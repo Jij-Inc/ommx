@@ -18,6 +18,8 @@ See the GitHub Release above for full details. The following summarizes the main
 
 {class}`~ommx.experiment.Experiment`, {meth}`~ommx.experiment.Experiment.with_temp_local_registry`, and {meth}`~ommx.experiment.Experiment.fork` now accept `store_trace=True`. When enabled, each `with experiment.run()` context captures the OpenTelemetry spans emitted inside that Run and stores one trace on the closed {class}`~ommx.experiment.SealedRun`. The stored trace is returned as {class}`~ommx.tracing.TraceResult` from {attr}`~ommx.experiment.SealedRun.trace`, and is carried through commit, load, and fork.
 
+See [Tracing and Profiling](../user_guide/tracing.ipynb) for the full tracing workflow, renderers, and OpenTelemetry setup notes.
+
 ```python
 from ommx.experiment import Experiment
 from ommx.tracing import render_text_tree
@@ -52,6 +54,8 @@ Descriptor-oriented attachment views from earlier 3.0 alphas, including `Experim
 ### 🆕 Experiment checkpoints and restore from interrupted sessions ([#917](https://github.com/Jij-Inc/ommx/pull/917))
 
 {class}`~ommx.experiment.Experiment` now publishes local checkpoints for partial experiment state. Closing a {class}`~ommx.experiment.Run` writes a best-effort draft checkpoint, and exiting an Experiment with an exception writes a failed or interrupted checkpoint instead of advancing the successful Experiment image reference. Closed Runs keep their attachments, solves, traces, and run parameters, including Runs closed as `"failed"` or `"interrupted"` after exceptions such as `KeyboardInterrupt`.
+
+See [Experiment Recovery and Cleanup](../user_guide/experiment.md) for Run close boundaries, checkpoint restoration, and Local Registry cleanup behavior.
 
 Use {meth}`~ommx.experiment.Experiment.restore_from_checkpoint` with the original Experiment image name to resume from the latest checkpoint:
 
@@ -97,6 +101,8 @@ and return structured report objects for notebook and script use.
 ### 🆕 Typed attachment codecs for Experiments ([#921](https://github.com/Jij-Inc/ommx/pull/921))
 
 The new {class}`ommx.experiment.attachments.AttachmentCodec` protocol lets packages that own Python payload types define how those values are stored as Experiment attachments. A codec class provides a media type plus `encode` / `decode` methods, and OMMX calls it through `log_with_codec` and `get_with_codec` on both Experiment-level and Run-level attachments.
+
+See the {ref}`Attachable Data Formats <experiment-management-attachable-data-formats>` section of the Experiment management tutorial for a JijModeling `Problem` codec example.
 
 ```python
 from ommx.experiment import Experiment

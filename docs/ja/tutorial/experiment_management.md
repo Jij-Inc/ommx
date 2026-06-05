@@ -69,6 +69,7 @@ pi = ParametricInstance.from_components(
 )
 ```
 
+(experiment-management-attachable-data-formats)=
 ### 添付できるデータ形式
 
 上で作った {py:class}`~ommx.v1.ParametricInstance` がソルバーに渡すOMMX形式の数理モデルです。実験を後から見直すためには、このOMMXモデルに加えて、元のモデリング用オブジェクトや入力ファイルなどもExperimentに添付しておくと便利です。
