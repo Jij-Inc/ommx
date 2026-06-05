@@ -82,7 +82,7 @@ pub use sealed::{SealedRun, Solve};
 
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor, TempLocalRegistry};
 use crate::artifact::{ImageRef, LocalArtifact};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use attachment::{read_file_attachment, store_attachment_descriptor};
 use oci_spec::image::MediaType;
 use parameter::ParameterSet;
@@ -450,15 +450,18 @@ impl<'reg> AttachmentLogger for &Experiment<'reg> {
         bytes: impl AsRef<[u8]>,
         annotations: HashMap<String, String>,
     ) -> Result<()> {
-        let mut state = self.lock_state();
-        if state.attachments.contains_key(name) {
-            crate::bail!("Attachment `{name}` already exists");
+        {
+            let state = self.lock_state();
+            if state.attachments.contains_key(name) {
+                crate::bail!("Attachment `{name}` already exists");
+            }
         }
         let descriptor =
             store_attachment_descriptor(self.registry, media_type, bytes.as_ref(), annotations)?;
-        state
+        self.lock_state()
             .attachments
-            .insert(name.to_string(), descriptor, None)?;
+            .insert(name.to_string(), descriptor, None)
+            .with_context(|| format!("Failed to register attachment `{name}`"))?;
         Ok(())
     }
 
@@ -470,15 +473,18 @@ impl<'reg> AttachmentLogger for &Experiment<'reg> {
         filename: Option<&str>,
     ) -> Result<()> {
         let (media_type, bytes, filename) = read_file_attachment(path, media_type, filename)?;
-        let mut state = self.lock_state();
-        if state.attachments.contains_key(name) {
-            crate::bail!("Attachment `{name}` already exists");
+        {
+            let state = self.lock_state();
+            if state.attachments.contains_key(name) {
+                crate::bail!("Attachment `{name}` already exists");
+            }
         }
         let descriptor =
             store_attachment_descriptor(self.registry, media_type, bytes.as_ref(), HashMap::new())?;
-        state
+        self.lock_state()
             .attachments
-            .insert(name.to_string(), descriptor, Some(filename))?;
+            .insert(name.to_string(), descriptor, Some(filename))
+            .with_context(|| format!("Failed to register attachment `{name}`"))?;
         Ok(())
     }
 }

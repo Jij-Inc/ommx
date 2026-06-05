@@ -117,10 +117,16 @@ impl ExperimentCheckpoint {
     }
 
     fn ensure_requested_image_name(&self, requested_image_name: &str) -> Result<()> {
+        let Some(actual_requested_image_name) = self.config.requested_image_name.as_deref() else {
+            crate::bail!(
+                "Experiment checkpoint {} is missing requested_image_name",
+                self.artifact.image_name()
+            );
+        };
         ensure!(
-            self.config.requested_image_name.as_deref() == Some(requested_image_name),
-            "Experiment checkpoint {} does not belong to requested image {requested_image_name}",
-            self.artifact.image_name()
+            actual_requested_image_name == requested_image_name,
+            "Experiment checkpoint {} belongs to requested image {actual_requested_image_name}, not {requested_image_name}",
+            self.artifact.image_name(),
         );
         Ok(())
     }
@@ -576,27 +582,38 @@ impl AttachmentLogger for &ExperimentDyn {
         bytes: impl AsRef<[u8]>,
         annotations: HashMap<String, String>,
     ) -> Result<()> {
-        let mut dyn_state = lock_experiment_state(&self.state);
-        ensure_unsealed_for_attachment_write(&dyn_state)?;
-        let registry_handle = dyn_state.registry_handle.clone();
-        let ExperimentDynLifecycle::Unsealed { state, .. } = &mut dyn_state.lifecycle else {
-            return bail_non_unsealed(&dyn_state.lifecycle);
+        let registry_handle = {
+            let dyn_state = lock_experiment_state(&self.state);
+            ensure_unsealed_for_attachment_write(&dyn_state)?;
+            let ExperimentDynLifecycle::Unsealed {
+                state: Some(state), ..
+            } = &dyn_state.lifecycle
+            else {
+                return bail_non_unsealed(&dyn_state.lifecycle);
+            };
+            if state.attachments.contains_key(name) {
+                crate::bail!("Attachment `{name}` already exists");
+            }
+            dyn_state.registry_handle.clone()
         };
-        let state = state
-            .as_mut()
-            .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
-        if state.attachments.contains_key(name) {
-            crate::bail!("Attachment `{name}` already exists");
-        }
         let descriptor = store_experiment_attachment_descriptor(
             registry_handle.registry(),
             media_type,
             bytes.as_ref(),
             annotations,
         )?;
+        let mut dyn_state = lock_experiment_state(&self.state);
+        ensure_unsealed_for_attachment_write(&dyn_state)?;
+        let ExperimentDynLifecycle::Unsealed { state, .. } = &mut dyn_state.lifecycle else {
+            return bail_non_unsealed(&dyn_state.lifecycle);
+        };
+        let state = state
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
         state
             .attachments
-            .insert(name.to_string(), descriptor, None)?;
+            .insert(name.to_string(), descriptor, None)
+            .with_context(|| format!("Failed to register attachment `{name}`"))?;
         Ok(())
     }
 
@@ -608,27 +625,38 @@ impl AttachmentLogger for &ExperimentDyn {
         filename: Option<&str>,
     ) -> Result<()> {
         let (media_type, bytes, filename) = read_file_attachment(path, media_type, filename)?;
-        let mut dyn_state = lock_experiment_state(&self.state);
-        ensure_unsealed_for_attachment_write(&dyn_state)?;
-        let registry_handle = dyn_state.registry_handle.clone();
-        let ExperimentDynLifecycle::Unsealed { state, .. } = &mut dyn_state.lifecycle else {
-            return bail_non_unsealed(&dyn_state.lifecycle);
+        let registry_handle = {
+            let dyn_state = lock_experiment_state(&self.state);
+            ensure_unsealed_for_attachment_write(&dyn_state)?;
+            let ExperimentDynLifecycle::Unsealed {
+                state: Some(state), ..
+            } = &dyn_state.lifecycle
+            else {
+                return bail_non_unsealed(&dyn_state.lifecycle);
+            };
+            if state.attachments.contains_key(name) {
+                crate::bail!("Attachment `{name}` already exists");
+            }
+            dyn_state.registry_handle.clone()
         };
-        let state = state
-            .as_mut()
-            .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
-        if state.attachments.contains_key(name) {
-            crate::bail!("Attachment `{name}` already exists");
-        }
         let descriptor = store_experiment_attachment_descriptor(
             registry_handle.registry(),
             media_type,
             bytes.as_ref(),
             HashMap::new(),
         )?;
+        let mut dyn_state = lock_experiment_state(&self.state);
+        ensure_unsealed_for_attachment_write(&dyn_state)?;
+        let ExperimentDynLifecycle::Unsealed { state, .. } = &mut dyn_state.lifecycle else {
+            return bail_non_unsealed(&dyn_state.lifecycle);
+        };
+        let state = state
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
         state
             .attachments
-            .insert(name.to_string(), descriptor, Some(filename))?;
+            .insert(name.to_string(), descriptor, Some(filename))
+            .with_context(|| format!("Failed to register attachment `{name}`"))?;
         Ok(())
     }
 }
