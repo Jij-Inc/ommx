@@ -41,13 +41,19 @@ Do NOT include:
    - `docs/en/release_note/ommx-{version}.md`
    - `docs/ja/release_note/ommx-{version}.md`
 
-5. Append entries to both files following the existing format:
+5. Check whether the same user-facing behavior is already explained in Tutorial
+   or User Guide pages under `docs/en/` and `docs/ja/`. When detailed docs
+   already exist, keep the release note concise and link readers to the
+   relevant Tutorial/User Guide section instead of duplicating the full
+   explanation.
+
+6. Append entries to both files following the existing format:
    - Use `###` headings with PR link: `### Feature name ([#NNN](https://github.com/Jij-Inc/ommx/pull/NNN))`
    - Place under appropriate `##` section (New Features, Bug Fixes, Breaking Changes, etc.)
    - Include code examples if the change adds new API
    - English first, then write the Japanese version as a natural translation (not machine-translated tone)
 
-6. Show the user the diff of what was added for review.
+7. Show the user the diff of what was added for review.
 
 ## Format reference
 

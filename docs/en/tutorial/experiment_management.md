@@ -69,6 +69,7 @@ pi = ParametricInstance.from_components(
 )
 ```
 
+(experiment-management-attachable-data-formats)=
 ### Attachable Data Formats
 
 The {py:class}`~ommx.v1.ParametricInstance` above is the OMMX-form mathematical model passed to solvers. To make the experiment easier to inspect later, you can also attach surrounding data such as the original modeling object or input files to the Experiment.
