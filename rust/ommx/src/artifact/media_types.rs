@@ -20,6 +20,7 @@ pub const V1_PARAMETRIC_INSTANCE_MEDIA_TYPE: &str = "application/org.ommx.v1.par
 pub const V1_SOLUTION_MEDIA_TYPE: &str = "application/org.ommx.v1.solution";
 pub const V1_SAMPLE_SET_MEDIA_TYPE: &str = "application/org.ommx.v1.sample-set";
 pub const TRACE_OTLP_PROTOBUF_MEDIA_TYPE: &str = "application/org.ommx.trace.otlp+protobuf";
+pub const PYTHON_PICKLE_MEDIA_TYPE: &str = "application/org.ommx.python.pickle";
 
 /// Media type of [crate::artifact::LocalArtifact], `application/org.ommx.v1.artifact`
 pub fn v1_artifact() -> MediaType {
@@ -54,4 +55,9 @@ pub fn v1_sample_set() -> MediaType {
 /// Media type of an Experiment Run trace encoded as OTLP protobuf.
 pub fn trace_otlp_protobuf() -> MediaType {
     MediaType::Other(TRACE_OTLP_PROTOBUF_MEDIA_TYPE.to_string())
+}
+
+/// Media type of a Python object encoded with `pickle`.
+pub fn python_pickle() -> MediaType {
+    MediaType::Other(PYTHON_PICKLE_MEDIA_TYPE.to_string())
 }

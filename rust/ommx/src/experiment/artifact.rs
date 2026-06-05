@@ -189,6 +189,12 @@ impl<'reg> UnsealedExperimentState<'reg> {
                     output: layers.push(solve.output.clone())?,
                     adapter: solve.adapter.clone(),
                     adapter_options: solve.adapter_options.clone(),
+                    diagnostics: solve
+                        .diagnostics
+                        .iter()
+                        .cloned()
+                        .map(|descriptor| layers.push(descriptor))
+                        .collect::<Result<Vec<_>>>()?,
                 });
             }
             runs.push(ExperimentConfigRun {

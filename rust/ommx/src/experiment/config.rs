@@ -40,6 +40,8 @@ pub struct ExperimentConfigSolve {
     pub adapter: String,
     #[serde(default = "default_adapter_options")]
     pub adapter_options: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub diagnostics: Vec<LayerRef>,
 }
 
 fn default_adapter_options() -> String {

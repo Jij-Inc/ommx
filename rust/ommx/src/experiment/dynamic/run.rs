@@ -2,7 +2,9 @@
 
 use super::super::attachment::read_file_attachment;
 use super::super::parameter::ParameterSet;
-use super::super::{AttachmentLogger, AttachmentTable, ParameterValue, RunStatus};
+use super::super::{
+    AttachmentLogger, AttachmentTable, ParameterValue, RunStatus, SolveDiagnosticPayload,
+};
 use super::{
     bail_non_unsealed, lock_experiment_state, store_run_attachment_descriptor,
     store_solve_payload_descriptor, store_trace_descriptor, ExperimentDyn, ExperimentDynLifecycle,
@@ -103,23 +105,54 @@ impl RunDyn {
         adapter: String,
         adapter_options: String,
     ) -> Result<u64> {
+        self.log_finished_solve_result_with_diagnostics(
+            input,
+            input_annotations,
+            output,
+            output_annotations,
+            adapter,
+            adapter_options,
+            Vec::new(),
+        )
+    }
+
+    pub fn log_finished_solve_result_with_diagnostics(
+        &mut self,
+        input: &Instance,
+        input_annotations: InstanceAnnotations,
+        output: &Solution,
+        output_annotations: SolutionAnnotations,
+        adapter: String,
+        adapter_options: String,
+        diagnostics: Vec<SolveDiagnosticPayload>,
+    ) -> Result<u64> {
         let solve_id = self.open()?.next_solve_id;
-        let (input, output) = {
+        let (input, output, diagnostics) = {
             let dyn_state = lock_experiment_state(&self.experiment_state);
-            (
-                store_solve_payload_descriptor(
-                    &dyn_state,
-                    media_types::v1_instance(),
-                    &input.to_bytes(),
-                    input_annotations.into_inner(),
-                )?,
-                store_solve_payload_descriptor(
-                    &dyn_state,
-                    media_types::v1_solution(),
-                    &output.to_bytes(),
-                    output_annotations.into_inner(),
-                )?,
-            )
+            let input = store_solve_payload_descriptor(
+                &dyn_state,
+                media_types::v1_instance(),
+                &input.to_bytes(),
+                input_annotations.into_inner(),
+            )?;
+            let output = store_solve_payload_descriptor(
+                &dyn_state,
+                media_types::v1_solution(),
+                &output.to_bytes(),
+                output_annotations.into_inner(),
+            )?;
+            let diagnostics = diagnostics
+                .into_iter()
+                .map(|diagnostic| {
+                    store_solve_payload_descriptor(
+                        &dyn_state,
+                        diagnostic.media_type,
+                        &diagnostic.bytes,
+                        diagnostic.annotations,
+                    )
+                })
+                .collect::<Result<Vec<_>>>()?;
+            (input, output, diagnostics)
         };
         let state = self.open_mut()?;
         state.next_solve_id += 1;
@@ -129,6 +162,7 @@ impl RunDyn {
             output,
             adapter,
             adapter_options,
+            diagnostics,
         });
         Ok(solve_id)
     }

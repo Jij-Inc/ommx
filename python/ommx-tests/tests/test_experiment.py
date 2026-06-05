@@ -1,4 +1,6 @@
+import math
 import uuid
+from dataclasses import dataclass
 from typing import Any, ClassVar, cast
 
 import pandas as pd
@@ -11,6 +13,12 @@ from ommx.tracing import TraceResult, render_text_tree
 from ommx.v1 import Instance, Solution
 
 from conftest import get_test_exporter
+
+
+@dataclass(frozen=True, slots=True)
+class DummyDiagnostic:
+    status: str
+    bound: float
 
 
 def _df_snap(df: pd.DataFrame) -> str:
@@ -617,6 +625,7 @@ def test_log_solve_logs_input_solution_and_adapter_options():
         "verbose": True,
         "label": "baseline",
     }
+    assert first_solve.diagnostics == ()
 
     second_solve = runs[0].solves[1]
     assert isinstance(second_solve.adapter_options, dict)
@@ -624,10 +633,55 @@ def test_log_solve_logs_input_solution_and_adapter_options():
         "time_limit": 2.0,
         "label": "pricing",
     }
+    assert second_solve.diagnostics == ()
 
     # Adapter options are solve-scoped metadata, not Run parameters.
     df = loaded.run_parameters_df()
     assert df.shape == (1, 0)
+
+
+def test_log_solve_records_adapter_diagnostics():
+    class DiagnosticAdapter(SolverAdapter):
+        SUPPORTS_DIAGNOSTICS = True
+        seen_kwargs: ClassVar[list[dict[str, object]]] = []
+
+        @classmethod
+        def solve(
+            cls,
+            ommx_instance: Instance,
+            *,
+            diagnostics: Any | None = None,
+            **kwargs: object,
+        ) -> Solution:
+            cls.seen_kwargs.append(kwargs)
+            assert diagnostics is not None
+            diagnostics.record(DummyDiagnostic(status="terminated", bound=math.inf))
+            return ommx_instance.evaluate({})
+
+        @property
+        def solver_input(self) -> Any:
+            raise NotImplementedError
+
+        def decode(self, data: Any) -> Solution:
+            raise NotImplementedError
+
+    instance = Instance.empty()
+    experiment = Experiment.with_temp_local_registry()
+    DiagnosticAdapter.seen_kwargs = []
+
+    with experiment.run() as run:
+        solution = run.log_solve(DiagnosticAdapter, instance, time_limit=1.5)
+        assert solution.feasible
+
+    assert DiagnosticAdapter.seen_kwargs == [{"time_limit": 1.5}]
+
+    artifact = experiment.commit()
+    loaded = Experiment.from_artifact(artifact)
+    solve = loaded.runs[0].solves[0]
+
+    assert solve.adapter_options == {"time_limit": 1.5}
+    assert solve.diagnostics == (DummyDiagnostic(status="terminated", bound=math.inf),)
+    assert math.isinf(solve.diagnostics[0].bound)
 
 
 def test_failed_run_preserves_completed_solves_after_adapter_exception():

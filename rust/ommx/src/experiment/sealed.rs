@@ -259,6 +259,7 @@ pub struct Solve<'reg> {
     output: StoredDescriptor<'reg>,
     adapter: String,
     adapter_options: String,
+    diagnostics: Vec<StoredDescriptor<'reg>>,
 }
 
 impl<'reg> Solve<'reg> {
@@ -276,6 +277,10 @@ impl<'reg> Solve<'reg> {
     /// into a dynamic view. Public solve access returns typed payloads.
     pub(crate) fn output_descriptor(&self) -> &StoredDescriptor<'reg> {
         &self.output
+    }
+
+    pub(crate) fn diagnostic_descriptors(&self) -> &[StoredDescriptor<'reg>] {
+        &self.diagnostics
     }
 
     pub fn input_instance(&self) -> Result<(Instance, InstanceAnnotations)> {
@@ -375,6 +380,25 @@ fn decode_solves<'reg>(
             output,
             adapter: solve.adapter,
             adapter_options: solve.adapter_options,
+            diagnostics: solve
+                .diagnostics
+                .into_iter()
+                .map(|layer_ref| {
+                    let descriptor = resolve_layer(layers, layer_ref)
+                        .with_context(|| {
+                            format!(
+                                "Failed to resolve Run {run_id} Solve {} diagnostic LayerRef {}",
+                                solve.solve_id, layer_ref.0
+                            )
+                        })?
+                        .clone();
+                    validate_layer_media_type(&descriptor, &media_types::python_pickle())
+                        .with_context(|| {
+                            format!("Invalid Run {run_id} Solve {} diagnostic", solve.solve_id)
+                        })?;
+                    Ok(descriptor)
+                })
+                .collect::<Result<Vec<_>>>()?,
         });
     }
     Ok(decoded)

@@ -6709,6 +6709,11 @@ class Solve:
         `json.dumps`; the Python SDK decodes it with `json.loads` before
         returning it.
         """
+    @property
+    def diagnostics(self) -> builtins.tuple[typing.Any, ...]:
+        r"""
+        Adapter-defined diagnostics recorded during this solve.
+        """
     def __repr__(self) -> builtins.str: ...
 
 @typing.final

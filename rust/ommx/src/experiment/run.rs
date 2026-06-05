@@ -1,7 +1,10 @@
 //! Experiment / Run handles and run lifecycle.
 
 use super::attachment::{read_file_attachment, store_attachment_descriptor};
-use super::{AttachmentLogger, ParameterValue, Run, RunEntry, RunStatus, SolveEntry, Trace};
+use super::{
+    AttachmentLogger, ParameterValue, Run, RunEntry, RunStatus, SolveDiagnosticPayload, SolveEntry,
+    Trace,
+};
 use crate::artifact::{media_types, InstanceAnnotations, SolutionAnnotations};
 use crate::{Instance, Solution};
 use anyhow::Result;
@@ -42,6 +45,27 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         adapter: String,
         adapter_options: String,
     ) -> Result<u64> {
+        self.log_finished_solve_result_with_diagnostics(
+            input,
+            input_annotations,
+            output,
+            output_annotations,
+            adapter,
+            adapter_options,
+            Vec::new(),
+        )
+    }
+
+    pub fn log_finished_solve_result_with_diagnostics(
+        &mut self,
+        input: &Instance,
+        input_annotations: InstanceAnnotations,
+        output: &Solution,
+        output_annotations: SolutionAnnotations,
+        adapter: String,
+        adapter_options: String,
+        diagnostics: Vec<SolveDiagnosticPayload>,
+    ) -> Result<u64> {
         let solve_id = self.next_solve_id;
         self.next_solve_id += 1;
         let input = self.experiment.registry.store_layer_blob(
@@ -54,12 +78,23 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
             &output.to_bytes(),
             output_annotations.into_inner(),
         )?;
+        let diagnostics = diagnostics
+            .into_iter()
+            .map(|diagnostic| {
+                self.experiment.registry.store_layer_blob(
+                    diagnostic.media_type,
+                    &diagnostic.bytes,
+                    diagnostic.annotations,
+                )
+            })
+            .collect::<Result<Vec<_>>>()?;
         self.solves.push(SolveEntry {
             solve_id,
             input,
             output,
             adapter,
             adapter_options,
+            diagnostics,
         });
         Ok(solve_id)
     }

@@ -315,6 +315,28 @@ struct SolveEntry<'reg> {
     output: StoredDescriptor<'reg>,
     adapter: String,
     adapter_options: String,
+    diagnostics: Vec<StoredDescriptor<'reg>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SolveDiagnosticPayload {
+    pub media_type: MediaType,
+    pub bytes: Vec<u8>,
+    pub annotations: HashMap<String, String>,
+}
+
+impl SolveDiagnosticPayload {
+    pub fn new(
+        media_type: MediaType,
+        bytes: Vec<u8>,
+        annotations: HashMap<String, String>,
+    ) -> Self {
+        Self {
+            media_type,
+            bytes,
+            annotations,
+        }
+    }
 }
 
 /// Mutable experiment state before the root manifest is sealed. A live
@@ -526,6 +548,7 @@ impl<'reg> SealedExperiment<'reg> {
                     output: solve.output_descriptor().clone(),
                     adapter: solve.adapter().to_string(),
                     adapter_options: solve.adapter_options().to_string(),
+                    diagnostics: solve.diagnostic_descriptors().to_vec(),
                 })
                 .collect();
             runs.insert(
