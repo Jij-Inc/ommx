@@ -32,6 +32,7 @@ __all__ = [
     "DecisionVariable",
     "DecisionVariableAnalysis",
     "Descriptor",
+    "DiagnosticCollector",
     "Equality",
     "EvaluatedConstraint",
     "EvaluatedDecisionVariable",
@@ -1724,6 +1725,12 @@ class EvaluatedNamedFunction:
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> EvaluatedNamedFunction: ...
     def __deepcopy__(self, _memo: typing.Any) -> EvaluatedNamedFunction: ...
+
+@typing.final
+class DiagnosticCollector:
+    @property
+    def diagnostics(self) -> builtins.list[typing.Any]: ...
+    def record(self, diagnostic: typing.Any) -> None: ...
 
 @typing.final
 class Experiment:

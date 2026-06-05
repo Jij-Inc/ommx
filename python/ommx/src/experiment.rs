@@ -1267,11 +1267,11 @@ impl PyRun {
         let _guard = crate::TRACING.attach_parent_context(py);
         self.ensure_store_trace_context_started()?;
         reject_reserved_log_solve_kwargs(kwargs)?;
-        let adapter_name = adapter.name(py)?;
+        let adapter = adapter.bind(py);
+        let adapter_name = adapter.name()?;
         let adapter_options = dump_kwargs(py, kwargs)?;
-        let diagnostics_collector = adapter.diagnostic_collector(py)?;
+        let diagnostics_collector = adapter.diagnostic_collector()?;
         let solution = adapter.solve(
-            py,
             instance,
             kwargs,
             diagnostics_collector
@@ -1280,7 +1280,7 @@ impl PyRun {
         )?;
         let diagnostics = diagnostics_collector
             .as_ref()
-            .map(|collector| pack_diagnostics(py, collector.bind(py)))
+            .map(|collector| collector.bind(py).borrow().pack(py))
             .transpose()?
             .flatten();
         let solve_id = self
@@ -1443,14 +1443,123 @@ impl<'py> FromPyObject<'_, 'py> for ParameterValueInput {
 pub struct SolverAdapterInput(Py<PyType>);
 
 impl SolverAdapterInput {
+    fn bind<'py>(&'py self, py: Python<'py>) -> SolverAdapter<'py> {
+        SolverAdapter {
+            adapter: self.0.bind(py),
+        }
+    }
+}
+
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
+#[pyclass]
+#[pyo3(module = "ommx._ommx_rust", name = "DiagnosticCollector")]
+pub struct PyDiagnosticCollector {
+    diagnostics: Vec<Py<PyAny>>,
+}
+
+impl PyDiagnosticCollector {
+    fn new_inner() -> Self {
+        Self {
+            diagnostics: Vec::new(),
+        }
+    }
+
+    fn pack(&self, py: Python<'_>) -> Result<Option<SolveDiagnosticPayload>> {
+        let dataclasses = py.import("dataclasses")?;
+        let msgpack = py.import("msgpack")?;
+        let mut packed_items = Vec::new();
+        let mut python_types = Vec::new();
+        for diagnostic in &self.diagnostics {
+            let diagnostic = diagnostic.bind(py);
+            let type_name = python_type_name(diagnostic)?;
+            let data = dataclasses
+                .call_method1("asdict", (diagnostic,))
+                .with_context(|| {
+                    format!("Adapter diagnostic `{type_name}` must be a dataclass instance")
+                })?;
+            packed_items.push(data);
+            python_types.push(type_name);
+        }
+        if packed_items.is_empty() {
+            return Ok(None);
+        }
+        let diagnostics = PyList::new(py, packed_items)?;
+        let kwargs = PyDict::new(py);
+        kwargs.set_item("use_bin_type", true)?;
+        let bytes: Vec<u8> = msgpack
+            .call_method("packb", (&diagnostics,), Some(&kwargs))?
+            .extract()?;
+        let mut annotations = HashMap::new();
+        annotations.insert(
+            "org.ommx.diagnostic.python_type".to_string(),
+            "builtins.list".to_string(),
+        );
+        annotations.insert(
+            "org.ommx.diagnostic.python_element_types".to_string(),
+            python_types.join(","),
+        );
+        Ok(Some(SolveDiagnosticPayload::new(
+            media_types::diagnostic_msgpack(),
+            bytes,
+            annotations,
+        )))
+    }
+}
+
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
+#[pymethods]
+impl PyDiagnosticCollector {
+    #[new]
+    pub fn new() -> Self {
+        Self::new_inner()
+    }
+
+    #[getter]
+    #[gen_stub(override_return_type(
+        type_repr = "builtins.list[typing.Any]",
+        imports = ("builtins", "typing")
+    ))]
+    pub fn diagnostics<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyList>> {
+        let diagnostics = self
+            .diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.clone_ref(py))
+            .collect::<Vec<_>>();
+        Ok(PyList::new(py, diagnostics)?)
+    }
+
+    pub fn record(&mut self, py: Python<'_>, diagnostic: Py<PyAny>) -> PyResult<()> {
+        let diagnostic_ref = diagnostic.bind(py);
+        let is_dataclass: bool = py
+            .import("dataclasses")?
+            .call_method1("is_dataclass", (diagnostic_ref,))?
+            .extract()?;
+        if !is_dataclass || diagnostic_ref.is_instance_of::<PyType>() {
+            return Err(pyo3::exceptions::PyTypeError::new_err(
+                "diagnostic must be a dataclass instance",
+            ));
+        }
+        self.diagnostics.push(diagnostic);
+        Ok(())
+    }
+}
+
+struct SolverAdapter<'py> {
+    adapter: &'py Bound<'py, PyType>,
+}
+
+impl<'py> SolverAdapter<'py> {
+    fn py(&self) -> Python<'py> {
+        self.adapter.py()
+    }
+
     fn solve(
         &self,
-        py: Python<'_>,
         instance: &crate::Instance,
-        kwargs: Option<&Bound<PyDict>>,
-        diagnostics: Option<&Bound<PyAny>>,
+        kwargs: Option<&Bound<'py, PyDict>>,
+        diagnostics: Option<&Bound<'py, PyDiagnosticCollector>>,
     ) -> Result<crate::Solution> {
-        let adapter = self.0.bind(py);
+        let py = self.py();
         let adapter_instance = Py::new(py, instance.clone())?;
         let solution_object = match diagnostics {
             Some(diagnostics) => {
@@ -1461,38 +1570,39 @@ impl SolverAdapterInput {
                     }
                 }
                 call_kwargs.set_item("diagnostics", diagnostics)?;
-                adapter.call_method("solve", (adapter_instance,), Some(&call_kwargs))?
+                self.adapter
+                    .call_method("solve", (adapter_instance,), Some(&call_kwargs))?
             }
-            None => adapter.call_method("solve", (adapter_instance,), kwargs)?,
+            None => self
+                .adapter
+                .call_method("solve", (adapter_instance,), kwargs)?,
         };
         solution_object
             .extract::<crate::Solution>()
             .map_err(|_| anyhow::anyhow!("adapter.solve(...) must return ommx.v1.Solution"))
     }
 
-    fn diagnostic_collector(&self, py: Python<'_>) -> Result<Option<Py<PyAny>>> {
-        if !self.supports_diagnostics(py)? {
+    fn diagnostic_collector(&self) -> Result<Option<Py<PyDiagnosticCollector>>> {
+        if !self.supports_diagnostics()? {
             return Ok(None);
         }
-        let collector = py
-            .import("ommx.adapter")?
-            .getattr("DiagnosticCollector")?
-            .call0()?;
-        Ok(Some(collector.unbind()))
+        Ok(Some(Py::new(
+            self.py(),
+            PyDiagnosticCollector::new_inner(),
+        )?))
     }
 
-    fn supports_diagnostics(&self, py: Python<'_>) -> Result<bool> {
-        let adapter = self.0.bind(py);
-        let value = adapter
+    fn supports_diagnostics(&self) -> Result<bool> {
+        let value = self
+            .adapter
             .getattr("SUPPORTS_DIAGNOSTICS")
             .context("SolverAdapter.SUPPORTS_DIAGNOSTICS must be readable")?;
         Ok(value.extract::<bool>()?)
     }
 
-    fn name(&self, py: Python<'_>) -> Result<String> {
-        let adapter = self.0.bind(py);
-        let module: String = adapter.module()?.extract()?;
-        let qualname: String = adapter.qualname()?.extract()?;
+    fn name(&self) -> Result<String> {
+        let module: String = self.adapter.module()?.extract()?;
+        let qualname: String = self.adapter.qualname()?.extract()?;
         Ok(format!("{module}.{qualname}"))
     }
 }
@@ -1519,51 +1629,6 @@ fn reject_reserved_log_solve_kwargs(kwargs: Option<&Bound<PyDict>>) -> Result<()
         anyhow::bail!("Run.log_solve owns the `diagnostics` adapter option");
     }
     Ok(())
-}
-
-fn pack_diagnostics(
-    py: Python<'_>,
-    collector: &Bound<'_, PyAny>,
-) -> Result<Option<SolveDiagnosticPayload>> {
-    let dataclasses = py.import("dataclasses")?;
-    let msgpack = py.import("msgpack")?;
-    let diagnostics = collector.getattr("diagnostics")?;
-    let mut packed_items = Vec::new();
-    let mut python_types = Vec::new();
-    for diagnostic in diagnostics.try_iter()? {
-        let diagnostic = diagnostic?;
-        let type_name = python_type_name(&diagnostic)?;
-        let data = dataclasses
-            .call_method1("asdict", (&diagnostic,))
-            .with_context(|| {
-                format!("Adapter diagnostic `{type_name}` must be a dataclass instance")
-            })?;
-        packed_items.push(data);
-        python_types.push(type_name);
-    }
-    if packed_items.is_empty() {
-        return Ok(None);
-    }
-    let diagnostics = PyList::new(py, packed_items)?;
-    let kwargs = PyDict::new(py);
-    kwargs.set_item("use_bin_type", true)?;
-    let bytes: Vec<u8> = msgpack
-        .call_method("packb", (&diagnostics,), Some(&kwargs))?
-        .extract()?;
-    let mut annotations = HashMap::new();
-    annotations.insert(
-        "org.ommx.diagnostic.python_type".to_string(),
-        "builtins.tuple".to_string(),
-    );
-    annotations.insert(
-        "org.ommx.diagnostic.python_element_types".to_string(),
-        python_types.join(","),
-    );
-    Ok(Some(SolveDiagnosticPayload::new(
-        media_types::diagnostic_msgpack(),
-        bytes,
-        annotations,
-    )))
 }
 
 fn python_type_name(value: &Bound<'_, PyAny>) -> Result<String> {
