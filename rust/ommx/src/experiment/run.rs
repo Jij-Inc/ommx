@@ -1,8 +1,10 @@
 //! Experiment / Run handles and run lifecycle.
 
 use super::attachment::store_attachment_descriptor;
-use super::{AttachmentLogger, ParameterValue, Run, RunEntry, RunStatus, SolveEntry, Trace};
-use crate::artifact::media_types;
+use super::{
+    AttachmentLogger, FileAttachment, ParameterValue, Run, RunEntry, RunStatus, SolveEntry, Trace,
+};
+use crate::artifact::{media_types, InstanceAnnotations, SolutionAnnotations};
 use crate::{Instance, Solution};
 use anyhow::Result;
 use oci_spec::image::MediaType;
@@ -36,7 +38,9 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
     pub fn log_finished_solve_result(
         &mut self,
         input: &Instance,
+        input_annotations: InstanceAnnotations,
         output: &Solution,
+        output_annotations: SolutionAnnotations,
         adapter: String,
         adapter_options: String,
     ) -> Result<u64> {
@@ -45,12 +49,12 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         let input = self.experiment.registry.store_layer_blob(
             media_types::v1_instance(),
             &input.to_bytes(),
-            Default::default(),
+            input_annotations.into_inner(),
         )?;
         let output = self.experiment.registry.store_layer_blob(
             media_types::v1_solution(),
             &output.to_bytes(),
-            Default::default(),
+            output_annotations.into_inner(),
         )?;
         self.solves.push(SolveEntry {
             solve_id,
@@ -131,13 +135,29 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
 }
 
 impl<'exp, 'reg> AttachmentLogger for &mut Run<'exp, 'reg> {
-    fn log_attachment_with_filename(
+    fn log_attachment(
         self,
         name: &str,
         media_type: MediaType,
         bytes: impl AsRef<[u8]>,
-        filename: Option<String>,
+        annotations: HashMap<String, String>,
     ) -> Result<()> {
+        if self.attachments.contains_key(name) {
+            crate::bail!("Attachment `{name}` already exists");
+        }
+        let descriptor = store_attachment_descriptor(
+            self.experiment.registry,
+            media_type,
+            bytes.as_ref(),
+            annotations,
+        )?;
+        self.attachments
+            .insert(name.to_string(), descriptor, None)?;
+        Ok(())
+    }
+
+    fn log_file(self, name: &str, attachment: FileAttachment) -> Result<()> {
+        let (media_type, bytes, filename) = attachment.into_parts();
         if self.attachments.contains_key(name) {
             crate::bail!("Attachment `{name}` already exists");
         }
@@ -148,7 +168,7 @@ impl<'exp, 'reg> AttachmentLogger for &mut Run<'exp, 'reg> {
             HashMap::new(),
         )?;
         self.attachments
-            .insert(name.to_string(), descriptor, filename)?;
+            .insert(name.to_string(), descriptor, Some(filename))?;
         Ok(())
     }
 }

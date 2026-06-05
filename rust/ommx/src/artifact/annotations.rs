@@ -1,12 +1,12 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Local};
-use derive_more::{Deref, From, Into};
+use derive_more::{Deref, DerefMut, From, Into};
 use oci_spec::image::{Descriptor, Digest};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Annotations for [`application/org.ommx.v1.instance`][crate::artifact::media_types::v1_instance]
-#[derive(Debug, Default, Clone, PartialEq, From, Deref, Into, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, PartialEq, From, Deref, DerefMut, Into, Serialize, Deserialize)]
 pub struct InstanceAnnotations(HashMap<String, String>);
 
 impl InstanceAnnotations {
@@ -111,7 +111,7 @@ impl InstanceAnnotations {
 }
 
 /// Annotations for [`application/org.ommx.v1.parametric-instance`][crate::artifact::media_types::v1_parametric_instance]
-#[derive(Debug, Default, Clone, PartialEq, From, Deref, Into, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, PartialEq, From, Deref, DerefMut, Into, Serialize, Deserialize)]
 pub struct ParametricInstanceAnnotations(HashMap<String, String>);
 
 impl ParametricInstanceAnnotations {
@@ -220,7 +220,7 @@ impl ParametricInstanceAnnotations {
 }
 
 /// Annotations for [`application/org.ommx.v1.solution`][crate::artifact::media_types::v1_solution]
-#[derive(Debug, Default, Clone, PartialEq, From, Deref, Into, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, PartialEq, From, Deref, DerefMut, Into, Serialize, Deserialize)]
 pub struct SolutionAnnotations(HashMap<String, String>);
 
 impl SolutionAnnotations {
@@ -313,7 +313,7 @@ impl SolutionAnnotations {
     }
 }
 
-#[derive(Debug, Default, Clone, PartialEq, From, Deref, Into, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, PartialEq, From, Deref, DerefMut, Into, Serialize, Deserialize)]
 pub struct SampleSetAnnotations(HashMap<String, String>);
 
 impl SampleSetAnnotations {

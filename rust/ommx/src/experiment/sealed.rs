@@ -8,7 +8,10 @@ use super::{
     RUN_PARAMETERS_MEDIA_TYPE,
 };
 use crate::artifact::local_registry::StoredDescriptor;
-use crate::artifact::{media_types, ImageRef, LocalArtifact};
+use crate::artifact::{
+    media_types, ImageRef, InstanceAnnotations, LocalArtifact, ParametricInstanceAnnotations,
+    SampleSetAnnotations, SolutionAnnotations,
+};
 use crate::{Instance, ParametricInstance, SampleSet, Solution};
 use anyhow::{Context, Result};
 use oci_spec::image::{Descriptor, MediaType};
@@ -109,19 +112,22 @@ impl<'reg> SealedExperiment<'reg> {
         self.attachments.blob(name)
     }
 
-    pub fn attachment_instance(&self, name: &str) -> Result<Instance> {
+    pub fn attachment_instance(&self, name: &str) -> Result<(Instance, InstanceAnnotations)> {
         self.attachments.instance(name)
     }
 
-    pub fn attachment_parametric_instance(&self, name: &str) -> Result<ParametricInstance> {
+    pub fn attachment_parametric_instance(
+        &self,
+        name: &str,
+    ) -> Result<(ParametricInstance, ParametricInstanceAnnotations)> {
         self.attachments.parametric_instance(name)
     }
 
-    pub fn attachment_solution(&self, name: &str) -> Result<Solution> {
+    pub fn attachment_solution(&self, name: &str) -> Result<(Solution, SolutionAnnotations)> {
         self.attachments.solution(name)
     }
 
-    pub fn attachment_sample_set(&self, name: &str) -> Result<SampleSet> {
+    pub fn attachment_sample_set(&self, name: &str) -> Result<(SampleSet, SampleSetAnnotations)> {
         self.attachments.sample_set(name)
     }
 
@@ -188,19 +194,22 @@ impl<'reg> SealedRun<'reg> {
         self.attachments.blob(name)
     }
 
-    pub fn attachment_instance(&self, name: &str) -> Result<Instance> {
+    pub fn attachment_instance(&self, name: &str) -> Result<(Instance, InstanceAnnotations)> {
         self.attachments.instance(name)
     }
 
-    pub fn attachment_parametric_instance(&self, name: &str) -> Result<ParametricInstance> {
+    pub fn attachment_parametric_instance(
+        &self,
+        name: &str,
+    ) -> Result<(ParametricInstance, ParametricInstanceAnnotations)> {
         self.attachments.parametric_instance(name)
     }
 
-    pub fn attachment_solution(&self, name: &str) -> Result<Solution> {
+    pub fn attachment_solution(&self, name: &str) -> Result<(Solution, SolutionAnnotations)> {
         self.attachments.solution(name)
     }
 
-    pub fn attachment_sample_set(&self, name: &str) -> Result<SampleSet> {
+    pub fn attachment_sample_set(&self, name: &str) -> Result<(SampleSet, SampleSetAnnotations)> {
         self.attachments.sample_set(name)
     }
 
@@ -258,16 +267,22 @@ impl<'reg> Solve<'reg> {
         &self.output
     }
 
-    pub fn input_instance(&self) -> Result<Instance> {
+    pub fn input_instance(&self) -> Result<(Instance, InstanceAnnotations)> {
         self.input.ensure_media_type(&media_types::v1_instance())?;
         let bytes = self.input.registry().get_blob(&self.input)?;
-        Instance::from_bytes(&bytes)
+        Ok((
+            Instance::from_bytes(&bytes)?,
+            InstanceAnnotations::from_descriptor(&self.input),
+        ))
     }
 
-    pub fn output_solution(&self) -> Result<Solution> {
+    pub fn output_solution(&self) -> Result<(Solution, SolutionAnnotations)> {
         self.output.ensure_media_type(&media_types::v1_solution())?;
         let bytes = self.output.registry().get_blob(&self.output)?;
-        Solution::from_bytes(&bytes)
+        Ok((
+            Solution::from_bytes(&bytes)?,
+            SolutionAnnotations::from_descriptor(&self.output),
+        ))
     }
 
     pub fn adapter(&self) -> &str {
@@ -316,20 +331,16 @@ fn decode_attachments<'reg>(
     attachment_context: &str,
 ) -> Result<AttachmentTable<StoredDescriptor<'reg>>> {
     attachments.validate(attachment_context)?;
-    let mut decoded = AttachmentTable::new();
-    let (entries, mut filenames) = attachments.into_parts();
-    for (name, layer_ref) in entries {
-        let descriptor = resolve_layer(layers, layer_ref)
+    attachments.try_map(|name, layer_ref| {
+        Ok(resolve_layer(layers, *layer_ref)
             .with_context(|| {
                 format!(
                     "Failed to resolve {attachment_context} attachment `{name}` LayerRef {}",
                     layer_ref.0
                 )
             })?
-            .clone();
-        decoded.insert(name.clone(), descriptor, filenames.remove(&name))?;
-    }
-    Ok(decoded)
+            .clone())
+    })
 }
 
 fn decode_trace<'reg>(

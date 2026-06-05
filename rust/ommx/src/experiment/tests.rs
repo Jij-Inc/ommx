@@ -263,15 +263,7 @@ fn file_attachment_filename_is_stored_in_config_table() {
             Some("input.json"),
         )
         .unwrap();
-        let (media_type, bytes, filename) = attachment.into_parts();
-        AttachmentLogger::log_attachment_with_filename(
-            &experiment,
-            "source-file",
-            media_type,
-            bytes,
-            Some(filename),
-        )
-        .unwrap();
+        AttachmentLogger::log_file(&experiment, "source-file", attachment).unwrap();
 
         let artifact = experiment.commit().unwrap().into_artifact();
         let config = experiment_config(&artifact);
@@ -305,7 +297,8 @@ fn log_json_encodes_hash_maps_stably() {
         let bytes = with_unsealed_state(&experiment, |state| {
             state
                 .attachments
-                .values()
+                .names()
+                .map(|name| state.attachments.get(name).unwrap())
                 .map(|descriptor| experiment.registry.read_blob(descriptor.digest()).unwrap())
                 .collect::<Vec<_>>()
         });
@@ -330,7 +323,8 @@ fn commit_produces_experiment_artifact() {
             crate::random::random_deterministic(crate::InstanceParameters::default_lp());
         {
             let mut run = experiment.run().unwrap();
-            run.log_instance("candidate", &instance).unwrap();
+            run.log_instance("candidate", &instance, Default::default())
+                .unwrap();
             run.log_json("config", json!({ "relaxed": true })).unwrap();
             run.finish().unwrap();
         }
@@ -536,7 +530,9 @@ fn sealed_experiment_fork_creates_child_with_parent_subject_and_next_run_id() {
             run.log_parameter("solver", "base").unwrap();
             run.log_finished_solve_result(
                 &instance,
+                Default::default(),
                 &solution,
+                Default::default(),
                 "dummy.Adapter".to_string(),
                 "{}".to_string(),
             )
@@ -633,7 +629,9 @@ fn log_finished_solve_result_materializes_solve_entry_with_layer_refs() {
             let solve_id = run
                 .log_finished_solve_result(
                     &instance,
+                    Default::default(),
                     &solution,
+                    Default::default(),
                     "dummy.Adapter".to_string(),
                     r#"{"time_limit":1.5}"#.to_string(),
                 )
@@ -675,11 +673,11 @@ fn log_finished_solve_result_materializes_solve_entry_with_layer_refs() {
         let solve = &run.solves()[0];
         assert_eq!(solve.solve_id(), 0);
         assert_eq!(
-            solve.input_instance().unwrap().to_bytes(),
+            solve.input_instance().unwrap().0.to_bytes(),
             instance.to_bytes()
         );
         assert_eq!(
-            solve.output_solution().unwrap().to_bytes(),
+            solve.output_solution().unwrap().0.to_bytes(),
             solution.to_bytes()
         );
         assert_eq!(solve.adapter(), "dummy.Adapter");

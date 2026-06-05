@@ -48,7 +48,7 @@
 //!
 //! let mut run = exp.run()?;
 //! run.log_parameter("solver", "scip")?;
-//! run.log_instance("candidate", &instance)?;
+//! run.log_instance("candidate", &instance, Default::default())?;
 //! run.finish()?;
 //!
 //! let artifact = exp.commit()?.into_artifact();
@@ -74,9 +74,8 @@ mod sealed;
 #[cfg(test)]
 mod tests;
 
-pub use attachment::{
-    detect_file_media_type, AttachmentTable, FileAttachment, DEFAULT_FILE_MEDIA_TYPE,
-};
+pub(crate) use attachment::AttachmentTable;
+pub use attachment::{detect_file_media_type, FileAttachment, DEFAULT_FILE_MEDIA_TYPE};
 pub use dynamic::{ExperimentDyn, RunDyn, SealedRunDyn, SolveDyn};
 pub use logging::AttachmentLogger;
 pub use parameter::{ParameterValue, RunParameterCell};
@@ -442,13 +441,27 @@ impl<'reg> Experiment<'reg> {
 }
 
 impl<'reg> AttachmentLogger for &Experiment<'reg> {
-    fn log_attachment_with_filename(
+    fn log_attachment(
         self,
         name: &str,
         media_type: MediaType,
         bytes: impl AsRef<[u8]>,
-        filename: Option<String>,
+        annotations: HashMap<String, String>,
     ) -> Result<()> {
+        let mut state = self.lock_state();
+        if state.attachments.contains_key(name) {
+            crate::bail!("Attachment `{name}` already exists");
+        }
+        let descriptor =
+            store_attachment_descriptor(self.registry, media_type, bytes.as_ref(), annotations)?;
+        state
+            .attachments
+            .insert(name.to_string(), descriptor, None)?;
+        Ok(())
+    }
+
+    fn log_file(self, name: &str, attachment: FileAttachment) -> Result<()> {
+        let (media_type, bytes, filename) = attachment.into_parts();
         let mut state = self.lock_state();
         if state.attachments.contains_key(name) {
             crate::bail!("Attachment `{name}` already exists");
@@ -457,7 +470,7 @@ impl<'reg> AttachmentLogger for &Experiment<'reg> {
             store_attachment_descriptor(self.registry, media_type, bytes.as_ref(), HashMap::new())?;
         state
             .attachments
-            .insert(name.to_string(), descriptor, filename)?;
+            .insert(name.to_string(), descriptor, Some(filename))?;
         Ok(())
     }
 }

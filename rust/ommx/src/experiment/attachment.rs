@@ -1,7 +1,10 @@
 //! Experiment and run scoped Attachment descriptor helpers.
 
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
-use crate::artifact::media_types;
+use crate::artifact::{
+    media_types, InstanceAnnotations, ParametricInstanceAnnotations, SampleSetAnnotations,
+    SolutionAnnotations,
+};
 use crate::{Instance, ParametricInstance, SampleSet, Solution};
 use anyhow::{ensure, Context, Result};
 use oci_spec::image::MediaType;
@@ -35,47 +38,31 @@ impl<D> Default for AttachmentTable<D> {
 }
 
 impl<D> AttachmentTable<D> {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::default()
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.entries.is_empty()
-    }
-
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.entries.len()
     }
 
-    pub fn contains_key(&self, name: &str) -> bool {
+    pub(crate) fn contains_key(&self, name: &str) -> bool {
         self.entries.contains_key(name)
     }
 
-    pub fn get(&self, name: &str) -> Option<&D> {
+    pub(crate) fn get(&self, name: &str) -> Option<&D> {
         self.entries.get(name)
     }
 
-    pub fn filename(&self, name: &str) -> Option<&str> {
+    pub(crate) fn filename(&self, name: &str) -> Option<&str> {
         self.filenames.get(name).map(String::as_str)
     }
 
-    pub fn names(&self) -> impl Iterator<Item = &String> {
+    pub(crate) fn names(&self) -> impl Iterator<Item = &String> {
         self.entries.keys()
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (&String, &D)> {
-        self.entries.iter()
-    }
-
-    pub fn values(&self) -> impl Iterator<Item = &D> {
-        self.entries.values()
-    }
-
-    pub fn filenames(&self) -> impl Iterator<Item = (&String, &String)> {
-        self.filenames.iter()
-    }
-
-    pub fn insert(
+    pub(crate) fn insert(
         &mut self,
         name: impl Into<String>,
         descriptor: D,
@@ -97,7 +84,7 @@ impl<D> AttachmentTable<D> {
         Ok(())
     }
 
-    pub fn validate(&self, context: &str) -> Result<()> {
+    pub(crate) fn validate(&self, context: &str) -> Result<()> {
         for (name, filename) in &self.filenames {
             ensure!(
                 self.entries.contains_key(name),
@@ -110,11 +97,14 @@ impl<D> AttachmentTable<D> {
         Ok(())
     }
 
-    pub fn try_map<E>(&self, mut f: impl FnMut(&D) -> Result<E>) -> Result<AttachmentTable<E>> {
+    pub(crate) fn try_map<E>(
+        &self,
+        mut f: impl FnMut(&str, &D) -> Result<E>,
+    ) -> Result<AttachmentTable<E>> {
         let entries = self
             .entries
             .iter()
-            .map(|(name, descriptor)| Ok((name.clone(), f(descriptor)?)))
+            .map(|(name, descriptor)| Ok((name.clone(), f(name, descriptor)?)))
             .collect::<Result<BTreeMap<_, _>>>()?;
         Ok(AttachmentTable {
             entries,
@@ -122,7 +112,10 @@ impl<D> AttachmentTable<D> {
         })
     }
 
-    pub fn try_map_owned<E>(self, mut f: impl FnMut(D) -> Result<E>) -> Result<AttachmentTable<E>> {
+    pub(crate) fn try_map_owned<E>(
+        self,
+        mut f: impl FnMut(D) -> Result<E>,
+    ) -> Result<AttachmentTable<E>> {
         let entries = self
             .entries
             .into_iter()
@@ -134,11 +127,8 @@ impl<D> AttachmentTable<D> {
         })
     }
 
-    pub fn into_parts(self) -> (BTreeMap<String, D>, BTreeMap<String, String>) {
-        (self.entries, self.filenames)
-    }
-
     /// Build a table from raw config maps; callers must validate before trusting it.
+    #[cfg(test)]
     pub(crate) fn from_parts_unchecked(
         entries: BTreeMap<String, D>,
         filenames: BTreeMap<String, String>,
@@ -153,49 +143,59 @@ impl<'reg> AttachmentTable<StoredDescriptor<'reg>> {
             .ok_or_else(|| anyhow::anyhow!("Attachment `{name}` not found"))
     }
 
-    pub fn media_type(&self, name: &str) -> Result<MediaType> {
+    pub(crate) fn media_type(&self, name: &str) -> Result<MediaType> {
         Ok(self.attachment(name)?.media_type().clone())
     }
 
-    pub(crate) fn payload_annotations(&self, name: &str) -> Result<HashMap<String, String>> {
-        Ok(self
-            .attachment(name)?
-            .annotations()
-            .as_ref()
-            .cloned()
-            .unwrap_or_default())
-    }
-
-    pub fn ensure_media_type(&self, name: &str, expected: &MediaType) -> Result<()> {
-        self.attachment(name)?.ensure_media_type(expected)
-    }
-
-    pub fn blob(&self, name: &str) -> Result<Vec<u8>> {
+    pub(crate) fn blob(&self, name: &str) -> Result<Vec<u8>> {
         let descriptor = self.attachment(name)?;
         descriptor.registry().get_blob(descriptor)
     }
 
-    pub fn instance(&self, name: &str) -> Result<Instance> {
-        self.ensure_media_type(name, &media_types::v1_instance())?;
-        Instance::from_bytes(&self.blob(name)?)
+    pub(crate) fn instance(&self, name: &str) -> Result<(Instance, InstanceAnnotations)> {
+        let descriptor = self.attachment(name)?;
+        descriptor.ensure_media_type(&media_types::v1_instance())?;
+        let bytes = descriptor.registry().get_blob(descriptor)?;
+        Ok((
+            Instance::from_bytes(&bytes)?,
+            InstanceAnnotations::from_descriptor(descriptor),
+        ))
     }
 
-    pub fn parametric_instance(&self, name: &str) -> Result<ParametricInstance> {
-        self.ensure_media_type(name, &media_types::v1_parametric_instance())?;
-        ParametricInstance::from_bytes(&self.blob(name)?)
+    pub(crate) fn parametric_instance(
+        &self,
+        name: &str,
+    ) -> Result<(ParametricInstance, ParametricInstanceAnnotations)> {
+        let descriptor = self.attachment(name)?;
+        descriptor.ensure_media_type(&media_types::v1_parametric_instance())?;
+        let bytes = descriptor.registry().get_blob(descriptor)?;
+        Ok((
+            ParametricInstance::from_bytes(&bytes)?,
+            ParametricInstanceAnnotations::from_descriptor(descriptor),
+        ))
     }
 
-    pub fn solution(&self, name: &str) -> Result<Solution> {
-        self.ensure_media_type(name, &media_types::v1_solution())?;
-        Solution::from_bytes(&self.blob(name)?)
+    pub(crate) fn solution(&self, name: &str) -> Result<(Solution, SolutionAnnotations)> {
+        let descriptor = self.attachment(name)?;
+        descriptor.ensure_media_type(&media_types::v1_solution())?;
+        let bytes = descriptor.registry().get_blob(descriptor)?;
+        Ok((
+            Solution::from_bytes(&bytes)?,
+            SolutionAnnotations::from_descriptor(descriptor),
+        ))
     }
 
-    pub fn sample_set(&self, name: &str) -> Result<SampleSet> {
-        self.ensure_media_type(name, &media_types::v1_sample_set())?;
-        SampleSet::from_bytes(&self.blob(name)?)
+    pub(crate) fn sample_set(&self, name: &str) -> Result<(SampleSet, SampleSetAnnotations)> {
+        let descriptor = self.attachment(name)?;
+        descriptor.ensure_media_type(&media_types::v1_sample_set())?;
+        let bytes = descriptor.registry().get_blob(descriptor)?;
+        Ok((
+            SampleSet::from_bytes(&bytes)?,
+            SampleSetAnnotations::from_descriptor(descriptor),
+        ))
     }
 
-    pub fn write_attachment(
+    pub(crate) fn write_attachment(
         &self,
         name: &str,
         path: impl AsRef<Path>,
@@ -251,20 +251,20 @@ impl FileAttachment {
 }
 
 /// Write `bytes` to the registry and build the in-memory Attachment descriptor.
-pub fn store_attachment_descriptor<'reg>(
+pub(crate) fn store_attachment_descriptor<'reg>(
     registry: &'reg LocalRegistry,
     media_type: MediaType,
     bytes: &[u8],
-    payload_annotations: HashMap<String, String>,
+    annotations: HashMap<String, String>,
 ) -> Result<StoredDescriptor<'reg>> {
-    registry.store_layer_blob(media_type, bytes, payload_annotations)
+    registry.store_layer_blob(media_type, bytes, annotations)
 }
 
-pub fn json_media_type() -> MediaType {
+pub(crate) fn json_media_type() -> MediaType {
     MediaType::from(JSON_MEDIA_TYPE)
 }
 
-pub fn encode_json(name: &str, value: impl serde::Serialize) -> Result<Vec<u8>> {
+pub(crate) fn encode_json(name: &str, value: impl serde::Serialize) -> Result<Vec<u8>> {
     crate::artifact::stable_json_bytes(&value)
         .map_err(|e| crate::error!("Failed to encode JSON attachment `{name}`: {e}"))
 }
