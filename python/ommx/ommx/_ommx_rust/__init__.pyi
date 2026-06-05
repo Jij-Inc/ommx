@@ -6710,20 +6710,9 @@ class Solve:
         returning it.
         """
     @property
-    def diagnostics(self) -> builtins.tuple[typing.Any, ...]:
+    def diagnostics(self) -> builtins.list[typing.Any]:
         r"""
         Adapter-defined diagnostics recorded during this solve.
-        """
-    def get_diagnostics(
-        self, *, model: typing.Any | None = None
-    ) -> builtins.tuple[typing.Any, ...]:
-        r"""
-        Adapter-defined diagnostics recorded during this solve.
-
-        By default this returns the MessagePack-decoded payload as normal
-        Python objects. Pass a dataclass type such as
-        `model=SCIPTerminationReport` to reconstruct each diagnostic with
-        `model(**data)`.
         """
     def __repr__(self) -> builtins.str: ...
 

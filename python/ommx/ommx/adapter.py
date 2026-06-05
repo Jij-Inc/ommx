@@ -34,8 +34,8 @@ class DiagnosticCollector:
         self._diagnostics: list[DiagnosticReport] = []
 
     @property
-    def diagnostics(self) -> tuple[DiagnosticReport, ...]:
-        return tuple(self._diagnostics)
+    def diagnostics(self) -> list[DiagnosticReport]:
+        return list(self._diagnostics)
 
     def record(self, diagnostic: DiagnosticReport) -> None:
         if not is_dataclass(diagnostic) or isinstance(diagnostic, type):

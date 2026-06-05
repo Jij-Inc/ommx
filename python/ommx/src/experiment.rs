@@ -3,7 +3,7 @@ use oci_spec::image::MediaType;
 use pyo3::{
     exceptions::PyKeyboardInterrupt,
     prelude::*,
-    types::{PyBool, PyBytes, PyDict, PyFloat, PyInt, PyString, PyTuple, PyType, PyTypeMethods},
+    types::{PyBool, PyBytes, PyDict, PyFloat, PyInt, PyList, PyString, PyType, PyTypeMethods},
 };
 use std::{
     collections::{btree_map::Entry, BTreeMap, HashMap},
@@ -1544,7 +1544,7 @@ fn pack_diagnostics(
     if packed_items.is_empty() {
         return Ok(None);
     }
-    let diagnostics = PyTuple::new(py, packed_items)?;
+    let diagnostics = PyList::new(py, packed_items)?;
     let kwargs = PyDict::new(py);
     kwargs.set_item("use_bin_type", true)?;
     let bytes: Vec<u8> = msgpack
@@ -1848,45 +1848,12 @@ impl PySolve {
     #[getter]
     #[pyo3(name = "diagnostics")]
     #[gen_stub(override_return_type(
-        type_repr = "builtins.tuple[typing.Any, ...]",
+        type_repr = "builtins.list[typing.Any]",
         imports = ("builtins", "typing")
     ))]
     /// Adapter-defined diagnostics recorded during this solve.
-    pub fn diagnostics_property<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyTuple>> {
+    pub fn diagnostics_property<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyList>> {
         unpack_diagnostics(py, &self.0)
-    }
-
-    #[pyo3(signature = (*, model = None))]
-    #[gen_stub(override_return_type(
-        type_repr = "builtins.tuple[typing.Any, ...]",
-        imports = ("builtins", "typing")
-    ))]
-    /// Adapter-defined diagnostics recorded during this solve.
-    ///
-    /// By default this returns the MessagePack-decoded payload as normal
-    /// Python objects. Pass a dataclass type such as
-    /// `model=SCIPTerminationReport` to reconstruct each diagnostic with
-    /// `model(**data)`.
-    pub fn get_diagnostics<'py>(
-        &self,
-        py: Python<'py>,
-        model: Option<&Bound<'py, PyAny>>,
-    ) -> Result<Bound<'py, PyTuple>> {
-        let diagnostics = unpack_diagnostics(py, &self.0)?;
-        let Some(model) = model else {
-            return Ok(diagnostics);
-        };
-
-        let mut typed = Vec::new();
-        for diagnostic in diagnostics.iter() {
-            let data = diagnostic.cast::<PyDict>().map_err(|_| {
-                anyhow::anyhow!(
-                    "Solve diagnostics payload must decode to dict values when model is provided"
-                )
-            })?;
-            typed.push(model.call((), Some(data))?);
-        }
-        Ok(PyTuple::new(py, typed)?)
     }
 
     pub fn __repr__(&self) -> String {
@@ -1897,18 +1864,16 @@ impl PySolve {
 fn unpack_diagnostics<'py>(
     py: Python<'py>,
     solve: &ommx::experiment::SolveDyn,
-) -> Result<Bound<'py, PyTuple>> {
+) -> Result<Bound<'py, PyList>> {
     let Some(blob) = solve.diagnostic_blob()? else {
-        let diagnostics: Vec<Bound<'py, PyAny>> = Vec::new();
-        return Ok(PyTuple::new(py, diagnostics)?);
+        return Ok(PyList::empty(py));
     };
     let msgpack = py.import("msgpack")?;
     let kwargs = PyDict::new(py);
     kwargs.set_item("raw", false)?;
     let decoded = msgpack.call_method("unpackb", (PyBytes::new(py, &blob),), Some(&kwargs))?;
-    let mut diagnostics = Vec::new();
-    for diagnostic in decoded.try_iter()? {
-        diagnostics.push(diagnostic?);
-    }
-    Ok(PyTuple::new(py, diagnostics)?)
+    Ok(decoded
+        .cast::<PyList>()
+        .map_err(|_| anyhow::anyhow!("Solve diagnostics payload must decode to a list"))?
+        .clone())
 }

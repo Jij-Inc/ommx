@@ -18,7 +18,7 @@ def test_diagnostic_collector_records_typed_diagnostics():
 
     collector.record(report)
 
-    assert collector.diagnostics == (report,)
+    assert collector.diagnostics == [report]
     assert collector.diagnostics[0] is report
 
 
@@ -32,7 +32,7 @@ def test_diagnostic_collector_does_not_require_serialization_hooks():
 
     collector.record(report)
 
-    assert collector.diagnostics == (report,)
+    assert collector.diagnostics == [report]
 
 
 def test_diagnostic_collector_requires_dataclass_instance():

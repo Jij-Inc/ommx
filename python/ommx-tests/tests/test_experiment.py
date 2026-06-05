@@ -21,6 +21,12 @@ class DummyDiagnostic:
     bound: float
 
 
+@dataclass(frozen=True, slots=True)
+class DummyProgressDiagnostic:
+    event: str
+    node_count: int
+
+
 def _df_snap(df: pd.DataFrame) -> str:
     return df.to_string(na_rep="<NA>")
 
@@ -625,7 +631,7 @@ def test_log_solve_logs_input_solution_and_adapter_options():
         "verbose": True,
         "label": "baseline",
     }
-    assert first_solve.diagnostics == ()
+    assert first_solve.diagnostics == []
 
     second_solve = runs[0].solves[1]
     assert isinstance(second_solve.adapter_options, dict)
@@ -633,7 +639,7 @@ def test_log_solve_logs_input_solution_and_adapter_options():
         "time_limit": 2.0,
         "label": "pricing",
     }
-    assert second_solve.diagnostics == ()
+    assert second_solve.diagnostics == []
 
     # Adapter options are solve-scoped metadata, not Run parameters.
     df = loaded.run_parameters_df()
@@ -655,8 +661,8 @@ def test_log_solve_records_adapter_diagnostics():
         ) -> Solution:
             cls.seen_kwargs.append(kwargs)
             assert diagnostics is not None
+            diagnostics.record(DummyProgressDiagnostic(event="node", node_count=10))
             diagnostics.record(DummyDiagnostic(status="terminated", bound=math.inf))
-            diagnostics.record(DummyDiagnostic(status="bounded", bound=-math.inf))
             return ommx_instance.evaluate({})
 
         @property
@@ -681,17 +687,11 @@ def test_log_solve_records_adapter_diagnostics():
     solve = loaded.runs[0].solves[0]
 
     assert solve.adapter_options == {"time_limit": 1.5}
-    assert solve.diagnostics == (
+    assert solve.diagnostics == [
+        {"event": "node", "node_count": 10},
         {"status": "terminated", "bound": math.inf},
-        {"status": "bounded", "bound": -math.inf},
-    )
-    diagnostics = solve.get_diagnostics(model=DummyDiagnostic)
-    assert diagnostics == (
-        DummyDiagnostic(status="terminated", bound=math.inf),
-        DummyDiagnostic(status="bounded", bound=-math.inf),
-    )
-    assert math.isinf(diagnostics[0].bound)
-    assert math.isinf(diagnostics[1].bound)
+    ]
+    assert math.isinf(solve.diagnostics[1]["bound"])
 
 
 def test_failed_run_preserves_completed_solves_after_adapter_exception():
