@@ -74,8 +74,7 @@ mod sealed;
 #[cfg(test)]
 mod tests;
 
-pub(crate) use attachment::AttachmentTable;
-pub use attachment::{detect_file_media_type, DEFAULT_FILE_MEDIA_TYPE};
+pub use attachment::{detect_file_media_type, AttachmentTable, DEFAULT_FILE_MEDIA_TYPE};
 pub use dynamic::{ExperimentDyn, RunDyn, SealedRunDyn, SolveDyn};
 pub use logging::AttachmentLogger;
 pub use parameter::{ParameterValue, RunParameterCell};

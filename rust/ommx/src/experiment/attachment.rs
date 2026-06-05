@@ -19,12 +19,19 @@ use std::{
 pub const DEFAULT_FILE_MEDIA_TYPE: &str = "application/octet-stream";
 
 /// Name-indexed attachment bindings for one Experiment or Run namespace.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct AttachmentTable<D> {
     /// Attachment name to stored descriptor reference.
     entries: BTreeMap<String, D>,
     /// Optional export filename metadata for file attachments.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    filenames: BTreeMap<String, String>,
+}
+
+#[derive(Deserialize)]
+struct RawAttachmentTable<D> {
+    entries: BTreeMap<String, D>,
+    #[serde(default)]
     filenames: BTreeMap<String, String>,
 }
 
@@ -38,11 +45,11 @@ impl<D> Default for AttachmentTable<D> {
 }
 
 impl<D> AttachmentTable<D> {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self::default()
     }
 
-    pub(crate) fn from_entries<N>(entries: impl IntoIterator<Item = (N, D)>) -> Result<Self>
+    pub fn from_entries<N>(entries: impl IntoIterator<Item = (N, D)>) -> Result<Self>
     where
         N: Into<String>,
     {
@@ -53,27 +60,31 @@ impl<D> AttachmentTable<D> {
         Ok(table)
     }
 
-    pub(crate) fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.entries.len()
     }
 
-    pub(crate) fn contains_key(&self, name: &str) -> bool {
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    pub fn contains_key(&self, name: &str) -> bool {
         self.entries.contains_key(name)
     }
 
-    pub(crate) fn get(&self, name: &str) -> Option<&D> {
+    pub fn get(&self, name: &str) -> Option<&D> {
         self.entries.get(name)
     }
 
-    pub(crate) fn filename(&self, name: &str) -> Option<&str> {
+    pub fn filename(&self, name: &str) -> Option<&str> {
         self.filenames.get(name).map(String::as_str)
     }
 
-    pub(crate) fn names(&self) -> impl Iterator<Item = &String> {
-        self.entries.keys()
+    pub fn names(&self) -> impl Iterator<Item = &str> {
+        self.entries.keys().map(String::as_str)
     }
 
-    pub(crate) fn insert(
+    pub fn insert(
         &mut self,
         name: impl Into<String>,
         descriptor: D,
@@ -95,45 +106,54 @@ impl<D> AttachmentTable<D> {
         Ok(())
     }
 
-    pub(crate) fn validate(&self, context: &str) -> Result<()> {
-        for (name, filename) in &self.filenames {
-            ensure!(
-                self.entries.contains_key(name),
-                "Attachment filename table in {context} references missing attachment `{name}`"
-            );
-            validate_attachment_filename(filename).with_context(|| {
-                format!("Invalid attachment filename for `{name}` in {context}")
-            })?;
-        }
-        Ok(())
-    }
-
     pub(crate) fn try_map<E>(
         &self,
         mut f: impl FnMut(&str, &D) -> Result<E>,
     ) -> Result<AttachmentTable<E>> {
-        let mut table = AttachmentTable::from_entries(
-            self.entries
-                .iter()
-                .map(|(name, descriptor)| Ok((name.clone(), f(name, descriptor)?)))
-                .collect::<Result<Vec<_>>>()?,
-        )?;
-        table.filenames = self.filenames.clone();
-        Ok(table)
+        let entries = self
+            .entries
+            .iter()
+            .map(|(name, descriptor)| Ok((name.clone(), f(name, descriptor)?)))
+            .collect::<Result<BTreeMap<_, _>>>()?;
+        Ok(AttachmentTable::from_valid_parts(
+            entries,
+            self.filenames.clone(),
+        ))
     }
 
     pub(crate) fn try_map_owned<E>(
         self,
         mut f: impl FnMut(D) -> Result<E>,
     ) -> Result<AttachmentTable<E>> {
-        let mut table = AttachmentTable::from_entries(
-            self.entries
-                .into_iter()
-                .map(|(name, descriptor)| Ok((name, f(descriptor)?)))
-                .collect::<Result<Vec<_>>>()?,
-        )?;
-        table.filenames = self.filenames;
-        Ok(table)
+        let entries = self
+            .entries
+            .into_iter()
+            .map(|(name, descriptor)| Ok((name, f(descriptor)?)))
+            .collect::<Result<BTreeMap<_, _>>>()?;
+        Ok(AttachmentTable::from_valid_parts(entries, self.filenames))
+    }
+
+    fn from_valid_parts(entries: BTreeMap<String, D>, filenames: BTreeMap<String, String>) -> Self {
+        debug_assert!(validate_attachment_table_parts(&entries, &filenames).is_ok());
+        Self { entries, filenames }
+    }
+}
+
+impl<'de, D> Deserialize<'de> for AttachmentTable<D>
+where
+    D: Deserialize<'de>,
+{
+    fn deserialize<De>(deserializer: De) -> std::result::Result<Self, De::Error>
+    where
+        De: serde::Deserializer<'de>,
+    {
+        let raw = RawAttachmentTable::<D>::deserialize(deserializer)?;
+        validate_attachment_table_parts(&raw.entries, &raw.filenames)
+            .map_err(serde::de::Error::custom)?;
+        Ok(Self {
+            entries: raw.entries,
+            filenames: raw.filenames,
+        })
     }
 }
 
@@ -325,6 +345,21 @@ fn validate_attachment_filename(filename: &str) -> Result<()> {
         filename != "." && filename != "..",
         "Attachment filename must not be `.` or `..`"
     );
+    Ok(())
+}
+
+fn validate_attachment_table_parts<D>(
+    entries: &BTreeMap<String, D>,
+    filenames: &BTreeMap<String, String>,
+) -> Result<()> {
+    for (name, filename) in filenames {
+        ensure!(
+            entries.contains_key(name),
+            "Attachment filename table references missing attachment `{name}`"
+        );
+        validate_attachment_filename(filename)
+            .with_context(|| format!("Invalid attachment filename for `{name}`"))?;
+    }
     Ok(())
 }
 

@@ -886,9 +886,12 @@ fn loaded_experiment_rejects_filename_without_attachment_entry() {
 
     let err = SealedExperiment::from_artifact(artifact)
         .expect_err("filename table must reference existing attachments only");
-    assert!(err
-        .to_string()
-        .contains("filename table in experiment references missing attachment `missing`"));
+    let messages = err
+        .chain()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(messages.contains("Attachment filename table references missing attachment `missing`"));
 }
 
 #[test]

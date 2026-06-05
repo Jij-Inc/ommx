@@ -108,7 +108,7 @@ impl<'reg> SealedExperiment<'reg> {
     }
 
     pub fn attachment_names(&self) -> impl Iterator<Item = &str> {
-        self.attachments.names().map(String::as_str)
+        self.attachments.names()
     }
 
     pub fn contains_attachment(&self, name: &str) -> bool {
@@ -190,7 +190,7 @@ impl<'reg> SealedRun<'reg> {
     }
 
     pub fn attachment_names(&self) -> impl Iterator<Item = &str> {
-        self.attachments.names().map(String::as_str)
+        self.attachments.names()
     }
 
     pub fn contains_attachment(&self, name: &str) -> bool {
@@ -310,7 +310,6 @@ fn decode_attachments<'reg>(
     attachments: AttachmentTable<LayerRef>,
     attachment_context: &str,
 ) -> Result<AttachmentTable<StoredDescriptor<'reg>>> {
-    attachments.validate(attachment_context)?;
     attachments.try_map(|name, layer_ref| {
         Ok(resolve_layer(layers, *layer_ref)
             .with_context(|| {

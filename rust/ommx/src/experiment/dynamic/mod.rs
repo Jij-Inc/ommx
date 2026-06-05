@@ -231,7 +231,7 @@ impl SealedRunDyn {
     }
 
     pub fn attachment_names(&self) -> Vec<String> {
-        self.attachments.names().cloned().collect()
+        self.attachments.names().map(ToOwned::to_owned).collect()
     }
 
     pub fn attachment_media_type(&self, name: &str) -> Result<MediaType> {
@@ -776,7 +776,7 @@ impl ExperimentDyn {
         Ok(self
             .experiment_attachment_table()?
             .names()
-            .cloned()
+            .map(ToOwned::to_owned)
             .collect())
     }
 
