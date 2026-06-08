@@ -283,6 +283,14 @@ impl<'reg> Solve<'reg> {
         self.diagnostics.as_ref()
     }
 
+    pub fn diagnostic_blob(&self) -> Result<Option<Vec<u8>>> {
+        let Some(descriptor) = &self.diagnostics else {
+            return Ok(None);
+        };
+        descriptor.ensure_media_type(&media_types::diagnostic_msgpack())?;
+        Ok(Some(descriptor.registry().get_blob(descriptor)?))
+    }
+
     pub fn input_instance(&self) -> Result<(Instance, InstanceAnnotations)> {
         self.input.ensure_media_type(&media_types::v1_instance())?;
         let bytes = self.input.registry().get_blob(&self.input)?;
