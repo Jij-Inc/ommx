@@ -66,7 +66,19 @@ class SolverAdapter(ABC):
 
     @classmethod
     @abstractmethod
-    def solve(cls, ommx_instance: Instance) -> Solution:
+    def solve(
+        cls,
+        ommx_instance: Instance,
+        *,
+        diagnostics: DiagnosticsSink | None = None,
+        **kwargs: Any,
+    ) -> Solution:
+        """Solve an OMMX instance with adapter-specific keyword options.
+
+        ``Run.log_solve`` owns the reserved ``diagnostics`` keyword. Adapters
+        that set ``SUPPORTS_DIAGNOSTICS = True`` must accept it and may record
+        adapter-defined dataclass reports into the sink.
+        """
         pass
 
     @property

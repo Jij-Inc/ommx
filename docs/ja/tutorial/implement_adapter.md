@@ -286,7 +286,13 @@ class SolverAdapter(ABC):
 
     @classmethod
     @abstractmethod
-    def solve(cls, ommx_instance: Instance) -> Solution:
+    def solve(
+        cls,
+        ommx_instance: Instance,
+        *,
+        diagnostics: DiagnosticsSink | None = None,
+        **kwargs: Any,
+    ) -> Solution:
         pass
 
     @property
@@ -303,6 +309,8 @@ class SolverAdapter(ABC):
 
 - バックエンドソルバーのパラメータなどを調整しない場合は、  `solve` クラスメソッドを使う。
 - バックエンドソルバーのパラメータなどを調整する場合は、 `solver_input` を使ってバックエンドソルバーの入力用のデータ構造（今回は `pyscipopt.Model`）を取得し、調整した後にバックエンドソルバーへ入力し、最後にバックエンドソルバーの出力を `decode` で変換する。
+
+`solve` クラスメソッドは adapter 固有の keyword option を定義できます。adapter が `SUPPORTS_DIAGNOSTICS = True` を設定する場合は、予約済みの `diagnostics` keyword も受け取り、adapter が定義する diagnostic report をその sink に記録する必要があります。
 
 #### 制約タイプの Capability 宣言
 

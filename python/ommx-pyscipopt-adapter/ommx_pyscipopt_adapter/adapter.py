@@ -1,7 +1,7 @@
 from __future__ import annotations
 import math
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 import pyscipopt
 
@@ -109,6 +109,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         *,
         initial_state: Optional[ToState] = None,
         diagnostics: DiagnosticsSink | None = None,
+        **kwargs: Any,
     ) -> Solution:
         """
         Solve the given ommx.v1.Instance using PySCIPopt, returning an ommx.v1.Solution.
@@ -197,6 +198,9 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                     ...
                 ommx.adapter.UnboundedDetected: Model was unbounded
         """
+        if kwargs:
+            unexpected = ", ".join(sorted(kwargs))
+            raise TypeError(f"Unexpected adapter option(s): {unexpected}")
         with _tracer.start_as_current_span("solve") as span:
             span.set_attribute("adapter", f"{cls.__module__}.{cls.__qualname__}")
             adapter = cls(ommx_instance, initial_state=initial_state)

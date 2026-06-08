@@ -1,3 +1,5 @@
+from typing import Any
+
 import highspy
 import numpy as np
 
@@ -5,7 +7,12 @@ from highspy.highs import highs_linear_expression
 from opentelemetry import trace
 
 from ommx.v1 import Instance, DecisionVariable, Solution, Constraint, State, Function
-from ommx.adapter import SolverAdapter, InfeasibleDetected, UnboundedDetected
+from ommx.adapter import (
+    DiagnosticsSink,
+    SolverAdapter,
+    InfeasibleDetected,
+    UnboundedDetected,
+)
 
 from .exception import OMMXHighsAdapterError
 
@@ -202,7 +209,14 @@ class OMMXHighsAdapter(SolverAdapter):
             self._set_constraints()
 
     @classmethod
-    def solve(cls, ommx_instance: Instance, *, verbose: bool = False) -> Solution:
+    def solve(
+        cls,
+        ommx_instance: Instance,
+        *,
+        verbose: bool = False,
+        diagnostics: DiagnosticsSink | None = None,
+        **kwargs: Any,
+    ) -> Solution:
         """
         Solve an OMMX optimization problem using HiGHS solver.
 
@@ -305,6 +319,11 @@ class OMMXHighsAdapter(SolverAdapter):
         #     ...
         # ommx.adapter.UnboundedDetected: Model was unbounded
         # ````
+        if diagnostics is not None:
+            raise TypeError("OMMXHighsAdapter does not support diagnostics")
+        if kwargs:
+            unexpected = ", ".join(sorted(kwargs))
+            raise TypeError(f"Unexpected adapter option(s): {unexpected}")
         with _tracer.start_as_current_span("solve") as span:
             span.set_attribute("adapter", f"{cls.__module__}.{cls.__qualname__}")
             adapter = cls(ommx_instance, verbose=verbose)

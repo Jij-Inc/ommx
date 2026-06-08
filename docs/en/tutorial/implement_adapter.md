@@ -290,7 +290,13 @@ class SolverAdapter(ABC):
 
     @classmethod
     @abstractmethod
-    def solve(cls, ommx_instance: Instance) -> Solution:
+    def solve(
+        cls,
+        ommx_instance: Instance,
+        *,
+        diagnostics: DiagnosticsSink | None = None,
+        **kwargs: Any,
+    ) -> Solution:
         pass
 
     @property
@@ -307,6 +313,8 @@ This abstract base class assumes the following two use cases:
 
 - If you do not adjust the backend solver's parameters, use the `solve` class method.
 - If you adjust the backend solver's parameters, use `solver_input` to get the data structure for the backend solver (in this case, `pyscipopt.Model`), adjust it, then input it to the backend solver, and finally convert the backend solver's output using `decode`.
+
+The `solve` class method may define adapter-specific keyword options. If the adapter sets `SUPPORTS_DIAGNOSTICS = True`, it must also accept the reserved `diagnostics` keyword and record adapter-defined diagnostic reports into that sink.
 
 #### Constraint Capability Declaration
 
