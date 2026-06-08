@@ -81,7 +81,7 @@ pub use parameter::{ParameterValue, RunParameterCell};
 pub use sealed::{SealedRun, Solve};
 
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor, TempLocalRegistry};
-use crate::artifact::{ImageRef, LocalArtifact};
+use crate::artifact::{media_types, ImageRef, LocalArtifact};
 use anyhow::{Context, Result};
 use attachment::{read_file_attachment, store_attachment_descriptor};
 use oci_spec::image::MediaType;
@@ -318,21 +318,19 @@ struct SolveEntry<'reg> {
     diagnostics: Option<StoredDescriptor<'reg>>,
 }
 
+/// MessagePack-encoded adapter diagnostics payload for one Solve.
 #[derive(Debug, Clone)]
 pub struct SolveDiagnosticPayload {
-    pub media_type: MediaType,
-    pub bytes: Vec<u8>,
-    pub annotations: HashMap<String, String>,
+    media_type: MediaType,
+    bytes: Vec<u8>,
+    annotations: HashMap<String, String>,
 }
 
 impl SolveDiagnosticPayload {
-    pub fn new(
-        media_type: MediaType,
-        bytes: Vec<u8>,
-        annotations: HashMap<String, String>,
-    ) -> Self {
+    /// Create a diagnostics payload stored as `application/org.ommx.diagnostic+msgpack`.
+    pub fn new(bytes: Vec<u8>, annotations: HashMap<String, String>) -> Self {
         Self {
-            media_type,
+            media_type: media_types::diagnostic_msgpack(),
             bytes,
             annotations,
         }

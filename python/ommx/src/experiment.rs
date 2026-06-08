@@ -15,7 +15,7 @@ use std::{
 
 use crate::pandas::{raw_entries_to_dataframe, PyDataFrame};
 use crate::PyArtifact;
-use ommx::artifact::{media_types, AsArtifact};
+use ommx::artifact::AsArtifact;
 use ommx::experiment::{AttachmentLogger, SolveDiagnosticPayload};
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
@@ -1551,11 +1551,7 @@ impl DiagnosticReport {
             "org.ommx.diagnostic.python_element_types".to_string(),
             python_types.join(","),
         );
-        Ok(Some(SolveDiagnosticPayload::new(
-            media_types::diagnostic_msgpack(),
-            bytes,
-            annotations,
-        )))
+        Ok(Some(SolveDiagnosticPayload::new(bytes, annotations)))
     }
 }
 

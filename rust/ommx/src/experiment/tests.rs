@@ -637,7 +637,6 @@ fn log_finished_solve_result_materializes_solve_entry_with_layer_refs() {
                     "dummy.Adapter".to_string(),
                     r#"{"time_limit":1.5}"#.to_string(),
                     Some(SolveDiagnosticPayload::new(
-                        media_types::diagnostic_msgpack(),
                         diagnostics.clone(),
                         HashMap::new(),
                     )),
