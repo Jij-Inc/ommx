@@ -81,14 +81,16 @@ pub use parameter::{ParameterValue, RunParameterCell};
 pub use sealed::{SealedRun, Solve};
 
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor, TempLocalRegistry};
-use crate::artifact::{media_types, ImageRef, LocalArtifact};
-use anyhow::{Context, Result};
+use crate::artifact::{ImageRef, LocalArtifact};
+use anyhow::{ensure, Context, Result};
 use attachment::{read_file_attachment, store_attachment_descriptor};
 use oci_spec::image::MediaType;
 use parameter::ParameterSet;
+use rmpv::Value as MessagePackValue;
 use std::sync::{Mutex, MutexGuard};
 use std::{
     collections::{BTreeMap, HashMap},
+    io::Cursor,
     path::Path,
 };
 
@@ -321,19 +323,43 @@ struct SolveEntry<'reg> {
 /// MessagePack-encoded adapter diagnostics payload for one Solve.
 #[derive(Debug, Clone)]
 pub struct SolveDiagnosticPayload {
-    media_type: MediaType,
-    bytes: Vec<u8>,
+    value: MessagePackValue,
     annotations: HashMap<String, String>,
 }
 
 impl SolveDiagnosticPayload {
-    /// Create a diagnostics payload stored as `application/org.ommx.diagnostic+msgpack`.
-    pub fn new(bytes: Vec<u8>, annotations: HashMap<String, String>) -> Self {
-        Self {
-            media_type: media_types::diagnostic_msgpack(),
-            bytes,
-            annotations,
-        }
+    /// Create a diagnostics payload from MessagePack bytes.
+    pub fn new(bytes: Vec<u8>, annotations: HashMap<String, String>) -> Result<Self> {
+        let mut cursor = Cursor::new(&bytes);
+        let value = rmpv::decode::read_value(&mut cursor)
+            .context("Solve diagnostic payload must be valid MessagePack")?;
+        ensure!(
+            cursor.position() == bytes.len() as u64,
+            "Solve diagnostic payload must contain exactly one MessagePack value",
+        );
+        Self::from_value(value, annotations)
+    }
+
+    pub fn from_value(
+        value: MessagePackValue,
+        annotations: HashMap<String, String>,
+    ) -> Result<Self> {
+        ensure!(
+            matches!(value, MessagePackValue::Array(_)),
+            "Solve diagnostic payload must decode to a MessagePack array",
+        );
+        Ok(Self { value, annotations })
+    }
+
+    pub fn value(&self) -> &MessagePackValue {
+        &self.value
+    }
+
+    pub(crate) fn to_msgpack_bytes(&self) -> Result<Vec<u8>> {
+        let mut bytes = Vec::new();
+        rmpv::encode::write_value(&mut bytes, &self.value)
+            .context("Failed to encode Solve diagnostic payload as MessagePack")?;
+        Ok(bytes)
     }
 }
 

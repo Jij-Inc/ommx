@@ -64,6 +64,7 @@ prost.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 rusqlite.workspace = true
+rmpv.workspace = true
 sha2.workspace = true
 similar.workspace = true
 smallvec.workspace = true

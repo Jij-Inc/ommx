@@ -1551,7 +1551,7 @@ impl DiagnosticReport {
             "org.ommx.diagnostic.python_element_types".to_string(),
             python_types.join(","),
         );
-        Ok(Some(SolveDiagnosticPayload::new(bytes, annotations)))
+        Ok(Some(SolveDiagnosticPayload::new(bytes, annotations)?))
     }
 }
 

@@ -4,7 +4,10 @@ use super::artifact::ExperimentArtifactView;
 use super::attachment::AttachmentTable;
 use super::config::{ExperimentConfigSolve, LayerRef};
 use super::parameter::{RunParameterCell, RunParameterTable};
-use super::{ExperimentStatus, RunStatus, SealedExperiment, Trace, RUN_PARAMETERS_MEDIA_TYPE};
+use super::{
+    ExperimentStatus, RunStatus, SealedExperiment, SolveDiagnosticPayload, Trace,
+    RUN_PARAMETERS_MEDIA_TYPE,
+};
 use crate::artifact::local_registry::StoredDescriptor;
 use crate::artifact::{
     media_types, ImageRef, InstanceAnnotations, LocalArtifact, ParametricInstanceAnnotations,
@@ -288,7 +291,10 @@ impl<'reg> Solve<'reg> {
             return Ok(None);
         };
         descriptor.ensure_media_type(&media_types::diagnostic_msgpack())?;
-        Ok(Some(descriptor.registry().get_blob(descriptor)?))
+        let bytes = descriptor.registry().get_blob(descriptor)?;
+        SolveDiagnosticPayload::new(bytes.clone(), Default::default())
+            .with_context(|| format!("Invalid Solve {} diagnostic payload", self.solve_id))?;
+        Ok(Some(bytes))
     }
 
     pub fn input_instance(&self) -> Result<(Instance, InstanceAnnotations)> {
@@ -403,6 +409,13 @@ fn decode_solves<'reg>(
                         .with_context(|| {
                             format!("Invalid Run {run_id} Solve {} diagnostic", solve.solve_id)
                         })?;
+                    let bytes = descriptor.registry().get_blob(&descriptor)?;
+                    SolveDiagnosticPayload::new(bytes, Default::default()).with_context(|| {
+                        format!(
+                            "Invalid Run {run_id} Solve {} diagnostic payload",
+                            solve.solve_id
+                        )
+                    })?;
                     Ok::<StoredDescriptor<'reg>, anyhow::Error>(descriptor)
                 })
                 .transpose()?,

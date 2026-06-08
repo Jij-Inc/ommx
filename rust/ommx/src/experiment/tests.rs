@@ -1,6 +1,6 @@
 //! Tests for the experiment session model.
 
-use super::config::{ExperimentConfig, ExperimentConfigRun, LayerRef};
+use super::config::{ExperimentConfig, ExperimentConfigRun, ExperimentConfigSolve, LayerRef};
 use super::UnsealedExperimentState;
 use super::{
     AttachmentLogger, AttachmentTable, Experiment, ExperimentDyn, ExperimentStatus, Name,
@@ -639,7 +639,7 @@ fn log_finished_solve_result_materializes_solve_entry_with_layer_refs() {
                     Some(SolveDiagnosticPayload::new(
                         diagnostics.clone(),
                         HashMap::new(),
-                    )),
+                    )?),
                 )
                 .unwrap();
             assert_eq!(solve_id, 0);
@@ -701,6 +701,100 @@ fn log_finished_solve_result_materializes_solve_entry_with_layer_refs() {
         );
         Ok(())
     });
+}
+
+#[test]
+fn solve_diagnostic_payload_requires_messagepack_array() {
+    let err = SolveDiagnosticPayload::new(vec![0xc4, 0x01], HashMap::new())
+        .expect_err("diagnostic payload must be valid MessagePack");
+    assert!(err.to_string().contains("valid MessagePack"), "{err:#}");
+
+    let map_payload = b"\x81\xa6status\xa7optimal".to_vec();
+    let err = SolveDiagnosticPayload::new(map_payload, HashMap::new())
+        .expect_err("diagnostic payload must be a top-level array");
+    assert!(err.to_string().contains("MessagePack array"), "{err:#}");
+
+    let trailing_payload = b"\x90\x00".to_vec();
+    let err = SolveDiagnosticPayload::new(trailing_payload, HashMap::new())
+        .expect_err("diagnostic payload must contain exactly one value");
+    assert!(
+        err.to_string().contains("exactly one MessagePack value"),
+        "{err:#}"
+    );
+}
+
+#[test]
+fn loaded_experiment_rejects_invalid_diagnostic_payload() {
+    let temp = crate::artifact::local_registry::TempLocalRegistry::new().unwrap();
+    let registry = temp.registry();
+    let input = registry
+        .store_layer_blob(media_types::v1_instance(), b"input", HashMap::new())
+        .unwrap();
+    let output = registry
+        .store_layer_blob(media_types::v1_solution(), b"output", HashMap::new())
+        .unwrap();
+    let diagnostics = registry
+        .store_layer_blob(
+            media_types::diagnostic_msgpack(),
+            b"\x81\xa6status\xa7optimal",
+            HashMap::new(),
+        )
+        .unwrap();
+    let run_parameters = registry
+        .store_json_layer_blob(
+            MediaType::Other(RUN_PARAMETERS_MEDIA_TYPE.to_string()),
+            &json!({ "columns": {} }),
+            HashMap::new(),
+        )
+        .unwrap();
+    let config = ExperimentConfig {
+        status: EXPERIMENT_STATUS_FINISHED.to_string(),
+        requested_image_name: None,
+        attachments: AttachmentTable::new(),
+        runs: vec![ExperimentConfigRun {
+            run_id: 0,
+            status: RUN_STATUS_FINISHED.to_string(),
+            attachments: AttachmentTable::new(),
+            trace: None,
+            solves: vec![ExperimentConfigSolve {
+                solve_id: 0,
+                input: LayerRef(0),
+                output: LayerRef(1),
+                adapter: "dummy.Adapter".to_string(),
+                adapter_options: "{}".to_string(),
+                diagnostics: Some(LayerRef(2)),
+            }],
+        }],
+        run_parameters: LayerRef(3),
+    };
+    let config_descriptor = registry
+        .store_json_blob(
+            MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()),
+            &config,
+        )
+        .unwrap();
+    let unsealed = UnsealedArtifact::new(
+        MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
+        config_descriptor,
+        vec![input, output, diagnostics, run_parameters],
+        None,
+        HashMap::new(),
+    );
+    let sealed_artifact = registry.seal_artifact(unsealed).unwrap();
+    let image_name =
+        ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:invalid-diagnostics").unwrap();
+    let artifact =
+        LocalArtifact::from_parts(registry, image_name, sealed_artifact.digest().clone());
+
+    let err = SealedExperiment::from_artifact(artifact)
+        .expect_err("diagnostic payload must be validated when loading an artifact");
+    let messages = err
+        .chain()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(messages.contains("Invalid Run 0 Solve 0 diagnostic payload"));
+    assert!(messages.contains("MessagePack array"));
 }
 
 #[test]

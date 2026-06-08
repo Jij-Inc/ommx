@@ -80,9 +80,10 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         )?;
         let diagnostics = diagnostics
             .map(|diagnostic| {
+                let bytes = diagnostic.to_msgpack_bytes()?;
                 self.experiment.registry.store_layer_blob(
-                    diagnostic.media_type,
-                    &diagnostic.bytes,
+                    media_types::diagnostic_msgpack(),
+                    &bytes,
                     diagnostic.annotations,
                 )
             })

@@ -143,10 +143,11 @@ impl RunDyn {
             )?;
             let diagnostics = diagnostics
                 .map(|diagnostic| {
+                    let bytes = diagnostic.to_msgpack_bytes()?;
                     store_solve_payload_descriptor(
                         &dyn_state,
-                        diagnostic.media_type,
-                        &diagnostic.bytes,
+                        media_types::diagnostic_msgpack(),
+                        &bytes,
                         diagnostic.annotations,
                     )
                 })
