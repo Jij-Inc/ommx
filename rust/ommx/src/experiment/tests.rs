@@ -625,6 +625,10 @@ fn log_finished_solve_result_materializes_solve_entry_with_layer_refs() {
             )
             .unwrap();
         let diagnostics = b"\x91\x81\xa6status\xa7optimal".to_vec();
+        let diagnostic_annotations = HashMap::from([(
+            "org.ommx.diagnostic.python_type".to_string(),
+            "builtins.list".to_string(),
+        )]);
 
         {
             let mut run = experiment.run().unwrap();
@@ -638,7 +642,7 @@ fn log_finished_solve_result_materializes_solve_entry_with_layer_refs() {
                     r#"{"time_limit":1.5}"#.to_string(),
                     Some(SolveDiagnosticPayload::new(
                         diagnostics.clone(),
-                        HashMap::new(),
+                        diagnostic_annotations.clone(),
                     )?),
                 )
                 .unwrap();
@@ -670,6 +674,10 @@ fn log_finished_solve_result_materializes_solve_entry_with_layer_refs() {
             diagnostic_layer.media_type(),
             &media_types::diagnostic_msgpack()
         );
+        assert_eq!(
+            diagnostic_layer.annotations().as_ref(),
+            Some(&diagnostic_annotations)
+        );
         assert_eq!(blob_bytes(&artifact, diagnostic_layer), diagnostics);
         assert_eq!(
             config_json["runs"][0]["solves"][0]["adapter"],
@@ -699,6 +707,12 @@ fn log_finished_solve_result_materializes_solve_entry_with_layer_refs() {
             solve.diagnostic_blob().unwrap().as_deref(),
             Some(&*diagnostics)
         );
+        let diagnostic_payload = solve.diagnostic_payload().unwrap().unwrap();
+        assert_eq!(diagnostic_payload.annotations(), &diagnostic_annotations);
+        assert!(matches!(
+            diagnostic_payload.value(),
+            rmpv::Value::Array(items) if items.len() == 1
+        ));
         Ok(())
     });
 }

@@ -17,9 +17,9 @@ use super::artifact::ExperimentArtifactView;
 use super::attachment::{read_file_attachment, store_attachment_descriptor};
 use super::config::ExperimentConfig;
 use super::{
-    allocate_next_run_id, next_run_id, AttachmentLogger, AttachmentTable, ExperimentStatus, Name,
-    RunEntry, RunParameterCell, RunStatus, SealedExperiment, SolveDiagnosticPayload,
-    UnsealedExperimentState,
+    allocate_next_run_id, next_run_id, read_solve_diagnostic_payload, AttachmentLogger,
+    AttachmentTable, ExperimentStatus, Name, RunEntry, RunParameterCell, RunStatus,
+    SealedExperiment, SolveDiagnosticPayload, UnsealedExperimentState,
 };
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
 use crate::artifact::{
@@ -357,6 +357,7 @@ impl SolveDyn {
         ))
     }
 
+    /// Raw MessagePack bytes of the adapter diagnostics payload.
     pub fn diagnostic_blob(&self) -> Result<Option<Vec<u8>>> {
         let Some(descriptor) = &self.diagnostics else {
             return Ok(None);
@@ -365,11 +366,21 @@ impl SolveDyn {
             .registry_handle
             .registry()
             .stored_descriptor(descriptor.clone())?;
-        descriptor.ensure_media_type(&media_types::diagnostic_msgpack())?;
-        let bytes = self.registry_handle.registry().get_blob(&descriptor)?;
-        SolveDiagnosticPayload::new(bytes.clone(), Default::default())
-            .with_context(|| format!("Invalid Solve {} diagnostic payload", self.solve_id))?;
+        let (bytes, _) = read_solve_diagnostic_payload(self.solve_id, &descriptor)?;
         Ok(Some(bytes))
+    }
+
+    /// Decode the adapter diagnostics payload recorded for this solve.
+    pub fn diagnostic_payload(&self) -> Result<Option<SolveDiagnosticPayload>> {
+        let Some(descriptor) = &self.diagnostics else {
+            return Ok(None);
+        };
+        let descriptor = self
+            .registry_handle
+            .registry()
+            .stored_descriptor(descriptor.clone())?;
+        let (_, payload) = read_solve_diagnostic_payload(self.solve_id, &descriptor)?;
+        Ok(Some(payload))
     }
 
     pub fn adapter(&self) -> &str {

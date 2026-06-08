@@ -81,7 +81,7 @@ pub use parameter::{ParameterValue, RunParameterCell};
 pub use sealed::{SealedRun, Solve};
 
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor, TempLocalRegistry};
-use crate::artifact::{ImageRef, LocalArtifact};
+use crate::artifact::{media_types, ImageRef, LocalArtifact};
 use anyhow::{ensure, Context, Result};
 use attachment::{read_file_attachment, store_attachment_descriptor};
 use oci_spec::image::MediaType;
@@ -320,7 +320,7 @@ struct SolveEntry<'reg> {
     diagnostics: Option<StoredDescriptor<'reg>>,
 }
 
-/// MessagePack-encoded adapter diagnostics payload for one Solve.
+/// Adapter diagnostics payload for one Solve.
 #[derive(Debug, Clone)]
 pub struct SolveDiagnosticPayload {
     value: MessagePackValue,
@@ -340,6 +340,7 @@ impl SolveDiagnosticPayload {
         Self::from_value(value, annotations)
     }
 
+    /// Create a diagnostics payload from a decoded MessagePack value.
     pub fn from_value(
         value: MessagePackValue,
         annotations: HashMap<String, String>,
@@ -351,8 +352,14 @@ impl SolveDiagnosticPayload {
         Ok(Self { value, annotations })
     }
 
+    /// Decoded MessagePack value. The top-level value is always an array.
     pub fn value(&self) -> &MessagePackValue {
         &self.value
+    }
+
+    /// OCI layer annotations stored with this diagnostics payload.
+    pub fn annotations(&self) -> &HashMap<String, String> {
+        &self.annotations
     }
 
     pub(crate) fn to_msgpack_bytes(&self) -> Result<Vec<u8>> {
@@ -361,6 +368,22 @@ impl SolveDiagnosticPayload {
             .context("Failed to encode Solve diagnostic payload as MessagePack")?;
         Ok(bytes)
     }
+}
+
+fn read_solve_diagnostic_payload(
+    solve_id: u64,
+    descriptor: &StoredDescriptor<'_>,
+) -> Result<(Vec<u8>, SolveDiagnosticPayload)> {
+    descriptor.ensure_media_type(&media_types::diagnostic_msgpack())?;
+    let bytes = descriptor.registry().get_blob(descriptor)?;
+    let annotations = descriptor
+        .annotations()
+        .as_ref()
+        .cloned()
+        .unwrap_or_default();
+    let payload = SolveDiagnosticPayload::new(bytes.clone(), annotations)
+        .with_context(|| format!("Invalid Solve {solve_id} diagnostic payload"))?;
+    Ok((bytes, payload))
 }
 
 /// Mutable experiment state before the root manifest is sealed. A live

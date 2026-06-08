@@ -5,8 +5,8 @@ use super::attachment::AttachmentTable;
 use super::config::{ExperimentConfigSolve, LayerRef};
 use super::parameter::{RunParameterCell, RunParameterTable};
 use super::{
-    ExperimentStatus, RunStatus, SealedExperiment, SolveDiagnosticPayload, Trace,
-    RUN_PARAMETERS_MEDIA_TYPE,
+    read_solve_diagnostic_payload, ExperimentStatus, RunStatus, SealedExperiment,
+    SolveDiagnosticPayload, Trace, RUN_PARAMETERS_MEDIA_TYPE,
 };
 use crate::artifact::local_registry::StoredDescriptor;
 use crate::artifact::{
@@ -286,14 +286,21 @@ impl<'reg> Solve<'reg> {
         self.diagnostics.as_ref()
     }
 
+    /// Decode the adapter diagnostics payload recorded for this solve.
+    pub fn diagnostic_payload(&self) -> Result<Option<SolveDiagnosticPayload>> {
+        let Some(descriptor) = &self.diagnostics else {
+            return Ok(None);
+        };
+        let (_, payload) = read_solve_diagnostic_payload(self.solve_id, descriptor)?;
+        Ok(Some(payload))
+    }
+
+    /// Raw MessagePack bytes of the adapter diagnostics payload.
     pub fn diagnostic_blob(&self) -> Result<Option<Vec<u8>>> {
         let Some(descriptor) = &self.diagnostics else {
             return Ok(None);
         };
-        descriptor.ensure_media_type(&media_types::diagnostic_msgpack())?;
-        let bytes = descriptor.registry().get_blob(descriptor)?;
-        SolveDiagnosticPayload::new(bytes.clone(), Default::default())
-            .with_context(|| format!("Invalid Solve {} diagnostic payload", self.solve_id))?;
+        let (bytes, _) = read_solve_diagnostic_payload(self.solve_id, descriptor)?;
         Ok(Some(bytes))
     }
 
