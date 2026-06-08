@@ -1994,6 +1994,7 @@ fn unpack_diagnostics<'py>(
     let msgpack = py.import("msgpack")?;
     let kwargs = PyDict::new(py);
     kwargs.set_item("raw", false)?;
+    kwargs.set_item("strict_map_key", false)?;
     let decoded = msgpack.call_method("unpackb", (PyBytes::new(py, &blob),), Some(&kwargs))?;
     Ok(decoded
         .cast::<PyList>()

@@ -27,6 +27,11 @@ class DummyProgressDiagnostic:
     node_count: int
 
 
+@dataclass(frozen=True, slots=True)
+class DummyMapKeyDiagnostic:
+    values: dict[int, str]
+
+
 def _df_snap(df: pd.DataFrame) -> str:
     return df.to_string(na_rep="<NA>")
 
@@ -663,6 +668,7 @@ def test_log_solve_records_adapter_diagnostics():
             assert diagnostics is not None
             diagnostics.record(DummyProgressDiagnostic(event="node", node_count=10))
             diagnostics.record(DummyDiagnostic(status="terminated", bound=math.inf))
+            diagnostics.record(DummyMapKeyDiagnostic(values={1: "root"}))
             return ommx_instance.evaluate({})
 
         @property
@@ -690,6 +696,7 @@ def test_log_solve_records_adapter_diagnostics():
     assert solve.diagnostics == [
         {"event": "node", "node_count": 10},
         {"status": "terminated", "bound": math.inf},
+        {"values": {1: "root"}},
     ]
     assert math.isinf(solve.diagnostics[1]["bound"])
 
