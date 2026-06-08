@@ -8,6 +8,14 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🆕 Adapter-specific solve diagnostics ([#913](https://github.com/Jij-Inc/ommx/pull/913))
+
+Solver adapters now have an adapter-specific diagnostics channel for preserving backend solver information that does not belong in the common {class}`~ommx.v1.Solution` result. Direct adapter calls can pass {class}`~ommx.adapter.DiagnosticCollector` to {meth}`~ommx.adapter.SolverAdapter.solve` through the reserved `diagnostics` keyword, while {meth}`~ommx.experiment.Run.log_solve` owns that keyword and stores recorded diagnostics with each Experiment {class}`~ommx.experiment.Solve`.
+
+The PySCIPOpt Adapter now emits {class}`~ommx_pyscipopt_adapter.SCIPTerminationReport`, including SCIP termination status, primal/dual bounds, gap, objective value, node and solution counts, timing, and SCIP/PySCIPOpt version metadata. The report is recorded after `model.optimize()` and before decoding back to an OMMX Solution, so it is available even when decoding raises an adapter exception such as infeasible or unbounded detection.
+
+See [Adapter-specific Diagnostics](../user_guide/adapter_diagnostics.md) for the full API workflow and the `SCIPTerminationReport` field reference.
+
 ## 3.0.0 Alpha 5
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0a5-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0a5)
