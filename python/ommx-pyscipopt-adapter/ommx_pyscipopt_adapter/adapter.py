@@ -184,6 +184,45 @@ class SCIPDiagnosticsAnalyzer:
     def termination_report(self) -> SCIPTerminationReport | None:
         return self._termination_report
 
+    def progress_records(self) -> list[dict[str, object]]:
+        """Return one dictionary per SCIP progress snapshot."""
+        return [
+            {
+                "event": snapshot.event,
+                "solving_time_sec": snapshot.solving_time_sec,
+                "node_count": snapshot.node_count,
+                "total_node_count": snapshot.total_node_count,
+                "lp_iteration_count": snapshot.lp_iteration_count,
+                "solution_count": snapshot.solution_count,
+                "primal_bound": snapshot.primal_bound,
+                "dual_bound": snapshot.dual_bound,
+                "gap": snapshot.gap,
+                "incumbent_objective": snapshot.incumbent_objective,
+            }
+            for snapshot in self.progress_snapshots
+        ]
+
+    def progress_df(self) -> Any:
+        """Return progress snapshots as a pandas DataFrame."""
+        return _dataframe(self.progress_records(), _PROGRESS_SNAPSHOT_COLUMNS)
+
+    def gap_evolution_records(self) -> list[dict[str, object]]:
+        """Return records for plotting SCIP gap evolution."""
+        return [
+            {
+                "solving_time_sec": snapshot.solving_time_sec,
+                "gap": snapshot.gap,
+                "primal_bound": snapshot.primal_bound,
+                "dual_bound": snapshot.dual_bound,
+                "event": snapshot.event,
+            }
+            for snapshot in self.progress_snapshots
+        ]
+
+    def gap_evolution_df(self) -> Any:
+        """Return SCIP gap evolution as a pandas DataFrame."""
+        return _dataframe(self.gap_evolution_records(), _GAP_EVOLUTION_COLUMNS)
+
     def gap_evolution(self) -> tuple[tuple[float, float, float, float, str], ...]:
         """Return ``(time, gap, primal_bound, dual_bound, event)`` samples."""
         return tuple(
@@ -195,6 +234,24 @@ class SCIPDiagnosticsAnalyzer:
                 snapshot.event,
             )
             for snapshot in self.progress_snapshots
+        )
+
+    def incumbent_evolution_records(self) -> list[dict[str, object]]:
+        """Return records for plotting incumbent objective evolution."""
+        return [
+            {
+                "solving_time_sec": snapshot.solving_time_sec,
+                "incumbent_objective": incumbent_objective,
+                "event": snapshot.event,
+            }
+            for snapshot in self.progress_snapshots
+            if (incumbent_objective := snapshot.incumbent_objective) is not None
+        ]
+
+    def incumbent_evolution_df(self) -> Any:
+        """Return incumbent objective evolution as a pandas DataFrame."""
+        return _dataframe(
+            self.incumbent_evolution_records(), _INCUMBENT_EVOLUTION_COLUMNS
         )
 
     def incumbent_evolution(self) -> tuple[tuple[float, float, str], ...]:
@@ -211,6 +268,44 @@ class SCIPDiagnosticsAnalyzer:
                     )
                 )
         return tuple(samples)
+
+    def termination_record(self) -> dict[str, object] | None:
+        """Return the terminal SCIP report as one dictionary, if present."""
+        report = self.termination_report
+        if report is None:
+            return None
+        return {
+            "status": report.status,
+            "primal_bound": report.primal_bound,
+            "dual_bound": report.dual_bound,
+            "gap": report.gap,
+            "objective_value": report.objective_value,
+            "node_count": report.node_count,
+            "total_node_count": report.total_node_count,
+            "lp_iteration_count": report.lp_iteration_count,
+            "lp_solve_count": report.lp_solve_count,
+            "cut_count": report.cut_count,
+            "applied_cut_count": report.applied_cut_count,
+            "solution_count": report.solution_count,
+            "solution_found_count": report.solution_found_count,
+            "best_solution_count": report.best_solution_count,
+            "max_depth": report.max_depth,
+            "primal_dual_integral": report.primal_dual_integral,
+            "solving_time_sec": report.solving_time_sec,
+            "presolving_time_sec": report.presolving_time_sec,
+            "reading_time_sec": report.reading_time_sec,
+            "scip_version": report.scip_version,
+            "pyscipopt_version": report.pyscipopt_version,
+        }
+
+    def termination_records(self) -> list[dict[str, object]]:
+        """Return the terminal SCIP report as a one-row record list."""
+        record = self.termination_record()
+        return [] if record is None else [record]
+
+    def termination_df(self) -> Any:
+        """Return the terminal SCIP report as a pandas DataFrame."""
+        return _dataframe(self.termination_records(), _TERMINATION_REPORT_COLUMNS)
 
 
 def _as_progress_snapshot(diagnostic: Any) -> SCIPProgressSnapshot | None:
@@ -281,6 +376,33 @@ _PROGRESS_SNAPSHOT_KEYS = frozenset(
     }
 )
 
+_PROGRESS_SNAPSHOT_COLUMNS = [
+    "event",
+    "solving_time_sec",
+    "node_count",
+    "total_node_count",
+    "lp_iteration_count",
+    "solution_count",
+    "primal_bound",
+    "dual_bound",
+    "gap",
+    "incumbent_objective",
+]
+
+_GAP_EVOLUTION_COLUMNS = [
+    "solving_time_sec",
+    "gap",
+    "primal_bound",
+    "dual_bound",
+    "event",
+]
+
+_INCUMBENT_EVOLUTION_COLUMNS = [
+    "solving_time_sec",
+    "incumbent_objective",
+    "event",
+]
+
 _TERMINATION_REPORT_KEYS = frozenset(
     {
         "status",
@@ -306,6 +428,41 @@ _TERMINATION_REPORT_KEYS = frozenset(
         "pyscipopt_version",
     }
 )
+
+_TERMINATION_REPORT_COLUMNS = [
+    "status",
+    "primal_bound",
+    "dual_bound",
+    "gap",
+    "objective_value",
+    "node_count",
+    "total_node_count",
+    "lp_iteration_count",
+    "lp_solve_count",
+    "cut_count",
+    "applied_cut_count",
+    "solution_count",
+    "solution_found_count",
+    "best_solution_count",
+    "max_depth",
+    "primal_dual_integral",
+    "solving_time_sec",
+    "presolving_time_sec",
+    "reading_time_sec",
+    "scip_version",
+    "pyscipopt_version",
+]
+
+
+def _dataframe(records: list[dict[str, object]], columns: list[str]) -> Any:
+    try:
+        import pandas as pd
+    except ImportError as error:
+        raise ImportError(
+            "pandas is required for SCIPDiagnosticsAnalyzer DataFrame methods. "
+            "Use the corresponding *_records() method without pandas."
+        ) from error
+    return pd.DataFrame.from_records(records, columns=columns)
 
 
 class OMMXPySCIPOptAdapter(SolverAdapter):

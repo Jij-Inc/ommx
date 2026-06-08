@@ -116,9 +116,15 @@ from ommx_pyscipopt_adapter import SCIPDiagnosticsAnalyzer
 
 analysis = SCIPDiagnosticsAnalyzer(collector.diagnostics)
 
-gap_series = analysis.gap_evolution()
+progress = analysis.progress_df()
+gap_series = analysis.gap_evolution_df()
+incumbents = analysis.incumbent_evolution_df()
 termination = analysis.termination_report
 ```
+
+DataFrame helper は pandas を必要とします。pandas が使えない環境では
+`progress_records()`、`gap_evolution_records()`、`incumbent_evolution_records()`、
+`termination_records()` を使ってください。
 
 ## PySCIPOpt Adapter: SCIPTerminationReport
 

@@ -108,9 +108,41 @@ def test_solve_records_progress_diagnostics():
         assert isinstance(snapshot.gap, float)
     analyzer = SCIPDiagnosticsAnalyzer(collector.diagnostics)
     assert analyzer.progress_snapshots == tuple(progress_snapshots)
+    assert analyzer.progress_records()
+    assert list(analyzer.progress_df().columns) == [
+        "event",
+        "solving_time_sec",
+        "node_count",
+        "total_node_count",
+        "lp_iteration_count",
+        "solution_count",
+        "primal_bound",
+        "dual_bound",
+        "gap",
+        "incumbent_objective",
+    ]
+    assert analyzer.gap_evolution_records()
     assert analyzer.gap_evolution()
+    assert list(analyzer.gap_evolution_df().columns) == [
+        "solving_time_sec",
+        "gap",
+        "primal_bound",
+        "dual_bound",
+        "event",
+    ]
+    assert analyzer.incumbent_evolution_records()
+    assert analyzer.incumbent_evolution()
+    assert list(analyzer.incumbent_evolution_df().columns) == [
+        "solving_time_sec",
+        "incumbent_objective",
+        "event",
+    ]
     assert analyzer.termination_report is not None
     assert analyzer.termination_report.status == "optimal"
+    assert analyzer.termination_record() is not None
+    termination_df = analyzer.termination_df()
+    assert termination_df.shape[0] == 1
+    assert termination_df.loc[0, "status"] == "optimal"
 
 
 def test_log_solve_stores_progress_diagnostics():
@@ -127,10 +159,13 @@ def test_log_solve_stores_progress_diagnostics():
         "BESTSOLFOUND",
         "DUALBOUNDIMPROVED",
     }
+    assert analyzer.progress_records()
     assert analyzer.gap_evolution()
+    assert not analyzer.gap_evolution_df().empty
     assert analyzer.termination_report is not None
     assert analyzer.termination_report.status == "optimal"
     assert analyzer.termination_report.lp_iteration_count >= 0
+    assert analyzer.termination_records()[0]["status"] == "optimal"
 
 
 def test_solve_records_termination_diagnostics_before_decode_errors():
