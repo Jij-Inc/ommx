@@ -1,7 +1,7 @@
 from __future__ import annotations
 import math
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Iterable, Mapping, Optional, cast
 
 import pyscipopt
 from pyscipopt.scip import PY_SCIP_EVENTTYPE as SCIP_EVENTTYPE
@@ -129,17 +129,10 @@ class SCIPProgressSnapshot:
         )
 
 
-@dataclass(frozen=True, slots=True)
-class SCIPProgressReport:
-    """SCIP bound progress trace collected during optimization."""
-
-    snapshots: tuple[SCIPProgressSnapshot, ...]
-
-
 class _SCIPDiagnosticsEventHandler(pyscipopt.Eventhdlr):
-    def __init__(self) -> None:
+    def __init__(self, diagnostics: DiagnosticsSink) -> None:
         super().__init__()
-        self.snapshots: list[SCIPProgressSnapshot] = []
+        self.diagnostics = diagnostics
 
     def eventinit(self) -> None:
         self.model.catchEvent(SCIP_EVENTTYPE.BESTSOLFOUND, self)
@@ -150,7 +143,7 @@ class _SCIPDiagnosticsEventHandler(pyscipopt.Eventhdlr):
         self.model.dropEvent(SCIP_EVENTTYPE.DUALBOUNDIMPROVED, self)
 
     def eventexec(self, event: SCIPEvent) -> None:
-        self.snapshots.append(SCIPProgressSnapshot.from_event(self.model, event))
+        self.diagnostics.record(SCIPProgressSnapshot.from_event(self.model, event))
 
 
 def _get_incumbent_objective(
@@ -162,6 +155,157 @@ def _get_incumbent_objective(
         return model.getObjVal()
     except Exception:
         return None
+
+
+class SCIPDiagnosticsAnalyzer:
+    """Post-process diagnostics emitted by the PySCIPOpt adapter."""
+
+    def __init__(self, diagnostics: Iterable[Any]) -> None:
+        diagnostics = tuple(diagnostics)
+        self._progress_snapshots = tuple(
+            snapshot
+            for diagnostic in diagnostics
+            if (snapshot := _as_progress_snapshot(diagnostic)) is not None
+        )
+        termination_reports = tuple(
+            report
+            for diagnostic in diagnostics
+            if (report := _as_termination_report(diagnostic)) is not None
+        )
+        self._termination_report = (
+            termination_reports[-1] if termination_reports else None
+        )
+
+    @property
+    def progress_snapshots(self) -> tuple[SCIPProgressSnapshot, ...]:
+        return self._progress_snapshots
+
+    @property
+    def termination_report(self) -> SCIPTerminationReport | None:
+        return self._termination_report
+
+    def gap_evolution(self) -> tuple[tuple[float, float, float, float, str], ...]:
+        """Return ``(time, gap, primal_bound, dual_bound, event)`` samples."""
+        return tuple(
+            (
+                snapshot.solving_time_sec,
+                snapshot.gap,
+                snapshot.primal_bound,
+                snapshot.dual_bound,
+                snapshot.event,
+            )
+            for snapshot in self.progress_snapshots
+        )
+
+    def incumbent_evolution(self) -> tuple[tuple[float, float, str], ...]:
+        """Return ``(time, incumbent_objective, event)`` samples."""
+        samples = []
+        for snapshot in self.progress_snapshots:
+            incumbent_objective = snapshot.incumbent_objective
+            if incumbent_objective is not None:
+                samples.append(
+                    (
+                        snapshot.solving_time_sec,
+                        incumbent_objective,
+                        snapshot.event,
+                    )
+                )
+        return tuple(samples)
+
+
+def _as_progress_snapshot(diagnostic: Any) -> SCIPProgressSnapshot | None:
+    if isinstance(diagnostic, SCIPProgressSnapshot):
+        return diagnostic
+    if not isinstance(diagnostic, Mapping):
+        return None
+    if not _PROGRESS_SNAPSHOT_KEYS <= diagnostic.keys():
+        return None
+    return SCIPProgressSnapshot(
+        event=cast(str, diagnostic["event"]),
+        solving_time_sec=cast(float, diagnostic["solving_time_sec"]),
+        node_count=cast(int, diagnostic["node_count"]),
+        total_node_count=cast(int, diagnostic["total_node_count"]),
+        lp_iteration_count=cast(int, diagnostic["lp_iteration_count"]),
+        solution_count=cast(int, diagnostic["solution_count"]),
+        primal_bound=cast(float, diagnostic["primal_bound"]),
+        dual_bound=cast(float, diagnostic["dual_bound"]),
+        gap=cast(float, diagnostic["gap"]),
+        incumbent_objective=cast(float | None, diagnostic["incumbent_objective"]),
+    )
+
+
+def _as_termination_report(diagnostic: Any) -> SCIPTerminationReport | None:
+    if isinstance(diagnostic, SCIPTerminationReport):
+        return diagnostic
+    if not isinstance(diagnostic, Mapping):
+        return None
+    if not _TERMINATION_REPORT_KEYS <= diagnostic.keys():
+        return None
+    return SCIPTerminationReport(
+        status=cast(str, diagnostic["status"]),
+        primal_bound=cast(float, diagnostic["primal_bound"]),
+        dual_bound=cast(float, diagnostic["dual_bound"]),
+        gap=cast(float, diagnostic["gap"]),
+        objective_value=cast(float | None, diagnostic["objective_value"]),
+        node_count=cast(int, diagnostic["node_count"]),
+        total_node_count=cast(int, diagnostic["total_node_count"]),
+        lp_iteration_count=cast(int, diagnostic["lp_iteration_count"]),
+        lp_solve_count=cast(int, diagnostic["lp_solve_count"]),
+        cut_count=cast(int, diagnostic["cut_count"]),
+        applied_cut_count=cast(int, diagnostic["applied_cut_count"]),
+        solution_count=cast(int, diagnostic["solution_count"]),
+        solution_found_count=cast(int, diagnostic["solution_found_count"]),
+        best_solution_count=cast(int, diagnostic["best_solution_count"]),
+        max_depth=cast(int, diagnostic["max_depth"]),
+        primal_dual_integral=cast(float, diagnostic["primal_dual_integral"]),
+        solving_time_sec=cast(float, diagnostic["solving_time_sec"]),
+        presolving_time_sec=cast(float, diagnostic["presolving_time_sec"]),
+        reading_time_sec=cast(float, diagnostic["reading_time_sec"]),
+        scip_version=cast(str, diagnostic["scip_version"]),
+        pyscipopt_version=cast(str | None, diagnostic["pyscipopt_version"]),
+    )
+
+
+_PROGRESS_SNAPSHOT_KEYS = frozenset(
+    {
+        "event",
+        "solving_time_sec",
+        "node_count",
+        "total_node_count",
+        "lp_iteration_count",
+        "solution_count",
+        "primal_bound",
+        "dual_bound",
+        "gap",
+        "incumbent_objective",
+    }
+)
+
+_TERMINATION_REPORT_KEYS = frozenset(
+    {
+        "status",
+        "primal_bound",
+        "dual_bound",
+        "gap",
+        "objective_value",
+        "node_count",
+        "total_node_count",
+        "lp_iteration_count",
+        "lp_solve_count",
+        "cut_count",
+        "applied_cut_count",
+        "solution_count",
+        "solution_found_count",
+        "best_solution_count",
+        "max_depth",
+        "primal_dual_integral",
+        "solving_time_sec",
+        "presolving_time_sec",
+        "reading_time_sec",
+        "scip_version",
+        "pyscipopt_version",
+    }
+)
 
 
 class OMMXPySCIPOptAdapter(SolverAdapter):
@@ -295,9 +439,8 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             span.set_attribute("adapter", f"{cls.__module__}.{cls.__qualname__}")
             adapter = cls(ommx_instance, initial_state=initial_state)
             model = adapter.solver_input
-            progress_handler = None
             if diagnostics is not None:
-                progress_handler = _SCIPDiagnosticsEventHandler()
+                progress_handler = _SCIPDiagnosticsEventHandler(diagnostics)
                 model.includeEventhdlr(
                     progress_handler,
                     "ommx_diagnostics",
@@ -306,10 +449,6 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             with _tracer.start_as_current_span("call"):
                 model.optimize()
             if diagnostics is not None:
-                if progress_handler is not None and progress_handler.snapshots:
-                    diagnostics.record(
-                        SCIPProgressReport(tuple(progress_handler.snapshots))
-                    )
                 diagnostics.record(SCIPTerminationReport.from_model(model))
             solution = adapter.decode(model)
             return solution

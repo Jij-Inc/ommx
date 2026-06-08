@@ -8,8 +8,9 @@ from ommx.experiment import Experiment
 from ommx.v1 import Instance, Constraint, DecisionVariable, Solution
 
 from ommx_pyscipopt_adapter import (
+    SCIPDiagnosticsAnalyzer,
     OMMXPySCIPOptAdapter,
-    SCIPProgressReport,
+    SCIPProgressSnapshot,
     SCIPTerminationReport,
 )
 from ommx_pyscipopt_adapter.exception import OMMXPySCIPOptAdapterError
@@ -85,21 +86,18 @@ def test_solve_records_progress_diagnostics():
     solution = OMMXPySCIPOptAdapter.solve(instance, diagnostics=collector)
 
     assert solution.optimality == Solution.OPTIMAL
-    progress_reports = [
+    progress_snapshots = [
         diagnostic
         for diagnostic in collector.diagnostics
-        if isinstance(diagnostic, SCIPProgressReport)
+        if isinstance(diagnostic, SCIPProgressSnapshot)
     ]
-    (progress_report,) = progress_reports
-    assert progress_report.snapshots
-    assert {snapshot.event for snapshot in progress_report.snapshots} <= {
+    assert progress_snapshots
+    assert {snapshot.event for snapshot in progress_snapshots} <= {
         "BESTSOLFOUND",
         "DUALBOUNDIMPROVED",
     }
-    assert any(
-        snapshot.event == "BESTSOLFOUND" for snapshot in progress_report.snapshots
-    )
-    for snapshot in progress_report.snapshots:
+    assert any(snapshot.event == "BESTSOLFOUND" for snapshot in progress_snapshots)
+    for snapshot in progress_snapshots:
         assert snapshot.solving_time_sec >= 0.0
         assert snapshot.node_count >= 0
         assert snapshot.total_node_count >= snapshot.node_count
@@ -108,6 +106,11 @@ def test_solve_records_progress_diagnostics():
         assert isinstance(snapshot.primal_bound, float)
         assert isinstance(snapshot.dual_bound, float)
         assert isinstance(snapshot.gap, float)
+    analyzer = SCIPDiagnosticsAnalyzer(collector.diagnostics)
+    assert analyzer.progress_snapshots == tuple(progress_snapshots)
+    assert analyzer.gap_evolution()
+    assert analyzer.termination_report is not None
+    assert analyzer.termination_report.status == "optimal"
 
 
 def test_log_solve_stores_progress_diagnostics():
@@ -115,16 +118,19 @@ def test_log_solve_stores_progress_diagnostics():
         with experiment.run() as run:
             run.log_solve(OMMXPySCIPOptAdapter, _knapsack_instance())
 
-    progress_report, termination_report = experiment.runs[0].solves[0].diagnostics
+    diagnostics = experiment.runs[0].solves[0].diagnostics
+    analyzer = SCIPDiagnosticsAnalyzer(diagnostics)
 
-    assert progress_report["snapshots"]
-    assert progress_report["snapshots"][0]["event"] in {
+    assert diagnostics[-1]["status"] == "optimal"
+    assert analyzer.progress_snapshots
+    assert analyzer.progress_snapshots[0].event in {
         "BESTSOLFOUND",
         "DUALBOUNDIMPROVED",
     }
-    assert "incumbent_objective" in progress_report["snapshots"][0]
-    assert termination_report["status"] == "optimal"
-    assert termination_report["lp_iteration_count"] >= 0
+    assert analyzer.gap_evolution()
+    assert analyzer.termination_report is not None
+    assert analyzer.termination_report.status == "optimal"
+    assert analyzer.termination_report.lp_iteration_count >= 0
 
 
 def test_solve_records_termination_diagnostics_before_decode_errors():

@@ -19,9 +19,14 @@ reported, or proved during the solve.
 The common entry point is the reserved `diagnostics` keyword on
 {meth}`~ommx.adapter.SolverAdapter.solve`. An adapter receives a
 {class}`~ommx.adapter.DiagnosticsSink` and records backend-specific dataclass
-reports with {meth}`DiagnosticsSink.record() <ommx.adapter.DiagnosticsSink.record>`.
-Each adapter decides which report types it emits, and adapters that have no
+diagnostics with {meth}`DiagnosticsSink.record() <ommx.adapter.DiagnosticsSink.record>`.
+Each adapter decides which diagnostic types it emits, and adapters that have no
 extra information may leave the sink empty.
+
+Adapters may call `record()` during the solve, including from backend solver
+callbacks. A collector can therefore receive progress events before the final
+termination report, while Experiment storage still writes one diagnostics BLOB
+for each Solve.
 
 ## Collect Diagnostics Directly
 
@@ -30,8 +35,8 @@ as the diagnostics sink. The collector stores typed diagnostic report instances
 exactly as the adapter records them.
 
 The following example uses the PySCIPOpt Adapter, which records
-{class}`~ommx_pyscipopt_adapter.SCIPProgressReport` when SCIP emits progress
-events and then records one
+{class}`~ommx_pyscipopt_adapter.SCIPProgressSnapshot` whenever SCIP emits a
+tracked progress event and then records one
 {class}`~ommx_pyscipopt_adapter.SCIPTerminationReport`.
 
 ```python
@@ -53,7 +58,7 @@ print(report.primal_bound, report.dual_bound, report.gap)
 ```
 
 `collector.diagnostics` is a list because an adapter may record multiple
-diagnostic reports. The concrete item types are adapter-specific.
+diagnostic events and reports. The concrete item types are adapter-specific.
 
 ## Store Diagnostics in an Experiment
 
@@ -82,17 +87,13 @@ dictionaries, not as the original dataclass instances. This keeps stored
 Artifacts independent of the Python class definitions used when the solve was
 recorded.
 
-## PySCIPOpt Adapter: SCIPProgressReport
+## PySCIPOpt Adapter: SCIPProgressSnapshot
 
 When diagnostics are requested, the PySCIPOpt Adapter attaches a SCIP event
 handler before `model.optimize()`. It currently listens for `BESTSOLFOUND` and
 `DUALBOUNDIMPROVED` events and records one
-{class}`~ommx_pyscipopt_adapter.SCIPProgressReport` when at least one such event
-was observed.
-
-The report contains a `snapshots` tuple of
-{class}`~ommx_pyscipopt_adapter.SCIPProgressSnapshot` values. Each snapshot is a
-model-state sample taken inside the SCIP event callback.
+{class}`~ommx_pyscipopt_adapter.SCIPProgressSnapshot` for each observed event.
+Each snapshot is a model-state sample taken inside the SCIP event callback.
 
 | Field | Meaning |
 |---|---|
@@ -111,6 +112,19 @@ SCIP may call a `BESTSOLFOUND` callback before every aggregate model statistic
 has been updated. Treat each snapshot as the model state visible from that SCIP
 callback, and use the final
 {class}`~ommx_pyscipopt_adapter.SCIPTerminationReport` for terminal values.
+
+For post-solve analysis, use
+{class}`~ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer` over either the typed
+collector contents or dictionaries loaded from an Experiment:
+
+```python
+from ommx_pyscipopt_adapter import SCIPDiagnosticsAnalyzer
+
+analysis = SCIPDiagnosticsAnalyzer(collector.diagnostics)
+
+gap_series = analysis.gap_evolution()
+termination = analysis.termination_report
+```
 
 ## PySCIPOpt Adapter: SCIPTerminationReport
 
@@ -168,25 +182,22 @@ except UnboundedDetected:
 ```
 
 When the report is loaded back from an Experiment, it is represented as a
-dictionary:
+dictionaries. Each progress event is one dictionary, followed by the
+termination report:
 
 ```python
 [
     {
-        "snapshots": [
-            {
-                "event": "DUALBOUNDIMPROVED",
-                "solving_time_sec": 0.01,
-                "node_count": 1,
-                "total_node_count": 1,
-                "lp_iteration_count": 3,
-                "solution_count": 2,
-                "primal_bound": 39.0,
-                "dual_bound": 42.0,
-                "gap": 0.07692307692307693,
-                "incumbent_objective": 42.0,
-            }
-        ]
+        "event": "DUALBOUNDIMPROVED",
+        "solving_time_sec": 0.01,
+        "node_count": 1,
+        "total_node_count": 1,
+        "lp_iteration_count": 3,
+        "solution_count": 2,
+        "primal_bound": 39.0,
+        "dual_bound": 42.0,
+        "gap": 0.07692307692307693,
+        "incumbent_objective": 42.0,
     },
     {
         "status": "optimal",

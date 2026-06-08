@@ -1,15 +1,15 @@
 from .exception import OMMXPySCIPOptAdapterError
 from .adapter import (
+    SCIPDiagnosticsAnalyzer,
     OMMXPySCIPOptAdapter,
-    SCIPProgressReport,
     SCIPProgressSnapshot,
     SCIPTerminationReport,
 )
 
 __all__ = [
+    "SCIPDiagnosticsAnalyzer",
     "OMMXPySCIPOptAdapter",
     "OMMXPySCIPOptAdapterError",
-    "SCIPProgressReport",
     "SCIPProgressSnapshot",
     "SCIPTerminationReport",
 ]
