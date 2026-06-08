@@ -94,6 +94,7 @@ tutorial/implement_adapter
 :hidden:
 
 user_guide/supported_ommx_adapters
+user_guide/adapter_diagnostics
 user_guide/adapter_initial_state
 user_guide/function
 user_guide/instance
