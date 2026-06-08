@@ -42,55 +42,75 @@ class SCIPTerminationReport:
     SCIP model back into an OMMX solution. It is therefore available even when
     decoding raises an adapter exception such as infeasible or unbounded
     detection.
-
-    :ivar status: SCIP termination status, such as ``"optimal"``,
-        ``"infeasible"``, or ``"unbounded"``.
-    :ivar primal_bound: SCIP primal bound at termination.
-    :ivar dual_bound: SCIP dual bound at termination.
-    :ivar gap: SCIP relative gap reported by ``getGap()``.
-    :ivar objective_value: Incumbent objective value, or ``None`` when SCIP has
-        no solution.
-    :ivar node_count: Number of branch-and-bound nodes processed by SCIP.
-    :ivar total_node_count: Total processed nodes including restarts.
-    :ivar lp_iteration_count: Total LP iterations.
-    :ivar lp_solve_count: Number of solved LPs.
-    :ivar cut_count: Number of cuts available in SCIP's cut pool.
-    :ivar applied_cut_count: Number of cuts applied by SCIP.
-    :ivar solution_count: Number of solutions stored by SCIP at termination.
-    :ivar solution_found_count: Number of solutions SCIP found during the
-        solve.
-    :ivar best_solution_count: Number of new incumbent solutions SCIP found.
-    :ivar max_depth: Maximum branch-and-bound depth. SCIP may report ``-1``
-        when no branching occurred.
-    :ivar primal_dual_integral: SCIP primal-dual integral at termination.
-    :ivar solving_time_sec: SCIP solving time in seconds.
-    :ivar presolving_time_sec: SCIP presolving time in seconds.
-    :ivar reading_time_sec: SCIP reading time in seconds.
-    :ivar scip_version: SCIP version used through PySCIPOpt.
-    :ivar pyscipopt_version: PySCIPOpt package version, if available.
     """
 
     status: str
+    """SCIP termination status, such as ``"optimal"``, ``"infeasible"``, or
+    ``"unbounded"``.
+    """
+
     primal_bound: float
+    """SCIP primal bound at termination."""
+
     dual_bound: float
+    """SCIP dual bound at termination."""
+
     gap: float
+    """SCIP relative gap reported by ``getGap()``."""
+
     objective_value: float | None
+    """Incumbent objective value, or ``None`` when SCIP has no solution."""
+
     node_count: int
+    """Number of branch-and-bound nodes processed by SCIP."""
+
     total_node_count: int
+    """Total processed nodes including restarts."""
+
     lp_iteration_count: int
+    """Total LP iterations."""
+
     lp_solve_count: int
+    """Number of solved LPs."""
+
     cut_count: int
+    """Number of cuts available in SCIP's cut pool."""
+
     applied_cut_count: int
+    """Number of cuts applied by SCIP."""
+
     solution_count: int
+    """Number of solutions stored by SCIP at termination."""
+
     solution_found_count: int
+    """Number of solutions SCIP found during the solve."""
+
     best_solution_count: int
+    """Number of new incumbent solutions SCIP found."""
+
     max_depth: int
+    """Maximum branch-and-bound depth.
+
+    SCIP may report ``-1`` when no branching occurred.
+    """
+
     primal_dual_integral: float
+    """SCIP primal-dual integral at termination."""
+
     solving_time_sec: float
+    """SCIP solving time in seconds."""
+
     presolving_time_sec: float
+    """SCIP presolving time in seconds."""
+
     reading_time_sec: float
+    """SCIP reading time in seconds."""
+
     scip_version: str
+    """SCIP version used through PySCIPOpt."""
+
     pyscipopt_version: str | None
+    """PySCIPOpt package version, if available."""
 
     @classmethod
     def from_model(cls, model: pyscipopt.Model) -> SCIPTerminationReport:
@@ -136,32 +156,43 @@ class SCIPProgressSnapshot:
     snapshot is the model state visible from that callback. SCIP may call a
     ``BESTSOLFOUND`` callback before every aggregate model statistic has been
     updated, so use :class:`SCIPTerminationReport` for terminal values.
-
-    :ivar event: SCIP event name, currently ``"BESTSOLFOUND"`` or
-        ``"DUALBOUNDIMPROVED"``.
-    :ivar solving_time_sec: SCIP solving time when the callback ran.
-    :ivar node_count: Processed branch-and-bound nodes at the callback.
-    :ivar total_node_count: Total processed nodes including restarts at the
-        callback.
-    :ivar lp_iteration_count: LP iterations at the callback.
-    :ivar solution_count: Number of solutions stored by SCIP at the callback.
-    :ivar primal_bound: SCIP primal bound reported at the callback.
-    :ivar dual_bound: SCIP dual bound reported at the callback.
-    :ivar gap: SCIP relative gap reported at the callback.
-    :ivar incumbent_objective: Objective value of SCIP's current best solution
-        if PySCIPOpt can read it at that callback; otherwise ``None``.
     """
 
     event: str
+    """SCIP event name, currently ``"BESTSOLFOUND"`` or
+    ``"DUALBOUNDIMPROVED"``.
+    """
+
     solving_time_sec: float
+    """SCIP solving time when the callback ran."""
+
     node_count: int
+    """Processed branch-and-bound nodes at the callback."""
+
     total_node_count: int
+    """Total processed nodes including restarts at the callback."""
+
     lp_iteration_count: int
+    """LP iterations at the callback."""
+
     solution_count: int
+    """Number of solutions stored by SCIP at the callback."""
+
     primal_bound: float
+    """SCIP primal bound reported at the callback."""
+
     dual_bound: float
+    """SCIP dual bound reported at the callback."""
+
     gap: float
+    """SCIP relative gap reported at the callback."""
+
     incumbent_objective: float | None
+    """Objective value of SCIP's current best solution.
+
+    This is ``None`` when PySCIPOpt cannot read the incumbent objective at that
+    callback.
+    """
 
     @classmethod
     def from_event(
