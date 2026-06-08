@@ -1,9 +1,10 @@
 from __future__ import annotations
 import math
 from dataclasses import dataclass
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import pyscipopt
+from pyscipopt.scip import PY_SCIP_EVENTTYPE as SCIP_EVENTTYPE
 
 from opentelemetry import trace
 
@@ -27,6 +28,9 @@ from ommx.v1 import (
 
 from .exception import OMMXPySCIPOptAdapterError
 
+if TYPE_CHECKING:
+    from pyscipopt.scip import Event as SCIPEvent
+
 _tracer = trace.get_tracer("ommx.adapter.pyscipopt")
 
 
@@ -40,8 +44,19 @@ class SCIPTerminationReport:
     gap: float
     objective_value: float | None
     node_count: int
+    total_node_count: int
+    lp_iteration_count: int
+    lp_solve_count: int
+    cut_count: int
+    applied_cut_count: int
     solution_count: int
+    solution_found_count: int
+    best_solution_count: int
+    max_depth: int
+    primal_dual_integral: float
     solving_time_sec: float
+    presolving_time_sec: float
+    reading_time_sec: float
     scip_version: str
     pyscipopt_version: str | None
 
@@ -60,13 +75,93 @@ class SCIPTerminationReport:
             gap=model.getGap(),
             objective_value=model.getObjVal() if solution_count > 0 else None,
             node_count=int(model.getNNodes()),
+            total_node_count=int(model.getNTotalNodes()),
+            lp_iteration_count=int(model.getNLPIterations()),
+            lp_solve_count=int(model.getNLPs()),
+            cut_count=int(model.getNCuts()),
+            applied_cut_count=int(model.getNCutsApplied()),
             solution_count=solution_count,
+            solution_found_count=int(model.getNSolsFound()),
+            best_solution_count=int(model.getNBestSolsFound()),
+            max_depth=int(model.getMaxDepth()),
+            primal_dual_integral=model.getPrimalDualIntegral(),
             solving_time_sec=model.getSolvingTime(),
+            presolving_time_sec=model.getPresolvingTime(),
+            reading_time_sec=model.getReadingTime(),
             scip_version=(
                 f"{model.getMajorVersion()}.{model.getMinorVersion()}.{model.getTechVersion()}"
             ),
             pyscipopt_version=getattr(pyscipopt, "__version__", None),
         )
+
+
+@dataclass(frozen=True, slots=True)
+class SCIPProgressSnapshot:
+    """SCIP solve progress observed from one solver event callback."""
+
+    event: str
+    solving_time_sec: float
+    node_count: int
+    total_node_count: int
+    lp_iteration_count: int
+    solution_count: int
+    primal_bound: float
+    dual_bound: float
+    gap: float
+    incumbent_objective: float | None
+
+    @classmethod
+    def from_event(
+        cls, model: pyscipopt.Model, event: SCIPEvent
+    ) -> SCIPProgressSnapshot:
+        solution_count = int(model.getNSols())
+        return cls(
+            event=event.getName(),
+            solving_time_sec=model.getSolvingTime(),
+            node_count=int(model.getNNodes()),
+            total_node_count=int(model.getNTotalNodes()),
+            lp_iteration_count=int(model.getNLPIterations()),
+            solution_count=solution_count,
+            primal_bound=model.getPrimalbound(),
+            dual_bound=model.getDualbound(),
+            gap=model.getGap(),
+            incumbent_objective=_get_incumbent_objective(model, solution_count),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class SCIPProgressReport:
+    """SCIP bound progress trace collected during optimization."""
+
+    snapshots: tuple[SCIPProgressSnapshot, ...]
+
+
+class _SCIPDiagnosticsEventHandler(pyscipopt.Eventhdlr):
+    def __init__(self) -> None:
+        super().__init__()
+        self.snapshots: list[SCIPProgressSnapshot] = []
+
+    def eventinit(self) -> None:
+        self.model.catchEvent(SCIP_EVENTTYPE.BESTSOLFOUND, self)
+        self.model.catchEvent(SCIP_EVENTTYPE.DUALBOUNDIMPROVED, self)
+
+    def eventexit(self) -> None:
+        self.model.dropEvent(SCIP_EVENTTYPE.BESTSOLFOUND, self)
+        self.model.dropEvent(SCIP_EVENTTYPE.DUALBOUNDIMPROVED, self)
+
+    def eventexec(self, event: SCIPEvent) -> None:
+        self.snapshots.append(SCIPProgressSnapshot.from_event(self.model, event))
+
+
+def _get_incumbent_objective(
+    model: pyscipopt.Model, solution_count: int
+) -> float | None:
+    if solution_count <= 0:
+        return None
+    try:
+        return model.getObjVal()
+    except Exception:
+        return None
 
 
 class OMMXPySCIPOptAdapter(SolverAdapter):
@@ -200,9 +295,21 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             span.set_attribute("adapter", f"{cls.__module__}.{cls.__qualname__}")
             adapter = cls(ommx_instance, initial_state=initial_state)
             model = adapter.solver_input
+            progress_handler = None
+            if diagnostics is not None:
+                progress_handler = _SCIPDiagnosticsEventHandler()
+                model.includeEventhdlr(
+                    progress_handler,
+                    "ommx_diagnostics",
+                    "Collect SCIP progress diagnostics for OMMX",
+                )
             with _tracer.start_as_current_span("call"):
                 model.optimize()
             if diagnostics is not None:
+                if progress_handler is not None and progress_handler.snapshots:
+                    diagnostics.record(
+                        SCIPProgressReport(tuple(progress_handler.snapshots))
+                    )
                 diagnostics.record(SCIPTerminationReport.from_model(model))
             solution = adapter.decode(model)
             return solution
