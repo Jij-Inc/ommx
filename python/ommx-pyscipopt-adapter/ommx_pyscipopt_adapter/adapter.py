@@ -36,7 +36,39 @@ _tracer = trace.get_tracer("ommx.adapter.pyscipopt")
 
 @dataclass(frozen=True, slots=True)
 class SCIPTerminationReport:
-    """Post-solve termination summary produced by SCIP."""
+    """SCIP-side termination summary recorded after ``model.optimize()``.
+
+    The PySCIPOpt adapter records this report before decoding the optimized
+    SCIP model back into an OMMX solution. It is therefore available even when
+    decoding raises an adapter exception such as infeasible or unbounded
+    detection.
+
+    :ivar status: SCIP termination status, such as ``"optimal"``,
+        ``"infeasible"``, or ``"unbounded"``.
+    :ivar primal_bound: SCIP primal bound at termination.
+    :ivar dual_bound: SCIP dual bound at termination.
+    :ivar gap: SCIP relative gap reported by ``getGap()``.
+    :ivar objective_value: Incumbent objective value, or ``None`` when SCIP has
+        no solution.
+    :ivar node_count: Number of branch-and-bound nodes processed by SCIP.
+    :ivar total_node_count: Total processed nodes including restarts.
+    :ivar lp_iteration_count: Total LP iterations.
+    :ivar lp_solve_count: Number of solved LPs.
+    :ivar cut_count: Number of cuts available in SCIP's cut pool.
+    :ivar applied_cut_count: Number of cuts applied by SCIP.
+    :ivar solution_count: Number of solutions stored by SCIP at termination.
+    :ivar solution_found_count: Number of solutions SCIP found during the
+        solve.
+    :ivar best_solution_count: Number of new incumbent solutions SCIP found.
+    :ivar max_depth: Maximum branch-and-bound depth. SCIP may report ``-1``
+        when no branching occurred.
+    :ivar primal_dual_integral: SCIP primal-dual integral at termination.
+    :ivar solving_time_sec: SCIP solving time in seconds.
+    :ivar presolving_time_sec: SCIP presolving time in seconds.
+    :ivar reading_time_sec: SCIP reading time in seconds.
+    :ivar scip_version: SCIP version used through PySCIPOpt.
+    :ivar pyscipopt_version: PySCIPOpt package version, if available.
+    """
 
     status: str
     primal_bound: float
@@ -97,7 +129,28 @@ class SCIPTerminationReport:
 
 @dataclass(frozen=True, slots=True)
 class SCIPProgressSnapshot:
-    """SCIP solve progress observed from one solver event callback."""
+    """SCIP solve progress observed from one solver event callback.
+
+    The PySCIPOpt adapter records this snapshot for each tracked SCIP event.
+    It currently listens for ``BESTSOLFOUND`` and ``DUALBOUNDIMPROVED``. Each
+    snapshot is the model state visible from that callback. SCIP may call a
+    ``BESTSOLFOUND`` callback before every aggregate model statistic has been
+    updated, so use :class:`SCIPTerminationReport` for terminal values.
+
+    :ivar event: SCIP event name, currently ``"BESTSOLFOUND"`` or
+        ``"DUALBOUNDIMPROVED"``.
+    :ivar solving_time_sec: SCIP solving time when the callback ran.
+    :ivar node_count: Processed branch-and-bound nodes at the callback.
+    :ivar total_node_count: Total processed nodes including restarts at the
+        callback.
+    :ivar lp_iteration_count: LP iterations at the callback.
+    :ivar solution_count: Number of solutions stored by SCIP at the callback.
+    :ivar primal_bound: SCIP primal bound reported at the callback.
+    :ivar dual_bound: SCIP dual bound reported at the callback.
+    :ivar gap: SCIP relative gap reported at the callback.
+    :ivar incumbent_objective: Incumbent objective if PySCIPOpt can read it at
+        that callback; otherwise ``None``.
+    """
 
     event: str
     solving_time_sec: float
@@ -158,7 +211,17 @@ def _get_incumbent_objective(
 
 
 class SCIPDiagnosticsAnalyzer:
-    """Post-process diagnostics emitted by the PySCIPOpt adapter."""
+    """Pandas-like post-processor for PySCIPOpt diagnostics.
+
+    The analyzer accepts either typed diagnostics collected by
+    :class:`ommx.adapter.DiagnosticCollector` or dictionaries loaded from
+    :attr:`ommx.experiment.Solve.diagnostics`.
+
+    ``*_records()`` methods return ``list[dict[str, object]]`` and do not
+    require pandas. ``*_df()`` methods return pandas DataFrames with stable
+    columns and import pandas lazily. If pandas is unavailable, use the
+    corresponding records method.
+    """
 
     def __init__(self, diagnostics: Iterable[Any]) -> None:
         diagnostics = tuple(diagnostics)
@@ -178,10 +241,12 @@ class SCIPDiagnosticsAnalyzer:
 
     @property
     def progress_snapshots(self) -> tuple[SCIPProgressSnapshot, ...]:
+        """Progress snapshots in the order they were recorded."""
         return self._progress_snapshots
 
     @property
     def termination_report(self) -> SCIPTerminationReport | None:
+        """Final termination report, or ``None`` when none was recorded."""
         return self._termination_report
 
     def progress_records(self) -> list[dict[str, object]]:
