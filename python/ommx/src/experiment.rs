@@ -1272,19 +1272,9 @@ impl PyRun {
         let adapter = adapter.bind(py);
         let adapter_name = adapter.name()?;
         let adapter_options = dump_kwargs(py, kwargs)?;
-        let diagnostics_collector = adapter.diagnostic_collector()?;
-        let solution = adapter.solve(
-            instance,
-            kwargs,
-            diagnostics_collector
-                .as_ref()
-                .map(|collector| collector.bind(py)),
-        )?;
-        let diagnostics = diagnostics_collector
-            .as_ref()
-            .map(|collector| collector.bind(py).borrow().pack(py))
-            .transpose()?
-            .flatten();
+        let diagnostics_collector = Py::new(py, PyDiagnosticCollector::new_inner())?;
+        let solution = adapter.solve(instance, kwargs, diagnostics_collector.bind(py))?;
+        let diagnostics = diagnostics_collector.bind(py).borrow().pack(py)?;
         let solve_id = self
             .as_open_mut()?
             .log_finished_solve_result_with_diagnostics(
@@ -1611,47 +1601,23 @@ impl<'py> SolverAdapter<'py> {
         &self,
         instance: &crate::Instance,
         kwargs: Option<&Bound<'py, PyDict>>,
-        diagnostics: Option<&Bound<'py, PyDiagnosticCollector>>,
+        diagnostics: &Bound<'py, PyDiagnosticCollector>,
     ) -> Result<crate::Solution> {
         let py = self.py();
         let adapter_instance = Py::new(py, instance.clone())?;
-        let solution_object = match diagnostics {
-            Some(diagnostics) => {
-                let call_kwargs = PyDict::new(py);
-                if let Some(kwargs) = kwargs {
-                    for (key, value) in kwargs.iter() {
-                        call_kwargs.set_item(key, value)?;
-                    }
-                }
-                call_kwargs.set_item("diagnostics", diagnostics)?;
-                self.adapter
-                    .call_method("solve", (adapter_instance,), Some(&call_kwargs))?
+        let call_kwargs = PyDict::new(py);
+        if let Some(kwargs) = kwargs {
+            for (key, value) in kwargs.iter() {
+                call_kwargs.set_item(key, value)?;
             }
-            None => self
-                .adapter
-                .call_method("solve", (adapter_instance,), kwargs)?,
-        };
+        }
+        call_kwargs.set_item("diagnostics", diagnostics)?;
+        let solution_object =
+            self.adapter
+                .call_method("solve", (adapter_instance,), Some(&call_kwargs))?;
         solution_object
             .extract::<crate::Solution>()
             .map_err(|_| anyhow::anyhow!("adapter.solve(...) must return ommx.v1.Solution"))
-    }
-
-    fn diagnostic_collector(&self) -> Result<Option<Py<PyDiagnosticCollector>>> {
-        if !self.supports_diagnostics()? {
-            return Ok(None);
-        }
-        Ok(Some(Py::new(
-            self.py(),
-            PyDiagnosticCollector::new_inner(),
-        )?))
-    }
-
-    fn supports_diagnostics(&self) -> Result<bool> {
-        let value = self
-            .adapter
-            .getattr("SUPPORTS_DIAGNOSTICS")
-            .context("SolverAdapter.SUPPORTS_DIAGNOSTICS must be readable")?;
-        Ok(value.extract::<bool>()?)
     }
 
     fn name(&self) -> Result<String> {

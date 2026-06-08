@@ -53,7 +53,6 @@ class SolverAdapter(ABC):
     """
 
     ADDITIONAL_CAPABILITIES: frozenset[AdditionalCapability] = frozenset()
-    SUPPORTS_DIAGNOSTICS: ClassVar[bool] = False
 
     def __init__(self, ommx_instance: Instance):
         """Reduce the instance to the adapter's supported capabilities.
@@ -71,13 +70,12 @@ class SolverAdapter(ABC):
         ommx_instance: Instance,
         *,
         diagnostics: DiagnosticsSink | None = None,
-        **kwargs: Any,
     ) -> Solution:
-        """Solve an OMMX instance with adapter-specific keyword options.
+        """Solve an OMMX instance.
 
-        ``Run.log_solve`` owns the reserved ``diagnostics`` keyword. Adapters
-        that set ``SUPPORTS_DIAGNOSTICS = True`` must accept it and may record
-        adapter-defined dataclass reports into the sink.
+        ``Run.log_solve`` owns the reserved ``diagnostics`` keyword and passes a
+        sink to every adapter. Adapters may record adapter-defined dataclass
+        reports into the sink; leaving it empty means no diagnostics are stored.
         """
         pass
 

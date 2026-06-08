@@ -285,7 +285,13 @@ def test_store_trace_records_run_scope_in_artifact():
 def test_store_trace_records_log_solve_scope_in_artifact():
     class DummyAdapter(SolverAdapter):
         @classmethod
-        def solve(cls, ommx_instance: Instance, **kwargs: object) -> Solution:
+        def solve(
+            cls,
+            ommx_instance: Instance,
+            *,
+            diagnostics: Any | None = None,
+        ) -> Solution:
+            assert diagnostics is not None
             tracer = otel_trace.get_tracer("dummy_adapter")
             with tracer.start_as_current_span("solve") as span:
                 span.set_attribute("adapter", f"{cls.__module__}.{cls.__qualname__}")
@@ -570,7 +576,14 @@ def test_log_solve_logs_input_solution_and_adapter_options():
         seen_kwargs: ClassVar[list[dict[str, object]]] = []
 
         @classmethod
-        def solve(cls, ommx_instance: Instance, **kwargs: object) -> Solution:
+        def solve(
+            cls,
+            ommx_instance: Instance,
+            *,
+            diagnostics: Any | None = None,
+            **kwargs: object,
+        ) -> Solution:
+            assert diagnostics is not None
             cls.seen_kwargs.append(kwargs)
             solution = ommx_instance.evaluate({})
             solution.add_user_annotation("adapter", "dummy")
@@ -653,7 +666,6 @@ def test_log_solve_logs_input_solution_and_adapter_options():
 
 def test_log_solve_records_adapter_diagnostics():
     class DiagnosticAdapter(SolverAdapter):
-        SUPPORTS_DIAGNOSTICS = True
         seen_kwargs: ClassVar[list[dict[str, object]]] = []
 
         @classmethod
@@ -706,7 +718,14 @@ def test_failed_run_preserves_completed_solves_after_adapter_exception():
         calls: ClassVar[int] = 0
 
         @classmethod
-        def solve(cls, ommx_instance: Instance, **kwargs: object) -> Solution:
+        def solve(
+            cls,
+            ommx_instance: Instance,
+            *,
+            diagnostics: Any | None = None,
+            **kwargs: object,
+        ) -> Solution:
+            assert diagnostics is not None
             cls.calls += 1
             if cls.calls == 3:
                 raise RuntimeError("backend crashed")
@@ -759,7 +778,14 @@ def test_log_solve_rejects_non_json_kwargs_before_solving():
         called: ClassVar[bool] = False
 
         @classmethod
-        def solve(cls, ommx_instance: Instance, **kwargs: object) -> Solution:
+        def solve(
+            cls,
+            ommx_instance: Instance,
+            *,
+            diagnostics: Any | None = None,
+            **kwargs: object,
+        ) -> Solution:
+            assert diagnostics is not None
             cls.called = True
             return ommx_instance.evaluate({})
 

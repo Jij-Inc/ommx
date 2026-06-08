@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Optional
 
 import mip
 from opentelemetry import trace
@@ -75,7 +75,6 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         verbose: bool = False,
         *,
         diagnostics: DiagnosticsSink | None = None,
-        **kwargs: Any,
     ) -> Solution:
         """
         Solve the given ommx.v1.Instance using Python-MIP, returning an ommx.v1.Solution.
@@ -185,11 +184,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                 1.0
 
         """
-        if diagnostics is not None:
-            raise TypeError("OMMXPythonMIPAdapter does not support diagnostics")
-        if kwargs:
-            unexpected = ", ".join(sorted(kwargs))
-            raise TypeError(f"Unexpected adapter option(s): {unexpected}")
+        _ = diagnostics
         with _tracer.start_as_current_span("solve") as span:
             span.set_attribute("adapter", f"{cls.__module__}.{cls.__qualname__}")
             adapter = cls(ommx_instance, relax=relax, verbose=verbose)
