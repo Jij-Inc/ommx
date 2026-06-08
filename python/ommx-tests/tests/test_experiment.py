@@ -1,4 +1,6 @@
+import math
 import uuid
+from dataclasses import dataclass
 from typing import Any, ClassVar, cast
 
 import pandas as pd
@@ -11,6 +13,23 @@ from ommx.tracing import TraceResult, render_text_tree
 from ommx.v1 import Instance, Solution
 
 from conftest import get_test_exporter
+
+
+@dataclass(frozen=True, slots=True)
+class DummyDiagnostic:
+    status: str
+    bound: float
+
+
+@dataclass(frozen=True, slots=True)
+class DummyProgressDiagnostic:
+    event: str
+    node_count: int
+
+
+@dataclass(frozen=True, slots=True)
+class DummyMapKeyDiagnostic:
+    values: dict[int, str]
 
 
 def _df_snap(df: pd.DataFrame) -> str:
@@ -266,7 +285,13 @@ def test_store_trace_records_run_scope_in_artifact():
 def test_store_trace_records_log_solve_scope_in_artifact():
     class DummyAdapter(SolverAdapter):
         @classmethod
-        def solve(cls, ommx_instance: Instance, **kwargs: object) -> Solution:
+        def solve(
+            cls,
+            ommx_instance: Instance,
+            *,
+            diagnostics: Any | None = None,
+        ) -> Solution:
+            assert diagnostics is not None
             tracer = otel_trace.get_tracer("dummy_adapter")
             with tracer.start_as_current_span("solve") as span:
                 span.set_attribute("adapter", f"{cls.__module__}.{cls.__qualname__}")
@@ -551,7 +576,14 @@ def test_log_solve_logs_input_solution_and_adapter_options():
         seen_kwargs: ClassVar[list[dict[str, object]]] = []
 
         @classmethod
-        def solve(cls, ommx_instance: Instance, **kwargs: object) -> Solution:
+        def solve(
+            cls,
+            ommx_instance: Instance,
+            *,
+            diagnostics: Any | None = None,
+            **kwargs: object,
+        ) -> Solution:
+            assert diagnostics is not None
             cls.seen_kwargs.append(kwargs)
             solution = ommx_instance.evaluate({})
             solution.add_user_annotation("adapter", "dummy")
@@ -617,6 +649,7 @@ def test_log_solve_logs_input_solution_and_adapter_options():
         "verbose": True,
         "label": "baseline",
     }
+    assert first_solve.diagnostics == []
 
     second_solve = runs[0].solves[1]
     assert isinstance(second_solve.adapter_options, dict)
@@ -624,10 +657,60 @@ def test_log_solve_logs_input_solution_and_adapter_options():
         "time_limit": 2.0,
         "label": "pricing",
     }
+    assert second_solve.diagnostics == []
 
     # Adapter options are solve-scoped metadata, not Run parameters.
     df = loaded.run_parameters_df()
     assert df.shape == (1, 0)
+
+
+def test_log_solve_records_adapter_diagnostics():
+    class DiagnosticAdapter(SolverAdapter):
+        seen_kwargs: ClassVar[list[dict[str, object]]] = []
+
+        @classmethod
+        def solve(
+            cls,
+            ommx_instance: Instance,
+            *,
+            diagnostics: Any | None = None,
+            **kwargs: object,
+        ) -> Solution:
+            cls.seen_kwargs.append(kwargs)
+            assert diagnostics is not None
+            diagnostics.record(DummyProgressDiagnostic(event="node", node_count=10))
+            diagnostics.record(DummyDiagnostic(status="terminated", bound=math.inf))
+            diagnostics.record(DummyMapKeyDiagnostic(values={1: "root"}))
+            return ommx_instance.evaluate({})
+
+        @property
+        def solver_input(self) -> Any:
+            raise NotImplementedError
+
+        def decode(self, data: Any) -> Solution:
+            raise NotImplementedError
+
+    instance = Instance.empty()
+    experiment = Experiment.with_temp_local_registry()
+    DiagnosticAdapter.seen_kwargs = []
+
+    with experiment.run() as run:
+        solution = run.log_solve(DiagnosticAdapter, instance, time_limit=1.5)
+        assert solution.feasible
+
+    assert DiagnosticAdapter.seen_kwargs == [{"time_limit": 1.5}]
+
+    artifact = experiment.commit()
+    loaded = Experiment.from_artifact(artifact)
+    solve = loaded.runs[0].solves[0]
+
+    assert solve.adapter_options == {"time_limit": 1.5}
+    assert solve.diagnostics == [
+        {"event": "node", "node_count": 10},
+        {"status": "terminated", "bound": math.inf},
+        {"values": {1: "root"}},
+    ]
+    assert math.isinf(solve.diagnostics[1]["bound"])
 
 
 def test_failed_run_preserves_completed_solves_after_adapter_exception():
@@ -635,7 +718,14 @@ def test_failed_run_preserves_completed_solves_after_adapter_exception():
         calls: ClassVar[int] = 0
 
         @classmethod
-        def solve(cls, ommx_instance: Instance, **kwargs: object) -> Solution:
+        def solve(
+            cls,
+            ommx_instance: Instance,
+            *,
+            diagnostics: Any | None = None,
+            **kwargs: object,
+        ) -> Solution:
+            assert diagnostics is not None
             cls.calls += 1
             if cls.calls == 3:
                 raise RuntimeError("backend crashed")
@@ -688,7 +778,14 @@ def test_log_solve_rejects_non_json_kwargs_before_solving():
         called: ClassVar[bool] = False
 
         @classmethod
-        def solve(cls, ommx_instance: Instance, **kwargs: object) -> Solution:
+        def solve(
+            cls,
+            ommx_instance: Instance,
+            *,
+            diagnostics: Any | None = None,
+            **kwargs: object,
+        ) -> Solution:
+            assert diagnostics is not None
             cls.called = True
             return ommx_instance.evaluate({})
 

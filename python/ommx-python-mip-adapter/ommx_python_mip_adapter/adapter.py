@@ -6,6 +6,7 @@ import mip
 from opentelemetry import trace
 
 from ommx.adapter import (
+    DiagnosticsSink,
     SolverAdapter,
     InfeasibleDetected,
     UnboundedDetected,
@@ -72,6 +73,8 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         ommx_instance: Instance,
         relax: bool = False,
         verbose: bool = False,
+        *,
+        diagnostics: DiagnosticsSink | None = None,
     ) -> Solution:
         """
         Solve the given ommx.v1.Instance using Python-MIP, returning an ommx.v1.Solution.
@@ -181,6 +184,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                 1.0
 
         """
+        _ = diagnostics
         with _tracer.start_as_current_span("solve") as span:
             span.set_attribute("adapter", f"{cls.__module__}.{cls.__qualname__}")
             adapter = cls(ommx_instance, relax=relax, verbose=verbose)

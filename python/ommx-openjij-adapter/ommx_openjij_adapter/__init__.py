@@ -9,7 +9,7 @@ from ommx.v1 import (
     DecisionVariable,
     Constraint,
 )
-from ommx.adapter import SamplerAdapter
+from ommx.adapter import DiagnosticsSink, SamplerAdapter
 import openjij as oj
 from opentelemetry import trace
 from typing_extensions import deprecated
@@ -160,7 +160,9 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         uniform_penalty_weight: Optional[float] = None,
         penalty_weights: dict[int, float] = {},
         inequality_integer_slack_max_range: int = 32,
+        diagnostics: DiagnosticsSink | None = None,
     ) -> Solution:
+        _ = diagnostics
         sample_set = cls.sample(
             ommx_instance,
             beta_min=beta_min,

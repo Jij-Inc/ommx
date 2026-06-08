@@ -1,5 +1,9 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, ClassVar, Protocol, runtime_checkable
+
+from ommx._ommx_rust import DiagnosticCollector as DiagnosticCollector
 from ommx.v1 import Instance, Solution, SampleSet, AdditionalCapability
 
 
@@ -7,6 +11,20 @@ SolverInput = Any
 SolverOutput = Any
 SamplerInput = Any
 SamplerOutput = Any
+
+
+@runtime_checkable
+class DiagnosticReport(Protocol):
+    """Adapter diagnostic report convertible with ``dataclasses.asdict``."""
+
+    __dataclass_fields__: ClassVar[dict[str, Any]]
+
+
+class DiagnosticsSink(Protocol):
+    """Receiver for adapter-defined diagnostics emitted during a solve."""
+
+    def record(self, diagnostic: DiagnosticReport) -> None:
+        """Record one adapter-defined dataclass diagnostic report."""
 
 
 class SolverAdapter(ABC):
@@ -47,7 +65,18 @@ class SolverAdapter(ABC):
 
     @classmethod
     @abstractmethod
-    def solve(cls, ommx_instance: Instance) -> Solution:
+    def solve(
+        cls,
+        ommx_instance: Instance,
+        *,
+        diagnostics: DiagnosticsSink | None = None,
+    ) -> Solution:
+        """Solve an OMMX instance.
+
+        ``Run.log_solve`` owns the reserved ``diagnostics`` keyword and passes a
+        sink to every adapter. Adapters may record adapter-defined dataclass
+        reports into the sink; leaving it empty means no diagnostics are stored.
+        """
         pass
 
     @property

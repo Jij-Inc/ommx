@@ -81,14 +81,16 @@ pub use parameter::{ParameterValue, RunParameterCell};
 pub use sealed::{SealedRun, Solve};
 
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor, TempLocalRegistry};
-use crate::artifact::{ImageRef, LocalArtifact};
-use anyhow::{Context, Result};
+use crate::artifact::{media_types, ImageRef, LocalArtifact};
+use anyhow::{ensure, Context, Result};
 use attachment::{read_file_attachment, store_attachment_descriptor};
 use oci_spec::image::MediaType;
 use parameter::ParameterSet;
+use rmpv::Value as MessagePackValue;
 use std::sync::{Mutex, MutexGuard};
 use std::{
     collections::{BTreeMap, HashMap},
+    io::Cursor,
     path::Path,
 };
 
@@ -315,6 +317,73 @@ struct SolveEntry<'reg> {
     output: StoredDescriptor<'reg>,
     adapter: String,
     adapter_options: String,
+    diagnostics: Option<StoredDescriptor<'reg>>,
+}
+
+/// Adapter diagnostics payload for one Solve.
+#[derive(Debug, Clone)]
+pub struct SolveDiagnosticPayload {
+    value: MessagePackValue,
+    annotations: HashMap<String, String>,
+}
+
+impl SolveDiagnosticPayload {
+    /// Create a diagnostics payload from MessagePack bytes.
+    pub fn new(bytes: Vec<u8>, annotations: HashMap<String, String>) -> Result<Self> {
+        let mut cursor = Cursor::new(&bytes);
+        let value = rmpv::decode::read_value(&mut cursor)
+            .context("Solve diagnostic payload must be valid MessagePack")?;
+        ensure!(
+            cursor.position() == bytes.len() as u64,
+            "Solve diagnostic payload must contain exactly one MessagePack value",
+        );
+        Self::from_value(value, annotations)
+    }
+
+    /// Create a diagnostics payload from a decoded MessagePack value.
+    pub fn from_value(
+        value: MessagePackValue,
+        annotations: HashMap<String, String>,
+    ) -> Result<Self> {
+        ensure!(
+            matches!(value, MessagePackValue::Array(_)),
+            "Solve diagnostic payload must decode to a MessagePack array",
+        );
+        Ok(Self { value, annotations })
+    }
+
+    /// Decoded MessagePack value. The top-level value is always an array.
+    pub fn value(&self) -> &MessagePackValue {
+        &self.value
+    }
+
+    /// OCI layer annotations stored with this diagnostics payload.
+    pub fn annotations(&self) -> &HashMap<String, String> {
+        &self.annotations
+    }
+
+    pub(crate) fn to_msgpack_bytes(&self) -> Result<Vec<u8>> {
+        let mut bytes = Vec::new();
+        rmpv::encode::write_value(&mut bytes, &self.value)
+            .context("Failed to encode Solve diagnostic payload as MessagePack")?;
+        Ok(bytes)
+    }
+}
+
+fn read_solve_diagnostic_payload(
+    solve_id: u64,
+    descriptor: &StoredDescriptor<'_>,
+) -> Result<(Vec<u8>, SolveDiagnosticPayload)> {
+    descriptor.ensure_media_type(&media_types::diagnostic_msgpack())?;
+    let bytes = descriptor.registry().get_blob(descriptor)?;
+    let annotations = descriptor
+        .annotations()
+        .as_ref()
+        .cloned()
+        .unwrap_or_default();
+    let payload = SolveDiagnosticPayload::new(bytes.clone(), annotations)
+        .with_context(|| format!("Invalid Solve {solve_id} diagnostic payload"))?;
+    Ok((bytes, payload))
 }
 
 /// Mutable experiment state before the root manifest is sealed. A live
@@ -526,6 +595,7 @@ impl<'reg> SealedExperiment<'reg> {
                     output: solve.output_descriptor().clone(),
                     adapter: solve.adapter().to_string(),
                     adapter_options: solve.adapter_options().to_string(),
+                    diagnostics: solve.diagnostic_descriptor().cloned(),
                 })
                 .collect();
             runs.insert(

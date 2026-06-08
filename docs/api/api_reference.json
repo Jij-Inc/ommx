@@ -5114,6 +5114,23 @@
               "is_readonly": true
             },
             {
+              "name": "diagnostics",
+              "doc": "Adapter-defined diagnostics recorded during this solve.",
+              "type_": {
+                "display": "list[Any]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "Any",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "input",
               "doc": "Input `Instance` passed to the solver.",
               "type_": {

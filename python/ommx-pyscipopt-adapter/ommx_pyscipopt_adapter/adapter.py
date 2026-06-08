@@ -1,12 +1,14 @@
 from __future__ import annotations
+import math
+from dataclasses import dataclass
 from typing import Optional
 
 import pyscipopt
-import math
 
 from opentelemetry import trace
 
 from ommx.adapter import (
+    DiagnosticsSink,
     SolverAdapter,
     InfeasibleDetected,
     UnboundedDetected,
@@ -26,6 +28,45 @@ from ommx.v1 import (
 from .exception import OMMXPySCIPOptAdapterError
 
 _tracer = trace.get_tracer("ommx.adapter.pyscipopt")
+
+
+@dataclass(frozen=True, slots=True)
+class SCIPTerminationReport:
+    """Post-solve termination summary produced by SCIP."""
+
+    status: str
+    primal_bound: float
+    dual_bound: float
+    gap: float
+    objective_value: float | None
+    node_count: int
+    solution_count: int
+    solving_time_sec: float
+    scip_version: str
+    pyscipopt_version: str | None
+
+    @classmethod
+    def from_model(cls, model: pyscipopt.Model) -> SCIPTerminationReport:
+        status = str(model.getStatus())
+        if status == "unknown":
+            raise OMMXPySCIPOptAdapterError(
+                "The model may not be optimized. [status: unknown]"
+            )
+        solution_count = int(model.getNSols())
+        return cls(
+            status=status,
+            primal_bound=model.getPrimalbound(),
+            dual_bound=model.getDualbound(),
+            gap=model.getGap(),
+            objective_value=model.getObjVal() if solution_count > 0 else None,
+            node_count=int(model.getNNodes()),
+            solution_count=solution_count,
+            solving_time_sec=model.getSolvingTime(),
+            scip_version=(
+                f"{model.getMajorVersion()}.{model.getMinorVersion()}.{model.getTechVersion()}"
+            ),
+            pyscipopt_version=getattr(pyscipopt, "__version__", None),
+        )
 
 
 class OMMXPySCIPOptAdapter(SolverAdapter):
@@ -66,6 +107,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         ommx_instance: Instance,
         *,
         initial_state: Optional[ToState] = None,
+        diagnostics: DiagnosticsSink | None = None,
     ) -> Solution:
         """
         Solve the given ommx.v1.Instance using PySCIPopt, returning an ommx.v1.Solution.
@@ -160,7 +202,10 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             model = adapter.solver_input
             with _tracer.start_as_current_span("call"):
                 model.optimize()
-            return adapter.decode(model)
+            if diagnostics is not None:
+                diagnostics.record(SCIPTerminationReport.from_model(model))
+            solution = adapter.decode(model)
+            return solution
 
     @property
     def solver_input(self) -> pyscipopt.Model:

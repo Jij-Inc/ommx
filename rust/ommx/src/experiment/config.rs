@@ -40,6 +40,8 @@ pub struct ExperimentConfigSolve {
     pub adapter: String,
     #[serde(default = "default_adapter_options")]
     pub adapter_options: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub diagnostics: Option<LayerRef>,
 }
 
 fn default_adapter_options() -> String {

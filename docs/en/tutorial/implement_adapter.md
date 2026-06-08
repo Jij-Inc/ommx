@@ -290,7 +290,12 @@ class SolverAdapter(ABC):
 
     @classmethod
     @abstractmethod
-    def solve(cls, ommx_instance: Instance) -> Solution:
+    def solve(
+        cls,
+        ommx_instance: Instance,
+        *,
+        diagnostics: DiagnosticsSink | None = None,
+    ) -> Solution:
         pass
 
     @property
@@ -307,6 +312,8 @@ This abstract base class assumes the following two use cases:
 
 - If you do not adjust the backend solver's parameters, use the `solve` class method.
 - If you adjust the backend solver's parameters, use `solver_input` to get the data structure for the backend solver (in this case, `pyscipopt.Model`), adjust it, then input it to the backend solver, and finally convert the backend solver's output using `decode`.
+
+The `solve` class method may define additional adapter-specific keyword options in concrete adapters. The reserved `diagnostics` keyword is passed by `Run.log_solve`; adapters may record adapter-defined diagnostic reports into that sink, and leaving it empty means no diagnostics are stored.
 
 #### Constraint Capability Declaration
 
@@ -325,7 +332,7 @@ Subclasses **must** call `super().__init__(ommx_instance)` in their `__init__` m
 Using the functions prepared so far, you can implement it as follows:
 
 ```{code-cell} ipython3
-from ommx.adapter import SolverAdapter
+from ommx.adapter import DiagnosticsSink, SolverAdapter
 from ommx.v1 import AdditionalCapability
 
 class OMMXPySCIPOptAdapter(SolverAdapter):
@@ -350,10 +357,13 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
     def solve(
         cls,
         ommx_instance: Instance,
+        *,
+        diagnostics: DiagnosticsSink | None = None,
     ) -> Solution:
         """
         Solve an ommx.v1.Instance using PySCIPopt and return an ommx.v1.Solution
         """
+        _ = diagnostics
         adapter = cls(ommx_instance)
         model = adapter.solver_input
         model.optimize()
@@ -399,6 +409,7 @@ You can add parameter arguments in the inherited class in Python, so you can def
         ommx_instance: Instance,
         *,
         timeout: Optional[int] = None,
+        diagnostics: DiagnosticsSink | None = None,
     ) -> Solution:
 ```
 
@@ -492,7 +503,7 @@ class SamplerAdapter(SolverAdapter):
 `SamplerAdapter` inherits from `SolverAdapter`, so you might think you need to implement `solve` and other `@abstractmethod`. However, since `SamplerAdapter` has a function to return the best sample using `sample`, it is sufficient to implement only `sample`. If you want to implement a more efficient implementation yourself, override `solve`.
 
 ```{code-cell} ipython3
-from ommx.adapter import SamplerAdapter
+from ommx.adapter import DiagnosticsSink, SamplerAdapter
 
 class OMMXOpenJijSAAdapter(SamplerAdapter):
     """
@@ -547,7 +558,10 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     def solve(
         cls,
         ommx_instance: Instance,
+        *,
+        diagnostics: DiagnosticsSink | None = None,
     ) -> Solution:
+        _ = diagnostics
         sample_set = cls.sample( ommx_instance,)
         return sample_set.best_feasible
 ```

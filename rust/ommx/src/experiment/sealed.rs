@@ -4,7 +4,10 @@ use super::artifact::ExperimentArtifactView;
 use super::attachment::AttachmentTable;
 use super::config::{ExperimentConfigSolve, LayerRef};
 use super::parameter::{RunParameterCell, RunParameterTable};
-use super::{ExperimentStatus, RunStatus, SealedExperiment, Trace, RUN_PARAMETERS_MEDIA_TYPE};
+use super::{
+    read_solve_diagnostic_payload, ExperimentStatus, RunStatus, SealedExperiment,
+    SolveDiagnosticPayload, Trace, RUN_PARAMETERS_MEDIA_TYPE,
+};
 use crate::artifact::local_registry::StoredDescriptor;
 use crate::artifact::{
     media_types, ImageRef, InstanceAnnotations, LocalArtifact, ParametricInstanceAnnotations,
@@ -259,6 +262,7 @@ pub struct Solve<'reg> {
     output: StoredDescriptor<'reg>,
     adapter: String,
     adapter_options: String,
+    diagnostics: Option<StoredDescriptor<'reg>>,
 }
 
 impl<'reg> Solve<'reg> {
@@ -276,6 +280,28 @@ impl<'reg> Solve<'reg> {
     /// into a dynamic view. Public solve access returns typed payloads.
     pub(crate) fn output_descriptor(&self) -> &StoredDescriptor<'reg> {
         &self.output
+    }
+
+    pub(crate) fn diagnostic_descriptor(&self) -> Option<&StoredDescriptor<'reg>> {
+        self.diagnostics.as_ref()
+    }
+
+    /// Decode the adapter diagnostics payload recorded for this solve.
+    pub fn diagnostic_payload(&self) -> Result<Option<SolveDiagnosticPayload>> {
+        let Some(descriptor) = &self.diagnostics else {
+            return Ok(None);
+        };
+        let (_, payload) = read_solve_diagnostic_payload(self.solve_id, descriptor)?;
+        Ok(Some(payload))
+    }
+
+    /// Raw MessagePack bytes of the adapter diagnostics payload.
+    pub fn diagnostic_blob(&self) -> Result<Option<Vec<u8>>> {
+        let Some(descriptor) = &self.diagnostics else {
+            return Ok(None);
+        };
+        let (bytes, _) = read_solve_diagnostic_payload(self.solve_id, descriptor)?;
+        Ok(Some(bytes))
     }
 
     pub fn input_instance(&self) -> Result<(Instance, InstanceAnnotations)> {
@@ -375,6 +401,31 @@ fn decode_solves<'reg>(
             output,
             adapter: solve.adapter,
             adapter_options: solve.adapter_options,
+            diagnostics: solve
+                .diagnostics
+                .map(|layer_ref| {
+                    let descriptor = resolve_layer(layers, layer_ref)
+                        .with_context(|| {
+                            format!(
+                                "Failed to resolve Run {run_id} Solve {} diagnostic LayerRef {}",
+                                solve.solve_id, layer_ref.0
+                            )
+                        })?
+                        .clone();
+                    validate_layer_media_type(&descriptor, &media_types::diagnostic_msgpack())
+                        .with_context(|| {
+                            format!("Invalid Run {run_id} Solve {} diagnostic", solve.solve_id)
+                        })?;
+                    let bytes = descriptor.registry().get_blob(&descriptor)?;
+                    SolveDiagnosticPayload::new(bytes, Default::default()).with_context(|| {
+                        format!(
+                            "Invalid Run {run_id} Solve {} diagnostic payload",
+                            solve.solve_id
+                        )
+                    })?;
+                    Ok::<StoredDescriptor<'reg>, anyhow::Error>(descriptor)
+                })
+                .transpose()?,
         });
     }
     Ok(decoded)

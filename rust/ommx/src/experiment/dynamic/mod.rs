@@ -17,8 +17,9 @@ use super::artifact::ExperimentArtifactView;
 use super::attachment::{read_file_attachment, store_attachment_descriptor};
 use super::config::ExperimentConfig;
 use super::{
-    allocate_next_run_id, next_run_id, AttachmentLogger, AttachmentTable, ExperimentStatus, Name,
-    RunEntry, RunParameterCell, RunStatus, SealedExperiment, UnsealedExperimentState,
+    allocate_next_run_id, next_run_id, read_solve_diagnostic_payload, AttachmentLogger,
+    AttachmentTable, ExperimentStatus, Name, RunEntry, RunParameterCell, RunStatus,
+    SealedExperiment, SolveDiagnosticPayload, UnsealedExperimentState,
 };
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
 use crate::artifact::{
@@ -172,6 +173,7 @@ struct SolveEntryDyn {
     output: Descriptor,
     adapter: String,
     adapter_options: String,
+    diagnostics: Option<Descriptor>,
 }
 
 #[derive(Debug, Clone)]
@@ -213,6 +215,7 @@ pub struct SolveDyn {
     output: Descriptor,
     adapter: String,
     adapter_options: String,
+    diagnostics: Option<Descriptor>,
 }
 
 impl SealedRunDyn {
@@ -352,6 +355,32 @@ impl SolveDyn {
             Solution::from_bytes(&bytes)?,
             SolutionAnnotations::from_descriptor(&descriptor),
         ))
+    }
+
+    /// Raw MessagePack bytes of the adapter diagnostics payload.
+    pub fn diagnostic_blob(&self) -> Result<Option<Vec<u8>>> {
+        let Some(descriptor) = &self.diagnostics else {
+            return Ok(None);
+        };
+        let descriptor = self
+            .registry_handle
+            .registry()
+            .stored_descriptor(descriptor.clone())?;
+        let (bytes, _) = read_solve_diagnostic_payload(self.solve_id, &descriptor)?;
+        Ok(Some(bytes))
+    }
+
+    /// Decode the adapter diagnostics payload recorded for this solve.
+    pub fn diagnostic_payload(&self) -> Result<Option<SolveDiagnosticPayload>> {
+        let Some(descriptor) = &self.diagnostics else {
+            return Ok(None);
+        };
+        let descriptor = self
+            .registry_handle
+            .registry()
+            .stored_descriptor(descriptor.clone())?;
+        let (_, payload) = read_solve_diagnostic_payload(self.solve_id, &descriptor)?;
+        Ok(Some(payload))
     }
 
     pub fn adapter(&self) -> &str {
@@ -976,6 +1005,13 @@ impl UnsealedExperimentDynState {
                                         output: registry.stored_descriptor(solve.output.clone())?,
                                         adapter: solve.adapter.clone(),
                                         adapter_options: solve.adapter_options.clone(),
+                                        diagnostics: solve
+                                            .diagnostics
+                                            .clone()
+                                            .map(|descriptor| {
+                                                registry.stored_descriptor(descriptor)
+                                            })
+                                            .transpose()?,
                                     })
                                 })
                                 .collect::<Result<Vec<_>>>()?,
@@ -1024,6 +1060,12 @@ impl UnsealedExperimentDynState {
                                         output: registry.stored_descriptor(solve.output)?,
                                         adapter: solve.adapter,
                                         adapter_options: solve.adapter_options,
+                                        diagnostics: solve
+                                            .diagnostics
+                                            .map(|descriptor| {
+                                                registry.stored_descriptor(descriptor)
+                                            })
+                                            .transpose()?,
                                     })
                                 })
                                 .collect::<Result<Vec<_>>>()?,
@@ -1081,6 +1123,10 @@ impl SealedExperimentDynState {
                                     output: Descriptor::from(solve.output_descriptor().clone()),
                                     adapter: solve.adapter().to_string(),
                                     adapter_options: solve.adapter_options().to_string(),
+                                    diagnostics: solve
+                                        .diagnostic_descriptor()
+                                        .cloned()
+                                        .map(Descriptor::from),
                                 })
                                 .collect(),
                         },
@@ -1129,6 +1175,7 @@ impl SealedExperimentDynState {
                     output: solve.output.clone(),
                     adapter: solve.adapter.clone(),
                     adapter_options: solve.adapter_options.clone(),
+                    diagnostics: solve.diagnostics.clone(),
                 })
                 .collect();
             runs.insert(
@@ -1191,6 +1238,7 @@ fn unsealed_run_views<'a>(
                 output: solve.output.clone(),
                 adapter: solve.adapter.clone(),
                 adapter_options: solve.adapter_options.clone(),
+                diagnostics: solve.diagnostics.clone(),
             })
             .collect(),
     })

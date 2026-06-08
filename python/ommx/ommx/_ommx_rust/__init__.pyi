@@ -32,6 +32,7 @@ __all__ = [
     "DecisionVariable",
     "DecisionVariableAnalysis",
     "Descriptor",
+    "DiagnosticCollector",
     "Equality",
     "EvaluatedConstraint",
     "EvaluatedDecisionVariable",
@@ -1580,6 +1581,13 @@ class Descriptor:
     def to_json(self) -> builtins.str: ...
     def __str__(self) -> builtins.str: ...
     def __eq__(self, rhs: typing.Any) -> builtins.bool: ...
+
+@typing.final
+class DiagnosticCollector:
+    @property
+    def diagnostics(self) -> builtins.list[adapter.DiagnosticReport]: ...
+    def __new__(cls) -> DiagnosticCollector: ...
+    def record(self, diagnostic: adapter.DiagnosticReport) -> None: ...
 
 @typing.final
 class EvaluatedConstraint:
@@ -6708,6 +6716,11 @@ class Solve:
         The artifact stores this value as a JSON string produced by Python's
         `json.dumps`; the Python SDK decodes it with `json.loads` before
         returning it.
+        """
+    @property
+    def diagnostics(self) -> builtins.list[typing.Any]:
+        r"""
+        Adapter-defined diagnostics recorded during this solve.
         """
     def __repr__(self) -> builtins.str: ...
 

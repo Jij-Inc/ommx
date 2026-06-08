@@ -141,6 +141,7 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<PyRun>()?;
     m.add_class::<PySealedRun>()?;
     m.add_class::<PySolve>()?;
+    m.add_class::<PyDiagnosticCollector>()?;
     m.add_function(wrap_pyfunction!(prune_anonymous, m)?)?;
     m.add_function(wrap_pyfunction!(gc, m)?)?;
     m.add_function(wrap_pyfunction!(set_local_registry_root, m)?)?;

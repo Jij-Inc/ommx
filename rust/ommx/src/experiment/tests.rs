@@ -1,12 +1,13 @@
 //! Tests for the experiment session model.
 
-use super::config::{ExperimentConfig, ExperimentConfigRun, LayerRef};
+use super::config::{ExperimentConfig, ExperimentConfigRun, ExperimentConfigSolve, LayerRef};
 use super::UnsealedExperimentState;
 use super::{
     AttachmentLogger, AttachmentTable, Experiment, ExperimentDyn, ExperimentStatus, Name,
-    ParameterValue, SealedExperiment, Trace, EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_STATUS_DRAFT,
-    EXPERIMENT_STATUS_FAILED, EXPERIMENT_STATUS_FINISHED, EXPERIMENT_STATUS_INTERRUPTED,
-    RUN_PARAMETERS_MEDIA_TYPE, RUN_STATUS_FAILED, RUN_STATUS_FINISHED, RUN_STATUS_INTERRUPTED,
+    ParameterValue, SealedExperiment, SolveDiagnosticPayload, Trace, EXPERIMENT_CONFIG_MEDIA_TYPE,
+    EXPERIMENT_STATUS_DRAFT, EXPERIMENT_STATUS_FAILED, EXPERIMENT_STATUS_FINISHED,
+    EXPERIMENT_STATUS_INTERRUPTED, RUN_PARAMETERS_MEDIA_TYPE, RUN_STATUS_FAILED,
+    RUN_STATUS_FINISHED, RUN_STATUS_INTERRUPTED,
 };
 use crate::artifact::local_registry::{StoredDescriptor, UnsealedArtifact};
 use crate::artifact::{
@@ -623,17 +624,26 @@ fn log_finished_solve_result_materializes_solve_entry_with_layer_refs() {
                 crate::ATol::default(),
             )
             .unwrap();
+        let diagnostics = b"\x91\x81\xa6status\xa7optimal".to_vec();
+        let diagnostic_annotations = HashMap::from([(
+            "org.ommx.diagnostic.python_type".to_string(),
+            "builtins.list".to_string(),
+        )]);
 
         {
             let mut run = experiment.run().unwrap();
             let solve_id = run
-                .log_finished_solve_result(
+                .log_finished_solve_result_with_diagnostics(
                     &instance,
                     Default::default(),
                     &solution,
                     Default::default(),
                     "dummy.Adapter".to_string(),
                     r#"{"time_limit":1.5}"#.to_string(),
+                    Some(SolveDiagnosticPayload::new(
+                        diagnostics.clone(),
+                        diagnostic_annotations.clone(),
+                    )?),
                 )
                 .unwrap();
             assert_eq!(solve_id, 0);
@@ -643,13 +653,13 @@ fn log_finished_solve_result_materializes_solve_entry_with_layer_refs() {
         let sealed = experiment.commit().unwrap();
         let artifact = sealed.artifact();
         let layers = artifact.layers().unwrap();
-        assert_eq!(layers.len(), 3);
+        assert_eq!(layers.len(), 4);
 
         let config = artifact.stored_config().unwrap();
         let config_json: serde_json::Value =
             serde_json::from_slice(&blob_bytes(&artifact, &config)).unwrap();
         assert_eq!(config_json["attachments"], json!({ "entries": {} }));
-        assert_eq!(config_json["run_parameters"], json!(2));
+        assert_eq!(config_json["run_parameters"], json!(3));
         assert_eq!(config_json["runs"][0]["status"], json!(RUN_STATUS_FINISHED));
         assert_eq!(
             config_json["runs"][0]["attachments"],
@@ -658,6 +668,17 @@ fn log_finished_solve_result_materializes_solve_entry_with_layer_refs() {
         assert_eq!(config_json["runs"][0]["solves"][0]["solve_id"], json!(0));
         assert_eq!(config_json["runs"][0]["solves"][0]["input"], json!(0));
         assert_eq!(config_json["runs"][0]["solves"][0]["output"], json!(1));
+        assert_eq!(config_json["runs"][0]["solves"][0]["diagnostics"], json!(2));
+        let diagnostic_layer = layer_from_ref(&layers, LayerRef(2));
+        assert_eq!(
+            diagnostic_layer.media_type(),
+            &media_types::diagnostic_msgpack()
+        );
+        assert_eq!(
+            diagnostic_layer.annotations().as_ref(),
+            Some(&diagnostic_annotations)
+        );
+        assert_eq!(blob_bytes(&artifact, diagnostic_layer), diagnostics);
         assert_eq!(
             config_json["runs"][0]["solves"][0]["adapter"],
             json!("dummy.Adapter")
@@ -682,8 +703,112 @@ fn log_finished_solve_result_materializes_solve_entry_with_layer_refs() {
         );
         assert_eq!(solve.adapter(), "dummy.Adapter");
         assert_eq!(solve.adapter_options(), r#"{"time_limit":1.5}"#);
+        assert_eq!(
+            solve.diagnostic_blob().unwrap().as_deref(),
+            Some(&*diagnostics)
+        );
+        let diagnostic_payload = solve.diagnostic_payload().unwrap().unwrap();
+        assert_eq!(diagnostic_payload.annotations(), &diagnostic_annotations);
+        assert!(matches!(
+            diagnostic_payload.value(),
+            rmpv::Value::Array(items) if items.len() == 1
+        ));
         Ok(())
     });
+}
+
+#[test]
+fn solve_diagnostic_payload_requires_messagepack_array() {
+    let err = SolveDiagnosticPayload::new(vec![0xc4, 0x01], HashMap::new())
+        .expect_err("diagnostic payload must be valid MessagePack");
+    assert!(err.to_string().contains("valid MessagePack"), "{err:#}");
+
+    let map_payload = b"\x81\xa6status\xa7optimal".to_vec();
+    let err = SolveDiagnosticPayload::new(map_payload, HashMap::new())
+        .expect_err("diagnostic payload must be a top-level array");
+    assert!(err.to_string().contains("MessagePack array"), "{err:#}");
+
+    let trailing_payload = b"\x90\x00".to_vec();
+    let err = SolveDiagnosticPayload::new(trailing_payload, HashMap::new())
+        .expect_err("diagnostic payload must contain exactly one value");
+    assert!(
+        err.to_string().contains("exactly one MessagePack value"),
+        "{err:#}"
+    );
+}
+
+#[test]
+fn loaded_experiment_rejects_invalid_diagnostic_payload() {
+    let temp = crate::artifact::local_registry::TempLocalRegistry::new().unwrap();
+    let registry = temp.registry();
+    let input = registry
+        .store_layer_blob(media_types::v1_instance(), b"input", HashMap::new())
+        .unwrap();
+    let output = registry
+        .store_layer_blob(media_types::v1_solution(), b"output", HashMap::new())
+        .unwrap();
+    let diagnostics = registry
+        .store_layer_blob(
+            media_types::diagnostic_msgpack(),
+            b"\x81\xa6status\xa7optimal",
+            HashMap::new(),
+        )
+        .unwrap();
+    let run_parameters = registry
+        .store_json_layer_blob(
+            MediaType::Other(RUN_PARAMETERS_MEDIA_TYPE.to_string()),
+            &json!({ "columns": {} }),
+            HashMap::new(),
+        )
+        .unwrap();
+    let config = ExperimentConfig {
+        status: EXPERIMENT_STATUS_FINISHED.to_string(),
+        requested_image_name: None,
+        attachments: AttachmentTable::new(),
+        runs: vec![ExperimentConfigRun {
+            run_id: 0,
+            status: RUN_STATUS_FINISHED.to_string(),
+            attachments: AttachmentTable::new(),
+            trace: None,
+            solves: vec![ExperimentConfigSolve {
+                solve_id: 0,
+                input: LayerRef(0),
+                output: LayerRef(1),
+                adapter: "dummy.Adapter".to_string(),
+                adapter_options: "{}".to_string(),
+                diagnostics: Some(LayerRef(2)),
+            }],
+        }],
+        run_parameters: LayerRef(3),
+    };
+    let config_descriptor = registry
+        .store_json_blob(
+            MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()),
+            &config,
+        )
+        .unwrap();
+    let unsealed = UnsealedArtifact::new(
+        MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
+        config_descriptor,
+        vec![input, output, diagnostics, run_parameters],
+        None,
+        HashMap::new(),
+    );
+    let sealed_artifact = registry.seal_artifact(unsealed).unwrap();
+    let image_name =
+        ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:invalid-diagnostics").unwrap();
+    let artifact =
+        LocalArtifact::from_parts(registry, image_name, sealed_artifact.digest().clone());
+
+    let err = SealedExperiment::from_artifact(artifact)
+        .expect_err("diagnostic payload must be validated when loading an artifact");
+    let messages = err
+        .chain()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(messages.contains("Invalid Run 0 Solve 0 diagnostic payload"));
+    assert!(messages.contains("MessagePack array"));
 }
 
 #[test]
