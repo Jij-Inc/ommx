@@ -145,6 +145,61 @@ def test_solve_records_progress_diagnostics():
     assert termination_df.loc[0, "status"] == "optimal"
 
 
+def test_scip_progress_snapshot_does_not_read_objective_in_callback():
+    class FakeSolution:
+        pass
+
+    class FakeModel:
+        def __init__(self) -> None:
+            self.solution = FakeSolution()
+
+        def getNSols(self) -> int:
+            return 1
+
+        def getPrimalbound(self) -> float:
+            return 12.5
+
+        def getSolvingTime(self) -> float:
+            return 0.25
+
+        def getNNodes(self) -> int:
+            return 2
+
+        def getNTotalNodes(self) -> int:
+            return 3
+
+        def getNLPIterations(self) -> int:
+            return 4
+
+        def getDualbound(self) -> float:
+            return 13.0
+
+        def getGap(self) -> float:
+            return 0.04
+
+        def getObjVal(self) -> float:
+            raise AssertionError("getObjVal must not be called from an event")
+
+        def getBestSol(self) -> FakeSolution:
+            return self.solution
+
+        def getSolObjVal(self, solution: FakeSolution) -> float:
+            assert solution is self.solution
+            return 14.0
+
+    class FakeEvent:
+        def getName(self) -> str:
+            return "BESTSOLFOUND"
+
+    snapshot = SCIPProgressSnapshot.from_event(
+        cast(Any, FakeModel()), cast(Any, FakeEvent())
+    )
+
+    assert snapshot.event == "BESTSOLFOUND"
+    assert snapshot.primal_bound == pytest.approx(12.5)
+    assert snapshot.incumbent_objective == pytest.approx(14.0)
+
+
 def test_log_solve_stores_progress_diagnostics():
     with Experiment.with_temp_local_registry() as experiment:
         with experiment.run() as run:

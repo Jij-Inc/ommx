@@ -148,8 +148,8 @@ class SCIPProgressSnapshot:
     :ivar primal_bound: SCIP primal bound reported at the callback.
     :ivar dual_bound: SCIP dual bound reported at the callback.
     :ivar gap: SCIP relative gap reported at the callback.
-    :ivar incumbent_objective: Incumbent objective if PySCIPOpt can read it at
-        that callback; otherwise ``None``.
+    :ivar incumbent_objective: Objective value of SCIP's current best solution
+        if PySCIPOpt can read it at that callback; otherwise ``None``.
     """
 
     event: str
@@ -168,6 +168,7 @@ class SCIPProgressSnapshot:
         cls, model: pyscipopt.Model, event: SCIPEvent
     ) -> SCIPProgressSnapshot:
         solution_count = int(model.getNSols())
+        primal_bound = model.getPrimalbound()
         return cls(
             event=event.getName(),
             solving_time_sec=model.getSolvingTime(),
@@ -175,7 +176,7 @@ class SCIPProgressSnapshot:
             total_node_count=int(model.getNTotalNodes()),
             lp_iteration_count=int(model.getNLPIterations()),
             solution_count=solution_count,
-            primal_bound=model.getPrimalbound(),
+            primal_bound=primal_bound,
             dual_bound=model.getDualbound(),
             gap=model.getGap(),
             incumbent_objective=_get_incumbent_objective(model, solution_count),
@@ -204,10 +205,10 @@ def _get_incumbent_objective(
 ) -> float | None:
     if solution_count <= 0:
         return None
-    try:
-        return model.getObjVal()
-    except Exception:
+    solution = model.getBestSol()
+    if solution is None:
         return None
+    return model.getSolObjVal(solution)
 
 
 class SCIPDiagnosticsAnalyzer:
