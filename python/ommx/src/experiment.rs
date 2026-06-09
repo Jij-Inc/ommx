@@ -1273,7 +1273,7 @@ impl PyRun {
         adapter: SolverAdapterInput,
         instance: &crate::Instance,
         kwargs: Option<&Bound<PyDict>>,
-    ) -> Result<crate::Solution> {
+    ) -> PyResult<crate::Solution> {
         let _guard = crate::TRACING.attach_parent_context(py);
         self.ensure_store_trace_context_started()?;
         reject_reserved_log_solve_kwargs(kwargs)?;
@@ -1310,7 +1310,7 @@ impl PyRun {
                         "Failed to record failed Solve attempt"
                     );
                 }
-                return Err(error.into());
+                return Err(error);
             }
         };
         let diagnostics = pack_diagnostics_or_none(

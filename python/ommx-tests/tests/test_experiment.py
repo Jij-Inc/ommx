@@ -831,6 +831,46 @@ def test_failed_run_preserves_completed_solves_after_adapter_exception():
     assert failed_solve.diagnostics == [{"status": "about-to-fail", "bound": math.inf}]
 
 
+def test_log_solve_preserves_keyboard_interrupt_type_and_records_interrupted_solve():
+    class InterruptingAdapter(SolverAdapter):
+        @classmethod
+        def solve(
+            cls,
+            ommx_instance: Instance,
+            *,
+            diagnostics: Any | None = None,
+            **kwargs: object,
+        ) -> Solution:
+            assert diagnostics is not None
+            diagnostics.record(DummyDiagnostic(status="before-interrupt", bound=math.inf))
+            raise KeyboardInterrupt
+
+        @property
+        def solver_input(self) -> Any:
+            raise NotImplementedError
+
+        def decode(self, data: Any) -> Solution:
+            raise NotImplementedError
+
+    instance = Instance.empty()
+    experiment = Experiment.with_temp_local_registry()
+
+    with pytest.raises(KeyboardInterrupt):
+        with experiment.run() as run:
+            run.log_solve(InterruptingAdapter, instance, label="interrupt")
+
+    loaded = Experiment.from_artifact(experiment.commit())
+    run = loaded.runs[0]
+    assert run.status == "interrupted"
+    assert [solve.solve_id for solve in run.solves] == [0]
+
+    solve = run.solves[0]
+    assert solve.status == "interrupted"
+    assert solve.output is None
+    assert solve.adapter_options == {"label": "interrupt"}
+    assert solve.diagnostics == [{"status": "before-interrupt", "bound": math.inf}]
+
+
 def test_log_solve_rejects_non_solver_adapter():
     class DummyAdapter:
         @classmethod
