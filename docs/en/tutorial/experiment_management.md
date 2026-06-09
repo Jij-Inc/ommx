@@ -27,7 +27,7 @@ In practical mathematical optimization, a workflow rarely ends by simply buildin
 * - {py:class}`~ommx.experiment.Run`
   - One trial within an experiment and the comparison unit. Since complex workflows often call solvers more than once, a Run can contain multiple solver calls (Solves). A Run can also have scalar parameters used as comparison axes, making it easy to compare Runs across the Experiment.
 * - {py:class}`~ommx.experiment.Solve`
-  - One solver call within a Run. It stores the input {py:class}`~ommx.v1.Instance` and output {py:class}`~ommx.v1.Solution`. It also records which Adapter was used and which options were passed to the solver call.
+  - One solver call within a Run. It always stores the input {py:class}`~ommx.v1.Instance`, the Adapter used, and the options passed to the solver call. A finished Solve also stores the output {py:class}`~ommx.v1.Solution`; a failed or interrupted Solve has no output.
 * - Attachment
   - An arbitrary payload attached to an Experiment or Run. It can store data types such as JSON, `numpy.ndarray`, {py:class}`~ommx.v1.Instance`, and {py:class}`~ommx.v1.Solution`, as well as arbitrary bytes with an explicit Media Type.
 ```
@@ -325,7 +325,8 @@ for run in loaded_experiment.runs:
 
     # Load input and output.
     input: Instance = solve.input
-    output: Solution = solve.output
+    output: Solution | None = solve.output
+    assert output is not None
 
     # The knapsack problem should have been solved.
     assert output.feasible

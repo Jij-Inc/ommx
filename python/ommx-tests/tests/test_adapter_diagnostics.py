@@ -1,8 +1,6 @@
 from dataclasses import dataclass
 from typing import Any, cast
 
-import pytest
-
 from ommx.adapter import DiagnosticCollector
 
 
@@ -25,21 +23,21 @@ def test_diagnostic_collector_records_typed_diagnostics():
 def test_diagnostic_collector_does_not_require_serialization_hooks():
     @dataclass(frozen=True, slots=True)
     class NoSerializationReport:
-        value: float
+        value: object
 
     collector = DiagnosticCollector()
-    report = NoSerializationReport(value=float("inf"))
+    report = NoSerializationReport(value=object())
 
     collector.record(report)
 
     assert collector.diagnostics == [report]
 
 
-def test_diagnostic_collector_requires_dataclass_instance():
+def test_diagnostic_collector_record_is_append_only():
     collector = DiagnosticCollector()
+    diagnostic = object()
 
-    with pytest.raises(TypeError, match="dataclass instance"):
-        collector.record(cast(Any, object()))
+    collector.record(cast(Any, diagnostic))
 
-    with pytest.raises(TypeError, match="dataclass instance"):
-        collector.record(cast(Any, DummyReport))
+    assert collector.diagnostics == [diagnostic]
+    assert collector.diagnostics[0] is diagnostic

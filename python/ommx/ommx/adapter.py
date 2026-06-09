@@ -21,10 +21,25 @@ class DiagnosticReport(Protocol):
 
 
 class DiagnosticsSink(Protocol):
-    """Receiver for adapter-defined diagnostics emitted during a solve."""
+    """Receiver for adapter-defined diagnostics emitted during a solve.
+
+    Adapters may call ``record`` while the backend solver is still running,
+    including from backend callbacks. Sink implementations should keep
+    ``record`` append-only, defer validation or serialization until after the
+    solve, and preserve the order in which diagnostics are received.
+
+    A conforming sink must not raise from ``record``. If recording fails, the
+    sink should log the failure and return normally. If ``record`` does raise,
+    that is a sink contract violation; adapters may let the exception propagate
+    and do not need to recover from it.
+    """
 
     def record(self, diagnostic: DiagnosticReport) -> None:
-        """Record one adapter-defined dataclass diagnostic report."""
+        """Record one adapter-defined dataclass diagnostic report or event.
+
+        This method must not raise under normal sink failures. Custom sinks
+        should log failures and return instead.
+        """
 
 
 class SolverAdapter(ABC):
@@ -75,7 +90,9 @@ class SolverAdapter(ABC):
 
         ``Run.log_solve`` owns the reserved ``diagnostics`` keyword and passes a
         sink to every adapter. Adapters may record adapter-defined dataclass
-        reports into the sink; leaving it empty means no diagnostics are stored.
+        diagnostics into the sink during the solve; leaving it empty means no
+        diagnostics are stored. Adapters do not need to catch exceptions raised
+        by a non-conforming diagnostics sink.
         """
         pass
 

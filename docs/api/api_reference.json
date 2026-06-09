@@ -4513,7 +4513,7 @@
             },
             {
               "name": "log_solve",
-              "doc": "Solve an Instance with an OMMX SolverAdapter and log a Solve entry.\n\nThe input Instance is cloned before calling the adapter, so adapter-side\ncapability reductions do not mutate the caller's object. The original\ninput is always stored as the Solve input.\n\n`adapter` must be a subclass of `ommx.adapter.SolverAdapter`. Keyword\narguments are passed to `adapter.solve(...)` and recorded as\n`Solve.adapter_options`. The adapter class name is stored in\n`Solve.adapter`.\n\nAdapter options are solve-scoped metadata, not run parameters. They do\nnot appear in `Experiment.run_parameters_df()`.",
+              "doc": "Solve an Instance with an OMMX SolverAdapter and log a Solve entry.\n\nThe input Instance is cloned before calling the adapter, so adapter-side\ncapability reductions do not mutate the caller's object. The original\ninput is always stored as the Solve input.\n\n`adapter` must be a subclass of `ommx.adapter.SolverAdapter`. Keyword\narguments are passed to `adapter.solve(...)` and recorded as\n`Solve.adapter_options`. The adapter class name is stored in\n`Solve.adapter`.\n\nAdapter options are solve-scoped metadata, not run parameters. They do\nnot appear in `Experiment.run_parameters_df()`.\n\nAdapter diagnostics persistence is best-effort. If diagnostics cannot\nbe serialized or stored after the adapter returns a solution, the Solve\nentry is still recorded without diagnostics.\n\nIf the adapter raises before returning a Solution, this method records\na failed Solve entry when possible, including diagnostics collected\nbefore the failure. Failed Solve entries have `output=None`.",
               "signatures": [
                 {
                   "parameters": [
@@ -4636,7 +4636,7 @@
         {
           "kind": "Class",
           "name": "SealedRun",
-          "doc": "Immutable view of a closed Run in an Experiment.\n\n`SealedRun` exposes run-level attachments by name and the sequence of\n`Solve` records created by `Run.log_solve`. The `status` property is\n`\"finished\"`, `\"failed\"`, or `\"interrupted\"` depending on how the Run was\nclosed.",
+          "doc": "Immutable view of a closed Run in an Experiment.\n\n`SealedRun` exposes run-level attachments by name and the sequence of\n`Solve` records created by `Run.log_solve`. The `status` property records\nhow the Run scope was closed: `\"finished\"`, `\"failed\"`, or `\"interrupted\"`.\nIt is not an aggregate status of child `Solve` records, so a finished Run\nmay contain failed Solve attempts that were handled inside the Run.",
           "bases": [],
           "methods": [
             {
@@ -5027,7 +5027,7 @@
             },
             {
               "name": "status",
-              "doc": "Run lifecycle status: `\"finished\"`, `\"failed\"`, or `\"interrupted\"`.",
+              "doc": "Run lifecycle status: `\"finished\"`, `\"failed\"`, or `\"interrupted\"`.\n\nThis records how the Run scope was closed, not whether every child\n`Solve` record finished successfully. A finished Run may contain failed\nSolve attempts if those adapter errors were handled inside the Run.",
               "type_": {
                 "display": "str",
                 "link_target": null,
@@ -5059,7 +5059,7 @@
         {
           "kind": "Class",
           "name": "Solve",
-          "doc": "Immutable record of one solver call.\n\nA `Solve` stores the input `Instance`, output `Solution`, adapter class\nname, and JSON-encoded adapter options for one `Run.log_solve` call.",
+          "doc": "Immutable record of one solver call.\n\nA `Solve` always stores the input `Instance`, adapter class name, and\nJSON-encoded adapter options for one `Run.log_solve` call. A finished Solve\nstores the output `Solution`; failed and interrupted Solve records have no\noutput.",
           "bases": [],
           "methods": [
             {
@@ -5143,11 +5143,17 @@
             },
             {
               "name": "output",
-              "doc": "Output `Solution` returned by the solver.",
+              "doc": "Output `Solution` returned by the solver, or `None` if the solve failed before returning one.",
               "type_": {
-                "display": "Solution",
+                "display": "Optional[Solution]",
                 "link_target": null,
-                "children": []
+                "children": [
+                  {
+                    "display": "Solution",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
               },
               "is_property": true,
               "is_readonly": true
@@ -5157,6 +5163,17 @@
               "doc": "Integer identifier of this solve within its run.",
               "type_": {
                 "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "status",
+              "doc": "Solve lifecycle status: `\"finished\"`, `\"failed\"`, or `\"interrupted\"`.",
+              "type_": {
+                "display": "str",
                 "link_target": null,
                 "children": []
               },

@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use oci_spec::image::MediaType;
 use pyo3::{
-    exceptions::PyKeyboardInterrupt,
+    exceptions::{PyKeyboardInterrupt, PyTypeError},
     prelude::*,
     types::{
         PyBool, PyBytes, PyDict, PyFloat, PyInt, PyList, PyModule, PyString, PyType, PyTypeMethods,
@@ -16,7 +16,7 @@ use std::{
 use crate::pandas::{raw_entries_to_dataframe, PyDataFrame};
 use crate::PyArtifact;
 use ommx::artifact::AsArtifact;
-use ommx::experiment::{AttachmentLogger, SolveDiagnosticPayload};
+use ommx::experiment::{AttachmentLogger, SolveDiagnosticPayload, SolveStatus};
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
@@ -1258,6 +1258,14 @@ impl PyRun {
     ///
     /// Adapter options are solve-scoped metadata, not run parameters. They do
     /// not appear in `Experiment.run_parameters_df()`.
+    ///
+    /// Adapter diagnostics persistence is best-effort. If diagnostics cannot
+    /// be serialized or stored after the adapter returns a solution, the Solve
+    /// entry is still recorded without diagnostics.
+    ///
+    /// If the adapter raises before returning a Solution, this method records
+    /// a failed Solve entry when possible, including diagnostics collected
+    /// before the failure. Failed Solve entries have `output=None`.
     #[pyo3(signature = (adapter, instance, **kwargs))]
     pub fn log_solve(
         &mut self,
@@ -1265,7 +1273,7 @@ impl PyRun {
         adapter: SolverAdapterInput,
         instance: &crate::Instance,
         kwargs: Option<&Bound<PyDict>>,
-    ) -> Result<crate::Solution> {
+    ) -> PyResult<crate::Solution> {
         let _guard = crate::TRACING.attach_parent_context(py);
         self.ensure_store_trace_context_started()?;
         reject_reserved_log_solve_kwargs(kwargs)?;
@@ -1273,8 +1281,43 @@ impl PyRun {
         let adapter_name = adapter.name()?;
         let adapter_options = dump_kwargs(py, kwargs)?;
         let diagnostics_collector = Py::new(py, PyDiagnosticCollector::new_inner())?;
-        let solution = adapter.solve(instance, kwargs, diagnostics_collector.bind(py))?;
-        let diagnostics = diagnostics_collector.bind(py).borrow().pack(py)?;
+        let solution = match adapter.solve(instance, kwargs, diagnostics_collector.bind(py)) {
+            Ok(solution) => solution,
+            Err(error) => {
+                let status = if error.is_instance_of::<PyKeyboardInterrupt>(py) {
+                    SolveStatus::Interrupted
+                } else {
+                    SolveStatus::Failed
+                };
+                let diagnostics = pack_diagnostics_or_none(
+                    py,
+                    &diagnostics_collector,
+                    "Failed to serialize failed Solve diagnostics; recording Solve without diagnostics",
+                );
+                let record_result = self.as_open_mut().and_then(|run| {
+                    run.log_failed_solve_attempt_with_diagnostics(
+                        &instance.inner,
+                        instance.annotations.clone(),
+                        adapter_name,
+                        adapter_options,
+                        status,
+                        diagnostics,
+                    )
+                });
+                if let Err(record_error) = record_result {
+                    tracing::warn!(
+                        error = %record_error,
+                        "Failed to record failed Solve attempt"
+                    );
+                }
+                return Err(error);
+            }
+        };
+        let diagnostics = pack_diagnostics_or_none(
+            py,
+            &diagnostics_collector,
+            "Failed to serialize adapter diagnostics; recording Solve without diagnostics",
+        );
         let solve_id = self
             .as_open_mut()?
             .log_finished_solve_result_with_diagnostics(
@@ -1477,8 +1520,26 @@ impl PyDiagnosticCollector {
             .collect()
     }
 
-    pub fn record(&mut self, diagnostic: DiagnosticReport) {
-        self.diagnostics.push(diagnostic);
+    pub fn record(
+        &mut self,
+        #[gen_stub(override_type(type_repr = "adapter.DiagnosticReport", imports = ("ommx.adapter")))]
+        diagnostic: Py<PyAny>,
+    ) {
+        self.diagnostics.push(DiagnosticReport(diagnostic));
+    }
+}
+
+fn pack_diagnostics_or_none(
+    py: Python<'_>,
+    diagnostics_collector: &Py<PyDiagnosticCollector>,
+    warning_message: &'static str,
+) -> Option<SolveDiagnosticPayload> {
+    match diagnostics_collector.bind(py).borrow().pack(py) {
+        Ok(diagnostics) => diagnostics,
+        Err(error) => {
+            tracing::warn!(error = %error, "{}", warning_message);
+            None
+        }
     }
 }
 
@@ -1497,15 +1558,16 @@ impl DiagnosticReport {
         &self,
         py: Python<'py>,
         dataclasses: &Bound<'py, PyModule>,
-    ) -> Result<(Bound<'py, PyAny>, String)> {
+    ) -> Result<Bound<'py, PyAny>> {
         let diagnostic = self.as_bound(py);
-        let type_name = python_type_name(diagnostic)?;
         let data = dataclasses
             .call_method1("asdict", (diagnostic,))
             .with_context(|| {
+                let type_name = python_type_name(diagnostic)
+                    .unwrap_or_else(|_| "<unknown diagnostic>".to_string());
                 format!("Adapter diagnostic `{type_name}` must be a dataclass instance")
             })?;
-        Ok((data, type_name))
+        Ok(data)
     }
 
     fn pack_reports(
@@ -1519,11 +1581,9 @@ impl DiagnosticReport {
         let dataclasses = py.import("dataclasses")?;
         let msgpack = py.import("msgpack")?;
         let mut packed_items = Vec::new();
-        let mut python_types = Vec::new();
         for report in reports {
-            let (data, type_name) = report.as_msgpack_item(py, &dataclasses)?;
+            let data = report.as_msgpack_item(py, &dataclasses)?;
             packed_items.push(data);
-            python_types.push(type_name);
         }
 
         let diagnostics = PyList::new(py, packed_items)?;
@@ -1532,16 +1592,7 @@ impl DiagnosticReport {
         let bytes: Vec<u8> = msgpack
             .call_method("packb", (&diagnostics,), Some(&kwargs))?
             .extract()?;
-        let mut annotations = HashMap::new();
-        annotations.insert(
-            "org.ommx.diagnostic.python_type".to_string(),
-            "builtins.list".to_string(),
-        );
-        annotations.insert(
-            "org.ommx.diagnostic.python_element_types".to_string(),
-            python_types.join(","),
-        );
-        Ok(Some(SolveDiagnosticPayload::new(bytes, annotations)?))
+        Ok(Some(SolveDiagnosticPayload::new(bytes)?))
     }
 }
 
@@ -1602,7 +1653,7 @@ impl<'py> SolverAdapter<'py> {
         instance: &crate::Instance,
         kwargs: Option<&Bound<'py, PyDict>>,
         diagnostics: &Bound<'py, PyDiagnosticCollector>,
-    ) -> Result<crate::Solution> {
+    ) -> PyResult<crate::Solution> {
         let py = self.py();
         let adapter_instance = Py::new(py, instance.clone())?;
         let call_kwargs = PyDict::new(py);
@@ -1617,7 +1668,7 @@ impl<'py> SolverAdapter<'py> {
                 .call_method("solve", (adapter_instance,), Some(&call_kwargs))?;
         solution_object
             .extract::<crate::Solution>()
-            .map_err(|_| anyhow::anyhow!("adapter.solve(...) must return ommx.v1.Solution"))
+            .map_err(|_| PyTypeError::new_err("adapter.solve(...) must return ommx.v1.Solution"))
     }
 
     fn name(&self) -> Result<String> {
@@ -1714,9 +1765,10 @@ impl pyo3_stub_gen::PyStubType for ParameterValueInput {
 /// Immutable view of a closed Run in an Experiment.
 ///
 /// `SealedRun` exposes run-level attachments by name and the sequence of
-/// `Solve` records created by `Run.log_solve`. The `status` property is
-/// `"finished"`, `"failed"`, or `"interrupted"` depending on how the Run was
-/// closed.
+/// `Solve` records created by `Run.log_solve`. The `status` property records
+/// how the Run scope was closed: `"finished"`, `"failed"`, or `"interrupted"`.
+/// It is not an aggregate status of child `Solve` records, so a finished Run
+/// may contain failed Solve attempts that were handled inside the Run.
 pub struct PySealedRun {
     run: ommx::experiment::SealedRunDyn,
 }
@@ -1732,6 +1784,10 @@ impl PySealedRun {
 
     #[getter]
     /// Run lifecycle status: `"finished"`, `"failed"`, or `"interrupted"`.
+    ///
+    /// This records how the Run scope was closed, not whether every child
+    /// `Solve` record finished successfully. A finished Run may contain failed
+    /// Solve attempts if those adapter errors were handled inside the Run.
     pub fn status(&self) -> String {
         self.run.status().to_string()
     }
@@ -1878,8 +1934,10 @@ impl PySealedRun {
 #[derive(Clone)]
 /// Immutable record of one solver call.
 ///
-/// A `Solve` stores the input `Instance`, output `Solution`, adapter class
-/// name, and JSON-encoded adapter options for one `Run.log_solve` call.
+/// A `Solve` always stores the input `Instance`, adapter class name, and
+/// JSON-encoded adapter options for one `Run.log_solve` call. A finished Solve
+/// stores the output `Solution`; failed and interrupted Solve records have no
+/// output.
 pub struct PySolve(ommx::experiment::SolveDyn);
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
@@ -1892,6 +1950,12 @@ impl PySolve {
     }
 
     #[getter]
+    /// Solve lifecycle status: `"finished"`, `"failed"`, or `"interrupted"`.
+    pub fn status(&self) -> String {
+        self.0.status().to_string()
+    }
+
+    #[getter]
     /// Input `Instance` passed to the solver.
     pub fn input(&self) -> Result<crate::Instance> {
         let (inner, annotations) = self.0.input_instance()?;
@@ -1899,10 +1963,12 @@ impl PySolve {
     }
 
     #[getter]
-    /// Output `Solution` returned by the solver.
-    pub fn output(&self) -> Result<crate::Solution> {
-        let (inner, annotations) = self.0.output_solution()?;
-        Ok(crate::Solution { inner, annotations })
+    /// Output `Solution` returned by the solver, or `None` if the solve failed before returning one.
+    pub fn output(&self) -> Result<Option<crate::Solution>> {
+        let Some((inner, annotations)) = self.0.output_solution()? else {
+            return Ok(None);
+        };
+        Ok(Some(crate::Solution { inner, annotations }))
     }
 
     #[getter]
@@ -1942,7 +2008,11 @@ impl PySolve {
     }
 
     pub fn __repr__(&self) -> String {
-        format!("Solve(solve_id={})", self.solve_id())
+        format!(
+            "Solve(solve_id={}, status='{}')",
+            self.solve_id(),
+            self.status()
+        )
     }
 }
 

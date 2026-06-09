@@ -35,8 +35,11 @@ pub struct ExperimentConfigRun {
 #[non_exhaustive]
 pub struct ExperimentConfigSolve {
     pub solve_id: u64,
+    #[serde(default = "default_solve_status")]
+    pub status: String,
     pub input: LayerRef,
-    pub output: LayerRef,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output: Option<LayerRef>,
     pub adapter: String,
     #[serde(default = "default_adapter_options")]
     pub adapter_options: String,
@@ -49,5 +52,9 @@ fn default_adapter_options() -> String {
 }
 
 fn default_run_status() -> String {
+    "finished".to_string()
+}
+
+fn default_solve_status() -> String {
     "finished".to_string()
 }

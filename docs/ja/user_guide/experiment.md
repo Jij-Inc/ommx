@@ -72,6 +72,9 @@ checkpoint を publish します。
 
 `KeyboardInterrupt` は Run / Experiment ともに `"interrupted"` として記録されます。それ以外の例外は `"failed"` として記録されます。
 
+Run status は Run scope がどう close されたかを表します。子 Solve record の集約 status ではないため、
+adapter error を Run 内で処理した場合、status `"finished"` の Run が failed Solve attempt を含むことがあります。
+
 Experiment を context manager として使わない場合、Run の外側で起きた例外は
 failed Experiment checkpoint を自動 publish しません。通常の interactive workflow
 では、探索中は Run close 後に作られる Experiment draft checkpoint によって復帰可能性を確保し、

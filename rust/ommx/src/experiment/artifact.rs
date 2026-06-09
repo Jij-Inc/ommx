@@ -185,8 +185,13 @@ impl<'reg> UnsealedExperimentState<'reg> {
             for solve in &run.solves {
                 solves.push(ExperimentConfigSolve {
                     solve_id: solve.solve_id,
+                    status: solve.status.as_str().to_string(),
                     input: layers.push(solve.input.clone())?,
-                    output: layers.push(solve.output.clone())?,
+                    output: solve
+                        .output
+                        .clone()
+                        .map(|descriptor| layers.push(descriptor))
+                        .transpose()?,
                     adapter: solve.adapter.clone(),
                     adapter_options: solve.adapter_options.clone(),
                     diagnostics: solve
