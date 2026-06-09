@@ -842,7 +842,9 @@ def test_log_solve_preserves_keyboard_interrupt_type_and_records_interrupted_sol
             **kwargs: object,
         ) -> Solution:
             assert diagnostics is not None
-            diagnostics.record(DummyDiagnostic(status="before-interrupt", bound=math.inf))
+            diagnostics.record(
+                DummyDiagnostic(status="before-interrupt", bound=math.inf)
+            )
             raise KeyboardInterrupt
 
         @property
