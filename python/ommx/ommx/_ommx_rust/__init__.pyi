@@ -6698,8 +6698,10 @@ class Solve:
     r"""
     Immutable record of one solver call.
 
-    A `Solve` stores the input `Instance`, output `Solution`, adapter class
-    name, and JSON-encoded adapter options for one `Run.log_solve` call.
+    A `Solve` always stores the input `Instance`, adapter class name, and
+    JSON-encoded adapter options for one `Run.log_solve` call. A finished Solve
+    stores the output `Solution`; failed and interrupted Solve records have no
+    output.
     """
     @property
     def solve_id(self) -> builtins.int:

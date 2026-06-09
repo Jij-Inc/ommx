@@ -402,6 +402,12 @@ fn decode_solves<'reg>(
                 solve.solve_id
             );
         }
+        if status != SolveStatus::Finished && solve.output.is_some() {
+            crate::bail!(
+                "Run {run_id} Solve {} has status {status} but has an output",
+                solve.solve_id
+            );
+        }
         let output = solve
             .output
             .map(|layer_ref| {

@@ -5059,7 +5059,7 @@
         {
           "kind": "Class",
           "name": "Solve",
-          "doc": "Immutable record of one solver call.\n\nA `Solve` stores the input `Instance`, output `Solution`, adapter class\nname, and JSON-encoded adapter options for one `Run.log_solve` call.",
+          "doc": "Immutable record of one solver call.\n\nA `Solve` always stores the input `Instance`, adapter class name, and\nJSON-encoded adapter options for one `Run.log_solve` call. A finished Solve\nstores the output `Solution`; failed and interrupted Solve records have no\noutput.",
           "bases": [],
           "methods": [
             {

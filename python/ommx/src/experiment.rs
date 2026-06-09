@@ -1934,8 +1934,10 @@ impl PySealedRun {
 #[derive(Clone)]
 /// Immutable record of one solver call.
 ///
-/// A `Solve` stores the input `Instance`, output `Solution`, adapter class
-/// name, and JSON-encoded adapter options for one `Run.log_solve` call.
+/// A `Solve` always stores the input `Instance`, adapter class name, and
+/// JSON-encoded adapter options for one `Run.log_solve` call. A finished Solve
+/// stores the output `Solution`; failed and interrupted Solve records have no
+/// output.
 pub struct PySolve(ommx::experiment::SolveDyn);
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]

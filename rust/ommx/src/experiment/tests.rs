@@ -805,6 +805,70 @@ fn loaded_experiment_rejects_invalid_diagnostic_payload() {
 }
 
 #[test]
+fn loaded_experiment_rejects_failed_solve_with_output() {
+    let temp = crate::artifact::local_registry::TempLocalRegistry::new().unwrap();
+    let registry = temp.registry();
+    let input = registry
+        .store_layer_blob(media_types::v1_instance(), b"input", HashMap::new())
+        .unwrap();
+    let output = registry
+        .store_layer_blob(media_types::v1_solution(), b"output", HashMap::new())
+        .unwrap();
+    let run_parameters = registry
+        .store_json_layer_blob(
+            MediaType::Other(RUN_PARAMETERS_MEDIA_TYPE.to_string()),
+            &json!({ "columns": {} }),
+            HashMap::new(),
+        )
+        .unwrap();
+    let config = ExperimentConfig {
+        status: EXPERIMENT_STATUS_FINISHED.to_string(),
+        requested_image_name: None,
+        attachments: AttachmentTable::new(),
+        runs: vec![ExperimentConfigRun {
+            run_id: 0,
+            status: RUN_STATUS_FINISHED.to_string(),
+            attachments: AttachmentTable::new(),
+            trace: None,
+            solves: vec![ExperimentConfigSolve {
+                solve_id: 0,
+                status: super::SOLVE_STATUS_FAILED.to_string(),
+                input: LayerRef(0),
+                output: Some(LayerRef(1)),
+                adapter: "dummy.Adapter".to_string(),
+                adapter_options: "{}".to_string(),
+                diagnostics: None,
+            }],
+        }],
+        run_parameters: LayerRef(2),
+    };
+    let config_descriptor = registry
+        .store_json_blob(
+            MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()),
+            &config,
+        )
+        .unwrap();
+    let unsealed = UnsealedArtifact::new(
+        MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
+        config_descriptor,
+        vec![input, output, run_parameters],
+        None,
+        HashMap::new(),
+    );
+    let sealed_artifact = registry.seal_artifact(unsealed).unwrap();
+    let image_name =
+        ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:failed-solve-output").unwrap();
+    let artifact =
+        LocalArtifact::from_parts(registry, image_name, sealed_artifact.digest().clone());
+
+    let err = SealedExperiment::from_artifact(artifact)
+        .expect_err("failed Solve configs must not carry output layers");
+    assert!(err
+        .to_string()
+        .contains("Run 0 Solve 0 has status failed but has an output"));
+}
+
+#[test]
 fn loaded_experiment_rejects_non_finished_status() {
     let temp = crate::artifact::local_registry::TempLocalRegistry::new().unwrap();
     let registry = temp.registry();

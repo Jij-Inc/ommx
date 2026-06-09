@@ -27,7 +27,7 @@ kernelspec:
 * - {py:class}`~ommx.experiment.Run`
   - 実験の中で行った一つの試行、比較の単位。複雑な問題を解く際に複数回のソルバー呼び出しを伴うことがよくあるため、Runは複数回のソルバー呼び出し（Solve）を持つことができる。加えてRun毎に比較の軸となるスカラー値のパラメータを付与でき、Experiment全体でのRunの比較を容易にする。
 * - {py:class}`~ommx.experiment.Solve`
-  - Runの中で行った一回のソルバー呼び出し。入力として {py:class}`~ommx.v1.Instance` を取り、出力として {py:class}`~ommx.v1.Solution` を保存する。さらに、どのAdapterを使ったか、ソルバー呼び出しに渡したオプションも記録する。
+  - Runの中で行った一回のソルバー呼び出し。入力の {py:class}`~ommx.v1.Instance`、使用した Adapter、ソルバー呼び出しに渡したオプションを常に記録する。finished Solve は出力の {py:class}`~ommx.v1.Solution` も保存し、failed または interrupted Solve は output を持たない。
 * - Attachment
   - ExperimentやRunに添付する任意のペイロード。JSON、`numpy.ndarray`、{py:class}`~ommx.v1.Instance`、{py:class}`~ommx.v1.Solution`などのデータ型に加えて、任意のbytesをMedia Typeを指定して保存できる。
 ```
