@@ -5622,6 +5622,14 @@ class Run:
 
         Adapter options are solve-scoped metadata, not run parameters. They do
         not appear in `Experiment.run_parameters_df()`.
+
+        Adapter diagnostics persistence is best-effort. If diagnostics cannot
+        be serialized or stored after the adapter returns a solution, the Solve
+        entry is still recorded without diagnostics.
+
+        If the adapter raises before returning a Solution, this method records
+        a failed Solve entry when possible, including diagnostics collected
+        before the failure. Failed Solve entries have `output=None`.
         """
     def finish(self) -> None:
         r"""
@@ -6185,9 +6193,10 @@ class SealedRun:
     Immutable view of a closed Run in an Experiment.
 
     `SealedRun` exposes run-level attachments by name and the sequence of
-    `Solve` records created by `Run.log_solve`. The `status` property is
-    `"finished"`, `"failed"`, or `"interrupted"` depending on how the Run was
-    closed.
+    `Solve` records created by `Run.log_solve`. The `status` property records
+    how the Run scope was closed: `"finished"`, `"failed"`, or `"interrupted"`.
+    It is not an aggregate status of child `Solve` records, so a finished Run
+    may contain failed Solve attempts that were handled inside the Run.
     """
     @property
     def run_id(self) -> builtins.int:
@@ -6198,6 +6207,10 @@ class SealedRun:
     def status(self) -> builtins.str:
         r"""
         Run lifecycle status: `"finished"`, `"failed"`, or `"interrupted"`.
+
+        This records how the Run scope was closed, not whether every child
+        `Solve` record finished successfully. A finished Run may contain failed
+        Solve attempts if those adapter errors were handled inside the Run.
         """
     @property
     def attachment_names(self) -> builtins.list[builtins.str]:
@@ -6685,8 +6698,10 @@ class Solve:
     r"""
     Immutable record of one solver call.
 
-    A `Solve` stores the input `Instance`, output `Solution`, adapter class
-    name, and JSON-encoded adapter options for one `Run.log_solve` call.
+    A `Solve` always stores the input `Instance`, adapter class name, and
+    JSON-encoded adapter options for one `Run.log_solve` call. A finished Solve
+    stores the output `Solution`; failed and interrupted Solve records have no
+    output.
     """
     @property
     def solve_id(self) -> builtins.int:
@@ -6694,14 +6709,19 @@ class Solve:
         Integer identifier of this solve within its run.
         """
     @property
+    def status(self) -> builtins.str:
+        r"""
+        Solve lifecycle status: `"finished"`, `"failed"`, or `"interrupted"`.
+        """
+    @property
     def input(self) -> Instance:
         r"""
         Input `Instance` passed to the solver.
         """
     @property
-    def output(self) -> Solution:
+    def output(self) -> typing.Optional[Solution]:
         r"""
-        Output `Solution` returned by the solver.
+        Output `Solution` returned by the solver, or `None` if the solve failed before returning one.
         """
     @property
     def adapter(self) -> builtins.str:

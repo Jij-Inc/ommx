@@ -12,9 +12,9 @@ Changes merged after the most recent release will be appended here as they land,
 
 Solver adapters now have an adapter-specific diagnostics channel for preserving backend solver information that does not belong in the common {class}`~ommx.v1.Solution` result. Direct adapter calls can pass {class}`~ommx.adapter.DiagnosticCollector` to {meth}`~ommx.adapter.SolverAdapter.solve` through the reserved `diagnostics` keyword, while {meth}`~ommx.experiment.Run.log_solve` owns that keyword and stores recorded diagnostics with each Experiment {class}`~ommx.experiment.Solve`.
 
-The PySCIPOpt Adapter now emits {class}`~ommx_pyscipopt_adapter.SCIPTerminationReport`, including SCIP termination status, primal/dual bounds, gap, objective value, node and solution counts, timing, and SCIP/PySCIPOpt version metadata. The report is recorded after `model.optimize()` and before decoding back to an OMMX Solution, so it is available even when decoding raises an adapter exception such as infeasible or unbounded detection.
+The PySCIPOpt Adapter now emits {class}`~ommx_pyscipopt_adapter.SCIPProgressSnapshot` diagnostics from SCIP `BESTSOLFOUND` and `DUALBOUNDIMPROVED` callbacks, plus {class}`~ommx_pyscipopt_adapter.SCIPTerminationReport` after `model.optimize()`. The termination report includes SCIP status, primal/dual bounds, gap, incumbent objective value, node counts, LP/cut/solution counters, primal-dual integral, timing, and SCIP/PySCIPOpt version metadata. {class}`~ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer` can post-process the typed collector contents or dictionaries loaded from an Experiment into records or pandas DataFrames. With direct collection, the termination report is recorded before decoding back to an OMMX Solution, so it remains available to the caller even when decoding raises an adapter exception such as infeasible or unbounded detection.
 
-See [Adapter-specific Diagnostics](../user_guide/adapter_diagnostics.md) for the full API workflow and the `SCIPTerminationReport` field reference.
+See [Adapter-specific Diagnostics](../user_guide/adapter_diagnostics.md) for the full API workflow and the PySCIPOpt report field references.
 
 ## 3.0.0 Alpha 5
 
@@ -202,8 +202,9 @@ with Experiment() as experiment:
 solve = experiment.runs[0].solves[0]
 assert solve.adapter.endswith("OMMXHighsAdapter")
 assert isinstance(solve.input, Instance)
-assert isinstance(solve.output, Solution)
-assert solve.output.feasible
+output = solve.output
+assert isinstance(output, Solution)
+assert output.feasible
 assert solve.adapter_options == {"verbose": False}
 ```
 
