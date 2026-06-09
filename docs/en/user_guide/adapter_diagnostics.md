@@ -107,11 +107,10 @@ Diagnostics are therefore stored without Python type annotations. Use the
 adapter metadata to choose the corresponding adapter-specific analyzer, such as
 {class}`~ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer`.
 
-Currently, Experiment storage records diagnostics only after
-{meth}`~ommx.adapter.SolverAdapter.solve` returns an OMMX Solution. If the
-adapter raises during solve or decode, diagnostics already emitted to a direct
-collector remain available to that caller, but they are not stored as an
-Experiment Solve entry.
+If {meth}`~ommx.adapter.SolverAdapter.solve` raises before returning an OMMX
+Solution, `Run.log_solve` still records a failed Solve entry when possible.
+That entry has `status == "failed"` or `"interrupted"`, no output Solution,
+and any diagnostics collected before the failure.
 
 ## PySCIPOpt Adapter Diagnostics
 

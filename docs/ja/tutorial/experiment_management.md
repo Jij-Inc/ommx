@@ -325,7 +325,8 @@ for run in loaded_experiment.runs:
 
     # 入力と出力をロードする
     input: Instance = solve.input
-    output: Solution = solve.output
+    output: Solution | None = solve.output
+    assert output is not None
 
     # ナップザック問題は解けているはず
     assert output.feasible

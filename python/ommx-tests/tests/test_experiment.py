@@ -642,11 +642,13 @@ def test_log_solve_logs_input_solution_and_adapter_options():
     assert [solve.solve_id for solve in runs[0].solves] == [0, 1]
 
     first_solve = runs[0].solves[0]
+    assert first_solve.status == "finished"
     assert isinstance(first_solve.input, Instance)
     assert first_solve.input.get_user_annotation("source") == "solve-input"
-    assert isinstance(first_solve.output, Solution)
-    assert first_solve.output.get_user_annotation("adapter") == "dummy"
-    assert first_solve.output.feasible
+    first_output = first_solve.output
+    assert isinstance(first_output, Solution)
+    assert first_output.get_user_annotation("adapter") == "dummy"
+    assert first_output.feasible
     assert str(first_solve.adapter).endswith("DummyAdapter")
     assert isinstance(first_solve.adapter_options, dict)
     assert first_solve.adapter_options == {
@@ -657,6 +659,7 @@ def test_log_solve_logs_input_solution_and_adapter_options():
     assert first_solve.diagnostics == []
 
     second_solve = runs[0].solves[1]
+    assert second_solve.status == "finished"
     assert isinstance(second_solve.adapter_options, dict)
     assert second_solve.adapter_options == {
         "time_limit": 2.0,
@@ -758,6 +761,8 @@ def test_log_solve_records_solve_without_unserializable_diagnostics():
     assert [solve.solve_id for solve in run.solves] == [0]
 
     solve = run.solves[0]
+    assert solve.status == "finished"
+    assert solve.output is not None
     assert solve.output.get_user_annotation("adapter") == "diagnostics-fallback"
     assert solve.adapter_options == {"label": "unserializable-diagnostics"}
     assert solve.diagnostics == []
@@ -778,6 +783,9 @@ def test_failed_run_preserves_completed_solves_after_adapter_exception():
             assert diagnostics is not None
             cls.calls += 1
             if cls.calls == 3:
+                diagnostics.record(
+                    DummyDiagnostic(status="about-to-fail", bound=math.inf)
+                )
                 raise RuntimeError("backend crashed")
             return ommx_instance.evaluate({})
 
@@ -789,6 +797,7 @@ def test_failed_run_preserves_completed_solves_after_adapter_exception():
             raise NotImplementedError
 
     instance = Instance.empty()
+    instance.add_user_annotation("source", "failed-solve-input")
     experiment = Experiment.with_temp_local_registry()
     FailingThirdAdapter.calls = 0
 
@@ -801,12 +810,25 @@ def test_failed_run_preserves_completed_solves_after_adapter_exception():
     loaded = Experiment.from_artifact(experiment.commit())
     run = loaded.runs[0]
     assert run.status == "failed"
-    assert [solve.solve_id for solve in run.solves] == [0, 1]
+    assert [solve.solve_id for solve in run.solves] == [0, 1, 2]
+    assert [solve.status for solve in run.solves] == [
+        "finished",
+        "finished",
+        "failed",
+    ]
     assert [solve.adapter_options["label"] for solve in run.solves] == [
         "first",
         "second",
+        "third",
     ]
-    assert all(solve.output.feasible for solve in run.solves)
+    assert all(solve.output is not None and solve.output.feasible for solve in run.solves[:2])
+    failed_solve = run.solves[2]
+    assert isinstance(failed_solve.input, Instance)
+    assert failed_solve.input.get_user_annotation("source") == "failed-solve-input"
+    assert failed_solve.output is None
+    assert failed_solve.diagnostics == [
+        {"status": "about-to-fail", "bound": math.inf}
+    ]
 
 
 def test_log_solve_rejects_non_solver_adapter():

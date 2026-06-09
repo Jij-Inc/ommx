@@ -202,8 +202,9 @@ with Experiment() as experiment:
 solve = experiment.runs[0].solves[0]
 assert solve.adapter.endswith("OMMXHighsAdapter")
 assert isinstance(solve.input, Instance)
-assert isinstance(solve.output, Solution)
-assert solve.output.feasible
+output = solve.output
+assert isinstance(output, Solution)
+assert output.feasible
 assert solve.adapter_options == {"verbose": False}
 ```
 

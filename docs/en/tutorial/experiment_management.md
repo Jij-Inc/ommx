@@ -325,7 +325,8 @@ for run in loaded_experiment.runs:
 
     # Load input and output.
     input: Instance = solve.input
-    output: Solution = solve.output
+    output: Solution | None = solve.output
+    assert output is not None
 
     # The knapsack problem should have been solved.
     assert output.feasible

@@ -19,7 +19,7 @@ use super::config::ExperimentConfig;
 use super::{
     allocate_next_run_id, next_run_id, read_solve_diagnostic_payload, AttachmentLogger,
     AttachmentTable, ExperimentStatus, Name, RunEntry, RunParameterCell, RunStatus,
-    SealedExperiment, SolveDiagnosticPayload, UnsealedExperimentState,
+    SealedExperiment, SolveDiagnosticPayload, SolveStatus, UnsealedExperimentState,
 };
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
 use crate::artifact::{
@@ -169,8 +169,9 @@ struct RunEntryDyn {
 #[derive(Debug)]
 struct SolveEntryDyn {
     solve_id: u64,
+    status: SolveStatus,
     input: Descriptor,
-    output: Descriptor,
+    output: Option<Descriptor>,
     adapter: String,
     adapter_options: String,
     diagnostics: Option<Descriptor>,
@@ -211,8 +212,9 @@ pub struct SealedRunDyn {
 pub struct SolveDyn {
     registry_handle: LocalRegistryHandle,
     solve_id: u64,
+    status: SolveStatus,
     input: Descriptor,
-    output: Descriptor,
+    output: Option<Descriptor>,
     adapter: String,
     adapter_options: String,
     diagnostics: Option<Descriptor>,
@@ -313,6 +315,10 @@ impl SolveDyn {
         self.solve_id
     }
 
+    pub fn status(&self) -> &SolveStatus {
+        &self.status
+    }
+
     fn input_descriptor(&self) -> Result<StoredDescriptor<'_>> {
         self.registry_handle
             .registry()
@@ -335,14 +341,21 @@ impl SolveDyn {
         ))
     }
 
-    fn output_descriptor(&self) -> Result<StoredDescriptor<'_>> {
-        self.registry_handle
-            .registry()
-            .stored_descriptor(self.output.clone())
+    fn output_descriptor(&self) -> Result<Option<StoredDescriptor<'_>>> {
+        self.output
+            .clone()
+            .map(|descriptor| {
+                self.registry_handle
+                    .registry()
+                    .stored_descriptor(descriptor)
+            })
+            .transpose()
     }
 
-    pub fn output_solution(&self) -> Result<(Solution, SolutionAnnotations)> {
-        let descriptor = self.output_descriptor()?;
+    pub fn output_solution(&self) -> Result<Option<(Solution, SolutionAnnotations)>> {
+        let Some(descriptor) = self.output_descriptor()? else {
+            return Ok(None);
+        };
         ensure!(
             descriptor.media_type().to_string() == media_types::V1_SOLUTION_MEDIA_TYPE,
             "Solve {} output has media type '{}', expected '{}'",
@@ -354,7 +367,8 @@ impl SolveDyn {
         Ok((
             Solution::from_bytes(&bytes)?,
             SolutionAnnotations::from_descriptor(&descriptor),
-        ))
+        )
+            .into())
     }
 
     /// Raw MessagePack bytes of the adapter diagnostics payload.
@@ -1001,8 +1015,15 @@ impl UnsealedExperimentDynState {
                                 .map(|solve| {
                                     Ok(super::SolveEntry {
                                         solve_id: solve.solve_id,
+                                        status: solve.status.clone(),
                                         input: registry.stored_descriptor(solve.input.clone())?,
-                                        output: registry.stored_descriptor(solve.output.clone())?,
+                                        output: solve
+                                            .output
+                                            .clone()
+                                            .map(|descriptor| {
+                                                registry.stored_descriptor(descriptor)
+                                            })
+                                            .transpose()?,
                                         adapter: solve.adapter.clone(),
                                         adapter_options: solve.adapter_options.clone(),
                                         diagnostics: solve
@@ -1056,8 +1077,14 @@ impl UnsealedExperimentDynState {
                                 .map(|solve| {
                                     Ok(super::SolveEntry {
                                         solve_id: solve.solve_id,
+                                        status: solve.status,
                                         input: registry.stored_descriptor(solve.input)?,
-                                        output: registry.stored_descriptor(solve.output)?,
+                                        output: solve
+                                            .output
+                                            .map(|descriptor| {
+                                                registry.stored_descriptor(descriptor)
+                                            })
+                                            .transpose()?,
                                         adapter: solve.adapter,
                                         adapter_options: solve.adapter_options,
                                         diagnostics: solve
@@ -1119,8 +1146,12 @@ impl SealedExperimentDynState {
                                 .map(|solve| SolveDyn {
                                     registry_handle: registry_handle.clone(),
                                     solve_id: solve.solve_id(),
+                                    status: solve.status().clone(),
                                     input: Descriptor::from(solve.input_descriptor().clone()),
-                                    output: Descriptor::from(solve.output_descriptor().clone()),
+                                    output: solve
+                                        .output_descriptor()
+                                        .cloned()
+                                        .map(Descriptor::from),
                                     adapter: solve.adapter().to_string(),
                                     adapter_options: solve.adapter_options().to_string(),
                                     diagnostics: solve
@@ -1171,6 +1202,7 @@ impl SealedExperimentDynState {
                 .iter()
                 .map(|solve| SolveEntryDyn {
                     solve_id: solve.solve_id,
+                    status: solve.status.clone(),
                     input: solve.input.clone(),
                     output: solve.output.clone(),
                     adapter: solve.adapter.clone(),
@@ -1234,6 +1266,7 @@ fn unsealed_run_views<'a>(
             .map(|solve| SolveDyn {
                 registry_handle: registry_handle.clone(),
                 solve_id: solve.solve_id,
+                status: solve.status.clone(),
                 input: solve.input.clone(),
                 output: solve.output.clone(),
                 adapter: solve.adapter.clone(),

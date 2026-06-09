@@ -5626,6 +5626,10 @@ class Run:
         Adapter diagnostics persistence is best-effort. If diagnostics cannot
         be serialized or stored after the adapter returns a solution, the Solve
         entry is still recorded without diagnostics.
+
+        If the adapter raises before returning a Solution, this method records
+        a failed Solve entry when possible, including diagnostics collected
+        before the failure. Failed Solve entries have `output=None`.
         """
     def finish(self) -> None:
         r"""
@@ -6698,14 +6702,19 @@ class Solve:
         Integer identifier of this solve within its run.
         """
     @property
+    def status(self) -> builtins.str:
+        r"""
+        Solve lifecycle status: `"finished"`, `"failed"`, or `"interrupted"`.
+        """
+    @property
     def input(self) -> Instance:
         r"""
         Input `Instance` passed to the solver.
         """
     @property
-    def output(self) -> Solution:
+    def output(self) -> typing.Optional[Solution]:
         r"""
-        Output `Solution` returned by the solver.
+        Output `Solution` returned by the solver, or `None` if the solve failed before returning one.
         """
     @property
     def adapter(self) -> builtins.str:

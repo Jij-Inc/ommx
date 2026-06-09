@@ -4,6 +4,7 @@ use super::super::attachment::read_file_attachment;
 use super::super::parameter::ParameterSet;
 use super::super::{
     AttachmentLogger, AttachmentTable, ParameterValue, RunStatus, SolveDiagnosticPayload,
+    SolveStatus,
 };
 use super::{
     bail_non_unsealed, lock_experiment_state, store_run_attachment_descriptor,
@@ -12,7 +13,7 @@ use super::{
 };
 use crate::artifact::{media_types, InstanceAnnotations, SolutionAnnotations};
 use crate::{Instance, Solution};
-use anyhow::Result;
+use anyhow::{ensure, Result};
 use oci_spec::image::{Descriptor, MediaType};
 use std::sync::{Arc, Mutex};
 use std::{collections::HashMap, path::Path};
@@ -171,8 +172,70 @@ impl RunDyn {
         state.next_solve_id += 1;
         state.solves.push(SolveEntryDyn {
             solve_id,
+            status: SolveStatus::Finished,
             input,
-            output,
+            output: Some(output),
+            adapter,
+            adapter_options,
+            diagnostics,
+        });
+        Ok(solve_id)
+    }
+
+    /// Log one failed solver call with adapter diagnostics.
+    ///
+    /// Failed solve attempts have an input, adapter metadata, and optional
+    /// diagnostics, but no output Solution.
+    pub fn log_failed_solve_attempt_with_diagnostics(
+        &mut self,
+        input: &Instance,
+        input_annotations: InstanceAnnotations,
+        adapter: String,
+        adapter_options: String,
+        status: SolveStatus,
+        diagnostics: Option<SolveDiagnosticPayload>,
+    ) -> Result<u64> {
+        ensure!(
+            status != SolveStatus::Finished,
+            "failed solve attempt status must not be finished"
+        );
+        let solve_id = self.open()?.next_solve_id;
+        let (input, diagnostics) = {
+            let dyn_state = lock_experiment_state(&self.experiment_state);
+            let input = store_solve_payload_descriptor(
+                &dyn_state,
+                media_types::v1_instance(),
+                &input.to_bytes(),
+                input_annotations.into_inner(),
+            )?;
+            let diagnostics = diagnostics.and_then(|diagnostic| {
+                match diagnostic.to_msgpack_bytes().and_then(|bytes| {
+                    store_solve_payload_descriptor(
+                        &dyn_state,
+                        media_types::diagnostic_msgpack(),
+                        &bytes,
+                        HashMap::new(),
+                    )
+                }) {
+                    Ok(descriptor) => Some(descriptor),
+                    Err(error) => {
+                        tracing::warn!(
+                            error = %error,
+                            "Failed to store failed Solve diagnostics; recording Solve without diagnostics"
+                        );
+                        None
+                    }
+                }
+            });
+            (input, diagnostics)
+        };
+        let state = self.open_mut()?;
+        state.next_solve_id += 1;
+        state.solves.push(SolveEntryDyn {
+            solve_id,
+            status,
+            input,
+            output: None,
             adapter,
             adapter_options,
             diagnostics,

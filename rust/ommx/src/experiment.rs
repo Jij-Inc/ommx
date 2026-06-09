@@ -108,6 +108,10 @@ const RUN_STATUS_FINISHED: &str = "finished";
 const RUN_STATUS_FAILED: &str = "failed";
 const RUN_STATUS_INTERRUPTED: &str = "interrupted";
 
+const SOLVE_STATUS_FINISHED: &str = "finished";
+const SOLVE_STATUS_FAILED: &str = "failed";
+const SOLVE_STATUS_INTERRUPTED: &str = "interrupted";
+
 /// Lifecycle status of a sealed Experiment Artifact.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExperimentStatus {
@@ -190,6 +194,47 @@ impl RunStatus {
 }
 
 impl std::fmt::Display for RunStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Lifecycle status of one solver call recorded in an Experiment.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SolveStatus {
+    /// The adapter returned a Solution.
+    Finished,
+    /// The adapter raised an error before returning a Solution.
+    Failed,
+    /// The adapter call was interrupted before returning a Solution.
+    Interrupted,
+}
+
+impl SolveStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Finished => SOLVE_STATUS_FINISHED,
+            Self::Failed => SOLVE_STATUS_FAILED,
+            Self::Interrupted => SOLVE_STATUS_INTERRUPTED,
+        }
+    }
+
+    fn from_config(status: &str) -> Result<Self> {
+        match status {
+            SOLVE_STATUS_FINISHED => Ok(Self::Finished),
+            SOLVE_STATUS_FAILED => Ok(Self::Failed),
+            SOLVE_STATUS_INTERRUPTED => Ok(Self::Interrupted),
+            _ => {
+                crate::bail!(
+                    "Solve status is {status}, expected {SOLVE_STATUS_FINISHED}, \
+                     {SOLVE_STATUS_FAILED}, or {SOLVE_STATUS_INTERRUPTED}"
+                )
+            }
+        }
+    }
+}
+
+impl std::fmt::Display for SolveStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.as_str())
     }
@@ -313,8 +358,9 @@ struct RunEntry<'reg> {
 #[derive(Debug, Clone)]
 struct SolveEntry<'reg> {
     solve_id: u64,
+    status: SolveStatus,
     input: StoredDescriptor<'reg>,
-    output: StoredDescriptor<'reg>,
+    output: Option<StoredDescriptor<'reg>>,
     adapter: String,
     adapter_options: String,
     diagnostics: Option<StoredDescriptor<'reg>>,
@@ -577,8 +623,9 @@ impl<'reg> SealedExperiment<'reg> {
                 .iter()
                 .map(|solve| SolveEntry {
                     solve_id: solve.solve_id(),
+                    status: solve.status().clone(),
                     input: solve.input_descriptor().clone(),
-                    output: solve.output_descriptor().clone(),
+                    output: solve.output_descriptor().cloned(),
                     adapter: solve.adapter().to_string(),
                     adapter_options: solve.adapter_options().to_string(),
                     diagnostics: solve.diagnostic_descriptor().cloned(),

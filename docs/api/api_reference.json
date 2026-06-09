@@ -4513,7 +4513,7 @@
             },
             {
               "name": "log_solve",
-              "doc": "Solve an Instance with an OMMX SolverAdapter and log a Solve entry.\n\nThe input Instance is cloned before calling the adapter, so adapter-side\ncapability reductions do not mutate the caller's object. The original\ninput is always stored as the Solve input.\n\n`adapter` must be a subclass of `ommx.adapter.SolverAdapter`. Keyword\narguments are passed to `adapter.solve(...)` and recorded as\n`Solve.adapter_options`. The adapter class name is stored in\n`Solve.adapter`.\n\nAdapter options are solve-scoped metadata, not run parameters. They do\nnot appear in `Experiment.run_parameters_df()`.\n\nAdapter diagnostics persistence is best-effort. If diagnostics cannot\nbe serialized or stored after the adapter returns a solution, the Solve\nentry is still recorded without diagnostics.",
+              "doc": "Solve an Instance with an OMMX SolverAdapter and log a Solve entry.\n\nThe input Instance is cloned before calling the adapter, so adapter-side\ncapability reductions do not mutate the caller's object. The original\ninput is always stored as the Solve input.\n\n`adapter` must be a subclass of `ommx.adapter.SolverAdapter`. Keyword\narguments are passed to `adapter.solve(...)` and recorded as\n`Solve.adapter_options`. The adapter class name is stored in\n`Solve.adapter`.\n\nAdapter options are solve-scoped metadata, not run parameters. They do\nnot appear in `Experiment.run_parameters_df()`.\n\nAdapter diagnostics persistence is best-effort. If diagnostics cannot\nbe serialized or stored after the adapter returns a solution, the Solve\nentry is still recorded without diagnostics.\n\nIf the adapter raises before returning a Solution, this method records\na failed Solve entry when possible, including diagnostics collected\nbefore the failure. Failed Solve entries have `output=None`.",
               "signatures": [
                 {
                   "parameters": [
@@ -5143,11 +5143,17 @@
             },
             {
               "name": "output",
-              "doc": "Output `Solution` returned by the solver.",
+              "doc": "Output `Solution` returned by the solver, or `None` if the solve failed before returning one.",
               "type_": {
-                "display": "Solution",
+                "display": "Optional[Solution]",
                 "link_target": null,
-                "children": []
+                "children": [
+                  {
+                    "display": "Solution",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
               },
               "is_property": true,
               "is_readonly": true
@@ -5157,6 +5163,17 @@
               "doc": "Integer identifier of this solve within its run.",
               "type_": {
                 "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "status",
+              "doc": "Solve lifecycle status: `\"finished\"`, `\"failed\"`, or `\"interrupted\"`.",
+              "type_": {
+                "display": "str",
                 "link_target": null,
                 "children": []
               },

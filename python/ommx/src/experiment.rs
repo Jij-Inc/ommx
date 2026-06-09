@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use oci_spec::image::MediaType;
 use pyo3::{
-    exceptions::PyKeyboardInterrupt,
+    exceptions::{PyKeyboardInterrupt, PyTypeError},
     prelude::*,
     types::{
         PyBool, PyBytes, PyDict, PyFloat, PyInt, PyList, PyModule, PyString, PyType, PyTypeMethods,
@@ -16,7 +16,7 @@ use std::{
 use crate::pandas::{raw_entries_to_dataframe, PyDataFrame};
 use crate::PyArtifact;
 use ommx::artifact::AsArtifact;
-use ommx::experiment::{AttachmentLogger, SolveDiagnosticPayload};
+use ommx::experiment::{AttachmentLogger, SolveDiagnosticPayload, SolveStatus};
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
@@ -1262,6 +1262,10 @@ impl PyRun {
     /// Adapter diagnostics persistence is best-effort. If diagnostics cannot
     /// be serialized or stored after the adapter returns a solution, the Solve
     /// entry is still recorded without diagnostics.
+    ///
+    /// If the adapter raises before returning a Solution, this method records
+    /// a failed Solve entry when possible, including diagnostics collected
+    /// before the failure. Failed Solve entries have `output=None`.
     #[pyo3(signature = (adapter, instance, **kwargs))]
     pub fn log_solve(
         &mut self,
@@ -1277,17 +1281,43 @@ impl PyRun {
         let adapter_name = adapter.name()?;
         let adapter_options = dump_kwargs(py, kwargs)?;
         let diagnostics_collector = Py::new(py, PyDiagnosticCollector::new_inner())?;
-        let solution = adapter.solve(instance, kwargs, diagnostics_collector.bind(py))?;
-        let diagnostics = match diagnostics_collector.bind(py).borrow().pack(py) {
-            Ok(diagnostics) => diagnostics,
+        let solution = match adapter.solve(instance, kwargs, diagnostics_collector.bind(py)) {
+            Ok(solution) => solution,
             Err(error) => {
-                tracing::warn!(
-                    error = %error,
-                    "Failed to serialize adapter diagnostics; recording Solve without diagnostics"
+                let status = if error.is_instance_of::<PyKeyboardInterrupt>(py) {
+                    SolveStatus::Interrupted
+                } else {
+                    SolveStatus::Failed
+                };
+                let diagnostics = pack_diagnostics_or_none(
+                    py,
+                    &diagnostics_collector,
+                    "Failed to serialize failed Solve diagnostics; recording Solve without diagnostics",
                 );
-                None
+                let record_result = self.as_open_mut().and_then(|run| {
+                    run.log_failed_solve_attempt_with_diagnostics(
+                        &instance.inner,
+                        instance.annotations.clone(),
+                        adapter_name,
+                        adapter_options,
+                        status,
+                        diagnostics,
+                    )
+                });
+                if let Err(record_error) = record_result {
+                    tracing::warn!(
+                        error = %record_error,
+                        "Failed to record failed Solve attempt"
+                    );
+                }
+                return Err(error.into());
             }
         };
+        let diagnostics = pack_diagnostics_or_none(
+            py,
+            &diagnostics_collector,
+            "Failed to serialize adapter diagnostics; recording Solve without diagnostics",
+        );
         let solve_id = self
             .as_open_mut()?
             .log_finished_solve_result_with_diagnostics(
@@ -1499,6 +1529,20 @@ impl PyDiagnosticCollector {
     }
 }
 
+fn pack_diagnostics_or_none(
+    py: Python<'_>,
+    diagnostics_collector: &Py<PyDiagnosticCollector>,
+    warning_message: &'static str,
+) -> Option<SolveDiagnosticPayload> {
+    match diagnostics_collector.bind(py).borrow().pack(py) {
+        Ok(diagnostics) => diagnostics,
+        Err(error) => {
+            tracing::warn!(error = %error, "{}", warning_message);
+            None
+        }
+    }
+}
+
 pub struct DiagnosticReport(Py<PyAny>);
 
 impl DiagnosticReport {
@@ -1609,7 +1653,7 @@ impl<'py> SolverAdapter<'py> {
         instance: &crate::Instance,
         kwargs: Option<&Bound<'py, PyDict>>,
         diagnostics: &Bound<'py, PyDiagnosticCollector>,
-    ) -> Result<crate::Solution> {
+    ) -> PyResult<crate::Solution> {
         let py = self.py();
         let adapter_instance = Py::new(py, instance.clone())?;
         let call_kwargs = PyDict::new(py);
@@ -1624,7 +1668,7 @@ impl<'py> SolverAdapter<'py> {
                 .call_method("solve", (adapter_instance,), Some(&call_kwargs))?;
         solution_object
             .extract::<crate::Solution>()
-            .map_err(|_| anyhow::anyhow!("adapter.solve(...) must return ommx.v1.Solution"))
+            .map_err(|_| PyTypeError::new_err("adapter.solve(...) must return ommx.v1.Solution"))
     }
 
     fn name(&self) -> Result<String> {
@@ -1899,6 +1943,12 @@ impl PySolve {
     }
 
     #[getter]
+    /// Solve lifecycle status: `"finished"`, `"failed"`, or `"interrupted"`.
+    pub fn status(&self) -> String {
+        self.0.status().to_string()
+    }
+
+    #[getter]
     /// Input `Instance` passed to the solver.
     pub fn input(&self) -> Result<crate::Instance> {
         let (inner, annotations) = self.0.input_instance()?;
@@ -1906,10 +1956,12 @@ impl PySolve {
     }
 
     #[getter]
-    /// Output `Solution` returned by the solver.
-    pub fn output(&self) -> Result<crate::Solution> {
-        let (inner, annotations) = self.0.output_solution()?;
-        Ok(crate::Solution { inner, annotations })
+    /// Output `Solution` returned by the solver, or `None` if the solve failed before returning one.
+    pub fn output(&self) -> Result<Option<crate::Solution>> {
+        let Some((inner, annotations)) = self.0.output_solution()? else {
+            return Ok(None);
+        };
+        Ok(Some(crate::Solution { inner, annotations }))
     }
 
     #[getter]
@@ -1949,7 +2001,11 @@ impl PySolve {
     }
 
     pub fn __repr__(&self) -> String {
-        format!("Solve(solve_id={})", self.solve_id())
+        format!(
+            "Solve(solve_id={}, status='{}')",
+            self.solve_id(),
+            self.status()
+        )
     }
 }
 

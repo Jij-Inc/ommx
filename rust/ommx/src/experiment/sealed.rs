@@ -6,7 +6,7 @@ use super::config::{ExperimentConfigSolve, LayerRef};
 use super::parameter::{RunParameterCell, RunParameterTable};
 use super::{
     read_solve_diagnostic_payload, ExperimentStatus, RunStatus, SealedExperiment,
-    SolveDiagnosticPayload, Trace, RUN_PARAMETERS_MEDIA_TYPE,
+    SolveDiagnosticPayload, SolveStatus, Trace, RUN_PARAMETERS_MEDIA_TYPE,
 };
 use crate::artifact::local_registry::StoredDescriptor;
 use crate::artifact::{
@@ -258,8 +258,9 @@ impl<'reg> SealedRun<'reg> {
 #[derive(Debug, Clone)]
 pub struct Solve<'reg> {
     solve_id: u64,
+    status: SolveStatus,
     input: StoredDescriptor<'reg>,
-    output: StoredDescriptor<'reg>,
+    output: Option<StoredDescriptor<'reg>>,
     adapter: String,
     adapter_options: String,
     diagnostics: Option<StoredDescriptor<'reg>>,
@@ -270,6 +271,10 @@ impl<'reg> Solve<'reg> {
         self.solve_id
     }
 
+    pub fn status(&self) -> &SolveStatus {
+        &self.status
+    }
+
     /// Internal input descriptor used when sealed state is forked or converted
     /// into a dynamic view. Public solve access returns typed payloads.
     pub(crate) fn input_descriptor(&self) -> &StoredDescriptor<'reg> {
@@ -278,8 +283,8 @@ impl<'reg> Solve<'reg> {
 
     /// Internal output descriptor used when sealed state is forked or converted
     /// into a dynamic view. Public solve access returns typed payloads.
-    pub(crate) fn output_descriptor(&self) -> &StoredDescriptor<'reg> {
-        &self.output
+    pub(crate) fn output_descriptor(&self) -> Option<&StoredDescriptor<'reg>> {
+        self.output.as_ref()
     }
 
     pub(crate) fn diagnostic_descriptor(&self) -> Option<&StoredDescriptor<'reg>> {
@@ -313,13 +318,17 @@ impl<'reg> Solve<'reg> {
         ))
     }
 
-    pub fn output_solution(&self) -> Result<(Solution, SolutionAnnotations)> {
-        self.output.ensure_media_type(&media_types::v1_solution())?;
-        let bytes = self.output.registry().get_blob(&self.output)?;
+    pub fn output_solution(&self) -> Result<Option<(Solution, SolutionAnnotations)>> {
+        let Some(output) = &self.output else {
+            return Ok(None);
+        };
+        output.ensure_media_type(&media_types::v1_solution())?;
+        let bytes = output.registry().get_blob(output)?;
         Ok((
             Solution::from_bytes(&bytes)?,
-            SolutionAnnotations::from_descriptor(&self.output),
-        ))
+            SolutionAnnotations::from_descriptor(output),
+        )
+            .into())
     }
 
     pub fn adapter(&self) -> &str {
@@ -385,18 +394,36 @@ fn decode_solves<'reg>(
             .clone();
         validate_layer_media_type(&input, &crate::artifact::media_types::v1_instance())
             .with_context(|| format!("Invalid Run {run_id} Solve {} input", solve.solve_id))?;
-        let output = resolve_layer(layers, solve.output)
-            .with_context(|| {
-                format!(
-                    "Failed to resolve Run {run_id} Solve {} output LayerRef {}",
-                    solve.solve_id, solve.output.0
+        let status = SolveStatus::from_config(&solve.status)
+            .with_context(|| format!("Invalid Run {run_id} Solve {} status", solve.solve_id))?;
+        if status == SolveStatus::Finished && solve.output.is_none() {
+            crate::bail!(
+                "Run {run_id} Solve {} is finished but has no output",
+                solve.solve_id
+            );
+        }
+        let output = solve
+            .output
+            .map(|layer_ref| {
+                let descriptor = resolve_layer(layers, layer_ref)
+                    .with_context(|| {
+                        format!(
+                            "Failed to resolve Run {run_id} Solve {} output LayerRef {}",
+                            solve.solve_id, layer_ref.0
+                        )
+                    })?
+                    .clone();
+                validate_layer_media_type(
+                    &descriptor,
+                    &crate::artifact::media_types::v1_solution(),
                 )
-            })?
-            .clone();
-        validate_layer_media_type(&output, &crate::artifact::media_types::v1_solution())
-            .with_context(|| format!("Invalid Run {run_id} Solve {} output", solve.solve_id))?;
+                .with_context(|| format!("Invalid Run {run_id} Solve {} output", solve.solve_id))?;
+                Ok::<_, anyhow::Error>(descriptor)
+            })
+            .transpose()?;
         decoded.push(Solve {
             solve_id: solve.solve_id,
+            status,
             input,
             output,
             adapter: solve.adapter,

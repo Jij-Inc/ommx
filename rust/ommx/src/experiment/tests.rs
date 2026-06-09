@@ -691,7 +691,7 @@ fn log_finished_solve_result_materializes_solve_entry_with_layer_refs() {
             instance.to_bytes()
         );
         assert_eq!(
-            solve.output_solution().unwrap().0.to_bytes(),
+            solve.output_solution().unwrap().unwrap().0.to_bytes(),
             solution.to_bytes()
         );
         assert_eq!(solve.adapter(), "dummy.Adapter");
@@ -764,8 +764,9 @@ fn loaded_experiment_rejects_invalid_diagnostic_payload() {
             trace: None,
             solves: vec![ExperimentConfigSolve {
                 solve_id: 0,
+                status: super::SOLVE_STATUS_FINISHED.to_string(),
                 input: LayerRef(0),
-                output: LayerRef(1),
+                output: Some(LayerRef(1)),
                 adapter: "dummy.Adapter".to_string(),
                 adapter_options: "{}".to_string(),
                 diagnostics: Some(LayerRef(2)),
