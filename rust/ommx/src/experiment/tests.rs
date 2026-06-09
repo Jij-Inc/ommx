@@ -625,10 +625,6 @@ fn log_finished_solve_result_materializes_solve_entry_with_layer_refs() {
             )
             .unwrap();
         let diagnostics = b"\x91\x81\xa6status\xa7optimal".to_vec();
-        let diagnostic_annotations = HashMap::from([(
-            "org.ommx.diagnostic.python_type".to_string(),
-            "builtins.list".to_string(),
-        )]);
 
         {
             let mut run = experiment.run().unwrap();
@@ -640,10 +636,7 @@ fn log_finished_solve_result_materializes_solve_entry_with_layer_refs() {
                     Default::default(),
                     "dummy.Adapter".to_string(),
                     r#"{"time_limit":1.5}"#.to_string(),
-                    Some(SolveDiagnosticPayload::new(
-                        diagnostics.clone(),
-                        diagnostic_annotations.clone(),
-                    )?),
+                    Some(SolveDiagnosticPayload::new(diagnostics.clone())?),
                 )
                 .unwrap();
             assert_eq!(solve_id, 0);
@@ -674,10 +667,10 @@ fn log_finished_solve_result_materializes_solve_entry_with_layer_refs() {
             diagnostic_layer.media_type(),
             &media_types::diagnostic_msgpack()
         );
-        assert_eq!(
-            diagnostic_layer.annotations().as_ref(),
-            Some(&diagnostic_annotations)
-        );
+        assert!(diagnostic_layer
+            .annotations()
+            .as_ref()
+            .is_none_or(HashMap::is_empty));
         assert_eq!(blob_bytes(&artifact, diagnostic_layer), diagnostics);
         assert_eq!(
             config_json["runs"][0]["solves"][0]["adapter"],
@@ -708,7 +701,6 @@ fn log_finished_solve_result_materializes_solve_entry_with_layer_refs() {
             Some(&*diagnostics)
         );
         let diagnostic_payload = solve.diagnostic_payload().unwrap().unwrap();
-        assert_eq!(diagnostic_payload.annotations(), &diagnostic_annotations);
         assert!(matches!(
             diagnostic_payload.value(),
             rmpv::Value::Array(items) if items.len() == 1
@@ -719,17 +711,17 @@ fn log_finished_solve_result_materializes_solve_entry_with_layer_refs() {
 
 #[test]
 fn solve_diagnostic_payload_requires_messagepack_array() {
-    let err = SolveDiagnosticPayload::new(vec![0xc4, 0x01], HashMap::new())
+    let err = SolveDiagnosticPayload::new(vec![0xc4, 0x01])
         .expect_err("diagnostic payload must be valid MessagePack");
     assert!(err.to_string().contains("valid MessagePack"), "{err:#}");
 
     let map_payload = b"\x81\xa6status\xa7optimal".to_vec();
-    let err = SolveDiagnosticPayload::new(map_payload, HashMap::new())
+    let err = SolveDiagnosticPayload::new(map_payload)
         .expect_err("diagnostic payload must be a top-level array");
     assert!(err.to_string().contains("MessagePack array"), "{err:#}");
 
     let trailing_payload = b"\x90\x00".to_vec();
-    let err = SolveDiagnosticPayload::new(trailing_payload, HashMap::new())
+    let err = SolveDiagnosticPayload::new(trailing_payload)
         .expect_err("diagnostic payload must contain exactly one value");
     assert!(
         err.to_string().contains("exactly one MessagePack value"),

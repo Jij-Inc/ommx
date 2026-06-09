@@ -324,12 +324,11 @@ struct SolveEntry<'reg> {
 #[derive(Debug, Clone)]
 pub struct SolveDiagnosticPayload {
     value: MessagePackValue,
-    annotations: HashMap<String, String>,
 }
 
 impl SolveDiagnosticPayload {
     /// Create a diagnostics payload from MessagePack bytes.
-    pub fn new(bytes: Vec<u8>, annotations: HashMap<String, String>) -> Result<Self> {
+    pub fn new(bytes: Vec<u8>) -> Result<Self> {
         let mut cursor = Cursor::new(&bytes);
         let value = rmpv::decode::read_value(&mut cursor)
             .context("Solve diagnostic payload must be valid MessagePack")?;
@@ -337,29 +336,21 @@ impl SolveDiagnosticPayload {
             cursor.position() == bytes.len() as u64,
             "Solve diagnostic payload must contain exactly one MessagePack value",
         );
-        Self::from_value(value, annotations)
+        Self::from_value(value)
     }
 
     /// Create a diagnostics payload from a decoded MessagePack value.
-    pub fn from_value(
-        value: MessagePackValue,
-        annotations: HashMap<String, String>,
-    ) -> Result<Self> {
+    pub fn from_value(value: MessagePackValue) -> Result<Self> {
         ensure!(
             matches!(value, MessagePackValue::Array(_)),
             "Solve diagnostic payload must decode to a MessagePack array",
         );
-        Ok(Self { value, annotations })
+        Ok(Self { value })
     }
 
     /// Decoded MessagePack value. The top-level value is always an array.
     pub fn value(&self) -> &MessagePackValue {
         &self.value
-    }
-
-    /// OCI layer annotations stored with this diagnostics payload.
-    pub fn annotations(&self) -> &HashMap<String, String> {
-        &self.annotations
     }
 
     pub(crate) fn to_msgpack_bytes(&self) -> Result<Vec<u8>> {
@@ -376,12 +367,7 @@ fn read_solve_diagnostic_payload(
 ) -> Result<(Vec<u8>, SolveDiagnosticPayload)> {
     descriptor.ensure_media_type(&media_types::diagnostic_msgpack())?;
     let bytes = descriptor.registry().get_blob(descriptor)?;
-    let annotations = descriptor
-        .annotations()
-        .as_ref()
-        .cloned()
-        .unwrap_or_default();
-    let payload = SolveDiagnosticPayload::new(bytes.clone(), annotations)
+    let payload = SolveDiagnosticPayload::new(bytes.clone())
         .with_context(|| format!("Invalid Solve {solve_id} diagnostic payload"))?;
     Ok((bytes, payload))
 }

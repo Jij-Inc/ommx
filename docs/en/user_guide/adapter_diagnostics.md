@@ -87,6 +87,17 @@ dictionaries, not as the original dataclass instances. This keeps stored
 Artifacts independent of the Python class definitions used when the solve was
 recorded.
 
+The Solve entry already records the adapter class name and adapter options.
+Diagnostics are therefore stored without Python type annotations. Use the
+adapter metadata to choose the corresponding adapter-specific analyzer, such as
+{class}`~ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer`.
+
+Currently, Experiment storage records diagnostics only after
+{meth}`~ommx.adapter.SolverAdapter.solve` returns an OMMX Solution. If the
+adapter raises during solve or decode, diagnostics already emitted to a direct
+collector remain available to that caller, but they are not stored as an
+Experiment Solve entry.
+
 ## PySCIPOpt Adapter Diagnostics
 
 When diagnostics are requested, the PySCIPOpt Adapter attaches a SCIP event
@@ -103,8 +114,9 @@ callback, and use the final
 The PySCIPOpt Adapter records the final
 {class}`~ommx_pyscipopt_adapter.SCIPTerminationReport` after
 `model.optimize()` finishes and before the PySCIPOpt model is decoded back into
-an OMMX Solution. This means the report is available even when the subsequent
-decode step raises an adapter exception such as
+an OMMX Solution. With a direct {class}`~ommx.adapter.DiagnosticCollector`, this
+means the report is available even when the subsequent decode step raises an
+adapter exception such as
 {exc}`~ommx.adapter.InfeasibleDetected` or
 {exc}`~ommx.adapter.UnboundedDetected`.
 

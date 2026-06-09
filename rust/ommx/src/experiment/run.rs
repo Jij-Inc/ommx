@@ -84,7 +84,7 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
                 self.experiment.registry.store_layer_blob(
                     media_types::diagnostic_msgpack(),
                     &bytes,
-                    diagnostic.annotations,
+                    HashMap::new(),
                 )
             })
             .transpose()?;

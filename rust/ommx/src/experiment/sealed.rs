@@ -417,7 +417,7 @@ fn decode_solves<'reg>(
                             format!("Invalid Run {run_id} Solve {} diagnostic", solve.solve_id)
                         })?;
                     let bytes = descriptor.registry().get_blob(&descriptor)?;
-                    SolveDiagnosticPayload::new(bytes, Default::default()).with_context(|| {
+                    SolveDiagnosticPayload::new(bytes).with_context(|| {
                         format!(
                             "Invalid Run {run_id} Solve {} diagnostic payload",
                             solve.solve_id

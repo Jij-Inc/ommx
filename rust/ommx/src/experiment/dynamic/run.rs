@@ -148,7 +148,7 @@ impl RunDyn {
                         &dyn_state,
                         media_types::diagnostic_msgpack(),
                         &bytes,
-                        diagnostic.annotations,
+                        HashMap::new(),
                     )
                 })
                 .transpose()?;
