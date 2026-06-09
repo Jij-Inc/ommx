@@ -1765,9 +1765,10 @@ impl pyo3_stub_gen::PyStubType for ParameterValueInput {
 /// Immutable view of a closed Run in an Experiment.
 ///
 /// `SealedRun` exposes run-level attachments by name and the sequence of
-/// `Solve` records created by `Run.log_solve`. The `status` property is
-/// `"finished"`, `"failed"`, or `"interrupted"` depending on how the Run was
-/// closed.
+/// `Solve` records created by `Run.log_solve`. The `status` property records
+/// how the Run scope was closed: `"finished"`, `"failed"`, or `"interrupted"`.
+/// It is not an aggregate status of child `Solve` records, so a finished Run
+/// may contain failed Solve attempts that were handled inside the Run.
 pub struct PySealedRun {
     run: ommx::experiment::SealedRunDyn,
 }
@@ -1783,6 +1784,10 @@ impl PySealedRun {
 
     #[getter]
     /// Run lifecycle status: `"finished"`, `"failed"`, or `"interrupted"`.
+    ///
+    /// This records how the Run scope was closed, not whether every child
+    /// `Solve` record finished successfully. A finished Run may contain failed
+    /// Solve attempts if those adapter errors were handled inside the Run.
     pub fn status(&self) -> String {
         self.run.status().to_string()
     }

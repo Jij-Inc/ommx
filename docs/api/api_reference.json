@@ -4636,7 +4636,7 @@
         {
           "kind": "Class",
           "name": "SealedRun",
-          "doc": "Immutable view of a closed Run in an Experiment.\n\n`SealedRun` exposes run-level attachments by name and the sequence of\n`Solve` records created by `Run.log_solve`. The `status` property is\n`\"finished\"`, `\"failed\"`, or `\"interrupted\"` depending on how the Run was\nclosed.",
+          "doc": "Immutable view of a closed Run in an Experiment.\n\n`SealedRun` exposes run-level attachments by name and the sequence of\n`Solve` records created by `Run.log_solve`. The `status` property records\nhow the Run scope was closed: `\"finished\"`, `\"failed\"`, or `\"interrupted\"`.\nIt is not an aggregate status of child `Solve` records, so a finished Run\nmay contain failed Solve attempts that were handled inside the Run.",
           "bases": [],
           "methods": [
             {
@@ -5027,7 +5027,7 @@
             },
             {
               "name": "status",
-              "doc": "Run lifecycle status: `\"finished\"`, `\"failed\"`, or `\"interrupted\"`.",
+              "doc": "Run lifecycle status: `\"finished\"`, `\"failed\"`, or `\"interrupted\"`.\n\nThis records how the Run scope was closed, not whether every child\n`Solve` record finished successfully. A finished Run may contain failed\nSolve attempts if those adapter errors were handled inside the Run.",
               "type_": {
                 "display": "str",
                 "link_target": null,

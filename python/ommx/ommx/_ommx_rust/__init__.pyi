@@ -6193,9 +6193,10 @@ class SealedRun:
     Immutable view of a closed Run in an Experiment.
 
     `SealedRun` exposes run-level attachments by name and the sequence of
-    `Solve` records created by `Run.log_solve`. The `status` property is
-    `"finished"`, `"failed"`, or `"interrupted"` depending on how the Run was
-    closed.
+    `Solve` records created by `Run.log_solve`. The `status` property records
+    how the Run scope was closed: `"finished"`, `"failed"`, or `"interrupted"`.
+    It is not an aggregate status of child `Solve` records, so a finished Run
+    may contain failed Solve attempts that were handled inside the Run.
     """
     @property
     def run_id(self) -> builtins.int:
@@ -6206,6 +6207,10 @@ class SealedRun:
     def status(self) -> builtins.str:
         r"""
         Run lifecycle status: `"finished"`, `"failed"`, or `"interrupted"`.
+
+        This records how the Run scope was closed, not whether every child
+        `Solve` record finished successfully. A finished Run may contain failed
+        Solve attempts if those adapter errors were handled inside the Run.
         """
     @property
     def attachment_names(self) -> builtins.list[builtins.str]:
