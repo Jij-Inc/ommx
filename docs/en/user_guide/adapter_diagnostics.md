@@ -33,6 +33,11 @@ Python object and preserves object identity for direct collection. Dataclass
 conversion and msgpack serialization are deferred until `Run.log_solve` stores
 the final diagnostics BLOB after the adapter returns.
 
+Diagnostics persistence is best-effort. If dataclass conversion, msgpack
+serialization, or diagnostics BLOB storage fails after the adapter returns a
+solution, `Run.log_solve` still records the Solve entry and stores it without
+diagnostics.
+
 A diagnostics sink should not raise from `record()`. If recording fails, the
 sink should log the failure and return normally. If a sink does raise, that is a
 sink contract violation, and the adapter may let the exception propagate rather

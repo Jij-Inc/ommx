@@ -4513,7 +4513,7 @@
             },
             {
               "name": "log_solve",
-              "doc": "Solve an Instance with an OMMX SolverAdapter and log a Solve entry.\n\nThe input Instance is cloned before calling the adapter, so adapter-side\ncapability reductions do not mutate the caller's object. The original\ninput is always stored as the Solve input.\n\n`adapter` must be a subclass of `ommx.adapter.SolverAdapter`. Keyword\narguments are passed to `adapter.solve(...)` and recorded as\n`Solve.adapter_options`. The adapter class name is stored in\n`Solve.adapter`.\n\nAdapter options are solve-scoped metadata, not run parameters. They do\nnot appear in `Experiment.run_parameters_df()`.",
+              "doc": "Solve an Instance with an OMMX SolverAdapter and log a Solve entry.\n\nThe input Instance is cloned before calling the adapter, so adapter-side\ncapability reductions do not mutate the caller's object. The original\ninput is always stored as the Solve input.\n\n`adapter` must be a subclass of `ommx.adapter.SolverAdapter`. Keyword\narguments are passed to `adapter.solve(...)` and recorded as\n`Solve.adapter_options`. The adapter class name is stored in\n`Solve.adapter`.\n\nAdapter options are solve-scoped metadata, not run parameters. They do\nnot appear in `Experiment.run_parameters_df()`.\n\nAdapter diagnostics persistence is best-effort. If diagnostics cannot\nbe serialized or stored after the adapter returns a solution, the Solve\nentry is still recorded without diagnostics.",
               "signatures": [
                 {
                   "parameters": [

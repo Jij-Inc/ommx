@@ -32,6 +32,11 @@ class DummyMapKeyDiagnostic:
     values: dict[int, str]
 
 
+@dataclass(frozen=True, slots=True)
+class UnserializableDiagnostic:
+    value: object
+
+
 def _df_snap(df: pd.DataFrame) -> str:
     return df.to_string(na_rep="<NA>")
 
@@ -711,6 +716,51 @@ def test_log_solve_records_adapter_diagnostics():
         {"values": {1: "root"}},
     ]
     assert math.isinf(solve.diagnostics[1]["bound"])
+
+
+def test_log_solve_records_solve_without_unserializable_diagnostics():
+    class UnserializableDiagnosticAdapter(SolverAdapter):
+        @classmethod
+        def solve(
+            cls,
+            ommx_instance: Instance,
+            *,
+            diagnostics: Any | None = None,
+            **kwargs: object,
+        ) -> Solution:
+            assert diagnostics is not None
+            diagnostics.record(UnserializableDiagnostic(value=object()))
+            solution = ommx_instance.evaluate({})
+            solution.add_user_annotation("adapter", "diagnostics-fallback")
+            return solution
+
+        @property
+        def solver_input(self) -> Any:
+            raise NotImplementedError
+
+        def decode(self, data: Any) -> Solution:
+            raise NotImplementedError
+
+    instance = Instance.empty()
+    experiment = Experiment.with_temp_local_registry()
+
+    with experiment.run() as run:
+        solution = run.log_solve(
+            UnserializableDiagnosticAdapter,
+            instance,
+            label="unserializable-diagnostics",
+        )
+        assert solution.feasible
+
+    loaded = Experiment.from_artifact(experiment.commit())
+    run = loaded.runs[0]
+    assert run.status == "finished"
+    assert [solve.solve_id for solve in run.solves] == [0]
+
+    solve = run.solves[0]
+    assert solve.output.get_user_annotation("adapter") == "diagnostics-fallback"
+    assert solve.adapter_options == {"label": "unserializable-diagnostics"}
+    assert solve.diagnostics == []
 
 
 def test_failed_run_preserves_completed_solves_after_adapter_exception():

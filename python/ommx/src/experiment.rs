@@ -1258,6 +1258,10 @@ impl PyRun {
     ///
     /// Adapter options are solve-scoped metadata, not run parameters. They do
     /// not appear in `Experiment.run_parameters_df()`.
+    ///
+    /// Adapter diagnostics persistence is best-effort. If diagnostics cannot
+    /// be serialized or stored after the adapter returns a solution, the Solve
+    /// entry is still recorded without diagnostics.
     #[pyo3(signature = (adapter, instance, **kwargs))]
     pub fn log_solve(
         &mut self,
@@ -1274,7 +1278,16 @@ impl PyRun {
         let adapter_options = dump_kwargs(py, kwargs)?;
         let diagnostics_collector = Py::new(py, PyDiagnosticCollector::new_inner())?;
         let solution = adapter.solve(instance, kwargs, diagnostics_collector.bind(py))?;
-        let diagnostics = diagnostics_collector.bind(py).borrow().pack(py)?;
+        let diagnostics = match diagnostics_collector.bind(py).borrow().pack(py) {
+            Ok(diagnostics) => diagnostics,
+            Err(error) => {
+                tracing::warn!(
+                    error = %error,
+                    "Failed to serialize adapter diagnostics; recording Solve without diagnostics"
+                );
+                None
+            }
+        };
         let solve_id = self
             .as_open_mut()?
             .log_finished_solve_result_with_diagnostics(

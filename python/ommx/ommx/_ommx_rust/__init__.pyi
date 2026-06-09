@@ -5622,6 +5622,10 @@ class Run:
 
         Adapter options are solve-scoped metadata, not run parameters. They do
         not appear in `Experiment.run_parameters_df()`.
+
+        Adapter diagnostics persistence is best-effort. If diagnostics cannot
+        be serialized or stored after the adapter returns a solution, the Solve
+        entry is still recorded without diagnostics.
         """
     def finish(self) -> None:
         r"""

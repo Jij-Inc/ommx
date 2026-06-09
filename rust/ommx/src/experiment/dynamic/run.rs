@@ -116,6 +116,11 @@ impl RunDyn {
         )
     }
 
+    /// Log one already-finished solver result with adapter diagnostics.
+    ///
+    /// Diagnostics are best-effort metadata. If the diagnostics payload cannot
+    /// be encoded or stored, the Solve entry is still recorded without
+    /// diagnostics.
     pub fn log_finished_solve_result_with_diagnostics(
         &mut self,
         input: &Instance,
@@ -141,17 +146,25 @@ impl RunDyn {
                 &output.to_bytes(),
                 output_annotations.into_inner(),
             )?;
-            let diagnostics = diagnostics
-                .map(|diagnostic| {
-                    let bytes = diagnostic.to_msgpack_bytes()?;
+            let diagnostics = diagnostics.and_then(|diagnostic| {
+                match diagnostic.to_msgpack_bytes().and_then(|bytes| {
                     store_solve_payload_descriptor(
                         &dyn_state,
                         media_types::diagnostic_msgpack(),
                         &bytes,
                         HashMap::new(),
                     )
-                })
-                .transpose()?;
+                }) {
+                    Ok(descriptor) => Some(descriptor),
+                    Err(error) => {
+                        tracing::warn!(
+                            error = %error,
+                            "Failed to store Solve diagnostics; recording Solve without diagnostics"
+                        );
+                        None
+                    }
+                }
+            });
             (input, output, diagnostics)
         };
         let state = self.open_mut()?;
