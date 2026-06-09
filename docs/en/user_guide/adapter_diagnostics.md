@@ -28,6 +28,16 @@ callbacks. A collector can therefore receive progress events before the final
 termination report, while Experiment storage still writes one diagnostics BLOB
 for each Solve.
 
+The built-in `DiagnosticCollector.record()` path only appends the received
+Python object and preserves object identity for direct collection. Dataclass
+conversion and msgpack serialization are deferred until `Run.log_solve` stores
+the final diagnostics BLOB after the adapter returns.
+
+A diagnostics sink should not raise from `record()`. If recording fails, the
+sink should log the failure and return normally. If a sink does raise, that is a
+sink contract violation, and the adapter may let the exception propagate rather
+than trying to recover from it.
+
 ## Collect Diagnostics Directly
 
 When calling an adapter directly, pass `DiagnosticCollector` from `ommx.adapter`

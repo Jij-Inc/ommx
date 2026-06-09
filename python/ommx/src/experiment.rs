@@ -1477,8 +1477,12 @@ impl PyDiagnosticCollector {
             .collect()
     }
 
-    pub fn record(&mut self, diagnostic: DiagnosticReport) {
-        self.diagnostics.push(diagnostic);
+    pub fn record(
+        &mut self,
+        #[gen_stub(override_type(type_repr = "adapter.DiagnosticReport", imports = ("ommx.adapter")))]
+        diagnostic: Py<PyAny>,
+    ) {
+        self.diagnostics.push(DiagnosticReport(diagnostic));
     }
 }
 
