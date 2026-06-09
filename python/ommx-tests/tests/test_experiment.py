@@ -821,14 +821,14 @@ def test_failed_run_preserves_completed_solves_after_adapter_exception():
         "second",
         "third",
     ]
-    assert all(solve.output is not None and solve.output.feasible for solve in run.solves[:2])
+    assert all(
+        solve.output is not None and solve.output.feasible for solve in run.solves[:2]
+    )
     failed_solve = run.solves[2]
     assert isinstance(failed_solve.input, Instance)
     assert failed_solve.input.get_user_annotation("source") == "failed-solve-input"
     assert failed_solve.output is None
-    assert failed_solve.diagnostics == [
-        {"status": "about-to-fail", "bound": math.inf}
-    ]
+    assert failed_solve.diagnostics == [{"status": "about-to-fail", "bound": math.inf}]
 
 
 def test_log_solve_rejects_non_solver_adapter():
