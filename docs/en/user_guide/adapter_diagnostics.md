@@ -1,60 +1,104 @@
 # Adapter-specific Diagnostics
 
-Diagnostics preserve backend solver details that do not fit in the portable
-{class}`~ommx.v1.Solution`: termination status, primal and dual bounds, gap,
-timing, node counts, progress events, and adapter-specific warnings.
+Adapter diagnostics preserve solver-side information that does not fit in the
+portable {class}`~ommx.v1.Solution`. Use {class}`~ommx.v1.Solution` for the
+decoded OMMX result. Use diagnostics when you need to inspect what the backend
+solver observed, reported, or proved.
 
-The shortest PySCIPOpt workflow is:
+## Record Diagnostics with the PySCIPOpt Adapter
+
+The PySCIPOpt Adapter records SCIP progress and termination information when you
+pass a {class}`~ommx.adapter.DiagnosticCollector` to `solve()`. The usual way to
+read that data is through
+{class}`~ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer`.
 
 ```python
-from ommx.adapter import DiagnosticCollector
+from ommx import adapter, dataset
+from ommx_pyscipopt_adapter import (
+    OMMXPySCIPOptAdapter as Adapter,
+    SCIPDiagnosticsAnalyzer,
+)
+
+instance = dataset.miplib2017("air05")
+
+diag = adapter.DiagnosticCollector()
+solution = Adapter.solve(instance, diagnostics=diag)
+
+analyze = SCIPDiagnosticsAnalyzer(diag.diagnostics)
+
+analyze.progress_history_df[["primal_bound", "dual_bound"]].loc[5:].plot()
+```
+
+```{figure} ./assets/adapter_diagnostics_bounds.png
+:alt: SCIP primal and dual bound history over solving time
+
+SCIP primal and dual bound history read through
+{class}`~ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer`.
+```
+
+`progress_history_df` is a pandas DataFrame indexed by `solving_time_sec`.
+Series properties such as `dual_bound`, `gap`, and `incumbent_objective` use the
+same time index, so they are ready for time-based plots. `termination_result` is
+a dictionary containing the final SCIP report.
+
+```python
+dual_bound = analyze.dual_bound
+gap = analyze.gap
+incumbents = analyze.incumbent_objective
+termination = analyze.termination_result
+```
+
+The DataFrame and Series helpers require pandas. When pandas is not available,
+use `progress_history_records` for progress samples and `termination_result` for
+the final report.
+
+### What PySCIPOpt Records
+
+The PySCIPOpt Adapter records two kinds of SCIP diagnostics.
+
+{class}`~ommx_pyscipopt_adapter.SCIPProgressSnapshot` is a progress sample
+recorded from SCIP event callbacks. The adapter currently listens for
+`BESTSOLFOUND` and `DUALBOUNDIMPROVED`. A progress snapshot includes fields such
+as `solving_time_sec`, `node_count`, `primal_bound`, `dual_bound`, `gap`, and
+`incumbent_objective`.
+
+{class}`~ommx_pyscipopt_adapter.SCIPTerminationReport` is the final SCIP report
+recorded after `model.optimize()` finishes and before the PySCIPOpt model is
+decoded back into an OMMX Solution. It includes fields such as `status`,
+`primal_bound`, `dual_bound`, `gap`, `objective_value`, node counts, LP and cut
+counters, primal-dual integral, timings, and SCIP/PySCIPOpt version metadata.
+
+Progress snapshots are callback-time observations. SCIP may call a
+`BESTSOLFOUND` callback before every aggregate statistic has been updated, so
+use the termination report for terminal values.
+
+For the complete member lists, see the API Reference for
+{class}`~ommx_pyscipopt_adapter.SCIPProgressSnapshot`,
+{class}`~ommx_pyscipopt_adapter.SCIPTerminationReport`, and
+{class}`~ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer`.
+
+### Failure Handling
+
+Direct collection is useful when OMMX Solution decoding fails. The PySCIPOpt
+Adapter records the termination report before decoding, so the collector can
+still contain the final SCIP status and bounds when the solve raises an adapter
+exception such as {exc}`~ommx.adapter.InfeasibleDetected` or
+{exc}`~ommx.adapter.UnboundedDetected`.
+
+```python
+from ommx.adapter import DiagnosticCollector, UnboundedDetected
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter, SCIPDiagnosticsAnalyzer
 
 collector = DiagnosticCollector()
-solution = OMMXPySCIPOptAdapter.solve(instance, diagnostics=collector)
 
-analysis = SCIPDiagnosticsAnalyzer(collector.diagnostics)
-progress = analysis.progress_history_df
-dual_bound = analysis.dual_bound
-termination = analysis.termination_result
+try:
+    OMMXPySCIPOptAdapter.solve(instance, diagnostics=collector)
+except UnboundedDetected:
+    analysis = SCIPDiagnosticsAnalyzer(collector.diagnostics)
+    print(analysis.termination_result)
 ```
 
-Use {class}`~ommx.v1.Solution` for the decoded OMMX result. Use diagnostics when
-you need to inspect what the backend solver observed, reported, or proved.
-
-## Collect Diagnostics Directly
-
-When calling an adapter directly, pass `DiagnosticCollector` from `ommx.adapter`
-as the diagnostics sink. The collector stores typed diagnostic report instances
-exactly as the adapter records them.
-
-The following example uses the PySCIPOpt Adapter, which records
-{class}`~ommx_pyscipopt_adapter.SCIPProgressSnapshot` whenever SCIP emits a
-tracked progress event and then records one
-{class}`~ommx_pyscipopt_adapter.SCIPTerminationReport`.
-
-```python
-from ommx.adapter import DiagnosticCollector
-from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter, SCIPTerminationReport
-
-collector = DiagnosticCollector()
-
-solution = OMMXPySCIPOptAdapter.solve(
-    instance,
-    diagnostics=collector,
-)
-
-report = collector.diagnostics[-1]
-assert isinstance(report, SCIPTerminationReport)
-
-print(report.status)
-print(report.primal_bound, report.dual_bound, report.gap)
-```
-
-`collector.diagnostics` is a list because an adapter may record multiple
-diagnostic events and reports. The concrete item types are adapter-specific.
-
-## Store Diagnostics in an Experiment
+## Experiment Integration
 
 When using {py:meth}`~ommx.experiment.Run.log_solve`, do not pass the
 `diagnostics` keyword yourself. `Run.log_solve` owns that reserved keyword,
@@ -63,130 +107,32 @@ the Solve entry in the Experiment Artifact.
 
 ```python
 from ommx.experiment import Experiment
-from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
+from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter, SCIPDiagnosticsAnalyzer
 
 with Experiment() as experiment:
     with experiment.run() as run:
         solution = run.log_solve(OMMXPySCIPOptAdapter, instance)
 
-loaded_experiment = experiment
-solve = loaded_experiment.runs[0].solves[0]
+solve = experiment.runs[0].solves[0]
+analysis = SCIPDiagnosticsAnalyzer(solve.diagnostics)
 
-print(solve.diagnostics)
+print(analysis.dual_bound)
+print(analysis.termination_result)
 ```
 
 Diagnostics loaded from an Experiment through
-{py:attr}`~ommx.experiment.Solve.diagnostics` are returned as a list of
-dictionaries, not as the original dataclass instances. This keeps stored
-Artifacts independent of the Python class definitions used when the solve was
-recorded.
-
-The Solve entry already records the adapter class name and adapter options.
-Diagnostics are therefore stored without Python type annotations. Use the
-adapter metadata to choose the corresponding adapter-specific analyzer, such as
-{class}`~ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer`.
-
-If {meth}`~ommx.adapter.SolverAdapter.solve` raises before returning an OMMX
-Solution, `Run.log_solve` still records a failed Solve entry when possible.
-That entry has `status == "failed"` or `"interrupted"`, no output Solution,
-and any diagnostics collected before the failure.
-
-## Diagnostics Contract
-
-The common entry point is the reserved `diagnostics` keyword on
-{meth}`~ommx.adapter.SolverAdapter.solve`. An adapter receives a
-{class}`~ommx.adapter.DiagnosticsSink` and records backend-specific dataclass
-diagnostics with {meth}`DiagnosticsSink.record() <ommx.adapter.DiagnosticsSink.record>`.
-Each adapter decides which diagnostic types it emits, and adapters that have no
-extra information may leave the sink empty.
-
-Adapters may call `record()` during the solve, including from backend solver
-callbacks. A collector can therefore receive progress events before the final
-termination report, while Experiment storage still writes one diagnostics BLOB
-for each Solve.
-
-The built-in `DiagnosticCollector.record()` path only appends the received
-Python object and preserves object identity for direct collection. Dataclass
-conversion and msgpack serialization are deferred until `Run.log_solve` stores
-the final diagnostics BLOB after the adapter returns.
-
-Diagnostics persistence is best-effort. If dataclass conversion, msgpack
-serialization, or diagnostics BLOB storage fails after the adapter returns a
-solution, `Run.log_solve` still records the Solve entry and stores it without
-diagnostics.
-
-A diagnostics sink should not raise from `record()`. If recording fails, the
-sink should log the failure and return normally. If a sink does raise, that is a
-sink contract violation, and the adapter may let the exception propagate rather
-than trying to recover from it.
-
-## PySCIPOpt Adapter Diagnostics
-
-When diagnostics are requested, the PySCIPOpt Adapter attaches a SCIP event
-handler before `model.optimize()`. It currently listens for `BESTSOLFOUND` and
-`DUALBOUNDIMPROVED` events and records one
-{class}`~ommx_pyscipopt_adapter.SCIPProgressSnapshot` for each observed event.
-Each snapshot is a model-state sample taken inside the SCIP event callback.
-
-SCIP may call a `BESTSOLFOUND` callback before every aggregate model statistic
-has been updated. Treat each snapshot as the model state visible from that SCIP
-callback, and use the final
-{class}`~ommx_pyscipopt_adapter.SCIPTerminationReport` for terminal values.
-
-The PySCIPOpt Adapter records the final
-{class}`~ommx_pyscipopt_adapter.SCIPTerminationReport` after
-`model.optimize()` finishes and before the PySCIPOpt model is decoded back into
-an OMMX Solution. With a direct {class}`~ommx.adapter.DiagnosticCollector`, this
-means the report is available even when the subsequent decode step raises an
-adapter exception such as
-{exc}`~ommx.adapter.InfeasibleDetected` or
-{exc}`~ommx.adapter.UnboundedDetected`.
-
-See the API Reference for the complete diagnostic entry schemas:
-
-- {class}`~ommx_pyscipopt_adapter.SCIPProgressSnapshot`
-- {class}`~ommx_pyscipopt_adapter.SCIPTerminationReport`
-- {class}`~ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer`
-
-For post-solve analysis, use
-{class}`~ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer` over either the typed
-collector contents or dictionaries loaded from an Experiment:
-
-```python
-from ommx_pyscipopt_adapter import SCIPDiagnosticsAnalyzer
-
-analysis = SCIPDiagnosticsAnalyzer(collector.diagnostics)
-
-progress = analysis.progress_history_df
-dual_bound = analysis.dual_bound
-incumbents = analysis.incumbent_objective
-termination = analysis.termination_result
-```
-
-The DataFrame and Series helpers require pandas. Use
-`progress_history_records` and `termination_result` when pandas is not
-available. `progress_history_df` and its Series views use `solving_time_sec` as
-the index, so they are ready for time-based plots.
-
-The bounds and gap come directly from SCIP. They are useful for understanding a
-time-limited or otherwise non-optimal termination, and for checking what SCIP had
-proved when no OMMX Solution could be decoded.
-
-```python
-from ommx.adapter import DiagnosticCollector, UnboundedDetected
-from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
-
-collector = DiagnosticCollector()
-
-try:
-    OMMXPySCIPOptAdapter.solve(instance, diagnostics=collector)
-except UnboundedDetected:
-    report = collector.diagnostics[-1]
-    assert report.status == "unbounded"
-    print(report.dual_bound, report.gap)
-```
-
-When diagnostics are loaded back from an Experiment, each progress event and the
-termination report are represented as dictionaries. Pass that list directly to
+{py:attr}`~ommx.experiment.Solve.diagnostics` are dictionaries, not the original
+dataclass instances. This keeps stored Artifacts independent of the Python class
+definitions used when the solve was recorded. Pass that list directly to
 {class}`~ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer` when you want the same
 records, DataFrame, or Series views as direct collection.
+
+If {meth}`~ommx.adapter.SolverAdapter.solve` raises before returning an OMMX
+Solution, `Run.log_solve` still records a failed Solve entry when possible. That
+entry has `status == "failed"` or `"interrupted"`, no output Solution, and any
+diagnostics collected before the failure.
+
+See the API Reference for the adapter diagnostics contract:
+{class}`~ommx.adapter.DiagnosticsSink`,
+{class}`~ommx.adapter.DiagnosticCollector`, and
+{meth}`~ommx.adapter.SolverAdapter.solve`.
