@@ -139,15 +139,16 @@ from ommx_pyscipopt_adapter import SCIPDiagnosticsAnalyzer
 
 analysis = SCIPDiagnosticsAnalyzer(collector.diagnostics)
 
-progress = analysis.progress_df()
-gap_series = analysis.gap_evolution_df()
-incumbents = analysis.incumbent_evolution_df()
-termination = analysis.termination_report
+progress = analysis.progress_history_df
+dual_bound = analysis.dual_bound
+incumbents = analysis.incumbent_objective
+termination = analysis.termination_result
 ```
 
-DataFrame helper は pandas を必要とします。pandas が使えない環境では
-`progress_records()`、`gap_evolution_records()`、`incumbent_evolution_records()`、
-`termination_records()` を使ってください。
+DataFrame / Series helper は pandas を必要とします。pandas が使えない環境では
+`progress_history_records` と `termination_result` を使ってください。
+`progress_history_df` とそこから切り出す Series view は `solving_time_sec` を index にするので、
+そのまま時間軸の plot に使えます。
 
 bound と gap は SCIP から直接取得した値です。time limit などで最適性が証明されていない場合や、
 OMMX Solution に decode できなかった場合に、SCIP がどこまで証明していたかを確認するために使えます。
@@ -167,5 +168,5 @@ except UnboundedDetected:
 ```
 
 Experiment から読み出した diagnostics では、各 progress event と termination report は
-dictionary として表現されます。直接取得した場合と同じ records / DataFrame view が必要な場合は、
+dictionary として表現されます。直接取得した場合と同じ records / DataFrame / Series view が必要な場合は、
 その list をそのまま {class}`~ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer` に渡してください。

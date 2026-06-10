@@ -1,6 +1,6 @@
 from __future__ import annotations
 import math
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, fields
 from typing import TYPE_CHECKING, Any, Iterable, Mapping, Optional, cast
 
 import pyscipopt
@@ -249,11 +249,16 @@ class SCIPDiagnosticsAnalyzer:
     :class:`ommx.adapter.DiagnosticCollector` or dictionaries loaded from
     :attr:`ommx.experiment.Solve.diagnostics`.
 
-    ``*_records()`` methods return ``list[dict[str, object]]`` and do not
-    require pandas. ``*_df()`` methods return pandas DataFrames with stable
-    columns and import pandas lazily. If pandas is unavailable, use the
-    corresponding records method.
+    :attr:`progress_history_records` returns ``list[dict[str, object]]`` and
+    does not require pandas. :attr:`progress_history_df` returns a pandas
+    DataFrame indexed by ``solving_time_sec`` and imports pandas lazily.
+    Time-series properties such as :attr:`dual_bound` return pandas Series with
+    the same index. :attr:`termination_result` returns the terminal SCIP report
+    as a dictionary.
     """
+
+    _progress_snapshots: tuple[SCIPProgressSnapshot, ...]
+    _termination_report: SCIPTerminationReport | None
 
     def __init__(self, diagnostics: Iterable[Any]) -> None:
         diagnostics = tuple(diagnostics)
@@ -277,132 +282,77 @@ class SCIPDiagnosticsAnalyzer:
         return self._progress_snapshots
 
     @property
-    def termination_report(self) -> SCIPTerminationReport | None:
-        """Final termination report, or ``None`` when none was recorded."""
-        return self._termination_report
-
-    def progress_records(self) -> list[dict[str, object]]:
+    def progress_history_records(self) -> list[dict[str, object]]:
         """Return one dictionary per SCIP progress snapshot."""
         return [
-            {
-                "event": snapshot.event,
-                "solving_time_sec": snapshot.solving_time_sec,
-                "node_count": snapshot.node_count,
-                "total_node_count": snapshot.total_node_count,
-                "lp_iteration_count": snapshot.lp_iteration_count,
-                "solution_count": snapshot.solution_count,
-                "primal_bound": snapshot.primal_bound,
-                "dual_bound": snapshot.dual_bound,
-                "gap": snapshot.gap,
-                "incumbent_objective": snapshot.incumbent_objective,
-            }
+            cast(dict[str, object], asdict(snapshot))
             for snapshot in self.progress_snapshots
         ]
 
-    def progress_df(self) -> Any:
-        """Return progress snapshots as a pandas DataFrame."""
-        return _dataframe(self.progress_records(), _PROGRESS_SNAPSHOT_COLUMNS)
-
-    def gap_evolution_records(self) -> list[dict[str, object]]:
-        """Return records for plotting SCIP gap evolution."""
-        return [
-            {
-                "solving_time_sec": snapshot.solving_time_sec,
-                "gap": snapshot.gap,
-                "primal_bound": snapshot.primal_bound,
-                "dual_bound": snapshot.dual_bound,
-                "event": snapshot.event,
-            }
-            for snapshot in self.progress_snapshots
-        ]
-
-    def gap_evolution_df(self) -> Any:
-        """Return SCIP gap evolution as a pandas DataFrame."""
-        return _dataframe(self.gap_evolution_records(), _GAP_EVOLUTION_COLUMNS)
-
-    def gap_evolution(self) -> tuple[tuple[float, float, float, float, str], ...]:
-        """Return ``(time, gap, primal_bound, dual_bound, event)`` samples."""
-        return tuple(
-            (
-                snapshot.solving_time_sec,
-                snapshot.gap,
-                snapshot.primal_bound,
-                snapshot.dual_bound,
-                snapshot.event,
-            )
-            for snapshot in self.progress_snapshots
-        )
-
-    def incumbent_evolution_records(self) -> list[dict[str, object]]:
-        """Return records for plotting incumbent objective evolution."""
-        return [
-            {
-                "solving_time_sec": snapshot.solving_time_sec,
-                "incumbent_objective": incumbent_objective,
-                "event": snapshot.event,
-            }
-            for snapshot in self.progress_snapshots
-            if (incumbent_objective := snapshot.incumbent_objective) is not None
-        ]
-
-    def incumbent_evolution_df(self) -> Any:
-        """Return incumbent objective evolution as a pandas DataFrame."""
+    @property
+    def progress_history_df(self) -> Any:
+        """Return progress snapshots as a pandas DataFrame indexed by time."""
         return _dataframe(
-            self.incumbent_evolution_records(), _INCUMBENT_EVOLUTION_COLUMNS
+            self.progress_history_records,
+            _dataclass_field_names(SCIPProgressSnapshot),
+            index="solving_time_sec",
         )
 
-    def incumbent_evolution(self) -> tuple[tuple[float, float, str], ...]:
-        """Return ``(time, incumbent_objective, event)`` samples."""
-        samples = []
-        for snapshot in self.progress_snapshots:
-            incumbent_objective = snapshot.incumbent_objective
-            if incumbent_objective is not None:
-                samples.append(
-                    (
-                        snapshot.solving_time_sec,
-                        incumbent_objective,
-                        snapshot.event,
-                    )
-                )
-        return tuple(samples)
+    @property
+    def event(self) -> Any:
+        """Return progress event names indexed by solving time."""
+        return self._progress_series("event")
 
-    def termination_record(self) -> dict[str, object] | None:
+    @property
+    def node_count(self) -> Any:
+        """Return processed node counts indexed by solving time."""
+        return self._progress_series("node_count")
+
+    @property
+    def total_node_count(self) -> Any:
+        """Return total processed node counts indexed by solving time."""
+        return self._progress_series("total_node_count")
+
+    @property
+    def lp_iteration_count(self) -> Any:
+        """Return LP iteration counts indexed by solving time."""
+        return self._progress_series("lp_iteration_count")
+
+    @property
+    def solution_count(self) -> Any:
+        """Return stored solution counts indexed by solving time."""
+        return self._progress_series("solution_count")
+
+    @property
+    def primal_bound(self) -> Any:
+        """Return primal bounds indexed by solving time."""
+        return self._progress_series("primal_bound")
+
+    @property
+    def dual_bound(self) -> Any:
+        """Return dual bounds indexed by solving time."""
+        return self._progress_series("dual_bound")
+
+    @property
+    def gap(self) -> Any:
+        """Return relative gaps indexed by solving time."""
+        return self._progress_series("gap")
+
+    @property
+    def incumbent_objective(self) -> Any:
+        """Return incumbent objectives indexed by solving time."""
+        return self._progress_series("incumbent_objective")
+
+    @property
+    def termination_result(self) -> dict[str, object] | None:
         """Return the terminal SCIP report as one dictionary, if present."""
-        report = self.termination_report
+        report = self._termination_report
         if report is None:
             return None
-        return {
-            "status": report.status,
-            "primal_bound": report.primal_bound,
-            "dual_bound": report.dual_bound,
-            "gap": report.gap,
-            "objective_value": report.objective_value,
-            "node_count": report.node_count,
-            "total_node_count": report.total_node_count,
-            "lp_iteration_count": report.lp_iteration_count,
-            "lp_solve_count": report.lp_solve_count,
-            "cut_count": report.cut_count,
-            "applied_cut_count": report.applied_cut_count,
-            "solution_count": report.solution_count,
-            "solution_found_count": report.solution_found_count,
-            "best_solution_count": report.best_solution_count,
-            "max_depth": report.max_depth,
-            "primal_dual_integral": report.primal_dual_integral,
-            "solving_time_sec": report.solving_time_sec,
-            "presolving_time_sec": report.presolving_time_sec,
-            "reading_time_sec": report.reading_time_sec,
-            "scip_version": report.scip_version,
-            "pyscipopt_version": report.pyscipopt_version,
-        }
+        return cast(dict[str, object], asdict(report))
 
-    def termination_records(self) -> list[dict[str, object]]:
-        """Return the terminal SCIP report as a one-row record list."""
-        record = self.termination_record()
-        return [] if record is None else [record]
-
-    def termination_df(self) -> Any:
-        """Return the terminal SCIP report as a pandas DataFrame."""
-        return _dataframe(self.termination_records(), _TERMINATION_REPORT_COLUMNS)
+    def _progress_series(self, column: str) -> Any:
+        return self.progress_history_df[column]
 
 
 def _as_progress_snapshot(diagnostic: Any) -> SCIPProgressSnapshot | None:
@@ -410,7 +360,7 @@ def _as_progress_snapshot(diagnostic: Any) -> SCIPProgressSnapshot | None:
         return diagnostic
     if not isinstance(diagnostic, Mapping):
         return None
-    if not _PROGRESS_SNAPSHOT_KEYS <= diagnostic.keys():
+    if not _has_dataclass_fields(diagnostic, SCIPProgressSnapshot):
         return None
     return SCIPProgressSnapshot(
         event=cast(str, diagnostic["event"]),
@@ -431,7 +381,7 @@ def _as_termination_report(diagnostic: Any) -> SCIPTerminationReport | None:
         return diagnostic
     if not isinstance(diagnostic, Mapping):
         return None
-    if not _TERMINATION_REPORT_KEYS <= diagnostic.keys():
+    if not _has_dataclass_fields(diagnostic, SCIPTerminationReport):
         return None
     return SCIPTerminationReport(
         status=cast(str, diagnostic["status"]),
@@ -458,108 +408,30 @@ def _as_termination_report(diagnostic: Any) -> SCIPTerminationReport | None:
     )
 
 
-_PROGRESS_SNAPSHOT_KEYS = frozenset(
-    {
-        "event",
-        "solving_time_sec",
-        "node_count",
-        "total_node_count",
-        "lp_iteration_count",
-        "solution_count",
-        "primal_bound",
-        "dual_bound",
-        "gap",
-        "incumbent_objective",
-    }
-)
-
-_PROGRESS_SNAPSHOT_COLUMNS = [
-    "event",
-    "solving_time_sec",
-    "node_count",
-    "total_node_count",
-    "lp_iteration_count",
-    "solution_count",
-    "primal_bound",
-    "dual_bound",
-    "gap",
-    "incumbent_objective",
-]
-
-_GAP_EVOLUTION_COLUMNS = [
-    "solving_time_sec",
-    "gap",
-    "primal_bound",
-    "dual_bound",
-    "event",
-]
-
-_INCUMBENT_EVOLUTION_COLUMNS = [
-    "solving_time_sec",
-    "incumbent_objective",
-    "event",
-]
-
-_TERMINATION_REPORT_KEYS = frozenset(
-    {
-        "status",
-        "primal_bound",
-        "dual_bound",
-        "gap",
-        "objective_value",
-        "node_count",
-        "total_node_count",
-        "lp_iteration_count",
-        "lp_solve_count",
-        "cut_count",
-        "applied_cut_count",
-        "solution_count",
-        "solution_found_count",
-        "best_solution_count",
-        "max_depth",
-        "primal_dual_integral",
-        "solving_time_sec",
-        "presolving_time_sec",
-        "reading_time_sec",
-        "scip_version",
-        "pyscipopt_version",
-    }
-)
-
-_TERMINATION_REPORT_COLUMNS = [
-    "status",
-    "primal_bound",
-    "dual_bound",
-    "gap",
-    "objective_value",
-    "node_count",
-    "total_node_count",
-    "lp_iteration_count",
-    "lp_solve_count",
-    "cut_count",
-    "applied_cut_count",
-    "solution_count",
-    "solution_found_count",
-    "best_solution_count",
-    "max_depth",
-    "primal_dual_integral",
-    "solving_time_sec",
-    "presolving_time_sec",
-    "reading_time_sec",
-    "scip_version",
-    "pyscipopt_version",
-]
+def _dataclass_field_names(dataclass_type: type[Any]) -> list[str]:
+    return [field.name for field in fields(dataclass_type)]
 
 
-def _dataframe(records: list[dict[str, object]], columns: list[str]) -> Any:
+def _has_dataclass_fields(
+    diagnostic: Mapping[Any, Any], dataclass_type: type[Any]
+) -> bool:
+    return set(_dataclass_field_names(dataclass_type)) <= diagnostic.keys()
+
+
+def _dataframe(
+    records: list[dict[str, object]], columns: list[str], *, index: str | None = None
+) -> Any:
     try:
         import pandas as pd
     except ImportError as error:
         raise ImportError(
-            "pandas is required for SCIPDiagnosticsAnalyzer DataFrame methods. "
-            "Use the corresponding *_records() method without pandas."
+            "pandas is required for SCIPDiagnosticsAnalyzer DataFrame and Series "
+            "properties. Use progress_history_records without pandas."
         ) from error
-    return pd.DataFrame.from_records(records, columns=columns)
+    dataframe = pd.DataFrame.from_records(records, columns=columns).convert_dtypes()
+    if index is not None:
+        dataframe = dataframe.set_index(index)
+    return dataframe
 
 
 class OMMXPySCIPOptAdapter(SolverAdapter):

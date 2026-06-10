@@ -149,15 +149,16 @@ from ommx_pyscipopt_adapter import SCIPDiagnosticsAnalyzer
 
 analysis = SCIPDiagnosticsAnalyzer(collector.diagnostics)
 
-progress = analysis.progress_df()
-gap_series = analysis.gap_evolution_df()
-incumbents = analysis.incumbent_evolution_df()
-termination = analysis.termination_report
+progress = analysis.progress_history_df
+dual_bound = analysis.dual_bound
+incumbents = analysis.incumbent_objective
+termination = analysis.termination_result
 ```
 
-The DataFrame helpers require pandas. Use `progress_records()`,
-`gap_evolution_records()`, `incumbent_evolution_records()`, or
-`termination_records()` when pandas is not available.
+The DataFrame and Series helpers require pandas. Use
+`progress_history_records` and `termination_result` when pandas is not
+available. `progress_history_df` and its Series views use `solving_time_sec` as
+the index, so they are ready for time-based plots.
 
 The bounds and gap come directly from SCIP. They are useful for understanding a
 time-limited or otherwise non-optimal termination, and for checking what SCIP had
@@ -180,4 +181,4 @@ except UnboundedDetected:
 When diagnostics are loaded back from an Experiment, each progress event and the
 termination report are represented as dictionaries. Pass that list directly to
 {class}`~ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer` when you want the same
-records or DataFrame views as direct collection.
+records, DataFrame, or Series views as direct collection.
