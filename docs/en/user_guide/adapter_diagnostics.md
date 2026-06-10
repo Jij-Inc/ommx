@@ -1,47 +1,26 @@
 # Adapter-specific Diagnostics
 
-Every Solver Adapter returns the same OMMX-side result type:
-{class}`~ommx.v1.Solution`. This is the portable output of a solve. It gives
-users a common way to read the decoded OMMX state, feasibility, optimality, and
-objective value regardless of which backend solver produced the result.
+Diagnostics preserve backend solver details that do not fit in the portable
+{class}`~ommx.v1.Solution`: termination status, primal and dual bounds, gap,
+timing, node counts, progress events, and adapter-specific warnings.
 
-Diagnostics are intentionally different. They are an adapter-specific framework
-for preserving detailed solver-side information that does not fit into the
-common {class}`~ommx.v1.Solution` contract. Examples include backend termination
-status, primal and dual bounds, gaps, timings, node counts, solution pools, or
-adapter-specific warnings. The shape and meaning of diagnostics are therefore
-defined by each adapter and backend solver.
+The shortest PySCIPOpt workflow is:
 
-Use {class}`~ommx.v1.Solution` when you need the common OMMX result. Use
-diagnostics when you need to understand what the backend solver observed,
-reported, or proved during the solve.
+```python
+from ommx.adapter import DiagnosticCollector
+from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter, SCIPDiagnosticsAnalyzer
 
-The common entry point is the reserved `diagnostics` keyword on
-{meth}`~ommx.adapter.SolverAdapter.solve`. An adapter receives a
-{class}`~ommx.adapter.DiagnosticsSink` and records backend-specific dataclass
-diagnostics with {meth}`DiagnosticsSink.record() <ommx.adapter.DiagnosticsSink.record>`.
-Each adapter decides which diagnostic types it emits, and adapters that have no
-extra information may leave the sink empty.
+collector = DiagnosticCollector()
+solution = OMMXPySCIPOptAdapter.solve(instance, diagnostics=collector)
 
-Adapters may call `record()` during the solve, including from backend solver
-callbacks. A collector can therefore receive progress events before the final
-termination report, while Experiment storage still writes one diagnostics BLOB
-for each Solve.
+analysis = SCIPDiagnosticsAnalyzer(collector.diagnostics)
+progress = analysis.progress_history_df
+dual_bound = analysis.dual_bound
+termination = analysis.termination_result
+```
 
-The built-in `DiagnosticCollector.record()` path only appends the received
-Python object and preserves object identity for direct collection. Dataclass
-conversion and msgpack serialization are deferred until `Run.log_solve` stores
-the final diagnostics BLOB after the adapter returns.
-
-Diagnostics persistence is best-effort. If dataclass conversion, msgpack
-serialization, or diagnostics BLOB storage fails after the adapter returns a
-solution, `Run.log_solve` still records the Solve entry and stores it without
-diagnostics.
-
-A diagnostics sink should not raise from `record()`. If recording fails, the
-sink should log the failure and return normally. If a sink does raise, that is a
-sink contract violation, and the adapter may let the exception propagate rather
-than trying to recover from it.
+Use {class}`~ommx.v1.Solution` for the decoded OMMX result. Use diagnostics when
+you need to inspect what the backend solver observed, reported, or proved.
 
 ## Collect Diagnostics Directly
 
@@ -111,6 +90,35 @@ If {meth}`~ommx.adapter.SolverAdapter.solve` raises before returning an OMMX
 Solution, `Run.log_solve` still records a failed Solve entry when possible.
 That entry has `status == "failed"` or `"interrupted"`, no output Solution,
 and any diagnostics collected before the failure.
+
+## Diagnostics Contract
+
+The common entry point is the reserved `diagnostics` keyword on
+{meth}`~ommx.adapter.SolverAdapter.solve`. An adapter receives a
+{class}`~ommx.adapter.DiagnosticsSink` and records backend-specific dataclass
+diagnostics with {meth}`DiagnosticsSink.record() <ommx.adapter.DiagnosticsSink.record>`.
+Each adapter decides which diagnostic types it emits, and adapters that have no
+extra information may leave the sink empty.
+
+Adapters may call `record()` during the solve, including from backend solver
+callbacks. A collector can therefore receive progress events before the final
+termination report, while Experiment storage still writes one diagnostics BLOB
+for each Solve.
+
+The built-in `DiagnosticCollector.record()` path only appends the received
+Python object and preserves object identity for direct collection. Dataclass
+conversion and msgpack serialization are deferred until `Run.log_solve` stores
+the final diagnostics BLOB after the adapter returns.
+
+Diagnostics persistence is best-effort. If dataclass conversion, msgpack
+serialization, or diagnostics BLOB storage fails after the adapter returns a
+solution, `Run.log_solve` still records the Solve entry and stores it without
+diagnostics.
+
+A diagnostics sink should not raise from `record()`. If recording fails, the
+sink should log the failure and return normally. If a sink does raise, that is a
+sink contract violation, and the adapter may let the exception propagate rather
+than trying to recover from it.
 
 ## PySCIPOpt Adapter Diagnostics
 

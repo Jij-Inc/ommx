@@ -1,42 +1,27 @@
 # Adapter 固有 diagnostics
 
-どの Solver Adapter でも、求解結果として返す OMMX 側の型は
-{class}`~ommx.v1.Solution` です。これは Adapter 共通の出力であり、どの backend
-solver で解いた場合でも、decode 済みの OMMX state、feasibility、optimality、
-objective value を同じ形で扱うためのものです。
+diagnostics は、portable な {class}`~ommx.v1.Solution` には入らない backend solver 側の情報を
+残すための仕組みです。termination status、primal / dual bound、gap、実行時間、
+node 数、progress event、adapter 固有の warning などを確認できます。
 
-diagnostics はこれとは意図的に別の枠組みです。diagnostics は、共通の
-{class}`~ommx.v1.Solution` contract には入らない solver 側の詳しい情報を保持するための
-adapter 固有の仕組みです。例えば backend の termination status、primal / dual bound、
-gap、実行時間、node 数、solution pool、adapter 固有の warning などが該当します。
-そのため、diagnostics の形と意味は adapter と backend solver ごとに定義されます。
+PySCIPOpt Adapter では、最短で次のように使えます。
 
-共通の OMMX 結果が必要な場合は {class}`~ommx.v1.Solution` を参照してください。
+```python
+from ommx.adapter import DiagnosticCollector
+from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter, SCIPDiagnosticsAnalyzer
+
+collector = DiagnosticCollector()
+solution = OMMXPySCIPOptAdapter.solve(instance, diagnostics=collector)
+
+analysis = SCIPDiagnosticsAnalyzer(collector.diagnostics)
+progress = analysis.progress_history_df
+dual_bound = analysis.dual_bound
+termination = analysis.termination_result
+```
+
+decode 済みの OMMX 結果を見るときは {class}`~ommx.v1.Solution` を使います。
 backend solver が求解中に何を観測し、何を報告し、どこまで証明したかを確認したい場合に
 diagnostics を使います。
-
-共通の入口は {meth}`~ommx.adapter.SolverAdapter.solve` の予約済み `diagnostics`
-keyword です。adapter は {class}`~ommx.adapter.DiagnosticsSink` を受け取り、
-backend 固有の dataclass diagnostics を
-{meth}`DiagnosticsSink.record() <ommx.adapter.DiagnosticsSink.record>` で記録します。
-どの diagnostic type を出力するかは adapter ごとに決まります。追加情報がない adapter は
-sink に何も記録しなくても構いません。
-
-adapter は solve 中、backend solver の callback 内から `record()` を呼ぶことがあります。
-そのため collector は最終的な termination report の前に progress event を受け取れます。
-一方、Experiment への保存は 1 Solve あたり 1 つの diagnostics BLOB として行われます。
-
-組み込みの `DiagnosticCollector.record()` は受け取った Python object を append するだけで、
-直接収集では object identity を保ちます。dataclass 変換と msgpack serialization は、
-adapter が戻った後に `Run.log_solve` が最終的な diagnostics BLOB を保存するときまで遅延されます。
-
-diagnostics の永続化は best-effort です。adapter が solution を返した後に dataclass 変換、
-msgpack serialization、または diagnostics BLOB の保存に失敗しても、`Run.log_solve` は
-Solve entry を記録し、diagnostics なしの Solve として保存します。
-
-diagnostics sink は `record()` から例外を投げない規約です。記録に失敗した場合、sink は
-失敗を log して正常に戻るべきです。sink が例外を投げた場合、それは sink 側の contract 違反であり、
-adapter は回復を試みずにその例外を伝搬して構いません。
 
 ## 直接 solve して diagnostics を取得する
 
@@ -104,6 +89,31 @@ Solve の adapter metadata から判断し、例えば PySCIPOpt Adapter の dia
 可能な限り `Run.log_solve` は failed Solve entry を記録します。この entry は
 `status == "failed"` または `"interrupted"`、output Solution なし、失敗前に収集済みの
 diagnostics あり、という形で保存されます。
+
+## Diagnostics の contract
+
+共通の入口は {meth}`~ommx.adapter.SolverAdapter.solve` の予約済み `diagnostics`
+keyword です。adapter は {class}`~ommx.adapter.DiagnosticsSink` を受け取り、
+backend 固有の dataclass diagnostics を
+{meth}`DiagnosticsSink.record() <ommx.adapter.DiagnosticsSink.record>` で記録します。
+どの diagnostic type を出力するかは adapter ごとに決まります。追加情報がない adapter は
+sink に何も記録しなくても構いません。
+
+adapter は solve 中、backend solver の callback 内から `record()` を呼ぶことがあります。
+そのため collector は最終的な termination report の前に progress event を受け取れます。
+一方、Experiment への保存は 1 Solve あたり 1 つの diagnostics BLOB として行われます。
+
+組み込みの `DiagnosticCollector.record()` は受け取った Python object を append するだけで、
+直接収集では object identity を保ちます。dataclass 変換と msgpack serialization は、
+adapter が戻った後に `Run.log_solve` が最終的な diagnostics BLOB を保存するときまで遅延されます。
+
+diagnostics の永続化は best-effort です。adapter が solution を返した後に dataclass 変換、
+msgpack serialization、または diagnostics BLOB の保存に失敗しても、`Run.log_solve` は
+Solve entry を記録し、diagnostics なしの Solve として保存します。
+
+diagnostics sink は `record()` から例外を投げない規約です。記録に失敗した場合、sink は
+失敗を log して正常に戻るべきです。sink が例外を投げた場合、それは sink 側の contract 違反であり、
+adapter は回復を試みずにその例外を伝搬して構いません。
 
 ## PySCIPOpt Adapter diagnostics
 
