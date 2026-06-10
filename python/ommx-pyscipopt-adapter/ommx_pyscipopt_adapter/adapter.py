@@ -428,7 +428,11 @@ def _dataframe(
             "pandas is required for SCIPDiagnosticsAnalyzer DataFrame and Series "
             "properties. Use progress_history_records without pandas."
         ) from error
-    dataframe = pd.DataFrame.from_records(records, columns=columns).convert_dtypes()
+    dataframe = pd.DataFrame.from_records(records, columns=columns)
+    if "incumbent_objective" in dataframe:
+        dataframe["incumbent_objective"] = dataframe["incumbent_objective"].astype(
+            "Float64"
+        )
     if index is not None:
         dataframe = dataframe.set_index(index)
     return dataframe

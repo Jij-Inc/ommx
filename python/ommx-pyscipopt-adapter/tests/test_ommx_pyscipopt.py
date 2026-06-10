@@ -1,4 +1,5 @@
 import math
+import warnings
 from typing import Any, cast
 
 import pandas as pd
@@ -251,6 +252,22 @@ def test_analyzer_accepts_experiment_dicts():
     assert analyzer.progress_snapshots == (progress,)
     assert analyzer.progress_history_records == [_progress_snapshot_dict(progress)]
     assert analyzer.termination_result == _termination_report_dict(termination)
+
+
+def test_analyzer_dual_bound_series_preserves_infinity_without_runtime_warning():
+    analyzer = SCIPDiagnosticsAnalyzer(
+        [
+            _progress_snapshot(dual_bound=math.inf, incumbent_objective=None),
+            _progress_snapshot(solving_time_sec=0.5, dual_bound=10.0),
+        ]
+    )
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", RuntimeWarning)
+        dual_bound = analyzer.dual_bound
+
+    assert list(dual_bound) == [math.inf, 10.0]
+    assert analyzer.incumbent_objective.iloc[0] is pd.NA
 
 
 def test_progress_snapshot_avoids_callback_get_obj_val_regression():
