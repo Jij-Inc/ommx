@@ -258,36 +258,37 @@ class SCIPDiagnosticsAnalyzer:
     """
 
     _progress_snapshots: tuple[SCIPProgressSnapshot, ...]
-    _termination_report: SCIPTerminationReport | None
+    _progress_history_records: tuple[dict[str, object], ...]
+    _termination_result: dict[str, object] | None
 
     def __init__(self, diagnostics: Iterable[Any]) -> None:
-        diagnostics = tuple(diagnostics)
-        self._progress_snapshots = tuple(
-            snapshot
-            for diagnostic in diagnostics
-            if (snapshot := _as_progress_snapshot(diagnostic)) is not None
-        )
-        termination_reports = tuple(
-            report
-            for diagnostic in diagnostics
-            if (report := _as_termination_report(diagnostic)) is not None
-        )
-        self._termination_report = (
-            termination_reports[-1] if termination_reports else None
+        progress_snapshots: list[SCIPProgressSnapshot] = []
+        progress_history_records: list[dict[str, object]] = []
+        termination_results: list[dict[str, object]] = []
+
+        for diagnostic in diagnostics:
+            if isinstance(diagnostic, SCIPProgressSnapshot):
+                progress_snapshots.append(diagnostic)
+            if (record := _as_progress_history_record(diagnostic)) is not None:
+                progress_history_records.append(record)
+            if (result := _as_termination_result(diagnostic)) is not None:
+                termination_results.append(result)
+
+        self._progress_snapshots = tuple(progress_snapshots)
+        self._progress_history_records = tuple(progress_history_records)
+        self._termination_result = (
+            termination_results[-1] if termination_results else None
         )
 
     @property
     def progress_snapshots(self) -> tuple[SCIPProgressSnapshot, ...]:
-        """Progress snapshots in the order they were recorded."""
+        """Typed progress snapshots in the order they were recorded."""
         return self._progress_snapshots
 
     @property
     def progress_history_records(self) -> list[dict[str, object]]:
         """Return one dictionary per SCIP progress snapshot."""
-        return [
-            cast(dict[str, object], asdict(snapshot))
-            for snapshot in self.progress_snapshots
-        ]
+        return [dict(record) for record in self._progress_history_records]
 
     @property
     def progress_history_df(self) -> Any:
@@ -346,66 +347,32 @@ class SCIPDiagnosticsAnalyzer:
     @property
     def termination_result(self) -> dict[str, object] | None:
         """Return the terminal SCIP report as one dictionary, if present."""
-        report = self._termination_report
-        if report is None:
+        if self._termination_result is None:
             return None
-        return cast(dict[str, object], asdict(report))
+        return dict(self._termination_result)
 
     def _progress_series(self, column: str) -> Any:
         return self.progress_history_df[column]
 
 
-def _as_progress_snapshot(diagnostic: Any) -> SCIPProgressSnapshot | None:
+def _as_progress_history_record(diagnostic: Any) -> dict[str, object] | None:
     if isinstance(diagnostic, SCIPProgressSnapshot):
-        return diagnostic
+        return cast(dict[str, object], asdict(diagnostic))
     if not isinstance(diagnostic, Mapping):
         return None
     if not _has_dataclass_fields(diagnostic, SCIPProgressSnapshot):
         return None
-    return SCIPProgressSnapshot(
-        event=cast(str, diagnostic["event"]),
-        solving_time_sec=cast(float, diagnostic["solving_time_sec"]),
-        node_count=cast(int, diagnostic["node_count"]),
-        total_node_count=cast(int, diagnostic["total_node_count"]),
-        lp_iteration_count=cast(int, diagnostic["lp_iteration_count"]),
-        solution_count=cast(int, diagnostic["solution_count"]),
-        primal_bound=cast(float, diagnostic["primal_bound"]),
-        dual_bound=cast(float, diagnostic["dual_bound"]),
-        gap=cast(float, diagnostic["gap"]),
-        incumbent_objective=cast(float | None, diagnostic["incumbent_objective"]),
-    )
+    return _select_dataclass_fields(diagnostic, SCIPProgressSnapshot)
 
 
-def _as_termination_report(diagnostic: Any) -> SCIPTerminationReport | None:
+def _as_termination_result(diagnostic: Any) -> dict[str, object] | None:
     if isinstance(diagnostic, SCIPTerminationReport):
-        return diagnostic
+        return cast(dict[str, object], asdict(diagnostic))
     if not isinstance(diagnostic, Mapping):
         return None
     if not _has_dataclass_fields(diagnostic, SCIPTerminationReport):
         return None
-    return SCIPTerminationReport(
-        status=cast(str, diagnostic["status"]),
-        primal_bound=cast(float, diagnostic["primal_bound"]),
-        dual_bound=cast(float, diagnostic["dual_bound"]),
-        gap=cast(float, diagnostic["gap"]),
-        objective_value=cast(float | None, diagnostic["objective_value"]),
-        node_count=cast(int, diagnostic["node_count"]),
-        total_node_count=cast(int, diagnostic["total_node_count"]),
-        lp_iteration_count=cast(int, diagnostic["lp_iteration_count"]),
-        lp_solve_count=cast(int, diagnostic["lp_solve_count"]),
-        cut_count=cast(int, diagnostic["cut_count"]),
-        applied_cut_count=cast(int, diagnostic["applied_cut_count"]),
-        solution_count=cast(int, diagnostic["solution_count"]),
-        solution_found_count=cast(int, diagnostic["solution_found_count"]),
-        best_solution_count=cast(int, diagnostic["best_solution_count"]),
-        max_depth=cast(int, diagnostic["max_depth"]),
-        primal_dual_integral=cast(float, diagnostic["primal_dual_integral"]),
-        solving_time_sec=cast(float, diagnostic["solving_time_sec"]),
-        presolving_time_sec=cast(float, diagnostic["presolving_time_sec"]),
-        reading_time_sec=cast(float, diagnostic["reading_time_sec"]),
-        scip_version=cast(str, diagnostic["scip_version"]),
-        pyscipopt_version=cast(str | None, diagnostic["pyscipopt_version"]),
-    )
+    return _select_dataclass_fields(diagnostic, SCIPTerminationReport)
 
 
 def _dataclass_field_names(dataclass_type: type[Any]) -> list[str]:
@@ -416,6 +383,15 @@ def _has_dataclass_fields(
     diagnostic: Mapping[Any, Any], dataclass_type: type[Any]
 ) -> bool:
     return set(_dataclass_field_names(dataclass_type)) <= diagnostic.keys()
+
+
+def _select_dataclass_fields(
+    diagnostic: Mapping[Any, Any], dataclass_type: type[Any]
+) -> dict[str, object]:
+    return {
+        name: cast(object, diagnostic[name])
+        for name in _dataclass_field_names(dataclass_type)
+    }
 
 
 def _dataframe(

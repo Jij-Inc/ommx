@@ -249,7 +249,7 @@ def test_analyzer_accepts_experiment_dicts():
         [_progress_snapshot_dict(progress), _termination_report_dict(termination)]
     )
 
-    assert analyzer.progress_snapshots == (progress,)
+    assert analyzer.progress_snapshots == ()
     assert analyzer.progress_history_records == [_progress_snapshot_dict(progress)]
     assert analyzer.termination_result == _termination_report_dict(termination)
 
@@ -346,8 +346,8 @@ def test_experiment_stores_diagnostics_as_dict_payload():
     assert diagnostics
     assert all(isinstance(diagnostic, dict) for diagnostic in diagnostics)
     assert diagnostics[-1]["status"] == "optimal"
-    assert analyzer.progress_snapshots
-    assert {snapshot.event for snapshot in analyzer.progress_snapshots} <= {
+    assert analyzer.progress_history_records
+    assert {record["event"] for record in analyzer.progress_history_records} <= {
         "BESTSOLFOUND",
         "DUALBOUNDIMPROVED",
     }
