@@ -830,11 +830,17 @@ def test_open_solve_manual_accessors_are_context_scoped():
     with experiment.run() as run:
         solve = run.open_solve(ManualAdapter, instance, store_diagnostics=True)
 
-        with pytest.raises(RuntimeError, match="OpenSolve context has not been entered"):
+        with pytest.raises(
+            RuntimeError, match="OpenSolve context has not been entered"
+        ):
             _ = solve.solver_input
-        with pytest.raises(RuntimeError, match="OpenSolve context has not been entered"):
+        with pytest.raises(
+            RuntimeError, match="OpenSolve context has not been entered"
+        ):
             _ = solve.adapter
-        with pytest.raises(RuntimeError, match="OpenSolve context has not been entered"):
+        with pytest.raises(
+            RuntimeError, match="OpenSolve context has not been entered"
+        ):
             _ = solve.diagnostics
 
         with solve:
@@ -874,15 +880,70 @@ def test_open_solve_rejects_reserved_diagnostics_option_with_manual_message():
 
     experiment = Experiment.with_temp_local_registry()
     with experiment.run() as run:
+        pattern = (
+            r"Run\.open_solve owns the `diagnostics` adapter option"
+            r".*store_diagnostics=True"
+        )
         with pytest.raises(
             RuntimeError,
-            match=r"Run\.open_solve owns the `diagnostics` adapter option.*store_diagnostics=True",
+            match=pattern,
         ):
             run.open_solve(
                 ManualAdapter,
                 Instance.empty(),
                 diagnostics=object(),
             )
+
+
+def test_open_solve_records_failed_attempt_when_adapter_construction_fails():
+    class FailingConstructorAdapter(SolverAdapter):
+        def __init__(self, ommx_instance: Instance, *, label: str = ""):
+            super().__init__(ommx_instance)
+            raise RuntimeError("model build failed")
+
+        @classmethod
+        def solve(
+            cls,
+            ommx_instance: Instance,
+            *,
+            diagnostics: Any | None = None,
+            **kwargs: object,
+        ) -> Solution:
+            raise AssertionError("direct solver_input workflow should not call solve")
+
+        @property
+        def solver_input(self) -> dict[str, object]:
+            raise NotImplementedError
+
+        def decode(self, data: dict[str, object]) -> Solution:
+            raise NotImplementedError
+
+    instance = Instance.empty()
+    instance.add_user_annotation("source", "open-construction-failed-input")
+    experiment = Experiment.with_temp_local_registry()
+
+    with pytest.raises(RuntimeError, match="model build failed"):
+        with experiment.run() as run:
+            solve = run.open_solve(
+                FailingConstructorAdapter,
+                instance,
+                store_diagnostics=True,
+                label="construction-failure",
+            )
+            with solve:
+                raise AssertionError("adapter construction should fail before body")
+
+    loaded = Experiment.from_artifact(experiment.commit())
+    run = loaded.runs[0]
+    assert run.status == "failed"
+    solve = run.solves[0]
+    assert solve.solve_id == 0
+    assert solve.status == "failed"
+    assert solve.input.get_user_annotation("source") == "open-construction-failed-input"
+    assert solve.output is None
+    assert str(solve.adapter).endswith("FailingConstructorAdapter")
+    assert solve.adapter_options == {"label": "construction-failure"}
+    assert solve.diagnostics == []
 
 
 def test_open_solve_records_failed_attempt_on_exception():

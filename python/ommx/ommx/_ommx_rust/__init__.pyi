@@ -5702,15 +5702,15 @@ class Run:
         r"""
         Open a manual Solve scope for direct backend solver model access.
 
-        This constructs the adapter with a cloned input Instance, exposes the
-        adapter's `solver_input` through the returned context manager, and
-        reserves a Solve ID when the context is entered. The caller can run
-        backend-specific APIs, record adapter options that are set directly on
-        the backend model, decode the backend output, and continue recording
-        diagnostics until the context exits. The Solve entry is finalized on
-        context exit. If the context exits with an exception before `decode`
-        succeeds, a failed or interrupted Solve is recorded when possible and
-        the exception is re-raised.
+        This returns a manual Solve context. Entering the context reserves a
+        Solve ID, constructs the adapter with a cloned input Instance, and
+        exposes the adapter's `solver_input`. The caller can run backend-specific
+        APIs, record adapter options that are set directly on the backend model,
+        decode the backend output, and continue recording diagnostics until the
+        context exits. The Solve entry is finalized on context exit. If adapter
+        construction or the context body fails before `decode` succeeds, a failed
+        or interrupted Solve is recorded when possible and the exception is
+        re-raised.
         """
     def finish(self) -> None:
         r"""

@@ -4866,7 +4866,7 @@
             },
             {
               "name": "open_solve",
-              "doc": "Open a manual Solve scope for direct backend solver model access.\n\nThis constructs the adapter with a cloned input Instance, exposes the\nadapter's `solver_input` through the returned context manager, and\nreserves a Solve ID when the context is entered. The caller can run\nbackend-specific APIs, record adapter options that are set directly on\nthe backend model, decode the backend output, and continue recording\ndiagnostics until the context exits. The Solve entry is finalized on\ncontext exit. If the context exits with an exception before `decode`\nsucceeds, a failed or interrupted Solve is recorded when possible and\nthe exception is re-raised.",
+              "doc": "Open a manual Solve scope for direct backend solver model access.\n\nThis returns a manual Solve context. Entering the context reserves a\nSolve ID, constructs the adapter with a cloned input Instance, and\nexposes the adapter's `solver_input`. The caller can run backend-specific\nAPIs, record adapter options that are set directly on the backend model,\ndecode the backend output, and continue recording diagnostics until the\ncontext exits. The Solve entry is finalized on context exit. If adapter\nconstruction or the context body fails before `decode` succeeds, a failed\nor interrupted Solve is recorded when possible and the exception is\nre-raised.",
               "signatures": [
                 {
                   "parameters": [

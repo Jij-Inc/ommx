@@ -1353,15 +1353,15 @@ impl PyRun {
 
     /// Open a manual Solve scope for direct backend solver model access.
     ///
-    /// This constructs the adapter with a cloned input Instance, exposes the
-    /// adapter's `solver_input` through the returned context manager, and
-    /// reserves a Solve ID when the context is entered. The caller can run
-    /// backend-specific APIs, record adapter options that are set directly on
-    /// the backend model, decode the backend output, and continue recording
-    /// diagnostics until the context exits. The Solve entry is finalized on
-    /// context exit. If the context exits with an exception before `decode`
-    /// succeeds, a failed or interrupted Solve is recorded when possible and
-    /// the exception is re-raised.
+    /// This returns a manual Solve context. Entering the context reserves a
+    /// Solve ID, constructs the adapter with a cloned input Instance, and
+    /// exposes the adapter's `solver_input`. The caller can run backend-specific
+    /// APIs, record adapter options that are set directly on the backend model,
+    /// decode the backend output, and continue recording diagnostics until the
+    /// context exits. The Solve entry is finalized on context exit. If adapter
+    /// construction or the context body fails before `decode` succeeds, a failed
+    /// or interrupted Solve is recorded when possible and the exception is
+    /// re-raised.
     #[pyo3(signature = (adapter, instance, *, store_diagnostics = false, **kwargs))]
     pub fn open_solve(
         slf: Bound<'_, Self>,
@@ -1377,18 +1377,19 @@ impl PyRun {
             this.ensure_store_trace_context_started()?;
         }
         reject_reserved_open_solve_kwargs(kwargs)?;
+        let adapter_type = adapter.0.clone_ref(py);
         let adapter = adapter.bind(py);
         let adapter_name = adapter.name()?;
         let adapter_options = clone_kwargs_dict(py, kwargs)?;
         let _ = dump_kwargs(py, Some(adapter_options.bind(py)))?;
-        let adapter_instance = adapter.instantiate(instance, kwargs)?;
         let diagnostics_collector = store_diagnostics
             .then(|| Py::new(py, PyDiagnosticCollector::new_inner()))
             .transpose()?;
         Ok(PyOpenSolve {
             run: slf.unbind(),
             solve_id: None,
-            adapter: adapter_instance,
+            adapter: adapter_type,
+            adapter_instance: None,
             adapter_name,
             instance: instance.clone(),
             adapter_options,
@@ -1474,7 +1475,8 @@ impl PyRun {
 pub struct PyOpenSolve {
     run: Py<PyRun>,
     solve_id: Option<u64>,
-    adapter: Py<PyAny>,
+    adapter: Py<PyType>,
+    adapter_instance: Option<Py<PyAny>>,
     adapter_name: String,
     instance: crate::Instance,
     adapter_options: Py<PyDict>,
@@ -1529,6 +1531,43 @@ impl PyOpenSolve {
                     }
                     this.solve_id = Some(solve_id);
                     this.span_context_manager = Some(span_context_manager);
+                    let adapter_instance = {
+                        let adapter = SolverAdapter {
+                            adapter: this.adapter.bind(py),
+                        };
+                        adapter.instantiate(&this.instance, Some(this.adapter_options.bind(py)))
+                    };
+                    match adapter_instance {
+                        Ok(adapter_instance) => {
+                            this.adapter_instance = Some(adapter_instance);
+                        }
+                        Err(error) => {
+                            let status = if error.is_instance_of::<PyKeyboardInterrupt>(py) {
+                                SolveStatus::Interrupted
+                            } else {
+                                SolveStatus::Failed
+                            };
+                            if let Err(record_error) = this.record_failed_with_status(
+                                py,
+                                status,
+                                None,
+                                "Failed to serialize failed Solve diagnostics; recording Solve without diagnostics",
+                            ) {
+                                tracing::warn!(
+                                    error = %record_error,
+                                    "Failed to record failed OpenSolve adapter construction"
+                                );
+                            }
+                            this.state = PyOpenSolveState::Closed;
+                            if let Err(close_error) = this.close_span(py, None, None, None) {
+                                tracing::warn!(
+                                    error = %close_error,
+                                    "Failed to close OpenSolve span after adapter construction failure"
+                                );
+                            }
+                            return Err(error);
+                        }
+                    }
                     this.state = PyOpenSolveState::Entered;
                 }
                 PyOpenSolveState::Entered => {
@@ -1621,15 +1660,17 @@ impl PyOpenSolve {
     #[getter]
     /// Backend solver model generated by the adapter.
     pub fn solver_input(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        self.ensure_entered()?;
-        Ok(self.adapter.bind(py).getattr("solver_input")?.unbind())
+        Ok(self
+            .adapter_instance_ref()?
+            .bind(py)
+            .getattr("solver_input")?
+            .unbind())
     }
 
     #[getter]
     /// Adapter instance used by this manual Solve.
     pub fn adapter(&self, py: Python<'_>) -> Result<Py<PyAny>> {
-        self.ensure_entered()?;
-        Ok(self.adapter.clone_ref(py))
+        Ok(self.adapter_instance_ref()?.clone_ref(py))
     }
 
     #[getter]
@@ -1653,9 +1694,8 @@ impl PyOpenSolve {
         py: Python<'_>,
         data: &Bound<'_, PyAny>,
     ) -> PyResult<Py<crate::Solution>> {
-        self.ensure_entered()?;
         let solution = self
-            .adapter
+            .adapter_instance_ref()?
             .bind(py)
             .call_method1("decode", (data,))?
             .extract::<Py<crate::Solution>>()
@@ -1714,6 +1754,13 @@ impl PyOpenSolve {
         }
         self.solve_id()?;
         Ok(())
+    }
+
+    fn adapter_instance_ref(&self) -> Result<&Py<PyAny>> {
+        self.ensure_entered()?;
+        self.adapter_instance
+            .as_ref()
+            .context("OpenSolve adapter has not been constructed")
     }
 
     fn set_adapter_option(
