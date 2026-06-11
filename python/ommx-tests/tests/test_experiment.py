@@ -1016,7 +1016,9 @@ def test_open_solve_records_failed_attempt_when_outcome_is_missing():
                 diagnostics = solve.diagnostics
                 assert diagnostics is not None
                 diagnostics.record(
-                    DummyDiagnostic(status="manual-open-missing-outcome", bound=math.inf)
+                    DummyDiagnostic(
+                        status="manual-open-missing-outcome", bound=math.inf
+                    )
                 )
 
     loaded = Experiment.from_artifact(experiment.commit())
