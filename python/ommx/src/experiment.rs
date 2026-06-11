@@ -1259,19 +1259,25 @@ impl PyRun {
     /// Adapter options are solve-scoped metadata, not run parameters. They do
     /// not appear in `Experiment.run_parameters_df()`.
     ///
-    /// Adapter diagnostics persistence is best-effort. If diagnostics cannot
-    /// be serialized or stored after the adapter returns a solution, the Solve
-    /// entry is still recorded without diagnostics.
+    /// Adapter diagnostics are disabled by default. Set
+    /// `store_diagnostics=True` to pass a diagnostics sink to the adapter and
+    /// store recorded diagnostics with the Solve entry. Diagnostics persistence
+    /// is best-effort. If diagnostics cannot be serialized or stored after the
+    /// adapter returns a solution, the Solve entry is still recorded without
+    /// diagnostics. `store_diagnostics` controls Experiment logging and is not
+    /// recorded in `Solve.adapter_options`.
     ///
     /// If the adapter raises before returning a Solution, this method records
     /// a failed Solve entry when possible, including diagnostics collected
-    /// before the failure. Failed Solve entries have `output=None`.
-    #[pyo3(signature = (adapter, instance, **kwargs))]
+    /// before the failure when `store_diagnostics=True`. Failed Solve entries
+    /// have `output=None`.
+    #[pyo3(signature = (adapter, instance, *, store_diagnostics = false, **kwargs))]
     pub fn log_solve(
         &mut self,
         py: Python<'_>,
         adapter: SolverAdapterInput,
         instance: &crate::Instance,
+        store_diagnostics: bool,
         kwargs: Option<&Bound<PyDict>>,
     ) -> PyResult<crate::Solution> {
         let _guard = crate::TRACING.attach_parent_context(py);
@@ -1280,8 +1286,10 @@ impl PyRun {
         let adapter = adapter.bind(py);
         let adapter_name = adapter.name()?;
         let adapter_options = dump_kwargs(py, kwargs)?;
-        let diagnostics_collector = Py::new(py, PyDiagnosticCollector::new_inner())?;
-        let solution = match adapter.solve(instance, kwargs, diagnostics_collector.bind(py)) {
+        let diagnostics_collector = store_diagnostics
+            .then(|| Py::new(py, PyDiagnosticCollector::new_inner()))
+            .transpose()?;
+        let solution = match adapter.solve(instance, kwargs, diagnostics_collector.as_ref()) {
             Ok(solution) => solution,
             Err(error) => {
                 let status = if error.is_instance_of::<PyKeyboardInterrupt>(py) {
@@ -1291,7 +1299,7 @@ impl PyRun {
                 };
                 let diagnostics = pack_diagnostics_or_none(
                     py,
-                    &diagnostics_collector,
+                    diagnostics_collector.as_ref(),
                     "Failed to serialize failed Solve diagnostics; recording Solve without diagnostics",
                 );
                 let record_result = self.as_open_mut().and_then(|run| {
@@ -1315,7 +1323,7 @@ impl PyRun {
         };
         let diagnostics = pack_diagnostics_or_none(
             py,
-            &diagnostics_collector,
+            diagnostics_collector.as_ref(),
             "Failed to serialize adapter diagnostics; recording Solve without diagnostics",
         );
         let solve_id = self
@@ -1531,9 +1539,10 @@ impl PyDiagnosticCollector {
 
 fn pack_diagnostics_or_none(
     py: Python<'_>,
-    diagnostics_collector: &Py<PyDiagnosticCollector>,
+    diagnostics_collector: Option<&Py<PyDiagnosticCollector>>,
     warning_message: &'static str,
 ) -> Option<SolveDiagnosticPayload> {
+    let diagnostics_collector = diagnostics_collector?;
     match diagnostics_collector.bind(py).borrow().pack(py) {
         Ok(diagnostics) => diagnostics,
         Err(error) => {
@@ -1652,7 +1661,7 @@ impl<'py> SolverAdapter<'py> {
         &self,
         instance: &crate::Instance,
         kwargs: Option<&Bound<'py, PyDict>>,
-        diagnostics: &Bound<'py, PyDiagnosticCollector>,
+        diagnostics: Option<&Py<PyDiagnosticCollector>>,
     ) -> PyResult<crate::Solution> {
         let py = self.py();
         let adapter_instance = Py::new(py, instance.clone())?;
@@ -1662,7 +1671,10 @@ impl<'py> SolverAdapter<'py> {
                 call_kwargs.set_item(key, value)?;
             }
         }
-        call_kwargs.set_item("diagnostics", diagnostics)?;
+        match diagnostics {
+            Some(diagnostics) => call_kwargs.set_item("diagnostics", diagnostics.bind(py))?,
+            None => call_kwargs.set_item("diagnostics", py.None())?,
+        }
         let solution_object =
             self.adapter
                 .call_method("solve", (adapter_instance,), Some(&call_kwargs))?;

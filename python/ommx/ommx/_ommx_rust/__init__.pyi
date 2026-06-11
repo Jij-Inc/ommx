@@ -5606,6 +5606,8 @@ class Run:
         self,
         adapter: type[adapter.SolverAdapter],
         instance: Instance,
+        *,
+        store_diagnostics: builtins.bool = False,
         **kwargs: typing.Any,
     ) -> Solution:
         r"""
@@ -5623,13 +5625,18 @@ class Run:
         Adapter options are solve-scoped metadata, not run parameters. They do
         not appear in `Experiment.run_parameters_df()`.
 
-        Adapter diagnostics persistence is best-effort. If diagnostics cannot
-        be serialized or stored after the adapter returns a solution, the Solve
-        entry is still recorded without diagnostics.
+        Adapter diagnostics are disabled by default. Set
+        `store_diagnostics=True` to pass a diagnostics sink to the adapter and
+        store recorded diagnostics with the Solve entry. Diagnostics persistence
+        is best-effort. If diagnostics cannot be serialized or stored after the
+        adapter returns a solution, the Solve entry is still recorded without
+        diagnostics. `store_diagnostics` controls Experiment logging and is not
+        recorded in `Solve.adapter_options`.
 
         If the adapter raises before returning a Solution, this method records
         a failed Solve entry when possible, including diagnostics collected
-        before the failure. Failed Solve entries have `output=None`.
+        before the failure when `store_diagnostics=True`. Failed Solve entries
+        have `output=None`.
         """
     def finish(self) -> None:
         r"""
