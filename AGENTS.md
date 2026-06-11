@@ -99,6 +99,13 @@ Run `task -l` to see all available commands.
 - `ommx.v1` is the public Python API surface re-exported from `ommx._ommx_rust`.
 - Prefer `ommx.v1` imports in user-facing Python code, examples, tests, and adapters unless the change is specifically about binding internals.
 
+### Tutorial Writing
+- Lead with the user workflow and the one fact they must remember. Avoid opening with lifecycle details, edge cases, or internal mechanics.
+- Put a small happy-path example before detailed prose. The example should show only calls that teach the central workflow.
+- Keep Tutorials practical and example-first. Move fine-grained semantics and exhaustive behavior details to the API Reference or a focused User Guide section unless they are required for first use.
+- Use domain wording that matches the public API without tying the explanation to incidental implementation details.
+- Keep English and Japanese tutorials structurally aligned when editing both.
+
 ### Rust Module Boundaries
 - When writing or reviewing Rust module structure, item visibility, or public API exposure, use `.agents/skills/rust-module-boundary/SKILL.md`.
 - Prefer expressing ownership with module structure; visibility should follow the domain owner and invariant boundary.
