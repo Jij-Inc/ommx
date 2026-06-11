@@ -800,6 +800,38 @@ def test_open_solve_records_direct_solver_input_workflow():
     ]
 
 
+def test_open_solve_rejects_reserved_diagnostics_option_with_manual_message():
+    class ManualAdapter(SolverAdapter):
+        @classmethod
+        def solve(
+            cls,
+            ommx_instance: Instance,
+            *,
+            diagnostics: Any | None = None,
+            **kwargs: object,
+        ) -> Solution:
+            raise AssertionError("direct solver_input workflow should not call solve")
+
+        @property
+        def solver_input(self) -> dict[str, object]:
+            return {}
+
+        def decode(self, data: dict[str, object]) -> Solution:
+            raise NotImplementedError
+
+    experiment = Experiment.with_temp_local_registry()
+    with experiment.run() as run:
+        with pytest.raises(
+            RuntimeError,
+            match=r"Run\.open_solve owns the `diagnostics` adapter option.*store_diagnostics=True",
+        ):
+            run.open_solve(
+                ManualAdapter,
+                Instance.empty(),
+                diagnostics=object(),
+            )
+
+
 def test_open_solve_records_failed_attempt_on_exception():
     class ManualAdapter(SolverAdapter):
         def __init__(self, ommx_instance: Instance, *, label: str = ""):

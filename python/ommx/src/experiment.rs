@@ -1376,7 +1376,7 @@ impl PyRun {
             let this = slf.borrow();
             this.ensure_store_trace_context_started()?;
         }
-        reject_reserved_log_solve_kwargs(kwargs)?;
+        reject_reserved_open_solve_kwargs(kwargs)?;
         let adapter = adapter.bind(py);
         let adapter_name = adapter.name()?;
         let adapter_options = clone_kwargs_dict(py, kwargs)?;
@@ -2188,6 +2188,22 @@ fn reject_reserved_log_solve_kwargs(kwargs: Option<&Bound<PyDict>>) -> Result<()
         .extract()?;
     if has_diagnostics {
         anyhow::bail!("Run.log_solve owns the `diagnostics` adapter option");
+    }
+    Ok(())
+}
+
+fn reject_reserved_open_solve_kwargs(kwargs: Option<&Bound<PyDict>>) -> Result<()> {
+    let Some(kwargs) = kwargs else {
+        return Ok(());
+    };
+    let has_diagnostics: bool = kwargs
+        .call_method1("__contains__", ("diagnostics",))?
+        .extract()?;
+    if has_diagnostics {
+        anyhow::bail!(
+            "Run.open_solve owns the `diagnostics` adapter option; \
+             pass `store_diagnostics=True` and use `solve.diagnostics` inside the context"
+        );
     }
     Ok(())
 }
