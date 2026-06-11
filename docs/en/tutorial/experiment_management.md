@@ -186,14 +186,15 @@ All data stored during the experiment is saved in OMMX's *Local Registry*.
 
 ### When You Need Direct Solver Model Access
 
-Most runs should use {py:meth}`~ommx.experiment.Run.log_solve`, which calls the adapter's `solve` method and records the input, output, adapter name, and adapter options in one step. When you need backend solver APIs that are not exposed as adapter keyword options, open a manual Solve scope, get its `solver_input`, run the backend solver, and decode the result.
+Most runs should use {py:meth}`~ommx.experiment.Run.log_solve`, which calls the adapter's `solve` method and records the input, output, adapter name, and adapter options in one step. When you need advanced solver features that the Adapter API does not cover, open a manual Solve scope.
+
+In a manual Solve scope, first get the backend solver model through `solver_input`, then operate on that model and run the optimization yourself. Finally, call `solve.decode(model)`: the adapter converts the backend result into an {py:class}`~ommx.v1.Solution`, and that Solution becomes the output of the Solve recorded in the Experiment.
 
 ```python
 with experiment.run() as run:
     run.log_parameter("capacity", c)
 
     with run.open_solve(OMMXHighsAdapter, instance, verbose=False) as solve:
-        solve_id = solve.solve_id
         model = solve.solver_input
         model.setOptionValue("time_limit", 10.0)
         solve.log_adapter_option("time_limit", 10.0)
@@ -202,9 +203,7 @@ with experiment.run() as run:
         solution = solve.decode(model)
 ```
 
-Entering the `open_solve` context reserves `solve.solve_id`. The keyword arguments passed to `open_solve` are forwarded to the adapter constructor and recorded as Solve metadata. Options set directly on the backend model should be recorded with `solve.log_adapter_option(...)`; they do not configure the backend solver, but make the manual settings visible later in `Solve.adapter_options`. The Solve entry is finalized when the `open_solve` context exits, so diagnostics recorded in `solve.diagnostics` remain collectable until the end of the `with` block. When trace storage is enabled, the `open_solve` scope is also recorded as a `Solve` span under the Run trace. If the direct backend call raises before `decode` succeeds, the `OpenSolve` context records a failed or interrupted Solve when possible and re-raises the original exception. Leaving the context normally without calling `decode` records a failed attempt and raises an error.
-
-OMMX does not serialize the backend solver model itself. If you need to preserve a solver log, exported LP/MPS file, or a JSON summary of manual model edits, attach it with run-level methods such as {py:meth}`~ommx.experiment.Run.log_file` or {py:meth}`~ommx.experiment.Run.log_json`. If you directly change the model's objective or constraints, make sure the recorded input {py:class}`~ommx.v1.Instance` still describes the problem that was actually solved.
+`solve.log_adapter_option(...)` is a helper for recording options set directly on the backend model in `Solve.adapter_options`. See {py:class}`~ommx.experiment.OpenSolve` for details about `open_solve`, diagnostics, traces, and failure handling.
 
 ## Share the Experiment
 
