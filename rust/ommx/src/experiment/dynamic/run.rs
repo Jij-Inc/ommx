@@ -3,16 +3,15 @@
 use super::super::attachment::read_file_attachment;
 use super::super::parameter::ParameterSet;
 use super::super::{
-    AttachmentLogger, AttachmentTable, ParameterValue, RunStatus, SolveDiagnosticPayload,
-    SolveStatus,
+    AttachmentLogger, AttachmentTable, FailedSolveRecord, FinishedSolveRecord, ParameterValue,
+    RunStatus, SolveStatus,
 };
 use super::{
     bail_non_unsealed, lock_experiment_state, store_run_attachment_descriptor,
     store_solve_payload_descriptor, store_trace_descriptor, ExperimentDyn, ExperimentDynLifecycle,
     ExperimentDynState, RunEntryDyn, SolveEntryDyn,
 };
-use crate::artifact::{media_types, InstanceAnnotations, SolutionAnnotations};
-use crate::{Instance, Solution};
+use crate::artifact::media_types;
 use anyhow::{ensure, Result};
 use oci_spec::image::{Descriptor, MediaType};
 use std::sync::{Arc, Mutex};
@@ -109,19 +108,19 @@ impl RunDyn {
     /// Diagnostics are best-effort metadata. If the diagnostics payload cannot
     /// be encoded or stored, the Solve entry is still recorded without
     /// diagnostics.
-    pub fn log_finished_solve(
-        &mut self,
-        input: &Instance,
-        input_annotations: InstanceAnnotations,
-        output: &Solution,
-        output_annotations: SolutionAnnotations,
-        adapter: String,
-        adapter_options: String,
-        diagnostics: Option<SolveDiagnosticPayload>,
-    ) -> Result<u64> {
+    pub fn log_finished_solve(&mut self, record: FinishedSolveRecord<'_>) -> Result<u64> {
         let solve_id = self.reserve_solve_id()?;
-        self.log_finished_solve_with_id(
-            solve_id,
+        self.log_finished_solve_with_id(solve_id, record)
+    }
+
+    /// Finalize a previously reserved Solve ID as a finished Solve.
+    pub fn log_finished_solve_with_id(
+        &mut self,
+        solve_id: u64,
+        record: FinishedSolveRecord<'_>,
+    ) -> Result<u64> {
+        ensure_reserved_solve_id(self.open()?, solve_id)?;
+        let FinishedSolveRecord {
             input,
             input_annotations,
             output,
@@ -129,22 +128,7 @@ impl RunDyn {
             adapter,
             adapter_options,
             diagnostics,
-        )
-    }
-
-    /// Finalize a previously reserved Solve ID as a finished Solve.
-    pub fn log_finished_solve_with_id(
-        &mut self,
-        solve_id: u64,
-        input: &Instance,
-        input_annotations: InstanceAnnotations,
-        output: &Solution,
-        output_annotations: SolutionAnnotations,
-        adapter: String,
-        adapter_options: String,
-        diagnostics: Option<SolveDiagnosticPayload>,
-    ) -> Result<u64> {
-        ensure_reserved_solve_id(self.open()?, solve_id)?;
+        } = record;
         let (input, output, diagnostics) = {
             let dyn_state = lock_experiment_state(&self.experiment_state);
             let input = store_solve_payload_descriptor(
@@ -200,42 +184,29 @@ impl RunDyn {
     ///
     /// Failed solve attempts have an input, adapter metadata, and optional
     /// diagnostics, but no output Solution.
-    pub fn log_failed_solve(
-        &mut self,
-        input: &Instance,
-        input_annotations: InstanceAnnotations,
-        adapter: String,
-        adapter_options: String,
-        status: SolveStatus,
-        diagnostics: Option<SolveDiagnosticPayload>,
-    ) -> Result<u64> {
+    pub fn log_failed_solve(&mut self, record: FailedSolveRecord<'_>) -> Result<u64> {
         ensure!(
-            status != SolveStatus::Finished,
+            record.status != SolveStatus::Finished,
             "failed solve attempt status must not be finished"
         );
         let solve_id = self.reserve_solve_id()?;
-        self.log_failed_solve_with_id(
-            solve_id,
-            input,
-            input_annotations,
-            adapter,
-            adapter_options,
-            status,
-            diagnostics,
-        )
+        self.log_failed_solve_with_id(solve_id, record)
     }
 
     /// Finalize a previously reserved Solve ID as a failed or interrupted Solve.
     pub fn log_failed_solve_with_id(
         &mut self,
         solve_id: u64,
-        input: &Instance,
-        input_annotations: InstanceAnnotations,
-        adapter: String,
-        adapter_options: String,
-        status: SolveStatus,
-        diagnostics: Option<SolveDiagnosticPayload>,
+        record: FailedSolveRecord<'_>,
     ) -> Result<u64> {
+        let FailedSolveRecord {
+            input,
+            input_annotations,
+            adapter,
+            adapter_options,
+            status,
+            diagnostics,
+        } = record;
         ensure!(
             status != SolveStatus::Finished,
             "failed solve attempt status must not be finished"

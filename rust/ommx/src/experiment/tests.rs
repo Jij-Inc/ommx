@@ -529,15 +529,15 @@ fn sealed_experiment_fork_creates_child_with_parent_subject_and_next_run_id() {
         {
             let mut run = experiment.run().unwrap();
             run.log_parameter("solver", "base").unwrap();
-            run.log_finished_solve(
-                &instance,
-                Default::default(),
-                &solution,
-                Default::default(),
-                "dummy.Adapter".to_string(),
-                "{}".to_string(),
-                None,
-            )
+            run.log_finished_solve(super::FinishedSolveRecord {
+                input: &instance,
+                input_annotations: Default::default(),
+                output: &solution,
+                output_annotations: Default::default(),
+                adapter: "dummy.Adapter".to_string(),
+                adapter_options: "{}".to_string(),
+                diagnostics: None,
+            })
             .unwrap();
             run.store_trace(Trace::from_bytes(b"parent trace".to_vec()))
                 .unwrap();
@@ -630,15 +630,15 @@ fn log_finished_solve_materializes_solve_entry_with_layer_refs() {
         {
             let mut run = experiment.run().unwrap();
             let solve_id = run
-                .log_finished_solve(
-                    &instance,
-                    Default::default(),
-                    &solution,
-                    Default::default(),
-                    "dummy.Adapter".to_string(),
-                    r#"{"time_limit":1.5}"#.to_string(),
-                    Some(SolveDiagnosticPayload::new(diagnostics.clone())?),
-                )
+                .log_finished_solve(super::FinishedSolveRecord {
+                    input: &instance,
+                    input_annotations: Default::default(),
+                    output: &solution,
+                    output_annotations: Default::default(),
+                    adapter: "dummy.Adapter".to_string(),
+                    adapter_options: r#"{"time_limit":1.5}"#.to_string(),
+                    diagnostics: Some(SolveDiagnosticPayload::new(diagnostics.clone())?),
+                })
                 .unwrap();
             assert_eq!(solve_id, 0);
             run.finish().unwrap();

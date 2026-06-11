@@ -16,7 +16,9 @@ use std::{
 use crate::pandas::{raw_entries_to_dataframe, PyDataFrame};
 use crate::PyArtifact;
 use ommx::artifact::AsArtifact;
-use ommx::experiment::{AttachmentLogger, SolveDiagnosticPayload, SolveStatus};
+use ommx::experiment::{
+    AttachmentLogger, FailedSolveRecord, FinishedSolveRecord, SolveDiagnosticPayload, SolveStatus,
+};
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
@@ -842,7 +844,7 @@ fn ensure_media_type(actual: &MediaType, expected: &MediaType) -> Result<()> {
 
 fn decode_json_blob<'py>(py: Python<'py>, blob: &[u8]) -> Result<Bound<'py, PyAny>> {
     let json = py.import("json")?;
-    Ok(json.call_method1("loads", (PyBytes::new(py, &blob),))?)
+    Ok(json.call_method1("loads", (PyBytes::new(py, blob),))?)
 }
 
 fn decode_experiment_attachment<'py>(
@@ -1311,14 +1313,14 @@ impl PyRun {
                     "Failed to serialize failed Solve diagnostics; recording Solve without diagnostics",
                 );
                 let record_result = self.as_open_mut().and_then(|run| {
-                    run.log_failed_solve(
-                        &instance.inner,
-                        instance.annotations.clone(),
-                        adapter_name,
+                    run.log_failed_solve(FailedSolveRecord {
+                        input: &instance.inner,
+                        input_annotations: instance.annotations.clone(),
+                        adapter: adapter_name,
                         adapter_options,
                         status,
                         diagnostics,
-                    )
+                    })
                 });
                 if let Err(record_error) = record_result {
                     tracing::warn!(
@@ -1334,15 +1336,17 @@ impl PyRun {
             diagnostics_collector.as_ref(),
             "Failed to serialize adapter diagnostics; recording Solve without diagnostics",
         );
-        let solve_id = self.as_open_mut()?.log_finished_solve(
-            &instance.inner,
-            instance.annotations.clone(),
-            &solution.inner,
-            solution.annotations.clone(),
-            adapter_name,
-            adapter_options,
-            diagnostics,
-        )?;
+        let solve_id = self
+            .as_open_mut()?
+            .log_finished_solve(FinishedSolveRecord {
+                input: &instance.inner,
+                input_annotations: instance.annotations.clone(),
+                output: &solution.inner,
+                output_annotations: solution.annotations.clone(),
+                adapter: adapter_name,
+                adapter_options,
+                diagnostics,
+            })?;
         tracing::info!(solve_id, "ommx.solve.recorded");
         Ok(solution)
     }
@@ -1756,13 +1760,15 @@ impl PyOpenSolve {
             .as_open_mut()?
             .log_finished_solve_with_id(
                 solve_id,
-                &self.instance.inner,
-                self.instance.annotations.clone(),
-                &solution.inner,
-                solution.annotations.clone(),
-                self.adapter_name.clone(),
-                adapter_options,
-                diagnostics,
+                FinishedSolveRecord {
+                    input: &self.instance.inner,
+                    input_annotations: self.instance.annotations.clone(),
+                    output: &solution.inner,
+                    output_annotations: solution.annotations.clone(),
+                    adapter: self.adapter_name.clone(),
+                    adapter_options,
+                    diagnostics,
+                },
             )?;
         tracing::info!(solve_id, "ommx.solve.recorded");
         Ok(solve_id)
@@ -1796,12 +1802,14 @@ impl PyOpenSolve {
             .as_open_mut()?
             .log_failed_solve_with_id(
                 solve_id,
-                &self.instance.inner,
-                self.instance.annotations.clone(),
-                self.adapter_name.clone(),
-                adapter_options,
-                status,
-                diagnostics,
+                FailedSolveRecord {
+                    input: &self.instance.inner,
+                    input_annotations: self.instance.annotations.clone(),
+                    adapter: self.adapter_name.clone(),
+                    adapter_options,
+                    status,
+                    diagnostics,
+                },
             )?;
         tracing::info!(solve_id, "ommx.solve.recorded");
         Ok(solve_id)
@@ -1927,6 +1935,12 @@ impl PyDiagnosticCollector {
 
     fn pack(&self, py: Python<'_>) -> Result<Option<SolveDiagnosticPayload>> {
         DiagnosticReport::pack_reports(py, &self.diagnostics)
+    }
+}
+
+impl Default for PyDiagnosticCollector {
+    fn default() -> Self {
+        Self::new_inner()
     }
 }
 

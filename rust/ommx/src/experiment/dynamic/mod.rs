@@ -63,7 +63,7 @@ struct ExperimentDynState {
 #[derive(Debug)]
 enum ExperimentDynLifecycle {
     Unsealed {
-        state: Option<UnsealedExperimentDynState>,
+        state: Option<Box<UnsealedExperimentDynState>>,
         open_runs: usize,
     },
     Sealed(SealedExperimentDynState),
@@ -424,13 +424,13 @@ impl ExperimentDyn {
             registry_handle: registry_handle.clone(),
             state: Arc::new(Mutex::new(ExperimentDynState {
                 lifecycle: ExperimentDynLifecycle::Unsealed {
-                    state: Some(UnsealedExperimentDynState {
+                    state: Some(Box::new(UnsealedExperimentDynState {
                         image_name,
                         subject: None,
                         attachments: AttachmentTable::new(),
                         runs: BTreeMap::new(),
                         next_run_id: 0,
-                    }),
+                    })),
                     open_runs: 0,
                 },
                 registry_handle,
@@ -504,7 +504,7 @@ impl ExperimentDyn {
             registry_handle: registry_handle.clone(),
             state: Arc::new(Mutex::new(ExperimentDynState {
                 lifecycle: ExperimentDynLifecycle::Unsealed {
-                    state: Some(state),
+                    state: Some(Box::new(state)),
                     open_runs: 0,
                 },
                 registry_handle,
@@ -526,7 +526,7 @@ impl ExperimentDyn {
             registry_handle: registry_handle.clone(),
             state: Arc::new(Mutex::new(ExperimentDynState {
                 lifecycle: ExperimentDynLifecycle::Unsealed {
-                    state: Some(state),
+                    state: Some(Box::new(state)),
                     open_runs: 0,
                 },
                 registry_handle,

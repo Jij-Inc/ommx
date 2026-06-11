@@ -261,6 +261,7 @@ impl FileBlobStore {
             .read(true)
             .write(true)
             .create(true)
+            .truncate(false)
             .open(&lock_path)
             .with_context(|| format!("Failed to open blob store lock {}", lock_path.display()))?;
         file.lock()
