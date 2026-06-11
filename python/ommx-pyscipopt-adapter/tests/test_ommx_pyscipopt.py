@@ -1,6 +1,8 @@
 import math
+import warnings
 from typing import Any, cast
 
+import pandas as pd
 import pytest
 
 from ommx.adapter import DiagnosticCollector, UnboundedDetected
@@ -213,20 +215,13 @@ def test_analyzer_accepts_typed_reports():
     analyzer = SCIPDiagnosticsAnalyzer([first, second, termination])
 
     assert analyzer.progress_snapshots == (first, second)
-    assert analyzer.termination_report == termination
-    assert analyzer.progress_records() == [
+    assert analyzer.progress_history_records == [
         _progress_snapshot_dict(first),
         _progress_snapshot_dict(second),
     ]
-    assert analyzer.gap_evolution() == (
-        (0.25, 0.2, 10.0, 12.0, "BESTSOLFOUND"),
-        (0.5, 0.05, 10.0, 10.5, "DUALBOUNDIMPROVED"),
-    )
-    assert analyzer.incumbent_evolution() == ((0.25, 10.0, "BESTSOLFOUND"),)
-    assert analyzer.termination_record() == _termination_report_dict(termination)
-    assert list(analyzer.progress_df().columns) == [
+    assert analyzer.termination_result == _termination_report_dict(termination)
+    assert list(analyzer.progress_history_df.columns) == [
         "event",
-        "solving_time_sec",
         "node_count",
         "total_node_count",
         "lp_iteration_count",
@@ -236,41 +231,14 @@ def test_analyzer_accepts_typed_reports():
         "gap",
         "incumbent_objective",
     ]
-    assert list(analyzer.gap_evolution_df().columns) == [
-        "solving_time_sec",
-        "gap",
-        "primal_bound",
-        "dual_bound",
-        "event",
-    ]
-    assert list(analyzer.incumbent_evolution_df().columns) == [
-        "solving_time_sec",
-        "incumbent_objective",
-        "event",
-    ]
-    assert list(analyzer.termination_df().columns) == [
-        "status",
-        "primal_bound",
-        "dual_bound",
-        "gap",
-        "objective_value",
-        "node_count",
-        "total_node_count",
-        "lp_iteration_count",
-        "lp_solve_count",
-        "cut_count",
-        "applied_cut_count",
-        "solution_count",
-        "solution_found_count",
-        "best_solution_count",
-        "max_depth",
-        "primal_dual_integral",
-        "solving_time_sec",
-        "presolving_time_sec",
-        "reading_time_sec",
-        "scip_version",
-        "pyscipopt_version",
-    ]
+    assert analyzer.progress_history_df.index.name == "solving_time_sec"
+    assert list(analyzer.progress_history_df.index) == [0.25, 0.5]
+    assert list(analyzer.gap) == [0.2, 0.05]
+    assert list(analyzer.primal_bound) == [10.0, 10.0]
+    assert list(analyzer.dual_bound) == [12.0, 10.5]
+    assert analyzer.incumbent_objective.iloc[0] == 10.0
+    assert analyzer.incumbent_objective.iloc[1] is pd.NA
+    assert analyzer.dual_bound.index.name == "solving_time_sec"
 
 
 def test_analyzer_accepts_experiment_dicts():
@@ -281,18 +249,25 @@ def test_analyzer_accepts_experiment_dicts():
         [_progress_snapshot_dict(progress), _termination_report_dict(termination)]
     )
 
-    assert analyzer.progress_snapshots == (progress,)
-    assert analyzer.termination_report == termination
-    assert analyzer.gap_evolution_records() == [
-        {
-            "solving_time_sec": 0.25,
-            "gap": 0.2,
-            "primal_bound": 10.0,
-            "dual_bound": 12.0,
-            "event": "BESTSOLFOUND",
-        }
-    ]
-    assert analyzer.termination_records() == [_termination_report_dict(termination)]
+    assert analyzer.progress_snapshots == ()
+    assert analyzer.progress_history_records == [_progress_snapshot_dict(progress)]
+    assert analyzer.termination_result == _termination_report_dict(termination)
+
+
+def test_analyzer_dual_bound_series_preserves_infinity_without_runtime_warning():
+    analyzer = SCIPDiagnosticsAnalyzer(
+        [
+            _progress_snapshot(dual_bound=math.inf, incumbent_objective=None),
+            _progress_snapshot(solving_time_sec=0.5, dual_bound=10.0),
+        ]
+    )
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", RuntimeWarning)
+        dual_bound = analyzer.dual_bound
+
+    assert list(dual_bound) == [math.inf, 10.0]
+    assert analyzer.incumbent_objective.iloc[0] is pd.NA
 
 
 def test_progress_snapshot_avoids_callback_get_obj_val_regression():
@@ -371,13 +346,13 @@ def test_experiment_stores_diagnostics_as_dict_payload():
     assert diagnostics
     assert all(isinstance(diagnostic, dict) for diagnostic in diagnostics)
     assert diagnostics[-1]["status"] == "optimal"
-    assert analyzer.progress_snapshots
-    assert {snapshot.event for snapshot in analyzer.progress_snapshots} <= {
+    assert analyzer.progress_history_records
+    assert {record["event"] for record in analyzer.progress_history_records} <= {
         "BESTSOLFOUND",
         "DUALBOUNDIMPROVED",
     }
-    assert analyzer.termination_report is not None
-    assert analyzer.termination_report.status == "optimal"
+    assert analyzer.termination_result is not None
+    assert analyzer.termination_result["status"] == "optimal"
 
 
 def test_direct_collector_keeps_termination_report_before_decode_error():
