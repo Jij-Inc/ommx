@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 from opentelemetry import trace as otel_trace
 
-from ommx.adapter import DiagnosticCollector, SolverAdapter
+from ommx.adapter import SolverAdapter
 from ommx.experiment import Experiment
 from ommx.tracing import TraceResult, render_text_tree
 from ommx.v1 import Instance, Solution
@@ -720,128 +720,6 @@ def test_log_solve_logs_input_solution_and_adapter_options():
     # Adapter options are solve-scoped metadata, not Run parameters.
     df = loaded.run_parameters_df()
     assert df.shape == (1, 0)
-
-
-def test_log_finished_solve_records_direct_solver_input_workflow():
-    class ManualAdapter(SolverAdapter):
-        def __init__(self, ommx_instance: Instance, *, label: str = ""):
-            super().__init__(ommx_instance)
-            self.label = label
-            self.instance = ommx_instance
-            self.model: dict[str, object] = {"optimized": False}
-
-        @classmethod
-        def solve(
-            cls,
-            ommx_instance: Instance,
-            *,
-            diagnostics: Any | None = None,
-            **kwargs: object,
-        ) -> Solution:
-            raise AssertionError("direct solver_input workflow should not call solve")
-
-        @property
-        def solver_input(self) -> dict[str, object]:
-            return self.model
-
-        def decode(self, data: dict[str, object]) -> Solution:
-            assert data["optimized"] is True
-            solution = self.instance.evaluate({})
-            solution.add_user_annotation("adapter", "manual")
-            return solution
-
-    instance = Instance.empty()
-    instance.add_user_annotation("source", "manual-solve-input")
-    adapter = ManualAdapter(instance)
-    model = adapter.solver_input
-    model["optimized"] = True
-    solution = adapter.decode(model)
-    diagnostics = DiagnosticCollector()
-    diagnostics.record(DummyDiagnostic(status="manual-optimal", bound=0.0))
-
-    experiment = Experiment.with_temp_local_registry()
-    solve_id = -1
-    with experiment.run() as run:
-        solve_id = run.log_finished_solve(
-            adapter,
-            instance,
-            solution,
-            diagnostics=diagnostics,
-            time_limit=1.5,
-            model_edits={"optimized": True},
-        )
-
-    assert solve_id == 0
-    loaded = Experiment.from_artifact(experiment.commit())
-    run = loaded.runs[0]
-    assert run.status == "finished"
-    assert [solve.solve_id for solve in run.solves] == [0]
-
-    solve = run.solves[0]
-    assert solve.status == "finished"
-    assert solve.input.get_user_annotation("source") == "manual-solve-input"
-    assert solve.output is not None
-    assert solve.output.get_user_annotation("adapter") == "manual"
-    assert str(solve.adapter).endswith("ManualAdapter")
-    assert solve.adapter_options == {
-        "time_limit": 1.5,
-        "model_edits": {"optimized": True},
-    }
-    assert solve.diagnostics == [{"status": "manual-optimal", "bound": 0.0}]
-
-
-def test_log_failed_solve_records_direct_solver_input_failure():
-    class ManualAdapter(SolverAdapter):
-        def __init__(self, ommx_instance: Instance, *, label: str = ""):
-            super().__init__(ommx_instance)
-            self.label = label
-
-        @classmethod
-        def solve(
-            cls,
-            ommx_instance: Instance,
-            *,
-            diagnostics: Any | None = None,
-            **kwargs: object,
-        ) -> Solution:
-            raise AssertionError("direct solver_input workflow should not call solve")
-
-        @property
-        def solver_input(self) -> Any:
-            raise NotImplementedError
-
-        def decode(self, data: Any) -> Solution:
-            raise NotImplementedError
-
-    instance = Instance.empty()
-    instance.add_user_annotation("source", "manual-failed-input")
-    diagnostics = DiagnosticCollector()
-    diagnostics.record(DummyDiagnostic(status="manual-interrupted", bound=math.inf))
-
-    experiment = Experiment.with_temp_local_registry()
-    solve_id = -1
-    with experiment.run() as run:
-        solve_id = run.log_failed_solve(
-            ManualAdapter,
-            instance,
-            status="interrupted",
-            diagnostics=diagnostics,
-            label="manual-failure",
-        )
-
-    assert solve_id == 0
-    loaded = Experiment.from_artifact(experiment.commit())
-    run = loaded.runs[0]
-    assert run.status == "finished"
-    assert [solve.solve_id for solve in run.solves] == [0]
-
-    solve = run.solves[0]
-    assert solve.status == "interrupted"
-    assert solve.input.get_user_annotation("source") == "manual-failed-input"
-    assert solve.output is None
-    assert str(solve.adapter).endswith("ManualAdapter")
-    assert solve.adapter_options == {"label": "manual-failure"}
-    assert solve.diagnostics == [{"status": "manual-interrupted", "bound": math.inf}]
 
 
 def test_open_solve_records_direct_solver_input_workflow():
