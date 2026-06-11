@@ -309,7 +309,7 @@ class SolverAdapter(ABC):
 - バックエンドソルバーのパラメータなどを調整しない場合は、  `solve` クラスメソッドを使う。
 - バックエンドソルバーのパラメータなどを調整する場合は、 `solver_input` を使ってバックエンドソルバーの入力用のデータ構造（今回は `pyscipopt.Model`）を取得し、調整した後にバックエンドソルバーへ入力し、最後にバックエンドソルバーの出力を `decode` で変換する。
 
-具体的な adapter の `solve` クラスメソッドは、adapter 固有の keyword option を追加で定義できます。予約済みの `diagnostics` keyword は `Run.log_solve` から渡されます。adapter はその sink に adapter 定義の diagnostic report を記録できます。何も記録しない場合、diagnostics は保存されません。
+具体的な adapter の `solve` クラスメソッドは、adapter 固有の keyword option を追加で定義できます。予約済みの `diagnostics` keyword は `Run.log_solve` が管理します。`Run.log_solve(..., store_diagnostics=True)` を使う場合、adapter はその sink に adapter 定義の diagnostic report を記録できます。`None` の場合、diagnostics は無効です。
 
 #### 制約タイプの Capability 宣言
 

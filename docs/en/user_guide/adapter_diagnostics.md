@@ -102,8 +102,9 @@ except UnboundedDetected:
 
 When using {py:meth}`~ommx.experiment.Run.log_solve`, do not pass the
 `diagnostics` keyword yourself. `Run.log_solve` owns that reserved keyword,
-passes a diagnostics sink to the adapter, and stores recorded diagnostics with
-the Solve entry in the Experiment Artifact.
+and diagnostics collection is disabled by default. Set
+`store_diagnostics=True` to pass a diagnostics sink to the adapter and store
+recorded diagnostics with the Solve entry in the Experiment Artifact.
 
 ```python
 from ommx.experiment import Experiment
@@ -111,7 +112,11 @@ from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter, SCIPDiagnosticsAnalyzer
 
 with Experiment() as experiment:
     with experiment.run() as run:
-        solution = run.log_solve(OMMXPySCIPOptAdapter, instance)
+        solution = run.log_solve(
+            OMMXPySCIPOptAdapter,
+            instance,
+            store_diagnostics=True,
+        )
 
 solve = experiment.runs[0].solves[0]
 analysis = SCIPDiagnosticsAnalyzer(solve.diagnostics)
@@ -130,7 +135,7 @@ records, DataFrame, or Series views as direct collection.
 If {meth}`~ommx.adapter.SolverAdapter.solve` raises before returning an OMMX
 Solution, `Run.log_solve` still records a failed Solve entry when possible. That
 entry has `status == "failed"` or `"interrupted"`, no output Solution, and any
-diagnostics collected before the failure.
+diagnostics collected before the failure when `store_diagnostics=True`.
 
 See the API Reference for the adapter diagnostics contract:
 {class}`~ommx.adapter.DiagnosticsSink`,

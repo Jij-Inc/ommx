@@ -296,7 +296,7 @@ def test_store_trace_records_log_solve_scope_in_artifact():
             *,
             diagnostics: Any | None = None,
         ) -> Solution:
-            assert diagnostics is not None
+            assert diagnostics is None
             tracer = otel_trace.get_tracer("dummy_adapter")
             with tracer.start_as_current_span("solve") as span:
                 span.set_attribute("adapter", f"{cls.__module__}.{cls.__qualname__}")
@@ -588,7 +588,7 @@ def test_log_solve_logs_input_solution_and_adapter_options():
             diagnostics: Any | None = None,
             **kwargs: object,
         ) -> Solution:
-            assert diagnostics is not None
+            assert diagnostics is None
             cls.seen_kwargs.append(kwargs)
             solution = ommx_instance.evaluate({})
             solution.add_user_annotation("adapter", "dummy")
@@ -703,7 +703,12 @@ def test_log_solve_records_adapter_diagnostics():
     DiagnosticAdapter.seen_kwargs = []
 
     with experiment.run() as run:
-        solution = run.log_solve(DiagnosticAdapter, instance, time_limit=1.5)
+        solution = run.log_solve(
+            DiagnosticAdapter,
+            instance,
+            store_diagnostics=True,
+            time_limit=1.5,
+        )
         assert solution.feasible
 
     assert DiagnosticAdapter.seen_kwargs == [{"time_limit": 1.5}]
@@ -751,6 +756,7 @@ def test_log_solve_records_solve_without_unserializable_diagnostics():
         solution = run.log_solve(
             UnserializableDiagnosticAdapter,
             instance,
+            store_diagnostics=True,
             label="unserializable-diagnostics",
         )
         assert solution.feasible
@@ -803,9 +809,24 @@ def test_failed_run_preserves_completed_solves_after_adapter_exception():
 
     with pytest.raises(RuntimeError, match="backend crashed"):
         with experiment.run() as run:
-            run.log_solve(FailingThirdAdapter, instance, label="first")
-            run.log_solve(FailingThirdAdapter, instance, label="second")
-            run.log_solve(FailingThirdAdapter, instance, label="third")
+            run.log_solve(
+                FailingThirdAdapter,
+                instance,
+                store_diagnostics=True,
+                label="first",
+            )
+            run.log_solve(
+                FailingThirdAdapter,
+                instance,
+                store_diagnostics=True,
+                label="second",
+            )
+            run.log_solve(
+                FailingThirdAdapter,
+                instance,
+                store_diagnostics=True,
+                label="third",
+            )
 
     loaded = Experiment.from_artifact(experiment.commit())
     run = loaded.runs[0]
@@ -859,7 +880,12 @@ def test_log_solve_preserves_keyboard_interrupt_type_and_records_interrupted_sol
 
     with pytest.raises(KeyboardInterrupt):
         with experiment.run() as run:
-            run.log_solve(InterruptingAdapter, instance, label="interrupt")
+            run.log_solve(
+                InterruptingAdapter,
+                instance,
+                store_diagnostics=True,
+                label="interrupt",
+            )
 
     loaded = Experiment.from_artifact(experiment.commit())
     run = loaded.runs[0]

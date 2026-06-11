@@ -88,11 +88,12 @@ class SolverAdapter(ABC):
     ) -> Solution:
         """Solve an OMMX instance.
 
-        ``Run.log_solve`` owns the reserved ``diagnostics`` keyword and passes a
-        sink to every adapter. Adapters may record adapter-defined dataclass
-        diagnostics into the sink during the solve; leaving it empty means no
-        diagnostics are stored. Adapters do not need to catch exceptions raised
-        by a non-conforming diagnostics sink.
+        ``Run.log_solve`` owns the reserved ``diagnostics`` keyword. When
+        called with ``store_diagnostics=True``, it passes a sink to the adapter
+        and stores recorded diagnostics with the Solve entry. Adapters may
+        record adapter-defined dataclass diagnostics into the sink during the
+        solve; ``None`` means diagnostics are disabled. Adapters do not need to
+        catch exceptions raised by a non-conforming diagnostics sink.
         """
         pass
 

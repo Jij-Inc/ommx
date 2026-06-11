@@ -338,7 +338,11 @@ def test_progress_snapshot_avoids_callback_get_obj_val_regression():
 def test_experiment_stores_diagnostics_as_dict_payload():
     with Experiment.with_temp_local_registry() as experiment:
         with experiment.run() as run:
-            run.log_solve(OMMXPySCIPOptAdapter, _knapsack_instance())
+            run.log_solve(
+                OMMXPySCIPOptAdapter,
+                _knapsack_instance(),
+                store_diagnostics=True,
+            )
 
     diagnostics = experiment.runs[0].solves[0].diagnostics
     analyzer = SCIPDiagnosticsAnalyzer(diagnostics)

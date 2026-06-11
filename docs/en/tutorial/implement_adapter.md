@@ -313,7 +313,7 @@ This abstract base class assumes the following two use cases:
 - If you do not adjust the backend solver's parameters, use the `solve` class method.
 - If you adjust the backend solver's parameters, use `solver_input` to get the data structure for the backend solver (in this case, `pyscipopt.Model`), adjust it, then input it to the backend solver, and finally convert the backend solver's output using `decode`.
 
-The `solve` class method may define additional adapter-specific keyword options in concrete adapters. The reserved `diagnostics` keyword is passed by `Run.log_solve`; adapters may record adapter-defined diagnostic reports into that sink, and leaving it empty means no diagnostics are stored.
+The `solve` class method may define additional adapter-specific keyword options in concrete adapters. The reserved `diagnostics` keyword is owned by `Run.log_solve`. When `Run.log_solve(..., store_diagnostics=True)` is used, adapters may record adapter-defined diagnostic reports into that sink; `None` means diagnostics are disabled.
 
 #### Constraint Capability Declaration
 
