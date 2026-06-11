@@ -529,13 +529,14 @@ fn sealed_experiment_fork_creates_child_with_parent_subject_and_next_run_id() {
         {
             let mut run = experiment.run().unwrap();
             run.log_parameter("solver", "base").unwrap();
-            run.log_finished_solve_result(
+            run.log_finished_solve(
                 &instance,
                 Default::default(),
                 &solution,
                 Default::default(),
                 "dummy.Adapter".to_string(),
                 "{}".to_string(),
+                None,
             )
             .unwrap();
             run.store_trace(Trace::from_bytes(b"parent trace".to_vec()))
@@ -607,7 +608,7 @@ fn sealed_experiment_fork_creates_child_with_parent_subject_and_next_run_id() {
 }
 
 #[test]
-fn log_finished_solve_result_materializes_solve_entry_with_layer_refs() {
+fn log_finished_solve_materializes_solve_entry_with_layer_refs() {
     with_temp_experiment(|experiment| {
         let instance = Instance::new(
             Sense::Minimize,
@@ -629,7 +630,7 @@ fn log_finished_solve_result_materializes_solve_entry_with_layer_refs() {
         {
             let mut run = experiment.run().unwrap();
             let solve_id = run
-                .log_finished_solve_result_with_diagnostics(
+                .log_finished_solve(
                     &instance,
                     Default::default(),
                     &solution,

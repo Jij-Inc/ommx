@@ -5638,6 +5638,46 @@ class Run:
         before the failure when `store_diagnostics=True`. Failed Solve entries
         have `output=None`.
         """
+    def log_finished_solve(
+        self,
+        adapter: adapter.SolverAdapter | type[adapter.SolverAdapter],
+        instance: Instance,
+        solution: Solution,
+        *,
+        diagnostics: typing.Optional[DiagnosticCollector] = None,
+        **kwargs: typing.Any,
+    ) -> builtins.int:
+        r"""
+        Log an already-finished solver result as a Solve entry.
+
+        Use this when the solver was run through an adapter's `solver_input`
+        and `decode(...)` methods instead of through `Run.log_solve(...)`.
+        The given input Instance and output Solution are stored as the Solve
+        input and output. `adapter` may be either a `SolverAdapter` subclass or
+        an adapter instance; only its class name is recorded.
+
+        Keyword arguments are recorded as `Solve.adapter_options`. They are
+        solve-scoped metadata, not run parameters, and must be JSON-serializable.
+        Pass a `DiagnosticCollector` through `diagnostics=` to store diagnostics
+        collected during the direct solver call.
+        """
+    def log_failed_solve(
+        self,
+        adapter: adapter.SolverAdapter | type[adapter.SolverAdapter],
+        instance: Instance,
+        *,
+        status: builtins.str = "failed",
+        diagnostics: typing.Optional[DiagnosticCollector] = None,
+        **kwargs: typing.Any,
+    ) -> builtins.int:
+        r"""
+        Log a failed or interrupted solver attempt as a Solve entry.
+
+        This records the input Instance, adapter identity, adapter options, and
+        optional diagnostics without an output Solution. Use it when a direct
+        `solver_input` workflow handles a backend failure but should still keep
+        the failed Solve in the Experiment.
+        """
     def finish(self) -> None:
         r"""
         Finish this run and append it to the parent Experiment.

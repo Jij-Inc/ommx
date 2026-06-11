@@ -97,32 +97,12 @@ impl RunDyn {
         self.open_mut()?.parameters.insert(name, value)
     }
 
-    pub fn log_finished_solve_result(
-        &mut self,
-        input: &Instance,
-        input_annotations: InstanceAnnotations,
-        output: &Solution,
-        output_annotations: SolutionAnnotations,
-        adapter: String,
-        adapter_options: String,
-    ) -> Result<u64> {
-        self.log_finished_solve_result_with_diagnostics(
-            input,
-            input_annotations,
-            output,
-            output_annotations,
-            adapter,
-            adapter_options,
-            None,
-        )
-    }
-
     /// Log one already-finished solver result with adapter diagnostics.
     ///
     /// Diagnostics are best-effort metadata. If the diagnostics payload cannot
     /// be encoded or stored, the Solve entry is still recorded without
     /// diagnostics.
-    pub fn log_finished_solve_result_with_diagnostics(
+    pub fn log_finished_solve(
         &mut self,
         input: &Instance,
         input_annotations: InstanceAnnotations,
@@ -186,7 +166,7 @@ impl RunDyn {
     ///
     /// Failed solve attempts have an input, adapter metadata, and optional
     /// diagnostics, but no output Solution.
-    pub fn log_failed_solve_attempt_with_diagnostics(
+    pub fn log_failed_solve(
         &mut self,
         input: &Instance,
         input_annotations: InstanceAnnotations,

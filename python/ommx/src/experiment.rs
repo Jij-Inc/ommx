@@ -1303,7 +1303,7 @@ impl PyRun {
                     "Failed to serialize failed Solve diagnostics; recording Solve without diagnostics",
                 );
                 let record_result = self.as_open_mut().and_then(|run| {
-                    run.log_failed_solve_attempt_with_diagnostics(
+                    run.log_failed_solve(
                         &instance.inner,
                         instance.annotations.clone(),
                         adapter_name,
@@ -1326,19 +1326,97 @@ impl PyRun {
             diagnostics_collector.as_ref(),
             "Failed to serialize adapter diagnostics; recording Solve without diagnostics",
         );
-        let solve_id = self
-            .as_open_mut()?
-            .log_finished_solve_result_with_diagnostics(
-                &instance.inner,
-                instance.annotations.clone(),
-                &solution.inner,
-                solution.annotations.clone(),
-                adapter_name,
-                adapter_options,
-                diagnostics,
-            )?;
+        let solve_id = self.as_open_mut()?.log_finished_solve(
+            &instance.inner,
+            instance.annotations.clone(),
+            &solution.inner,
+            solution.annotations.clone(),
+            adapter_name,
+            adapter_options,
+            diagnostics,
+        )?;
         tracing::info!(solve_id, "ommx.solve.recorded");
         Ok(solution)
+    }
+
+    /// Log an already-finished solver result as a Solve entry.
+    ///
+    /// Use this when the solver was run through an adapter's `solver_input`
+    /// and `decode(...)` methods instead of through `Run.log_solve(...)`.
+    /// The given input Instance and output Solution are stored as the Solve
+    /// input and output. `adapter` may be either a `SolverAdapter` subclass or
+    /// an adapter instance; only its class name is recorded.
+    ///
+    /// Keyword arguments are recorded as `Solve.adapter_options`. They are
+    /// solve-scoped metadata, not run parameters, and must be JSON-serializable.
+    /// Pass a `DiagnosticCollector` through `diagnostics=` to store diagnostics
+    /// collected during the direct solver call.
+    #[pyo3(signature = (adapter, instance, solution, *, diagnostics = None, **kwargs))]
+    pub fn log_finished_solve(
+        &mut self,
+        py: Python<'_>,
+        adapter: SolverAdapterRecordInput,
+        instance: &crate::Instance,
+        solution: &crate::Solution,
+        diagnostics: Option<PyRef<'_, PyDiagnosticCollector>>,
+        kwargs: Option<&Bound<PyDict>>,
+    ) -> Result<u64> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        self.ensure_store_trace_context_started()?;
+        let adapter_options = dump_kwargs(py, kwargs)?;
+        let diagnostics = pack_borrowed_diagnostics_or_none(
+            py,
+            diagnostics.as_deref(),
+            "Failed to serialize adapter diagnostics; recording Solve without diagnostics",
+        );
+        let solve_id = self.as_open_mut()?.log_finished_solve(
+            &instance.inner,
+            instance.annotations.clone(),
+            &solution.inner,
+            solution.annotations.clone(),
+            adapter.name,
+            adapter_options,
+            diagnostics,
+        )?;
+        tracing::info!(solve_id, "ommx.solve.recorded");
+        Ok(solve_id)
+    }
+
+    /// Log a failed or interrupted solver attempt as a Solve entry.
+    ///
+    /// This records the input Instance, adapter identity, adapter options, and
+    /// optional diagnostics without an output Solution. Use it when a direct
+    /// `solver_input` workflow handles a backend failure but should still keep
+    /// the failed Solve in the Experiment.
+    #[pyo3(signature = (adapter, instance, *, status = "failed", diagnostics = None, **kwargs))]
+    pub fn log_failed_solve(
+        &mut self,
+        py: Python<'_>,
+        adapter: SolverAdapterRecordInput,
+        instance: &crate::Instance,
+        status: &str,
+        diagnostics: Option<PyRef<'_, PyDiagnosticCollector>>,
+        kwargs: Option<&Bound<PyDict>>,
+    ) -> Result<u64> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        self.ensure_store_trace_context_started()?;
+        let status = parse_failed_solve_status(status)?;
+        let adapter_options = dump_kwargs(py, kwargs)?;
+        let diagnostics = pack_borrowed_diagnostics_or_none(
+            py,
+            diagnostics.as_deref(),
+            "Failed to serialize failed Solve diagnostics; recording Solve without diagnostics",
+        );
+        let solve_id = self.as_open_mut()?.log_failed_solve(
+            &instance.inner,
+            instance.annotations.clone(),
+            adapter.name,
+            adapter_options,
+            status,
+            diagnostics,
+        )?;
+        tracing::info!(solve_id, "ommx.solve.recorded");
+        Ok(solve_id)
     }
 
     /// Finish this run and append it to the parent Experiment.
@@ -1493,6 +1571,10 @@ impl SolverAdapterInput {
     }
 }
 
+pub struct SolverAdapterRecordInput {
+    name: String,
+}
+
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust", name = "DiagnosticCollector")]
@@ -1544,6 +1626,21 @@ fn pack_diagnostics_or_none(
 ) -> Option<SolveDiagnosticPayload> {
     let diagnostics_collector = diagnostics_collector?;
     match diagnostics_collector.bind(py).borrow().pack(py) {
+        Ok(diagnostics) => diagnostics,
+        Err(error) => {
+            tracing::warn!(error = %error, "{}", warning_message);
+            None
+        }
+    }
+}
+
+fn pack_borrowed_diagnostics_or_none(
+    py: Python<'_>,
+    diagnostics_collector: Option<&PyDiagnosticCollector>,
+    warning_message: &'static str,
+) -> Option<SolveDiagnosticPayload> {
+    let diagnostics_collector = diagnostics_collector?;
+    match diagnostics_collector.pack(py) {
         Ok(diagnostics) => diagnostics,
         Err(error) => {
             tracing::warn!(error = %error, "{}", warning_message);
@@ -1741,6 +1838,36 @@ impl<'py> FromPyObject<'_, 'py> for SolverAdapterInput {
     }
 }
 
+impl<'py> FromPyObject<'_, 'py> for SolverAdapterRecordInput {
+    type Error = PyErr;
+
+    fn extract(ob: pyo3::Borrowed<'_, 'py, PyAny>) -> PyResult<Self> {
+        let py = ob.py();
+        let solver_adapter = py.import("ommx.adapter")?.getattr("SolverAdapter")?;
+        let adapter_type = if let Ok(adapter) = ob.extract::<Py<PyType>>() {
+            let adapter_bound = adapter.bind(py);
+            if !adapter_bound.is_subclass(&solver_adapter)? {
+                return Err(pyo3::exceptions::PyTypeError::new_err(
+                    "adapter must be a subclass or instance of ommx.adapter.SolverAdapter",
+                ));
+            }
+            adapter_bound.clone()
+        } else {
+            if !ob.is_instance(&solver_adapter)? {
+                return Err(pyo3::exceptions::PyTypeError::new_err(
+                    "adapter must be a subclass or instance of ommx.adapter.SolverAdapter",
+                ));
+            }
+            ob.get_type()
+        };
+        let module: String = adapter_type.getattr("__module__")?.extract()?;
+        let qualname: String = adapter_type.getattr("__qualname__")?.extract()?;
+        Ok(Self {
+            name: format!("{module}.{qualname}"),
+        })
+    }
+}
+
 impl pyo3_stub_gen::PyStubType for SolverAdapterInput {
     fn type_input() -> pyo3_stub_gen::TypeInfo {
         pyo3_stub_gen::TypeInfo {
@@ -1753,6 +1880,29 @@ impl pyo3_stub_gen::PyStubType for SolverAdapterInput {
 
     fn type_output() -> pyo3_stub_gen::TypeInfo {
         Self::type_input()
+    }
+}
+
+impl pyo3_stub_gen::PyStubType for SolverAdapterRecordInput {
+    fn type_input() -> pyo3_stub_gen::TypeInfo {
+        pyo3_stub_gen::TypeInfo {
+            name: "adapter.SolverAdapter | type[adapter.SolverAdapter]".to_string(),
+            source_module: None,
+            import: ["ommx.adapter".into()].into(),
+            type_refs: Default::default(),
+        }
+    }
+
+    fn type_output() -> pyo3_stub_gen::TypeInfo {
+        Self::type_input()
+    }
+}
+
+fn parse_failed_solve_status(status: &str) -> Result<SolveStatus> {
+    match status {
+        "failed" => Ok(SolveStatus::Failed),
+        "interrupted" => Ok(SolveStatus::Interrupted),
+        _ => anyhow::bail!("failed Solve status is {status}, expected failed or interrupted"),
     }
 }
 

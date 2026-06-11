@@ -30,38 +30,17 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         self.parameters.insert(name, value)
     }
 
-    /// Log one already-finished solver result under this run.
+    /// Log one already-finished solver result with adapter diagnostics.
     ///
     /// The original input [`Instance`] and returned [`Solution`] are
     /// stored as solve-scoped payloads. Solver adapter identity and
     /// adapter options are stored on the Solve entry, not in the Run
     /// parameter table.
-    pub fn log_finished_solve_result(
-        &mut self,
-        input: &Instance,
-        input_annotations: InstanceAnnotations,
-        output: &Solution,
-        output_annotations: SolutionAnnotations,
-        adapter: String,
-        adapter_options: String,
-    ) -> Result<u64> {
-        self.log_finished_solve_result_with_diagnostics(
-            input,
-            input_annotations,
-            output,
-            output_annotations,
-            adapter,
-            adapter_options,
-            None,
-        )
-    }
-
-    /// Log one already-finished solver result with adapter diagnostics.
     ///
     /// Diagnostics are best-effort metadata. If the diagnostics payload cannot
     /// be encoded or stored, the Solve entry is still recorded without
     /// diagnostics.
-    pub fn log_finished_solve_result_with_diagnostics(
+    pub fn log_finished_solve(
         &mut self,
         input: &Instance,
         input_annotations: InstanceAnnotations,
@@ -117,7 +96,7 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
     ///
     /// Failed solve attempts have an input, adapter metadata, and optional
     /// diagnostics, but no output Solution.
-    pub fn log_failed_solve_attempt_with_diagnostics(
+    pub fn log_failed_solve(
         &mut self,
         input: &Instance,
         input_annotations: InstanceAnnotations,
