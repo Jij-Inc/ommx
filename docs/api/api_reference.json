@@ -4022,7 +4022,7 @@
         {
           "kind": "Class",
           "name": "OpenSolve",
-          "doc": "Context manager for a manually executed Solve inside a Run.\n\n`OpenSolve` is returned by `Run.open_solve(...)`. Use `solver_input` to\naccess the backend solver model, run backend-specific APIs, decode the\nsolver output, and call `finish(...)` to record the Solve.",
+          "doc": "Context manager for a manually executed Solve inside a Run.\n\n`OpenSolve` is returned by `Run.open_solve(...)`. Use `solver_input` to\naccess the backend solver model, run backend-specific APIs, decode the\nsolver output, and record adapter options that are set directly on the\nbackend model. The Solve entry is finalized when the context exits.",
           "bases": [],
           "methods": [
             {
@@ -4135,7 +4135,7 @@
             },
             {
               "name": "decode",
-              "doc": "Decode backend solver output through the adapter.",
+              "doc": "Decode backend solver output through the adapter.\n\nThe decoded Solution is kept as this scope's finished output candidate.\nThe Solve entry is recorded when the `OpenSolve` context exits, so\ndiagnostics and annotations can still be recorded after this call and\nbefore the end of the `with` block.",
               "signatures": [
                 {
                   "parameters": [
@@ -4160,25 +4160,22 @@
               "deprecated": null
             },
             {
-              "name": "fail",
-              "doc": "Record a failed or interrupted Solve explicitly.",
+              "name": "log_adapter_option",
+              "doc": "Record an adapter option set through direct backend model access.",
               "signatures": [
                 {
                   "parameters": [
                     {
-                      "name": "status",
+                      "name": "name",
                       "type_": {
                         "display": "str",
                         "link_target": null,
                         "children": []
                       },
-                      "default": {
-                        "kind": "Simple",
-                        "value": "'failed'"
-                      }
+                      "default": null
                     },
                     {
-                      "name": "kwargs",
+                      "name": "value",
                       "type_": {
                         "display": "Any",
                         "link_target": null,
@@ -4188,42 +4185,7 @@
                     }
                   ],
                   "return_type": {
-                    "display": "int",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "finish",
-              "doc": "Record a finished Solve with the decoded Solution.",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "solution",
-                      "type_": {
-                        "display": "Solution",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    },
-                    {
-                      "name": "kwargs",
-                      "type_": {
-                        "display": "Any",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "int",
+                    "display": "None",
                     "link_target": null,
                     "children": []
                   }
@@ -4263,6 +4225,17 @@
                     "children": []
                   }
                 ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "solve_id",
+              "doc": "Reserved Solve ID for this manual Solve.",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
               },
               "is_property": true,
               "is_readonly": true
@@ -5082,7 +5055,7 @@
             },
             {
               "name": "open_solve",
-              "doc": "Open a manual Solve scope for direct backend solver model access.\n\nThis constructs the adapter with a cloned input Instance, exposes the\nadapter's `solver_input` through the returned context manager, and lets\nthe caller run backend-specific APIs before calling\n`OpenSolve.finish(...)`. If the context exits with an exception before\na result is recorded, a failed or interrupted Solve is recorded when\npossible and the exception is re-raised.",
+              "doc": "Open a manual Solve scope for direct backend solver model access.\n\nThis constructs the adapter with a cloned input Instance, exposes the\nadapter's `solver_input` through the returned context manager, and\nreserves a Solve ID when the context is entered. The caller can run\nbackend-specific APIs, record adapter options that are set directly on\nthe backend model, decode the backend output, and continue recording\ndiagnostics until the context exits. The Solve entry is finalized on\ncontext exit. If the context exits with an exception before `decode`\nsucceeds, a failed or interrupted Solve is recorded when possible and\nthe exception is re-raised.",
               "signatures": [
                 {
                   "parameters": [

@@ -4578,8 +4578,14 @@ class OpenSolve:
 
     `OpenSolve` is returned by `Run.open_solve(...)`. Use `solver_input` to
     access the backend solver model, run backend-specific APIs, decode the
-    solver output, and call `finish(...)` to record the Solve.
+    solver output, and record adapter options that are set directly on the
+    backend model. The Solve entry is finalized when the context exits.
     """
+    @property
+    def solve_id(self) -> builtins.int:
+        r"""
+        Reserved Solve ID for this manual Solve.
+        """
     @property
     def solver_input(self) -> typing.Any:
         r"""
@@ -4605,16 +4611,15 @@ class OpenSolve:
     def decode(self, data: typing.Any) -> Solution:
         r"""
         Decode backend solver output through the adapter.
+
+        The decoded Solution is kept as this scope's finished output candidate.
+        The Solve entry is recorded when the `OpenSolve` context exits, so
+        diagnostics and annotations can still be recorded after this call and
+        before the end of the `with` block.
         """
-    def finish(self, solution: Solution, **kwargs: typing.Any) -> builtins.int:
+    def log_adapter_option(self, name: builtins.str, value: typing.Any) -> None:
         r"""
-        Record a finished Solve with the decoded Solution.
-        """
-    def fail(
-        self, *, status: builtins.str = "failed", **kwargs: typing.Any
-    ) -> builtins.int:
-        r"""
-        Record a failed or interrupted Solve explicitly.
+        Record an adapter option set through direct backend model access.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -5698,11 +5703,14 @@ class Run:
         Open a manual Solve scope for direct backend solver model access.
 
         This constructs the adapter with a cloned input Instance, exposes the
-        adapter's `solver_input` through the returned context manager, and lets
-        the caller run backend-specific APIs before calling
-        `OpenSolve.finish(...)`. If the context exits with an exception before
-        a result is recorded, a failed or interrupted Solve is recorded when
-        possible and the exception is re-raised.
+        adapter's `solver_input` through the returned context manager, and
+        reserves a Solve ID when the context is entered. The caller can run
+        backend-specific APIs, record adapter options that are set directly on
+        the backend model, decode the backend output, and continue recording
+        diagnostics until the context exits. The Solve entry is finalized on
+        context exit. If the context exits with an exception before `decode`
+        succeeds, a failed or interrupted Solve is recorded when possible and
+        the exception is re-raised.
         """
     def log_finished_solve(
         self,

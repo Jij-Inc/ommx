@@ -97,6 +97,13 @@ impl RunDyn {
         self.open_mut()?.parameters.insert(name, value)
     }
 
+    pub fn reserve_solve_id(&mut self) -> Result<u64> {
+        let state = self.open_mut()?;
+        let solve_id = state.next_solve_id;
+        state.next_solve_id += 1;
+        Ok(solve_id)
+    }
+
     /// Log one already-finished solver result with adapter diagnostics.
     ///
     /// Diagnostics are best-effort metadata. If the diagnostics payload cannot
@@ -112,7 +119,32 @@ impl RunDyn {
         adapter_options: String,
         diagnostics: Option<SolveDiagnosticPayload>,
     ) -> Result<u64> {
-        let solve_id = self.open()?.next_solve_id;
+        let solve_id = self.reserve_solve_id()?;
+        self.log_finished_solve_with_id(
+            solve_id,
+            input,
+            input_annotations,
+            output,
+            output_annotations,
+            adapter,
+            adapter_options,
+            diagnostics,
+        )
+    }
+
+    /// Finalize a previously reserved Solve ID as a finished Solve.
+    pub fn log_finished_solve_with_id(
+        &mut self,
+        solve_id: u64,
+        input: &Instance,
+        input_annotations: InstanceAnnotations,
+        output: &Solution,
+        output_annotations: SolutionAnnotations,
+        adapter: String,
+        adapter_options: String,
+        diagnostics: Option<SolveDiagnosticPayload>,
+    ) -> Result<u64> {
+        ensure_reserved_solve_id(self.open()?, solve_id)?;
         let (input, output, diagnostics) = {
             let dyn_state = lock_experiment_state(&self.experiment_state);
             let input = store_solve_payload_descriptor(
@@ -149,16 +181,18 @@ impl RunDyn {
             (input, output, diagnostics)
         };
         let state = self.open_mut()?;
-        state.next_solve_id += 1;
-        state.solves.push(SolveEntryDyn {
-            solve_id,
-            status: SolveStatus::Finished,
-            input,
-            output: Some(output),
-            adapter,
-            adapter_options,
-            diagnostics,
-        });
+        insert_solve(
+            state,
+            SolveEntryDyn {
+                solve_id,
+                status: SolveStatus::Finished,
+                input,
+                output: Some(output),
+                adapter,
+                adapter_options,
+                diagnostics,
+            },
+        )?;
         Ok(solve_id)
     }
 
@@ -179,7 +213,34 @@ impl RunDyn {
             status != SolveStatus::Finished,
             "failed solve attempt status must not be finished"
         );
-        let solve_id = self.open()?.next_solve_id;
+        let solve_id = self.reserve_solve_id()?;
+        self.log_failed_solve_with_id(
+            solve_id,
+            input,
+            input_annotations,
+            adapter,
+            adapter_options,
+            status,
+            diagnostics,
+        )
+    }
+
+    /// Finalize a previously reserved Solve ID as a failed or interrupted Solve.
+    pub fn log_failed_solve_with_id(
+        &mut self,
+        solve_id: u64,
+        input: &Instance,
+        input_annotations: InstanceAnnotations,
+        adapter: String,
+        adapter_options: String,
+        status: SolveStatus,
+        diagnostics: Option<SolveDiagnosticPayload>,
+    ) -> Result<u64> {
+        ensure!(
+            status != SolveStatus::Finished,
+            "failed solve attempt status must not be finished"
+        );
+        ensure_reserved_solve_id(self.open()?, solve_id)?;
         let (input, diagnostics) = {
             let dyn_state = lock_experiment_state(&self.experiment_state);
             let input = store_solve_payload_descriptor(
@@ -210,16 +271,18 @@ impl RunDyn {
             (input, diagnostics)
         };
         let state = self.open_mut()?;
-        state.next_solve_id += 1;
-        state.solves.push(SolveEntryDyn {
-            solve_id,
-            status,
-            input,
-            output: None,
-            adapter,
-            adapter_options,
-            diagnostics,
-        });
+        insert_solve(
+            state,
+            SolveEntryDyn {
+                solve_id,
+                status,
+                input,
+                output: None,
+                adapter,
+                adapter_options,
+                diagnostics,
+            },
+        )?;
         Ok(solve_id)
     }
 
@@ -419,4 +482,28 @@ fn decrement_open_runs(open_runs: &mut usize) {
         return;
     }
     *open_runs -= 1;
+}
+
+fn ensure_reserved_solve_id(run: &RunDynState, solve_id: u64) -> Result<()> {
+    ensure!(
+        solve_id < run.next_solve_id,
+        "Solve ID {solve_id} has not been reserved"
+    );
+    ensure!(
+        !run.solves
+            .iter()
+            .any(|existing| existing.solve_id == solve_id),
+        "Run {} already contains Solve {solve_id}",
+        run.run_id
+    );
+    Ok(())
+}
+
+fn insert_solve(run: &mut RunDynState, solve: SolveEntryDyn) -> Result<()> {
+    ensure_reserved_solve_id(run, solve.solve_id)?;
+    let index = run
+        .solves
+        .partition_point(|existing| existing.solve_id < solve.solve_id);
+    run.solves.insert(index, solve);
+    Ok(())
 }

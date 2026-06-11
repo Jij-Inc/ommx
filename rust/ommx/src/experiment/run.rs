@@ -30,6 +30,13 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         self.parameters.insert(name, value)
     }
 
+    /// Reserve a Solve ID for a solver attempt that will be finalized later.
+    pub fn reserve_solve_id(&mut self) -> u64 {
+        let solve_id = self.next_solve_id;
+        self.next_solve_id += 1;
+        solve_id
+    }
+
     /// Log one already-finished solver result with adapter diagnostics.
     ///
     /// The original input [`Instance`] and returned [`Solution`] are
@@ -50,8 +57,31 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         adapter_options: String,
         diagnostics: Option<SolveDiagnosticPayload>,
     ) -> Result<u64> {
-        let solve_id = self.next_solve_id;
-        self.next_solve_id += 1;
+        let solve_id = self.reserve_solve_id();
+        self.log_finished_solve_with_id(
+            solve_id,
+            input,
+            input_annotations,
+            output,
+            output_annotations,
+            adapter,
+            adapter_options,
+            diagnostics,
+        )
+    }
+
+    /// Finalize a previously reserved Solve ID as a finished Solve.
+    pub fn log_finished_solve_with_id(
+        &mut self,
+        solve_id: u64,
+        input: &Instance,
+        input_annotations: InstanceAnnotations,
+        output: &Solution,
+        output_annotations: SolutionAnnotations,
+        adapter: String,
+        adapter_options: String,
+        diagnostics: Option<SolveDiagnosticPayload>,
+    ) -> Result<u64> {
         let input = self.experiment.registry.store_layer_blob(
             media_types::v1_instance(),
             &input.to_bytes(),
@@ -80,7 +110,7 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
                 }
             }
         });
-        self.solves.push(SolveEntry {
+        self.insert_solve(SolveEntry {
             solve_id,
             status: SolveStatus::Finished,
             input,
@@ -88,7 +118,7 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
             adapter,
             adapter_options,
             diagnostics,
-        });
+        })?;
         Ok(solve_id)
     }
 
@@ -109,8 +139,33 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
             status != SolveStatus::Finished,
             "failed solve attempt status must not be finished"
         );
-        let solve_id = self.next_solve_id;
-        self.next_solve_id += 1;
+        let solve_id = self.reserve_solve_id();
+        self.log_failed_solve_with_id(
+            solve_id,
+            input,
+            input_annotations,
+            adapter,
+            adapter_options,
+            status,
+            diagnostics,
+        )
+    }
+
+    /// Finalize a previously reserved Solve ID as a failed or interrupted Solve.
+    pub fn log_failed_solve_with_id(
+        &mut self,
+        solve_id: u64,
+        input: &Instance,
+        input_annotations: InstanceAnnotations,
+        adapter: String,
+        adapter_options: String,
+        status: SolveStatus,
+        diagnostics: Option<SolveDiagnosticPayload>,
+    ) -> Result<u64> {
+        ensure!(
+            status != SolveStatus::Finished,
+            "failed solve attempt status must not be finished"
+        );
         let input = self.experiment.registry.store_layer_blob(
             media_types::v1_instance(),
             &input.to_bytes(),
@@ -134,7 +189,7 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
                 }
             }
         });
-        self.solves.push(SolveEntry {
+        self.insert_solve(SolveEntry {
             solve_id,
             status,
             input,
@@ -142,8 +197,30 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
             adapter,
             adapter_options,
             diagnostics,
-        });
+        })?;
         Ok(solve_id)
+    }
+
+    fn insert_solve(&mut self, solve: SolveEntry<'reg>) -> Result<()> {
+        ensure!(
+            solve.solve_id < self.next_solve_id,
+            "Solve ID {} has not been reserved",
+            solve.solve_id
+        );
+        ensure!(
+            !self
+                .solves
+                .iter()
+                .any(|existing| existing.solve_id == solve.solve_id),
+            "Run {} already contains Solve {}",
+            self.run_id,
+            solve.solve_id
+        );
+        let index = self
+            .solves
+            .partition_point(|existing| existing.solve_id < solve.solve_id);
+        self.solves.insert(index, solve);
+        Ok(())
     }
 
     /// Store a trace for this Run.

@@ -186,23 +186,23 @@ with Experiment() as experiment:
 
 ### ソルバーのModelを直接操作する場合
 
-通常のRunでは {py:meth}`~ommx.experiment.Run.log_solve` を使います。これはadapterの `solve` メソッドを呼び出し、入力、出力、adapter名、adapter optionsをまとめて記録します。一方で、adapterのkeyword optionとして公開されていないバックエンドソルバー固有のAPIを使いたい場合は、手動Solveスコープを開き、`solver_input` を取得してバックエンドソルバーを実行し、`decode` で {py:class}`~ommx.v1.Solution` に戻してから、完了したSolveとして明示的に閉じます。
+通常のRunでは {py:meth}`~ommx.experiment.Run.log_solve` を使います。これはadapterの `solve` メソッドを呼び出し、入力、出力、adapter名、adapter optionsをまとめて記録します。一方で、adapterのkeyword optionとして公開されていないバックエンドソルバー固有のAPIを使いたい場合は、手動Solveスコープを開き、`solver_input` を取得してバックエンドソルバーを実行し、`decode` で {py:class}`~ommx.v1.Solution` に戻します。
 
 ```python
 with experiment.run() as run:
     run.log_parameter("capacity", c)
 
     with run.open_solve(OMMXHighsAdapter, instance, verbose=False) as solve:
+        solve_id = solve.solve_id
         model = solve.solver_input
         model.setOptionValue("time_limit", 10.0)
+        solve.log_adapter_option("time_limit", 10.0)
 
         model.run()
         solution = solve.decode(model)
-
-        solve.finish(solution, time_limit=10.0)
 ```
 
-`open_solve` に渡したkeyword argumentsはadapterのコンストラクタへ渡され、Solveのメタデータとしても記録されます。`finish` に渡したkeyword argumentsもSolveのメタデータとして記録されます。これらはバックエンドソルバーを設定するものではないので、後から確認したい値を明示的に渡してください。`finish` を呼ぶ前に直接呼び出したバックエンドソルバーが例外を送出した場合、`OpenSolve` contextは可能な範囲でfailedまたはinterruptedのSolveを記録し、元の例外を再送出します。`with` ブロックの中でバックエンドの失敗を捕捉して処理する場合は、`solve.fail(status="failed")` を明示的に呼び出してください。
+`open_solve` contextに入ると `solve.solve_id` が予約されます。`open_solve` に渡したkeyword argumentsはadapterのコンストラクタへ渡され、Solveのメタデータとしても記録されます。バックエンドModelへ直接設定したoptionは `solve.log_adapter_option(...)` で記録してください。この呼び出しはバックエンドソルバーを設定するものではありませんが、手動設定した値を後から `Solve.adapter_options` で確認できるようにします。Solve entryは `open_solve` contextを抜ける時点で確定するため、`solve.diagnostics` への記録は `with` ブロックの終わりまで収集対象になります。trace storageが有効な場合、この `open_solve` scopeはRun trace配下の `Solve` spanとしても記録されます。`decode` が成功する前に直接呼び出したバックエンドソルバーが例外を送出した場合、`OpenSolve` contextは可能な範囲でfailedまたはinterruptedのSolveを記録し、元の例外を再送出します。`decode` を呼ばずに正常に `with` ブロックを抜けると、failed attemptを記録した上でエラーになります。
 
 OMMXはバックエンドソルバーのModel自体をシリアライズしません。solver log、exportしたLP/MPSファイル、手動で行ったmodel変更のJSONサマリなどを残したい場合は、{py:meth}`~ommx.experiment.Run.log_file` や {py:meth}`~ommx.experiment.Run.log_json` などのRun-level attachmentとして保存してください。目的関数や制約を直接変更する場合は、記録する入力 {py:class}`~ommx.v1.Instance` が実際に解いた問題を表していることを確認してください。
 
