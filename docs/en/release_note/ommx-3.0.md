@@ -8,6 +8,10 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+## 3.0.0 Alpha 6
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0a6-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0a5)
+
 ### 🆕 Adapter-specific solve diagnostics ([#913](https://github.com/Jij-Inc/ommx/pull/913))
 
 Solver adapters now have an adapter-specific diagnostics channel for preserving backend solver information that does not belong in the common {class}`~ommx.v1.Solution` result. Direct adapter calls can pass {class}`~ommx.adapter.DiagnosticCollector` to {meth}`~ommx.adapter.SolverAdapter.solve` through the reserved `diagnostics` keyword, while {meth}`~ommx.experiment.Run.log_solve` owns that keyword and stores recorded diagnostics with each Experiment {class}`~ommx.experiment.Solve` when called with `store_diagnostics=True`. Experiment diagnostics are disabled by default so adapter-side collection overhead is opt-in.
