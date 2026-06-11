@@ -7,6 +7,7 @@ ommx.experiment
    :hidden:
 
    _items/ommx.experiment.Experiment
+   _items/ommx.experiment.OpenSolve
    _items/ommx.experiment.Run
    _items/ommx.experiment.SealedRun
    _items/ommx.experiment.Solve

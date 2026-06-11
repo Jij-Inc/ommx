@@ -186,28 +186,23 @@ All data stored during the experiment is saved in OMMX's *Local Registry*.
 
 ### When You Need Direct Solver Model Access
 
-Most runs should use {py:meth}`~ommx.experiment.Run.log_solve`, which calls the adapter's `solve` method and records the input, output, adapter name, and adapter options in one step. When you need backend solver APIs that are not exposed as adapter keyword options, instantiate the adapter yourself, get its `solver_input`, run the backend solver, decode the result, and then record the finished Solve explicitly.
+Most runs should use {py:meth}`~ommx.experiment.Run.log_solve`, which calls the adapter's `solve` method and records the input, output, adapter name, and adapter options in one step. When you need backend solver APIs that are not exposed as adapter keyword options, open a manual Solve scope, get its `solver_input`, run the backend solver, decode the result, and then finish the Solve explicitly.
 
 ```python
 with experiment.run() as run:
     run.log_parameter("capacity", c)
 
-    adapter = OMMXHighsAdapter(instance, verbose=False)
-    model = adapter.solver_input
-    model.setOptionValue("time_limit", 10.0)
+    with run.open_solve(OMMXHighsAdapter, instance, verbose=False) as solve:
+        model = solve.solver_input
+        model.setOptionValue("time_limit", 10.0)
 
-    model.run()
-    solution = adapter.decode(model)
+        model.run()
+        solution = solve.decode(model)
 
-    run.log_finished_solve(
-        adapter,
-        instance,
-        solution,
-        time_limit=10.0,
-    )
+        solve.finish(solution, time_limit=10.0)
 ```
 
-The keyword arguments passed to `log_finished_solve` are recorded as Solve metadata. They do not configure the backend solver; record the values that are useful for later inspection. If the direct backend call fails but you still want the failed attempt in the Experiment, use {py:meth}`~ommx.experiment.Run.log_failed_solve` with `status="failed"` or `status="interrupted"`.
+The keyword arguments passed to `open_solve` are forwarded to the adapter constructor and recorded as Solve metadata. Keyword arguments passed to `finish` are also recorded as Solve metadata. They do not configure the backend solver; record the values that are useful for later inspection. If the direct backend call raises before `finish` is called, the `OpenSolve` context records a failed or interrupted Solve when possible and re-raises the original exception. If you handle the backend failure inside the `with` block, call `solve.fail(status="failed")` explicitly.
 
 OMMX does not serialize the backend solver model itself. If you need to preserve a solver log, exported LP/MPS file, or a JSON summary of manual model edits, attach it with run-level methods such as {py:meth}`~ommx.experiment.Run.log_file` or {py:meth}`~ommx.experiment.Run.log_json`. If you directly change the model's objective or constraints, make sure the recorded input {py:class}`~ommx.v1.Instance` still describes the problem that was actually solved.
 

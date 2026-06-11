@@ -139,6 +139,7 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<PyPruneAnonymousReport>()?;
     m.add_class::<PyExperiment>()?;
     m.add_class::<PyRun>()?;
+    m.add_class::<PyOpenSolve>()?;
     m.add_class::<PySealedRun>()?;
     m.add_class::<PySolve>()?;
     m.add_class::<PyDiagnosticCollector>()?;
@@ -333,6 +334,7 @@ update the local registry image reference before saving or pushing.
 
 pyo3_stub_gen::reexport_module_members!("ommx.experiment" from "ommx._ommx_rust";
     "Experiment",
+    "OpenSolve",
     "Run",
     "SealedRun",
     "Solve"

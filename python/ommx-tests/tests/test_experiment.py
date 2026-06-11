@@ -741,6 +741,10 @@ def test_log_finished_solve_records_direct_solver_input_workflow():
 
 def test_log_failed_solve_records_direct_solver_input_failure():
     class ManualAdapter(SolverAdapter):
+        def __init__(self, ommx_instance: Instance, *, label: str = ""):
+            super().__init__(ommx_instance)
+            self.label = label
+
         @classmethod
         def solve(
             cls,
@@ -787,6 +791,133 @@ def test_log_failed_solve_records_direct_solver_input_failure():
     assert str(solve.adapter).endswith("ManualAdapter")
     assert solve.adapter_options == {"label": "manual-failure"}
     assert solve.diagnostics == [{"status": "manual-interrupted", "bound": math.inf}]
+
+
+def test_open_solve_records_direct_solver_input_workflow():
+    class ManualAdapter(SolverAdapter):
+        def __init__(self, ommx_instance: Instance, *, constructor_label: str = ""):
+            super().__init__(ommx_instance)
+            self.instance = ommx_instance
+            self.model: dict[str, object] = {
+                "constructor_label": constructor_label,
+                "optimized": False,
+            }
+
+        @classmethod
+        def solve(
+            cls,
+            ommx_instance: Instance,
+            *,
+            diagnostics: Any | None = None,
+            **kwargs: object,
+        ) -> Solution:
+            raise AssertionError("direct solver_input workflow should not call solve")
+
+        @property
+        def solver_input(self) -> dict[str, object]:
+            return self.model
+
+        def decode(self, data: dict[str, object]) -> Solution:
+            assert data["optimized"] is True
+            solution = self.instance.evaluate({})
+            solution.add_user_annotation("adapter", "manual-open")
+            return solution
+
+    instance = Instance.empty()
+    instance.add_user_annotation("source", "open-solve-input")
+    experiment = Experiment.with_temp_local_registry()
+    solve_id = -1
+
+    with experiment.run() as run:
+        with run.open_solve(
+            ManualAdapter,
+            instance,
+            store_diagnostics=True,
+            constructor_label="build",
+        ) as solve:
+            model = solve.solver_input
+            assert model["constructor_label"] == "build"
+            model["optimized"] = True
+            diagnostics = solve.diagnostics
+            assert diagnostics is not None
+            diagnostics.record(DummyDiagnostic(status="manual-open-optimal", bound=0.0))
+            solution = solve.decode(model)
+            solve_id = solve.finish(
+                solution,
+                time_limit=1.5,
+                model_edits={"optimized": True},
+            )
+
+    assert solve_id == 0
+    loaded = Experiment.from_artifact(experiment.commit())
+    run = loaded.runs[0]
+    assert run.status == "finished"
+    solve = run.solves[0]
+    assert solve.status == "finished"
+    assert solve.input.get_user_annotation("source") == "open-solve-input"
+    assert solve.output is not None
+    assert solve.output.get_user_annotation("adapter") == "manual-open"
+    assert str(solve.adapter).endswith("ManualAdapter")
+    assert solve.adapter_options == {
+        "constructor_label": "build",
+        "time_limit": 1.5,
+        "model_edits": {"optimized": True},
+    }
+    assert solve.diagnostics == [{"status": "manual-open-optimal", "bound": 0.0}]
+
+
+def test_open_solve_records_failed_attempt_on_exception():
+    class ManualAdapter(SolverAdapter):
+        def __init__(self, ommx_instance: Instance, *, label: str = ""):
+            super().__init__(ommx_instance)
+            self.label = label
+
+        @classmethod
+        def solve(
+            cls,
+            ommx_instance: Instance,
+            *,
+            diagnostics: Any | None = None,
+            **kwargs: object,
+        ) -> Solution:
+            raise AssertionError("direct solver_input workflow should not call solve")
+
+        @property
+        def solver_input(self) -> dict[str, object]:
+            return {}
+
+        def decode(self, data: dict[str, object]) -> Solution:
+            raise NotImplementedError
+
+    instance = Instance.empty()
+    instance.add_user_annotation("source", "open-failed-input")
+    experiment = Experiment.with_temp_local_registry()
+
+    with pytest.raises(RuntimeError, match="backend crashed"):
+        with experiment.run() as run:
+            with run.open_solve(
+                ManualAdapter,
+                instance,
+                store_diagnostics=True,
+                label="open-failure",
+            ) as solve:
+                diagnostics = solve.diagnostics
+                assert diagnostics is not None
+                diagnostics.record(
+                    DummyDiagnostic(status="manual-open-failed", bound=math.inf)
+                )
+                raise RuntimeError("backend crashed")
+
+    loaded = Experiment.from_artifact(experiment.commit())
+    run = loaded.runs[0]
+    assert run.status == "failed"
+    solve = run.solves[0]
+    assert solve.status == "failed"
+    assert solve.input.get_user_annotation("source") == "open-failed-input"
+    assert solve.output is None
+    assert str(solve.adapter).endswith("ManualAdapter")
+    assert solve.adapter_options == {"label": "open-failure"}
+    assert solve.diagnostics == [{"status": "manual-open-failed", "bound": math.inf}]
 
 
 def test_log_solve_records_adapter_diagnostics():

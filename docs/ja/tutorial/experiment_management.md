@@ -186,28 +186,23 @@ with Experiment() as experiment:
 
 ### ソルバーのModelを直接操作する場合
 
-通常のRunでは {py:meth}`~ommx.experiment.Run.log_solve` を使います。これはadapterの `solve` メソッドを呼び出し、入力、出力、adapter名、adapter optionsをまとめて記録します。一方で、adapterのkeyword optionとして公開されていないバックエンドソルバー固有のAPIを使いたい場合は、adapterを自分でインスタンス化し、`solver_input` を取得してバックエンドソルバーを実行し、`decode` で {py:class}`~ommx.v1.Solution` に戻してから、完了したSolveとして明示的に記録します。
+通常のRunでは {py:meth}`~ommx.experiment.Run.log_solve` を使います。これはadapterの `solve` メソッドを呼び出し、入力、出力、adapter名、adapter optionsをまとめて記録します。一方で、adapterのkeyword optionとして公開されていないバックエンドソルバー固有のAPIを使いたい場合は、手動Solveスコープを開き、`solver_input` を取得してバックエンドソルバーを実行し、`decode` で {py:class}`~ommx.v1.Solution` に戻してから、完了したSolveとして明示的に閉じます。
 
 ```python
 with experiment.run() as run:
     run.log_parameter("capacity", c)
 
-    adapter = OMMXHighsAdapter(instance, verbose=False)
-    model = adapter.solver_input
-    model.setOptionValue("time_limit", 10.0)
+    with run.open_solve(OMMXHighsAdapter, instance, verbose=False) as solve:
+        model = solve.solver_input
+        model.setOptionValue("time_limit", 10.0)
 
-    model.run()
-    solution = adapter.decode(model)
+        model.run()
+        solution = solve.decode(model)
 
-    run.log_finished_solve(
-        adapter,
-        instance,
-        solution,
-        time_limit=10.0,
-    )
+        solve.finish(solution, time_limit=10.0)
 ```
 
-`log_finished_solve` に渡したkeyword argumentsはSolveのメタデータとして記録されます。バックエンドソルバーを設定するものではないので、後から確認したい値を明示的に渡してください。直接呼び出したバックエンドソルバーが失敗したが、その試行もExperimentに残したい場合は、{py:meth}`~ommx.experiment.Run.log_failed_solve` を `status="failed"` または `status="interrupted"` とともに使います。
+`open_solve` に渡したkeyword argumentsはadapterのコンストラクタへ渡され、Solveのメタデータとしても記録されます。`finish` に渡したkeyword argumentsもSolveのメタデータとして記録されます。これらはバックエンドソルバーを設定するものではないので、後から確認したい値を明示的に渡してください。`finish` を呼ぶ前に直接呼び出したバックエンドソルバーが例外を送出した場合、`OpenSolve` contextは可能な範囲でfailedまたはinterruptedのSolveを記録し、元の例外を再送出します。`with` ブロックの中でバックエンドの失敗を捕捉して処理する場合は、`solve.fail(status="failed")` を明示的に呼び出してください。
 
 OMMXはバックエンドソルバーのModel自体をシリアライズしません。solver log、exportしたLP/MPSファイル、手動で行ったmodel変更のJSONサマリなどを残したい場合は、{py:meth}`~ommx.experiment.Run.log_file` や {py:meth}`~ommx.experiment.Run.log_json` などのRun-level attachmentとして保存してください。目的関数や制約を直接変更する場合は、記録する入力 {py:class}`~ommx.v1.Instance` が実際に解いた問題を表していることを確認してください。
 
