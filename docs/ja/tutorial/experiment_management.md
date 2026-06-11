@@ -184,6 +184,33 @@ with Experiment() as experiment:
 - `log_json` や `log_solve` ではデータは随時Local Registryに保存されていきます。メモリ上に置いておいてExperimentの最後にまとめて保存するわけではありません。これはデータの内容（SHA256ハッシュ値）をもとに保存パスが決められるので、同じデータはLocal Registry単位で一度だけ保存されます。
 - Experimentの終了処理ではそのExperiment中に保存されたデータの一覧をまとめたJSON（Artifact Manifest）をLocal Registryに保存して、起動時に指定あるいは自動的に決めたExperimentの名前でこのArtifact Manifestを指すタグをLocal Registryに保存します。
 
+### ソルバーのModelを直接操作する場合
+
+通常のRunでは {py:meth}`~ommx.experiment.Run.log_solve` を使います。これはadapterの `solve` メソッドを呼び出し、入力、出力、adapter名、adapter optionsをまとめて記録します。一方で、adapterのkeyword optionとして公開されていないバックエンドソルバー固有のAPIを使いたい場合は、adapterを自分でインスタンス化し、`solver_input` を取得してバックエンドソルバーを実行し、`decode` で {py:class}`~ommx.v1.Solution` に戻してから、完了したSolveとして明示的に記録します。
+
+```python
+with experiment.run() as run:
+    run.log_parameter("capacity", c)
+
+    adapter = OMMXHighsAdapter(instance, verbose=False)
+    model = adapter.solver_input
+    model.setOptionValue("time_limit", 10.0)
+
+    model.run()
+    solution = adapter.decode(model)
+
+    run.log_finished_solve(
+        adapter,
+        instance,
+        solution,
+        time_limit=10.0,
+    )
+```
+
+`log_finished_solve` に渡したkeyword argumentsはSolveのメタデータとして記録されます。バックエンドソルバーを設定するものではないので、後から確認したい値を明示的に渡してください。直接呼び出したバックエンドソルバーが失敗したが、その試行もExperimentに残したい場合は、{py:meth}`~ommx.experiment.Run.log_failed_solve` を `status="failed"` または `status="interrupted"` とともに使います。
+
+OMMXはバックエンドソルバーのModel自体をシリアライズしません。solver log、exportしたLP/MPSファイル、手動で行ったmodel変更のJSONサマリなどを残したい場合は、{py:meth}`~ommx.experiment.Run.log_file` や {py:meth}`~ommx.experiment.Run.log_json` などのRun-level attachmentとして保存してください。目的関数や制約を直接変更する場合は、記録する入力 {py:class}`~ommx.v1.Instance` が実際に解いた問題を表していることを確認してください。
+
 ## 実験を共有する
 
 実験を共有するにはその実験を識別する名前が必要です。Experimentの名前は、実験の開始時に `Experiment(name=...)` で指定するか、あるいは実験の途中や最後に {py:meth}`Experiment.rename` で変更することができます。また指定しない場合はデフォルトで次の形式で名前を生成します。
