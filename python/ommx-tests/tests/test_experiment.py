@@ -800,6 +800,59 @@ def test_open_solve_records_direct_solver_input_workflow():
     ]
 
 
+def test_open_solve_manual_accessors_are_context_scoped():
+    class ManualAdapter(SolverAdapter):
+        def __init__(self, ommx_instance: Instance):
+            super().__init__(ommx_instance)
+            self.instance = ommx_instance
+            self.model: dict[str, object] = {}
+
+        @classmethod
+        def solve(
+            cls,
+            ommx_instance: Instance,
+            *,
+            diagnostics: Any | None = None,
+            **kwargs: object,
+        ) -> Solution:
+            raise AssertionError("direct solver_input workflow should not call solve")
+
+        @property
+        def solver_input(self) -> dict[str, object]:
+            return self.model
+
+        def decode(self, data: dict[str, object]) -> Solution:
+            return self.instance.evaluate({})
+
+    instance = Instance.empty()
+    experiment = Experiment.with_temp_local_registry()
+
+    with experiment.run() as run:
+        solve = run.open_solve(ManualAdapter, instance, store_diagnostics=True)
+
+        with pytest.raises(RuntimeError, match="OpenSolve context has not been entered"):
+            _ = solve.solver_input
+        with pytest.raises(RuntimeError, match="OpenSolve context has not been entered"):
+            _ = solve.adapter
+        with pytest.raises(RuntimeError, match="OpenSolve context has not been entered"):
+            _ = solve.diagnostics
+
+        with solve:
+            model = solve.solver_input
+            assert solve.adapter is not None
+            assert solve.diagnostics is not None
+            solution = solve.decode(model)
+            assert solution.feasible
+
+        assert solve.solve_id == 0
+        with pytest.raises(RuntimeError, match="OpenSolve has already been closed"):
+            _ = solve.solver_input
+        with pytest.raises(RuntimeError, match="OpenSolve has already been closed"):
+            _ = solve.adapter
+        with pytest.raises(RuntimeError, match="OpenSolve has already been closed"):
+            _ = solve.diagnostics
+
+
 def test_open_solve_rejects_reserved_diagnostics_option_with_manual_message():
     class ManualAdapter(SolverAdapter):
         @classmethod
