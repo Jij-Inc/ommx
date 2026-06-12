@@ -79,6 +79,7 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         solve_id: u64,
         record: FinishedSolveRecord<'_>,
     ) -> Result<u64> {
+        self.ensure_reserved_solve_id(solve_id)?;
         let FinishedSolveRecord {
             input,
             input_annotations,
@@ -159,6 +160,7 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
             status != SolveStatus::Finished,
             "failed solve attempt status must not be finished"
         );
+        self.ensure_reserved_solve_id(solve_id)?;
         let input = self.experiment.registry.store_layer_blob(
             media_types::v1_instance(),
             &input.to_bytes(),
@@ -194,21 +196,26 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         Ok(solve_id)
     }
 
-    fn insert_solve(&mut self, solve: SolveEntry<'reg>) -> Result<()> {
+    fn ensure_reserved_solve_id(&self, solve_id: u64) -> Result<()> {
         ensure!(
-            solve.solve_id < self.next_solve_id,
+            solve_id < self.next_solve_id,
             "Solve ID {} has not been reserved",
-            solve.solve_id
+            solve_id
         );
         ensure!(
             !self
                 .solves
                 .iter()
-                .any(|existing| existing.solve_id == solve.solve_id),
+                .any(|existing| existing.solve_id == solve_id),
             "Run {} already contains Solve {}",
             self.run_id,
-            solve.solve_id
+            solve_id
         );
+        Ok(())
+    }
+
+    fn insert_solve(&mut self, solve: SolveEntry<'reg>) -> Result<()> {
+        self.ensure_reserved_solve_id(solve.solve_id)?;
         let index = self
             .solves
             .partition_point(|existing| existing.solve_id < solve.solve_id);
