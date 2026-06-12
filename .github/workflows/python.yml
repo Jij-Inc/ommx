@@ -60,6 +60,7 @@ jobs:
         with:
           command: build
           args: >
+            --strip
             --out wheels
             -m python/ommx/Cargo.toml
       - name: Upload wheel
