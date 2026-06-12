@@ -81,6 +81,33 @@ def _span_int_attributes(span) -> dict[str, int]:
     }
 
 
+def _assert_open_solve_terminal_state(
+    terminal_state: dict[str, Any],
+    *,
+    solve_id: int,
+    outcome: str,
+    adapter_suffix: str,
+    diagnostics_pack: str,
+    trace_error_state: str = "not_marked",
+) -> None:
+    assert terminal_state["solve_id"] == solve_id
+    assert terminal_state["outcome"] == outcome
+
+    trace_state = terminal_state["trace"]
+    assert trace_state["state"] == "closed"
+    solve_context = trace_state["context"]["solve_context"]
+    assert solve_context["state"] == "set"
+    assert solve_context["solve_id"] == solve_id
+    assert solve_context["adapter"].endswith(adapter_suffix)
+    assert trace_state["context"]["error"]["state"] == trace_error_state
+
+    diagnostics_state = terminal_state["diagnostics"]
+    assert diagnostics_state["state"] == "finalized"
+    diagnostics_outcome = diagnostics_state["outcome"]
+    assert diagnostics_outcome["state"] == "stored"
+    assert diagnostics_outcome["pack"] == diagnostics_pack
+
+
 def test_view_run_parameters_from_committed_artifact(snapshot):
     with Experiment.with_temp_local_registry() as experiment:
         experiment.log_json("dataset", {"name": "miplib2017"})
@@ -791,6 +818,7 @@ def test_open_solve_records_direct_solver_input_workflow():
     instance.add_user_annotation("source", "open-solve-input")
     experiment = Experiment.with_temp_local_registry()
     solve_id = -1
+    open_solve = None
 
     with experiment.run() as run:
         with run.open_solve(
@@ -799,6 +827,7 @@ def test_open_solve_records_direct_solver_input_workflow():
             store_diagnostics=True,
             constructor_label="build",
         ) as solve:
+            open_solve = solve
             assert solve.solve_id == 0
             model = solve.solver_input
             assert model["constructor_label"] == "build"
@@ -814,6 +843,17 @@ def test_open_solve_records_direct_solver_input_workflow():
             diagnostics.record(DummyDiagnostic(status="manual-open-final", bound=1.0))
 
     assert solve_id == 0
+    assert open_solve is not None
+    terminal_state = open_solve.terminal_state
+    assert terminal_state is not None
+    _assert_open_solve_terminal_state(
+        terminal_state,
+        solve_id=0,
+        outcome="finished",
+        adapter_suffix="ManualAdapter",
+        diagnostics_pack="attached",
+    )
+
     loaded = Experiment.from_artifact(experiment.commit())
     run = loaded.runs[0]
     assert run.status == "finished"
@@ -864,6 +904,7 @@ def test_open_solve_manual_accessors_are_context_scoped():
 
     with experiment.run() as run:
         solve = run.open_solve(ManualAdapter, instance, store_diagnostics=True)
+        assert solve.terminal_state is None
 
         with pytest.raises(
             RuntimeError, match="OpenSolve context has not been entered"
@@ -879,6 +920,7 @@ def test_open_solve_manual_accessors_are_context_scoped():
             _ = solve.diagnostics
 
         with solve:
+            assert solve.terminal_state is None
             model = solve.solver_input
             assert solve.adapter is not None
             assert solve.diagnostics is not None
@@ -886,6 +928,15 @@ def test_open_solve_manual_accessors_are_context_scoped():
             assert solution.feasible
 
         assert solve.solve_id == 0
+        terminal_state = solve.terminal_state
+        assert terminal_state is not None
+        _assert_open_solve_terminal_state(
+            terminal_state,
+            solve_id=0,
+            outcome="finished",
+            adapter_suffix="ManualAdapter",
+            diagnostics_pack="empty",
+        )
         with pytest.raises(RuntimeError, match="OpenSolve has already been closed"):
             _ = solve.solver_input
         with pytest.raises(RuntimeError, match="OpenSolve has already been closed"):
@@ -956,17 +1007,31 @@ def test_open_solve_records_failed_attempt_when_adapter_construction_fails():
     instance = Instance.empty()
     instance.add_user_annotation("source", "open-construction-failed-input")
     experiment = Experiment.with_temp_local_registry()
+    open_solve = None
 
     with pytest.raises(RuntimeError, match="model build failed"):
         with experiment.run() as run:
-            solve = run.open_solve(
+            open_solve = run.open_solve(
                 FailingConstructorAdapter,
                 instance,
                 store_diagnostics=True,
                 label="construction-failure",
             )
-            with solve:
+            with open_solve:
                 raise AssertionError("adapter construction should fail before body")
+
+    assert open_solve is not None
+    terminal_state = open_solve.terminal_state
+    assert terminal_state is not None
+    _assert_open_solve_terminal_state(
+        terminal_state,
+        solve_id=0,
+        outcome="adapter_construction_failed",
+        adapter_suffix="FailingConstructorAdapter",
+        diagnostics_pack="empty",
+        trace_error_state="marked",
+    )
+    assert "model build failed" in terminal_state["trace"]["context"]["error"]["reason"]
 
     loaded = Experiment.from_artifact(experiment.commit())
     run = loaded.runs[0]
@@ -1012,15 +1077,30 @@ def test_open_solve_failed_decode_clears_previous_decoded_solution():
     instance = Instance.empty()
     instance.add_user_annotation("source", "open-decode-failed-input")
     experiment = Experiment.with_temp_local_registry()
+    open_solve = None
 
     with pytest.raises(RuntimeError, match="decode failed"):
         with experiment.run() as run:
             with run.open_solve(ManualAdapter, instance) as solve:
+                open_solve = solve
                 model = solve.solver_input
                 first_solution = solve.decode(model)
                 assert first_solution.get_user_annotation("decode") == "first"
                 model["decode_fails"] = True
                 solve.decode(model)
+
+    assert open_solve is not None
+    terminal_state = open_solve.terminal_state
+    assert terminal_state is not None
+    _assert_open_solve_terminal_state(
+        terminal_state,
+        solve_id=0,
+        outcome="failed",
+        adapter_suffix="ManualAdapter",
+        diagnostics_pack="disabled",
+        trace_error_state="marked",
+    )
+    assert "decode failed" in terminal_state["trace"]["context"]["error"]["reason"]
 
     loaded = Experiment.from_artifact(experiment.commit())
     run = loaded.runs[0]
@@ -1057,6 +1137,7 @@ def test_open_solve_records_failed_attempt_on_exception():
     instance = Instance.empty()
     instance.add_user_annotation("source", "open-failed-input")
     experiment = Experiment.with_temp_local_registry()
+    open_solve = None
 
     with pytest.raises(RuntimeError, match="backend crashed"):
         with experiment.run() as run:
@@ -1066,6 +1147,7 @@ def test_open_solve_records_failed_attempt_on_exception():
                 store_diagnostics=True,
                 label="open-failure",
             ) as solve:
+                open_solve = solve
                 assert solve.solve_id == 0
                 diagnostics = solve.diagnostics
                 assert diagnostics is not None
@@ -1073,6 +1155,19 @@ def test_open_solve_records_failed_attempt_on_exception():
                     DummyDiagnostic(status="manual-open-failed", bound=math.inf)
                 )
                 raise RuntimeError("backend crashed")
+
+    assert open_solve is not None
+    terminal_state = open_solve.terminal_state
+    assert terminal_state is not None
+    _assert_open_solve_terminal_state(
+        terminal_state,
+        solve_id=0,
+        outcome="failed",
+        adapter_suffix="ManualAdapter",
+        diagnostics_pack="attached",
+        trace_error_state="marked",
+    )
+    assert "backend crashed" in terminal_state["trace"]["context"]["error"]["reason"]
 
     loaded = Experiment.from_artifact(experiment.commit())
     run = loaded.runs[0]
@@ -1112,6 +1207,7 @@ def test_open_solve_records_failed_attempt_when_outcome_is_missing():
     instance = Instance.empty()
     instance.add_user_annotation("source", "open-missing-outcome-input")
     experiment = Experiment.with_temp_local_registry()
+    open_solve = None
 
     with pytest.raises(RuntimeError, match="OpenSolve.decode"):
         with experiment.run() as run:
@@ -1121,6 +1217,7 @@ def test_open_solve_records_failed_attempt_when_outcome_is_missing():
                 store_diagnostics=True,
                 label="missing-outcome",
             ) as solve:
+                open_solve = solve
                 assert solve.solve_id == 0
                 diagnostics = solve.diagnostics
                 assert diagnostics is not None
@@ -1129,6 +1226,19 @@ def test_open_solve_records_failed_attempt_when_outcome_is_missing():
                         status="manual-open-missing-outcome", bound=math.inf
                     )
                 )
+
+    assert open_solve is not None
+    terminal_state = open_solve.terminal_state
+    assert terminal_state is not None
+    _assert_open_solve_terminal_state(
+        terminal_state,
+        solve_id=0,
+        outcome="missing_decode",
+        adapter_suffix="ManualAdapter",
+        diagnostics_pack="attached",
+        trace_error_state="marked",
+    )
+    assert "OpenSolve.decode" in terminal_state["trace"]["context"]["error"]["reason"]
 
     loaded = Experiment.from_artifact(experiment.commit())
     run = loaded.runs[0]

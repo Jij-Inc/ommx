@@ -4250,6 +4250,34 @@
               },
               "is_property": true,
               "is_readonly": true
+            },
+            {
+              "name": "terminal_state",
+              "doc": "Terminal state recorded when this manual Solve scope closes.\n\nReturns `None` until the context has closed. After closing, this exposes\nthe recorded Solve outcome together with trace and diagnostics\nfinalization states for advanced debugging.",
+              "type_": {
+                "display": "Optional[dict[str, Any]]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "dict[str, Any]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "Any",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
             }
           ],
           "deprecated": null
