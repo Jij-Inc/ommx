@@ -184,6 +184,27 @@ with Experiment() as experiment:
 - `log_json` や `log_solve` ではデータは随時Local Registryに保存されていきます。メモリ上に置いておいてExperimentの最後にまとめて保存するわけではありません。これはデータの内容（SHA256ハッシュ値）をもとに保存パスが決められるので、同じデータはLocal Registry単位で一度だけ保存されます。
 - Experimentの終了処理ではそのExperiment中に保存されたデータの一覧をまとめたJSON（Artifact Manifest）をLocal Registryに保存して、起動時に指定あるいは自動的に決めたExperimentの名前でこのArtifact Manifestを指すタグをLocal Registryに保存します。
 
+### ソルバーのModelを直接操作する場合
+
+通常のRunでは {py:meth}`~ommx.experiment.Run.log_solve` を使います。これはadapterの `solve` メソッドを呼び出し、入力、出力、adapter名、adapter optionsをまとめて記録します。一方で、AdapterのAPIではサポートしきれていないソルバーの高度な機能を使う必要がある場合は、手動Solveスコープを開きます。
+
+手動Solveスコープでは、まず `solver_input` でバックエンドソルバーのModelを受け取り、ユーザーがそのModelを直接操作して最適化を行います。最後に `solve.decode(model)` を呼ぶと、adapterがバックエンドの結果を {py:class}`~ommx.v1.Solution` に変換し、そのSolutionがExperimentに記録されるSolveの出力になります。
+
+```python
+with experiment.run() as run:
+    run.log_parameter("capacity", c)
+
+    with run.open_solve(OMMXHighsAdapter, instance, verbose=False) as solve:
+        model = solve.solver_input
+        model.setOptionValue("time_limit", 10.0)
+        solve.log_adapter_option("time_limit", 10.0)
+
+        model.run()
+        solution = solve.decode(model)
+```
+
+`solve.log_adapter_option(...)` は、バックエンドModelへ直接設定したoptionを `Solve.adapter_options` に残すための補助APIです。`open_solve` の詳細な挙動、diagnostics、trace、失敗時の扱いは {py:class}`~ommx.experiment.OpenSolve` を参照してください。
+
 ## 実験を共有する
 
 実験を共有するにはその実験を識別する名前が必要です。Experimentの名前は、実験の開始時に `Experiment(name=...)` で指定するか、あるいは実験の途中や最後に {py:meth}`Experiment.rename` で変更することができます。また指定しない場合はデフォルトで次の形式で名前を生成します。

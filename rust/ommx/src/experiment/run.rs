@@ -11,6 +11,27 @@ use anyhow::{ensure, Result};
 use oci_spec::image::MediaType;
 use std::{collections::HashMap, path::Path};
 
+/// Data needed to record a finished Solve.
+pub struct FinishedSolveRecord<'a> {
+    pub input: &'a Instance,
+    pub input_annotations: InstanceAnnotations,
+    pub output: &'a Solution,
+    pub output_annotations: SolutionAnnotations,
+    pub adapter: String,
+    pub adapter_options: String,
+    pub diagnostics: Option<SolveDiagnosticPayload>,
+}
+
+/// Data needed to record a failed or interrupted Solve.
+pub struct FailedSolveRecord<'a> {
+    pub input: &'a Instance,
+    pub input_annotations: InstanceAnnotations,
+    pub adapter: String,
+    pub adapter_options: String,
+    pub status: SolveStatus,
+    pub diagnostics: Option<SolveDiagnosticPayload>,
+}
+
 impl<'exp, 'reg> Run<'exp, 'reg> {
     /// This run's 0-based id within the experiment.
     pub fn run_id(&self) -> u64 {
@@ -30,49 +51,44 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         self.parameters.insert(name, value)
     }
 
-    /// Log one already-finished solver result under this run.
+    /// Reserve a Solve ID for a solver attempt that will be finalized later.
+    pub fn reserve_solve_id(&mut self) -> u64 {
+        let solve_id = self.next_solve_id;
+        self.next_solve_id += 1;
+        solve_id
+    }
+
+    /// Log one already-finished solver result with adapter diagnostics.
     ///
     /// The original input [`Instance`] and returned [`Solution`] are
     /// stored as solve-scoped payloads. Solver adapter identity and
     /// adapter options are stored on the Solve entry, not in the Run
     /// parameter table.
-    pub fn log_finished_solve_result(
+    ///
+    /// Diagnostics are best-effort metadata. If the diagnostics payload cannot
+    /// be encoded or stored, the Solve entry is still recorded without
+    /// diagnostics.
+    pub fn log_finished_solve(&mut self, record: FinishedSolveRecord<'_>) -> Result<u64> {
+        let solve_id = self.reserve_solve_id();
+        self.log_finished_solve_with_id(solve_id, record)
+    }
+
+    /// Finalize a previously reserved Solve ID as a finished Solve.
+    pub fn log_finished_solve_with_id(
         &mut self,
-        input: &Instance,
-        input_annotations: InstanceAnnotations,
-        output: &Solution,
-        output_annotations: SolutionAnnotations,
-        adapter: String,
-        adapter_options: String,
+        solve_id: u64,
+        record: FinishedSolveRecord<'_>,
     ) -> Result<u64> {
-        self.log_finished_solve_result_with_diagnostics(
+        self.ensure_reserved_solve_id(solve_id)?;
+        let FinishedSolveRecord {
             input,
             input_annotations,
             output,
             output_annotations,
             adapter,
             adapter_options,
-            None,
-        )
-    }
-
-    /// Log one already-finished solver result with adapter diagnostics.
-    ///
-    /// Diagnostics are best-effort metadata. If the diagnostics payload cannot
-    /// be encoded or stored, the Solve entry is still recorded without
-    /// diagnostics.
-    pub fn log_finished_solve_result_with_diagnostics(
-        &mut self,
-        input: &Instance,
-        input_annotations: InstanceAnnotations,
-        output: &Solution,
-        output_annotations: SolutionAnnotations,
-        adapter: String,
-        adapter_options: String,
-        diagnostics: Option<SolveDiagnosticPayload>,
-    ) -> Result<u64> {
-        let solve_id = self.next_solve_id;
-        self.next_solve_id += 1;
+            diagnostics,
+        } = record;
         let input = self.experiment.registry.store_layer_blob(
             media_types::v1_instance(),
             &input.to_bytes(),
@@ -101,7 +117,7 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
                 }
             }
         });
-        self.solves.push(SolveEntry {
+        self.insert_solve(SolveEntry {
             solve_id,
             status: SolveStatus::Finished,
             input,
@@ -109,7 +125,7 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
             adapter,
             adapter_options,
             diagnostics,
-        });
+        })?;
         Ok(solve_id)
     }
 
@@ -117,21 +133,34 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
     ///
     /// Failed solve attempts have an input, adapter metadata, and optional
     /// diagnostics, but no output Solution.
-    pub fn log_failed_solve_attempt_with_diagnostics(
+    pub fn log_failed_solve(&mut self, record: FailedSolveRecord<'_>) -> Result<u64> {
+        ensure!(
+            record.status != SolveStatus::Finished,
+            "failed solve attempt status must not be finished"
+        );
+        let solve_id = self.reserve_solve_id();
+        self.log_failed_solve_with_id(solve_id, record)
+    }
+
+    /// Finalize a previously reserved Solve ID as a failed or interrupted Solve.
+    pub fn log_failed_solve_with_id(
         &mut self,
-        input: &Instance,
-        input_annotations: InstanceAnnotations,
-        adapter: String,
-        adapter_options: String,
-        status: SolveStatus,
-        diagnostics: Option<SolveDiagnosticPayload>,
+        solve_id: u64,
+        record: FailedSolveRecord<'_>,
     ) -> Result<u64> {
+        let FailedSolveRecord {
+            input,
+            input_annotations,
+            adapter,
+            adapter_options,
+            status,
+            diagnostics,
+        } = record;
         ensure!(
             status != SolveStatus::Finished,
             "failed solve attempt status must not be finished"
         );
-        let solve_id = self.next_solve_id;
-        self.next_solve_id += 1;
+        self.ensure_reserved_solve_id(solve_id)?;
         let input = self.experiment.registry.store_layer_blob(
             media_types::v1_instance(),
             &input.to_bytes(),
@@ -155,7 +184,7 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
                 }
             }
         });
-        self.solves.push(SolveEntry {
+        self.insert_solve(SolveEntry {
             solve_id,
             status,
             input,
@@ -163,8 +192,35 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
             adapter,
             adapter_options,
             diagnostics,
-        });
+        })?;
         Ok(solve_id)
+    }
+
+    fn ensure_reserved_solve_id(&self, solve_id: u64) -> Result<()> {
+        ensure!(
+            solve_id < self.next_solve_id,
+            "Solve ID {} has not been reserved",
+            solve_id
+        );
+        ensure!(
+            !self
+                .solves
+                .iter()
+                .any(|existing| existing.solve_id == solve_id),
+            "Run {} already contains Solve {}",
+            self.run_id,
+            solve_id
+        );
+        Ok(())
+    }
+
+    fn insert_solve(&mut self, solve: SolveEntry<'reg>) -> Result<()> {
+        self.ensure_reserved_solve_id(solve.solve_id)?;
+        let index = self
+            .solves
+            .partition_point(|existing| existing.solve_id < solve.solve_id);
+        self.solves.insert(index, solve);
+        Ok(())
     }
 
     /// Store a trace for this Run.

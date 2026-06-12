@@ -3,16 +3,15 @@
 use super::super::attachment::read_file_attachment;
 use super::super::parameter::ParameterSet;
 use super::super::{
-    AttachmentLogger, AttachmentTable, ParameterValue, RunStatus, SolveDiagnosticPayload,
-    SolveStatus,
+    AttachmentLogger, AttachmentTable, FailedSolveRecord, FinishedSolveRecord, ParameterValue,
+    RunStatus, SolveStatus,
 };
 use super::{
     bail_non_unsealed, lock_experiment_state, store_run_attachment_descriptor,
     store_solve_payload_descriptor, store_trace_descriptor, ExperimentDyn, ExperimentDynLifecycle,
     ExperimentDynState, RunEntryDyn, SolveEntryDyn,
 };
-use crate::artifact::{media_types, InstanceAnnotations, SolutionAnnotations};
-use crate::{Instance, Solution};
+use crate::artifact::media_types;
 use anyhow::{ensure, Result};
 use oci_spec::image::{Descriptor, MediaType};
 use std::sync::{Arc, Mutex};
@@ -97,24 +96,11 @@ impl RunDyn {
         self.open_mut()?.parameters.insert(name, value)
     }
 
-    pub fn log_finished_solve_result(
-        &mut self,
-        input: &Instance,
-        input_annotations: InstanceAnnotations,
-        output: &Solution,
-        output_annotations: SolutionAnnotations,
-        adapter: String,
-        adapter_options: String,
-    ) -> Result<u64> {
-        self.log_finished_solve_result_with_diagnostics(
-            input,
-            input_annotations,
-            output,
-            output_annotations,
-            adapter,
-            adapter_options,
-            None,
-        )
+    pub fn reserve_solve_id(&mut self) -> Result<u64> {
+        let state = self.open_mut()?;
+        let solve_id = state.next_solve_id;
+        state.next_solve_id += 1;
+        Ok(solve_id)
     }
 
     /// Log one already-finished solver result with adapter diagnostics.
@@ -122,17 +108,27 @@ impl RunDyn {
     /// Diagnostics are best-effort metadata. If the diagnostics payload cannot
     /// be encoded or stored, the Solve entry is still recorded without
     /// diagnostics.
-    pub fn log_finished_solve_result_with_diagnostics(
+    pub fn log_finished_solve(&mut self, record: FinishedSolveRecord<'_>) -> Result<u64> {
+        let solve_id = self.reserve_solve_id()?;
+        self.log_finished_solve_with_id(solve_id, record)
+    }
+
+    /// Finalize a previously reserved Solve ID as a finished Solve.
+    pub fn log_finished_solve_with_id(
         &mut self,
-        input: &Instance,
-        input_annotations: InstanceAnnotations,
-        output: &Solution,
-        output_annotations: SolutionAnnotations,
-        adapter: String,
-        adapter_options: String,
-        diagnostics: Option<SolveDiagnosticPayload>,
+        solve_id: u64,
+        record: FinishedSolveRecord<'_>,
     ) -> Result<u64> {
-        let solve_id = self.open()?.next_solve_id;
+        ensure_reserved_solve_id(self.open()?, solve_id)?;
+        let FinishedSolveRecord {
+            input,
+            input_annotations,
+            output,
+            output_annotations,
+            adapter,
+            adapter_options,
+            diagnostics,
+        } = record;
         let (input, output, diagnostics) = {
             let dyn_state = lock_experiment_state(&self.experiment_state);
             let input = store_solve_payload_descriptor(
@@ -169,16 +165,18 @@ impl RunDyn {
             (input, output, diagnostics)
         };
         let state = self.open_mut()?;
-        state.next_solve_id += 1;
-        state.solves.push(SolveEntryDyn {
-            solve_id,
-            status: SolveStatus::Finished,
-            input,
-            output: Some(output),
-            adapter,
-            adapter_options,
-            diagnostics,
-        });
+        insert_solve(
+            state,
+            SolveEntryDyn {
+                solve_id,
+                status: SolveStatus::Finished,
+                input,
+                output: Some(output),
+                adapter,
+                adapter_options,
+                diagnostics,
+            },
+        )?;
         Ok(solve_id)
     }
 
@@ -186,20 +184,34 @@ impl RunDyn {
     ///
     /// Failed solve attempts have an input, adapter metadata, and optional
     /// diagnostics, but no output Solution.
-    pub fn log_failed_solve_attempt_with_diagnostics(
+    pub fn log_failed_solve(&mut self, record: FailedSolveRecord<'_>) -> Result<u64> {
+        ensure!(
+            record.status != SolveStatus::Finished,
+            "failed solve attempt status must not be finished"
+        );
+        let solve_id = self.reserve_solve_id()?;
+        self.log_failed_solve_with_id(solve_id, record)
+    }
+
+    /// Finalize a previously reserved Solve ID as a failed or interrupted Solve.
+    pub fn log_failed_solve_with_id(
         &mut self,
-        input: &Instance,
-        input_annotations: InstanceAnnotations,
-        adapter: String,
-        adapter_options: String,
-        status: SolveStatus,
-        diagnostics: Option<SolveDiagnosticPayload>,
+        solve_id: u64,
+        record: FailedSolveRecord<'_>,
     ) -> Result<u64> {
+        let FailedSolveRecord {
+            input,
+            input_annotations,
+            adapter,
+            adapter_options,
+            status,
+            diagnostics,
+        } = record;
         ensure!(
             status != SolveStatus::Finished,
             "failed solve attempt status must not be finished"
         );
-        let solve_id = self.open()?.next_solve_id;
+        ensure_reserved_solve_id(self.open()?, solve_id)?;
         let (input, diagnostics) = {
             let dyn_state = lock_experiment_state(&self.experiment_state);
             let input = store_solve_payload_descriptor(
@@ -230,16 +242,18 @@ impl RunDyn {
             (input, diagnostics)
         };
         let state = self.open_mut()?;
-        state.next_solve_id += 1;
-        state.solves.push(SolveEntryDyn {
-            solve_id,
-            status,
-            input,
-            output: None,
-            adapter,
-            adapter_options,
-            diagnostics,
-        });
+        insert_solve(
+            state,
+            SolveEntryDyn {
+                solve_id,
+                status,
+                input,
+                output: None,
+                adapter,
+                adapter_options,
+                diagnostics,
+            },
+        )?;
         Ok(solve_id)
     }
 
@@ -439,4 +453,28 @@ fn decrement_open_runs(open_runs: &mut usize) {
         return;
     }
     *open_runs -= 1;
+}
+
+fn ensure_reserved_solve_id(run: &RunDynState, solve_id: u64) -> Result<()> {
+    ensure!(
+        solve_id < run.next_solve_id,
+        "Solve ID {solve_id} has not been reserved"
+    );
+    ensure!(
+        !run.solves
+            .iter()
+            .any(|existing| existing.solve_id == solve_id),
+        "Run {} already contains Solve {solve_id}",
+        run.run_id
+    );
+    Ok(())
+}
+
+fn insert_solve(run: &mut RunDynState, solve: SolveEntryDyn) -> Result<()> {
+    ensure_reserved_solve_id(run, solve.solve_id)?;
+    let index = run
+        .solves
+        .partition_point(|existing| existing.solve_id < solve.solve_id);
+    run.solves.insert(index, solve);
+    Ok(())
 }

@@ -4,20 +4,21 @@ use super::config::{ExperimentConfig, ExperimentConfigRun, ExperimentConfigSolve
 use super::UnsealedExperimentState;
 use super::{
     AttachmentLogger, AttachmentTable, Experiment, ExperimentDyn, ExperimentStatus, Name,
-    ParameterValue, SealedExperiment, SolveDiagnosticPayload, Trace, EXPERIMENT_CONFIG_MEDIA_TYPE,
-    EXPERIMENT_STATUS_DRAFT, EXPERIMENT_STATUS_FAILED, EXPERIMENT_STATUS_FINISHED,
-    EXPERIMENT_STATUS_INTERRUPTED, RUN_PARAMETERS_MEDIA_TYPE, RUN_STATUS_FAILED,
-    RUN_STATUS_FINISHED, RUN_STATUS_INTERRUPTED,
+    ParameterValue, SealedExperiment, SolveDiagnosticPayload, SolveStatus, Trace,
+    EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_STATUS_DRAFT, EXPERIMENT_STATUS_FAILED,
+    EXPERIMENT_STATUS_FINISHED, EXPERIMENT_STATUS_INTERRUPTED, RUN_PARAMETERS_MEDIA_TYPE,
+    RUN_STATUS_FAILED, RUN_STATUS_FINISHED, RUN_STATUS_INTERRUPTED,
 };
 use crate::artifact::local_registry::{StoredDescriptor, UnsealedArtifact};
 use crate::artifact::{
-    media_types, AsArtifact, ImageRef, LocalArtifact, LocalArtifactDyn, LocalRegistryHandle,
+    media_types, sha256_digest, AsArtifact, ImageRef, LocalArtifact, LocalArtifactDyn,
+    LocalRegistryHandle,
 };
-use crate::{Evaluate, Function, Instance, Sense};
-use oci_spec::image::MediaType;
+use crate::{Coefficient, Evaluate, Function, Instance, Sense};
+use oci_spec::image::{Digest, MediaType};
 use serde_json::json;
 use std::collections::{BTreeMap, HashMap};
-use std::fs;
+use std::{fs, str::FromStr};
 
 fn with_temp_experiment<T>(f: impl FnOnce(Experiment<'_>) -> anyhow::Result<T>) -> T {
     Experiment::with_temp_local_registry(Name::Anonymous, f).unwrap()
@@ -72,6 +73,39 @@ fn experiment_config(artifact: &LocalArtifact<'_>) -> ExperimentConfig {
 
 fn blob_bytes(artifact: &LocalArtifact<'_>, descriptor: &StoredDescriptor<'_>) -> Vec<u8> {
     artifact.get_blob(descriptor).unwrap()
+}
+
+fn digest_for_bytes(bytes: &[u8]) -> Digest {
+    Digest::from_str(&sha256_digest(bytes)).unwrap()
+}
+
+fn assert_blob_absent(experiment: &Experiment<'_>, bytes: &[u8]) {
+    let digest = digest_for_bytes(bytes);
+    assert!(
+        !experiment.registry.contains_blob(&digest).unwrap(),
+        "unexpected blob was stored: {digest}"
+    );
+}
+
+fn constant_instance(sense: Sense, objective: f64) -> Instance {
+    Instance::new(
+        sense,
+        Function::Constant(Coefficient::try_from(objective).unwrap()),
+        BTreeMap::new(),
+        BTreeMap::new(),
+    )
+    .unwrap()
+}
+
+fn empty_solution(instance: &Instance) -> crate::Solution {
+    instance
+        .evaluate(
+            &crate::v1::State {
+                entries: HashMap::new(),
+            },
+            crate::ATol::default(),
+        )
+        .unwrap()
 }
 
 /// `run()` hands out fresh 0-based ids; `finish()` consumes the run
@@ -529,14 +563,15 @@ fn sealed_experiment_fork_creates_child_with_parent_subject_and_next_run_id() {
         {
             let mut run = experiment.run().unwrap();
             run.log_parameter("solver", "base").unwrap();
-            run.log_finished_solve_result(
-                &instance,
-                Default::default(),
-                &solution,
-                Default::default(),
-                "dummy.Adapter".to_string(),
-                "{}".to_string(),
-            )
+            run.log_finished_solve(super::FinishedSolveRecord {
+                input: &instance,
+                input_annotations: Default::default(),
+                output: &solution,
+                output_annotations: Default::default(),
+                adapter: "dummy.Adapter".to_string(),
+                adapter_options: "{}".to_string(),
+                diagnostics: None,
+            })
             .unwrap();
             run.store_trace(Trace::from_bytes(b"parent trace".to_vec()))
                 .unwrap();
@@ -607,7 +642,7 @@ fn sealed_experiment_fork_creates_child_with_parent_subject_and_next_run_id() {
 }
 
 #[test]
-fn log_finished_solve_result_materializes_solve_entry_with_layer_refs() {
+fn log_finished_solve_materializes_solve_entry_with_layer_refs() {
     with_temp_experiment(|experiment| {
         let instance = Instance::new(
             Sense::Minimize,
@@ -629,15 +664,15 @@ fn log_finished_solve_result_materializes_solve_entry_with_layer_refs() {
         {
             let mut run = experiment.run().unwrap();
             let solve_id = run
-                .log_finished_solve_result_with_diagnostics(
-                    &instance,
-                    Default::default(),
-                    &solution,
-                    Default::default(),
-                    "dummy.Adapter".to_string(),
-                    r#"{"time_limit":1.5}"#.to_string(),
-                    Some(SolveDiagnosticPayload::new(diagnostics.clone())?),
-                )
+                .log_finished_solve(super::FinishedSolveRecord {
+                    input: &instance,
+                    input_annotations: Default::default(),
+                    output: &solution,
+                    output_annotations: Default::default(),
+                    adapter: "dummy.Adapter".to_string(),
+                    adapter_options: r#"{"time_limit":1.5}"#.to_string(),
+                    diagnostics: Some(SolveDiagnosticPayload::new(diagnostics.clone())?),
+                })
                 .unwrap();
             assert_eq!(solve_id, 0);
             run.finish().unwrap();
@@ -705,6 +740,166 @@ fn log_finished_solve_result_materializes_solve_entry_with_layer_refs() {
             diagnostic_payload.value(),
             rmpv::Value::Array(items) if items.len() == 1
         ));
+        Ok(())
+    });
+}
+
+#[test]
+fn log_finished_solve_with_id_validates_id_before_storing_payloads() {
+    with_temp_experiment(|experiment| {
+        let unreserved_instance = constant_instance(Sense::Minimize, 10.0);
+        let unreserved_solution = empty_solution(&unreserved_instance);
+        let unreserved_diagnostics = SolveDiagnosticPayload::new(vec![0x91, 0x01])?;
+        let unreserved_input_bytes = unreserved_instance.to_bytes();
+        let unreserved_output_bytes = unreserved_solution.to_bytes();
+        let unreserved_diagnostic_bytes = unreserved_diagnostics.to_msgpack_bytes()?;
+
+        {
+            let mut run = experiment.run().unwrap();
+            let err = run
+                .log_finished_solve_with_id(
+                    0,
+                    super::FinishedSolveRecord {
+                        input: &unreserved_instance,
+                        input_annotations: Default::default(),
+                        output: &unreserved_solution,
+                        output_annotations: Default::default(),
+                        adapter: "dummy.Adapter".to_string(),
+                        adapter_options: "{}".to_string(),
+                        diagnostics: Some(unreserved_diagnostics),
+                    },
+                )
+                .expect_err("unreserved solve ID must be rejected before payload storage");
+            assert!(err.to_string().contains("has not been reserved"), "{err:#}");
+            run.finish().unwrap();
+        }
+        assert_blob_absent(&experiment, &unreserved_input_bytes);
+        assert_blob_absent(&experiment, &unreserved_output_bytes);
+        assert_blob_absent(&experiment, &unreserved_diagnostic_bytes);
+
+        let first_instance = constant_instance(Sense::Minimize, 20.0);
+        let first_solution = empty_solution(&first_instance);
+        let duplicate_instance = constant_instance(Sense::Maximize, 30.0);
+        let duplicate_solution = empty_solution(&duplicate_instance);
+        let duplicate_diagnostics = SolveDiagnosticPayload::new(vec![0x91, 0x02])?;
+        let duplicate_input_bytes = duplicate_instance.to_bytes();
+        let duplicate_output_bytes = duplicate_solution.to_bytes();
+        let duplicate_diagnostic_bytes = duplicate_diagnostics.to_msgpack_bytes()?;
+
+        {
+            let mut run = experiment.run().unwrap();
+            let solve_id = run.reserve_solve_id();
+            run.log_finished_solve_with_id(
+                solve_id,
+                super::FinishedSolveRecord {
+                    input: &first_instance,
+                    input_annotations: Default::default(),
+                    output: &first_solution,
+                    output_annotations: Default::default(),
+                    adapter: "dummy.Adapter".to_string(),
+                    adapter_options: "{}".to_string(),
+                    diagnostics: None,
+                },
+            )
+            .unwrap();
+            let err = run
+                .log_finished_solve_with_id(
+                    solve_id,
+                    super::FinishedSolveRecord {
+                        input: &duplicate_instance,
+                        input_annotations: Default::default(),
+                        output: &duplicate_solution,
+                        output_annotations: Default::default(),
+                        adapter: "dummy.Adapter".to_string(),
+                        adapter_options: "{}".to_string(),
+                        diagnostics: Some(duplicate_diagnostics),
+                    },
+                )
+                .expect_err("duplicate solve ID must be rejected before payload storage");
+            assert!(
+                err.to_string().contains("already contains Solve"),
+                "{err:#}"
+            );
+            run.finish().unwrap();
+        }
+        assert_blob_absent(&experiment, &duplicate_input_bytes);
+        assert_blob_absent(&experiment, &duplicate_output_bytes);
+        assert_blob_absent(&experiment, &duplicate_diagnostic_bytes);
+        Ok(())
+    });
+}
+
+#[test]
+fn log_failed_solve_with_id_validates_id_before_storing_payloads() {
+    with_temp_experiment(|experiment| {
+        let unreserved_instance = constant_instance(Sense::Minimize, 40.0);
+        let unreserved_diagnostics = SolveDiagnosticPayload::new(vec![0x91, 0x03])?;
+        let unreserved_input_bytes = unreserved_instance.to_bytes();
+        let unreserved_diagnostic_bytes = unreserved_diagnostics.to_msgpack_bytes()?;
+
+        {
+            let mut run = experiment.run().unwrap();
+            let err = run
+                .log_failed_solve_with_id(
+                    0,
+                    super::FailedSolveRecord {
+                        input: &unreserved_instance,
+                        input_annotations: Default::default(),
+                        adapter: "dummy.Adapter".to_string(),
+                        adapter_options: "{}".to_string(),
+                        status: SolveStatus::Failed,
+                        diagnostics: Some(unreserved_diagnostics),
+                    },
+                )
+                .expect_err("unreserved solve ID must be rejected before payload storage");
+            assert!(err.to_string().contains("has not been reserved"), "{err:#}");
+            run.finish().unwrap();
+        }
+        assert_blob_absent(&experiment, &unreserved_input_bytes);
+        assert_blob_absent(&experiment, &unreserved_diagnostic_bytes);
+
+        let first_instance = constant_instance(Sense::Minimize, 50.0);
+        let duplicate_instance = constant_instance(Sense::Maximize, 60.0);
+        let duplicate_diagnostics = SolveDiagnosticPayload::new(vec![0x91, 0x04])?;
+        let duplicate_input_bytes = duplicate_instance.to_bytes();
+        let duplicate_diagnostic_bytes = duplicate_diagnostics.to_msgpack_bytes()?;
+
+        {
+            let mut run = experiment.run().unwrap();
+            let solve_id = run.reserve_solve_id();
+            run.log_failed_solve_with_id(
+                solve_id,
+                super::FailedSolveRecord {
+                    input: &first_instance,
+                    input_annotations: Default::default(),
+                    adapter: "dummy.Adapter".to_string(),
+                    adapter_options: "{}".to_string(),
+                    status: SolveStatus::Failed,
+                    diagnostics: None,
+                },
+            )
+            .unwrap();
+            let err = run
+                .log_failed_solve_with_id(
+                    solve_id,
+                    super::FailedSolveRecord {
+                        input: &duplicate_instance,
+                        input_annotations: Default::default(),
+                        adapter: "dummy.Adapter".to_string(),
+                        adapter_options: "{}".to_string(),
+                        status: SolveStatus::Interrupted,
+                        diagnostics: Some(duplicate_diagnostics),
+                    },
+                )
+                .expect_err("duplicate solve ID must be rejected before payload storage");
+            assert!(
+                err.to_string().contains("already contains Solve"),
+                "{err:#}"
+            );
+            run.finish().unwrap();
+        }
+        assert_blob_absent(&experiment, &duplicate_input_bytes);
+        assert_blob_absent(&experiment, &duplicate_diagnostic_bytes);
         Ok(())
     });
 }

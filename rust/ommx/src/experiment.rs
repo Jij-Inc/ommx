@@ -78,6 +78,7 @@ pub use attachment::{detect_file_media_type, AttachmentTable, DEFAULT_FILE_MEDIA
 pub use dynamic::{ExperimentDyn, RunDyn, SealedRunDyn, SolveDyn};
 pub use logging::AttachmentLogger;
 pub use parameter::{ParameterValue, RunParameterCell};
+pub use run::{FailedSolveRecord, FinishedSolveRecord};
 pub use sealed::{SealedRun, Solve};
 
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor, TempLocalRegistry};

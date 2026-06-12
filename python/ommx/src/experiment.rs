@@ -16,7 +16,9 @@ use std::{
 use crate::pandas::{raw_entries_to_dataframe, PyDataFrame};
 use crate::PyArtifact;
 use ommx::artifact::AsArtifact;
-use ommx::experiment::{AttachmentLogger, SolveDiagnosticPayload, SolveStatus};
+use ommx::experiment::{
+    AttachmentLogger, FailedSolveRecord, FinishedSolveRecord, SolveDiagnosticPayload, SolveStatus,
+};
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
@@ -661,6 +663,23 @@ fn set_current_span_run_id(py: Python<'_>, run_id: u64) -> Result<()> {
     Ok(())
 }
 
+fn set_current_span_solve_context(py: Python<'_>, solve_id: u64, adapter_name: &str) -> Result<()> {
+    let trace = py.import("opentelemetry.trace")?;
+    let span = trace.call_method0("get_current_span")?;
+    span.call_method1("set_attribute", ("ommx.solve.id", solve_id))?;
+    span.call_method1("set_attribute", ("adapter", adapter_name))?;
+    Ok(())
+}
+
+fn set_current_span_error(py: Python<'_>, description: &str) -> Result<()> {
+    let trace = py.import("opentelemetry.trace")?;
+    let span = trace.call_method0("get_current_span")?;
+    let status = trace.getattr("Status")?;
+    let status_code = trace.getattr("StatusCode")?.getattr("ERROR")?;
+    span.call_method1("set_status", (status.call1((status_code, description))?,))?;
+    Ok(())
+}
+
 fn python_exception_reason(
     exc_type: Option<&Bound<'_, PyAny>>,
     exc_value: Option<&Bound<'_, PyAny>>,
@@ -834,7 +853,7 @@ fn ensure_media_type(actual: &MediaType, expected: &MediaType) -> Result<()> {
 
 fn decode_json_blob<'py>(py: Python<'py>, blob: &[u8]) -> Result<Bound<'py, PyAny>> {
     let json = py.import("json")?;
-    Ok(json.call_method1("loads", (PyBytes::new(py, &blob),))?)
+    Ok(json.call_method1("loads", (PyBytes::new(py, blob),))?)
 }
 
 fn decode_experiment_attachment<'py>(
@@ -1303,14 +1322,14 @@ impl PyRun {
                     "Failed to serialize failed Solve diagnostics; recording Solve without diagnostics",
                 );
                 let record_result = self.as_open_mut().and_then(|run| {
-                    run.log_failed_solve_attempt_with_diagnostics(
-                        &instance.inner,
-                        instance.annotations.clone(),
-                        adapter_name,
+                    run.log_failed_solve(FailedSolveRecord {
+                        input: &instance.inner,
+                        input_annotations: instance.annotations.clone(),
+                        adapter: adapter_name,
                         adapter_options,
                         status,
                         diagnostics,
-                    )
+                    })
                 });
                 if let Err(record_error) = record_result {
                     tracing::warn!(
@@ -1328,17 +1347,63 @@ impl PyRun {
         );
         let solve_id = self
             .as_open_mut()?
-            .log_finished_solve_result_with_diagnostics(
-                &instance.inner,
-                instance.annotations.clone(),
-                &solution.inner,
-                solution.annotations.clone(),
-                adapter_name,
+            .log_finished_solve(FinishedSolveRecord {
+                input: &instance.inner,
+                input_annotations: instance.annotations.clone(),
+                output: &solution.inner,
+                output_annotations: solution.annotations.clone(),
+                adapter: adapter_name,
                 adapter_options,
                 diagnostics,
-            )?;
+            })?;
         tracing::info!(solve_id, "ommx.solve.recorded");
         Ok(solution)
+    }
+
+    /// Open a manual Solve scope for direct backend solver model access.
+    ///
+    /// This returns a manual Solve context. Entering the context reserves a
+    /// Solve ID, constructs the adapter with a cloned input Instance, and
+    /// exposes the adapter's `solver_input`. The caller can run backend-specific
+    /// APIs, record adapter options that are set directly on the backend model,
+    /// decode the backend output, and continue recording diagnostics until the
+    /// context exits. The Solve entry is finalized on context exit. If adapter
+    /// construction or the context body fails before `decode` succeeds, a failed
+    /// or interrupted Solve is recorded when possible and the exception is
+    /// re-raised.
+    #[pyo3(signature = (adapter, instance, *, store_diagnostics = false, **kwargs))]
+    pub fn open_solve(
+        slf: Bound<'_, Self>,
+        adapter: SolverAdapterInput,
+        instance: &crate::Instance,
+        store_diagnostics: bool,
+        kwargs: Option<&Bound<PyDict>>,
+    ) -> PyResult<PyOpenSolve> {
+        let py = slf.py();
+        let _guard = crate::TRACING.attach_parent_context(py);
+        {
+            let this = slf.borrow();
+            this.ensure_store_trace_context_started()?;
+        }
+        reject_reserved_open_solve_kwargs(kwargs)?;
+        let adapter_type = adapter.0.clone_ref(py);
+        let adapter = adapter.bind(py);
+        let adapter_name = adapter.name()?;
+        let adapter_options = clone_kwargs_dict(py, kwargs)?;
+        let _ = dump_kwargs(py, Some(adapter_options.bind(py)))?;
+        let diagnostics_collector = store_diagnostics
+            .then(|| Py::new(py, PyDiagnosticCollector::new_inner()))
+            .transpose()?;
+        Ok(PyOpenSolve {
+            run: slf.unbind(),
+            adapter: adapter_type,
+            adapter_name,
+            instance: instance.clone(),
+            adapter_options,
+            state: PyOpenSolveState::Open,
+            trace: PyOpenSolveTraceState::NotStarted,
+            diagnostics: PyOpenSolveDiagnosticsState::new(diagnostics_collector),
+        })
     }
 
     /// Finish this run and append it to the parent Experiment.
@@ -1400,6 +1465,1048 @@ impl PyRun {
         match &mut self.state {
             PyRunState::Open { run } | PyRunState::Entered { run, .. } => Ok(run),
             PyRunState::Closed => anyhow::bail!("Run has already been finished"),
+        }
+    }
+}
+
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
+#[pyclass]
+#[pyo3(module = "ommx._ommx_rust", name = "OpenSolve")]
+/// Context manager for a manually executed Solve inside a Run.
+///
+/// `OpenSolve` is returned by `Run.open_solve(...)`. Use `solver_input` to
+/// access the backend solver model, run backend-specific APIs, decode the
+/// solver output, and record adapter options that are set directly on the
+/// backend model. The Solve entry is finalized when the context exits.
+pub struct PyOpenSolve {
+    run: Py<PyRun>,
+    adapter: Py<PyType>,
+    adapter_name: String,
+    instance: crate::Instance,
+    adapter_options: Py<PyDict>,
+    state: PyOpenSolveState,
+    trace: PyOpenSolveTraceState,
+    diagnostics: PyOpenSolveDiagnosticsState,
+}
+
+struct PyOpenSolveActiveState {
+    solve_id: u64,
+    adapter_instance: Py<PyAny>,
+    output: PyOpenSolveOutputState,
+}
+
+enum PyOpenSolveOutputState {
+    Missing,
+    Decoded(Py<crate::Solution>),
+}
+
+enum PyOpenSolveState {
+    Open,
+    Active(PyOpenSolveActiveState),
+    Finalizing {
+        solve_id: u64,
+    },
+    Closed {
+        solve_id: u64,
+        outcome: PyOpenSolveCloseOutcome,
+    },
+}
+
+enum PyOpenSolveCloseOutcome {
+    Finished,
+    Failed,
+    Interrupted,
+    AdapterConstructionFailed,
+    MissingDecode,
+    RecordingFailed,
+}
+
+enum PyOpenSolveTraceState {
+    NotStarted,
+    Active {
+        span_context_manager: Py<PyAny>,
+        context: PyOpenSolveTraceContextState,
+    },
+    CloseFailed {
+        span_context_manager: Py<PyAny>,
+        context: PyOpenSolveTraceContextState,
+        close_error: String,
+    },
+    Closed {
+        context: PyOpenSolveTraceContextState,
+    },
+}
+
+struct PyOpenSolveTraceContextState {
+    solve_context: PyOpenSolveTraceSolveContextState,
+    error: PyOpenSolveTraceErrorState,
+}
+
+enum PyOpenSolveTraceSolveContextState {
+    NotSet,
+    Set {
+        solve_id: u64,
+        adapter_name: String,
+    },
+    SetFailed {
+        solve_id: u64,
+        adapter_name: String,
+        error: String,
+    },
+}
+
+enum PyOpenSolveTraceErrorState {
+    NotMarked,
+    Marked { reason: String },
+    MarkFailed { reason: String, error: String },
+}
+
+enum PyOpenSolveDiagnosticsState {
+    Disabled,
+    Prepared {
+        collector: Py<PyDiagnosticCollector>,
+    },
+    Collecting {
+        collector: Py<PyDiagnosticCollector>,
+    },
+    Finalized {
+        outcome: PyOpenSolveDiagnosticsRecordOutcome,
+    },
+}
+
+enum PyOpenSolveDiagnosticsRecordOutcome {
+    Stored {
+        pack: PyOpenSolveDiagnosticsPackOutcome,
+    },
+    RecordFailed {
+        pack: PyOpenSolveDiagnosticsPackOutcome,
+    },
+    RecordFailedBeforePack,
+}
+
+enum PyOpenSolveDiagnosticsPackOutcome {
+    Disabled,
+    Empty,
+    Attached,
+    SerializationFailed,
+}
+
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
+#[pymethods]
+impl PyOpenSolve {
+    pub fn __enter__(slf: Bound<'_, Self>) -> PyResult<Py<PyOpenSolve>> {
+        {
+            let py = slf.py();
+            let mut this = slf.borrow_mut();
+            match &this.state {
+                PyOpenSolveState::Open => {
+                    let span_context_manager = start_python_span(py, "Solve")?;
+                    this.trace = PyOpenSolveTraceState::started(span_context_manager);
+                    let solve_id_result = this
+                        .run
+                        .bind(py)
+                        .borrow_mut()
+                        .as_open_mut()
+                        .and_then(|run| run.reserve_solve_id());
+                    let solve_id = match solve_id_result {
+                        Ok(solve_id) => solve_id,
+                        Err(error) => {
+                            let original_message = error.to_string();
+                            this.close_span(py, None, None, None).with_context(|| {
+                                format!(
+                                    "OpenSolve context setup failed with `{original_message}`, then closing the partial context failed"
+                                )
+                            })?;
+                            return Err(error.into());
+                        }
+                    };
+                    let adapter_name = this.adapter_name.clone();
+                    this.trace.set_solve_context(py, solve_id, &adapter_name);
+                    this.diagnostics.start_collecting();
+                    let adapter_instance = {
+                        let adapter = SolverAdapter {
+                            adapter: this.adapter.bind(py),
+                        };
+                        adapter.instantiate(&this.instance, Some(this.adapter_options.bind(py)))
+                    };
+                    let adapter_instance = match adapter_instance {
+                        Ok(adapter_instance) => adapter_instance,
+                        Err(error) => {
+                            let status = if error.is_instance_of::<PyKeyboardInterrupt>(py) {
+                                SolveStatus::Interrupted
+                            } else {
+                                SolveStatus::Failed
+                            };
+                            let outcome = if matches!(status, SolveStatus::Interrupted) {
+                                PyOpenSolveCloseOutcome::Interrupted
+                            } else {
+                                PyOpenSolveCloseOutcome::AdapterConstructionFailed
+                            };
+                            let outcome = if let Err(record_error) = this.record_failed_with_status(
+                                py,
+                                solve_id,
+                                status,
+                                None,
+                                "Failed to serialize failed Solve diagnostics; recording Solve without diagnostics",
+                            ) {
+                                tracing::warn!(
+                                    error = %record_error,
+                                    "Failed to record failed OpenSolve adapter construction"
+                                );
+                                PyOpenSolveCloseOutcome::RecordingFailed
+                            } else {
+                                outcome
+                            };
+                            this.trace.mark_error(py, &error.to_string());
+                            this.state = PyOpenSolveState::Closed { solve_id, outcome };
+                            if let Err(close_error) = this.close_span(py, None, None, None) {
+                                tracing::warn!(
+                                    error = %close_error,
+                                    "Failed to close OpenSolve span after adapter construction failure"
+                                );
+                            }
+                            return Err(error);
+                        }
+                    };
+                    this.state = PyOpenSolveState::Active(PyOpenSolveActiveState {
+                        solve_id,
+                        adapter_instance,
+                        output: PyOpenSolveOutputState::Missing,
+                    });
+                }
+                PyOpenSolveState::Active(_) | PyOpenSolveState::Finalizing { .. } => {
+                    return Err(
+                        anyhow::anyhow!("OpenSolve context has already been entered").into(),
+                    );
+                }
+                PyOpenSolveState::Closed { .. } => {
+                    return Err(anyhow::anyhow!("OpenSolve has already been closed").into());
+                }
+            }
+        }
+        Ok(slf.unbind())
+    }
+
+    #[pyo3(signature = (exc_type = None, exc_value = None, traceback = None))]
+    pub fn __exit__(
+        &mut self,
+        py: Python<'_>,
+        exc_type: Option<&Bound<'_, PyAny>>,
+        exc_value: Option<&Bound<'_, PyAny>>,
+        traceback: Option<&Bound<'_, PyAny>>,
+    ) -> Result<bool> {
+        let solve_id = match &self.state {
+            PyOpenSolveState::Open => anyhow::bail!("OpenSolve context has not been entered"),
+            PyOpenSolveState::Active(active) => active.solve_id,
+            PyOpenSolveState::Finalizing { .. } => {
+                anyhow::bail!("OpenSolve context is already finalizing")
+            }
+            PyOpenSolveState::Closed { .. } => {
+                self.close_span(py, exc_type, exc_value, traceback)?;
+                return Ok(false);
+            }
+        };
+
+        let PyOpenSolveState::Active(active) =
+            mem::replace(&mut self.state, PyOpenSolveState::Finalizing { solve_id })
+        else {
+            unreachable!("OpenSolve state checked as active above");
+        };
+
+        let (outcome, exit_result) = match active.output {
+            PyOpenSolveOutputState::Decoded(solution) => {
+                self.finalize_decoded_output(py, solve_id, solution, exc_type.is_some())
+            }
+            PyOpenSolveOutputState::Missing if exc_type.is_some() => {
+                self.finalize_body_exception(py, solve_id, exc_type)
+            }
+            PyOpenSolveOutputState::Missing => self.finalize_missing_decode(py, solve_id),
+        };
+
+        if exc_type.is_some() {
+            let reason = python_exception_reason(exc_type, exc_value);
+            self.trace.mark_error(py, &reason);
+        } else if let Err(error) = &exit_result {
+            self.trace.mark_error(py, &error.to_string());
+        }
+        self.state = PyOpenSolveState::Closed { solve_id, outcome };
+        if let Err(close_error) = self.close_span(py, exc_type, exc_value, traceback) {
+            if exc_type.is_some() || exit_result.is_err() {
+                tracing::warn!(
+                    error = %close_error,
+                    "Failed to close OpenSolve span"
+                );
+            } else {
+                return Err(close_error);
+            }
+        }
+        exit_result
+    }
+
+    #[getter]
+    /// Reserved Solve ID for this manual Solve.
+    pub fn solve_id(&self) -> Result<u64> {
+        match &self.state {
+            PyOpenSolveState::Open => anyhow::bail!("OpenSolve context has not been entered"),
+            PyOpenSolveState::Active(active) => Ok(active.solve_id),
+            PyOpenSolveState::Finalizing { solve_id }
+            | PyOpenSolveState::Closed { solve_id, .. } => Ok(*solve_id),
+        }
+    }
+
+    #[getter]
+    #[gen_stub(override_return_type(
+        type_repr = "typing.Optional[builtins.dict[builtins.str, typing.Any]]",
+        imports = ("builtins", "typing")
+    ))]
+    /// Terminal state recorded when this manual Solve scope closes.
+    ///
+    /// Returns `None` until the context has closed. After closing, this exposes
+    /// the recorded Solve outcome together with trace and diagnostics
+    /// finalization states for advanced debugging.
+    pub fn terminal_state<'py>(&self, py: Python<'py>) -> Result<Option<Bound<'py, PyDict>>> {
+        let PyOpenSolveState::Closed { solve_id, outcome } = &self.state else {
+            return Ok(None);
+        };
+        let terminal = PyDict::new(py);
+        terminal.set_item("solve_id", *solve_id)?;
+        terminal.set_item("outcome", outcome.as_str())?;
+        terminal.set_item("trace", self.trace.to_dict(py)?)?;
+        terminal.set_item("diagnostics", self.diagnostics.to_dict(py)?)?;
+        Ok(Some(terminal))
+    }
+
+    #[getter]
+    /// Backend solver model generated by the adapter.
+    pub fn solver_input(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        Ok(self
+            .adapter_instance_ref()?
+            .bind(py)
+            .getattr("solver_input")?
+            .unbind())
+    }
+
+    #[getter]
+    /// Adapter instance used by this manual Solve.
+    pub fn adapter(&self, py: Python<'_>) -> Result<Py<PyAny>> {
+        Ok(self.adapter_instance_ref()?.clone_ref(py))
+    }
+
+    #[getter]
+    /// Diagnostics collector stored with this Solve, or `None` when disabled.
+    pub fn diagnostics(&self, py: Python<'_>) -> Result<Option<Py<PyDiagnosticCollector>>> {
+        self.ensure_entered()?;
+        self.diagnostics.collector_for_user(py)
+    }
+
+    /// Decode backend solver output through the adapter.
+    ///
+    /// The decoded Solution is kept as this scope's finished output candidate.
+    /// The Solve entry is recorded when the `OpenSolve` context exits, so
+    /// diagnostics and annotations can still be recorded after this call and
+    /// before the end of the `with` block.
+    pub fn decode(
+        &mut self,
+        py: Python<'_>,
+        data: &Bound<'_, PyAny>,
+    ) -> PyResult<Py<crate::Solution>> {
+        let adapter_instance = {
+            let active = self.active_mut()?;
+            active.output = PyOpenSolveOutputState::Missing;
+            active.adapter_instance.clone_ref(py)
+        };
+        let solution = adapter_instance
+            .bind(py)
+            .call_method1("decode", (data,))?
+            .extract::<Py<crate::Solution>>()
+            .map_err(|_| {
+                PyTypeError::new_err("adapter.decode(...) must return ommx.v1.Solution")
+            })?;
+        self.active_mut()?.output = PyOpenSolveOutputState::Decoded(solution.clone_ref(py));
+        Ok(solution)
+    }
+
+    /// Record an adapter option set through direct backend model access.
+    pub fn log_adapter_option(
+        &mut self,
+        py: Python<'_>,
+        name: &str,
+        value: &Bound<'_, PyAny>,
+    ) -> Result<()> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        self.ensure_entered()?;
+        self.set_adapter_option(py, name, value)
+    }
+
+    pub fn __repr__(&self) -> String {
+        match &self.state {
+            PyOpenSolveState::Open => {
+                format!("OpenSolve(adapter='{}', state='open')", self.adapter_name)
+            }
+            PyOpenSolveState::Active(active) => format!(
+                "OpenSolve(adapter='{}', solve_id={}, state='active')",
+                self.adapter_name, active.solve_id
+            ),
+            PyOpenSolveState::Finalizing { solve_id } => format!(
+                "OpenSolve(adapter='{}', solve_id={}, state='finalizing')",
+                self.adapter_name, solve_id
+            ),
+            PyOpenSolveState::Closed { solve_id, outcome } => format!(
+                "OpenSolve(adapter='{}', solve_id={}, state='closed', outcome='{}')",
+                self.adapter_name,
+                solve_id,
+                outcome.as_str()
+            ),
+        }
+    }
+}
+
+impl PyOpenSolve {
+    fn close_span(
+        &mut self,
+        py: Python<'_>,
+        exc_type: Option<&Bound<'_, PyAny>>,
+        exc_value: Option<&Bound<'_, PyAny>>,
+        traceback: Option<&Bound<'_, PyAny>>,
+    ) -> Result<()> {
+        self.trace.close(py, exc_type, exc_value, traceback)
+    }
+
+    fn ensure_entered(&self) -> Result<()> {
+        match &self.state {
+            PyOpenSolveState::Open => anyhow::bail!("OpenSolve context has not been entered"),
+            PyOpenSolveState::Active(_) => {}
+            PyOpenSolveState::Finalizing { .. } => {
+                anyhow::bail!("OpenSolve context is already finalizing")
+            }
+            PyOpenSolveState::Closed { .. } => anyhow::bail!("OpenSolve has already been closed"),
+        }
+        Ok(())
+    }
+
+    fn active(&self) -> Result<&PyOpenSolveActiveState> {
+        match &self.state {
+            PyOpenSolveState::Open => anyhow::bail!("OpenSolve context has not been entered"),
+            PyOpenSolveState::Active(active) => Ok(active),
+            PyOpenSolveState::Finalizing { .. } => {
+                anyhow::bail!("OpenSolve context is already finalizing")
+            }
+            PyOpenSolveState::Closed { .. } => anyhow::bail!("OpenSolve has already been closed"),
+        }
+    }
+
+    fn active_mut(&mut self) -> Result<&mut PyOpenSolveActiveState> {
+        match &mut self.state {
+            PyOpenSolveState::Open => anyhow::bail!("OpenSolve context has not been entered"),
+            PyOpenSolveState::Active(active) => Ok(active),
+            PyOpenSolveState::Finalizing { .. } => {
+                anyhow::bail!("OpenSolve context is already finalizing")
+            }
+            PyOpenSolveState::Closed { .. } => anyhow::bail!("OpenSolve has already been closed"),
+        }
+    }
+
+    fn finalize_decoded_output(
+        &mut self,
+        py: Python<'_>,
+        solve_id: u64,
+        solution: Py<crate::Solution>,
+        had_body_exception: bool,
+    ) -> (PyOpenSolveCloseOutcome, Result<bool>) {
+        if let Err(error) = self.record_decoded_solution(py, solve_id, solution) {
+            if had_body_exception {
+                tracing::warn!(
+                    error = %error,
+                    "Failed to record OpenSolve outcome"
+                );
+                (PyOpenSolveCloseOutcome::RecordingFailed, Ok(false))
+            } else {
+                (PyOpenSolveCloseOutcome::RecordingFailed, Err(error))
+            }
+        } else {
+            (PyOpenSolveCloseOutcome::Finished, Ok(false))
+        }
+    }
+
+    fn finalize_body_exception(
+        &mut self,
+        py: Python<'_>,
+        solve_id: u64,
+        exc_type: Option<&Bound<'_, PyAny>>,
+    ) -> (PyOpenSolveCloseOutcome, Result<bool>) {
+        let interrupted = match is_keyboard_interrupt(py, exc_type) {
+            Ok(interrupted) => interrupted,
+            Err(error) => {
+                tracing::warn!(
+                    error = %error,
+                    "Failed to inspect OpenSolve exception type"
+                );
+                false
+            }
+        };
+        let status = if interrupted {
+            SolveStatus::Interrupted
+        } else {
+            SolveStatus::Failed
+        };
+        let outcome = if matches!(status, SolveStatus::Interrupted) {
+            PyOpenSolveCloseOutcome::Interrupted
+        } else {
+            PyOpenSolveCloseOutcome::Failed
+        };
+        let outcome = if let Err(error) = self.record_failed_with_status(
+            py,
+            solve_id,
+            status,
+            None,
+            "Failed to serialize failed Solve diagnostics; recording Solve without diagnostics",
+        ) {
+            tracing::warn!(
+                error = %error,
+                "Failed to record failed OpenSolve attempt"
+            );
+            PyOpenSolveCloseOutcome::RecordingFailed
+        } else {
+            outcome
+        };
+        (outcome, Ok(false))
+    }
+
+    fn finalize_missing_decode(
+        &mut self,
+        py: Python<'_>,
+        solve_id: u64,
+    ) -> (PyOpenSolveCloseOutcome, Result<bool>) {
+        let outcome = if let Err(error) = self.record_failed_with_status(
+            py,
+            solve_id,
+            SolveStatus::Failed,
+            None,
+            "Failed to serialize failed Solve diagnostics; recording Solve without diagnostics",
+        ) {
+            tracing::warn!(
+                error = %error,
+                "Failed to record unfinished OpenSolve attempt"
+            );
+            PyOpenSolveCloseOutcome::RecordingFailed
+        } else {
+            PyOpenSolveCloseOutcome::MissingDecode
+        };
+        (
+            outcome,
+            Err(anyhow::anyhow!(
+                "OpenSolve.decode(...) must be called before leaving the context"
+            )),
+        )
+    }
+
+    fn adapter_instance_ref(&self) -> Result<&Py<PyAny>> {
+        Ok(&self.active()?.adapter_instance)
+    }
+
+    fn set_adapter_option(
+        &mut self,
+        py: Python<'_>,
+        name: &str,
+        value: &Bound<'_, PyAny>,
+    ) -> Result<()> {
+        let options = self.adapter_options.bind(py);
+        let previous = options.get_item(name)?.map(|value| value.unbind());
+        options.set_item(name, value)?;
+        if let Err(error) = dump_kwargs(py, Some(options)) {
+            match previous {
+                Some(value) => options.set_item(name, value.bind(py))?,
+                None => options.del_item(name)?,
+            }
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    fn record_decoded_solution(
+        &mut self,
+        py: Python<'_>,
+        solve_id: u64,
+        solution: Py<crate::Solution>,
+    ) -> Result<u64> {
+        let adapter_options = match dump_merged_kwargs(py, &self.adapter_options, None) {
+            Ok(adapter_options) => adapter_options,
+            Err(error) => {
+                self.diagnostics.finalize_record_failed_before_pack();
+                return Err(error);
+            }
+        };
+        let solution = solution.bind(py).borrow();
+        self.record_finished_with_options(py, solve_id, &solution, adapter_options)
+    }
+
+    fn record_finished_with_options(
+        &mut self,
+        py: Python<'_>,
+        solve_id: u64,
+        solution: &crate::Solution,
+        adapter_options: String,
+    ) -> Result<u64> {
+        let (diagnostics, diagnostics_pack_outcome) = self.diagnostics.pack_for_record(
+            py,
+            "Failed to serialize adapter diagnostics; recording Solve without diagnostics",
+        );
+        let result = self
+            .run
+            .bind(py)
+            .borrow_mut()
+            .as_open_mut()?
+            .log_finished_solve_with_id(
+                solve_id,
+                FinishedSolveRecord {
+                    input: &self.instance.inner,
+                    input_annotations: self.instance.annotations.clone(),
+                    output: &solution.inner,
+                    output_annotations: solution.annotations.clone(),
+                    adapter: self.adapter_name.clone(),
+                    adapter_options,
+                    diagnostics,
+                },
+            );
+        let solve_id = match result {
+            Ok(solve_id) => {
+                self.diagnostics.finalize_stored(diagnostics_pack_outcome);
+                solve_id
+            }
+            Err(error) => {
+                self.diagnostics
+                    .finalize_record_failed(diagnostics_pack_outcome);
+                return Err(error);
+            }
+        };
+        tracing::info!(solve_id, "ommx.solve.recorded");
+        Ok(solve_id)
+    }
+
+    fn record_failed_with_status(
+        &mut self,
+        py: Python<'_>,
+        solve_id: u64,
+        status: SolveStatus,
+        kwargs: Option<&Bound<PyDict>>,
+        warning_message: &'static str,
+    ) -> Result<u64> {
+        let adapter_options = match dump_merged_kwargs(py, &self.adapter_options, kwargs) {
+            Ok(adapter_options) => adapter_options,
+            Err(error) => {
+                self.diagnostics.finalize_record_failed_before_pack();
+                return Err(error);
+            }
+        };
+        self.record_failed_with_options(py, solve_id, status, adapter_options, warning_message)
+    }
+
+    fn record_failed_with_options(
+        &mut self,
+        py: Python<'_>,
+        solve_id: u64,
+        status: SolveStatus,
+        adapter_options: String,
+        warning_message: &'static str,
+    ) -> Result<u64> {
+        let (diagnostics, diagnostics_pack_outcome) =
+            self.diagnostics.pack_for_record(py, warning_message);
+        let result = self
+            .run
+            .bind(py)
+            .borrow_mut()
+            .as_open_mut()?
+            .log_failed_solve_with_id(
+                solve_id,
+                FailedSolveRecord {
+                    input: &self.instance.inner,
+                    input_annotations: self.instance.annotations.clone(),
+                    adapter: self.adapter_name.clone(),
+                    adapter_options,
+                    status,
+                    diagnostics,
+                },
+            );
+        let solve_id = match result {
+            Ok(solve_id) => {
+                self.diagnostics.finalize_stored(diagnostics_pack_outcome);
+                solve_id
+            }
+            Err(error) => {
+                self.diagnostics
+                    .finalize_record_failed(diagnostics_pack_outcome);
+                return Err(error);
+            }
+        };
+        tracing::info!(solve_id, "ommx.solve.recorded");
+        Ok(solve_id)
+    }
+}
+
+impl PyOpenSolveTraceState {
+    fn started(span_context_manager: Py<PyAny>) -> Self {
+        Self::Active {
+            span_context_manager,
+            context: PyOpenSolveTraceContextState::new(),
+        }
+    }
+
+    fn set_solve_context(&mut self, py: Python<'_>, solve_id: u64, adapter_name: &str) {
+        let Some(context) = self.context_mut() else {
+            tracing::warn!(
+                solve_id,
+                adapter = %adapter_name,
+                state = %self.as_str(),
+                "Cannot set OpenSolve span attributes outside an active trace"
+            );
+            return;
+        };
+        match set_current_span_solve_context(py, solve_id, adapter_name) {
+            Ok(()) => {
+                context.solve_context = PyOpenSolveTraceSolveContextState::Set {
+                    solve_id,
+                    adapter_name: adapter_name.to_string(),
+                };
+            }
+            Err(error) => {
+                tracing::warn!(
+                    error = %error,
+                    solve_id,
+                    adapter = %adapter_name,
+                    "Failed to set OpenSolve span attributes"
+                );
+                context.solve_context = PyOpenSolveTraceSolveContextState::SetFailed {
+                    solve_id,
+                    adapter_name: adapter_name.to_string(),
+                    error: error.to_string(),
+                };
+            }
+        }
+    }
+
+    fn mark_error(&mut self, py: Python<'_>, reason: &str) {
+        let Some(context) = self.context_mut() else {
+            tracing::warn!(
+                reason,
+                state = %self.as_str(),
+                "Cannot mark OpenSolve span as error outside an active trace"
+            );
+            return;
+        };
+        match set_current_span_error(py, reason) {
+            Ok(()) => {
+                context.error = PyOpenSolveTraceErrorState::Marked {
+                    reason: reason.to_string(),
+                };
+            }
+            Err(error) => {
+                tracing::warn!(
+                    error = %error,
+                    reason,
+                    "Failed to mark OpenSolve span as error"
+                );
+                context.error = PyOpenSolveTraceErrorState::MarkFailed {
+                    reason: reason.to_string(),
+                    error: error.to_string(),
+                };
+            }
+        }
+    }
+
+    fn close(
+        &mut self,
+        py: Python<'_>,
+        exc_type: Option<&Bound<'_, PyAny>>,
+        exc_value: Option<&Bound<'_, PyAny>>,
+        traceback: Option<&Bound<'_, PyAny>>,
+    ) -> Result<()> {
+        let (span_context_manager, context) = match mem::replace(self, Self::NotStarted) {
+            Self::NotStarted => return Ok(()),
+            Self::Active {
+                span_context_manager,
+                context,
+            }
+            | Self::CloseFailed {
+                span_context_manager,
+                context,
+                ..
+            } => (span_context_manager, context),
+            Self::Closed { context } => {
+                *self = Self::Closed { context };
+                return Ok(());
+            }
+        };
+        if let Err(error) = close_python_context_manager(
+            py,
+            Some(&span_context_manager),
+            exc_type,
+            exc_value,
+            traceback,
+        ) {
+            *self = Self::CloseFailed {
+                span_context_manager,
+                context,
+                close_error: error.to_string(),
+            };
+            return Err(error);
+        }
+        *self = Self::Closed { context };
+        Ok(())
+    }
+
+    fn context_mut(&mut self) -> Option<&mut PyOpenSolveTraceContextState> {
+        match self {
+            Self::Active { context, .. } | Self::CloseFailed { context, .. } => Some(context),
+            Self::NotStarted | Self::Closed { .. } => None,
+        }
+    }
+
+    fn as_str(&self) -> &'static str {
+        match self {
+            Self::NotStarted => "not_started",
+            Self::Active { .. } => "active",
+            Self::CloseFailed { .. } => "close_failed",
+            Self::Closed { .. } => "closed",
+        }
+    }
+
+    fn to_dict<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDict>> {
+        let dict = PyDict::new(py);
+        dict.set_item("state", self.as_str())?;
+        match self {
+            Self::NotStarted => {}
+            Self::Active { context, .. } | Self::Closed { context } => {
+                dict.set_item("context", context.to_dict(py)?)?;
+            }
+            Self::CloseFailed {
+                context,
+                close_error,
+                ..
+            } => {
+                dict.set_item("context", context.to_dict(py)?)?;
+                dict.set_item("close_error", close_error)?;
+            }
+        }
+        Ok(dict)
+    }
+}
+
+impl PyOpenSolveTraceContextState {
+    fn new() -> Self {
+        Self {
+            solve_context: PyOpenSolveTraceSolveContextState::NotSet,
+            error: PyOpenSolveTraceErrorState::NotMarked,
+        }
+    }
+
+    fn to_dict<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDict>> {
+        let dict = PyDict::new(py);
+        dict.set_item("solve_context", self.solve_context.to_dict(py)?)?;
+        dict.set_item("error", self.error.to_dict(py)?)?;
+        Ok(dict)
+    }
+}
+
+impl PyOpenSolveTraceSolveContextState {
+    fn as_str(&self) -> &'static str {
+        match self {
+            Self::NotSet => "not_set",
+            Self::Set { .. } => "set",
+            Self::SetFailed { .. } => "set_failed",
+        }
+    }
+
+    fn to_dict<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDict>> {
+        let dict = PyDict::new(py);
+        dict.set_item("state", self.as_str())?;
+        match self {
+            Self::NotSet => {}
+            Self::Set {
+                solve_id,
+                adapter_name,
+            } => {
+                dict.set_item("solve_id", *solve_id)?;
+                dict.set_item("adapter", adapter_name)?;
+            }
+            Self::SetFailed {
+                solve_id,
+                adapter_name,
+                error,
+            } => {
+                dict.set_item("solve_id", *solve_id)?;
+                dict.set_item("adapter", adapter_name)?;
+                dict.set_item("error", error)?;
+            }
+        }
+        Ok(dict)
+    }
+}
+
+impl PyOpenSolveTraceErrorState {
+    fn as_str(&self) -> &'static str {
+        match self {
+            Self::NotMarked => "not_marked",
+            Self::Marked { .. } => "marked",
+            Self::MarkFailed { .. } => "mark_failed",
+        }
+    }
+
+    fn to_dict<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDict>> {
+        let dict = PyDict::new(py);
+        dict.set_item("state", self.as_str())?;
+        match self {
+            Self::NotMarked => {}
+            Self::Marked { reason } => {
+                dict.set_item("reason", reason)?;
+            }
+            Self::MarkFailed { reason, error } => {
+                dict.set_item("reason", reason)?;
+                dict.set_item("error", error)?;
+            }
+        }
+        Ok(dict)
+    }
+}
+
+impl PyOpenSolveCloseOutcome {
+    fn as_str(&self) -> &'static str {
+        match self {
+            Self::Finished => "finished",
+            Self::Failed => "failed",
+            Self::Interrupted => "interrupted",
+            Self::AdapterConstructionFailed => "adapter_construction_failed",
+            Self::MissingDecode => "missing_decode",
+            Self::RecordingFailed => "recording_failed",
+        }
+    }
+}
+
+impl PyOpenSolveDiagnosticsState {
+    fn new(collector: Option<Py<PyDiagnosticCollector>>) -> Self {
+        match collector {
+            Some(collector) => Self::Prepared { collector },
+            None => Self::Disabled,
+        }
+    }
+
+    fn start_collecting(&mut self) {
+        if matches!(self, Self::Prepared { .. }) {
+            let Self::Prepared { collector } = mem::replace(self, Self::Disabled) else {
+                unreachable!("OpenSolve diagnostics state checked as prepared above");
+            };
+            *self = Self::Collecting { collector };
+        }
+    }
+
+    fn collector_for_user(&self, py: Python<'_>) -> Result<Option<Py<PyDiagnosticCollector>>> {
+        match self {
+            Self::Disabled | Self::Prepared { .. } => Ok(None),
+            Self::Collecting { collector } => Ok(Some(collector.clone_ref(py))),
+            Self::Finalized { outcome } => {
+                anyhow::bail!(
+                    "OpenSolve diagnostics have been finalized ({})",
+                    outcome.as_str()
+                )
+            }
+        }
+    }
+
+    fn to_dict<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDict>> {
+        let dict = PyDict::new(py);
+        match self {
+            Self::Disabled => {
+                dict.set_item("state", "disabled")?;
+            }
+            Self::Prepared { .. } => {
+                dict.set_item("state", "prepared")?;
+            }
+            Self::Collecting { .. } => {
+                dict.set_item("state", "collecting")?;
+            }
+            Self::Finalized { outcome } => {
+                dict.set_item("state", "finalized")?;
+                dict.set_item("outcome", outcome.to_dict(py)?)?;
+            }
+        }
+        Ok(dict)
+    }
+
+    fn pack_for_record(
+        &self,
+        py: Python<'_>,
+        warning_message: &'static str,
+    ) -> (
+        Option<SolveDiagnosticPayload>,
+        PyOpenSolveDiagnosticsPackOutcome,
+    ) {
+        let collector = match self {
+            Self::Disabled => {
+                return (None, PyOpenSolveDiagnosticsPackOutcome::Disabled);
+            }
+            Self::Prepared { collector } | Self::Collecting { collector } => collector,
+            Self::Finalized { .. } => {
+                tracing::warn!("OpenSolve diagnostics were already finalized");
+                return (None, PyOpenSolveDiagnosticsPackOutcome::Disabled);
+            }
+        };
+        match collector.bind(py).borrow().pack(py) {
+            Ok(Some(payload)) => (Some(payload), PyOpenSolveDiagnosticsPackOutcome::Attached),
+            Ok(None) => (None, PyOpenSolveDiagnosticsPackOutcome::Empty),
+            Err(error) => {
+                tracing::warn!(error = %error, "{}", warning_message);
+                (None, PyOpenSolveDiagnosticsPackOutcome::SerializationFailed)
+            }
+        }
+    }
+
+    fn finalize_stored(&mut self, pack: PyOpenSolveDiagnosticsPackOutcome) {
+        *self = Self::Finalized {
+            outcome: PyOpenSolveDiagnosticsRecordOutcome::Stored { pack },
+        };
+    }
+
+    fn finalize_record_failed(&mut self, pack: PyOpenSolveDiagnosticsPackOutcome) {
+        *self = Self::Finalized {
+            outcome: PyOpenSolveDiagnosticsRecordOutcome::RecordFailed { pack },
+        };
+    }
+
+    fn finalize_record_failed_before_pack(&mut self) {
+        *self = Self::Finalized {
+            outcome: PyOpenSolveDiagnosticsRecordOutcome::RecordFailedBeforePack,
+        };
+    }
+}
+
+impl PyOpenSolveDiagnosticsRecordOutcome {
+    fn as_str(&self) -> &'static str {
+        match self {
+            Self::Stored { .. } => "stored",
+            Self::RecordFailed { .. } => "record_failed",
+            Self::RecordFailedBeforePack => "record_failed_before_pack",
+        }
+    }
+
+    fn to_dict<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDict>> {
+        let dict = PyDict::new(py);
+        dict.set_item("state", self.as_str())?;
+        match self {
+            Self::Stored { pack } | Self::RecordFailed { pack } => {
+                dict.set_item("pack", pack.as_str())?;
+            }
+            Self::RecordFailedBeforePack => {}
+        }
+        Ok(dict)
+    }
+}
+
+impl PyOpenSolveDiagnosticsPackOutcome {
+    fn as_str(&self) -> &'static str {
+        match self {
+            Self::Disabled => "disabled",
+            Self::Empty => "empty",
+            Self::Attached => "attached",
+            Self::SerializationFailed => "serialization_failed",
         }
     }
 }
@@ -1509,6 +2616,12 @@ impl PyDiagnosticCollector {
 
     fn pack(&self, py: Python<'_>) -> Result<Option<SolveDiagnosticPayload>> {
         DiagnosticReport::pack_reports(py, &self.diagnostics)
+    }
+}
+
+impl Default for PyDiagnosticCollector {
+    fn default() -> Self {
+        Self::new_inner()
     }
 }
 
@@ -1657,6 +2770,25 @@ impl<'py> SolverAdapter<'py> {
         self.adapter.py()
     }
 
+    fn instantiate(
+        &self,
+        instance: &crate::Instance,
+        kwargs: Option<&Bound<'py, PyDict>>,
+    ) -> PyResult<Py<PyAny>> {
+        let py = self.py();
+        let adapter_instance = Py::new(py, instance.clone())?;
+        let call_kwargs = PyDict::new(py);
+        if let Some(kwargs) = kwargs {
+            for (key, value) in kwargs.iter() {
+                call_kwargs.set_item(key, value)?;
+            }
+        }
+        Ok(self
+            .adapter
+            .call((adapter_instance,), Some(&call_kwargs))?
+            .unbind())
+    }
+
     fn solve(
         &self,
         instance: &crate::Instance,
@@ -1701,6 +2833,33 @@ fn dump_kwargs(py: Python<'_>, kwargs: Option<&Bound<PyDict>>) -> Result<String>
     Ok(encoded)
 }
 
+fn clone_kwargs_dict(py: Python<'_>, kwargs: Option<&Bound<PyDict>>) -> Result<Py<PyDict>> {
+    let cloned = PyDict::new(py);
+    if let Some(kwargs) = kwargs {
+        for (key, value) in kwargs.iter() {
+            cloned.set_item(key, value)?;
+        }
+    }
+    Ok(cloned.unbind())
+}
+
+fn dump_merged_kwargs(
+    py: Python<'_>,
+    base: &Py<PyDict>,
+    kwargs: Option<&Bound<PyDict>>,
+) -> Result<String> {
+    let merged = PyDict::new(py);
+    for (key, value) in base.bind(py).iter() {
+        merged.set_item(key, value)?;
+    }
+    if let Some(kwargs) = kwargs {
+        for (key, value) in kwargs.iter() {
+            merged.set_item(key, value)?;
+        }
+    }
+    dump_kwargs(py, Some(&merged))
+}
+
 fn reject_reserved_log_solve_kwargs(kwargs: Option<&Bound<PyDict>>) -> Result<()> {
     let Some(kwargs) = kwargs else {
         return Ok(());
@@ -1710,6 +2869,22 @@ fn reject_reserved_log_solve_kwargs(kwargs: Option<&Bound<PyDict>>) -> Result<()
         .extract()?;
     if has_diagnostics {
         anyhow::bail!("Run.log_solve owns the `diagnostics` adapter option");
+    }
+    Ok(())
+}
+
+fn reject_reserved_open_solve_kwargs(kwargs: Option<&Bound<PyDict>>) -> Result<()> {
+    let Some(kwargs) = kwargs else {
+        return Ok(());
+    };
+    let has_diagnostics: bool = kwargs
+        .call_method1("__contains__", ("diagnostics",))?
+        .extract()?;
+    if has_diagnostics {
+        anyhow::bail!(
+            "Run.open_solve owns the `diagnostics` adapter option; \
+             pass `store_diagnostics=True` and use `solve.diagnostics` inside the context"
+        );
     }
     Ok(())
 }

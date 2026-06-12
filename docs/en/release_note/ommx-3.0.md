@@ -8,9 +8,19 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+## 3.0.0 Alpha 7
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0a7-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0a7)
+
+### 🆕 Manual `solver_input` workflows in Experiment records ([#934](https://github.com/Jij-Inc/ommx/pull/934))
+
+{meth}`~ommx.experiment.Run.open_solve` now opens a manual Solve scope for advanced solver features that are not covered by the Adapter API. Inside the scope, use `solve.solver_input` to operate the backend solver model directly, run the backend optimizer, then call `solve.decode(...)` so the decoded {class}`~ommx.v1.Solution` becomes the Experiment Solve output. Manual adapter options can be recorded with `solve.log_adapter_option(...)`, and `store_diagnostics=True` stores diagnostics recorded through `solve.diagnostics` until the scope exits. After the scope closes, {attr}`~ommx.experiment.OpenSolve.terminal_state` exposes the final outcome plus trace and diagnostics finalization state for advanced debugging.
+
+See the [Experiment management tutorial](../tutorial/experiment_management.md) for the workflow example.
+
 ## 3.0.0 Alpha 6
 
-[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0a6-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0a5)
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0a6-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0a6)
 
 ### 🆕 Adapter-specific solve diagnostics ([#913](https://github.com/Jij-Inc/ommx/pull/913))
 

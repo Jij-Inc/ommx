@@ -184,6 +184,27 @@ All data stored during the experiment is saved in OMMX's *Local Registry*.
 - `log_json` and `log_solve` store data in the Local Registry immediately. They do not keep everything in memory and save it all at the end of the Experiment. Since storage paths are determined from the content of the data (SHA256 hash), identical data is stored only once per Local Registry.
 - When the Experiment is finalized, OMMX stores JSON (the Artifact Manifest) that lists all data saved during the Experiment, and stores a tag in the Local Registry pointing to this Artifact Manifest under the Experiment name chosen at startup or generated automatically.
 
+### When You Need Direct Solver Model Access
+
+Most runs should use {py:meth}`~ommx.experiment.Run.log_solve`, which calls the adapter's `solve` method and records the input, output, adapter name, and adapter options in one step. When you need advanced solver features that the Adapter API does not cover, open a manual Solve scope.
+
+In a manual Solve scope, first get the backend solver model through `solver_input`, then operate on that model and run the optimization yourself. Finally, call `solve.decode(model)`: the adapter converts the backend result into an {py:class}`~ommx.v1.Solution`, and that Solution becomes the output of the Solve recorded in the Experiment.
+
+```python
+with experiment.run() as run:
+    run.log_parameter("capacity", c)
+
+    with run.open_solve(OMMXHighsAdapter, instance, verbose=False) as solve:
+        model = solve.solver_input
+        model.setOptionValue("time_limit", 10.0)
+        solve.log_adapter_option("time_limit", 10.0)
+
+        model.run()
+        solution = solve.decode(model)
+```
+
+`solve.log_adapter_option(...)` is a helper for recording options set directly on the backend model in `Solve.adapter_options`. See {py:class}`~ommx.experiment.OpenSolve` for details about `open_solve`, diagnostics, traces, and failure handling.
+
 ## Share the Experiment
 
 To share an experiment, it needs a name that identifies it. The Experiment name can be specified at startup with `Experiment(name=...)`, or changed during or after the experiment with {py:meth}`~ommx.experiment.Experiment.rename`. If omitted, a default name is generated in the following format.
