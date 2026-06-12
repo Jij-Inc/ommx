@@ -6,6 +6,7 @@ from typing import Any, ClassVar, cast
 import pandas as pd
 import pytest
 from opentelemetry import trace as otel_trace
+from opentelemetry.proto.trace.v1.trace_pb2 import Status as ProtoStatus
 
 from ommx.adapter import SolverAdapter
 from ommx.experiment import Experiment
@@ -375,6 +376,40 @@ def test_store_trace_records_open_solve_scope_in_artifact():
     tree = render_text_tree(trace)
     assert "Solve" in tree
     assert "ommx.solve.id=0" in tree
+
+
+def test_store_trace_marks_open_solve_missing_decode_span_error():
+    class ManualAdapter(SolverAdapter):
+        def __init__(self, ommx_instance: Instance):
+            super().__init__(ommx_instance)
+
+        @classmethod
+        def solve(
+            cls,
+            ommx_instance: Instance,
+            *,
+            diagnostics: Any | None = None,
+        ) -> Solution:
+            raise AssertionError("direct solver_input workflow should not call solve")
+
+        @property
+        def solver_input(self) -> dict[str, object]:
+            return {}
+
+        def decode(self, data: dict[str, object]) -> Solution:
+            raise NotImplementedError
+
+    experiment = Experiment.with_temp_local_registry(store_trace=True)
+
+    with pytest.raises(RuntimeError, match="OpenSolve.decode"):
+        with experiment.run() as run:
+            with run.open_solve(ManualAdapter, Instance.empty()) as solve:
+                assert solve.solve_id == 0
+
+    loaded = Experiment.from_artifact(experiment.commit())
+    trace = _require_trace(loaded.runs[0].trace)
+    solve_span = _single_trace_span(trace, "Solve")
+    assert solve_span.status.code == ProtoStatus.STATUS_CODE_ERROR
 
 
 def test_fork_store_trace_carries_parent_run_trace():
@@ -944,6 +979,56 @@ def test_open_solve_records_failed_attempt_when_adapter_construction_fails():
     assert str(solve.adapter).endswith("FailingConstructorAdapter")
     assert solve.adapter_options == {"label": "construction-failure"}
     assert solve.diagnostics == []
+
+
+def test_open_solve_failed_decode_clears_previous_decoded_solution():
+    class ManualAdapter(SolverAdapter):
+        def __init__(self, ommx_instance: Instance):
+            super().__init__(ommx_instance)
+            self.instance = ommx_instance
+            self.model: dict[str, object] = {"decode_fails": False}
+
+        @classmethod
+        def solve(
+            cls,
+            ommx_instance: Instance,
+            *,
+            diagnostics: Any | None = None,
+            **kwargs: object,
+        ) -> Solution:
+            raise AssertionError("direct solver_input workflow should not call solve")
+
+        @property
+        def solver_input(self) -> dict[str, object]:
+            return self.model
+
+        def decode(self, data: dict[str, object]) -> Solution:
+            if data["decode_fails"]:
+                raise RuntimeError("decode failed")
+            solution = self.instance.evaluate({})
+            solution.add_user_annotation("decode", "first")
+            return solution
+
+    instance = Instance.empty()
+    instance.add_user_annotation("source", "open-decode-failed-input")
+    experiment = Experiment.with_temp_local_registry()
+
+    with pytest.raises(RuntimeError, match="decode failed"):
+        with experiment.run() as run:
+            with run.open_solve(ManualAdapter, instance) as solve:
+                model = solve.solver_input
+                first_solution = solve.decode(model)
+                assert first_solution.get_user_annotation("decode") == "first"
+                model["decode_fails"] = True
+                solve.decode(model)
+
+    loaded = Experiment.from_artifact(experiment.commit())
+    run = loaded.runs[0]
+    assert run.status == "failed"
+    solve = run.solves[0]
+    assert solve.status == "failed"
+    assert solve.input.get_user_annotation("source") == "open-decode-failed-input"
+    assert solve.output is None
 
 
 def test_open_solve_records_failed_attempt_on_exception():
