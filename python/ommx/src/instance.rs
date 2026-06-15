@@ -66,7 +66,6 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 #[derive(Clone)]
 pub struct Instance {
     pub(crate) inner: ommx::Instance,
-    pub(crate) annotations: ommx::artifact::InstanceAnnotations,
 }
 
 crate::annotations::impl_instance_annotations!(Instance, "org.ommx.v1.instance");
@@ -231,10 +230,7 @@ impl Instance {
             nf_meta.insert(id, m);
         }
 
-        Ok(Self {
-            inner,
-            annotations: ommx::artifact::InstanceAnnotations::default(),
-        })
+        Ok(Self { inner })
     }
 
     /// Create trivial empty instance of minimization with zero objective, no constraints, and no decision variables.
@@ -905,7 +901,6 @@ impl Instance {
     pub fn as_parametric_instance(&self) -> ParametricInstance {
         ParametricInstance {
             inner: self.inner.clone().into(),
-            annotations: ommx::artifact::ParametricInstanceAnnotations::default(),
         }
     }
 
@@ -961,7 +956,6 @@ impl Instance {
         let parametric_instance = self.inner.clone().penalty_method()?;
         Ok(ParametricInstance {
             inner: parametric_instance,
-            annotations: ommx::artifact::ParametricInstanceAnnotations::default(),
         })
     }
 
@@ -1026,7 +1020,6 @@ impl Instance {
         let parametric_instance = self.inner.clone().uniform_penalty_method()?;
         Ok(ParametricInstance {
             inner: parametric_instance,
-            annotations: ommx::artifact::ParametricInstanceAnnotations::default(),
         })
     }
 
@@ -1086,10 +1079,7 @@ impl Instance {
             .inner
             .evaluate(&state.0, atol)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-        Ok(Solution {
-            inner: solution,
-            annotations: ommx::artifact::SolutionAnnotations::default(),
-        })
+        Ok(Solution { inner: solution })
     }
 
     /// Creates a new instance with specific decision variables fixed to given values.
@@ -1151,10 +1141,7 @@ impl Instance {
         new_inner
             .partial_evaluate(&state.0, atol)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-        Ok(Self {
-            inner: new_inner,
-            annotations: self.annotations.clone(),
-        })
+        Ok(Self { inner: new_inner })
     }
 
     #[pyo3(signature = (samples, *, atol=None))]
@@ -1171,7 +1158,6 @@ impl Instance {
         };
         Ok(SampleSet {
             inner: self.inner.evaluate_samples(&samples.0, atol)?,
-            annotations: ommx::artifact::SampleSetAnnotations::default(),
         })
     }
 
@@ -2504,10 +2490,7 @@ impl Instance {
     pub fn load_mps(py: Python<'_>, path: String) -> Result<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let instance = ommx::mps::load(path)?;
-        Ok(Self {
-            inner: instance,
-            annotations: ommx::artifact::InstanceAnnotations::default(),
-        })
+        Ok(Self { inner: instance })
     }
 
     #[pyo3(signature = (path, compress = true))]
@@ -2521,10 +2504,7 @@ impl Instance {
     pub fn load_qplib(py: Python<'_>, path: String) -> Result<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let instance = ommx::qplib::load(path)?;
-        Ok(Self {
-            inner: instance,
-            annotations: ommx::artifact::InstanceAnnotations::default(),
-        })
+        Ok(Self { inner: instance })
     }
 
     /// Generate folded stack format for memory profiling of this instance.

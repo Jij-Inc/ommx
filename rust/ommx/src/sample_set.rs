@@ -128,7 +128,7 @@ pub struct SampleSet {
     #[getset(get = "pub")]
     feasible_relaxed: BTreeMap<SampleID, bool>,
     /// OMMX-defined provenance metadata.
-    pub metadata: Option<crate::v1::sample_set::Metadata>,
+    pub metadata: Option<crate::v1::ProcessMetadata>,
     /// User-defined or third-party extension annotations.
     pub annotations: HashMap<String, String>,
 }

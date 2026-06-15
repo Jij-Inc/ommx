@@ -11,94 +11,134 @@ pub fn normalize_namespace(ns: &str) -> String {
     }
 }
 
+/// Cross-module conversion boundary for Python wrappers that need the
+/// annotation-aware protobuf representation without exposing wrapper internals.
 pub(crate) fn instance_to_v1_with_annotations(instance: &crate::Instance) -> ommx::v1::Instance {
-    let mut proto: ommx::v1::Instance = instance.inner.clone().into();
-    instance.annotations.overlay_into_v1_instance(&mut proto);
-    proto
+    instance.inner.clone().into()
 }
 
+/// Cross-module artifact-read boundary: descriptor annotations from old
+/// artifacts are merged into the protobuf before the Python wrapper is built.
 pub(crate) fn instance_from_v1_with_descriptor_annotations(
     mut proto: ommx::v1::Instance,
     descriptor_annotations: HashMap<String, String>,
 ) -> Result<crate::Instance> {
     ommx::artifact::InstanceAnnotations::from(descriptor_annotations)
         .merge_into_v1_instance(&mut proto);
-    let annotations = ommx::artifact::InstanceAnnotations::from_v1_instance(&proto);
     Ok(crate::Instance {
         inner: proto.try_into()?,
-        annotations,
     })
 }
 
+/// Cross-module conversion boundary for Python wrappers that need the
+/// annotation-aware protobuf representation without exposing wrapper internals.
 pub(crate) fn parametric_instance_to_v1_with_annotations(
     instance: &crate::ParametricInstance,
 ) -> ommx::v1::ParametricInstance {
-    let mut proto: ommx::v1::ParametricInstance = instance.inner.clone().into();
-    instance
-        .annotations
-        .overlay_into_v1_parametric_instance(&mut proto);
-    proto
+    instance.inner.clone().into()
 }
 
+/// Cross-module artifact-read boundary: descriptor annotations from old
+/// artifacts are merged into the protobuf before the Python wrapper is built.
 pub(crate) fn parametric_instance_from_v1_with_descriptor_annotations(
     mut proto: ommx::v1::ParametricInstance,
     descriptor_annotations: HashMap<String, String>,
 ) -> Result<crate::ParametricInstance> {
     ommx::artifact::ParametricInstanceAnnotations::from(descriptor_annotations)
         .merge_into_v1_parametric_instance(&mut proto);
-    let annotations =
-        ommx::artifact::ParametricInstanceAnnotations::from_v1_parametric_instance(&proto);
     Ok(crate::ParametricInstance {
         inner: proto.parse(&())?,
-        annotations,
     })
 }
 
+/// Cross-module conversion boundary for Python wrappers that need the
+/// annotation-aware protobuf representation without exposing wrapper internals.
 pub(crate) fn solution_to_v1_with_annotations(solution: &crate::Solution) -> ommx::v1::Solution {
-    let mut proto: ommx::v1::Solution = solution.inner.clone().into();
-    solution.annotations.overlay_into_v1_solution(&mut proto);
-    proto
+    solution.inner.clone().into()
 }
 
+/// Cross-module artifact-read boundary: descriptor annotations from old
+/// artifacts are merged into the protobuf before the Python wrapper is built.
 pub(crate) fn solution_from_v1_with_descriptor_annotations(
     mut proto: ommx::v1::Solution,
     descriptor_annotations: HashMap<String, String>,
 ) -> Result<crate::Solution> {
     ommx::artifact::SolutionAnnotations::from(descriptor_annotations)
         .merge_into_v1_solution(&mut proto);
-    let annotations = ommx::artifact::SolutionAnnotations::from_v1_solution(&proto);
     Ok(crate::Solution {
         inner: proto.parse(&())?,
-        annotations,
     })
 }
 
+/// Cross-module conversion boundary for Python wrappers that need the
+/// annotation-aware protobuf representation without exposing wrapper internals.
 pub(crate) fn sample_set_to_v1_with_annotations(
     sample_set: &crate::SampleSet,
 ) -> ommx::v1::SampleSet {
-    let mut proto: ommx::v1::SampleSet = sample_set.inner.clone().into();
-    sample_set
-        .annotations
-        .overlay_into_v1_sample_set(&mut proto);
-    proto
+    sample_set.inner.clone().into()
 }
 
+/// Cross-module artifact-read boundary: descriptor annotations from old
+/// artifacts are merged into the protobuf before the Python wrapper is built.
 pub(crate) fn sample_set_from_v1_with_descriptor_annotations(
     mut proto: ommx::v1::SampleSet,
     descriptor_annotations: HashMap<String, String>,
 ) -> Result<crate::SampleSet> {
     ommx::artifact::SampleSetAnnotations::from(descriptor_annotations)
         .merge_into_v1_sample_set(&mut proto);
-    let annotations = ommx::artifact::SampleSetAnnotations::from_v1_sample_set(&proto);
     Ok(crate::SampleSet {
         inner: proto.parse(&())?,
-        annotations,
     })
 }
 
+/// Cross-module experiment/artifact boundary: build descriptor annotations
+/// from the protobuf-backed `Instance` source of truth.
+pub(crate) fn instance_descriptor_annotations(
+    instance: &crate::Instance,
+) -> ommx::artifact::InstanceAnnotations {
+    let proto = instance_to_v1_with_annotations(instance);
+    ommx::artifact::InstanceAnnotations::from_v1_instance(&proto)
+}
+
+/// Cross-module experiment/artifact boundary: build descriptor annotations
+/// from the protobuf-backed `ParametricInstance` source of truth.
+pub(crate) fn parametric_instance_descriptor_annotations(
+    instance: &crate::ParametricInstance,
+) -> ommx::artifact::ParametricInstanceAnnotations {
+    let proto = parametric_instance_to_v1_with_annotations(instance);
+    ommx::artifact::ParametricInstanceAnnotations::from_v1_parametric_instance(&proto)
+}
+
+/// Cross-module experiment/artifact boundary: build descriptor annotations
+/// from the protobuf-backed `Solution` source of truth.
+pub(crate) fn solution_descriptor_annotations(
+    solution: &crate::Solution,
+) -> ommx::artifact::SolutionAnnotations {
+    let proto = solution_to_v1_with_annotations(solution);
+    ommx::artifact::SolutionAnnotations::from_v1_solution(&proto)
+}
+
+/// Cross-module experiment/artifact boundary: build descriptor annotations
+/// from the protobuf-backed `SampleSet` source of truth.
+pub(crate) fn sample_set_descriptor_annotations(
+    sample_set: &crate::SampleSet,
+) -> ommx::artifact::SampleSetAnnotations {
+    let proto = sample_set_to_v1_with_annotations(sample_set);
+    ommx::artifact::SampleSetAnnotations::from_v1_sample_set(&proto)
+}
+
+/// Crate-wide wrapper contract used by annotation macros expanded in sibling
+/// modules. The trait keeps annotation projection owned by this module while
+/// allowing each Python wrapper to update its protobuf-backed `inner` value.
 pub(crate) trait FlatAnnotations {
     fn flat_annotations(&self) -> HashMap<String, String>;
-    fn set_flat_annotations(&mut self, annotations: HashMap<String, String>);
+    fn set_flat_annotations(&mut self, annotations: HashMap<String, String>) -> Result<()>;
+
+    fn insert_flat_annotation(&mut self, key: String, value: String) -> Result<()> {
+        let mut annotations = self.flat_annotations();
+        annotations.insert(key, value);
+        self.set_flat_annotations(annotations)
+    }
 }
 
 impl FlatAnnotations for crate::Instance {
@@ -107,8 +147,11 @@ impl FlatAnnotations for crate::Instance {
         ommx::artifact::InstanceAnnotations::from_v1_instance(&proto).into_inner()
     }
 
-    fn set_flat_annotations(&mut self, annotations: HashMap<String, String>) {
-        self.annotations = annotations.into();
+    fn set_flat_annotations(&mut self, annotations: HashMap<String, String>) -> Result<()> {
+        let mut proto = instance_to_v1_with_annotations(self);
+        ommx::artifact::InstanceAnnotations::from(annotations).overlay_into_v1_instance(&mut proto);
+        self.inner = proto.try_into()?;
+        Ok(())
     }
 }
 
@@ -119,8 +162,12 @@ impl FlatAnnotations for crate::ParametricInstance {
             .into_inner()
     }
 
-    fn set_flat_annotations(&mut self, annotations: HashMap<String, String>) {
-        self.annotations = annotations.into();
+    fn set_flat_annotations(&mut self, annotations: HashMap<String, String>) -> Result<()> {
+        let mut proto = parametric_instance_to_v1_with_annotations(self);
+        ommx::artifact::ParametricInstanceAnnotations::from(annotations)
+            .overlay_into_v1_parametric_instance(&mut proto);
+        self.inner = proto.parse(&())?;
+        Ok(())
     }
 }
 
@@ -130,8 +177,11 @@ impl FlatAnnotations for crate::Solution {
         ommx::artifact::SolutionAnnotations::from_v1_solution(&proto).into_inner()
     }
 
-    fn set_flat_annotations(&mut self, annotations: HashMap<String, String>) {
-        self.annotations = annotations.into();
+    fn set_flat_annotations(&mut self, annotations: HashMap<String, String>) -> Result<()> {
+        let mut proto = solution_to_v1_with_annotations(self);
+        ommx::artifact::SolutionAnnotations::from(annotations).overlay_into_v1_solution(&mut proto);
+        self.inner = proto.parse(&())?;
+        Ok(())
     }
 }
 
@@ -141,8 +191,12 @@ impl FlatAnnotations for crate::SampleSet {
         ommx::artifact::SampleSetAnnotations::from_v1_sample_set(&proto).into_inner()
     }
 
-    fn set_flat_annotations(&mut self, annotations: HashMap<String, String>) {
-        self.annotations = annotations.into();
+    fn set_flat_annotations(&mut self, annotations: HashMap<String, String>) -> Result<()> {
+        let mut proto = sample_set_to_v1_with_annotations(self);
+        ommx::artifact::SampleSetAnnotations::from(annotations)
+            .overlay_into_v1_sample_set(&mut proto);
+        self.inner = proto.parse(&())?;
+        Ok(())
     }
 }
 
@@ -173,8 +227,8 @@ macro_rules! impl_instance_annotations {
             pub fn set_annotations(
                 &mut self,
                 annotations: std::collections::HashMap<String, String>,
-            ) {
-                $crate::annotations::FlatAnnotations::set_flat_annotations(self, annotations);
+            ) -> anyhow::Result<()> {
+                $crate::annotations::FlatAnnotations::set_flat_annotations(self, annotations)
             }
 
             #[pyo3(signature = (key, value, *, annotation_namespace = "org.ommx.user."))]
@@ -185,7 +239,8 @@ macro_rules! impl_instance_annotations {
                 annotation_namespace: &str,
             ) {
                 let ns = $crate::annotations::normalize_namespace(annotation_namespace);
-                self.annotations
+                self.inner
+                    .annotations
                     .insert(format!("{ns}{key}"), value.to_string());
             }
 
@@ -197,7 +252,7 @@ macro_rules! impl_instance_annotations {
             ) {
                 let ns = $crate::annotations::normalize_namespace(annotation_namespace);
                 for (key, value) in annotations {
-                    self.annotations.insert(format!("{ns}{key}"), value);
+                    self.inner.annotations.insert(format!("{ns}{key}"), value);
                 }
             }
 
@@ -240,9 +295,12 @@ macro_rules! impl_instance_annotations {
             }
 
             #[setter]
-            pub fn set_title(&mut self, value: String) {
-                self.annotations
-                    .insert(concat!($namespace, ".title").to_string(), value);
+            pub fn set_title(&mut self, value: String) -> anyhow::Result<()> {
+                $crate::annotations::FlatAnnotations::insert_flat_annotation(
+                    self,
+                    concat!($namespace, ".title").to_string(),
+                    value,
+                )
             }
 
             #[getter]
@@ -253,9 +311,12 @@ macro_rules! impl_instance_annotations {
             }
 
             #[setter]
-            pub fn set_license(&mut self, value: String) {
-                self.annotations
-                    .insert(concat!($namespace, ".license").to_string(), value);
+            pub fn set_license(&mut self, value: String) -> anyhow::Result<()> {
+                $crate::annotations::FlatAnnotations::insert_flat_annotation(
+                    self,
+                    concat!($namespace, ".license").to_string(),
+                    value,
+                )
             }
 
             #[getter]
@@ -266,9 +327,12 @@ macro_rules! impl_instance_annotations {
             }
 
             #[setter]
-            pub fn set_dataset(&mut self, value: String) {
-                self.annotations
-                    .insert(concat!($namespace, ".dataset").to_string(), value);
+            pub fn set_dataset(&mut self, value: String) -> anyhow::Result<()> {
+                $crate::annotations::FlatAnnotations::insert_flat_annotation(
+                    self,
+                    concat!($namespace, ".dataset").to_string(),
+                    value,
+                )
             }
 
             // --- String list property ---
@@ -283,13 +347,14 @@ macro_rules! impl_instance_annotations {
             }
 
             #[setter]
-            pub fn set_authors(&mut self, value: Vec<String>) {
+            pub fn set_authors(&mut self, value: Vec<String>) -> anyhow::Result<()> {
                 let key = concat!($namespace, ".authors").to_string();
-                if value.is_empty() {
-                    self.annotations.insert(key, String::new());
+                let value = if value.is_empty() {
+                    String::new()
                 } else {
-                    self.annotations.insert(key, value.join(","));
-                }
+                    value.join(",")
+                };
+                $crate::annotations::FlatAnnotations::insert_flat_annotation(self, key, value)
             }
 
             // --- Integer properties ---
@@ -301,27 +366,11 @@ macro_rules! impl_instance_annotations {
                     .and_then(|v| v.parse().ok())
             }
 
-            #[setter]
-            pub fn set_num_variables(&mut self, value: i64) {
-                self.annotations.insert(
-                    concat!($namespace, ".variables").to_string(),
-                    value.to_string(),
-                );
-            }
-
             #[getter]
             pub fn num_constraints(&self) -> Option<i64> {
                 self.annotations()
                     .get(concat!($namespace, ".constraints"))
                     .and_then(|v| v.parse().ok())
-            }
-
-            #[setter]
-            pub fn set_num_constraints(&mut self, value: i64) {
-                self.annotations.insert(
-                    concat!($namespace, ".constraints").to_string(),
-                    value.to_string(),
-                );
             }
 
             // --- Datetime property (RFC3339 string ↔ Python datetime via dateutil) ---
@@ -347,9 +396,12 @@ macro_rules! impl_instance_annotations {
                 value: &pyo3::Bound<'_, pyo3::types::PyDateTime>,
             ) -> pyo3::PyResult<()> {
                 let iso: String = value.call_method0("isoformat")?.extract()?;
-                self.annotations
-                    .insert(concat!($namespace, ".created").to_string(), iso);
-                Ok(())
+                $crate::annotations::FlatAnnotations::insert_flat_annotation(
+                    self,
+                    concat!($namespace, ".created").to_string(),
+                    iso,
+                )
+                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
             }
         }
     };
@@ -382,8 +434,8 @@ macro_rules! impl_solution_annotations {
             pub fn set_annotations(
                 &mut self,
                 annotations: std::collections::HashMap<String, String>,
-            ) {
-                $crate::annotations::FlatAnnotations::set_flat_annotations(self, annotations);
+            ) -> anyhow::Result<()> {
+                $crate::annotations::FlatAnnotations::set_flat_annotations(self, annotations)
             }
 
             #[pyo3(signature = (key, value, *, annotation_namespace = "org.ommx.user."))]
@@ -394,7 +446,8 @@ macro_rules! impl_solution_annotations {
                 annotation_namespace: &str,
             ) {
                 let ns = $crate::annotations::normalize_namespace(annotation_namespace);
-                self.annotations
+                self.inner
+                    .annotations
                     .insert(format!("{ns}{key}"), value.to_string());
             }
 
@@ -406,7 +459,7 @@ macro_rules! impl_solution_annotations {
             ) {
                 let ns = $crate::annotations::normalize_namespace(annotation_namespace);
                 for (key, value) in annotations {
-                    self.annotations.insert(format!("{ns}{key}"), value);
+                    self.inner.annotations.insert(format!("{ns}{key}"), value);
                 }
             }
 
@@ -449,9 +502,12 @@ macro_rules! impl_solution_annotations {
             }
 
             #[setter]
-            pub fn set_instance_digest(&mut self, value: String) {
-                self.annotations
-                    .insert(concat!($namespace, ".instance").to_string(), value);
+            pub fn set_instance_digest(&mut self, value: String) -> anyhow::Result<()> {
+                $crate::annotations::FlatAnnotations::insert_flat_annotation(
+                    self,
+                    concat!($namespace, ".instance").to_string(),
+                    value,
+                )
             }
 
             // --- JSON properties (serde_json ↔ Python object) ---
@@ -482,9 +538,12 @@ macro_rules! impl_solution_annotations {
                     .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
                 let json_str = serde_json::to_string(&json_value)
                     .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-                self.annotations
-                    .insert(concat!($namespace, ".solver").to_string(), json_str);
-                Ok(())
+                $crate::annotations::FlatAnnotations::insert_flat_annotation(
+                    self,
+                    concat!($namespace, ".solver").to_string(),
+                    json_str,
+                )
+                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
             }
 
             #[getter]
@@ -513,9 +572,12 @@ macro_rules! impl_solution_annotations {
                     .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
                 let json_str = serde_json::to_string(&json_value)
                     .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-                self.annotations
-                    .insert(concat!($namespace, ".parameters").to_string(), json_str);
-                Ok(())
+                $crate::annotations::FlatAnnotations::insert_flat_annotation(
+                    self,
+                    concat!($namespace, ".parameters").to_string(),
+                    json_str,
+                )
+                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
             }
 
             // --- Datetime properties (RFC3339 string ↔ Python datetime via dateutil) ---
@@ -541,9 +603,12 @@ macro_rules! impl_solution_annotations {
                 value: &pyo3::Bound<'_, pyo3::types::PyDateTime>,
             ) -> pyo3::PyResult<()> {
                 let iso: String = value.call_method0("isoformat")?.extract()?;
-                self.annotations
-                    .insert(concat!($namespace, ".start").to_string(), iso);
-                Ok(())
+                $crate::annotations::FlatAnnotations::insert_flat_annotation(
+                    self,
+                    concat!($namespace, ".start").to_string(),
+                    iso,
+                )
+                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
             }
 
             #[getter]
@@ -567,9 +632,12 @@ macro_rules! impl_solution_annotations {
                 value: &pyo3::Bound<'_, pyo3::types::PyDateTime>,
             ) -> pyo3::PyResult<()> {
                 let iso: String = value.call_method0("isoformat")?.extract()?;
-                self.annotations
-                    .insert(concat!($namespace, ".end").to_string(), iso);
-                Ok(())
+                $crate::annotations::FlatAnnotations::insert_flat_annotation(
+                    self,
+                    concat!($namespace, ".end").to_string(),
+                    iso,
+                )
+                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
             }
 
             // --- Backward-compatible aliases ---
@@ -583,7 +651,7 @@ macro_rules! impl_solution_annotations {
 
             #[setter]
             #[pyo3(name = "instance")]
-            pub fn set_instance_alias(&mut self, value: String) {
+            pub fn set_instance_alias(&mut self, value: String) -> anyhow::Result<()> {
                 self.set_instance_digest(value)
             }
 
@@ -626,5 +694,7 @@ macro_rules! impl_solution_annotations {
     };
 }
 
+/// Crate-wide macro export for Instance-like Python wrappers in sibling modules.
 pub(crate) use impl_instance_annotations;
+/// Crate-wide macro export for Solution-like Python wrappers in sibling modules.
 pub(crate) use impl_solution_annotations;

@@ -134,7 +134,7 @@ pub struct Solution {
     #[getset(get = "pub")]
     sense: Option<Sense>,
     /// OMMX-defined provenance metadata.
-    pub metadata: Option<crate::v1::solution::Metadata>,
+    pub metadata: Option<crate::v1::ProcessMetadata>,
     /// User-defined or third-party extension annotations.
     pub annotations: HashMap<String, String>,
 }

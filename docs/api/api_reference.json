@@ -16820,7 +16820,8 @@
                   }
                 ]
               },
-              "is_property": true
+              "is_property": true,
+              "is_readonly": true
             },
             {
               "name": "num_variables",
@@ -16836,7 +16837,8 @@
                   }
                 ]
               },
-              "is_property": true
+              "is_property": true,
+              "is_readonly": true
             },
             {
               "name": "objective",
@@ -21886,7 +21888,8 @@
                   }
                 ]
               },
-              "is_property": true
+              "is_property": true,
+              "is_readonly": true
             },
             {
               "name": "num_variables",
@@ -21902,7 +21905,8 @@
                   }
                 ]
               },
-              "is_property": true
+              "is_property": true,
+              "is_readonly": true
             },
             {
               "name": "objective",

@@ -73,6 +73,13 @@ message Instance {
 
   repeated NamedFunction named_functions = 10;
 
+  // User-defined or third-party extension annotations.
+  //
+  // OMMX-reserved metadata must use explicit fields such as `description`.
+  // Keys in this map must be valid reverse-domain names and must not start with
+  // `org.ommx.v1.`.
+  map<string, string> annotations = 11;
+
   // Format version of this message for forward compatibility checks.
   //
   // - 0 means the format as of OMMX Python SDK 2.5.1 and earlier.
@@ -80,11 +87,4 @@ message Instance {
   // - Each SDK declares a current version; it writes that value and accepts any `<= current`. Data with a higher version fails with an "upgrade the SDK" error.
   // - Non-semantic-breaking additions keep protobuf's standard forward compatibility (unknown fields ignored) and do not bump this.
   uint32 format_version = 100;
-
-  // User-defined or third-party extension annotations.
-  //
-  // OMMX-reserved metadata must use explicit fields such as `description`.
-  // Keys in this map must be valid reverse-domain names and must not start with
-  // `org.ommx.v1.`.
-  map<string, string> annotations = 11;
 }

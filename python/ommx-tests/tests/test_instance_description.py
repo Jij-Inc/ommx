@@ -1,6 +1,6 @@
 """Tests for Instance description property."""
 
-from ommx.v1 import Instance, DecisionVariable
+from ommx.v1 import Instance, DecisionVariable, Parameter, ParametricInstance
 
 
 def test_instance_description_none():
@@ -77,4 +77,40 @@ def test_solution_annotations_round_trip_through_bytes():
 
     assert restored.solver == {"name": "unit-solver"}
     assert restored.parameters == {"time_limit": 1}
+    assert restored.get_user_annotation("source") == "bytes"
+
+
+def test_parametric_instance_annotations_round_trip_through_bytes():
+    """ParametricInstance annotations are persisted in protobuf."""
+    x = DecisionVariable.binary(0)
+    p = Parameter(100, name="p")
+    instance = ParametricInstance.from_components(
+        decision_variables=[x],
+        parameters=[p],
+        objective=x + p,
+        constraints={},
+        sense=Instance.MINIMIZE,
+    )
+    instance.title = "Parametric Proto Title"
+    instance.add_user_annotation("source", "bytes")
+
+    restored = ParametricInstance.from_bytes(instance.to_bytes())
+
+    assert restored.title == "Parametric Proto Title"
+    assert restored.get_user_annotation("source") == "bytes"
+    assert restored.description is not None
+    assert restored.description.name == "Parametric Proto Title"
+
+
+def test_sample_set_annotations_round_trip_through_bytes():
+    """SampleSet provenance and user annotations are persisted in protobuf."""
+    sample_set = Instance.empty().evaluate_samples([{}])
+    sample_set.solver = {"name": "unit-sampler"}
+    sample_set.parameters = {"num_reads": 10}
+    sample_set.add_user_annotation("source", "bytes")
+
+    restored = type(sample_set).from_bytes(sample_set.to_bytes())
+
+    assert restored.solver == {"name": "unit-sampler"}
+    assert restored.parameters == {"num_reads": 10}
     assert restored.get_user_annotation("source") == "bytes"

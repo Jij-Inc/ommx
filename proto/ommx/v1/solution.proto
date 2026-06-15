@@ -30,21 +30,22 @@ enum Relaxation {
   RELAXATION_LP_RELAXED = 1;
 }
 
+// Metadata for an optimization or sampling process that produced a Solution or SampleSet.
+message ProcessMetadata {
+  // Digest of the corresponding Instance, when this output is stored with one.
+  optional string instance = 1;
+  // Solver or sampler information encoded as JSON.
+  optional string solver = 2;
+  // Solver or sampler parameters encoded as JSON.
+  optional string parameters = 3;
+  // Solver or sampler start time encoded as an RFC3339 string.
+  optional string start = 4;
+  // Solver or sampler end time encoded as an RFC3339 string.
+  optional string end = 5;
+}
+
 // Solution with evaluated objective and constraints
 message Solution {
-  message Metadata {
-    // Digest of the corresponding Instance, when this Solution is stored with one.
-    optional string instance = 1;
-    // Solver information encoded as JSON.
-    optional string solver = 2;
-    // Solver parameters encoded as JSON.
-    optional string parameters = 3;
-    // Solver start time encoded as an RFC3339 string.
-    optional string start = 4;
-    // Solver end time encoded as an RFC3339 string.
-    optional string end = 5;
-  }
-
   State state = 1;
   double objective = 2;
 
@@ -78,12 +79,8 @@ message Solution {
   // Whether the problem is a minimization or maximization problem.
   Instance.Sense sense = 10;
 
-  // Format version of this message for forward compatibility checks.
-  // See `Instance.format_version` for semantics.
-  uint32 format_version = 100;
-
   // OMMX-defined provenance metadata for this Solution.
-  Metadata metadata = 12;
+  ProcessMetadata metadata = 12;
 
   // User-defined or third-party extension annotations.
   //
@@ -91,6 +88,10 @@ message Solution {
   // Keys in this map must be valid reverse-domain names and must not start with
   // `org.ommx.v1.`.
   map<string, string> annotations = 13;
+
+  // Format version of this message for forward compatibility checks.
+  // See `Instance.format_version` for semantics.
+  uint32 format_version = 100;
 }
 
 // The solver proved that the problem is infeasible.

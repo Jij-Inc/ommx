@@ -187,7 +187,7 @@ fn overlay_description_annotations(
 fn insert_solution_metadata_annotations(
     annotations: &mut HashMap<String, String>,
     namespace: &str,
-    metadata: &Option<crate::v1::solution::Metadata>,
+    metadata: &Option<crate::v1::ProcessMetadata>,
 ) {
     let Some(metadata) = metadata else {
         return;
@@ -210,7 +210,7 @@ fn insert_solution_metadata_annotations(
 }
 
 fn merge_solution_metadata_annotations(
-    target: &mut Option<crate::v1::solution::Metadata>,
+    target: &mut Option<crate::v1::ProcessMetadata>,
     source: &HashMap<String, String>,
     namespace: &str,
 ) {
@@ -226,7 +226,7 @@ fn merge_solution_metadata_annotations(
         || source.contains_key(&start_key)
         || source.contains_key(&end_key)
     {
-        let target = target.get_or_insert_with(crate::v1::solution::Metadata::default);
+        let target = target.get_or_insert_with(crate::v1::ProcessMetadata::default);
         if target.instance.is_none() {
             target.instance = source.get(&instance_key).cloned();
         }
@@ -246,7 +246,7 @@ fn merge_solution_metadata_annotations(
 }
 
 fn overlay_solution_metadata_annotations(
-    target: &mut Option<crate::v1::solution::Metadata>,
+    target: &mut Option<crate::v1::ProcessMetadata>,
     source: &HashMap<String, String>,
     namespace: &str,
 ) {
@@ -262,7 +262,7 @@ fn overlay_solution_metadata_annotations(
         || source.contains_key(&start_key)
         || source.contains_key(&end_key)
     {
-        let target = target.get_or_insert_with(crate::v1::solution::Metadata::default);
+        let target = target.get_or_insert_with(crate::v1::ProcessMetadata::default);
         if let Some(value) = source.get(&instance_key) {
             target.instance = Some(value.clone());
         }
@@ -284,7 +284,7 @@ fn overlay_solution_metadata_annotations(
 fn insert_sample_set_metadata_annotations(
     annotations: &mut HashMap<String, String>,
     namespace: &str,
-    metadata: &Option<crate::v1::sample_set::Metadata>,
+    metadata: &Option<crate::v1::ProcessMetadata>,
 ) {
     let Some(metadata) = metadata else {
         return;
@@ -307,7 +307,7 @@ fn insert_sample_set_metadata_annotations(
 }
 
 fn merge_sample_set_metadata_annotations(
-    target: &mut Option<crate::v1::sample_set::Metadata>,
+    target: &mut Option<crate::v1::ProcessMetadata>,
     source: &HashMap<String, String>,
     namespace: &str,
 ) {
@@ -323,7 +323,7 @@ fn merge_sample_set_metadata_annotations(
         || source.contains_key(&start_key)
         || source.contains_key(&end_key)
     {
-        let target = target.get_or_insert_with(crate::v1::sample_set::Metadata::default);
+        let target = target.get_or_insert_with(crate::v1::ProcessMetadata::default);
         if target.instance.is_none() {
             target.instance = source.get(&instance_key).cloned();
         }
@@ -343,7 +343,7 @@ fn merge_sample_set_metadata_annotations(
 }
 
 fn overlay_sample_set_metadata_annotations(
-    target: &mut Option<crate::v1::sample_set::Metadata>,
+    target: &mut Option<crate::v1::ProcessMetadata>,
     source: &HashMap<String, String>,
     namespace: &str,
 ) {
@@ -359,7 +359,7 @@ fn overlay_sample_set_metadata_annotations(
         || source.contains_key(&start_key)
         || source.contains_key(&end_key)
     {
-        let target = target.get_or_insert_with(crate::v1::sample_set::Metadata::default);
+        let target = target.get_or_insert_with(crate::v1::ProcessMetadata::default);
         if let Some(value) = source.get(&instance_key) {
             target.instance = Some(value.clone());
         }

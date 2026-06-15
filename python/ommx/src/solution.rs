@@ -22,7 +22,6 @@ use std::collections::BTreeSet;
 #[derive(Clone)]
 pub struct Solution {
     pub(crate) inner: ommx::Solution,
-    pub(crate) annotations: ommx::artifact::SolutionAnnotations,
 }
 
 crate::annotations::impl_solution_annotations!(Solution, "org.ommx.v1.solution");

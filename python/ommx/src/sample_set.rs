@@ -86,7 +86,6 @@ use std::collections::{BTreeMap, BTreeSet};
 #[derive(Clone)]
 pub struct SampleSet {
     pub(crate) inner: ommx::SampleSet,
-    pub(crate) annotations: ommx::artifact::SampleSetAnnotations,
 }
 
 crate::annotations::impl_solution_annotations!(SampleSet, "org.ommx.v1.sample-set");
@@ -118,10 +117,7 @@ impl SampleSet {
             .inner
             .get(sample_id)
             .ok_or_else(|| anyhow::anyhow!("Unknown sample ID: {}", sample_id.into_inner()))?;
-        Ok(Solution {
-            inner: solution,
-            annotations: ommx::artifact::SolutionAnnotations::default(),
-        })
+        Ok(Solution { inner: solution })
     }
 
     /// Get sample by ID (alias for get method)
@@ -176,7 +172,6 @@ impl SampleSet {
     pub fn best_feasible(&self) -> Result<Solution> {
         Ok(Solution {
             inner: self.inner.best_feasible()?,
-            annotations: ommx::artifact::SolutionAnnotations::default(),
         })
     }
 
@@ -184,7 +179,6 @@ impl SampleSet {
     pub fn best_feasible_relaxed(&self) -> Result<Solution> {
         Ok(Solution {
             inner: self.inner.best_feasible_relaxed()?,
-            annotations: ommx::artifact::SolutionAnnotations::default(),
         })
     }
 

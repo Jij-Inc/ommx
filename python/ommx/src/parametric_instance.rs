@@ -16,7 +16,6 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 #[derive(Clone)]
 pub struct ParametricInstance {
     pub(crate) inner: ommx::ParametricInstance,
-    pub(crate) annotations: ommx::artifact::ParametricInstanceAnnotations,
 }
 
 crate::annotations::impl_instance_annotations!(
@@ -194,10 +193,7 @@ impl ParametricInstance {
             nf_meta.insert(id, m);
         }
 
-        Ok(Self {
-            inner,
-            annotations: ommx::artifact::ParametricInstanceAnnotations::default(),
-        })
+        Ok(Self { inner })
     }
 
     /// Create trivial empty instance of minimization with zero objective, no constraints, and no decision variables and parameters.
@@ -224,10 +220,7 @@ impl ParametricInstance {
         let mut v1_params = ommx::v1::Parameters::default();
         v1_params.entries = parameters;
         let instance = self.inner.clone().with_parameters(v1_params)?;
-        Ok(Instance {
-            inner: instance,
-            annotations: ommx::artifact::InstanceAnnotations::default(),
-        })
+        Ok(Instance { inner: instance })
     }
 
     /// Substitute decision variables with function expressions (in-place).
