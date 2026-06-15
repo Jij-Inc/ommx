@@ -1,15 +1,15 @@
 //! Experiment / Run handles and run lifecycle.
 
-use super::attachment::{read_file_attachment, store_attachment_descriptor};
 use super::{
     AttachmentLogger, ParameterValue, Run, RunEntry, RunStatus, SolveDiagnosticPayload, SolveEntry,
     SolveStatus, Trace,
 };
+use crate::artifact::local_registry::LocalRegistry;
 use crate::artifact::media_types;
-use crate::{Instance, ParametricInstance, SampleSet, Solution};
+use crate::{Instance, Solution};
 use anyhow::{ensure, Result};
-use oci_spec::image::MediaType;
-use std::{collections::HashMap, path::Path};
+use oci_spec::image::Descriptor;
+use std::collections::HashMap;
 
 /// Data needed to record a finished Solve.
 pub struct FinishedSolveRecord<'a> {
@@ -274,92 +274,19 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
 }
 
 impl<'exp, 'reg> AttachmentLogger for &mut Run<'exp, 'reg> {
-    fn log_attachment(
+    fn with_local_registry<R>(&self, f: impl FnOnce(&LocalRegistry) -> Result<R>) -> Result<R> {
+        f(self.experiment.registry)
+    }
+
+    fn register_attachment_descriptor(
         self,
         name: &str,
-        media_type: MediaType,
-        bytes: impl AsRef<[u8]>,
-        annotations: HashMap<String, String>,
+        descriptor: Descriptor,
+        filename: Option<String>,
     ) -> Result<()> {
-        if self.attachments.contains_key(name) {
-            crate::bail!("Attachment `{name}` already exists");
-        }
-        let descriptor = store_attachment_descriptor(
-            self.experiment.registry,
-            media_type,
-            bytes.as_ref(),
-            annotations,
-        )?;
+        let descriptor = self.experiment.registry.stored_descriptor(descriptor)?;
         self.attachments
-            .insert(name.to_string(), descriptor, None)?;
-        Ok(())
-    }
-
-    fn log_file(
-        self,
-        name: &str,
-        path: impl AsRef<Path>,
-        media_type: Option<MediaType>,
-        filename: Option<&str>,
-    ) -> Result<()> {
-        let (media_type, bytes, filename) = read_file_attachment(path, media_type, filename)?;
-        if self.attachments.contains_key(name) {
-            crate::bail!("Attachment `{name}` already exists");
-        }
-        let descriptor = store_attachment_descriptor(
-            self.experiment.registry,
-            media_type,
-            bytes.as_ref(),
-            HashMap::new(),
-        )?;
-        self.attachments
-            .insert(name.to_string(), descriptor, Some(filename))?;
-        Ok(())
-    }
-
-    fn log_instance(self, name: &str, instance: &Instance) -> Result<()> {
-        if self.attachments.contains_key(name) {
-            crate::bail!("Attachment `{name}` already exists");
-        }
-        let descriptor = self.experiment.registry.store_instance_layer(instance)?;
-        self.attachments
-            .insert(name.to_string(), descriptor, None)?;
-        Ok(())
-    }
-
-    fn log_parametric_instance(self, name: &str, pi: &ParametricInstance) -> Result<()> {
-        if self.attachments.contains_key(name) {
-            crate::bail!("Attachment `{name}` already exists");
-        }
-        let descriptor = self
-            .experiment
-            .registry
-            .store_parametric_instance_layer(pi)?;
-        self.attachments
-            .insert(name.to_string(), descriptor, None)?;
-        Ok(())
-    }
-
-    fn log_solution(self, name: &str, solution: &Solution) -> Result<()> {
-        if self.attachments.contains_key(name) {
-            crate::bail!("Attachment `{name}` already exists");
-        }
-        let descriptor = self.experiment.registry.store_solution_layer(solution)?;
-        self.attachments
-            .insert(name.to_string(), descriptor, None)?;
-        Ok(())
-    }
-
-    fn log_sample_set(self, name: &str, sample_set: &SampleSet) -> Result<()> {
-        if self.attachments.contains_key(name) {
-            crate::bail!("Attachment `{name}` already exists");
-        }
-        let descriptor = self
-            .experiment
-            .registry
-            .store_sample_set_layer(sample_set)?;
-        self.attachments
-            .insert(name.to_string(), descriptor, None)?;
+            .insert(name.to_string(), descriptor, filename)?;
         Ok(())
     }
 }

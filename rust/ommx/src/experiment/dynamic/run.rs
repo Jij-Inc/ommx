@@ -1,6 +1,5 @@
 //! Dynamic-lifetime Run handle.
 
-use super::super::attachment::read_file_attachment;
 use super::super::parameter::ParameterSet;
 use super::super::{
     AttachmentLogger, AttachmentTable, FailedSolveRecord, FinishedSolveRecord, ParameterValue,
@@ -8,15 +7,15 @@ use super::super::{
 };
 use super::{
     bail_non_unsealed, ensure_unsealed_for_attachment_write, lock_experiment_state,
-    store_run_attachment_descriptor, store_trace_descriptor, ExperimentDyn, ExperimentDynLifecycle,
-    ExperimentDynState, RunEntryDyn, SolveEntryDyn,
+    store_trace_descriptor, ExperimentDyn, ExperimentDynLifecycle, ExperimentDynState, RunEntryDyn,
+    SolveEntryDyn,
 };
+use crate::artifact::local_registry::LocalRegistry;
 use crate::artifact::media_types;
-use crate::{Instance, ParametricInstance, SampleSet, Solution};
 use anyhow::{ensure, Result};
-use oci_spec::image::{Descriptor, MediaType};
+use oci_spec::image::Descriptor;
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use std::{collections::HashMap, path::Path};
 
 /// Runtime-owned Run handle.
 ///
@@ -360,108 +359,24 @@ impl RunDyn {
 }
 
 impl AttachmentLogger for &mut RunDyn {
-    fn log_attachment(
+    fn with_local_registry<R>(&self, f: impl FnOnce(&LocalRegistry) -> Result<R>) -> Result<R> {
+        let registry_handle = self.registry_handle_for_attachment_write()?;
+        f(registry_handle.registry())
+    }
+
+    fn register_attachment_descriptor(
         self,
         name: &str,
-        media_type: MediaType,
-        bytes: impl AsRef<[u8]>,
-        annotations: HashMap<String, String>,
+        descriptor: Descriptor,
+        filename: Option<String>,
     ) -> Result<()> {
-        if self.open()?.attachments.contains_key(name) {
-            crate::bail!("Attachment `{name}` already exists");
-        }
         let registry_handle = self.registry_handle_for_attachment_write()?;
-        let descriptor = store_run_attachment_descriptor(
-            registry_handle.registry(),
-            media_type,
-            bytes.as_ref(),
-            annotations,
-        )?;
+        registry_handle
+            .registry()
+            .stored_descriptor(descriptor.clone())?;
         self.open_mut()?
             .attachments
-            .insert(name.to_string(), descriptor, None)?;
-        Ok(())
-    }
-
-    fn log_file(
-        self,
-        name: &str,
-        path: impl AsRef<Path>,
-        media_type: Option<MediaType>,
-        filename: Option<&str>,
-    ) -> Result<()> {
-        let (media_type, bytes, filename) = read_file_attachment(path, media_type, filename)?;
-        if self.open()?.attachments.contains_key(name) {
-            crate::bail!("Attachment `{name}` already exists");
-        }
-        let registry_handle = self.registry_handle_for_attachment_write()?;
-        let descriptor = store_run_attachment_descriptor(
-            registry_handle.registry(),
-            media_type,
-            bytes.as_ref(),
-            HashMap::new(),
-        )?;
-        self.open_mut()?
-            .attachments
-            .insert(name.to_string(), descriptor, Some(filename))?;
-        Ok(())
-    }
-
-    fn log_instance(self, name: &str, instance: &Instance) -> Result<()> {
-        if self.open()?.attachments.contains_key(name) {
-            crate::bail!("Attachment `{name}` already exists");
-        }
-        let registry_handle = self.registry_handle_for_attachment_write()?;
-        let descriptor =
-            Descriptor::from(registry_handle.registry().store_instance_layer(instance)?);
-        self.open_mut()?
-            .attachments
-            .insert(name.to_string(), descriptor, None)?;
-        Ok(())
-    }
-
-    fn log_parametric_instance(self, name: &str, pi: &ParametricInstance) -> Result<()> {
-        if self.open()?.attachments.contains_key(name) {
-            crate::bail!("Attachment `{name}` already exists");
-        }
-        let registry_handle = self.registry_handle_for_attachment_write()?;
-        let descriptor = Descriptor::from(
-            registry_handle
-                .registry()
-                .store_parametric_instance_layer(pi)?,
-        );
-        self.open_mut()?
-            .attachments
-            .insert(name.to_string(), descriptor, None)?;
-        Ok(())
-    }
-
-    fn log_solution(self, name: &str, solution: &Solution) -> Result<()> {
-        if self.open()?.attachments.contains_key(name) {
-            crate::bail!("Attachment `{name}` already exists");
-        }
-        let registry_handle = self.registry_handle_for_attachment_write()?;
-        let descriptor =
-            Descriptor::from(registry_handle.registry().store_solution_layer(solution)?);
-        self.open_mut()?
-            .attachments
-            .insert(name.to_string(), descriptor, None)?;
-        Ok(())
-    }
-
-    fn log_sample_set(self, name: &str, sample_set: &SampleSet) -> Result<()> {
-        if self.open()?.attachments.contains_key(name) {
-            crate::bail!("Attachment `{name}` already exists");
-        }
-        let registry_handle = self.registry_handle_for_attachment_write()?;
-        let descriptor = Descriptor::from(
-            registry_handle
-                .registry()
-                .store_sample_set_layer(sample_set)?,
-        );
-        self.open_mut()?
-            .attachments
-            .insert(name.to_string(), descriptor, None)?;
+            .insert(name.to_string(), descriptor, filename)?;
         Ok(())
     }
 }

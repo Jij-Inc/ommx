@@ -6,7 +6,7 @@ use anyhow::{ensure, Context, Result};
 use oci_spec::image::MediaType;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::BTreeMap,
     fs,
     path::{Path, PathBuf},
 };
@@ -212,16 +212,6 @@ impl<'reg> AttachmentTable<StoredDescriptor<'reg>> {
 
 /// OCI layer media type for JSON attachment payloads.
 const JSON_MEDIA_TYPE: &str = "application/json";
-
-/// Write `bytes` to the registry and build the in-memory Attachment descriptor.
-pub(crate) fn store_attachment_descriptor<'reg>(
-    registry: &'reg LocalRegistry,
-    media_type: MediaType,
-    bytes: &[u8],
-    annotations: HashMap<String, String>,
-) -> Result<StoredDescriptor<'reg>> {
-    registry.store_layer_blob(media_type, bytes, annotations)
-}
 
 pub(crate) fn json_media_type() -> MediaType {
     MediaType::from(JSON_MEDIA_TYPE)
