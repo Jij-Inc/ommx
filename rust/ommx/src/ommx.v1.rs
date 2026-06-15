@@ -505,7 +505,7 @@ pub struct Instance {
     /// OMMX-reserved metadata must use explicit fields such as `description`.
     /// Keys in this map must be valid reverse-domain names and must not start with
     /// `org.ommx.v1.`.
-    #[prost(map = "string, string", tag = "101")]
+    #[prost(map = "string, string", tag = "11")]
     pub annotations:
         ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
 }
@@ -636,7 +636,7 @@ pub struct ParametricInstance {
     /// OMMX-reserved metadata must use explicit fields such as `description`.
     /// Keys in this map must be valid reverse-domain names and must not start with
     /// `org.ommx.v1.`.
-    #[prost(map = "string, string", tag = "101")]
+    #[prost(map = "string, string", tag = "11")]
     pub annotations:
         ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
 }
@@ -697,14 +697,14 @@ pub struct Solution {
     #[prost(uint32, tag = "100")]
     pub format_version: u32,
     /// OMMX-defined provenance metadata for this Solution.
-    #[prost(message, optional, tag = "101")]
+    #[prost(message, optional, tag = "12")]
     pub metadata: ::core::option::Option<solution::Metadata>,
     /// User-defined or third-party extension annotations.
     ///
     /// OMMX-reserved metadata must use explicit fields such as `metadata`.
     /// Keys in this map must be valid reverse-domain names and must not start with
     /// `org.ommx.v1.`.
-    #[prost(map = "string, string", tag = "102")]
+    #[prost(map = "string, string", tag = "13")]
     pub annotations:
         ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
 }
@@ -1013,14 +1013,14 @@ pub struct SampleSet {
     #[prost(uint32, tag = "100")]
     pub format_version: u32,
     /// OMMX-defined provenance metadata for this SampleSet.
-    #[prost(message, optional, tag = "101")]
+    #[prost(message, optional, tag = "9")]
     pub metadata: ::core::option::Option<sample_set::Metadata>,
     /// User-defined or third-party extension annotations.
     ///
     /// OMMX-reserved metadata must use explicit fields such as `metadata`.
     /// Keys in this map must be valid reverse-domain names and must not start with
     /// `org.ommx.v1.`.
-    #[prost(map = "string, string", tag = "102")]
+    #[prost(map = "string, string", tag = "10")]
     pub annotations:
         ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
 }

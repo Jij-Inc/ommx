@@ -153,12 +153,12 @@ message SampleSet {
   uint32 format_version = 100;
 
   // OMMX-defined provenance metadata for this SampleSet.
-  Metadata metadata = 101;
+  Metadata metadata = 9;
 
   // User-defined or third-party extension annotations.
   //
   // OMMX-reserved metadata must use explicit fields such as `metadata`.
   // Keys in this map must be valid reverse-domain names and must not start with
   // `org.ommx.v1.`.
-  map<string, string> annotations = 102;
+  map<string, string> annotations = 10;
 }

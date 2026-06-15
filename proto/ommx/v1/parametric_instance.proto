@@ -72,5 +72,5 @@ message ParametricInstance {
   // OMMX-reserved metadata must use explicit fields such as `description`.
   // Keys in this map must be valid reverse-domain names and must not start with
   // `org.ommx.v1.`.
-  map<string, string> annotations = 101;
+  map<string, string> annotations = 11;
 }
