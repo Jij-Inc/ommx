@@ -12,6 +12,7 @@ from ommx import tracing
 import os
 import pandas
 import pathlib
+import types
 import typing
 from typing import TypeAlias
 
@@ -2600,18 +2601,13 @@ class Instance:
     MINIMIZE: Sense
     Description: type[InstanceDescription]
     @property
-    def annotations(self) -> builtins.dict[builtins.str, builtins.str]:
+    def annotations(self) -> types.MappingProxyType[str, str]:
         r"""
-        Returns a **copy** of the annotations dictionary.
+        Returns a read-only mapping of flat annotations.
 
-        Mutating the returned dict will **not** update the object.
-        Use {meth}`add_user_annotation` or assign to {attr}`annotations`
-        to modify annotations.
+        Use {meth}`add_user_annotation`, metadata properties, or
+        {meth}`replace_annotations` to modify annotations.
         """
-    @annotations.setter
-    def annotations(
-        self, value: typing.Mapping[builtins.str, builtins.str]
-    ) -> None: ...
     @property
     def title(self) -> typing.Optional[builtins.str]: ...
     @title.setter
@@ -2757,6 +2753,9 @@ class Instance:
     def description(self) -> typing.Optional[InstanceDescription]: ...
     @property
     def used_decision_variables(self) -> builtins.list[DecisionVariable]: ...
+    def replace_annotations(
+        self, annotations: typing.Mapping[builtins.str, builtins.str]
+    ) -> None: ...
     def add_user_annotation(
         self,
         key: builtins.str,
@@ -4766,18 +4765,13 @@ class Parameters:
 @typing.final
 class ParametricInstance:
     @property
-    def annotations(self) -> builtins.dict[builtins.str, builtins.str]:
+    def annotations(self) -> types.MappingProxyType[str, str]:
         r"""
-        Returns a **copy** of the annotations dictionary.
+        Returns a read-only mapping of flat annotations.
 
-        Mutating the returned dict will **not** update the object.
-        Use {meth}`add_user_annotation` or assign to {attr}`annotations`
-        to modify annotations.
+        Use {meth}`add_user_annotation`, metadata properties, or
+        {meth}`replace_annotations` to modify annotations.
         """
-    @annotations.setter
-    def annotations(
-        self, value: typing.Mapping[builtins.str, builtins.str]
-    ) -> None: ...
     @property
     def title(self) -> typing.Optional[builtins.str]: ...
     @title.setter
@@ -4895,6 +4889,9 @@ class ParametricInstance:
     def decision_variable_ids(self) -> builtins.set[builtins.int]: ...
     @property
     def parameter_ids(self) -> builtins.set[builtins.int]: ...
+    def replace_annotations(
+        self, annotations: typing.Mapping[builtins.str, builtins.str]
+    ) -> None: ...
     def add_user_annotation(
         self,
         key: builtins.str,
@@ -5809,18 +5806,13 @@ class SampleSet:
     Of course, the sample of smallest objective value is returned for minimization problems.
     """
     @property
-    def annotations(self) -> builtins.dict[builtins.str, builtins.str]:
+    def annotations(self) -> types.MappingProxyType[str, str]:
         r"""
-        Returns a **copy** of the annotations dictionary.
+        Returns a read-only mapping of flat annotations.
 
-        Mutating the returned dict will **not** update the object.
-        Use {meth}`add_user_annotation` or assign to {attr}`annotations`
-        to modify annotations.
+        Use {meth}`add_user_annotation`, metadata properties, or
+        {meth}`replace_annotations` to modify annotations.
         """
-    @annotations.setter
-    def annotations(
-        self, value: typing.Mapping[builtins.str, builtins.str]
-    ) -> None: ...
     @property
     def instance_digest(self) -> typing.Optional[builtins.str]: ...
     @instance_digest.setter
@@ -5949,6 +5941,9 @@ class SampleSet:
         Summary DataFrame with per-constraint feasibility columns.
         Index is sample_id.
         """
+    def replace_annotations(
+        self, annotations: typing.Mapping[builtins.str, builtins.str]
+    ) -> None: ...
     def add_user_annotation(
         self,
         key: builtins.str,
@@ -6406,18 +6401,13 @@ class Solution:
     Class constant for LP-relaxed solutions
     """
     @property
-    def annotations(self) -> builtins.dict[builtins.str, builtins.str]:
+    def annotations(self) -> types.MappingProxyType[str, str]:
         r"""
-        Returns a **copy** of the annotations dictionary.
+        Returns a read-only mapping of flat annotations.
 
-        Mutating the returned dict will **not** update the object.
-        Use {meth}`add_user_annotation` or assign to {attr}`annotations`
-        to modify annotations.
+        Use {meth}`add_user_annotation`, metadata properties, or
+        {meth}`replace_annotations` to modify annotations.
         """
-    @annotations.setter
-    def annotations(
-        self, value: typing.Mapping[builtins.str, builtins.str]
-    ) -> None: ...
     @property
     def instance_digest(self) -> typing.Optional[builtins.str]: ...
     @instance_digest.setter
@@ -6558,6 +6548,9 @@ class Solution:
         r"""
         Get all unique named function names in this solution
         """
+    def replace_annotations(
+        self, annotations: typing.Mapping[builtins.str, builtins.str]
+    ) -> None: ...
     def add_user_annotation(
         self,
         key: builtins.str,

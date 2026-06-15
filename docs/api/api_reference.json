@@ -16150,6 +16150,43 @@
               "deprecated": null
             },
             {
+              "name": "replace_annotations",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "annotations",
+                      "type_": {
+                        "display": "Mapping[str, str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "required_ids",
               "doc": "Get the set of decision variable IDs used in the objective and remaining constraints.\n\n# Examples\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.required_ids()\n{0, 1, 2}\n```",
               "signatures": [
@@ -16594,9 +16631,9 @@
             },
             {
               "name": "annotations",
-              "doc": "Returns a **copy** of the annotations dictionary.\n\nMutating the returned dict will **not** update the object.\nUse {meth}`add_user_annotation` or assign to {attr}`annotations`\nto modify annotations.",
+              "doc": "Returns a read-only mapping of flat annotations.\n\nUse {meth}`add_user_annotation`, metadata properties, or\n{meth}`replace_annotations` to modify annotations.",
               "type_": {
-                "display": "dict[str, str]",
+                "display": "MappingProxyType[str, str]",
                 "link_target": null,
                 "children": [
                   {
@@ -16611,7 +16648,8 @@
                   }
                 ]
               },
-              "is_property": true
+              "is_property": true,
+              "is_readonly": true
             },
             {
               "name": "authors",
@@ -21549,6 +21587,43 @@
               "deprecated": null
             },
             {
+              "name": "replace_annotations",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "annotations",
+                      "type_": {
+                        "display": "Mapping[str, str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "substitute",
               "doc": "Substitute decision variables with function expressions (in-place).\n\nReplaces each given decision variable with the provided function in the\nobjective and all active constraints. Replacement functions may still\nreference parameters; those parameter references remain in this\nparametric instance and are evaluated later by {meth}`with_parameters`.\nAssignment targets must be existing decision variable IDs. Replacement\nexpressions may only reference existing decision variable or parameter\nIDs; parameter IDs cannot be assignment targets.\n\n**Args:**\n- `assignments`: A dict mapping decision variable IDs to the function\n  expressions that should replace them.\n\n**Important:**\nThis method performs an algebraic rewrite. It does not automatically\ntranslate the substituted variable's bound or kind into constraints on\nthe replacement expression. If the substitution must preserve the\noptimization problem, the caller must provide a domain-preserving\nencoding or add the required linking and bound constraints explicitly.\n\nRaises ``ValueError`` on cyclic or recursive assignments, undefined\nIDs, when a parameter ID is used as an assignment target, or when\nsubstituting a variable that is a member of an indicator, one-hot, or\nSOS1 constraint.",
               "signatures": [
@@ -21679,9 +21754,9 @@
           "attributes": [
             {
               "name": "annotations",
-              "doc": "Returns a **copy** of the annotations dictionary.\n\nMutating the returned dict will **not** update the object.\nUse {meth}`add_user_annotation` or assign to {attr}`annotations`\nto modify annotations.",
+              "doc": "Returns a read-only mapping of flat annotations.\n\nUse {meth}`add_user_annotation`, metadata properties, or\n{meth}`replace_annotations` to modify annotations.",
               "type_": {
-                "display": "dict[str, str]",
+                "display": "MappingProxyType[str, str]",
                 "link_target": null,
                 "children": [
                   {
@@ -21696,7 +21771,8 @@
                   }
                 ]
               },
-              "is_property": true
+              "is_property": true,
+              "is_readonly": true
             },
             {
               "name": "authors",
@@ -26223,6 +26299,43 @@
               "deprecated": null
             },
             {
+              "name": "replace_annotations",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "annotations",
+                      "type_": {
+                        "display": "Mapping[str, str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "sample_ids",
               "doc": "",
               "signatures": [
@@ -26296,9 +26409,9 @@
           "attributes": [
             {
               "name": "annotations",
-              "doc": "Returns a **copy** of the annotations dictionary.\n\nMutating the returned dict will **not** update the object.\nUse {meth}`add_user_annotation` or assign to {attr}`annotations`\nto modify annotations.",
+              "doc": "Returns a read-only mapping of flat annotations.\n\nUse {meth}`add_user_annotation`, metadata properties, or\n{meth}`replace_annotations` to modify annotations.",
               "type_": {
-                "display": "dict[str, str]",
+                "display": "MappingProxyType[str, str]",
                 "link_target": null,
                 "children": [
                   {
@@ -26313,7 +26426,8 @@
                   }
                 ]
               },
-              "is_property": true
+              "is_property": true,
+              "is_readonly": true
             },
             {
               "name": "best_feasible",
@@ -28283,6 +28397,43 @@
               "deprecated": null
             },
             {
+              "name": "replace_annotations",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "annotations",
+                      "type_": {
+                        "display": "Mapping[str, str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "set_dual_variable",
               "doc": "Set the dual variable value for a specific constraint by ID",
               "signatures": [
@@ -28434,9 +28585,9 @@
             },
             {
               "name": "annotations",
-              "doc": "Returns a **copy** of the annotations dictionary.\n\nMutating the returned dict will **not** update the object.\nUse {meth}`add_user_annotation` or assign to {attr}`annotations`\nto modify annotations.",
+              "doc": "Returns a read-only mapping of flat annotations.\n\nUse {meth}`add_user_annotation`, metadata properties, or\n{meth}`replace_annotations` to modify annotations.",
               "type_": {
-                "display": "dict[str, str]",
+                "display": "MappingProxyType[str, str]",
                 "link_target": null,
                 "children": [
                   {
@@ -28451,7 +28602,8 @@
                   }
                 ]
               },
-              "is_property": true
+              "is_property": true,
+              "is_readonly": true
             },
             {
               "name": "constraint_ids",

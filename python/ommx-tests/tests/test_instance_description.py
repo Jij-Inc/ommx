@@ -1,6 +1,12 @@
 """Tests for Instance description property."""
 
+import pytest
+
 from ommx.v1 import Instance, DecisionVariable, Parameter, ParametricInstance
+
+
+def _set_mapping_item(mapping, key, value):
+    mapping[key] = value
 
 
 def test_instance_description_none():
@@ -66,6 +72,60 @@ def test_instance_annotations_round_trip_through_bytes():
     assert restored.description.dataset == "unit-test"
 
 
+def test_instance_annotations_is_read_only_mapping():
+    """The annotations projection is readable but not mutable in place."""
+    instance = Instance.empty()
+    instance.add_user_annotation("source", "old")
+
+    annotations = instance.annotations
+
+    assert annotations["org.ommx.user.source"] == "old"
+    assert dict(annotations)["org.ommx.user.source"] == "old"
+    with pytest.raises(TypeError):
+        _set_mapping_item(annotations, "org.ommx.user.source", "new")
+    with pytest.raises(AttributeError):
+        setattr(instance, "annotations", {})
+    assert instance.get_user_annotation("source") == "old"
+
+
+def test_instance_replace_annotations_replaces_existing_metadata():
+    """replace_annotations replaces protobuf-backed metadata and user annotations."""
+    instance = Instance.empty()
+    instance.title = "Old Title"
+    instance.license = "MIT"
+    instance.add_user_annotation("source", "old")
+
+    instance.replace_annotations({"org.ommx.user.keep": "new"})
+
+    assert instance.title is None
+    assert instance.license is None
+    assert instance.get_user_annotation("keep") == "new"
+    assert "org.ommx.user.source" not in instance.annotations
+    assert "org.ommx.v1.instance.title" not in instance.annotations
+    assert "org.ommx.v1.instance.variables" in instance.annotations
+
+
+def test_instance_add_user_annotation_rejects_reserved_namespace():
+    """User annotation helpers must not write OMMX-reserved proto annotation keys."""
+    instance = Instance.empty()
+
+    with pytest.raises(ValueError, match="reserved for OMMX metadata"):
+        instance.add_user_annotation(
+            "title",
+            "invalid",
+            annotation_namespace="org.ommx.v1.instance",
+        )
+
+    with pytest.raises(ValueError, match="reserved for OMMX metadata"):
+        instance.add_user_annotations(
+            {"title": "invalid"},
+            annotation_namespace="org.ommx.v1.instance",
+        )
+
+    assert instance.title is None
+    assert "org.ommx.v1.instance.title" not in instance.annotations
+
+
 def test_solution_annotations_round_trip_through_bytes():
     """Solution provenance and user annotations are persisted in protobuf."""
     solution = Instance.empty().evaluate({})
@@ -78,6 +138,54 @@ def test_solution_annotations_round_trip_through_bytes():
     assert restored.solver == {"name": "unit-solver"}
     assert restored.parameters == {"time_limit": 1}
     assert restored.get_user_annotation("source") == "bytes"
+
+
+def test_solution_annotations_is_read_only_mapping():
+    """Solution annotations projection is also not mutable in place."""
+    solution = Instance.empty().evaluate({})
+    solution.add_user_annotation("source", "old")
+
+    annotations = solution.annotations
+
+    assert annotations["org.ommx.user.source"] == "old"
+    with pytest.raises(TypeError):
+        _set_mapping_item(annotations, "org.ommx.user.source", "new")
+    with pytest.raises(AttributeError):
+        setattr(solution, "annotations", {})
+    assert solution.get_user_annotation("source") == "old"
+
+
+def test_solution_replace_annotations_replaces_existing_metadata():
+    """replace_annotations clears Solution ProcessMetadata and user annotations."""
+    solution = Instance.empty().evaluate({})
+    solution.instance = "sha256:old"
+    solution.solver = {"name": "old-solver"}
+    solution.parameters = {"time_limit": 1}
+    solution.add_user_annotation("source", "old")
+
+    solution.replace_annotations({"org.ommx.user.keep": "new"})
+
+    assert solution.instance is None
+    assert solution.solver is None
+    assert solution.parameters is None
+    assert solution.get_user_annotation("keep") == "new"
+    assert "org.ommx.user.source" not in solution.annotations
+    assert "org.ommx.v1.solution.solver" not in solution.annotations
+
+
+def test_solution_add_user_annotation_rejects_reserved_namespace():
+    """Solution user annotation helpers must reject OMMX metadata namespaces."""
+    solution = Instance.empty().evaluate({})
+
+    with pytest.raises(ValueError, match="reserved for OMMX metadata"):
+        solution.add_user_annotation(
+            "solver",
+            "invalid",
+            annotation_namespace="org.ommx.v1.solution",
+        )
+
+    assert solution.solver is None
+    assert "org.ommx.v1.solution.solver" not in solution.annotations
 
 
 def test_parametric_instance_annotations_round_trip_through_bytes():
@@ -102,6 +210,28 @@ def test_parametric_instance_annotations_round_trip_through_bytes():
     assert restored.description.name == "Parametric Proto Title"
 
 
+def test_parametric_instance_replace_annotations_replaces_existing_metadata():
+    """replace_annotations clears ParametricInstance description and user annotations."""
+    x = DecisionVariable.binary(0)
+    p = Parameter(100, name="p")
+    instance = ParametricInstance.from_components(
+        decision_variables=[x],
+        parameters=[p],
+        objective=x + p,
+        constraints={},
+        sense=Instance.MINIMIZE,
+    )
+    instance.title = "Old Parametric Title"
+    instance.add_user_annotation("source", "old")
+
+    instance.replace_annotations({})
+
+    assert instance.title is None
+    assert "org.ommx.user.source" not in instance.annotations
+    assert "org.ommx.v1.parametric-instance.title" not in instance.annotations
+    assert "org.ommx.v1.parametric-instance.variables" in instance.annotations
+
+
 def test_sample_set_annotations_round_trip_through_bytes():
     """SampleSet provenance and user annotations are persisted in protobuf."""
     sample_set = Instance.empty().evaluate_samples([{}])
@@ -114,3 +244,20 @@ def test_sample_set_annotations_round_trip_through_bytes():
     assert restored.solver == {"name": "unit-sampler"}
     assert restored.parameters == {"num_reads": 10}
     assert restored.get_user_annotation("source") == "bytes"
+
+
+def test_sample_set_replace_annotations_replaces_existing_metadata():
+    """replace_annotations clears SampleSet ProcessMetadata and user annotations."""
+    sample_set = Instance.empty().evaluate_samples([{}])
+    sample_set.instance = "sha256:old"
+    sample_set.solver = {"name": "old-sampler"}
+    sample_set.parameters = {"num_reads": 10}
+    sample_set.add_user_annotation("source", "old")
+
+    sample_set.replace_annotations({})
+
+    assert sample_set.instance is None
+    assert sample_set.solver is None
+    assert sample_set.parameters is None
+    assert "org.ommx.user.source" not in sample_set.annotations
+    assert "org.ommx.v1.sample-set.solver" not in sample_set.annotations
