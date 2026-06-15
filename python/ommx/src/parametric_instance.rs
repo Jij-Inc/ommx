@@ -621,8 +621,9 @@ impl ParametricInstance {
 
     #[getter]
     pub fn description(&self) -> Option<crate::InstanceDescription> {
-        crate::annotations::parametric_instance_to_v1_with_annotations(self)
+        self.inner
             .description
+            .clone()
             .map(crate::InstanceDescription)
     }
 

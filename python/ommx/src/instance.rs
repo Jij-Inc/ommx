@@ -702,9 +702,7 @@ impl Instance {
 
     #[getter]
     pub fn description(&self) -> Option<InstanceDescription> {
-        crate::annotations::instance_to_v1_with_annotations(self)
-            .description
-            .map(InstanceDescription)
+        self.inner.description.clone().map(InstanceDescription)
     }
 
     #[getter]

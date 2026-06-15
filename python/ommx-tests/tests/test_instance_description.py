@@ -2,7 +2,13 @@
 
 import pytest
 
-from ommx.v1 import Instance, DecisionVariable, Parameter, ParametricInstance
+from ommx.v1 import (
+    DecisionVariable,
+    Instance,
+    OneHotConstraint,
+    Parameter,
+    ParametricInstance,
+)
 
 
 def _set_mapping_item(mapping, key, value):
@@ -105,6 +111,25 @@ def test_instance_replace_annotations_replaces_existing_metadata():
     assert "org.ommx.v1.instance.variables" in instance.annotations
 
 
+def test_instance_annotations_do_not_serialize_structural_constraints():
+    """Annotation operations must not round-trip through v1 serialization."""
+    x = [DecisionVariable.binary(0), DecisionVariable.binary(1)]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=x[0],
+        constraints={},
+        one_hot_constraints={10: OneHotConstraint(variables=[0, 1])},
+        sense=Instance.MINIMIZE,
+    )
+
+    instance.title = "Structural Instance"
+    annotations = instance.annotations
+
+    assert instance.title == "Structural Instance"
+    assert annotations["org.ommx.v1.instance.title"] == "Structural Instance"
+    assert len(instance.constraints_df(kind="one_hot")) == 1
+
+
 def test_instance_add_user_annotation_rejects_reserved_namespace():
     """User annotation helpers must not write OMMX-reserved proto annotation keys."""
     instance = Instance.empty()
@@ -171,6 +196,26 @@ def test_solution_replace_annotations_replaces_existing_metadata():
     assert solution.get_user_annotation("keep") == "new"
     assert "org.ommx.user.source" not in solution.annotations
     assert "org.ommx.v1.solution.solver" not in solution.annotations
+
+
+def test_solution_annotations_preserve_structural_constraint_evaluations():
+    """Annotation setters must not drop non-regular evaluated constraints."""
+    x = [DecisionVariable.binary(i) for i in range(1, 4)]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=sum(x),
+        constraints={},
+        one_hot_constraints={10: OneHotConstraint(variables=[1, 2, 3])},
+        sense=Instance.MAXIMIZE,
+    )
+    solution = instance.evaluate({1: 0.0, 2: 1.0, 3: 0.0})
+
+    assert len(solution.constraints_df(kind="one_hot")) == 1
+
+    solution.solver = {"name": "unit-solver"}
+
+    assert solution.solver == {"name": "unit-solver"}
+    assert len(solution.constraints_df(kind="one_hot")) == 1
 
 
 def test_solution_add_user_annotation_rejects_reserved_namespace():
@@ -261,3 +306,28 @@ def test_sample_set_replace_annotations_replaces_existing_metadata():
     assert sample_set.parameters is None
     assert "org.ommx.user.source" not in sample_set.annotations
     assert "org.ommx.v1.sample-set.solver" not in sample_set.annotations
+
+
+def test_sample_set_annotations_preserve_structural_constraint_samples():
+    """Annotation setters must not reparse and invalidate sampled structural constraints."""
+    x = [DecisionVariable.binary(i) for i in range(1, 4)]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=sum(x),
+        constraints={},
+        one_hot_constraints={10: OneHotConstraint(variables=[1, 2, 3])},
+        sense=Instance.MAXIMIZE,
+    )
+    sample_set = instance.evaluate_samples(
+        {
+            0: {1: 1.0, 2: 0.0, 3: 0.0},
+            1: {1: 1.0, 2: 1.0, 3: 0.0},
+        }
+    )
+
+    assert len(sample_set.constraints_df(kind="one_hot")) == 1
+
+    sample_set.solver = {"name": "unit-sampler"}
+
+    assert sample_set.solver == {"name": "unit-sampler"}
+    assert len(sample_set.constraints_df(kind="one_hot")) == 1

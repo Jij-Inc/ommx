@@ -3,6 +3,8 @@ use ommx::Parse;
 use pyo3::types::{PyAnyMethods, PyDictMethods};
 use std::collections::HashMap;
 
+const RESERVED_PREFIX: &str = "org.ommx.v1.";
+
 /// Normalize annotation namespace to ensure it ends with "."
 pub fn normalize_namespace(ns: &str) -> String {
     if ns.ends_with('.') {
@@ -70,42 +72,6 @@ pub fn sample_set_from_v1_with_descriptor_annotations(
     })
 }
 
-fn replace_instance_annotations(
-    instance: &mut ommx::v1::Instance,
-    annotations: &HashMap<String, String>,
-) {
-    instance.description = None;
-    instance.annotations.clear();
-    ommx::artifact::overlay_instance_annotations(instance, annotations);
-}
-
-fn replace_parametric_instance_annotations(
-    instance: &mut ommx::v1::ParametricInstance,
-    annotations: &HashMap<String, String>,
-) {
-    instance.description = None;
-    instance.annotations.clear();
-    ommx::artifact::overlay_parametric_instance_annotations(instance, annotations);
-}
-
-fn replace_solution_annotations(
-    solution: &mut ommx::v1::Solution,
-    annotations: &HashMap<String, String>,
-) {
-    solution.metadata = None;
-    solution.annotations.clear();
-    ommx::artifact::overlay_solution_annotations(solution, annotations);
-}
-
-fn replace_sample_set_annotations(
-    sample_set: &mut ommx::v1::SampleSet,
-    annotations: &HashMap<String, String>,
-) {
-    sample_set.metadata = None;
-    sample_set.annotations.clear();
-    ommx::artifact::overlay_sample_set_annotations(sample_set, annotations);
-}
-
 fn readonly_annotations<'py>(
     py: pyo3::Python<'py>,
     annotations: HashMap<String, String>,
@@ -148,6 +114,184 @@ impl pyo3_stub_gen::PyStubType for AnnotationMapping {
     }
 }
 
+fn is_extension_annotation(key: &str) -> bool {
+    !key.starts_with(RESERVED_PREFIX)
+}
+
+fn copy_extension_annotations(
+    target: &mut HashMap<String, String>,
+    source: &HashMap<String, String>,
+) {
+    for (key, value) in source {
+        if is_extension_annotation(key) {
+            target.insert(key.clone(), value.clone());
+        }
+    }
+}
+
+fn overlay_extension_annotations(
+    target: &mut HashMap<String, String>,
+    source: &HashMap<String, String>,
+) {
+    target.clear();
+    for (key, value) in source {
+        if is_extension_annotation(key) {
+            target.insert(key.clone(), value.clone());
+        }
+    }
+}
+
+fn description_mut(
+    description: &mut Option<ommx::v1::instance::Description>,
+) -> &mut ommx::v1::instance::Description {
+    description.get_or_insert_with(ommx::v1::instance::Description::default)
+}
+
+fn insert_description_annotations(
+    annotations: &mut HashMap<String, String>,
+    namespace: &str,
+    description: &Option<ommx::v1::instance::Description>,
+) {
+    let Some(description) = description else {
+        return;
+    };
+    if let Some(value) = &description.name {
+        annotations.insert(format!("{namespace}.title"), value.clone());
+    }
+    if let Some(value) = &description.description {
+        annotations.insert(format!("{namespace}.description"), value.clone());
+    }
+    if !description.authors.is_empty() {
+        annotations.insert(
+            format!("{namespace}.authors"),
+            description.authors.join(","),
+        );
+    }
+    if let Some(value) = &description.created_by {
+        annotations.insert(format!("{namespace}.created_by"), value.clone());
+    }
+    if let Some(value) = &description.created {
+        annotations.insert(format!("{namespace}.created"), value.clone());
+    }
+    if let Some(value) = &description.license {
+        annotations.insert(format!("{namespace}.license"), value.clone());
+    }
+    if let Some(value) = &description.dataset {
+        annotations.insert(format!("{namespace}.dataset"), value.clone());
+    }
+}
+
+fn overlay_description_annotations(
+    target: &mut Option<ommx::v1::instance::Description>,
+    source: &HashMap<String, String>,
+    namespace: &str,
+) {
+    let title_key = format!("{namespace}.title");
+    let description_key = format!("{namespace}.description");
+    let authors_key = format!("{namespace}.authors");
+    let created_by_key = format!("{namespace}.created_by");
+    let created_key = format!("{namespace}.created");
+    let license_key = format!("{namespace}.license");
+    let dataset_key = format!("{namespace}.dataset");
+
+    if source.contains_key(&title_key)
+        || source.contains_key(&description_key)
+        || source.contains_key(&authors_key)
+        || source.contains_key(&created_by_key)
+        || source.contains_key(&created_key)
+        || source.contains_key(&license_key)
+        || source.contains_key(&dataset_key)
+    {
+        let target = description_mut(target);
+        if let Some(value) = source.get(&title_key) {
+            target.name = Some(value.clone());
+        }
+        if let Some(value) = source.get(&description_key) {
+            target.description = Some(value.clone());
+        }
+        if let Some(value) = source.get(&authors_key) {
+            target.authors = if value.is_empty() {
+                Vec::new()
+            } else {
+                value.split(',').map(str::to_string).collect()
+            };
+        }
+        if let Some(value) = source.get(&created_by_key) {
+            target.created_by = Some(value.clone());
+        }
+        if let Some(value) = source.get(&created_key) {
+            target.created = Some(value.clone());
+        }
+        if let Some(value) = source.get(&license_key) {
+            target.license = Some(value.clone());
+        }
+        if let Some(value) = source.get(&dataset_key) {
+            target.dataset = Some(value.clone());
+        }
+    }
+}
+
+fn insert_process_metadata_annotations(
+    annotations: &mut HashMap<String, String>,
+    namespace: &str,
+    metadata: &Option<ommx::v1::ProcessMetadata>,
+) {
+    let Some(metadata) = metadata else {
+        return;
+    };
+    if let Some(value) = &metadata.instance {
+        annotations.insert(format!("{namespace}.instance"), value.clone());
+    }
+    if let Some(value) = &metadata.solver {
+        annotations.insert(format!("{namespace}.solver"), value.clone());
+    }
+    if let Some(value) = &metadata.parameters {
+        annotations.insert(format!("{namespace}.parameters"), value.clone());
+    }
+    if let Some(value) = &metadata.start {
+        annotations.insert(format!("{namespace}.start"), value.clone());
+    }
+    if let Some(value) = &metadata.end {
+        annotations.insert(format!("{namespace}.end"), value.clone());
+    }
+}
+
+fn overlay_process_metadata_annotations(
+    target: &mut Option<ommx::v1::ProcessMetadata>,
+    source: &HashMap<String, String>,
+    namespace: &str,
+) {
+    let instance_key = format!("{namespace}.instance");
+    let solver_key = format!("{namespace}.solver");
+    let parameters_key = format!("{namespace}.parameters");
+    let start_key = format!("{namespace}.start");
+    let end_key = format!("{namespace}.end");
+
+    if source.contains_key(&instance_key)
+        || source.contains_key(&solver_key)
+        || source.contains_key(&parameters_key)
+        || source.contains_key(&start_key)
+        || source.contains_key(&end_key)
+    {
+        let target = target.get_or_insert_with(ommx::v1::ProcessMetadata::default);
+        if let Some(value) = source.get(&instance_key) {
+            target.instance = Some(value.clone());
+        }
+        if let Some(value) = source.get(&solver_key) {
+            target.solver = Some(value.clone());
+        }
+        if let Some(value) = source.get(&parameters_key) {
+            target.parameters = Some(value.clone());
+        }
+        if let Some(value) = source.get(&start_key) {
+            target.start = Some(value.clone());
+        }
+        if let Some(value) = source.get(&end_key) {
+            target.end = Some(value.clone());
+        }
+    }
+}
+
 pub trait FlatAnnotations {
     fn flat_annotations(&self) -> HashMap<String, String>;
     fn set_flat_annotations(&mut self, annotations: HashMap<String, String>) -> Result<()>;
@@ -161,56 +305,112 @@ pub trait FlatAnnotations {
 
 impl FlatAnnotations for crate::Instance {
     fn flat_annotations(&self) -> HashMap<String, String> {
-        let proto = instance_to_v1_with_annotations(self);
-        ommx::artifact::instance_annotations(&proto)
+        let mut annotations = HashMap::new();
+        copy_extension_annotations(&mut annotations, &self.inner.annotations);
+        insert_description_annotations(
+            &mut annotations,
+            "org.ommx.v1.instance",
+            &self.inner.description,
+        );
+        annotations.insert(
+            "org.ommx.v1.instance.variables".to_string(),
+            self.inner.decision_variables().len().to_string(),
+        );
+        annotations.insert(
+            "org.ommx.v1.instance.constraints".to_string(),
+            self.inner.constraints().len().to_string(),
+        );
+        annotations
     }
 
     fn set_flat_annotations(&mut self, annotations: HashMap<String, String>) -> Result<()> {
-        let mut proto = instance_to_v1_with_annotations(self);
-        replace_instance_annotations(&mut proto, &annotations);
-        self.inner = proto.try_into()?;
+        self.inner.description = None;
+        overlay_description_annotations(
+            &mut self.inner.description,
+            &annotations,
+            "org.ommx.v1.instance",
+        );
+        overlay_extension_annotations(&mut self.inner.annotations, &annotations);
         Ok(())
     }
 }
 
 impl FlatAnnotations for crate::ParametricInstance {
     fn flat_annotations(&self) -> HashMap<String, String> {
-        let proto = parametric_instance_to_v1_with_annotations(self);
-        ommx::artifact::parametric_instance_annotations(&proto)
+        let mut annotations = HashMap::new();
+        copy_extension_annotations(&mut annotations, &self.inner.annotations);
+        insert_description_annotations(
+            &mut annotations,
+            "org.ommx.v1.parametric-instance",
+            &self.inner.description,
+        );
+        annotations.insert(
+            "org.ommx.v1.parametric-instance.variables".to_string(),
+            self.inner.decision_variables().len().to_string(),
+        );
+        annotations.insert(
+            "org.ommx.v1.parametric-instance.constraints".to_string(),
+            self.inner.constraints().len().to_string(),
+        );
+        annotations
     }
 
     fn set_flat_annotations(&mut self, annotations: HashMap<String, String>) -> Result<()> {
-        let mut proto = parametric_instance_to_v1_with_annotations(self);
-        replace_parametric_instance_annotations(&mut proto, &annotations);
-        self.inner = proto.parse(&())?;
+        self.inner.description = None;
+        overlay_description_annotations(
+            &mut self.inner.description,
+            &annotations,
+            "org.ommx.v1.parametric-instance",
+        );
+        overlay_extension_annotations(&mut self.inner.annotations, &annotations);
         Ok(())
     }
 }
 
 impl FlatAnnotations for crate::Solution {
     fn flat_annotations(&self) -> HashMap<String, String> {
-        let proto = solution_to_v1_with_annotations(self);
-        ommx::artifact::solution_annotations(&proto)
+        let mut annotations = HashMap::new();
+        copy_extension_annotations(&mut annotations, &self.inner.annotations);
+        insert_process_metadata_annotations(
+            &mut annotations,
+            "org.ommx.v1.solution",
+            &self.inner.metadata,
+        );
+        annotations
     }
 
     fn set_flat_annotations(&mut self, annotations: HashMap<String, String>) -> Result<()> {
-        let mut proto = solution_to_v1_with_annotations(self);
-        replace_solution_annotations(&mut proto, &annotations);
-        self.inner = proto.parse(&())?;
+        self.inner.metadata = None;
+        overlay_process_metadata_annotations(
+            &mut self.inner.metadata,
+            &annotations,
+            "org.ommx.v1.solution",
+        );
+        overlay_extension_annotations(&mut self.inner.annotations, &annotations);
         Ok(())
     }
 }
 
 impl FlatAnnotations for crate::SampleSet {
     fn flat_annotations(&self) -> HashMap<String, String> {
-        let proto = sample_set_to_v1_with_annotations(self);
-        ommx::artifact::sample_set_annotations(&proto)
+        let mut annotations = HashMap::new();
+        copy_extension_annotations(&mut annotations, &self.inner.annotations);
+        insert_process_metadata_annotations(
+            &mut annotations,
+            "org.ommx.v1.sample-set",
+            &self.inner.metadata,
+        );
+        annotations
     }
 
     fn set_flat_annotations(&mut self, annotations: HashMap<String, String>) -> Result<()> {
-        let mut proto = sample_set_to_v1_with_annotations(self);
-        replace_sample_set_annotations(&mut proto, &annotations);
-        self.inner = proto.parse(&())?;
+        self.inner.metadata = None;
+        overlay_process_metadata_annotations(
+            &mut self.inner.metadata,
+            &annotations,
+            "org.ommx.v1.sample-set",
+        );
+        overlay_extension_annotations(&mut self.inner.annotations, &annotations);
         Ok(())
     }
 }
