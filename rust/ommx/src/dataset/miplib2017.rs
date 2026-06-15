@@ -1,6 +1,6 @@
 use crate::{
     artifact::{
-        ghcr, local_registry::LocalRegistry, media_types, InstanceAnnotations, LocalArtifact,
+        descriptor_annotations, ghcr, local_registry::LocalRegistry, media_types, LocalArtifact,
     },
     v1::Instance,
 };
@@ -80,26 +80,46 @@ struct RawEntry {
 }
 
 impl RawEntry {
-    fn as_annotation(&self) -> InstanceAnnotations {
-        let mut annotation = InstanceAnnotations::default();
-        annotation.set_title(self.instance.clone());
-        annotation.set_authors(
+    fn as_annotation(&self) -> HashMap<String, String> {
+        let mut annotation = HashMap::new();
+        annotation.insert(
+            "org.ommx.v1.instance.title".to_string(),
+            self.instance.clone(),
+        );
+        annotation.insert(
+            "org.ommx.v1.instance.authors".to_string(),
             self.submitter
                 .split(',')
-                .map(|s| s.trim().to_string())
-                .collect(),
+                .map(str::trim)
+                .collect::<Vec<_>>()
+                .join(","),
         );
         if self.submitter.contains("Berk Ustun") {
             // Berk Ustun's submissions are licensed under "BSD", we assume it is "BSD-3-Clause"
             // https://git.zib.de/miplib2017/submissions/-/blob/master/Berk_Ustun/meta.yml?ref_type=heads
-            annotation.set_license("BSD-3-Clause".to_string());
+            annotation.insert(
+                "org.ommx.v1.instance.license".to_string(),
+                "BSD-3-Clause".to_string(),
+            );
         } else {
             // Other submissions are licensed under the default MIPLIB license "CC-BY-SA-4.0"
-            annotation.set_license("CC-BY-SA-4.0".to_string());
+            annotation.insert(
+                "org.ommx.v1.instance.license".to_string(),
+                "CC-BY-SA-4.0".to_string(),
+            );
         }
-        annotation.set_dataset("MIPLIB2017".to_string());
-        annotation.set_variables(self.variable as usize);
-        annotation.set_constraints(self.constraints as usize);
+        annotation.insert(
+            "org.ommx.v1.instance.dataset".to_string(),
+            "MIPLIB2017".to_string(),
+        );
+        annotation.insert(
+            "org.ommx.v1.instance.variables".to_string(),
+            (self.variable as usize).to_string(),
+        );
+        annotation.insert(
+            "org.ommx.v1.instance.constraints".to_string(),
+            (self.constraints as usize).to_string(),
+        );
 
         // MIPLIB specific annotations
         for (key, value) in [
@@ -108,23 +128,23 @@ impl RawEntry {
             ("continuous", self.continuous as usize),
             ("non_zero", self.non_zero as usize),
         ] {
-            annotation.set_other(format!("org.ommx.miplib.{key}"), value.to_string());
+            annotation.insert(format!("org.ommx.miplib.{key}"), value.to_string());
         }
-        annotation.set_other(
+        annotation.insert(
             "org.ommx.miplib.status".to_string(),
             self.status.to_string(),
         );
         if self.group != "-" {
-            annotation.set_other("org.ommx.miplib.group".to_string(), self.group.to_string());
+            annotation.insert("org.ommx.miplib.group".to_string(), self.group.to_string());
         }
         if let Some(objective) = self.objective.try_to_string() {
-            annotation.set_other("org.ommx.miplib.objective".to_string(), objective);
+            annotation.insert("org.ommx.miplib.objective".to_string(), objective);
         }
         let tags: Vec<_> = self.tags.split(' ').map(str::trim).collect();
         if !tags.is_empty() {
-            annotation.set_other("org.ommx.miplib.tags".to_string(), tags.join(","));
+            annotation.insert("org.ommx.miplib.tags".to_string(), tags.join(","));
         }
-        annotation.set_other(
+        annotation.insert(
             "org.ommx.miplib.url".to_string(),
             format!(
                 "https://miplib.zib.de/instance_details_{}.html",
@@ -135,7 +155,7 @@ impl RawEntry {
     }
 }
 
-/// Convert [MIPLIB2017_CSV] as [InstanceAnnotations] dictionary
+/// Convert [MIPLIB2017_CSV] as flat annotation dictionaries.
 ///
 /// MIPLIB-specific annotations are stored in the `org.ommx.miplib.*` namespace.
 ///
@@ -145,8 +165,8 @@ impl RawEntry {
 /// let annotations = miplib2017::instance_annotations().get("air05").unwrap().clone();
 ///
 /// // Common annotations
-/// assert_eq!(annotations.title().unwrap(), "air05");
-/// assert_eq!(annotations.authors().unwrap().next(), Some("G. Astfalk"));
+/// assert_eq!(annotations.get("org.ommx.v1.instance.title").unwrap(), "air05");
+/// assert_eq!(annotations.get("org.ommx.v1.instance.authors").unwrap(), "G. Astfalk");
 ///
 /// // MIPLIB specific annotations
 /// assert_eq!(annotations.get("org.ommx.miplib.status").unwrap(), "easy");
@@ -159,7 +179,7 @@ impl RawEntry {
 /// assert_eq!(annotations.get("org.ommx.miplib.tags").unwrap(), "benchmark,binary,benchmark_suitable,set_partitioning");
 /// assert_eq!(annotations.get("org.ommx.miplib.url").unwrap(), "https://miplib.zib.de/instance_details_air05.html");
 /// ```
-pub fn instance_annotations() -> HashMap<String, InstanceAnnotations> {
+pub fn instance_annotations() -> HashMap<String, HashMap<String, String>> {
     let mut rdr = csv::Reader::from_reader(MIPLIB2017_CSV.as_bytes());
     let mut entries = HashMap::new();
     for result in rdr.deserialize() {
@@ -245,7 +265,7 @@ fn check_unsupported(name: &str) -> Result<()> {
 }
 
 /// Load an instance from the MIPLIB 2017 dataset
-pub fn load(name: &str) -> Result<(Instance, InstanceAnnotations)> {
+pub fn load(name: &str) -> Result<Instance> {
     let annotations = instance_annotations();
     ensure!(
         annotations.contains_key(name),
@@ -269,12 +289,10 @@ pub fn load(name: &str) -> Result<(Instance, InstanceAnnotations)> {
         "MIPLIB2017 Artifact should contain exactly one instance"
     );
     let bytes = artifact.get_blob(&layer)?;
-    let instance =
+    let mut instance =
         Instance::decode(bytes.as_slice()).context("Failed to decode MIPLIB2017 instance layer")?;
-    Ok((
-        instance,
-        InstanceAnnotations::from(layer.annotations().clone().unwrap_or_default()),
-    ))
+    crate::artifact::merge_instance_annotations(&mut instance, &descriptor_annotations(&layer));
+    Ok(instance)
 }
 
 #[cfg(test)]

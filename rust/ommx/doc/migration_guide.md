@@ -630,7 +630,7 @@ let artifact = builder.build()?;
 // ✅ After
 use ommx::artifact::ArtifactDraft;
 let mut draft = ArtifactDraft::for_github("Jij-Inc", "demo", "experiment", "v1")?;
-draft.add_instance(instance, annotations)?;
+draft.add_instance(instance)?;
 let artifact = draft.commit()?;
 ```
 
@@ -651,7 +651,7 @@ let artifact = builder.build()?;
 // ✅ After
 use ommx::artifact::ArtifactDraft;
 let mut draft = ArtifactDraft::new(image_name)?;
-draft.add_instance(instance, ann)?;
+draft.add_instance(instance)?;
 let artifact = draft.commit()?;
 artifact.save(&path)?;
 ```

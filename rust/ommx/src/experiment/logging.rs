@@ -1,9 +1,6 @@
 //! Shared attachment logging APIs for experiment and run handles.
 
-use crate::artifact::{
-    media_types, InstanceAnnotations, ParametricInstanceAnnotations, SampleSetAnnotations,
-    SolutionAnnotations,
-};
+use crate::artifact::media_types;
 use crate::{Instance, ParametricInstance, SampleSet, Solution};
 use anyhow::Result;
 use oci_spec::image::MediaType;
@@ -43,26 +40,15 @@ pub trait AttachmentLogger: Sized {
         self.log_attachment(name, json_media_type(), bytes, HashMap::new())
     }
 
-    /// Attach an [`Instance`] with its artifact annotations.
-    fn log_instance(
-        self,
-        name: &str,
-        instance: &Instance,
-        annotations: InstanceAnnotations,
-    ) -> Result<()> {
-        let (bytes, annotations) = crate::artifact::encode_instance_layer(instance, annotations);
+    /// Attach an [`Instance`].
+    fn log_instance(self, name: &str, instance: &Instance) -> Result<()> {
+        let (bytes, annotations) = crate::artifact::encode_instance_layer(instance);
         self.log_attachment(name, media_types::v1_instance(), bytes, annotations)
     }
 
-    /// Attach a [`ParametricInstance`] with its artifact annotations.
-    fn log_parametric_instance(
-        self,
-        name: &str,
-        pi: &ParametricInstance,
-        annotations: ParametricInstanceAnnotations,
-    ) -> Result<()> {
-        let (bytes, annotations) =
-            crate::artifact::encode_parametric_instance_layer(pi, annotations);
+    /// Attach a [`ParametricInstance`].
+    fn log_parametric_instance(self, name: &str, pi: &ParametricInstance) -> Result<()> {
+        let (bytes, annotations) = crate::artifact::encode_parametric_instance_layer(pi);
         self.log_attachment(
             name,
             media_types::v1_parametric_instance(),
@@ -71,26 +57,15 @@ pub trait AttachmentLogger: Sized {
         )
     }
 
-    /// Attach a [`Solution`] with its artifact annotations.
-    fn log_solution(
-        self,
-        name: &str,
-        solution: &Solution,
-        annotations: SolutionAnnotations,
-    ) -> Result<()> {
-        let (bytes, annotations) = crate::artifact::encode_solution_layer(solution, annotations);
+    /// Attach a [`Solution`].
+    fn log_solution(self, name: &str, solution: &Solution) -> Result<()> {
+        let (bytes, annotations) = crate::artifact::encode_solution_layer(solution);
         self.log_attachment(name, media_types::v1_solution(), bytes, annotations)
     }
 
-    /// Attach a [`SampleSet`] with its artifact annotations.
-    fn log_sample_set(
-        self,
-        name: &str,
-        sample_set: &SampleSet,
-        annotations: SampleSetAnnotations,
-    ) -> Result<()> {
-        let (bytes, annotations) =
-            crate::artifact::encode_sample_set_layer(sample_set, annotations);
+    /// Attach a [`SampleSet`].
+    fn log_sample_set(self, name: &str, sample_set: &SampleSet) -> Result<()> {
+        let (bytes, annotations) = crate::artifact::encode_sample_set_layer(sample_set);
         self.log_attachment(name, media_types::v1_sample_set(), bytes, annotations)
     }
 }

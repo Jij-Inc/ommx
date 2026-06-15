@@ -23,8 +23,8 @@ use super::{
 };
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
 use crate::artifact::{
-    media_types, AsArtifact, ImageRef, InstanceAnnotations, LocalArtifact, LocalArtifactDyn,
-    LocalRegistryHandle, ParametricInstanceAnnotations, SampleSetAnnotations, SolutionAnnotations,
+    descriptor_annotations, media_types, AsArtifact, ImageRef, LocalArtifact, LocalArtifactDyn,
+    LocalRegistryHandle,
 };
 use crate::{Instance, ParametricInstance, SampleSet, Solution};
 use anyhow::{ensure, Context, Result};
@@ -253,22 +253,19 @@ impl SealedRunDyn {
         self.attachment_table()?.blob(name)
     }
 
-    pub fn attachment_instance(&self, name: &str) -> Result<(Instance, InstanceAnnotations)> {
+    pub fn attachment_instance(&self, name: &str) -> Result<Instance> {
         self.attachment_table()?.instance(name)
     }
 
-    pub fn attachment_parametric_instance(
-        &self,
-        name: &str,
-    ) -> Result<(ParametricInstance, ParametricInstanceAnnotations)> {
+    pub fn attachment_parametric_instance(&self, name: &str) -> Result<ParametricInstance> {
         self.attachment_table()?.parametric_instance(name)
     }
 
-    pub fn attachment_solution(&self, name: &str) -> Result<(Solution, SolutionAnnotations)> {
+    pub fn attachment_solution(&self, name: &str) -> Result<Solution> {
         self.attachment_table()?.solution(name)
     }
 
-    pub fn attachment_sample_set(&self, name: &str) -> Result<(SampleSet, SampleSetAnnotations)> {
+    pub fn attachment_sample_set(&self, name: &str) -> Result<SampleSet> {
         self.attachment_table()?.sample_set(name)
     }
 
@@ -325,7 +322,7 @@ impl SolveDyn {
             .stored_descriptor(self.input.clone())
     }
 
-    pub fn input_instance(&self) -> Result<(Instance, InstanceAnnotations)> {
+    pub fn input_instance(&self) -> Result<Instance> {
         let descriptor = self.input_descriptor()?;
         ensure!(
             descriptor.media_type().to_string() == media_types::V1_INSTANCE_MEDIA_TYPE,
@@ -335,10 +332,7 @@ impl SolveDyn {
             media_types::V1_INSTANCE_MEDIA_TYPE
         );
         let bytes = self.registry_handle.registry().get_blob(&descriptor)?;
-        Ok((
-            Instance::from_bytes(&bytes)?,
-            InstanceAnnotations::from_descriptor(&descriptor),
-        ))
+        crate::artifact::decode_instance_layer(&bytes, &descriptor_annotations(&descriptor))
     }
 
     fn output_descriptor(&self) -> Result<Option<StoredDescriptor<'_>>> {
@@ -352,7 +346,7 @@ impl SolveDyn {
             .transpose()
     }
 
-    pub fn output_solution(&self) -> Result<Option<(Solution, SolutionAnnotations)>> {
+    pub fn output_solution(&self) -> Result<Option<Solution>> {
         let Some(descriptor) = self.output_descriptor()? else {
             return Ok(None);
         };
@@ -364,11 +358,10 @@ impl SolveDyn {
             media_types::V1_SOLUTION_MEDIA_TYPE
         );
         let bytes = self.registry_handle.registry().get_blob(&descriptor)?;
-        Ok((
-            Solution::from_bytes(&bytes)?,
-            SolutionAnnotations::from_descriptor(&descriptor),
-        )
-            .into())
+        Ok(Some(crate::artifact::decode_solution_layer(
+            &bytes,
+            &descriptor_annotations(&descriptor),
+        )?))
     }
 
     /// Raw MessagePack bytes of the adapter diagnostics payload.
@@ -859,23 +852,20 @@ impl ExperimentDyn {
         self.experiment_attachment_table()?.blob(name)
     }
 
-    pub fn attachment_instance(&self, name: &str) -> Result<(Instance, InstanceAnnotations)> {
+    pub fn attachment_instance(&self, name: &str) -> Result<Instance> {
         self.experiment_attachment_table()?.instance(name)
     }
 
-    pub fn attachment_parametric_instance(
-        &self,
-        name: &str,
-    ) -> Result<(ParametricInstance, ParametricInstanceAnnotations)> {
+    pub fn attachment_parametric_instance(&self, name: &str) -> Result<ParametricInstance> {
         self.experiment_attachment_table()?
             .parametric_instance(name)
     }
 
-    pub fn attachment_solution(&self, name: &str) -> Result<(Solution, SolutionAnnotations)> {
+    pub fn attachment_solution(&self, name: &str) -> Result<Solution> {
         self.experiment_attachment_table()?.solution(name)
     }
 
-    pub fn attachment_sample_set(&self, name: &str) -> Result<(SampleSet, SampleSetAnnotations)> {
+    pub fn attachment_sample_set(&self, name: &str) -> Result<SampleSet> {
         self.experiment_attachment_table()?.sample_set(name)
     }
 

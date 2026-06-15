@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use colored::Colorize;
 use ommx::{
-    artifact::{ArtifactDraft, ImageRef, InstanceAnnotations},
+    artifact::{ArtifactDraft, ImageRef},
     random::random_deterministic,
     InstanceParameters,
 };
@@ -22,7 +22,7 @@ fn main() -> Result<()> {
         .init();
 
     let lp: ommx::Instance = random_deterministic(InstanceParameters::default_lp());
-    let lp: ommx::v1::Instance = lp.into();
+    let mut lp: ommx::v1::Instance = lp.into();
 
     // "data" directory is at the root of the repository
     let manifest_root: &Path = env!("CARGO_MANIFEST_DIR").as_ref();
@@ -45,12 +45,14 @@ fn main() -> Result<()> {
     ))?;
 
     println!("{:>12} {}", "New Artifact".blue().bold(), image_name);
-    let mut annotations = InstanceAnnotations::default();
-    annotations.set_title("random_lp".to_string());
-    annotations.set_created(chrono::Local::now());
+    lp.description = Some(ommx::v1::instance::Description {
+        name: Some("random_lp".to_string()),
+        created: Some(chrono::Local::now().to_rfc3339()),
+        ..Default::default()
+    });
 
     let mut builder = ArtifactDraft::new(image_name)?;
-    builder.add_instance(lp, annotations)?;
+    builder.add_instance(lp)?;
     builder.add_source(&Url::parse("https://github.com/Jij-Inc/ommx")?);
     builder.add_annotation(
         "org.opencontainers.image.description",

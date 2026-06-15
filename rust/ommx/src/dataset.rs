@@ -7,14 +7,15 @@
 //! ```rust
 //! use ommx::dataset::miplib2017;
 //!
-//! // Get an instance and its annotations
-//! let (instance, annotation) = miplib2017::load("air05").unwrap();
+//! // Get an instance whose descriptor annotations are merged into protobuf metadata
+//! let instance = miplib2017::load("air05").unwrap();
 //!
-//! // Metadata of the MIPLIB 2017 instance is stored in the annotation
-//! assert_eq!(annotation.title().unwrap(), "air05");
-//! assert_eq!(annotation.authors().unwrap().next(), Some("G. Astfalk"));
-//! assert_eq!(annotation.license().unwrap(), "CC-BY-SA-4.0");
-//! assert_eq!(annotation.dataset().unwrap(), "MIPLIB2017");
+//! // Metadata of the MIPLIB 2017 instance is stored in the description
+//! let description = instance.description.as_ref().unwrap();
+//! assert_eq!(description.name.as_deref(), Some("air05"));
+//! assert_eq!(description.authors.first().map(String::as_str), Some("G. Astfalk"));
+//! assert_eq!(description.license.as_deref(), Some("CC-BY-SA-4.0"));
+//! assert_eq!(description.dataset.as_deref(), Some("MIPLIB2017"));
 //! ```
 //!
 //! # QPLIB
@@ -28,9 +29,9 @@
 //! let annotations = qplib::instance_annotations();
 //! let annotation = annotations.get("0018").unwrap();
 //!
-//! // Metadata is stored in the annotation
-//! assert_eq!(annotation.title().unwrap(), "QPLIB_0018");
-//! assert_eq!(annotation.dataset().unwrap(), "QPLIB");
+//! // Metadata is stored in flat annotation keys for catalogue lookup
+//! assert_eq!(annotation.get("org.ommx.v1.instance.title").unwrap(), "QPLIB_0018");
+//! assert_eq!(annotation.get("org.ommx.v1.instance.dataset").unwrap(), "QPLIB");
 //! assert_eq!(annotation.get("org.ommx.qplib.nvars").unwrap(), "50");
 //! ```
 

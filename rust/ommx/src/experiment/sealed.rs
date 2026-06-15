@@ -9,10 +9,7 @@ use super::{
     SolveDiagnosticPayload, SolveStatus, Trace, RUN_PARAMETERS_MEDIA_TYPE,
 };
 use crate::artifact::local_registry::StoredDescriptor;
-use crate::artifact::{
-    media_types, ImageRef, InstanceAnnotations, LocalArtifact, ParametricInstanceAnnotations,
-    SampleSetAnnotations, SolutionAnnotations,
-};
+use crate::artifact::{descriptor_annotations, media_types, ImageRef, LocalArtifact};
 use crate::{Instance, ParametricInstance, SampleSet, Solution};
 use anyhow::{Context, Result};
 use oci_spec::image::{Descriptor, MediaType};
@@ -126,22 +123,19 @@ impl<'reg> SealedExperiment<'reg> {
         self.attachments.blob(name)
     }
 
-    pub fn attachment_instance(&self, name: &str) -> Result<(Instance, InstanceAnnotations)> {
+    pub fn attachment_instance(&self, name: &str) -> Result<Instance> {
         self.attachments.instance(name)
     }
 
-    pub fn attachment_parametric_instance(
-        &self,
-        name: &str,
-    ) -> Result<(ParametricInstance, ParametricInstanceAnnotations)> {
+    pub fn attachment_parametric_instance(&self, name: &str) -> Result<ParametricInstance> {
         self.attachments.parametric_instance(name)
     }
 
-    pub fn attachment_solution(&self, name: &str) -> Result<(Solution, SolutionAnnotations)> {
+    pub fn attachment_solution(&self, name: &str) -> Result<Solution> {
         self.attachments.solution(name)
     }
 
-    pub fn attachment_sample_set(&self, name: &str) -> Result<(SampleSet, SampleSetAnnotations)> {
+    pub fn attachment_sample_set(&self, name: &str) -> Result<SampleSet> {
         self.attachments.sample_set(name)
     }
 
@@ -208,22 +202,19 @@ impl<'reg> SealedRun<'reg> {
         self.attachments.blob(name)
     }
 
-    pub fn attachment_instance(&self, name: &str) -> Result<(Instance, InstanceAnnotations)> {
+    pub fn attachment_instance(&self, name: &str) -> Result<Instance> {
         self.attachments.instance(name)
     }
 
-    pub fn attachment_parametric_instance(
-        &self,
-        name: &str,
-    ) -> Result<(ParametricInstance, ParametricInstanceAnnotations)> {
+    pub fn attachment_parametric_instance(&self, name: &str) -> Result<ParametricInstance> {
         self.attachments.parametric_instance(name)
     }
 
-    pub fn attachment_solution(&self, name: &str) -> Result<(Solution, SolutionAnnotations)> {
+    pub fn attachment_solution(&self, name: &str) -> Result<Solution> {
         self.attachments.solution(name)
     }
 
-    pub fn attachment_sample_set(&self, name: &str) -> Result<(SampleSet, SampleSetAnnotations)> {
+    pub fn attachment_sample_set(&self, name: &str) -> Result<SampleSet> {
         self.attachments.sample_set(name)
     }
 
@@ -309,26 +300,22 @@ impl<'reg> Solve<'reg> {
         Ok(Some(bytes))
     }
 
-    pub fn input_instance(&self) -> Result<(Instance, InstanceAnnotations)> {
+    pub fn input_instance(&self) -> Result<Instance> {
         self.input.ensure_media_type(&media_types::v1_instance())?;
         let bytes = self.input.registry().get_blob(&self.input)?;
-        Ok((
-            Instance::from_bytes(&bytes)?,
-            InstanceAnnotations::from_descriptor(&self.input),
-        ))
+        crate::artifact::decode_instance_layer(&bytes, &descriptor_annotations(&self.input))
     }
 
-    pub fn output_solution(&self) -> Result<Option<(Solution, SolutionAnnotations)>> {
+    pub fn output_solution(&self) -> Result<Option<Solution>> {
         let Some(output) = &self.output else {
             return Ok(None);
         };
         output.ensure_media_type(&media_types::v1_solution())?;
         let bytes = output.registry().get_blob(output)?;
-        Ok((
-            Solution::from_bytes(&bytes)?,
-            SolutionAnnotations::from_descriptor(output),
-        )
-            .into())
+        Ok(Some(crate::artifact::decode_solution_layer(
+            &bytes,
+            &descriptor_annotations(output),
+        )?))
     }
 
     pub fn adapter(&self) -> &str {

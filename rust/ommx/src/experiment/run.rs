@@ -5,7 +5,7 @@ use super::{
     AttachmentLogger, ParameterValue, Run, RunEntry, RunStatus, SolveDiagnosticPayload, SolveEntry,
     SolveStatus, Trace,
 };
-use crate::artifact::{media_types, InstanceAnnotations, SolutionAnnotations};
+use crate::artifact::media_types;
 use crate::{Instance, Solution};
 use anyhow::{ensure, Result};
 use oci_spec::image::MediaType;
@@ -14,9 +14,7 @@ use std::{collections::HashMap, path::Path};
 /// Data needed to record a finished Solve.
 pub struct FinishedSolveRecord<'a> {
     pub input: &'a Instance,
-    pub input_annotations: InstanceAnnotations,
     pub output: &'a Solution,
-    pub output_annotations: SolutionAnnotations,
     pub adapter: String,
     pub adapter_options: String,
     pub diagnostics: Option<SolveDiagnosticPayload>,
@@ -25,7 +23,6 @@ pub struct FinishedSolveRecord<'a> {
 /// Data needed to record a failed or interrupted Solve.
 pub struct FailedSolveRecord<'a> {
     pub input: &'a Instance,
-    pub input_annotations: InstanceAnnotations,
     pub adapter: String,
     pub adapter_options: String,
     pub status: SolveStatus,
@@ -82,22 +79,18 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         self.ensure_reserved_solve_id(solve_id)?;
         let FinishedSolveRecord {
             input,
-            input_annotations,
             output,
-            output_annotations,
             adapter,
             adapter_options,
             diagnostics,
         } = record;
-        let (input_bytes, input_annotations) =
-            crate::artifact::encode_instance_layer(input, input_annotations);
+        let (input_bytes, input_annotations) = crate::artifact::encode_instance_layer(input);
         let input = self.experiment.registry.store_layer_blob(
             media_types::v1_instance(),
             &input_bytes,
             input_annotations,
         )?;
-        let (output_bytes, output_annotations) =
-            crate::artifact::encode_solution_layer(output, output_annotations);
+        let (output_bytes, output_annotations) = crate::artifact::encode_solution_layer(output);
         let output = self.experiment.registry.store_layer_blob(
             media_types::v1_solution(),
             &output_bytes,
@@ -154,7 +147,6 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
     ) -> Result<u64> {
         let FailedSolveRecord {
             input,
-            input_annotations,
             adapter,
             adapter_options,
             status,
@@ -165,8 +157,7 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
             "failed solve attempt status must not be finished"
         );
         self.ensure_reserved_solve_id(solve_id)?;
-        let (input_bytes, input_annotations) =
-            crate::artifact::encode_instance_layer(input, input_annotations);
+        let (input_bytes, input_annotations) = crate::artifact::encode_instance_layer(input);
         let input = self.experiment.registry.store_layer_blob(
             media_types::v1_instance(),
             &input_bytes,

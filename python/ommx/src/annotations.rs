@@ -19,8 +19,7 @@ pub fn instance_from_v1_with_descriptor_annotations(
     mut proto: ommx::v1::Instance,
     descriptor_annotations: HashMap<String, String>,
 ) -> Result<crate::Instance> {
-    ommx::artifact::InstanceAnnotations::from(descriptor_annotations)
-        .merge_into_v1_instance(&mut proto);
+    ommx::artifact::merge_instance_annotations(&mut proto, &descriptor_annotations);
     Ok(crate::Instance {
         inner: proto.try_into()?,
     })
@@ -36,8 +35,7 @@ pub fn parametric_instance_from_v1_with_descriptor_annotations(
     mut proto: ommx::v1::ParametricInstance,
     descriptor_annotations: HashMap<String, String>,
 ) -> Result<crate::ParametricInstance> {
-    ommx::artifact::ParametricInstanceAnnotations::from(descriptor_annotations)
-        .merge_into_v1_parametric_instance(&mut proto);
+    ommx::artifact::merge_parametric_instance_annotations(&mut proto, &descriptor_annotations);
     Ok(crate::ParametricInstance {
         inner: proto.parse(&())?,
     })
@@ -51,8 +49,7 @@ pub fn solution_from_v1_with_descriptor_annotations(
     mut proto: ommx::v1::Solution,
     descriptor_annotations: HashMap<String, String>,
 ) -> Result<crate::Solution> {
-    ommx::artifact::SolutionAnnotations::from(descriptor_annotations)
-        .merge_into_v1_solution(&mut proto);
+    ommx::artifact::merge_solution_annotations(&mut proto, &descriptor_annotations);
     Ok(crate::Solution {
         inner: proto.parse(&())?,
     })
@@ -66,39 +63,10 @@ pub fn sample_set_from_v1_with_descriptor_annotations(
     mut proto: ommx::v1::SampleSet,
     descriptor_annotations: HashMap<String, String>,
 ) -> Result<crate::SampleSet> {
-    ommx::artifact::SampleSetAnnotations::from(descriptor_annotations)
-        .merge_into_v1_sample_set(&mut proto);
+    ommx::artifact::merge_sample_set_annotations(&mut proto, &descriptor_annotations);
     Ok(crate::SampleSet {
         inner: proto.parse(&())?,
     })
-}
-
-pub fn instance_descriptor_annotations(
-    instance: &crate::Instance,
-) -> ommx::artifact::InstanceAnnotations {
-    let proto = instance_to_v1_with_annotations(instance);
-    ommx::artifact::InstanceAnnotations::from_v1_instance(&proto)
-}
-
-pub fn parametric_instance_descriptor_annotations(
-    instance: &crate::ParametricInstance,
-) -> ommx::artifact::ParametricInstanceAnnotations {
-    let proto = parametric_instance_to_v1_with_annotations(instance);
-    ommx::artifact::ParametricInstanceAnnotations::from_v1_parametric_instance(&proto)
-}
-
-pub fn solution_descriptor_annotations(
-    solution: &crate::Solution,
-) -> ommx::artifact::SolutionAnnotations {
-    let proto = solution_to_v1_with_annotations(solution);
-    ommx::artifact::SolutionAnnotations::from_v1_solution(&proto)
-}
-
-pub fn sample_set_descriptor_annotations(
-    sample_set: &crate::SampleSet,
-) -> ommx::artifact::SampleSetAnnotations {
-    let proto = sample_set_to_v1_with_annotations(sample_set);
-    ommx::artifact::SampleSetAnnotations::from_v1_sample_set(&proto)
 }
 
 pub trait FlatAnnotations {
@@ -115,12 +83,12 @@ pub trait FlatAnnotations {
 impl FlatAnnotations for crate::Instance {
     fn flat_annotations(&self) -> HashMap<String, String> {
         let proto = instance_to_v1_with_annotations(self);
-        ommx::artifact::InstanceAnnotations::from_v1_instance(&proto).into_inner()
+        ommx::artifact::instance_annotations(&proto)
     }
 
     fn set_flat_annotations(&mut self, annotations: HashMap<String, String>) -> Result<()> {
         let mut proto = instance_to_v1_with_annotations(self);
-        ommx::artifact::InstanceAnnotations::from(annotations).overlay_into_v1_instance(&mut proto);
+        ommx::artifact::overlay_instance_annotations(&mut proto, &annotations);
         self.inner = proto.try_into()?;
         Ok(())
     }
@@ -129,14 +97,12 @@ impl FlatAnnotations for crate::Instance {
 impl FlatAnnotations for crate::ParametricInstance {
     fn flat_annotations(&self) -> HashMap<String, String> {
         let proto = parametric_instance_to_v1_with_annotations(self);
-        ommx::artifact::ParametricInstanceAnnotations::from_v1_parametric_instance(&proto)
-            .into_inner()
+        ommx::artifact::parametric_instance_annotations(&proto)
     }
 
     fn set_flat_annotations(&mut self, annotations: HashMap<String, String>) -> Result<()> {
         let mut proto = parametric_instance_to_v1_with_annotations(self);
-        ommx::artifact::ParametricInstanceAnnotations::from(annotations)
-            .overlay_into_v1_parametric_instance(&mut proto);
+        ommx::artifact::overlay_parametric_instance_annotations(&mut proto, &annotations);
         self.inner = proto.parse(&())?;
         Ok(())
     }
@@ -145,12 +111,12 @@ impl FlatAnnotations for crate::ParametricInstance {
 impl FlatAnnotations for crate::Solution {
     fn flat_annotations(&self) -> HashMap<String, String> {
         let proto = solution_to_v1_with_annotations(self);
-        ommx::artifact::SolutionAnnotations::from_v1_solution(&proto).into_inner()
+        ommx::artifact::solution_annotations(&proto)
     }
 
     fn set_flat_annotations(&mut self, annotations: HashMap<String, String>) -> Result<()> {
         let mut proto = solution_to_v1_with_annotations(self);
-        ommx::artifact::SolutionAnnotations::from(annotations).overlay_into_v1_solution(&mut proto);
+        ommx::artifact::overlay_solution_annotations(&mut proto, &annotations);
         self.inner = proto.parse(&())?;
         Ok(())
     }
@@ -159,13 +125,12 @@ impl FlatAnnotations for crate::Solution {
 impl FlatAnnotations for crate::SampleSet {
     fn flat_annotations(&self) -> HashMap<String, String> {
         let proto = sample_set_to_v1_with_annotations(self);
-        ommx::artifact::SampleSetAnnotations::from_v1_sample_set(&proto).into_inner()
+        ommx::artifact::sample_set_annotations(&proto)
     }
 
     fn set_flat_annotations(&mut self, annotations: HashMap<String, String>) -> Result<()> {
         let mut proto = sample_set_to_v1_with_annotations(self);
-        ommx::artifact::SampleSetAnnotations::from(annotations)
-            .overlay_into_v1_sample_set(&mut proto);
+        ommx::artifact::overlay_sample_set_annotations(&mut proto, &annotations);
         self.inner = proto.parse(&())?;
         Ok(())
     }

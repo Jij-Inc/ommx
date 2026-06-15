@@ -1401,7 +1401,7 @@ impl PyArtifactDraft {
         self.0.add_layer(
             "application/org.ommx.v1.instance",
             &blob,
-            ommx::artifact::InstanceAnnotations::from_v1_instance(&proto).into_inner(),
+            ommx::artifact::instance_annotations(&proto),
         )
     }
 
@@ -1417,8 +1417,7 @@ impl PyArtifactDraft {
         self.0.add_layer(
             "application/org.ommx.v1.parametric-instance",
             &blob,
-            ommx::artifact::ParametricInstanceAnnotations::from_v1_parametric_instance(&proto)
-                .into_inner(),
+            ommx::artifact::parametric_instance_annotations(&proto),
         )
     }
 
@@ -1434,7 +1433,7 @@ impl PyArtifactDraft {
         self.0.add_layer(
             "application/org.ommx.v1.solution",
             &blob,
-            ommx::artifact::SolutionAnnotations::from_v1_solution(&proto).into_inner(),
+            ommx::artifact::solution_annotations(&proto),
         )
     }
 
@@ -1450,7 +1449,7 @@ impl PyArtifactDraft {
         self.0.add_layer(
             "application/org.ommx.v1.sample-set",
             &blob,
-            ommx::artifact::SampleSetAnnotations::from_v1_sample_set(&proto).into_inner(),
+            ommx::artifact::sample_set_annotations(&proto),
         )
     }
 

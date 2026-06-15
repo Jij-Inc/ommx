@@ -358,8 +358,7 @@ fn commit_produces_experiment_artifact() {
             crate::random::random_deterministic(crate::InstanceParameters::default_lp());
         {
             let mut run = experiment.run().unwrap();
-            run.log_instance("candidate", &instance, Default::default())
-                .unwrap();
+            run.log_instance("candidate", &instance).unwrap();
             run.log_json("config", json!({ "relaxed": true })).unwrap();
             run.finish().unwrap();
         }
@@ -575,9 +574,7 @@ fn sealed_experiment_fork_creates_child_with_parent_subject_and_next_run_id() {
             run.log_parameter("solver", "base").unwrap();
             run.log_finished_solve(super::FinishedSolveRecord {
                 input: &instance,
-                input_annotations: Default::default(),
                 output: &solution,
-                output_annotations: Default::default(),
                 adapter: "dummy.Adapter".to_string(),
                 adapter_options: "{}".to_string(),
                 diagnostics: None,
@@ -676,9 +673,7 @@ fn log_finished_solve_materializes_solve_entry_with_layer_refs() {
             let solve_id = run
                 .log_finished_solve(super::FinishedSolveRecord {
                     input: &instance,
-                    input_annotations: Default::default(),
                     output: &solution,
-                    output_annotations: Default::default(),
                     adapter: "dummy.Adapter".to_string(),
                     adapter_options: r#"{"time_limit":1.5}"#.to_string(),
                     diagnostics: Some(SolveDiagnosticPayload::new(diagnostics.clone())?),
@@ -732,11 +727,11 @@ fn log_finished_solve_materializes_solve_entry_with_layer_refs() {
         let solve = &run.solves()[0];
         assert_eq!(solve.solve_id(), 0);
         assert_eq!(
-            solve.input_instance().unwrap().0.to_bytes(),
+            solve.input_instance().unwrap().to_bytes(),
             instance.to_bytes()
         );
         assert_eq!(
-            solve.output_solution().unwrap().unwrap().0.to_bytes(),
+            solve.output_solution().unwrap().unwrap().to_bytes(),
             solution.to_bytes()
         );
         assert_eq!(solve.adapter(), "dummy.Adapter");
@@ -771,9 +766,7 @@ fn log_finished_solve_with_id_validates_id_before_storing_payloads() {
                     0,
                     super::FinishedSolveRecord {
                         input: &unreserved_instance,
-                        input_annotations: Default::default(),
                         output: &unreserved_solution,
-                        output_annotations: Default::default(),
                         adapter: "dummy.Adapter".to_string(),
                         adapter_options: "{}".to_string(),
                         diagnostics: Some(unreserved_diagnostics),
@@ -803,9 +796,7 @@ fn log_finished_solve_with_id_validates_id_before_storing_payloads() {
                 solve_id,
                 super::FinishedSolveRecord {
                     input: &first_instance,
-                    input_annotations: Default::default(),
                     output: &first_solution,
-                    output_annotations: Default::default(),
                     adapter: "dummy.Adapter".to_string(),
                     adapter_options: "{}".to_string(),
                     diagnostics: None,
@@ -817,9 +808,7 @@ fn log_finished_solve_with_id_validates_id_before_storing_payloads() {
                     solve_id,
                     super::FinishedSolveRecord {
                         input: &duplicate_instance,
-                        input_annotations: Default::default(),
                         output: &duplicate_solution,
-                        output_annotations: Default::default(),
                         adapter: "dummy.Adapter".to_string(),
                         adapter_options: "{}".to_string(),
                         diagnostics: Some(duplicate_diagnostics),
@@ -854,7 +843,6 @@ fn log_failed_solve_with_id_validates_id_before_storing_payloads() {
                     0,
                     super::FailedSolveRecord {
                         input: &unreserved_instance,
-                        input_annotations: Default::default(),
                         adapter: "dummy.Adapter".to_string(),
                         adapter_options: "{}".to_string(),
                         status: SolveStatus::Failed,
@@ -881,7 +869,6 @@ fn log_failed_solve_with_id_validates_id_before_storing_payloads() {
                 solve_id,
                 super::FailedSolveRecord {
                     input: &first_instance,
-                    input_annotations: Default::default(),
                     adapter: "dummy.Adapter".to_string(),
                     adapter_options: "{}".to_string(),
                     status: SolveStatus::Failed,
@@ -894,7 +881,6 @@ fn log_failed_solve_with_id_validates_id_before_storing_payloads() {
                     solve_id,
                     super::FailedSolveRecord {
                         input: &duplicate_instance,
-                        input_annotations: Default::default(),
                         adapter: "dummy.Adapter".to_string(),
                         adapter_options: "{}".to_string(),
                         status: SolveStatus::Interrupted,

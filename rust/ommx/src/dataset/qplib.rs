@@ -1,6 +1,6 @@
 use crate::{
     artifact::{
-        ghcr, local_registry::LocalRegistry, media_types, InstanceAnnotations, LocalArtifact,
+        descriptor_annotations, ghcr, local_registry::LocalRegistry, media_types, LocalArtifact,
     },
     v1::Instance,
 };
@@ -73,20 +73,29 @@ struct RawEntry {
 }
 
 impl RawEntry {
-    fn as_annotation(&self) -> InstanceAnnotations {
-        let mut annotation = InstanceAnnotations::default();
-        annotation.set_title(self.name.clone());
+    fn as_annotation(&self) -> HashMap<String, String> {
+        let mut annotation = HashMap::new();
+        annotation.insert("org.ommx.v1.instance.title".to_string(), self.name.clone());
         if !self.donor.is_empty() {
-            annotation.set_authors(vec![self.donor.clone()]);
+            annotation.insert(
+                "org.ommx.v1.instance.authors".to_string(),
+                self.donor.clone(),
+            );
         }
         // QPLIB is licensed under CC-BY 4.0 as of August 30, 2021
-        annotation.set_license("CC-BY-4.0".to_string());
-        annotation.set_dataset("QPLIB".to_string());
+        annotation.insert(
+            "org.ommx.v1.instance.license".to_string(),
+            "CC-BY-4.0".to_string(),
+        );
+        annotation.insert(
+            "org.ommx.v1.instance.dataset".to_string(),
+            "QPLIB".to_string(),
+        );
 
         // Store QPLIB's original counts in qplib namespace
         // Note: QPLIB and OMMX may count constraints differently (e.g., l <= f(x) <= u)
-        annotation.set_other("org.ommx.qplib.nvars".to_string(), self.nvars.to_string());
-        annotation.set_other("org.ommx.qplib.ncons".to_string(), self.ncons.to_string());
+        annotation.insert("org.ommx.qplib.nvars".to_string(), self.nvars.to_string());
+        annotation.insert("org.ommx.qplib.ncons".to_string(), self.ncons.to_string());
 
         // QPLIB specific annotations - variable counts
         for (key, value) in [
@@ -103,7 +112,7 @@ impl RawEntry {
             ("nsos1", self.nsos1),
             ("nsos2", self.nsos2),
         ] {
-            annotation.set_other(format!("org.ommx.qplib.{key}"), value.to_string());
+            annotation.insert(format!("org.ommx.qplib.{key}"), value.to_string());
         }
 
         // QPLIB specific annotations - constraint counts
@@ -115,7 +124,7 @@ impl RawEntry {
             ("nconcavenlcons", self.nconcavenlcons),
             ("nindefinitenlcons", self.nindefinitenlcons),
         ] {
-            annotation.set_other(format!("org.ommx.qplib.{key}"), value.to_string());
+            annotation.insert(format!("org.ommx.qplib.{key}"), value.to_string());
         }
 
         // QPLIB specific annotations - objective function
@@ -125,14 +134,14 @@ impl RawEntry {
             ("nobjquadnz", self.nobjquadnz),
             ("nobjquaddiagnz", self.nobjquaddiagnz),
         ] {
-            annotation.set_other(format!("org.ommx.qplib.{key}"), value.to_string());
+            annotation.insert(format!("org.ommx.qplib.{key}"), value.to_string());
         }
 
         for (key, value) in [
             ("nobjquadnegev", self.nobjquadnegev),
             ("nobjquadposev", self.nobjquadposev),
         ] {
-            annotation.set_other(format!("org.ommx.qplib.{key}"), value.to_string());
+            annotation.insert(format!("org.ommx.qplib.{key}"), value.to_string());
         }
 
         // QPLIB specific annotations - Jacobian and Hessian
@@ -145,10 +154,10 @@ impl RawEntry {
             ("laghessianminblocksize", self.laghessianminblocksize),
             ("laghessianmaxblocksize", self.laghessianmaxblocksize),
         ] {
-            annotation.set_other(format!("org.ommx.qplib.{key}"), value.to_string());
+            annotation.insert(format!("org.ommx.qplib.{key}"), value.to_string());
         }
 
-        annotation.set_other(
+        annotation.insert(
             "org.ommx.qplib.laghessianavgblocksize".to_string(),
             self.laghessianavgblocksize.to_string(),
         );
@@ -161,62 +170,62 @@ impl RawEntry {
             ("nquadfunc", self.nquadfunc),
             ("nnlfunc", self.nnlfunc),
         ] {
-            annotation.set_other(format!("org.ommx.qplib.{key}"), value.to_string());
+            annotation.insert(format!("org.ommx.qplib.{key}"), value.to_string());
         }
 
         // QPLIB specific annotations - density measures
-        annotation.set_other(
+        annotation.insert(
             "org.ommx.qplib.density".to_string(),
             self.density.to_string(),
         );
-        annotation.set_other(
+        annotation.insert(
             "org.ommx.qplib.nldensity".to_string(),
             self.nldensity.to_string(),
         );
-        annotation.set_other(
+        annotation.insert(
             "org.ommx.qplib.objquaddensity".to_string(),
             self.objquaddensity.to_string(),
         );
-        annotation.set_other(
+        annotation.insert(
             "org.ommx.qplib.objquadproblevfrac".to_string(),
             self.objquadproblevfrac.to_string(),
         );
 
         // QPLIB specific annotations - problem characteristics
-        annotation.set_other("org.ommx.qplib.objsense".to_string(), self.objsense.clone());
-        annotation.set_other("org.ommx.qplib.objtype".to_string(), self.objtype.clone());
-        annotation.set_other(
+        annotation.insert("org.ommx.qplib.objsense".to_string(), self.objsense.clone());
+        annotation.insert("org.ommx.qplib.objtype".to_string(), self.objtype.clone());
+        annotation.insert(
             "org.ommx.qplib.objcurvature".to_string(),
             self.objcurvature.clone(),
         );
-        annotation.set_other(
+        annotation.insert(
             "org.ommx.qplib.conscurvature".to_string(),
             self.conscurvature.clone(),
         );
-        annotation.set_other("org.ommx.qplib.probtype".to_string(), self.probtype.clone());
-        annotation.set_other("org.ommx.qplib.convex".to_string(), self.convex.clone());
+        annotation.insert("org.ommx.qplib.probtype".to_string(), self.probtype.clone());
+        annotation.insert("org.ommx.qplib.convex".to_string(), self.convex.clone());
 
         // QPLIB specific annotations - solution information
         if !self.solobjvalue.is_empty() {
-            annotation.set_other(
+            annotation.insert(
                 "org.ommx.qplib.solobjvalue".to_string(),
                 self.solobjvalue.clone(),
             );
         }
         if !self.solinfeasibility.is_empty() {
-            annotation.set_other(
+            annotation.insert(
                 "org.ommx.qplib.solinfeasibility".to_string(),
                 self.solinfeasibility.clone(),
             );
         }
         if !self.sol_source.is_empty() {
-            annotation.set_other(
+            annotation.insert(
                 "org.ommx.qplib.solsource".to_string(),
                 self.sol_source.clone(),
             );
         }
 
-        annotation.set_other(
+        annotation.insert(
             "org.ommx.qplib.url".to_string(),
             format!(
                 "http://qplib.zib.de/QPLIB_{}.html",
@@ -227,7 +236,7 @@ impl RawEntry {
     }
 }
 
-/// Convert [QPLIB_CSV] as [InstanceAnnotations] dictionary
+/// Convert [QPLIB_CSV] as flat annotation dictionaries.
 ///
 /// QPLIB-specific annotations are stored in the `org.ommx.qplib.*` namespace.
 /// Field definitions are documented at <https://qplib.zib.de/doc.html>.
@@ -239,8 +248,8 @@ impl RawEntry {
 /// let annotation = annotations.get("0018").unwrap();
 ///
 /// // Common annotations
-/// assert_eq!(annotation.title().unwrap(), "QPLIB_0018");
-/// assert_eq!(annotation.dataset().unwrap(), "QPLIB");
+/// assert_eq!(annotation.get("org.ommx.v1.instance.title").unwrap(), "QPLIB_0018");
+/// assert_eq!(annotation.get("org.ommx.v1.instance.dataset").unwrap(), "QPLIB");
 ///
 /// // QPLIB specific annotations (QPLIB's original counts)
 /// assert_eq!(annotation.get("org.ommx.qplib.nvars").unwrap(), "50");
@@ -250,7 +259,7 @@ impl RawEntry {
 /// assert_eq!(annotation.get("org.ommx.qplib.probtype").unwrap(), "QCL");
 /// assert_eq!(annotation.get("org.ommx.qplib.url").unwrap(), "http://qplib.zib.de/QPLIB_0018.html");
 /// ```
-pub fn instance_annotations() -> HashMap<String, InstanceAnnotations> {
+pub fn instance_annotations() -> HashMap<String, HashMap<String, String>> {
     let mut rdr = csv::Reader::from_reader(QPLIB_CSV.as_bytes());
     let mut entries = HashMap::new();
     for result in rdr.deserialize() {
@@ -277,12 +286,13 @@ pub fn instance_annotations() -> HashMap<String, InstanceAnnotations> {
 /// use ommx::dataset::qplib;
 ///
 /// // Load QPLIB_0018 from local artifact (requires prior packaging)
-/// let (instance, annotation) = qplib::load("0018").unwrap();
-/// assert_eq!(annotation.title().unwrap(), "QPLIB_0018");
-/// assert_eq!(annotation.dataset().unwrap(), "QPLIB");
+/// let instance = qplib::load("0018").unwrap();
+/// let description = instance.description.as_ref().unwrap();
+/// assert_eq!(description.name.as_deref(), Some("QPLIB_0018"));
+/// assert_eq!(description.dataset.as_deref(), Some("QPLIB"));
 /// assert!(instance.decision_variables.len() > 0);
 /// ```
-pub fn load(tag: &str) -> Result<(Instance, InstanceAnnotations)> {
+pub fn load(tag: &str) -> Result<Instance> {
     let annotations = instance_annotations();
     ensure!(
         annotations.contains_key(tag),
@@ -305,12 +315,10 @@ pub fn load(tag: &str) -> Result<(Instance, InstanceAnnotations)> {
         "QPLIB Artifact should contain exactly one instance"
     );
     let bytes = artifact.get_blob(&layer)?;
-    let instance =
+    let mut instance =
         Instance::decode(bytes.as_slice()).context("Failed to decode QPLIB instance layer")?;
-    Ok((
-        instance,
-        InstanceAnnotations::from(layer.annotations().clone().unwrap_or_default()),
-    ))
+    crate::artifact::merge_instance_annotations(&mut instance, &descriptor_annotations(&layer));
+    Ok(instance)
 }
 
 #[cfg(test)]
@@ -333,8 +341,14 @@ mod tests {
             .expect("Should find annotation with key '0018'");
 
         // Verify that the title still contains the full QPLIB_XXXX format
-        assert_eq!(annotation.title().unwrap(), "QPLIB_0018");
-        assert_eq!(annotation.dataset().unwrap(), "QPLIB");
+        assert_eq!(
+            annotation.get("org.ommx.v1.instance.title").unwrap(),
+            "QPLIB_0018"
+        );
+        assert_eq!(
+            annotation.get("org.ommx.v1.instance.dataset").unwrap(),
+            "QPLIB"
+        );
 
         // Verify that old format "QPLIB_0018" does NOT work as a key
         assert!(
@@ -357,9 +371,10 @@ mod tests {
         // This test requires QPLIB_3877 to be packaged locally
         let result = super::load("3877");
         match result {
-            Ok((instance, annotation)) => {
-                assert_eq!(annotation.title().unwrap(), "QPLIB_3877");
-                assert_eq!(annotation.dataset().unwrap(), "QPLIB");
+            Ok(instance) => {
+                let description = instance.description.as_ref().unwrap();
+                assert_eq!(description.name.as_deref(), Some("QPLIB_3877"));
+                assert_eq!(description.dataset.as_deref(), Some("QPLIB"));
                 assert!(!instance.decision_variables.is_empty());
                 println!(
                     "Successfully loaded QPLIB_3877: {} vars, {} constraints",

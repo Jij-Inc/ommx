@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Context, Result};
 use ommx::artifact::{ArtifactDraft, ImageRef, LocalArtifact};
-use std::{fs, path::Path};
+use std::{collections::HashMap, fs, path::Path};
 use url::Url;
 use zip::ZipArchive;
 
@@ -63,20 +63,32 @@ pub fn package(path: &Path) -> Result<()> {
         // Get CSV metadata for this instance, or create basic annotations
         let mut annotations = csv_annotations.get(tag).cloned().unwrap_or_else(|| {
             tracing::warn!("No CSV metadata found for instance '{name}', using basic annotations");
-            let mut ann = ommx::artifact::InstanceAnnotations::default();
-            ann.set_title(name.clone());
-            ann.set_dataset("QPLIB".to_string());
+            let mut ann = HashMap::new();
+            ann.insert("org.ommx.v1.instance.title".to_string(), name.clone());
+            ann.insert(
+                "org.ommx.v1.instance.dataset".to_string(),
+                "QPLIB".to_string(),
+            );
             ann
         });
 
-        annotations.set_created_now();
+        annotations.insert(
+            "org.ommx.v1.instance.created".to_string(),
+            chrono::Local::now().to_rfc3339(),
+        );
 
         // Override variables and constraints with actual parsed values
         // QPLIB and OMMX may count constraints differently (e.g., l <= f(x) <= u)
         let nvars = instance.decision_variables().len();
         let ncons = instance.constraints().len();
-        annotations.set_variables(nvars);
-        annotations.set_constraints(ncons);
+        annotations.insert(
+            "org.ommx.v1.instance.variables".to_string(),
+            nvars.to_string(),
+        );
+        annotations.insert(
+            "org.ommx.v1.instance.constraints".to_string(),
+            ncons.to_string(),
+        );
 
         tracing::info!(
             "Packaged '{name}': {} variables, {} constraints",
@@ -86,7 +98,9 @@ pub fn package(path: &Path) -> Result<()> {
 
         let mut builder = ArtifactDraft::new(image_name)?;
         builder.add_source(&source_url);
-        builder.add_instance(instance.into(), annotations)?;
+        let mut instance: ommx::v1::Instance = instance.into();
+        ommx::artifact::overlay_instance_annotations(&mut instance, &annotations);
+        builder.add_instance(instance)?;
         let _artifact = builder.commit()?;
         // Do not push here. Use `ommx push` command to upload the artifacts.
     }

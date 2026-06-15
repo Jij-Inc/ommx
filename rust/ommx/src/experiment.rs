@@ -48,7 +48,7 @@
 //!
 //! let mut run = exp.run()?;
 //! run.log_parameter("solver", "scip")?;
-//! run.log_instance("candidate", &instance, Default::default())?;
+//! run.log_instance("candidate", &instance)?;
 //! run.finish()?;
 //!
 //! let artifact = exp.commit()?.into_artifact();
