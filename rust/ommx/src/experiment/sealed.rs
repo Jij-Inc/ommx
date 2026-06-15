@@ -1,7 +1,7 @@
 //! Read-only model reconstructed from a sealed Experiment Artifact.
 
 use super::artifact::ExperimentArtifactView;
-use super::attachment::{decode_instance_layer, decode_solution_layer, AttachmentTable};
+use super::attachment::AttachmentTable;
 use super::config::{ExperimentConfigSolve, LayerRef};
 use super::parameter::{RunParameterCell, RunParameterTable};
 use super::{
@@ -301,18 +301,14 @@ impl<'reg> Solve<'reg> {
     }
 
     pub fn input_instance(&self) -> Result<Instance> {
-        self.input.ensure_media_type(&media_types::v1_instance())?;
-        let bytes = self.input.registry().get_blob(&self.input)?;
-        decode_instance_layer(&bytes, &self.input)
+        self.input.registry().get_instance_layer(&self.input)
     }
 
     pub fn output_solution(&self) -> Result<Option<Solution>> {
         let Some(output) = &self.output else {
             return Ok(None);
         };
-        output.ensure_media_type(&media_types::v1_solution())?;
-        let bytes = output.registry().get_blob(output)?;
-        Ok(Some(decode_solution_layer(&bytes, output)?))
+        Ok(Some(output.registry().get_solution_layer(output)?))
     }
 
     pub fn adapter(&self) -> &str {

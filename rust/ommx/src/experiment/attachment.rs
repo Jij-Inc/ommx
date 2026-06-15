@@ -1,11 +1,9 @@
 //! Experiment and run scoped Attachment descriptor helpers.
 
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
-use crate::artifact::media_types;
 use crate::{Instance, ParametricInstance, SampleSet, Solution};
-use crate::{Message, Parse};
 use anyhow::{ensure, Context, Result};
-use oci_spec::image::{Descriptor, MediaType};
+use oci_spec::image::MediaType;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashMap},
@@ -172,30 +170,24 @@ impl<'reg> AttachmentTable<StoredDescriptor<'reg>> {
 
     pub(crate) fn instance(&self, name: &str) -> Result<Instance> {
         let descriptor = self.attachment(name)?;
-        descriptor.ensure_media_type(&media_types::v1_instance())?;
-        let bytes = descriptor.registry().get_blob(descriptor)?;
-        decode_instance_layer(&bytes, descriptor)
+        descriptor.registry().get_instance_layer(descriptor)
     }
 
     pub(crate) fn parametric_instance(&self, name: &str) -> Result<ParametricInstance> {
         let descriptor = self.attachment(name)?;
-        descriptor.ensure_media_type(&media_types::v1_parametric_instance())?;
-        let bytes = descriptor.registry().get_blob(descriptor)?;
-        decode_parametric_instance_layer(&bytes, descriptor)
+        descriptor
+            .registry()
+            .get_parametric_instance_layer(descriptor)
     }
 
     pub(crate) fn solution(&self, name: &str) -> Result<Solution> {
         let descriptor = self.attachment(name)?;
-        descriptor.ensure_media_type(&media_types::v1_solution())?;
-        let bytes = descriptor.registry().get_blob(descriptor)?;
-        decode_solution_layer(&bytes, descriptor)
+        descriptor.registry().get_solution_layer(descriptor)
     }
 
     pub(crate) fn sample_set(&self, name: &str) -> Result<SampleSet> {
         let descriptor = self.attachment(name)?;
-        descriptor.ensure_media_type(&media_types::v1_sample_set())?;
-        let bytes = descriptor.registry().get_blob(descriptor)?;
-        decode_sample_set_layer(&bytes, descriptor)
+        descriptor.registry().get_sample_set_layer(descriptor)
     }
 
     pub(crate) fn write_attachment(
@@ -238,69 +230,6 @@ pub(crate) fn json_media_type() -> MediaType {
 pub(crate) fn encode_json(name: &str, value: impl serde::Serialize) -> Result<Vec<u8>> {
     crate::artifact::stable_json_bytes(&value)
         .map_err(|e| crate::error!("Failed to encode JSON attachment `{name}`: {e}"))
-}
-
-pub fn encode_instance_layer(instance: &Instance) -> (Vec<u8>, HashMap<String, String>) {
-    let proto: crate::v1::Instance = instance.clone().into();
-    let annotations = crate::artifact::instance_annotations(&proto);
-    (proto.encode_to_vec(), annotations)
-}
-
-pub fn encode_parametric_instance_layer(
-    instance: &ParametricInstance,
-) -> (Vec<u8>, HashMap<String, String>) {
-    let proto: crate::v1::ParametricInstance = instance.clone().into();
-    let annotations = crate::artifact::parametric_instance_annotations(&proto);
-    (proto.encode_to_vec(), annotations)
-}
-
-pub fn encode_solution_layer(solution: &Solution) -> (Vec<u8>, HashMap<String, String>) {
-    let proto: crate::v1::Solution = solution.clone().into();
-    let annotations = crate::artifact::solution_annotations(&proto);
-    (proto.encode_to_vec(), annotations)
-}
-
-pub fn encode_sample_set_layer(sample_set: &SampleSet) -> (Vec<u8>, HashMap<String, String>) {
-    let proto: crate::v1::SampleSet = sample_set.clone().into();
-    let annotations = crate::artifact::sample_set_annotations(&proto);
-    (proto.encode_to_vec(), annotations)
-}
-
-pub fn decode_instance_layer(bytes: &[u8], descriptor: &Descriptor) -> Result<Instance> {
-    let mut instance = crate::v1::Instance::decode(bytes)?;
-    crate::artifact::merge_instance_annotations(&mut instance, &descriptor_annotations(descriptor));
-    Ok(instance.try_into()?)
-}
-
-pub fn decode_parametric_instance_layer(
-    bytes: &[u8],
-    descriptor: &Descriptor,
-) -> Result<ParametricInstance> {
-    let mut instance = crate::v1::ParametricInstance::decode(bytes)?;
-    crate::artifact::merge_parametric_instance_annotations(
-        &mut instance,
-        &descriptor_annotations(descriptor),
-    );
-    Ok(instance.parse(&())?)
-}
-
-pub fn decode_solution_layer(bytes: &[u8], descriptor: &Descriptor) -> Result<Solution> {
-    let mut solution = crate::v1::Solution::decode(bytes)?;
-    crate::artifact::merge_solution_annotations(&mut solution, &descriptor_annotations(descriptor));
-    Ok(solution.parse(&())?)
-}
-
-pub fn decode_sample_set_layer(bytes: &[u8], descriptor: &Descriptor) -> Result<SampleSet> {
-    let mut sample_set = crate::v1::SampleSet::decode(bytes)?;
-    crate::artifact::merge_sample_set_annotations(
-        &mut sample_set,
-        &descriptor_annotations(descriptor),
-    );
-    Ok(sample_set.parse(&())?)
-}
-
-fn descriptor_annotations(desc: &Descriptor) -> HashMap<String, String> {
-    desc.annotations().as_ref().cloned().unwrap_or_default()
 }
 
 /// Detect the media type of file contents using magic bytes.

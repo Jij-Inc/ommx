@@ -1,14 +1,12 @@
 //! Experiment / Run handles and run lifecycle.
 
-use super::attachment::{
-    encode_instance_layer, encode_solution_layer, read_file_attachment, store_attachment_descriptor,
-};
+use super::attachment::{read_file_attachment, store_attachment_descriptor};
 use super::{
     AttachmentLogger, ParameterValue, Run, RunEntry, RunStatus, SolveDiagnosticPayload, SolveEntry,
     SolveStatus, Trace,
 };
 use crate::artifact::media_types;
-use crate::{Instance, Solution};
+use crate::{Instance, ParametricInstance, SampleSet, Solution};
 use anyhow::{ensure, Result};
 use oci_spec::image::MediaType;
 use std::{collections::HashMap, path::Path};
@@ -86,18 +84,8 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
             adapter_options,
             diagnostics,
         } = record;
-        let (input_bytes, input_annotations) = encode_instance_layer(input);
-        let input = self.experiment.registry.store_layer_blob(
-            media_types::v1_instance(),
-            &input_bytes,
-            input_annotations,
-        )?;
-        let (output_bytes, output_annotations) = encode_solution_layer(output);
-        let output = self.experiment.registry.store_layer_blob(
-            media_types::v1_solution(),
-            &output_bytes,
-            output_annotations,
-        )?;
+        let input = self.experiment.registry.store_instance_layer(input)?;
+        let output = self.experiment.registry.store_solution_layer(output)?;
         let diagnostics = diagnostics.and_then(|diagnostic| {
             match diagnostic.to_msgpack_bytes().and_then(|bytes| {
                 self.experiment.registry.store_layer_blob(
@@ -159,12 +147,7 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
             "failed solve attempt status must not be finished"
         );
         self.ensure_reserved_solve_id(solve_id)?;
-        let (input_bytes, input_annotations) = encode_instance_layer(input);
-        let input = self.experiment.registry.store_layer_blob(
-            media_types::v1_instance(),
-            &input_bytes,
-            input_annotations,
-        )?;
+        let input = self.experiment.registry.store_instance_layer(input)?;
         let diagnostics = diagnostics.and_then(|diagnostic| {
             match diagnostic.to_msgpack_bytes().and_then(|bytes| {
                 self.experiment.registry.store_layer_blob(
@@ -331,6 +314,52 @@ impl<'exp, 'reg> AttachmentLogger for &mut Run<'exp, 'reg> {
         )?;
         self.attachments
             .insert(name.to_string(), descriptor, Some(filename))?;
+        Ok(())
+    }
+
+    fn log_instance(self, name: &str, instance: &Instance) -> Result<()> {
+        if self.attachments.contains_key(name) {
+            crate::bail!("Attachment `{name}` already exists");
+        }
+        let descriptor = self.experiment.registry.store_instance_layer(instance)?;
+        self.attachments
+            .insert(name.to_string(), descriptor, None)?;
+        Ok(())
+    }
+
+    fn log_parametric_instance(self, name: &str, pi: &ParametricInstance) -> Result<()> {
+        if self.attachments.contains_key(name) {
+            crate::bail!("Attachment `{name}` already exists");
+        }
+        let descriptor = self
+            .experiment
+            .registry
+            .store_parametric_instance_layer(pi)?;
+        self.attachments
+            .insert(name.to_string(), descriptor, None)?;
+        Ok(())
+    }
+
+    fn log_solution(self, name: &str, solution: &Solution) -> Result<()> {
+        if self.attachments.contains_key(name) {
+            crate::bail!("Attachment `{name}` already exists");
+        }
+        let descriptor = self.experiment.registry.store_solution_layer(solution)?;
+        self.attachments
+            .insert(name.to_string(), descriptor, None)?;
+        Ok(())
+    }
+
+    fn log_sample_set(self, name: &str, sample_set: &SampleSet) -> Result<()> {
+        if self.attachments.contains_key(name) {
+            crate::bail!("Attachment `{name}` already exists");
+        }
+        let descriptor = self
+            .experiment
+            .registry
+            .store_sample_set_layer(sample_set)?;
+        self.attachments
+            .insert(name.to_string(), descriptor, None)?;
         Ok(())
     }
 }

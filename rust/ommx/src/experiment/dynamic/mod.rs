@@ -14,9 +14,7 @@
 //! descriptors before decoding typed payloads or writing attachment files.
 
 use super::artifact::ExperimentArtifactView;
-use super::attachment::{
-    decode_instance_layer, decode_solution_layer, read_file_attachment, store_attachment_descriptor,
-};
+use super::attachment::{read_file_attachment, store_attachment_descriptor};
 use super::config::ExperimentConfig;
 use super::{
     allocate_next_run_id, next_run_id, read_solve_diagnostic_payload, AttachmentLogger,
@@ -332,8 +330,9 @@ impl SolveDyn {
             descriptor.media_type(),
             media_types::V1_INSTANCE_MEDIA_TYPE
         );
-        let bytes = self.registry_handle.registry().get_blob(&descriptor)?;
-        decode_instance_layer(&bytes, &descriptor)
+        self.registry_handle
+            .registry()
+            .get_instance_layer(&descriptor)
     }
 
     fn output_descriptor(&self) -> Result<Option<StoredDescriptor<'_>>> {
@@ -358,8 +357,11 @@ impl SolveDyn {
             descriptor.media_type(),
             media_types::V1_SOLUTION_MEDIA_TYPE
         );
-        let bytes = self.registry_handle.registry().get_blob(&descriptor)?;
-        Ok(Some(decode_solution_layer(&bytes, &descriptor)?))
+        Ok(Some(
+            self.registry_handle
+                .registry()
+                .get_solution_layer(&descriptor)?,
+        ))
     }
 
     /// Raw MessagePack bytes of the adapter diagnostics payload.
@@ -606,6 +608,27 @@ impl ExperimentDyn {
             ExperimentDynLifecycle::Sealed(_) | ExperimentDynLifecycle::Failed { .. } => 0,
         }
     }
+
+    fn register_attachment_descriptor(
+        &self,
+        name: &str,
+        descriptor: Descriptor,
+        filename: Option<String>,
+    ) -> Result<()> {
+        let mut dyn_state = lock_experiment_state(&self.state);
+        ensure_unsealed_for_attachment_write(&dyn_state)?;
+        let ExperimentDynLifecycle::Unsealed { state, .. } = &mut dyn_state.lifecycle else {
+            return bail_non_unsealed(&dyn_state.lifecycle);
+        };
+        let state = state
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
+        state
+            .attachments
+            .insert(name.to_string(), descriptor, filename)
+            .with_context(|| format!("Failed to register attachment `{name}`"))?;
+        Ok(())
+    }
 }
 
 impl AttachmentLogger for &ExperimentDyn {
@@ -692,6 +715,92 @@ impl AttachmentLogger for &ExperimentDyn {
             .insert(name.to_string(), descriptor, Some(filename))
             .with_context(|| format!("Failed to register attachment `{name}`"))?;
         Ok(())
+    }
+
+    fn log_instance(self, name: &str, instance: &Instance) -> Result<()> {
+        let registry_handle = {
+            let dyn_state = lock_experiment_state(&self.state);
+            ensure_unsealed_for_attachment_write(&dyn_state)?;
+            let ExperimentDynLifecycle::Unsealed {
+                state: Some(state), ..
+            } = &dyn_state.lifecycle
+            else {
+                return bail_non_unsealed(&dyn_state.lifecycle);
+            };
+            if state.attachments.contains_key(name) {
+                crate::bail!("Attachment `{name}` already exists");
+            }
+            dyn_state.registry_handle.clone()
+        };
+        let descriptor =
+            Descriptor::from(registry_handle.registry().store_instance_layer(instance)?);
+        self.register_attachment_descriptor(name, descriptor, None)
+    }
+
+    fn log_parametric_instance(self, name: &str, pi: &ParametricInstance) -> Result<()> {
+        let registry_handle = {
+            let dyn_state = lock_experiment_state(&self.state);
+            ensure_unsealed_for_attachment_write(&dyn_state)?;
+            let ExperimentDynLifecycle::Unsealed {
+                state: Some(state), ..
+            } = &dyn_state.lifecycle
+            else {
+                return bail_non_unsealed(&dyn_state.lifecycle);
+            };
+            if state.attachments.contains_key(name) {
+                crate::bail!("Attachment `{name}` already exists");
+            }
+            dyn_state.registry_handle.clone()
+        };
+        let descriptor = Descriptor::from(
+            registry_handle
+                .registry()
+                .store_parametric_instance_layer(pi)?,
+        );
+        self.register_attachment_descriptor(name, descriptor, None)
+    }
+
+    fn log_solution(self, name: &str, solution: &Solution) -> Result<()> {
+        let registry_handle = {
+            let dyn_state = lock_experiment_state(&self.state);
+            ensure_unsealed_for_attachment_write(&dyn_state)?;
+            let ExperimentDynLifecycle::Unsealed {
+                state: Some(state), ..
+            } = &dyn_state.lifecycle
+            else {
+                return bail_non_unsealed(&dyn_state.lifecycle);
+            };
+            if state.attachments.contains_key(name) {
+                crate::bail!("Attachment `{name}` already exists");
+            }
+            dyn_state.registry_handle.clone()
+        };
+        let descriptor =
+            Descriptor::from(registry_handle.registry().store_solution_layer(solution)?);
+        self.register_attachment_descriptor(name, descriptor, None)
+    }
+
+    fn log_sample_set(self, name: &str, sample_set: &SampleSet) -> Result<()> {
+        let registry_handle = {
+            let dyn_state = lock_experiment_state(&self.state);
+            ensure_unsealed_for_attachment_write(&dyn_state)?;
+            let ExperimentDynLifecycle::Unsealed {
+                state: Some(state), ..
+            } = &dyn_state.lifecycle
+            else {
+                return bail_non_unsealed(&dyn_state.lifecycle);
+            };
+            if state.attachments.contains_key(name) {
+                crate::bail!("Attachment `{name}` already exists");
+            }
+            dyn_state.registry_handle.clone()
+        };
+        let descriptor = Descriptor::from(
+            registry_handle
+                .registry()
+                .store_sample_set_layer(sample_set)?,
+        );
+        self.register_attachment_descriptor(name, descriptor, None)
     }
 }
 
@@ -1309,21 +1418,6 @@ fn store_run_attachment_descriptor(
     annotations: HashMap<String, String>,
 ) -> Result<Descriptor> {
     let descriptor = store_attachment_descriptor(registry, media_type, bytes, annotations)?;
-    Ok(Descriptor::from(descriptor))
-}
-
-fn store_solve_payload_descriptor(
-    state: &ExperimentDynState,
-    media_type: MediaType,
-    bytes: &[u8],
-    annotations: HashMap<String, String>,
-) -> Result<Descriptor> {
-    ensure_unsealed_for_attachment_write(state)?;
-    let descriptor =
-        state
-            .registry_handle
-            .registry()
-            .store_layer_blob(media_type, bytes, annotations)?;
     Ok(Descriptor::from(descriptor))
 }
 

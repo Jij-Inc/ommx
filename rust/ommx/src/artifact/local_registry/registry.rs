@@ -1,6 +1,7 @@
 use super::index::SqliteIndexStore;
 use super::RefUpdate;
 use crate::artifact::{media_types, sha256_digest, stable_json_bytes, ImageRef};
+use crate::{Message, Parse};
 use anyhow::{ensure, Context, Result};
 use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, ImageManifest, MediaType};
 use std::collections::{BTreeSet, HashMap};
@@ -277,6 +278,134 @@ impl LocalRegistry {
             bytes.len()
         );
         Ok(bytes)
+    }
+
+    pub fn get_instance_layer(&self, descriptor: &StoredDescriptor<'_>) -> Result<crate::Instance> {
+        descriptor.ensure_media_type(&media_types::v1_instance())?;
+        let bytes = self.get_blob(descriptor)?;
+        let mut instance = crate::v1::Instance::decode(bytes.as_slice())?;
+        let annotations = descriptor
+            .annotations()
+            .as_ref()
+            .cloned()
+            .unwrap_or_default();
+        crate::artifact::merge_instance_annotations(&mut instance, &annotations);
+        Ok(instance.try_into()?)
+    }
+
+    pub fn get_parametric_instance_layer(
+        &self,
+        descriptor: &StoredDescriptor<'_>,
+    ) -> Result<crate::ParametricInstance> {
+        descriptor.ensure_media_type(&media_types::v1_parametric_instance())?;
+        let bytes = self.get_blob(descriptor)?;
+        let mut instance = crate::v1::ParametricInstance::decode(bytes.as_slice())?;
+        let annotations = descriptor
+            .annotations()
+            .as_ref()
+            .cloned()
+            .unwrap_or_default();
+        crate::artifact::merge_parametric_instance_annotations(&mut instance, &annotations);
+        Ok(instance.parse(&())?)
+    }
+
+    pub fn get_solution_layer(&self, descriptor: &StoredDescriptor<'_>) -> Result<crate::Solution> {
+        descriptor.ensure_media_type(&media_types::v1_solution())?;
+        let bytes = self.get_blob(descriptor)?;
+        let mut solution = crate::v1::Solution::decode(bytes.as_slice())?;
+        let annotations = descriptor
+            .annotations()
+            .as_ref()
+            .cloned()
+            .unwrap_or_default();
+        crate::artifact::merge_solution_annotations(&mut solution, &annotations);
+        Ok(solution.parse(&())?)
+    }
+
+    pub fn get_sample_set_layer(
+        &self,
+        descriptor: &StoredDescriptor<'_>,
+    ) -> Result<crate::SampleSet> {
+        descriptor.ensure_media_type(&media_types::v1_sample_set())?;
+        let bytes = self.get_blob(descriptor)?;
+        let mut sample_set = crate::v1::SampleSet::decode(bytes.as_slice())?;
+        let annotations = descriptor
+            .annotations()
+            .as_ref()
+            .cloned()
+            .unwrap_or_default();
+        crate::artifact::merge_sample_set_annotations(&mut sample_set, &annotations);
+        Ok(sample_set.parse(&())?)
+    }
+
+    pub fn store_v1_instance_layer(
+        &self,
+        instance: crate::v1::Instance,
+    ) -> Result<StoredDescriptor<'_>> {
+        let annotations = crate::artifact::instance_annotations(&instance);
+        self.store_layer_blob(
+            media_types::v1_instance(),
+            &instance.encode_to_vec(),
+            annotations,
+        )
+    }
+
+    pub fn store_instance_layer(&self, instance: &crate::Instance) -> Result<StoredDescriptor<'_>> {
+        self.store_v1_instance_layer(instance.clone().into())
+    }
+
+    pub fn store_v1_parametric_instance_layer(
+        &self,
+        instance: crate::v1::ParametricInstance,
+    ) -> Result<StoredDescriptor<'_>> {
+        let annotations = crate::artifact::parametric_instance_annotations(&instance);
+        self.store_layer_blob(
+            media_types::v1_parametric_instance(),
+            &instance.encode_to_vec(),
+            annotations,
+        )
+    }
+
+    pub fn store_parametric_instance_layer(
+        &self,
+        instance: &crate::ParametricInstance,
+    ) -> Result<StoredDescriptor<'_>> {
+        self.store_v1_parametric_instance_layer(instance.clone().into())
+    }
+
+    pub fn store_v1_solution_layer(
+        &self,
+        solution: crate::v1::Solution,
+    ) -> Result<StoredDescriptor<'_>> {
+        let annotations = crate::artifact::solution_annotations(&solution);
+        self.store_layer_blob(
+            media_types::v1_solution(),
+            &solution.encode_to_vec(),
+            annotations,
+        )
+    }
+
+    pub fn store_solution_layer(&self, solution: &crate::Solution) -> Result<StoredDescriptor<'_>> {
+        self.store_v1_solution_layer(solution.clone().into())
+    }
+
+    pub fn store_v1_sample_set_layer(
+        &self,
+        sample_set: crate::v1::SampleSet,
+    ) -> Result<StoredDescriptor<'_>> {
+        let annotations = crate::artifact::sample_set_annotations(&sample_set);
+        self.store_layer_blob(
+            media_types::v1_sample_set(),
+            &sample_set.encode_to_vec(),
+            annotations,
+        )
+    }
+
+    pub fn store_sample_set_layer(
+        &self,
+        sample_set: &crate::SampleSet,
+    ) -> Result<StoredDescriptor<'_>> {
+        self.store_v1_sample_set_layer(sample_set.clone().into())
     }
 
     pub fn resolve_image_name(&self, image_name: &ImageRef) -> Result<Option<Digest>> {

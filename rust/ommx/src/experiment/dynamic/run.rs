@@ -1,19 +1,18 @@
 //! Dynamic-lifetime Run handle.
 
-use super::super::attachment::{
-    encode_instance_layer, encode_solution_layer, read_file_attachment,
-};
+use super::super::attachment::read_file_attachment;
 use super::super::parameter::ParameterSet;
 use super::super::{
     AttachmentLogger, AttachmentTable, FailedSolveRecord, FinishedSolveRecord, ParameterValue,
     RunStatus, SolveStatus,
 };
 use super::{
-    bail_non_unsealed, lock_experiment_state, store_run_attachment_descriptor,
-    store_solve_payload_descriptor, store_trace_descriptor, ExperimentDyn, ExperimentDynLifecycle,
+    bail_non_unsealed, ensure_unsealed_for_attachment_write, lock_experiment_state,
+    store_run_attachment_descriptor, store_trace_descriptor, ExperimentDyn, ExperimentDynLifecycle,
     ExperimentDynState, RunEntryDyn, SolveEntryDyn,
 };
 use crate::artifact::media_types;
+use crate::{Instance, ParametricInstance, SampleSet, Solution};
 use anyhow::{ensure, Result};
 use oci_spec::image::{Descriptor, MediaType};
 use std::sync::{Arc, Mutex};
@@ -129,43 +128,30 @@ impl RunDyn {
             adapter_options,
             diagnostics,
         } = record;
-        let (input_bytes, input_annotations) = encode_instance_layer(input);
-        let (output_bytes, output_annotations) = encode_solution_layer(output);
-        let (input, output, diagnostics) = {
-            let dyn_state = lock_experiment_state(&self.experiment_state);
-            let input = store_solve_payload_descriptor(
-                &dyn_state,
-                media_types::v1_instance(),
-                &input_bytes,
-                input_annotations,
-            )?;
-            let output = store_solve_payload_descriptor(
-                &dyn_state,
-                media_types::v1_solution(),
-                &output_bytes,
-                output_annotations,
-            )?;
-            let diagnostics = diagnostics.and_then(|diagnostic| {
-                match diagnostic.to_msgpack_bytes().and_then(|bytes| {
-                    store_solve_payload_descriptor(
-                        &dyn_state,
-                        media_types::diagnostic_msgpack(),
-                        &bytes,
-                        HashMap::new(),
-                    )
-                }) {
-                    Ok(descriptor) => Some(descriptor),
-                    Err(error) => {
-                        tracing::warn!(
-                            error = %error,
-                            "Failed to store Solve diagnostics; recording Solve without diagnostics"
-                        );
-                        None
-                    }
+        let registry_handle = self.registry_handle_for_attachment_write()?;
+        let registry = registry_handle.registry();
+        let input = Descriptor::from(registry.store_instance_layer(input)?);
+        let output = Descriptor::from(registry.store_solution_layer(output)?);
+        let diagnostics = diagnostics.and_then(|diagnostic| {
+            match diagnostic.to_msgpack_bytes().and_then(|bytes| {
+                let registry_handle = self.registry_handle_for_attachment_write()?;
+                let descriptor = registry_handle.registry().store_layer_blob(
+                    media_types::diagnostic_msgpack(),
+                    &bytes,
+                    HashMap::new(),
+                )?;
+                Ok(Descriptor::from(descriptor))
+            }) {
+                Ok(descriptor) => Some(descriptor),
+                Err(error) => {
+                    tracing::warn!(
+                        error = %error,
+                        "Failed to store Solve diagnostics; recording Solve without diagnostics"
+                    );
+                    None
                 }
-            });
-            (input, output, diagnostics)
-        };
+            }
+        });
         let state = self.open_mut()?;
         insert_solve(
             state,
@@ -213,36 +199,28 @@ impl RunDyn {
             "failed solve attempt status must not be finished"
         );
         ensure_reserved_solve_id(self.open()?, solve_id)?;
-        let (input_bytes, input_annotations) = encode_instance_layer(input);
-        let (input, diagnostics) = {
-            let dyn_state = lock_experiment_state(&self.experiment_state);
-            let input = store_solve_payload_descriptor(
-                &dyn_state,
-                media_types::v1_instance(),
-                &input_bytes,
-                input_annotations,
-            )?;
-            let diagnostics = diagnostics.and_then(|diagnostic| {
-                match diagnostic.to_msgpack_bytes().and_then(|bytes| {
-                    store_solve_payload_descriptor(
-                        &dyn_state,
-                        media_types::diagnostic_msgpack(),
-                        &bytes,
-                        HashMap::new(),
-                    )
-                }) {
-                    Ok(descriptor) => Some(descriptor),
-                    Err(error) => {
-                        tracing::warn!(
-                            error = %error,
-                            "Failed to store failed Solve diagnostics; recording Solve without diagnostics"
-                        );
-                        None
-                    }
+        let registry_handle = self.registry_handle_for_attachment_write()?;
+        let input = Descriptor::from(registry_handle.registry().store_instance_layer(input)?);
+        let diagnostics = diagnostics.and_then(|diagnostic| {
+            match diagnostic.to_msgpack_bytes().and_then(|bytes| {
+                let registry_handle = self.registry_handle_for_attachment_write()?;
+                let descriptor = registry_handle.registry().store_layer_blob(
+                    media_types::diagnostic_msgpack(),
+                    &bytes,
+                    HashMap::new(),
+                )?;
+                Ok(Descriptor::from(descriptor))
+            }) {
+                Ok(descriptor) => Some(descriptor),
+                Err(error) => {
+                    tracing::warn!(
+                        error = %error,
+                        "Failed to store failed Solve diagnostics; recording Solve without diagnostics"
+                    );
+                    None
                 }
-            });
-            (input, diagnostics)
-        };
+            }
+        });
         let state = self.open_mut()?;
         insert_solve(
             state,
@@ -373,6 +351,12 @@ impl RunDyn {
             .as_mut()
             .ok_or_else(|| anyhow::anyhow!("Run has already been finished"))
     }
+
+    fn registry_handle_for_attachment_write(&self) -> Result<crate::artifact::LocalRegistryHandle> {
+        let dyn_state = lock_experiment_state(&self.experiment_state);
+        ensure_unsealed_for_attachment_write(&dyn_state)?;
+        Ok(dyn_state.registry_handle.clone())
+    }
 }
 
 impl AttachmentLogger for &mut RunDyn {
@@ -386,17 +370,13 @@ impl AttachmentLogger for &mut RunDyn {
         if self.open()?.attachments.contains_key(name) {
             crate::bail!("Attachment `{name}` already exists");
         }
-        let descriptor = {
-            let dyn_state = lock_experiment_state(&self.experiment_state);
-            super::ensure_unsealed_for_attachment_write(&dyn_state)?;
-            let registry_handle = dyn_state.registry_handle.clone();
-            store_run_attachment_descriptor(
-                registry_handle.registry(),
-                media_type,
-                bytes.as_ref(),
-                annotations,
-            )?
-        };
+        let registry_handle = self.registry_handle_for_attachment_write()?;
+        let descriptor = store_run_attachment_descriptor(
+            registry_handle.registry(),
+            media_type,
+            bytes.as_ref(),
+            annotations,
+        )?;
         self.open_mut()?
             .attachments
             .insert(name.to_string(), descriptor, None)?;
@@ -414,20 +394,74 @@ impl AttachmentLogger for &mut RunDyn {
         if self.open()?.attachments.contains_key(name) {
             crate::bail!("Attachment `{name}` already exists");
         }
-        let descriptor = {
-            let dyn_state = lock_experiment_state(&self.experiment_state);
-            super::ensure_unsealed_for_attachment_write(&dyn_state)?;
-            let registry_handle = dyn_state.registry_handle.clone();
-            store_run_attachment_descriptor(
-                registry_handle.registry(),
-                media_type,
-                bytes.as_ref(),
-                HashMap::new(),
-            )?
-        };
+        let registry_handle = self.registry_handle_for_attachment_write()?;
+        let descriptor = store_run_attachment_descriptor(
+            registry_handle.registry(),
+            media_type,
+            bytes.as_ref(),
+            HashMap::new(),
+        )?;
         self.open_mut()?
             .attachments
             .insert(name.to_string(), descriptor, Some(filename))?;
+        Ok(())
+    }
+
+    fn log_instance(self, name: &str, instance: &Instance) -> Result<()> {
+        if self.open()?.attachments.contains_key(name) {
+            crate::bail!("Attachment `{name}` already exists");
+        }
+        let registry_handle = self.registry_handle_for_attachment_write()?;
+        let descriptor =
+            Descriptor::from(registry_handle.registry().store_instance_layer(instance)?);
+        self.open_mut()?
+            .attachments
+            .insert(name.to_string(), descriptor, None)?;
+        Ok(())
+    }
+
+    fn log_parametric_instance(self, name: &str, pi: &ParametricInstance) -> Result<()> {
+        if self.open()?.attachments.contains_key(name) {
+            crate::bail!("Attachment `{name}` already exists");
+        }
+        let registry_handle = self.registry_handle_for_attachment_write()?;
+        let descriptor = Descriptor::from(
+            registry_handle
+                .registry()
+                .store_parametric_instance_layer(pi)?,
+        );
+        self.open_mut()?
+            .attachments
+            .insert(name.to_string(), descriptor, None)?;
+        Ok(())
+    }
+
+    fn log_solution(self, name: &str, solution: &Solution) -> Result<()> {
+        if self.open()?.attachments.contains_key(name) {
+            crate::bail!("Attachment `{name}` already exists");
+        }
+        let registry_handle = self.registry_handle_for_attachment_write()?;
+        let descriptor =
+            Descriptor::from(registry_handle.registry().store_solution_layer(solution)?);
+        self.open_mut()?
+            .attachments
+            .insert(name.to_string(), descriptor, None)?;
+        Ok(())
+    }
+
+    fn log_sample_set(self, name: &str, sample_set: &SampleSet) -> Result<()> {
+        if self.open()?.attachments.contains_key(name) {
+            crate::bail!("Attachment `{name}` already exists");
+        }
+        let registry_handle = self.registry_handle_for_attachment_write()?;
+        let descriptor = Descriptor::from(
+            registry_handle
+                .registry()
+                .store_sample_set_layer(sample_set)?,
+        );
+        self.open_mut()?
+            .attachments
+            .insert(name.to_string(), descriptor, None)?;
         Ok(())
     }
 }

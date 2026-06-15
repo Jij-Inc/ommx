@@ -589,6 +589,66 @@ impl<'reg> AttachmentLogger for &Experiment<'reg> {
             .with_context(|| format!("Failed to register attachment `{name}`"))?;
         Ok(())
     }
+
+    fn log_instance(self, name: &str, instance: &crate::Instance) -> Result<()> {
+        {
+            let state = self.lock_state();
+            if state.attachments.contains_key(name) {
+                crate::bail!("Attachment `{name}` already exists");
+            }
+        }
+        let descriptor = self.registry.store_instance_layer(instance)?;
+        self.lock_state()
+            .attachments
+            .insert(name.to_string(), descriptor, None)
+            .with_context(|| format!("Failed to register attachment `{name}`"))?;
+        Ok(())
+    }
+
+    fn log_parametric_instance(self, name: &str, pi: &crate::ParametricInstance) -> Result<()> {
+        {
+            let state = self.lock_state();
+            if state.attachments.contains_key(name) {
+                crate::bail!("Attachment `{name}` already exists");
+            }
+        }
+        let descriptor = self.registry.store_parametric_instance_layer(pi)?;
+        self.lock_state()
+            .attachments
+            .insert(name.to_string(), descriptor, None)
+            .with_context(|| format!("Failed to register attachment `{name}`"))?;
+        Ok(())
+    }
+
+    fn log_solution(self, name: &str, solution: &crate::Solution) -> Result<()> {
+        {
+            let state = self.lock_state();
+            if state.attachments.contains_key(name) {
+                crate::bail!("Attachment `{name}` already exists");
+            }
+        }
+        let descriptor = self.registry.store_solution_layer(solution)?;
+        self.lock_state()
+            .attachments
+            .insert(name.to_string(), descriptor, None)
+            .with_context(|| format!("Failed to register attachment `{name}`"))?;
+        Ok(())
+    }
+
+    fn log_sample_set(self, name: &str, sample_set: &crate::SampleSet) -> Result<()> {
+        {
+            let state = self.lock_state();
+            if state.attachments.contains_key(name) {
+                crate::bail!("Attachment `{name}` already exists");
+            }
+        }
+        let descriptor = self.registry.store_sample_set_layer(sample_set)?;
+        self.lock_state()
+            .attachments
+            .insert(name.to_string(), descriptor, None)
+            .with_context(|| format!("Failed to register attachment `{name}`"))?;
+        Ok(())
+    }
 }
 
 impl<'reg> SealedExperiment<'reg> {

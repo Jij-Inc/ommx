@@ -10,7 +10,6 @@ use super::{
 use crate::v1;
 use anyhow::{bail, ensure, Context, Result};
 use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, ImageManifest, MediaType};
-use prost::Message;
 use serde::Serialize;
 use std::{
     collections::{BTreeSet, HashMap},
@@ -574,42 +573,30 @@ impl<'reg> ArtifactDraft<'reg> {
     }
 
     pub fn add_instance(&mut self, instance: v1::Instance) -> Result<StoredDescriptor<'reg>> {
-        let annotations = super::instance_annotations(&instance);
-        self.add_layer_bytes(
-            media_types::v1_instance(),
-            instance.encode_to_vec(),
-            annotations,
-        )
+        let stored_descriptor = self.registry.store_v1_instance_layer(instance)?;
+        self.layers.push(stored_descriptor.clone());
+        Ok(stored_descriptor)
     }
 
     pub fn add_solution(&mut self, solution: v1::Solution) -> Result<StoredDescriptor<'reg>> {
-        let annotations = super::solution_annotations(&solution);
-        self.add_layer_bytes(
-            media_types::v1_solution(),
-            solution.encode_to_vec(),
-            annotations,
-        )
+        let stored_descriptor = self.registry.store_v1_solution_layer(solution)?;
+        self.layers.push(stored_descriptor.clone());
+        Ok(stored_descriptor)
     }
 
     pub fn add_parametric_instance(
         &mut self,
         instance: v1::ParametricInstance,
     ) -> Result<StoredDescriptor<'reg>> {
-        let annotations = super::parametric_instance_annotations(&instance);
-        self.add_layer_bytes(
-            media_types::v1_parametric_instance(),
-            instance.encode_to_vec(),
-            annotations,
-        )
+        let stored_descriptor = self.registry.store_v1_parametric_instance_layer(instance)?;
+        self.layers.push(stored_descriptor.clone());
+        Ok(stored_descriptor)
     }
 
     pub fn add_sample_set(&mut self, sample_set: v1::SampleSet) -> Result<StoredDescriptor<'reg>> {
-        let annotations = super::sample_set_annotations(&sample_set);
-        self.add_layer_bytes(
-            media_types::v1_sample_set(),
-            sample_set.encode_to_vec(),
-            annotations,
-        )
+        let stored_descriptor = self.registry.store_v1_sample_set_layer(sample_set)?;
+        self.layers.push(stored_descriptor.clone());
+        Ok(stored_descriptor)
     }
 
     pub fn set_subject(&mut self, subject: Descriptor) -> &mut Self {
@@ -904,6 +891,7 @@ pub fn is_anonymous_artifact_tag(tag: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use prost::Message;
 
     fn test_image_name(tag: &str) -> Result<ImageRef> {
         ImageRef::parse(&format!("ghcr.io/jij-inc/ommx/demo:{tag}"))
