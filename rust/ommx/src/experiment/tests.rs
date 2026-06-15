@@ -242,14 +242,16 @@ fn duplicate_attachment_names_are_rejected_per_namespace() {
             .log_json("dataset", json!("second"))
             .expect_err("duplicate experiment attachment names must be rejected");
         assert!(err.to_string().contains("already exists"));
+        assert_blob_absent(&experiment, br#""second""#);
 
         {
             let mut run = experiment.run().unwrap();
             run.log_json("candidate", json!("first")).unwrap();
             let err = run
-                .log_json("candidate", json!("second"))
+                .log_json("candidate", json!("run-second"))
                 .expect_err("duplicate run attachment names must be rejected");
             assert!(err.to_string().contains("already exists"));
+            assert_blob_absent(&experiment, br#""run-second""#);
             run.finish().unwrap();
         }
 
@@ -266,6 +268,34 @@ fn duplicate_attachment_names_are_rejected_per_namespace() {
         assert!(loaded.run(1).unwrap().contains_attachment("candidate"));
         Ok(())
     });
+}
+
+#[test]
+fn experiment_dyn_duplicate_attachment_names_are_rejected_before_blob_storage() {
+    let registry_handle = LocalRegistryHandle::temp().unwrap();
+    let experiment =
+        ExperimentDyn::with_registry_handle(registry_handle.clone(), Name::Anonymous).unwrap();
+
+    experiment.log_json("dataset", json!("first")).unwrap();
+    let err = experiment
+        .log_json("dataset", json!("second"))
+        .expect_err("duplicate experiment attachment names must be rejected");
+    assert!(err.to_string().contains("already exists"));
+    assert!(!registry_handle
+        .registry()
+        .contains_blob(&digest_for_bytes(br#""second""#))
+        .unwrap());
+
+    let mut run = experiment.run().unwrap();
+    run.log_json("candidate", json!("first")).unwrap();
+    let err = run
+        .log_json("candidate", json!("run-second"))
+        .expect_err("duplicate run attachment names must be rejected");
+    assert!(err.to_string().contains("already exists"));
+    assert!(!registry_handle
+        .registry()
+        .contains_blob(&digest_for_bytes(br#""run-second""#))
+        .unwrap());
 }
 
 #[test]

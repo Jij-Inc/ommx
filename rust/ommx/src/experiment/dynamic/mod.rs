@@ -15,10 +15,11 @@
 
 use super::artifact::ExperimentArtifactView;
 use super::config::ExperimentConfig;
+use super::logging::AttachmentLoggerStorage;
 use super::{
-    allocate_next_run_id, next_run_id, read_solve_diagnostic_payload, AttachmentLogger,
-    AttachmentTable, ExperimentStatus, Name, RunEntry, RunParameterCell, RunStatus,
-    SealedExperiment, SolveDiagnosticPayload, SolveStatus, UnsealedExperimentState,
+    allocate_next_run_id, next_run_id, read_solve_diagnostic_payload, AttachmentTable,
+    ExperimentStatus, Name, RunEntry, RunParameterCell, RunStatus, SealedExperiment,
+    SolveDiagnosticPayload, SolveStatus, UnsealedExperimentState,
 };
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
 use crate::artifact::{
@@ -607,37 +608,11 @@ impl ExperimentDyn {
             ExperimentDynLifecycle::Sealed(_) | ExperimentDynLifecycle::Failed { .. } => 0,
         }
     }
-
-    fn register_attachment_descriptor(
-        &self,
-        name: &str,
-        descriptor: Descriptor,
-        filename: Option<String>,
-    ) -> Result<()> {
-        let registry_handle = {
-            let dyn_state = lock_experiment_state(&self.state);
-            ensure_unsealed_for_attachment_write(&dyn_state)?;
-            dyn_state.registry_handle.clone()
-        };
-        registry_handle
-            .registry()
-            .stored_descriptor(descriptor.clone())?;
-        let mut dyn_state = lock_experiment_state(&self.state);
-        ensure_unsealed_for_attachment_write(&dyn_state)?;
-        let ExperimentDynLifecycle::Unsealed { state, .. } = &mut dyn_state.lifecycle else {
-            return bail_non_unsealed(&dyn_state.lifecycle);
-        };
-        let state = state
-            .as_mut()
-            .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
-        state
-            .attachments
-            .insert(name.to_string(), descriptor, filename)?;
-        Ok(())
-    }
 }
 
-impl AttachmentLogger for &ExperimentDyn {
+impl AttachmentLoggerStorage for &ExperimentDyn {
+    type Descriptor = oci_spec::image::Descriptor;
+
     fn with_local_registry<R>(&self, f: impl FnOnce(&LocalRegistry) -> Result<R>) -> Result<R> {
         let registry_handle = {
             let dyn_state = lock_experiment_state(&self.state);
@@ -647,13 +622,26 @@ impl AttachmentLogger for &ExperimentDyn {
         f(registry_handle.registry())
     }
 
-    fn register_attachment_descriptor(
-        self,
-        name: &str,
-        descriptor: Descriptor,
-        filename: Option<String>,
-    ) -> Result<()> {
-        ExperimentDyn::register_attachment_descriptor(self, name, descriptor, filename)
+    fn with_attachment_table<R>(
+        &mut self,
+        f: impl FnOnce(&mut AttachmentTable<Self::Descriptor>) -> Result<R>,
+    ) -> Result<R> {
+        let mut dyn_state = lock_experiment_state(&self.state);
+        ensure_unsealed_for_attachment_write(&dyn_state)?;
+        let ExperimentDynLifecycle::Unsealed { state, .. } = &mut dyn_state.lifecycle else {
+            return bail_non_unsealed(&dyn_state.lifecycle);
+        };
+        let state = state
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
+        f(&mut state.attachments)
+    }
+
+    fn descriptor_for_attachment_table(&self, descriptor: Descriptor) -> Result<Self::Descriptor> {
+        self.with_local_registry(|registry| {
+            registry.stored_descriptor(descriptor.clone())?;
+            Ok(descriptor)
+        })
     }
 }
 

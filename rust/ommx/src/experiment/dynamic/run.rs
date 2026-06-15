@@ -1,9 +1,9 @@
 //! Dynamic-lifetime Run handle.
 
+use super::super::logging::AttachmentLoggerStorage;
 use super::super::parameter::ParameterSet;
 use super::super::{
-    AttachmentLogger, AttachmentTable, FailedSolveRecord, FinishedSolveRecord, ParameterValue,
-    RunStatus, SolveStatus,
+    AttachmentTable, FailedSolveRecord, FinishedSolveRecord, ParameterValue, RunStatus, SolveStatus,
 };
 use super::{
     bail_non_unsealed, ensure_unsealed_for_attachment_write, lock_experiment_state,
@@ -358,26 +358,31 @@ impl RunDyn {
     }
 }
 
-impl AttachmentLogger for &mut RunDyn {
+impl AttachmentLoggerStorage for &mut RunDyn {
+    type Descriptor = oci_spec::image::Descriptor;
+
     fn with_local_registry<R>(&self, f: impl FnOnce(&LocalRegistry) -> Result<R>) -> Result<R> {
         let registry_handle = self.registry_handle_for_attachment_write()?;
         f(registry_handle.registry())
     }
 
-    fn register_attachment_descriptor(
-        self,
-        name: &str,
-        descriptor: Descriptor,
-        filename: Option<String>,
-    ) -> Result<()> {
+    fn with_attachment_table<R>(
+        &mut self,
+        f: impl FnOnce(&mut AttachmentTable<Self::Descriptor>) -> Result<R>,
+    ) -> Result<R> {
+        {
+            let dyn_state = lock_experiment_state(&self.experiment_state);
+            ensure_unsealed_for_attachment_write(&dyn_state)?;
+        }
+        f(&mut self.open_mut()?.attachments)
+    }
+
+    fn descriptor_for_attachment_table(&self, descriptor: Descriptor) -> Result<Self::Descriptor> {
         let registry_handle = self.registry_handle_for_attachment_write()?;
         registry_handle
             .registry()
             .stored_descriptor(descriptor.clone())?;
-        self.open_mut()?
-            .attachments
-            .insert(name.to_string(), descriptor, filename)?;
-        Ok(())
+        Ok(descriptor)
     }
 }
 

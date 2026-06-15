@@ -1,10 +1,11 @@
 //! Experiment / Run handles and run lifecycle.
 
+use super::logging::AttachmentLoggerStorage;
 use super::{
-    AttachmentLogger, ParameterValue, Run, RunEntry, RunStatus, SolveDiagnosticPayload, SolveEntry,
+    AttachmentTable, ParameterValue, Run, RunEntry, RunStatus, SolveDiagnosticPayload, SolveEntry,
     SolveStatus, Trace,
 };
-use crate::artifact::local_registry::LocalRegistry;
+use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
 use crate::artifact::media_types;
 use crate::{Instance, Solution};
 use anyhow::{ensure, Result};
@@ -273,20 +274,21 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
     }
 }
 
-impl<'exp, 'reg> AttachmentLogger for &mut Run<'exp, 'reg> {
+impl<'exp, 'reg> AttachmentLoggerStorage for &mut Run<'exp, 'reg> {
+    type Descriptor = StoredDescriptor<'reg>;
+
     fn with_local_registry<R>(&self, f: impl FnOnce(&LocalRegistry) -> Result<R>) -> Result<R> {
         f(self.experiment.registry)
     }
 
-    fn register_attachment_descriptor(
-        self,
-        name: &str,
-        descriptor: Descriptor,
-        filename: Option<String>,
-    ) -> Result<()> {
-        let descriptor = self.experiment.registry.stored_descriptor(descriptor)?;
-        self.attachments
-            .insert(name.to_string(), descriptor, filename)?;
-        Ok(())
+    fn with_attachment_table<R>(
+        &mut self,
+        f: impl FnOnce(&mut AttachmentTable<Self::Descriptor>) -> Result<R>,
+    ) -> Result<R> {
+        f(&mut self.attachments)
+    }
+
+    fn descriptor_for_attachment_table(&self, descriptor: Descriptor) -> Result<Self::Descriptor> {
+        self.experiment.registry.stored_descriptor(descriptor)
     }
 }

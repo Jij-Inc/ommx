@@ -539,22 +539,23 @@ impl<'reg> Experiment<'reg> {
     }
 }
 
-impl<'reg> AttachmentLogger for &Experiment<'reg> {
+impl<'reg> logging::AttachmentLoggerStorage for &Experiment<'reg> {
+    type Descriptor = StoredDescriptor<'reg>;
+
     fn with_local_registry<R>(&self, f: impl FnOnce(&LocalRegistry) -> Result<R>) -> Result<R> {
         f(self.registry)
     }
 
-    fn register_attachment_descriptor(
-        self,
-        name: &str,
-        descriptor: Descriptor,
-        filename: Option<String>,
-    ) -> Result<()> {
-        let descriptor = self.registry.stored_descriptor(descriptor)?;
-        self.lock_state()
-            .attachments
-            .insert(name.to_string(), descriptor, filename)?;
-        Ok(())
+    fn with_attachment_table<R>(
+        &mut self,
+        f: impl FnOnce(&mut AttachmentTable<Self::Descriptor>) -> Result<R>,
+    ) -> Result<R> {
+        let mut state = self.lock_state();
+        f(&mut state.attachments)
+    }
+
+    fn descriptor_for_attachment_table(&self, descriptor: Descriptor) -> Result<Self::Descriptor> {
+        self.registry.stored_descriptor(descriptor)
     }
 }
 
