@@ -1,6 +1,8 @@
 //! Experiment / Run handles and run lifecycle.
 
-use super::attachment::{read_file_attachment, store_attachment_descriptor};
+use super::attachment::{
+    encode_instance_layer, encode_solution_layer, read_file_attachment, store_attachment_descriptor,
+};
 use super::{
     AttachmentLogger, ParameterValue, Run, RunEntry, RunStatus, SolveDiagnosticPayload, SolveEntry,
     SolveStatus, Trace,
@@ -84,13 +86,13 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
             adapter_options,
             diagnostics,
         } = record;
-        let (input_bytes, input_annotations) = crate::artifact::encode_instance_layer(input);
+        let (input_bytes, input_annotations) = encode_instance_layer(input);
         let input = self.experiment.registry.store_layer_blob(
             media_types::v1_instance(),
             &input_bytes,
             input_annotations,
         )?;
-        let (output_bytes, output_annotations) = crate::artifact::encode_solution_layer(output);
+        let (output_bytes, output_annotations) = encode_solution_layer(output);
         let output = self.experiment.registry.store_layer_blob(
             media_types::v1_solution(),
             &output_bytes,
@@ -157,7 +159,7 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
             "failed solve attempt status must not be finished"
         );
         self.ensure_reserved_solve_id(solve_id)?;
-        let (input_bytes, input_annotations) = crate::artifact::encode_instance_layer(input);
+        let (input_bytes, input_annotations) = encode_instance_layer(input);
         let input = self.experiment.registry.store_layer_blob(
             media_types::v1_instance(),
             &input_bytes,

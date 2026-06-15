@@ -1,7 +1,5 @@
 use crate::{
-    artifact::{
-        descriptor_annotations, ghcr, local_registry::LocalRegistry, media_types, LocalArtifact,
-    },
+    artifact::{ghcr, local_registry::LocalRegistry, media_types, LocalArtifact},
     v1::Instance,
 };
 
@@ -317,7 +315,8 @@ pub fn load(tag: &str) -> Result<Instance> {
     let bytes = artifact.get_blob(&layer)?;
     let mut instance =
         Instance::decode(bytes.as_slice()).context("Failed to decode QPLIB instance layer")?;
-    crate::artifact::merge_instance_annotations(&mut instance, &descriptor_annotations(&layer));
+    let annotations = layer.annotations().as_ref().cloned().unwrap_or_default();
+    crate::artifact::merge_instance_annotations(&mut instance, &annotations);
     Ok(instance)
 }
 

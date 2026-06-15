@@ -6,7 +6,10 @@ use anyhow::Result;
 use oci_spec::image::MediaType;
 use std::{collections::HashMap, path::Path};
 
-use super::attachment::{encode_json, json_media_type};
+use super::attachment::{
+    encode_instance_layer, encode_json, encode_parametric_instance_layer, encode_sample_set_layer,
+    encode_solution_layer, json_media_type,
+};
 
 /// A handle that can log attachment payloads into an Experiment space.
 ///
@@ -42,13 +45,13 @@ pub trait AttachmentLogger: Sized {
 
     /// Attach an [`Instance`].
     fn log_instance(self, name: &str, instance: &Instance) -> Result<()> {
-        let (bytes, annotations) = crate::artifact::encode_instance_layer(instance);
+        let (bytes, annotations) = encode_instance_layer(instance);
         self.log_attachment(name, media_types::v1_instance(), bytes, annotations)
     }
 
     /// Attach a [`ParametricInstance`].
     fn log_parametric_instance(self, name: &str, pi: &ParametricInstance) -> Result<()> {
-        let (bytes, annotations) = crate::artifact::encode_parametric_instance_layer(pi);
+        let (bytes, annotations) = encode_parametric_instance_layer(pi);
         self.log_attachment(
             name,
             media_types::v1_parametric_instance(),
@@ -59,13 +62,13 @@ pub trait AttachmentLogger: Sized {
 
     /// Attach a [`Solution`].
     fn log_solution(self, name: &str, solution: &Solution) -> Result<()> {
-        let (bytes, annotations) = crate::artifact::encode_solution_layer(solution);
+        let (bytes, annotations) = encode_solution_layer(solution);
         self.log_attachment(name, media_types::v1_solution(), bytes, annotations)
     }
 
     /// Attach a [`SampleSet`].
     fn log_sample_set(self, name: &str, sample_set: &SampleSet) -> Result<()> {
-        let (bytes, annotations) = crate::artifact::encode_sample_set_layer(sample_set);
+        let (bytes, annotations) = encode_sample_set_layer(sample_set);
         self.log_attachment(name, media_types::v1_sample_set(), bytes, annotations)
     }
 }

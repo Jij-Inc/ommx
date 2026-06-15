@@ -1,6 +1,8 @@
 //! Dynamic-lifetime Run handle.
 
-use super::super::attachment::read_file_attachment;
+use super::super::attachment::{
+    encode_instance_layer, encode_solution_layer, read_file_attachment,
+};
 use super::super::parameter::ParameterSet;
 use super::super::{
     AttachmentLogger, AttachmentTable, FailedSolveRecord, FinishedSolveRecord, ParameterValue,
@@ -127,8 +129,8 @@ impl RunDyn {
             adapter_options,
             diagnostics,
         } = record;
-        let (input_bytes, input_annotations) = crate::artifact::encode_instance_layer(input);
-        let (output_bytes, output_annotations) = crate::artifact::encode_solution_layer(output);
+        let (input_bytes, input_annotations) = encode_instance_layer(input);
+        let (output_bytes, output_annotations) = encode_solution_layer(output);
         let (input, output, diagnostics) = {
             let dyn_state = lock_experiment_state(&self.experiment_state);
             let input = store_solve_payload_descriptor(
@@ -211,7 +213,7 @@ impl RunDyn {
             "failed solve attempt status must not be finished"
         );
         ensure_reserved_solve_id(self.open()?, solve_id)?;
-        let (input_bytes, input_annotations) = crate::artifact::encode_instance_layer(input);
+        let (input_bytes, input_annotations) = encode_instance_layer(input);
         let (input, diagnostics) = {
             let dyn_state = lock_experiment_state(&self.experiment_state);
             let input = store_solve_payload_descriptor(

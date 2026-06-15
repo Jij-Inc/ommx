@@ -1,7 +1,7 @@
 //! Read-only model reconstructed from a sealed Experiment Artifact.
 
 use super::artifact::ExperimentArtifactView;
-use super::attachment::AttachmentTable;
+use super::attachment::{decode_instance_layer, decode_solution_layer, AttachmentTable};
 use super::config::{ExperimentConfigSolve, LayerRef};
 use super::parameter::{RunParameterCell, RunParameterTable};
 use super::{
@@ -9,7 +9,7 @@ use super::{
     SolveDiagnosticPayload, SolveStatus, Trace, RUN_PARAMETERS_MEDIA_TYPE,
 };
 use crate::artifact::local_registry::StoredDescriptor;
-use crate::artifact::{descriptor_annotations, media_types, ImageRef, LocalArtifact};
+use crate::artifact::{media_types, ImageRef, LocalArtifact};
 use crate::{Instance, ParametricInstance, SampleSet, Solution};
 use anyhow::{Context, Result};
 use oci_spec::image::{Descriptor, MediaType};
@@ -303,7 +303,7 @@ impl<'reg> Solve<'reg> {
     pub fn input_instance(&self) -> Result<Instance> {
         self.input.ensure_media_type(&media_types::v1_instance())?;
         let bytes = self.input.registry().get_blob(&self.input)?;
-        crate::artifact::decode_instance_layer(&bytes, &descriptor_annotations(&self.input))
+        decode_instance_layer(&bytes, &self.input)
     }
 
     pub fn output_solution(&self) -> Result<Option<Solution>> {
@@ -312,10 +312,7 @@ impl<'reg> Solve<'reg> {
         };
         output.ensure_media_type(&media_types::v1_solution())?;
         let bytes = output.registry().get_blob(output)?;
-        Ok(Some(crate::artifact::decode_solution_layer(
-            &bytes,
-            &descriptor_annotations(output),
-        )?))
+        Ok(Some(decode_solution_layer(&bytes, output)?))
     }
 
     pub fn adapter(&self) -> &str {

@@ -1,8 +1,4 @@
-use anyhow::Result;
-use oci_spec::image::Descriptor;
 use std::collections::HashMap;
-
-use crate::{Message, Parse};
 
 const RESERVED_PREFIX: &str = "org.ommx.v1.";
 
@@ -375,13 +371,6 @@ fn overlay_sample_set_metadata_annotations(
     }
 }
 
-// Crate-internal descriptor projection helper. Raw OCI descriptor plumbing is
-// shared by Artifact, Experiment, and Dataset but is not part of the typed
-// annotation API.
-pub(crate) fn descriptor_annotations(desc: &Descriptor) -> HashMap<String, String> {
-    desc.annotations().as_ref().cloned().unwrap_or_default()
-}
-
 pub fn instance_annotations(instance: &crate::v1::Instance) -> HashMap<String, String> {
     let mut annotations = HashMap::new();
     copy_extension_annotations(&mut annotations, &instance.annotations);
@@ -538,75 +527,4 @@ pub fn overlay_sample_set_annotations(
         "org.ommx.v1.sample-set",
     );
     overlay_extension_annotations(&mut sample_set.annotations, annotations);
-}
-
-// Crate-internal Artifact persistence boundary shared by Artifact, Experiment,
-// Dataset, and Python bindings. Callers outside this crate should work with the
-// protobuf-backed messages, not with descriptor projection plumbing.
-pub(crate) fn encode_instance_layer(
-    instance: &crate::Instance,
-) -> (Vec<u8>, HashMap<String, String>) {
-    let proto: crate::v1::Instance = instance.clone().into();
-    let descriptor_annotations = instance_annotations(&proto);
-    (proto.encode_to_vec(), descriptor_annotations)
-}
-
-pub(crate) fn encode_parametric_instance_layer(
-    instance: &crate::ParametricInstance,
-) -> (Vec<u8>, HashMap<String, String>) {
-    let proto: crate::v1::ParametricInstance = instance.clone().into();
-    let descriptor_annotations = parametric_instance_annotations(&proto);
-    (proto.encode_to_vec(), descriptor_annotations)
-}
-
-pub(crate) fn encode_solution_layer(
-    solution: &crate::Solution,
-) -> (Vec<u8>, HashMap<String, String>) {
-    let proto: crate::v1::Solution = solution.clone().into();
-    let descriptor_annotations = solution_annotations(&proto);
-    (proto.encode_to_vec(), descriptor_annotations)
-}
-
-pub(crate) fn encode_sample_set_layer(
-    sample_set: &crate::SampleSet,
-) -> (Vec<u8>, HashMap<String, String>) {
-    let proto: crate::v1::SampleSet = sample_set.clone().into();
-    let descriptor_annotations = sample_set_annotations(&proto);
-    (proto.encode_to_vec(), descriptor_annotations)
-}
-
-pub(crate) fn decode_instance_layer(
-    bytes: &[u8],
-    descriptor_annotations: &HashMap<String, String>,
-) -> Result<crate::Instance> {
-    let mut instance = crate::v1::Instance::decode(bytes)?;
-    merge_instance_annotations(&mut instance, descriptor_annotations);
-    Ok(instance.try_into()?)
-}
-
-pub(crate) fn decode_parametric_instance_layer(
-    bytes: &[u8],
-    descriptor_annotations: &HashMap<String, String>,
-) -> Result<crate::ParametricInstance> {
-    let mut instance = crate::v1::ParametricInstance::decode(bytes)?;
-    merge_parametric_instance_annotations(&mut instance, descriptor_annotations);
-    Ok(instance.parse(&())?)
-}
-
-pub(crate) fn decode_solution_layer(
-    bytes: &[u8],
-    descriptor_annotations: &HashMap<String, String>,
-) -> Result<crate::Solution> {
-    let mut solution = crate::v1::Solution::decode(bytes)?;
-    merge_solution_annotations(&mut solution, descriptor_annotations);
-    Ok(solution.parse(&())?)
-}
-
-pub(crate) fn decode_sample_set_layer(
-    bytes: &[u8],
-    descriptor_annotations: &HashMap<String, String>,
-) -> Result<crate::SampleSet> {
-    let mut sample_set = crate::v1::SampleSet::decode(bytes)?;
-    merge_sample_set_annotations(&mut sample_set, descriptor_annotations);
-    Ok(sample_set.parse(&())?)
 }

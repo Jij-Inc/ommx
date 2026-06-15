@@ -14,7 +14,9 @@
 //! descriptors before decoding typed payloads or writing attachment files.
 
 use super::artifact::ExperimentArtifactView;
-use super::attachment::{read_file_attachment, store_attachment_descriptor};
+use super::attachment::{
+    decode_instance_layer, decode_solution_layer, read_file_attachment, store_attachment_descriptor,
+};
 use super::config::ExperimentConfig;
 use super::{
     allocate_next_run_id, next_run_id, read_solve_diagnostic_payload, AttachmentLogger,
@@ -23,8 +25,7 @@ use super::{
 };
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
 use crate::artifact::{
-    descriptor_annotations, media_types, AsArtifact, ImageRef, LocalArtifact, LocalArtifactDyn,
-    LocalRegistryHandle,
+    media_types, AsArtifact, ImageRef, LocalArtifact, LocalArtifactDyn, LocalRegistryHandle,
 };
 use crate::{Instance, ParametricInstance, SampleSet, Solution};
 use anyhow::{ensure, Context, Result};
@@ -332,7 +333,7 @@ impl SolveDyn {
             media_types::V1_INSTANCE_MEDIA_TYPE
         );
         let bytes = self.registry_handle.registry().get_blob(&descriptor)?;
-        crate::artifact::decode_instance_layer(&bytes, &descriptor_annotations(&descriptor))
+        decode_instance_layer(&bytes, &descriptor)
     }
 
     fn output_descriptor(&self) -> Result<Option<StoredDescriptor<'_>>> {
@@ -358,10 +359,7 @@ impl SolveDyn {
             media_types::V1_SOLUTION_MEDIA_TYPE
         );
         let bytes = self.registry_handle.registry().get_blob(&descriptor)?;
-        Ok(Some(crate::artifact::decode_solution_layer(
-            &bytes,
-            &descriptor_annotations(&descriptor),
-        )?))
+        Ok(Some(decode_solution_layer(&bytes, &descriptor)?))
     }
 
     /// Raw MessagePack bytes of the adapter diagnostics payload.
