@@ -10,7 +10,7 @@ use crate::{
     SampledDecisionVariable, SampledNamedFunction, Sense, Solution, VariableID,
 };
 use getset::Getters;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 /// Error occurred during SampleSet validation
 #[non_exhaustive]
@@ -127,6 +127,10 @@ pub struct SampleSet {
     feasible: BTreeMap<SampleID, bool>,
     #[getset(get = "pub")]
     feasible_relaxed: BTreeMap<SampleID, bool>,
+    /// OMMX-defined provenance metadata.
+    pub metadata: Option<crate::v1::sample_set::Metadata>,
+    /// User-defined or third-party extension annotations.
+    pub annotations: HashMap<String, String>,
 }
 
 impl SampleSet {
@@ -613,6 +617,8 @@ impl SampleSetBuilder {
             sense,
             feasible,
             feasible_relaxed,
+            metadata: Default::default(),
+            annotations: Default::default(),
         })
     }
 
@@ -674,6 +680,8 @@ impl SampleSetBuilder {
             sense,
             feasible,
             feasible_relaxed,
+            metadata: Default::default(),
+            annotations: Default::default(),
         })
     }
 

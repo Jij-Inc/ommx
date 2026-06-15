@@ -244,6 +244,7 @@ impl Arbitrary for Instance {
                                     sos1_constraint_collection: Default::default(),
                                     decision_variable_dependency: Default::default(),
                                     description: None,
+                                    annotations: Default::default(),
                                 }
                             },
                         )

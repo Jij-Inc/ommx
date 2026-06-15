@@ -2551,8 +2551,10 @@ class Instance:
     r"""
     Optimization problem instance.
 
-    Note that this class also contains annotations like {attr}`~ommx.v1.Instance.title` which are not contained in protobuf message but stored in OMMX artifact.
-    These annotations are loaded from annotations while reading from OMMX artifact.
+    This class also contains annotations like {attr}`~ommx.v1.Instance.title`.
+    OMMX-defined annotations are stored in explicit protobuf fields, while
+    user-defined annotations are stored in the protobuf annotation map and
+    mirrored to OMMX Artifact descriptors.
 
     # Examples
 
@@ -4237,12 +4239,21 @@ class InstanceDescription:
     def authors(self) -> builtins.list[builtins.str]: ...
     @property
     def created_by(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def created(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def license(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def dataset(self) -> typing.Optional[builtins.str]: ...
     def __new__(
         cls,
         name: typing.Optional[builtins.str] = None,
         description: typing.Optional[builtins.str] = None,
         authors: typing.Optional[typing.Sequence[builtins.str]] = None,
         created_by: typing.Optional[builtins.str] = None,
+        created: typing.Optional[builtins.str] = None,
+        license: typing.Optional[builtins.str] = None,
+        dataset: typing.Optional[builtins.str] = None,
     ) -> InstanceDescription: ...
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> InstanceDescription: ...
@@ -6386,7 +6397,8 @@ class Solution:
     r"""
     Idiomatic wrapper of `ommx.v1.Solution` protobuf message.
 
-    This also contains annotations not contained in protobuf message, and will be stored in OMMX artifact.
+    This also contains annotations persisted in the protobuf payload and mirrored
+    to OMMX Artifact descriptors.
     """
 
     OPTIMAL: Optimality

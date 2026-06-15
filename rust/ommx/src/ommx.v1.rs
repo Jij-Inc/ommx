@@ -500,6 +500,14 @@ pub struct Instance {
     /// - Non-semantic-breaking additions keep protobuf's standard forward compatibility (unknown fields ignored) and do not bump this.
     #[prost(uint32, tag = "100")]
     pub format_version: u32,
+    /// User-defined or third-party extension annotations.
+    ///
+    /// OMMX-reserved metadata must use explicit fields such as `description`.
+    /// Keys in this map must be valid reverse-domain names and must not start with
+    /// `org.ommx.v1.`.
+    #[prost(map = "string, string", tag = "101")]
+    pub annotations:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
 }
 /// Nested message and enum types in `Instance`.
 pub mod instance {
@@ -516,6 +524,15 @@ pub mod instance {
         /// The application or library name that created this message.
         #[prost(string, optional, tag = "4")]
         pub created_by: ::core::option::Option<::prost::alloc::string::String>,
+        /// When this instance was created, encoded as an RFC3339 string.
+        #[prost(string, optional, tag = "5")]
+        pub created: ::core::option::Option<::prost::alloc::string::String>,
+        /// SPDX license identifier for this instance or dataset.
+        #[prost(string, optional, tag = "6")]
+        pub license: ::core::option::Option<::prost::alloc::string::String>,
+        /// Name of the dataset this instance belongs to.
+        #[prost(string, optional, tag = "7")]
+        pub dataset: ::core::option::Option<::prost::alloc::string::String>,
     }
     /// The sense of this instance
     #[non_exhaustive]
@@ -614,6 +631,14 @@ pub struct ParametricInstance {
     /// See `Instance.format_version` for semantics.
     #[prost(uint32, tag = "100")]
     pub format_version: u32,
+    /// User-defined or third-party extension annotations.
+    ///
+    /// OMMX-reserved metadata must use explicit fields such as `description`.
+    /// Keys in this map must be valid reverse-domain names and must not start with
+    /// `org.ommx.v1.`.
+    #[prost(map = "string, string", tag = "101")]
+    pub annotations:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
 }
 /// A set of values of decision variables, without any evaluation, even the
 /// feasiblity of the solution.
@@ -671,6 +696,40 @@ pub struct Solution {
     /// See `Instance.format_version` for semantics.
     #[prost(uint32, tag = "100")]
     pub format_version: u32,
+    /// OMMX-defined provenance metadata for this Solution.
+    #[prost(message, optional, tag = "101")]
+    pub metadata: ::core::option::Option<solution::Metadata>,
+    /// User-defined or third-party extension annotations.
+    ///
+    /// OMMX-reserved metadata must use explicit fields such as `metadata`.
+    /// Keys in this map must be valid reverse-domain names and must not start with
+    /// `org.ommx.v1.`.
+    #[prost(map = "string, string", tag = "102")]
+    pub annotations:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
+}
+/// Nested message and enum types in `Solution`.
+pub mod solution {
+    #[non_exhaustive]
+    #[allow(clippy::derive_partial_eq_without_eq)]
+    #[derive(Clone, PartialEq, ::prost::Message)]
+    pub struct Metadata {
+        /// Digest of the corresponding Instance, when this Solution is stored with one.
+        #[prost(string, optional, tag = "1")]
+        pub instance: ::core::option::Option<::prost::alloc::string::String>,
+        /// Solver information encoded as JSON.
+        #[prost(string, optional, tag = "2")]
+        pub solver: ::core::option::Option<::prost::alloc::string::String>,
+        /// Solver parameters encoded as JSON.
+        #[prost(string, optional, tag = "3")]
+        pub parameters: ::core::option::Option<::prost::alloc::string::String>,
+        /// Solver start time encoded as an RFC3339 string.
+        #[prost(string, optional, tag = "4")]
+        pub start: ::core::option::Option<::prost::alloc::string::String>,
+        /// Solver end time encoded as an RFC3339 string.
+        #[prost(string, optional, tag = "5")]
+        pub end: ::core::option::Option<::prost::alloc::string::String>,
+    }
 }
 /// The solver proved that the problem is infeasible.
 ///
@@ -953,4 +1012,38 @@ pub struct SampleSet {
     /// See `Instance.format_version` for semantics.
     #[prost(uint32, tag = "100")]
     pub format_version: u32,
+    /// OMMX-defined provenance metadata for this SampleSet.
+    #[prost(message, optional, tag = "101")]
+    pub metadata: ::core::option::Option<sample_set::Metadata>,
+    /// User-defined or third-party extension annotations.
+    ///
+    /// OMMX-reserved metadata must use explicit fields such as `metadata`.
+    /// Keys in this map must be valid reverse-domain names and must not start with
+    /// `org.ommx.v1.`.
+    #[prost(map = "string, string", tag = "102")]
+    pub annotations:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
+}
+/// Nested message and enum types in `SampleSet`.
+pub mod sample_set {
+    #[non_exhaustive]
+    #[allow(clippy::derive_partial_eq_without_eq)]
+    #[derive(Clone, PartialEq, ::prost::Message)]
+    pub struct Metadata {
+        /// Digest of the corresponding Instance, when this SampleSet is stored with one.
+        #[prost(string, optional, tag = "1")]
+        pub instance: ::core::option::Option<::prost::alloc::string::String>,
+        /// Solver or sampler information encoded as JSON.
+        #[prost(string, optional, tag = "2")]
+        pub solver: ::core::option::Option<::prost::alloc::string::String>,
+        /// Solver or sampler parameters encoded as JSON.
+        #[prost(string, optional, tag = "3")]
+        pub parameters: ::core::option::Option<::prost::alloc::string::String>,
+        /// Solver or sampler start time encoded as an RFC3339 string.
+        #[prost(string, optional, tag = "4")]
+        pub start: ::core::option::Option<::prost::alloc::string::String>,
+        /// Solver or sampler end time encoded as an RFC3339 string.
+        #[prost(string, optional, tag = "5")]
+        pub end: ::core::option::Option<::prost::alloc::string::String>,
+    }
 }

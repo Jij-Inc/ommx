@@ -32,6 +32,19 @@ enum Relaxation {
 
 // Solution with evaluated objective and constraints
 message Solution {
+  message Metadata {
+    // Digest of the corresponding Instance, when this Solution is stored with one.
+    optional string instance = 1;
+    // Solver information encoded as JSON.
+    optional string solver = 2;
+    // Solver parameters encoded as JSON.
+    optional string parameters = 3;
+    // Solver start time encoded as an RFC3339 string.
+    optional string start = 4;
+    // Solver end time encoded as an RFC3339 string.
+    optional string end = 5;
+  }
+
   State state = 1;
   double objective = 2;
 
@@ -68,6 +81,16 @@ message Solution {
   // Format version of this message for forward compatibility checks.
   // See `Instance.format_version` for semantics.
   uint32 format_version = 100;
+
+  // OMMX-defined provenance metadata for this Solution.
+  Metadata metadata = 101;
+
+  // User-defined or third-party extension annotations.
+  //
+  // OMMX-reserved metadata must use explicit fields such as `metadata`.
+  // Keys in this map must be valid reverse-domain names and must not start with
+  // `org.ommx.v1.`.
+  map<string, string> annotations = 102;
 }
 
 // The solver proved that the problem is infeasible.

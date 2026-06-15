@@ -20,6 +20,12 @@ message Instance {
     repeated string authors = 3;
     // The application or library name that created this message.
     optional string created_by = 4;
+    // When this instance was created, encoded as an RFC3339 string.
+    optional string created = 5;
+    // SPDX license identifier for this instance or dataset.
+    optional string license = 6;
+    // Name of the dataset this instance belongs to.
+    optional string dataset = 7;
   }
   Description description = 1;
 
@@ -74,4 +80,11 @@ message Instance {
   // - Each SDK declares a current version; it writes that value and accepts any `<= current`. Data with a higher version fails with an "upgrade the SDK" error.
   // - Non-semantic-breaking additions keep protobuf's standard forward compatibility (unknown fields ignored) and do not bump this.
   uint32 format_version = 100;
+
+  // User-defined or third-party extension annotations.
+  //
+  // OMMX-reserved metadata must use explicit fields such as `description`.
+  // Keys in this map must be valid reverse-domain names and must not start with
+  // `org.ommx.v1.`.
+  map<string, string> annotations = 101;
 }

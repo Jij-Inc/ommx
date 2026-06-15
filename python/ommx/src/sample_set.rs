@@ -6,6 +6,7 @@ use crate::{
     Solution,
 };
 use anyhow::Result;
+use ommx::Message;
 use pyo3::{
     prelude::*,
     types::{PyBytes, PyDict, PyTuple},
@@ -96,15 +97,19 @@ impl SampleSet {
     #[staticmethod]
     pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
         let _guard = crate::TRACING.attach_parent_context(bytes.py());
-        Ok(Self {
-            inner: ommx::SampleSet::from_bytes(bytes.as_bytes())?,
-            annotations: ommx::artifact::SampleSetAnnotations::default(),
-        })
+        let proto = ommx::v1::SampleSet::decode(bytes.as_bytes())?;
+        crate::annotations::sample_set_from_v1_with_descriptor_annotations(
+            proto,
+            Default::default(),
+        )
     }
 
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        PyBytes::new(py, &self.inner.to_bytes())
+        PyBytes::new(
+            py,
+            &crate::annotations::sample_set_to_v1_with_annotations(self).encode_to_vec(),
+        )
     }
 
     pub fn get(&self, sample_id: u64) -> Result<Solution> {

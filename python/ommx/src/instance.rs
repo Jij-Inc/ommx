@@ -7,7 +7,7 @@ use crate::{
     Rng, SampleSet, Samples, Sense, Solution, State, VariableBound,
 };
 use anyhow::Result;
-use ommx::{ConstraintID, Evaluate, NamedFunctionID, VariableID};
+use ommx::{ConstraintID, Evaluate, Message, NamedFunctionID, VariableID};
 use pyo3::{
     exceptions::PyKeyError,
     prelude::*,
@@ -18,8 +18,10 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 /// Optimization problem instance.
 ///
-/// Note that this class also contains annotations like {attr}`~ommx.v1.Instance.title` which are not contained in protobuf message but stored in OMMX artifact.
-/// These annotations are loaded from annotations while reading from OMMX artifact.
+/// This class also contains annotations like {attr}`~ommx.v1.Instance.title`.
+/// OMMX-defined annotations are stored in explicit protobuf fields, while
+/// user-defined annotations are stored in the protobuf annotation map and
+/// mirrored to OMMX Artifact descriptors.
 ///
 /// # Examples
 ///
@@ -75,10 +77,8 @@ impl Instance {
     #[staticmethod]
     pub fn from_bytes(py: Python<'_>, bytes: &Bound<PyBytes>) -> Result<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        Ok(Self {
-            inner: ommx::Instance::from_bytes(bytes.as_bytes())?,
-            annotations: ommx::artifact::InstanceAnnotations::default(),
-        })
+        let proto = ommx::v1::Instance::decode(bytes.as_bytes())?;
+        crate::annotations::instance_from_v1_with_descriptor_annotations(proto, HashMap::new())
     }
 
     /// Create an instance from its components.
@@ -706,11 +706,9 @@ impl Instance {
 
     #[getter]
     pub fn description(&self) -> Option<InstanceDescription> {
-        // Convert Option<v1::instance::Description> to Option<InstanceDescription>
-        self.inner
+        crate::annotations::instance_to_v1_with_annotations(self)
             .description
-            .as_ref()
-            .map(|desc| InstanceDescription(desc.clone()))
+            .map(InstanceDescription)
     }
 
     #[getter]
@@ -725,7 +723,7 @@ impl Instance {
 
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let buf = self.inner.to_bytes();
+        let buf = crate::annotations::instance_to_v1_with_annotations(self).encode_to_vec();
         PyBytes::new(py, &buf)
     }
 
@@ -2779,18 +2777,24 @@ pub struct InstanceDescription(pub(crate) ommx::v1::instance::Description);
 #[pymethods]
 impl InstanceDescription {
     #[new]
-    #[pyo3(signature = (name = None, description = None, authors = None, created_by = None))]
+    #[pyo3(signature = (name = None, description = None, authors = None, created_by = None, created = None, license = None, dataset = None))]
     pub fn new(
         name: Option<String>,
         description: Option<String>,
         authors: Option<Vec<String>>,
         created_by: Option<String>,
+        created: Option<String>,
+        license: Option<String>,
+        dataset: Option<String>,
     ) -> Self {
         let mut desc = ommx::v1::instance::Description::default();
         desc.name = name;
         desc.description = description;
         desc.authors = authors.unwrap_or_default();
         desc.created_by = created_by;
+        desc.created = created;
+        desc.license = license;
+        desc.dataset = dataset;
         Self(desc)
     }
     #[getter]
@@ -2813,10 +2817,31 @@ impl InstanceDescription {
         self.0.created_by.clone()
     }
 
+    #[getter]
+    pub fn created(&self) -> Option<String> {
+        self.0.created.clone()
+    }
+
+    #[getter]
+    pub fn license(&self) -> Option<String> {
+        self.0.license.clone()
+    }
+
+    #[getter]
+    pub fn dataset(&self) -> Option<String> {
+        self.0.dataset.clone()
+    }
+
     fn __repr__(&self) -> String {
         format!(
-            "InstanceDescription(name={:?}, description={:?}, authors={:?}, created_by={:?})",
-            self.0.name, self.0.description, self.0.authors, self.0.created_by
+            "InstanceDescription(name={:?}, description={:?}, authors={:?}, created_by={:?}, created={:?}, license={:?}, dataset={:?})",
+            self.0.name,
+            self.0.description,
+            self.0.authors,
+            self.0.created_by,
+            self.0.created,
+            self.0.license,
+            self.0.dataset
         )
     }
 

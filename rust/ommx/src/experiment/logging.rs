@@ -50,12 +50,8 @@ pub trait AttachmentLogger: Sized {
         instance: &Instance,
         annotations: InstanceAnnotations,
     ) -> Result<()> {
-        self.log_attachment(
-            name,
-            media_types::v1_instance(),
-            instance.to_bytes(),
-            annotations.into_inner(),
-        )
+        let (bytes, annotations) = crate::artifact::encode_instance_layer(instance, annotations);
+        self.log_attachment(name, media_types::v1_instance(), bytes, annotations)
     }
 
     /// Attach a [`ParametricInstance`] with its artifact annotations.
@@ -65,11 +61,13 @@ pub trait AttachmentLogger: Sized {
         pi: &ParametricInstance,
         annotations: ParametricInstanceAnnotations,
     ) -> Result<()> {
+        let (bytes, annotations) =
+            crate::artifact::encode_parametric_instance_layer(pi, annotations);
         self.log_attachment(
             name,
             media_types::v1_parametric_instance(),
-            pi.to_bytes(),
-            annotations.into_inner(),
+            bytes,
+            annotations,
         )
     }
 
@@ -80,12 +78,8 @@ pub trait AttachmentLogger: Sized {
         solution: &Solution,
         annotations: SolutionAnnotations,
     ) -> Result<()> {
-        self.log_attachment(
-            name,
-            media_types::v1_solution(),
-            solution.to_bytes(),
-            annotations.into_inner(),
-        )
+        let (bytes, annotations) = crate::artifact::encode_solution_layer(solution, annotations);
+        self.log_attachment(name, media_types::v1_solution(), bytes, annotations)
     }
 
     /// Attach a [`SampleSet`] with its artifact annotations.
@@ -95,11 +89,8 @@ pub trait AttachmentLogger: Sized {
         sample_set: &SampleSet,
         annotations: SampleSetAnnotations,
     ) -> Result<()> {
-        self.log_attachment(
-            name,
-            media_types::v1_sample_set(),
-            sample_set.to_bytes(),
-            annotations.into_inner(),
-        )
+        let (bytes, annotations) =
+            crate::artifact::encode_sample_set_layer(sample_set, annotations);
+        self.log_attachment(name, media_types::v1_sample_set(), bytes, annotations)
     }
 }

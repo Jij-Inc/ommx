@@ -5,7 +5,7 @@ use crate::artifact::{
     media_types, InstanceAnnotations, ParametricInstanceAnnotations, SampleSetAnnotations,
     SolutionAnnotations,
 };
-use crate::{Instance, ParametricInstance, SampleSet, Solution};
+use crate::{Instance, Message, ParametricInstance, Parse, SampleSet, Solution};
 use anyhow::{ensure, Context, Result};
 use oci_spec::image::MediaType;
 use serde::{Deserialize, Serialize};
@@ -176,10 +176,10 @@ impl<'reg> AttachmentTable<StoredDescriptor<'reg>> {
         let descriptor = self.attachment(name)?;
         descriptor.ensure_media_type(&media_types::v1_instance())?;
         let bytes = descriptor.registry().get_blob(descriptor)?;
-        Ok((
-            Instance::from_bytes(&bytes)?,
-            InstanceAnnotations::from_descriptor(descriptor),
-        ))
+        let mut instance = crate::v1::Instance::decode(bytes.as_slice())?;
+        InstanceAnnotations::from_descriptor(descriptor).merge_into_v1_instance(&mut instance);
+        let annotations = InstanceAnnotations::from_v1_instance(&instance);
+        Ok((instance.try_into()?, annotations))
     }
 
     pub(crate) fn parametric_instance(
@@ -189,30 +189,31 @@ impl<'reg> AttachmentTable<StoredDescriptor<'reg>> {
         let descriptor = self.attachment(name)?;
         descriptor.ensure_media_type(&media_types::v1_parametric_instance())?;
         let bytes = descriptor.registry().get_blob(descriptor)?;
-        Ok((
-            ParametricInstance::from_bytes(&bytes)?,
-            ParametricInstanceAnnotations::from_descriptor(descriptor),
-        ))
+        let mut instance = crate::v1::ParametricInstance::decode(bytes.as_slice())?;
+        ParametricInstanceAnnotations::from_descriptor(descriptor)
+            .merge_into_v1_parametric_instance(&mut instance);
+        let annotations = ParametricInstanceAnnotations::from_v1_parametric_instance(&instance);
+        Ok((instance.parse(&())?, annotations))
     }
 
     pub(crate) fn solution(&self, name: &str) -> Result<(Solution, SolutionAnnotations)> {
         let descriptor = self.attachment(name)?;
         descriptor.ensure_media_type(&media_types::v1_solution())?;
         let bytes = descriptor.registry().get_blob(descriptor)?;
-        Ok((
-            Solution::from_bytes(&bytes)?,
-            SolutionAnnotations::from_descriptor(descriptor),
-        ))
+        let mut solution = crate::v1::Solution::decode(bytes.as_slice())?;
+        SolutionAnnotations::from_descriptor(descriptor).merge_into_v1_solution(&mut solution);
+        let annotations = SolutionAnnotations::from_v1_solution(&solution);
+        Ok((solution.parse(&())?, annotations))
     }
 
     pub(crate) fn sample_set(&self, name: &str) -> Result<(SampleSet, SampleSetAnnotations)> {
         let descriptor = self.attachment(name)?;
         descriptor.ensure_media_type(&media_types::v1_sample_set())?;
         let bytes = descriptor.registry().get_blob(descriptor)?;
-        Ok((
-            SampleSet::from_bytes(&bytes)?,
-            SampleSetAnnotations::from_descriptor(descriptor),
-        ))
+        let mut sample_set = crate::v1::SampleSet::decode(bytes.as_slice())?;
+        SampleSetAnnotations::from_descriptor(descriptor).merge_into_v1_sample_set(&mut sample_set);
+        let annotations = SampleSetAnnotations::from_v1_sample_set(&sample_set);
+        Ok((sample_set.parse(&())?, annotations))
     }
 
     pub(crate) fn write_attachment(

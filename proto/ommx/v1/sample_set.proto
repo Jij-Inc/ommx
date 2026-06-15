@@ -107,6 +107,19 @@ message SampledNamedFunction {
 
 // Output of the sampling process.
 message SampleSet {
+  message Metadata {
+    // Digest of the corresponding Instance, when this SampleSet is stored with one.
+    optional string instance = 1;
+    // Solver or sampler information encoded as JSON.
+    optional string solver = 2;
+    // Solver or sampler parameters encoded as JSON.
+    optional string parameters = 3;
+    // Solver or sampler start time encoded as an RFC3339 string.
+    optional string start = 4;
+    // Solver or sampler end time encoded as an RFC3339 string.
+    optional string end = 5;
+  }
+
   SampledValues objectives = 1;
   repeated SampledDecisionVariable decision_variables = 2;
   repeated SampledConstraint constraints = 3;
@@ -138,4 +151,14 @@ message SampleSet {
   // Format version of this message for forward compatibility checks.
   // See `Instance.format_version` for semantics.
   uint32 format_version = 100;
+
+  // OMMX-defined provenance metadata for this SampleSet.
+  Metadata metadata = 101;
+
+  // User-defined or third-party extension annotations.
+  //
+  // OMMX-reserved metadata must use explicit fields such as `metadata`.
+  // Keys in this map must be valid reverse-domain names and must not start with
+  // `org.ommx.v1.`.
+  map<string, string> annotations = 102;
 }

@@ -130,6 +130,8 @@ impl Parse for crate::v1::Solution {
             optimality,
             relaxation,
             sense,
+            metadata: self.metadata,
+            annotations: self.annotations,
         };
 
         // Validate feasibility consistency
@@ -238,6 +240,8 @@ impl From<Solution> for crate::v1::Solution {
             feasible_unrelaxed,
             sense,
             format_version: crate::CURRENT_FORMAT_VERSION,
+            metadata: solution.metadata,
+            annotations: solution.annotations,
         }
     }
 }

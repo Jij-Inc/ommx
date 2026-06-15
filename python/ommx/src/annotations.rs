@@ -1,9 +1,148 @@
+use anyhow::Result;
+use ommx::Parse;
+use std::collections::HashMap;
+
 /// Normalize annotation namespace to ensure it ends with "."
 pub fn normalize_namespace(ns: &str) -> String {
     if ns.ends_with('.') {
         ns.to_string()
     } else {
         format!("{ns}.")
+    }
+}
+
+pub(crate) fn instance_to_v1_with_annotations(instance: &crate::Instance) -> ommx::v1::Instance {
+    let mut proto: ommx::v1::Instance = instance.inner.clone().into();
+    instance.annotations.overlay_into_v1_instance(&mut proto);
+    proto
+}
+
+pub(crate) fn instance_from_v1_with_descriptor_annotations(
+    mut proto: ommx::v1::Instance,
+    descriptor_annotations: HashMap<String, String>,
+) -> Result<crate::Instance> {
+    ommx::artifact::InstanceAnnotations::from(descriptor_annotations)
+        .merge_into_v1_instance(&mut proto);
+    let annotations = ommx::artifact::InstanceAnnotations::from_v1_instance(&proto);
+    Ok(crate::Instance {
+        inner: proto.try_into()?,
+        annotations,
+    })
+}
+
+pub(crate) fn parametric_instance_to_v1_with_annotations(
+    instance: &crate::ParametricInstance,
+) -> ommx::v1::ParametricInstance {
+    let mut proto: ommx::v1::ParametricInstance = instance.inner.clone().into();
+    instance
+        .annotations
+        .overlay_into_v1_parametric_instance(&mut proto);
+    proto
+}
+
+pub(crate) fn parametric_instance_from_v1_with_descriptor_annotations(
+    mut proto: ommx::v1::ParametricInstance,
+    descriptor_annotations: HashMap<String, String>,
+) -> Result<crate::ParametricInstance> {
+    ommx::artifact::ParametricInstanceAnnotations::from(descriptor_annotations)
+        .merge_into_v1_parametric_instance(&mut proto);
+    let annotations =
+        ommx::artifact::ParametricInstanceAnnotations::from_v1_parametric_instance(&proto);
+    Ok(crate::ParametricInstance {
+        inner: proto.parse(&())?,
+        annotations,
+    })
+}
+
+pub(crate) fn solution_to_v1_with_annotations(solution: &crate::Solution) -> ommx::v1::Solution {
+    let mut proto: ommx::v1::Solution = solution.inner.clone().into();
+    solution.annotations.overlay_into_v1_solution(&mut proto);
+    proto
+}
+
+pub(crate) fn solution_from_v1_with_descriptor_annotations(
+    mut proto: ommx::v1::Solution,
+    descriptor_annotations: HashMap<String, String>,
+) -> Result<crate::Solution> {
+    ommx::artifact::SolutionAnnotations::from(descriptor_annotations)
+        .merge_into_v1_solution(&mut proto);
+    let annotations = ommx::artifact::SolutionAnnotations::from_v1_solution(&proto);
+    Ok(crate::Solution {
+        inner: proto.parse(&())?,
+        annotations,
+    })
+}
+
+pub(crate) fn sample_set_to_v1_with_annotations(
+    sample_set: &crate::SampleSet,
+) -> ommx::v1::SampleSet {
+    let mut proto: ommx::v1::SampleSet = sample_set.inner.clone().into();
+    sample_set
+        .annotations
+        .overlay_into_v1_sample_set(&mut proto);
+    proto
+}
+
+pub(crate) fn sample_set_from_v1_with_descriptor_annotations(
+    mut proto: ommx::v1::SampleSet,
+    descriptor_annotations: HashMap<String, String>,
+) -> Result<crate::SampleSet> {
+    ommx::artifact::SampleSetAnnotations::from(descriptor_annotations)
+        .merge_into_v1_sample_set(&mut proto);
+    let annotations = ommx::artifact::SampleSetAnnotations::from_v1_sample_set(&proto);
+    Ok(crate::SampleSet {
+        inner: proto.parse(&())?,
+        annotations,
+    })
+}
+
+pub(crate) trait FlatAnnotations {
+    fn flat_annotations(&self) -> HashMap<String, String>;
+    fn set_flat_annotations(&mut self, annotations: HashMap<String, String>);
+}
+
+impl FlatAnnotations for crate::Instance {
+    fn flat_annotations(&self) -> HashMap<String, String> {
+        let proto = instance_to_v1_with_annotations(self);
+        ommx::artifact::InstanceAnnotations::from_v1_instance(&proto).into_inner()
+    }
+
+    fn set_flat_annotations(&mut self, annotations: HashMap<String, String>) {
+        self.annotations = annotations.into();
+    }
+}
+
+impl FlatAnnotations for crate::ParametricInstance {
+    fn flat_annotations(&self) -> HashMap<String, String> {
+        let proto = parametric_instance_to_v1_with_annotations(self);
+        ommx::artifact::ParametricInstanceAnnotations::from_v1_parametric_instance(&proto)
+            .into_inner()
+    }
+
+    fn set_flat_annotations(&mut self, annotations: HashMap<String, String>) {
+        self.annotations = annotations.into();
+    }
+}
+
+impl FlatAnnotations for crate::Solution {
+    fn flat_annotations(&self) -> HashMap<String, String> {
+        let proto = solution_to_v1_with_annotations(self);
+        ommx::artifact::SolutionAnnotations::from_v1_solution(&proto).into_inner()
+    }
+
+    fn set_flat_annotations(&mut self, annotations: HashMap<String, String>) {
+        self.annotations = annotations.into();
+    }
+}
+
+impl FlatAnnotations for crate::SampleSet {
+    fn flat_annotations(&self) -> HashMap<String, String> {
+        let proto = sample_set_to_v1_with_annotations(self);
+        ommx::artifact::SampleSetAnnotations::from_v1_sample_set(&proto).into_inner()
+    }
+
+    fn set_flat_annotations(&mut self, annotations: HashMap<String, String>) {
+        self.annotations = annotations.into();
     }
 }
 
@@ -27,7 +166,7 @@ macro_rules! impl_instance_annotations {
             /// to modify annotations.
             #[getter]
             pub fn annotations(&self) -> std::collections::HashMap<String, String> {
-                self.annotations.clone().into_inner()
+                $crate::annotations::FlatAnnotations::flat_annotations(self)
             }
 
             #[setter]
@@ -35,7 +174,7 @@ macro_rules! impl_instance_annotations {
                 &mut self,
                 annotations: std::collections::HashMap<String, String>,
             ) {
-                self.annotations = annotations.into();
+                $crate::annotations::FlatAnnotations::set_flat_annotations(self, annotations);
             }
 
             #[pyo3(signature = (key, value, *, annotation_namespace = "org.ommx.user."))]
@@ -70,7 +209,7 @@ macro_rules! impl_instance_annotations {
             ) -> pyo3::PyResult<String> {
                 let ns = $crate::annotations::normalize_namespace(annotation_namespace);
                 let full_key = format!("{ns}{key}");
-                self.annotations
+                self.annotations()
                     .get(&full_key)
                     .cloned()
                     .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err(full_key))
@@ -82,11 +221,11 @@ macro_rules! impl_instance_annotations {
                 annotation_namespace: &str,
             ) -> std::collections::HashMap<String, String> {
                 let ns = $crate::annotations::normalize_namespace(annotation_namespace);
-                self.annotations
-                    .iter()
+                self.annotations()
+                    .into_iter()
                     .filter_map(|(key, value)| {
                         key.strip_prefix(&ns)
-                            .map(|stripped| (stripped.to_string(), value.clone()))
+                            .map(|stripped| (stripped.to_string(), value))
                     })
                     .collect()
             }
@@ -95,7 +234,9 @@ macro_rules! impl_instance_annotations {
 
             #[getter]
             pub fn title(&self) -> Option<String> {
-                self.annotations.get(concat!($namespace, ".title")).cloned()
+                self.annotations()
+                    .get(concat!($namespace, ".title"))
+                    .cloned()
             }
 
             #[setter]
@@ -106,7 +247,7 @@ macro_rules! impl_instance_annotations {
 
             #[getter]
             pub fn license(&self) -> Option<String> {
-                self.annotations
+                self.annotations()
                     .get(concat!($namespace, ".license"))
                     .cloned()
             }
@@ -119,7 +260,7 @@ macro_rules! impl_instance_annotations {
 
             #[getter]
             pub fn dataset(&self) -> Option<String> {
-                self.annotations
+                self.annotations()
                     .get(concat!($namespace, ".dataset"))
                     .cloned()
             }
@@ -134,7 +275,7 @@ macro_rules! impl_instance_annotations {
 
             #[getter]
             pub fn authors(&self) -> Vec<String> {
-                self.annotations
+                self.annotations()
                     .get(concat!($namespace, ".authors"))
                     .filter(|v| !v.is_empty())
                     .map(|v| v.split(',').map(|s| s.to_string()).collect())
@@ -145,7 +286,7 @@ macro_rules! impl_instance_annotations {
             pub fn set_authors(&mut self, value: Vec<String>) {
                 let key = concat!($namespace, ".authors").to_string();
                 if value.is_empty() {
-                    self.annotations.remove(&key);
+                    self.annotations.insert(key, String::new());
                 } else {
                     self.annotations.insert(key, value.join(","));
                 }
@@ -155,7 +296,7 @@ macro_rules! impl_instance_annotations {
 
             #[getter]
             pub fn num_variables(&self) -> Option<i64> {
-                self.annotations
+                self.annotations()
                     .get(concat!($namespace, ".variables"))
                     .and_then(|v| v.parse().ok())
             }
@@ -170,7 +311,7 @@ macro_rules! impl_instance_annotations {
 
             #[getter]
             pub fn num_constraints(&self) -> Option<i64> {
-                self.annotations
+                self.annotations()
                     .get(concat!($namespace, ".constraints"))
                     .and_then(|v| v.parse().ok())
             }
@@ -190,7 +331,8 @@ macro_rules! impl_instance_annotations {
                 &self,
                 py: pyo3::Python<'py>,
             ) -> pyo3::PyResult<Option<pyo3::Bound<'py, pyo3::types::PyDateTime>>> {
-                let value = match self.annotations.get(concat!($namespace, ".created")) {
+                let annotations = self.annotations();
+                let value = match annotations.get(concat!($namespace, ".created")) {
                     Some(v) if !v.is_empty() => v,
                     _ => return Ok(None),
                 };
@@ -233,7 +375,7 @@ macro_rules! impl_solution_annotations {
             /// to modify annotations.
             #[getter]
             pub fn annotations(&self) -> std::collections::HashMap<String, String> {
-                self.annotations.clone().into_inner()
+                $crate::annotations::FlatAnnotations::flat_annotations(self)
             }
 
             #[setter]
@@ -241,7 +383,7 @@ macro_rules! impl_solution_annotations {
                 &mut self,
                 annotations: std::collections::HashMap<String, String>,
             ) {
-                self.annotations = annotations.into();
+                $crate::annotations::FlatAnnotations::set_flat_annotations(self, annotations);
             }
 
             #[pyo3(signature = (key, value, *, annotation_namespace = "org.ommx.user."))]
@@ -276,7 +418,7 @@ macro_rules! impl_solution_annotations {
             ) -> pyo3::PyResult<String> {
                 let ns = $crate::annotations::normalize_namespace(annotation_namespace);
                 let full_key = format!("{ns}{key}");
-                self.annotations
+                self.annotations()
                     .get(&full_key)
                     .cloned()
                     .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err(full_key))
@@ -288,11 +430,11 @@ macro_rules! impl_solution_annotations {
                 annotation_namespace: &str,
             ) -> std::collections::HashMap<String, String> {
                 let ns = $crate::annotations::normalize_namespace(annotation_namespace);
-                self.annotations
-                    .iter()
+                self.annotations()
+                    .into_iter()
                     .filter_map(|(key, value)| {
                         key.strip_prefix(&ns)
-                            .map(|stripped| (stripped.to_string(), value.clone()))
+                            .map(|stripped| (stripped.to_string(), value))
                     })
                     .collect()
             }
@@ -301,7 +443,7 @@ macro_rules! impl_solution_annotations {
 
             #[getter]
             pub fn instance_digest(&self) -> Option<String> {
-                self.annotations
+                self.annotations()
                     .get(concat!($namespace, ".instance"))
                     .cloned()
             }
@@ -319,7 +461,8 @@ macro_rules! impl_solution_annotations {
                 &self,
                 py: pyo3::Python<'py>,
             ) -> pyo3::PyResult<Option<pyo3::Bound<'py, pyo3::PyAny>>> {
-                let value = match self.annotations.get(concat!($namespace, ".solver")) {
+                let annotations = self.annotations();
+                let value = match annotations.get(concat!($namespace, ".solver")) {
                     Some(v) if !v.is_empty() => v,
                     _ => return Ok(None),
                 };
@@ -349,7 +492,8 @@ macro_rules! impl_solution_annotations {
                 &self,
                 py: pyo3::Python<'py>,
             ) -> pyo3::PyResult<Option<pyo3::Bound<'py, pyo3::PyAny>>> {
-                let value = match self.annotations.get(concat!($namespace, ".parameters")) {
+                let annotations = self.annotations();
+                let value = match annotations.get(concat!($namespace, ".parameters")) {
                     Some(v) if !v.is_empty() => v,
                     _ => return Ok(None),
                 };
@@ -381,7 +525,8 @@ macro_rules! impl_solution_annotations {
                 &self,
                 py: pyo3::Python<'py>,
             ) -> pyo3::PyResult<Option<pyo3::Bound<'py, pyo3::types::PyDateTime>>> {
-                let value = match self.annotations.get(concat!($namespace, ".start")) {
+                let annotations = self.annotations();
+                let value = match annotations.get(concat!($namespace, ".start")) {
                     Some(v) if !v.is_empty() => v,
                     _ => return Ok(None),
                 };
@@ -406,7 +551,8 @@ macro_rules! impl_solution_annotations {
                 &self,
                 py: pyo3::Python<'py>,
             ) -> pyo3::PyResult<Option<pyo3::Bound<'py, pyo3::types::PyDateTime>>> {
-                let value = match self.annotations.get(concat!($namespace, ".end")) {
+                let annotations = self.annotations();
+                let value = match annotations.get(concat!($namespace, ".end")) {
                     Some(v) if !v.is_empty() => v,
                     _ => return Ok(None),
                 };

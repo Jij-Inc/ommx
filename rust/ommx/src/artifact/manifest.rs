@@ -576,9 +576,11 @@ impl<'reg> ArtifactDraft<'reg> {
 
     pub fn add_instance(
         &mut self,
-        instance: v1::Instance,
+        mut instance: v1::Instance,
         annotations: InstanceAnnotations,
     ) -> Result<StoredDescriptor<'reg>> {
+        annotations.merge_into_v1_instance(&mut instance);
+        let annotations = InstanceAnnotations::from_v1_instance(&instance);
         self.add_layer_bytes(
             media_types::v1_instance(),
             instance.encode_to_vec(),
@@ -588,9 +590,11 @@ impl<'reg> ArtifactDraft<'reg> {
 
     pub fn add_solution(
         &mut self,
-        solution: v1::Solution,
+        mut solution: v1::Solution,
         annotations: SolutionAnnotations,
     ) -> Result<StoredDescriptor<'reg>> {
+        annotations.merge_into_v1_solution(&mut solution);
+        let annotations = SolutionAnnotations::from_v1_solution(&solution);
         self.add_layer_bytes(
             media_types::v1_solution(),
             solution.encode_to_vec(),
@@ -600,9 +604,11 @@ impl<'reg> ArtifactDraft<'reg> {
 
     pub fn add_parametric_instance(
         &mut self,
-        instance: v1::ParametricInstance,
+        mut instance: v1::ParametricInstance,
         annotations: ParametricInstanceAnnotations,
     ) -> Result<StoredDescriptor<'reg>> {
+        annotations.merge_into_v1_parametric_instance(&mut instance);
+        let annotations = ParametricInstanceAnnotations::from_v1_parametric_instance(&instance);
         self.add_layer_bytes(
             media_types::v1_parametric_instance(),
             instance.encode_to_vec(),
@@ -612,9 +618,11 @@ impl<'reg> ArtifactDraft<'reg> {
 
     pub fn add_sample_set(
         &mut self,
-        sample_set: v1::SampleSet,
+        mut sample_set: v1::SampleSet,
         annotations: SampleSetAnnotations,
     ) -> Result<StoredDescriptor<'reg>> {
+        annotations.merge_into_v1_sample_set(&mut sample_set);
+        let annotations = SampleSetAnnotations::from_v1_sample_set(&sample_set);
         self.add_layer_bytes(
             media_types::v1_sample_set(),
             sample_set.encode_to_vec(),
@@ -1065,6 +1073,8 @@ mod tests {
             relaxation: v1::Relaxation::Unspecified as i32,
             sense: v1::instance::Sense::Minimize as i32,
             format_version: crate::CURRENT_FORMAT_VERSION,
+            metadata: None,
+            annotations: HashMap::new(),
         };
 
         let descriptor = builder.add_solution(solution.clone(), SolutionAnnotations::default())?;
@@ -1073,6 +1083,75 @@ mod tests {
         let blob = registry.get_blob(&descriptor)?;
         let decoded = v1::Solution::decode(blob.as_slice())?;
         assert_eq!(decoded, solution);
+        Ok(())
+    }
+
+    #[test]
+    fn add_instance_merges_annotations_into_proto_with_proto_priority() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let registry = LocalRegistry::open(dir.path())?;
+        let mut builder = ArtifactDraft::with_registry(&registry, test_image_name("instance")?);
+
+        let instance = v1::Instance {
+            description: Some(v1::instance::Description {
+                name: Some("proto title".to_string()),
+                ..Default::default()
+            }),
+            annotations: HashMap::from([(
+                "org.example.annotation".to_string(),
+                "proto value".to_string(),
+            )]),
+            ..Default::default()
+        };
+        let descriptor_annotations = InstanceAnnotations::from(HashMap::from([
+            (
+                "org.ommx.v1.instance.title".to_string(),
+                "descriptor title".to_string(),
+            ),
+            (
+                "org.example.annotation".to_string(),
+                "descriptor value".to_string(),
+            ),
+            (
+                "org.example.legacy".to_string(),
+                "descriptor only".to_string(),
+            ),
+        ]));
+
+        let descriptor = builder.add_instance(instance, descriptor_annotations)?;
+
+        let annotations = descriptor
+            .annotations()
+            .as_ref()
+            .context("descriptor annotations should be present")?;
+        assert_eq!(
+            annotations.get("org.ommx.v1.instance.title"),
+            Some(&"proto title".to_string())
+        );
+        assert_eq!(
+            annotations.get("org.example.annotation"),
+            Some(&"proto value".to_string())
+        );
+        assert_eq!(
+            annotations.get("org.example.legacy"),
+            Some(&"descriptor only".to_string())
+        );
+
+        let bytes = registry.get_blob(&descriptor)?;
+        let decoded = v1::Instance::decode(bytes.as_slice())?;
+        assert_eq!(
+            decoded.description.and_then(|description| description.name),
+            Some("proto title".to_string())
+        );
+        assert_eq!(
+            decoded.annotations.get("org.example.annotation"),
+            Some(&"proto value".to_string())
+        );
+        assert_eq!(
+            decoded.annotations.get("org.example.legacy"),
+            Some(&"descriptor only".to_string())
+        );
+
         Ok(())
     }
 

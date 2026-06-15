@@ -87,6 +87,9 @@ impl Parse for crate::v1::SampleSet {
             .sense(sense)
             .build()
             .map_err(crate::RawParseError::SampleSetError)?;
+        let mut sample_set = sample_set;
+        sample_set.metadata = self.metadata;
+        sample_set.annotations = self.annotations;
 
         // Check the consistency of feasibility maps from the original v1 data
         for (sample_id_u64, provided_feasible) in self.feasible {
@@ -207,6 +210,8 @@ impl From<SampleSet> for crate::v1::SampleSet {
             feasible,
             sense,
             format_version: crate::CURRENT_FORMAT_VERSION,
+            metadata: sample_set.metadata,
+            annotations: sample_set.annotations,
             ..Default::default()
         }
     }

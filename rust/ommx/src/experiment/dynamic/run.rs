@@ -129,19 +129,23 @@ impl RunDyn {
             adapter_options,
             diagnostics,
         } = record;
+        let (input_bytes, input_annotations) =
+            crate::artifact::encode_instance_layer(input, input_annotations);
+        let (output_bytes, output_annotations) =
+            crate::artifact::encode_solution_layer(output, output_annotations);
         let (input, output, diagnostics) = {
             let dyn_state = lock_experiment_state(&self.experiment_state);
             let input = store_solve_payload_descriptor(
                 &dyn_state,
                 media_types::v1_instance(),
-                &input.to_bytes(),
-                input_annotations.into_inner(),
+                &input_bytes,
+                input_annotations,
             )?;
             let output = store_solve_payload_descriptor(
                 &dyn_state,
                 media_types::v1_solution(),
-                &output.to_bytes(),
-                output_annotations.into_inner(),
+                &output_bytes,
+                output_annotations,
             )?;
             let diagnostics = diagnostics.and_then(|diagnostic| {
                 match diagnostic.to_msgpack_bytes().and_then(|bytes| {
@@ -212,13 +216,15 @@ impl RunDyn {
             "failed solve attempt status must not be finished"
         );
         ensure_reserved_solve_id(self.open()?, solve_id)?;
+        let (input_bytes, input_annotations) =
+            crate::artifact::encode_instance_layer(input, input_annotations);
         let (input, diagnostics) = {
             let dyn_state = lock_experiment_state(&self.experiment_state);
             let input = store_solve_payload_descriptor(
                 &dyn_state,
                 media_types::v1_instance(),
-                &input.to_bytes(),
-                input_annotations.into_inner(),
+                &input_bytes,
+                input_annotations,
             )?;
             let diagnostics = diagnostics.and_then(|diagnostic| {
                 match diagnostic.to_msgpack_bytes().and_then(|bytes| {

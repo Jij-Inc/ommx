@@ -257,6 +257,7 @@ impl Parse for v1::Instance {
             decision_variable_dependency,
             parameters: self.parameters,
             description: self.description,
+            annotations: self.annotations,
             named_functions,
             named_function_metadata,
         })
@@ -334,6 +335,7 @@ impl From<Instance> for v1::Instance {
             description: value.description,
             constraint_hints: None,
             format_version: crate::CURRENT_FORMAT_VERSION,
+            annotations: value.annotations,
         }
     }
 }
@@ -493,6 +495,7 @@ impl Parse for v1::ParametricInstance {
             named_function_metadata,
             decision_variable_dependency,
             description: self.description,
+            annotations: self.annotations,
         })
     }
 }
@@ -513,6 +516,7 @@ impl From<ParametricInstance> for v1::ParametricInstance {
             description,
             named_functions,
             named_function_metadata,
+            annotations,
         }: ParametricInstance,
     ) -> Self {
         // Special constraint types do not have a v1 proto representation yet.
@@ -573,6 +577,7 @@ impl From<ParametricInstance> for v1::ParametricInstance {
                 .collect(),
             constraint_hints: None,
             format_version: crate::CURRENT_FORMAT_VERSION,
+            annotations,
         }
     }
 }

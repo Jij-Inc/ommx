@@ -386,19 +386,29 @@ fn commit_produces_experiment_artifact() {
         // 3 attachments (1 experiment-space + 2 run-space) + run-parameters.
         let layers = artifact.layers().unwrap();
         assert_eq!(layers.len(), 4);
-        assert!(layers
-            .iter()
-            .all(|layer| layer.annotations().as_ref().is_none_or(HashMap::is_empty)));
 
         let dataset = layer_from_ref(&layers, *config.attachments.get("dataset").unwrap());
         assert_eq!(
             dataset.media_type(),
             &MediaType::Other("application/json".into())
         );
+        assert!(dataset.annotations().as_ref().is_none_or(HashMap::is_empty));
 
         let run = &config.runs[0];
         let candidate = layer_from_ref(&layers, *run.attachments.get("candidate").unwrap());
         assert_eq!(candidate.media_type(), &media_types::v1_instance());
+        let candidate_annotations = candidate
+            .annotations()
+            .as_ref()
+            .expect("instance layer should mirror protobuf metadata");
+        assert_eq!(
+            candidate_annotations.get("org.ommx.v1.instance.variables"),
+            Some(&instance.decision_variables().len().to_string())
+        );
+        assert_eq!(
+            candidate_annotations.get("org.ommx.v1.instance.constraints"),
+            Some(&instance.constraints().len().to_string())
+        );
         assert_eq!(blob_bytes(&artifact, candidate), instance.to_bytes());
 
         // Aggregate layers are not tagged as attachments.

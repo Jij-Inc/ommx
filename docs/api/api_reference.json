@@ -14172,7 +14172,7 @@
         {
           "kind": "Class",
           "name": "Instance",
-          "doc": "Optimization problem instance.\n\nNote that this class also contains annotations like {attr}`~ommx.v1.Instance.title` which are not contained in protobuf message but stored in OMMX artifact.\nThese annotations are loaded from annotations while reading from OMMX artifact.\n\n# Examples\n\nCreate an instance for KnapSack Problem\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable\n```\n\nProfit and weight of items\n\n```python\n>>> p = [10, 13, 18, 31, 7, 15]\n>>> w = [11, 15, 20, 35, 10, 33]\n```\n\nDecision variables\n\n```python\n>>> x = [DecisionVariable.binary(i) for i in range(6)]\n```\n\nObjective and constraint\n\n```python\n>>> objective = sum(p[i] * x[i] for i in range(6))\n>>> constraint = sum(w[i] * x[i] for i in range(6)) <= 47\n```\n\nCompose as an instance\n\n```python\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=objective,\n...     constraints=[constraint],\n...     sense=Instance.MAXIMIZE,\n... )\n```",
+          "doc": "Optimization problem instance.\n\nThis class also contains annotations like {attr}`~ommx.v1.Instance.title`.\nOMMX-defined annotations are stored in explicit protobuf fields, while\nuser-defined annotations are stored in the protobuf annotation map and\nmirrored to OMMX Artifact descriptors.\n\n# Examples\n\nCreate an instance for KnapSack Problem\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable\n```\n\nProfit and weight of items\n\n```python\n>>> p = [10, 13, 18, 31, 7, 15]\n>>> w = [11, 15, 20, 35, 10, 33]\n```\n\nDecision variables\n\n```python\n>>> x = [DecisionVariable.binary(i) for i in range(6)]\n```\n\nObjective and constraint\n\n```python\n>>> objective = sum(p[i] * x[i] for i in range(6))\n>>> constraint = sum(w[i] * x[i] for i in range(6)) <= 47\n```\n\nCompose as an instance\n\n```python\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=objective,\n...     constraints=[constraint],\n...     sense=Instance.MAXIMIZE,\n... )\n```",
           "bases": [],
           "methods": [
             {
@@ -27431,7 +27431,7 @@
         {
           "kind": "Class",
           "name": "Solution",
-          "doc": "Idiomatic wrapper of `ommx.v1.Solution` protobuf message.\n\nThis also contains annotations not contained in protobuf message, and will be stored in OMMX artifact.",
+          "doc": "Idiomatic wrapper of `ommx.v1.Solution` protobuf message.\n\nThis also contains annotations persisted in the protobuf payload and mirrored\nto OMMX Artifact descriptors.",
           "bases": [],
           "methods": [
             {

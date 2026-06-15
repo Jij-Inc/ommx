@@ -89,15 +89,19 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
             adapter_options,
             diagnostics,
         } = record;
+        let (input_bytes, input_annotations) =
+            crate::artifact::encode_instance_layer(input, input_annotations);
         let input = self.experiment.registry.store_layer_blob(
             media_types::v1_instance(),
-            &input.to_bytes(),
-            input_annotations.into_inner(),
+            &input_bytes,
+            input_annotations,
         )?;
+        let (output_bytes, output_annotations) =
+            crate::artifact::encode_solution_layer(output, output_annotations);
         let output = self.experiment.registry.store_layer_blob(
             media_types::v1_solution(),
-            &output.to_bytes(),
-            output_annotations.into_inner(),
+            &output_bytes,
+            output_annotations,
         )?;
         let diagnostics = diagnostics.and_then(|diagnostic| {
             match diagnostic.to_msgpack_bytes().and_then(|bytes| {
@@ -161,10 +165,12 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
             "failed solve attempt status must not be finished"
         );
         self.ensure_reserved_solve_id(solve_id)?;
+        let (input_bytes, input_annotations) =
+            crate::artifact::encode_instance_layer(input, input_annotations);
         let input = self.experiment.registry.store_layer_blob(
             media_types::v1_instance(),
-            &input.to_bytes(),
-            input_annotations.into_inner(),
+            &input_bytes,
+            input_annotations,
         )?;
         let diagnostics = diagnostics.and_then(|diagnostic| {
             match diagnostic.to_msgpack_bytes().and_then(|bytes| {
