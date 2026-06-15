@@ -18,10 +18,7 @@ pub struct ParametricInstance {
     pub(crate) inner: ommx::ParametricInstance,
 }
 
-crate::annotations::impl_instance_annotations!(
-    ParametricInstance,
-    "org.ommx.v1.parametric-instance"
-);
+impl_instance_annotations!(ParametricInstance, "org.ommx.v1.parametric-instance");
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]

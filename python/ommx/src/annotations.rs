@@ -11,15 +11,11 @@ pub fn normalize_namespace(ns: &str) -> String {
     }
 }
 
-/// Cross-module conversion boundary for Python wrappers that need the
-/// annotation-aware protobuf representation without exposing wrapper internals.
-pub(crate) fn instance_to_v1_with_annotations(instance: &crate::Instance) -> ommx::v1::Instance {
+pub fn instance_to_v1_with_annotations(instance: &crate::Instance) -> ommx::v1::Instance {
     instance.inner.clone().into()
 }
 
-/// Cross-module artifact-read boundary: descriptor annotations from old
-/// artifacts are merged into the protobuf before the Python wrapper is built.
-pub(crate) fn instance_from_v1_with_descriptor_annotations(
+pub fn instance_from_v1_with_descriptor_annotations(
     mut proto: ommx::v1::Instance,
     descriptor_annotations: HashMap<String, String>,
 ) -> Result<crate::Instance> {
@@ -30,17 +26,13 @@ pub(crate) fn instance_from_v1_with_descriptor_annotations(
     })
 }
 
-/// Cross-module conversion boundary for Python wrappers that need the
-/// annotation-aware protobuf representation without exposing wrapper internals.
-pub(crate) fn parametric_instance_to_v1_with_annotations(
+pub fn parametric_instance_to_v1_with_annotations(
     instance: &crate::ParametricInstance,
 ) -> ommx::v1::ParametricInstance {
     instance.inner.clone().into()
 }
 
-/// Cross-module artifact-read boundary: descriptor annotations from old
-/// artifacts are merged into the protobuf before the Python wrapper is built.
-pub(crate) fn parametric_instance_from_v1_with_descriptor_annotations(
+pub fn parametric_instance_from_v1_with_descriptor_annotations(
     mut proto: ommx::v1::ParametricInstance,
     descriptor_annotations: HashMap<String, String>,
 ) -> Result<crate::ParametricInstance> {
@@ -51,15 +43,11 @@ pub(crate) fn parametric_instance_from_v1_with_descriptor_annotations(
     })
 }
 
-/// Cross-module conversion boundary for Python wrappers that need the
-/// annotation-aware protobuf representation without exposing wrapper internals.
-pub(crate) fn solution_to_v1_with_annotations(solution: &crate::Solution) -> ommx::v1::Solution {
+pub fn solution_to_v1_with_annotations(solution: &crate::Solution) -> ommx::v1::Solution {
     solution.inner.clone().into()
 }
 
-/// Cross-module artifact-read boundary: descriptor annotations from old
-/// artifacts are merged into the protobuf before the Python wrapper is built.
-pub(crate) fn solution_from_v1_with_descriptor_annotations(
+pub fn solution_from_v1_with_descriptor_annotations(
     mut proto: ommx::v1::Solution,
     descriptor_annotations: HashMap<String, String>,
 ) -> Result<crate::Solution> {
@@ -70,17 +58,11 @@ pub(crate) fn solution_from_v1_with_descriptor_annotations(
     })
 }
 
-/// Cross-module conversion boundary for Python wrappers that need the
-/// annotation-aware protobuf representation without exposing wrapper internals.
-pub(crate) fn sample_set_to_v1_with_annotations(
-    sample_set: &crate::SampleSet,
-) -> ommx::v1::SampleSet {
+pub fn sample_set_to_v1_with_annotations(sample_set: &crate::SampleSet) -> ommx::v1::SampleSet {
     sample_set.inner.clone().into()
 }
 
-/// Cross-module artifact-read boundary: descriptor annotations from old
-/// artifacts are merged into the protobuf before the Python wrapper is built.
-pub(crate) fn sample_set_from_v1_with_descriptor_annotations(
+pub fn sample_set_from_v1_with_descriptor_annotations(
     mut proto: ommx::v1::SampleSet,
     descriptor_annotations: HashMap<String, String>,
 ) -> Result<crate::SampleSet> {
@@ -91,46 +73,35 @@ pub(crate) fn sample_set_from_v1_with_descriptor_annotations(
     })
 }
 
-/// Cross-module experiment/artifact boundary: build descriptor annotations
-/// from the protobuf-backed `Instance` source of truth.
-pub(crate) fn instance_descriptor_annotations(
+pub fn instance_descriptor_annotations(
     instance: &crate::Instance,
 ) -> ommx::artifact::InstanceAnnotations {
     let proto = instance_to_v1_with_annotations(instance);
     ommx::artifact::InstanceAnnotations::from_v1_instance(&proto)
 }
 
-/// Cross-module experiment/artifact boundary: build descriptor annotations
-/// from the protobuf-backed `ParametricInstance` source of truth.
-pub(crate) fn parametric_instance_descriptor_annotations(
+pub fn parametric_instance_descriptor_annotations(
     instance: &crate::ParametricInstance,
 ) -> ommx::artifact::ParametricInstanceAnnotations {
     let proto = parametric_instance_to_v1_with_annotations(instance);
     ommx::artifact::ParametricInstanceAnnotations::from_v1_parametric_instance(&proto)
 }
 
-/// Cross-module experiment/artifact boundary: build descriptor annotations
-/// from the protobuf-backed `Solution` source of truth.
-pub(crate) fn solution_descriptor_annotations(
+pub fn solution_descriptor_annotations(
     solution: &crate::Solution,
 ) -> ommx::artifact::SolutionAnnotations {
     let proto = solution_to_v1_with_annotations(solution);
     ommx::artifact::SolutionAnnotations::from_v1_solution(&proto)
 }
 
-/// Cross-module experiment/artifact boundary: build descriptor annotations
-/// from the protobuf-backed `SampleSet` source of truth.
-pub(crate) fn sample_set_descriptor_annotations(
+pub fn sample_set_descriptor_annotations(
     sample_set: &crate::SampleSet,
 ) -> ommx::artifact::SampleSetAnnotations {
     let proto = sample_set_to_v1_with_annotations(sample_set);
     ommx::artifact::SampleSetAnnotations::from_v1_sample_set(&proto)
 }
 
-/// Crate-wide wrapper contract used by annotation macros expanded in sibling
-/// modules. The trait keeps annotation projection owned by this module while
-/// allowing each Python wrapper to update its protobuf-backed `inner` value.
-pub(crate) trait FlatAnnotations {
+pub trait FlatAnnotations {
     fn flat_annotations(&self) -> HashMap<String, String>;
     fn set_flat_annotations(&mut self, annotations: HashMap<String, String>) -> Result<()>;
 
@@ -693,8 +664,3 @@ macro_rules! impl_solution_annotations {
         }
     };
 }
-
-/// Crate-wide macro export for Instance-like Python wrappers in sibling modules.
-pub(crate) use impl_instance_annotations;
-/// Crate-wide macro export for Solution-like Python wrappers in sibling modules.
-pub(crate) use impl_solution_annotations;

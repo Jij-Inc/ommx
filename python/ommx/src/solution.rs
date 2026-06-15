@@ -24,7 +24,7 @@ pub struct Solution {
     pub(crate) inner: ommx::Solution,
 }
 
-crate::annotations::impl_solution_annotations!(Solution, "org.ommx.v1.solution");
+impl_solution_annotations!(Solution, "org.ommx.v1.solution");
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]

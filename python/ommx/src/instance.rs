@@ -68,7 +68,7 @@ pub struct Instance {
     pub(crate) inner: ommx::Instance,
 }
 
-crate::annotations::impl_instance_annotations!(Instance, "org.ommx.v1.instance");
+impl_instance_annotations!(Instance, "org.ommx.v1.instance");
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
