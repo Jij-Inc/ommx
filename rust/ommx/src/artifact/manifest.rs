@@ -588,7 +588,7 @@ impl<'reg> ArtifactDraft<'reg> {
 
     pub fn add_solution(
         &mut self,
-        solution: v1::State,
+        solution: v1::Solution,
         annotations: SolutionAnnotations,
     ) -> Result<StoredDescriptor<'reg>> {
         self.add_layer_bytes(
@@ -1041,6 +1041,38 @@ mod tests {
             )?;
             builder.commit()?;
         }
+        Ok(())
+    }
+
+    #[test]
+    fn add_solution_stores_v1_solution_blob() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let registry = LocalRegistry::open(dir.path())?;
+        let mut builder = ArtifactDraft::with_registry(&registry, test_image_name("solution")?);
+        #[allow(deprecated)]
+        let solution = v1::Solution {
+            state: Some(v1::State {
+                entries: HashMap::from([(1, 1.0)]),
+            }),
+            objective: 1.0,
+            decision_variables: Vec::new(),
+            evaluated_constraints: Vec::new(),
+            evaluated_named_functions: Vec::new(),
+            feasible: true,
+            feasible_relaxed: Some(true),
+            feasible_unrelaxed: true,
+            optimality: v1::Optimality::Optimal as i32,
+            relaxation: v1::Relaxation::Unspecified as i32,
+            sense: v1::instance::Sense::Minimize as i32,
+            format_version: crate::CURRENT_FORMAT_VERSION,
+        };
+
+        let descriptor = builder.add_solution(solution.clone(), SolutionAnnotations::default())?;
+        assert_eq!(descriptor.media_type(), &media_types::v1_solution());
+
+        let blob = registry.get_blob(&descriptor)?;
+        let decoded = v1::Solution::decode(blob.as_slice())?;
+        assert_eq!(decoded, solution);
         Ok(())
     }
 
