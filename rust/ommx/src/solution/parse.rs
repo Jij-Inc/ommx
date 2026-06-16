@@ -242,7 +242,7 @@ impl From<Solution> for crate::v1::Solution {
             sense,
             format_version: crate::CURRENT_FORMAT_VERSION,
             metadata: solution.metadata,
-            annotations: solution.annotations,
+            annotations: crate::protobuf_extension_annotations(solution.annotations),
         }
     }
 }
@@ -267,6 +267,35 @@ mod tests {
         └─ommx.v1.Solution[annotations]
         Annotation key `org.ommx.v1.solution.solver` is reserved for OMMX metadata and cannot be stored in extension annotations.
         "###);
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn test_solution_to_bytes_filters_reserved_annotation_key() {
+        let mut solution: Solution = v1::Solution {
+            state: Some(v1::State::default()),
+            feasible: true,
+            feasible_relaxed: Some(true),
+            feasible_unrelaxed: true,
+            optimality: v1::Optimality::Optimal as i32,
+            relaxation: v1::Relaxation::Unspecified as i32,
+            ..Default::default()
+        }
+        .parse(&())
+        .unwrap();
+        let reserved_key = format!("{}.solver", crate::annotation_keys::SOLUTION_NAMESPACE);
+        solution.annotations = std::collections::HashMap::from([
+            (reserved_key.clone(), "invalid extension solver".to_string()),
+            ("org.example.owner".to_string(), "domain".to_string()),
+        ]);
+
+        let restored = Solution::from_bytes(&solution.to_bytes()).unwrap();
+
+        assert!(!restored.annotations.contains_key(&reserved_key));
+        assert_eq!(
+            restored.annotations.get("org.example.owner"),
+            Some(&"domain".to_string())
+        );
     }
 
     #[test]

@@ -336,7 +336,7 @@ impl From<Instance> for v1::Instance {
             description: value.description,
             constraint_hints: None,
             format_version: crate::CURRENT_FORMAT_VERSION,
-            annotations: value.annotations,
+            annotations: crate::protobuf_extension_annotations(value.annotations),
         }
     }
 }
@@ -579,7 +579,7 @@ impl From<ParametricInstance> for v1::ParametricInstance {
                 .collect(),
             constraint_hints: None,
             format_version: crate::CURRENT_FORMAT_VERSION,
-            annotations,
+            annotations: crate::protobuf_extension_annotations(annotations),
         }
     }
 }
@@ -635,6 +635,49 @@ mod tests {
         └─ommx.v1.ParametricInstance[annotations]
         Annotation key `org.ommx.v1.parametric-instance.title` is reserved for OMMX metadata and cannot be stored in extension annotations.
         "###);
+    }
+
+    #[test]
+    fn test_instance_to_bytes_filters_reserved_annotation_key() {
+        let mut instance = Instance::default();
+        instance.annotations = HashMap::from([
+            (
+                crate::annotation_keys::INSTANCE_TITLE.to_string(),
+                "invalid extension title".to_string(),
+            ),
+            ("org.example.owner".to_string(), "domain".to_string()),
+        ]);
+
+        let restored = Instance::from_bytes(&instance.to_bytes()).unwrap();
+
+        assert!(!restored
+            .annotations
+            .contains_key(crate::annotation_keys::INSTANCE_TITLE));
+        assert_eq!(
+            restored.annotations.get("org.example.owner"),
+            Some(&"domain".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parametric_instance_to_bytes_filters_reserved_annotation_key() {
+        let mut instance: crate::ParametricInstance = Instance::default().into();
+        let reserved_key = format!(
+            "{}.title",
+            crate::annotation_keys::PARAMETRIC_INSTANCE_NAMESPACE
+        );
+        instance.annotations = HashMap::from([
+            (reserved_key.clone(), "invalid extension title".to_string()),
+            ("org.example.owner".to_string(), "domain".to_string()),
+        ]);
+
+        let restored = crate::ParametricInstance::from_bytes(&instance.to_bytes()).unwrap();
+
+        assert!(!restored.annotations.contains_key(&reserved_key));
+        assert_eq!(
+            restored.annotations.get("org.example.owner"),
+            Some(&"domain".to_string())
+        );
     }
 
     #[test]

@@ -63,6 +63,18 @@ fn replace_extension_annotations(
     copy_extension_annotations(target, source);
 }
 
+/// Crate-internal protobuf serializers use this to keep v1 extension maps free
+/// of OMMX-reserved metadata keys even if a domain object's raw annotation map
+/// was mutated directly.
+pub(crate) fn protobuf_extension_annotations(
+    annotations: HashMap<String, String>,
+) -> HashMap<String, String> {
+    annotations
+        .into_iter()
+        .filter(|(key, _)| is_extension_annotation(key))
+        .collect()
+}
+
 fn description_mut(
     description: &mut Option<crate::v1::instance::Description>,
 ) -> &mut crate::v1::instance::Description {

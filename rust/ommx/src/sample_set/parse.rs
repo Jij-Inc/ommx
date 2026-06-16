@@ -212,7 +212,7 @@ impl From<SampleSet> for crate::v1::SampleSet {
             sense,
             format_version: crate::CURRENT_FORMAT_VERSION,
             metadata: sample_set.metadata,
-            annotations: sample_set.annotations,
+            annotations: crate::protobuf_extension_annotations(sample_set.annotations),
             ..Default::default()
         }
     }
@@ -238,6 +238,35 @@ mod tests {
         └─ommx.v1.SampleSet[annotations]
         Annotation key `org.ommx.v1.sample-set.solver` is reserved for OMMX metadata and cannot be stored in extension annotations.
         "###);
+    }
+
+    #[test]
+    fn test_sample_set_to_bytes_filters_reserved_annotation_key() {
+        let mut sample_set: SampleSet = v1::SampleSet {
+            objectives: Some(v1::SampledValues {
+                entries: vec![v1::sampled_values::SampledValuesEntry {
+                    ids: vec![0],
+                    value: 1.0,
+                }],
+            }),
+            sense: v1::instance::Sense::Minimize as i32,
+            ..Default::default()
+        }
+        .parse(&())
+        .unwrap();
+        let reserved_key = format!("{}.solver", crate::annotation_keys::SAMPLE_SET_NAMESPACE);
+        sample_set.annotations = std::collections::HashMap::from([
+            (reserved_key.clone(), "invalid extension solver".to_string()),
+            ("org.example.owner".to_string(), "domain".to_string()),
+        ]);
+
+        let restored = SampleSet::from_bytes(&sample_set.to_bytes()).unwrap();
+
+        assert!(!restored.annotations.contains_key(&reserved_key));
+        assert_eq!(
+            restored.annotations.get("org.example.owner"),
+            Some(&"domain".to_string())
+        );
     }
 
     #[test]
