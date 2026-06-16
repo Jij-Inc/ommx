@@ -1,4 +1,15 @@
-from .adapter import OMMXHighsAdapter
+from .adapter import (
+    HighsDiagnosticsAnalyzer,
+    HighsProgressSnapshot,
+    HighsTerminationReport,
+    OMMXHighsAdapter,
+)
 from .exception import OMMXHighsAdapterError
 
-__all__ = ["OMMXHighsAdapter", "OMMXHighsAdapterError"]
+__all__ = [
+    "HighsDiagnosticsAnalyzer",
+    "HighsProgressSnapshot",
+    "HighsTerminationReport",
+    "OMMXHighsAdapter",
+    "OMMXHighsAdapterError",
+]
