@@ -77,12 +77,42 @@ For the complete member lists, see the API Reference for
 {class}`~ommx_pyscipopt_adapter.SCIPTerminationReport`, and
 {class}`~ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer`.
 
+## Record Diagnostics with the HiGHS Adapter
+
+The HiGHS Adapter records a termination report when you pass a
+{class}`~ommx.adapter.DiagnosticCollector` to `solve()`. Read that data through
+{class}`~ommx_highs_adapter.HighsDiagnosticsAnalyzer`.
+
+```python
+from ommx import adapter
+from ommx_highs_adapter import OMMXHighsAdapter, HighsDiagnosticsAnalyzer
+
+diag = adapter.DiagnosticCollector()
+solution = OMMXHighsAdapter.solve(instance, diagnostics=diag)
+
+analysis = HighsDiagnosticsAnalyzer(diag.diagnostics)
+
+print(analysis.dual_bound)
+print(analysis.gap)
+print(analysis.termination_result)
+```
+
+{class}`~ommx_highs_adapter.HighsTerminationReport` is recorded after
+`model.run()` finishes and before the HiGHS model is decoded back into an OMMX
+Solution. It includes fields such as `status`, `objective_value`,
+`mip_dual_bound`, `mip_gap`, `mip_node_count`, iteration counts, feasibility
+violation summaries, runtime, and HiGHS version metadata.
+
+`dual_bound`, `gap`, and `node_count` on
+{class}`~ommx_highs_adapter.HighsDiagnosticsAnalyzer` are aliases for the HiGHS
+MIP fields `mip_dual_bound`, `mip_gap`, and `mip_node_count`.
+
 ### Failure Handling
 
 Direct collection is useful when OMMX Solution decoding fails. The PySCIPOpt
-Adapter records the termination report before decoding, so the collector can
-still contain the final SCIP status and bounds when the solve raises an adapter
-exception such as {exc}`~ommx.adapter.InfeasibleDetected` or
+and HiGHS Adapters record the termination report before decoding, so the
+collector can still contain the final solver status and bounds when the solve
+raises an adapter exception such as {exc}`~ommx.adapter.InfeasibleDetected` or
 {exc}`~ommx.adapter.UnboundedDetected`.
 
 ```python

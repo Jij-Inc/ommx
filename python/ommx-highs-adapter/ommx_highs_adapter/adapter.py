@@ -1,3 +1,8 @@
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass, fields
+from typing import Any, Iterable, Mapping, cast
+
 import highspy
 import numpy as np
 
@@ -15,6 +20,219 @@ from ommx.adapter import (
 from .exception import OMMXHighsAdapterError
 
 _tracer = trace.get_tracer("ommx.adapter.highs")
+
+
+@dataclass(frozen=True, slots=True)
+class HighsTerminationReport:
+    """HiGHS-side termination summary recorded after ``model.run()``.
+
+    The HiGHS adapter records this report before decoding the optimized HiGHS
+    model back into an OMMX solution. It is therefore available even when
+    decoding raises an adapter exception such as infeasible or unbounded
+    detection.
+    """
+
+    status: str
+    """HiGHS model status, such as ``"Optimal"`` or ``"Infeasible"``."""
+
+    objective_value: float | None
+    """Objective value reported by HiGHS, or ``None`` when no objective is valid."""
+
+    mip_dual_bound: float
+    """MIP dual bound reported by ``HighsInfo.mip_dual_bound``."""
+
+    mip_gap: float
+    """MIP relative gap reported by ``HighsInfo.mip_gap``."""
+
+    mip_node_count: int
+    """Number of MIP branch-and-bound nodes processed by HiGHS."""
+
+    simplex_iteration_count: int
+    """Number of simplex iterations."""
+
+    ipm_iteration_count: int
+    """Number of interior-point iterations."""
+
+    crossover_iteration_count: int
+    """Number of crossover iterations after interior-point optimization."""
+
+    pdlp_iteration_count: int
+    """Number of PDLP iterations."""
+
+    primal_dual_integral: float
+    """HiGHS primal-dual integral."""
+
+    primal_solution_status: int
+    """HiGHS primal solution status code."""
+
+    dual_solution_status: int
+    """HiGHS dual solution status code."""
+
+    max_integrality_violation: float
+    """Maximum integrality violation in the final solution."""
+
+    max_primal_infeasibility: float
+    """Maximum primal infeasibility in the final solution."""
+
+    max_dual_infeasibility: float
+    """Maximum dual infeasibility in the final solution."""
+
+    run_time_sec: float
+    """HiGHS runtime in seconds."""
+
+    highs_version: str
+    """HiGHS version used through highspy."""
+
+    highs_githash: str
+    """HiGHS git hash reported by highspy."""
+
+    @classmethod
+    def from_model(cls, model: highspy.Highs) -> HighsTerminationReport:
+        status = model.getModelStatus()
+        status_name = model.modelStatusToString(status)
+        if status == highspy.HighsModelStatus.kNotset:
+            raise OMMXHighsAdapterError(
+                f"The model may not be optimized. [status: {status_name}]"
+            )
+
+        info = model.getInfo()
+        objective_value = None
+        if status not in {
+            highspy.HighsModelStatus.kInfeasible,
+            highspy.HighsModelStatus.kUnbounded,
+            highspy.HighsModelStatus.kUnboundedOrInfeasible,
+            highspy.HighsModelStatus.kModelError,
+            highspy.HighsModelStatus.kPresolveError,
+            highspy.HighsModelStatus.kSolveError,
+            highspy.HighsModelStatus.kPostsolveError,
+            highspy.HighsModelStatus.kLoadError,
+            highspy.HighsModelStatus.kNotset,
+        }:
+            objective_value = info.objective_function_value
+
+        return cls(
+            status=status_name,
+            objective_value=objective_value,
+            mip_dual_bound=info.mip_dual_bound,
+            mip_gap=info.mip_gap,
+            mip_node_count=int(info.mip_node_count),
+            simplex_iteration_count=int(info.simplex_iteration_count),
+            ipm_iteration_count=int(info.ipm_iteration_count),
+            crossover_iteration_count=int(info.crossover_iteration_count),
+            pdlp_iteration_count=int(info.pdlp_iteration_count),
+            primal_dual_integral=float(getattr(info, "primal_dual_integral")),
+            primal_solution_status=int(info.primal_solution_status),
+            dual_solution_status=int(info.dual_solution_status),
+            max_integrality_violation=info.max_integrality_violation,
+            max_primal_infeasibility=info.max_primal_infeasibility,
+            max_dual_infeasibility=info.max_dual_infeasibility,
+            run_time_sec=model.getRunTime(),
+            highs_version=model.version(),
+            highs_githash=model.githash(),
+        )
+
+
+class HighsDiagnosticsAnalyzer:
+    """Post-processor for HiGHS diagnostics.
+
+    The analyzer accepts either typed diagnostics collected by
+    :class:`ommx.adapter.DiagnosticCollector` or dictionaries loaded from
+    :attr:`ommx.experiment.Solve.diagnostics`.
+    """
+
+    _termination_result: dict[str, object] | None
+
+    def __init__(self, diagnostics: Iterable[Any]) -> None:
+        termination_results: list[dict[str, object]] = []
+
+        for diagnostic in diagnostics:
+            if (result := _as_termination_result(diagnostic)) is not None:
+                termination_results.append(result)
+
+        self._termination_result = (
+            termination_results[-1] if termination_results else None
+        )
+
+    @property
+    def termination_result(self) -> dict[str, object] | None:
+        """Return the terminal HiGHS report as one dictionary, if present."""
+        if self._termination_result is None:
+            return None
+        return dict(self._termination_result)
+
+    @property
+    def status(self) -> str | None:
+        """Return the terminal HiGHS model status, if present."""
+        return cast(str | None, self._termination_value("status"))
+
+    @property
+    def objective_value(self) -> float | None:
+        """Return the terminal objective value, if present."""
+        return cast(float | None, self._termination_value("objective_value"))
+
+    @property
+    def mip_dual_bound(self) -> float | None:
+        """Return the terminal HiGHS MIP dual bound, if present."""
+        return cast(float | None, self._termination_value("mip_dual_bound"))
+
+    @property
+    def dual_bound(self) -> float | None:
+        """Alias for :attr:`mip_dual_bound`."""
+        return self.mip_dual_bound
+
+    @property
+    def mip_gap(self) -> float | None:
+        """Return the terminal HiGHS MIP gap, if present."""
+        return cast(float | None, self._termination_value("mip_gap"))
+
+    @property
+    def gap(self) -> float | None:
+        """Alias for :attr:`mip_gap`."""
+        return self.mip_gap
+
+    @property
+    def mip_node_count(self) -> int | None:
+        """Return the terminal HiGHS MIP node count, if present."""
+        return cast(int | None, self._termination_value("mip_node_count"))
+
+    @property
+    def node_count(self) -> int | None:
+        """Alias for :attr:`mip_node_count`."""
+        return self.mip_node_count
+
+    def _termination_value(self, column: str) -> object | None:
+        if self._termination_result is None:
+            return None
+        return self._termination_result[column]
+
+
+def _as_termination_result(diagnostic: Any) -> dict[str, object] | None:
+    if isinstance(diagnostic, HighsTerminationReport):
+        return cast(dict[str, object], asdict(diagnostic))
+    if not isinstance(diagnostic, Mapping):
+        return None
+    if not _has_dataclass_fields(diagnostic, HighsTerminationReport):
+        return None
+    return _select_dataclass_fields(diagnostic, HighsTerminationReport)
+
+
+def _dataclass_field_names(dataclass_type: type[Any]) -> list[str]:
+    return [field.name for field in fields(dataclass_type)]
+
+
+def _has_dataclass_fields(
+    diagnostic: Mapping[Any, Any], dataclass_type: type[Any]
+) -> bool:
+    return set(_dataclass_field_names(dataclass_type)) <= diagnostic.keys()
+
+
+def _select_dataclass_fields(
+    diagnostic: Mapping[Any, Any], dataclass_type: type[Any]
+) -> dict[str, object]:
+    return {
+        name: cast(object, diagnostic[name])
+        for name in _dataclass_field_names(dataclass_type)
+    }
 
 
 class OMMXHighsAdapter(SolverAdapter):
@@ -316,13 +534,14 @@ class OMMXHighsAdapter(SolverAdapter):
         #     ...
         # ommx.adapter.UnboundedDetected: Model was unbounded
         # ````
-        _ = diagnostics
         with _tracer.start_as_current_span("solve") as span:
             span.set_attribute("adapter", f"{cls.__module__}.{cls.__qualname__}")
             adapter = cls(ommx_instance, verbose=verbose)
             model = adapter.solver_input
             with _tracer.start_as_current_span("call"):
                 model.run()
+            if diagnostics is not None:
+                diagnostics.record(HighsTerminationReport.from_model(model))
             return adapter.decode(model)
 
     @property

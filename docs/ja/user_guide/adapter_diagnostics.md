@@ -71,12 +71,41 @@ progress snapshot は callback 時点の観測値です。SCIP は `BESTSOLFOUND
 {class}`~ommx_pyscipopt_adapter.SCIPTerminationReport`、
 {class}`~ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer` を参照してください。
 
+## HiGHS で diagnostics を記録する
+
+HiGHS Adapter は、`solve()` に {class}`~ommx.adapter.DiagnosticCollector` を渡すと
+termination report を記録します。通常は
+{class}`~ommx_highs_adapter.HighsDiagnosticsAnalyzer` を通して読みます。
+
+```python
+from ommx import adapter
+from ommx_highs_adapter import OMMXHighsAdapter, HighsDiagnosticsAnalyzer
+
+diag = adapter.DiagnosticCollector()
+solution = OMMXHighsAdapter.solve(instance, diagnostics=diag)
+
+analysis = HighsDiagnosticsAnalyzer(diag.diagnostics)
+
+print(analysis.dual_bound)
+print(analysis.gap)
+print(analysis.termination_result)
+```
+
+{class}`~ommx_highs_adapter.HighsTerminationReport` は、`model.run()` が終了した後、
+HiGHS model を OMMX Solution に decode する前に記録される最終 report です。
+`status`、`objective_value`、`mip_dual_bound`、`mip_gap`、`mip_node_count`、
+iteration count、feasibility violation summary、runtime、HiGHS version metadata などが含まれます。
+
+{class}`~ommx_highs_adapter.HighsDiagnosticsAnalyzer` の `dual_bound`、`gap`、
+`node_count` は、それぞれ HiGHS の MIP field である `mip_dual_bound`、`mip_gap`、
+`mip_node_count` への alias です。
+
 ### 失敗時の処理
 
-直接取得は、OMMX Solution への decode が失敗する場合にも有用です。PySCIPOpt Adapter は
-decode の前に termination report を記録するため、{exc}`~ommx.adapter.InfeasibleDetected` や
-{exc}`~ommx.adapter.UnboundedDetected` などの adapter exception が発生しても、collector には
-SCIP の最終 status や bound が残ります。
+直接取得は、OMMX Solution への decode が失敗する場合にも有用です。PySCIPOpt Adapter と
+HiGHS Adapter は decode の前に termination report を記録するため、
+{exc}`~ommx.adapter.InfeasibleDetected` や {exc}`~ommx.adapter.UnboundedDetected` などの
+adapter exception が発生しても、collector には solver の最終 status や bound が残ります。
 
 ```python
 from ommx.adapter import DiagnosticCollector, UnboundedDetected
