@@ -21,8 +21,7 @@ fn main() -> Result<()> {
         )
         .init();
 
-    let lp: ommx::Instance = random_deterministic(InstanceParameters::default_lp());
-    let mut lp: ommx::v1::Instance = lp.into();
+    let mut lp: ommx::Instance = random_deterministic(InstanceParameters::default_lp());
 
     // "data" directory is at the root of the repository
     let manifest_root: &Path = env!("CARGO_MANIFEST_DIR").as_ref();
@@ -45,11 +44,10 @@ fn main() -> Result<()> {
     ))?;
 
     println!("{:>12} {}", "New Artifact".blue().bold(), image_name);
-    lp.description = Some(ommx::v1::instance::Description {
-        name: Some("random_lp".to_string()),
-        created: Some(chrono::Local::now().to_rfc3339()),
-        ..Default::default()
-    });
+    let mut description = ommx::v1::instance::Description::default();
+    description.name = Some("random_lp".to_string());
+    description.created = Some(chrono::Local::now().to_rfc3339());
+    lp.description = Some(description);
 
     let mut builder = ArtifactDraft::new(image_name)?;
     builder.add_instance(lp)?;
