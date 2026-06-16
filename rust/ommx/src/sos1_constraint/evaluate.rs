@@ -1,6 +1,18 @@
 use super::*;
 use crate::{ATol, Evaluate, Propagate, PropagateOutcome, VariableIDSet};
 
+fn ensure_sos1_value_is_finite(var_id: VariableID, value: f64) -> crate::Result<()> {
+    if value.is_finite() {
+        Ok(())
+    } else {
+        crate::bail!(
+            "Variable {:?} in SOS1 constraint must be finite (value={})",
+            var_id,
+            value
+        );
+    }
+}
+
 impl Propagate for Sos1Constraint<Created> {
     type Transformed = std::convert::Infallible;
 
@@ -18,6 +30,7 @@ impl Propagate for Sos1Constraint<Created> {
                 continue;
             };
 
+            ensure_sos1_value_is_finite(var_id, value)?;
             if value.abs() < *atol {
                 // Variable is ~0, removed from set
             } else {
@@ -134,6 +147,7 @@ fn check_sos1(
             )
         })?;
 
+        ensure_sos1_value_is_finite(var_id, *value)?;
         if value.abs() >= *atol {
             // Variable is non-zero
             if active.is_some() {
@@ -187,6 +201,15 @@ mod tests {
         let result = c.evaluate(&state, ATol::default()).unwrap();
         assert!(!result.stage.feasible);
         assert_eq!(result.stage.active_variable, None);
+    }
+
+    #[test]
+    fn test_evaluate_rejects_non_finite_value() {
+        let c = make_sos1(1, &[1, 2, 3]);
+        let state = crate::v1::State::from(HashMap::from([(1, f64::NAN), (2, 0.0), (3, 0.0)]));
+
+        let err = c.evaluate(&state, ATol::default()).unwrap_err();
+        assert!(err.to_string().contains("must be finite"));
     }
 
     #[test]
@@ -309,6 +332,15 @@ mod tests {
         let state = crate::v1::State::from(HashMap::from([(1, 1.0), (2, 2.0)]));
         let result = c.propagate(&state, ATol::default());
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_propagate_rejects_non_finite_value() {
+        let c = make_sos1(1, &[1, 2, 3]);
+        let state = crate::v1::State::from(HashMap::from([(1, f64::INFINITY)]));
+
+        let err = c.propagate(&state, ATol::default()).unwrap_err();
+        assert!(err.to_string().contains("must be finite"));
     }
 
     #[test]

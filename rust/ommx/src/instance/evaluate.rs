@@ -6,6 +6,30 @@ use crate::{
 };
 use std::collections::BTreeMap;
 
+fn ensure_state_value_is_finite(var_id: u64, value: f64) -> Result<()> {
+    if !value.is_finite() {
+        crate::bail!(
+            { var_id, value },
+            "state value for variable ID={var_id} must be finite (value={value})",
+        );
+    }
+    Ok(())
+}
+
+fn ensure_instance_value_is_finite(var_id: VariableID, value: f64) -> Result<()> {
+    if !value.is_finite() {
+        crate::bail!(
+            { var_id = ?var_id, value },
+            "instance value for variable {var_id:?} must be finite (value={value})",
+        );
+    }
+    Ok(())
+}
+
+fn values_are_consistent(left: f64, right: f64, atol: ATol) -> bool {
+    left.is_finite() && right.is_finite() && (left - right).abs() <= *atol
+}
+
 /// Merge additional variable fixings from propagation into `expanded` state.
 ///
 /// Returns `Err` if any fixing conflicts with an existing value in `expanded`
@@ -18,8 +42,10 @@ fn merge_state(
     changed: &mut bool,
 ) -> Result<()> {
     for (var_id, value) in additional.entries {
+        ensure_state_value_is_finite(var_id, value)?;
         if let Some(&existing) = expanded.entries.get(&var_id) {
-            if (existing - value).abs() > *atol {
+            ensure_state_value_is_finite(var_id, existing)?;
+            if !values_are_consistent(existing, value, atol) {
                 return Err(crate::error!(
                     "Conflicting variable fixings for ID={var_id}: \
                      existing={existing}, new={value}"
@@ -62,13 +88,18 @@ impl StatePopulationPlan<'_> {
             );
         }
 
+        for (&id, &value) in &state.entries {
+            ensure_state_value_is_finite(id, value)?;
+        }
+
         // Bound and kind checking is intentionally left to Solution::feasible().
         for (id, value) in &self.fixed {
+            ensure_instance_value_is_finite(*id, *value)?;
             use std::collections::hash_map::Entry;
             match state.entries.entry(id.into_inner()) {
                 Entry::Occupied(entry) => {
-                    if (entry.get() - value).abs() > atol {
-                        let state_value = *entry.get();
+                    let state_value = *entry.get();
+                    if !values_are_consistent(state_value, *value, atol) {
                         let instance_value = *value;
                         crate::bail!(
                             { id = ?id, state_value, instance_value },
@@ -100,12 +131,25 @@ impl StatePopulationPlan<'_> {
             let value = f.evaluate(&state, atol).inspect_err(|e| {
                 tracing::error!(?id, error = %e, "failed to evaluate dependent variable");
             })?;
-            if let Some(v) = state.entries.insert(id.into_inner(), value) {
-                if (v - value).abs() > atol {
-                    crate::bail!(
-                        { id = ?id, state_value = v, instance_value = value },
-                        "state value for variable {id:?} is inconsistent with instance (state={v}, instance={value})",
-                    );
+            if !value.is_finite() {
+                crate::bail!(
+                    { id = ?id, value },
+                    "dependent variable {id:?} evaluated to non-finite value: {value}",
+                );
+            }
+            use std::collections::hash_map::Entry;
+            match state.entries.entry(id.into_inner()) {
+                Entry::Occupied(entry) => {
+                    let state_value = *entry.get();
+                    if !values_are_consistent(state_value, value, atol) {
+                        crate::bail!(
+                            { id = ?id, state_value, instance_value = value },
+                            "state value for variable {id:?} is inconsistent with instance (state={state_value}, instance={value})",
+                        );
+                    }
+                }
+                Entry::Vacant(entry) => {
+                    entry.insert(value);
                 }
             }
         }
@@ -470,6 +514,86 @@ mod tests {
             let s2 = instance.evaluate(&v, ATol::default()).unwrap();
             prop_assert!(s1.state().abs_diff_eq(&s2.state(), ATol::default()));
         }
+    }
+
+    #[test]
+    fn test_populate_state_rejects_non_finite_fixed_value_from_state() {
+        let mut x2 = crate::DecisionVariable::continuous(VariableID::from(2));
+        x2.substitute(3.0, ATol::default()).unwrap();
+        let decision_variables = BTreeMap::from([
+            (
+                VariableID::from(1),
+                crate::DecisionVariable::continuous(VariableID::from(1)),
+            ),
+            (VariableID::from(2), x2),
+        ]);
+        let instance = Instance::new(
+            Sense::Minimize,
+            Function::from(linear!(1)),
+            decision_variables,
+            BTreeMap::new(),
+        )
+        .unwrap();
+        let state = v1::State::from(HashMap::from([(1, 1.0), (2, f64::NAN)]));
+
+        let err = instance.populate_state(state, ATol::default()).unwrap_err();
+        assert!(err.to_string().contains("must be finite"));
+    }
+
+    #[test]
+    fn test_populate_state_rejects_non_finite_existing_dependent_value() {
+        let decision_variables = BTreeMap::from([
+            (
+                VariableID::from(1),
+                crate::DecisionVariable::continuous(VariableID::from(1)),
+            ),
+            (
+                VariableID::from(10),
+                crate::DecisionVariable::continuous(VariableID::from(10)),
+            ),
+        ]);
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            Function::from(linear!(1)),
+            decision_variables,
+            BTreeMap::new(),
+        )
+        .unwrap();
+        instance.decision_variable_dependency = crate::assign! {
+            10 <- linear!(1)
+        };
+        let state = v1::State::from(HashMap::from([(1, 1.0), (10, f64::INFINITY)]));
+
+        let err = instance.populate_state(state, ATol::default()).unwrap_err();
+        assert!(err.to_string().contains("must be finite"));
+    }
+
+    #[test]
+    fn test_populate_state_rejects_non_finite_dependent_evaluation() {
+        let decision_variables = BTreeMap::from([
+            (
+                VariableID::from(1),
+                crate::DecisionVariable::continuous(VariableID::from(1)),
+            ),
+            (
+                VariableID::from(10),
+                crate::DecisionVariable::continuous(VariableID::from(10)),
+            ),
+        ]);
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            Function::from(linear!(1)),
+            decision_variables,
+            BTreeMap::new(),
+        )
+        .unwrap();
+        instance.decision_variable_dependency = crate::assign! {
+            10 <- coeff!(f64::MAX) * linear!(1)
+        };
+        let state = v1::State::from(HashMap::from([(1, f64::MAX)]));
+
+        let err = instance.populate_state(state, ATol::default()).unwrap_err();
+        assert!(err.to_string().contains("evaluated to non-finite value"));
     }
 
     /// Test that named functions can reference fixed, dependent, and irrelevant variables
