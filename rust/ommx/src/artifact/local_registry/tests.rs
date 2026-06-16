@@ -1512,7 +1512,10 @@ fn new_test_local_artifact_builder<'reg>(
     let descriptor = builder.add_layer_bytes(
         MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
         layer_bytes.to_vec(),
-        HashMap::from([("org.ommx.v1.instance.title".to_string(), "demo".to_string())]),
+        HashMap::from([(
+            crate::annotation_keys::INSTANCE_TITLE.to_string(),
+            "demo".to_string(),
+        )]),
     )?;
     Ok((builder, descriptor.into()))
 }

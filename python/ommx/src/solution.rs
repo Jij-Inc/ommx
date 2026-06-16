@@ -14,16 +14,16 @@ use std::collections::BTreeSet;
 
 /// Idiomatic wrapper of `ommx.v1.Solution` protobuf message.
 ///
-/// This also contains annotations not contained in protobuf message, and will be stored in OMMX artifact.
+/// This also contains annotations persisted in the protobuf payload and mirrored
+/// to OMMX Artifact descriptors.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
 pub struct Solution {
     pub(crate) inner: ommx::Solution,
-    pub(crate) annotations: ommx::artifact::SolutionAnnotations,
 }
 
-crate::annotations::impl_solution_annotations!(Solution, "org.ommx.v1.solution");
+impl_solution_annotations!(Solution);
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
@@ -33,7 +33,6 @@ impl Solution {
         let _guard = crate::TRACING.attach_parent_context(bytes.py());
         Ok(Self {
             inner: ommx::Solution::from_bytes(bytes.as_bytes())?,
-            annotations: ommx::artifact::SolutionAnnotations::default(),
         })
     }
 

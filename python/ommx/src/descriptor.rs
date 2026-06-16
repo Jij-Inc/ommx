@@ -20,6 +20,10 @@ use std::collections::HashMap;
 pub struct PyDescriptor(Descriptor);
 
 impl PyDescriptor {
+    pub(crate) fn as_descriptor(&self) -> &Descriptor {
+        &self.0
+    }
+
     pub(crate) fn read_blob_from(&self, artifact: &LocalArtifactDyn) -> Result<Vec<u8>> {
         artifact.get_blob(&self.0)
     }

@@ -37,14 +37,18 @@ pub fn package(path: &Path) -> Result<()> {
         }
 
         tracing::info!("Loading: {name}");
-        let instance = match ommx::mps::parse(file) {
+        let mut instance = match ommx::mps::parse(file) {
             Ok(instance) => instance,
             Err(err) => {
                 tracing::error!("Skip: Failed to load '{name}' with error: {err}");
                 continue;
             }
         };
-        let expected_count = annotations.variables()?;
+        let expected_count = annotations
+            .get("org.ommx.v1.instance.variables")
+            .context("MIPLIB2017 metadata does not contain variable count")?
+            .parse::<usize>()
+            .context("Invalid MIPLIB2017 variable count metadata")?;
         let actual_count = instance.decision_variables().len();
         if actual_count != expected_count {
             tracing::error!(
@@ -54,11 +58,15 @@ pub fn package(path: &Path) -> Result<()> {
         }
 
         let mut annotations = annotations.clone();
-        annotations.set_created_now();
+        annotations.insert(
+            "org.ommx.v1.instance.created".to_string(),
+            chrono::Local::now().to_rfc3339(),
+        );
 
         let mut builder = ArtifactDraft::new(image_name)?;
         builder.add_source(&source_url);
-        builder.add_instance(instance.into(), annotations)?;
+        ommx::FlatAnnotations::replace_annotations(&mut instance, annotations);
+        builder.add_instance(instance)?;
         let _artifact = builder.commit()?;
         // Do not push here. Use `ommx push` command to upload the artifacts.
     }

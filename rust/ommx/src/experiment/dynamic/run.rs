@@ -1,21 +1,21 @@
 //! Dynamic-lifetime Run handle.
 
-use super::super::attachment::read_file_attachment;
+use super::super::logging::AttachmentLoggerStorage;
 use super::super::parameter::ParameterSet;
 use super::super::{
-    AttachmentLogger, AttachmentTable, FailedSolveRecord, FinishedSolveRecord, ParameterValue,
-    RunStatus, SolveStatus,
+    AttachmentTable, FailedSolveRecord, FinishedSolveRecord, ParameterValue, RunStatus, SolveStatus,
 };
 use super::{
-    bail_non_unsealed, lock_experiment_state, store_run_attachment_descriptor,
-    store_solve_payload_descriptor, store_trace_descriptor, ExperimentDyn, ExperimentDynLifecycle,
-    ExperimentDynState, RunEntryDyn, SolveEntryDyn,
+    bail_non_unsealed, ensure_unsealed_for_attachment_write, lock_experiment_state,
+    store_trace_descriptor, ExperimentDyn, ExperimentDynLifecycle, ExperimentDynState, RunEntryDyn,
+    SolveEntryDyn,
 };
+use crate::artifact::local_registry::LocalRegistry;
 use crate::artifact::media_types;
 use anyhow::{ensure, Result};
-use oci_spec::image::{Descriptor, MediaType};
+use oci_spec::image::Descriptor;
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use std::{collections::HashMap, path::Path};
 
 /// Runtime-owned Run handle.
 ///
@@ -122,48 +122,35 @@ impl RunDyn {
         ensure_reserved_solve_id(self.open()?, solve_id)?;
         let FinishedSolveRecord {
             input,
-            input_annotations,
             output,
-            output_annotations,
             adapter,
             adapter_options,
             diagnostics,
         } = record;
-        let (input, output, diagnostics) = {
-            let dyn_state = lock_experiment_state(&self.experiment_state);
-            let input = store_solve_payload_descriptor(
-                &dyn_state,
-                media_types::v1_instance(),
-                &input.to_bytes(),
-                input_annotations.into_inner(),
-            )?;
-            let output = store_solve_payload_descriptor(
-                &dyn_state,
-                media_types::v1_solution(),
-                &output.to_bytes(),
-                output_annotations.into_inner(),
-            )?;
-            let diagnostics = diagnostics.and_then(|diagnostic| {
-                match diagnostic.to_msgpack_bytes().and_then(|bytes| {
-                    store_solve_payload_descriptor(
-                        &dyn_state,
-                        media_types::diagnostic_msgpack(),
-                        &bytes,
-                        HashMap::new(),
-                    )
-                }) {
-                    Ok(descriptor) => Some(descriptor),
-                    Err(error) => {
-                        tracing::warn!(
-                            error = %error,
-                            "Failed to store Solve diagnostics; recording Solve without diagnostics"
-                        );
-                        None
-                    }
+        let registry_handle = self.registry_handle_for_attachment_write()?;
+        let registry = registry_handle.registry();
+        let input = Descriptor::from(registry.store_instance_layer(input)?);
+        let output = Descriptor::from(registry.store_solution_layer(output)?);
+        let diagnostics = diagnostics.and_then(|diagnostic| {
+            match diagnostic.to_msgpack_bytes().and_then(|bytes| {
+                let registry_handle = self.registry_handle_for_attachment_write()?;
+                let descriptor = registry_handle.registry().store_layer_blob(
+                    media_types::diagnostic_msgpack(),
+                    &bytes,
+                    HashMap::new(),
+                )?;
+                Ok(Descriptor::from(descriptor))
+            }) {
+                Ok(descriptor) => Some(descriptor),
+                Err(error) => {
+                    tracing::warn!(
+                        error = %error,
+                        "Failed to store Solve diagnostics; recording Solve without diagnostics"
+                    );
+                    None
                 }
-            });
-            (input, output, diagnostics)
-        };
+            }
+        });
         let state = self.open_mut()?;
         insert_solve(
             state,
@@ -201,7 +188,6 @@ impl RunDyn {
     ) -> Result<u64> {
         let FailedSolveRecord {
             input,
-            input_annotations,
             adapter,
             adapter_options,
             status,
@@ -212,35 +198,28 @@ impl RunDyn {
             "failed solve attempt status must not be finished"
         );
         ensure_reserved_solve_id(self.open()?, solve_id)?;
-        let (input, diagnostics) = {
-            let dyn_state = lock_experiment_state(&self.experiment_state);
-            let input = store_solve_payload_descriptor(
-                &dyn_state,
-                media_types::v1_instance(),
-                &input.to_bytes(),
-                input_annotations.into_inner(),
-            )?;
-            let diagnostics = diagnostics.and_then(|diagnostic| {
-                match diagnostic.to_msgpack_bytes().and_then(|bytes| {
-                    store_solve_payload_descriptor(
-                        &dyn_state,
-                        media_types::diagnostic_msgpack(),
-                        &bytes,
-                        HashMap::new(),
-                    )
-                }) {
-                    Ok(descriptor) => Some(descriptor),
-                    Err(error) => {
-                        tracing::warn!(
-                            error = %error,
-                            "Failed to store failed Solve diagnostics; recording Solve without diagnostics"
-                        );
-                        None
-                    }
+        let registry_handle = self.registry_handle_for_attachment_write()?;
+        let input = Descriptor::from(registry_handle.registry().store_instance_layer(input)?);
+        let diagnostics = diagnostics.and_then(|diagnostic| {
+            match diagnostic.to_msgpack_bytes().and_then(|bytes| {
+                let registry_handle = self.registry_handle_for_attachment_write()?;
+                let descriptor = registry_handle.registry().store_layer_blob(
+                    media_types::diagnostic_msgpack(),
+                    &bytes,
+                    HashMap::new(),
+                )?;
+                Ok(Descriptor::from(descriptor))
+            }) {
+                Ok(descriptor) => Some(descriptor),
+                Err(error) => {
+                    tracing::warn!(
+                        error = %error,
+                        "Failed to store failed Solve diagnostics; recording Solve without diagnostics"
+                    );
+                    None
                 }
-            });
-            (input, diagnostics)
-        };
+            }
+        });
         let state = self.open_mut()?;
         insert_solve(
             state,
@@ -371,62 +350,39 @@ impl RunDyn {
             .as_mut()
             .ok_or_else(|| anyhow::anyhow!("Run has already been finished"))
     }
+
+    fn registry_handle_for_attachment_write(&self) -> Result<crate::artifact::LocalRegistryHandle> {
+        let dyn_state = lock_experiment_state(&self.experiment_state);
+        ensure_unsealed_for_attachment_write(&dyn_state)?;
+        Ok(dyn_state.registry_handle.clone())
+    }
 }
 
-impl AttachmentLogger for &mut RunDyn {
-    fn log_attachment(
-        self,
-        name: &str,
-        media_type: MediaType,
-        bytes: impl AsRef<[u8]>,
-        annotations: HashMap<String, String>,
-    ) -> Result<()> {
-        if self.open()?.attachments.contains_key(name) {
-            crate::bail!("Attachment `{name}` already exists");
-        }
-        let descriptor = {
-            let dyn_state = lock_experiment_state(&self.experiment_state);
-            super::ensure_unsealed_for_attachment_write(&dyn_state)?;
-            let registry_handle = dyn_state.registry_handle.clone();
-            store_run_attachment_descriptor(
-                registry_handle.registry(),
-                media_type,
-                bytes.as_ref(),
-                annotations,
-            )?
-        };
-        self.open_mut()?
-            .attachments
-            .insert(name.to_string(), descriptor, None)?;
-        Ok(())
+impl AttachmentLoggerStorage for &mut RunDyn {
+    type Descriptor = oci_spec::image::Descriptor;
+
+    fn with_local_registry<R>(&self, f: impl FnOnce(&LocalRegistry) -> Result<R>) -> Result<R> {
+        let registry_handle = self.registry_handle_for_attachment_write()?;
+        f(registry_handle.registry())
     }
 
-    fn log_file(
-        self,
-        name: &str,
-        path: impl AsRef<Path>,
-        media_type: Option<MediaType>,
-        filename: Option<&str>,
-    ) -> Result<()> {
-        let (media_type, bytes, filename) = read_file_attachment(path, media_type, filename)?;
-        if self.open()?.attachments.contains_key(name) {
-            crate::bail!("Attachment `{name}` already exists");
-        }
-        let descriptor = {
+    fn with_attachment_table<R>(
+        &mut self,
+        f: impl FnOnce(&mut AttachmentTable<Self::Descriptor>) -> Result<R>,
+    ) -> Result<R> {
+        {
             let dyn_state = lock_experiment_state(&self.experiment_state);
-            super::ensure_unsealed_for_attachment_write(&dyn_state)?;
-            let registry_handle = dyn_state.registry_handle.clone();
-            store_run_attachment_descriptor(
-                registry_handle.registry(),
-                media_type,
-                bytes.as_ref(),
-                HashMap::new(),
-            )?
-        };
-        self.open_mut()?
-            .attachments
-            .insert(name.to_string(), descriptor, Some(filename))?;
-        Ok(())
+            ensure_unsealed_for_attachment_write(&dyn_state)?;
+        }
+        f(&mut self.open_mut()?.attachments)
+    }
+
+    fn descriptor_for_attachment_table(&self, descriptor: Descriptor) -> Result<Self::Descriptor> {
+        let registry_handle = self.registry_handle_for_attachment_write()?;
+        registry_handle
+            .registry()
+            .stored_descriptor(descriptor.clone())?;
+        Ok(descriptor)
     }
 }
 

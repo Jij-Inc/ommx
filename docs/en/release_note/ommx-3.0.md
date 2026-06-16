@@ -8,6 +8,26 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### ⚠ Protobuf-backed annotations and read-only annotation views ([#939](https://github.com/Jij-Inc/ommx/pull/939))
+
+Annotations on {class}`~ommx.v1.Instance`, {class}`~ommx.v1.ParametricInstance`, {class}`~ommx.v1.Solution`, and {class}`~ommx.v1.SampleSet` are now stored in the protobuf payload instead of living only in Python-side wrapper state or Artifact descriptors. `to_bytes()` / `from_bytes()` therefore preserve titles, licenses, solver metadata, and user extension annotations. When reading older Artifacts, descriptor-only annotations are still merged in, with protobuf metadata taking precedence if both locations define the same OMMX key.
+
+The `annotations` property is now a read-only `types.MappingProxyType[str, str]` projection. Mutating `obj.annotations[...]` or assigning `obj.annotations = {...}` now raises an error; update OMMX metadata through dedicated properties and update user annotations with `add_user_annotation`, `add_user_annotations`, or `replace_annotations`.
+
+```python
+from ommx.v1 import Instance
+
+instance = Instance.empty()
+instance.title = "portfolio"
+instance.add_user_annotation("owner", "analytics")
+
+restored = Instance.from_bytes(instance.to_bytes())
+assert restored.title == "portfolio"
+assert restored.get_user_annotation("owner") == "analytics"
+```
+
+{class}`~ommx.v1.Solution` and {class}`~ommx.v1.SampleSet` also expose process metadata through `instance`, `solver`, `parameters`, `start`, and `end`; those fields round-trip through both protobuf bytes and Artifacts.
+
 ## 3.0.0 Alpha 7
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0a7-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0a7)

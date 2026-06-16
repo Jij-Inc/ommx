@@ -18,8 +18,10 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 /// Optimization problem instance.
 ///
-/// Note that this class also contains annotations like {attr}`~ommx.v1.Instance.title` which are not contained in protobuf message but stored in OMMX artifact.
-/// These annotations are loaded from annotations while reading from OMMX artifact.
+/// This class also contains annotations like {attr}`~ommx.v1.Instance.title`.
+/// OMMX-defined annotations are stored in explicit protobuf fields, while
+/// user-defined annotations are stored in the protobuf annotation map and
+/// mirrored to OMMX Artifact descriptors.
 ///
 /// # Examples
 ///
@@ -64,10 +66,9 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 #[derive(Clone)]
 pub struct Instance {
     pub(crate) inner: ommx::Instance,
-    pub(crate) annotations: ommx::artifact::InstanceAnnotations,
 }
 
-crate::annotations::impl_instance_annotations!(Instance, "org.ommx.v1.instance");
+impl_instance_annotations!(Instance);
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
@@ -77,7 +78,6 @@ impl Instance {
         let _guard = crate::TRACING.attach_parent_context(py);
         Ok(Self {
             inner: ommx::Instance::from_bytes(bytes.as_bytes())?,
-            annotations: ommx::artifact::InstanceAnnotations::default(),
         })
     }
 
@@ -231,10 +231,7 @@ impl Instance {
             nf_meta.insert(id, m);
         }
 
-        Ok(Self {
-            inner,
-            annotations: ommx::artifact::InstanceAnnotations::default(),
-        })
+        Ok(Self { inner })
     }
 
     /// Create trivial empty instance of minimization with zero objective, no constraints, and no decision variables.
@@ -706,11 +703,7 @@ impl Instance {
 
     #[getter]
     pub fn description(&self) -> Option<InstanceDescription> {
-        // Convert Option<v1::instance::Description> to Option<InstanceDescription>
-        self.inner
-            .description
-            .as_ref()
-            .map(|desc| InstanceDescription(desc.clone()))
+        self.inner.description.clone().map(InstanceDescription)
     }
 
     #[getter]
@@ -725,8 +718,7 @@ impl Instance {
 
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let buf = self.inner.to_bytes();
-        PyBytes::new(py, &buf)
+        PyBytes::new(py, &self.inner.to_bytes())
     }
 
     /// Get the set of decision variable IDs used in the objective and remaining constraints.
@@ -907,7 +899,6 @@ impl Instance {
     pub fn as_parametric_instance(&self) -> ParametricInstance {
         ParametricInstance {
             inner: self.inner.clone().into(),
-            annotations: ommx::artifact::ParametricInstanceAnnotations::default(),
         }
     }
 
@@ -963,7 +954,6 @@ impl Instance {
         let parametric_instance = self.inner.clone().penalty_method()?;
         Ok(ParametricInstance {
             inner: parametric_instance,
-            annotations: ommx::artifact::ParametricInstanceAnnotations::default(),
         })
     }
 
@@ -1028,7 +1018,6 @@ impl Instance {
         let parametric_instance = self.inner.clone().uniform_penalty_method()?;
         Ok(ParametricInstance {
             inner: parametric_instance,
-            annotations: ommx::artifact::ParametricInstanceAnnotations::default(),
         })
     }
 
@@ -1088,10 +1077,7 @@ impl Instance {
             .inner
             .evaluate(&state.0, atol)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-        Ok(Solution {
-            inner: solution,
-            annotations: ommx::artifact::SolutionAnnotations::default(),
-        })
+        Ok(Solution { inner: solution })
     }
 
     /// Creates a new instance with specific decision variables fixed to given values.
@@ -1153,10 +1139,7 @@ impl Instance {
         new_inner
             .partial_evaluate(&state.0, atol)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-        Ok(Self {
-            inner: new_inner,
-            annotations: self.annotations.clone(),
-        })
+        Ok(Self { inner: new_inner })
     }
 
     #[pyo3(signature = (samples, *, atol=None))]
@@ -1173,7 +1156,6 @@ impl Instance {
         };
         Ok(SampleSet {
             inner: self.inner.evaluate_samples(&samples.0, atol)?,
-            annotations: ommx::artifact::SampleSetAnnotations::default(),
         })
     }
 
@@ -2506,10 +2488,7 @@ impl Instance {
     pub fn load_mps(py: Python<'_>, path: String) -> Result<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let instance = ommx::mps::load(path)?;
-        Ok(Self {
-            inner: instance,
-            annotations: ommx::artifact::InstanceAnnotations::default(),
-        })
+        Ok(Self { inner: instance })
     }
 
     #[pyo3(signature = (path, compress = true))]
@@ -2523,10 +2502,7 @@ impl Instance {
     pub fn load_qplib(py: Python<'_>, path: String) -> Result<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let instance = ommx::qplib::load(path)?;
-        Ok(Self {
-            inner: instance,
-            annotations: ommx::artifact::InstanceAnnotations::default(),
-        })
+        Ok(Self { inner: instance })
     }
 
     /// Generate folded stack format for memory profiling of this instance.
@@ -2779,18 +2755,24 @@ pub struct InstanceDescription(pub(crate) ommx::v1::instance::Description);
 #[pymethods]
 impl InstanceDescription {
     #[new]
-    #[pyo3(signature = (name = None, description = None, authors = None, created_by = None))]
+    #[pyo3(signature = (name = None, description = None, authors = None, created_by = None, created = None, license = None, dataset = None))]
     pub fn new(
         name: Option<String>,
         description: Option<String>,
         authors: Option<Vec<String>>,
         created_by: Option<String>,
+        created: Option<String>,
+        license: Option<String>,
+        dataset: Option<String>,
     ) -> Self {
         let mut desc = ommx::v1::instance::Description::default();
         desc.name = name;
         desc.description = description;
         desc.authors = authors.unwrap_or_default();
         desc.created_by = created_by;
+        desc.created = created;
+        desc.license = license;
+        desc.dataset = dataset;
         Self(desc)
     }
     #[getter]
@@ -2813,10 +2795,31 @@ impl InstanceDescription {
         self.0.created_by.clone()
     }
 
+    #[getter]
+    pub fn created(&self) -> Option<String> {
+        self.0.created.clone()
+    }
+
+    #[getter]
+    pub fn license(&self) -> Option<String> {
+        self.0.license.clone()
+    }
+
+    #[getter]
+    pub fn dataset(&self) -> Option<String> {
+        self.0.dataset.clone()
+    }
+
     fn __repr__(&self) -> String {
         format!(
-            "InstanceDescription(name={:?}, description={:?}, authors={:?}, created_by={:?})",
-            self.0.name, self.0.description, self.0.authors, self.0.created_by
+            "InstanceDescription(name={:?}, description={:?}, authors={:?}, created_by={:?}, created={:?}, license={:?}, dataset={:?})",
+            self.0.name,
+            self.0.description,
+            self.0.authors,
+            self.0.created_by,
+            self.0.created,
+            self.0.license,
+            self.0.dataset
         )
     }
 

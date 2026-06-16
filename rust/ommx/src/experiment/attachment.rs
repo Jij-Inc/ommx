@@ -1,16 +1,12 @@
 //! Experiment and run scoped Attachment descriptor helpers.
 
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
-use crate::artifact::{
-    media_types, InstanceAnnotations, ParametricInstanceAnnotations, SampleSetAnnotations,
-    SolutionAnnotations,
-};
 use crate::{Instance, ParametricInstance, SampleSet, Solution};
 use anyhow::{ensure, Context, Result};
 use oci_spec::image::MediaType;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::BTreeMap,
     fs,
     path::{Path, PathBuf},
 };
@@ -172,47 +168,26 @@ impl<'reg> AttachmentTable<StoredDescriptor<'reg>> {
         descriptor.registry().get_blob(descriptor)
     }
 
-    pub(crate) fn instance(&self, name: &str) -> Result<(Instance, InstanceAnnotations)> {
+    pub(crate) fn instance(&self, name: &str) -> Result<Instance> {
         let descriptor = self.attachment(name)?;
-        descriptor.ensure_media_type(&media_types::v1_instance())?;
-        let bytes = descriptor.registry().get_blob(descriptor)?;
-        Ok((
-            Instance::from_bytes(&bytes)?,
-            InstanceAnnotations::from_descriptor(descriptor),
-        ))
+        descriptor.registry().get_instance_layer(descriptor)
     }
 
-    pub(crate) fn parametric_instance(
-        &self,
-        name: &str,
-    ) -> Result<(ParametricInstance, ParametricInstanceAnnotations)> {
+    pub(crate) fn parametric_instance(&self, name: &str) -> Result<ParametricInstance> {
         let descriptor = self.attachment(name)?;
-        descriptor.ensure_media_type(&media_types::v1_parametric_instance())?;
-        let bytes = descriptor.registry().get_blob(descriptor)?;
-        Ok((
-            ParametricInstance::from_bytes(&bytes)?,
-            ParametricInstanceAnnotations::from_descriptor(descriptor),
-        ))
+        descriptor
+            .registry()
+            .get_parametric_instance_layer(descriptor)
     }
 
-    pub(crate) fn solution(&self, name: &str) -> Result<(Solution, SolutionAnnotations)> {
+    pub(crate) fn solution(&self, name: &str) -> Result<Solution> {
         let descriptor = self.attachment(name)?;
-        descriptor.ensure_media_type(&media_types::v1_solution())?;
-        let bytes = descriptor.registry().get_blob(descriptor)?;
-        Ok((
-            Solution::from_bytes(&bytes)?,
-            SolutionAnnotations::from_descriptor(descriptor),
-        ))
+        descriptor.registry().get_solution_layer(descriptor)
     }
 
-    pub(crate) fn sample_set(&self, name: &str) -> Result<(SampleSet, SampleSetAnnotations)> {
+    pub(crate) fn sample_set(&self, name: &str) -> Result<SampleSet> {
         let descriptor = self.attachment(name)?;
-        descriptor.ensure_media_type(&media_types::v1_sample_set())?;
-        let bytes = descriptor.registry().get_blob(descriptor)?;
-        Ok((
-            SampleSet::from_bytes(&bytes)?,
-            SampleSetAnnotations::from_descriptor(descriptor),
-        ))
+        descriptor.registry().get_sample_set_layer(descriptor)
     }
 
     pub(crate) fn write_attachment(
@@ -237,16 +212,6 @@ impl<'reg> AttachmentTable<StoredDescriptor<'reg>> {
 
 /// OCI layer media type for JSON attachment payloads.
 const JSON_MEDIA_TYPE: &str = "application/json";
-
-/// Write `bytes` to the registry and build the in-memory Attachment descriptor.
-pub(crate) fn store_attachment_descriptor<'reg>(
-    registry: &'reg LocalRegistry,
-    media_type: MediaType,
-    bytes: &[u8],
-    annotations: HashMap<String, String>,
-) -> Result<StoredDescriptor<'reg>> {
-    registry.store_layer_blob(media_type, bytes, annotations)
-}
 
 pub(crate) fn json_media_type() -> MediaType {
     MediaType::from(JSON_MEDIA_TYPE)

@@ -49,7 +49,6 @@
 //! then creates and stores the manifest blob and updates the registry
 //! ref.
 
-mod annotations;
 mod config;
 pub mod digest;
 mod image_ref;
@@ -61,7 +60,6 @@ mod push;
 #[cfg(feature = "remote-artifact")]
 mod remote_transport;
 mod save;
-pub use annotations::*;
 pub use config::*;
 pub use digest::sha256_digest;
 pub use image_ref::ImageRef;

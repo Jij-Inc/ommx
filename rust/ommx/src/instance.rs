@@ -42,7 +42,7 @@ use crate::{
     v1, AcyclicAssignments, Constraint, ConstraintID, DecisionVariable, Evaluate, Function,
     NamedFunction, VariableID, VariableIDSet,
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 /// A constraint type capability flag for non-standard constraint types.
 ///
@@ -193,6 +193,11 @@ pub struct Instance {
     // These fields are public since arbitrary values can be set without validation.
     pub parameters: Option<v1::Parameters>,
     pub description: Option<v1::instance::Description>,
+    /// User-defined or third-party extension annotations.
+    ///
+    /// OMMX-reserved metadata is represented by explicit fields such as
+    /// [`Self::description`].
+    pub annotations: HashMap<String, String>,
 }
 
 impl Instance {
@@ -542,6 +547,11 @@ pub struct ParametricInstance {
     // Optional fields for additional metadata.
     // These fields are public since arbitrary values can be set without validation.
     pub description: Option<v1::instance::Description>,
+    /// User-defined or third-party extension annotations.
+    ///
+    /// OMMX-reserved metadata is represented by explicit fields such as
+    /// [`Self::description`].
+    pub annotations: HashMap<String, String>,
 }
 
 impl ParametricInstance {

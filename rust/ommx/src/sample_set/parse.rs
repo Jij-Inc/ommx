@@ -9,6 +9,7 @@ impl Parse for crate::v1::SampleSet {
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v1.SampleSet";
         crate::parse::check_format_version(self.format_version, message)?;
+        crate::parse::validate_extension_annotations(&self.annotations, message)?;
 
         // Parse decision variables into BTreeMap and drain metadata into the SoA store
         let mut decision_variables = BTreeMap::new();
@@ -87,6 +88,9 @@ impl Parse for crate::v1::SampleSet {
             .sense(sense)
             .build()
             .map_err(crate::RawParseError::SampleSetError)?;
+        let mut sample_set = sample_set;
+        sample_set.metadata = self.metadata;
+        sample_set.annotations = self.annotations;
 
         // Check the consistency of feasibility maps from the original v1 data
         for (sample_id_u64, provided_feasible) in self.feasible {
@@ -207,6 +211,8 @@ impl From<SampleSet> for crate::v1::SampleSet {
             feasible,
             sense,
             format_version: crate::CURRENT_FORMAT_VERSION,
+            metadata: sample_set.metadata,
+            annotations: crate::protobuf_extension_annotations(sample_set.annotations),
             ..Default::default()
         }
     }
@@ -216,6 +222,52 @@ impl From<SampleSet> for crate::v1::SampleSet {
 mod tests {
     use super::*;
     use crate::{v1, Parse};
+
+    #[test]
+    fn test_sample_set_parse_rejects_reserved_annotation_key() {
+        let v1_sample_set = v1::SampleSet {
+            annotations: std::collections::HashMap::from([(
+                format!("{}.solver", crate::annotation_keys::SAMPLE_SET_NAMESPACE),
+                "bad".to_string(),
+            )]),
+            ..Default::default()
+        };
+        let result: Result<SampleSet, ParseError> = v1_sample_set.parse(&());
+        insta::assert_snapshot!(result.unwrap_err().to_string(), @r###"
+        Traceback for OMMX Message parse error:
+        └─ommx.v1.SampleSet[annotations]
+        Annotation key `org.ommx.v1.sample-set.solver` is reserved for OMMX metadata and cannot be stored in extension annotations.
+        "###);
+    }
+
+    #[test]
+    fn test_sample_set_to_bytes_filters_reserved_annotation_key() {
+        let mut sample_set: SampleSet = v1::SampleSet {
+            objectives: Some(v1::SampledValues {
+                entries: vec![v1::sampled_values::SampledValuesEntry {
+                    ids: vec![0],
+                    value: 1.0,
+                }],
+            }),
+            sense: v1::instance::Sense::Minimize as i32,
+            ..Default::default()
+        }
+        .parse(&())
+        .unwrap();
+        let reserved_key = format!("{}.solver", crate::annotation_keys::SAMPLE_SET_NAMESPACE);
+        sample_set.annotations = std::collections::HashMap::from([
+            (reserved_key.clone(), "invalid extension solver".to_string()),
+            ("org.example.owner".to_string(), "domain".to_string()),
+        ]);
+
+        let restored = SampleSet::from_bytes(&sample_set.to_bytes()).unwrap();
+
+        assert!(!restored.annotations.contains_key(&reserved_key));
+        assert_eq!(
+            restored.annotations.get("org.example.owner"),
+            Some(&"domain".to_string())
+        );
+    }
 
     #[test]
     fn test_sample_set_parse() {

@@ -407,6 +407,7 @@ impl InstanceBuilder {
             decision_variable_dependency: self.decision_variable_dependency,
             parameters: self.parameters,
             description: self.description,
+            annotations: Default::default(),
         })
     }
 }
