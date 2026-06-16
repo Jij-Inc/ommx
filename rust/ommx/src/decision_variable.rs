@@ -147,6 +147,18 @@ impl Kind {
     }
 }
 
+fn ensure_finite_value(id: VariableID, value: f64) -> Result<(), DecisionVariableError> {
+    if value.is_finite() {
+        Ok(())
+    } else {
+        Err(DecisionVariableError::NonFiniteValue { id, value })
+    }
+}
+
+fn values_are_consistent(left: f64, right: f64, atol: ATol) -> bool {
+    left.is_finite() && right.is_finite() && (left - right).abs() <= *atol
+}
+
 /// The decision variable's intrinsic data.
 ///
 /// Holds only `id`, `kind`, `bound`, and `substituted_value`. Auxiliary
@@ -280,6 +292,7 @@ impl DecisionVariable {
             substituted_value: value,
             atol,
         };
+        ensure_finite_value(self.id, value)?;
         if !self.bound.contains(value, atol) {
             return Err(err());
         }
@@ -341,8 +354,9 @@ impl DecisionVariable {
     }
 
     pub fn substitute(&mut self, new_value: f64, atol: ATol) -> Result<(), DecisionVariableError> {
+        ensure_finite_value(self.id, new_value)?;
         if let Some(previous_value) = self.substituted_value {
-            if (new_value - previous_value).abs() > atol {
+            if !values_are_consistent(new_value, previous_value, atol) {
                 return Err(DecisionVariableError::SubstitutedValueOverwrite {
                     id: self.id,
                     previous_value,
@@ -367,6 +381,9 @@ pub enum DecisionVariableError {
         kind: Kind,
         bound: Bound,
     },
+
+    #[error("Decision variable value for ID={id} must be finite: value={value}")]
+    NonFiniteValue { id: VariableID, value: f64 },
 
     #[error("Substituted value for ID={id} cannot be overwritten: previous={previous_value}, new={new_value}, atol={atol:?}")]
     SubstitutedValueOverwrite {
@@ -426,9 +443,11 @@ impl EvaluatedDecisionVariable {
         value: f64,
         atol: crate::ATol,
     ) -> Result<Self, DecisionVariableError> {
+        ensure_finite_value(decision_variable.id, value)?;
+
         // Check consistency with existing substituted_value if present
         if let Some(substituted_value) = decision_variable.substituted_value {
-            if (substituted_value - value).abs() > *atol {
+            if !values_are_consistent(substituted_value, value, atol) {
                 return Err(DecisionVariableError::SubstitutedValueOverwrite {
                     id: decision_variable.id,
                     previous_value: substituted_value,
@@ -451,6 +470,10 @@ impl EvaluatedDecisionVariable {
 
     /// Check if the value satisfies kind and bound constraints
     pub fn is_valid(&self, atol: crate::ATol) -> bool {
+        if !self.value.is_finite() {
+            return false;
+        }
+
         // Check bound
         if !self.bound.contains(self.value, atol) {
             return false;
@@ -491,11 +514,15 @@ impl SampledDecisionVariable {
         samples: Sampled<f64>,
         atol: crate::ATol,
     ) -> Result<Self, DecisionVariableError> {
+        for (_, &sample_value) in samples.iter() {
+            ensure_finite_value(decision_variable.id, sample_value)?;
+        }
+
         // Check consistency with existing substituted_value if present
         if let Some(substituted_value) = decision_variable.substituted_value {
             // Check that all sample values are consistent with substituted_value
             for (_, &sample_value) in samples.iter() {
-                if (substituted_value - sample_value).abs() > *atol {
+                if !values_are_consistent(substituted_value, sample_value, atol) {
                     return Err(DecisionVariableError::SubstitutedValueOverwrite {
                         id: decision_variable.id,
                         previous_value: substituted_value,
@@ -757,6 +784,43 @@ mod tests {
         assert!(matches!(
             result,
             Err(DecisionVariableError::EmptyBoundIntersection { .. })
+        ));
+    }
+
+    #[test]
+    fn test_decision_variable_rejects_non_finite_values() {
+        let id = VariableID::from(1);
+        let mut dv = DecisionVariable::continuous(id);
+
+        assert!(matches!(
+            dv.substitute(f64::NAN, ATol::default()),
+            Err(DecisionVariableError::NonFiniteValue { .. })
+        ));
+        assert!(matches!(
+            DecisionVariable::new(
+                id,
+                Kind::Continuous,
+                Bound::default(),
+                Some(f64::INFINITY),
+                ATol::default()
+            ),
+            Err(DecisionVariableError::NonFiniteValue { .. })
+        ));
+        assert!(matches!(
+            EvaluatedDecisionVariable::new(dv, f64::NEG_INFINITY, ATol::default()),
+            Err(DecisionVariableError::NonFiniteValue { .. })
+        ));
+    }
+
+    #[test]
+    fn test_sampled_decision_variable_rejects_non_finite_values() {
+        let id = VariableID::from(1);
+        let dv = DecisionVariable::continuous(id);
+        let samples = Sampled::new([vec![crate::SampleID::from(0)]], [f64::NAN]).unwrap();
+
+        assert!(matches!(
+            SampledDecisionVariable::new(dv, samples, ATol::default()),
+            Err(DecisionVariableError::NonFiniteValue { .. })
         ));
     }
 

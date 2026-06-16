@@ -3198,6 +3198,16 @@ class Instance:
             ...
         ValueError: The state does not contain some required IDs: {VariableID(2)}
         """
+    def populate_state(
+        self, state: ToState, *, atol: typing.Optional[builtins.float] = None
+    ) -> State:
+        r"""
+        Populate fixed, irrelevant, and dependent decision variables in a state.
+
+        The input state must contain all decision variables that are actually used
+        by this instance's objective and active constraints. The returned
+        {class}`~ommx.v1.State` contains every decision variable in the instance.
+        """
     def partial_evaluate(
         self, state: ToState, *, atol: typing.Optional[builtins.float] = None
     ) -> Instance:

@@ -28,6 +28,27 @@ assert restored.get_user_annotation("owner") == "analytics"
 
 {class}`~ommx.v1.Solution` と {class}`~ommx.v1.SampleSet` では、process metadata を `instance`、`solver`、`parameters`、`start`、`end` から扱えます。これらの field も protobuf bytes と Artifact の両方で round-trip します。
 
+### 🆕 完全な solver state を作る `Instance.populate_state` ([#944](https://github.com/Jij-Inc/ommx/pull/944))
+
+{meth}`~ommx.v1.Instance.populate_state` を Python SDK から使えるようにしました。部分的な solver state を Instance に対して検証し、Instance が所有する固定変数、irrelevant な変数、dependent variable を補完して、すべての決定変数を含む {class}`~ommx.v1.State` を返します。
+
+```python
+from ommx.v1 import DecisionVariable, Instance
+
+x = {i: DecisionVariable.continuous(i) for i in [1, 2, 5, 10, 99]}
+instance = Instance.from_components(
+    decision_variables=list(x.values()),
+    objective=x[1] + x[2],
+    constraints={},
+    sense=Instance.MINIMIZE,
+)
+instance.substitute({10: x[1] + x[2], 5: x[10] + 1})
+instance = instance.partial_evaluate({99: 4.0})
+
+state = instance.populate_state({1: 2.0, 2: 3.0})
+assert state.entries == {1: 2.0, 2: 3.0, 5: 6.0, 10: 5.0, 99: 4.0}
+```
+
 ## 3.0.0 Alpha 7
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0a7-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0a7)

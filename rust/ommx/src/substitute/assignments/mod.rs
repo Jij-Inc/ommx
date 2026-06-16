@@ -17,6 +17,8 @@ pub struct AcyclicAssignments {
     assignments: FnvHashMap<VariableID, Function>,
     // The directed graph representing dependencies between assignments, assigned -> required.
     dependency: DiGraphMap<VariableID, ()>,
+    // Topological order of `dependency`, cached at construction time.
+    topological_order: Vec<VariableID>,
 }
 
 impl AcyclicAssignments {
@@ -45,14 +47,16 @@ impl AcyclicAssignments {
             }
         }
 
-        // Check if the dependency graph is acyclic
-        if algo::is_cyclic_directed(&dependency) {
-            return Err(SubstitutionError::CyclicAssignmentDetected);
-        }
+        let topological_order = algo::toposort(&dependency, None)
+            .map_err(|_| SubstitutionError::CyclicAssignmentDetected)?
+            .into_iter()
+            .filter(|var_id| assignments.contains_key(var_id))
+            .collect();
 
         Ok(Self {
             assignments,
             dependency,
+            topological_order,
         })
     }
 
@@ -72,14 +76,10 @@ impl AcyclicAssignments {
         self.assignments.iter()
     }
 
-    fn sorted_ids(&self) -> Vec<VariableID> {
-        algo::toposort(&self.dependency, None).expect("Graph should be acyclic by construction")
-    }
-
     /// Get the assignments in substitution order (variables that need to be replaced first).
     ///
-    /// This order is used when performing substitution operations where variables
-    /// that are depended upon by others should be substituted first.
+    /// This order is used when performing substitution operations where assigned
+    /// variables that depend on other assigned variables are substituted first.
     ///
     /// # Example
     ///
@@ -97,9 +97,13 @@ impl AcyclicAssignments {
     /// assert_eq!(order, vec![4, 1]);
     /// ```
     pub fn substitution_order_iter(&self) -> impl Iterator<Item = (VariableID, &Function)> {
-        self.sorted_ids()
-            .into_iter()
-            .filter_map(move |var_id| self.assignments.get(&var_id).map(|linear| (var_id, linear)))
+        self.topological_order.iter().copied().map(move |var_id| {
+            let function = self
+                .assignments
+                .get(&var_id)
+                .expect("topological_order only contains assigned variables");
+            (var_id, function)
+        })
     }
 
     /// Get the assignments in evaluation order (variables that should be evaluated first).
@@ -132,10 +136,17 @@ impl AcyclicAssignments {
     /// assert_eq!(result.entries[&4], 5.0);
     /// ```
     pub fn evaluation_order_iter(&self) -> impl Iterator<Item = (VariableID, &Function)> {
-        self.sorted_ids()
-            .into_iter()
+        self.topological_order
+            .iter()
+            .copied()
             .rev()
-            .filter_map(move |var_id| self.assignments.get(&var_id).map(|linear| (var_id, linear)))
+            .map(move |var_id| {
+                let function = self
+                    .assignments
+                    .get(&var_id)
+                    .expect("topological_order only contains assigned variables");
+                (var_id, function)
+            })
     }
 
     pub fn keys(&self) -> impl Iterator<Item = VariableID> + '_ {
@@ -215,12 +226,18 @@ impl Evaluate for AcyclicAssignments {
     fn evaluate(&self, state: &State, atol: ATol) -> crate::Result<Self::Output> {
         let mut extended_state = state.clone();
 
-        // Evaluate assignments in topological order
+        // Evaluate assignments in dependency-first order, the reverse of the dependency graph's
+        // topological order.
         //
         // When the assignment is x1 <- x2 + x3, x4 <- x1 + 2, and state is {x2: 1, x3: 2},
         // we first evaluate x1 = 3, then x4 = 5. Finally returns extended state {x1: 3, x2: 1, x3: 2, x4: 5}.
         for (var_id, function) in self.evaluation_order_iter() {
             let value = function.evaluate(&extended_state, atol)?;
+            if !value.is_finite() {
+                return Err(crate::error!(
+                    "Assignment for variable {var_id:?} evaluated to non-finite value: {value}"
+                ));
+            }
             extended_state.entries.insert(var_id.into_inner(), value);
         }
         Ok(extended_state)
@@ -369,5 +386,30 @@ mod tests {
         assert_eq!(result.entries[&2], 1.0); // x2 = 1 (original)
         assert_eq!(result.entries[&3], 2.0); // x3 = 2 (original)
         assert_eq!(result.entries[&4], 5.0); // x4 = x1 + 2 = 3 + 2 = 5
+    }
+
+    #[test]
+    fn test_topological_order_contains_only_assigned_variables() {
+        let assignments = assign! {
+            1 <- linear!(2) + linear!(3),
+            4 <- linear!(1) + linear!(5)
+        };
+
+        assert_eq!(assignments.topological_order.len(), assignments.len());
+        assert!(assignments
+            .topological_order
+            .iter()
+            .all(|var_id| assignments.assignments.contains_key(var_id)));
+    }
+
+    #[test]
+    fn test_evaluate_rejects_non_finite_assignment_value() {
+        let assignments = assign! {
+            1 <- linear!(2)
+        };
+        let state = State::from_iter([(2, f64::INFINITY)]);
+
+        let err = assignments.evaluate(&state, ATol::default()).unwrap_err();
+        assert!(err.to_string().contains("evaluated to non-finite value"));
     }
 }

@@ -106,3 +106,31 @@ def test_bound_wrapper_functionality():
     # Test string representations
     assert "0" in str(bound)
     assert "1" in str(bound)
+
+
+def test_instance_populate_state():
+    """Test that Instance owns state population for fixed/dependent variables."""
+    x = {i: DecisionVariable.continuous(i) for i in [1, 2, 5, 10, 99]}
+    instance = Instance.from_components(
+        decision_variables=list(x.values()),
+        objective=x[1] + x[2],
+        constraints={},
+        sense=Instance.MINIMIZE,
+    )
+    instance.substitute(
+        {
+            10: x[1] + x[2],
+            5: x[10] + 1,
+        }
+    )
+    instance = instance.partial_evaluate({99: 4.0})
+
+    populated = instance.populate_state({1: 2.0, 2: 3.0})
+
+    assert populated.entries == {
+        1: 2.0,
+        2: 3.0,
+        5: 6.0,
+        10: 5.0,
+        99: 4.0,
+    }

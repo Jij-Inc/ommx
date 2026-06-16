@@ -1,9 +1,34 @@
 use super::*;
 use crate::Result;
 use crate::{
-    constraint::RemovedReason, ATol, Evaluate, Propagate, PropagateOutcome, VariableIDSet,
+    constraint::RemovedReason, ATol, Bound, Evaluate, Kind, Propagate, PropagateOutcome,
+    VariableIDSet,
 };
 use std::collections::BTreeMap;
+
+fn ensure_state_value_is_finite(var_id: u64, value: f64) -> Result<()> {
+    if !value.is_finite() {
+        crate::bail!(
+            { var_id, value },
+            "state value for variable ID={var_id} must be finite (value={value})",
+        );
+    }
+    Ok(())
+}
+
+fn ensure_instance_value_is_finite(var_id: VariableID, value: f64) -> Result<()> {
+    if !value.is_finite() {
+        crate::bail!(
+            { var_id = ?var_id, value },
+            "instance value for variable {var_id:?} must be finite (value={value})",
+        );
+    }
+    Ok(())
+}
+
+fn values_are_consistent(left: f64, right: f64, atol: ATol) -> bool {
+    left.is_finite() && right.is_finite() && (left - right).abs() <= *atol
+}
 
 /// Merge additional variable fixings from propagation into `expanded` state.
 ///
@@ -17,8 +42,10 @@ fn merge_state(
     changed: &mut bool,
 ) -> Result<()> {
     for (var_id, value) in additional.entries {
+        ensure_state_value_is_finite(var_id, value)?;
         if let Some(&existing) = expanded.entries.get(&var_id) {
-            if (existing - value).abs() > *atol {
+            ensure_state_value_is_finite(var_id, existing)?;
+            if !values_are_consistent(existing, value, atol) {
                 return Err(crate::error!(
                     "Conflicting variable fixings for ID={var_id}: \
                      existing={existing}, new={value}"
@@ -33,15 +60,156 @@ fn merge_state(
     Ok(())
 }
 
+struct StatePopulationPlan<'a> {
+    all: VariableIDSet,
+    used: VariableIDSet,
+    fixed: Vec<(VariableID, f64)>,
+    irrelevant: Vec<(VariableID, Kind, Bound)>,
+    dependency: &'a AcyclicAssignments,
+}
+
+impl StatePopulationPlan<'_> {
+    fn populate(&self, mut state: v1::State, atol: ATol) -> Result<v1::State> {
+        let state_ids: VariableIDSet = state.entries.keys().map(|id| (*id).into()).collect();
+
+        let unknown_ids: VariableIDSet = state_ids.difference(&self.all).cloned().collect();
+        if !unknown_ids.is_empty() {
+            crate::bail!(
+                { ?unknown_ids },
+                "state contains unknown variable IDs: {unknown_ids:?}",
+            );
+        }
+
+        let missing_ids: VariableIDSet = self.used.difference(&state_ids).cloned().collect();
+        if !missing_ids.is_empty() {
+            crate::bail!(
+                { ?missing_ids },
+                "state is missing required variable IDs: {missing_ids:?}",
+            );
+        }
+
+        for (&id, &value) in &state.entries {
+            ensure_state_value_is_finite(id, value)?;
+        }
+
+        // Bound and kind checking is intentionally left to Solution::feasible().
+        for (id, value) in &self.fixed {
+            ensure_instance_value_is_finite(*id, *value)?;
+            use std::collections::hash_map::Entry;
+            match state.entries.entry(id.into_inner()) {
+                Entry::Occupied(entry) => {
+                    let state_value = *entry.get();
+                    if !values_are_consistent(state_value, *value, atol) {
+                        let instance_value = *value;
+                        crate::bail!(
+                            { id = ?id, state_value, instance_value },
+                            "state value for variable {id:?} is inconsistent with instance (state={state_value}, instance={instance_value})",
+                        );
+                    }
+                }
+                Entry::Vacant(entry) => {
+                    entry.insert(*value);
+                }
+            }
+        }
+
+        for (id, kind, bound) in &self.irrelevant {
+            use std::collections::hash_map::Entry;
+            match state.entries.entry(id.into_inner()) {
+                Entry::Occupied(_entry) => {}
+                Entry::Vacant(entry) => {
+                    let value = match kind {
+                        Kind::Binary | Kind::Integer | Kind::Continuous => bound.nearest_to_zero(),
+                        Kind::SemiInteger | Kind::SemiContinuous => 0.0,
+                    };
+                    entry.insert(value);
+                }
+            }
+        }
+
+        for (id, f) in self.dependency.evaluation_order_iter() {
+            let value = f.evaluate(&state, atol).inspect_err(|e| {
+                tracing::error!(?id, error = %e, "failed to evaluate dependent variable");
+            })?;
+            if !value.is_finite() {
+                crate::bail!(
+                    { id = ?id, value },
+                    "dependent variable {id:?} evaluated to non-finite value: {value}",
+                );
+            }
+            use std::collections::hash_map::Entry;
+            match state.entries.entry(id.into_inner()) {
+                Entry::Occupied(entry) => {
+                    let state_value = *entry.get();
+                    if !values_are_consistent(state_value, value, atol) {
+                        crate::bail!(
+                            { id = ?id, state_value, instance_value = value },
+                            "state value for variable {id:?} is inconsistent with instance (state={state_value}, instance={value})",
+                        );
+                    }
+                }
+                Entry::Vacant(entry) => {
+                    entry.insert(value);
+                }
+            }
+        }
+
+        Ok(state)
+    }
+}
+
+impl Instance {
+    fn state_population_plan(&self) -> StatePopulationPlan<'_> {
+        let all: VariableIDSet = self.decision_variables.keys().copied().collect();
+        let used = self.used_decision_variable_ids();
+
+        let fixed: Vec<_> = self
+            .decision_variables
+            .iter()
+            .filter_map(|(id, dv)| dv.substituted_value().map(|value| (*id, value)))
+            .collect();
+        let fixed_ids: VariableIDSet = fixed.iter().map(|(id, _)| *id).collect();
+        let dependent_ids: VariableIDSet = self.decision_variable_dependency.keys().collect();
+        let relevant: VariableIDSet = used
+            .iter()
+            .chain(fixed_ids.iter())
+            .chain(dependent_ids.iter())
+            .copied()
+            .collect();
+
+        let irrelevant = self
+            .decision_variables
+            .iter()
+            .filter(|(id, _)| !relevant.contains(id))
+            .map(|(id, dv)| (*id, dv.kind(), dv.bound()))
+            .collect();
+
+        StatePopulationPlan {
+            all,
+            used,
+            fixed,
+            irrelevant,
+            dependency: &self.decision_variable_dependency,
+        }
+    }
+
+    /// Check the state is valid for this instance and populate fixed,
+    /// irrelevant, and dependent decision variables.
+    ///
+    /// Post-condition: the returned state contains exactly this instance's
+    /// decision-variable IDs.
+    pub fn populate_state(&self, state: v1::State, atol: ATol) -> Result<v1::State> {
+        self.state_population_plan().populate(state, atol)
+    }
+}
+
 impl Evaluate for Instance {
     type Output = crate::Solution;
     type SampledOutput = crate::SampleSet;
 
     #[tracing::instrument(skip_all)]
     fn evaluate(&self, state: &v1::State, atol: ATol) -> Result<Self::Output> {
-        let state = self
-            .analyze_decision_variables()
-            .populate(state.clone(), atol)?;
+        let state = self.populate_state(state.clone(), atol)?;
 
         let objective = self.objective.evaluate(&state, atol)?;
         let evaluated_constraints = self.constraint_collection.evaluate(&state, atol)?;
@@ -93,11 +261,11 @@ impl Evaluate for Instance {
     ) -> Result<Self::SampledOutput> {
         // Populate the decision variables in the samples
         let samples = {
-            let analysis = self.analyze_decision_variables();
+            let population = self.state_population_plan();
             let mut samples = samples.clone();
             for state in samples.iter_mut() {
                 let taken = std::mem::take(state);
-                *state = analysis.populate(taken, atol)?;
+                *state = population.populate(taken, atol)?;
             }
             samples
         };
@@ -191,7 +359,7 @@ impl Evaluate for Instance {
     }
 
     fn required_ids(&self) -> VariableIDSet {
-        self.analyze_decision_variables().used().clone()
+        self.used_decision_variable_ids()
     }
 }
 
@@ -346,6 +514,86 @@ mod tests {
             let s2 = instance.evaluate(&v, ATol::default()).unwrap();
             prop_assert!(s1.state().abs_diff_eq(&s2.state(), ATol::default()));
         }
+    }
+
+    #[test]
+    fn test_populate_state_rejects_non_finite_fixed_value_from_state() {
+        let mut x2 = crate::DecisionVariable::continuous(VariableID::from(2));
+        x2.substitute(3.0, ATol::default()).unwrap();
+        let decision_variables = BTreeMap::from([
+            (
+                VariableID::from(1),
+                crate::DecisionVariable::continuous(VariableID::from(1)),
+            ),
+            (VariableID::from(2), x2),
+        ]);
+        let instance = Instance::new(
+            Sense::Minimize,
+            Function::from(linear!(1)),
+            decision_variables,
+            BTreeMap::new(),
+        )
+        .unwrap();
+        let state = v1::State::from(HashMap::from([(1, 1.0), (2, f64::NAN)]));
+
+        let err = instance.populate_state(state, ATol::default()).unwrap_err();
+        assert!(err.to_string().contains("must be finite"));
+    }
+
+    #[test]
+    fn test_populate_state_rejects_non_finite_existing_dependent_value() {
+        let decision_variables = BTreeMap::from([
+            (
+                VariableID::from(1),
+                crate::DecisionVariable::continuous(VariableID::from(1)),
+            ),
+            (
+                VariableID::from(10),
+                crate::DecisionVariable::continuous(VariableID::from(10)),
+            ),
+        ]);
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            Function::from(linear!(1)),
+            decision_variables,
+            BTreeMap::new(),
+        )
+        .unwrap();
+        instance.decision_variable_dependency = crate::assign! {
+            10 <- linear!(1)
+        };
+        let state = v1::State::from(HashMap::from([(1, 1.0), (10, f64::INFINITY)]));
+
+        let err = instance.populate_state(state, ATol::default()).unwrap_err();
+        assert!(err.to_string().contains("must be finite"));
+    }
+
+    #[test]
+    fn test_populate_state_rejects_non_finite_dependent_evaluation() {
+        let decision_variables = BTreeMap::from([
+            (
+                VariableID::from(1),
+                crate::DecisionVariable::continuous(VariableID::from(1)),
+            ),
+            (
+                VariableID::from(10),
+                crate::DecisionVariable::continuous(VariableID::from(10)),
+            ),
+        ]);
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            Function::from(linear!(1)),
+            decision_variables,
+            BTreeMap::new(),
+        )
+        .unwrap();
+        instance.decision_variable_dependency = crate::assign! {
+            10 <- coeff!(f64::MAX) * linear!(1)
+        };
+        let state = v1::State::from(HashMap::from([(1, f64::MAX)]));
+
+        let err = instance.populate_state(state, ATol::default()).unwrap_err();
+        assert!(err.to_string().contains("evaluated to non-finite value"));
     }
 
     /// Test that named functions can reference fixed, dependent, and irrelevant variables

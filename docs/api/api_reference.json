@@ -15904,6 +15904,60 @@
               "deprecated": null
             },
             {
+              "name": "populate_state",
+              "doc": "Populate fixed, irrelevant, and dependent decision variables in a state.\n\nThe input state must contain all decision variables that are actually used\nby this instance's objective and active constraints. The returned\n{class}`~ommx.v1.State` contains every decision variable in the instance.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "state",
+                      "type_": {
+                        "display": "ToState",
+                        "link_target": {
+                          "fqn": "ommx.v1.ToState",
+                          "doc_module": "ommx.v1",
+                          "kind": "Class",
+                          "attribute": null
+                        },
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "atol",
+                      "type_": {
+                        "display": "Optional[float]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "float",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "State",
+                    "link_target": {
+                      "fqn": "ommx.v1.State",
+                      "doc_module": "ommx.v1",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "random_samples",
               "doc": "Generate random samples for this instance.\n\nThe generated samples will contain ``num_samples`` sample entries divided into\n``num_different_samples`` groups, where each group shares the same state but has\ndifferent sample IDs.\n\n**Args:**\n- `rng`: Random number generator\n- `num_different_samples`: Number of different states to generate\n- `num_samples`: Total number of samples to generate\n- `max_sample_id`: Maximum sample ID (default: ``num_samples``)\n\n**Returns:**\nSamples object\n\n# Examples\n\nGenerate samples for a simple instance:\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable, Rng\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[(sum(x) <= 2).set_id(0)],\n...     sense=Instance.MAXIMIZE,\n... )\n\n>>> rng = Rng()\n>>> samples = instance.random_samples(rng, num_different_samples=2, num_samples=5)\n>>> samples.num_samples()\n5\n```",
               "signatures": [
