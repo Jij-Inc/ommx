@@ -138,7 +138,7 @@ impl RawEntry {
         if let Some(objective) = self.objective.try_to_string() {
             annotation.insert("org.ommx.miplib.objective".to_string(), objective);
         }
-        let tags: Vec<_> = self.tags.split(' ').map(str::trim).collect();
+        let tags: Vec<_> = self.tags.split_whitespace().collect();
         if !tags.is_empty() {
             annotation.insert("org.ommx.miplib.tags".to_string(), tags.join(","));
         }

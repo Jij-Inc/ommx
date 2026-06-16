@@ -77,18 +77,8 @@ pub fn package(path: &Path) -> Result<()> {
             chrono::Local::now().to_rfc3339(),
         );
 
-        // Override variables and constraints with actual parsed values
-        // QPLIB and OMMX may count constraints differently (e.g., l <= f(x) <= u)
         let nvars = instance.decision_variables().len();
         let ncons = instance.constraints().len();
-        annotations.insert(
-            "org.ommx.v1.instance.variables".to_string(),
-            nvars.to_string(),
-        );
-        annotations.insert(
-            "org.ommx.v1.instance.constraints".to_string(),
-            ncons.to_string(),
-        );
 
         tracing::info!(
             "Packaged '{name}': {} variables, {} constraints",

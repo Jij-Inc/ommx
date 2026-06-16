@@ -69,6 +69,15 @@ fn description_mut(
     description.get_or_insert_with(crate::v1::instance::Description::default)
 }
 
+fn parse_authors_annotation(value: &str) -> Vec<String> {
+    value
+        .split(',')
+        .map(str::trim)
+        .filter(|author| !author.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
 fn insert_description_annotations(
     annotations: &mut HashMap<String, String>,
     namespace: &str,
@@ -133,7 +142,7 @@ fn merge_description_annotations(
         }
         if target.authors.is_empty() {
             if let Some(authors) = source.get(&authors_key).filter(|v| !v.is_empty()) {
-                target.authors = authors.split(',').map(str::to_string).collect();
+                target.authors = parse_authors_annotation(authors);
             }
         }
         if target.created_by.is_none() {
@@ -180,11 +189,7 @@ fn replace_description_annotations(
             target.description = Some(value.clone());
         }
         if let Some(value) = source.get(&authors_key) {
-            target.authors = if value.is_empty() {
-                Vec::new()
-            } else {
-                value.split(',').map(str::to_string).collect()
-            };
+            target.authors = parse_authors_annotation(value);
         }
         if let Some(value) = source.get(&created_by_key) {
             target.created_by = Some(value.clone());
@@ -519,6 +524,34 @@ mod tests {
                 .flat_annotations()
                 .get(annotation_keys::INSTANCE_VARIABLES),
             Some(&"0".to_string())
+        );
+    }
+
+    #[test]
+    fn description_author_annotations_are_trimmed() {
+        let mut instance = crate::Instance::default();
+        instance.merge_annotations(&HashMap::from([(
+            annotation_keys::INSTANCE_AUTHORS.to_string(),
+            "Alice, Bob,, Carol , ".to_string(),
+        )]));
+        assert_eq!(
+            instance
+                .description
+                .as_ref()
+                .map(|desc| desc.authors.as_slice()),
+            Some(&["Alice".to_string(), "Bob".to_string(), "Carol".to_string()][..])
+        );
+
+        instance.replace_annotations(HashMap::from([(
+            annotation_keys::INSTANCE_AUTHORS.to_string(),
+            " Dave, , Eve ".to_string(),
+        )]));
+        assert_eq!(
+            instance
+                .description
+                .as_ref()
+                .map(|desc| desc.authors.as_slice()),
+            Some(&["Dave".to_string(), "Eve".to_string()][..])
         );
     }
 

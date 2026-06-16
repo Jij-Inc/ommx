@@ -8,6 +8,7 @@ impl Parse for crate::v1::Solution {
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v1.Solution";
         crate::parse::check_format_version(self.format_version, message)?;
+        crate::parse::validate_extension_annotations(&self.annotations, message)?;
 
         let provided_feasible = match self.feasible_relaxed {
             Some(_) => self.feasible,
@@ -250,6 +251,23 @@ impl From<Solution> for crate::v1::Solution {
 mod tests {
     use super::*;
     use crate::{v1, Parse};
+
+    #[test]
+    fn test_solution_parse_rejects_reserved_annotation_key() {
+        let v1_solution = v1::Solution {
+            annotations: std::collections::HashMap::from([(
+                format!("{}.solver", crate::annotation_keys::SOLUTION_NAMESPACE),
+                "bad".to_string(),
+            )]),
+            ..Default::default()
+        };
+        let result: Result<Solution, ParseError> = v1_solution.parse(&());
+        insta::assert_snapshot!(result.unwrap_err().to_string(), @r###"
+        Traceback for OMMX Message parse error:
+        └─ommx.v1.Solution[annotations]
+        Annotation key `org.ommx.v1.solution.solver` is reserved for OMMX metadata and cannot be stored in extension annotations.
+        "###);
+    }
 
     #[test]
     fn test_solution_parse() {

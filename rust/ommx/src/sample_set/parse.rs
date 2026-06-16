@@ -9,6 +9,7 @@ impl Parse for crate::v1::SampleSet {
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v1.SampleSet";
         crate::parse::check_format_version(self.format_version, message)?;
+        crate::parse::validate_extension_annotations(&self.annotations, message)?;
 
         // Parse decision variables into BTreeMap and drain metadata into the SoA store
         let mut decision_variables = BTreeMap::new();
@@ -221,6 +222,23 @@ impl From<SampleSet> for crate::v1::SampleSet {
 mod tests {
     use super::*;
     use crate::{v1, Parse};
+
+    #[test]
+    fn test_sample_set_parse_rejects_reserved_annotation_key() {
+        let v1_sample_set = v1::SampleSet {
+            annotations: std::collections::HashMap::from([(
+                format!("{}.solver", crate::annotation_keys::SAMPLE_SET_NAMESPACE),
+                "bad".to_string(),
+            )]),
+            ..Default::default()
+        };
+        let result: Result<SampleSet, ParseError> = v1_sample_set.parse(&());
+        insta::assert_snapshot!(result.unwrap_err().to_string(), @r###"
+        Traceback for OMMX Message parse error:
+        └─ommx.v1.SampleSet[annotations]
+        Annotation key `org.ommx.v1.sample-set.solver` is reserved for OMMX metadata and cannot be stored in extension annotations.
+        "###);
+    }
 
     #[test]
     fn test_sample_set_parse() {

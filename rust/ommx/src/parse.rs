@@ -4,7 +4,10 @@ use crate::{
     SolutionError, SubstitutionError, VariableID,
 };
 use prost::DecodeError;
-use std::{collections::BTreeMap, fmt};
+use std::{
+    collections::{BTreeMap, HashMap},
+    fmt,
+};
 
 /// Parse [`crate::v1`] messages into validated Rust types.
 pub trait Parse: Sized {
@@ -105,6 +108,12 @@ pub enum RawParseError {
     #[error("{0}")]
     InvalidInstance(String),
 
+    /// Extension annotation maps must not carry OMMX-owned metadata.
+    #[error(
+        "Annotation key `{key}` is reserved for OMMX metadata and cannot be stored in extension annotations."
+    )]
+    ReservedAnnotationKey { key: String },
+
     #[error(transparent)]
     SolutionError(#[from] SolutionError),
 
@@ -154,6 +163,21 @@ pub(crate) fn check_format_version(
             current_version: crate::CURRENT_FORMAT_VERSION,
         }
         .context(message, "format_version"));
+    }
+    Ok(())
+}
+
+/// Crate-internal parse paths use this to preserve the domain invariant that
+/// extension annotations never contain OMMX-reserved metadata keys.
+pub(crate) fn validate_extension_annotations(
+    annotations: &HashMap<String, String>,
+    message: &'static str,
+) -> Result<(), ParseError> {
+    for key in annotations.keys() {
+        if crate::is_reserved_annotation_key(key) {
+            return Err(RawParseError::ReservedAnnotationKey { key: key.clone() }
+                .context(message, "annotations"));
+        }
     }
     Ok(())
 }
