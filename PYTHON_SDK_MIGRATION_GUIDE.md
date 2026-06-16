@@ -87,7 +87,7 @@ Linear(...)                     # just call the constructor
 instance.to_bytes()             # (de)serialise whole Instance / Solution / SampleSet
 ```
 
-The dataclass-style constructors (`Instance(raw=..., annotations=...)`) are also gone — `Instance`, `Solution`, `SampleSet` are no longer Python `@dataclass`es. Construct through `Instance.from_components(...)` etc. and set `instance.annotations = {...}` or `instance.add_user_annotation(...)` afterwards.
+The dataclass-style constructors (`Instance(raw=..., annotations=...)`) are also gone — `Instance`, `Solution`, `SampleSet` are no longer Python `@dataclass`es. Construct through `Instance.from_components(...)` etc., set OMMX metadata through dedicated properties such as `instance.title`, and store user annotations with `instance.add_user_annotation(...)` or `instance.replace_annotations(...)`. The `annotations` property is a read-only projection in v3.
 
 `Constraint`, `EvaluatedConstraint`, `SampledConstraint`, and `RemovedConstraint` no longer have `to_bytes` / `from_bytes` — a single constraint cannot meaningfully carry its ID on its own now that IDs live in the enclosing dict, so the per-constraint serialisation API was removed. Serialise the containing `Instance` / `Solution` / `SampleSet` instead. (3.0.0a3 extends the same removal to the rest of the non-top-level types — `Function` / `Linear` / `Quadratic` / `Polynomial`, `Parameter`, `NamedFunction` family, `DecisionVariable` family — see §12.)
 
