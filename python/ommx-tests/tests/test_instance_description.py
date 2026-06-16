@@ -147,6 +147,15 @@ def test_instance_add_user_annotation_rejects_reserved_namespace():
             annotation_namespace="org.ommx.v1.instance",
         )
 
+    with pytest.raises(ValueError, match="reserved for OMMX metadata"):
+        instance.get_user_annotation(
+            "title",
+            annotation_namespace="org.ommx.v1.instance",
+        )
+
+    with pytest.raises(ValueError, match="reserved for OMMX metadata"):
+        instance.get_user_annotations(annotation_namespace="org.ommx.v1.instance")
+
     assert instance.title is None
     assert "org.ommx.v1.instance.title" not in instance.annotations
 

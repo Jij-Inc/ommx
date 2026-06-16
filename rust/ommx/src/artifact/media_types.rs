@@ -32,22 +32,30 @@ pub fn v1_config() -> MediaType {
     MediaType::Other(V1_CONFIG_MEDIA_TYPE.to_string())
 }
 
-/// Media type of the layer storing [crate::v1::Instance] with descriptor annotations projected from protobuf metadata, `application/org.ommx.v1.instance`
+/// Media type of the layer storing [crate::Instance] as v1 protobuf, with
+/// descriptor annotations projected from domain metadata,
+/// `application/org.ommx.v1.instance`
 pub fn v1_instance() -> MediaType {
     MediaType::Other(V1_INSTANCE_MEDIA_TYPE.to_string())
 }
 
-/// Media type of the layer storing [crate::v1::ParametricInstance] with descriptor annotations projected from protobuf metadata, `application/org.ommx.v1.parametric-instance`
+/// Media type of the layer storing [crate::ParametricInstance] as v1 protobuf,
+/// with descriptor annotations projected from domain metadata,
+/// `application/org.ommx.v1.parametric-instance`
 pub fn v1_parametric_instance() -> MediaType {
     MediaType::Other(V1_PARAMETRIC_INSTANCE_MEDIA_TYPE.to_string())
 }
 
-/// Media type of the layer storing [crate::v1::Solution] with descriptor annotations projected from protobuf metadata, `application/org.ommx.v1.solution`
+/// Media type of the layer storing [crate::Solution] as v1 protobuf, with
+/// descriptor annotations projected from domain metadata,
+/// `application/org.ommx.v1.solution`
 pub fn v1_solution() -> MediaType {
     MediaType::Other(V1_SOLUTION_MEDIA_TYPE.to_string())
 }
 
-/// Media type of the layer storing [crate::v1::SampleSet] with descriptor annotations projected from protobuf metadata, `application/org.ommx.v1.sample-set`
+/// Media type of the layer storing [crate::SampleSet] as v1 protobuf, with
+/// descriptor annotations projected from domain metadata,
+/// `application/org.ommx.v1.sample-set`
 pub fn v1_sample_set() -> MediaType {
     MediaType::Other(V1_SAMPLE_SET_MEDIA_TYPE.to_string())
 }

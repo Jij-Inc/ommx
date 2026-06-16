@@ -81,11 +81,11 @@ impl RawEntry {
     fn as_annotation(&self) -> HashMap<String, String> {
         let mut annotation = HashMap::new();
         annotation.insert(
-            "org.ommx.v1.instance.title".to_string(),
+            crate::annotation_keys::INSTANCE_TITLE.to_string(),
             self.instance.clone(),
         );
         annotation.insert(
-            "org.ommx.v1.instance.authors".to_string(),
+            crate::annotation_keys::INSTANCE_AUTHORS.to_string(),
             self.submitter
                 .split(',')
                 .map(str::trim)
@@ -96,26 +96,26 @@ impl RawEntry {
             // Berk Ustun's submissions are licensed under "BSD", we assume it is "BSD-3-Clause"
             // https://git.zib.de/miplib2017/submissions/-/blob/master/Berk_Ustun/meta.yml?ref_type=heads
             annotation.insert(
-                "org.ommx.v1.instance.license".to_string(),
+                crate::annotation_keys::INSTANCE_LICENSE.to_string(),
                 "BSD-3-Clause".to_string(),
             );
         } else {
             // Other submissions are licensed under the default MIPLIB license "CC-BY-SA-4.0"
             annotation.insert(
-                "org.ommx.v1.instance.license".to_string(),
+                crate::annotation_keys::INSTANCE_LICENSE.to_string(),
                 "CC-BY-SA-4.0".to_string(),
             );
         }
         annotation.insert(
-            "org.ommx.v1.instance.dataset".to_string(),
+            crate::annotation_keys::INSTANCE_DATASET.to_string(),
             "MIPLIB2017".to_string(),
         );
         annotation.insert(
-            "org.ommx.v1.instance.variables".to_string(),
+            crate::annotation_keys::INSTANCE_VARIABLES.to_string(),
             (self.variable as usize).to_string(),
         );
         annotation.insert(
-            "org.ommx.v1.instance.constraints".to_string(),
+            crate::annotation_keys::INSTANCE_CONSTRAINTS.to_string(),
             (self.constraints as usize).to_string(),
         );
 
@@ -287,11 +287,12 @@ pub fn load(name: &str) -> Result<Instance> {
         "MIPLIB2017 Artifact should contain exactly one instance"
     );
     let bytes = artifact.get_blob(&layer)?;
-    let mut instance =
+    let proto =
         Instance::decode(bytes.as_slice()).context("Failed to decode MIPLIB2017 instance layer")?;
     let annotations = layer.annotations().as_ref().cloned().unwrap_or_default();
-    crate::artifact::merge_instance_annotations(&mut instance, &annotations);
-    Ok(instance)
+    let mut instance: crate::Instance = proto.try_into()?;
+    crate::FlatAnnotations::merge_annotations(&mut instance, &annotations);
+    Ok(instance.into())
 }
 
 #[cfg(test)]

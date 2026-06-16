@@ -431,11 +431,11 @@ fn commit_produces_experiment_artifact() {
             .as_ref()
             .expect("instance layer should mirror protobuf metadata");
         assert_eq!(
-            candidate_annotations.get("org.ommx.v1.instance.variables"),
+            candidate_annotations.get(crate::annotation_keys::INSTANCE_VARIABLES),
             Some(&instance.decision_variables().len().to_string())
         );
         assert_eq!(
-            candidate_annotations.get("org.ommx.v1.instance.constraints"),
+            candidate_annotations.get(crate::annotation_keys::INSTANCE_CONSTRAINTS),
             Some(&instance.constraints().len().to_string())
         );
         assert_eq!(blob_bytes(&artifact, candidate), instance.to_bytes());

@@ -2,6 +2,28 @@ use std::collections::HashMap;
 
 const RESERVED_PREFIX: &str = "org.ommx.v1.";
 
+/// Flat annotation keys defined by OMMX.
+///
+/// These constants describe the public flat annotation vocabulary mirrored to
+/// OCI descriptors and Python `annotations` views. Domain objects remain the
+/// source of truth for the corresponding metadata.
+pub mod annotation_keys {
+    pub const INSTANCE_NAMESPACE: &str = "org.ommx.v1.instance";
+    pub const INSTANCE_TITLE: &str = "org.ommx.v1.instance.title";
+    pub const INSTANCE_AUTHORS: &str = "org.ommx.v1.instance.authors";
+    pub const INSTANCE_LICENSE: &str = "org.ommx.v1.instance.license";
+    pub const INSTANCE_DATASET: &str = "org.ommx.v1.instance.dataset";
+    pub const INSTANCE_VARIABLES: &str = "org.ommx.v1.instance.variables";
+    pub const INSTANCE_CONSTRAINTS: &str = "org.ommx.v1.instance.constraints";
+
+    pub const PARAMETRIC_INSTANCE_NAMESPACE: &str = "org.ommx.v1.parametric-instance";
+    pub const PARAMETRIC_INSTANCE_VARIABLES: &str = "org.ommx.v1.parametric-instance.variables";
+    pub const PARAMETRIC_INSTANCE_CONSTRAINTS: &str = "org.ommx.v1.parametric-instance.constraints";
+
+    pub const SOLUTION_NAMESPACE: &str = "org.ommx.v1.solution";
+    pub const SAMPLE_SET_NAMESPACE: &str = "org.ommx.v1.sample-set";
+}
+
 /// Return true when an annotation key is reserved for OMMX-defined metadata.
 pub fn is_reserved_annotation_key(key: &str) -> bool {
     key.starts_with(RESERVED_PREFIX)
@@ -18,6 +40,17 @@ fn copy_extension_annotations(
     for (key, value) in source {
         if is_extension_annotation(key) {
             target.insert(key.clone(), value.clone());
+        }
+    }
+}
+
+fn merge_extension_annotations(
+    target: &mut HashMap<String, String>,
+    source: &HashMap<String, String>,
+) {
+    for (key, value) in source {
+        if is_extension_annotation(key) {
+            target.entry(key.clone()).or_insert_with(|| value.clone());
         }
     }
 }
@@ -67,6 +100,54 @@ fn insert_description_annotations(
     }
     if let Some(value) = &description.dataset {
         annotations.insert(format!("{namespace}.dataset"), value.clone());
+    }
+}
+
+fn merge_description_annotations(
+    target: &mut Option<crate::v1::instance::Description>,
+    source: &HashMap<String, String>,
+    namespace: &str,
+) {
+    let title_key = format!("{namespace}.title");
+    let description_key = format!("{namespace}.description");
+    let authors_key = format!("{namespace}.authors");
+    let created_by_key = format!("{namespace}.created_by");
+    let created_key = format!("{namespace}.created");
+    let license_key = format!("{namespace}.license");
+    let dataset_key = format!("{namespace}.dataset");
+
+    if source.contains_key(&title_key)
+        || source.contains_key(&description_key)
+        || source.contains_key(&authors_key)
+        || source.contains_key(&created_by_key)
+        || source.contains_key(&created_key)
+        || source.contains_key(&license_key)
+        || source.contains_key(&dataset_key)
+    {
+        let target = description_mut(target);
+        if target.name.is_none() {
+            target.name = source.get(&title_key).cloned();
+        }
+        if target.description.is_none() {
+            target.description = source.get(&description_key).cloned();
+        }
+        if target.authors.is_empty() {
+            if let Some(authors) = source.get(&authors_key).filter(|v| !v.is_empty()) {
+                target.authors = authors.split(',').map(str::to_string).collect();
+            }
+        }
+        if target.created_by.is_none() {
+            target.created_by = source.get(&created_by_key).cloned();
+        }
+        if target.created.is_none() {
+            target.created = source.get(&created_key).cloned();
+        }
+        if target.license.is_none() {
+            target.license = source.get(&license_key).cloned();
+        }
+        if target.dataset.is_none() {
+            target.dataset = source.get(&dataset_key).cloned();
+        }
     }
 }
 
@@ -145,6 +226,42 @@ fn insert_process_metadata_annotations(
     }
 }
 
+fn merge_process_metadata_annotations(
+    target: &mut Option<crate::v1::ProcessMetadata>,
+    source: &HashMap<String, String>,
+    namespace: &str,
+) {
+    let instance_key = format!("{namespace}.instance");
+    let solver_key = format!("{namespace}.solver");
+    let parameters_key = format!("{namespace}.parameters");
+    let start_key = format!("{namespace}.start");
+    let end_key = format!("{namespace}.end");
+
+    if source.contains_key(&instance_key)
+        || source.contains_key(&solver_key)
+        || source.contains_key(&parameters_key)
+        || source.contains_key(&start_key)
+        || source.contains_key(&end_key)
+    {
+        let target = target.get_or_insert_with(crate::v1::ProcessMetadata::default);
+        if target.instance.is_none() {
+            target.instance = source.get(&instance_key).cloned();
+        }
+        if target.solver.is_none() {
+            target.solver = source.get(&solver_key).cloned();
+        }
+        if target.parameters.is_none() {
+            target.parameters = source.get(&parameters_key).cloned();
+        }
+        if target.start.is_none() {
+            target.start = source.get(&start_key).cloned();
+        }
+        if target.end.is_none() {
+            target.end = source.get(&end_key).cloned();
+        }
+    }
+}
+
 fn replace_process_metadata_annotations(
     target: &mut Option<crate::v1::ProcessMetadata>,
     source: &HashMap<String, String>,
@@ -188,29 +305,37 @@ fn replace_process_metadata_annotations(
 /// mapping rules into those serialization layers.
 pub trait FlatAnnotations {
     fn flat_annotations(&self) -> HashMap<String, String>;
+    fn merge_annotations(&mut self, annotations: &HashMap<String, String>);
     fn replace_annotations(&mut self, annotations: HashMap<String, String>);
-
-    fn insert_flat_annotation(&mut self, key: String, value: String) {
-        let mut annotations = self.flat_annotations();
-        annotations.insert(key, value);
-        self.replace_annotations(annotations);
-    }
 }
 
 impl FlatAnnotations for crate::Instance {
     fn flat_annotations(&self) -> HashMap<String, String> {
         let mut annotations = HashMap::new();
         copy_extension_annotations(&mut annotations, &self.annotations);
-        insert_description_annotations(&mut annotations, "org.ommx.v1.instance", &self.description);
+        insert_description_annotations(
+            &mut annotations,
+            annotation_keys::INSTANCE_NAMESPACE,
+            &self.description,
+        );
         annotations.insert(
-            "org.ommx.v1.instance.variables".to_string(),
+            annotation_keys::INSTANCE_VARIABLES.to_string(),
             self.decision_variables().len().to_string(),
         );
         annotations.insert(
-            "org.ommx.v1.instance.constraints".to_string(),
+            annotation_keys::INSTANCE_CONSTRAINTS.to_string(),
             self.constraints().len().to_string(),
         );
         annotations
+    }
+
+    fn merge_annotations(&mut self, annotations: &HashMap<String, String>) {
+        merge_description_annotations(
+            &mut self.description,
+            annotations,
+            annotation_keys::INSTANCE_NAMESPACE,
+        );
+        merge_extension_annotations(&mut self.annotations, annotations);
     }
 
     fn replace_annotations(&mut self, annotations: HashMap<String, String>) {
@@ -218,7 +343,7 @@ impl FlatAnnotations for crate::Instance {
         replace_description_annotations(
             &mut self.description,
             &annotations,
-            "org.ommx.v1.instance",
+            annotation_keys::INSTANCE_NAMESPACE,
         );
         replace_extension_annotations(&mut self.annotations, &annotations);
     }
@@ -230,18 +355,27 @@ impl FlatAnnotations for crate::ParametricInstance {
         copy_extension_annotations(&mut annotations, &self.annotations);
         insert_description_annotations(
             &mut annotations,
-            "org.ommx.v1.parametric-instance",
+            annotation_keys::PARAMETRIC_INSTANCE_NAMESPACE,
             &self.description,
         );
         annotations.insert(
-            "org.ommx.v1.parametric-instance.variables".to_string(),
+            annotation_keys::PARAMETRIC_INSTANCE_VARIABLES.to_string(),
             self.decision_variables().len().to_string(),
         );
         annotations.insert(
-            "org.ommx.v1.parametric-instance.constraints".to_string(),
+            annotation_keys::PARAMETRIC_INSTANCE_CONSTRAINTS.to_string(),
             self.constraints().len().to_string(),
         );
         annotations
+    }
+
+    fn merge_annotations(&mut self, annotations: &HashMap<String, String>) {
+        merge_description_annotations(
+            &mut self.description,
+            annotations,
+            annotation_keys::PARAMETRIC_INSTANCE_NAMESPACE,
+        );
+        merge_extension_annotations(&mut self.annotations, annotations);
     }
 
     fn replace_annotations(&mut self, annotations: HashMap<String, String>) {
@@ -249,7 +383,7 @@ impl FlatAnnotations for crate::ParametricInstance {
         replace_description_annotations(
             &mut self.description,
             &annotations,
-            "org.ommx.v1.parametric-instance",
+            annotation_keys::PARAMETRIC_INSTANCE_NAMESPACE,
         );
         replace_extension_annotations(&mut self.annotations, &annotations);
     }
@@ -261,10 +395,19 @@ impl FlatAnnotations for crate::Solution {
         copy_extension_annotations(&mut annotations, &self.annotations);
         insert_process_metadata_annotations(
             &mut annotations,
-            "org.ommx.v1.solution",
+            annotation_keys::SOLUTION_NAMESPACE,
             &self.metadata,
         );
         annotations
+    }
+
+    fn merge_annotations(&mut self, annotations: &HashMap<String, String>) {
+        merge_process_metadata_annotations(
+            &mut self.metadata,
+            annotations,
+            annotation_keys::SOLUTION_NAMESPACE,
+        );
+        merge_extension_annotations(&mut self.annotations, annotations);
     }
 
     fn replace_annotations(&mut self, annotations: HashMap<String, String>) {
@@ -272,7 +415,7 @@ impl FlatAnnotations for crate::Solution {
         replace_process_metadata_annotations(
             &mut self.metadata,
             &annotations,
-            "org.ommx.v1.solution",
+            annotation_keys::SOLUTION_NAMESPACE,
         );
         replace_extension_annotations(&mut self.annotations, &annotations);
     }
@@ -284,10 +427,19 @@ impl FlatAnnotations for crate::SampleSet {
         copy_extension_annotations(&mut annotations, &self.annotations);
         insert_process_metadata_annotations(
             &mut annotations,
-            "org.ommx.v1.sample-set",
+            annotation_keys::SAMPLE_SET_NAMESPACE,
             &self.metadata,
         );
         annotations
+    }
+
+    fn merge_annotations(&mut self, annotations: &HashMap<String, String>) {
+        merge_process_metadata_annotations(
+            &mut self.metadata,
+            annotations,
+            annotation_keys::SAMPLE_SET_NAMESPACE,
+        );
+        merge_extension_annotations(&mut self.annotations, annotations);
     }
 
     fn replace_annotations(&mut self, annotations: HashMap<String, String>) {
@@ -295,7 +447,7 @@ impl FlatAnnotations for crate::SampleSet {
         replace_process_metadata_annotations(
             &mut self.metadata,
             &annotations,
-            "org.ommx.v1.sample-set",
+            annotation_keys::SAMPLE_SET_NAMESPACE,
         );
         replace_extension_annotations(&mut self.annotations, &annotations);
     }
@@ -318,11 +470,11 @@ mod tests {
 
         let annotations = instance.flat_annotations();
         assert_eq!(
-            annotations.get("org.ommx.v1.instance.title"),
+            annotations.get(annotation_keys::INSTANCE_TITLE),
             Some(&"demo".to_string())
         );
         assert_eq!(
-            annotations.get("org.ommx.v1.instance.license"),
+            annotations.get(annotation_keys::INSTANCE_LICENSE),
             Some(&"MIT".to_string())
         );
         assert_eq!(
@@ -332,11 +484,11 @@ mod tests {
 
         instance.replace_annotations(HashMap::from([
             (
-                "org.ommx.v1.instance.title".to_string(),
+                annotation_keys::INSTANCE_TITLE.to_string(),
                 "updated".to_string(),
             ),
             (
-                "org.ommx.v1.instance.variables".to_string(),
+                annotation_keys::INSTANCE_VARIABLES.to_string(),
                 "999".to_string(),
             ),
             ("org.example.owner".to_string(), "bob".to_string()),
@@ -356,7 +508,7 @@ mod tests {
         assert_eq!(
             instance
                 .flat_annotations()
-                .get("org.ommx.v1.instance.variables"),
+                .get(annotation_keys::INSTANCE_VARIABLES),
             Some(&"0".to_string())
         );
     }

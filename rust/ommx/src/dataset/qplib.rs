@@ -73,20 +73,23 @@ struct RawEntry {
 impl RawEntry {
     fn as_annotation(&self) -> HashMap<String, String> {
         let mut annotation = HashMap::new();
-        annotation.insert("org.ommx.v1.instance.title".to_string(), self.name.clone());
+        annotation.insert(
+            crate::annotation_keys::INSTANCE_TITLE.to_string(),
+            self.name.clone(),
+        );
         if !self.donor.is_empty() {
             annotation.insert(
-                "org.ommx.v1.instance.authors".to_string(),
+                crate::annotation_keys::INSTANCE_AUTHORS.to_string(),
                 self.donor.clone(),
             );
         }
         // QPLIB is licensed under CC-BY 4.0 as of August 30, 2021
         annotation.insert(
-            "org.ommx.v1.instance.license".to_string(),
+            crate::annotation_keys::INSTANCE_LICENSE.to_string(),
             "CC-BY-4.0".to_string(),
         );
         annotation.insert(
-            "org.ommx.v1.instance.dataset".to_string(),
+            crate::annotation_keys::INSTANCE_DATASET.to_string(),
             "QPLIB".to_string(),
         );
 
@@ -313,11 +316,12 @@ pub fn load(tag: &str) -> Result<Instance> {
         "QPLIB Artifact should contain exactly one instance"
     );
     let bytes = artifact.get_blob(&layer)?;
-    let mut instance =
+    let proto =
         Instance::decode(bytes.as_slice()).context("Failed to decode QPLIB instance layer")?;
     let annotations = layer.annotations().as_ref().cloned().unwrap_or_default();
-    crate::artifact::merge_instance_annotations(&mut instance, &annotations);
-    Ok(instance)
+    let mut instance: crate::Instance = proto.try_into()?;
+    crate::FlatAnnotations::merge_annotations(&mut instance, &annotations);
+    Ok(instance.into())
 }
 
 #[cfg(test)]
@@ -341,11 +345,15 @@ mod tests {
 
         // Verify that the title still contains the full QPLIB_XXXX format
         assert_eq!(
-            annotation.get("org.ommx.v1.instance.title").unwrap(),
+            annotation
+                .get(crate::annotation_keys::INSTANCE_TITLE)
+                .unwrap(),
             "QPLIB_0018"
         );
         assert_eq!(
-            annotation.get("org.ommx.v1.instance.dataset").unwrap(),
+            annotation
+                .get(crate::annotation_keys::INSTANCE_DATASET)
+                .unwrap(),
             "QPLIB"
         );
 

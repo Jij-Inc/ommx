@@ -1548,17 +1548,17 @@ fn build_annotations(
     namespace: &str,
     annotations: Option<&Bound<pyo3::types::PyDict>>,
 ) -> Result<HashMap<String, String>> {
-    let ns = if namespace.ends_with('.') {
-        namespace.to_string()
-    } else {
-        format!("{namespace}.")
-    };
+    let ns = crate::annotations::normalize_namespace(namespace);
     let mut result = HashMap::new();
     if let Some(dict) = annotations {
         for (key, value) in dict.iter() {
             let k: String = key.extract()?;
             let v: String = value.extract()?;
-            result.insert(format!("{ns}{k}"), v);
+            let full_key = format!("{ns}{k}");
+            if ommx::is_reserved_annotation_key(&full_key) {
+                bail!("User annotation key `{full_key}` is reserved for OMMX metadata");
+            }
+            result.insert(full_key, v);
         }
     }
     Ok(result)

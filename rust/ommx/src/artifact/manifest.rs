@@ -7,7 +7,6 @@ use super::{
     media_types::{self, OCI_EMPTY_CONFIG_BYTES},
     ImageRef,
 };
-use crate::v1;
 use anyhow::{bail, ensure, Context, Result};
 use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, ImageManifest, MediaType};
 use serde::Serialize;
@@ -615,20 +614,8 @@ impl<'reg> ArtifactDraft<'reg> {
         Ok(stored_descriptor)
     }
 
-    pub fn add_v1_instance(&mut self, instance: v1::Instance) -> Result<StoredDescriptor<'reg>> {
-        let stored_descriptor = self.registry.store_v1_instance_layer(instance)?;
-        self.layers.push(stored_descriptor.clone());
-        Ok(stored_descriptor)
-    }
-
     pub fn add_instance(&mut self, instance: crate::Instance) -> Result<StoredDescriptor<'reg>> {
         let stored_descriptor = self.registry.store_instance_layer(&instance)?;
-        self.layers.push(stored_descriptor.clone());
-        Ok(stored_descriptor)
-    }
-
-    pub fn add_v1_solution(&mut self, solution: v1::Solution) -> Result<StoredDescriptor<'reg>> {
-        let stored_descriptor = self.registry.store_v1_solution_layer(solution)?;
         self.layers.push(stored_descriptor.clone());
         Ok(stored_descriptor)
     }
@@ -639,29 +626,11 @@ impl<'reg> ArtifactDraft<'reg> {
         Ok(stored_descriptor)
     }
 
-    pub fn add_v1_parametric_instance(
-        &mut self,
-        instance: v1::ParametricInstance,
-    ) -> Result<StoredDescriptor<'reg>> {
-        let stored_descriptor = self.registry.store_v1_parametric_instance_layer(instance)?;
-        self.layers.push(stored_descriptor.clone());
-        Ok(stored_descriptor)
-    }
-
     pub fn add_parametric_instance(
         &mut self,
         instance: crate::ParametricInstance,
     ) -> Result<StoredDescriptor<'reg>> {
         let stored_descriptor = self.registry.store_parametric_instance_layer(&instance)?;
-        self.layers.push(stored_descriptor.clone());
-        Ok(stored_descriptor)
-    }
-
-    pub fn add_v1_sample_set(
-        &mut self,
-        sample_set: v1::SampleSet,
-    ) -> Result<StoredDescriptor<'reg>> {
-        let stored_descriptor = self.registry.store_v1_sample_set_layer(sample_set)?;
         self.layers.push(stored_descriptor.clone());
         Ok(stored_descriptor)
     }
@@ -967,6 +936,7 @@ pub fn is_anonymous_artifact_tag(tag: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{v1, Parse};
     use prost::Message;
 
     fn test_image_name(tag: &str) -> Result<ImageRef> {
@@ -1099,12 +1069,12 @@ mod tests {
     }
 
     #[test]
-    fn add_solution_stores_v1_solution_blob() -> Result<()> {
+    fn add_solution_stores_solution_blob() -> Result<()> {
         let dir = tempfile::tempdir()?;
         let registry = LocalRegistry::open(dir.path())?;
         let mut builder = ArtifactDraft::with_registry(&registry, test_image_name("solution")?);
         #[allow(deprecated)]
-        let solution = v1::Solution {
+        let solution_proto = v1::Solution {
             state: Some(v1::State {
                 entries: HashMap::from([(1, 1.0)]),
             }),
@@ -1122,57 +1092,56 @@ mod tests {
             metadata: None,
             annotations: HashMap::new(),
         };
+        let solution = solution_proto.parse(&())?;
 
-        let descriptor = builder.add_v1_solution(solution.clone())?;
+        let descriptor = builder.add_solution(solution.clone())?;
         assert_eq!(descriptor.media_type(), &media_types::v1_solution());
 
         let blob = registry.get_blob(&descriptor)?;
         let decoded = v1::Solution::decode(blob.as_slice())?;
-        assert_eq!(decoded, solution);
+        assert_eq!(decoded, v1::Solution::from(solution));
         Ok(())
     }
 
     #[test]
-    fn add_instance_projects_proto_annotations_to_descriptor() -> Result<()> {
+    fn add_instance_projects_annotations_to_descriptor() -> Result<()> {
         let dir = tempfile::tempdir()?;
         let registry = LocalRegistry::open(dir.path())?;
         let mut builder = ArtifactDraft::with_registry(&registry, test_image_name("instance")?);
 
-        let instance = v1::Instance {
-            description: Some(v1::instance::Description {
-                name: Some("proto title".to_string()),
-                ..Default::default()
-            }),
-            annotations: HashMap::from([(
-                "org.example.annotation".to_string(),
-                "proto value".to_string(),
-            )]),
+        let mut instance = crate::Instance::default();
+        instance.description = Some(crate::v1::instance::Description {
+            name: Some("domain title".to_string()),
             ..Default::default()
-        };
-        let descriptor = builder.add_v1_instance(instance)?;
+        });
+        instance.annotations.insert(
+            "org.example.annotation".to_string(),
+            "domain value".to_string(),
+        );
+        let descriptor = builder.add_instance(instance)?;
 
         let annotations = descriptor
             .annotations()
             .as_ref()
             .context("descriptor annotations should be present")?;
         assert_eq!(
-            annotations.get("org.ommx.v1.instance.title"),
-            Some(&"proto title".to_string())
+            annotations.get(crate::annotation_keys::INSTANCE_TITLE),
+            Some(&"domain title".to_string())
         );
         assert_eq!(
             annotations.get("org.example.annotation"),
-            Some(&"proto value".to_string())
+            Some(&"domain value".to_string())
         );
 
         let bytes = registry.get_blob(&descriptor)?;
         let decoded = v1::Instance::decode(bytes.as_slice())?;
         assert_eq!(
             decoded.description.and_then(|description| description.name),
-            Some("proto title".to_string())
+            Some("domain title".to_string())
         );
         assert_eq!(
             decoded.annotations.get("org.example.annotation"),
-            Some(&"proto value".to_string())
+            Some(&"domain value".to_string())
         );
 
         Ok(())
@@ -1186,7 +1155,10 @@ mod tests {
         let layer = builder.add_layer_bytes(
             MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
             b"instance".to_vec(),
-            HashMap::from([("org.ommx.v1.instance.title".to_string(), "demo".to_string())]),
+            HashMap::from([(
+                crate::annotation_keys::INSTANCE_TITLE.to_string(),
+                "demo".to_string(),
+            )]),
         )?;
         builder.add_annotation("org.opencontainers.image.ref.name", "example.com/demo:v1");
 

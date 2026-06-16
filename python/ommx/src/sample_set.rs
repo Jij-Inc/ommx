@@ -87,7 +87,7 @@ pub struct SampleSet {
     pub(crate) inner: ommx::SampleSet,
 }
 
-impl_solution_annotations!(SampleSet, "org.ommx.v1.sample-set");
+impl_solution_annotations!(SampleSet);
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
