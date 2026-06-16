@@ -86,18 +86,18 @@ solution = OMMXHighsAdapter.solve(instance, diagnostics=diag)
 
 analysis = HighsDiagnosticsAnalyzer(diag.diagnostics)
 
-analysis.progress_history_df[["mip_primal_bound", "mip_dual_bound"]].plot()
+analysis.progress_history_df[["primal_bound", "dual_bound"]].plot()
 print(analysis.dual_bound)
 print(analysis.termination_result)
 ```
 
-`progress_history_df` は `running_time_sec` を index にした pandas DataFrame です。
+`progress_history_df` は `solving_time_sec` を index にした pandas DataFrame です。
 `dual_bound`、`gap`、`primal_bound` などの Series property も同じ time index を使うので、
 そのまま時間軸の plot に使えます。
 
 {class}`~ommx_highs_adapter.HighsProgressSnapshot` は、HiGHS の MIP logging callback から
-記録される progress sample です。progress snapshot には `running_time_sec`、
-`mip_node_count`、`mip_primal_bound`、`mip_dual_bound`、`mip_gap` などが含まれます。
+記録される progress sample です。progress snapshot には `solving_time_sec`、
+`mip_node_count`、`primal_bound`、`dual_bound`、`gap` などが含まれます。
 
 {class}`~ommx_highs_adapter.HighsTerminationReport` は、`model.run()` が終了した後、
 HiGHS model を OMMX Solution に decode する前に記録される最終 report です。

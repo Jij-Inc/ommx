@@ -29,7 +29,7 @@ class HighsProgressSnapshot:
     event: str
     """HiGHS callback message, currently ``"MIP logging"``."""
 
-    running_time_sec: float
+    solving_time_sec: float
     """HiGHS runtime when the callback ran."""
 
     mip_node_count: int
@@ -47,13 +47,13 @@ class HighsProgressSnapshot:
     objective_value: float
     """Objective value reported at the callback."""
 
-    mip_primal_bound: float
+    primal_bound: float
     """MIP primal bound reported at the callback."""
 
-    mip_dual_bound: float
+    dual_bound: float
     """MIP dual bound reported at the callback."""
 
-    mip_gap: float
+    gap: float
     """MIP relative gap reported at the callback."""
 
     @classmethod
@@ -61,15 +61,15 @@ class HighsProgressSnapshot:
         data = event.data_out
         return cls(
             event=event.message,
-            running_time_sec=data.running_time,
+            solving_time_sec=data.running_time,
             mip_node_count=int(data.mip_node_count),
             simplex_iteration_count=int(data.simplex_iteration_count),
             ipm_iteration_count=int(data.ipm_iteration_count),
             pdlp_iteration_count=int(data.pdlp_iteration_count),
             objective_value=data.objective_function_value,
-            mip_primal_bound=data.mip_primal_bound,
-            mip_dual_bound=data.mip_dual_bound,
-            mip_gap=data.mip_gap,
+            primal_bound=data.mip_primal_bound,
+            dual_bound=data.mip_dual_bound,
+            gap=data.mip_gap,
         )
 
 
@@ -230,17 +230,17 @@ class HighsDiagnosticsAnalyzer:
         return _dataframe(
             self.progress_history_records,
             _dataclass_field_names(HighsProgressSnapshot),
-            index="running_time_sec",
+            index="solving_time_sec",
         )
 
     @property
     def event(self) -> Any:
-        """Return progress event names indexed by running time."""
+        """Return progress event names indexed by solving time."""
         return self._progress_series("event")
 
     @property
     def mip_node_count(self) -> Any:
-        """Return MIP node counts indexed by running time."""
+        """Return MIP node counts indexed by solving time."""
         return self._progress_series("mip_node_count")
 
     @property
@@ -250,53 +250,53 @@ class HighsDiagnosticsAnalyzer:
 
     @property
     def simplex_iteration_count(self) -> Any:
-        """Return simplex iteration counts indexed by running time."""
+        """Return simplex iteration counts indexed by solving time."""
         return self._progress_series("simplex_iteration_count")
 
     @property
     def ipm_iteration_count(self) -> Any:
-        """Return interior-point iteration counts indexed by running time."""
+        """Return interior-point iteration counts indexed by solving time."""
         return self._progress_series("ipm_iteration_count")
 
     @property
     def pdlp_iteration_count(self) -> Any:
-        """Return PDLP iteration counts indexed by running time."""
+        """Return PDLP iteration counts indexed by solving time."""
         return self._progress_series("pdlp_iteration_count")
 
     @property
     def objective_value(self) -> Any:
-        """Return objective values indexed by running time."""
+        """Return objective values indexed by solving time."""
         return self._progress_series("objective_value")
 
     @property
     def mip_primal_bound(self) -> Any:
-        """Return MIP primal bounds indexed by running time."""
-        return self._progress_series("mip_primal_bound")
+        """Alias for :attr:`primal_bound`."""
+        return self.primal_bound
 
     @property
     def primal_bound(self) -> Any:
-        """Alias for :attr:`mip_primal_bound`."""
-        return self.mip_primal_bound
+        """Return MIP primal bounds indexed by solving time."""
+        return self._progress_series("primal_bound")
 
     @property
     def mip_dual_bound(self) -> Any:
-        """Return MIP dual bounds indexed by running time."""
-        return self._progress_series("mip_dual_bound")
+        """Alias for :attr:`dual_bound`."""
+        return self.dual_bound
 
     @property
     def dual_bound(self) -> Any:
-        """Alias for :attr:`mip_dual_bound`."""
-        return self.mip_dual_bound
+        """Return MIP dual bounds indexed by solving time."""
+        return self._progress_series("dual_bound")
 
     @property
     def mip_gap(self) -> Any:
-        """Return MIP gaps indexed by running time."""
-        return self._progress_series("mip_gap")
+        """Alias for :attr:`gap`."""
+        return self.gap
 
     @property
     def gap(self) -> Any:
-        """Alias for :attr:`mip_gap`."""
-        return self.mip_gap
+        """Return MIP gaps indexed by solving time."""
+        return self._progress_series("gap")
 
     @property
     def termination_result(self) -> dict[str, object] | None:

@@ -53,24 +53,24 @@ def _infeasible_instance() -> Instance:
 def _progress_snapshot(
     *,
     event: str = "MIP logging",
-    running_time_sec: float = 0.25,
+    solving_time_sec: float = 0.25,
     mip_node_count: int = 0,
     objective_value: float = 10.0,
-    mip_primal_bound: float = 10.0,
-    mip_dual_bound: float = 12.0,
-    mip_gap: float = 0.2,
+    primal_bound: float = 10.0,
+    dual_bound: float = 12.0,
+    gap: float = 0.2,
 ) -> HighsProgressSnapshot:
     return HighsProgressSnapshot(
         event=event,
-        running_time_sec=running_time_sec,
+        solving_time_sec=solving_time_sec,
         mip_node_count=mip_node_count,
         simplex_iteration_count=-1,
         ipm_iteration_count=-1,
         pdlp_iteration_count=-1,
         objective_value=objective_value,
-        mip_primal_bound=mip_primal_bound,
-        mip_dual_bound=mip_dual_bound,
-        mip_gap=mip_gap,
+        primal_bound=primal_bound,
+        dual_bound=dual_bound,
+        gap=gap,
     )
 
 
@@ -140,22 +140,22 @@ def test_direct_solve_records_progress_snapshots():
     assert collector.diagnostics[-1].__class__ is HighsTerminationReport
     assert {snapshot.event for snapshot in progress_snapshots} == {"MIP logging"}
     for snapshot in progress_snapshots:
-        assert snapshot.running_time_sec >= 0.0
+        assert snapshot.solving_time_sec >= 0.0
         assert snapshot.mip_node_count >= 0
-        assert isinstance(snapshot.mip_primal_bound, float)
-        assert isinstance(snapshot.mip_dual_bound, float)
-        assert isinstance(snapshot.mip_gap, float)
+        assert isinstance(snapshot.primal_bound, float)
+        assert isinstance(snapshot.dual_bound, float)
+        assert isinstance(snapshot.gap, float)
 
 
 def test_analyzer_accepts_typed_reports():
     first = _progress_snapshot()
     second = _progress_snapshot(
-        running_time_sec=0.5,
+        solving_time_sec=0.5,
         mip_node_count=1,
         objective_value=10.0,
-        mip_primal_bound=10.0,
-        mip_dual_bound=10.0,
-        mip_gap=0.0,
+        primal_bound=10.0,
+        dual_bound=10.0,
+        gap=0.0,
     )
     report = _termination_report()
 
@@ -174,17 +174,17 @@ def test_analyzer_accepts_typed_reports():
         "ipm_iteration_count",
         "pdlp_iteration_count",
         "objective_value",
-        "mip_primal_bound",
-        "mip_dual_bound",
-        "mip_gap",
+        "primal_bound",
+        "dual_bound",
+        "gap",
     ]
-    assert analyzer.progress_history_df.index.name == "running_time_sec"
+    assert analyzer.progress_history_df.index.name == "solving_time_sec"
     assert list(analyzer.progress_history_df.index) == [0.25, 0.5]
     assert list(analyzer.dual_bound) == [12.0, 10.0]
     assert list(analyzer.gap) == [0.2, 0.0]
     assert list(analyzer.primal_bound) == [10.0, 10.0]
     assert list(analyzer.node_count) == [0, 1]
-    assert analyzer.dual_bound.index.name == "running_time_sec"
+    assert analyzer.dual_bound.index.name == "solving_time_sec"
     assert analyzer.termination_status == "Optimal"
     assert analyzer.termination_objective_value == pytest.approx(5.0)
     assert analyzer.termination_mip_dual_bound == pytest.approx(5.0)
@@ -225,7 +225,7 @@ def test_experiment_stores_diagnostics_as_dict_payload():
     assert diagnostics[-1]["status"] == "Optimal"
     assert analyzer.termination_result is not None
     assert analyzer.termination_result["mip_gap"] == pytest.approx(0.0)
-    assert analyzer.dual_bound.index.name == "running_time_sec"
+    assert analyzer.dual_bound.index.name == "solving_time_sec"
 
 
 def test_direct_collector_keeps_termination_report_before_decode_error():

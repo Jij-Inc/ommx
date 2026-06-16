@@ -92,19 +92,18 @@ solution = OMMXHighsAdapter.solve(instance, diagnostics=diag)
 
 analysis = HighsDiagnosticsAnalyzer(diag.diagnostics)
 
-analysis.progress_history_df[["mip_primal_bound", "mip_dual_bound"]].plot()
+analysis.progress_history_df[["primal_bound", "dual_bound"]].plot()
 print(analysis.dual_bound)
 print(analysis.termination_result)
 ```
 
-`progress_history_df` is a pandas DataFrame indexed by `running_time_sec`.
+`progress_history_df` is a pandas DataFrame indexed by `solving_time_sec`.
 Series properties such as `dual_bound`, `gap`, and `primal_bound` use the same
 time index, so they are ready for time-based plots.
 
 {class}`~ommx_highs_adapter.HighsProgressSnapshot` is recorded from HiGHS MIP
 logging callbacks. A progress snapshot includes fields such as
-`running_time_sec`, `mip_node_count`, `mip_primal_bound`, `mip_dual_bound`, and
-`mip_gap`.
+`solving_time_sec`, `mip_node_count`, `primal_bound`, `dual_bound`, and `gap`.
 
 {class}`~ommx_highs_adapter.HighsTerminationReport` is recorded after
 `model.run()` finishes and before the HiGHS model is decoded back into an OMMX
