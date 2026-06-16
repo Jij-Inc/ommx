@@ -28,6 +28,27 @@ assert restored.get_user_annotation("owner") == "analytics"
 
 {class}`~ommx.v1.Solution` and {class}`~ommx.v1.SampleSet` also expose process metadata through `instance`, `solver`, `parameters`, `start`, and `end`; those fields round-trip through both protobuf bytes and Artifacts.
 
+### 🆕 `Instance.populate_state` for complete solver states ([#944](https://github.com/Jij-Inc/ommx/pull/944))
+
+{meth}`~ommx.v1.Instance.populate_state` is now exposed in the Python SDK. It validates a partial solver state against an Instance and returns a {class}`~ommx.v1.State` containing every decision variable by filling fixed variables, irrelevant variables, and dependent variables owned by the Instance.
+
+```python
+from ommx.v1 import DecisionVariable, Instance
+
+x = {i: DecisionVariable.continuous(i) for i in [1, 2, 5, 10, 99]}
+instance = Instance.from_components(
+    decision_variables=list(x.values()),
+    objective=x[1] + x[2],
+    constraints={},
+    sense=Instance.MINIMIZE,
+)
+instance.substitute({10: x[1] + x[2], 5: x[10] + 1})
+instance = instance.partial_evaluate({99: 4.0})
+
+state = instance.populate_state({1: 2.0, 2: 3.0})
+assert state.entries == {1: 2.0, 2: 3.0, 5: 6.0, 10: 5.0, 99: 4.0}
+```
+
 ## 3.0.0 Alpha 7
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0a7-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0a7)

@@ -78,8 +78,8 @@ impl AcyclicAssignments {
 
     /// Get the assignments in substitution order (variables that need to be replaced first).
     ///
-    /// This order is used when performing substitution operations where variables
-    /// that are depended upon by others should be substituted first.
+    /// This order is used when performing substitution operations where assigned
+    /// variables that depend on other assigned variables are substituted first.
     ///
     /// # Example
     ///
@@ -226,7 +226,8 @@ impl Evaluate for AcyclicAssignments {
     fn evaluate(&self, state: &State, atol: ATol) -> crate::Result<Self::Output> {
         let mut extended_state = state.clone();
 
-        // Evaluate assignments in topological order
+        // Evaluate assignments in dependency-first order, the reverse of the dependency graph's
+        // topological order.
         //
         // When the assignment is x1 <- x2 + x3, x4 <- x1 + 2, and state is {x2: 1, x3: 2},
         // we first evaluate x1 = 3, then x4 = 5. Finally returns extended state {x1: 3, x2: 1, x3: 2, x4: 5}.
