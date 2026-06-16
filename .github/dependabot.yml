@@ -22,3 +22,5 @@ updates:
       # Do not upgrade prost related dependencies
       - dependency-name: "prost"
       - dependency-name: "prost-build"
+      # Keep oci-spec aligned with the version re-exported by oci-client
+      - dependency-name: "oci-spec"
