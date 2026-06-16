@@ -165,6 +165,7 @@ mod tests {
         Instance.constraint_collection;removed_constraints;BTreeMap[stack] 24
         Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[stack] 32
         Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
+        Instance.decision_variable_dependency;AcyclicAssignments.topological_order;Vec[stack] 24
         Instance.decision_variables;BTreeMap[stack] 24
         Instance.description;Option[stack] 168
         Instance.indicator_constraint_collection;indicator_constraints;BTreeMap[stack] 24
@@ -234,6 +235,7 @@ mod tests {
         Instance.constraint_collection;removed_constraints;BTreeMap[stack] 24
         Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[stack] 32
         Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
+        Instance.decision_variable_dependency;AcyclicAssignments.topological_order;Vec[stack] 24
         Instance.decision_variables;BTreeMap[key] 16
         Instance.decision_variables;BTreeMap[stack] 24
         Instance.decision_variables;DecisionVariable.bound 32
@@ -321,6 +323,7 @@ mod tests {
         Instance.constraint_collection;removed_constraints;BTreeMap[stack] 24
         Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[stack] 32
         Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
+        Instance.decision_variable_dependency;AcyclicAssignments.topological_order;Vec[stack] 24
         Instance.decision_variables;BTreeMap[key] 16
         Instance.decision_variables;BTreeMap[stack] 24
         Instance.decision_variables;DecisionVariable.bound 32
@@ -402,6 +405,7 @@ mod tests {
         Instance.constraint_collection;removed_constraints;BTreeMap[stack] 24
         Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[stack] 32
         Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
+        Instance.decision_variable_dependency;AcyclicAssignments.topological_order;Vec[stack] 24
         Instance.decision_variables;BTreeMap[key] 24
         Instance.decision_variables;BTreeMap[stack] 24
         Instance.decision_variables;DecisionVariable.bound 48
@@ -493,6 +497,7 @@ mod tests {
         Instance.constraint_collection;removed_constraints;BTreeMap[stack] 24
         Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[stack] 32
         Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
+        Instance.decision_variable_dependency;AcyclicAssignments.topological_order;Vec[stack] 24
         Instance.decision_variables;BTreeMap[key] 8
         Instance.decision_variables;BTreeMap[stack] 24
         Instance.decision_variables;DecisionVariable.bound 16
