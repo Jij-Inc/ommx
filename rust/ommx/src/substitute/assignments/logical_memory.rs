@@ -20,6 +20,11 @@ impl LogicalMemoryProfile for AcyclicAssignments {
         let edge_bytes = self.dependency.edge_count() * (size_of::<crate::VariableID>() * 2);
         let total_bytes = graph_overhead + node_bytes + edge_bytes;
         visitor.visit_leaf(&path.with("AcyclicAssignments.dependency"), total_bytes);
+
+        self.topological_order.visit_logical_memory(
+            path.with("AcyclicAssignments.topological_order").as_mut(),
+            visitor,
+        );
     }
 }
 
@@ -37,6 +42,7 @@ mod tests {
         insta::assert_snapshot!(folded, @r###"
         AcyclicAssignments.assignments;FnvHashMap[stack] 32
         AcyclicAssignments.dependency 144
+        AcyclicAssignments.topological_order;Vec[stack] 24
         "###);
     }
 
@@ -55,6 +61,8 @@ mod tests {
         AcyclicAssignments.assignments;FnvHashMap[stack] 32
         AcyclicAssignments.assignments;Linear;PolynomialBase.terms 160
         AcyclicAssignments.dependency 224
+        AcyclicAssignments.topological_order 32
+        AcyclicAssignments.topological_order;Vec[stack] 24
         "###);
     }
 }

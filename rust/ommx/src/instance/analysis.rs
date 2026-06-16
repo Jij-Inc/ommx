@@ -1,5 +1,5 @@
 use super::*;
-use crate::{v1::State, ATol, AcyclicAssignments, Bound, Bounds, Evaluate, Kind, VariableIDSet};
+use crate::{Bound, Bounds, Evaluate, Kind, VariableIDSet};
 use std::collections::BTreeMap;
 
 /// The result of analyzing the decision variables in an instance.
@@ -14,22 +14,19 @@ use std::collections::BTreeMap;
 ///   variables and constraints, removed constraints or fixed variables which does not affect the
 ///   optimization problem itself.
 ///
-/// - Validating the state returned by solvers, and populating the variables which does not passed to the solvers.
-///   - The state by solvers is **valid** if:
-///     - It contains every [`Self::used`] decision variables. Other IDs are allowed as long as consistent with the population result.
-///     - The values for each decision variable are within the bounds.
-///   - [`Self::populate`] checks the state is valid, and populates the state as follows:
-///     - For [`Self::fixed`] ID, the fixed value is used.
-///     - For [`Self::irrelevant`] ID, [`Bound::nearest_to_zero`] is used as the value.
-///     - For [`Self::dependent`] ID, the value is evaluated from other IDs.
+/// This struct is only an analysis view. Validation and population of solver
+/// states is an [`Instance`] responsibility; use [`Instance::populate_state`].
 ///
 /// Invariants
 /// -----------
 /// - Every IDs are subset of [`Self::all`].
 /// - (kind-based partitioning) [`Self::binary`], [`Self::integer`], [`Self::continuous`], [`Self::semi_integer`], and [`Self::semi_continuous`]
 ///   are disjoint, and their union is equal to [`Self::all`].
-/// - (usage-based partitioning) The union of [`Self::used_in_objective`] and [`Self::used_in_constraints`] (= [`Self::used`]), [`Self::fixed`],
-///   and [`Self::dependent`] are disjoint each other. Remaining decision variables are [`Self::irrelevant`].
+/// - (usage-based partitioning) [`Self::used`], [`Self::fixed`], and
+///   [`Self::dependent`] are disjoint each other. Remaining decision variables
+///   are [`Self::irrelevant`]. [`Self::used`] includes IDs used in the objective
+///   or active constraints; [`Self::used_in_constraints`] is the regular
+///   constraint-level breakdown.
 #[derive(Debug, Clone, PartialEq, getset::Getters, serde::Serialize, serde::Deserialize)]
 pub struct DecisionVariableAnalysis {
     /// The IDs of all decision variables
@@ -56,10 +53,10 @@ pub struct DecisionVariableAnalysis {
     /// The set of decision variables that are used in the objective function.
     #[getset(get = "pub")]
     used_in_objective: VariableIDSet,
-    /// The set of decision variables that are used in the constraints.
+    /// The set of decision variables that are used in regular constraints.
     #[getset(get = "pub")]
     used_in_constraints: BTreeMap<ConstraintID, VariableIDSet>,
-    /// The set of decision variables that are used in the objective function or constraints.
+    /// The set of decision variables that are used in the objective function or active constraints.
     #[getset(get = "pub")]
     used: VariableIDSet,
     /// Fixed decision variables
@@ -118,102 +115,6 @@ impl DecisionVariableAnalysis {
             .map(|(id, bound)| (*id, *bound))
             .collect()
     }
-
-    /// Check the state is **valid**, and populate the state with the removed decision variables
-    ///
-    /// Post-condition
-    /// --------------
-    /// - The IDs of returned [`State`] are the same as [`Self::all`].
-    pub fn populate(&self, mut state: State, atol: ATol) -> crate::Result<State> {
-        let state_ids: VariableIDSet = state.entries.keys().map(|id| (*id).into()).collect();
-
-        // Check the IDs in the state are subset of all IDs
-        let unknown_ids: VariableIDSet = state_ids.difference(&self.all).cloned().collect();
-        if !unknown_ids.is_empty() {
-            crate::bail!(
-                { ?unknown_ids },
-                "state contains unknown variable IDs: {unknown_ids:?}",
-            );
-        }
-
-        // Check the state contains every used decision variables
-        let missing_ids: VariableIDSet = self.used().difference(&state_ids).cloned().collect();
-        if !missing_ids.is_empty() {
-            crate::bail!(
-                { ?missing_ids },
-                "state is missing required variable IDs: {missing_ids:?}",
-            );
-        }
-
-        // Note: Bound and kind checking is intentionally omitted here.
-        // These constraints will be validated as part of Solution::feasible() instead.
-
-        // Populate the state with fixed variables
-        for (id, value) in self.fixed() {
-            use std::collections::hash_map::Entry;
-            match state.entries.entry(id.into_inner()) {
-                Entry::Occupied(entry) => {
-                    if (entry.get() - value).abs() > atol {
-                        let state_value = *entry.get();
-                        let instance_value = *value;
-                        crate::bail!(
-                            { id = ?id, state_value, instance_value },
-                            "state value for variable {id:?} is inconsistent with instance (state={state_value}, instance={instance_value})",
-                        );
-                    }
-                }
-                Entry::Vacant(entry) => {
-                    entry.insert(*value);
-                }
-            }
-        }
-        // Populate the state with irrelevant variables
-        for (id, (kind, bound)) in self.irrelevant() {
-            use std::collections::hash_map::Entry;
-            match state.entries.entry(id.into_inner()) {
-                Entry::Occupied(_entry) => {
-                    // Value already exists, no need to check or modify
-                    // Note: Bound and kind checking is intentionally omitted here.
-                }
-                Entry::Vacant(entry) => {
-                    let value = match kind {
-                        Kind::Binary | Kind::Integer | Kind::Continuous => bound.nearest_to_zero(),
-                        Kind::SemiInteger | Kind::SemiContinuous => 0.0,
-                    };
-                    entry.insert(value);
-                }
-            }
-        }
-        // Populate the state with dependent variables in topological order.
-        // Emit the diagnostic context via tracing and propagate the original
-        // error unchanged, so callers can still
-        // `err.downcast_ref::<SubstitutionError>()` after propagation.
-        let acyclic = AcyclicAssignments::new(
-            self.dependent()
-                .iter()
-                .map(|(id, (_kind, _bound, f))| (*id, f.clone())),
-        )
-        .inspect_err(|e| {
-            tracing::error!(error = %e, "cyclic dependency among dependent variables");
-        })?;
-        for (id, f) in acyclic.evaluation_order_iter() {
-            let value = f.evaluate(&state, atol).inspect_err(|e| {
-                tracing::error!(?id, error = %e, "failed to evaluate dependent variable");
-            })?;
-            // Note: Bound and kind checking is intentionally omitted here.
-            // These constraints will be validated as part of Solution::feasible() instead.
-            if let Some(v) = state.entries.insert(id.into_inner(), value) {
-                if (v - value).abs() > atol {
-                    crate::bail!(
-                        { id = ?id, state_value = v, instance_value = value },
-                        "state value for variable {id:?} is inconsistent with instance (state={v}, instance={value})",
-                    );
-                }
-            }
-        }
-
-        Ok(state)
-    }
 }
 
 impl Instance {
@@ -232,12 +133,10 @@ impl Instance {
 
     pub fn used_decision_variable_ids(&self) -> VariableIDSet {
         let mut used = self.objective.required_ids();
-        for constraint in self.constraints().values() {
-            used.extend(constraint.function().required_ids());
-        }
-        for ic in self.indicator_constraints().values() {
-            used.extend(ic.required_ids());
-        }
+        used.extend(self.constraint_collection.required_ids());
+        used.extend(self.indicator_constraint_collection.required_ids());
+        used.extend(self.one_hot_constraint_collection.required_ids());
+        used.extend(self.sos1_constraint_collection.required_ids());
         // Note: named_functions are intentionally excluded from the "used" set.
         // They are auxiliary quantities that can reference fixed/dependent variables.
         used
@@ -291,12 +190,7 @@ impl Instance {
             used_in_constraints.insert(cid, required_ids);
         }
 
-        let mut used = used_in_objective.clone();
-        // Note: named_functions are intentionally excluded from the "used" set.
-        // They are auxiliary quantities that can reference fixed/dependent variables.
-        for ids in used_in_constraints.values() {
-            used.extend(ids);
-        }
+        let used = self.used_decision_variable_ids();
 
         let dependent: BTreeMap<VariableID, _> = self
             .decision_variable_dependency
@@ -374,7 +268,7 @@ impl std::fmt::Display for DecisionVariableAnalysis {
         // They are auxiliary quantities that can reference fixed/dependent/irrelevant variables.
         writeln!(
             f,
-            "    Used: {} (in objective: {}, in constraints: {}), Fixed: {}, Dependent: {}, Irrelevant: {}",
+            "    Used: {} (in objective: {}, in regular constraints: {}), Fixed: {}, Dependent: {}, Irrelevant: {}",
             self.used.len(),
             self.used_in_objective.len(),
             used_in_constraints_count,
@@ -445,7 +339,7 @@ impl std::fmt::Display for DecisionVariableAnalysis {
         if !self.used_in_constraints.is_empty() {
             writeln!(
                 f,
-                "\n  Used in Constraints ({} constraints):",
+                "\n  Used in Regular Constraints ({} constraints):",
                 self.used_in_constraints.len()
             )?;
             for (constraint_id, var_ids) in &self.used_in_constraints {
@@ -603,9 +497,8 @@ mod tests {
             .build()
             .unwrap();
 
-        let analysis = instance.analyze_decision_variables();
-
         // Verify x_5 and x_10 are both dependent
+        let analysis = instance.analyze_decision_variables();
         assert!(analysis.dependent().contains_key(&VariableID::from(5)));
         assert!(analysis.dependent().contains_key(&VariableID::from(10)));
 
@@ -615,7 +508,7 @@ mod tests {
         // This should succeed with topological sort:
         // 1. Evaluate x_10 = x_1 + x_2 = 2.0 + 3.0 = 5.0
         // 2. Evaluate x_5 = x_10 + 1 = 5.0 + 1.0 = 6.0
-        let populated = analysis.populate(state, ATol::default()).unwrap();
+        let populated = instance.populate_state(state, ATol::default()).unwrap();
 
         assert_eq!(populated.entries.get(&1), Some(&2.0));
         assert_eq!(populated.entries.get(&2), Some(&3.0));
@@ -674,10 +567,14 @@ mod tests {
             (instance, state) in Instance::arbitrary()
                 .prop_flat_map(move |instance| instance.arbitrary_state().prop_map(move |state| (instance.clone(), state)))
         ) {
-            let analysis = instance.analyze_decision_variables();
-            let populated = analysis.populate(state.clone(), ATol::default()).unwrap();
+            let populated = instance
+                .populate_state(state.clone(), crate::ATol::default())
+                .unwrap();
             let populated_ids: VariableIDSet = populated.entries.keys().map(|id| (*id).into()).collect();
-            prop_assert_eq!(populated_ids, analysis.all);
+            prop_assert_eq!(
+                populated_ids,
+                instance.decision_variables().keys().copied().collect()
+            );
         }
     }
 }

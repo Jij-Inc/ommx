@@ -1080,6 +1080,31 @@ impl Instance {
         Ok(Solution { inner: solution })
     }
 
+    /// Populate fixed, irrelevant, and dependent decision variables in a state.
+    ///
+    /// The input state must contain all decision variables that are actually used
+    /// by this instance's objective and active constraints. The returned
+    /// {class}`~ommx.v1.State` contains every decision variable in the instance.
+    #[pyo3(signature = (state, *, atol=None))]
+    pub fn populate_state(
+        &self,
+        py: Python<'_>,
+        state: State,
+        atol: Option<f64>,
+    ) -> PyResult<State> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let atol = match atol {
+            Some(value) => ommx::ATol::new(value)
+                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?,
+            None => ommx::ATol::default(),
+        };
+        let state = self
+            .inner
+            .populate_state(state.0, atol)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        Ok(State(state))
+    }
+
     /// Creates a new instance with specific decision variables fixed to given values.
     ///
     /// This method substitutes the specified decision variables with their provided values,

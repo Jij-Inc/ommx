@@ -1,7 +1,8 @@
 use super::*;
 use crate::Result;
 use crate::{
-    constraint::RemovedReason, ATol, Evaluate, Propagate, PropagateOutcome, VariableIDSet,
+    constraint::RemovedReason, ATol, Bound, Evaluate, Kind, Propagate, PropagateOutcome,
+    VariableIDSet,
 };
 use std::collections::BTreeMap;
 
@@ -33,15 +34,138 @@ fn merge_state(
     Ok(())
 }
 
+struct StatePopulationPlan<'a> {
+    all: VariableIDSet,
+    used: VariableIDSet,
+    fixed: Vec<(VariableID, f64)>,
+    irrelevant: Vec<(VariableID, Kind, Bound)>,
+    dependency: &'a AcyclicAssignments,
+}
+
+impl StatePopulationPlan<'_> {
+    fn populate(&self, mut state: v1::State, atol: ATol) -> Result<v1::State> {
+        let state_ids: VariableIDSet = state.entries.keys().map(|id| (*id).into()).collect();
+
+        let unknown_ids: VariableIDSet = state_ids.difference(&self.all).cloned().collect();
+        if !unknown_ids.is_empty() {
+            crate::bail!(
+                { ?unknown_ids },
+                "state contains unknown variable IDs: {unknown_ids:?}",
+            );
+        }
+
+        let missing_ids: VariableIDSet = self.used.difference(&state_ids).cloned().collect();
+        if !missing_ids.is_empty() {
+            crate::bail!(
+                { ?missing_ids },
+                "state is missing required variable IDs: {missing_ids:?}",
+            );
+        }
+
+        // Bound and kind checking is intentionally left to Solution::feasible().
+        for (id, value) in &self.fixed {
+            use std::collections::hash_map::Entry;
+            match state.entries.entry(id.into_inner()) {
+                Entry::Occupied(entry) => {
+                    if (entry.get() - value).abs() > atol {
+                        let state_value = *entry.get();
+                        let instance_value = *value;
+                        crate::bail!(
+                            { id = ?id, state_value, instance_value },
+                            "state value for variable {id:?} is inconsistent with instance (state={state_value}, instance={instance_value})",
+                        );
+                    }
+                }
+                Entry::Vacant(entry) => {
+                    entry.insert(*value);
+                }
+            }
+        }
+
+        for (id, kind, bound) in &self.irrelevant {
+            use std::collections::hash_map::Entry;
+            match state.entries.entry(id.into_inner()) {
+                Entry::Occupied(_entry) => {}
+                Entry::Vacant(entry) => {
+                    let value = match kind {
+                        Kind::Binary | Kind::Integer | Kind::Continuous => bound.nearest_to_zero(),
+                        Kind::SemiInteger | Kind::SemiContinuous => 0.0,
+                    };
+                    entry.insert(value);
+                }
+            }
+        }
+
+        for (id, f) in self.dependency.evaluation_order_iter() {
+            let value = f.evaluate(&state, atol).inspect_err(|e| {
+                tracing::error!(?id, error = %e, "failed to evaluate dependent variable");
+            })?;
+            if let Some(v) = state.entries.insert(id.into_inner(), value) {
+                if (v - value).abs() > atol {
+                    crate::bail!(
+                        { id = ?id, state_value = v, instance_value = value },
+                        "state value for variable {id:?} is inconsistent with instance (state={v}, instance={value})",
+                    );
+                }
+            }
+        }
+
+        Ok(state)
+    }
+}
+
+impl Instance {
+    fn state_population_plan(&self) -> StatePopulationPlan<'_> {
+        let all: VariableIDSet = self.decision_variables.keys().copied().collect();
+        let used = self.used_decision_variable_ids();
+
+        let fixed: Vec<_> = self
+            .decision_variables
+            .iter()
+            .filter_map(|(id, dv)| dv.substituted_value().map(|value| (*id, value)))
+            .collect();
+        let fixed_ids: VariableIDSet = fixed.iter().map(|(id, _)| *id).collect();
+        let dependent_ids: VariableIDSet = self.decision_variable_dependency.keys().collect();
+        let relevant: VariableIDSet = used
+            .iter()
+            .chain(fixed_ids.iter())
+            .chain(dependent_ids.iter())
+            .copied()
+            .collect();
+
+        let irrelevant = self
+            .decision_variables
+            .iter()
+            .filter(|(id, _)| !relevant.contains(id))
+            .map(|(id, dv)| (*id, dv.kind(), dv.bound()))
+            .collect();
+
+        StatePopulationPlan {
+            all,
+            used,
+            fixed,
+            irrelevant,
+            dependency: &self.decision_variable_dependency,
+        }
+    }
+
+    /// Check the state is valid for this instance and populate fixed,
+    /// irrelevant, and dependent decision variables.
+    ///
+    /// Post-condition: the returned state contains exactly this instance's
+    /// decision-variable IDs.
+    pub fn populate_state(&self, state: v1::State, atol: ATol) -> Result<v1::State> {
+        self.state_population_plan().populate(state, atol)
+    }
+}
+
 impl Evaluate for Instance {
     type Output = crate::Solution;
     type SampledOutput = crate::SampleSet;
 
     #[tracing::instrument(skip_all)]
     fn evaluate(&self, state: &v1::State, atol: ATol) -> Result<Self::Output> {
-        let state = self
-            .analyze_decision_variables()
-            .populate(state.clone(), atol)?;
+        let state = self.populate_state(state.clone(), atol)?;
 
         let objective = self.objective.evaluate(&state, atol)?;
         let evaluated_constraints = self.constraint_collection.evaluate(&state, atol)?;
@@ -93,11 +217,11 @@ impl Evaluate for Instance {
     ) -> Result<Self::SampledOutput> {
         // Populate the decision variables in the samples
         let samples = {
-            let analysis = self.analyze_decision_variables();
+            let population = self.state_population_plan();
             let mut samples = samples.clone();
             for state in samples.iter_mut() {
                 let taken = std::mem::take(state);
-                *state = analysis.populate(taken, atol)?;
+                *state = population.populate(taken, atol)?;
             }
             samples
         };
@@ -191,7 +315,7 @@ impl Evaluate for Instance {
     }
 
     fn required_ids(&self) -> VariableIDSet {
-        self.analyze_decision_variables().used().clone()
+        self.used_decision_variable_ids()
     }
 }
 

@@ -17,6 +17,8 @@ pub struct AcyclicAssignments {
     assignments: FnvHashMap<VariableID, Function>,
     // The directed graph representing dependencies between assignments, assigned -> required.
     dependency: DiGraphMap<VariableID, ()>,
+    // Topological order of `dependency`, cached at construction time.
+    topological_order: Vec<VariableID>,
 }
 
 impl AcyclicAssignments {
@@ -45,14 +47,13 @@ impl AcyclicAssignments {
             }
         }
 
-        // Check if the dependency graph is acyclic
-        if algo::is_cyclic_directed(&dependency) {
-            return Err(SubstitutionError::CyclicAssignmentDetected);
-        }
+        let topological_order = algo::toposort(&dependency, None)
+            .map_err(|_| SubstitutionError::CyclicAssignmentDetected)?;
 
         Ok(Self {
             assignments,
             dependency,
+            topological_order,
         })
     }
 
@@ -70,10 +71,6 @@ impl AcyclicAssignments {
 
     pub fn iter(&self) -> impl Iterator<Item = (&VariableID, &Function)> {
         self.assignments.iter()
-    }
-
-    fn sorted_ids(&self) -> Vec<VariableID> {
-        algo::toposort(&self.dependency, None).expect("Graph should be acyclic by construction")
     }
 
     /// Get the assignments in substitution order (variables that need to be replaced first).
@@ -97,8 +94,9 @@ impl AcyclicAssignments {
     /// assert_eq!(order, vec![4, 1]);
     /// ```
     pub fn substitution_order_iter(&self) -> impl Iterator<Item = (VariableID, &Function)> {
-        self.sorted_ids()
-            .into_iter()
+        self.topological_order
+            .iter()
+            .copied()
             .filter_map(move |var_id| self.assignments.get(&var_id).map(|linear| (var_id, linear)))
     }
 
@@ -132,8 +130,9 @@ impl AcyclicAssignments {
     /// assert_eq!(result.entries[&4], 5.0);
     /// ```
     pub fn evaluation_order_iter(&self) -> impl Iterator<Item = (VariableID, &Function)> {
-        self.sorted_ids()
-            .into_iter()
+        self.topological_order
+            .iter()
+            .copied()
             .rev()
             .filter_map(move |var_id| self.assignments.get(&var_id).map(|linear| (var_id, linear)))
     }
