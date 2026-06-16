@@ -7,7 +7,7 @@ use crate::{
     Rng, SampleSet, Samples, Sense, Solution, State, VariableBound,
 };
 use anyhow::Result;
-use ommx::{ConstraintID, Evaluate, Message, NamedFunctionID, VariableID};
+use ommx::{ConstraintID, Evaluate, NamedFunctionID, VariableID};
 use pyo3::{
     exceptions::PyKeyError,
     prelude::*,
@@ -76,8 +76,9 @@ impl Instance {
     #[staticmethod]
     pub fn from_bytes(py: Python<'_>, bytes: &Bound<PyBytes>) -> Result<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let proto = ommx::v1::Instance::decode(bytes.as_bytes())?;
-        crate::annotations::instance_from_v1_with_descriptor_annotations(proto, HashMap::new())
+        Ok(Self {
+            inner: ommx::Instance::from_bytes(bytes.as_bytes())?,
+        })
     }
 
     /// Create an instance from its components.
@@ -717,8 +718,7 @@ impl Instance {
 
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let buf = crate::annotations::instance_to_v1_with_annotations(self).encode_to_vec();
-        PyBytes::new(py, &buf)
+        PyBytes::new(py, &self.inner.to_bytes())
     }
 
     /// Get the set of decision variable IDs used in the objective and remaining constraints.

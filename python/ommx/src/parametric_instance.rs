@@ -7,7 +7,7 @@ use crate::{
     Sense,
 };
 use anyhow::Result;
-use ommx::{ConstraintID, Message, NamedFunctionID, VariableID};
+use ommx::{ConstraintID, NamedFunctionID, VariableID};
 use pyo3::{exceptions::PyKeyError, prelude::*, types::PyBytes, Bound, PyAny};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
@@ -26,19 +26,14 @@ impl ParametricInstance {
     #[staticmethod]
     pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
         let _guard = crate::TRACING.attach_parent_context(bytes.py());
-        let proto = ommx::v1::ParametricInstance::decode(bytes.as_bytes())?;
-        crate::annotations::parametric_instance_from_v1_with_descriptor_annotations(
-            proto,
-            HashMap::new(),
-        )
+        Ok(Self {
+            inner: ommx::ParametricInstance::from_bytes(bytes.as_bytes())?,
+        })
     }
 
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        PyBytes::new(
-            py,
-            &crate::annotations::parametric_instance_to_v1_with_annotations(self).encode_to_vec(),
-        )
+        PyBytes::new(py, &self.inner.to_bytes())
     }
 
     #[staticmethod]

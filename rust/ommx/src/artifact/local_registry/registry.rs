@@ -351,7 +351,11 @@ impl LocalRegistry {
     }
 
     pub fn store_instance_layer(&self, instance: &crate::Instance) -> Result<StoredDescriptor<'_>> {
-        self.store_v1_instance_layer(instance.clone().into())
+        self.store_layer_blob(
+            media_types::v1_instance(),
+            &instance.to_bytes(),
+            crate::FlatAnnotations::flat_annotations(instance),
+        )
     }
 
     pub fn store_v1_parametric_instance_layer(
@@ -370,7 +374,11 @@ impl LocalRegistry {
         &self,
         instance: &crate::ParametricInstance,
     ) -> Result<StoredDescriptor<'_>> {
-        self.store_v1_parametric_instance_layer(instance.clone().into())
+        self.store_layer_blob(
+            media_types::v1_parametric_instance(),
+            &instance.to_bytes(),
+            crate::FlatAnnotations::flat_annotations(instance),
+        )
     }
 
     pub fn store_v1_solution_layer(
@@ -386,7 +394,11 @@ impl LocalRegistry {
     }
 
     pub fn store_solution_layer(&self, solution: &crate::Solution) -> Result<StoredDescriptor<'_>> {
-        self.store_v1_solution_layer(solution.clone().into())
+        self.store_layer_blob(
+            media_types::v1_solution(),
+            &solution.to_bytes(),
+            crate::FlatAnnotations::flat_annotations(solution),
+        )
     }
 
     pub fn store_v1_sample_set_layer(
@@ -405,7 +417,11 @@ impl LocalRegistry {
         &self,
         sample_set: &crate::SampleSet,
     ) -> Result<StoredDescriptor<'_>> {
-        self.store_v1_sample_set_layer(sample_set.clone().into())
+        self.store_layer_blob(
+            media_types::v1_sample_set(),
+            &sample_set.to_bytes(),
+            crate::FlatAnnotations::flat_annotations(sample_set),
+        )
     }
 
     pub fn resolve_image_name(&self, image_name: &ImageRef) -> Result<Option<Digest>> {

@@ -205,6 +205,49 @@ impl LocalArtifactDyn {
         self.registry_handle.get_blob_dyn(descriptor)
     }
 
+    pub fn get_instance_layer(&self, descriptor: &Descriptor) -> Result<crate::Instance> {
+        let descriptor = self
+            .registry_handle
+            .registry()
+            .stored_descriptor(descriptor.clone())?;
+        self.registry_handle
+            .registry()
+            .get_instance_layer(&descriptor)
+    }
+
+    pub fn get_parametric_instance_layer(
+        &self,
+        descriptor: &Descriptor,
+    ) -> Result<crate::ParametricInstance> {
+        let descriptor = self
+            .registry_handle
+            .registry()
+            .stored_descriptor(descriptor.clone())?;
+        self.registry_handle
+            .registry()
+            .get_parametric_instance_layer(&descriptor)
+    }
+
+    pub fn get_solution_layer(&self, descriptor: &Descriptor) -> Result<crate::Solution> {
+        let descriptor = self
+            .registry_handle
+            .registry()
+            .stored_descriptor(descriptor.clone())?;
+        self.registry_handle
+            .registry()
+            .get_solution_layer(&descriptor)
+    }
+
+    pub fn get_sample_set_layer(&self, descriptor: &Descriptor) -> Result<crate::SampleSet> {
+        let descriptor = self
+            .registry_handle
+            .registry()
+            .stored_descriptor(descriptor.clone())?;
+        self.registry_handle
+            .registry()
+            .get_sample_set_layer(&descriptor)
+    }
+
     pub fn save(&self, output: &Path) -> crate::Result<()> {
         AsArtifact::save(self, output)
     }
@@ -572,19 +615,31 @@ impl<'reg> ArtifactDraft<'reg> {
         Ok(stored_descriptor)
     }
 
-    pub fn add_instance(&mut self, instance: v1::Instance) -> Result<StoredDescriptor<'reg>> {
+    pub fn add_v1_instance(&mut self, instance: v1::Instance) -> Result<StoredDescriptor<'reg>> {
         let stored_descriptor = self.registry.store_v1_instance_layer(instance)?;
         self.layers.push(stored_descriptor.clone());
         Ok(stored_descriptor)
     }
 
-    pub fn add_solution(&mut self, solution: v1::Solution) -> Result<StoredDescriptor<'reg>> {
+    pub fn add_instance(&mut self, instance: crate::Instance) -> Result<StoredDescriptor<'reg>> {
+        let stored_descriptor = self.registry.store_instance_layer(&instance)?;
+        self.layers.push(stored_descriptor.clone());
+        Ok(stored_descriptor)
+    }
+
+    pub fn add_v1_solution(&mut self, solution: v1::Solution) -> Result<StoredDescriptor<'reg>> {
         let stored_descriptor = self.registry.store_v1_solution_layer(solution)?;
         self.layers.push(stored_descriptor.clone());
         Ok(stored_descriptor)
     }
 
-    pub fn add_parametric_instance(
+    pub fn add_solution(&mut self, solution: crate::Solution) -> Result<StoredDescriptor<'reg>> {
+        let stored_descriptor = self.registry.store_solution_layer(&solution)?;
+        self.layers.push(stored_descriptor.clone());
+        Ok(stored_descriptor)
+    }
+
+    pub fn add_v1_parametric_instance(
         &mut self,
         instance: v1::ParametricInstance,
     ) -> Result<StoredDescriptor<'reg>> {
@@ -593,8 +648,29 @@ impl<'reg> ArtifactDraft<'reg> {
         Ok(stored_descriptor)
     }
 
-    pub fn add_sample_set(&mut self, sample_set: v1::SampleSet) -> Result<StoredDescriptor<'reg>> {
+    pub fn add_parametric_instance(
+        &mut self,
+        instance: crate::ParametricInstance,
+    ) -> Result<StoredDescriptor<'reg>> {
+        let stored_descriptor = self.registry.store_parametric_instance_layer(&instance)?;
+        self.layers.push(stored_descriptor.clone());
+        Ok(stored_descriptor)
+    }
+
+    pub fn add_v1_sample_set(
+        &mut self,
+        sample_set: v1::SampleSet,
+    ) -> Result<StoredDescriptor<'reg>> {
         let stored_descriptor = self.registry.store_v1_sample_set_layer(sample_set)?;
+        self.layers.push(stored_descriptor.clone());
+        Ok(stored_descriptor)
+    }
+
+    pub fn add_sample_set(
+        &mut self,
+        sample_set: crate::SampleSet,
+    ) -> Result<StoredDescriptor<'reg>> {
+        let stored_descriptor = self.registry.store_sample_set_layer(&sample_set)?;
         self.layers.push(stored_descriptor.clone());
         Ok(stored_descriptor)
     }
@@ -1047,7 +1123,7 @@ mod tests {
             annotations: HashMap::new(),
         };
 
-        let descriptor = builder.add_solution(solution.clone())?;
+        let descriptor = builder.add_v1_solution(solution.clone())?;
         assert_eq!(descriptor.media_type(), &media_types::v1_solution());
 
         let blob = registry.get_blob(&descriptor)?;
@@ -1073,7 +1149,7 @@ mod tests {
             )]),
             ..Default::default()
         };
-        let descriptor = builder.add_instance(instance)?;
+        let descriptor = builder.add_v1_instance(instance)?;
 
         let annotations = descriptor
             .annotations()

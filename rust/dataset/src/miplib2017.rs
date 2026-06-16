@@ -37,7 +37,7 @@ pub fn package(path: &Path) -> Result<()> {
         }
 
         tracing::info!("Loading: {name}");
-        let instance = match ommx::mps::parse(file) {
+        let mut instance = match ommx::mps::parse(file) {
             Ok(instance) => instance,
             Err(err) => {
                 tracing::error!("Skip: Failed to load '{name}' with error: {err}");
@@ -65,8 +65,7 @@ pub fn package(path: &Path) -> Result<()> {
 
         let mut builder = ArtifactDraft::new(image_name)?;
         builder.add_source(&source_url);
-        let mut instance: ommx::v1::Instance = instance.into();
-        ommx::artifact::overlay_instance_annotations(&mut instance, &annotations);
+        ommx::FlatAnnotations::replace_annotations(&mut instance, annotations);
         builder.add_instance(instance)?;
         let _artifact = builder.commit()?;
         // Do not push here. Use `ommx push` command to upload the artifacts.

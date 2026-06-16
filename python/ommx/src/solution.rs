@@ -3,7 +3,6 @@ use crate::pandas::{
     PyDataFrame, ToPandasEntry,
 };
 use anyhow::Result;
-use ommx::Message;
 use pyo3::{
     exceptions::PyKeyError,
     exceptions::PyRuntimeError,
@@ -32,16 +31,14 @@ impl Solution {
     #[staticmethod]
     pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
         let _guard = crate::TRACING.attach_parent_context(bytes.py());
-        let proto = ommx::v1::Solution::decode(bytes.as_bytes())?;
-        crate::annotations::solution_from_v1_with_descriptor_annotations(proto, Default::default())
+        Ok(Self {
+            inner: ommx::Solution::from_bytes(bytes.as_bytes())?,
+        })
     }
 
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        PyBytes::new(
-            py,
-            &crate::annotations::solution_to_v1_with_annotations(self).encode_to_vec(),
-        )
+        PyBytes::new(py, &self.inner.to_bytes())
     }
 
     /// Class constant for optimal solutions
