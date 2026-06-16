@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, fields
-from typing import Any, Iterable, Mapping, cast
+from typing import Any, Callable, Iterable, Mapping, cast
 
 import highspy
 import numpy as np
@@ -20,6 +20,57 @@ from ommx.adapter import (
 from .exception import OMMXHighsAdapterError
 
 _tracer = trace.get_tracer("ommx.adapter.highs")
+
+
+@dataclass(frozen=True, slots=True)
+class HighsProgressSnapshot:
+    """HiGHS MIP solve progress observed from one logging callback."""
+
+    event: str
+    """HiGHS callback message, currently ``"MIP logging"``."""
+
+    running_time_sec: float
+    """HiGHS runtime when the callback ran."""
+
+    mip_node_count: int
+    """MIP branch-and-bound nodes processed at the callback."""
+
+    simplex_iteration_count: int
+    """Simplex iterations at the callback."""
+
+    ipm_iteration_count: int
+    """Interior-point iterations at the callback."""
+
+    pdlp_iteration_count: int
+    """PDLP iterations at the callback."""
+
+    objective_value: float
+    """Objective value reported at the callback."""
+
+    mip_primal_bound: float
+    """MIP primal bound reported at the callback."""
+
+    mip_dual_bound: float
+    """MIP dual bound reported at the callback."""
+
+    mip_gap: float
+    """MIP relative gap reported at the callback."""
+
+    @classmethod
+    def from_callback_event(cls, event: Any) -> HighsProgressSnapshot:
+        data = event.data_out
+        return cls(
+            event=event.message,
+            running_time_sec=data.running_time,
+            mip_node_count=int(data.mip_node_count),
+            simplex_iteration_count=int(data.simplex_iteration_count),
+            ipm_iteration_count=int(data.ipm_iteration_count),
+            pdlp_iteration_count=int(data.pdlp_iteration_count),
+            objective_value=data.objective_function_value,
+            mip_primal_bound=data.mip_primal_bound,
+            mip_dual_bound=data.mip_dual_bound,
+            mip_gap=data.mip_gap,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,18 +191,112 @@ class HighsDiagnosticsAnalyzer:
     :attr:`ommx.experiment.Solve.diagnostics`.
     """
 
+    _progress_snapshots: tuple[HighsProgressSnapshot, ...]
+    _progress_history_records: tuple[dict[str, object], ...]
     _termination_result: dict[str, object] | None
 
     def __init__(self, diagnostics: Iterable[Any]) -> None:
+        progress_snapshots: list[HighsProgressSnapshot] = []
+        progress_history_records: list[dict[str, object]] = []
         termination_results: list[dict[str, object]] = []
 
         for diagnostic in diagnostics:
+            if isinstance(diagnostic, HighsProgressSnapshot):
+                progress_snapshots.append(diagnostic)
+            if (record := _as_progress_history_record(diagnostic)) is not None:
+                progress_history_records.append(record)
             if (result := _as_termination_result(diagnostic)) is not None:
                 termination_results.append(result)
 
+        self._progress_snapshots = tuple(progress_snapshots)
+        self._progress_history_records = tuple(progress_history_records)
         self._termination_result = (
             termination_results[-1] if termination_results else None
         )
+
+    @property
+    def progress_snapshots(self) -> tuple[HighsProgressSnapshot, ...]:
+        """Typed progress snapshots in the order they were recorded."""
+        return self._progress_snapshots
+
+    @property
+    def progress_history_records(self) -> list[dict[str, object]]:
+        """Return one dictionary per HiGHS MIP logging callback."""
+        return [dict(record) for record in self._progress_history_records]
+
+    @property
+    def progress_history_df(self) -> Any:
+        """Return progress snapshots as a pandas DataFrame indexed by time."""
+        return _dataframe(
+            self.progress_history_records,
+            _dataclass_field_names(HighsProgressSnapshot),
+            index="running_time_sec",
+        )
+
+    @property
+    def event(self) -> Any:
+        """Return progress event names indexed by running time."""
+        return self._progress_series("event")
+
+    @property
+    def mip_node_count(self) -> Any:
+        """Return MIP node counts indexed by running time."""
+        return self._progress_series("mip_node_count")
+
+    @property
+    def node_count(self) -> Any:
+        """Alias for :attr:`mip_node_count`."""
+        return self.mip_node_count
+
+    @property
+    def simplex_iteration_count(self) -> Any:
+        """Return simplex iteration counts indexed by running time."""
+        return self._progress_series("simplex_iteration_count")
+
+    @property
+    def ipm_iteration_count(self) -> Any:
+        """Return interior-point iteration counts indexed by running time."""
+        return self._progress_series("ipm_iteration_count")
+
+    @property
+    def pdlp_iteration_count(self) -> Any:
+        """Return PDLP iteration counts indexed by running time."""
+        return self._progress_series("pdlp_iteration_count")
+
+    @property
+    def objective_value(self) -> Any:
+        """Return objective values indexed by running time."""
+        return self._progress_series("objective_value")
+
+    @property
+    def mip_primal_bound(self) -> Any:
+        """Return MIP primal bounds indexed by running time."""
+        return self._progress_series("mip_primal_bound")
+
+    @property
+    def primal_bound(self) -> Any:
+        """Alias for :attr:`mip_primal_bound`."""
+        return self.mip_primal_bound
+
+    @property
+    def mip_dual_bound(self) -> Any:
+        """Return MIP dual bounds indexed by running time."""
+        return self._progress_series("mip_dual_bound")
+
+    @property
+    def dual_bound(self) -> Any:
+        """Alias for :attr:`mip_dual_bound`."""
+        return self.mip_dual_bound
+
+    @property
+    def mip_gap(self) -> Any:
+        """Return MIP gaps indexed by running time."""
+        return self._progress_series("mip_gap")
+
+    @property
+    def gap(self) -> Any:
+        """Alias for :attr:`mip_gap`."""
+        return self.mip_gap
 
     @property
     def termination_result(self) -> dict[str, object] | None:
@@ -161,49 +306,47 @@ class HighsDiagnosticsAnalyzer:
         return dict(self._termination_result)
 
     @property
-    def status(self) -> str | None:
+    def termination_status(self) -> str | None:
         """Return the terminal HiGHS model status, if present."""
         return cast(str | None, self._termination_value("status"))
 
     @property
-    def objective_value(self) -> float | None:
+    def termination_objective_value(self) -> float | None:
         """Return the terminal objective value, if present."""
         return cast(float | None, self._termination_value("objective_value"))
 
     @property
-    def mip_dual_bound(self) -> float | None:
+    def termination_mip_dual_bound(self) -> float | None:
         """Return the terminal HiGHS MIP dual bound, if present."""
         return cast(float | None, self._termination_value("mip_dual_bound"))
 
     @property
-    def dual_bound(self) -> float | None:
-        """Alias for :attr:`mip_dual_bound`."""
-        return self.mip_dual_bound
-
-    @property
-    def mip_gap(self) -> float | None:
+    def termination_mip_gap(self) -> float | None:
         """Return the terminal HiGHS MIP gap, if present."""
         return cast(float | None, self._termination_value("mip_gap"))
 
     @property
-    def gap(self) -> float | None:
-        """Alias for :attr:`mip_gap`."""
-        return self.mip_gap
-
-    @property
-    def mip_node_count(self) -> int | None:
+    def termination_mip_node_count(self) -> int | None:
         """Return the terminal HiGHS MIP node count, if present."""
         return cast(int | None, self._termination_value("mip_node_count"))
-
-    @property
-    def node_count(self) -> int | None:
-        """Alias for :attr:`mip_node_count`."""
-        return self.mip_node_count
 
     def _termination_value(self, column: str) -> object | None:
         if self._termination_result is None:
             return None
         return self._termination_result[column]
+
+    def _progress_series(self, column: str) -> Any:
+        return self.progress_history_df[column]
+
+
+def _as_progress_history_record(diagnostic: Any) -> dict[str, object] | None:
+    if isinstance(diagnostic, HighsProgressSnapshot):
+        return cast(dict[str, object], asdict(diagnostic))
+    if not isinstance(diagnostic, Mapping):
+        return None
+    if not _has_dataclass_fields(diagnostic, HighsProgressSnapshot):
+        return None
+    return _select_dataclass_fields(diagnostic, HighsProgressSnapshot)
 
 
 def _as_termination_result(diagnostic: Any) -> dict[str, object] | None:
@@ -233,6 +376,22 @@ def _select_dataclass_fields(
         name: cast(object, diagnostic[name])
         for name in _dataclass_field_names(dataclass_type)
     }
+
+
+def _dataframe(
+    records: list[dict[str, object]], columns: list[str], *, index: str | None = None
+) -> Any:
+    try:
+        import pandas as pd
+    except ImportError as error:
+        raise ImportError(
+            "pandas is required for HighsDiagnosticsAnalyzer DataFrame and Series "
+            "properties. Use progress_history_records without pandas."
+        ) from error
+    dataframe = pd.DataFrame.from_records(records, columns=columns)
+    if index is not None:
+        dataframe = dataframe.set_index(index)
+    return dataframe
 
 
 class OMMXHighsAdapter(SolverAdapter):
@@ -538,8 +697,20 @@ class OMMXHighsAdapter(SolverAdapter):
             span.set_attribute("adapter", f"{cls.__module__}.{cls.__qualname__}")
             adapter = cls(ommx_instance, verbose=verbose)
             model = adapter.solver_input
+            diagnostics_callback: Callable[[Any], None] | None = None
+            if diagnostics is not None:
+
+                def record_progress(event: Any) -> None:
+                    diagnostics.record(HighsProgressSnapshot.from_callback_event(event))
+
+                diagnostics_callback = record_progress
+                model.cbMipLogging.subscribe(diagnostics_callback)
             with _tracer.start_as_current_span("call"):
-                model.run()
+                try:
+                    model.run()
+                finally:
+                    if diagnostics_callback is not None:
+                        model.cbMipLogging.unsubscribe(diagnostics_callback)
             if diagnostics is not None:
                 diagnostics.record(HighsTerminationReport.from_model(model))
             return adapter.decode(model)

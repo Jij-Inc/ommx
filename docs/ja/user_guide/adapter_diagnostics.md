@@ -74,7 +74,7 @@ progress snapshot は callback 時点の観測値です。SCIP は `BESTSOLFOUND
 ## HiGHS で diagnostics を記録する
 
 HiGHS Adapter は、`solve()` に {class}`~ommx.adapter.DiagnosticCollector` を渡すと
-termination report を記録します。通常は
+MIP progress と termination 情報を記録します。通常は
 {class}`~ommx_highs_adapter.HighsDiagnosticsAnalyzer` を通して読みます。
 
 ```python
@@ -86,19 +86,24 @@ solution = OMMXHighsAdapter.solve(instance, diagnostics=diag)
 
 analysis = HighsDiagnosticsAnalyzer(diag.diagnostics)
 
+analysis.progress_history_df[["mip_primal_bound", "mip_dual_bound"]].plot()
 print(analysis.dual_bound)
-print(analysis.gap)
 print(analysis.termination_result)
 ```
+
+`progress_history_df` は `running_time_sec` を index にした pandas DataFrame です。
+`dual_bound`、`gap`、`primal_bound` などの Series property も同じ time index を使うので、
+そのまま時間軸の plot に使えます。
+
+{class}`~ommx_highs_adapter.HighsProgressSnapshot` は、HiGHS の MIP logging callback から
+記録される progress sample です。progress snapshot には `running_time_sec`、
+`mip_node_count`、`mip_primal_bound`、`mip_dual_bound`、`mip_gap` などが含まれます。
 
 {class}`~ommx_highs_adapter.HighsTerminationReport` は、`model.run()` が終了した後、
 HiGHS model を OMMX Solution に decode する前に記録される最終 report です。
 `status`、`objective_value`、`mip_dual_bound`、`mip_gap`、`mip_node_count`、
 iteration count、feasibility violation summary、runtime、HiGHS version metadata などが含まれます。
-
-{class}`~ommx_highs_adapter.HighsDiagnosticsAnalyzer` の `dual_bound`、`gap`、
-`node_count` は、それぞれ HiGHS の MIP field である `mip_dual_bound`、`mip_gap`、
-`mip_node_count` への alias です。
+終了時点の scalar 値が必要な場合は、`termination_result` または `termination_*` property を使ってください。
 
 ### 失敗時の処理
 
