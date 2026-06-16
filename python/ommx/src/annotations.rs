@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::Result as AnyhowResult;
 use pyo3::types::{PyAnyMethods, PyDictMethods};
 use std::collections::HashMap;
 
@@ -37,7 +37,10 @@ impl<'py> pyo3::IntoPyObject<'py> for AnnotationMapping {
     type Output = pyo3::Bound<'py, pyo3::PyAny>;
     type Error = pyo3::PyErr;
 
-    fn into_pyobject(self, py: pyo3::Python<'py>) -> Result<Self::Output, Self::Error> {
+    fn into_pyobject(
+        self,
+        py: pyo3::Python<'py>,
+    ) -> std::result::Result<Self::Output, Self::Error> {
         readonly_annotations(py, self.0)
     }
 }
@@ -60,7 +63,7 @@ pub fn flat_annotations<T: ommx::FlatAnnotations>(value: &T) -> HashMap<String, 
 pub fn replace_annotations<T: ommx::FlatAnnotations>(
     value: &mut T,
     annotations: HashMap<String, String>,
-) -> Result<()> {
+) -> AnyhowResult<()> {
     ommx::FlatAnnotations::replace_annotations(value, annotations);
     Ok(())
 }
@@ -330,7 +333,11 @@ macro_rules! impl_instance_annotations {
 
             #[getter]
             pub fn num_constraints(&self) -> Option<i64> {
-                Some(self.inner.constraints().len() as i64)
+                let count = self.inner.constraints().len()
+                    + self.inner.indicator_constraints().len()
+                    + self.inner.one_hot_constraints().len()
+                    + self.inner.sos1_constraints().len();
+                Some(count as i64)
             }
 
             #[getter]

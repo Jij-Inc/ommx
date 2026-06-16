@@ -127,6 +127,8 @@ def test_instance_annotations_do_not_serialize_structural_constraints():
 
     assert instance.title == "Structural Instance"
     assert annotations["org.ommx.v1.instance.title"] == "Structural Instance"
+    assert annotations["org.ommx.v1.instance.constraints"] == "1"
+    assert instance.num_constraints == 1
     assert len(instance.constraints_df(kind="one_hot")) == 1
 
 

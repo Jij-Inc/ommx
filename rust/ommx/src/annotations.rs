@@ -324,7 +324,11 @@ impl FlatAnnotations for crate::Instance {
         );
         annotations.insert(
             annotation_keys::INSTANCE_CONSTRAINTS.to_string(),
-            self.constraints().len().to_string(),
+            (self.constraints().len()
+                + self.indicator_constraints().len()
+                + self.one_hot_constraints().len()
+                + self.sos1_constraints().len())
+            .to_string(),
         );
         annotations
     }
@@ -364,7 +368,11 @@ impl FlatAnnotations for crate::ParametricInstance {
         );
         annotations.insert(
             annotation_keys::PARAMETRIC_INSTANCE_CONSTRAINTS.to_string(),
-            self.constraints().len().to_string(),
+            (self.constraints().len()
+                + self.indicator_constraints().len()
+                + self.one_hot_constraints().len()
+                + self.sos1_constraints().len())
+            .to_string(),
         );
         annotations
     }
@@ -456,6 +464,7 @@ impl FlatAnnotations for crate::SampleSet {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::{BTreeMap, BTreeSet};
 
     #[test]
     fn instance_flat_annotations_project_description_and_extensions() {
@@ -510,6 +519,48 @@ mod tests {
                 .flat_annotations()
                 .get(annotation_keys::INSTANCE_VARIABLES),
             Some(&"0".to_string())
+        );
+    }
+
+    #[test]
+    fn flat_annotations_count_active_special_constraints() {
+        let decision_variables = BTreeMap::from([
+            (
+                crate::VariableID::from(1),
+                crate::DecisionVariable::binary(crate::VariableID::from(1)),
+            ),
+            (
+                crate::VariableID::from(2),
+                crate::DecisionVariable::binary(crate::VariableID::from(2)),
+            ),
+        ]);
+        let one_hot = crate::OneHotConstraint::new(BTreeSet::from([
+            crate::VariableID::from(1),
+            crate::VariableID::from(2),
+        ]));
+        let instance = crate::Instance::builder()
+            .sense(crate::Sense::Minimize)
+            .objective(crate::Function::Zero)
+            .decision_variables(decision_variables)
+            .constraints(BTreeMap::new())
+            .one_hot_constraints(BTreeMap::from([(
+                crate::OneHotConstraintID::from(10),
+                one_hot,
+            )]))
+            .build()
+            .unwrap();
+
+        let annotations = instance.flat_annotations();
+        assert_eq!(
+            annotations.get(annotation_keys::INSTANCE_CONSTRAINTS),
+            Some(&"1".to_string())
+        );
+
+        let parametric: crate::ParametricInstance = instance.into();
+        let annotations = parametric.flat_annotations();
+        assert_eq!(
+            annotations.get(annotation_keys::PARAMETRIC_INSTANCE_CONSTRAINTS),
+            Some(&"1".to_string())
         );
     }
 }
