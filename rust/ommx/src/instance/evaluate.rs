@@ -491,11 +491,11 @@ mod tests {
                     (Just(instance), state)
                 })
         ) {
-            let analysis = instance.analyze_decision_variables();
+            let usage = instance.decision_variable_usage();
             let solution = instance.evaluate(&state, ATol::default()).unwrap();
             // Must be populated
             let ids: VariableIDSet = solution.state().entries.keys().map(|id| VariableID::from(*id)).collect();
-            prop_assert_eq!(&ids, analysis.all());
+            prop_assert_eq!(ids, usage.all());
         }
 
         #[test]
@@ -659,14 +659,14 @@ mod tests {
         instance.decision_variable_dependency = decision_variable_dependency;
         instance.named_functions = named_functions;
 
-        // Verify the analysis: x1 is used, x2 is fixed, x3 is dependent,
+        // Verify the usage: x1 is used, x2 is fixed, x3 is dependent,
         // x4 and x5 should be irrelevant (named_functions don't contribute to "used")
-        let analysis = instance.analyze_decision_variables();
-        assert!(analysis.used().contains(&VariableID::from(1)));
-        assert!(analysis.fixed().contains_key(&VariableID::from(2)));
-        assert!(analysis.dependent().contains_key(&VariableID::from(3)));
-        assert!(analysis.irrelevant().contains_key(&VariableID::from(4)));
-        assert!(analysis.irrelevant().contains_key(&VariableID::from(5)));
+        let usage = instance.decision_variable_usage();
+        assert!(usage.used().contains(&VariableID::from(1)));
+        assert!(usage.fixed().contains_key(&VariableID::from(2)));
+        assert!(usage.dependent().contains(&VariableID::from(3)));
+        assert!(usage.irrelevant().contains(&VariableID::from(4)));
+        assert!(usage.irrelevant().contains(&VariableID::from(5)));
 
         // Create state: x1=1.0, x4=2.0, x5=10.0
         // x2 is fixed to 3.0

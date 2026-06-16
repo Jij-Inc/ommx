@@ -1,10 +1,10 @@
-"""Test decision_variable_analysis API implementation."""
+"""Test decision_variable_usage API implementation."""
 
-from ommx.v1 import DecisionVariable, Instance
+from ommx.v1 import DecisionVariable, DecisionVariableRole, Instance
 
 
-def test_decision_variable_analysis_basic():
-    """Test basic decision_variable_analysis functionality."""
+def test_decision_variable_usage_basic():
+    """Test basic decision_variable_usage functionality."""
     # Create binary variables
     x = [DecisionVariable.binary(i, name="x") for i in range(3)]
 
@@ -16,24 +16,34 @@ def test_decision_variable_analysis_basic():
         sense=Instance.MAXIMIZE,
     )
 
-    # Test decision_variable_analysis method
-    analysis = instance.decision_variable_analysis()
+    usage = instance.decision_variable_usage()
 
     # Test basic functionality
-    used_ids = analysis.used_decision_variable_ids()
+    used_ids = usage.used_decision_variable_ids()
     assert used_ids == {0, 1, 2}
 
     # Test used_in_objective
-    objective_vars = analysis.used_in_objective()
+    objective_vars = usage.used_in_objective()
     assert objective_vars == {0, 1}
 
     # Test used_in_constraints
-    constraint_vars = analysis.used_in_constraints()
+    constraint_vars = usage.used_in_constraints()
     assert 0 in constraint_vars
     assert constraint_vars[0] == {1, 2}
 
+    assert usage.roles() == {
+        0: DecisionVariableRole.Used,
+        1: DecisionVariableRole.Used,
+        2: DecisionVariableRole.Used,
+    }
+
+    by_variable = usage.by_variable()
+    assert by_variable[0].role == DecisionVariableRole.Used
+    assert by_variable[0].used_in_objective
+    assert by_variable[2].used_in_regular_constraints() == {0}
+
     # Test used_binary returns Bound objects
-    binary_vars = analysis.used_binary()
+    binary_vars = usage.used_binary()
     assert len(binary_vars) == 3
     for var_id, bound in binary_vars.items():
         assert var_id in {0, 1, 2}
@@ -41,8 +51,8 @@ def test_decision_variable_analysis_basic():
         assert bound.upper == 1.0
 
 
-def test_decision_variable_analysis_mixed_types():
-    """Test decision_variable_analysis with mixed variable types."""
+def test_decision_variable_usage_mixed_types():
+    """Test decision_variable_usage with mixed variable types."""
     # Create mixed variables
     x_bin = DecisionVariable.binary(0, name="x_bin")
     x_int = DecisionVariable.integer(1, lower=0, upper=5, name="x_int")
@@ -56,23 +66,22 @@ def test_decision_variable_analysis_mixed_types():
         sense=Instance.MINIMIZE,
     )
 
-    # Get analysis
-    analysis = instance.decision_variable_analysis()
+    usage = instance.decision_variable_usage()
 
     # Test binary variables
-    binary_vars = analysis.used_binary()
+    binary_vars = usage.used_binary()
     assert 0 in binary_vars
     assert binary_vars[0].lower == 0.0
     assert binary_vars[0].upper == 1.0
 
     # Test integer variables
-    integer_vars = analysis.used_integer()
+    integer_vars = usage.used_integer()
     assert 1 in integer_vars
     assert integer_vars[1].lower == 0.0
     assert integer_vars[1].upper == 5.0
 
     # Test continuous variables
-    continuous_vars = analysis.used_continuous()
+    continuous_vars = usage.used_continuous()
     assert 2 in continuous_vars
     assert continuous_vars[2].lower == 0.0
     assert continuous_vars[2].upper == 10.0
@@ -88,8 +97,8 @@ def test_bound_wrapper_functionality():
         sense=Instance.MAXIMIZE,
     )
 
-    analysis = instance.decision_variable_analysis()
-    binary_vars = analysis.used_binary()
+    usage = instance.decision_variable_usage()
+    binary_vars = usage.used_binary()
 
     # Test a specific bound object
     bound = binary_vars[0]

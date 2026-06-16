@@ -1,10 +1,11 @@
 use crate::{
     pandas::{
-        constraint_id_col, constraint_kind_collection, entries_to_dataframe, ConstraintKind,
-        PyDataFrame, ToPandasEntry,
+        apply_include_filter, constraint_id_col, constraint_kind_collection, entries_to_dataframe,
+        raw_entries_to_dataframe, ConstraintKind, PyDataFrame, ToPandasEntry,
     },
-    Constraint, DecisionVariable, Function, NamedFunction, ParametricInstance, RemovedConstraint,
-    Rng, SampleSet, Samples, Sense, Solution, State, VariableBound,
+    Constraint, DecisionVariable, DecisionVariableRole, Function, Kind, NamedFunction,
+    ParametricInstance, RemovedConstraint, Rng, SampleSet, Samples, Sense, Solution, State,
+    VariableBound,
 };
 use anyhow::Result;
 use ommx::{ConstraintID, Evaluate, NamedFunctionID, VariableID};
@@ -1187,7 +1188,7 @@ impl Instance {
     /// Generate a random state for this instance using the provided random number generator.
     ///
     /// This method generates random values only for variables that are actually used in the
-    /// objective function or constraints, as determined by decision variable analysis.
+    /// objective function or constraints, as determined by decision variable usage.
     /// Generated values respect the bounds of each variable type.
     ///
     /// **Args:**
@@ -1711,8 +1712,8 @@ impl Instance {
         let _guard = crate::TRACING.attach_parent_context(py);
         let ids: BTreeSet<u64> = if decision_variable_ids.is_empty() {
             // Auto-detect: find all used integer decision variables
-            let analysis = self.inner.analyze_decision_variables();
-            let integer_ids: BTreeSet<u64> = analysis
+            let usage = self.inner.decision_variable_usage();
+            let integer_ids: BTreeSet<u64> = usage
                 .used_integer()
                 .into_keys()
                 .map(|id| id.into_inner())
@@ -1910,16 +1911,16 @@ impl Instance {
         Ok(result)
     }
 
-    /// Analyze decision variables in the optimization problem instance.
+    /// Build a decision-variable usage snapshot for the optimization problem instance.
     ///
-    /// Returns a comprehensive analysis of all decision variables including:
+    /// Returns reverse usage information for all decision variables including:
     ///
-    /// - Kind-based partitioning (binary, integer, continuous, etc.)
-    /// - Usage-based partitioning (used in objective, constraints, fixed, etc.)
-    /// - Variable bounds information
+    /// - Role: used, fixed, dependent, or irrelevant
+    /// - Variable references from objective, active constraints, named functions, and dependency assignments
+    /// - Kind, bound, and substituted value copied at construction time
     ///
     /// **Returns:**
-    /// Analysis object containing detailed information about decision variables
+    /// Usage snapshot containing detailed information about decision variables
     ///
     /// # Examples
     ///
@@ -1932,16 +1933,16 @@ impl Instance {
     /// ...     constraints=[(x[1] + x[2] == 1).set_id(0)],
     /// ...     sense=Instance.MAXIMIZE,
     /// ... )
-    /// >>> analysis = instance.decision_variable_analysis()
-    /// >>> analysis.used_decision_variable_ids()
+    /// >>> usage = instance.decision_variable_usage()
+    /// >>> usage.used_decision_variable_ids()
     /// {0, 1, 2}
-    /// >>> analysis.used_in_objective()
+    /// >>> usage.used_in_objective()
     /// {0, 1}
-    /// >>> analysis.used_in_constraints()
+    /// >>> usage.used_in_constraints()
     /// {0: {1, 2}}
     /// ```
-    pub fn decision_variable_analysis(&self) -> DecisionVariableAnalysis {
-        DecisionVariableAnalysis(self.inner.analyze_decision_variables())
+    pub fn decision_variable_usage(&self) -> DecisionVariableUsage {
+        DecisionVariableUsage(self.inner.decision_variable_usage().into_core())
     }
 
     /// Get statistics about the instance.
@@ -2006,21 +2007,24 @@ impl Instance {
         include: Option<Vec<String>>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let flags = crate::pandas::IncludeFlags::from_optional(include)?;
-        let var_meta_store = self.inner.variable_metadata().clone();
-        let var_meta_view: Vec<(ommx::DecisionVariableMetadata, &ommx::DecisionVariable)> = self
+        let usage = self.inner.decision_variable_usage_core();
+        let var_meta_store = self.inner.variable_metadata();
+        let entries = self
             .inner
             .decision_variables()
             .iter()
-            .map(|(id, dv)| (var_meta_store.collect_for(*id), dv))
-            .collect();
-        entries_to_dataframe(
-            py,
-            var_meta_view
-                .iter()
-                .map(|(m, dv)| crate::pandas::WithMetadata::new(*dv, m)),
-            "id",
-            flags,
-        )
+            .map(|(id, dv)| {
+                let metadata = var_meta_store.collect_for(*id);
+                let dict = crate::pandas::WithMetadata::new(dv, &metadata).to_pandas_entry(py)?;
+                let role = usage
+                    .role(*id)
+                    .expect("usage is built from the same decision_variables map");
+                dict.set_item("state_role", role.as_str())?;
+                apply_include_filter(&dict, flags)?;
+                Ok(dict.into_any())
+            })
+            .collect::<PyResult<_>>()?;
+        raw_entries_to_dataframe(py, entries, "id")
     }
 
     /// DataFrame of constraints, dispatched on `kind=`.
@@ -2572,7 +2576,7 @@ impl Instance {
     pub(crate) fn check_no_continuous_variables(&self, format_name: &str) -> Result<()> {
         let continuous_ids: Vec<u64> = self
             .inner
-            .analyze_decision_variables()
+            .decision_variable_usage()
             .used_continuous()
             .into_keys()
             .map(|id| id.into_inner())
@@ -2663,11 +2667,11 @@ impl Instance {
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
-pub struct DecisionVariableAnalysis(ommx::DecisionVariableAnalysis);
+pub struct DecisionVariableUsage(ommx::DecisionVariableUsageCore);
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
-impl DecisionVariableAnalysis {
+impl DecisionVariableUsage {
     pub fn used_binary(&self) -> BTreeMap<u64, VariableBound> {
         self.0
             .used_binary()
@@ -2730,7 +2734,7 @@ impl DecisionVariableAnalysis {
             .iter()
             .map(|(constraint_id, variable_ids)| {
                 (
-                    **constraint_id,
+                    (*constraint_id).into_inner(),
                     variable_ids.iter().map(|id| id.into_inner()).collect(),
                 )
             })
@@ -2748,7 +2752,7 @@ impl DecisionVariableAnalysis {
     pub fn irrelevant(&self) -> BTreeSet<u64> {
         self.0
             .irrelevant()
-            .keys()
+            .into_iter()
             .map(|id| id.into_inner())
             .collect()
     }
@@ -2756,8 +2760,87 @@ impl DecisionVariableAnalysis {
     pub fn dependent(&self) -> BTreeSet<u64> {
         self.0
             .dependent()
-            .keys()
+            .into_iter()
             .map(|id| id.into_inner())
+            .collect()
+    }
+
+    pub fn by_variable(&self) -> BTreeMap<u64, DecisionVariableUsageEntry> {
+        self.0
+            .by_variable()
+            .iter()
+            .map(|(id, usage)| (id.into_inner(), DecisionVariableUsageEntry(usage.clone())))
+            .collect()
+    }
+
+    pub fn get(&self, id: u64) -> Option<DecisionVariableUsageEntry> {
+        self.0
+            .get(VariableID::from(id))
+            .cloned()
+            .map(DecisionVariableUsageEntry)
+    }
+
+    pub fn role(&self, id: u64) -> Option<DecisionVariableRole> {
+        self.0.role(VariableID::from(id)).map(Into::into)
+    }
+
+    pub fn roles(&self) -> BTreeMap<u64, DecisionVariableRole> {
+        self.0
+            .by_variable()
+            .iter()
+            .map(|(id, usage)| (id.into_inner(), usage.role().into()))
+            .collect()
+    }
+
+    pub fn used_in_indicator_constraints(&self) -> BTreeMap<u64, BTreeSet<u64>> {
+        self.0
+            .used_in_indicator_constraints()
+            .iter()
+            .map(|(constraint_id, variable_ids)| {
+                (
+                    (*constraint_id).into_inner(),
+                    variable_ids.iter().map(|id| id.into_inner()).collect(),
+                )
+            })
+            .collect()
+    }
+
+    pub fn used_in_one_hot_constraints(&self) -> BTreeMap<u64, BTreeSet<u64>> {
+        self.0
+            .used_in_one_hot_constraints()
+            .iter()
+            .map(|(constraint_id, variable_ids)| {
+                (
+                    (*constraint_id).into_inner(),
+                    variable_ids.iter().map(|id| id.into_inner()).collect(),
+                )
+            })
+            .collect()
+    }
+
+    pub fn used_in_sos1_constraints(&self) -> BTreeMap<u64, BTreeSet<u64>> {
+        self.0
+            .used_in_sos1_constraints()
+            .iter()
+            .map(|(constraint_id, variable_ids)| {
+                (
+                    (*constraint_id).into_inner(),
+                    variable_ids.iter().map(|id| id.into_inner()).collect(),
+                )
+            })
+            .collect()
+    }
+
+    pub fn used_in_named_functions(&self) -> BTreeMap<u64, BTreeSet<u64>> {
+        self.0
+            .used_in_named_functions()
+            .iter()
+            .map(|(named_function_id, variable_ids)| {
+                (
+                    (*named_function_id).into_inner(),
+                    variable_ids.iter().map(|id| id.into_inner()).collect(),
+                )
+            })
             .collect()
     }
 
@@ -2768,6 +2851,107 @@ impl DecisionVariableAnalysis {
 
     pub fn __repr__(&self) -> String {
         self.0.to_string()
+    }
+}
+
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
+#[pyclass]
+#[derive(Clone)]
+pub struct DecisionVariableUsageEntry(ommx::VariableUsage);
+
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
+#[pymethods]
+impl DecisionVariableUsageEntry {
+    #[getter]
+    pub fn kind(&self) -> Kind {
+        self.0.kind().into()
+    }
+
+    #[getter]
+    pub fn bound(&self) -> VariableBound {
+        VariableBound(self.0.bound())
+    }
+
+    #[getter]
+    pub fn substituted_value(&self) -> Option<f64> {
+        self.0.substituted_value()
+    }
+
+    #[getter]
+    pub fn role(&self) -> DecisionVariableRole {
+        self.0.role().into()
+    }
+
+    #[getter]
+    pub fn used_in_objective(&self) -> bool {
+        self.0.used_in_objective()
+    }
+
+    pub fn used_in_regular_constraints(&self) -> BTreeSet<u64> {
+        self.0
+            .used_in_regular_constraints()
+            .iter()
+            .map(|id| id.into_inner())
+            .collect()
+    }
+
+    pub fn used_in_indicator_constraints(&self) -> BTreeSet<u64> {
+        self.0
+            .used_in_indicator_constraints()
+            .iter()
+            .map(|id| id.into_inner())
+            .collect()
+    }
+
+    pub fn used_in_one_hot_constraints(&self) -> BTreeSet<u64> {
+        self.0
+            .used_in_one_hot_constraints()
+            .iter()
+            .map(|id| id.into_inner())
+            .collect()
+    }
+
+    pub fn used_in_sos1_constraints(&self) -> BTreeSet<u64> {
+        self.0
+            .used_in_sos1_constraints()
+            .iter()
+            .map(|id| id.into_inner())
+            .collect()
+    }
+
+    pub fn used_in_named_functions(&self) -> BTreeSet<u64> {
+        self.0
+            .used_in_named_functions()
+            .iter()
+            .map(|id| id.into_inner())
+            .collect()
+    }
+
+    #[getter]
+    pub fn defines_dependent_variable(&self) -> bool {
+        self.0.defines_dependent_variable()
+    }
+
+    pub fn used_in_dependency_rhs_of(&self) -> BTreeSet<u64> {
+        self.0
+            .used_in_dependency_rhs_of()
+            .iter()
+            .map(|id| id.into_inner())
+            .collect()
+    }
+
+    #[getter]
+    pub fn is_used_by_solver(&self) -> bool {
+        self.0.is_used_by_solver()
+    }
+
+    pub fn to_dict<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let obj = serde_pyobject::to_pyobject(py, &self.0)?;
+        Ok(obj.cast::<PyDict>()?.clone())
+    }
+
+    pub fn __repr__(&self) -> String {
+        format!("{:?}", self.0)
     }
 }
 

@@ -9,6 +9,7 @@ ommx.v1
    _items/ommx.v1.Sense
    _items/ommx.v1.Equality
    _items/ommx.v1.Kind
+   _items/ommx.v1.DecisionVariableRole
    _items/ommx.v1.Optimality
    _items/ommx.v1.Relaxation
    _items/ommx.v1.State
@@ -43,7 +44,8 @@ ommx.v1
    _items/ommx.v1.SampledDecisionVariable
    _items/ommx.v1.SampledConstraint
    _items/ommx.v1.SampledNamedFunction
-   _items/ommx.v1.DecisionVariableAnalysis
+   _items/ommx.v1.DecisionVariableUsage
+   _items/ommx.v1.DecisionVariableUsageEntry
    _items/ommx.v1.Instance
    _items/ommx.v1.ParametricInstance
    _items/ommx.v1.Solution

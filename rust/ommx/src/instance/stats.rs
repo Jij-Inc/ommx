@@ -20,9 +20,9 @@ pub struct VariableStatsByKind {
 pub struct VariableStatsByUsage {
     /// Number of variables used in the objective function
     pub used_in_objective: usize,
-    /// Number of variables used in constraints
+    /// Number of variables used in regular constraints
     pub used_in_constraints: usize,
-    /// Number of variables used in either objective or constraints
+    /// Number of variables used in either objective or active constraints
     pub used: usize,
     /// Number of fixed variables
     pub fixed: usize,
@@ -41,9 +41,9 @@ pub struct VariableStatsByUsage {
 /// Note on usage categories:
 /// The usage-based categories (used, fixed, dependent, irrelevant) are mutually exclusive.
 /// A variable belongs to exactly one category, determined by this priority:
-/// 1. `fixed`: Variables with substituted values
-/// 2. `dependent`: Variables defined by assignments in decision_variable_dependency
-/// 3. `used`: Variables appearing in objective or active constraints (not in categories 1-2)
+/// 1. `used`: Variables appearing in objective or active constraints
+/// 2. `fixed`: Variables with substituted values (not in category 1)
+/// 3. `dependent`: Variables defined by assignments in decision_variable_dependency (not in categories 1-2)
 /// 4. `irrelevant`: All other variables (not in categories 1-3)
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DecisionVariableStats {
@@ -98,28 +98,28 @@ impl super::Instance {
     /// println!("Active constraints: {}", stats.constraints.active);
     /// ```
     pub fn stats(&self) -> InstanceStats {
-        let analysis = self.analyze_decision_variables();
+        let usage = self.decision_variable_usage();
 
         let by_kind = VariableStatsByKind {
-            binary: analysis.binary().len(),
-            integer: analysis.integer().len(),
-            continuous: analysis.continuous().len(),
-            semi_integer: analysis.semi_integer().len(),
-            semi_continuous: analysis.semi_continuous().len(),
+            binary: usage.binary().len(),
+            integer: usage.integer().len(),
+            continuous: usage.continuous().len(),
+            semi_integer: usage.semi_integer().len(),
+            semi_continuous: usage.semi_continuous().len(),
         };
 
         let by_usage = VariableStatsByUsage {
-            used_in_objective: analysis.used_in_objective().len(),
-            used_in_constraints: analysis
+            used_in_objective: usage.used_in_objective().len(),
+            used_in_constraints: usage
                 .used_in_constraints()
                 .values()
                 .flat_map(|vars| vars.iter())
                 .collect::<std::collections::HashSet<_>>()
                 .len(),
-            used: analysis.used().len(),
-            fixed: analysis.fixed().len(),
-            dependent: analysis.dependent().len(),
-            irrelevant: analysis.irrelevant().len(),
+            used: usage.used().len(),
+            fixed: usage.fixed().len(),
+            dependent: usage.dependent().len(),
+            irrelevant: usage.irrelevant().len(),
         };
 
         let decision_variables = DecisionVariableStats {

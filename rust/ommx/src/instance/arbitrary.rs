@@ -75,14 +75,14 @@ fn arbitrary_semi_continuous_state(bounds: &Bounds, max_abs: f64) -> BoxedStrate
 
 impl Instance {
     pub fn arbitrary_state(&self) -> BoxedStrategy<State> {
-        let analysis = self.analyze_decision_variables();
+        let usage = self.decision_variable_usage();
 
         (
-            arbitrary_integer_state(&analysis.used_binary(), 1),
-            arbitrary_integer_state(&analysis.used_integer(), 100),
-            arbitrary_semi_integer_state(&analysis.used_semi_integer(), 100),
-            arbitrary_continuous_state(&analysis.used_continuous(), 100.0),
-            arbitrary_semi_continuous_state(&analysis.used_semi_continuous(), 100.0),
+            arbitrary_integer_state(&usage.used_binary(), 1),
+            arbitrary_integer_state(&usage.used_integer(), 100),
+            arbitrary_semi_integer_state(&usage.used_semi_integer(), 100),
+            arbitrary_continuous_state(&usage.used_continuous(), 100.0),
+            arbitrary_semi_continuous_state(&usage.used_semi_continuous(), 100.0),
         )
             .prop_map(
                 |(binary, integer, semi_integer, continuous, semi_continuous)| {

@@ -31,7 +31,9 @@ __all__ = [
     "Bound",
     "Constraint",
     "DecisionVariable",
-    "DecisionVariableAnalysis",
+    "DecisionVariableRole",
+    "DecisionVariableUsage",
+    "DecisionVariableUsageEntry",
     "Descriptor",
     "DiagnosticCollector",
     "Equality",
@@ -1535,7 +1537,7 @@ class DecisionVariable:
         """
 
 @typing.final
-class DecisionVariableAnalysis:
+class DecisionVariableUsage:
     def used_binary(self) -> builtins.dict[builtins.int, Bound]: ...
     def used_integer(self) -> builtins.dict[builtins.int, Bound]: ...
     def used_continuous(self) -> builtins.dict[builtins.int, Bound]: ...
@@ -1550,6 +1552,49 @@ class DecisionVariableAnalysis:
     def fixed(self) -> builtins.dict[builtins.int, builtins.float]: ...
     def irrelevant(self) -> builtins.set[builtins.int]: ...
     def dependent(self) -> builtins.set[builtins.int]: ...
+    def by_variable(
+        self,
+    ) -> builtins.dict[builtins.int, DecisionVariableUsageEntry]: ...
+    def get(self, id: builtins.int) -> typing.Optional[DecisionVariableUsageEntry]: ...
+    def role(self, id: builtins.int) -> typing.Optional[DecisionVariableRole]: ...
+    def roles(self) -> builtins.dict[builtins.int, DecisionVariableRole]: ...
+    def used_in_indicator_constraints(
+        self,
+    ) -> builtins.dict[builtins.int, builtins.set[builtins.int]]: ...
+    def used_in_one_hot_constraints(
+        self,
+    ) -> builtins.dict[builtins.int, builtins.set[builtins.int]]: ...
+    def used_in_sos1_constraints(
+        self,
+    ) -> builtins.dict[builtins.int, builtins.set[builtins.int]]: ...
+    def used_in_named_functions(
+        self,
+    ) -> builtins.dict[builtins.int, builtins.set[builtins.int]]: ...
+    def to_dict(self) -> dict: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class DecisionVariableUsageEntry:
+    @property
+    def kind(self) -> Kind: ...
+    @property
+    def bound(self) -> Bound: ...
+    @property
+    def substituted_value(self) -> typing.Optional[builtins.float]: ...
+    @property
+    def role(self) -> DecisionVariableRole: ...
+    @property
+    def used_in_objective(self) -> builtins.bool: ...
+    @property
+    def defines_dependent_variable(self) -> builtins.bool: ...
+    @property
+    def is_used_by_solver(self) -> builtins.bool: ...
+    def used_in_regular_constraints(self) -> builtins.set[builtins.int]: ...
+    def used_in_indicator_constraints(self) -> builtins.set[builtins.int]: ...
+    def used_in_one_hot_constraints(self) -> builtins.set[builtins.int]: ...
+    def used_in_sos1_constraints(self) -> builtins.set[builtins.int]: ...
+    def used_in_named_functions(self) -> builtins.set[builtins.int]: ...
+    def used_in_dependency_rhs_of(self) -> builtins.set[builtins.int]: ...
     def to_dict(self) -> dict: ...
     def __repr__(self) -> builtins.str: ...
 
@@ -3263,7 +3308,7 @@ class Instance:
         Generate a random state for this instance using the provided random number generator.
 
         This method generates random values only for variables that are actually used in the
-        objective function or constraints, as determined by decision variable analysis.
+        objective function or constraints, as determined by decision variable usage.
         Generated values respect the bounds of each variable type.
 
         **Args:**
@@ -3858,18 +3903,18 @@ class Instance:
         (2.0, Constraint(x0 + 2*x1 + 2*x3 - 4 <= 0))
         ```
         """
-    def decision_variable_analysis(self) -> DecisionVariableAnalysis:
+    def decision_variable_usage(self) -> DecisionVariableUsage:
         r"""
-        Analyze decision variables in the optimization problem instance.
+        Build a decision-variable usage snapshot for the optimization problem instance.
 
-        Returns a comprehensive analysis of all decision variables including:
+        Returns reverse usage information for all decision variables including:
 
-        - Kind-based partitioning (binary, integer, continuous, etc.)
-        - Usage-based partitioning (used in objective, constraints, fixed, etc.)
-        - Variable bounds information
+        - Role: used, fixed, dependent, or irrelevant
+        - Variable references from objective, active constraints, named functions, and dependency assignments
+        - Kind, bound, and substituted value copied at construction time
 
         **Returns:**
-        Analysis object containing detailed information about decision variables
+        Usage snapshot containing detailed information about decision variables
 
         # Examples
 
@@ -3882,12 +3927,12 @@ class Instance:
         ...     constraints=[(x[1] + x[2] == 1).set_id(0)],
         ...     sense=Instance.MAXIMIZE,
         ... )
-        >>> analysis = instance.decision_variable_analysis()
-        >>> analysis.used_decision_variable_ids()
+        >>> usage = instance.decision_variable_usage()
+        >>> usage.used_decision_variable_ids()
         {0, 1, 2}
-        >>> analysis.used_in_objective()
+        >>> usage.used_in_objective()
         {0, 1}
-        >>> analysis.used_in_constraints()
+        >>> usage.used_in_constraints()
         {0: {1, 2}}
         ```
         """
@@ -6950,6 +6995,32 @@ class AdditionalCapability(enum.Enum):
     r"""
     SOS1 constraints: at most one of a set of variables can be non-zero
     """
+
+@typing.final
+class DecisionVariableRole(enum.Enum):
+    r"""
+    Decision variable role in an instance.
+    """
+
+    Used = ...
+    r"""
+    Used by the objective or active constraints passed to solvers
+    """
+    Fixed = ...
+    r"""
+    Fixed by substituted_value and not used by solver input
+    """
+    Dependent = ...
+    r"""
+    Defined by decision_variable_dependency
+    """
+    Irrelevant = ...
+    r"""
+    Not used, fixed, or dependent
+    """
+
+    def __repr__(self) -> builtins.str: ...
+    def __str__(self) -> builtins.str: ...
 
 @typing.final
 class Equality(enum.Enum):

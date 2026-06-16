@@ -46,7 +46,7 @@ def _build_instance() -> Instance:
 
 def _df_snap(df: pd.DataFrame) -> str:
     """Deterministic, snapshot-friendly rendering of a DataFrame."""
-    return df.to_string(na_rep="<NA>")
+    return "\n".join(line.rstrip() for line in df.to_string(na_rep="<NA>").splitlines())
 
 
 # ---------------------------------------------------------------------------
@@ -78,6 +78,26 @@ def test_decision_variables_df_include_parameters_only(snapshot):
         _df_snap(_build_instance().decision_variables_df(include=["parameters"]))
         == snapshot
     )
+
+
+def test_decision_variables_df_state_role():
+    x = {i: DecisionVariable.continuous(i) for i in range(4)}
+    instance = Instance.from_components(
+        decision_variables=list(x.values()),
+        objective=x[0],
+        constraints={},
+        sense=Instance.MINIMIZE,
+    )
+    instance.substitute({2: x[0] + 1})
+    instance = instance.partial_evaluate({1: 2.0})
+
+    df = instance.decision_variables_df(include=[])
+    assert df["state_role"].to_dict() == {
+        0: "used",
+        1: "fixed",
+        2: "dependent",
+        3: "irrelevant",
+    }
 
 
 # ---------------------------------------------------------------------------
