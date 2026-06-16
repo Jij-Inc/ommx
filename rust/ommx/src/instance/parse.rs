@@ -133,6 +133,7 @@ impl Parse for v1::Instance {
     fn parse(self, _context: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v1.Instance";
         crate::parse::check_format_version(self.format_version, message)?;
+        crate::parse::validate_extension_annotations(&self.annotations, message)?;
         let sense = self.sense().parse_as(&(), message, "sense")?;
 
         let (decision_variables, variable_metadata): (
@@ -257,6 +258,7 @@ impl Parse for v1::Instance {
             decision_variable_dependency,
             parameters: self.parameters,
             description: self.description,
+            annotations: self.annotations,
             named_functions,
             named_function_metadata,
         })
@@ -334,6 +336,7 @@ impl From<Instance> for v1::Instance {
             description: value.description,
             constraint_hints: None,
             format_version: crate::CURRENT_FORMAT_VERSION,
+            annotations: crate::protobuf_extension_annotations(value.annotations),
         }
     }
 }
@@ -344,6 +347,7 @@ impl Parse for v1::ParametricInstance {
     fn parse(self, _context: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v1.ParametricInstance";
         crate::parse::check_format_version(self.format_version, message)?;
+        crate::parse::validate_extension_annotations(&self.annotations, message)?;
         let sense = self.sense().parse_as(&(), message, "sense")?;
 
         let (decision_variables, variable_metadata): (
@@ -493,6 +497,7 @@ impl Parse for v1::ParametricInstance {
             named_function_metadata,
             decision_variable_dependency,
             description: self.description,
+            annotations: self.annotations,
         })
     }
 }
@@ -513,6 +518,7 @@ impl From<ParametricInstance> for v1::ParametricInstance {
             description,
             named_functions,
             named_function_metadata,
+            annotations,
         }: ParametricInstance,
     ) -> Self {
         // Special constraint types do not have a v1 proto representation yet.
@@ -573,6 +579,7 @@ impl From<ParametricInstance> for v1::ParametricInstance {
                 .collect(),
             constraint_hints: None,
             format_version: crate::CURRENT_FORMAT_VERSION,
+            annotations: crate::protobuf_extension_annotations(annotations),
         }
     }
 }
@@ -582,6 +589,7 @@ mod tests {
     use super::*;
     use crate::instance::Instance;
     use proptest::prelude::*;
+    use std::collections::HashMap;
 
     proptest! {
         #[test]
@@ -590,6 +598,86 @@ mod tests {
             let roundtripped_instance = Instance::try_from(v1_instance).unwrap();
             assert_eq!(original_instance, roundtripped_instance);
         }
+    }
+
+    #[test]
+    fn test_instance_parse_rejects_reserved_annotation_key() {
+        let v1_instance = v1::Instance {
+            annotations: HashMap::from([(
+                crate::annotation_keys::INSTANCE_TITLE.to_string(),
+                "bad".to_string(),
+            )]),
+            ..Default::default()
+        };
+        let result = v1_instance.parse(&());
+        insta::assert_snapshot!(result.unwrap_err().to_string(), @r###"
+        Traceback for OMMX Message parse error:
+        └─ommx.v1.Instance[annotations]
+        Annotation key `org.ommx.v1.instance.title` is reserved for OMMX metadata and cannot be stored in extension annotations.
+        "###);
+    }
+
+    #[test]
+    fn test_parametric_instance_parse_rejects_reserved_annotation_key() {
+        let v1_parametric_instance = v1::ParametricInstance {
+            annotations: HashMap::from([(
+                format!(
+                    "{}.title",
+                    crate::annotation_keys::PARAMETRIC_INSTANCE_NAMESPACE
+                ),
+                "bad".to_string(),
+            )]),
+            ..Default::default()
+        };
+        let result = v1_parametric_instance.parse(&());
+        insta::assert_snapshot!(result.unwrap_err().to_string(), @r###"
+        Traceback for OMMX Message parse error:
+        └─ommx.v1.ParametricInstance[annotations]
+        Annotation key `org.ommx.v1.parametric-instance.title` is reserved for OMMX metadata and cannot be stored in extension annotations.
+        "###);
+    }
+
+    #[test]
+    fn test_instance_to_bytes_filters_reserved_annotation_key() {
+        let mut instance = Instance::default();
+        instance.annotations = HashMap::from([
+            (
+                crate::annotation_keys::INSTANCE_TITLE.to_string(),
+                "invalid extension title".to_string(),
+            ),
+            ("org.example.owner".to_string(), "domain".to_string()),
+        ]);
+
+        let restored = Instance::from_bytes(&instance.to_bytes()).unwrap();
+
+        assert!(!restored
+            .annotations
+            .contains_key(crate::annotation_keys::INSTANCE_TITLE));
+        assert_eq!(
+            restored.annotations.get("org.example.owner"),
+            Some(&"domain".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parametric_instance_to_bytes_filters_reserved_annotation_key() {
+        let mut instance: crate::ParametricInstance = Instance::default().into();
+        let reserved_key = format!(
+            "{}.title",
+            crate::annotation_keys::PARAMETRIC_INSTANCE_NAMESPACE
+        );
+        instance.annotations = HashMap::from([
+            (reserved_key.clone(), "invalid extension title".to_string()),
+            ("org.example.owner".to_string(), "domain".to_string()),
+        ]);
+
+        let restored = crate::ParametricInstance::from_bytes(&instance.to_bytes()).unwrap();
+
+        assert!(!restored.annotations.contains_key(&reserved_key));
+        assert_eq!(
+            restored.annotations.get("org.example.owner"),
+            Some(&"domain".to_string())
+        );
     }
 
     #[test]

@@ -1,22 +1,21 @@
 //! Experiment / Run handles and run lifecycle.
 
-use super::attachment::{read_file_attachment, store_attachment_descriptor};
+use super::logging::AttachmentLoggerStorage;
 use super::{
-    AttachmentLogger, ParameterValue, Run, RunEntry, RunStatus, SolveDiagnosticPayload, SolveEntry,
+    AttachmentTable, ParameterValue, Run, RunEntry, RunStatus, SolveDiagnosticPayload, SolveEntry,
     SolveStatus, Trace,
 };
-use crate::artifact::{media_types, InstanceAnnotations, SolutionAnnotations};
+use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
+use crate::artifact::media_types;
 use crate::{Instance, Solution};
 use anyhow::{ensure, Result};
-use oci_spec::image::MediaType;
-use std::{collections::HashMap, path::Path};
+use oci_spec::image::Descriptor;
+use std::collections::HashMap;
 
 /// Data needed to record a finished Solve.
 pub struct FinishedSolveRecord<'a> {
     pub input: &'a Instance,
-    pub input_annotations: InstanceAnnotations,
     pub output: &'a Solution,
-    pub output_annotations: SolutionAnnotations,
     pub adapter: String,
     pub adapter_options: String,
     pub diagnostics: Option<SolveDiagnosticPayload>,
@@ -25,7 +24,6 @@ pub struct FinishedSolveRecord<'a> {
 /// Data needed to record a failed or interrupted Solve.
 pub struct FailedSolveRecord<'a> {
     pub input: &'a Instance,
-    pub input_annotations: InstanceAnnotations,
     pub adapter: String,
     pub adapter_options: String,
     pub status: SolveStatus,
@@ -82,23 +80,13 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         self.ensure_reserved_solve_id(solve_id)?;
         let FinishedSolveRecord {
             input,
-            input_annotations,
             output,
-            output_annotations,
             adapter,
             adapter_options,
             diagnostics,
         } = record;
-        let input = self.experiment.registry.store_layer_blob(
-            media_types::v1_instance(),
-            &input.to_bytes(),
-            input_annotations.into_inner(),
-        )?;
-        let output = self.experiment.registry.store_layer_blob(
-            media_types::v1_solution(),
-            &output.to_bytes(),
-            output_annotations.into_inner(),
-        )?;
+        let input = self.experiment.registry.store_instance_layer(input)?;
+        let output = self.experiment.registry.store_solution_layer(output)?;
         let diagnostics = diagnostics.and_then(|diagnostic| {
             match diagnostic.to_msgpack_bytes().and_then(|bytes| {
                 self.experiment.registry.store_layer_blob(
@@ -150,7 +138,6 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
     ) -> Result<u64> {
         let FailedSolveRecord {
             input,
-            input_annotations,
             adapter,
             adapter_options,
             status,
@@ -161,11 +148,7 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
             "failed solve attempt status must not be finished"
         );
         self.ensure_reserved_solve_id(solve_id)?;
-        let input = self.experiment.registry.store_layer_blob(
-            media_types::v1_instance(),
-            &input.to_bytes(),
-            input_annotations.into_inner(),
-        )?;
+        let input = self.experiment.registry.store_instance_layer(input)?;
         let diagnostics = diagnostics.and_then(|diagnostic| {
             match diagnostic.to_msgpack_bytes().and_then(|bytes| {
                 self.experiment.registry.store_layer_blob(
@@ -291,47 +274,21 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
     }
 }
 
-impl<'exp, 'reg> AttachmentLogger for &mut Run<'exp, 'reg> {
-    fn log_attachment(
-        self,
-        name: &str,
-        media_type: MediaType,
-        bytes: impl AsRef<[u8]>,
-        annotations: HashMap<String, String>,
-    ) -> Result<()> {
-        if self.attachments.contains_key(name) {
-            crate::bail!("Attachment `{name}` already exists");
-        }
-        let descriptor = store_attachment_descriptor(
-            self.experiment.registry,
-            media_type,
-            bytes.as_ref(),
-            annotations,
-        )?;
-        self.attachments
-            .insert(name.to_string(), descriptor, None)?;
-        Ok(())
+impl<'exp, 'reg> AttachmentLoggerStorage for &mut Run<'exp, 'reg> {
+    type Descriptor = StoredDescriptor<'reg>;
+
+    fn with_local_registry<R>(&self, f: impl FnOnce(&LocalRegistry) -> Result<R>) -> Result<R> {
+        f(self.experiment.registry)
     }
 
-    fn log_file(
-        self,
-        name: &str,
-        path: impl AsRef<Path>,
-        media_type: Option<MediaType>,
-        filename: Option<&str>,
-    ) -> Result<()> {
-        let (media_type, bytes, filename) = read_file_attachment(path, media_type, filename)?;
-        if self.attachments.contains_key(name) {
-            crate::bail!("Attachment `{name}` already exists");
-        }
-        let descriptor = store_attachment_descriptor(
-            self.experiment.registry,
-            media_type,
-            bytes.as_ref(),
-            HashMap::new(),
-        )?;
-        self.attachments
-            .insert(name.to_string(), descriptor, Some(filename))?;
-        Ok(())
+    fn with_attachment_table<R>(
+        &mut self,
+        f: impl FnOnce(&mut AttachmentTable<Self::Descriptor>) -> Result<R>,
+    ) -> Result<R> {
+        f(&mut self.attachments)
+    }
+
+    fn descriptor_for_attachment_table(&self, descriptor: Descriptor) -> Result<Self::Descriptor> {
+        self.experiment.registry.stored_descriptor(descriptor)
     }
 }

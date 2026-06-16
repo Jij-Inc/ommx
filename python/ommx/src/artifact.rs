@@ -1139,19 +1139,15 @@ impl PyPruneAnonymousReport {
 impl PyArtifact {
     fn get_instance_inner(&mut self, descriptor: &PyDescriptor) -> Result<crate::Instance> {
         assert_media_type(descriptor, "application/org.ommx.v1.instance")?;
-        let blob = descriptor.read_blob_from(&self.inner)?;
         Ok(crate::Instance {
-            inner: ommx::Instance::from_bytes(&blob)?,
-            annotations: descriptor.annotations().into(),
+            inner: self.inner.get_instance_layer(descriptor.as_descriptor())?,
         })
     }
 
     fn get_solution_inner(&mut self, descriptor: &PyDescriptor) -> Result<crate::Solution> {
         assert_media_type(descriptor, "application/org.ommx.v1.solution")?;
-        let blob = descriptor.read_blob_from(&self.inner)?;
         Ok(crate::Solution {
-            inner: ommx::Solution::from_bytes(&blob)?,
-            annotations: descriptor.annotations().into(),
+            inner: self.inner.get_solution_layer(descriptor.as_descriptor())?,
         })
     }
 
@@ -1160,19 +1156,19 @@ impl PyArtifact {
         descriptor: &PyDescriptor,
     ) -> Result<crate::ParametricInstance> {
         assert_media_type(descriptor, "application/org.ommx.v1.parametric-instance")?;
-        let blob = descriptor.read_blob_from(&self.inner)?;
         Ok(crate::ParametricInstance {
-            inner: ommx::ParametricInstance::from_bytes(&blob)?,
-            annotations: descriptor.annotations().into(),
+            inner: self
+                .inner
+                .get_parametric_instance_layer(descriptor.as_descriptor())?,
         })
     }
 
     fn get_sample_set_inner(&mut self, descriptor: &PyDescriptor) -> Result<crate::SampleSet> {
         assert_media_type(descriptor, "application/org.ommx.v1.sample-set")?;
-        let blob = descriptor.read_blob_from(&self.inner)?;
         Ok(crate::SampleSet {
-            inner: ommx::SampleSet::from_bytes(&blob)?,
-            annotations: descriptor.annotations().into(),
+            inner: self
+                .inner
+                .get_sample_set_layer(descriptor.as_descriptor())?,
         })
     }
 
@@ -1391,12 +1387,8 @@ impl PyArtifactDraft {
         instance: &crate::Instance,
     ) -> Result<PyDescriptor> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let blob = instance.inner.to_bytes();
-        self.0.add_layer(
-            "application/org.ommx.v1.instance",
-            &blob,
-            instance.annotations.clone().into_inner(),
-        )
+        let desc = self.0.as_mut()?.add_instance(instance.inner.clone())?;
+        Ok(PyDescriptor::from(desc))
     }
 
     /// Add a {class}`~ommx.v1.ParametricInstance` to the artifact with annotations.
@@ -1406,12 +1398,11 @@ impl PyArtifactDraft {
         instance: &crate::ParametricInstance,
     ) -> Result<PyDescriptor> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let blob = instance.inner.to_bytes();
-        self.0.add_layer(
-            "application/org.ommx.v1.parametric-instance",
-            &blob,
-            instance.annotations.clone().into_inner(),
-        )
+        let desc = self
+            .0
+            .as_mut()?
+            .add_parametric_instance(instance.inner.clone())?;
+        Ok(PyDescriptor::from(desc))
     }
 
     /// Add a {class}`~ommx.v1.Solution` to the artifact with annotations.
@@ -1421,12 +1412,8 @@ impl PyArtifactDraft {
         solution: &crate::Solution,
     ) -> Result<PyDescriptor> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let blob = solution.inner.to_bytes();
-        self.0.add_layer(
-            "application/org.ommx.v1.solution",
-            &blob,
-            solution.annotations.clone().into_inner(),
-        )
+        let desc = self.0.as_mut()?.add_solution(solution.inner.clone())?;
+        Ok(PyDescriptor::from(desc))
     }
 
     /// Add a {class}`~ommx.v1.SampleSet` to the artifact with annotations.
@@ -1436,12 +1423,8 @@ impl PyArtifactDraft {
         sample_set: &crate::SampleSet,
     ) -> Result<PyDescriptor> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let blob = sample_set.inner.to_bytes();
-        self.0.add_layer(
-            "application/org.ommx.v1.sample-set",
-            &blob,
-            sample_set.annotations.clone().into_inner(),
-        )
+        let desc = self.0.as_mut()?.add_sample_set(sample_set.inner.clone())?;
+        Ok(PyDescriptor::from(desc))
     }
 
     /// Add a numpy ndarray to the artifact with npy format.
@@ -1565,17 +1548,17 @@ fn build_annotations(
     namespace: &str,
     annotations: Option<&Bound<pyo3::types::PyDict>>,
 ) -> Result<HashMap<String, String>> {
-    let ns = if namespace.ends_with('.') {
-        namespace.to_string()
-    } else {
-        format!("{namespace}.")
-    };
+    let ns = crate::annotations::normalize_namespace(namespace);
     let mut result = HashMap::new();
     if let Some(dict) = annotations {
         for (key, value) in dict.iter() {
             let k: String = key.extract()?;
             let v: String = value.extract()?;
-            result.insert(format!("{ns}{k}"), v);
+            let full_key = format!("{ns}{k}");
+            if ommx::is_reserved_annotation_key(&full_key) {
+                bail!("User annotation key `{full_key}` is reserved for OMMX metadata");
+            }
+            result.insert(full_key, v);
         }
     }
     Ok(result)

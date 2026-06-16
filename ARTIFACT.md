@@ -36,7 +36,9 @@ OMMX Artifact is a collection of `config`, `layers`, and annotations.
     - `org.ommx.v1.solution.end`: (RFC3339) The end time of the solution as a RFC3339 string
   - `application/org.ommx.v1.instance` blob with the following annotations:
     - `org.ommx.v1.instance.title`: (String) The title of this instance
+    - `org.ommx.v1.instance.description`: (String) Human-readable description of this instance
     - `org.ommx.v1.instance.created`: (RFC3339) When this instance was created
+    - `org.ommx.v1.instance.created_by`: (String) The application or library name that created this instance
     - `org.ommx.v1.instance.authors`: (String) Name of authors. Multiple authors are separated by comma (`,`)
     - `org.ommx.v1.instance.license`: ([SPDX License Identifier](https://spdx.org/licenses/)) License of this instance
     - `org.ommx.v1.instance.dataset`: (String) Name of the dataset this instance belongs to
@@ -51,3 +53,12 @@ OMMX Artifact is a collection of `config`, `layers`, and annotations.
 
 Note that other annotations listed above are also allowed.
 The key may not start with `org.ommx.v1.`, but must be a valid reverse domain name as specified by OCI specification.
+
+OMMX Messages are the source of truth for OMMX-defined metadata. When an OMMX
+Message is stored as an Artifact layer, explicit metadata fields in the message
+are projected to the `org.ommx.v1.*` descriptor annotations above. User-defined
+and third-party extension annotations are stored in the message annotation map
+and mirrored to the descriptor. For compatibility with older Artifacts, readers
+may recover metadata from descriptor annotations when the message does not
+contain the corresponding field; if both are present, the message value takes
+priority.

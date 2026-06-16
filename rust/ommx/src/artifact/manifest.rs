@@ -5,13 +5,10 @@ use super::{
         LocalRegistry, RefUpdate, StoredDescriptor, TempLocalRegistry, UnsealedArtifact,
     },
     media_types::{self, OCI_EMPTY_CONFIG_BYTES},
-    ImageRef, InstanceAnnotations, ParametricInstanceAnnotations, SampleSetAnnotations,
-    SolutionAnnotations,
+    ImageRef,
 };
-use crate::v1;
 use anyhow::{bail, ensure, Context, Result};
 use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, ImageManifest, MediaType};
-use prost::Message;
 use serde::Serialize;
 use std::{
     collections::{BTreeSet, HashMap},
@@ -205,6 +202,49 @@ impl LocalArtifactDyn {
 
     pub fn get_blob(&self, descriptor: &Descriptor) -> Result<Vec<u8>> {
         self.registry_handle.get_blob_dyn(descriptor)
+    }
+
+    pub fn get_instance_layer(&self, descriptor: &Descriptor) -> Result<crate::Instance> {
+        let descriptor = self
+            .registry_handle
+            .registry()
+            .stored_descriptor(descriptor.clone())?;
+        self.registry_handle
+            .registry()
+            .get_instance_layer(&descriptor)
+    }
+
+    pub fn get_parametric_instance_layer(
+        &self,
+        descriptor: &Descriptor,
+    ) -> Result<crate::ParametricInstance> {
+        let descriptor = self
+            .registry_handle
+            .registry()
+            .stored_descriptor(descriptor.clone())?;
+        self.registry_handle
+            .registry()
+            .get_parametric_instance_layer(&descriptor)
+    }
+
+    pub fn get_solution_layer(&self, descriptor: &Descriptor) -> Result<crate::Solution> {
+        let descriptor = self
+            .registry_handle
+            .registry()
+            .stored_descriptor(descriptor.clone())?;
+        self.registry_handle
+            .registry()
+            .get_solution_layer(&descriptor)
+    }
+
+    pub fn get_sample_set_layer(&self, descriptor: &Descriptor) -> Result<crate::SampleSet> {
+        let descriptor = self
+            .registry_handle
+            .registry()
+            .stored_descriptor(descriptor.clone())?;
+        self.registry_handle
+            .registry()
+            .get_sample_set_layer(&descriptor)
     }
 
     pub fn save(&self, output: &Path) -> crate::Result<()> {
@@ -574,52 +614,34 @@ impl<'reg> ArtifactDraft<'reg> {
         Ok(stored_descriptor)
     }
 
-    pub fn add_instance(
-        &mut self,
-        instance: v1::Instance,
-        annotations: InstanceAnnotations,
-    ) -> Result<StoredDescriptor<'reg>> {
-        self.add_layer_bytes(
-            media_types::v1_instance(),
-            instance.encode_to_vec(),
-            annotations.into(),
-        )
+    pub fn add_instance(&mut self, instance: crate::Instance) -> Result<StoredDescriptor<'reg>> {
+        let stored_descriptor = self.registry.store_instance_layer(&instance)?;
+        self.layers.push(stored_descriptor.clone());
+        Ok(stored_descriptor)
     }
 
-    pub fn add_solution(
-        &mut self,
-        solution: v1::Solution,
-        annotations: SolutionAnnotations,
-    ) -> Result<StoredDescriptor<'reg>> {
-        self.add_layer_bytes(
-            media_types::v1_solution(),
-            solution.encode_to_vec(),
-            annotations.into(),
-        )
+    pub fn add_solution(&mut self, solution: crate::Solution) -> Result<StoredDescriptor<'reg>> {
+        let stored_descriptor = self.registry.store_solution_layer(&solution)?;
+        self.layers.push(stored_descriptor.clone());
+        Ok(stored_descriptor)
     }
 
     pub fn add_parametric_instance(
         &mut self,
-        instance: v1::ParametricInstance,
-        annotations: ParametricInstanceAnnotations,
+        instance: crate::ParametricInstance,
     ) -> Result<StoredDescriptor<'reg>> {
-        self.add_layer_bytes(
-            media_types::v1_parametric_instance(),
-            instance.encode_to_vec(),
-            annotations.into(),
-        )
+        let stored_descriptor = self.registry.store_parametric_instance_layer(&instance)?;
+        self.layers.push(stored_descriptor.clone());
+        Ok(stored_descriptor)
     }
 
     pub fn add_sample_set(
         &mut self,
-        sample_set: v1::SampleSet,
-        annotations: SampleSetAnnotations,
+        sample_set: crate::SampleSet,
     ) -> Result<StoredDescriptor<'reg>> {
-        self.add_layer_bytes(
-            media_types::v1_sample_set(),
-            sample_set.encode_to_vec(),
-            annotations.into(),
-        )
+        let stored_descriptor = self.registry.store_sample_set_layer(&sample_set)?;
+        self.layers.push(stored_descriptor.clone());
+        Ok(stored_descriptor)
     }
 
     pub fn set_subject(&mut self, subject: Descriptor) -> &mut Self {
@@ -914,6 +936,8 @@ pub fn is_anonymous_artifact_tag(tag: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{v1, Parse};
+    use prost::Message;
 
     fn test_image_name(tag: &str) -> Result<ImageRef> {
         ImageRef::parse(&format!("ghcr.io/jij-inc/ommx/demo:{tag}"))
@@ -1045,12 +1069,12 @@ mod tests {
     }
 
     #[test]
-    fn add_solution_stores_v1_solution_blob() -> Result<()> {
+    fn add_solution_stores_solution_blob() -> Result<()> {
         let dir = tempfile::tempdir()?;
         let registry = LocalRegistry::open(dir.path())?;
         let mut builder = ArtifactDraft::with_registry(&registry, test_image_name("solution")?);
         #[allow(deprecated)]
-        let solution = v1::Solution {
+        let solution_proto = v1::Solution {
             state: Some(v1::State {
                 entries: HashMap::from([(1, 1.0)]),
             }),
@@ -1065,14 +1089,186 @@ mod tests {
             relaxation: v1::Relaxation::Unspecified as i32,
             sense: v1::instance::Sense::Minimize as i32,
             format_version: crate::CURRENT_FORMAT_VERSION,
+            metadata: None,
+            annotations: HashMap::new(),
         };
+        let solution = solution_proto.parse(&())?;
 
-        let descriptor = builder.add_solution(solution.clone(), SolutionAnnotations::default())?;
+        let descriptor = builder.add_solution(solution.clone())?;
         assert_eq!(descriptor.media_type(), &media_types::v1_solution());
 
         let blob = registry.get_blob(&descriptor)?;
         let decoded = v1::Solution::decode(blob.as_slice())?;
-        assert_eq!(decoded, solution);
+        assert_eq!(decoded, v1::Solution::from(solution));
+        Ok(())
+    }
+
+    #[test]
+    fn add_instance_projects_annotations_to_descriptor() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let registry = LocalRegistry::open(dir.path())?;
+        let mut builder = ArtifactDraft::with_registry(&registry, test_image_name("instance")?);
+
+        let mut instance = crate::Instance::default();
+        instance.description = Some(crate::v1::instance::Description {
+            name: Some("domain title".to_string()),
+            ..Default::default()
+        });
+        instance.annotations.insert(
+            "org.example.annotation".to_string(),
+            "domain value".to_string(),
+        );
+        let descriptor = builder.add_instance(instance)?;
+
+        let annotations = descriptor
+            .annotations()
+            .as_ref()
+            .context("descriptor annotations should be present")?;
+        assert_eq!(
+            annotations.get(crate::annotation_keys::INSTANCE_TITLE),
+            Some(&"domain title".to_string())
+        );
+        assert_eq!(
+            annotations.get("org.example.annotation"),
+            Some(&"domain value".to_string())
+        );
+
+        let bytes = registry.get_blob(&descriptor)?;
+        let decoded = v1::Instance::decode(bytes.as_slice())?;
+        assert_eq!(
+            decoded.description.and_then(|description| description.name),
+            Some("domain title".to_string())
+        );
+        assert_eq!(
+            decoded.annotations.get("org.example.annotation"),
+            Some(&"domain value".to_string())
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn get_instance_layer_merges_descriptor_annotations_without_overwriting_proto() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let registry = LocalRegistry::open(dir.path())?;
+
+        let mut instance = crate::Instance::default();
+        instance.description = Some(crate::v1::instance::Description {
+            name: Some("proto title".to_string()),
+            ..Default::default()
+        });
+        instance
+            .annotations
+            .insert("org.example.owner".to_string(), "proto".to_string());
+
+        let descriptor = registry.store_layer_blob(
+            media_types::v1_instance(),
+            &instance.to_bytes(),
+            HashMap::from([
+                (
+                    crate::annotation_keys::INSTANCE_TITLE.to_string(),
+                    "descriptor title".to_string(),
+                ),
+                (
+                    crate::annotation_keys::INSTANCE_LICENSE.to_string(),
+                    "MIT".to_string(),
+                ),
+                ("org.example.owner".to_string(), "descriptor".to_string()),
+                ("org.example.source".to_string(), "descriptor".to_string()),
+            ]),
+        )?;
+
+        let restored = registry.get_instance_layer(&descriptor)?;
+        let description = restored
+            .description
+            .as_ref()
+            .context("descriptor fallback should create description")?;
+        assert_eq!(description.name.as_deref(), Some("proto title"));
+        assert_eq!(description.license.as_deref(), Some("MIT"));
+        assert_eq!(
+            restored
+                .annotations
+                .get("org.example.owner")
+                .map(String::as_str),
+            Some("proto")
+        );
+        assert_eq!(
+            restored
+                .annotations
+                .get("org.example.source")
+                .map(String::as_str),
+            Some("descriptor")
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn get_solution_layer_merges_descriptor_annotations_without_overwriting_proto() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let registry = LocalRegistry::open(dir.path())?;
+
+        let solution_proto = v1::Solution {
+            state: Some(v1::State::default()),
+            objective: 1.0,
+            decision_variables: Vec::new(),
+            evaluated_constraints: Vec::new(),
+            evaluated_named_functions: Vec::new(),
+            feasible: true,
+            feasible_relaxed: Some(true),
+            feasible_unrelaxed: true,
+            optimality: v1::Optimality::Optimal as i32,
+            relaxation: v1::Relaxation::Unspecified as i32,
+            sense: v1::instance::Sense::Minimize as i32,
+            format_version: crate::CURRENT_FORMAT_VERSION,
+            metadata: Some(v1::ProcessMetadata {
+                solver: Some(r#"{"name":"proto"}"#.to_string()),
+                ..Default::default()
+            }),
+            annotations: HashMap::from([("org.example.owner".to_string(), "proto".to_string())]),
+        };
+        let solution = solution_proto.parse(&())?;
+
+        let descriptor = registry.store_layer_blob(
+            media_types::v1_solution(),
+            &solution.to_bytes(),
+            HashMap::from([
+                (
+                    format!("{}.solver", crate::annotation_keys::SOLUTION_NAMESPACE),
+                    r#"{"name":"descriptor"}"#.to_string(),
+                ),
+                (
+                    format!("{}.instance", crate::annotation_keys::SOLUTION_NAMESPACE),
+                    "sha256:descriptor".to_string(),
+                ),
+                ("org.example.owner".to_string(), "descriptor".to_string()),
+                ("org.example.source".to_string(), "descriptor".to_string()),
+            ]),
+        )?;
+
+        let restored = registry.get_solution_layer(&descriptor)?;
+        let metadata = restored
+            .metadata
+            .as_ref()
+            .context("descriptor fallback should create process metadata")?;
+        assert_eq!(metadata.solver.as_deref(), Some(r#"{"name":"proto"}"#));
+        assert_eq!(metadata.instance.as_deref(), Some("sha256:descriptor"));
+        assert_eq!(
+            restored
+                .annotations
+                .get("org.example.owner")
+                .map(String::as_str),
+            Some("proto")
+        );
+        assert_eq!(
+            restored
+                .annotations
+                .get("org.example.source")
+                .map(String::as_str),
+            Some("descriptor")
+        );
+
         Ok(())
     }
 
@@ -1084,7 +1280,10 @@ mod tests {
         let layer = builder.add_layer_bytes(
             MediaType::Other(media_types::V1_INSTANCE_MEDIA_TYPE.to_string()),
             b"instance".to_vec(),
-            HashMap::from([("org.ommx.v1.instance.title".to_string(), "demo".to_string())]),
+            HashMap::from([(
+                crate::annotation_keys::INSTANCE_TITLE.to_string(),
+                "demo".to_string(),
+            )]),
         )?;
         builder.add_annotation("org.opencontainers.image.ref.name", "example.com/demo:v1");
 

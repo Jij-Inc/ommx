@@ -7,7 +7,7 @@ use crate::{
     EvaluatedDecisionVariable, EvaluatedNamedFunction, NamedFunctionID, Sense, VariableID,
 };
 use getset::Getters;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 /// Error occurred during Solution validation
 #[non_exhaustive]
@@ -133,6 +133,10 @@ pub struct Solution {
     pub relaxation: crate::v1::Relaxation,
     #[getset(get = "pub")]
     sense: Option<Sense>,
+    /// OMMX-defined provenance metadata.
+    pub metadata: Option<crate::v1::ProcessMetadata>,
+    /// User-defined or third-party extension annotations.
+    pub annotations: HashMap<String, String>,
 }
 
 impl Solution {
@@ -803,6 +807,8 @@ impl SolutionBuilder {
             optimality: self.optimality,
             relaxation: self.relaxation,
             sense: Some(sense),
+            metadata: Default::default(),
+            annotations: Default::default(),
         })
     }
 
@@ -853,6 +859,8 @@ impl SolutionBuilder {
             optimality: self.optimality,
             relaxation: self.relaxation,
             sense: Some(sense),
+            metadata: Default::default(),
+            annotations: Default::default(),
         })
     }
 }

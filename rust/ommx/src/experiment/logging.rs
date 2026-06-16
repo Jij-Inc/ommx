@@ -1,15 +1,12 @@
 //! Shared attachment logging APIs for experiment and run handles.
 
-use crate::artifact::{
-    media_types, InstanceAnnotations, ParametricInstanceAnnotations, SampleSetAnnotations,
-    SolutionAnnotations,
-};
+use crate::artifact::local_registry::LocalRegistry;
 use crate::{Instance, ParametricInstance, SampleSet, Solution};
-use anyhow::Result;
-use oci_spec::image::MediaType;
+use anyhow::{ensure, Result};
+use oci_spec::image::{Descriptor, MediaType};
 use std::{collections::HashMap, path::Path};
 
-use super::attachment::{encode_json, json_media_type};
+use super::attachment::{encode_json, json_media_type, read_file_attachment, AttachmentTable};
 
 /// A handle that can log attachment payloads into an Experiment space.
 ///
@@ -43,63 +40,139 @@ pub trait AttachmentLogger: Sized {
         self.log_attachment(name, json_media_type(), bytes, HashMap::new())
     }
 
-    /// Attach an [`Instance`] with its artifact annotations.
-    fn log_instance(
+    /// Attach an [`Instance`].
+    fn log_instance(self, name: &str, instance: &Instance) -> Result<()>;
+
+    /// Attach a [`ParametricInstance`].
+    fn log_parametric_instance(self, name: &str, pi: &ParametricInstance) -> Result<()>;
+
+    /// Attach a [`Solution`].
+    fn log_solution(self, name: &str, solution: &Solution) -> Result<()>;
+
+    /// Attach a [`SampleSet`].
+    fn log_sample_set(self, name: &str, sample_set: &SampleSet) -> Result<()>;
+}
+
+impl<T> AttachmentLogger for T
+where
+    T: AttachmentLoggerStorage,
+{
+    fn log_attachment(
         self,
         name: &str,
-        instance: &Instance,
-        annotations: InstanceAnnotations,
+        media_type: MediaType,
+        bytes: impl AsRef<[u8]>,
+        annotations: HashMap<String, String>,
     ) -> Result<()> {
-        self.log_attachment(
-            name,
-            media_types::v1_instance(),
-            instance.to_bytes(),
-            annotations.into_inner(),
-        )
+        let mut logger = self;
+        ensure_attachment_name_available(&mut logger, name)?;
+        let bytes = bytes.as_ref();
+        let descriptor = AttachmentLoggerStorage::with_local_registry(&logger, |registry| {
+            let descriptor = registry.store_layer_blob(media_type, bytes, annotations)?;
+            Ok(Descriptor::from(descriptor))
+        })?;
+        let descriptor = logger.descriptor_for_attachment_table(descriptor)?;
+        logger.with_attachment_table(|attachments| {
+            attachments.insert(name.to_string(), descriptor, None)
+        })
     }
 
-    /// Attach a [`ParametricInstance`] with its artifact annotations.
-    fn log_parametric_instance(
+    fn log_file(
         self,
         name: &str,
-        pi: &ParametricInstance,
-        annotations: ParametricInstanceAnnotations,
+        path: impl AsRef<Path>,
+        media_type: Option<MediaType>,
+        filename: Option<&str>,
     ) -> Result<()> {
-        self.log_attachment(
-            name,
-            media_types::v1_parametric_instance(),
-            pi.to_bytes(),
-            annotations.into_inner(),
-        )
+        let mut logger = self;
+        ensure_attachment_name_available(&mut logger, name)?;
+        let (media_type, bytes, filename) = read_file_attachment(path, media_type, filename)?;
+        let descriptor = AttachmentLoggerStorage::with_local_registry(&logger, |registry| {
+            let descriptor =
+                registry.store_layer_blob(media_type, bytes.as_ref(), HashMap::new())?;
+            Ok(Descriptor::from(descriptor))
+        })?;
+        let descriptor = logger.descriptor_for_attachment_table(descriptor)?;
+        logger.with_attachment_table(|attachments| {
+            attachments.insert(name.to_string(), descriptor, Some(filename))
+        })
     }
 
-    /// Attach a [`Solution`] with its artifact annotations.
-    fn log_solution(
-        self,
-        name: &str,
-        solution: &Solution,
-        annotations: SolutionAnnotations,
-    ) -> Result<()> {
-        self.log_attachment(
-            name,
-            media_types::v1_solution(),
-            solution.to_bytes(),
-            annotations.into_inner(),
-        )
+    fn log_instance(self, name: &str, instance: &Instance) -> Result<()> {
+        let mut logger = self;
+        ensure_attachment_name_available(&mut logger, name)?;
+        let descriptor = AttachmentLoggerStorage::with_local_registry(&logger, |registry| {
+            let descriptor = registry.store_instance_layer(instance)?;
+            Ok(Descriptor::from(descriptor))
+        })?;
+        let descriptor = logger.descriptor_for_attachment_table(descriptor)?;
+        logger.with_attachment_table(|attachments| {
+            attachments.insert(name.to_string(), descriptor, None)
+        })
     }
 
-    /// Attach a [`SampleSet`] with its artifact annotations.
-    fn log_sample_set(
-        self,
-        name: &str,
-        sample_set: &SampleSet,
-        annotations: SampleSetAnnotations,
-    ) -> Result<()> {
-        self.log_attachment(
-            name,
-            media_types::v1_sample_set(),
-            sample_set.to_bytes(),
-            annotations.into_inner(),
-        )
+    fn log_parametric_instance(self, name: &str, pi: &ParametricInstance) -> Result<()> {
+        let mut logger = self;
+        ensure_attachment_name_available(&mut logger, name)?;
+        let descriptor = AttachmentLoggerStorage::with_local_registry(&logger, |registry| {
+            let descriptor = registry.store_parametric_instance_layer(pi)?;
+            Ok(Descriptor::from(descriptor))
+        })?;
+        let descriptor = logger.descriptor_for_attachment_table(descriptor)?;
+        logger.with_attachment_table(|attachments| {
+            attachments.insert(name.to_string(), descriptor, None)
+        })
     }
+
+    fn log_solution(self, name: &str, solution: &Solution) -> Result<()> {
+        let mut logger = self;
+        ensure_attachment_name_available(&mut logger, name)?;
+        let descriptor = AttachmentLoggerStorage::with_local_registry(&logger, |registry| {
+            let descriptor = registry.store_solution_layer(solution)?;
+            Ok(Descriptor::from(descriptor))
+        })?;
+        let descriptor = logger.descriptor_for_attachment_table(descriptor)?;
+        logger.with_attachment_table(|attachments| {
+            attachments.insert(name.to_string(), descriptor, None)
+        })
+    }
+
+    fn log_sample_set(self, name: &str, sample_set: &SampleSet) -> Result<()> {
+        let mut logger = self;
+        ensure_attachment_name_available(&mut logger, name)?;
+        let descriptor = AttachmentLoggerStorage::with_local_registry(&logger, |registry| {
+            let descriptor = registry.store_sample_set_layer(sample_set)?;
+            Ok(Descriptor::from(descriptor))
+        })?;
+        let descriptor = logger.descriptor_for_attachment_table(descriptor)?;
+        logger.with_attachment_table(|attachments| {
+            attachments.insert(name.to_string(), descriptor, None)
+        })
+    }
+}
+
+pub(super) trait AttachmentLoggerStorage: Sized {
+    type Descriptor;
+
+    fn with_local_registry<R>(&self, f: impl FnOnce(&LocalRegistry) -> Result<R>) -> Result<R>;
+
+    fn with_attachment_table<R>(
+        &mut self,
+        f: impl FnOnce(&mut AttachmentTable<Self::Descriptor>) -> Result<R>,
+    ) -> Result<R>;
+
+    fn descriptor_for_attachment_table(&self, descriptor: Descriptor) -> Result<Self::Descriptor>;
+}
+
+fn ensure_attachment_name_available<T: AttachmentLoggerStorage>(
+    logger: &mut T,
+    name: &str,
+) -> Result<()> {
+    logger.with_attachment_table(|attachments| {
+        ensure!(
+            !attachments.contains_key(name),
+            "Attachment `{name}` already exists"
+        );
+        Ok(())
+    })
 }

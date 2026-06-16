@@ -8,6 +8,7 @@ impl Parse for crate::v1::Solution {
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v1.Solution";
         crate::parse::check_format_version(self.format_version, message)?;
+        crate::parse::validate_extension_annotations(&self.annotations, message)?;
 
         let provided_feasible = match self.feasible_relaxed {
             Some(_) => self.feasible,
@@ -130,6 +131,8 @@ impl Parse for crate::v1::Solution {
             optimality,
             relaxation,
             sense,
+            metadata: self.metadata,
+            annotations: self.annotations,
         };
 
         // Validate feasibility consistency
@@ -238,6 +241,8 @@ impl From<Solution> for crate::v1::Solution {
             feasible_unrelaxed,
             sense,
             format_version: crate::CURRENT_FORMAT_VERSION,
+            metadata: solution.metadata,
+            annotations: crate::protobuf_extension_annotations(solution.annotations),
         }
     }
 }
@@ -246,6 +251,52 @@ impl From<Solution> for crate::v1::Solution {
 mod tests {
     use super::*;
     use crate::{v1, Parse};
+
+    #[test]
+    fn test_solution_parse_rejects_reserved_annotation_key() {
+        let v1_solution = v1::Solution {
+            annotations: std::collections::HashMap::from([(
+                format!("{}.solver", crate::annotation_keys::SOLUTION_NAMESPACE),
+                "bad".to_string(),
+            )]),
+            ..Default::default()
+        };
+        let result: Result<Solution, ParseError> = v1_solution.parse(&());
+        insta::assert_snapshot!(result.unwrap_err().to_string(), @r###"
+        Traceback for OMMX Message parse error:
+        └─ommx.v1.Solution[annotations]
+        Annotation key `org.ommx.v1.solution.solver` is reserved for OMMX metadata and cannot be stored in extension annotations.
+        "###);
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn test_solution_to_bytes_filters_reserved_annotation_key() {
+        let mut solution: Solution = v1::Solution {
+            state: Some(v1::State::default()),
+            feasible: true,
+            feasible_relaxed: Some(true),
+            feasible_unrelaxed: true,
+            optimality: v1::Optimality::Optimal as i32,
+            relaxation: v1::Relaxation::Unspecified as i32,
+            ..Default::default()
+        }
+        .parse(&())
+        .unwrap();
+        let reserved_key = format!("{}.solver", crate::annotation_keys::SOLUTION_NAMESPACE);
+        solution.annotations = std::collections::HashMap::from([
+            (reserved_key.clone(), "invalid extension solver".to_string()),
+            ("org.example.owner".to_string(), "domain".to_string()),
+        ]);
+
+        let restored = Solution::from_bytes(&solution.to_bytes()).unwrap();
+
+        assert!(!restored.annotations.contains_key(&reserved_key));
+        assert_eq!(
+            restored.annotations.get("org.example.owner"),
+            Some(&"domain".to_string())
+        );
+    }
 
     #[test]
     fn test_solution_parse() {

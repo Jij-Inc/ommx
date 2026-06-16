@@ -457,6 +457,7 @@ impl ParametricInstanceBuilder {
             named_function_metadata: Default::default(),
             decision_variable_dependency: self.decision_variable_dependency,
             description: self.description,
+            annotations: Default::default(),
         })
     }
 }

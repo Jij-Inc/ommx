@@ -49,6 +49,7 @@ impl From<Instance> for ParametricInstance {
             sos1_constraint_collection,
             decision_variable_dependency,
             description,
+            annotations,
             named_functions,
             named_function_metadata,
             ..
@@ -66,6 +67,7 @@ impl From<Instance> for ParametricInstance {
             sos1_constraint_collection,
             decision_variable_dependency,
             description,
+            annotations,
             named_functions,
             named_function_metadata,
         }
@@ -171,6 +173,7 @@ impl ParametricInstance {
             decision_variable_dependency,
             parameters: Some(parameters),
             description: self.description,
+            annotations: self.annotations,
         })
     }
 }

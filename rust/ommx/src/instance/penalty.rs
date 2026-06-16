@@ -126,6 +126,7 @@ impl Instance {
             description: self.description,
             named_functions: self.named_functions,
             named_function_metadata: self.named_function_metadata,
+            annotations: self.annotations,
         })
     }
 
@@ -202,6 +203,7 @@ impl Instance {
                 description: self.description,
                 named_functions: self.named_functions,
                 named_function_metadata: self.named_function_metadata,
+                annotations: self.annotations,
             });
         }
 
@@ -268,6 +270,7 @@ impl Instance {
             description: self.description,
             named_functions: self.named_functions,
             named_function_metadata: self.named_function_metadata,
+            annotations: self.annotations,
         })
     }
 }

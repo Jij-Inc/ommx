@@ -16,13 +16,9 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 #[derive(Clone)]
 pub struct ParametricInstance {
     pub(crate) inner: ommx::ParametricInstance,
-    pub(crate) annotations: ommx::artifact::ParametricInstanceAnnotations,
 }
 
-crate::annotations::impl_instance_annotations!(
-    ParametricInstance,
-    "org.ommx.v1.parametric-instance"
-);
+impl_instance_annotations!(ParametricInstance);
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
@@ -30,10 +26,8 @@ impl ParametricInstance {
     #[staticmethod]
     pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
         let _guard = crate::TRACING.attach_parent_context(bytes.py());
-        let inner = ommx::ParametricInstance::from_bytes(bytes.as_bytes())?;
         Ok(Self {
-            inner,
-            annotations: ommx::artifact::ParametricInstanceAnnotations::default(),
+            inner: ommx::ParametricInstance::from_bytes(bytes.as_bytes())?,
         })
     }
 
@@ -191,10 +185,7 @@ impl ParametricInstance {
             nf_meta.insert(id, m);
         }
 
-        Ok(Self {
-            inner,
-            annotations: ommx::artifact::ParametricInstanceAnnotations::default(),
-        })
+        Ok(Self { inner })
     }
 
     /// Create trivial empty instance of minimization with zero objective, no constraints, and no decision variables and parameters.
@@ -221,10 +212,7 @@ impl ParametricInstance {
         let mut v1_params = ommx::v1::Parameters::default();
         v1_params.entries = parameters;
         let instance = self.inner.clone().with_parameters(v1_params)?;
-        Ok(Instance {
-            inner: instance,
-            annotations: ommx::artifact::InstanceAnnotations::default(),
-        })
+        Ok(Instance { inner: instance })
     }
 
     /// Substitute decision variables with function expressions (in-place).
@@ -630,8 +618,8 @@ impl ParametricInstance {
     pub fn description(&self) -> Option<crate::InstanceDescription> {
         self.inner
             .description
-            .as_ref()
-            .map(|desc| crate::InstanceDescription(desc.clone()))
+            .clone()
+            .map(crate::InstanceDescription)
     }
 
     #[getter]

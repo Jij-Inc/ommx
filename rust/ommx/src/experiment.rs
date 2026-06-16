@@ -48,7 +48,7 @@
 //!
 //! let mut run = exp.run()?;
 //! run.log_parameter("solver", "scip")?;
-//! run.log_instance("candidate", &instance, Default::default())?;
+//! run.log_instance("candidate", &instance)?;
 //! run.finish()?;
 //!
 //! let artifact = exp.commit()?.into_artifact();
@@ -84,16 +84,11 @@ pub use sealed::{SealedRun, Solve};
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor, TempLocalRegistry};
 use crate::artifact::{media_types, ImageRef, LocalArtifact};
 use anyhow::{ensure, Context, Result};
-use attachment::{read_file_attachment, store_attachment_descriptor};
-use oci_spec::image::MediaType;
+use oci_spec::image::Descriptor;
 use parameter::ParameterSet;
 use rmpv::Value as MessagePackValue;
 use std::sync::{Mutex, MutexGuard};
-use std::{
-    collections::{BTreeMap, HashMap},
-    io::Cursor,
-    path::Path,
-};
+use std::{collections::BTreeMap, io::Cursor};
 
 // --- Artifact mapping constants ---------------------------------------------
 
@@ -544,50 +539,23 @@ impl<'reg> Experiment<'reg> {
     }
 }
 
-impl<'reg> AttachmentLogger for &Experiment<'reg> {
-    fn log_attachment(
-        self,
-        name: &str,
-        media_type: MediaType,
-        bytes: impl AsRef<[u8]>,
-        annotations: HashMap<String, String>,
-    ) -> Result<()> {
-        {
-            let state = self.lock_state();
-            if state.attachments.contains_key(name) {
-                crate::bail!("Attachment `{name}` already exists");
-            }
-        }
-        let descriptor =
-            store_attachment_descriptor(self.registry, media_type, bytes.as_ref(), annotations)?;
-        self.lock_state()
-            .attachments
-            .insert(name.to_string(), descriptor, None)
-            .with_context(|| format!("Failed to register attachment `{name}`"))?;
-        Ok(())
+impl<'reg> logging::AttachmentLoggerStorage for &Experiment<'reg> {
+    type Descriptor = StoredDescriptor<'reg>;
+
+    fn with_local_registry<R>(&self, f: impl FnOnce(&LocalRegistry) -> Result<R>) -> Result<R> {
+        f(self.registry)
     }
 
-    fn log_file(
-        self,
-        name: &str,
-        path: impl AsRef<Path>,
-        media_type: Option<MediaType>,
-        filename: Option<&str>,
-    ) -> Result<()> {
-        let (media_type, bytes, filename) = read_file_attachment(path, media_type, filename)?;
-        {
-            let state = self.lock_state();
-            if state.attachments.contains_key(name) {
-                crate::bail!("Attachment `{name}` already exists");
-            }
-        }
-        let descriptor =
-            store_attachment_descriptor(self.registry, media_type, bytes.as_ref(), HashMap::new())?;
-        self.lock_state()
-            .attachments
-            .insert(name.to_string(), descriptor, Some(filename))
-            .with_context(|| format!("Failed to register attachment `{name}`"))?;
-        Ok(())
+    fn with_attachment_table<R>(
+        &mut self,
+        f: impl FnOnce(&mut AttachmentTable<Self::Descriptor>) -> Result<R>,
+    ) -> Result<R> {
+        let mut state = self.lock_state();
+        f(&mut state.attachments)
+    }
+
+    fn descriptor_for_attachment_table(&self, descriptor: Descriptor) -> Result<Self::Descriptor> {
+        self.registry.stored_descriptor(descriptor)
     }
 }
 
