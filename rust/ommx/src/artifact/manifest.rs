@@ -1148,6 +1148,131 @@ mod tests {
     }
 
     #[test]
+    fn get_instance_layer_merges_descriptor_annotations_without_overwriting_proto() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let registry = LocalRegistry::open(dir.path())?;
+
+        let mut instance = crate::Instance::default();
+        instance.description = Some(crate::v1::instance::Description {
+            name: Some("proto title".to_string()),
+            ..Default::default()
+        });
+        instance
+            .annotations
+            .insert("org.example.owner".to_string(), "proto".to_string());
+
+        let descriptor = registry.store_layer_blob(
+            media_types::v1_instance(),
+            &instance.to_bytes(),
+            HashMap::from([
+                (
+                    crate::annotation_keys::INSTANCE_TITLE.to_string(),
+                    "descriptor title".to_string(),
+                ),
+                (
+                    crate::annotation_keys::INSTANCE_LICENSE.to_string(),
+                    "MIT".to_string(),
+                ),
+                ("org.example.owner".to_string(), "descriptor".to_string()),
+                ("org.example.source".to_string(), "descriptor".to_string()),
+            ]),
+        )?;
+
+        let restored = registry.get_instance_layer(&descriptor)?;
+        let description = restored
+            .description
+            .as_ref()
+            .context("descriptor fallback should create description")?;
+        assert_eq!(description.name.as_deref(), Some("proto title"));
+        assert_eq!(description.license.as_deref(), Some("MIT"));
+        assert_eq!(
+            restored
+                .annotations
+                .get("org.example.owner")
+                .map(String::as_str),
+            Some("proto")
+        );
+        assert_eq!(
+            restored
+                .annotations
+                .get("org.example.source")
+                .map(String::as_str),
+            Some("descriptor")
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn get_solution_layer_merges_descriptor_annotations_without_overwriting_proto() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let registry = LocalRegistry::open(dir.path())?;
+
+        let solution_proto = v1::Solution {
+            state: Some(v1::State::default()),
+            objective: 1.0,
+            decision_variables: Vec::new(),
+            evaluated_constraints: Vec::new(),
+            evaluated_named_functions: Vec::new(),
+            feasible: true,
+            feasible_relaxed: Some(true),
+            feasible_unrelaxed: true,
+            optimality: v1::Optimality::Optimal as i32,
+            relaxation: v1::Relaxation::Unspecified as i32,
+            sense: v1::instance::Sense::Minimize as i32,
+            format_version: crate::CURRENT_FORMAT_VERSION,
+            metadata: Some(v1::ProcessMetadata {
+                solver: Some(r#"{"name":"proto"}"#.to_string()),
+                ..Default::default()
+            }),
+            annotations: HashMap::from([("org.example.owner".to_string(), "proto".to_string())]),
+        };
+        let solution = solution_proto.parse(&())?;
+
+        let descriptor = registry.store_layer_blob(
+            media_types::v1_solution(),
+            &solution.to_bytes(),
+            HashMap::from([
+                (
+                    format!("{}.solver", crate::annotation_keys::SOLUTION_NAMESPACE),
+                    r#"{"name":"descriptor"}"#.to_string(),
+                ),
+                (
+                    format!("{}.instance", crate::annotation_keys::SOLUTION_NAMESPACE),
+                    "sha256:descriptor".to_string(),
+                ),
+                ("org.example.owner".to_string(), "descriptor".to_string()),
+                ("org.example.source".to_string(), "descriptor".to_string()),
+            ]),
+        )?;
+
+        let restored = registry.get_solution_layer(&descriptor)?;
+        let metadata = restored
+            .metadata
+            .as_ref()
+            .context("descriptor fallback should create process metadata")?;
+        assert_eq!(metadata.solver.as_deref(), Some(r#"{"name":"proto"}"#));
+        assert_eq!(metadata.instance.as_deref(), Some("sha256:descriptor"));
+        assert_eq!(
+            restored
+                .annotations
+                .get("org.example.owner")
+                .map(String::as_str),
+            Some("proto")
+        );
+        assert_eq!(
+            restored
+                .annotations
+                .get("org.example.source")
+                .map(String::as_str),
+            Some("descriptor")
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn builds_native_oci_image_manifest_with_artifact_type() -> Result<()> {
         let dir = tempfile::tempdir()?;
         let registry = LocalRegistry::open(dir.path())?;
