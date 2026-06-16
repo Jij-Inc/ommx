@@ -77,12 +77,48 @@ For the complete member lists, see the API Reference for
 {class}`~ommx_pyscipopt_adapter.SCIPTerminationReport`, and
 {class}`~ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer`.
 
+## Record Diagnostics with the HiGHS Adapter
+
+The HiGHS Adapter records MIP progress and termination information when you
+pass a {class}`~ommx.adapter.DiagnosticCollector` to `solve()`. Read that data
+through {class}`~ommx_highs_adapter.HighsDiagnosticsAnalyzer`.
+
+```python
+from ommx import adapter
+from ommx_highs_adapter import OMMXHighsAdapter, HighsDiagnosticsAnalyzer
+
+diag = adapter.DiagnosticCollector()
+solution = OMMXHighsAdapter.solve(instance, diagnostics=diag)
+
+analysis = HighsDiagnosticsAnalyzer(diag.diagnostics)
+
+analysis.progress_history_df[["primal_bound", "dual_bound"]].plot()
+print(analysis.dual_bound)
+print(analysis.termination_result)
+```
+
+`progress_history_df` is a pandas DataFrame indexed by `solving_time_sec`.
+Series properties such as `dual_bound`, `gap`, and `primal_bound` use the same
+time index, so they are ready for time-based plots.
+
+{class}`~ommx_highs_adapter.HighsProgressSnapshot` is recorded from HiGHS MIP
+logging callbacks. A progress snapshot includes fields such as
+`solving_time_sec`, `mip_node_count`, `primal_bound`, `dual_bound`, and `gap`.
+
+{class}`~ommx_highs_adapter.HighsTerminationReport` is recorded after
+`model.run()` finishes and before the HiGHS model is decoded back into an OMMX
+Solution. It includes fields such as `status`, `objective_value`,
+`mip_dual_bound`, `mip_gap`, `mip_node_count`, iteration counts, feasibility
+violation summaries, runtime, and HiGHS version metadata. Use
+`termination_result` or the `termination_*` properties when you need terminal
+scalar values.
+
 ### Failure Handling
 
 Direct collection is useful when OMMX Solution decoding fails. The PySCIPOpt
-Adapter records the termination report before decoding, so the collector can
-still contain the final SCIP status and bounds when the solve raises an adapter
-exception such as {exc}`~ommx.adapter.InfeasibleDetected` or
+and HiGHS Adapters record the termination report before decoding, so the
+collector can still contain the final solver status and bounds when the solve
+raises an adapter exception such as {exc}`~ommx.adapter.InfeasibleDetected` or
 {exc}`~ommx.adapter.UnboundedDetected`.
 
 ```python
