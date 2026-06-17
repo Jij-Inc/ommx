@@ -47,13 +47,13 @@ impl std::fmt::Display for DecisionVariableRole {
     }
 }
 
-/// Reverse-usage information for one used decision variable.
+/// Reverse-usage entry for one used decision variable.
 ///
 /// A variable has an entry here only when it appears in the objective or an
 /// active constraint family that contributes to solver input. Fixed,
 /// dependent, and irrelevant variables do not have usage entries.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct UsedDecisionVariableUsage {
+pub struct DecisionVariableUsageEntry {
     used_in_objective: bool,
     used_in_regular_constraints: BTreeSet<ConstraintID>,
     used_in_indicator_constraints: BTreeSet<IndicatorConstraintID>,
@@ -61,7 +61,7 @@ pub struct UsedDecisionVariableUsage {
     used_in_sos1_constraints: BTreeSet<Sos1ConstraintID>,
 }
 
-impl UsedDecisionVariableUsage {
+impl DecisionVariableUsageEntry {
     fn new() -> Self {
         Self {
             used_in_objective: false,
@@ -109,12 +109,13 @@ impl UsedDecisionVariableUsage {
 #[derive(Debug, Clone)]
 pub struct DecisionVariableUsage<'a> {
     instance: &'a Instance,
-    by_used_variable: BTreeMap<VariableID, UsedDecisionVariableUsage>,
+    by_used_variable: BTreeMap<VariableID, DecisionVariableUsageEntry>,
 }
 
 impl<'a> DecisionVariableUsage<'a> {
     fn new(instance: &'a Instance) -> Self {
-        let mut by_used_variable: BTreeMap<VariableID, UsedDecisionVariableUsage> = BTreeMap::new();
+        let mut by_used_variable: BTreeMap<VariableID, DecisionVariableUsageEntry> =
+            BTreeMap::new();
 
         for id in instance.objective().required_ids() {
             usage_entry_mut(&mut by_used_variable, id).used_in_objective = true;
@@ -162,11 +163,11 @@ impl<'a> DecisionVariableUsage<'a> {
         self.instance
     }
 
-    pub fn by_used_variable(&self) -> &BTreeMap<VariableID, UsedDecisionVariableUsage> {
+    pub fn by_used_variable(&self) -> &BTreeMap<VariableID, DecisionVariableUsageEntry> {
         &self.by_used_variable
     }
 
-    pub fn get(&self, id: VariableID) -> Option<&UsedDecisionVariableUsage> {
+    pub fn get(&self, id: VariableID) -> Option<&DecisionVariableUsageEntry> {
         self.by_used_variable.get(&id)
     }
 
@@ -419,17 +420,17 @@ fn write_usage_display(
 }
 
 fn usage_entry_mut(
-    by_variable: &mut BTreeMap<VariableID, UsedDecisionVariableUsage>,
+    by_variable: &mut BTreeMap<VariableID, DecisionVariableUsageEntry>,
     id: VariableID,
-) -> &mut UsedDecisionVariableUsage {
+) -> &mut DecisionVariableUsageEntry {
     by_variable
         .entry(id)
-        .or_insert_with(UsedDecisionVariableUsage::new)
+        .or_insert_with(DecisionVariableUsageEntry::new)
 }
 
 fn invert_usage_map<ID: Copy + Ord>(
-    by_variable: &BTreeMap<VariableID, UsedDecisionVariableUsage>,
-    select: impl Fn(&UsedDecisionVariableUsage) -> &BTreeSet<ID>,
+    by_variable: &BTreeMap<VariableID, DecisionVariableUsageEntry>,
+    select: impl Fn(&DecisionVariableUsageEntry) -> &BTreeSet<ID>,
 ) -> BTreeMap<ID, VariableIDSet> {
     let mut by_owner: BTreeMap<ID, VariableIDSet> = BTreeMap::new();
     for (variable_id, usage) in by_variable {

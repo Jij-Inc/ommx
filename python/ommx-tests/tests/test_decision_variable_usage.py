@@ -50,12 +50,6 @@ def test_decision_variable_role_partitions():
 def test_bound_wrapper_functionality():
     """Test that Bound wrapper works correctly."""
     x = [DecisionVariable.binary(i) for i in range(2)]
-    instance = Instance.from_components(
-        decision_variables=x,
-        objective=x[0],
-        constraints={},
-        sense=Instance.MAXIMIZE,
-    )
 
     bound = x[0].bound
 
