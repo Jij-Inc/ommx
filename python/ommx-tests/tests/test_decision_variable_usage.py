@@ -42,50 +42,6 @@ def test_decision_variable_usage_basic():
     assert by_variable[0].used_in_objective
     assert by_variable[2].used_in_regular_constraints() == {0}
 
-    # Test used_binary returns Bound objects
-    binary_vars = usage.used_binary()
-    assert len(binary_vars) == 3
-    for var_id, bound in binary_vars.items():
-        assert var_id in {0, 1, 2}
-        assert bound.lower == 0.0
-        assert bound.upper == 1.0
-
-
-def test_decision_variable_usage_mixed_types():
-    """Test decision_variable_usage with mixed variable types."""
-    # Create mixed variables
-    x_bin = DecisionVariable.binary(0, name="x_bin")
-    x_int = DecisionVariable.integer(1, lower=0, upper=5, name="x_int")
-    x_cont = DecisionVariable.continuous(2, lower=0, upper=10, name="x_cont")
-
-    # Create instance
-    instance = Instance.from_components(
-        decision_variables=[x_bin, x_int, x_cont],
-        objective=x_bin + x_int + x_cont,
-        constraints={},
-        sense=Instance.MINIMIZE,
-    )
-
-    usage = instance.decision_variable_usage()
-
-    # Test binary variables
-    binary_vars = usage.used_binary()
-    assert 0 in binary_vars
-    assert binary_vars[0].lower == 0.0
-    assert binary_vars[0].upper == 1.0
-
-    # Test integer variables
-    integer_vars = usage.used_integer()
-    assert 1 in integer_vars
-    assert integer_vars[1].lower == 0.0
-    assert integer_vars[1].upper == 5.0
-
-    # Test continuous variables
-    continuous_vars = usage.used_continuous()
-    assert 2 in continuous_vars
-    assert continuous_vars[2].lower == 0.0
-    assert continuous_vars[2].upper == 10.0
-
 
 def test_bound_wrapper_functionality():
     """Test that Bound wrapper works correctly."""
@@ -97,11 +53,7 @@ def test_bound_wrapper_functionality():
         sense=Instance.MAXIMIZE,
     )
 
-    usage = instance.decision_variable_usage()
-    binary_vars = usage.used_binary()
-
-    # Test a specific bound object
-    bound = binary_vars[0]
+    bound = x[0].bound
 
     # Test bound methods
     assert bound.lower == 0.0

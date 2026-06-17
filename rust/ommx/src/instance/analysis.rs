@@ -1,7 +1,7 @@
 use super::Instance;
 use crate::{
-    Bound, Bounds, ConstraintID, DecisionVariable, Evaluate, IndicatorConstraintID, Kind,
-    NamedFunctionID, OneHotConstraintID, Sos1ConstraintID, VariableID, VariableIDSet,
+    Bounds, ConstraintID, DecisionVariable, Evaluate, IndicatorConstraintID, Kind, NamedFunctionID,
+    OneHotConstraintID, Sos1ConstraintID, VariableID, VariableIDSet,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -49,15 +49,13 @@ impl std::fmt::Display for DecisionVariableRole {
 
 /// Reverse-usage snapshot for one decision variable.
 ///
-/// This is intentionally a snapshot. It copies the variable kind, bound, and
-/// substituted value at construction time, and records inverse references from
-/// a variable to the instance components that use it. That makes
-/// [`DecisionVariableUsageCore`] self-contained for role queries in bindings
-/// that cannot borrow an [`Instance`] for the lifetime of the usage view.
+/// This is intentionally a snapshot. It copies the substituted value at
+/// construction time and records inverse references from a variable to the
+/// instance components that use it. That makes [`DecisionVariableUsageCore`]
+/// self-contained for role queries in bindings that cannot borrow an
+/// [`Instance`] for the lifetime of the usage view.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct VariableUsage {
-    kind: Kind,
-    bound: Bound,
     substituted_value: Option<f64>,
     role: DecisionVariableRole,
     used_in_objective: bool,
@@ -73,8 +71,6 @@ pub struct VariableUsage {
 impl VariableUsage {
     fn new(dv: &DecisionVariable) -> Self {
         Self {
-            kind: dv.kind(),
-            bound: dv.bound(),
             substituted_value: dv.substituted_value(),
             role: DecisionVariableRole::Irrelevant,
             used_in_objective: false,
@@ -98,14 +94,6 @@ impl VariableUsage {
         } else {
             DecisionVariableRole::Irrelevant
         };
-    }
-
-    pub fn kind(&self) -> Kind {
-        self.kind
-    }
-
-    pub fn bound(&self) -> Bound {
-        self.bound
     }
 
     pub fn substituted_value(&self) -> Option<f64> {
@@ -250,46 +238,6 @@ impl DecisionVariableUsageCore {
         self.by_variable.keys().copied().collect()
     }
 
-    pub fn binary(&self) -> Bounds {
-        self.by_kind(Kind::Binary, false)
-    }
-
-    pub fn integer(&self) -> Bounds {
-        self.by_kind(Kind::Integer, false)
-    }
-
-    pub fn continuous(&self) -> Bounds {
-        self.by_kind(Kind::Continuous, false)
-    }
-
-    pub fn semi_integer(&self) -> Bounds {
-        self.by_kind(Kind::SemiInteger, false)
-    }
-
-    pub fn semi_continuous(&self) -> Bounds {
-        self.by_kind(Kind::SemiContinuous, false)
-    }
-
-    pub fn used_binary(&self) -> Bounds {
-        self.by_kind(Kind::Binary, true)
-    }
-
-    pub fn used_integer(&self) -> Bounds {
-        self.by_kind(Kind::Integer, true)
-    }
-
-    pub fn used_continuous(&self) -> Bounds {
-        self.by_kind(Kind::Continuous, true)
-    }
-
-    pub fn used_semi_integer(&self) -> Bounds {
-        self.by_kind(Kind::SemiInteger, true)
-    }
-
-    pub fn used_semi_continuous(&self) -> Bounds {
-        self.by_kind(Kind::SemiContinuous, true)
-    }
-
     pub fn used(&self) -> VariableIDSet {
         self.by_variable
             .iter()
@@ -365,16 +313,6 @@ impl DecisionVariableUsageCore {
             })
             .collect()
     }
-
-    fn by_kind(&self, kind: Kind, used_only: bool) -> Bounds {
-        self.by_variable
-            .iter()
-            .filter_map(|(id, usage)| {
-                (usage.kind == kind && (!used_only || usage.is_used_by_solver()))
-                    .then_some((*id, usage.bound))
-            })
-            .collect()
-    }
 }
 
 /// Reverse-usage view tied to the lifetime of an [`Instance`].
@@ -415,6 +353,58 @@ impl<'a> DecisionVariableUsage<'a> {
             .iter()
             .filter(|(id, _)| used_ids.contains(id))
             .map(|(id, dv)| (*id, dv))
+            .collect()
+    }
+
+    pub fn binary(&self) -> Bounds {
+        self.by_kind(Kind::Binary, false)
+    }
+
+    pub fn integer(&self) -> Bounds {
+        self.by_kind(Kind::Integer, false)
+    }
+
+    pub fn continuous(&self) -> Bounds {
+        self.by_kind(Kind::Continuous, false)
+    }
+
+    pub fn semi_integer(&self) -> Bounds {
+        self.by_kind(Kind::SemiInteger, false)
+    }
+
+    pub fn semi_continuous(&self) -> Bounds {
+        self.by_kind(Kind::SemiContinuous, false)
+    }
+
+    pub fn used_binary(&self) -> Bounds {
+        self.by_kind(Kind::Binary, true)
+    }
+
+    pub fn used_integer(&self) -> Bounds {
+        self.by_kind(Kind::Integer, true)
+    }
+
+    pub fn used_continuous(&self) -> Bounds {
+        self.by_kind(Kind::Continuous, true)
+    }
+
+    pub fn used_semi_integer(&self) -> Bounds {
+        self.by_kind(Kind::SemiInteger, true)
+    }
+
+    pub fn used_semi_continuous(&self) -> Bounds {
+        self.by_kind(Kind::SemiContinuous, true)
+    }
+
+    fn by_kind(&self, kind: Kind, used_only: bool) -> Bounds {
+        let used = used_only.then(|| self.core.used());
+        self.instance
+            .decision_variables()
+            .iter()
+            .filter_map(|(id, dv)| {
+                (dv.kind() == kind && used.as_ref().map_or(true, |used| used.contains(id)))
+                    .then_some((*id, dv.bound()))
+            })
             .collect()
     }
 }
@@ -472,137 +462,163 @@ impl Instance {
 
 impl std::fmt::Display for DecisionVariableUsageCore {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "DecisionVariableUsage {{")?;
-        writeln!(f, "  Total Variables: {}", self.by_variable.len())?;
-        writeln!(f)?;
-
-        writeln!(f, "  Kind-based Partitioning:")?;
-        writeln!(
-            f,
-            "    Binary: {}, Integer: {}, Continuous: {}, Semi-Integer: {}, Semi-Continuous: {}",
-            self.binary().len(),
-            self.integer().len(),
-            self.continuous().len(),
-            self.semi_integer().len(),
-            self.semi_continuous().len()
-        )?;
-        writeln!(f)?;
-
-        let used = self.used();
-        let fixed = self.fixed();
-        let dependent = self.dependent();
-        let irrelevant = self.irrelevant();
-        writeln!(f, "  Role Summary:")?;
-        writeln!(
-            f,
-            "    Used: {}, Fixed: {}, Dependent: {}, Irrelevant: {}",
-            used.len(),
-            fixed.len(),
-            dependent.len(),
-            irrelevant.len()
-        )?;
-
-        if !self.used_in_objective().is_empty() {
-            writeln!(
-                f,
-                "\n  Used in Objective ({}):",
-                self.used_in_objective().len()
-            )?;
-            write_variable_list(f, self.used_in_objective().iter())?;
-        }
-
-        write_constraint_usage(
-            f,
-            "Used in Regular Constraints",
-            &self.used_in_constraints(),
-        )?;
-        write_constraint_usage(
-            f,
-            "Used in Indicator Constraints",
-            &self.used_in_indicator_constraints(),
-        )?;
-        write_constraint_usage(
-            f,
-            "Used in One-Hot Constraints",
-            &self.used_in_one_hot_constraints(),
-        )?;
-        write_constraint_usage(
-            f,
-            "Used in SOS1 Constraints",
-            &self.used_in_sos1_constraints(),
-        )?;
-        write_constraint_usage(
-            f,
-            "Used in Named Functions (diagnostic)",
-            &self.used_in_named_functions(),
-        )?;
-
-        if !fixed.is_empty() {
-            writeln!(f, "\n  Fixed Variables ({}):", fixed.len())?;
-            for (id, value) in &fixed {
-                writeln!(f, "    x{} = {}", id.into_inner(), value)?;
-            }
-        }
-
-        if !dependent.is_empty() {
-            writeln!(f, "\n  Dependent Variables ({}):", dependent.len())?;
-            for id in &dependent {
-                let usage = self.by_variable.get(id).expect("ID comes from by_variable");
-                writeln!(
-                    f,
-                    "    x{} ({:?}, {})",
-                    id.into_inner(),
-                    usage.kind(),
-                    usage.bound()
-                )?;
-            }
-        }
-
-        let dependency_rhs: BTreeMap<VariableID, VariableIDSet> = self
-            .by_variable
-            .iter()
-            .filter_map(|(id, usage)| {
-                (!usage.used_in_dependency_rhs_of.is_empty())
-                    .then_some((*id, usage.used_in_dependency_rhs_of.clone()))
-            })
-            .collect();
-        if !dependency_rhs.is_empty() {
-            writeln!(
-                f,
-                "\n  Used in Dependent Variable Assignments ({} variables):",
-                dependency_rhs.len()
-            )?;
-            for (id, dependent_ids) in &dependency_rhs {
-                write!(f, "    x{} -> ", id.into_inner())?;
-                write_variable_list_inline(f, dependent_ids.iter())?;
-                writeln!(f)?;
-            }
-        }
-
-        if !irrelevant.is_empty() {
-            writeln!(f, "\n  Irrelevant Variables ({}):", irrelevant.len())?;
-            for id in &irrelevant {
-                let usage = self.by_variable.get(id).expect("ID comes from by_variable");
-                let default_value = usage.bound().nearest_to_zero();
-                writeln!(
-                    f,
-                    "    x{} ({:?}, {}): will be set to {}",
-                    id.into_inner(),
-                    usage.kind(),
-                    usage.bound(),
-                    default_value
-                )?;
-            }
-        }
-
-        write!(f, "}}")
+        write_usage_display(f, self, None)
     }
 }
 
 impl std::fmt::Display for DecisionVariableUsage<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.core.fmt(f)
+        write_usage_display(f, &self.core, Some(self))
     }
+}
+
+fn write_usage_display(
+    f: &mut std::fmt::Formatter<'_>,
+    core: &DecisionVariableUsageCore,
+    usage_view: Option<&DecisionVariableUsage<'_>>,
+) -> std::fmt::Result {
+    writeln!(f, "DecisionVariableUsage {{")?;
+    writeln!(f, "  Total Variables: {}", core.by_variable.len())?;
+    writeln!(f)?;
+
+    if let Some(usage) = usage_view {
+        writeln!(f, "  Kind-based Partitioning:")?;
+        writeln!(
+            f,
+            "    Binary: {}, Integer: {}, Continuous: {}, Semi-Integer: {}, Semi-Continuous: {}",
+            usage.binary().len(),
+            usage.integer().len(),
+            usage.continuous().len(),
+            usage.semi_integer().len(),
+            usage.semi_continuous().len()
+        )?;
+        writeln!(f)?;
+    }
+
+    let used = core.used();
+    let fixed = core.fixed();
+    let dependent = core.dependent();
+    let irrelevant = core.irrelevant();
+    writeln!(f, "  Role Summary:")?;
+    writeln!(
+        f,
+        "    Used: {}, Fixed: {}, Dependent: {}, Irrelevant: {}",
+        used.len(),
+        fixed.len(),
+        dependent.len(),
+        irrelevant.len()
+    )?;
+
+    if !core.used_in_objective().is_empty() {
+        writeln!(
+            f,
+            "\n  Used in Objective ({}):",
+            core.used_in_objective().len()
+        )?;
+        write_variable_list(f, core.used_in_objective().iter())?;
+    }
+
+    write_constraint_usage(
+        f,
+        "Used in Regular Constraints",
+        &core.used_in_constraints(),
+    )?;
+    write_constraint_usage(
+        f,
+        "Used in Indicator Constraints",
+        &core.used_in_indicator_constraints(),
+    )?;
+    write_constraint_usage(
+        f,
+        "Used in One-Hot Constraints",
+        &core.used_in_one_hot_constraints(),
+    )?;
+    write_constraint_usage(
+        f,
+        "Used in SOS1 Constraints",
+        &core.used_in_sos1_constraints(),
+    )?;
+    write_constraint_usage(
+        f,
+        "Used in Named Functions (diagnostic)",
+        &core.used_in_named_functions(),
+    )?;
+
+    if !fixed.is_empty() {
+        writeln!(f, "\n  Fixed Variables ({}):", fixed.len())?;
+        for (id, value) in &fixed {
+            writeln!(f, "    x{} = {}", id.into_inner(), value)?;
+        }
+    }
+
+    if !dependent.is_empty() {
+        writeln!(f, "\n  Dependent Variables ({}):", dependent.len())?;
+        for id in &dependent {
+            if let Some(usage) = usage_view {
+                let dv = usage
+                    .instance
+                    .decision_variables()
+                    .get(id)
+                    .expect("ID comes from by_variable");
+                writeln!(
+                    f,
+                    "    x{} ({:?}, {})",
+                    id.into_inner(),
+                    dv.kind(),
+                    dv.bound()
+                )?;
+            } else {
+                writeln!(f, "    x{}", id.into_inner())?;
+            }
+        }
+    }
+
+    let dependency_rhs: BTreeMap<VariableID, VariableIDSet> = core
+        .by_variable
+        .iter()
+        .filter_map(|(id, usage)| {
+            (!usage.used_in_dependency_rhs_of.is_empty())
+                .then_some((*id, usage.used_in_dependency_rhs_of.clone()))
+        })
+        .collect();
+    if !dependency_rhs.is_empty() {
+        writeln!(
+            f,
+            "\n  Used in Dependent Variable Assignments ({} variables):",
+            dependency_rhs.len()
+        )?;
+        for (id, dependent_ids) in &dependency_rhs {
+            write!(f, "    x{} -> ", id.into_inner())?;
+            write_variable_list_inline(f, dependent_ids.iter())?;
+            writeln!(f)?;
+        }
+    }
+
+    if !irrelevant.is_empty() {
+        writeln!(f, "\n  Irrelevant Variables ({}):", irrelevant.len())?;
+        for id in &irrelevant {
+            if let Some(usage) = usage_view {
+                let dv = usage
+                    .instance
+                    .decision_variables()
+                    .get(id)
+                    .expect("ID comes from by_variable");
+                let default_value = dv.bound().nearest_to_zero();
+                writeln!(
+                    f,
+                    "    x{} ({:?}, {}): will be set to {}",
+                    id.into_inner(),
+                    dv.kind(),
+                    dv.bound(),
+                    default_value
+                )?;
+            } else {
+                writeln!(f, "    x{}", id.into_inner())?;
+            }
+        }
+    }
+
+    write!(f, "}}")
 }
 
 fn usage_entry_mut(

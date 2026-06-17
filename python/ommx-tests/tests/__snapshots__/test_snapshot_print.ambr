@@ -16,9 +16,6 @@
   DecisionVariableUsage {
     Total Variables: 5
   
-    Kind-based Partitioning:
-      Binary: 5, Integer: 0, Continuous: 0, Semi-Integer: 0, Semi-Continuous: 0
-  
     Role Summary:
       Used: 3, Fixed: 1, Dependent: 0, Irrelevant: 1
   
@@ -33,12 +30,12 @@
       x0 = 1
   
     Irrelevant Variables (1):
-      x4 (Binary, [0, 1]): will be set to 0
+      x4
   }
   '''
 # ---
 # name: test_decision_variable_usage_to_dict
-  "{'by_variable': {0: {'kind': 'Binary', 'bound': {'lower': 0.0, 'upper': 1.0}, 'substituted_value': None, 'role': 'used', 'used_in_objective': True, 'used_in_regular_constraints': [], 'used_in_indicator_constraints': [], 'used_in_one_hot_constraints': [], 'used_in_sos1_constraints': [], 'used_in_named_functions': [], 'defines_dependent_variable': False, 'used_in_dependency_rhs_of': []}, 1: {'kind': 'Binary', 'bound': {'lower': 0.0, 'upper': 1.0}, 'substituted_value': None, 'role': 'used', 'used_in_objective': True, 'used_in_regular_constraints': [0], 'used_in_indicator_constraints': [], 'used_in_one_hot_constraints': [], 'used_in_sos1_constraints': [], 'used_in_named_functions': [], 'defines_dependent_variable': False, 'used_in_dependency_rhs_of': []}, 2: {'kind': 'Binary', 'bound': {'lower': 0.0, 'upper': 1.0}, 'substituted_value': None, 'role': 'used', 'used_in_objective': False, 'used_in_regular_constraints': [0], 'used_in_indicator_constraints': [], 'used_in_one_hot_constraints': [], 'used_in_sos1_constraints': [], 'used_in_named_functions': [], 'defines_dependent_variable': False, 'used_in_dependency_rhs_of': []}}}"
+  "{'by_variable': {0: {'substituted_value': None, 'role': 'used', 'used_in_objective': True, 'used_in_regular_constraints': [], 'used_in_indicator_constraints': [], 'used_in_one_hot_constraints': [], 'used_in_sos1_constraints': [], 'used_in_named_functions': [], 'defines_dependent_variable': False, 'used_in_dependency_rhs_of': []}, 1: {'substituted_value': None, 'role': 'used', 'used_in_objective': True, 'used_in_regular_constraints': [0], 'used_in_indicator_constraints': [], 'used_in_one_hot_constraints': [], 'used_in_sos1_constraints': [], 'used_in_named_functions': [], 'defines_dependent_variable': False, 'used_in_dependency_rhs_of': []}, 2: {'substituted_value': None, 'role': 'used', 'used_in_objective': False, 'used_in_regular_constraints': [0], 'used_in_indicator_constraints': [], 'used_in_one_hot_constraints': [], 'used_in_sos1_constraints': [], 'used_in_named_functions': [], 'defines_dependent_variable': False, 'used_in_dependency_rhs_of': []}}}"
 # ---
 # name: test_function_print_linear
   'Function(2*x1 + 3*x2 + 1)'

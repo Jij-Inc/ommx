@@ -3,9 +3,8 @@ use crate::{
         apply_include_filter, constraint_id_col, constraint_kind_collection, entries_to_dataframe,
         raw_entries_to_dataframe, ConstraintKind, PyDataFrame, ToPandasEntry,
     },
-    Constraint, DecisionVariable, DecisionVariableRole, Function, Kind, NamedFunction,
+    Constraint, DecisionVariable, DecisionVariableRole, Function, NamedFunction,
     ParametricInstance, RemovedConstraint, Rng, SampleSet, Samples, Sense, Solution, State,
-    VariableBound,
 };
 use anyhow::Result;
 use ommx::{ConstraintID, Evaluate, NamedFunctionID, VariableID};
@@ -1917,7 +1916,7 @@ impl Instance {
     ///
     /// - Role: used, fixed, dependent, or irrelevant
     /// - Variable references from objective, active constraints, named functions, and dependency assignments
-    /// - Kind, bound, and substituted value copied at construction time
+    /// - Substituted value copied at construction time
     ///
     /// **Returns:**
     /// Usage snapshot containing detailed information about decision variables
@@ -2672,46 +2671,6 @@ pub struct DecisionVariableUsage(ommx::DecisionVariableUsageCore);
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl DecisionVariableUsage {
-    pub fn used_binary(&self) -> BTreeMap<u64, VariableBound> {
-        self.0
-            .used_binary()
-            .into_iter()
-            .map(|(id, bound)| (id.into_inner(), VariableBound(bound)))
-            .collect()
-    }
-
-    pub fn used_integer(&self) -> BTreeMap<u64, VariableBound> {
-        self.0
-            .used_integer()
-            .into_iter()
-            .map(|(id, bound)| (id.into_inner(), VariableBound(bound)))
-            .collect()
-    }
-
-    pub fn used_continuous(&self) -> BTreeMap<u64, VariableBound> {
-        self.0
-            .used_continuous()
-            .into_iter()
-            .map(|(id, bound)| (id.into_inner(), VariableBound(bound)))
-            .collect()
-    }
-
-    pub fn used_semi_integer(&self) -> BTreeMap<u64, VariableBound> {
-        self.0
-            .used_semi_integer()
-            .into_iter()
-            .map(|(id, bound)| (id.into_inner(), VariableBound(bound)))
-            .collect()
-    }
-
-    pub fn used_semi_continuous(&self) -> BTreeMap<u64, VariableBound> {
-        self.0
-            .used_semi_continuous()
-            .into_iter()
-            .map(|(id, bound)| (id.into_inner(), VariableBound(bound)))
-            .collect()
-    }
-
     pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
         self.0.used().iter().map(|id| id.into_inner()).collect()
     }
@@ -2862,16 +2821,6 @@ pub struct DecisionVariableUsageEntry(ommx::VariableUsage);
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl DecisionVariableUsageEntry {
-    #[getter]
-    pub fn kind(&self) -> Kind {
-        self.0.kind().into()
-    }
-
-    #[getter]
-    pub fn bound(&self) -> VariableBound {
-        VariableBound(self.0.bound())
-    }
-
     #[getter]
     pub fn substituted_value(&self) -> Option<f64> {
         self.0.substituted_value()

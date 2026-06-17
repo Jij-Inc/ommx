@@ -107,15 +107,7 @@ def test_decision_variable_usage_print(snapshot):
 def test_bound_print(snapshot):
     """Test Bound print output."""
     x = [DecisionVariable.binary(i) for i in range(2)]
-    instance = Instance.from_components(
-        decision_variables=x,
-        objective=x[0],
-        constraints={},
-        sense=Instance.MAXIMIZE,
-    )
-    usage = instance.decision_variable_usage()
-    binary_vars = usage.used_binary()
-    bound = binary_vars[0]
+    bound = x[0].bound
     assert str(bound) == snapshot
 
 

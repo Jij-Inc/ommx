@@ -11795,60 +11795,6 @@
               "deprecated": null
             },
             {
-              "name": "used_binary",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "dict[int, Bound]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      },
-                      {
-                        "display": "Bound",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "used_continuous",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "dict[int, Bound]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      },
-                      {
-                        "display": "Bound",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
               "name": "used_decision_variable_ids",
               "doc": "",
               "signatures": [
@@ -12056,87 +12002,6 @@
               ],
               "is_async": false,
               "deprecated": null
-            },
-            {
-              "name": "used_integer",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "dict[int, Bound]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      },
-                      {
-                        "display": "Bound",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "used_semi_continuous",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "dict[int, Bound]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      },
-                      {
-                        "display": "Bound",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "used_semi_integer",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "dict[int, Bound]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      },
-                      {
-                        "display": "Bound",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
             }
           ],
           "attributes": [],
@@ -12315,17 +12180,6 @@
           ],
           "attributes": [
             {
-              "name": "bound",
-              "doc": "",
-              "type_": {
-                "display": "Bound",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
               "name": "defines_dependent_variable",
               "doc": "",
               "type_": {
@@ -12341,17 +12195,6 @@
               "doc": "",
               "type_": {
                 "display": "bool",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "kind",
-              "doc": "",
-              "type_": {
-                "display": "Kind",
                 "link_target": null,
                 "children": []
               },
@@ -15651,7 +15494,7 @@
             },
             {
               "name": "decision_variable_usage",
-              "doc": "Build a decision-variable usage snapshot for the optimization problem instance.\n\nReturns reverse usage information for all decision variables including:\n\n- Role: used, fixed, dependent, or irrelevant\n- Variable references from objective, active constraints, named functions, and dependency assignments\n- Kind, bound, and substituted value copied at construction time\n\n**Returns:**\nUsage snapshot containing detailed information about decision variables\n\n# Examples\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=x[0] + x[1],\n...     constraints=[(x[1] + x[2] == 1).set_id(0)],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> usage = instance.decision_variable_usage()\n>>> usage.used_decision_variable_ids()\n{0, 1, 2}\n>>> usage.used_in_objective()\n{0, 1}\n>>> usage.used_in_constraints()\n{0: {1, 2}}\n```",
+              "doc": "Build a decision-variable usage snapshot for the optimization problem instance.\n\nReturns reverse usage information for all decision variables including:\n\n- Role: used, fixed, dependent, or irrelevant\n- Variable references from objective, active constraints, named functions, and dependency assignments\n- Substituted value copied at construction time\n\n**Returns:**\nUsage snapshot containing detailed information about decision variables\n\n# Examples\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=x[0] + x[1],\n...     constraints=[(x[1] + x[2] == 1).set_id(0)],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> usage = instance.decision_variable_usage()\n>>> usage.used_decision_variable_ids()\n{0, 1, 2}\n>>> usage.used_in_objective()\n{0, 1}\n>>> usage.used_in_constraints()\n{0: {1, 2}}\n```",
               "signatures": [
                 {
                   "parameters": [],
