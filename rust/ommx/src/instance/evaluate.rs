@@ -491,11 +491,11 @@ mod tests {
                     (Just(instance), state)
                 })
         ) {
-            let usage = instance.decision_variable_usage();
             let solution = instance.evaluate(&state, ATol::default()).unwrap();
             // Must be populated
             let ids: VariableIDSet = solution.state().entries.keys().map(|id| VariableID::from(*id)).collect();
-            prop_assert_eq!(ids, usage.all());
+            let all: VariableIDSet = instance.decision_variables().keys().copied().collect();
+            prop_assert_eq!(ids, all);
         }
 
         #[test]

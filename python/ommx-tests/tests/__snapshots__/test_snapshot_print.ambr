@@ -11,32 +11,6 @@
 # name: test_constraint_print_less_equal
   'Constraint(x1 + 2*x2 - 10 <= 0)'
 # ---
-# name: test_decision_variable_usage_print
-  '''
-  DecisionVariableUsage {
-    Total Variables: 5
-  
-    Role Summary:
-      Used: 3, Fixed: 1, Dependent: 0, Irrelevant: 1
-  
-    Used in Objective (2):
-      x1, x2
-  
-    Used in Regular Constraints (2):
-      0: x1, x2
-      1: x1, x3
-  
-    Fixed Variables (1):
-      x0 = 1
-  
-    Irrelevant Variables (1):
-      x4
-  }
-  '''
-# ---
-# name: test_decision_variable_usage_to_dict
-  "{'by_variable': {0: {'substituted_value': None, 'role': 'used', 'used_in_objective': True, 'used_in_regular_constraints': [], 'used_in_indicator_constraints': [], 'used_in_one_hot_constraints': [], 'used_in_sos1_constraints': [], 'used_in_named_functions': [], 'defines_dependent_variable': False, 'used_in_dependency_rhs_of': []}, 1: {'substituted_value': None, 'role': 'used', 'used_in_objective': True, 'used_in_regular_constraints': [0], 'used_in_indicator_constraints': [], 'used_in_one_hot_constraints': [], 'used_in_sos1_constraints': [], 'used_in_named_functions': [], 'defines_dependent_variable': False, 'used_in_dependency_rhs_of': []}, 2: {'substituted_value': None, 'role': 'used', 'used_in_objective': False, 'used_in_regular_constraints': [0], 'used_in_indicator_constraints': [], 'used_in_one_hot_constraints': [], 'used_in_sos1_constraints': [], 'used_in_named_functions': [], 'defines_dependent_variable': False, 'used_in_dependency_rhs_of': []}}}"
-# ---
 # name: test_function_print_linear
   'Function(2*x1 + 3*x2 + 1)'
 # ---

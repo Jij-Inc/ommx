@@ -158,8 +158,6 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<VariableBound>()?;
     m.add_class::<Instance>()?;
     m.add_class::<InstanceDescription>()?;
-    m.add_class::<DecisionVariableUsage>()?;
-    m.add_class::<DecisionVariableUsageEntry>()?;
     m.add_class::<DecisionVariable>()?;
     m.add_class::<AttachedDecisionVariable>()?;
     m.add_class::<Parameter>()?;
@@ -268,9 +266,6 @@ pyo3_stub_gen::reexport_module_members!("ommx.v1" from "ommx._ommx_rust";
     "SampledDecisionVariable",
     "SampledConstraint",
     "SampledNamedFunction",
-    // Decision variable usage
-    "DecisionVariableUsage",
-    "DecisionVariableUsageEntry",
     // Top-level types
     "Instance",
     "ParametricInstance",

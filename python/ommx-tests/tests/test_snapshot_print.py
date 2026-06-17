@@ -84,26 +84,6 @@ def test_constraint_print_greater_equal(snapshot):
     assert str(constraint) == snapshot
 
 
-def test_decision_variable_usage_print(snapshot):
-    """Test DecisionVariableUsage repr() output."""
-    x = [DecisionVariable.binary(i, name="x") for i in range(5)]
-    instance = Instance.from_components(
-        decision_variables=x,
-        objective=x[0] + x[1] + x[2],
-        constraints={
-            0: x[1] + x[2] == 1,
-            1: x[3] == x[0] + x[1],  # x[3] becomes dependent
-        },
-        sense=Instance.MAXIMIZE,
-    )
-
-    # Apply partial_evaluate to fix x[0] = 1
-    instance_partial = instance.partial_evaluate({0: 1.0})
-
-    usage = instance_partial.decision_variable_usage()
-    assert repr(usage) == snapshot
-
-
 def test_bound_print(snapshot):
     """Test Bound print output."""
     x = [DecisionVariable.binary(i) for i in range(2)]
@@ -126,16 +106,3 @@ def test_instance_stats_print(snapshot):
     )
     stats = instance.stats()
     assert str(stats) == snapshot
-
-
-def test_decision_variable_usage_to_dict(snapshot):
-    """Test DecisionVariableUsage.to_dict() output."""
-    x = [DecisionVariable.binary(i, name="x") for i in range(3)]
-    instance = Instance.from_components(
-        decision_variables=x,
-        objective=x[0] + x[1],
-        constraints={0: x[1] + x[2] == 1},
-        sense=Instance.MAXIMIZE,
-    )
-    usage = instance.decision_variable_usage()
-    assert str(usage.to_dict()) == snapshot

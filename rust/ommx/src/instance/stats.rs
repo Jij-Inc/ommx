@@ -98,16 +98,35 @@ impl super::Instance {
     /// println!("Active constraints: {}", stats.constraints.active);
     /// ```
     pub fn stats(&self) -> InstanceStats {
-        let usage = self.decision_variable_usage();
-
         let by_kind = VariableStatsByKind {
-            binary: usage.binary().len(),
-            integer: usage.integer().len(),
-            continuous: usage.continuous().len(),
-            semi_integer: usage.semi_integer().len(),
-            semi_continuous: usage.semi_continuous().len(),
+            binary: self
+                .decision_variables()
+                .values()
+                .filter(|dv| dv.kind() == crate::Kind::Binary)
+                .count(),
+            integer: self
+                .decision_variables()
+                .values()
+                .filter(|dv| dv.kind() == crate::Kind::Integer)
+                .count(),
+            continuous: self
+                .decision_variables()
+                .values()
+                .filter(|dv| dv.kind() == crate::Kind::Continuous)
+                .count(),
+            semi_integer: self
+                .decision_variables()
+                .values()
+                .filter(|dv| dv.kind() == crate::Kind::SemiInteger)
+                .count(),
+            semi_continuous: self
+                .decision_variables()
+                .values()
+                .filter(|dv| dv.kind() == crate::Kind::SemiContinuous)
+                .count(),
         };
 
+        let usage = self.decision_variable_usage();
         let by_usage = VariableStatsByUsage {
             used_in_objective: usage.used_in_objective().len(),
             used_in_constraints: usage

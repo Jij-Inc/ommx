@@ -11547,704 +11547,6 @@
         },
         {
           "kind": "Class",
-          "name": "DecisionVariableUsage",
-          "doc": "",
-          "bases": [],
-          "methods": [
-            {
-              "name": "__repr__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "str",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "all_decision_variable_ids",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "set[int]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "by_variable",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "dict[int, DecisionVariableUsageEntry]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      },
-                      {
-                        "display": "DecisionVariableUsageEntry",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "dependent",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "set[int]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "fixed",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "dict[int, float]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      },
-                      {
-                        "display": "float",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "get",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "id",
-                      "type_": {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "Optional[DecisionVariableUsageEntry]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "DecisionVariableUsageEntry",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "irrelevant",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "set[int]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "role",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "id",
-                      "type_": {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "Optional[DecisionVariableRole]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "DecisionVariableRole",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "roles",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "dict[int, DecisionVariableRole]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      },
-                      {
-                        "display": "DecisionVariableRole",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "to_dict",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "dict",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "used_decision_variable_ids",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "set[int]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "used_in_constraints",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "dict[int, set[int]]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      },
-                      {
-                        "display": "set[int]",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "int",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "used_in_indicator_constraints",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "dict[int, set[int]]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      },
-                      {
-                        "display": "set[int]",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "int",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "used_in_named_functions",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "dict[int, set[int]]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      },
-                      {
-                        "display": "set[int]",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "int",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "used_in_objective",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "set[int]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "used_in_one_hot_constraints",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "dict[int, set[int]]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      },
-                      {
-                        "display": "set[int]",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "int",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "used_in_sos1_constraints",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "dict[int, set[int]]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      },
-                      {
-                        "display": "set[int]",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "int",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            }
-          ],
-          "attributes": [],
-          "deprecated": null
-        },
-        {
-          "kind": "Class",
-          "name": "DecisionVariableUsageEntry",
-          "doc": "",
-          "bases": [],
-          "methods": [
-            {
-              "name": "__repr__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "str",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "to_dict",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "dict",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "used_in_dependency_rhs_of",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "set[int]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "used_in_indicator_constraints",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "set[int]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "used_in_named_functions",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "set[int]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "used_in_one_hot_constraints",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "set[int]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "used_in_regular_constraints",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "set[int]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "used_in_sos1_constraints",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "set[int]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            }
-          ],
-          "attributes": [
-            {
-              "name": "defines_dependent_variable",
-              "doc": "",
-              "type_": {
-                "display": "bool",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "is_used_by_solver",
-              "doc": "",
-              "type_": {
-                "display": "bool",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "role",
-              "doc": "",
-              "type_": {
-                "display": "DecisionVariableRole",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "substituted_value",
-              "doc": "",
-              "type_": {
-                "display": "Optional[float]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "float",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "used_in_objective",
-              "doc": "",
-              "type_": {
-                "display": "bool",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            }
-          ],
-          "deprecated": null
-        },
-        {
-          "kind": "Class",
           "name": "Equality",
           "doc": "Equality type for constraints",
           "bases": [],
@@ -15493,15 +14795,58 @@
               "deprecated": null
             },
             {
-              "name": "decision_variable_usage",
-              "doc": "Build a decision-variable usage snapshot for the optimization problem instance.\n\nReturns reverse usage information for all decision variables including:\n\n- Role: used, fixed, dependent, or irrelevant\n- Variable references from objective, active constraints, named functions, and dependency assignments\n- Substituted value copied at construction time\n\n**Returns:**\nUsage snapshot containing detailed information about decision variables\n\n# Examples\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=x[0] + x[1],\n...     constraints=[(x[1] + x[2] == 1).set_id(0)],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> usage = instance.decision_variable_usage()\n>>> usage.used_decision_variable_ids()\n{0, 1, 2}\n>>> usage.used_in_objective()\n{0, 1}\n>>> usage.used_in_constraints()\n{0: {1, 2}}\n```",
+              "name": "decision_variable_role",
+              "doc": "Return the state role of a decision variable.\n\nThe role is one of ``used``, ``fixed``, ``dependent``, or\n``irrelevant``. Unknown IDs return ``None``.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "id",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Optional[DecisionVariableRole]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "DecisionVariableRole",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "decision_variable_roles",
+              "doc": "Return the state role of every decision variable, keyed by ID.",
               "signatures": [
                 {
                   "parameters": [],
                   "return_type": {
-                    "display": "DecisionVariableUsage",
+                    "display": "dict[int, DecisionVariableRole]",
                     "link_target": null,
-                    "children": []
+                    "children": [
+                      {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "DecisionVariableRole",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
                   }
                 }
               ],
@@ -15543,6 +14888,28 @@
                     "display": "DataFrame",
                     "link_target": null,
                     "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "dependent_decision_variable_ids",
+              "doc": "Return IDs of decision variables defined by ``decision_variable_dependency``.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "set[int]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
                   }
                 }
               ],
@@ -15657,6 +15024,33 @@
                     "display": "SampleSet",
                     "link_target": null,
                     "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "fixed_decision_variables",
+              "doc": "Return fixed decision variables as ``{id: substituted_value}``.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "dict[int, float]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "float",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
                   }
                 }
               ],
@@ -16065,6 +15459,28 @@
                       },
                       {
                         "display": "str",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "irrelevant_decision_variable_ids",
+              "doc": "Return IDs of decision variables not used, fixed, or dependent.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "set[int]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "int",
                         "link_target": null,
                         "children": []
                       }
@@ -30331,8 +29747,6 @@
     "ommx.v1.Constraint": "ommx.v1",
     "ommx.v1.DecisionVariable": "ommx.v1",
     "ommx.v1.DecisionVariableRole": "ommx.v1",
-    "ommx.v1.DecisionVariableUsage": "ommx.v1",
-    "ommx.v1.DecisionVariableUsageEntry": "ommx.v1",
     "ommx.v1.Equality": "ommx.v1",
     "ommx.v1.EvaluatedConstraint": "ommx.v1",
     "ommx.v1.EvaluatedDecisionVariable": "ommx.v1",

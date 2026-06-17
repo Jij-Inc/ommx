@@ -3,13 +3,7 @@ source: rust/ommx/src/instance/analysis.rs
 expression: usage
 ---
 DecisionVariableUsage {
-  Total Variables: 5
-
-  Kind-based Partitioning:
-    Binary: 5, Integer: 0, Continuous: 0, Semi-Integer: 0, Semi-Continuous: 0
-
-  Role Summary:
-    Used: 3, Fixed: 0, Dependent: 1, Irrelevant: 1
+  Used Variables: 3
 
   Used in Objective (2):
     x1, x2
@@ -17,14 +11,4 @@ DecisionVariableUsage {
   Used in Regular Constraints (2):
     0: x1, x2
     1: x0
-
-  Dependent Variables (1):
-    x3 (Binary, [0, 1])
-
-  Used in Dependent Variable Assignments (2 variables):
-    x0 -> x3
-    x1 -> x3
-
-  Irrelevant Variables (1):
-    x4 (Binary, [0, 1]): will be set to 0
 }

@@ -32,8 +32,6 @@ __all__ = [
     "Constraint",
     "DecisionVariable",
     "DecisionVariableRole",
-    "DecisionVariableUsage",
-    "DecisionVariableUsageEntry",
     "Descriptor",
     "DiagnosticCollector",
     "Equality",
@@ -1535,59 +1533,6 @@ class DecisionVariable:
         r"""
         Create a greater-than-or-equal constraint: self >= other → Constraint
         """
-
-@typing.final
-class DecisionVariableUsage:
-    def used_decision_variable_ids(self) -> builtins.set[builtins.int]: ...
-    def all_decision_variable_ids(self) -> builtins.set[builtins.int]: ...
-    def used_in_objective(self) -> builtins.set[builtins.int]: ...
-    def used_in_constraints(
-        self,
-    ) -> builtins.dict[builtins.int, builtins.set[builtins.int]]: ...
-    def fixed(self) -> builtins.dict[builtins.int, builtins.float]: ...
-    def irrelevant(self) -> builtins.set[builtins.int]: ...
-    def dependent(self) -> builtins.set[builtins.int]: ...
-    def by_variable(
-        self,
-    ) -> builtins.dict[builtins.int, DecisionVariableUsageEntry]: ...
-    def get(self, id: builtins.int) -> typing.Optional[DecisionVariableUsageEntry]: ...
-    def role(self, id: builtins.int) -> typing.Optional[DecisionVariableRole]: ...
-    def roles(self) -> builtins.dict[builtins.int, DecisionVariableRole]: ...
-    def used_in_indicator_constraints(
-        self,
-    ) -> builtins.dict[builtins.int, builtins.set[builtins.int]]: ...
-    def used_in_one_hot_constraints(
-        self,
-    ) -> builtins.dict[builtins.int, builtins.set[builtins.int]]: ...
-    def used_in_sos1_constraints(
-        self,
-    ) -> builtins.dict[builtins.int, builtins.set[builtins.int]]: ...
-    def used_in_named_functions(
-        self,
-    ) -> builtins.dict[builtins.int, builtins.set[builtins.int]]: ...
-    def to_dict(self) -> dict: ...
-    def __repr__(self) -> builtins.str: ...
-
-@typing.final
-class DecisionVariableUsageEntry:
-    @property
-    def substituted_value(self) -> typing.Optional[builtins.float]: ...
-    @property
-    def role(self) -> DecisionVariableRole: ...
-    @property
-    def used_in_objective(self) -> builtins.bool: ...
-    @property
-    def defines_dependent_variable(self) -> builtins.bool: ...
-    @property
-    def is_used_by_solver(self) -> builtins.bool: ...
-    def used_in_regular_constraints(self) -> builtins.set[builtins.int]: ...
-    def used_in_indicator_constraints(self) -> builtins.set[builtins.int]: ...
-    def used_in_one_hot_constraints(self) -> builtins.set[builtins.int]: ...
-    def used_in_sos1_constraints(self) -> builtins.set[builtins.int]: ...
-    def used_in_named_functions(self) -> builtins.set[builtins.int]: ...
-    def used_in_dependency_rhs_of(self) -> builtins.set[builtins.int]: ...
-    def to_dict(self) -> dict: ...
-    def __repr__(self) -> builtins.str: ...
 
 @typing.final
 class Descriptor:
@@ -3894,38 +3839,32 @@ class Instance:
         (2.0, Constraint(x0 + 2*x1 + 2*x3 - 4 <= 0))
         ```
         """
-    def decision_variable_usage(self) -> DecisionVariableUsage:
+    def decision_variable_role(
+        self, id: builtins.int
+    ) -> typing.Optional[DecisionVariableRole]:
         r"""
-        Build a decision-variable usage snapshot for the optimization problem instance.
+        Return the state role of a decision variable.
 
-        Returns reverse usage information for all decision variables including:
-
-        - Role: used, fixed, dependent, or irrelevant
-        - Variable references from objective, active constraints, named functions, and dependency assignments
-        - Substituted value copied at construction time
-
-        **Returns:**
-        Usage snapshot containing detailed information about decision variables
-
-        # Examples
-
-        ```python
-        >>> from ommx.v1 import Instance, DecisionVariable
-        >>> x = [DecisionVariable.binary(i) for i in range(3)]
-        >>> instance = Instance.from_components(
-        ...     decision_variables=x,
-        ...     objective=x[0] + x[1],
-        ...     constraints=[(x[1] + x[2] == 1).set_id(0)],
-        ...     sense=Instance.MAXIMIZE,
-        ... )
-        >>> usage = instance.decision_variable_usage()
-        >>> usage.used_decision_variable_ids()
-        {0, 1, 2}
-        >>> usage.used_in_objective()
-        {0, 1}
-        >>> usage.used_in_constraints()
-        {0: {1, 2}}
-        ```
+        The role is one of ``used``, ``fixed``, ``dependent``, or
+        ``irrelevant``. Unknown IDs return ``None``.
+        """
+    def decision_variable_roles(
+        self,
+    ) -> builtins.dict[builtins.int, DecisionVariableRole]:
+        r"""
+        Return the state role of every decision variable, keyed by ID.
+        """
+    def fixed_decision_variables(self) -> builtins.dict[builtins.int, builtins.float]:
+        r"""
+        Return fixed decision variables as ``{id: substituted_value}``.
+        """
+    def dependent_decision_variable_ids(self) -> builtins.set[builtins.int]:
+        r"""
+        Return IDs of decision variables defined by ``decision_variable_dependency``.
+        """
+    def irrelevant_decision_variable_ids(self) -> builtins.set[builtins.int]:
+        r"""
+        Return IDs of decision variables not used, fixed, or dependent.
         """
     def stats(self) -> dict:
         r"""

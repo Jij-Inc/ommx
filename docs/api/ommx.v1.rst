@@ -44,8 +44,6 @@ ommx.v1
    _items/ommx.v1.SampledDecisionVariable
    _items/ommx.v1.SampledConstraint
    _items/ommx.v1.SampledNamedFunction
-   _items/ommx.v1.DecisionVariableUsage
-   _items/ommx.v1.DecisionVariableUsageEntry
    _items/ommx.v1.Instance
    _items/ommx.v1.ParametricInstance
    _items/ommx.v1.Solution

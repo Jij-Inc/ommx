@@ -49,6 +49,12 @@ state = instance.populate_state({1: 2.0, 2: 3.0})
 assert state.entries == {1: 2.0, 2: 3.0, 5: 6.0, 10: 5.0, 99: 4.0}
 ```
 
+### ⚠ Decision variable role queries on `Instance` ([#946](https://github.com/Jij-Inc/ommx/pull/946))
+
+The Python SDK no longer exposes `DecisionVariableUsage` or `DecisionVariableUsageEntry` objects. Use {attr}`~ommx.v1.Instance.used_decision_variables` when adapters need the solver input variables, and use {meth}`~ommx.v1.Instance.decision_variable_role`, {meth}`~ommx.v1.Instance.decision_variable_roles`, {meth}`~ommx.v1.Instance.fixed_decision_variables`, {meth}`~ommx.v1.Instance.dependent_decision_variable_ids`, and {meth}`~ommx.v1.Instance.irrelevant_decision_variable_ids` to query state roles directly from the owning Instance.
+
+{meth}`~ommx.v1.Instance.decision_variables_df` continues to include the `state_role` column, so DataFrame-based workflows can inspect `used`, `fixed`, `dependent`, and `irrelevant` roles without constructing a separate usage object.
+
 ## 3.0.0 Alpha 7
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0a7-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0a7)

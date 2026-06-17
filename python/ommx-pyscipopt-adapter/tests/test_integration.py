@@ -327,7 +327,7 @@ def test_relax_constraint():
     assert instance.used_decision_variables == x
     instance.relax_constraint(1, "relax")
     # id for x[2] is listed as irrelevant
-    assert instance.decision_variable_usage().irrelevant() == {x[2].id}
+    assert instance.irrelevant_decision_variable_ids() == {x[2].id}
 
     solution = OMMXPySCIPOptAdapter.solve(instance)
     # x[2] is still present as part of the evaluate/decoding process but has a value of 0

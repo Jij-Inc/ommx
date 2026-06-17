@@ -1,14 +1,12 @@
-"""Test decision_variable_usage API implementation."""
+"""Test decision-variable role and used-variable APIs."""
 
 from ommx.v1 import DecisionVariable, DecisionVariableRole, Instance
 
 
-def test_decision_variable_usage_basic():
-    """Test basic decision_variable_usage functionality."""
-    # Create binary variables
+def test_decision_variable_roles_basic():
+    """Test basic decision-variable role query functionality."""
     x = [DecisionVariable.binary(i, name="x") for i in range(3)]
 
-    # Create instance with objective and constraints
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0] + x[1],
@@ -16,31 +14,37 @@ def test_decision_variable_usage_basic():
         sense=Instance.MAXIMIZE,
     )
 
-    usage = instance.decision_variable_usage()
-
-    # Test basic functionality
-    used_ids = usage.used_decision_variable_ids()
-    assert used_ids == {0, 1, 2}
-
-    # Test used_in_objective
-    objective_vars = usage.used_in_objective()
-    assert objective_vars == {0, 1}
-
-    # Test used_in_constraints
-    constraint_vars = usage.used_in_constraints()
-    assert 0 in constraint_vars
-    assert constraint_vars[0] == {1, 2}
-
-    assert usage.roles() == {
+    assert instance.used_decision_variables == x
+    assert instance.decision_variable_roles() == {
         0: DecisionVariableRole.Used,
         1: DecisionVariableRole.Used,
         2: DecisionVariableRole.Used,
     }
+    assert instance.decision_variable_role(0) == DecisionVariableRole.Used
+    assert instance.decision_variable_role(999) is None
 
-    by_variable = usage.by_variable()
-    assert by_variable[0].role == DecisionVariableRole.Used
-    assert by_variable[0].used_in_objective
-    assert by_variable[2].used_in_regular_constraints() == {0}
+
+def test_decision_variable_role_partitions():
+    """Test used/fixed/dependent/irrelevant role partitions on Instance."""
+    x = {i: DecisionVariable.continuous(i) for i in range(4)}
+    instance = Instance.from_components(
+        decision_variables=list(x.values()),
+        objective=x[0],
+        constraints={},
+        sense=Instance.MINIMIZE,
+    )
+    instance.substitute({2: x[0] + 1})
+    instance = instance.partial_evaluate({1: 2.0})
+
+    assert instance.decision_variable_roles() == {
+        0: DecisionVariableRole.Used,
+        1: DecisionVariableRole.Fixed,
+        2: DecisionVariableRole.Dependent,
+        3: DecisionVariableRole.Irrelevant,
+    }
+    assert instance.fixed_decision_variables() == {1: 2.0}
+    assert instance.dependent_decision_variable_ids() == {2}
+    assert instance.irrelevant_decision_variable_ids() == {3}
 
 
 def test_bound_wrapper_functionality():

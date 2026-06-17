@@ -1910,38 +1910,50 @@ impl Instance {
         Ok(result)
     }
 
-    /// Build a decision-variable usage snapshot for the optimization problem instance.
+    /// Return the state role of a decision variable.
     ///
-    /// Returns reverse usage information for all decision variables including:
-    ///
-    /// - Role: used, fixed, dependent, or irrelevant
-    /// - Variable references from objective, active constraints, named functions, and dependency assignments
-    /// - Substituted value copied at construction time
-    ///
-    /// **Returns:**
-    /// Usage snapshot containing detailed information about decision variables
-    ///
-    /// # Examples
-    ///
-    /// ```python
-    /// >>> from ommx.v1 import Instance, DecisionVariable
-    /// >>> x = [DecisionVariable.binary(i) for i in range(3)]
-    /// >>> instance = Instance.from_components(
-    /// ...     decision_variables=x,
-    /// ...     objective=x[0] + x[1],
-    /// ...     constraints=[(x[1] + x[2] == 1).set_id(0)],
-    /// ...     sense=Instance.MAXIMIZE,
-    /// ... )
-    /// >>> usage = instance.decision_variable_usage()
-    /// >>> usage.used_decision_variable_ids()
-    /// {0, 1, 2}
-    /// >>> usage.used_in_objective()
-    /// {0, 1}
-    /// >>> usage.used_in_constraints()
-    /// {0: {1, 2}}
-    /// ```
-    pub fn decision_variable_usage(&self) -> DecisionVariableUsage {
-        DecisionVariableUsage(self.inner.decision_variable_usage().into_core())
+    /// The role is one of ``used``, ``fixed``, ``dependent``, or
+    /// ``irrelevant``. Unknown IDs return ``None``.
+    pub fn decision_variable_role(&self, id: u64) -> Option<DecisionVariableRole> {
+        self.inner
+            .decision_variable_role(VariableID::from(id))
+            .map(Into::into)
+    }
+
+    /// Return the state role of every decision variable, keyed by ID.
+    pub fn decision_variable_roles(&self) -> BTreeMap<u64, DecisionVariableRole> {
+        self.inner
+            .decision_variable_roles()
+            .into_iter()
+            .map(|(id, role)| (id.into_inner(), role.into()))
+            .collect()
+    }
+
+    /// Return fixed decision variables as ``{id: substituted_value}``.
+    pub fn fixed_decision_variables(&self) -> BTreeMap<u64, f64> {
+        self.inner
+            .fixed_decision_variables()
+            .into_iter()
+            .map(|(id, value)| (id.into_inner(), value))
+            .collect()
+    }
+
+    /// Return IDs of decision variables defined by ``decision_variable_dependency``.
+    pub fn dependent_decision_variable_ids(&self) -> BTreeSet<u64> {
+        self.inner
+            .dependent_decision_variable_ids()
+            .into_iter()
+            .map(|id| id.into_inner())
+            .collect()
+    }
+
+    /// Return IDs of decision variables not used, fixed, or dependent.
+    pub fn irrelevant_decision_variable_ids(&self) -> BTreeSet<u64> {
+        self.inner
+            .irrelevant_decision_variable_ids()
+            .into_iter()
+            .map(|id| id.into_inner())
+            .collect()
     }
 
     /// Get statistics about the instance.
@@ -2006,7 +2018,6 @@ impl Instance {
         include: Option<Vec<String>>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let flags = crate::pandas::IncludeFlags::from_optional(include)?;
-        let usage = self.inner.decision_variable_usage_core();
         let var_meta_store = self.inner.variable_metadata();
         let entries = self
             .inner
@@ -2015,9 +2026,10 @@ impl Instance {
             .map(|(id, dv)| {
                 let metadata = var_meta_store.collect_for(*id);
                 let dict = crate::pandas::WithMetadata::new(dv, &metadata).to_pandas_entry(py)?;
-                let role = usage
-                    .role(*id)
-                    .expect("usage is built from the same decision_variables map");
+                let role = self
+                    .inner
+                    .decision_variable_role(*id)
+                    .expect("role query uses the same decision_variables map");
                 dict.set_item("state_role", role.as_str())?;
                 apply_include_filter(&dict, flags)?;
                 Ok(dict.into_any())
@@ -2661,246 +2673,6 @@ impl Instance {
         }
 
         Ok(())
-    }
-}
-
-#[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass]
-pub struct DecisionVariableUsage(ommx::DecisionVariableUsageCore);
-
-#[pyo3_stub_gen::derive::gen_stub_pymethods]
-#[pymethods]
-impl DecisionVariableUsage {
-    pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
-        self.0.used().iter().map(|id| id.into_inner()).collect()
-    }
-
-    pub fn all_decision_variable_ids(&self) -> BTreeSet<u64> {
-        self.0.all().iter().map(|id| id.into_inner()).collect()
-    }
-
-    pub fn used_in_objective(&self) -> BTreeSet<u64> {
-        self.0
-            .used_in_objective()
-            .iter()
-            .map(|id| id.into_inner())
-            .collect()
-    }
-
-    pub fn used_in_constraints(&self) -> BTreeMap<u64, BTreeSet<u64>> {
-        self.0
-            .used_in_constraints()
-            .iter()
-            .map(|(constraint_id, variable_ids)| {
-                (
-                    (*constraint_id).into_inner(),
-                    variable_ids.iter().map(|id| id.into_inner()).collect(),
-                )
-            })
-            .collect()
-    }
-
-    pub fn fixed(&self) -> BTreeMap<u64, f64> {
-        self.0
-            .fixed()
-            .iter()
-            .map(|(id, value)| (id.into_inner(), *value))
-            .collect()
-    }
-
-    pub fn irrelevant(&self) -> BTreeSet<u64> {
-        self.0
-            .irrelevant()
-            .into_iter()
-            .map(|id| id.into_inner())
-            .collect()
-    }
-
-    pub fn dependent(&self) -> BTreeSet<u64> {
-        self.0
-            .dependent()
-            .into_iter()
-            .map(|id| id.into_inner())
-            .collect()
-    }
-
-    pub fn by_variable(&self) -> BTreeMap<u64, DecisionVariableUsageEntry> {
-        self.0
-            .by_variable()
-            .iter()
-            .map(|(id, usage)| (id.into_inner(), DecisionVariableUsageEntry(usage.clone())))
-            .collect()
-    }
-
-    pub fn get(&self, id: u64) -> Option<DecisionVariableUsageEntry> {
-        self.0
-            .get(VariableID::from(id))
-            .cloned()
-            .map(DecisionVariableUsageEntry)
-    }
-
-    pub fn role(&self, id: u64) -> Option<DecisionVariableRole> {
-        self.0.role(VariableID::from(id)).map(Into::into)
-    }
-
-    pub fn roles(&self) -> BTreeMap<u64, DecisionVariableRole> {
-        self.0
-            .by_variable()
-            .iter()
-            .map(|(id, usage)| (id.into_inner(), usage.role().into()))
-            .collect()
-    }
-
-    pub fn used_in_indicator_constraints(&self) -> BTreeMap<u64, BTreeSet<u64>> {
-        self.0
-            .used_in_indicator_constraints()
-            .iter()
-            .map(|(constraint_id, variable_ids)| {
-                (
-                    (*constraint_id).into_inner(),
-                    variable_ids.iter().map(|id| id.into_inner()).collect(),
-                )
-            })
-            .collect()
-    }
-
-    pub fn used_in_one_hot_constraints(&self) -> BTreeMap<u64, BTreeSet<u64>> {
-        self.0
-            .used_in_one_hot_constraints()
-            .iter()
-            .map(|(constraint_id, variable_ids)| {
-                (
-                    (*constraint_id).into_inner(),
-                    variable_ids.iter().map(|id| id.into_inner()).collect(),
-                )
-            })
-            .collect()
-    }
-
-    pub fn used_in_sos1_constraints(&self) -> BTreeMap<u64, BTreeSet<u64>> {
-        self.0
-            .used_in_sos1_constraints()
-            .iter()
-            .map(|(constraint_id, variable_ids)| {
-                (
-                    (*constraint_id).into_inner(),
-                    variable_ids.iter().map(|id| id.into_inner()).collect(),
-                )
-            })
-            .collect()
-    }
-
-    pub fn used_in_named_functions(&self) -> BTreeMap<u64, BTreeSet<u64>> {
-        self.0
-            .used_in_named_functions()
-            .iter()
-            .map(|(named_function_id, variable_ids)| {
-                (
-                    (*named_function_id).into_inner(),
-                    variable_ids.iter().map(|id| id.into_inner()).collect(),
-                )
-            })
-            .collect()
-    }
-
-    pub fn to_dict<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let obj = serde_pyobject::to_pyobject(py, &self.0)?;
-        Ok(obj.cast::<PyDict>()?.clone())
-    }
-
-    pub fn __repr__(&self) -> String {
-        self.0.to_string()
-    }
-}
-
-#[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass]
-#[derive(Clone)]
-pub struct DecisionVariableUsageEntry(ommx::VariableUsage);
-
-#[pyo3_stub_gen::derive::gen_stub_pymethods]
-#[pymethods]
-impl DecisionVariableUsageEntry {
-    #[getter]
-    pub fn substituted_value(&self) -> Option<f64> {
-        self.0.substituted_value()
-    }
-
-    #[getter]
-    pub fn role(&self) -> DecisionVariableRole {
-        self.0.role().into()
-    }
-
-    #[getter]
-    pub fn used_in_objective(&self) -> bool {
-        self.0.used_in_objective()
-    }
-
-    pub fn used_in_regular_constraints(&self) -> BTreeSet<u64> {
-        self.0
-            .used_in_regular_constraints()
-            .iter()
-            .map(|id| id.into_inner())
-            .collect()
-    }
-
-    pub fn used_in_indicator_constraints(&self) -> BTreeSet<u64> {
-        self.0
-            .used_in_indicator_constraints()
-            .iter()
-            .map(|id| id.into_inner())
-            .collect()
-    }
-
-    pub fn used_in_one_hot_constraints(&self) -> BTreeSet<u64> {
-        self.0
-            .used_in_one_hot_constraints()
-            .iter()
-            .map(|id| id.into_inner())
-            .collect()
-    }
-
-    pub fn used_in_sos1_constraints(&self) -> BTreeSet<u64> {
-        self.0
-            .used_in_sos1_constraints()
-            .iter()
-            .map(|id| id.into_inner())
-            .collect()
-    }
-
-    pub fn used_in_named_functions(&self) -> BTreeSet<u64> {
-        self.0
-            .used_in_named_functions()
-            .iter()
-            .map(|id| id.into_inner())
-            .collect()
-    }
-
-    #[getter]
-    pub fn defines_dependent_variable(&self) -> bool {
-        self.0.defines_dependent_variable()
-    }
-
-    pub fn used_in_dependency_rhs_of(&self) -> BTreeSet<u64> {
-        self.0
-            .used_in_dependency_rhs_of()
-            .iter()
-            .map(|id| id.into_inner())
-            .collect()
-    }
-
-    #[getter]
-    pub fn is_used_by_solver(&self) -> bool {
-        self.0.is_used_by_solver()
-    }
-
-    pub fn to_dict<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let obj = serde_pyobject::to_pyobject(py, &self.0)?;
-        Ok(obj.cast::<PyDict>()?.clone())
-    }
-
-    pub fn __repr__(&self) -> String {
-        format!("{:?}", self.0)
     }
 }
 
