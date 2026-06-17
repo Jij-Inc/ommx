@@ -1,3 +1,4 @@
+use super::DecisionVariableRole;
 use serde::{Deserialize, Serialize};
 
 /// Statistics about decision variables categorized by kind.
@@ -127,6 +128,7 @@ impl super::Instance {
         };
 
         let usage = self.decision_variable_usage();
+        let roles = self.decision_variable_roles();
         let by_usage = VariableStatsByUsage {
             used_in_objective: usage.used_in_objective().len(),
             used_in_constraints: usage
@@ -136,9 +138,18 @@ impl super::Instance {
                 .collect::<std::collections::HashSet<_>>()
                 .len(),
             used: usage.used().len(),
-            fixed: usage.fixed().len(),
-            dependent: usage.dependent().len(),
-            irrelevant: usage.irrelevant().len(),
+            fixed: roles
+                .values()
+                .filter(|&&role| role == DecisionVariableRole::Fixed)
+                .count(),
+            dependent: roles
+                .values()
+                .filter(|&&role| role == DecisionVariableRole::Dependent)
+                .count(),
+            irrelevant: roles
+                .values()
+                .filter(|&&role| role == DecisionVariableRole::Irrelevant)
+                .count(),
         };
 
         let decision_variables = DecisionVariableStats {

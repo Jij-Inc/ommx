@@ -2019,6 +2019,7 @@ impl Instance {
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         let var_meta_store = self.inner.variable_metadata();
+        let roles = self.inner.decision_variable_roles();
         let entries = self
             .inner
             .decision_variables()
@@ -2026,9 +2027,8 @@ impl Instance {
             .map(|(id, dv)| {
                 let metadata = var_meta_store.collect_for(*id);
                 let dict = crate::pandas::WithMetadata::new(dv, &metadata).to_pandas_entry(py)?;
-                let role = self
-                    .inner
-                    .decision_variable_role(*id)
+                let role = roles
+                    .get(id)
                     .expect("role query uses the same decision_variables map");
                 dict.set_item("state_role", role.as_str())?;
                 apply_include_filter(&dict, flags)?;

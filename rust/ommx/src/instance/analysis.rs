@@ -386,13 +386,10 @@ fn write_usage_display(
     writeln!(f, "DecisionVariableUsage {{")?;
     writeln!(f, "  Used Variables: {}", usage.by_used_variable.len())?;
 
-    if !usage.used_in_objective().is_empty() {
-        writeln!(
-            f,
-            "\n  Used in Objective ({}):",
-            usage.used_in_objective().len()
-        )?;
-        write_variable_list(f, usage.used_in_objective().iter())?;
+    let used_in_objective = usage.used_in_objective();
+    if !used_in_objective.is_empty() {
+        writeln!(f, "\n  Used in Objective ({}):", used_in_objective.len())?;
+        write_variable_list(f, used_in_objective.iter())?;
     }
 
     write_constraint_usage(
