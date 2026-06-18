@@ -38,8 +38,9 @@ SCIP primal and dual bound history read through
 
 `progress_history_df` is a pandas DataFrame indexed by `solving_time_sec`.
 Series properties such as `dual_bound`, `gap`, and `incumbent_objective` use the
-same time index, so they are ready for time-based plots. `termination_result` is
-a dictionary containing the final SCIP report.
+same time index, so they are ready for time-based plots. The history includes a
+final `TERMINATION` row derived from the SCIP termination report.
+`termination_result` is a dictionary containing the final SCIP report.
 
 ```python
 dual_bound = analyze.dual_bound
@@ -49,17 +50,18 @@ termination = analyze.termination_result
 ```
 
 The DataFrame and Series helpers require pandas. When pandas is not available,
-use `progress_history_records` for progress samples and `termination_result` for
-the final report.
+use `progress_history_records` for the progress history, including the final
+`TERMINATION` row, and `termination_result` for the final report.
 
 ### What PySCIPOpt Records
 
 The PySCIPOpt Adapter records two kinds of SCIP diagnostics.
 
 {class}`~ommx_pyscipopt_adapter.SCIPProgressSnapshot` is a progress sample
-recorded from SCIP event callbacks. The adapter currently listens for
-`BESTSOLFOUND` and `DUALBOUNDIMPROVED`. A progress snapshot includes fields such
-as `solving_time_sec`, `node_count`, `primal_bound`, `dual_bound`, `gap`, and
+recorded from SCIP event callbacks and from the final termination report. The
+adapter currently listens for `BESTSOLFOUND` and `DUALBOUNDIMPROVED`, then adds a
+final `TERMINATION` snapshot. A progress snapshot includes fields such as
+`solving_time_sec`, `node_count`, `primal_bound`, `dual_bound`, `gap`, and
 `incumbent_objective`.
 
 {class}`~ommx_pyscipopt_adapter.SCIPTerminationReport` is the final SCIP report
@@ -68,9 +70,9 @@ decoded back into an OMMX Solution. It includes fields such as `status`,
 `primal_bound`, `dual_bound`, `gap`, `objective_value`, node counts, LP and cut
 counters, primal-dual integral, timings, and SCIP/PySCIPOpt version metadata.
 
-Progress snapshots are callback-time observations. SCIP may call a
+Callback progress snapshots are callback-time observations. SCIP may call a
 `BESTSOLFOUND` callback before every aggregate statistic has been updated, so
-use the termination report for terminal values.
+use the `TERMINATION` row or the termination report for terminal values.
 
 For the complete member lists, see the API Reference for
 {class}`~ommx_pyscipopt_adapter.SCIPProgressSnapshot`,

@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from pyscipopt.scip import Event as SCIPEvent
 
 _tracer = trace.get_tracer("ommx.adapter.pyscipopt")
+_SCIP_TERMINATION_EVENT = "TERMINATION"
 
 
 @dataclass(frozen=True, slots=True)
@@ -149,18 +150,20 @@ class SCIPTerminationReport:
 
 @dataclass(frozen=True, slots=True)
 class SCIPProgressSnapshot:
-    """SCIP solve progress observed from one solver event callback.
+    """SCIP solve progress observed during a solve.
 
-    The PySCIPOpt adapter records this snapshot for each tracked SCIP event.
-    It currently listens for ``BESTSOLFOUND`` and ``DUALBOUNDIMPROVED``. Each
-    snapshot is the model state visible from that callback. SCIP may call a
+    The PySCIPOpt adapter records this snapshot for each tracked SCIP event and
+    once more from the termination report after ``model.optimize()`` finishes.
+    It currently listens for ``BESTSOLFOUND`` and ``DUALBOUNDIMPROVED``. Event
+    snapshots are the model state visible from that callback. SCIP may call a
     ``BESTSOLFOUND`` callback before every aggregate model statistic has been
-    updated, so use :class:`SCIPTerminationReport` for terminal values.
+    updated, so use the ``TERMINATION`` snapshot or
+    :class:`SCIPTerminationReport` for terminal values.
     """
 
     event: str
-    """SCIP event name, currently ``"BESTSOLFOUND"`` or
-    ``"DUALBOUNDIMPROVED"``.
+    """SCIP event name, currently ``"BESTSOLFOUND"``,
+    ``"DUALBOUNDIMPROVED"``, or ``"TERMINATION"``.
     """
 
     solving_time_sec: float
@@ -213,6 +216,23 @@ class SCIPProgressSnapshot:
             incumbent_objective=_get_incumbent_objective(model, solution_count),
         )
 
+    @classmethod
+    def from_termination_report(
+        cls, report: SCIPTerminationReport
+    ) -> SCIPProgressSnapshot:
+        return cls(
+            event=_SCIP_TERMINATION_EVENT,
+            solving_time_sec=report.solving_time_sec,
+            node_count=report.node_count,
+            total_node_count=report.total_node_count,
+            lp_iteration_count=report.lp_iteration_count,
+            solution_count=report.solution_count,
+            primal_bound=report.primal_bound,
+            dual_bound=report.dual_bound,
+            gap=report.gap,
+            incumbent_objective=report.objective_value,
+        )
+
 
 class _SCIPDiagnosticsEventHandler(pyscipopt.Eventhdlr):
     def __init__(self, diagnostics: DiagnosticsSink) -> None:
@@ -250,11 +270,12 @@ class SCIPDiagnosticsAnalyzer:
     :attr:`ommx.experiment.Solve.diagnostics`.
 
     :attr:`progress_history_records` returns ``list[dict[str, object]]`` and
-    does not require pandas. :attr:`progress_history_df` returns a pandas
-    DataFrame indexed by ``solving_time_sec`` and imports pandas lazily.
-    Time-series properties such as :attr:`dual_bound` return pandas Series with
-    the same index. :attr:`termination_result` returns the terminal SCIP report
-    as a dictionary.
+    does not require pandas. It includes the final ``TERMINATION`` row from the
+    terminal SCIP report. :attr:`progress_history_df` returns a pandas DataFrame
+    indexed by ``solving_time_sec`` and imports pandas lazily. Time-series
+    properties such as :attr:`dual_bound` return pandas Series with the same
+    index. :attr:`termination_result` returns the terminal SCIP report as a
+    dictionary.
     """
 
     _progress_snapshots: tuple[SCIPProgressSnapshot, ...]
@@ -274,11 +295,15 @@ class SCIPDiagnosticsAnalyzer:
             if (result := _as_termination_result(diagnostic)) is not None:
                 termination_results.append(result)
 
+        termination_result = termination_results[-1] if termination_results else None
+        if termination_result is not None:
+            terminal_record = _progress_record_from_termination_result(termination_result)
+            if not progress_history_records or progress_history_records[-1] != terminal_record:
+                progress_history_records.append(terminal_record)
+
         self._progress_snapshots = tuple(progress_snapshots)
         self._progress_history_records = tuple(progress_history_records)
-        self._termination_result = (
-            termination_results[-1] if termination_results else None
-        )
+        self._termination_result = termination_result
 
     @property
     def progress_snapshots(self) -> tuple[SCIPProgressSnapshot, ...]:
@@ -287,12 +312,12 @@ class SCIPDiagnosticsAnalyzer:
 
     @property
     def progress_history_records(self) -> list[dict[str, object]]:
-        """Return one dictionary per SCIP progress snapshot."""
+        """Return SCIP progress history with a final ``TERMINATION`` row."""
         return [dict(record) for record in self._progress_history_records]
 
     @property
     def progress_history_df(self) -> Any:
-        """Return progress snapshots as a pandas DataFrame indexed by time."""
+        """Return progress history as a pandas DataFrame indexed by time."""
         return _dataframe(
             self.progress_history_records,
             _dataclass_field_names(SCIPProgressSnapshot),
@@ -373,6 +398,23 @@ def _as_termination_result(diagnostic: Any) -> dict[str, object] | None:
     if not _has_dataclass_fields(diagnostic, SCIPTerminationReport):
         return None
     return _select_dataclass_fields(diagnostic, SCIPTerminationReport)
+
+
+def _progress_record_from_termination_result(
+    result: Mapping[str, object],
+) -> dict[str, object]:
+    return {
+        "event": _SCIP_TERMINATION_EVENT,
+        "solving_time_sec": result["solving_time_sec"],
+        "node_count": result["node_count"],
+        "total_node_count": result["total_node_count"],
+        "lp_iteration_count": result["lp_iteration_count"],
+        "solution_count": result["solution_count"],
+        "primal_bound": result["primal_bound"],
+        "dual_bound": result["dual_bound"],
+        "gap": result["gap"],
+        "incumbent_objective": result["objective_value"],
+    }
 
 
 def _dataclass_field_names(dataclass_type: type[Any]) -> list[str]:
@@ -555,7 +597,11 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             with _tracer.start_as_current_span("call"):
                 model.optimize()
             if diagnostics is not None:
-                diagnostics.record(SCIPTerminationReport.from_model(model))
+                termination_report = SCIPTerminationReport.from_model(model)
+                diagnostics.record(
+                    SCIPProgressSnapshot.from_termination_report(termination_report)
+                )
+                diagnostics.record(termination_report)
             solution = adapter.decode(model)
             return solution
 

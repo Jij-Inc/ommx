@@ -37,7 +37,8 @@ SCIP の primal / dual bound の推移。
 
 `progress_history_df` は `solving_time_sec` を index にした pandas DataFrame です。
 `dual_bound`、`gap`、`incumbent_objective` などの Series property も同じ time index を使うので、
-そのまま時間軸の plot に使えます。`termination_result` は最終的な SCIP report を表す dictionary です。
+そのまま時間軸の plot に使えます。この history には SCIP の termination report から作った
+最後の `TERMINATION` row も含まれます。`termination_result` は最終的な SCIP report を表す dictionary です。
 
 ```python
 dual_bound = analyze.dual_bound
@@ -47,14 +48,16 @@ termination = analyze.termination_result
 ```
 
 DataFrame / Series helper は pandas を必要とします。pandas が使えない環境では、
-progress sample には `progress_history_records`、最終 report には `termination_result` を使ってください。
+最後の `TERMINATION` row を含む progress history には `progress_history_records`、
+最終 report には `termination_result` を使ってください。
 
 ### PySCIPOpt が記録するもの
 
 PySCIPOpt Adapter は 2 種類の SCIP diagnostics を記録します。
 
 {class}`~ommx_pyscipopt_adapter.SCIPProgressSnapshot` は、SCIP event callback から記録される
-progress sample です。現在は `BESTSOLFOUND` と `DUALBOUNDIMPROVED` を監視しています。
+progress sample と、最終 termination report から記録される progress sample です。
+現在は `BESTSOLFOUND` と `DUALBOUNDIMPROVED` を監視し、最後に `TERMINATION` snapshot を追加します。
 progress snapshot には `solving_time_sec`、`node_count`、`primal_bound`、`dual_bound`、
 `gap`、`incumbent_objective` などが含まれます。
 
@@ -63,8 +66,9 @@ PySCIPOpt model を OMMX Solution に decode する前に記録される最終 r
 `status`、`primal_bound`、`dual_bound`、`gap`、`objective_value`、node 数、LP / cut counter、
 primal-dual integral、timing、SCIP / PySCIPOpt version metadata などが含まれます。
 
-progress snapshot は callback 時点の観測値です。SCIP は `BESTSOLFOUND` callback を、
-集計済みの統計がすべて更新される前に呼ぶことがあります。終了時点の値は termination report を参照してください。
+callback 由来の progress snapshot は callback 時点の観測値です。SCIP は `BESTSOLFOUND` callback を、
+集計済みの統計がすべて更新される前に呼ぶことがあります。終了時点の値は `TERMINATION` row
+または termination report を参照してください。
 
 完全な member list は API Reference の
 {class}`~ommx_pyscipopt_adapter.SCIPProgressSnapshot`、
