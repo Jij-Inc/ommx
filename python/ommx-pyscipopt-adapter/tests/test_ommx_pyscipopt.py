@@ -64,6 +64,7 @@ def _termination_report(
     dual_bound: float = 10.0,
     gap: float = 0.0,
     objective_value: float | None = 10.0,
+    solving_time_sec: float = 0.75,
 ) -> SCIPTerminationReport:
     return SCIPTerminationReport(
         status=status,
@@ -82,7 +83,7 @@ def _termination_report(
         best_solution_count=1,
         max_depth=0,
         primal_dual_integral=0.0,
-        solving_time_sec=0.25,
+        solving_time_sec=solving_time_sec,
         presolving_time_sec=0.01,
         reading_time_sec=0.0,
         scip_version="9.2.1",
@@ -102,6 +103,23 @@ def _progress_snapshot_dict(snapshot: SCIPProgressSnapshot) -> dict[str, object]
         "dual_bound": snapshot.dual_bound,
         "gap": snapshot.gap,
         "incumbent_objective": snapshot.incumbent_objective,
+    }
+
+
+def _termination_progress_snapshot_dict(
+    report: SCIPTerminationReport,
+) -> dict[str, object]:
+    return {
+        "event": "TERMINATION",
+        "solving_time_sec": report.solving_time_sec,
+        "node_count": report.node_count,
+        "total_node_count": report.total_node_count,
+        "lp_iteration_count": report.lp_iteration_count,
+        "solution_count": report.solution_count,
+        "primal_bound": report.primal_bound,
+        "dual_bound": report.dual_bound,
+        "gap": report.gap,
+        "incumbent_objective": report.objective_value,
     }
 
 
@@ -191,8 +209,11 @@ def test_direct_solve_records_progress_snapshots():
     assert {snapshot.event for snapshot in progress_snapshots} <= {
         "BESTSOLFOUND",
         "DUALBOUNDIMPROVED",
+        "TERMINATION",
     }
     assert any(snapshot.event == "BESTSOLFOUND" for snapshot in progress_snapshots)
+    assert progress_snapshots[-1].event == "TERMINATION"
+    assert collector.diagnostics[-2] is progress_snapshots[-1]
     for snapshot in progress_snapshots:
         assert snapshot.solving_time_sec >= 0.0
         assert isinstance(snapshot.primal_bound, float)
@@ -218,6 +239,7 @@ def test_analyzer_accepts_typed_reports():
     assert analyzer.progress_history_records == [
         _progress_snapshot_dict(first),
         _progress_snapshot_dict(second),
+        _termination_progress_snapshot_dict(termination),
     ]
     assert analyzer.termination_result == _termination_report_dict(termination)
     assert list(analyzer.progress_history_df.columns) == [
@@ -232,13 +254,60 @@ def test_analyzer_accepts_typed_reports():
         "incumbent_objective",
     ]
     assert analyzer.progress_history_df.index.name == "solving_time_sec"
-    assert list(analyzer.progress_history_df.index) == [0.25, 0.5]
-    assert list(analyzer.gap) == [0.2, 0.05]
-    assert list(analyzer.primal_bound) == [10.0, 10.0]
-    assert list(analyzer.dual_bound) == [12.0, 10.5]
+    assert list(analyzer.progress_history_df.index) == [0.25, 0.5, 0.75]
+    assert list(analyzer.gap) == [0.2, 0.05, 0.0]
+    assert list(analyzer.primal_bound) == [10.0, 10.0, 10.0]
+    assert list(analyzer.dual_bound) == [12.0, 10.5, 10.0]
     assert analyzer.incumbent_objective.iloc[0] == 10.0
     assert analyzer.incumbent_objective.iloc[1] is pd.NA
+    assert analyzer.incumbent_objective.iloc[2] == 10.0
     assert analyzer.dual_bound.index.name == "solving_time_sec"
+
+
+def test_analyzer_does_not_duplicate_recorded_termination_snapshot():
+    progress = _progress_snapshot()
+    termination = _termination_report()
+    termination_progress = SCIPProgressSnapshot.from_termination_report(termination)
+
+    analyzer = SCIPDiagnosticsAnalyzer([progress, termination_progress, termination])
+
+    assert analyzer.progress_snapshots == (progress, termination_progress)
+    assert analyzer.progress_history_records == [
+        _progress_snapshot_dict(progress),
+        _termination_progress_snapshot_dict(termination),
+    ]
+
+
+def test_analyzer_does_not_duplicate_serialized_nan_termination_snapshot():
+    termination = _termination_report(
+        status="infeasible",
+        primal_bound=math.inf,
+        dual_bound=-math.inf,
+        gap=math.nan,
+        objective_value=None,
+    )
+    termination_progress_payload = _termination_progress_snapshot_dict(termination)
+    termination_payload = _termination_report_dict(termination)
+    termination_progress_payload["gap"] = float("nan")
+    termination_payload["gap"] = float("nan")
+
+    analyzer = SCIPDiagnosticsAnalyzer(
+        [termination_progress_payload, termination_payload]
+    )
+
+    assert len(analyzer.progress_history_records) == 1
+    terminal_record = analyzer.progress_history_records[0]
+    assert terminal_record["event"] == "TERMINATION"
+    assert math.isnan(cast(float, terminal_record["gap"]))
+
+
+def test_analyzer_accepts_partial_progress_without_termination_row():
+    progress = _progress_snapshot()
+
+    analyzer = SCIPDiagnosticsAnalyzer([progress])
+
+    assert analyzer.termination_result is None
+    assert analyzer.progress_history_records == [_progress_snapshot_dict(progress)]
 
 
 def test_analyzer_accepts_experiment_dicts():
@@ -250,7 +319,10 @@ def test_analyzer_accepts_experiment_dicts():
     )
 
     assert analyzer.progress_snapshots == ()
-    assert analyzer.progress_history_records == [_progress_snapshot_dict(progress)]
+    assert analyzer.progress_history_records == [
+        _progress_snapshot_dict(progress),
+        _termination_progress_snapshot_dict(termination),
+    ]
     assert analyzer.termination_result == _termination_report_dict(termination)
 
 
@@ -335,6 +407,16 @@ def test_progress_snapshot_avoids_callback_get_obj_val_regression():
     assert snapshot.incumbent_objective == pytest.approx(14.0)
 
 
+def test_progress_snapshot_can_be_derived_from_termination_report():
+    termination = _termination_report()
+
+    snapshot = SCIPProgressSnapshot.from_termination_report(termination)
+
+    assert _progress_snapshot_dict(snapshot) == _termination_progress_snapshot_dict(
+        termination
+    )
+
+
 def test_experiment_stores_diagnostics_as_dict_payload():
     with Experiment.with_temp_local_registry() as experiment:
         with experiment.run() as run:
@@ -354,7 +436,9 @@ def test_experiment_stores_diagnostics_as_dict_payload():
     assert {record["event"] for record in analyzer.progress_history_records} <= {
         "BESTSOLFOUND",
         "DUALBOUNDIMPROVED",
+        "TERMINATION",
     }
+    assert analyzer.progress_history_records[-1]["event"] == "TERMINATION"
     assert analyzer.termination_result is not None
     assert analyzer.termination_result["status"] == "optimal"
 
