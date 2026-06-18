@@ -231,12 +231,16 @@ impl<'a> DecisionVariableUsage<'a> {
     }
 
     pub fn used_decision_variables(&self) -> BTreeMap<VariableID, &'a DecisionVariable> {
-        let used_ids = self.used();
-        self.instance
-            .decision_variables()
-            .iter()
-            .filter(|(id, _)| used_ids.contains(id))
-            .map(|(id, dv)| (*id, dv))
+        self.by_used_variable
+            .keys()
+            .map(|id| {
+                let dv = self
+                    .instance
+                    .decision_variables()
+                    .get(id)
+                    .expect("used variable ID must be defined in decision_variables");
+                (*id, dv)
+            })
             .collect()
     }
 
@@ -261,12 +265,15 @@ impl<'a> DecisionVariableUsage<'a> {
     }
 
     fn used_by_kind(&self, kind: Kind) -> Bounds {
-        let used = self.used();
-        self.instance
-            .decision_variables()
-            .iter()
-            .filter_map(|(id, dv)| {
-                (dv.kind() == kind && used.contains(id)).then_some((*id, dv.bound()))
+        self.by_used_variable
+            .keys()
+            .filter_map(|id| {
+                let dv = self
+                    .instance
+                    .decision_variables()
+                    .get(id)
+                    .expect("used variable ID must be defined in decision_variables");
+                (dv.kind() == kind).then_some((*id, dv.bound()))
             })
             .collect()
     }
