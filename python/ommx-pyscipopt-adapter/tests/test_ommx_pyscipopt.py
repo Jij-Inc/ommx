@@ -278,6 +278,38 @@ def test_analyzer_does_not_duplicate_recorded_termination_snapshot():
     ]
 
 
+def test_analyzer_does_not_duplicate_serialized_nan_termination_snapshot():
+    termination = _termination_report(
+        status="infeasible",
+        primal_bound=math.inf,
+        dual_bound=-math.inf,
+        gap=math.nan,
+        objective_value=None,
+    )
+    termination_progress_payload = _termination_progress_snapshot_dict(termination)
+    termination_payload = _termination_report_dict(termination)
+    termination_progress_payload["gap"] = float("nan")
+    termination_payload["gap"] = float("nan")
+
+    analyzer = SCIPDiagnosticsAnalyzer(
+        [termination_progress_payload, termination_payload]
+    )
+
+    assert len(analyzer.progress_history_records) == 1
+    terminal_record = analyzer.progress_history_records[0]
+    assert terminal_record["event"] == "TERMINATION"
+    assert math.isnan(cast(float, terminal_record["gap"]))
+
+
+def test_analyzer_accepts_partial_progress_without_termination_row():
+    progress = _progress_snapshot()
+
+    analyzer = SCIPDiagnosticsAnalyzer([progress])
+
+    assert analyzer.termination_result is None
+    assert analyzer.progress_history_records == [_progress_snapshot_dict(progress)]
+
+
 def test_analyzer_accepts_experiment_dicts():
     progress = _progress_snapshot()
     termination = _termination_report()

@@ -39,8 +39,8 @@ SCIP primal and dual bound history read through
 `progress_history_df` is a pandas DataFrame indexed by `solving_time_sec`.
 Series properties such as `dual_bound`, `gap`, and `incumbent_objective` use the
 same time index, so they are ready for time-based plots. The history includes a
-final `TERMINATION` row derived from the SCIP termination report.
-`termination_result` is a dictionary containing the final SCIP report.
+final `TERMINATION` row when diagnostics include a SCIP termination report.
+`termination_result` is a dictionary containing that final SCIP report.
 
 ```python
 dual_bound = analyze.dual_bound
@@ -51,7 +51,7 @@ termination = analyze.termination_result
 
 The DataFrame and Series helpers require pandas. When pandas is not available,
 use `progress_history_records` for the progress history, including the final
-`TERMINATION` row, and `termination_result` for the final report.
+`TERMINATION` row when present, and `termination_result` for the final report.
 
 ### What PySCIPOpt Records
 

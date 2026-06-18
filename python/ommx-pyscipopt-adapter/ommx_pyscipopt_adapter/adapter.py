@@ -162,39 +162,42 @@ class SCIPProgressSnapshot:
     """
 
     event: str
-    """SCIP event name, currently ``"BESTSOLFOUND"``,
-    ``"DUALBOUNDIMPROVED"``, or ``"TERMINATION"``.
+    """Progress marker.
+
+    Callback snapshots use SCIP event names such as ``"BESTSOLFOUND"`` and
+    ``"DUALBOUNDIMPROVED"``. The terminal snapshot uses the synthetic
+    ``"TERMINATION"`` marker.
     """
 
     solving_time_sec: float
-    """SCIP solving time when the callback ran."""
+    """SCIP solving time when the snapshot was recorded."""
 
     node_count: int
-    """Processed branch-and-bound nodes at the callback."""
+    """Processed branch-and-bound nodes at the snapshot."""
 
     total_node_count: int
-    """Total processed nodes including restarts at the callback."""
+    """Total processed nodes including restarts at the snapshot."""
 
     lp_iteration_count: int
-    """LP iterations at the callback."""
+    """LP iterations at the snapshot."""
 
     solution_count: int
-    """Number of solutions stored by SCIP at the callback."""
+    """Number of solutions stored by SCIP at the snapshot."""
 
     primal_bound: float
-    """SCIP primal bound reported at the callback."""
+    """SCIP primal bound reported at the snapshot."""
 
     dual_bound: float
-    """SCIP dual bound reported at the callback."""
+    """SCIP dual bound reported at the snapshot."""
 
     gap: float
-    """SCIP relative gap reported at the callback."""
+    """SCIP relative gap reported at the snapshot."""
 
     incumbent_objective: float | None
     """Objective value of SCIP's current best solution.
 
-    This is ``None`` when PySCIPOpt cannot read the incumbent objective at that
-    callback.
+    This is ``None`` when PySCIPOpt cannot read an incumbent objective at that
+    snapshot.
     """
 
     @classmethod
@@ -270,12 +273,12 @@ class SCIPDiagnosticsAnalyzer:
     :attr:`ommx.experiment.Solve.diagnostics`.
 
     :attr:`progress_history_records` returns ``list[dict[str, object]]`` and
-    does not require pandas. It includes the final ``TERMINATION`` row from the
-    terminal SCIP report. :attr:`progress_history_df` returns a pandas DataFrame
-    indexed by ``solving_time_sec`` and imports pandas lazily. Time-series
-    properties such as :attr:`dual_bound` return pandas Series with the same
-    index. :attr:`termination_result` returns the terminal SCIP report as a
-    dictionary.
+    does not require pandas. When diagnostics include a terminal SCIP report,
+    the progress history includes a final ``TERMINATION`` row derived from that
+    report. :attr:`progress_history_df` returns a pandas DataFrame indexed by
+    ``solving_time_sec`` and imports pandas lazily. Time-series properties such
+    as :attr:`dual_bound` return pandas Series with the same index.
+    :attr:`termination_result` returns the terminal SCIP report as a dictionary.
     """
 
     _progress_snapshots: tuple[SCIPProgressSnapshot, ...]
@@ -302,7 +305,9 @@ class SCIPDiagnosticsAnalyzer:
             )
             if (
                 not progress_history_records
-                or progress_history_records[-1] != terminal_record
+                or not _progress_history_records_equal(
+                    progress_history_records[-1], terminal_record
+                )
             ):
                 progress_history_records.append(terminal_record)
 
@@ -317,7 +322,7 @@ class SCIPDiagnosticsAnalyzer:
 
     @property
     def progress_history_records(self) -> list[dict[str, object]]:
-        """Return SCIP progress history with a final ``TERMINATION`` row."""
+        """Return SCIP progress history, with ``TERMINATION`` when present."""
         return [dict(record) for record in self._progress_history_records]
 
     @property
@@ -420,6 +425,28 @@ def _progress_record_from_termination_result(
         "gap": result["gap"],
         "incumbent_objective": result["objective_value"],
     }
+
+
+def _progress_history_records_equal(
+    left: Mapping[str, object],
+    right: Mapping[str, object],
+) -> bool:
+    for name in _dataclass_field_names(SCIPProgressSnapshot):
+        if name not in left or name not in right:
+            return False
+        if not _diagnostic_values_equal(left[name], right[name]):
+            return False
+    return True
+
+
+def _diagnostic_values_equal(left: object, right: object) -> bool:
+    if _is_nan(left) and _is_nan(right):
+        return True
+    return left == right
+
+
+def _is_nan(value: object) -> bool:
+    return isinstance(value, float) and math.isnan(value)
 
 
 def _dataclass_field_names(dataclass_type: type[Any]) -> list[str]:

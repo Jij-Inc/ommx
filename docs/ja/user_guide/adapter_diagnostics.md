@@ -37,8 +37,9 @@ SCIP の primal / dual bound の推移。
 
 `progress_history_df` は `solving_time_sec` を index にした pandas DataFrame です。
 `dual_bound`、`gap`、`incumbent_objective` などの Series property も同じ time index を使うので、
-そのまま時間軸の plot に使えます。この history には SCIP の termination report から作った
-最後の `TERMINATION` row も含まれます。`termination_result` は最終的な SCIP report を表す dictionary です。
+そのまま時間軸の plot に使えます。diagnostics に SCIP の termination report が含まれる場合、
+この history には最後の `TERMINATION` row も含まれます。`termination_result` はその最終的な
+SCIP report を表す dictionary です。
 
 ```python
 dual_bound = analyze.dual_bound
@@ -48,7 +49,7 @@ termination = analyze.termination_result
 ```
 
 DataFrame / Series helper は pandas を必要とします。pandas が使えない環境では、
-最後の `TERMINATION` row を含む progress history には `progress_history_records`、
+存在する場合は最後の `TERMINATION` row も含む progress history には `progress_history_records`、
 最終 report には `termination_result` を使ってください。
 
 ### PySCIPOpt が記録するもの
