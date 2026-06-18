@@ -303,11 +303,8 @@ class SCIPDiagnosticsAnalyzer:
             terminal_record = _progress_record_from_termination_result(
                 termination_result
             )
-            if (
-                not progress_history_records
-                or not _progress_history_records_equal(
-                    progress_history_records[-1], terminal_record
-                )
+            if not progress_history_records or not _progress_history_records_equal(
+                progress_history_records[-1], terminal_record
             ):
                 progress_history_records.append(terminal_record)
 
