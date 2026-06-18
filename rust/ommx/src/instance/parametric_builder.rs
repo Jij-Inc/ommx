@@ -159,7 +159,7 @@ impl ParametricInstanceBuilder {
     /// - The keys of `decision_variable_dependency` are not in `decision_variables`
     /// - The RHS expressions of `decision_variable_dependency` reference IDs
     ///   outside `decision_variables` or `parameters`
-    /// - `used`, `fixed`, and `dependent` are not pairwise disjoint (see [`DecisionVariableAnalysis`])
+    /// - Construction-time `used`, `fixed`, and `dependent` sets are not pairwise disjoint
     pub fn build(self) -> crate::Result<ParametricInstance> {
         let sense = self
             .sense
@@ -385,8 +385,7 @@ impl ParametricInstanceBuilder {
             }
         }
 
-        // Invariant: used, fixed, and dependent must be pairwise disjoint.
-        // See DecisionVariableAnalysis for details.
+        // Construction invariant: raw used, fixed, and dependent sets must be pairwise disjoint.
         // - used: IDs appearing in objective or constraints
         // - fixed: IDs with substituted_value set
         // - dependent: keys of decision_variable_dependency

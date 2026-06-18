@@ -1,0 +1,14 @@
+---
+source: rust/ommx/src/instance/analysis.rs
+expression: usage
+---
+DecisionVariableUsage {
+  Used Variables: 3
+
+  Used in Objective (2):
+    x1, x2
+
+  Used in Regular Constraints (2):
+    0: x1, x2
+    1: x0
+}

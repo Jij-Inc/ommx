@@ -18,6 +18,65 @@ pub enum AdditionalCapability {
     Sos1 = 3,
 }
 
+/// Decision variable role in an instance.
+#[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
+#[pyclass(eq, eq_int, hash, frozen)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DecisionVariableRole {
+    /// Used by the objective or active constraints passed to solvers
+    Used = 1,
+    /// Fixed by substituted_value and not used by solver input
+    Fixed = 2,
+    /// Defined by decision_variable_dependency
+    Dependent = 3,
+    /// Not used, fixed, or dependent
+    Irrelevant = 4,
+}
+
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
+#[pymethods]
+impl DecisionVariableRole {
+    fn __repr__(&self) -> &'static str {
+        match self {
+            DecisionVariableRole::Used => "DecisionVariableRole.Used",
+            DecisionVariableRole::Fixed => "DecisionVariableRole.Fixed",
+            DecisionVariableRole::Dependent => "DecisionVariableRole.Dependent",
+            DecisionVariableRole::Irrelevant => "DecisionVariableRole.Irrelevant",
+        }
+    }
+
+    fn __str__(&self) -> &'static str {
+        match self {
+            DecisionVariableRole::Used => "used",
+            DecisionVariableRole::Fixed => "fixed",
+            DecisionVariableRole::Dependent => "dependent",
+            DecisionVariableRole::Irrelevant => "irrelevant",
+        }
+    }
+}
+
+impl From<ommx::DecisionVariableRole> for DecisionVariableRole {
+    fn from(role: ommx::DecisionVariableRole) -> Self {
+        match role {
+            ommx::DecisionVariableRole::Used => DecisionVariableRole::Used,
+            ommx::DecisionVariableRole::Fixed => DecisionVariableRole::Fixed,
+            ommx::DecisionVariableRole::Dependent => DecisionVariableRole::Dependent,
+            ommx::DecisionVariableRole::Irrelevant => DecisionVariableRole::Irrelevant,
+        }
+    }
+}
+
+impl From<DecisionVariableRole> for ommx::DecisionVariableRole {
+    fn from(role: DecisionVariableRole) -> Self {
+        match role {
+            DecisionVariableRole::Used => ommx::DecisionVariableRole::Used,
+            DecisionVariableRole::Fixed => ommx::DecisionVariableRole::Fixed,
+            DecisionVariableRole::Dependent => ommx::DecisionVariableRole::Dependent,
+            DecisionVariableRole::Irrelevant => ommx::DecisionVariableRole::Irrelevant,
+        }
+    }
+}
+
 impl From<ommx::AdditionalCapability> for AdditionalCapability {
     fn from(cap: ommx::AdditionalCapability) -> Self {
         match cap {

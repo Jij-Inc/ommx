@@ -1,10 +1,10 @@
 use crate::{
     pandas::{
-        constraint_id_col, constraint_kind_collection, entries_to_dataframe, ConstraintKind,
-        PyDataFrame, ToPandasEntry,
+        apply_include_filter, constraint_id_col, constraint_kind_collection, entries_to_dataframe,
+        raw_entries_to_dataframe, ConstraintKind, PyDataFrame, ToPandasEntry,
     },
-    Constraint, DecisionVariable, Function, NamedFunction, ParametricInstance, RemovedConstraint,
-    Rng, SampleSet, Samples, Sense, Solution, State, VariableBound,
+    Constraint, DecisionVariable, DecisionVariableRole, Function, NamedFunction,
+    ParametricInstance, RemovedConstraint, Rng, SampleSet, Samples, Sense, Solution, State,
 };
 use anyhow::Result;
 use ommx::{ConstraintID, Evaluate, NamedFunctionID, VariableID};
@@ -1187,7 +1187,7 @@ impl Instance {
     /// Generate a random state for this instance using the provided random number generator.
     ///
     /// This method generates random values only for variables that are actually used in the
-    /// objective function or constraints, as determined by decision variable analysis.
+    /// objective function or constraints, as determined by decision variable usage.
     /// Generated values respect the bounds of each variable type.
     ///
     /// **Args:**
@@ -1711,8 +1711,8 @@ impl Instance {
         let _guard = crate::TRACING.attach_parent_context(py);
         let ids: BTreeSet<u64> = if decision_variable_ids.is_empty() {
             // Auto-detect: find all used integer decision variables
-            let analysis = self.inner.analyze_decision_variables();
-            let integer_ids: BTreeSet<u64> = analysis
+            let usage = self.inner.decision_variable_usage();
+            let integer_ids: BTreeSet<u64> = usage
                 .used_integer()
                 .into_keys()
                 .map(|id| id.into_inner())
@@ -1910,38 +1910,50 @@ impl Instance {
         Ok(result)
     }
 
-    /// Analyze decision variables in the optimization problem instance.
+    /// Return the state role of a decision variable.
     ///
-    /// Returns a comprehensive analysis of all decision variables including:
-    ///
-    /// - Kind-based partitioning (binary, integer, continuous, etc.)
-    /// - Usage-based partitioning (used in objective, constraints, fixed, etc.)
-    /// - Variable bounds information
-    ///
-    /// **Returns:**
-    /// Analysis object containing detailed information about decision variables
-    ///
-    /// # Examples
-    ///
-    /// ```python
-    /// >>> from ommx.v1 import Instance, DecisionVariable
-    /// >>> x = [DecisionVariable.binary(i) for i in range(3)]
-    /// >>> instance = Instance.from_components(
-    /// ...     decision_variables=x,
-    /// ...     objective=x[0] + x[1],
-    /// ...     constraints=[(x[1] + x[2] == 1).set_id(0)],
-    /// ...     sense=Instance.MAXIMIZE,
-    /// ... )
-    /// >>> analysis = instance.decision_variable_analysis()
-    /// >>> analysis.used_decision_variable_ids()
-    /// {0, 1, 2}
-    /// >>> analysis.used_in_objective()
-    /// {0, 1}
-    /// >>> analysis.used_in_constraints()
-    /// {0: {1, 2}}
-    /// ```
-    pub fn decision_variable_analysis(&self) -> DecisionVariableAnalysis {
-        DecisionVariableAnalysis(self.inner.analyze_decision_variables())
+    /// The role is one of ``used``, ``fixed``, ``dependent``, or
+    /// ``irrelevant``. Unknown IDs return ``None``.
+    pub fn decision_variable_role(&self, id: u64) -> Option<DecisionVariableRole> {
+        self.inner
+            .decision_variable_role(VariableID::from(id))
+            .map(Into::into)
+    }
+
+    /// Return the state role of every decision variable, keyed by ID.
+    pub fn decision_variable_roles(&self) -> BTreeMap<u64, DecisionVariableRole> {
+        self.inner
+            .decision_variable_roles()
+            .into_iter()
+            .map(|(id, role)| (id.into_inner(), role.into()))
+            .collect()
+    }
+
+    /// Return fixed decision variables as ``{id: substituted_value}``.
+    pub fn fixed_decision_variables(&self) -> BTreeMap<u64, f64> {
+        self.inner
+            .fixed_decision_variables()
+            .into_iter()
+            .map(|(id, value)| (id.into_inner(), value))
+            .collect()
+    }
+
+    /// Return IDs of decision variables defined by ``decision_variable_dependency``.
+    pub fn dependent_decision_variable_ids(&self) -> BTreeSet<u64> {
+        self.inner
+            .dependent_decision_variable_ids()
+            .into_iter()
+            .map(|id| id.into_inner())
+            .collect()
+    }
+
+    /// Return IDs of decision variables not used, fixed, or dependent.
+    pub fn irrelevant_decision_variable_ids(&self) -> BTreeSet<u64> {
+        self.inner
+            .irrelevant_decision_variable_ids()
+            .into_iter()
+            .map(|id| id.into_inner())
+            .collect()
     }
 
     /// Get statistics about the instance.
@@ -2006,21 +2018,24 @@ impl Instance {
         include: Option<Vec<String>>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let flags = crate::pandas::IncludeFlags::from_optional(include)?;
-        let var_meta_store = self.inner.variable_metadata().clone();
-        let var_meta_view: Vec<(ommx::DecisionVariableMetadata, &ommx::DecisionVariable)> = self
+        let var_meta_store = self.inner.variable_metadata();
+        let roles = self.inner.decision_variable_roles();
+        let entries = self
             .inner
             .decision_variables()
             .iter()
-            .map(|(id, dv)| (var_meta_store.collect_for(*id), dv))
-            .collect();
-        entries_to_dataframe(
-            py,
-            var_meta_view
-                .iter()
-                .map(|(m, dv)| crate::pandas::WithMetadata::new(*dv, m)),
-            "id",
-            flags,
-        )
+            .map(|(id, dv)| {
+                let metadata = var_meta_store.collect_for(*id);
+                let dict = crate::pandas::WithMetadata::new(dv, &metadata).to_pandas_entry(py)?;
+                let role = roles
+                    .get(id)
+                    .expect("role query uses the same decision_variables map");
+                dict.set_item("state_role", role.as_str())?;
+                apply_include_filter(&dict, flags)?;
+                Ok(dict.into_any())
+            })
+            .collect::<PyResult<_>>()?;
+        raw_entries_to_dataframe(py, entries, "id")
     }
 
     /// DataFrame of constraints, dispatched on `kind=`.
@@ -2572,7 +2587,7 @@ impl Instance {
     pub(crate) fn check_no_continuous_variables(&self, format_name: &str) -> Result<()> {
         let continuous_ids: Vec<u64> = self
             .inner
-            .analyze_decision_variables()
+            .decision_variable_usage()
             .used_continuous()
             .into_keys()
             .map(|id| id.into_inner())
@@ -2658,116 +2673,6 @@ impl Instance {
         }
 
         Ok(())
-    }
-}
-
-#[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass]
-pub struct DecisionVariableAnalysis(ommx::DecisionVariableAnalysis);
-
-#[pyo3_stub_gen::derive::gen_stub_pymethods]
-#[pymethods]
-impl DecisionVariableAnalysis {
-    pub fn used_binary(&self) -> BTreeMap<u64, VariableBound> {
-        self.0
-            .used_binary()
-            .into_iter()
-            .map(|(id, bound)| (id.into_inner(), VariableBound(bound)))
-            .collect()
-    }
-
-    pub fn used_integer(&self) -> BTreeMap<u64, VariableBound> {
-        self.0
-            .used_integer()
-            .into_iter()
-            .map(|(id, bound)| (id.into_inner(), VariableBound(bound)))
-            .collect()
-    }
-
-    pub fn used_continuous(&self) -> BTreeMap<u64, VariableBound> {
-        self.0
-            .used_continuous()
-            .into_iter()
-            .map(|(id, bound)| (id.into_inner(), VariableBound(bound)))
-            .collect()
-    }
-
-    pub fn used_semi_integer(&self) -> BTreeMap<u64, VariableBound> {
-        self.0
-            .used_semi_integer()
-            .into_iter()
-            .map(|(id, bound)| (id.into_inner(), VariableBound(bound)))
-            .collect()
-    }
-
-    pub fn used_semi_continuous(&self) -> BTreeMap<u64, VariableBound> {
-        self.0
-            .used_semi_continuous()
-            .into_iter()
-            .map(|(id, bound)| (id.into_inner(), VariableBound(bound)))
-            .collect()
-    }
-
-    pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
-        self.0.used().iter().map(|id| id.into_inner()).collect()
-    }
-
-    pub fn all_decision_variable_ids(&self) -> BTreeSet<u64> {
-        self.0.all().iter().map(|id| id.into_inner()).collect()
-    }
-
-    pub fn used_in_objective(&self) -> BTreeSet<u64> {
-        self.0
-            .used_in_objective()
-            .iter()
-            .map(|id| id.into_inner())
-            .collect()
-    }
-
-    pub fn used_in_constraints(&self) -> BTreeMap<u64, BTreeSet<u64>> {
-        self.0
-            .used_in_constraints()
-            .iter()
-            .map(|(constraint_id, variable_ids)| {
-                (
-                    **constraint_id,
-                    variable_ids.iter().map(|id| id.into_inner()).collect(),
-                )
-            })
-            .collect()
-    }
-
-    pub fn fixed(&self) -> BTreeMap<u64, f64> {
-        self.0
-            .fixed()
-            .iter()
-            .map(|(id, value)| (id.into_inner(), *value))
-            .collect()
-    }
-
-    pub fn irrelevant(&self) -> BTreeSet<u64> {
-        self.0
-            .irrelevant()
-            .keys()
-            .map(|id| id.into_inner())
-            .collect()
-    }
-
-    pub fn dependent(&self) -> BTreeSet<u64> {
-        self.0
-            .dependent()
-            .keys()
-            .map(|id| id.into_inner())
-            .collect()
-    }
-
-    pub fn to_dict<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let obj = serde_pyobject::to_pyobject(py, &self.0)?;
-        Ok(obj.cast::<PyDict>()?.clone())
-    }
-
-    pub fn __repr__(&self) -> String {
-        self.0.to_string()
     }
 }
 

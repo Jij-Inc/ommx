@@ -1,3 +1,4 @@
+use super::DecisionVariableRole;
 use serde::{Deserialize, Serialize};
 
 /// Statistics about decision variables categorized by kind.
@@ -20,9 +21,9 @@ pub struct VariableStatsByKind {
 pub struct VariableStatsByUsage {
     /// Number of variables used in the objective function
     pub used_in_objective: usize,
-    /// Number of variables used in constraints
+    /// Number of variables used in regular constraints
     pub used_in_constraints: usize,
-    /// Number of variables used in either objective or constraints
+    /// Number of variables used in either objective or active constraints
     pub used: usize,
     /// Number of fixed variables
     pub fixed: usize,
@@ -41,9 +42,9 @@ pub struct VariableStatsByUsage {
 /// Note on usage categories:
 /// The usage-based categories (used, fixed, dependent, irrelevant) are mutually exclusive.
 /// A variable belongs to exactly one category, determined by this priority:
-/// 1. `fixed`: Variables with substituted values
-/// 2. `dependent`: Variables defined by assignments in decision_variable_dependency
-/// 3. `used`: Variables appearing in objective or active constraints (not in categories 1-2)
+/// 1. `used`: Variables appearing in objective or active constraints
+/// 2. `fixed`: Variables with substituted values (not in category 1)
+/// 3. `dependent`: Variables defined by assignments in decision_variable_dependency (not in categories 1-2)
 /// 4. `irrelevant`: All other variables (not in categories 1-3)
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DecisionVariableStats {
@@ -98,28 +99,57 @@ impl super::Instance {
     /// println!("Active constraints: {}", stats.constraints.active);
     /// ```
     pub fn stats(&self) -> InstanceStats {
-        let analysis = self.analyze_decision_variables();
-
         let by_kind = VariableStatsByKind {
-            binary: analysis.binary().len(),
-            integer: analysis.integer().len(),
-            continuous: analysis.continuous().len(),
-            semi_integer: analysis.semi_integer().len(),
-            semi_continuous: analysis.semi_continuous().len(),
+            binary: self
+                .decision_variables()
+                .values()
+                .filter(|dv| dv.kind() == crate::Kind::Binary)
+                .count(),
+            integer: self
+                .decision_variables()
+                .values()
+                .filter(|dv| dv.kind() == crate::Kind::Integer)
+                .count(),
+            continuous: self
+                .decision_variables()
+                .values()
+                .filter(|dv| dv.kind() == crate::Kind::Continuous)
+                .count(),
+            semi_integer: self
+                .decision_variables()
+                .values()
+                .filter(|dv| dv.kind() == crate::Kind::SemiInteger)
+                .count(),
+            semi_continuous: self
+                .decision_variables()
+                .values()
+                .filter(|dv| dv.kind() == crate::Kind::SemiContinuous)
+                .count(),
         };
 
+        let usage = self.decision_variable_usage();
+        let roles = self.decision_variable_roles();
         let by_usage = VariableStatsByUsage {
-            used_in_objective: analysis.used_in_objective().len(),
-            used_in_constraints: analysis
+            used_in_objective: usage.used_in_objective().len(),
+            used_in_constraints: usage
                 .used_in_constraints()
                 .values()
                 .flat_map(|vars| vars.iter())
                 .collect::<std::collections::HashSet<_>>()
                 .len(),
-            used: analysis.used().len(),
-            fixed: analysis.fixed().len(),
-            dependent: analysis.dependent().len(),
-            irrelevant: analysis.irrelevant().len(),
+            used: usage.used().len(),
+            fixed: roles
+                .values()
+                .filter(|&&role| role == DecisionVariableRole::Fixed)
+                .count(),
+            dependent: roles
+                .values()
+                .filter(|&&role| role == DecisionVariableRole::Dependent)
+                .count(),
+            irrelevant: roles
+                .values()
+                .filter(|&&role| role == DecisionVariableRole::Irrelevant)
+                .count(),
         };
 
         let decision_variables = DecisionVariableStats {

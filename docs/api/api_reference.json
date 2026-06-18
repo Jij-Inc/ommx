@@ -11517,349 +11517,32 @@
         },
         {
           "kind": "Class",
-          "name": "DecisionVariableAnalysis",
-          "doc": "",
+          "name": "DecisionVariableRole",
+          "doc": "Decision variable role in an instance.",
           "bases": [],
-          "methods": [
+          "methods": [],
+          "attributes": [
             {
-              "name": "__repr__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "str",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
+              "name": "Dependent",
+              "doc": "Defined by decision_variable_dependency",
+              "type_": null
             },
             {
-              "name": "all_decision_variable_ids",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "set[int]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
+              "name": "Fixed",
+              "doc": "Fixed by substituted_value and not used by solver input",
+              "type_": null
             },
             {
-              "name": "dependent",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "set[int]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
+              "name": "Irrelevant",
+              "doc": "Not used, fixed, or dependent",
+              "type_": null
             },
             {
-              "name": "fixed",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "dict[int, float]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      },
-                      {
-                        "display": "float",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "irrelevant",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "set[int]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "to_dict",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "dict",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "used_binary",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "dict[int, Bound]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      },
-                      {
-                        "display": "Bound",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "used_continuous",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "dict[int, Bound]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      },
-                      {
-                        "display": "Bound",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "used_decision_variable_ids",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "set[int]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "used_in_constraints",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "dict[int, set[int]]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      },
-                      {
-                        "display": "set[int]",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "int",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "used_in_objective",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "set[int]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "used_integer",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "dict[int, Bound]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      },
-                      {
-                        "display": "Bound",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "used_semi_continuous",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "dict[int, Bound]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      },
-                      {
-                        "display": "Bound",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "used_semi_integer",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "dict[int, Bound]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      },
-                      {
-                        "display": "Bound",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
+              "name": "Used",
+              "doc": "Used by the objective or active constraints passed to solvers",
+              "type_": null
             }
           ],
-          "attributes": [],
           "deprecated": null
         },
         {
@@ -15112,15 +14795,58 @@
               "deprecated": null
             },
             {
-              "name": "decision_variable_analysis",
-              "doc": "Analyze decision variables in the optimization problem instance.\n\nReturns a comprehensive analysis of all decision variables including:\n\n- Kind-based partitioning (binary, integer, continuous, etc.)\n- Usage-based partitioning (used in objective, constraints, fixed, etc.)\n- Variable bounds information\n\n**Returns:**\nAnalysis object containing detailed information about decision variables\n\n# Examples\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=x[0] + x[1],\n...     constraints=[(x[1] + x[2] == 1).set_id(0)],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> analysis = instance.decision_variable_analysis()\n>>> analysis.used_decision_variable_ids()\n{0, 1, 2}\n>>> analysis.used_in_objective()\n{0, 1}\n>>> analysis.used_in_constraints()\n{0: {1, 2}}\n```",
+              "name": "decision_variable_role",
+              "doc": "Return the state role of a decision variable.\n\nThe role is one of ``used``, ``fixed``, ``dependent``, or\n``irrelevant``. Unknown IDs return ``None``.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "id",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Optional[DecisionVariableRole]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "DecisionVariableRole",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "decision_variable_roles",
+              "doc": "Return the state role of every decision variable, keyed by ID.",
               "signatures": [
                 {
                   "parameters": [],
                   "return_type": {
-                    "display": "DecisionVariableAnalysis",
+                    "display": "dict[int, DecisionVariableRole]",
                     "link_target": null,
-                    "children": []
+                    "children": [
+                      {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "DecisionVariableRole",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
                   }
                 }
               ],
@@ -15162,6 +14888,28 @@
                     "display": "DataFrame",
                     "link_target": null,
                     "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "dependent_decision_variable_ids",
+              "doc": "Return IDs of decision variables defined by ``decision_variable_dependency``.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "set[int]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
                   }
                 }
               ],
@@ -15276,6 +15024,33 @@
                     "display": "SampleSet",
                     "link_target": null,
                     "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "fixed_decision_variables",
+              "doc": "Return fixed decision variables as ``{id: substituted_value}``.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "dict[int, float]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "float",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
                   }
                 }
               ],
@@ -15695,6 +15470,28 @@
               "deprecated": null
             },
             {
+              "name": "irrelevant_decision_variable_ids",
+              "doc": "Return IDs of decision variables not used, fixed, or dependent.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "set[int]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "load_mps",
               "doc": "",
               "signatures": [
@@ -16032,7 +15829,7 @@
             },
             {
               "name": "random_state",
-              "doc": "Generate a random state for this instance using the provided random number generator.\n\nThis method generates random values only for variables that are actually used in the\nobjective function or constraints, as determined by decision variable analysis.\nGenerated values respect the bounds of each variable type.\n\n**Args:**\n- `rng`: Random number generator to use for generating the state.\n\n**Returns:**\nA randomly generated state that satisfies the variable bounds of this instance.\nOnly contains values for variables that are used in the problem.\n\n# Examples\n\nGenerate random state only for used variables\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable, Rng\n>>> x = [DecisionVariable.binary(i) for i in range(5)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=x[0] + x[1],\n...     constraints=[],\n...     sense=Instance.MAXIMIZE,\n... )\n\n>>> rng = Rng()\n>>> state = instance.random_state(rng)\n```\n\nOnly used variables have values\n\n```python\n>>> set(state.entries.keys())\n{0, 1}\n```\n\nValues respect binary bounds\n\n```python\n>>> all(state.entries[i] in [0.0, 1.0] for i in state.entries)\nTrue\n```",
+              "doc": "Generate a random state for this instance using the provided random number generator.\n\nThis method generates random values only for variables that are actually used in the\nobjective function or constraints, as determined by decision variable usage.\nGenerated values respect the bounds of each variable type.\n\n**Args:**\n- `rng`: Random number generator to use for generating the state.\n\n**Returns:**\nA randomly generated state that satisfies the variable bounds of this instance.\nOnly contains values for variables that are used in the problem.\n\n# Examples\n\nGenerate random state only for used variables\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable, Rng\n>>> x = [DecisionVariable.binary(i) for i in range(5)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=x[0] + x[1],\n...     constraints=[],\n...     sense=Instance.MAXIMIZE,\n... )\n\n>>> rng = Rng()\n>>> state = instance.random_state(rng)\n```\n\nOnly used variables have values\n\n```python\n>>> set(state.entries.keys())\n{0, 1}\n```\n\nValues respect binary bounds\n\n```python\n>>> all(state.entries[i] in [0.0, 1.0] for i in state.entries)\nTrue\n```",
               "signatures": [
                 {
                   "parameters": [
@@ -29949,7 +29746,7 @@
     "ommx.v1.Bound": "ommx.v1",
     "ommx.v1.Constraint": "ommx.v1",
     "ommx.v1.DecisionVariable": "ommx.v1",
-    "ommx.v1.DecisionVariableAnalysis": "ommx.v1",
+    "ommx.v1.DecisionVariableRole": "ommx.v1",
     "ommx.v1.Equality": "ommx.v1",
     "ommx.v1.EvaluatedConstraint": "ommx.v1",
     "ommx.v1.EvaluatedDecisionVariable": "ommx.v1",

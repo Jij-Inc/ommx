@@ -104,11 +104,11 @@ pub enum Sense {
 /// - The keys of [`Self::decision_variable_dependency`] must be in [`Self::decision_variables`],
 ///   but must NOT be used in the objective function or constraints.
 ///   These are "dependent variables" whose values are computed from other variables.
-///   See also the document of [`DecisionVariableAnalysis`].
-/// - The following three sets must be pairwise disjoint (from [`DecisionVariableAnalysis`]):
-///   - **used**: Variable IDs appearing in the objective function or constraints
-///   - **fixed**: Variable IDs with `substituted_value` set
-///   - **dependent**: Keys of `decision_variable_dependency`
+/// - Decision variables are classified into mutually exclusive roles:
+///   - **used**: Variable IDs appearing in the objective function or active constraints
+///   - **fixed**: Variable IDs with `substituted_value` set and not used
+///   - **dependent**: Keys of `decision_variable_dependency` that are not used or fixed
+/// - [`DecisionVariableUsage`] is the reverse-usage index for used decision variables only.
 /// - [`Self::removed_constraints`] may contain fixed or dependent variable IDs.
 ///   These are substituted when the constraint is restored via [`Self::restore_constraint`].
 /// - The keys of [`Self::named_functions`] match the `id()` of their values.
@@ -456,11 +456,11 @@ impl Instance {
 ///   reference IDs from [`Self::decision_variables`] or [`Self::parameters`],
 ///   and may not reference undefined IDs. Parameter IDs in RHS expressions are
 ///   evaluated by [`Self::with_parameters`].
-///   See also the document of [`DecisionVariableAnalysis`].
-/// - The following three sets must be pairwise disjoint (from [`DecisionVariableAnalysis`]):
-///   - **used**: Variable IDs appearing in the objective function or constraints
-///   - **fixed**: Variable IDs with `substituted_value` set
-///   - **dependent**: Keys of `decision_variable_dependency`
+/// - Decision variables are classified into mutually exclusive roles:
+///   - **used**: Variable IDs appearing in the objective function or active constraints
+///   - **fixed**: Variable IDs with `substituted_value` set and not used
+///   - **dependent**: Keys of `decision_variable_dependency` that are not used or fixed
+/// - [`DecisionVariableUsage`] is the reverse-usage index for used decision variables only.
 /// - The keys of [`Self::named_functions`] match the `id()` of their values.
 /// - [`Self::named_functions`] may contain fixed or dependent variable IDs (like `removed_constraints`).
 ///   Variable IDs in `named_functions` must be registered in [`Self::decision_variables`],

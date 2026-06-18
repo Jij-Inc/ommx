@@ -49,6 +49,12 @@ state = instance.populate_state({1: 2.0, 2: 3.0})
 assert state.entries == {1: 2.0, 2: 3.0, 5: 6.0, 10: 5.0, 99: 4.0}
 ```
 
+### ⚠ `Instance` 上の決定変数 role query ([#946](https://github.com/Jij-Inc/ommx/pull/946))
+
+Python SDK では `DecisionVariableUsage` と `DecisionVariableUsageEntry` オブジェクトを公開しない形に整理しました。Adapter が solver input の変数を必要とする場合は {attr}`~ommx.v1.Instance.used_decision_variables` を使い、state role は所有者である Instance から {meth}`~ommx.v1.Instance.decision_variable_role`、{meth}`~ommx.v1.Instance.decision_variable_roles`、{meth}`~ommx.v1.Instance.fixed_decision_variables`、{meth}`~ommx.v1.Instance.dependent_decision_variable_ids`、{meth}`~ommx.v1.Instance.irrelevant_decision_variable_ids` で直接取得してください。
+
+{meth}`~ommx.v1.Instance.decision_variables_df` は引き続き `state_role` column を含むため、DataFrame ベースの workflow では別の usage object を作らずに `used`、`fixed`、`dependent`、`irrelevant` の分類を確認できます。
+
 ## 3.0.0 Alpha 7
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0a7-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0a7)

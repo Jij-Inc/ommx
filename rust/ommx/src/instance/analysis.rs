@@ -1,118 +1,280 @@
-use super::*;
-use crate::{Bound, Bounds, Evaluate, Kind, VariableIDSet};
-use std::collections::BTreeMap;
+use super::Instance;
+use crate::{
+    Bounds, ConstraintID, DecisionVariable, Evaluate, IndicatorConstraintID, Kind,
+    OneHotConstraintID, Sos1ConstraintID, VariableID, VariableIDSet,
+};
+use std::collections::{BTreeMap, BTreeSet};
 
-/// The result of analyzing the decision variables in an instance.
+/// Role of a decision variable in an [`Instance`].
 ///
-/// Responsibility
-/// ---------------
-/// This struct is responsible for
+/// The role is derived from the current instance structure:
 ///
-/// - Serving kind-based and usage-based partitioning of decision variables to solvers.
-///   Solvers only want to know the mathematical properties of the optimization problem.
-///   They do not need to know the details of the instance, such as the names of the decision
-///   variables and constraints, removed constraints or fixed variables which does not affect the
-///   optimization problem itself.
+/// - [`DecisionVariableRole::Used`] means the variable appears in the objective
+///   function or in an active constraint family that affects solver input.
+/// - [`DecisionVariableRole::Fixed`] means the variable has
+///   [`DecisionVariable::substituted_value`] and is not solver-used.
+/// - [`DecisionVariableRole::Dependent`] means the variable is defined by
+///   `decision_variable_dependency` and is neither solver-used nor fixed.
+/// - [`DecisionVariableRole::Irrelevant`] is the remaining case.
 ///
-/// This struct is only an analysis view. Validation and population of solver
-/// states is an [`Instance`] responsibility; use [`Instance::populate_state`].
-///
-/// Invariants
-/// -----------
-/// - Every IDs are subset of [`Self::all`].
-/// - (kind-based partitioning) [`Self::binary`], [`Self::integer`], [`Self::continuous`], [`Self::semi_integer`], and [`Self::semi_continuous`]
-///   are disjoint, and their union is equal to [`Self::all`].
-/// - (usage-based partitioning) [`Self::used`], [`Self::fixed`], and
-///   [`Self::dependent`] are disjoint each other. Remaining decision variables
-///   are [`Self::irrelevant`]. [`Self::used`] includes IDs used in the objective
-///   or active constraints; [`Self::used_in_constraints`] is the regular
-///   constraint-level breakdown.
-#[derive(Debug, Clone, PartialEq, getset::Getters, serde::Serialize, serde::Deserialize)]
-pub struct DecisionVariableAnalysis {
-    /// The IDs of all decision variables
-    #[getset(get = "pub")]
-    all: VariableIDSet,
-
-    /*
-     * Kind-based partition
-     */
-    #[getset(get = "pub")]
-    binary: Bounds,
-    #[getset(get = "pub")]
-    integer: Bounds,
-    #[getset(get = "pub")]
-    continuous: Bounds,
-    #[getset(get = "pub")]
-    semi_integer: Bounds,
-    #[getset(get = "pub")]
-    semi_continuous: Bounds,
-
-    /*
-     * Usage-based partition
-     */
-    /// The set of decision variables that are used in the objective function.
-    #[getset(get = "pub")]
-    used_in_objective: VariableIDSet,
-    /// The set of decision variables that are used in regular constraints.
-    #[getset(get = "pub")]
-    used_in_constraints: BTreeMap<ConstraintID, VariableIDSet>,
-    /// The set of decision variables that are used in the objective function or active constraints.
-    #[getset(get = "pub")]
-    used: VariableIDSet,
-    /// Fixed decision variables
-    #[getset(get = "pub")]
-    fixed: BTreeMap<VariableID, f64>,
-    /// Dependent variables
-    #[getset(get = "pub")]
-    dependent: BTreeMap<VariableID, (Kind, Bound, Function)>,
-    /// The set of decision variables that are not used in the objective or constraints and are not fixed or dependent.
-    #[getset(get = "pub")]
-    irrelevant: BTreeMap<VariableID, (Kind, Bound)>,
+/// Named functions and decision-variable dependency RHS expressions are
+/// intentionally not solver-used.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum DecisionVariableRole {
+    Used,
+    Fixed,
+    Dependent,
+    Irrelevant,
 }
 
-impl DecisionVariableAnalysis {
-    pub fn used_binary(&self) -> Bounds {
-        let used_ids = self.used();
-        self.binary()
+impl DecisionVariableRole {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            DecisionVariableRole::Used => "used",
+            DecisionVariableRole::Fixed => "fixed",
+            DecisionVariableRole::Dependent => "dependent",
+            DecisionVariableRole::Irrelevant => "irrelevant",
+        }
+    }
+}
+
+impl std::fmt::Display for DecisionVariableRole {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Reverse-usage entry for one used decision variable.
+///
+/// A variable has an entry here only when it appears in the objective or an
+/// active constraint family that contributes to solver input. Fixed,
+/// dependent, and irrelevant variables do not have usage entries.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct DecisionVariableUsageEntry {
+    used_in_objective: bool,
+    used_in_regular_constraints: BTreeSet<ConstraintID>,
+    used_in_indicator_constraints: BTreeSet<IndicatorConstraintID>,
+    used_in_one_hot_constraints: BTreeSet<OneHotConstraintID>,
+    used_in_sos1_constraints: BTreeSet<Sos1ConstraintID>,
+}
+
+impl DecisionVariableUsageEntry {
+    fn new() -> Self {
+        Self {
+            used_in_objective: false,
+            used_in_regular_constraints: BTreeSet::new(),
+            used_in_indicator_constraints: BTreeSet::new(),
+            used_in_one_hot_constraints: BTreeSet::new(),
+            used_in_sos1_constraints: BTreeSet::new(),
+        }
+    }
+
+    pub fn used_in_objective(&self) -> bool {
+        self.used_in_objective
+    }
+
+    pub fn used_in_regular_constraints(&self) -> &BTreeSet<ConstraintID> {
+        &self.used_in_regular_constraints
+    }
+
+    pub fn used_in_indicator_constraints(&self) -> &BTreeSet<IndicatorConstraintID> {
+        &self.used_in_indicator_constraints
+    }
+
+    pub fn used_in_one_hot_constraints(&self) -> &BTreeSet<OneHotConstraintID> {
+        &self.used_in_one_hot_constraints
+    }
+
+    pub fn used_in_sos1_constraints(&self) -> &BTreeSet<Sos1ConstraintID> {
+        &self.used_in_sos1_constraints
+    }
+
+    pub fn is_used_by_solver(&self) -> bool {
+        self.used_in_objective
+            || !self.used_in_regular_constraints.is_empty()
+            || !self.used_in_indicator_constraints.is_empty()
+            || !self.used_in_one_hot_constraints.is_empty()
+            || !self.used_in_sos1_constraints.is_empty()
+    }
+}
+
+/// Reverse-usage view tied to the lifetime of an [`Instance`].
+///
+/// The usage index contains only variables that are used by solver input. The
+/// borrowed [`Instance`] remains the source of truth for decision-variable
+/// classification such as fixed, dependent, and irrelevant.
+#[derive(Debug, Clone)]
+pub struct DecisionVariableUsage<'a> {
+    instance: &'a Instance,
+    by_used_variable: BTreeMap<VariableID, DecisionVariableUsageEntry>,
+}
+
+impl<'a> DecisionVariableUsage<'a> {
+    fn new(instance: &'a Instance) -> Self {
+        let mut by_used_variable: BTreeMap<VariableID, DecisionVariableUsageEntry> =
+            BTreeMap::new();
+
+        for id in instance.objective().required_ids() {
+            usage_entry_mut(&mut by_used_variable, id).used_in_objective = true;
+        }
+
+        for (constraint_id, constraint) in instance.constraints() {
+            for id in constraint.function().required_ids() {
+                usage_entry_mut(&mut by_used_variable, id)
+                    .used_in_regular_constraints
+                    .insert(*constraint_id);
+            }
+        }
+
+        for (constraint_id, constraint) in instance.indicator_constraints() {
+            for id in constraint.required_ids() {
+                usage_entry_mut(&mut by_used_variable, id)
+                    .used_in_indicator_constraints
+                    .insert(*constraint_id);
+            }
+        }
+
+        for (constraint_id, constraint) in instance.one_hot_constraints() {
+            for id in constraint.required_ids() {
+                usage_entry_mut(&mut by_used_variable, id)
+                    .used_in_one_hot_constraints
+                    .insert(*constraint_id);
+            }
+        }
+
+        for (constraint_id, constraint) in instance.sos1_constraints() {
+            for id in constraint.required_ids() {
+                usage_entry_mut(&mut by_used_variable, id)
+                    .used_in_sos1_constraints
+                    .insert(*constraint_id);
+            }
+        }
+
+        Self {
+            instance,
+            by_used_variable,
+        }
+    }
+
+    pub fn instance(&self) -> &'a Instance {
+        self.instance
+    }
+
+    pub fn by_used_variable(&self) -> &BTreeMap<VariableID, DecisionVariableUsageEntry> {
+        &self.by_used_variable
+    }
+
+    pub fn get(&self, id: VariableID) -> Option<&DecisionVariableUsageEntry> {
+        self.by_used_variable.get(&id)
+    }
+
+    pub fn role(&self, id: VariableID) -> Option<DecisionVariableRole> {
+        self.instance.decision_variable_role(id)
+    }
+
+    pub fn roles(&self) -> BTreeMap<VariableID, DecisionVariableRole> {
+        self.instance.decision_variable_roles()
+    }
+
+    pub fn used(&self) -> VariableIDSet {
+        self.by_used_variable.keys().copied().collect()
+    }
+
+    pub fn used_in_objective(&self) -> VariableIDSet {
+        self.by_used_variable
             .iter()
-            .filter(|(id, _)| used_ids.contains(id))
-            .map(|(id, bound)| (*id, *bound))
+            .filter_map(|(id, usage)| usage.used_in_objective.then_some(*id))
             .collect()
+    }
+
+    /// Variables used in active regular constraints, keyed by constraint ID.
+    pub fn used_in_constraints(&self) -> BTreeMap<ConstraintID, VariableIDSet> {
+        invert_usage_map(&self.by_used_variable, |usage| {
+            &usage.used_in_regular_constraints
+        })
+    }
+
+    /// Variables used in active indicator constraints, keyed by constraint ID.
+    pub fn used_in_indicator_constraints(&self) -> BTreeMap<IndicatorConstraintID, VariableIDSet> {
+        invert_usage_map(&self.by_used_variable, |usage| {
+            &usage.used_in_indicator_constraints
+        })
+    }
+
+    /// Variables used in active one-hot constraints, keyed by constraint ID.
+    pub fn used_in_one_hot_constraints(&self) -> BTreeMap<OneHotConstraintID, VariableIDSet> {
+        invert_usage_map(&self.by_used_variable, |usage| {
+            &usage.used_in_one_hot_constraints
+        })
+    }
+
+    /// Variables used in active SOS1 constraints, keyed by constraint ID.
+    pub fn used_in_sos1_constraints(&self) -> BTreeMap<Sos1ConstraintID, VariableIDSet> {
+        invert_usage_map(&self.by_used_variable, |usage| {
+            &usage.used_in_sos1_constraints
+        })
+    }
+
+    pub fn fixed(&self) -> BTreeMap<VariableID, f64> {
+        self.instance.fixed_decision_variables()
+    }
+
+    pub fn dependent(&self) -> VariableIDSet {
+        self.instance.dependent_decision_variable_ids()
+    }
+
+    pub fn irrelevant(&self) -> VariableIDSet {
+        self.instance.irrelevant_decision_variable_ids()
+    }
+
+    pub fn used_decision_variables(&self) -> BTreeMap<VariableID, &'a DecisionVariable> {
+        self.by_used_variable
+            .keys()
+            .map(|id| {
+                let dv = self
+                    .instance
+                    .decision_variables()
+                    .get(id)
+                    .expect("used variable ID must be defined in decision_variables");
+                (*id, dv)
+            })
+            .collect()
+    }
+
+    pub fn used_binary(&self) -> Bounds {
+        self.used_by_kind(Kind::Binary)
     }
 
     pub fn used_integer(&self) -> Bounds {
-        let used_ids = self.used();
-        self.integer()
-            .iter()
-            .filter(|(id, _)| used_ids.contains(id))
-            .map(|(id, bound)| (*id, *bound))
-            .collect()
+        self.used_by_kind(Kind::Integer)
     }
 
     pub fn used_continuous(&self) -> Bounds {
-        let used_ids = self.used();
-        self.continuous()
-            .iter()
-            .filter(|(id, _)| used_ids.contains(id))
-            .map(|(id, bound)| (*id, *bound))
-            .collect()
+        self.used_by_kind(Kind::Continuous)
     }
 
     pub fn used_semi_integer(&self) -> Bounds {
-        let used_ids = self.used();
-        self.semi_integer()
-            .iter()
-            .filter(|(id, _)| used_ids.contains(id))
-            .map(|(id, bound)| (*id, *bound))
-            .collect()
+        self.used_by_kind(Kind::SemiInteger)
     }
 
     pub fn used_semi_continuous(&self) -> Bounds {
-        let used_ids = self.used();
-        self.semi_continuous()
-            .iter()
-            .filter(|(id, _)| used_ids.contains(id))
-            .map(|(id, bound)| (*id, *bound))
+        self.used_by_kind(Kind::SemiContinuous)
+    }
+
+    fn used_by_kind(&self, kind: Kind) -> Bounds {
+        self.by_used_variable
+            .keys()
+            .filter_map(|id| {
+                let dv = self
+                    .instance
+                    .decision_variables()
+                    .get(id)
+                    .expect("used variable ID must be defined in decision_variables");
+                (dv.kind() == kind).then_some((*id, dv.bound()))
+            })
             .collect()
     }
 }
@@ -151,245 +313,172 @@ impl Instance {
             .collect()
     }
 
-    pub fn analyze_decision_variables(&self) -> DecisionVariableAnalysis {
-        let mut all = VariableIDSet::default();
-        let mut fixed = BTreeMap::default();
-        let mut binary = Bounds::default();
-        let mut integer = Bounds::default();
-        let mut continuous = Bounds::default();
-        let mut semi_integer = Bounds::default();
-        let mut semi_continuous = Bounds::default();
-        for (id, dv) in &self.decision_variables {
-            match dv.kind() {
-                Kind::Binary => binary.insert(*id, dv.bound()),
-                Kind::Integer => integer.insert(*id, dv.bound()),
-                Kind::Continuous => continuous.insert(*id, dv.bound()),
-                Kind::SemiInteger => semi_integer.insert(*id, dv.bound()),
-                Kind::SemiContinuous => semi_continuous.insert(*id, dv.bound()),
-            };
-            all.insert(*id);
-            if let Some(value) = dv.substituted_value() {
-                fixed.insert(*id, value);
-            }
-        }
-
-        let used_in_objective: VariableIDSet = self.objective.required_ids().into_iter().collect();
-        debug_assert!(
-            used_in_objective.is_subset(&all),
-            "Objective function uses variables not in the instance"
-        );
-
-        let mut used_in_constraints: BTreeMap<ConstraintID, VariableIDSet> = BTreeMap::default();
-        for (&cid, constraint) in self.constraints().iter() {
-            let required_ids: VariableIDSet =
-                constraint.function().required_ids().into_iter().collect();
-            debug_assert!(
-                required_ids.is_subset(&all),
-                "Constraints use variables not in the instance"
-            );
-            used_in_constraints.insert(cid, required_ids);
-        }
-
+    pub fn decision_variable_role(&self, id: VariableID) -> Option<DecisionVariableRole> {
         let used = self.used_decision_variable_ids();
+        self.decision_variables
+            .get(&id)
+            .map(|dv| self.decision_variable_role_with_used(id, dv, &used))
+    }
 
-        let dependent: BTreeMap<VariableID, _> = self
-            .decision_variable_dependency
+    pub fn decision_variable_roles(&self) -> BTreeMap<VariableID, DecisionVariableRole> {
+        let used = self.used_decision_variable_ids();
+        self.decision_variables
             .iter()
-            .map(|(id, f)| {
-                let dv = self
-                    .decision_variables
-                    .get(id)
-                    .expect("Invariant of Instance.decision_variable_dependency is violated");
-                (*id, (dv.kind(), dv.bound(), f.clone()))
-            })
-            .collect();
+            .map(|(id, dv)| (*id, self.decision_variable_role_with_used(*id, dv, &used)))
+            .collect()
+    }
 
-        let relevant: VariableIDSet = used
-            .iter()
-            .chain(dependent.keys())
-            .chain(fixed.keys())
-            .cloned()
-            .collect();
-        let irrelevant = all
-            .difference(&relevant)
-            .map(|id| {
-                let dv = self.decision_variables.get(id).unwrap(); // subset of all
-                debug_assert!(dv.substituted_value().is_none()); // fixed is subtracted
-                (*id, (dv.kind(), dv.bound()))
+    pub fn fixed_decision_variables(&self) -> BTreeMap<VariableID, f64> {
+        self.decision_variable_roles()
+            .into_iter()
+            .filter_map(|(id, role)| {
+                (role == DecisionVariableRole::Fixed).then(|| {
+                    let value = self
+                        .decision_variables
+                        .get(&id)
+                        .and_then(DecisionVariable::substituted_value)
+                        .expect("fixed role requires substituted_value");
+                    (id, value)
+                })
             })
-            .collect();
+            .collect()
+    }
 
-        DecisionVariableAnalysis {
-            all,
-            fixed,
-            binary,
-            integer,
-            continuous,
-            semi_integer,
-            semi_continuous,
-            used_in_objective,
-            used_in_constraints,
-            used,
-            dependent,
-            irrelevant,
+    pub fn dependent_decision_variable_ids(&self) -> VariableIDSet {
+        self.decision_variable_roles()
+            .into_iter()
+            .filter_map(|(id, role)| (role == DecisionVariableRole::Dependent).then_some(id))
+            .collect()
+    }
+
+    pub fn irrelevant_decision_variable_ids(&self) -> VariableIDSet {
+        self.decision_variable_roles()
+            .into_iter()
+            .filter_map(|(id, role)| (role == DecisionVariableRole::Irrelevant).then_some(id))
+            .collect()
+    }
+
+    fn decision_variable_role_with_used(
+        &self,
+        id: VariableID,
+        dv: &DecisionVariable,
+        used: &VariableIDSet,
+    ) -> DecisionVariableRole {
+        if used.contains(&id) {
+            DecisionVariableRole::Used
+        } else if dv.substituted_value().is_some() {
+            DecisionVariableRole::Fixed
+        } else if self.decision_variable_dependency.get(&id).is_some() {
+            DecisionVariableRole::Dependent
+        } else {
+            DecisionVariableRole::Irrelevant
         }
+    }
+
+    pub fn decision_variable_usage(&self) -> DecisionVariableUsage<'_> {
+        DecisionVariableUsage::new(self)
     }
 }
 
-impl std::fmt::Display for DecisionVariableAnalysis {
+impl std::fmt::Display for DecisionVariableUsage<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "DecisionVariableAnalysis {{")?;
-        writeln!(f, "  Total Variables: {}", self.all.len())?;
-        writeln!(f)?;
-
-        // Kind-based partitioning summary
-        writeln!(f, "  Kind-based Partitioning:")?;
-        writeln!(
-            f,
-            "    Binary: {}, Integer: {}, Continuous: {}, Semi-Integer: {}, Semi-Continuous: {}",
-            self.binary.len(),
-            self.integer.len(),
-            self.continuous.len(),
-            self.semi_integer.len(),
-            self.semi_continuous.len()
-        )?;
-        writeln!(f)?;
-
-        // Usage-based partitioning summary
-        writeln!(f, "  Usage-based Partitioning:")?;
-        // Count unique variables used in constraints (union of all constraint variable sets)
-        let used_in_constraints_count: usize = self
-            .used_in_constraints
-            .values()
-            .flat_map(|ids| ids.iter())
-            .collect::<std::collections::BTreeSet<_>>()
-            .len();
-        // Note: named_functions are intentionally excluded from the "used" set.
-        // They are auxiliary quantities that can reference fixed/dependent/irrelevant variables.
-        writeln!(
-            f,
-            "    Used: {} (in objective: {}, in regular constraints: {}), Fixed: {}, Dependent: {}, Irrelevant: {}",
-            self.used.len(),
-            self.used_in_objective.len(),
-            used_in_constraints_count,
-            self.fixed.len(),
-            self.dependent.len(),
-            self.irrelevant.len()
-        )?;
-
-        // Kind-based details
-        if !self.binary.is_empty() {
-            writeln!(f, "\n  Binary Variables ({}):", self.binary.len())?;
-            for (id, bound) in &self.binary {
-                writeln!(f, "    x{}: {}", id.into_inner(), bound)?;
-            }
-        }
-
-        if !self.integer.is_empty() {
-            writeln!(f, "\n  Integer Variables ({}):", self.integer.len())?;
-            for (id, bound) in &self.integer {
-                writeln!(f, "    x{}: {}", id.into_inner(), bound)?;
-            }
-        }
-
-        if !self.continuous.is_empty() {
-            writeln!(f, "\n  Continuous Variables ({}):", self.continuous.len())?;
-            for (id, bound) in &self.continuous {
-                writeln!(f, "    x{}: {}", id.into_inner(), bound)?;
-            }
-        }
-
-        if !self.semi_integer.is_empty() {
-            writeln!(
-                f,
-                "\n  Semi-Integer Variables ({}):",
-                self.semi_integer.len()
-            )?;
-            for (id, bound) in &self.semi_integer {
-                writeln!(f, "    x{}: {}", id.into_inner(), bound)?;
-            }
-        }
-
-        if !self.semi_continuous.is_empty() {
-            writeln!(
-                f,
-                "\n  Semi-Continuous Variables ({}):",
-                self.semi_continuous.len()
-            )?;
-            for (id, bound) in &self.semi_continuous {
-                writeln!(f, "    x{}: {}", id.into_inner(), bound)?;
-            }
-        }
-
-        // Usage-based details
-        if !self.used_in_objective.is_empty() {
-            writeln!(
-                f,
-                "\n  Used in Objective ({}):",
-                self.used_in_objective.len()
-            )?;
-            let vars: Vec<String> = self
-                .used_in_objective
-                .iter()
-                .map(|id| format!("x{}", id.into_inner()))
-                .collect();
-            writeln!(f, "    {}", vars.join(", "))?;
-        }
-
-        if !self.used_in_constraints.is_empty() {
-            writeln!(
-                f,
-                "\n  Used in Regular Constraints ({} constraints):",
-                self.used_in_constraints.len()
-            )?;
-            for (constraint_id, var_ids) in &self.used_in_constraints {
-                write!(f, "    {}: ", constraint_id)?;
-                let vars: Vec<String> = var_ids
-                    .iter()
-                    .map(|id| format!("x{}", id.into_inner()))
-                    .collect();
-                writeln!(f, "{}", vars.join(", "))?;
-            }
-        }
-
-        if !self.fixed.is_empty() {
-            writeln!(f, "\n  Fixed Variables ({}):", self.fixed.len())?;
-            for (id, value) in &self.fixed {
-                writeln!(f, "    x{} = {}", id.into_inner(), value)?;
-            }
-        }
-
-        if !self.dependent.is_empty() {
-            writeln!(f, "\n  Dependent Variables ({}):", self.dependent.len())?;
-            for (id, (kind, bound, function)) in &self.dependent {
-                writeln!(
-                    f,
-                    "    x{} ({:?}, {}): {}",
-                    id.into_inner(),
-                    kind,
-                    bound,
-                    function
-                )?;
-            }
-        }
-
-        if !self.irrelevant.is_empty() {
-            writeln!(f, "\n  Irrelevant Variables ({}):", self.irrelevant.len())?;
-            for (id, (kind, bound)) in &self.irrelevant {
-                let default_value = bound.nearest_to_zero();
-                writeln!(
-                    f,
-                    "    x{} ({:?}, {}): will be set to {}",
-                    id.into_inner(),
-                    kind,
-                    bound,
-                    default_value
-                )?;
-            }
-        }
-
-        write!(f, "}}")
+        write_usage_display(f, self)
     }
+}
+
+fn write_usage_display(
+    f: &mut std::fmt::Formatter<'_>,
+    usage: &DecisionVariableUsage<'_>,
+) -> std::fmt::Result {
+    writeln!(f, "DecisionVariableUsage {{")?;
+    writeln!(f, "  Used Variables: {}", usage.by_used_variable.len())?;
+
+    let used_in_objective = usage.used_in_objective();
+    if !used_in_objective.is_empty() {
+        writeln!(f, "\n  Used in Objective ({}):", used_in_objective.len())?;
+        write_variable_list(f, used_in_objective.iter())?;
+    }
+
+    write_constraint_usage(
+        f,
+        "Used in Regular Constraints",
+        &usage.used_in_constraints(),
+    )?;
+    write_constraint_usage(
+        f,
+        "Used in Indicator Constraints",
+        &usage.used_in_indicator_constraints(),
+    )?;
+    write_constraint_usage(
+        f,
+        "Used in One-Hot Constraints",
+        &usage.used_in_one_hot_constraints(),
+    )?;
+    write_constraint_usage(
+        f,
+        "Used in SOS1 Constraints",
+        &usage.used_in_sos1_constraints(),
+    )?;
+
+    write!(f, "}}")
+}
+
+fn usage_entry_mut(
+    by_variable: &mut BTreeMap<VariableID, DecisionVariableUsageEntry>,
+    id: VariableID,
+) -> &mut DecisionVariableUsageEntry {
+    by_variable
+        .entry(id)
+        .or_insert_with(DecisionVariableUsageEntry::new)
+}
+
+fn invert_usage_map<ID: Copy + Ord>(
+    by_variable: &BTreeMap<VariableID, DecisionVariableUsageEntry>,
+    select: impl Fn(&DecisionVariableUsageEntry) -> &BTreeSet<ID>,
+) -> BTreeMap<ID, VariableIDSet> {
+    let mut by_owner: BTreeMap<ID, VariableIDSet> = BTreeMap::new();
+    for (variable_id, usage) in by_variable {
+        for owner_id in select(usage) {
+            by_owner.entry(*owner_id).or_default().insert(*variable_id);
+        }
+    }
+    by_owner
+}
+
+fn write_constraint_usage<ID: std::fmt::Display>(
+    f: &mut std::fmt::Formatter<'_>,
+    title: &str,
+    usage: &BTreeMap<ID, VariableIDSet>,
+) -> std::fmt::Result {
+    if usage.is_empty() {
+        return Ok(());
+    }
+    writeln!(f, "\n  {title} ({}):", usage.len())?;
+    for (owner_id, variable_ids) in usage {
+        write!(f, "    {owner_id}: ")?;
+        write_variable_list_inline(f, variable_ids.iter())?;
+        writeln!(f)?;
+    }
+    Ok(())
+}
+
+fn write_variable_list<'a>(
+    f: &mut std::fmt::Formatter<'_>,
+    variable_ids: impl Iterator<Item = &'a VariableID>,
+) -> std::fmt::Result {
+    write!(f, "    ")?;
+    write_variable_list_inline(f, variable_ids)?;
+    writeln!(f)
+}
+
+fn write_variable_list_inline<'a>(
+    f: &mut std::fmt::Formatter<'_>,
+    variable_ids: impl Iterator<Item = &'a VariableID>,
+) -> std::fmt::Result {
+    let vars: Vec<String> = variable_ids
+        .map(|id| format!("x{}", id.into_inner()))
+        .collect();
+    write!(f, "{}", vars.join(", "))
 }
 
 #[cfg(test)]
@@ -404,7 +493,7 @@ mod tests {
     use std::collections::BTreeMap;
 
     #[test]
-    fn test_decision_variable_analysis_display() {
+    fn test_decision_variable_usage_display() {
         // Create instance with 5 binary variables
         let mut decision_variables = BTreeMap::new();
         for i in 0..5 {
@@ -449,8 +538,8 @@ mod tests {
         };
         let instance = instance.substitute_acyclic(&substitutions).unwrap();
 
-        let analysis = instance.analyze_decision_variables();
-        insta::assert_snapshot!(analysis);
+        let usage = instance.decision_variable_usage();
+        insta::assert_snapshot!(usage);
     }
 
     /// Test that dependent variables are evaluated in topological order.
@@ -464,7 +553,7 @@ mod tests {
     /// With topological sort, x_10 is evaluated first, then x_5.
     #[test]
     fn test_populate_dependent_variables_topological_order() {
-        use crate::{assign, coeff, linear, ATol, DecisionVariable, Sense};
+        use crate::{assign, coeff, linear, DecisionVariable, Sense};
         use maplit::btreemap;
         use std::collections::HashMap;
 
@@ -490,7 +579,7 @@ mod tests {
 
         let instance = Instance::builder()
             .sense(Sense::Minimize)
-            .objective(Function::from(linear!(1) + linear!(2))) // objective uses x_1 and x_2
+            .objective(crate::Function::from(linear!(1) + linear!(2))) // objective uses x_1 and x_2
             .decision_variables(decision_variables)
             .constraints(btreemap! {})
             .decision_variable_dependency(dependency)
@@ -498,9 +587,9 @@ mod tests {
             .unwrap();
 
         // Verify x_5 and x_10 are both dependent
-        let analysis = instance.analyze_decision_variables();
-        assert!(analysis.dependent().contains_key(&VariableID::from(5)));
-        assert!(analysis.dependent().contains_key(&VariableID::from(10)));
+        let usage = instance.decision_variable_usage();
+        assert!(usage.dependent().contains(&VariableID::from(5)));
+        assert!(usage.dependent().contains(&VariableID::from(10)));
 
         // State with only independent variables
         let state = crate::v1::State::from(HashMap::from([(1, 2.0), (2, 3.0)]));
@@ -508,7 +597,9 @@ mod tests {
         // This should succeed with topological sort:
         // 1. Evaluate x_10 = x_1 + x_2 = 2.0 + 3.0 = 5.0
         // 2. Evaluate x_5 = x_10 + 1 = 5.0 + 1.0 = 6.0
-        let populated = instance.populate_state(state, ATol::default()).unwrap();
+        let populated = instance
+            .populate_state(state, crate::ATol::default())
+            .unwrap();
 
         assert_eq!(populated.entries.get(&1), Some(&2.0));
         assert_eq!(populated.entries.get(&2), Some(&3.0));
@@ -516,49 +607,84 @@ mod tests {
         assert_eq!(populated.entries.get(&5), Some(&6.0)); // x_5 = 5 + 1
     }
 
-    proptest! {
-        // Binary, integer, continuous, semi_integer, and semi_continuous are disjoint
-        // and their union is equal to all.
-        #[test]
-        fn test_kind_partition(instance in Instance::arbitrary()) {
-            let analysis = instance.analyze_decision_variables();
-            prop_assert_eq!(
-                analysis.all.len(),
-                analysis.binary.len() + analysis.integer.len() + analysis.continuous.len()
-                + analysis.semi_integer.len() + analysis.semi_continuous.len()
-            );
-            let mut all: VariableIDSet = analysis.binary.keys().cloned().collect();
-            prop_assert_eq!(&all, &instance.binary_ids());
+    #[test]
+    fn test_named_function_does_not_create_usage() {
+        use crate::{linear, DecisionVariable, NamedFunction, NamedFunctionID};
+        use maplit::btreemap;
 
-            all.extend(analysis.integer.keys());
-            all.extend(analysis.continuous.keys());
-            all.extend(analysis.semi_integer.keys());
-            all.extend(analysis.semi_continuous.keys());
-            prop_assert_eq!(&all, &analysis.all);
+        let decision_variables = btreemap! {
+            VariableID::from(1) => DecisionVariable::continuous(VariableID::from(1)),
+            VariableID::from(2) => DecisionVariable::continuous(VariableID::from(2)),
+        };
+        let named_function = NamedFunction {
+            id: NamedFunctionID::from(7),
+            function: linear!(2).into(),
+        };
+        let instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(linear!(1).into())
+            .decision_variables(decision_variables)
+            .constraints(btreemap! {})
+            .named_functions(btreemap! {
+                NamedFunctionID::from(7) => named_function,
+            })
+            .build()
+            .unwrap();
+
+        let usage = instance.decision_variable_usage();
+        assert_eq!(
+            usage.role(VariableID::from(1)),
+            Some(DecisionVariableRole::Used)
+        );
+        assert_eq!(
+            usage.role(VariableID::from(2)),
+            Some(DecisionVariableRole::Irrelevant)
+        );
+        assert!(usage.get(VariableID::from(2)).is_none());
+    }
+
+    proptest! {
+        // Used binary, integer, continuous, semi_integer, and semi_continuous sets
+        // are disjoint and their union is equal to all used variables.
+        #[test]
+        fn test_used_kind_partition(instance in Instance::arbitrary()) {
+            let usage = instance.decision_variable_usage();
+            let used = usage.used();
+            prop_assert_eq!(
+                used.len(),
+                usage.used_binary().len() + usage.used_integer().len() + usage.used_continuous().len()
+                + usage.used_semi_integer().len() + usage.used_semi_continuous().len()
+            );
+            let mut by_kind_all: VariableIDSet = usage.used_binary().keys().cloned().collect();
+
+            by_kind_all.extend(usage.used_integer().keys());
+            by_kind_all.extend(usage.used_continuous().keys());
+            by_kind_all.extend(usage.used_semi_integer().keys());
+            by_kind_all.extend(usage.used_semi_continuous().keys());
+            prop_assert_eq!(&by_kind_all, &used);
         }
 
-        // Used, fixed, dependent, and irrelevant are disjoint each other, and their union is equal to all.
+        // Used, fixed, dependent, and irrelevant roles are disjoint, and their union is equal to all.
         #[test]
-        fn test_used_partition(instance in Instance::arbitrary()) {
-            let analysis = instance.analyze_decision_variables();
-            let used = analysis.used();
-            let all_len = analysis.all.len();
-            let used_len = used.len();
-            let fixed_len = analysis.fixed.len();
-            let dependent_len = analysis.dependent.len();
-            let irrelevant_len = analysis.irrelevant().len();
-            prop_assert_eq!(used, &instance.used_decision_variable_ids());
+        fn test_role_partition(instance in Instance::arbitrary()) {
+            let usage = instance.decision_variable_usage();
+            let used = usage.used();
+            let all: VariableIDSet = instance.decision_variables().keys().copied().collect();
+            let fixed = usage.fixed();
+            let dependent = usage.dependent();
+            let irrelevant = usage.irrelevant();
+            prop_assert_eq!(&used, &instance.used_decision_variable_ids());
             prop_assert_eq!(
-                all_len,
-                used_len + fixed_len + dependent_len + irrelevant_len,
+                all.len(),
+                used.len() + fixed.len() + dependent.len() + irrelevant.len(),
                 "all: {}, used: {}, fixed: {}, dependent: {}, irrelevant: {}",
-                all_len, used_len, fixed_len, dependent_len, irrelevant_len
+                all.len(), used.len(), fixed.len(), dependent.len(), irrelevant.len()
             );
-            let mut all = used.clone();
-            all.extend(analysis.fixed.keys());
-            all.extend(analysis.dependent.keys());
-            all.extend(analysis.irrelevant.keys());
-            prop_assert_eq!(&all, &analysis.all);
+            let mut role_all = used.clone();
+            role_all.extend(fixed.keys());
+            role_all.extend(dependent);
+            role_all.extend(irrelevant);
+            prop_assert_eq!(&role_all, &all);
         }
 
         /// Test post-condition
