@@ -297,8 +297,13 @@ class SCIPDiagnosticsAnalyzer:
 
         termination_result = termination_results[-1] if termination_results else None
         if termination_result is not None:
-            terminal_record = _progress_record_from_termination_result(termination_result)
-            if not progress_history_records or progress_history_records[-1] != terminal_record:
+            terminal_record = _progress_record_from_termination_result(
+                termination_result
+            )
+            if (
+                not progress_history_records
+                or progress_history_records[-1] != terminal_record
+            ):
                 progress_history_records.append(terminal_record)
 
         self._progress_snapshots = tuple(progress_snapshots)
