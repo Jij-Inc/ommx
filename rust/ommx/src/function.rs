@@ -26,7 +26,10 @@ mod substitute;
 pub enum Function {
     #[default]
     Zero,
-    /// Non-zero constant
+    /// Constant term.
+    ///
+    /// Constructors avoid zero constants, but coefficient arithmetic is unchecked and can
+    /// underflow to zero.
     Constant(Coefficient),
     Linear(Linear),
     Quadratic(Quadratic),

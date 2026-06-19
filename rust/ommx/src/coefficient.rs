@@ -21,9 +21,10 @@ pub enum CoefficientError {
 
 /// Coefficient of polynomial terms.
 ///
-/// Invariants
-/// -----------
-/// - The value is not zero and finite.
+/// `Coefficient::try_from` rejects zero, infinite, and NaN inputs. Arithmetic
+/// operations use unchecked floating-point operations for performance: overflow
+/// can produce infinity, and underflow can produce zero. This type only
+/// guarantees that stored values are not NaN.
 #[derive(
     Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
 )]
@@ -47,7 +48,7 @@ impl Coefficient {
         self.0.into_inner()
     }
 
-    /// ABS of the coefficient is also a coefficient.
+    /// ABS of the coefficient.
     pub fn abs(&self) -> Self {
         Self(self.0.abs().try_into().unwrap())
     }
@@ -95,7 +96,6 @@ impl Add for Coefficient {
     }
 }
 
-// Non-zero * Non-zero = Non-zero
 impl Mul for Coefficient {
     type Output = Self;
     fn mul(self, rhs: Self) -> Self::Output {
@@ -145,7 +145,6 @@ impl One for Coefficient {
 impl Inv for Coefficient {
     type Output = Self;
     fn inv(self) -> Self::Output {
-        // Non-zero coefficient is invertible
         Self(self.0.into_inner().recip().try_into().unwrap())
     }
 }
@@ -193,9 +192,61 @@ impl PartialOrd<ATol> for Coefficient {
 mod tests {
     use super::*;
 
+    fn zero_by_underflow() -> Coefficient {
+        let tiny = Coefficient::try_from(f64::from_bits(1)).unwrap();
+        tiny * tiny
+    }
+
+    fn infinity_by_overflow() -> Coefficient {
+        let max = Coefficient::try_from(f64::MAX).unwrap();
+        max * max
+    }
+
     #[test]
     fn div_uses_direct_floating_point_division() {
         let tiny = Coefficient::try_from(f64::from_bits(1)).unwrap();
         assert_eq!((tiny / tiny).into_inner(), 1.0);
+    }
+
+    #[test]
+    fn arithmetic_can_create_zero_and_infinity() {
+        assert_eq!(zero_by_underflow().into_inner(), 0.0);
+        assert!(infinity_by_overflow().into_inner().is_infinite());
+    }
+
+    // FIXME: Revisit the Coefficient invariant; arithmetic currently permits zero and infinity,
+    // and only NaN-producing operations are rejected by NotNan panics.
+    #[test]
+    #[should_panic]
+    fn add_opposite_infinities_panics() {
+        let infinity = infinity_by_overflow();
+        let _ = infinity + (-infinity);
+    }
+
+    #[test]
+    #[should_panic]
+    fn subtract_infinities_panics() {
+        let infinity = infinity_by_overflow();
+        let _ = infinity - infinity;
+    }
+
+    #[test]
+    #[should_panic]
+    fn multiply_infinity_by_zero_panics() {
+        let _ = infinity_by_overflow() * zero_by_underflow();
+    }
+
+    #[test]
+    #[should_panic]
+    fn divide_infinity_by_infinity_panics() {
+        let infinity = infinity_by_overflow();
+        let _ = infinity / infinity;
+    }
+
+    #[test]
+    #[should_panic]
+    fn divide_zero_by_zero_panics() {
+        let zero = zero_by_underflow();
+        let _ = zero / zero;
     }
 }

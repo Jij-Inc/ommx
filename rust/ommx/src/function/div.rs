@@ -52,6 +52,7 @@ impl Div<&Coefficient> for &Function {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{coeff, linear};
     use ::approx::assert_abs_diff_eq;
     use num::{One, Zero};
     use proptest::prelude::*;
@@ -83,5 +84,40 @@ mod tests {
             Function::from(tiny) / tiny,
             Function::from(Coefficient::one())
         );
+    }
+
+    #[test]
+    fn div_by_zero_coefficient_created_by_arithmetic_produces_infinities() {
+        let tiny = Coefficient::try_from(f64::from_bits(1)).unwrap();
+        let zero = tiny * tiny;
+        assert_eq!(zero.into_inner(), 0.0);
+
+        let function =
+            Function::from(coeff!(2.0) * linear!(1) + (-coeff!(3.0)) * linear!(2) + coeff!(4.0));
+        let divided = function / zero;
+        let values = divided
+            .values()
+            .map(|coefficient| coefficient.into_inner())
+            .collect::<Vec<_>>();
+
+        assert_eq!(values.len(), 3);
+        assert!(values.iter().all(|value| value.is_infinite()));
+        assert!(values.iter().any(|value| value.is_sign_positive()));
+        assert!(values.iter().any(|value| value.is_sign_negative()));
+    }
+
+    #[test]
+    fn zero_function_div_by_zero_coefficient_is_noop() {
+        let tiny = Coefficient::try_from(f64::from_bits(1)).unwrap();
+        let zero = tiny * tiny;
+        assert_abs_diff_eq!(Function::zero() / zero, Function::zero());
+    }
+
+    #[test]
+    #[should_panic]
+    fn zero_coefficient_div_by_zero_coefficient_panics() {
+        let tiny = Coefficient::try_from(f64::from_bits(1)).unwrap();
+        let zero = tiny * tiny;
+        let _ = Function::from(zero) / zero;
     }
 }
