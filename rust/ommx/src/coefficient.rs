@@ -22,9 +22,10 @@ pub enum CoefficientError {
 /// Coefficient of polynomial terms.
 ///
 /// `Coefficient::try_from` rejects zero, infinite, and NaN inputs. Arithmetic
-/// operations use unchecked floating-point operations for performance: overflow
-/// can produce infinity, and underflow can produce zero. This type only
-/// guarantees that stored values are not NaN.
+/// operations use unchecked floating-point operations for performance, then wrap
+/// the result as `NotNan`: overflow can produce infinity, underflow can produce
+/// zero, and NaN results panic while being wrapped. `Inv::inv` follows the same
+/// model. This type only guarantees that stored values are not NaN.
 #[derive(
     Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
 )]
@@ -212,6 +213,15 @@ mod tests {
     fn arithmetic_can_create_zero_and_infinity() {
         assert_eq!(zero_by_underflow().into_inner(), 0.0);
         assert!(infinity_by_overflow().into_inner().is_infinite());
+    }
+
+    #[test]
+    fn inv_allows_zero_and_infinity_created_by_arithmetic() {
+        let zero = zero_by_underflow();
+        assert!(zero.inv().into_inner().is_infinite());
+
+        let infinity = infinity_by_overflow();
+        assert_eq!(infinity.inv().into_inner(), 0.0);
     }
 
     // FIXME: Revisit the Coefficient invariant; arithmetic currently permits zero and infinity,

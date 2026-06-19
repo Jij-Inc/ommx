@@ -4,8 +4,13 @@ use super::*;
 
 impl DivAssign<Coefficient> for Function {
     fn div_assign(&mut self, rhs: Coefficient) {
-        self.values_mut()
-            .for_each(|coefficient| *coefficient /= rhs);
+        match self {
+            Function::Zero => {}
+            Function::Constant(c) => *c /= rhs,
+            Function::Linear(l) => l.values_mut().for_each(|coefficient| *coefficient /= rhs),
+            Function::Quadratic(q) => q.values_mut().for_each(|coefficient| *coefficient /= rhs),
+            Function::Polynomial(p) => p.values_mut().for_each(|coefficient| *coefficient /= rhs),
+        }
     }
 }
 
