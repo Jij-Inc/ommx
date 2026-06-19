@@ -24,3 +24,9 @@ updates:
       - dependency-name: "prost-build"
       # Keep oci-spec aligned with the version re-exported by oci-client
       - dependency-name: "oci-spec"
+      # rusqlite 0.40 pulls in libsqlite3-sys 0.38, whose build script requires
+      # a newer Rust toolchain than the current OMMX MSRV and Pyodide build pin.
+      - dependency-name: "rusqlite"
+        update-types:
+          - "version-update:semver-minor"
+          - "version-update:semver-major"
