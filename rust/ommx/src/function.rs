@@ -8,6 +8,7 @@ use std::borrow::Cow;
 mod add;
 mod approx;
 mod arbitrary;
+mod div;
 mod evaluate;
 mod evaluate_bound;
 mod logical_memory;
@@ -25,7 +26,10 @@ mod substitute;
 pub enum Function {
     #[default]
     Zero,
-    /// Non-zero constant
+    /// Constant term stored as a [`Coefficient`].
+    ///
+    /// This variant inherits `Coefficient`'s unchecked arithmetic behavior: constructing from an
+    /// existing coefficient or applying later arithmetic can carry zero or +/-infinity.
     Constant(Coefficient),
     Linear(Linear),
     Quadratic(Quadratic),
