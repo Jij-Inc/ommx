@@ -3,7 +3,7 @@ use ordered_float::NotNan;
 use proptest::prelude::*;
 use std::{
     fmt::{Debug, Display},
-    ops::{Add, Deref, Mul, MulAssign, Neg, Sub},
+    ops::{Add, Deref, Div, DivAssign, Mul, MulAssign, Neg, Sub},
 };
 
 use crate::ATol;
@@ -109,6 +109,19 @@ impl MulAssign for Coefficient {
     }
 }
 
+impl Div for Coefficient {
+    type Output = Self;
+    fn div(self, rhs: Self) -> Self::Output {
+        Self(self.0 / rhs.0)
+    }
+}
+
+impl DivAssign for Coefficient {
+    fn div_assign(&mut self, rhs: Self) {
+        self.0 /= rhs.0;
+    }
+}
+
 impl Neg for Coefficient {
     type Output = Self;
     fn neg(self) -> Self::Output {
@@ -173,5 +186,16 @@ impl PartialEq<ATol> for Coefficient {
 impl PartialOrd<ATol> for Coefficient {
     fn partial_cmp(&self, other: &ATol) -> Option<std::cmp::Ordering> {
         self.into_inner().partial_cmp(&other.into_inner())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn div_uses_direct_floating_point_division() {
+        let tiny = Coefficient::try_from(f64::from_bits(1)).unwrap();
+        assert_eq!((tiny / tiny).into_inner(), 1.0);
     }
 }

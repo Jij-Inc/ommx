@@ -8,6 +8,7 @@ use std::borrow::Cow;
 mod add;
 mod approx;
 mod arbitrary;
+mod div;
 mod evaluate;
 mod evaluate_bound;
 mod logical_memory;
