@@ -1,233 +1,153 @@
-use num::One;
-use std::ops::{Mul, MulAssign};
-
 use super::*;
+use crate::CoefficientError;
+use std::ops::Mul;
 
-impl MulAssign<Coefficient> for Function {
-    fn mul_assign(&mut self, rhs: Coefficient) {
-        match self {
-            Function::Zero => {}
-            Function::Constant(c) => *c *= rhs,
-            Function::Linear(l) => l.mul_assign(rhs),
-            Function::Quadratic(q) => q.mul_assign(rhs),
-            Function::Polynomial(p) => p.mul_assign(rhs),
-        }
-    }
-}
-
-impl MulAssign<&Linear> for Function {
-    fn mul_assign(&mut self, rhs: &Linear) {
-        match self {
-            Function::Zero => {}
-            Function::Constant(c) => *self = (rhs.clone() * *c).into(),
-            Function::Linear(l) => *self = (&*l * rhs).into(),
-            Function::Quadratic(q) => *self = (&*q * rhs).into(),
-            Function::Polynomial(p) => *self = (&*p * rhs).into(),
-        }
-    }
-}
-
-impl MulAssign<Linear> for Function {
-    fn mul_assign(&mut self, rhs: Linear) {
-        match self {
-            Function::Constant(c) => *self = (rhs * *c).into(),
-            _ => self.mul_assign(&rhs),
-        }
-    }
-}
-
-impl MulAssign<&Quadratic> for Function {
-    fn mul_assign(&mut self, rhs: &Quadratic) {
-        match self {
-            Function::Zero => {}
-            Function::Constant(c) => *self = (rhs.clone() * *c).into(),
-            Function::Linear(l) => *self = (&*l * rhs).into(),
-            Function::Quadratic(q) => *self = (&*q * rhs).into(),
-            Function::Polynomial(p) => *self = (&*p * rhs).into(),
-        }
-    }
-}
-
-impl MulAssign<Quadratic> for Function {
-    fn mul_assign(&mut self, rhs: Quadratic) {
-        match self {
-            Function::Constant(c) => *self = (rhs * *c).into(),
-            _ => self.mul_assign(&rhs),
-        }
-    }
-}
-
-impl MulAssign<&Polynomial> for Function {
-    fn mul_assign(&mut self, rhs: &Polynomial) {
-        match self {
-            Function::Zero => {}
-            Function::Constant(c) => *self = (rhs.clone() * *c).into(),
-            Function::Linear(l) => *self = (&*l * rhs).into(),
-            Function::Quadratic(q) => *self = (&*q * rhs).into(),
-            Function::Polynomial(p) => *self = (&*p * rhs).into(),
-        }
-    }
-}
-
-impl MulAssign<Polynomial> for Function {
-    fn mul_assign(&mut self, rhs: Polynomial) {
-        match self {
-            Function::Constant(c) => *self = (rhs * *c).into(),
-            _ => self.mul_assign(&rhs),
-        }
-    }
-}
-
-macro_rules! impl_mul_via_mul_assign {
-    ($rhs:ty) => {
-        impl Mul<$rhs> for Function {
-            type Output = Self;
-            fn mul(mut self, rhs: $rhs) -> Self {
-                self.mul_assign(rhs);
-                self
-            }
-        }
-
-        impl Mul<Function> for $rhs {
-            type Output = Function;
-            fn mul(self, mut rhs: Function) -> Self::Output {
-                rhs.mul_assign(self);
-                rhs
-            }
-        }
-    };
-    () => {};
-}
-
-impl_mul_via_mul_assign!(Coefficient);
-impl_mul_via_mul_assign!(&Linear);
-impl_mul_via_mul_assign!(Linear);
-impl_mul_via_mul_assign!(&Quadratic);
-impl_mul_via_mul_assign!(Quadratic);
-impl_mul_via_mul_assign!(&Polynomial);
-impl_mul_via_mul_assign!(Polynomial);
-impl_mul_via_mul_assign!(&Function);
-
-impl MulAssign for Function {
-    fn mul_assign(&mut self, rhs: Self) {
-        match rhs {
-            Function::Zero => *self = Function::Zero,
-            Function::Constant(c) => self.mul_assign(c),
-            Function::Linear(l) => self.mul_assign(l),
-            Function::Quadratic(q) => self.mul_assign(q),
-            Function::Polynomial(p) => self.mul_assign(p),
-        }
-    }
-}
-
-impl MulAssign<&Function> for Function {
-    fn mul_assign(&mut self, rhs: &Self) {
-        match rhs {
-            Function::Zero => *self = Function::Zero,
-            Function::Constant(c) => self.mul_assign(*c),
-            Function::Linear(l) => self.mul_assign(l),
-            Function::Quadratic(q) => self.mul_assign(q),
-            Function::Polynomial(p) => self.mul_assign(p),
-        }
-    }
-}
-
-impl Mul for Function {
-    type Output = Self;
-    fn mul(mut self, rhs: Function) -> Self::Output {
-        self.mul_assign(rhs);
-        self
-    }
-}
-
-impl Mul for &Function {
-    type Output = Function;
-    fn mul(self, rhs: Self) -> Self::Output {
-        if self.degree() > rhs.degree() {
-            let mut out = self.clone();
-            out.mul_assign(rhs);
-            out
-        } else {
-            let mut out = rhs.clone();
-            out.mul_assign(self);
-            out
-        }
-    }
-}
-
-impl One for Function {
-    fn one() -> Self {
+impl Function {
+    pub fn one() -> Self {
         Function::Constant(Coefficient::one())
     }
 }
 
-// Add support for &Function operations with references
-impl Mul<&Coefficient> for &Function {
-    type Output = Function;
-    fn mul(self, rhs: &Coefficient) -> Self::Output {
-        self.clone() * *rhs
+impl Mul<Coefficient> for Function {
+    type Output = Result<Self, CoefficientError>;
+
+    fn mul(self, rhs: Coefficient) -> Self::Output {
+        Ok(Function::from((self.into_polynomial() * rhs)?))
     }
 }
 
 impl Mul<Coefficient> for &Function {
-    type Output = Function;
+    type Output = Result<Function, CoefficientError>;
+
     fn mul(self, rhs: Coefficient) -> Self::Output {
         self.clone() * rhs
     }
 }
 
-impl Mul<&Linear> for &Function {
-    type Output = Function;
-    fn mul(self, rhs: &Linear) -> Self::Output {
+impl Mul<&Coefficient> for Function {
+    type Output = Result<Self, CoefficientError>;
+
+    fn mul(self, rhs: &Coefficient) -> Self::Output {
+        self * *rhs
+    }
+}
+
+impl Mul<&Coefficient> for &Function {
+    type Output = Result<Function, CoefficientError>;
+
+    fn mul(self, rhs: &Coefficient) -> Self::Output {
+        self.clone() * *rhs
+    }
+}
+
+impl Mul<Function> for Coefficient {
+    type Output = Result<Function, CoefficientError>;
+
+    fn mul(self, rhs: Function) -> Self::Output {
+        rhs * self
+    }
+}
+
+impl Mul<&Function> for Coefficient {
+    type Output = Result<Function, CoefficientError>;
+
+    fn mul(self, rhs: &Function) -> Self::Output {
+        rhs.clone() * self
+    }
+}
+
+impl Mul for Function {
+    type Output = Result<Self, CoefficientError>;
+
+    fn mul(self, rhs: Function) -> Self::Output {
+        Ok(Function::from(
+            (self.into_polynomial() * rhs.into_polynomial())?,
+        ))
+    }
+}
+
+impl Mul for &Function {
+    type Output = Result<Function, CoefficientError>;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        self.clone() * rhs.clone()
+    }
+}
+
+impl Mul<Function> for &Function {
+    type Output = Result<Function, CoefficientError>;
+
+    fn mul(self, rhs: Function) -> Self::Output {
         self.clone() * rhs
     }
 }
 
-impl Mul<&Quadratic> for &Function {
-    type Output = Function;
-    fn mul(self, rhs: &Quadratic) -> Self::Output {
-        self.clone() * rhs
+impl Mul<&Function> for Function {
+    type Output = Result<Function, CoefficientError>;
+
+    fn mul(self, rhs: &Function) -> Self::Output {
+        self * rhs.clone()
     }
 }
 
-impl Mul<&Polynomial> for &Function {
-    type Output = Function;
-    fn mul(self, rhs: &Polynomial) -> Self::Output {
-        self.clone() * rhs
-    }
+macro_rules! impl_mul_polynomial_rhs {
+    ($rhs:ty) => {
+        impl Mul<$rhs> for Function {
+            type Output = Result<Function, CoefficientError>;
+
+            fn mul(self, rhs: $rhs) -> Self::Output {
+                Ok(Function::from(
+                    (self.into_polynomial() * Function::from(rhs.clone()).into_polynomial())?,
+                ))
+            }
+        }
+
+        impl Mul<$rhs> for &Function {
+            type Output = Result<Function, CoefficientError>;
+
+            fn mul(self, rhs: $rhs) -> Self::Output {
+                self.clone() * rhs
+            }
+        }
+    };
 }
 
-// Add property-based tests for multiplication of Function
+impl_mul_polynomial_rhs!(Linear);
+impl_mul_polynomial_rhs!(&Linear);
+impl_mul_polynomial_rhs!(Quadratic);
+impl_mul_polynomial_rhs!(&Quadratic);
+impl_mul_polynomial_rhs!(Polynomial);
+impl_mul_polynomial_rhs!(&Polynomial);
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use ::approx::assert_abs_diff_eq;
-    use num::Zero;
     use proptest::prelude::*;
 
     proptest! {
         #[test]
         fn mul_ref(a in any::<Function>(), b in any::<Function>()) {
-            let ans = a.clone() * b.clone();
-            assert_abs_diff_eq!(&a * &b, ans);
-            assert_abs_diff_eq!(a.clone() * &b, ans);
-            assert_abs_diff_eq!(&a * b, ans);
+            let ans = (a.clone() * b.clone()).unwrap();
+            assert_abs_diff_eq!((&a * &b).unwrap(), ans);
+            assert_abs_diff_eq!((a.clone() * &b).unwrap(), ans);
+            assert_abs_diff_eq!((&a * b).unwrap(), ans);
         }
 
         #[test]
         fn zero(a in any::<Function>()) {
-            assert_abs_diff_eq!(&a * Function::zero(), Function::zero());
-            assert_abs_diff_eq!(Function::zero() * &a, Function::zero());
+            assert_abs_diff_eq!((&a * Function::zero()).unwrap(), Function::zero());
+            assert_abs_diff_eq!((Function::zero() * &a).unwrap(), Function::zero());
         }
 
         #[test]
         fn mul_commutative(a in any::<Function>(), b in any::<Function>()) {
-            assert_abs_diff_eq!(&a * &b, &b * &a);
+            assert_abs_diff_eq!((&a * &b).unwrap(), (&b * &a).unwrap());
         }
 
         #[test]
         fn mul_associative(a in any::<Function>(), b in any::<Function>(), c in any::<Function>()) {
-            assert_abs_diff_eq!(&a * (&b * &c), (&a * &b) * &c);
+            assert_abs_diff_eq!((&a * (&b * &c).unwrap()).unwrap(), ((&a * &b).unwrap() * &c).unwrap());
         }
     }
 }

@@ -1,7 +1,6 @@
 use super::*;
 use crate::{constraint_type::ConstraintCollection, linear, v1, Function, VariableID};
 use anyhow::Result;
-use num::Zero;
 
 impl Instance {
     #[cfg_attr(doc, katexit::katexit)]
@@ -88,8 +87,9 @@ impl Instance {
 
             let f = constraint.function().clone();
             // Add penalty term: λ * f(x)^2
-            let penalty_term = Function::from(linear!(parameter_id)) * f.clone() * f;
-            objective += penalty_term;
+            let penalty_term = (Function::from(linear!(parameter_id)) * f.clone())?;
+            let penalty_term = (penalty_term * f)?;
+            objective = (objective + penalty_term)?;
 
             // Create removed constraint
             let removed_reason = crate::constraint::RemovedReason {
@@ -237,7 +237,7 @@ impl Instance {
 
         for (constraint_id, constraint) in active_constraints.into_iter() {
             let f = constraint.function().clone();
-            quad_sum += f.clone() * f;
+            quad_sum = (quad_sum + (f.clone() * f)?)?;
 
             // Create removed constraint
             let removed_reason = crate::constraint::RemovedReason {
@@ -248,7 +248,7 @@ impl Instance {
             removed_constraints.insert(constraint_id, (constraint, removed_reason));
         }
 
-        objective += Function::from(linear!(parameter_id)) * quad_sum;
+        objective = (objective + (Function::from(linear!(parameter_id)) * quad_sum)?)?;
 
         let parameters = BTreeMap::from([(parameter_id, parameter)]);
 
@@ -293,7 +293,7 @@ mod tests {
             DecisionVariable::continuous(VariableID::from(2)),
         );
 
-        let objective = Function::from(linear!(1) + linear!(2));
+        let objective = Function::from((linear!(1) + linear!(2)).unwrap());
 
         let mut constraints = BTreeMap::new();
         constraints.insert(
@@ -301,7 +301,9 @@ mod tests {
             Constraint {
                 equality: Equality::LessThanOrEqualToZero,
                 stage: crate::constraint::CreatedData {
-                    function: Function::from(linear!(1) + linear!(2) + coeff!(-1.0)),
+                    function: Function::from(
+                        ((linear!(1) + linear!(2)).unwrap() + coeff!(-1.0)).unwrap(),
+                    ),
                 },
             },
         );

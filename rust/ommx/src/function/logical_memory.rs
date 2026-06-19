@@ -48,15 +48,19 @@ mod tests {
 
     #[test]
     fn test_function_linear_snapshot() {
-        let func = Function::Linear(coeff!(2.0) * linear!(1) + coeff!(3.0) * linear!(2));
+        let func = Function::Linear(
+            ((coeff!(2.0) * linear!(1)).unwrap() + (coeff!(3.0) * linear!(2)).unwrap()).unwrap(),
+        );
         let folded = logical_memory_to_folded(&func);
         insta::assert_snapshot!(folded, @"Linear;PolynomialBase.terms 80");
     }
 
     #[test]
     fn test_function_quadratic_snapshot() {
-        let func =
-            Function::Quadratic(coeff!(1.0) * quadratic!(1, 2) + coeff!(2.0) * quadratic!(1));
+        let func = Function::Quadratic(
+            ((coeff!(1.0) * quadratic!(1, 2)).unwrap() + (coeff!(2.0) * quadratic!(1)).unwrap())
+                .unwrap(),
+        );
         let folded = logical_memory_to_folded(&func);
         insta::assert_snapshot!(folded, @"Quadratic;PolynomialBase.terms 96");
     }

@@ -1,15 +1,15 @@
-use num::{traits::Inv, One};
+use num::traits::Inv;
 use ordered_float::NotNan;
 use proptest::prelude::*;
 use std::{
     fmt::{Debug, Display},
-    ops::{Add, Deref, Div, DivAssign, Mul, MulAssign, Neg, Sub},
+    ops::{Add, Deref, Div, Mul, Neg, Sub},
 };
 
 use crate::ATol;
 
 #[non_exhaustive]
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum CoefficientError {
     #[error("Coefficient must be non-zero")]
     Zero,
@@ -19,18 +19,31 @@ pub enum CoefficientError {
     NaN,
 }
 
+/// Result of coefficient arithmetic.
+///
+/// - `Ok(Some(coefficient))`: the result is a finite non-zero coefficient.
+/// - `Ok(None)`: the result is exactly zero, so the owning polynomial term should be removed.
+/// - `Err(error)`: the result is NaN or infinite and cannot be represented as a coefficient.
+pub type CoefficientArithmeticResult = Result<Option<Coefficient>, CoefficientError>;
+
 /// Coefficient of polynomial terms.
 ///
-/// `Coefficient::try_from` rejects zero, infinite, and NaN inputs. Arithmetic
-/// operations use unchecked floating-point operations for performance, then wrap
-/// the result as `NotNan`: overflow can produce infinity, underflow can produce
-/// zero, and NaN results panic while being wrapped. `Inv::inv` follows the same
-/// model. This type only guarantees that stored values are not NaN.
-#[derive(
-    Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
-)]
+/// The value is always finite, non-zero, and not NaN. Arithmetic returns
+/// [`CoefficientArithmeticResult`] because cancellation or underflow can remove
+/// a term, while overflow and NaN are invalid coefficient values.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 #[repr(transparent)]
 pub struct Coefficient(NotNan<f64>);
+
+impl<'de> serde::Deserialize<'de> for Coefficient {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = f64::deserialize(deserializer)?;
+        Coefficient::try_from(value).map_err(serde::de::Error::custom)
+    }
+}
 
 impl Debug for Coefficient {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -45,6 +58,10 @@ impl Display for Coefficient {
 }
 
 impl Coefficient {
+    pub fn one() -> Self {
+        Coefficient(NotNan::new(1.0).unwrap())
+    }
+
     pub fn into_inner(self) -> f64 {
         self.0.into_inner()
     }
@@ -52,6 +69,14 @@ impl Coefficient {
     /// ABS of the coefficient.
     pub fn abs(&self) -> Self {
         Self(self.0.abs().try_into().unwrap())
+    }
+
+    fn classify_arithmetic(value: f64) -> CoefficientArithmeticResult {
+        match Coefficient::try_from(value) {
+            Ok(coefficient) => Ok(Some(coefficient)),
+            Err(CoefficientError::Zero) => Ok(None),
+            Err(error) => Err(error),
+        }
     }
 }
 
@@ -85,41 +110,23 @@ impl Deref for Coefficient {
 }
 
 impl Add for Coefficient {
-    type Output = Option<Self>;
+    type Output = CoefficientArithmeticResult;
     fn add(self, rhs: Self) -> Self::Output {
-        let sum = self.0 + rhs.0;
-        // Check cancellation since Coefficient is not zero
-        if sum == 0.0 {
-            None
-        } else {
-            Some(Self(sum))
-        }
+        Self::classify_arithmetic(self.into_inner() + rhs.into_inner())
     }
 }
 
 impl Mul for Coefficient {
-    type Output = Self;
+    type Output = CoefficientArithmeticResult;
     fn mul(self, rhs: Self) -> Self::Output {
-        Self(self.0 * rhs.0)
-    }
-}
-
-impl MulAssign for Coefficient {
-    fn mul_assign(&mut self, rhs: Self) {
-        self.0 *= rhs.0;
+        Self::classify_arithmetic(self.into_inner() * rhs.into_inner())
     }
 }
 
 impl Div for Coefficient {
-    type Output = Self;
+    type Output = CoefficientArithmeticResult;
     fn div(self, rhs: Self) -> Self::Output {
-        Self(self.0 / rhs.0)
-    }
-}
-
-impl DivAssign for Coefficient {
-    fn div_assign(&mut self, rhs: Self) {
-        self.0 /= rhs.0;
+        Self::classify_arithmetic(self.into_inner() / rhs.into_inner())
     }
 }
 
@@ -131,22 +138,16 @@ impl Neg for Coefficient {
 }
 
 impl Sub for Coefficient {
-    type Output = Option<Self>;
+    type Output = CoefficientArithmeticResult;
     fn sub(self, rhs: Self) -> Self::Output {
         self + (-rhs)
     }
 }
 
-impl One for Coefficient {
-    fn one() -> Self {
-        Coefficient(NotNan::new(1.0).unwrap())
-    }
-}
-
 impl Inv for Coefficient {
-    type Output = Self;
+    type Output = Result<Self, CoefficientError>;
     fn inv(self) -> Self::Output {
-        Self(self.0.into_inner().recip().try_into().unwrap())
+        Coefficient::try_from(self.into_inner().recip())
     }
 }
 
@@ -192,71 +193,50 @@ impl PartialOrd<ATol> for Coefficient {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::coeff;
 
-    fn zero_by_underflow() -> Coefficient {
+    fn tiny() -> Coefficient {
+        Coefficient::try_from(f64::from_bits(1)).unwrap()
+    }
+
+    fn huge() -> Coefficient {
+        Coefficient::try_from(f64::MAX).unwrap()
+    }
+
+    fn unwrap_some(result: CoefficientArithmeticResult) -> Coefficient {
+        result.unwrap().unwrap()
+    }
+
+    #[test]
+    fn arithmetic_can_remove_terms() {
+        assert_eq!(coeff!(1.0) + coeff!(-1.0), Ok(None));
+
         let tiny = Coefficient::try_from(f64::from_bits(1)).unwrap();
-        tiny * tiny
-    }
-
-    fn infinity_by_overflow() -> Coefficient {
-        let max = Coefficient::try_from(f64::MAX).unwrap();
-        max * max
+        assert_eq!(tiny * tiny, Ok(None));
+        assert_eq!(tiny / huge(), Ok(None));
     }
 
     #[test]
-    fn div_uses_direct_floating_point_division() {
-        let tiny = Coefficient::try_from(f64::from_bits(1)).unwrap();
-        assert_eq!((tiny / tiny).into_inner(), 1.0);
+    fn arithmetic_rejects_non_finite_results() {
+        assert!(matches!(huge() + huge(), Err(CoefficientError::Infinite)));
+        assert!(matches!(huge() * huge(), Err(CoefficientError::Infinite)));
+        assert!(matches!(tiny().inv(), Err(CoefficientError::Infinite)));
     }
 
     #[test]
-    fn arithmetic_can_create_zero_and_infinity() {
-        assert_eq!(zero_by_underflow().into_inner(), 0.0);
-        assert!(infinity_by_overflow().into_inner().is_infinite());
+    fn arithmetic_preserves_finite_nonzero_results() {
+        assert_eq!(unwrap_some(coeff!(2.0) + coeff!(3.0)), coeff!(5.0));
+        assert_eq!(unwrap_some(coeff!(2.0) - coeff!(3.0)), coeff!(-1.0));
+        assert_eq!(unwrap_some(coeff!(2.0) * coeff!(3.0)), coeff!(6.0));
+        assert_eq!(unwrap_some(coeff!(6.0) / coeff!(3.0)), coeff!(2.0));
+        assert_eq!(coeff!(2.0).inv().unwrap(), coeff!(0.5));
     }
 
     #[test]
-    fn inv_allows_zero_and_infinity_created_by_arithmetic() {
-        let zero = zero_by_underflow();
-        assert!(zero.inv().into_inner().is_infinite());
-
-        let infinity = infinity_by_overflow();
-        assert_eq!(infinity.inv().into_inner(), 0.0);
-    }
-
-    // FIXME: Revisit the Coefficient invariant; arithmetic currently permits zero and infinity,
-    // and only NaN-producing operations are rejected by NotNan panics.
-    #[test]
-    #[should_panic]
-    fn add_opposite_infinities_panics() {
-        let infinity = infinity_by_overflow();
-        let _ = infinity + (-infinity);
-    }
-
-    #[test]
-    #[should_panic]
-    fn subtract_infinities_panics() {
-        let infinity = infinity_by_overflow();
-        let _ = infinity - infinity;
-    }
-
-    #[test]
-    #[should_panic]
-    fn multiply_infinity_by_zero_panics() {
-        let _ = infinity_by_overflow() * zero_by_underflow();
-    }
-
-    #[test]
-    #[should_panic]
-    fn divide_infinity_by_infinity_panics() {
-        let infinity = infinity_by_overflow();
-        let _ = infinity / infinity;
-    }
-
-    #[test]
-    #[should_panic]
-    fn divide_zero_by_zero_panics() {
-        let zero = zero_by_underflow();
-        let _ = zero / zero;
+    fn deserialize_rejects_invalid_values() {
+        assert!(serde_json::from_str::<Coefficient>("1.0").is_ok());
+        assert!(serde_json::from_str::<Coefficient>("0.0").is_err());
+        assert!(serde_json::from_str::<Coefficient>("1e999").is_err());
+        assert!(serde_json::from_str::<Coefficient>("NaN").is_err());
     }
 }

@@ -1,238 +1,444 @@
 use super::*;
-use crate::{LinearMonomial, MonomialDyn, QuadraticMonomial};
-use num::Zero;
-use std::{
-    iter::Sum,
-    ops::{Add, AddAssign, Neg, Sub, SubAssign},
-};
+use crate::{CoefficientError, LinearMonomial, MonomialDyn, QuadraticMonomial};
+use std::ops::{Add, Neg, Sub};
 
-impl<M1, M2> AddAssign<&PolynomialBase<M1>> for PolynomialBase<M2>
+impl<M: Monomial> PolynomialBase<M> {
+    pub fn zero() -> Self {
+        Self::default()
+    }
+
+    pub fn is_zero(&self) -> bool {
+        self.terms.is_empty()
+    }
+}
+
+impl<M1, M2> Add<&PolynomialBase<M1>> for PolynomialBase<M2>
 where
     M1: Monomial,
     M2: Monomial + From<M1>,
 {
-    fn add_assign(&mut self, rhs: &PolynomialBase<M1>) {
+    type Output = Result<Self, CoefficientError>;
+
+    fn add(mut self, rhs: &PolynomialBase<M1>) -> Self::Output {
         for (id, c) in &rhs.terms {
-            self.add_term(Into::<M2>::into(id.clone()), *c)
+            self.add_term(Into::<M2>::into(id.clone()), *c)?;
         }
+        Ok(self)
     }
 }
 
-impl<M: Monomial> AddAssign for PolynomialBase<M> {
-    fn add_assign(&mut self, mut rhs: Self) {
+impl<M: Monomial> Add for PolynomialBase<M> {
+    type Output = Result<Self, CoefficientError>;
+
+    fn add(self, rhs: Self) -> Self::Output {
         if self.terms.len() < rhs.terms.len() {
-            rhs += &*self;
-            *self = rhs;
+            rhs + &self
         } else {
-            self.add_assign(&rhs);
+            self + &rhs
         }
     }
 }
 
-impl<M: Monomial> AddAssign<Coefficient> for PolynomialBase<M> {
-    fn add_assign(&mut self, rhs: Coefficient) {
-        self.add_term(M::default(), rhs);
+impl<M: Monomial> Add<Result<PolynomialBase<M>, CoefficientError>> for PolynomialBase<M> {
+    type Output = Result<Self, CoefficientError>;
+
+    fn add(self, rhs: Result<PolynomialBase<M>, CoefficientError>) -> Self::Output {
+        self + rhs?
+    }
+}
+
+impl<M: Monomial> Add for &PolynomialBase<M> {
+    type Output = Result<PolynomialBase<M>, CoefficientError>;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        if self.terms.len() < rhs.terms.len() {
+            rhs.clone() + self
+        } else {
+            self.clone() + rhs
+        }
+    }
+}
+
+impl<M: Monomial> Add<Result<PolynomialBase<M>, CoefficientError>> for &PolynomialBase<M> {
+    type Output = Result<PolynomialBase<M>, CoefficientError>;
+
+    fn add(self, rhs: Result<PolynomialBase<M>, CoefficientError>) -> Self::Output {
+        self.clone() + rhs?
+    }
+}
+
+impl<M: Monomial> Add<PolynomialBase<M>> for &PolynomialBase<M> {
+    type Output = Result<PolynomialBase<M>, CoefficientError>;
+
+    fn add(self, rhs: PolynomialBase<M>) -> Self::Output {
+        rhs + self
     }
 }
 
 impl<M: Monomial> Add<Coefficient> for PolynomialBase<M> {
-    type Output = Self;
+    type Output = Result<Self, CoefficientError>;
+
     fn add(mut self, rhs: Coefficient) -> Self::Output {
-        self += rhs;
-        self
+        self.add_term(M::default(), rhs)?;
+        Ok(self)
     }
 }
 
 impl<M: Monomial> Add<PolynomialBase<M>> for Coefficient {
-    type Output = PolynomialBase<M>;
-    fn add(self, mut rhs: PolynomialBase<M>) -> Self::Output {
-        rhs += self;
-        rhs
+    type Output = Result<PolynomialBase<M>, CoefficientError>;
+
+    fn add(self, rhs: PolynomialBase<M>) -> Self::Output {
+        rhs + self
     }
 }
 
 impl<M: Monomial> Add<Coefficient> for &PolynomialBase<M> {
-    type Output = PolynomialBase<M>;
+    type Output = Result<PolynomialBase<M>, CoefficientError>;
+
     fn add(self, rhs: Coefficient) -> Self::Output {
         self.clone() + rhs
     }
 }
 
 impl<M: Monomial> Add<&PolynomialBase<M>> for Coefficient {
-    type Output = PolynomialBase<M>;
+    type Output = Result<PolynomialBase<M>, CoefficientError>;
+
     fn add(self, rhs: &PolynomialBase<M>) -> Self::Output {
         self + rhs.clone()
     }
 }
 
-// Add support for PolynomialBase<M> + M operations
 impl<M: Monomial> Add<M> for PolynomialBase<M> {
-    type Output = Self;
+    type Output = Result<Self, CoefficientError>;
+
     fn add(mut self, rhs: M) -> Self::Output {
-        self.add_term(rhs, coeff!(1.0));
-        self
+        self.add_term(rhs, Coefficient::one())?;
+        Ok(self)
     }
 }
 
 impl<M: Monomial> Add<&M> for PolynomialBase<M> {
-    type Output = Self;
+    type Output = Result<Self, CoefficientError>;
+
     fn add(mut self, rhs: &M) -> Self::Output {
-        self.add_term(rhs.clone(), coeff!(1.0));
-        self
+        self.add_term(rhs.clone(), Coefficient::one())?;
+        Ok(self)
     }
 }
 
 impl<M: Monomial> Add<M> for &PolynomialBase<M> {
-    type Output = PolynomialBase<M>;
+    type Output = Result<PolynomialBase<M>, CoefficientError>;
+
     fn add(self, rhs: M) -> Self::Output {
         self.clone() + rhs
     }
 }
 
 impl<M: Monomial> Add<&M> for &PolynomialBase<M> {
-    type Output = PolynomialBase<M>;
+    type Output = Result<PolynomialBase<M>, CoefficientError>;
+
     fn add(self, rhs: &M) -> Self::Output {
         self.clone() + rhs
     }
 }
 
-// Sub<Coefficient> operations
-impl<M: Monomial> Sub<Coefficient> for PolynomialBase<M> {
+impl Add<&PolynomialBase<LinearMonomial>> for &PolynomialBase<MonomialDyn> {
+    type Output = Result<PolynomialBase<MonomialDyn>, CoefficientError>;
+
+    fn add(self, rhs: &PolynomialBase<LinearMonomial>) -> Self::Output {
+        let mut result = self.clone();
+        for (monomial, coeff) in rhs {
+            result.add_term(MonomialDyn::from(*monomial), *coeff)?;
+        }
+        Ok(result)
+    }
+}
+
+impl Add<&PolynomialBase<QuadraticMonomial>> for &PolynomialBase<MonomialDyn> {
+    type Output = Result<PolynomialBase<MonomialDyn>, CoefficientError>;
+
+    fn add(self, rhs: &PolynomialBase<QuadraticMonomial>) -> Self::Output {
+        let mut result = self.clone();
+        for (monomial, coeff) in rhs {
+            result.add_term(MonomialDyn::from(*monomial), *coeff)?;
+        }
+        Ok(result)
+    }
+}
+
+impl Add<&PolynomialBase<LinearMonomial>> for &PolynomialBase<QuadraticMonomial> {
+    type Output = Result<PolynomialBase<QuadraticMonomial>, CoefficientError>;
+
+    fn add(self, rhs: &PolynomialBase<LinearMonomial>) -> Self::Output {
+        let mut result = self.clone();
+        for (monomial, coeff) in rhs {
+            result.add_term(QuadraticMonomial::from(*monomial), *coeff)?;
+        }
+        Ok(result)
+    }
+}
+
+impl<M: Monomial> Neg for PolynomialBase<M> {
     type Output = Self;
-    fn sub(mut self, rhs: Coefficient) -> Self::Output {
-        self -= rhs;
+
+    fn neg(mut self) -> Self::Output {
+        for c in self.terms.values_mut() {
+            *c = -(*c);
+        }
         self
     }
 }
 
+impl<M1, M2> Sub<&PolynomialBase<M1>> for PolynomialBase<M2>
+where
+    M1: Monomial,
+    M2: Monomial + From<M1>,
+{
+    type Output = Result<Self, CoefficientError>;
+
+    fn sub(mut self, rhs: &PolynomialBase<M1>) -> Self::Output {
+        for (id, c) in &rhs.terms {
+            self.add_term(Into::<M2>::into(id.clone()), -(*c))?;
+        }
+        Ok(self)
+    }
+}
+
+impl<M: Monomial> Sub for PolynomialBase<M> {
+    type Output = Result<Self, CoefficientError>;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        if self.terms.len() < rhs.terms.len() {
+            (-rhs) + &self
+        } else {
+            self - &rhs
+        }
+    }
+}
+
+impl<M: Monomial> Sub<Result<PolynomialBase<M>, CoefficientError>> for PolynomialBase<M> {
+    type Output = Result<Self, CoefficientError>;
+
+    fn sub(self, rhs: Result<PolynomialBase<M>, CoefficientError>) -> Self::Output {
+        self - rhs?
+    }
+}
+
+impl<M: Monomial> Sub for &PolynomialBase<M> {
+    type Output = Result<PolynomialBase<M>, CoefficientError>;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        if self.terms.len() < rhs.terms.len() {
+            (-rhs.clone()) + self
+        } else {
+            self.clone() - rhs
+        }
+    }
+}
+
+impl<M: Monomial> Sub<Result<PolynomialBase<M>, CoefficientError>> for &PolynomialBase<M> {
+    type Output = Result<PolynomialBase<M>, CoefficientError>;
+
+    fn sub(self, rhs: Result<PolynomialBase<M>, CoefficientError>) -> Self::Output {
+        self.clone() - rhs?
+    }
+}
+
+impl<M: Monomial> Sub<PolynomialBase<M>> for &PolynomialBase<M> {
+    type Output = Result<PolynomialBase<M>, CoefficientError>;
+
+    fn sub(self, rhs: PolynomialBase<M>) -> Self::Output {
+        (-rhs) + self
+    }
+}
+
+impl<M: Monomial> Sub<Coefficient> for PolynomialBase<M> {
+    type Output = Result<Self, CoefficientError>;
+
+    fn sub(mut self, rhs: Coefficient) -> Self::Output {
+        self.add_term(M::default(), -rhs)?;
+        Ok(self)
+    }
+}
+
 impl<M: Monomial> Sub<PolynomialBase<M>> for Coefficient {
-    type Output = PolynomialBase<M>;
-    fn sub(self, mut rhs: PolynomialBase<M>) -> Self::Output {
-        rhs = -rhs;
-        rhs += self;
-        rhs
+    type Output = Result<PolynomialBase<M>, CoefficientError>;
+
+    fn sub(self, rhs: PolynomialBase<M>) -> Self::Output {
+        (-rhs) + self
     }
 }
 
 impl<M: Monomial> Sub<Coefficient> for &PolynomialBase<M> {
-    type Output = PolynomialBase<M>;
+    type Output = Result<PolynomialBase<M>, CoefficientError>;
+
     fn sub(self, rhs: Coefficient) -> Self::Output {
         self.clone() - rhs
     }
 }
 
 impl<M: Monomial> Sub<&PolynomialBase<M>> for Coefficient {
-    type Output = PolynomialBase<M>;
+    type Output = Result<PolynomialBase<M>, CoefficientError>;
+
     fn sub(self, rhs: &PolynomialBase<M>) -> Self::Output {
         self - rhs.clone()
     }
 }
 
-// Generic macro for implementing binary operations for monomial types
+impl<M: Monomial> Sub<M> for PolynomialBase<M> {
+    type Output = Result<Self, CoefficientError>;
+
+    fn sub(mut self, rhs: M) -> Self::Output {
+        self.add_term(rhs, -Coefficient::one())?;
+        Ok(self)
+    }
+}
+
+impl<M: Monomial> Sub<&M> for PolynomialBase<M> {
+    type Output = Result<Self, CoefficientError>;
+
+    fn sub(mut self, rhs: &M) -> Self::Output {
+        self.add_term(rhs.clone(), -Coefficient::one())?;
+        Ok(self)
+    }
+}
+
+impl<M: Monomial> Sub<M> for &PolynomialBase<M> {
+    type Output = Result<PolynomialBase<M>, CoefficientError>;
+
+    fn sub(self, rhs: M) -> Self::Output {
+        self.clone() - rhs
+    }
+}
+
+impl<M: Monomial> Sub<&M> for &PolynomialBase<M> {
+    type Output = Result<PolynomialBase<M>, CoefficientError>;
+
+    fn sub(self, rhs: &M) -> Self::Output {
+        self.clone() - rhs
+    }
+}
+
 macro_rules! impl_monomial_op {
     ($op_trait:ident, $op_method:ident, $monomial:ty) => {
         impl $op_trait for $monomial {
-            type Output = PolynomialBase<$monomial>;
+            type Output = Result<PolynomialBase<$monomial>, CoefficientError>;
+
             fn $op_method(self, rhs: Self) -> Self::Output {
                 PolynomialBase::from(self).$op_method(PolynomialBase::from(rhs))
             }
         }
 
         impl $op_trait<&$monomial> for $monomial {
-            type Output = PolynomialBase<$monomial>;
+            type Output = Result<PolynomialBase<$monomial>, CoefficientError>;
+
             fn $op_method(self, rhs: &Self) -> Self::Output {
                 PolynomialBase::from(self).$op_method(PolynomialBase::from(rhs.clone()))
             }
         }
 
         impl $op_trait<$monomial> for &$monomial {
-            type Output = PolynomialBase<$monomial>;
+            type Output = Result<PolynomialBase<$monomial>, CoefficientError>;
+
             fn $op_method(self, rhs: $monomial) -> Self::Output {
                 PolynomialBase::from(self.clone()).$op_method(PolynomialBase::from(rhs))
             }
         }
 
         impl $op_trait for &$monomial {
-            type Output = PolynomialBase<$monomial>;
+            type Output = Result<PolynomialBase<$monomial>, CoefficientError>;
+
             fn $op_method(self, rhs: Self) -> Self::Output {
                 PolynomialBase::from(self.clone()).$op_method(PolynomialBase::from(rhs.clone()))
             }
         }
 
-        // Operations with Coefficient
         impl $op_trait<Coefficient> for $monomial {
-            type Output = PolynomialBase<$monomial>;
+            type Output = Result<PolynomialBase<$monomial>, CoefficientError>;
+
             fn $op_method(self, rhs: Coefficient) -> Self::Output {
                 PolynomialBase::from(self).$op_method(rhs)
             }
         }
 
         impl $op_trait<$monomial> for Coefficient {
-            type Output = PolynomialBase<$monomial>;
+            type Output = Result<PolynomialBase<$monomial>, CoefficientError>;
+
             fn $op_method(self, rhs: $monomial) -> Self::Output {
                 self.$op_method(PolynomialBase::from(rhs))
             }
         }
 
         impl $op_trait<Coefficient> for &$monomial {
-            type Output = PolynomialBase<$monomial>;
+            type Output = Result<PolynomialBase<$monomial>, CoefficientError>;
+
             fn $op_method(self, rhs: Coefficient) -> Self::Output {
                 PolynomialBase::from(self.clone()).$op_method(rhs)
             }
         }
 
         impl $op_trait<&$monomial> for Coefficient {
-            type Output = PolynomialBase<$monomial>;
+            type Output = Result<PolynomialBase<$monomial>, CoefficientError>;
+
             fn $op_method(self, rhs: &$monomial) -> Self::Output {
                 self.$op_method(PolynomialBase::from(rhs.clone()))
             }
         }
 
-        // Operations with PolynomialBase
         impl $op_trait<PolynomialBase<$monomial>> for $monomial {
-            type Output = PolynomialBase<$monomial>;
+            type Output = Result<PolynomialBase<$monomial>, CoefficientError>;
+
             fn $op_method(self, rhs: PolynomialBase<$monomial>) -> Self::Output {
-                // Special handling for different operation types
-                impl_monomial_op!(@internal $op_trait, $op_method, self, rhs)
+                PolynomialBase::from(self).$op_method(rhs)
+            }
+        }
+
+        impl $op_trait<Result<PolynomialBase<$monomial>, CoefficientError>> for $monomial {
+            type Output = Result<PolynomialBase<$monomial>, CoefficientError>;
+
+            fn $op_method(
+                self,
+                rhs: Result<PolynomialBase<$monomial>, CoefficientError>,
+            ) -> Self::Output {
+                PolynomialBase::from(self).$op_method(rhs?)
             }
         }
 
         impl $op_trait<&PolynomialBase<$monomial>> for $monomial {
-            type Output = PolynomialBase<$monomial>;
+            type Output = Result<PolynomialBase<$monomial>, CoefficientError>;
+
             fn $op_method(self, rhs: &PolynomialBase<$monomial>) -> Self::Output {
-                self.$op_method(rhs.clone())
+                PolynomialBase::from(self).$op_method(rhs)
             }
         }
 
         impl $op_trait<PolynomialBase<$monomial>> for &$monomial {
-            type Output = PolynomialBase<$monomial>;
+            type Output = Result<PolynomialBase<$monomial>, CoefficientError>;
+
             fn $op_method(self, rhs: PolynomialBase<$monomial>) -> Self::Output {
-                // Special handling for different operation types
-                impl_monomial_op!(@internal $op_trait, $op_method, self.clone(), rhs)
+                PolynomialBase::from(self.clone()).$op_method(rhs)
+            }
+        }
+
+        impl $op_trait<Result<PolynomialBase<$monomial>, CoefficientError>> for &$monomial {
+            type Output = Result<PolynomialBase<$monomial>, CoefficientError>;
+
+            fn $op_method(
+                self,
+                rhs: Result<PolynomialBase<$monomial>, CoefficientError>,
+            ) -> Self::Output {
+                PolynomialBase::from(self.clone()).$op_method(rhs?)
             }
         }
 
         impl $op_trait<&PolynomialBase<$monomial>> for &$monomial {
-            type Output = PolynomialBase<$monomial>;
+            type Output = Result<PolynomialBase<$monomial>, CoefficientError>;
+
             fn $op_method(self, rhs: &PolynomialBase<$monomial>) -> Self::Output {
-                self.clone().$op_method(rhs.clone())
+                PolynomialBase::from(self.clone()).$op_method(rhs)
             }
         }
     };
-
-    // Internal helper for optimized Add implementation
-    (@internal Add, add, $self:expr, $rhs:expr) => {{
-        let mut rhs = $rhs;
-        rhs.add_term($self, coeff!(1.0));
-        rhs
-    }};
-
-    // Internal helper for Sub implementation
-    (@internal Sub, sub, $self:expr, $rhs:expr) => {{
-        let mut result = PolynomialBase::from($self);
-        result -= $rhs;
-        result
-    }};
 }
 
 impl_monomial_op!(Add, add, LinearMonomial);
@@ -243,193 +449,6 @@ impl_monomial_op!(Sub, sub, LinearMonomial);
 impl_monomial_op!(Sub, sub, QuadraticMonomial);
 impl_monomial_op!(Sub, sub, MonomialDyn);
 
-impl<M: Monomial> Add for PolynomialBase<M> {
-    type Output = Self;
-    fn add(mut self, mut rhs: Self) -> Self::Output {
-        if self.terms.len() < rhs.terms.len() {
-            rhs += self;
-            rhs
-        } else {
-            self += rhs;
-            self
-        }
-    }
-}
-
-impl<M1: Monomial, M2: Monomial + From<M1>> Add<&PolynomialBase<M1>> for PolynomialBase<M2> {
-    type Output = Self;
-    fn add(mut self, rhs: &PolynomialBase<M1>) -> Self::Output {
-        self += rhs;
-        self
-    }
-}
-
-impl<M: Monomial> Add for &PolynomialBase<M> {
-    type Output = PolynomialBase<M>;
-    fn add(self, rhs: Self) -> Self::Output {
-        if self.terms.len() < rhs.terms.len() {
-            rhs.clone() + self
-        } else {
-            self.clone() + rhs
-        }
-    }
-}
-
-impl<M: Monomial> Add<PolynomialBase<M>> for &PolynomialBase<M> {
-    type Output = PolynomialBase<M>;
-    fn add(self, rhs: PolynomialBase<M>) -> Self::Output {
-        rhs + self
-    }
-}
-
-// Special implementations for MonomialDyn + LinearMonomial/QuadraticMonomial
-impl Add<&PolynomialBase<LinearMonomial>> for &PolynomialBase<MonomialDyn> {
-    type Output = PolynomialBase<MonomialDyn>;
-    fn add(self, rhs: &PolynomialBase<LinearMonomial>) -> Self::Output {
-        let mut result = self.clone();
-        for (monomial, coeff) in rhs {
-            result.add_term(MonomialDyn::from(*monomial), *coeff);
-        }
-        result
-    }
-}
-
-impl Add<&PolynomialBase<QuadraticMonomial>> for &PolynomialBase<MonomialDyn> {
-    type Output = PolynomialBase<MonomialDyn>;
-    fn add(self, rhs: &PolynomialBase<QuadraticMonomial>) -> Self::Output {
-        let mut result = self.clone();
-        for (monomial, coeff) in rhs {
-            result.add_term(MonomialDyn::from(*monomial), *coeff);
-        }
-        result
-    }
-}
-
-impl Add<&PolynomialBase<LinearMonomial>> for &PolynomialBase<QuadraticMonomial> {
-    type Output = PolynomialBase<QuadraticMonomial>;
-    fn add(self, rhs: &PolynomialBase<LinearMonomial>) -> Self::Output {
-        let mut result = self.clone();
-        for (monomial, coeff) in rhs {
-            result.add_term(QuadraticMonomial::from(*monomial), *coeff);
-        }
-        result
-    }
-}
-
-impl<M: Monomial> Sum for PolynomialBase<M> {
-    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
-        iter.fold(Self::default(), Add::add)
-    }
-}
-
-impl<M: Monomial> Neg for PolynomialBase<M> {
-    type Output = Self;
-    fn neg(mut self) -> Self::Output {
-        for c in self.terms.values_mut() {
-            *c = -(*c);
-        }
-        self
-    }
-}
-
-impl<M1: Monomial, M2: Monomial + From<M1>> SubAssign<&PolynomialBase<M1>> for PolynomialBase<M2> {
-    fn sub_assign(&mut self, rhs: &PolynomialBase<M1>) {
-        for (id, c) in &rhs.terms {
-            self.add_term(Into::<M2>::into(id.clone()), -(*c));
-        }
-    }
-}
-
-impl<M: Monomial> SubAssign for PolynomialBase<M> {
-    fn sub_assign(&mut self, rhs: Self) {
-        if self.terms.len() < rhs.terms.len() {
-            *self = -rhs + &*self;
-        } else {
-            self.sub_assign(&rhs);
-        }
-    }
-}
-
-impl<M: Monomial> SubAssign<Coefficient> for PolynomialBase<M> {
-    fn sub_assign(&mut self, rhs: Coefficient) {
-        self.add_term(M::default(), -rhs);
-    }
-}
-
-impl<M: Monomial> Sub for PolynomialBase<M> {
-    type Output = Self;
-    fn sub(mut self, rhs: Self) -> Self::Output {
-        self -= rhs;
-        self
-    }
-}
-
-impl<M1: Monomial, M2: Monomial + From<M1>> Sub<&PolynomialBase<M1>> for PolynomialBase<M2> {
-    type Output = Self;
-    fn sub(mut self, rhs: &PolynomialBase<M1>) -> Self::Output {
-        self -= rhs;
-        self
-    }
-}
-
-impl<M: Monomial> Sub for &PolynomialBase<M> {
-    type Output = PolynomialBase<M>;
-    fn sub(self, rhs: Self) -> Self::Output {
-        if self.terms.len() < rhs.terms.len() {
-            -rhs.clone() + self
-        } else {
-            self.clone() - rhs
-        }
-    }
-}
-
-impl<M: Monomial> Sub<PolynomialBase<M>> for &PolynomialBase<M> {
-    type Output = PolynomialBase<M>;
-    fn sub(self, rhs: PolynomialBase<M>) -> Self::Output {
-        -rhs + self
-    }
-}
-
-// Add support for PolynomialBase<M> - M operations
-impl<M: Monomial> Sub<M> for PolynomialBase<M> {
-    type Output = Self;
-    fn sub(mut self, rhs: M) -> Self::Output {
-        self.add_term(rhs, coeff!(-1.0));
-        self
-    }
-}
-
-impl<M: Monomial> Sub<&M> for PolynomialBase<M> {
-    type Output = Self;
-    fn sub(mut self, rhs: &M) -> Self::Output {
-        self.add_term(rhs.clone(), coeff!(-1.0));
-        self
-    }
-}
-
-impl<M: Monomial> Sub<M> for &PolynomialBase<M> {
-    type Output = PolynomialBase<M>;
-    fn sub(self, rhs: M) -> Self::Output {
-        self.clone() - rhs
-    }
-}
-
-impl<M: Monomial> Sub<&M> for &PolynomialBase<M> {
-    type Output = PolynomialBase<M>;
-    fn sub(self, rhs: &M) -> Self::Output {
-        self.clone() - rhs
-    }
-}
-
-impl<M: Monomial> Zero for PolynomialBase<M> {
-    fn zero() -> Self {
-        Self::default()
-    }
-    fn is_zero(&self) -> bool {
-        self.terms.is_empty()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -439,39 +458,37 @@ mod tests {
     type Linear = PolynomialBase<LinearMonomial>;
 
     proptest! {
-        /// Check four implementations of Add yields the same result
         #[test]
         fn add_ref(a: Linear, b: Linear) {
-            let ans = a.clone() + b.clone();
-            assert_abs_diff_eq!(&a + &b, ans);
-            assert_abs_diff_eq!(&a + b.clone(), ans);
-            assert_abs_diff_eq!(a + &b, ans);
+            let ans = (a.clone() + b.clone()).unwrap();
+            assert_abs_diff_eq!((&a + &b).unwrap(), ans);
+            assert_abs_diff_eq!((&a + b.clone()).unwrap(), ans);
+            assert_abs_diff_eq!((a + &b).unwrap(), ans);
         }
 
-        /// Check four implementations of Sub yields the same result
         #[test]
         fn sub_ref(a: Linear, b: Linear) {
-            let ans = a.clone() - b.clone();
-            assert_abs_diff_eq!(&a - &b, ans);
-            assert_abs_diff_eq!(&a - b.clone(), ans);
-            assert_abs_diff_eq!(a - &b, ans);
+            let ans = (a.clone() - b.clone()).unwrap();
+            assert_abs_diff_eq!((&a - &b).unwrap(), ans);
+            assert_abs_diff_eq!((&a - b.clone()).unwrap(), ans);
+            assert_abs_diff_eq!((a.clone() - &b).unwrap(), ans);
         }
 
         #[test]
         fn zero(a: Linear) {
-            assert_abs_diff_eq!(&a + Linear::zero(), &a);
-            assert_abs_diff_eq!(&a - Linear::zero(), &a);
-            assert_abs_diff_eq!(&a - &a, Linear::zero());
+            assert_abs_diff_eq!((&a + Linear::zero()).unwrap(), &a);
+            assert_abs_diff_eq!((&a - Linear::zero()).unwrap(), &a);
+            assert_abs_diff_eq!((&a - &a).unwrap(), Linear::zero());
         }
 
         #[test]
         fn add_commutative(a: Linear, b: Linear) {
-            assert_abs_diff_eq!(&a + &b, &b + &a);
+            assert_abs_diff_eq!((&a + &b).unwrap(), (&b + &a).unwrap());
         }
 
         #[test]
         fn add_associative(a: Linear, b: Linear, c: Linear) {
-            assert_abs_diff_eq!(&a + (&b + &c), (&a + &b) + &c);
+            assert_abs_diff_eq!((&a + (&b + &c).unwrap()).unwrap(), ((&a + &b).unwrap() + &c).unwrap());
         }
     }
 }

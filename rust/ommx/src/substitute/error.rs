@@ -43,4 +43,8 @@ pub enum SubstitutionError {
         variable: VariableID,
         constraint_id: crate::sos1_constraint::Sos1ConstraintID,
     },
+
+    /// Coefficient arithmetic during substitution yielded a non-representable value.
+    #[error(transparent)]
+    Coefficient(#[from] crate::CoefficientError),
 }

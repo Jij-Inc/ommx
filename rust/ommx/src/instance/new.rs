@@ -115,12 +115,14 @@ mod tests {
         };
 
         // Objective function uses both decision variables and parameters
-        let objective = (linear!(1) + linear!(100) + coeff!(1.0)).into();
+        let objective = ((linear!(1) + linear!(100)).unwrap() + coeff!(1.0))
+            .unwrap()
+            .into();
 
         // Constraints also use both decision variables and parameters
         let constraints = btreemap! {
-            ConstraintID::from(1) => Constraint::equal_to_zero((linear!(2) + linear!(101) + coeff!(1.0)).into()),
-            ConstraintID::from(2) => Constraint::less_than_or_equal_to_zero((linear!(1) + linear!(100) + coeff!(2.0)).into()),
+            ConstraintID::from(1) => Constraint::equal_to_zero(((linear!(2) + linear!(101)).unwrap() + coeff!(1.0)).unwrap().into()),
+            ConstraintID::from(2) => Constraint::less_than_or_equal_to_zero(((linear!(1) + linear!(100)).unwrap() + coeff!(2.0)).unwrap().into()),
         };
 
         let parametric_instance = ParametricInstance::new(

@@ -29,7 +29,9 @@ impl<M: Monomial> Evaluate for PolynomialBase<M> {
             let (new_monomial, value) = monomial.partial_evaluate(state);
             match TryInto::<Coefficient>::try_into(value) {
                 Ok(value) => {
-                    self.add_term(new_monomial, value * coefficient);
+                    if let Some(coefficient) = (value * coefficient)? {
+                        self.add_term(new_monomial, coefficient)?;
+                    }
                 }
                 Err(crate::CoefficientError::Zero) => {
                     continue;
@@ -114,7 +116,7 @@ mod tests {
                 ) {
                     let v1 = l1.evaluate(&state, crate::ATol::default()).unwrap();
                     let v2 = l2.evaluate(&state, crate::ATol::default()).unwrap();
-                    let v3 = (&l1 $op &l2).evaluate(&state, crate::ATol::default()).unwrap();
+                    let v3 = (&l1 $op &l2).unwrap().evaluate(&state, crate::ATol::default()).unwrap();
                     prop_assert!((v1 $op v2).abs_diff_eq(&v3, 1e-9));
                 }
             }

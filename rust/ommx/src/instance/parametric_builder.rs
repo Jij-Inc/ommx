@@ -603,7 +603,7 @@ mod tests {
         let indicator = crate::IndicatorConstraint::new(
             VariableID::from(1),
             Equality::EqualToZero,
-            Function::from(linear!(2) + linear!(100) + coeff!(1.0)),
+            Function::from(((linear!(2) + linear!(100)).unwrap() + coeff!(1.0)).unwrap()),
         );
 
         let instance = ParametricInstance::builder()

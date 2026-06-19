@@ -42,7 +42,7 @@ mod tests {
     #[test]
     fn test_single_term_snapshot() {
         // Single term: 2*x1
-        let linear = coeff!(2.0) * linear!(1);
+        let linear = (coeff!(2.0) * linear!(1)).unwrap();
         let folded = logical_memory_to_folded(&linear);
 
         insta::assert_snapshot!(folded, @"PolynomialBase.terms 56");
@@ -51,7 +51,9 @@ mod tests {
     #[test]
     fn test_linear_three_terms_snapshot() {
         // Create: 2*x1 + 3*x2 + 5 (3 terms)
-        let linear = coeff!(2.0) * linear!(1) + coeff!(3.0) * linear!(2) + coeff!(5.0);
+        let linear =
+            ((coeff!(2.0) * linear!(1)).unwrap() + (coeff!(3.0) * linear!(2)).unwrap()).unwrap();
+        let linear = (linear + coeff!(5.0)).unwrap();
         let folded = logical_memory_to_folded(&linear);
 
         insta::assert_snapshot!(folded, @"PolynomialBase.terms 104");
@@ -60,7 +62,10 @@ mod tests {
     #[test]
     fn test_quadratic_three_terms_snapshot() {
         // Create: x1*x2 + 2*x1 + 1 (3 terms)
-        let quad = coeff!(1.0) * quadratic!(1, 2) + coeff!(2.0) * quadratic!(1) + coeff!(1.0);
+        let quad = ((coeff!(1.0) * quadratic!(1, 2)).unwrap()
+            + (coeff!(2.0) * quadratic!(1)).unwrap())
+        .unwrap();
+        let quad = (quad + coeff!(1.0)).unwrap();
         let folded = logical_memory_to_folded(&quad);
 
         insta::assert_snapshot!(folded, @"PolynomialBase.terms 128");

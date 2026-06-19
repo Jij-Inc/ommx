@@ -1,45 +1,76 @@
 use super::*;
-use crate::{Coefficient, LinearMonomial, MonomialDyn, QuadraticMonomial};
-use std::ops::{Mul, MulAssign};
-
-impl<M: Monomial> MulAssign<Coefficient> for PolynomialBase<M> {
-    fn mul_assign(&mut self, rhs: Coefficient) {
-        for coefficient in self.terms.values_mut() {
-            *coefficient *= rhs;
-        }
-    }
-}
+use crate::{CoefficientError, LinearMonomial, MonomialDyn, QuadraticMonomial};
+use std::ops::Mul;
 
 impl<M: Monomial> Mul<Coefficient> for PolynomialBase<M> {
-    type Output = Self;
-    fn mul(mut self, rhs: Coefficient) -> Self::Output {
-        self *= rhs;
-        self
+    type Output = Result<Self, CoefficientError>;
+
+    fn mul(self, rhs: Coefficient) -> Self::Output {
+        let mut out = Self::default();
+        for (monomial, coefficient) in self.terms {
+            if let Some(coefficient) = (coefficient * rhs)? {
+                out.terms.insert(monomial, coefficient);
+            }
+        }
+        Ok(out)
     }
 }
 
 impl<M: Monomial> Mul<PolynomialBase<M>> for Coefficient {
-    type Output = PolynomialBase<M>;
-    fn mul(self, mut rhs: PolynomialBase<M>) -> Self::Output {
-        rhs *= self;
-        rhs
+    type Output = Result<PolynomialBase<M>, CoefficientError>;
+
+    fn mul(self, rhs: PolynomialBase<M>) -> Self::Output {
+        rhs * self
     }
 }
 
-// Add support for Coefficient * Monomial operations for specific monomial types
+impl<M: Monomial> Mul<Coefficient> for &PolynomialBase<M> {
+    type Output = Result<PolynomialBase<M>, CoefficientError>;
+
+    fn mul(self, rhs: Coefficient) -> Self::Output {
+        self.clone() * rhs
+    }
+}
+
+impl<M: Monomial> Mul<&PolynomialBase<M>> for Coefficient {
+    type Output = Result<PolynomialBase<M>, CoefficientError>;
+
+    fn mul(self, rhs: &PolynomialBase<M>) -> Self::Output {
+        rhs.clone() * self
+    }
+}
+
 macro_rules! impl_coefficient_monomial_mul {
     ($monomial:ty) => {
         impl Mul<$monomial> for Coefficient {
-            type Output = PolynomialBase<$monomial>;
+            type Output = Result<PolynomialBase<$monomial>, CoefficientError>;
+
             fn mul(self, rhs: $monomial) -> Self::Output {
                 self * PolynomialBase::from(rhs)
             }
         }
 
         impl Mul<Coefficient> for $monomial {
-            type Output = PolynomialBase<$monomial>;
+            type Output = Result<PolynomialBase<$monomial>, CoefficientError>;
+
             fn mul(self, rhs: Coefficient) -> Self::Output {
                 rhs * self
+            }
+        }
+
+        impl Mul<&$monomial> for Coefficient {
+            type Output = Result<PolynomialBase<$monomial>, CoefficientError>;
+
+            fn mul(self, rhs: &$monomial) -> Self::Output {
+                self * rhs.clone()
+            }
+        }
+
+        impl Mul<Coefficient> for &$monomial {
+            type Output = Result<PolynomialBase<$monomial>, CoefficientError>;
+
+            fn mul(self, rhs: Coefficient) -> Self::Output {
+                rhs * self.clone()
             }
         }
     };
@@ -51,6 +82,7 @@ impl_coefficient_monomial_mul!(MonomialDyn);
 
 impl Mul for LinearMonomial {
     type Output = QuadraticMonomial;
+
     fn mul(self, rhs: Self) -> Self::Output {
         use LinearMonomial::*;
         match (self, rhs) {
@@ -64,6 +96,7 @@ impl Mul for LinearMonomial {
 
 impl Mul<LinearMonomial> for QuadraticMonomial {
     type Output = MonomialDyn;
+
     fn mul(self, rhs: LinearMonomial) -> Self::Output {
         self.iter().chain(rhs.iter()).collect()
     }
@@ -71,6 +104,7 @@ impl Mul<LinearMonomial> for QuadraticMonomial {
 
 impl Mul<QuadraticMonomial> for LinearMonomial {
     type Output = MonomialDyn;
+
     fn mul(self, rhs: QuadraticMonomial) -> Self::Output {
         rhs.mul(self)
     }
@@ -78,6 +112,7 @@ impl Mul<QuadraticMonomial> for LinearMonomial {
 
 impl Mul for QuadraticMonomial {
     type Output = MonomialDyn;
+
     fn mul(self, rhs: QuadraticMonomial) -> Self::Output {
         self.iter().chain(rhs.iter()).collect()
     }
@@ -85,6 +120,7 @@ impl Mul for QuadraticMonomial {
 
 impl Mul<MonomialDyn> for LinearMonomial {
     type Output = MonomialDyn;
+
     fn mul(self, other: MonomialDyn) -> Self::Output {
         other * self
     }
@@ -92,6 +128,7 @@ impl Mul<MonomialDyn> for LinearMonomial {
 
 impl Mul<MonomialDyn> for QuadraticMonomial {
     type Output = MonomialDyn;
+
     fn mul(self, other: MonomialDyn) -> Self::Output {
         other * self
     }
@@ -103,24 +140,56 @@ where
     M2: Monomial,
     N: Monomial,
 {
-    type Output = PolynomialBase<N>;
+    type Output = Result<PolynomialBase<N>, CoefficientError>;
+
     fn mul(self, rhs: &PolynomialBase<M2>) -> Self::Output {
-        let mut out = Self::Output::default();
+        let mut out = PolynomialBase::<N>::default();
         for (lhs_m, lhs_c) in self {
             for (rhs_m, rhs_c) in rhs {
-                out.add_term(lhs_m.clone() * rhs_m.clone(), *lhs_c * *rhs_c);
+                if let Some(coefficient) = (*lhs_c * *rhs_c)? {
+                    out.add_term(lhs_m.clone() * rhs_m.clone(), coefficient)?;
+                }
             }
         }
-        out
+        Ok(out)
     }
 }
 
-impl<M1, M2> MulAssign<&PolynomialBase<M2>> for PolynomialBase<M1>
+impl<M1, M2, N> Mul<PolynomialBase<M2>> for PolynomialBase<M1>
 where
-    M1: Monomial + Mul<M2, Output = M1>,
+    M1: Monomial + Mul<M2, Output = N>,
     M2: Monomial,
+    N: Monomial,
 {
-    fn mul_assign(&mut self, rhs: &PolynomialBase<M2>) {
-        *self = &*self * rhs;
+    type Output = Result<PolynomialBase<N>, CoefficientError>;
+
+    fn mul(self, rhs: PolynomialBase<M2>) -> Self::Output {
+        &self * &rhs
+    }
+}
+
+impl<M1, M2, N> Mul<&PolynomialBase<M2>> for PolynomialBase<M1>
+where
+    M1: Monomial + Mul<M2, Output = N>,
+    M2: Monomial,
+    N: Monomial,
+{
+    type Output = Result<PolynomialBase<N>, CoefficientError>;
+
+    fn mul(self, rhs: &PolynomialBase<M2>) -> Self::Output {
+        &self * rhs
+    }
+}
+
+impl<M1, M2, N> Mul<PolynomialBase<M2>> for &PolynomialBase<M1>
+where
+    M1: Monomial + Mul<M2, Output = N>,
+    M2: Monomial,
+    N: Monomial,
+{
+    type Output = Result<PolynomialBase<N>, CoefficientError>;
+
+    fn mul(self, rhs: PolynomialBase<M2>) -> Self::Output {
+        self * &rhs
     }
 }

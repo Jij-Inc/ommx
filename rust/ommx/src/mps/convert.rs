@@ -1,4 +1,3 @@
-use num::Zero;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use super::{
@@ -143,7 +142,9 @@ fn convert_objective(
             for (name, &coefficient) in c {
                 if let Some(&id) = name_id_map.get(name) {
                     match Coefficient::try_from(coefficient) {
-                        Ok(coef) => linear.add_term(crate::LinearMonomial::Variable(id), coef),
+                        Ok(coef) => {
+                            linear.add_term(crate::LinearMonomial::Variable(id), coef)?;
+                        }
                         Err(crate::CoefficientError::Zero) => {} // Skip zero coefficients
                         Err(e) => return Err(e.into()),
                     }
@@ -163,7 +164,9 @@ fn convert_objective(
         for (name, &coefficient) in c {
             if let Some(&id) = name_id_map.get(name) {
                 match Coefficient::try_from(coefficient) {
-                    Ok(coef) => quadratic.add_term(crate::QuadraticMonomial::Linear(id), coef),
+                    Ok(coef) => {
+                        quadratic.add_term(crate::QuadraticMonomial::Linear(id), coef)?;
+                    }
                     Err(crate::CoefficientError::Zero) => {} // Skip zero coefficients
                     Err(e) => return Err(e.into()),
                 }
@@ -177,7 +180,7 @@ fn convert_objective(
             {
                 match Coefficient::try_from(coefficient) {
                     Ok(coef) => {
-                        quadratic.add_term(crate::QuadraticMonomial::new_pair(id1, id2), coef)
+                        quadratic.add_term(crate::QuadraticMonomial::new_pair(id1, id2), coef)?;
                     }
                     Err(crate::CoefficientError::Zero) => {} // Skip zero coefficients
                     Err(e) => return Err(e.into()),
@@ -292,7 +295,9 @@ fn convert_inequality(
             if let Some(&id) = name_id_map.get(col_name) {
                 let coeff = if negate { -coefficient } else { coefficient };
                 match Coefficient::try_from(coeff) {
-                    Ok(coef) => linear.add_term(crate::LinearMonomial::Variable(id), coef),
+                    Ok(coef) => {
+                        linear.add_term(crate::LinearMonomial::Variable(id), coef)?;
+                    }
                     Err(crate::CoefficientError::Zero) => {} // Skip zero coefficients
                     Err(e) => return Err(e.into()),
                 }
@@ -313,7 +318,9 @@ fn convert_inequality(
             if let Some(&id) = name_id_map.get(col_name) {
                 let coeff = if negate { -coefficient } else { coefficient };
                 match Coefficient::try_from(coeff) {
-                    Ok(coef) => quadratic.add_term(crate::QuadraticMonomial::Linear(id), coef),
+                    Ok(coef) => {
+                        quadratic.add_term(crate::QuadraticMonomial::Linear(id), coef)?;
+                    }
                     Err(crate::CoefficientError::Zero) => {} // Skip zero coefficients
                     Err(e) => return Err(e.into()),
                 }
@@ -329,7 +336,8 @@ fn convert_inequality(
                     let coeff = if negate { -coefficient } else { coefficient };
                     match Coefficient::try_from(coeff) {
                         Ok(coef) => {
-                            quadratic.add_term(crate::QuadraticMonomial::new_pair(id1, id2), coef)
+                            quadratic
+                                .add_term(crate::QuadraticMonomial::new_pair(id1, id2), coef)?;
                         }
                         Err(crate::CoefficientError::Zero) => {} // Skip zero coefficients
                         Err(e) => return Err(e.into()),

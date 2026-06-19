@@ -1,5 +1,5 @@
 use super::*;
-use crate::VariableIDSet;
+use crate::{CoefficientError, VariableIDSet};
 
 impl Constraint<Created> {
     /// Reduce binary powers in the constraint function.
@@ -7,7 +7,10 @@ impl Constraint<Created> {
     /// For binary variables, x^n = x for any n >= 1, so we can reduce higher powers to linear terms.
     ///
     /// Returns `true` if any reduction was performed, `false` otherwise.
-    pub fn reduce_binary_power(&mut self, binary_ids: &VariableIDSet) -> bool {
+    pub fn reduce_binary_power(
+        &mut self,
+        binary_ids: &VariableIDSet,
+    ) -> Result<bool, CoefficientError> {
         self.stage.function.reduce_binary_power(binary_ids)
     }
 }
@@ -22,7 +25,7 @@ mod tests {
         let binary_ids = crate::variable_ids!(1);
 
         // Create a constraint with x1^2 + x2 <= 0
-        let function = Function::Quadratic(quadratic!(1, 1) + quadratic!(2));
+        let function = Function::Quadratic((quadratic!(1, 1) + quadratic!(2)).unwrap());
 
         let mut constraint: Constraint<Created> = Constraint {
             equality: Equality::LessThanOrEqualToZero,
@@ -30,11 +33,11 @@ mod tests {
         };
 
         // Apply reduction
-        let changed = constraint.reduce_binary_power(&binary_ids);
+        let changed = constraint.reduce_binary_power(&binary_ids).unwrap();
         assert!(changed);
 
         // Check that x1^2 was reduced to x1
-        let expected_function = Function::Quadratic(quadratic!(1) + quadratic!(2));
+        let expected_function = Function::Quadratic((quadratic!(1) + quadratic!(2)).unwrap());
         assert_eq!(constraint.stage.function, expected_function);
     }
 }

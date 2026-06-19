@@ -73,7 +73,10 @@ mod tests {
         // NamedFunction with 2*x1 + 3*x2
         let nf = NamedFunction {
             id: NamedFunctionID::from(2),
-            function: Function::Linear(coeff!(2.0) * linear!(1) + coeff!(3.0) * linear!(2)),
+            function: Function::Linear(
+                ((coeff!(2.0) * linear!(1)).unwrap() + (coeff!(3.0) * linear!(2)).unwrap())
+                    .unwrap(),
+            ),
         };
 
         // x1 = 5.0, x2 = 10.0 => 2*5 + 3*10 = 40.0
@@ -94,7 +97,10 @@ mod tests {
         // NamedFunction with a linear function referencing variables 1 and 2
         let nf = NamedFunction {
             id: NamedFunctionID::from(3),
-            function: Function::Linear(coeff!(2.0) * linear!(1) + coeff!(3.0) * linear!(2)),
+            function: Function::Linear(
+                ((coeff!(2.0) * linear!(1)).unwrap() + (coeff!(3.0) * linear!(2)).unwrap())
+                    .unwrap(),
+            ),
         };
 
         let ids = nf.required_ids();

@@ -642,7 +642,9 @@ mod tests {
         // - x5: only used in named function
         let named_function = NamedFunction {
             id: NamedFunctionID::from(1),
-            function: Function::from(linear!(2) + linear!(3) + linear!(4) + linear!(5)),
+            function: Function::from(
+                (((linear!(2) + linear!(3)).unwrap() + linear!(4)).unwrap() + linear!(5)).unwrap(),
+            ),
         };
 
         let named_functions = btreemap! {
@@ -712,7 +714,7 @@ mod tests {
             VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
             VariableID::from(3) => DecisionVariable::binary(VariableID::from(3)),
         };
-        let objective = Function::from(linear!(1) + linear!(2) + linear!(3));
+        let objective = Function::from(((linear!(1) + linear!(2)).unwrap() + linear!(3)).unwrap());
 
         let mut instance = Instance::new(
             Sense::Minimize,
@@ -761,7 +763,7 @@ mod tests {
             VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
             VariableID::from(3) => DecisionVariable::binary(VariableID::from(3)),
         };
-        let objective = Function::from(linear!(1) + linear!(2) + linear!(3));
+        let objective = Function::from(((linear!(1) + linear!(2)).unwrap() + linear!(3)).unwrap());
 
         let mut instance = Instance::new(
             Sense::Minimize,
@@ -802,7 +804,7 @@ mod tests {
             VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
             VariableID::from(3) => DecisionVariable::continuous(VariableID::from(3)),
         };
-        let objective = Function::from(linear!(1) + linear!(2) + linear!(3));
+        let objective = Function::from(((linear!(1) + linear!(2)).unwrap() + linear!(3)).unwrap());
 
         let mut instance = Instance::new(
             Sense::Minimize,
@@ -862,7 +864,7 @@ mod tests {
             crate::IndicatorConstraint::new(
                 VariableID::from(10),
                 Equality::LessThanOrEqualToZero,
-                Function::from(linear!(1) + linear!(2) + coeff!(-5.0)),
+                Function::from(((linear!(1) + linear!(2)).unwrap() + coeff!(-5.0)).unwrap()),
             ),
         );
 

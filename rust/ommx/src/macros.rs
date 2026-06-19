@@ -25,8 +25,9 @@
 /// let c5 = coeff!(x * 3.0);
 ///
 /// // Use in expressions
-/// let expr = c1 * linear!(1)
-///     + c2 * linear!(2);
+/// let expr = (c1 * linear!(1))?;
+/// let expr = (expr + (c2 * linear!(2))?)?;
+/// # Ok::<(), ommx::CoefficientError>(())
 /// ```
 ///
 /// # Note

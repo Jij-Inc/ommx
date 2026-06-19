@@ -7,7 +7,6 @@ use crate::{
     Bound, Coefficient, Constraint, Function, Kind, Linear, LinearMonomial, VariableID,
 };
 use anyhow::{bail, Context, Result};
-use num::Zero;
 use std::collections::BTreeMap;
 
 /// Plan for each SOS1 variable: reuse it as its own indicator, or allocate a fresh one.
@@ -58,7 +57,7 @@ impl Instance {
         id: Sos1ConstraintID,
     ) -> Result<Vec<ConstraintID>> {
         let plans = self.plan_sos1_conversion(id)?;
-        Ok(self.apply_sos1_conversion(id, plans))
+        self.apply_sos1_conversion(id, plans)
     }
 
     /// Convert every active SOS1 constraint to regular constraints using Big-M.
@@ -95,7 +94,7 @@ impl Instance {
         // plans.
         let mut result = BTreeMap::new();
         for (id, plans) in all_plans {
-            result.insert(id, self.apply_sos1_conversion(id, plans));
+            result.insert(id, self.apply_sos1_conversion(id, plans)?);
         }
         Ok(result)
     }
@@ -154,17 +153,11 @@ impl Instance {
         Ok(plans)
     }
 
-    /// Apply a pre-validated SOS1 conversion plan.
-    ///
-    /// Infallible given a plan returned by [`Self::plan_sos1_conversion`] on the
-    /// current instance: every fallible check (kind, bound finiteness, zero
-    /// inclusion) was performed there, so any failure here indicates an internal
-    /// consistency bug.
     fn apply_sos1_conversion(
         &mut self,
         id: Sos1ConstraintID,
         plans: Vec<(VariableID, IndicatorPlan)>,
-    ) -> Vec<ConstraintID> {
+    ) -> Result<Vec<ConstraintID>> {
         // Allocate fresh binary indicators first.
         let mut indicators: BTreeMap<VariableID, VariableID> = BTreeMap::new();
         for (x_id, plan) in &plans {
@@ -199,9 +192,8 @@ impl Instance {
             if bound.upper() > 0.0 {
                 let neg_u = Coefficient::try_from(-bound.upper())
                     .expect("planner guaranteed finite non-zero upper bound");
-                let f = Linear::zero()
-                    + linear!(x_id.into_inner())
-                    + Linear::single_term(LinearMonomial::Variable(y_id), neg_u);
+                let f = (Linear::zero() + linear!(x_id.into_inner()))?;
+                let f = (f + Linear::single_term(LinearMonomial::Variable(y_id), neg_u))?;
                 let new_id = self.insert_sos1_generated_constraint(
                     id,
                     Constraint::less_than_or_equal_to_zero(Function::from(f)),
@@ -213,8 +205,8 @@ impl Instance {
             if bound.lower() < 0.0 {
                 let l = Coefficient::try_from(bound.lower())
                     .expect("planner guaranteed finite non-zero lower bound");
-                let f = Linear::single_term(LinearMonomial::Variable(y_id), l)
-                    + Linear::single_term(LinearMonomial::Variable(*x_id), coeff!(-1.0));
+                let f = (Linear::single_term(LinearMonomial::Variable(y_id), l)
+                    + Linear::single_term(LinearMonomial::Variable(*x_id), coeff!(-1.0)))?;
                 let new_id = self.insert_sos1_generated_constraint(
                     id,
                     Constraint::less_than_or_equal_to_zero(Function::from(f)),
@@ -233,8 +225,8 @@ impl Instance {
         if !indicators.is_empty() {
             let sum = indicators
                 .values()
-                .fold(Linear::zero(), |acc, v| acc + linear!(v.into_inner()));
-            let cardinality = Function::from(sum + Linear::from(coeff!(-1.0)));
+                .try_fold(Linear::zero(), |acc, v| acc + linear!(v.into_inner()))?;
+            let cardinality = Function::from((sum + Linear::from(coeff!(-1.0)))?);
             let new_id = self.insert_sos1_generated_constraint(
                 id,
                 Constraint::less_than_or_equal_to_zero(cardinality),
@@ -260,7 +252,7 @@ impl Instance {
             )
             .expect("SOS1 id was present when the plan was built and hasn't been touched since");
 
-        new_constraint_ids
+        Ok(new_constraint_ids)
     }
 
     fn insert_sos1_generated_constraint(
@@ -349,7 +341,9 @@ mod tests {
 
         let cardinality = instance.constraints().get(&new_ids[0]).unwrap();
         assert_eq!(cardinality.equality, Equality::LessThanOrEqualToZero);
-        let expected = Function::from(linear!(0) + linear!(1) + Linear::from(coeff!(-1.0)));
+        let expected = Function::from(
+            ((linear!(0) + linear!(1)).unwrap() + Linear::from(coeff!(-1.0))).unwrap(),
+        );
         assert_abs_diff_eq!(cardinality.function(), &expected);
         assert_eq!(
             instance
@@ -397,9 +391,9 @@ mod tests {
         // Upper Big-M: x0 - 3 y == x0 + (-3) y <= 0
         let upper = instance.constraints().get(&new_ids[0]).unwrap();
         let expected_upper = Function::from(
-            Linear::zero()
-                + linear!(0)
-                + Linear::single_term(LinearMonomial::Variable(y_id), coeff!(-3.0)),
+            ((Linear::zero() + linear!(0)).unwrap()
+                + Linear::single_term(LinearMonomial::Variable(y_id), coeff!(-3.0)))
+            .unwrap(),
         );
         assert_abs_diff_eq!(upper.function(), &expected_upper);
 
@@ -414,7 +408,8 @@ mod tests {
         // Cardinality: y - 1 <= 0
         let card = instance.constraints().get(&new_ids[2]).unwrap();
         let expected_card = Function::from(
-            Linear::zero() + linear!(y_id.into_inner()) + Linear::from(coeff!(-1.0)),
+            ((Linear::zero() + linear!(y_id.into_inner())).unwrap() + Linear::from(coeff!(-1.0)))
+                .unwrap(),
         );
         assert_abs_diff_eq!(card.function(), &expected_card);
 

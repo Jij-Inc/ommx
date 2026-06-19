@@ -213,7 +213,9 @@ mod tests {
         decision_variables.insert(dv1.id(), dv1);
         decision_variables.insert(dv2.id(), dv2);
 
-        let objective = Function::Linear(coeff!(2.0) * linear!(1) + coeff!(3.0) * linear!(2));
+        let objective = Function::Linear(
+            ((coeff!(2.0) * linear!(1)).unwrap() + (coeff!(3.0) * linear!(2)).unwrap()).unwrap(),
+        );
 
         let instance = Instance::new(
             crate::instance::Sense::Minimize,
@@ -288,12 +290,14 @@ mod tests {
         decision_variables.insert(dv1.id(), dv1);
         decision_variables.insert(dv2.id(), dv2);
 
-        let objective = Function::Linear(coeff!(2.0) * linear!(1) + coeff!(3.0) * linear!(2));
+        let objective = Function::Linear(
+            ((coeff!(2.0) * linear!(1)).unwrap() + (coeff!(3.0) * linear!(2)).unwrap()).unwrap(),
+        );
 
         let constraint = Constraint {
             equality: Equality::LessThanOrEqualToZero,
             stage: CreatedData {
-                function: Function::Linear(linear!(1) + linear!(2)),
+                function: Function::Linear((linear!(1) + linear!(2)).unwrap()),
             },
         };
 

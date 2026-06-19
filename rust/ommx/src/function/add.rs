@@ -1,226 +1,150 @@
 use super::*;
-use num::Zero;
-use std::ops::{Add, AddAssign, Neg};
+use crate::{CoefficientError, MonomialDyn};
+use std::ops::{Add, Neg};
 
-impl Zero for Function {
-    fn zero() -> Self {
+impl Function {
+    pub fn zero() -> Self {
         Function::Zero
     }
-    fn is_zero(&self) -> bool {
+
+    pub fn is_zero(&self) -> bool {
         matches!(self, Function::Zero)
     }
-}
 
-impl AddAssign<&Function> for Function {
-    fn add_assign(&mut self, rhs: &Function) {
-        match rhs {
-            Function::Zero => {}
-            Function::Constant(c) => self.add_assign(*c),
-            Function::Linear(l) => self.add_assign(l),
-            Function::Quadratic(q) => self.add_assign(q),
-            Function::Polynomial(p) => self.add_assign(p),
-        }
-    }
-}
-
-impl AddAssign for Function {
-    fn add_assign(&mut self, rhs: Self) {
-        match rhs {
-            Function::Zero => {}
-            Function::Constant(c) => self.add_assign(c),
-            Function::Linear(l) => self.add_assign(l),
-            Function::Quadratic(q) => self.add_assign(q),
-            Function::Polynomial(p) => self.add_assign(p),
-        }
-    }
-}
-
-impl AddAssign<Coefficient> for Function {
-    fn add_assign(&mut self, rhs: Coefficient) {
+    pub(crate) fn into_polynomial(self) -> Polynomial {
         match self {
-            Function::Zero => *self = Function::from(rhs),
-            Function::Constant(c) => {
-                *self = (*c + rhs).map(Function::from).unwrap_or(Function::Zero)
-            }
-            Function::Linear(l) => l.add_assign(rhs),
-            Function::Quadratic(q) => q.add_assign(rhs),
-            Function::Polynomial(p) => p.add_assign(rhs),
+            Function::Zero => Polynomial::zero(),
+            Function::Constant(c) => Polynomial::from(c),
+            Function::Linear(l) => l
+                .into_iter()
+                .map(|(m, c)| (MonomialDyn::from(m), c))
+                .collect(),
+            Function::Quadratic(q) => q
+                .into_iter()
+                .map(|(m, c)| (MonomialDyn::from(m), c))
+                .collect(),
+            Function::Polynomial(p) => p,
         }
     }
 }
-
-impl AddAssign<&Linear> for Function {
-    fn add_assign(&mut self, rhs: &Linear) {
-        match self {
-            Function::Linear(l) => l.add_assign(rhs),
-            Function::Quadratic(q) => q.add_assign(rhs),
-            Function::Polynomial(p) => p.add_assign(rhs),
-            _ => self.add_assign(rhs.clone()),
-        }
-    }
-}
-
-impl AddAssign<Linear> for Function {
-    fn add_assign(&mut self, mut rhs: Linear) {
-        match self {
-            Function::Zero => *self = Function::from(rhs),
-            Function::Constant(c) => {
-                rhs += *c;
-                *self = Function::from(rhs);
-            }
-            Function::Linear(l) => l.add_assign(rhs),
-            Function::Quadratic(q) => q.add_assign(&rhs),
-            Function::Polynomial(p) => p.add_assign(&rhs),
-        }
-    }
-}
-
-impl AddAssign<&Quadratic> for Function {
-    fn add_assign(&mut self, rhs: &Quadratic) {
-        match self {
-            Function::Quadratic(q) => q.add_assign(rhs),
-            Function::Polynomial(p) => p.add_assign(rhs),
-            _ => self.add_assign(rhs.clone()),
-        }
-    }
-}
-
-impl AddAssign<Quadratic> for Function {
-    fn add_assign(&mut self, mut rhs: Quadratic) {
-        match self {
-            Function::Zero => *self = Function::from(rhs),
-            Function::Constant(c) => {
-                rhs += *c;
-                *self = Function::from(rhs);
-            }
-            Function::Linear(l) => {
-                rhs += &*l;
-                *self = Function::from(rhs);
-            }
-            Function::Quadratic(q) => q.add_assign(rhs),
-            Function::Polynomial(p) => p.add_assign(&rhs),
-        }
-    }
-}
-
-impl AddAssign<&Polynomial> for Function {
-    fn add_assign(&mut self, rhs: &Polynomial) {
-        match self {
-            Function::Polynomial(p) => p.add_assign(rhs),
-            _ => self.add_assign(rhs.clone()),
-        }
-    }
-}
-
-impl AddAssign<Polynomial> for Function {
-    fn add_assign(&mut self, mut rhs: Polynomial) {
-        match self {
-            Function::Zero => *self = Function::from(rhs),
-            Function::Constant(c) => {
-                rhs += *c;
-                *self = Function::from(rhs);
-            }
-            Function::Linear(l) => {
-                rhs += &*l;
-                *self = Function::from(rhs);
-            }
-            Function::Quadratic(q) => {
-                rhs += &*q;
-                *self = Function::from(rhs);
-            }
-            Function::Polynomial(p) => p.add_assign(rhs),
-        }
-    }
-}
-
-macro_rules! impl_add_via_add_assign {
-    ($RHS:ty) => {
-        impl Add<$RHS> for Function {
-            type Output = Self;
-            fn add(mut self, rhs: $RHS) -> Self::Output {
-                self.add_assign(rhs);
-                self
-            }
-        }
-    };
-}
-
-impl_add_via_add_assign!(Coefficient);
-impl_add_via_add_assign!(Linear);
-impl_add_via_add_assign!(&Linear);
-impl_add_via_add_assign!(Quadratic);
-impl_add_via_add_assign!(&Quadratic);
-impl_add_via_add_assign!(Polynomial);
-impl_add_via_add_assign!(&Polynomial);
-impl_add_via_add_assign!(&Function);
 
 impl Add for Function {
-    type Output = Self;
-    fn add(mut self, rhs: Self) -> Self::Output {
-        self += rhs;
-        self
+    type Output = Result<Self, CoefficientError>;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Ok(Function::from(
+            (self.into_polynomial() + rhs.into_polynomial())?,
+        ))
     }
 }
 
 impl Add for &Function {
-    type Output = Function;
+    type Output = Result<Function, CoefficientError>;
+
     fn add(self, rhs: Self) -> Self::Output {
-        if self.degree() > rhs.degree() {
-            self.clone() + rhs
-        } else {
-            rhs.clone() + self
-        }
+        self.clone() + rhs.clone()
     }
 }
 
 impl Add<Function> for &Function {
-    type Output = Function;
+    type Output = Result<Function, CoefficientError>;
+
     fn add(self, rhs: Function) -> Self::Output {
-        rhs + self
+        self.clone() + rhs
     }
 }
 
-impl Neg for Function {
-    type Output = Self;
-    fn neg(mut self) -> Self::Output {
-        self.values_mut().for_each(|v| *v = -(*v));
-        self
+impl Add<&Function> for Function {
+    type Output = Result<Function, CoefficientError>;
+
+    fn add(self, rhs: &Function) -> Self::Output {
+        self + rhs.clone()
     }
 }
 
-// Add support for &Function operations with references
-impl Add<&Coefficient> for &Function {
-    type Output = Function;
-    fn add(self, rhs: &Coefficient) -> Self::Output {
-        self.clone() + *rhs
+impl Add<Coefficient> for Function {
+    type Output = Result<Self, CoefficientError>;
+
+    fn add(self, rhs: Coefficient) -> Self::Output {
+        Ok(Function::from((self.into_polynomial() + rhs)?))
     }
 }
 
 impl Add<Coefficient> for &Function {
-    type Output = Function;
+    type Output = Result<Function, CoefficientError>;
+
     fn add(self, rhs: Coefficient) -> Self::Output {
         self.clone() + rhs
     }
 }
 
-impl Add<&Linear> for &Function {
-    type Output = Function;
-    fn add(self, rhs: &Linear) -> Self::Output {
-        self.clone() + rhs
+impl Add<&Coefficient> for Function {
+    type Output = Result<Self, CoefficientError>;
+
+    fn add(self, rhs: &Coefficient) -> Self::Output {
+        self + *rhs
     }
 }
 
-impl Add<&Quadratic> for &Function {
-    type Output = Function;
-    fn add(self, rhs: &Quadratic) -> Self::Output {
-        self.clone() + rhs
+impl Add<&Coefficient> for &Function {
+    type Output = Result<Function, CoefficientError>;
+
+    fn add(self, rhs: &Coefficient) -> Self::Output {
+        self.clone() + *rhs
     }
 }
 
-impl Add<&Polynomial> for &Function {
-    type Output = Function;
-    fn add(self, rhs: &Polynomial) -> Self::Output {
-        self.clone() + rhs
+impl Add<Function> for Coefficient {
+    type Output = Result<Function, CoefficientError>;
+
+    fn add(self, rhs: Function) -> Self::Output {
+        rhs + self
+    }
+}
+
+impl Add<&Function> for Coefficient {
+    type Output = Result<Function, CoefficientError>;
+
+    fn add(self, rhs: &Function) -> Self::Output {
+        rhs.clone() + self
+    }
+}
+
+macro_rules! impl_add_polynomial_rhs {
+    ($rhs:ty) => {
+        impl Add<$rhs> for Function {
+            type Output = Result<Function, CoefficientError>;
+
+            fn add(self, rhs: $rhs) -> Self::Output {
+                Ok(Function::from(
+                    (self.into_polynomial() + Function::from(rhs.clone()).into_polynomial())?,
+                ))
+            }
+        }
+
+        impl Add<$rhs> for &Function {
+            type Output = Result<Function, CoefficientError>;
+
+            fn add(self, rhs: $rhs) -> Self::Output {
+                self.clone() + rhs
+            }
+        }
+    };
+}
+
+impl_add_polynomial_rhs!(Linear);
+impl_add_polynomial_rhs!(&Linear);
+impl_add_polynomial_rhs!(Quadratic);
+impl_add_polynomial_rhs!(&Quadratic);
+impl_add_polynomial_rhs!(Polynomial);
+impl_add_polynomial_rhs!(&Polynomial);
+
+impl Neg for Function {
+    type Output = Self;
+
+    fn neg(mut self) -> Self::Output {
+        self.values_mut().for_each(|v| *v = -(*v));
+        self
     }
 }
 
@@ -233,26 +157,26 @@ mod tests {
     proptest! {
         #[test]
         fn add_ref(a in any::<Function>(), b in any::<Function>()) {
-            let ans = a.clone() + b.clone();
-            assert_abs_diff_eq!(&a + &b, ans);
-            assert_abs_diff_eq!(&a + b.clone(), ans);
-            assert_abs_diff_eq!(a + &b, ans);
+            let ans = (a.clone() + b.clone()).unwrap();
+            assert_abs_diff_eq!((&a + &b).unwrap(), ans);
+            assert_abs_diff_eq!((&a + b.clone()).unwrap(), ans);
+            assert_abs_diff_eq!((a + &b).unwrap(), ans);
         }
 
         #[test]
         fn zero(a in any::<Function>()) {
-            assert_abs_diff_eq!(&a + Function::zero(), a.clone());
-            assert_abs_diff_eq!(Function::zero() + &a, a.clone());
+            assert_abs_diff_eq!((&a + Function::zero()).unwrap(), a.clone());
+            assert_abs_diff_eq!((Function::zero() + &a).unwrap(), a.clone());
         }
 
         #[test]
         fn add_commutative(a in any::<Function>(), b in any::<Function>()) {
-            assert_abs_diff_eq!(&a + &b, &b + &a);
+            assert_abs_diff_eq!((&a + &b).unwrap(), (&b + &a).unwrap());
         }
 
         #[test]
         fn add_associative(a in any::<Function>(), b in any::<Function>(), c in any::<Function>()) {
-            assert_abs_diff_eq!(&a + (&b + &c), (&a + &b) + &c);
+            assert_abs_diff_eq!((&a + (&b + &c).unwrap()).unwrap(), ((&a + &b).unwrap() + &c).unwrap());
         }
     }
 }

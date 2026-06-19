@@ -357,7 +357,7 @@ mod with_parameters_tests {
         let indicator = crate::IndicatorConstraint::new(
             y,
             Equality::EqualToZero,
-            Function::from(linear!(2) + linear!(100) + coeff!(-1.0)),
+            Function::from(((linear!(2) + linear!(100)).unwrap() + coeff!(-1.0)).unwrap()),
         );
 
         let parametric = ParametricInstance::builder()

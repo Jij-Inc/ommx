@@ -25,16 +25,16 @@ let decision_variables = btreemap! {
     VariableID::from(2) => DecisionVariable::continuous(VariableID::from(2)),
 };
 
-let objective = Function::from(linear!(1) + coeff!(2.0) * linear!(2));
+let objective = Function::from((linear!(1) + (coeff!(2.0) * linear!(2))?)?);
 
 let constraints = btreemap! {
     // x1 + x2 <= 10
     ConstraintID::from(1) => Constraint::less_than_or_equal_to_zero(
-        Function::from(linear!(1) + linear!(2) + Linear::from(coeff!(-10.0)))
+        Function::from(((linear!(1) + linear!(2))? + Linear::from(coeff!(-10.0)))?)
     ),
     // x1 >= 1 (as -x1 + 1 <= 0)
     ConstraintID::from(2) => Constraint::less_than_or_equal_to_zero(
-        Function::from(coeff!(-1.0) * linear!(1) + Linear::from(coeff!(1.0)))
+        Function::from(((coeff!(-1.0) * linear!(1))? + Linear::from(coeff!(1.0)))?)
     ),
 };
 
@@ -90,11 +90,11 @@ let decision_variables = btreemap! {
     VariableID::from(1) => DecisionVariable::continuous(VariableID::from(1)),
     VariableID::from(2) => DecisionVariable::continuous(VariableID::from(2)),
 };
-let objective = Function::from(linear!(1) + coeff!(2.0) * linear!(2));
+let objective = Function::from((linear!(1) + (coeff!(2.0) * linear!(2))?)?);
 let constraints = btreemap! {
     // x1 + x2 <= 10
     ConstraintID::from(1) => Constraint::less_than_or_equal_to_zero(
-        Function::from(linear!(1) + linear!(2) + Linear::from(coeff!(-10.0)))
+        Function::from(((linear!(1) + linear!(2))? + Linear::from(coeff!(-10.0)))?)
     ),
 };
 let instance = Instance::new(Sense::Minimize, objective, decision_variables, constraints)?;

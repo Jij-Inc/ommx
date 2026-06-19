@@ -81,7 +81,7 @@ impl Instance {
         id: IndicatorConstraintID,
     ) -> Result<Vec<ConstraintID>> {
         let plan = self.plan_indicator_conversion(id)?;
-        Ok(self.apply_indicator_conversion(id, plan))
+        self.apply_indicator_conversion(id, plan)
     }
 
     /// Convert every active indicator constraint to regular constraints using Big-M.
@@ -112,7 +112,7 @@ impl Instance {
         }
         let mut result = BTreeMap::new();
         for (id, plan) in all_plans {
-            result.insert(id, self.apply_indicator_conversion(id, plan));
+            result.insert(id, self.apply_indicator_conversion(id, plan)?);
         }
         Ok(result)
     }
@@ -201,21 +201,18 @@ impl Instance {
 
     /// Apply a pre-validated indicator conversion plan.
     ///
-    /// Infallible given a plan returned by [`Self::plan_indicator_conversion`] on
-    /// the current instance.
     fn apply_indicator_conversion(
         &mut self,
         id: IndicatorConstraintID,
         plan: IndicatorPlan,
-    ) -> Vec<ConstraintID> {
+    ) -> Result<Vec<ConstraintID>> {
         let mut new_ids: Vec<ConstraintID> = Vec::new();
         let y = plan.indicator_variable;
 
         if let Some(u) = plan.upper_big_m {
             // f(x) + u y - u <= 0
-            let f = plan.function.clone()
-                + Linear::single_term(LinearMonomial::Variable(y), u)
-                + Linear::from(-u);
+            let f = (plan.function.clone() + Linear::single_term(LinearMonomial::Variable(y), u))?;
+            let f = (f + Linear::from(-u))?;
             let new_id = self.insert_indicator_generated_constraint(
                 id,
                 Constraint::less_than_or_equal_to_zero(f),
@@ -226,9 +223,9 @@ impl Instance {
         if let Some(l) = plan.lower_big_m {
             // -f(x) - l y + l <= 0
             let neg_l = -l;
-            let f = -plan.function.clone()
-                + Linear::single_term(LinearMonomial::Variable(y), neg_l)
-                + Linear::from(l);
+            let f =
+                (-plan.function.clone() + Linear::single_term(LinearMonomial::Variable(y), neg_l))?;
+            let f = (f + Linear::from(l))?;
             let new_id = self.insert_indicator_generated_constraint(
                 id,
                 Constraint::less_than_or_equal_to_zero(f),
@@ -255,7 +252,7 @@ impl Instance {
                 "indicator id was present when the plan was built and hasn't been touched since",
             );
 
-        new_ids
+        Ok(new_ids)
     }
 
     fn insert_indicator_generated_constraint(
@@ -337,9 +334,14 @@ mod tests {
         let c = instance.constraints().get(&new_ids[0]).unwrap();
         assert_eq!(c.equality, Equality::LessThanOrEqualToZero);
         let expected = Function::from(
-            linear!(1)
-                + Linear::single_term(LinearMonomial::Variable(VariableID::from(10)), coeff!(3.0))
-                + coeff!(-5.0), // (-2) [original] + (-3) [big-M constant] = -5
+            ((linear!(1)
+                + Linear::single_term(
+                    LinearMonomial::Variable(VariableID::from(10)),
+                    coeff!(3.0),
+                ))
+            .unwrap()
+                + coeff!(-5.0))
+            .unwrap(), // (-2) [original] + (-3) [big-M constant] = -5
         );
         assert_abs_diff_eq!(c.function(), &expected);
         assert_eq!(
@@ -385,9 +387,14 @@ mod tests {
         let upper = instance.constraints().get(&new_ids[0]).unwrap();
         assert_eq!(upper.equality, Equality::LessThanOrEqualToZero);
         let expected_upper = Function::from(
-            linear!(1)
-                + Linear::single_term(LinearMonomial::Variable(VariableID::from(10)), coeff!(3.0))
-                + coeff!(-5.0),
+            ((linear!(1)
+                + Linear::single_term(
+                    LinearMonomial::Variable(VariableID::from(10)),
+                    coeff!(3.0),
+                ))
+            .unwrap()
+                + coeff!(-5.0))
+            .unwrap(),
         );
         assert_abs_diff_eq!(upper.function(), &expected_upper);
 
@@ -494,10 +501,11 @@ mod tests {
         let ic = IndicatorConstraint::new(
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
-            Function::from(Linear::single_term(
+            (Function::from(Linear::single_term(
                 LinearMonomial::Variable(VariableID::from(1)),
                 coeff!(-1.0),
-            )) + coeff!(0.5),
+            )) + coeff!(0.5))
+            .unwrap(),
         );
         let mut instance = Instance::builder()
             .sense(Sense::Minimize)

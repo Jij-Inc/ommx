@@ -40,7 +40,7 @@
 /// // Create assignments with different expression types
 /// let assignments = assign! {
 ///     1 <- coeff!(5.0),                           // Constant assignment
-///     2 <- coeff!(2.0) * linear!(3) + coeff!(1.0), // Linear expression
+///     2 <- (coeff!(2.0) * linear!(3)).unwrap() + coeff!(1.0), // Linear expression
 ///     4 <- linear!(5)                             // Simple variable assignment
 /// };
 /// ```
@@ -61,20 +61,24 @@
 ///
 /// let assignments = vec![
 ///     (VariableID::from(1), Function::from(coeff!(5.0))),
-///     (VariableID::from(2), Function::from(linear!(3) + coeff!(1.0))),
+///     (VariableID::from(2), Function::from((linear!(3) + coeff!(1.0))?)),
 /// ];
 ///
 /// match AcyclicAssignments::new(assignments) {
 ///     Ok(acyclic) => { /* use acyclic */ },
 ///     Err(err) => { /* handle error */ },
 /// }
+/// # Ok::<(), ommx::CoefficientError>(())
 /// ```
 #[macro_export]
 macro_rules! assign {
     ( $( $var_id:literal <- $expr:expr ),* $(,)? ) => {
         $crate::AcyclicAssignments::new([
             $(
-                ($crate::VariableID::from($var_id), $crate::Function::from($expr)),
+                (
+                    $crate::VariableID::from($var_id),
+                    $crate::IntoFunctionForMacro::into_function_for_macro($expr),
+                ),
             )*
         ]).unwrap()
     };

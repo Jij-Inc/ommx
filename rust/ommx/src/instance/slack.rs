@@ -45,7 +45,7 @@ impl Instance {
         let a = function
             .content_factor()
             .context("Cannot normalize the coefficients to integers")?;
-        let af = function.clone() * a;
+        let af = (function.clone() * a)?;
 
         let af_bound = af.evaluate_bound(&bounds);
         let af_bound = af_bound.as_integer_bound(atol).ok_or(
@@ -86,8 +86,8 @@ impl Instance {
         metadata.set_name(slack_id, "ommx.slack");
         metadata.set_subscripts(slack_id, vec![constraint_id.into_inner() as i64]);
 
-        let slack_term = Linear::single_term(LinearMonomial::Variable(slack_id), a.inv());
-        let new_function = function + slack_term;
+        let slack_term = Linear::single_term(LinearMonomial::Variable(slack_id), a.inv()?);
+        let new_function = (function + slack_term)?;
 
         let constraint = self
             .constraint_collection
@@ -181,7 +181,7 @@ impl Instance {
         let new_function = match b_coeff {
             Some(c) => {
                 let slack_term = Linear::single_term(LinearMonomial::Variable(slack_id), c);
-                function + slack_term
+                (function + slack_term)?
             }
             None => function,
         };
@@ -230,8 +230,10 @@ mod tests {
                 VariableID::from(2), Kind::Integer, Bound::new(0.0, 3.0).unwrap(), None, ATol::default()
             ).unwrap(),
         };
-        let objective = Function::from(linear!(1)) + Function::from(linear!(2));
-        let constraint_fn = Function::from(linear!(1)) + Function::from(linear!(2)) + coeff!(-4.0);
+        let objective = (Function::from(linear!(1)) + Function::from(linear!(2))).unwrap();
+        let constraint_fn = ((Function::from(linear!(1)) + Function::from(linear!(2))).unwrap()
+            + coeff!(-4.0))
+        .unwrap();
         let constraints = btreemap! {
             ConstraintID::from(0) => crate::Constraint::less_than_or_equal_to_zero(constraint_fn,
             ),
@@ -264,7 +266,7 @@ mod tests {
             ).unwrap(),
         };
         let objective = Function::from(linear!(1));
-        let constraint_fn = Function::from(linear!(1)) + coeff!(-2.0);
+        let constraint_fn = (Function::from(linear!(1)) + coeff!(-2.0)).unwrap();
         let constraints = btreemap! {
             ConstraintID::from(0) => crate::Constraint::less_than_or_equal_to_zero(constraint_fn,
             ),
@@ -298,7 +300,7 @@ mod tests {
             ).unwrap(),
         };
         let objective = Function::from(linear!(1));
-        let constraint_fn = Function::from(linear!(1)) + coeff!(-10.0);
+        let constraint_fn = (Function::from(linear!(1)) + coeff!(-10.0)).unwrap();
         let constraints = btreemap! {
             ConstraintID::from(0) => crate::Constraint::less_than_or_equal_to_zero(constraint_fn,
             ),
@@ -322,7 +324,7 @@ mod tests {
             ).unwrap(),
         };
         let objective = Function::from(linear!(1));
-        let constraint_fn = Function::from(linear!(1)) + coeff!(-2.0);
+        let constraint_fn = (Function::from(linear!(1)) + coeff!(-2.0)).unwrap();
         let constraints = btreemap! {
             ConstraintID::from(0) => crate::Constraint::less_than_or_equal_to_zero(constraint_fn,
             ),
@@ -351,7 +353,7 @@ mod tests {
             ).unwrap(),
         };
         let objective = Function::from(linear!(1));
-        let constraint_fn = Function::from(linear!(1)) + coeff!(-2.0);
+        let constraint_fn = (Function::from(linear!(1)) + coeff!(-2.0)).unwrap();
         let constraints = btreemap! {
             ConstraintID::from(0) => crate::Constraint::equal_to_zero(constraint_fn,
             ),
@@ -370,7 +372,7 @@ mod tests {
             VariableID::from(1) => DecisionVariable::continuous(VariableID::from(1)),
         };
         let objective = Function::from(linear!(1));
-        let constraint_fn = Function::from(linear!(1)) + coeff!(-2.0);
+        let constraint_fn = (Function::from(linear!(1)) + coeff!(-2.0)).unwrap();
         let constraints = btreemap! {
             ConstraintID::from(0) => crate::Constraint::less_than_or_equal_to_zero(constraint_fn,
             ),

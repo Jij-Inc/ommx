@@ -33,7 +33,9 @@ impl<M: Monomial> FromIterator<(M, Coefficient)> for PolynomialBase<M> {
     fn from_iter<I: IntoIterator<Item = (M, Coefficient)>>(iter: I) -> Self {
         let mut polynomial = Self::default();
         for (term, coefficient) in iter {
-            polynomial.add_term(term, coefficient);
+            polynomial
+                .add_term(term, coefficient)
+                .expect("collecting finite non-zero coefficients must not overflow");
         }
         polynomial
     }

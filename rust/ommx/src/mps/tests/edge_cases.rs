@@ -146,7 +146,7 @@ fn test_removed_constraint_information_loss() {
     let constraints = btreemap! {
         ConstraintID::from(0) => Constraint::less_than_or_equal_to_zero(Function::from(linear!(0) + coeff!(-5.0))  // x0 - 5 <= 0
         ),
-        ConstraintID::from(1) => Constraint::equal_to_zero(Function::from(coeff!(2.0) * linear!(0) + coeff!(-10.0))  // 2*x0 - 10 = 0
+        ConstraintID::from(1) => Constraint::equal_to_zero(Function::from(((coeff!(2.0) * linear!(0)).unwrap() + coeff!(-10.0)).unwrap())  // 2*x0 - 10 = 0
         ),
     };
 

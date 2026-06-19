@@ -9,7 +9,7 @@ use ommx::v1::State;
 use std::collections::HashMap;
 
 // Create a function: 2*x1 + 3*x2
-let func = Function::from(coeff!(2.0) * linear!(1) + coeff!(3.0) * linear!(2));
+let func = Function::from(((coeff!(2.0) * linear!(1))? + (coeff!(3.0) * linear!(2))?)?);
 
 // Create variable assignments
 let state = State::from(HashMap::from([(1, 4.0), (2, 5.0)]));

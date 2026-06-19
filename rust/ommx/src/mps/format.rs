@@ -535,7 +535,9 @@ mod tests {
 
         let instance = Instance::new(
             Sense::Minimize,
-            Function::from(crate::linear!(0) + crate::linear!(1) + crate::linear!(2)),
+            Function::from(
+                ((crate::linear!(0) + crate::linear!(1)).unwrap() + crate::linear!(2)).unwrap(),
+            ),
             decision_variables,
             btreemap! {},
         )
