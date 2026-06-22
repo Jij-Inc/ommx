@@ -83,6 +83,20 @@ pub(crate) fn coefficient_error_to_pyerr(error: ommx::CoefficientError) -> PyErr
     pyo3::exceptions::PyValueError::new_err(error.to_string())
 }
 
+pub(crate) fn comparison_constraint(
+    function: std::result::Result<ommx::Function, ommx::CoefficientError>,
+    equality: ommx::Equality,
+) -> PyResult<Constraint> {
+    let function = function.map_err(coefficient_error_to_pyerr)?;
+    Ok(Constraint(
+        ommx::Constraint {
+            equality,
+            stage: ommx::CreatedData { function },
+        },
+        ommx::ConstraintMetadata::default(),
+    ))
+}
+
 #[cfg(feature = "tracing-bridge")]
 use pyo3_tracing_opentelemetry::TracingBridge;
 

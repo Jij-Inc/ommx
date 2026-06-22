@@ -1,5 +1,4 @@
 use crate::{Constraint, Function, Linear, Polynomial, Quadratic};
-use anyhow::Result;
 use ommx::{LinearMonomial, VariableID};
 use pyo3::{prelude::*, Bound, PyAny};
 use std::collections::HashMap;
@@ -333,40 +332,25 @@ impl Parameter {
     /// Create an equality constraint: self == other → Constraint with EqualToZero
     #[gen_stub(type_ignore = ["override"])]
     #[pyo3(name = "__eq__")]
-    pub fn py_eq(&self, other: Function) -> Result<Constraint> {
-        let function = (-other.0 + &self.as_linear())?;
-        Ok(Constraint(
-            ommx::Constraint {
-                equality: ommx::Equality::EqualToZero,
-                stage: ommx::CreatedData { function },
-            },
-            ommx::ConstraintMetadata::default(),
-        ))
+    pub fn py_eq(&self, other: Function) -> PyResult<Constraint> {
+        crate::comparison_constraint(-other.0 + &self.as_linear(), ommx::Equality::EqualToZero)
     }
 
     /// Create a less-than-or-equal constraint: self <= other → Constraint
     #[pyo3(name = "__le__")]
-    pub fn py_le(&self, other: Function) -> Result<Constraint> {
-        let function = (-other.0 + &self.as_linear())?;
-        Ok(Constraint(
-            ommx::Constraint {
-                equality: ommx::Equality::LessThanOrEqualToZero,
-                stage: ommx::CreatedData { function },
-            },
-            ommx::ConstraintMetadata::default(),
-        ))
+    pub fn py_le(&self, other: Function) -> PyResult<Constraint> {
+        crate::comparison_constraint(
+            -other.0 + &self.as_linear(),
+            ommx::Equality::LessThanOrEqualToZero,
+        )
     }
 
     /// Create a greater-than-or-equal constraint: self >= other → Constraint
     #[pyo3(name = "__ge__")]
-    pub fn py_ge(&self, other: Function) -> Result<Constraint> {
-        let function = (other.0 - &self.as_linear())?;
-        Ok(Constraint(
-            ommx::Constraint {
-                equality: ommx::Equality::LessThanOrEqualToZero,
-                stage: ommx::CreatedData { function },
-            },
-            ommx::ConstraintMetadata::default(),
-        ))
+    pub fn py_ge(&self, other: Function) -> PyResult<Constraint> {
+        crate::comparison_constraint(
+            other.0 - &self.as_linear(),
+            ommx::Equality::LessThanOrEqualToZero,
+        )
     }
 }

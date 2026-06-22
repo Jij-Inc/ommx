@@ -223,6 +223,22 @@ def test_function_arithmetic_raises_on_coefficient_overflow():
         _ = f * f
 
 
+def test_comparison_raises_value_error_on_coefficient_overflow():
+    huge = sys.float_info.max
+    lhs = Function(Linear(terms={1: huge}))
+    rhs = Function(Linear(terms={1: -huge}))
+
+    with pytest.raises(ValueError, match="Coefficient must be finite"):
+        _ = lhs == rhs
+    with pytest.raises(ValueError, match="Coefficient must be finite"):
+        _ = lhs <= rhs
+    with pytest.raises(ValueError, match="Coefficient must be finite"):
+        _ = lhs >= rhs
+
+    with pytest.raises(ValueError, match="Coefficient must be finite"):
+        _ = Linear(terms={1: huge}) <= Linear(terms={1: -huge})
+
+
 def test_function_terms_zero():
     zero = Function(0)
     assert zero.terms == {}
