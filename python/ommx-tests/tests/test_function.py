@@ -1,8 +1,10 @@
 # FIXME: Use test case generator like Hypothesis
 
 import math
+import sys
 
 import numpy as np
+import pytest
 
 from ommx.v1 import Bound, Linear, DecisionVariable, Quadratic, Polynomial, Function
 
@@ -16,6 +18,17 @@ def test_decision_variable():
     assert_eq(3 + DecisionVariable.binary(1), Linear(terms={1: 1}, constant=3))
     assert_eq(DecisionVariable.binary(1) * 2, Linear(terms={1: 2}))
     assert_eq(3 * DecisionVariable.binary(1), Linear(terms={1: 3}))
+
+
+def test_python_arithmetic_raises_on_coefficient_overflow():
+    huge = sys.float_info.max
+    x = DecisionVariable.binary(1)
+
+    with pytest.raises(ValueError, match="Coefficient must be finite"):
+        huge * x + huge * x
+
+    with pytest.raises(ValueError, match="Coefficient must be finite"):
+        huge * x * huge
 
 
 def test_linear():
@@ -197,6 +210,17 @@ def test_function():
     func_instance += Function(x2)
     assert id(func_instance) == original_id  # Verify it's the same object
     assert_eq(func_instance, Function(x1 + x2))
+
+
+def test_function_arithmetic_raises_on_coefficient_overflow():
+    huge = sys.float_info.max
+    f = Function(Linear(terms={1: huge}))
+
+    with pytest.raises(RuntimeError, match="Coefficient must be finite"):
+        f + f
+
+    with pytest.raises(RuntimeError, match="Coefficient must be finite"):
+        f * f
 
 
 def test_function_terms_zero():
