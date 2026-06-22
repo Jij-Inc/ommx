@@ -51,8 +51,13 @@ impl Function {
         Function::from_polynomial(self.into_polynomial())
     }
 
-    pub(crate) fn add_raw(self, rhs: Self) -> Result<Self, CoefficientError> {
-        Ok(match (self, rhs) {
+    /// Add to this function in place.
+    ///
+    /// This fast path is not atomic: if a coefficient operation fails, `self`
+    /// may already have been partially modified.
+    pub(crate) fn try_add_assign_in_place(&mut self, rhs: Self) -> Result<(), CoefficientError> {
+        let lhs = std::mem::take(self);
+        *self = match (lhs, rhs) {
             (Function::Zero, rhs) => rhs,
             (lhs, Function::Zero) => lhs,
             (Function::Constant(lhs), Function::Constant(rhs)) => {
@@ -90,7 +95,8 @@ impl Function {
             (Function::Polynomial(lhs), Function::Polynomial(rhs)) => {
                 Function::Polynomial((lhs + rhs)?)
             }
-        })
+        };
+        Ok(())
     }
 }
 
@@ -98,7 +104,9 @@ impl Add for Function {
     type Output = Result<Self, CoefficientError>;
 
     fn add(self, rhs: Self) -> Self::Output {
-        Ok(self.add_raw(rhs)?.normalize())
+        let mut out = self;
+        out.try_add_assign_in_place(rhs)?;
+        Ok(out.normalize())
     }
 }
 

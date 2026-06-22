@@ -6,13 +6,114 @@ impl Function {
     pub fn one() -> Self {
         Function::Constant(Coefficient::one())
     }
+
+    /// Scale this function in place.
+    ///
+    /// This fast path is not atomic: if a coefficient operation fails, `self`
+    /// may already have been partially modified.
+    pub(crate) fn try_scale_assign_in_place(
+        &mut self,
+        rhs: Coefficient,
+    ) -> Result<(), CoefficientError> {
+        match self {
+            Function::Zero => {}
+            Function::Constant(c) => {
+                if let Some(coefficient) = (*c * rhs)? {
+                    *c = coefficient;
+                } else {
+                    *self = Function::Zero;
+                }
+            }
+            Function::Linear(l) => l.try_scale_assign_in_place(rhs)?,
+            Function::Quadratic(q) => q.try_scale_assign_in_place(rhs)?,
+            Function::Polynomial(p) => p.try_scale_assign_in_place(rhs)?,
+        }
+        Ok(())
+    }
+
+    /// Multiply this function in place.
+    ///
+    /// This fast path is not atomic: if a coefficient operation fails, `self`
+    /// may already have been partially modified.
+    pub(crate) fn try_mul_assign_in_place(
+        &mut self,
+        rhs: &Function,
+    ) -> Result<(), CoefficientError> {
+        match rhs {
+            Function::Zero => *self = Function::Zero,
+            Function::Constant(c) => self.try_scale_assign_in_place(*c)?,
+            Function::Linear(l) => self.try_mul_linear_assign_in_place(l)?,
+            Function::Quadratic(q) => self.try_mul_quadratic_assign_in_place(q)?,
+            Function::Polynomial(p) => self.try_mul_polynomial_ref_assign_in_place(p)?,
+        }
+        Ok(())
+    }
+
+    pub(crate) fn try_mul_polynomial_assign_in_place(
+        &mut self,
+        rhs: Polynomial,
+    ) -> Result<(), CoefficientError> {
+        let lhs = std::mem::take(self);
+        *self = match lhs {
+            Function::Zero => Function::Zero,
+            Function::Constant(c) => Function::Polynomial((rhs * c)?),
+            Function::Linear(l) => Function::Polynomial((&l * &rhs)?),
+            Function::Quadratic(q) => Function::Polynomial((&q * &rhs)?),
+            Function::Polynomial(p) => Function::Polynomial((&p * &rhs)?),
+        };
+        Ok(())
+    }
+
+    fn try_mul_linear_assign_in_place(&mut self, rhs: &Linear) -> Result<(), CoefficientError> {
+        let lhs = std::mem::take(self);
+        *self = match lhs {
+            Function::Zero => Function::Zero,
+            Function::Constant(c) => Function::Linear((rhs.clone() * c)?),
+            Function::Linear(l) => Function::Quadratic((&l * rhs)?),
+            Function::Quadratic(q) => Function::Polynomial((&q * rhs)?),
+            Function::Polynomial(p) => Function::Polynomial((&p * rhs)?),
+        };
+        Ok(())
+    }
+
+    fn try_mul_quadratic_assign_in_place(
+        &mut self,
+        rhs: &Quadratic,
+    ) -> Result<(), CoefficientError> {
+        let lhs = std::mem::take(self);
+        *self = match lhs {
+            Function::Zero => Function::Zero,
+            Function::Constant(c) => Function::Quadratic((rhs.clone() * c)?),
+            Function::Linear(l) => Function::Polynomial((&l * rhs)?),
+            Function::Quadratic(q) => Function::Polynomial((&q * rhs)?),
+            Function::Polynomial(p) => Function::Polynomial((&p * rhs)?),
+        };
+        Ok(())
+    }
+
+    fn try_mul_polynomial_ref_assign_in_place(
+        &mut self,
+        rhs: &Polynomial,
+    ) -> Result<(), CoefficientError> {
+        let lhs = std::mem::take(self);
+        *self = match lhs {
+            Function::Zero => Function::Zero,
+            Function::Constant(c) => Function::Polynomial((rhs * c)?),
+            Function::Linear(l) => Function::Polynomial((&l * rhs)?),
+            Function::Quadratic(q) => Function::Polynomial((&q * rhs)?),
+            Function::Polynomial(p) => Function::Polynomial((&p * rhs)?),
+        };
+        Ok(())
+    }
 }
 
 impl Mul<Coefficient> for Function {
     type Output = Result<Self, CoefficientError>;
 
     fn mul(self, rhs: Coefficient) -> Self::Output {
-        Ok(Function::from_polynomial((self.into_polynomial() * rhs)?))
+        let mut out = self;
+        out.try_scale_assign_in_place(rhs)?;
+        Ok(out.normalize())
     }
 }
 
@@ -60,9 +161,9 @@ impl Mul for Function {
     type Output = Result<Self, CoefficientError>;
 
     fn mul(self, rhs: Function) -> Self::Output {
-        Ok(Function::from_polynomial(
-            (self.into_polynomial() * rhs.into_polynomial())?,
-        ))
+        let mut out = self;
+        out.try_mul_assign_in_place(&rhs)?;
+        Ok(out.normalize())
     }
 }
 
@@ -96,9 +197,9 @@ macro_rules! impl_mul_polynomial_rhs {
             type Output = Result<Function, CoefficientError>;
 
             fn mul(self, rhs: $rhs) -> Self::Output {
-                Ok(Function::from_polynomial(
-                    (self.into_polynomial() * Function::from(rhs.clone()).into_polynomial())?,
-                ))
+                let mut out = self;
+                out.try_mul_assign_in_place(&Function::from(rhs.clone()))?;
+                Ok(out.normalize())
             }
         }
 

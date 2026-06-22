@@ -2,6 +2,26 @@ use super::*;
 use crate::{CoefficientError, LinearMonomial, MonomialDyn, QuadraticMonomial};
 use std::ops::Mul;
 
+impl<M: Monomial> PolynomialBase<M> {
+    pub(crate) fn try_scale_assign_in_place(
+        &mut self,
+        rhs: Coefficient,
+    ) -> Result<(), CoefficientError> {
+        let mut removed = Vec::new();
+        for (monomial, coefficient) in self.terms.iter_mut() {
+            if let Some(scaled) = (*coefficient * rhs)? {
+                *coefficient = scaled;
+            } else {
+                removed.push(monomial.clone());
+            }
+        }
+        for monomial in removed {
+            self.terms.remove(&monomial);
+        }
+        Ok(())
+    }
+}
+
 impl<M: Monomial> Mul<Coefficient> for PolynomialBase<M> {
     type Output = Result<Self, CoefficientError>;
 

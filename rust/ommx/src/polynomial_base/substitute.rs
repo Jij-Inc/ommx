@@ -30,8 +30,9 @@ where
         check_self_assignment(assigned, f)?;
         let mut substituted = Function::Zero;
         for (monomial, coefficient) in self.terms {
-            let term = (coefficient * monomial.substitute_one(assigned, f)?)?;
-            substituted = substituted.add_raw(term)?;
+            let mut term = monomial.substitute_one(assigned, f)?;
+            term.try_scale_assign_in_place(coefficient)?;
+            substituted.try_add_assign_in_place(term)?;
         }
         Ok(substituted.normalize())
     }
@@ -117,13 +118,15 @@ impl Substitute for MonomialDyn {
         let mut non_substituted = Vec::new();
         for var_id in self.iter() {
             if *var_id == assigned {
-                substituted = (substituted * f)?;
+                substituted.try_mul_assign_in_place(f)?;
             } else {
                 non_substituted.push(*var_id);
             }
         }
-        substituted = (substituted * Polynomial::from(MonomialDyn::from(non_substituted)))?;
-        Ok(substituted)
+        substituted.try_mul_polynomial_assign_in_place(Polynomial::from(MonomialDyn::from(
+            non_substituted,
+        )))?;
+        Ok(substituted.normalize())
     }
 }
 
