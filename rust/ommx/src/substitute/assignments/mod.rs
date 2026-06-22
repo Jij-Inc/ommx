@@ -325,6 +325,7 @@ mod tests {
     use super::*;
     use crate::{assign, coeff, linear};
     use ::approx::assert_abs_diff_eq;
+    use std::collections::BTreeSet;
 
     #[test]
     fn test_substitute_acyclic_success() {
@@ -350,8 +351,8 @@ mod tests {
             assert_abs_diff_eq!(result.get(var_id).unwrap(), expected_function);
         }
         assert_eq!(
-            result.dependency.all_edges().collect::<Vec<_>>(),
-            expected.dependency.all_edges().collect::<Vec<_>>()
+            result.dependency.all_edges().collect::<BTreeSet<_>>(),
+            expected.dependency.all_edges().collect::<BTreeSet<_>>()
         );
     }
 

@@ -253,7 +253,10 @@ impl Quadratic {
         Ok(())
     }
 
-    /// In-place addition for += operator
+    /// In-place addition for += operator.
+    ///
+    /// PyO3's in-place operator wrapper returns the mutated self object to Python
+    /// when this Rust callback succeeds.
     #[gen_stub(skip)]
     pub fn __iadd__(&mut self, rhs: &Quadratic) -> Result<()> {
         self.add_assign(rhs)

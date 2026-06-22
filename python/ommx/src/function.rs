@@ -246,7 +246,8 @@ pyo3_stub_gen::type_alias!(
         | Function
 );
 
-// Manual stub for __iadd__ (PyO3 returns () but Python returns self)
+// Manual stub for __iadd__. PyO3's in-place operator wrapper returns the
+// mutated self object to Python when the Rust callback succeeds.
 pyo3_stub_gen::inventory::submit! {
     pyo3_stub_gen::derive::gen_methods_from_python! {
         r#"
@@ -377,7 +378,10 @@ impl Function {
         Ok(())
     }
 
-    /// In-place addition for += operator
+    /// In-place addition for += operator.
+    ///
+    /// PyO3's in-place operator wrapper returns the mutated self object to Python
+    /// when this Rust callback succeeds.
     #[gen_stub(skip)]
     pub fn __iadd__(&mut self, rhs: &Function) -> Result<()> {
         self.add_assign(rhs)

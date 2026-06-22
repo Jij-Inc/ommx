@@ -40,7 +40,7 @@ impl<'de> serde::Deserialize<'de> for Coefficient {
     where
         D: serde::Deserializer<'de>,
     {
-        let value = f64::deserialize(deserializer)?;
+        let value = <f64 as serde::Deserialize>::deserialize(deserializer)?;
         Coefficient::try_from(value).map_err(serde::de::Error::custom)
     }
 }

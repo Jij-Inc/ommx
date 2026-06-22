@@ -2,7 +2,7 @@ use super::Instance;
 use crate::{
     constraint::{ConstraintID, Equality, Provenance, RemovedReason},
     indicator_constraint::IndicatorConstraintID,
-    Bounds, Coefficient, Constraint, Evaluate, Function, Kind, Linear, LinearMonomial, VariableID,
+    Bounds, Coefficient, Constraint, Evaluate, Kind, Linear, LinearMonomial,
 };
 use anyhow::{bail, Context, Result};
 use std::collections::BTreeMap;
@@ -10,15 +10,7 @@ use std::collections::BTreeMap;
 /// Big-M sides planned for a single indicator constraint.
 #[derive(Debug, Clone)]
 struct IndicatorPlan {
-    indicator_variable: VariableID,
-    function: Function,
-    /// Upper-side Big-M coefficient $u$ (strictly positive). Emits `f(x) + u y - u <= 0`.
-    /// `None` means the upper side is redundant (upper bound of $f$ is $\leq 0$) and skipped.
-    upper_big_m: Option<Coefficient>,
-    /// Lower-side Big-M coefficient $l$ (strictly negative). Emits `-f(x) - l y + l <= 0`.
-    /// `None` means the lower side is redundant (lower bound of $f$ is $\geq 0$) or the
-    /// constraint is an inequality (no lower side to emit).
-    lower_big_m: Option<Coefficient>,
+    generated_constraints: Vec<Constraint>,
 }
 
 impl Instance {
@@ -191,11 +183,27 @@ impl Instance {
             Equality::LessThanOrEqualToZero => None,
         };
 
+        let mut generated_constraints = Vec::new();
+
+        if let Some(u) = upper_big_m {
+            // f(x) + u y - u <= 0
+            let f = (function.clone()
+                + Linear::single_term(LinearMonomial::Variable(indicator_variable), u))?;
+            let f = (f + Linear::from(-u))?;
+            generated_constraints.push(Constraint::less_than_or_equal_to_zero(f));
+        }
+
+        if let Some(l) = lower_big_m {
+            // -f(x) - l y + l <= 0
+            let neg_l = -l;
+            let f = (-function.clone()
+                + Linear::single_term(LinearMonomial::Variable(indicator_variable), neg_l))?;
+            let f = (f + Linear::from(l))?;
+            generated_constraints.push(Constraint::less_than_or_equal_to_zero(f));
+        }
+
         Ok(IndicatorPlan {
-            indicator_variable,
-            function,
-            upper_big_m,
-            lower_big_m,
+            generated_constraints,
         })
     }
 
@@ -206,30 +214,10 @@ impl Instance {
         id: IndicatorConstraintID,
         plan: IndicatorPlan,
     ) -> Result<Vec<ConstraintID>> {
-        let mut new_ids: Vec<ConstraintID> = Vec::new();
-        let y = plan.indicator_variable;
+        let mut new_ids: Vec<ConstraintID> = Vec::with_capacity(plan.generated_constraints.len());
 
-        if let Some(u) = plan.upper_big_m {
-            // f(x) + u y - u <= 0
-            let f = (plan.function.clone() + Linear::single_term(LinearMonomial::Variable(y), u))?;
-            let f = (f + Linear::from(-u))?;
-            let new_id = self.insert_indicator_generated_constraint(
-                id,
-                Constraint::less_than_or_equal_to_zero(f),
-            );
-            new_ids.push(new_id);
-        }
-
-        if let Some(l) = plan.lower_big_m {
-            // -f(x) - l y + l <= 0
-            let neg_l = -l;
-            let f =
-                (-plan.function.clone() + Linear::single_term(LinearMonomial::Variable(y), neg_l))?;
-            let f = (f + Linear::from(l))?;
-            let new_id = self.insert_indicator_generated_constraint(
-                id,
-                Constraint::less_than_or_equal_to_zero(f),
-            );
+        for constraint in plan.generated_constraints {
+            let new_id = self.insert_indicator_generated_constraint(id, constraint);
             new_ids.push(new_id);
         }
 
@@ -276,7 +264,7 @@ mod tests {
     use super::*;
     use crate::{
         coeff, indicator_constraint::IndicatorConstraint, linear, ATol, Bound, DecisionVariable,
-        Kind, Sense,
+        Function, Kind, Sense, VariableID,
     };
     use ::approx::assert_abs_diff_eq;
     use maplit::btreemap;
@@ -477,6 +465,33 @@ mod tests {
         assert_eq!(instance.decision_variables, before_vars);
         assert_eq!(instance.constraints(), &before_constraints);
         assert_eq!(instance.indicator_constraints(), &before_indicators);
+    }
+
+    #[test]
+    fn side_arithmetic_overflow_is_rejected_without_mutation() {
+        // y=1 → -f64::MAX * y + 1 = 0 has finite bounds, so planning reaches
+        // side construction. The upper side is finite, but the lower side tries
+        // to combine f64::MAX*y with f64::MAX*y and must fail before insertion.
+        let y = VariableID::from(10);
+        let huge_negative = Coefficient::try_from(-f64::MAX).unwrap();
+        let f = (Function::from(Linear::single_term(
+            LinearMonomial::Variable(y),
+            huge_negative,
+        )) + coeff!(1.0))
+        .unwrap();
+        let mut instance =
+            single_indicator_instance(Bound::new(0.0, 1.0).unwrap(), Equality::EqualToZero, f);
+        let before_constraints = instance.constraints().clone();
+        let before_indicators = instance.indicator_constraints().clone();
+
+        let err = instance
+            .convert_indicator_to_constraint(IndicatorConstraintID::from(7))
+            .unwrap_err();
+        assert!(err.to_string().contains("Coefficient must be finite"));
+
+        assert_eq!(instance.constraints(), &before_constraints);
+        assert_eq!(instance.indicator_constraints(), &before_indicators);
+        assert!(instance.removed_indicator_constraints().is_empty());
     }
 
     #[test]
