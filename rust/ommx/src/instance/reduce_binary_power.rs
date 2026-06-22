@@ -13,11 +13,13 @@ impl Instance {
             return Ok(false);
         }
         let mut changed = false;
-        changed |= self.objective.reduce_binary_power(&binary_ids)?;
-        for constraint in self.constraint_collection.active_mut().values_mut() {
+        let mut updated = self.clone();
+        changed |= updated.objective.reduce_binary_power(&binary_ids)?;
+        for constraint in updated.constraint_collection.active_mut().values_mut() {
             changed |= constraint.reduce_binary_power(&binary_ids)?;
         }
         // Note: We don't need to reduce in removed_constraints since they are not active
+        *self = updated;
         Ok(changed)
     }
 }
@@ -26,8 +28,8 @@ impl Instance {
 mod tests {
     use super::*;
     use crate::{
-        coeff, constraint::CreatedData, quadratic, ATol, Bound, Constraint, DecisionVariable,
-        Equality, Kind, Sense,
+        coeff, constraint::CreatedData, quadratic, ATol, Bound, Coefficient, Constraint,
+        DecisionVariable, Equality, Kind, Sense,
     };
     use ::approx::assert_abs_diff_eq;
     use proptest::prelude::*;
@@ -134,6 +136,41 @@ mod tests {
         let changed = instance.reduce_binary_power().unwrap();
         assert!(!changed);
         assert_eq!(instance.objective(), &objective);
+    }
+
+    #[test]
+    fn reduce_binary_power_preserves_instance_on_coefficient_error() {
+        let mut decision_variables = BTreeMap::new();
+        decision_variables.insert(
+            VariableID::from(1),
+            DecisionVariable::binary(VariableID::from(1)),
+        );
+
+        let objective = Function::Quadratic(quadratic!(1, 1).into());
+        let huge = Coefficient::try_from(f64::MAX).unwrap();
+        let overflowing_constraint = Function::Quadratic(
+            ((huge * quadratic!(1, 1)).unwrap() + (huge * quadratic!(1)).unwrap()).unwrap(),
+        );
+        let mut constraints = BTreeMap::new();
+        constraints.insert(
+            ConstraintID::from(1),
+            Constraint {
+                equality: Equality::LessThanOrEqualToZero,
+                stage: CreatedData {
+                    function: overflowing_constraint,
+                },
+            },
+        );
+        let mut instance =
+            Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
+        let before_objective = instance.objective().clone();
+        let before_constraints = instance.constraints().clone();
+
+        let err = instance.reduce_binary_power().unwrap_err();
+
+        assert_eq!(err, crate::CoefficientError::Infinite);
+        assert_eq!(instance.objective(), &before_objective);
+        assert_eq!(instance.constraints(), &before_constraints);
     }
 
     proptest! {

@@ -216,11 +216,11 @@ def test_function_arithmetic_raises_on_coefficient_overflow():
     huge = sys.float_info.max
     f = Function(Linear(terms={1: huge}))
 
-    with pytest.raises(RuntimeError, match="Coefficient must be finite"):
-        f + f
+    with pytest.raises(ValueError, match="Coefficient must be finite"):
+        _ = f + f
 
-    with pytest.raises(RuntimeError, match="Coefficient must be finite"):
-        f * f
+    with pytest.raises(ValueError, match="Coefficient must be finite"):
+        _ = f * f
 
 
 def test_function_terms_zero():

@@ -354,27 +354,35 @@ impl Function {
     }
 
     /// Addition
-    pub fn __add__(&self, rhs: Function) -> Result<Function> {
-        Ok(Function((&self.0 + &rhs.0)?))
+    pub fn __add__(&self, rhs: Function) -> PyResult<Function> {
+        Ok(Function(
+            (&self.0 + &rhs.0).map_err(crate::coefficient_error_to_pyerr)?,
+        ))
     }
 
     /// Reverse addition (lhs + self)
-    pub fn __radd__(&self, lhs: Function) -> Result<Function> {
-        Ok(Function((&self.0 + &lhs.0)?))
+    pub fn __radd__(&self, lhs: Function) -> PyResult<Function> {
+        Ok(Function(
+            (&self.0 + &lhs.0).map_err(crate::coefficient_error_to_pyerr)?,
+        ))
     }
 
     /// Subtraction
-    pub fn __sub__(&self, rhs: Function) -> Result<Function> {
-        Ok(Function((&self.0 - &rhs.0)?))
+    pub fn __sub__(&self, rhs: Function) -> PyResult<Function> {
+        Ok(Function(
+            (&self.0 - &rhs.0).map_err(crate::coefficient_error_to_pyerr)?,
+        ))
     }
 
     /// Reverse subtraction (lhs - self)
-    pub fn __rsub__(&self, lhs: Function) -> Result<Function> {
-        Ok(Function((&lhs.0 - &self.0)?))
+    pub fn __rsub__(&self, lhs: Function) -> PyResult<Function> {
+        Ok(Function(
+            (&lhs.0 - &self.0).map_err(crate::coefficient_error_to_pyerr)?,
+        ))
     }
 
-    pub fn add_assign(&mut self, rhs: &Function) -> Result<()> {
-        self.0 = (&self.0 + &rhs.0)?;
+    pub fn add_assign(&mut self, rhs: &Function) -> PyResult<()> {
+        self.0 = (&self.0 + &rhs.0).map_err(crate::coefficient_error_to_pyerr)?;
         Ok(())
     }
 
@@ -383,62 +391,85 @@ impl Function {
     /// PyO3's in-place operator wrapper returns the mutated self object to Python
     /// when this Rust callback succeeds.
     #[gen_stub(skip)]
-    pub fn __iadd__(&mut self, rhs: &Function) -> Result<()> {
+    pub fn __iadd__(&mut self, rhs: &Function) -> PyResult<()> {
         self.add_assign(rhs)
     }
 
     /// Multiplication
-    pub fn __mul__(&self, rhs: Function) -> Result<Function> {
-        Ok(Function((&self.0 * &rhs.0)?))
+    pub fn __mul__(&self, rhs: Function) -> PyResult<Function> {
+        Ok(Function(
+            (&self.0 * &rhs.0).map_err(crate::coefficient_error_to_pyerr)?,
+        ))
     }
 
     /// Reverse multiplication (lhs * self)
-    pub fn __rmul__(&self, lhs: Function) -> Result<Function> {
-        Ok(Function((&self.0 * &lhs.0)?))
+    pub fn __rmul__(&self, lhs: Function) -> PyResult<Function> {
+        Ok(Function(
+            (&self.0 * &lhs.0).map_err(crate::coefficient_error_to_pyerr)?,
+        ))
     }
 
-    pub fn add_scalar(&self, scalar: f64) -> Result<Function> {
+    pub fn add_scalar(&self, scalar: f64) -> PyResult<Function> {
         match TryInto::<Coefficient>::try_into(scalar) {
-            Ok(coeff) => Ok(Function((&self.0 + coeff)?)),
+            Ok(coeff) => Ok(Function(
+                (&self.0 + coeff).map_err(crate::coefficient_error_to_pyerr)?,
+            )),
             Err(CoefficientError::Zero) => Ok(Function(self.0.clone())), // Return unchanged if scalar is zero
-            Err(e) => Err(e.into()), // Return error for NaN or infinite
+            Err(e) => Err(crate::coefficient_error_to_pyerr(e)), // Return error for NaN or infinite
         }
     }
 
-    pub fn add_linear(&self, linear: &Linear) -> Result<Function> {
-        Ok(Function((&self.0 + &linear.0)?))
+    pub fn add_linear(&self, linear: &Linear) -> PyResult<Function> {
+        Ok(Function(
+            (&self.0 + &linear.0).map_err(crate::coefficient_error_to_pyerr)?,
+        ))
     }
 
-    pub fn add_quadratic(&self, quadratic: &Quadratic) -> Result<Function> {
-        Ok(Function((&self.0 + &quadratic.0)?))
+    pub fn add_quadratic(&self, quadratic: &Quadratic) -> PyResult<Function> {
+        Ok(Function(
+            (&self.0 + &quadratic.0).map_err(crate::coefficient_error_to_pyerr)?,
+        ))
     }
 
-    pub fn add_polynomial(&self, polynomial: &Polynomial) -> Result<Function> {
-        Ok(Function((&self.0 + &polynomial.0)?))
+    pub fn add_polynomial(&self, polynomial: &Polynomial) -> PyResult<Function> {
+        Ok(Function(
+            (&self.0 + &polynomial.0).map_err(crate::coefficient_error_to_pyerr)?,
+        ))
     }
 
-    pub fn mul_scalar(&self, scalar: f64) -> Result<Function> {
+    pub fn mul_scalar(&self, scalar: f64) -> PyResult<Function> {
         match TryInto::<Coefficient>::try_into(scalar) {
-            Ok(coeff) => Ok(Function((&self.0 * coeff)?)),
+            Ok(coeff) => Ok(Function(
+                (&self.0 * coeff).map_err(crate::coefficient_error_to_pyerr)?,
+            )),
             Err(CoefficientError::Zero) => Ok(Function(ommx::Function::default())), // Return zero if scalar is zero
-            Err(e) => Err(e.into()), // Return error for NaN or infinite
+            Err(e) => Err(crate::coefficient_error_to_pyerr(e)), // Return error for NaN or infinite
         }
     }
 
-    pub fn mul_linear(&self, linear: &Linear) -> Result<Function> {
-        Ok(Function((&self.0 * &linear.0)?))
+    pub fn mul_linear(&self, linear: &Linear) -> PyResult<Function> {
+        Ok(Function(
+            (&self.0 * &linear.0).map_err(crate::coefficient_error_to_pyerr)?,
+        ))
     }
 
-    pub fn mul_quadratic(&self, quadratic: &Quadratic) -> Result<Function> {
-        Ok(Function((&self.0 * &quadratic.0)?))
+    pub fn mul_quadratic(&self, quadratic: &Quadratic) -> PyResult<Function> {
+        Ok(Function(
+            (&self.0 * &quadratic.0).map_err(crate::coefficient_error_to_pyerr)?,
+        ))
     }
 
-    pub fn mul_polynomial(&self, polynomial: &Polynomial) -> Result<Function> {
-        Ok(Function((&self.0 * &polynomial.0)?))
+    pub fn mul_polynomial(&self, polynomial: &Polynomial) -> PyResult<Function> {
+        Ok(Function(
+            (&self.0 * &polynomial.0).map_err(crate::coefficient_error_to_pyerr)?,
+        ))
     }
 
-    pub fn content_factor(&self) -> Result<f64> {
-        self.0.content_factor().map(|c| c.into_inner())
+    pub fn content_factor(&self) -> PyResult<f64> {
+        self.0
+            .content_factor()
+            .map(|c| c.into_inner())
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))
     }
 
     pub fn required_ids(&self) -> BTreeSet<u64> {
