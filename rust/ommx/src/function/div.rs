@@ -20,7 +20,7 @@ impl Div<Coefficient> for Function {
     type Output = Result<Self, CoefficientError>;
 
     fn div(self, rhs: Coefficient) -> Self::Output {
-        Ok(Function::from(divide_polynomial(
+        Ok(Function::from_polynomial(divide_polynomial(
             self.into_polynomial(),
             rhs,
         )?))

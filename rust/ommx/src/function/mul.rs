@@ -12,7 +12,7 @@ impl Mul<Coefficient> for Function {
     type Output = Result<Self, CoefficientError>;
 
     fn mul(self, rhs: Coefficient) -> Self::Output {
-        Ok(Function::from((self.into_polynomial() * rhs)?))
+        Ok(Function::from_polynomial((self.into_polynomial() * rhs)?))
     }
 }
 
@@ -60,7 +60,7 @@ impl Mul for Function {
     type Output = Result<Self, CoefficientError>;
 
     fn mul(self, rhs: Function) -> Self::Output {
-        Ok(Function::from(
+        Ok(Function::from_polynomial(
             (self.into_polynomial() * rhs.into_polynomial())?,
         ))
     }
@@ -96,7 +96,7 @@ macro_rules! impl_mul_polynomial_rhs {
             type Output = Result<Function, CoefficientError>;
 
             fn mul(self, rhs: $rhs) -> Self::Output {
-                Ok(Function::from(
+                Ok(Function::from_polynomial(
                     (self.into_polynomial() * Function::from(rhs.clone()).into_polynomial())?,
                 ))
             }

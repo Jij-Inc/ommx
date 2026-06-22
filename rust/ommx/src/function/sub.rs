@@ -6,7 +6,7 @@ impl Sub for Function {
     type Output = Result<Self, CoefficientError>;
 
     fn sub(self, rhs: Self) -> Self::Output {
-        Ok(Function::from(
+        Ok(Function::from_polynomial(
             (self.into_polynomial() - rhs.into_polynomial())?,
         ))
     }
@@ -40,7 +40,7 @@ impl Sub<Coefficient> for Function {
     type Output = Result<Self, CoefficientError>;
 
     fn sub(self, rhs: Coefficient) -> Self::Output {
-        Ok(Function::from((self.into_polynomial() - rhs)?))
+        Ok(Function::from_polynomial((self.into_polynomial() - rhs)?))
     }
 }
 
@@ -72,7 +72,7 @@ impl Sub<Function> for Coefficient {
     type Output = Result<Function, CoefficientError>;
 
     fn sub(self, rhs: Function) -> Self::Output {
-        Ok(Function::from((self - rhs.into_polynomial())?))
+        Ok(Function::from_polynomial((self - rhs.into_polynomial())?))
     }
 }
 
@@ -90,7 +90,7 @@ macro_rules! impl_sub_polynomial_rhs {
             type Output = Result<Function, CoefficientError>;
 
             fn sub(self, rhs: $rhs) -> Self::Output {
-                Ok(Function::from(
+                Ok(Function::from_polynomial(
                     (self.into_polynomial() - Function::from(rhs.clone()).into_polynomial())?,
                 ))
             }
