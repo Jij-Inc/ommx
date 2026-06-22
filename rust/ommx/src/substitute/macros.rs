@@ -48,8 +48,13 @@
 /// # Panics
 ///
 /// This macro panics if:
+/// - An assignment expression panics while being evaluated, for example `coeff!(0.0)`
+/// - An assignment expression has a fallible arithmetic result that is `Err`
 /// - The assignments contain cycles (e.g., x1 <- x2, x2 <- x1)
 /// - A variable is assigned to an expression containing itself (e.g., x1 <- x1 + 1)
+///
+/// Use [`crate::AcyclicAssignments::new`] with explicit error handling for runtime
+/// input that may be invalid.
 ///
 /// # Note
 ///

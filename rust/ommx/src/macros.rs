@@ -7,7 +7,9 @@
 ///
 /// # Panics
 ///
-/// Panics if the value is zero, infinite, or NaN.
+/// Panics if the value is an invalid coefficient value: zero, infinite, or NaN.
+/// This macro is intended for literals and other values that are known to be valid.
+/// Use [`crate::Coefficient::try_from`] for runtime input that may be invalid.
 ///
 /// # Examples
 ///
