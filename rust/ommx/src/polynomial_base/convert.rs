@@ -6,6 +6,16 @@ impl<M: Monomial> PolynomialBase<M> {
         Self { terms }
     }
 
+    pub fn try_from_terms(
+        iter: impl IntoIterator<Item = (M, Coefficient)>,
+    ) -> Result<Self, CoefficientError> {
+        let mut polynomial = Self::default();
+        for (term, coefficient) in iter {
+            polynomial.add_term(term, coefficient)?;
+        }
+        Ok(polynomial)
+    }
+
     pub fn single_term(term: M, coefficient: Coefficient) -> Self {
         let mut terms = FnvHashMap::default();
         terms.insert(term, coefficient);
@@ -29,23 +39,42 @@ where
     }
 }
 
-impl<M: Monomial> FromIterator<(M, Coefficient)> for PolynomialBase<M> {
-    fn from_iter<I: IntoIterator<Item = (M, Coefficient)>>(iter: I) -> Self {
-        let mut polynomial = Self::default();
-        for (term, coefficient) in iter {
-            polynomial
-                .add_term(term, coefficient)
-                .expect("collecting finite non-zero coefficients must not overflow");
-        }
-        polynomial
-    }
-}
-
 impl<M: Monomial> IntoIterator for PolynomialBase<M> {
     type Item = (M, Coefficient);
     type IntoIter = std::collections::hash_map::IntoIter<M, Coefficient>;
     fn into_iter(self) -> Self::IntoIter {
         self.terms.into_iter()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{coeff, linear, Linear};
+
+    #[test]
+    fn try_from_terms_combines_duplicate_terms() {
+        let polynomial =
+            Linear::try_from_terms([(linear!(1), coeff!(2.0)), (linear!(1), coeff!(3.0))]).unwrap();
+
+        assert_eq!(polynomial.terms[&linear!(1)], coeff!(5.0));
+    }
+
+    #[test]
+    fn try_from_terms_removes_cancelled_terms() {
+        let polynomial =
+            Linear::try_from_terms([(linear!(1), coeff!(1.0)), (linear!(1), coeff!(-1.0))])
+                .unwrap();
+
+        assert!(polynomial.is_zero());
+    }
+
+    #[test]
+    fn try_from_terms_returns_error_on_overflow() {
+        let huge = Coefficient::try_from(f64::MAX).unwrap();
+        let err = Linear::try_from_terms([(linear!(1), huge), (linear!(1), huge)]).unwrap_err();
+
+        assert_eq!(err, CoefficientError::Infinite);
     }
 }
 

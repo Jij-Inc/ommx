@@ -15,14 +15,16 @@ impl Function {
         match self {
             Function::Zero => Polynomial::zero(),
             Function::Constant(c) => Polynomial::from(c),
-            Function::Linear(l) => l
-                .into_iter()
-                .map(|(m, c)| (MonomialDyn::from(m), c))
-                .collect(),
-            Function::Quadratic(q) => q
-                .into_iter()
-                .map(|(m, c)| (MonomialDyn::from(m), c))
-                .collect(),
+            Function::Linear(l) => Polynomial::new(
+                l.into_iter()
+                    .map(|(m, c)| (MonomialDyn::from(m), c))
+                    .collect(),
+            ),
+            Function::Quadratic(q) => Polynomial::new(
+                q.into_iter()
+                    .map(|(m, c)| (MonomialDyn::from(m), c))
+                    .collect(),
+            ),
             Function::Polynomial(p) => p,
         }
     }
