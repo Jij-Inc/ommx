@@ -1,14 +1,29 @@
-use num::traits::Inv;
 use std::ops::Div;
 
 use super::*;
 use crate::CoefficientError;
 
+fn divide_polynomial(
+    polynomial: Polynomial,
+    rhs: Coefficient,
+) -> Result<Polynomial, CoefficientError> {
+    let mut out = Polynomial::zero();
+    for (monomial, coefficient) in polynomial.iter() {
+        if let Some(coefficient) = (*coefficient / rhs)? {
+            out.add_term(monomial.clone(), coefficient)?;
+        }
+    }
+    Ok(out)
+}
+
 impl Div<Coefficient> for Function {
     type Output = Result<Self, CoefficientError>;
 
     fn div(self, rhs: Coefficient) -> Self::Output {
-        self * rhs.inv()?
+        Ok(Function::from(divide_polynomial(
+            self.into_polynomial(),
+            rhs,
+        )?))
     }
 }
 
@@ -61,11 +76,11 @@ mod tests {
     }
 
     #[test]
-    fn div_uses_fallible_reciprocal() {
+    fn div_directly_divides_coefficients() {
         let tiny = Coefficient::try_from(f64::from_bits(1)).unwrap();
-        assert!(matches!(
-            Function::from(tiny) / tiny,
-            Err(CoefficientError::Infinite)
-        ));
+        assert_abs_diff_eq!(
+            (Function::from(tiny) / tiny).unwrap(),
+            Function::from(Coefficient::one())
+        );
     }
 }

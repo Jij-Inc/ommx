@@ -1,4 +1,5 @@
 use crate::{Constraint, EvaluatedNamedFunction, Function, State};
+use anyhow::Result;
 use ommx::{Evaluate, NamedFunctionID};
 use pyo3::{prelude::*, Bound, PyAny};
 use std::collections::HashMap;
@@ -138,32 +139,32 @@ impl NamedFunction {
     // Arithmetic operators - delegate to the inner function
 
     /// Addition: returns self.function + other
-    pub fn __add__(&self, other: Function) -> Function {
+    pub fn __add__(&self, other: Function) -> Result<Function> {
         self.function().__add__(other)
     }
 
     /// Reverse addition: returns other + self.function
-    pub fn __radd__(&self, other: Function) -> Function {
+    pub fn __radd__(&self, other: Function) -> Result<Function> {
         self.function().__add__(other)
     }
 
     /// Subtraction: returns self.function - other
-    pub fn __sub__(&self, other: Function) -> Function {
+    pub fn __sub__(&self, other: Function) -> Result<Function> {
         self.function().__sub__(other)
     }
 
     /// Reverse subtraction: returns other - self.function
-    pub fn __rsub__(&self, other: Function) -> Function {
-        Function(&other.0 - &self.0.function)
+    pub fn __rsub__(&self, other: Function) -> Result<Function> {
+        Ok(Function((&other.0 - &self.0.function)?))
     }
 
     /// Multiplication: returns self.function * other
-    pub fn __mul__(&self, other: Function) -> Function {
+    pub fn __mul__(&self, other: Function) -> Result<Function> {
         self.function().__mul__(other)
     }
 
     /// Reverse multiplication: returns other * self.function
-    pub fn __rmul__(&self, other: Function) -> Function {
+    pub fn __rmul__(&self, other: Function) -> Result<Function> {
         self.function().__mul__(other)
     }
 
@@ -181,47 +182,45 @@ impl NamedFunction {
     /// Note: This does NOT return bool, it creates a Constraint object.
     #[gen_stub(type_ignore = ["override"])]
     #[pyo3(name = "__eq__")]
-    pub fn py_eq(&self, other: Function) -> Constraint {
-        let mut function = -other.0;
-        function += &self.0.function;
-        Constraint(
+    pub fn py_eq(&self, other: Function) -> Result<Constraint> {
+        let function = (-other.0 + &self.0.function)?;
+        Ok(Constraint(
             ommx::Constraint {
                 equality: ommx::Equality::EqualToZero,
                 stage: ommx::CreatedData { function },
             },
             ommx::ConstraintMetadata::default(),
-        )
+        ))
     }
 
     /// Create a less-than-or-equal constraint: self.function <= other → Constraint with LessThanOrEqualToZero
     ///
     /// Returns a Constraint where (self.function - other) <= 0.
     #[pyo3(name = "__le__")]
-    pub fn py_le(&self, other: Function) -> Constraint {
-        let mut function = -other.0;
-        function += &self.0.function;
-        Constraint(
+    pub fn py_le(&self, other: Function) -> Result<Constraint> {
+        let function = (-other.0 + &self.0.function)?;
+        Ok(Constraint(
             ommx::Constraint {
                 equality: ommx::Equality::LessThanOrEqualToZero,
                 stage: ommx::CreatedData { function },
             },
             ommx::ConstraintMetadata::default(),
-        )
+        ))
     }
 
     /// Create a greater-than-or-equal constraint: self.function >= other → Constraint with LessThanOrEqualToZero
     ///
     /// Returns a Constraint where (other - self.function) <= 0.
     #[pyo3(name = "__ge__")]
-    pub fn py_ge(&self, other: Function) -> Constraint {
-        let function = other.0 - &self.0.function;
-        Constraint(
+    pub fn py_ge(&self, other: Function) -> Result<Constraint> {
+        let function = (other.0 - &self.0.function)?;
+        Ok(Constraint(
             ommx::Constraint {
                 equality: ommx::Equality::LessThanOrEqualToZero,
                 stage: ommx::CreatedData { function },
             },
             ommx::ConstraintMetadata::default(),
-        )
+        ))
     }
 
     pub fn __repr__(&self) -> String {

@@ -79,6 +79,10 @@ pub use state::*;
 use pyo3::prelude::*;
 use pyo3_stub_gen::runtime::PyModuleTypeAliasExt;
 
+pub(crate) fn coefficient_error_to_pyerr(error: ommx::CoefficientError) -> PyErr {
+    pyo3::exceptions::PyValueError::new_err(error.to_string())
+}
+
 #[cfg(feature = "tracing-bridge")]
 use pyo3_tracing_opentelemetry::TracingBridge;
 

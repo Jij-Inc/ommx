@@ -353,83 +353,84 @@ impl Function {
     }
 
     /// Addition
-    pub fn __add__(&self, rhs: Function) -> Function {
-        Function(&self.0 + &rhs.0)
+    pub fn __add__(&self, rhs: Function) -> Result<Function> {
+        Ok(Function((&self.0 + &rhs.0)?))
     }
 
     /// Reverse addition (lhs + self)
-    pub fn __radd__(&self, lhs: Function) -> Function {
-        Function(&self.0 + &lhs.0)
+    pub fn __radd__(&self, lhs: Function) -> Result<Function> {
+        Ok(Function((&self.0 + &lhs.0)?))
     }
 
     /// Subtraction
-    pub fn __sub__(&self, rhs: Function) -> Function {
-        Function(&self.0 - &rhs.0)
+    pub fn __sub__(&self, rhs: Function) -> Result<Function> {
+        Ok(Function((&self.0 - &rhs.0)?))
     }
 
     /// Reverse subtraction (lhs - self)
-    pub fn __rsub__(&self, lhs: Function) -> Function {
-        Function(&lhs.0 - &self.0)
+    pub fn __rsub__(&self, lhs: Function) -> Result<Function> {
+        Ok(Function((&lhs.0 - &self.0)?))
     }
 
-    pub fn add_assign(&mut self, rhs: &Function) {
-        self.0 += &rhs.0;
+    pub fn add_assign(&mut self, rhs: &Function) -> Result<()> {
+        self.0 = (&self.0 + &rhs.0)?;
+        Ok(())
     }
 
     /// In-place addition for += operator
     #[gen_stub(skip)]
-    pub fn __iadd__(&mut self, rhs: &Function) {
-        self.0 += &rhs.0;
+    pub fn __iadd__(&mut self, rhs: &Function) -> Result<()> {
+        self.add_assign(rhs)
     }
 
     /// Multiplication
-    pub fn __mul__(&self, rhs: Function) -> Function {
-        Function(&self.0 * &rhs.0)
+    pub fn __mul__(&self, rhs: Function) -> Result<Function> {
+        Ok(Function((&self.0 * &rhs.0)?))
     }
 
     /// Reverse multiplication (lhs * self)
-    pub fn __rmul__(&self, lhs: Function) -> Function {
-        Function(&self.0 * &lhs.0)
+    pub fn __rmul__(&self, lhs: Function) -> Result<Function> {
+        Ok(Function((&self.0 * &lhs.0)?))
     }
 
     pub fn add_scalar(&self, scalar: f64) -> Result<Function> {
         match TryInto::<Coefficient>::try_into(scalar) {
-            Ok(coeff) => Ok(Function(&self.0 + coeff)),
+            Ok(coeff) => Ok(Function((&self.0 + coeff)?)),
             Err(CoefficientError::Zero) => Ok(Function(self.0.clone())), // Return unchanged if scalar is zero
             Err(e) => Err(e.into()), // Return error for NaN or infinite
         }
     }
 
-    pub fn add_linear(&self, linear: &Linear) -> Function {
-        Function(&self.0 + &linear.0)
+    pub fn add_linear(&self, linear: &Linear) -> Result<Function> {
+        Ok(Function((&self.0 + &linear.0)?))
     }
 
-    pub fn add_quadratic(&self, quadratic: &Quadratic) -> Function {
-        Function(&self.0 + &quadratic.0)
+    pub fn add_quadratic(&self, quadratic: &Quadratic) -> Result<Function> {
+        Ok(Function((&self.0 + &quadratic.0)?))
     }
 
-    pub fn add_polynomial(&self, polynomial: &Polynomial) -> Function {
-        Function(&self.0 + &polynomial.0)
+    pub fn add_polynomial(&self, polynomial: &Polynomial) -> Result<Function> {
+        Ok(Function((&self.0 + &polynomial.0)?))
     }
 
     pub fn mul_scalar(&self, scalar: f64) -> Result<Function> {
         match TryInto::<Coefficient>::try_into(scalar) {
-            Ok(coeff) => Ok(Function(&self.0 * coeff)),
+            Ok(coeff) => Ok(Function((&self.0 * coeff)?)),
             Err(CoefficientError::Zero) => Ok(Function(ommx::Function::default())), // Return zero if scalar is zero
             Err(e) => Err(e.into()), // Return error for NaN or infinite
         }
     }
 
-    pub fn mul_linear(&self, linear: &Linear) -> Function {
-        Function(&self.0 * &linear.0)
+    pub fn mul_linear(&self, linear: &Linear) -> Result<Function> {
+        Ok(Function((&self.0 * &linear.0)?))
     }
 
-    pub fn mul_quadratic(&self, quadratic: &Quadratic) -> Function {
-        Function(&self.0 * &quadratic.0)
+    pub fn mul_quadratic(&self, quadratic: &Quadratic) -> Result<Function> {
+        Ok(Function((&self.0 * &quadratic.0)?))
     }
 
-    pub fn mul_polynomial(&self, polynomial: &Polynomial) -> Function {
-        Function(&self.0 * &polynomial.0)
+    pub fn mul_polynomial(&self, polynomial: &Polynomial) -> Result<Function> {
+        Ok(Function((&self.0 * &polynomial.0)?))
     }
 
     pub fn content_factor(&self) -> Result<f64> {
@@ -599,10 +600,10 @@ impl Function {
     /// - `binary_ids`: Set of binary variable IDs to reduce powers for
     ///
     /// **Returns:** `True` if any reduction was performed, `False` otherwise
-    pub fn reduce_binary_power(&mut self, binary_ids: BTreeSet<u64>) -> bool {
+    pub fn reduce_binary_power(&mut self, binary_ids: BTreeSet<u64>) -> Result<bool> {
         let variable_id_set: ommx::VariableIDSet =
             binary_ids.into_iter().map(ommx::VariableID::from).collect();
-        self.0.reduce_binary_power(&variable_id_set)
+        Ok(self.0.reduce_binary_power(&variable_id_set)?)
     }
 
     /// Create an equality constraint: self == other → Constraint with EqualToZero
@@ -611,46 +612,44 @@ impl Function {
     /// Note: This does NOT return bool, it creates a Constraint object.
     #[gen_stub(type_ignore = ["override"])]
     #[pyo3(name = "__eq__")]
-    pub fn py_eq(&self, other: Function) -> Constraint {
-        let mut function = -other.0;
-        function += &self.0;
-        Constraint(
+    pub fn py_eq(&self, other: Function) -> Result<Constraint> {
+        let function = (-other.0 + &self.0)?;
+        Ok(Constraint(
             ommx::Constraint {
                 equality: ommx::Equality::EqualToZero,
                 stage: ommx::CreatedData { function },
             },
             ommx::ConstraintMetadata::default(),
-        )
+        ))
     }
 
     /// Create a less-than-or-equal constraint: self <= other → Constraint with LessThanOrEqualToZero
     ///
     /// Returns a Constraint where (self - other) <= 0.
     #[pyo3(name = "__le__")]
-    pub fn py_le(&self, other: Function) -> Constraint {
-        let mut function = -other.0;
-        function += &self.0;
-        Constraint(
+    pub fn py_le(&self, other: Function) -> Result<Constraint> {
+        let function = (-other.0 + &self.0)?;
+        Ok(Constraint(
             ommx::Constraint {
                 equality: ommx::Equality::LessThanOrEqualToZero,
                 stage: ommx::CreatedData { function },
             },
             ommx::ConstraintMetadata::default(),
-        )
+        ))
     }
 
     /// Create a greater-than-or-equal constraint: self >= other → Constraint with LessThanOrEqualToZero
     ///
     /// Returns a Constraint where (other - self) <= 0.
     #[pyo3(name = "__ge__")]
-    pub fn py_ge(&self, other: Function) -> Constraint {
-        let function = other.0 - &self.0;
-        Constraint(
+    pub fn py_ge(&self, other: Function) -> Result<Constraint> {
+        let function = (other.0 - &self.0)?;
+        Ok(Constraint(
             ommx::Constraint {
                 equality: ommx::Equality::LessThanOrEqualToZero,
                 stage: ommx::CreatedData { function },
             },
             ommx::ConstraintMetadata::default(),
-        )
+        ))
     }
 }
