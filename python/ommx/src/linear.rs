@@ -354,7 +354,7 @@ impl Linear {
     }
 
     pub fn add_assign(&mut self, rhs: &Linear) -> Result<()> {
-        self.0 = (&self.0 + &rhs.0)?;
+        self.0.try_add_assign_in_place(&rhs.0)?;
         Ok(())
     }
 

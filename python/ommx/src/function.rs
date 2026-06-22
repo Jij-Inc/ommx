@@ -382,7 +382,9 @@ impl Function {
     }
 
     pub fn add_assign(&mut self, rhs: &Function) -> PyResult<()> {
-        self.0 = (&self.0 + &rhs.0).map_err(crate::coefficient_error_to_pyerr)?;
+        self.0
+            .try_add_assign_in_place(rhs.0.clone())
+            .map_err(crate::coefficient_error_to_pyerr)?;
         Ok(())
     }
 

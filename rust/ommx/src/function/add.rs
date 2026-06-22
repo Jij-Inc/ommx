@@ -51,11 +51,13 @@ impl Function {
         Function::from_polynomial(self.into_polynomial())
     }
 
-    /// Add to this function in place.
+    /// Add `rhs` to this function in place.
     ///
-    /// This fast path is not atomic: if a coefficient operation fails, `self`
-    /// may already have been partially modified.
-    pub(crate) fn try_add_assign_in_place(&mut self, rhs: Self) -> Result<(), CoefficientError> {
+    /// This is a fallible replacement for `AddAssign`: it returns
+    /// [`CoefficientError`] when coefficient arithmetic overflows or produces
+    /// NaN. The operation is intentionally not atomic. If an error is returned,
+    /// `self` may already have been modified.
+    pub fn try_add_assign_in_place(&mut self, rhs: Self) -> Result<(), CoefficientError> {
         let lhs = std::mem::take(self);
         *self = match (lhs, rhs) {
             (Function::Zero, rhs) => rhs,

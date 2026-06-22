@@ -10,6 +10,27 @@ impl<M: Monomial> PolynomialBase<M> {
     pub fn is_zero(&self) -> bool {
         self.terms.is_empty()
     }
+
+    /// Add `rhs` to this polynomial in place.
+    ///
+    /// This is a fallible replacement for `AddAssign`: it returns
+    /// [`CoefficientError`] when coefficient arithmetic overflows or produces
+    /// NaN. The operation is intentionally not atomic. If an error is returned,
+    /// terms processed before the failing coefficient may already have been
+    /// updated.
+    pub fn try_add_assign_in_place<N>(
+        &mut self,
+        rhs: &PolynomialBase<N>,
+    ) -> Result<(), CoefficientError>
+    where
+        N: Monomial,
+        M: From<N>,
+    {
+        for (monomial, coefficient) in &rhs.terms {
+            self.add_term(M::from(monomial.clone()), *coefficient)?;
+        }
+        Ok(())
+    }
 }
 
 impl<M1, M2> Add<&PolynomialBase<M1>> for PolynomialBase<M2>
@@ -20,9 +41,7 @@ where
     type Output = Result<Self, CoefficientError>;
 
     fn add(mut self, rhs: &PolynomialBase<M1>) -> Self::Output {
-        for (id, c) in &rhs.terms {
-            self.add_term(Into::<M2>::into(id.clone()), *c)?;
-        }
+        self.try_add_assign_in_place(rhs)?;
         Ok(self)
     }
 }
