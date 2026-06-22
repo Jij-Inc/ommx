@@ -1,5 +1,5 @@
 use super::*;
-use crate::{CoefficientError, MonomialDyn};
+use crate::{CoefficientError, LinearMonomial, MonomialDyn, QuadraticMonomial};
 use std::ops::{Add, Neg};
 
 impl Function {
@@ -46,15 +46,59 @@ impl Function {
             Function::Polynomial(p) => p,
         }
     }
+
+    pub(crate) fn normalize(self) -> Self {
+        Function::from_polynomial(self.into_polynomial())
+    }
+
+    pub(crate) fn add_raw(self, rhs: Self) -> Result<Self, CoefficientError> {
+        Ok(match (self, rhs) {
+            (Function::Zero, rhs) => rhs,
+            (lhs, Function::Zero) => lhs,
+            (Function::Constant(lhs), Function::Constant(rhs)) => {
+                if let Some(coefficient) = (lhs + rhs)? {
+                    Function::Constant(coefficient)
+                } else {
+                    Function::Zero
+                }
+            }
+            (Function::Constant(c), Function::Linear(mut l))
+            | (Function::Linear(mut l), Function::Constant(c)) => {
+                l.add_term(LinearMonomial::Constant, c)?;
+                Function::Linear(l)
+            }
+            (Function::Constant(c), Function::Quadratic(mut q))
+            | (Function::Quadratic(mut q), Function::Constant(c)) => {
+                q.add_term(QuadraticMonomial::Constant, c)?;
+                Function::Quadratic(q)
+            }
+            (Function::Constant(c), Function::Polynomial(mut p))
+            | (Function::Polynomial(mut p), Function::Constant(c)) => {
+                p.add_term(MonomialDyn::default(), c)?;
+                Function::Polynomial(p)
+            }
+            (Function::Linear(lhs), Function::Linear(rhs)) => Function::Linear((lhs + rhs)?),
+            (Function::Linear(l), Function::Quadratic(q))
+            | (Function::Quadratic(q), Function::Linear(l)) => Function::Quadratic((q + &l)?),
+            (Function::Linear(l), Function::Polynomial(p))
+            | (Function::Polynomial(p), Function::Linear(l)) => Function::Polynomial((p + &l)?),
+            (Function::Quadratic(lhs), Function::Quadratic(rhs)) => {
+                Function::Quadratic((lhs + rhs)?)
+            }
+            (Function::Quadratic(q), Function::Polynomial(p))
+            | (Function::Polynomial(p), Function::Quadratic(q)) => Function::Polynomial((p + &q)?),
+            (Function::Polynomial(lhs), Function::Polynomial(rhs)) => {
+                Function::Polynomial((lhs + rhs)?)
+            }
+        })
+    }
 }
 
 impl Add for Function {
     type Output = Result<Self, CoefficientError>;
 
     fn add(self, rhs: Self) -> Self::Output {
-        Ok(Function::from_polynomial(
-            (self.into_polynomial() + rhs.into_polynomial())?,
-        ))
+        Ok(self.add_raw(rhs)?.normalize())
     }
 }
 

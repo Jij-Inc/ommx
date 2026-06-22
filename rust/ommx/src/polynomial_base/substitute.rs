@@ -30,9 +30,10 @@ where
         check_self_assignment(assigned, f)?;
         let mut substituted = Function::Zero;
         for (monomial, coefficient) in self.terms {
-            substituted = (substituted + (coefficient * monomial.substitute_one(assigned, f)?)?)?;
+            let term = (coefficient * monomial.substitute_one(assigned, f)?)?;
+            substituted = substituted.add_raw(term)?;
         }
-        Ok(substituted)
+        Ok(substituted.normalize())
     }
 }
 
