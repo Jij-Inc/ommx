@@ -57,7 +57,9 @@ fn test_memory_profile_entries_iter() {
 #[test]
 fn test_linear_memory_profile() {
     // Create a linear expression: 2*x1 + 3*x2 + 5
-    let expr: Linear = coeff!(2.0) * linear!(1) + coeff!(3.0) * linear!(2) + coeff!(5.0);
+    let expr: Linear =
+        ((coeff!(2.0) * linear!(1)).unwrap() + (coeff!(3.0) * linear!(2)).unwrap()).unwrap();
+    let expr = (expr + coeff!(5.0)).unwrap();
 
     let folded = logical_memory_to_folded(&expr);
     insta::assert_snapshot!(folded, @"PolynomialBase.terms 104");
@@ -69,7 +71,9 @@ fn test_linear_memory_profile() {
 #[test]
 fn test_linear_snapshot() {
     // Create a deterministic linear expression: 2*x1 + 3*x2 + 5
-    let expr: Linear = coeff!(2.0) * linear!(1) + coeff!(3.0) * linear!(2) + coeff!(5.0);
+    let expr: Linear =
+        ((coeff!(2.0) * linear!(1)).unwrap() + (coeff!(3.0) * linear!(2)).unwrap()).unwrap();
+    let expr = (expr + coeff!(5.0)).unwrap();
 
     let folded = logical_memory_to_folded(&expr);
 
@@ -80,8 +84,10 @@ fn test_linear_snapshot() {
 #[test]
 fn test_quadratic_memory_profile() {
     // Create a quadratic expression: x1*x2 + 2*x1 + 1
-    let expr: Quadratic =
-        coeff!(1.0) * quadratic!(1, 2) + coeff!(2.0) * quadratic!(1) + coeff!(1.0);
+    let expr: Quadratic = ((coeff!(1.0) * quadratic!(1, 2)).unwrap()
+        + (coeff!(2.0) * quadratic!(1)).unwrap())
+    .unwrap();
+    let expr = (expr + coeff!(1.0)).unwrap();
 
     let folded = logical_memory_to_folded(&expr);
     insta::assert_snapshot!(folded, @"PolynomialBase.terms 128");
@@ -93,8 +99,10 @@ fn test_quadratic_memory_profile() {
 #[test]
 fn test_quadratic_snapshot() {
     // Create a deterministic quadratic expression: x1*x2 + 2*x1 + 1
-    let expr: Quadratic =
-        coeff!(1.0) * quadratic!(1, 2) + coeff!(2.0) * quadratic!(1) + coeff!(1.0);
+    let expr: Quadratic = ((coeff!(1.0) * quadratic!(1, 2)).unwrap()
+        + (coeff!(2.0) * quadratic!(1)).unwrap())
+    .unwrap();
+    let expr = (expr + coeff!(1.0)).unwrap();
 
     let folded = logical_memory_to_folded(&expr);
 
@@ -105,9 +113,9 @@ fn test_quadratic_snapshot() {
 #[test]
 fn test_large_linear_memory() {
     // Create a larger linear expression with many terms
-    let mut expr = coeff!(1.0) * linear!(1);
+    let mut expr = (coeff!(1.0) * linear!(1)).unwrap();
     for i in 2..=100 {
-        expr += coeff!(i as f64) * linear!(i);
+        expr = (expr + (coeff!(i as f64) * linear!(i)).unwrap()).unwrap();
     }
 
     let folded = logical_memory_to_folded(&expr);
@@ -123,9 +131,9 @@ fn test_large_linear_memory() {
 #[test]
 fn test_medium_linear_snapshot() {
     // Create a medium-sized deterministic linear expression with 10 terms
-    let mut expr = coeff!(1.0) * linear!(1);
+    let mut expr = (coeff!(1.0) * linear!(1)).unwrap();
     for i in 2..=10 {
-        expr += coeff!(i as f64) * linear!(i);
+        expr = (expr + (coeff!(i as f64) * linear!(i)).unwrap()).unwrap();
     }
 
     let folded = logical_memory_to_folded(&expr);
@@ -142,8 +150,8 @@ fn test_btreemap_with_linear() {
     use std::collections::BTreeMap;
 
     let mut map = BTreeMap::new();
-    map.insert(VariableID::from(1), coeff!(2.0) * linear!(1));
-    map.insert(VariableID::from(2), coeff!(3.0) * linear!(2));
+    map.insert(VariableID::from(1), (coeff!(2.0) * linear!(1)).unwrap());
+    map.insert(VariableID::from(2), (coeff!(3.0) * linear!(2)).unwrap());
 
     let folded = logical_memory_to_folded(&map);
     insta::assert_snapshot!(folded, @r###"
@@ -159,8 +167,8 @@ fn test_hashmap_with_linear() {
     use std::collections::HashMap;
 
     let mut map = HashMap::new();
-    map.insert(VariableID::from(1), coeff!(2.0) * linear!(1));
-    map.insert(VariableID::from(2), coeff!(3.0) * linear!(2));
+    map.insert(VariableID::from(1), (coeff!(2.0) * linear!(1)).unwrap());
+    map.insert(VariableID::from(2), (coeff!(3.0) * linear!(2)).unwrap());
 
     let folded = logical_memory_to_folded(&map);
     // Note: HashMap iteration order is non-deterministic, but snapshots should still be stable
@@ -174,9 +182,9 @@ fn test_hashmap_with_linear() {
 #[test]
 fn test_vec_with_linear() {
     let vec = vec![
-        coeff!(2.0) * linear!(1),
-        coeff!(3.0) * linear!(2),
-        coeff!(4.0) * linear!(3),
+        (coeff!(2.0) * linear!(1)).unwrap(),
+        (coeff!(3.0) * linear!(2)).unwrap(),
+        (coeff!(4.0) * linear!(3)).unwrap(),
     ];
 
     let folded = logical_memory_to_folded(&vec);

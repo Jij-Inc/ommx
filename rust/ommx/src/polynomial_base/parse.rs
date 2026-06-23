@@ -38,11 +38,14 @@ impl Parse for v1::Linear {
         for term in self.terms {
             let term = term.parse_as(&(), message, "terms")?;
             if let Some(term) = term {
-                out.add_term(term.id.into(), term.coefficient);
+                out.add_term(term.id.into(), term.coefficient)
+                    .map_err(|e| RawParseError::from(e).context(message, "terms"))?;
             }
         }
         match self.constant.try_into() {
-            Ok(coefficient) => out.add_term(LinearMonomial::Constant, coefficient),
+            Ok(coefficient) => out
+                .add_term(LinearMonomial::Constant, coefficient)
+                .map_err(|e| RawParseError::from(e).context(message, "constant"))?,
             Err(CoefficientError::Zero) => {}
             Err(e) => return Err(RawParseError::from(e).context(message, "constant")),
         }
@@ -114,7 +117,9 @@ impl Parse for v1::Quadratic {
             let column = VariableID::from(column);
             let row = VariableID::from(row);
             match value.try_into() {
-                Ok(coefficient) => out.add_term((column, row).into(), coefficient),
+                Ok(coefficient) => out
+                    .add_term((column, row).into(), coefficient)
+                    .map_err(|e| RawParseError::from(e).context(message, "values"))?,
                 Err(CoefficientError::Zero) => {}
                 Err(e) => return Err(RawParseError::from(e).context(message, "values")),
             }
@@ -122,7 +127,7 @@ impl Parse for v1::Quadratic {
 
         if let Some(linear) = self.linear {
             let linear = linear.parse_as(&(), message, "linear")?;
-            out += &linear;
+            out = (out + &linear).map_err(|e| RawParseError::from(e).context(message, "linear"))?;
         }
         Ok(out)
     }
@@ -188,7 +193,8 @@ impl Parse for v1::Polynomial {
             if let Some((monomial, coefficient)) =
                 term.parse_as(&(), "ommx.v1.Polynomial", "terms")?
             {
-                out.add_term(monomial, coefficient);
+                out.add_term(monomial, coefficient)
+                    .map_err(|e| RawParseError::from(e).context("ommx.v1.Polynomial", "terms"))?;
             }
         }
         Ok(out)

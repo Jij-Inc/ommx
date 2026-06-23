@@ -58,7 +58,7 @@ mod tests {
     #[test]
     fn test_constraint_snapshot() {
         let constraint = Constraint::equal_to_zero(Function::Linear(
-            coeff!(2.0) * linear!(1) + coeff!(3.0) * linear!(2),
+            ((coeff!(2.0) * linear!(1)).unwrap() + (coeff!(3.0) * linear!(2)).unwrap()).unwrap(),
         ));
         let folded = logical_memory_to_folded(&constraint);
         insta::assert_snapshot!(folded);

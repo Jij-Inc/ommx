@@ -238,8 +238,9 @@ mod tests {
         );
 
         // Create a simple instance: minimize x1 + 2*x2, subject to x1 + x2 <= 10
-        let objective = Function::from(linear!(1) + coeff!(2.0) * linear!(2));
-        let constraint_function = Function::from(linear!(1) + linear!(2) + coeff!(-10.0));
+        let objective = Function::from((linear!(1) + coeff!(2.0) * linear!(2)).unwrap());
+        let constraint_function =
+            Function::from(((linear!(1) + linear!(2)).unwrap() + coeff!(-10.0)).unwrap());
 
         let mut constraints = BTreeMap::new();
         let constraint = Constraint {

@@ -30,16 +30,14 @@ fn main() -> Result<()> {
     );
 
     // Objective function: 2.0 * x_{0, 0} * x_{1, 0} - x_{0, 0} - x_{1, 0} + 3.0
-    let objective = Function::Quadratic(
-        // Quadratic term: 2.0 * x_{0,0} * x_{1, 0}
-        coeff!(2.0) * quadratic!(0, 1)
-            // Linear term: - x_{0, 0}
-            + coeff!(-1.0) * quadratic!(0)
-            // Linear term: - x_{1, 0}
-            + coeff!(-1.0) * quadratic!(1)
-            // Constant term: 3.0
-            + coeff!(3.0),
-    );
+    // Quadratic term: 2.0 * x_{0,0} * x_{1, 0}
+    let objective = (coeff!(2.0) * quadratic!(0, 1))?
+        // Linear term: - x_{0, 0}
+        + (coeff!(-1.0) * quadratic!(0))?;
+    // Linear term: - x_{1, 0}
+    let objective = objective? + (coeff!(-1.0) * quadratic!(1))?;
+    // Constant term: 3.0
+    let objective = Function::Quadratic((objective? + coeff!(3.0))?);
 
     // No constraints (unconstrained QUBO)
     let constraints: BTreeMap<_, Constraint> = BTreeMap::new();

@@ -229,7 +229,7 @@ mod tests {
         // Add a named function that references variable 0
         let nf = instance
             .new_named_function(
-                Function::Linear(coeff!(2.0) * linear!(0)),
+                Function::Linear((coeff!(2.0) * linear!(0)).unwrap()),
                 Some("obj".to_string()),
                 vec![0],
                 Default::default(),
@@ -252,7 +252,7 @@ mod tests {
         // Try to add a function referencing variable 99 which doesn't exist
         let err = instance
             .new_named_function(
-                Function::Linear(coeff!(1.0) * linear!(99)),
+                Function::Linear((coeff!(1.0) * linear!(99)).unwrap()),
                 Some("bad".to_string()),
                 vec![],
                 Default::default(),

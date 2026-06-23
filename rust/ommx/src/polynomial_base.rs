@@ -21,13 +21,10 @@ pub use parse::*;
 pub use polynomial::*;
 pub use quadratic::*;
 
-use crate::{coeff, v1::State, Coefficient, VariableID, VariableIDSet};
+use crate::{coeff, v1::State, Coefficient, CoefficientError, VariableID, VariableIDSet};
 use anyhow::{Context, Result};
 use fnv::{FnvHashMap, FnvHashSet};
-use num::{
-    integer::{gcd, lcm},
-    One,
-};
+use num::integer::{gcd, lcm};
 use proptest::strategy::BoxedStrategy;
 use std::{fmt::Debug, hash::Hash};
 
@@ -111,20 +108,21 @@ impl<M: Monomial> PolynomialBase<M> {
         Self { terms }
     }
 
-    pub fn add_term(&mut self, term: M, coefficient: Coefficient) {
+    pub fn add_term(&mut self, term: M, coefficient: Coefficient) -> Result<(), CoefficientError> {
         use std::collections::hash_map::Entry;
         match self.terms.entry(term) {
             Entry::Vacant(e) => {
                 e.insert(coefficient);
             }
             Entry::Occupied(mut e) => {
-                if let Some(added) = *e.get() + coefficient {
+                if let Some(added) = (*e.get() + coefficient)? {
                     e.insert(added);
                 } else {
                     e.remove();
                 }
             }
         }
+        Ok(())
     }
 
     pub fn num_terms(&self) -> usize {
@@ -197,16 +195,19 @@ impl<M: Monomial> PolynomialBase<M> {
             .filter_map(|(monomial, coeff)| monomial.as_quadratic().map(|pair| (pair, *coeff)))
     }
 
-    pub fn reduce_binary_power(&mut self, binary_ids: &VariableIDSet) -> bool {
+    pub fn reduce_binary_power(
+        &mut self,
+        binary_ids: &VariableIDSet,
+    ) -> Result<bool, CoefficientError> {
         let mut reduced = false;
         let mut new = Self::default();
         for (monomial, coefficient) in &self.terms {
             let mut m = monomial.clone();
             reduced |= m.reduce_binary_power(binary_ids);
-            new.add_term(m, *coefficient);
+            new.add_term(m, *coefficient)?;
         }
         *self = new;
-        reduced
+        Ok(reduced)
     }
 
     /// The maximum absolute value of the coefficients including the constant.
@@ -283,28 +284,28 @@ mod tests {
         use ::approx::assert_abs_diff_eq;
 
         // Test case 1: Linear polynomial - no change expected
-        let original_linear = coeff!(2.0) * linear!(1) + coeff!(3.0) * linear!(2) + coeff!(1.0);
+        let original_linear =
+            ((coeff!(2.0) * linear!(1)).unwrap() + (coeff!(3.0) * linear!(2)).unwrap()).unwrap();
+        let original_linear = (original_linear + coeff!(1.0)).unwrap();
         let mut linear_poly = original_linear.clone();
 
         let mut binary_ids = crate::variable_ids!(1);
 
-        let changed = linear_poly.reduce_binary_power(&binary_ids);
+        let changed = linear_poly.reduce_binary_power(&binary_ids).unwrap();
         assert!(!changed); // Linear terms should not change
         assert_abs_diff_eq!(linear_poly, original_linear);
 
         // Test case 2: Quadratic polynomial with binary variable
         // x1^2 + x1*x2 + x2^2 + 4 -> x1 + x1*x2 + x2^2 + 4 when x1 is binary
-        let mut quad_poly = quadratic!(1, 1)
-            + coeff!(2.0) * quadratic!(1, 2)
-            + coeff!(3.0) * quadratic!(2, 2)
-            + coeff!(4.0);
+        let mut quad_poly = (quadratic!(1, 1) + (coeff!(2.0) * quadratic!(1, 2)).unwrap()).unwrap();
+        quad_poly = (quad_poly + (coeff!(3.0) * quadratic!(2, 2)).unwrap()).unwrap();
+        quad_poly = (quad_poly + coeff!(4.0)).unwrap();
 
-        let expected = quadratic!(1)
-            + coeff!(2.0) * quadratic!(1, 2)
-            + coeff!(3.0) * quadratic!(2, 2)
-            + coeff!(4.0);
+        let mut expected = (quadratic!(1) + (coeff!(2.0) * quadratic!(1, 2)).unwrap()).unwrap();
+        expected = (expected + (coeff!(3.0) * quadratic!(2, 2)).unwrap()).unwrap();
+        expected = (expected + coeff!(4.0)).unwrap();
 
-        let changed2 = quad_poly.reduce_binary_power(&binary_ids);
+        let changed2 = quad_poly.reduce_binary_power(&binary_ids).unwrap();
         assert!(changed2);
         assert_abs_diff_eq!(quad_poly, expected);
 
@@ -312,31 +313,34 @@ mod tests {
         binary_ids.extend(crate::variable_ids!(2, 3));
 
         // x1^2 + x2^2 + x3^2 + x1*x2 -> x1 + x2 + x3 + x1*x2
-        let mut quad_poly2 = coeff!(5.0) * quadratic!(1, 1)
-            + coeff!(6.0) * quadratic!(2, 2)
-            + coeff!(7.0) * quadratic!(3, 3)
-            + coeff!(8.0) * quadratic!(1, 2);
+        let mut quad_poly2 = ((coeff!(5.0) * quadratic!(1, 1)).unwrap()
+            + (coeff!(6.0) * quadratic!(2, 2)).unwrap())
+        .unwrap();
+        quad_poly2 = (quad_poly2 + (coeff!(7.0) * quadratic!(3, 3)).unwrap()).unwrap();
+        quad_poly2 = (quad_poly2 + (coeff!(8.0) * quadratic!(1, 2)).unwrap()).unwrap();
 
-        let expected2 = coeff!(5.0) * quadratic!(1)  // x1^2 -> x1
-            + coeff!(6.0) * quadratic!(2)  // x2^2 -> x2
-            + coeff!(7.0) * quadratic!(3)  // x3^2 -> x3
-            + coeff!(8.0) * quadratic!(1, 2);
+        let mut expected2 = ((coeff!(5.0) * quadratic!(1)).unwrap()  // x1^2 -> x1
+            + (coeff!(6.0) * quadratic!(2)).unwrap()) // x2^2 -> x2
+        .unwrap();
+        expected2 = (expected2 + (coeff!(7.0) * quadratic!(3)).unwrap()).unwrap(); // x3^2 -> x3
+        expected2 = (expected2 + (coeff!(8.0) * quadratic!(1, 2)).unwrap()).unwrap();
 
-        let changed3 = quad_poly2.reduce_binary_power(&binary_ids);
+        let changed3 = quad_poly2.reduce_binary_power(&binary_ids).unwrap();
         assert!(changed3);
         assert_abs_diff_eq!(quad_poly2, expected2);
 
         // Test case 4: No change case - all non-binary variables
-        let original_quad3 = quadratic!(4, 4) + coeff!(2.0) * quadratic!(5, 5);
+        let original_quad3 =
+            (quadratic!(4, 4) + (coeff!(2.0) * quadratic!(5, 5)).unwrap()).unwrap();
         let mut quad_poly3 = original_quad3.clone();
-        let changed4 = quad_poly3.reduce_binary_power(&binary_ids);
+        let changed4 = quad_poly3.reduce_binary_power(&binary_ids).unwrap();
         assert!(!changed4); // No change since x4 and x5 are not binary
         assert_abs_diff_eq!(quad_poly3, original_quad3);
 
         // Test case 5: Empty polynomial
         let mut empty_poly = Quadratic::default();
         let expected_empty = Quadratic::default();
-        let changed5 = empty_poly.reduce_binary_power(&binary_ids);
+        let changed5 = empty_poly.reduce_binary_power(&binary_ids).unwrap();
         assert!(!changed5); // No change for empty polynomial
         assert_abs_diff_eq!(empty_poly, expected_empty);
     }
@@ -348,13 +352,16 @@ mod tests {
 
         // Test with simple rational coefficients
         // 1/2 * x1 + 1/3 * x2 => content factor should be 6
-        let p = coeff!(0.5) * linear!(1) + Coefficient::try_from(1.0 / 3.0).unwrap() * linear!(2);
+        let p = ((coeff!(0.5) * linear!(1)).unwrap()
+            + (Coefficient::try_from(1.0 / 3.0).unwrap() * linear!(2)).unwrap())
+        .unwrap();
 
         let factor = p.content_factor().unwrap();
         assert_abs_diff_eq!(factor.into_inner(), 6.0);
 
         // Test with integer coefficients (should return 1)
-        let p = coeff!(2.0) * linear!(1) + coeff!(3.0) * linear!(2);
+        let p =
+            ((coeff!(2.0) * linear!(1)).unwrap() + (coeff!(3.0) * linear!(2)).unwrap()).unwrap();
 
         let factor = p.content_factor().unwrap();
         assert_eq!(factor, Coefficient::one());
@@ -366,16 +373,18 @@ mod tests {
 
         // Test with more complex rational coefficients
         // 2/3 * x1 + 2/5 * x2 => content factor should be 15/2
-        let p = Coefficient::try_from(2.0 / 3.0).unwrap() * linear!(1)
-            + Coefficient::try_from(2.0 / 5.0).unwrap() * linear!(2);
+        let p = ((Coefficient::try_from(2.0 / 3.0).unwrap() * linear!(1)).unwrap()
+            + (Coefficient::try_from(2.0 / 5.0).unwrap() * linear!(2)).unwrap())
+        .unwrap();
 
         let factor = p.content_factor().unwrap();
         assert_abs_diff_eq!(factor.into_inner(), 15.0 / 2.0);
 
         // Test with PI (irrational numbers)
         use std::f64::consts::PI;
-        let p = Coefficient::try_from(PI).unwrap() * linear!(1)
-            + Coefficient::try_from(2.0 * PI).unwrap() * linear!(2);
+        let p = ((Coefficient::try_from(PI).unwrap() * linear!(1)).unwrap()
+            + (Coefficient::try_from(2.0 * PI).unwrap() * linear!(2)).unwrap())
+        .unwrap();
 
         let factor = p.content_factor().unwrap();
         // For PI and 2*PI, the content factor should be approximately 1/PI

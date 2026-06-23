@@ -3,7 +3,6 @@ use crate::{
     Function, Linear, LinearMonomial, Monomial, MonomialDyn, Polynomial, PolynomialBase,
     QuadraticMonomial, VariableID,
 };
-use num::One;
 
 impl<M> Substitute for PolynomialBase<M>
 where
@@ -31,9 +30,11 @@ where
         check_self_assignment(assigned, f)?;
         let mut substituted = Function::Zero;
         for (monomial, coefficient) in self.terms {
-            substituted += coefficient * monomial.substitute_one(assigned, f)?;
+            let mut term = monomial.substitute_one(assigned, f)?;
+            term.try_scale_assign_in_place(coefficient)?;
+            substituted.try_add_assign_in_place(term)?;
         }
-        Ok(substituted)
+        Ok(substituted.normalize())
     }
 }
 
@@ -86,7 +87,7 @@ impl Substitute for QuadraticMonomial {
             QuadraticMonomial::Pair(pair) => {
                 let l_sub = LinearMonomial::Variable(pair.lower()).substitute_one(assigned, f)?;
                 let u_sub = LinearMonomial::Variable(pair.upper()).substitute_one(assigned, f)?;
-                Ok(&l_sub * &u_sub)
+                Ok((&l_sub * &u_sub)?)
             }
             QuadraticMonomial::Linear(id) => {
                 let result = LinearMonomial::Variable(id).substitute_one(assigned, f)?;
@@ -117,13 +118,15 @@ impl Substitute for MonomialDyn {
         let mut non_substituted = Vec::new();
         for var_id in self.iter() {
             if *var_id == assigned {
-                substituted *= f;
+                substituted.try_mul_assign_in_place(f)?;
             } else {
                 non_substituted.push(*var_id);
             }
         }
-        substituted *= Polynomial::from(MonomialDyn::from(non_substituted));
-        Ok(substituted)
+        substituted.try_mul_polynomial_assign_in_place(Polynomial::from(MonomialDyn::from(
+            non_substituted,
+        )))?;
+        Ok(substituted.normalize())
     }
 }
 
@@ -134,41 +137,46 @@ mod tests {
         assign, coeff, linear, AcyclicAssignments, Evaluate, QuadraticMonomial, VariableID,
         VariableIDSet,
     };
+    use ::approx::assert_abs_diff_eq;
     use proptest::prelude::*;
 
     #[test]
     fn substitute_linear_to_linear() {
         // Poly: 2.0 * x0 + 1.0 (using improved syntax)
-        let poly = coeff!(2.0) * linear!(0) + Linear::one();
+        let poly = ((coeff!(2.0) * linear!(0)).unwrap() + Linear::one()).unwrap();
 
         // Assignments: x0 <- 0.5 * x1 + 1.0
         let assignments = assign! {
-            0 <- coeff!(0.5) * linear!(1) + Linear::one()
+            0 <- ((coeff!(0.5) * linear!(1)).unwrap() + Linear::one()).unwrap()
         };
 
         // 2.0 * (0.5 * x1 + 1.0) + 1.0 = x1 + 3.0
-        let expected = Linear::from(linear!(1) + coeff!(3.0));
+        let expected = (linear!(1) + coeff!(3.0)).unwrap();
 
         let result = poly.substitute_acyclic(&assignments).unwrap();
-        assert_eq!(result, expected.into());
+        assert_abs_diff_eq!(result, expected.into());
     }
 
     #[test]
     fn substitute_linear_to_quadratic() {
         // q = 2 * x0 * x1 (using improved syntax)
-        let q = coeff!(2.0) * QuadraticMonomial::from((VariableID::from(0), VariableID::from(1)));
+        let q = (coeff!(2.0) * QuadraticMonomial::from((VariableID::from(0), VariableID::from(1))))
+            .unwrap();
 
         // x0 = 2*x1 + 1
         let assignments = assign! {
-            0 <- coeff!(2.0) * linear!(1) + Linear::one()
+            0 <- ((coeff!(2.0) * linear!(1)).unwrap() + Linear::one()).unwrap()
         };
 
         // 2 * (2 * x1 + 1) * x1 = 4 * x1^2 + 2 * x1
-        let ans = coeff!(4.0) * QuadraticMonomial::from((VariableID::from(1), VariableID::from(1)))
-            + coeff!(2.0) * QuadraticMonomial::from(VariableID::from(1));
+        let ans = ((coeff!(4.0)
+            * QuadraticMonomial::from((VariableID::from(1), VariableID::from(1))))
+        .unwrap()
+            + (coeff!(2.0) * QuadraticMonomial::from(VariableID::from(1))).unwrap())
+        .unwrap();
 
         let result = q.substitute_acyclic(&assignments).unwrap();
-        assert_eq!(result, ans.into());
+        assert_abs_diff_eq!(result, ans.into());
     }
 
     proptest! {

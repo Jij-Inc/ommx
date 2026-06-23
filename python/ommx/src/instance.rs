@@ -2520,8 +2520,8 @@ impl Instance {
     /// >>> changed
     /// False
     /// ```
-    pub fn reduce_binary_power(&mut self) -> bool {
-        self.inner.reduce_binary_power()
+    pub fn reduce_binary_power(&mut self) -> Result<bool> {
+        Ok(self.inner.reduce_binary_power()?)
     }
 
     #[staticmethod]

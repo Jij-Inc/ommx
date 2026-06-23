@@ -7,12 +7,15 @@ or inequality types, and can be temporarily removed while preserving their defin
 use ommx::{Constraint, Function, Linear, linear, coeff};
 
 // Create constraints: x1 + x2 <= 10 (as x1 + x2 - 10 <= 0)
-let constraint_expr = coeff!(1.0) * linear!(1) + coeff!(1.0) * linear!(2) + Linear::from(coeff!(-10.0));
+let constraint_expr = (coeff!(1.0) * linear!(1))?;
+let constraint_expr = (constraint_expr + (coeff!(1.0) * linear!(2))?)?;
+let constraint_expr = (constraint_expr + Linear::from(coeff!(-10.0)))?;
 let constraint = Constraint::less_than_or_equal_to_zero(Function::from(constraint_expr));
 
 // Equality constraint: x1 - x2 = 0 (as f(x) = 0)
-let eq_expr = coeff!(1.0) * linear!(1) - coeff!(1.0) * linear!(2);
+let eq_expr = ((coeff!(1.0) * linear!(1))? - (coeff!(1.0) * linear!(2))?)?;
 let eq_constraint = Constraint::equal_to_zero(Function::from(eq_expr));
+# Ok::<(), ommx::CoefficientError>(())
 ```
 
 ## Constraint Type System

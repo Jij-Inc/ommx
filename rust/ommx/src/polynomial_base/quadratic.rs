@@ -83,7 +83,7 @@ impl Quadratic {
             match (columns.next(), rows.next(), values.next()) {
                 (Some(col), Some(row), Some(val)) => {
                     let pair = VariableIDPair::new(col, row);
-                    result.add_term(QuadraticMonomial::Pair(pair), val);
+                    result.add_term(QuadraticMonomial::Pair(pair), val)?;
                 }
                 (None, None, None) => break,
                 _ => bail!("Mismatched lengths of columns, rows, and values"),

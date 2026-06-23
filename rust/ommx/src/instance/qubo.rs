@@ -125,9 +125,9 @@ mod tests {
     #[test]
     fn qubo_from_quadratic_objective() {
         // min x1 + 2*x2 + 3*x1*x2 with binary x1, x2
-        let objective = Function::from(linear!(1))
-            + Function::from(coeff!(2.0) * linear!(2))
-            + Function::from(coeff!(3.0) * quadratic!(1, 2));
+        let objective =
+            (Function::from(linear!(1)) + Function::from(coeff!(2.0) * linear!(2))).unwrap();
+        let objective = (objective + Function::from(coeff!(3.0) * quadratic!(1, 2))).unwrap();
         let instance = Instance::new(
             Sense::Minimize,
             objective,
@@ -231,7 +231,7 @@ mod tests {
             ]),
             coeff!(1.0),
         );
-        let objective = Function::from(linear!(1)) + Function::from(cubic);
+        let objective = (Function::from(linear!(1)) + Function::from(cubic)).unwrap();
         let instance = Instance::new(
             Sense::Minimize,
             objective,

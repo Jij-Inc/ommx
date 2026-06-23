@@ -2,7 +2,6 @@ use criterion::{
     criterion_group, criterion_main, AxisScale, BenchmarkId, Criterion, PlotConfiguration,
 };
 
-use num::Zero;
 use ommx::{
     random::{random, random_deterministic, Rng},
     Linear, LinearParameters, Polynomial, PolynomialParameters, Quadratic, QuadraticParameters,
@@ -30,7 +29,8 @@ fn sum_linear_small_many(c: &mut Criterion) {
                 b.iter(|| {
                     linears
                         .iter()
-                        .fold(Linear::zero(), |acc, lin| acc + lin.clone())
+                        .try_fold(Linear::zero(), |acc, lin| acc + lin.clone())
+                        .unwrap()
                 })
             },
         );
@@ -59,7 +59,8 @@ fn sum_linear_large_little(c: &mut Criterion) {
                 b.iter(|| {
                     linears
                         .iter()
-                        .fold(Linear::zero(), |acc, lin| acc + lin.clone())
+                        .try_fold(Linear::zero(), |acc, lin| acc + lin.clone())
+                        .unwrap()
                 })
             },
         );
@@ -89,7 +90,8 @@ fn sum_quadratic_small_many(c: &mut Criterion) {
                 b.iter(|| {
                     quads
                         .iter()
-                        .fold(Quadratic::zero(), |acc, q| acc + q.clone())
+                        .try_fold(Quadratic::zero(), |acc, q| acc + q.clone())
+                        .unwrap()
                 })
             },
         );
@@ -119,7 +121,8 @@ fn sum_quadratic_large_little(c: &mut Criterion) {
                 b.iter(|| {
                     quads
                         .iter()
-                        .fold(Quadratic::zero(), |acc, q| acc + q.clone())
+                        .try_fold(Quadratic::zero(), |acc, q| acc + q.clone())
+                        .unwrap()
                 })
             },
         );
@@ -149,7 +152,8 @@ fn sum_polynomial_small_many(c: &mut Criterion) {
                 b.iter(|| {
                     polys
                         .iter()
-                        .fold(Polynomial::zero(), |acc, p| acc + p.clone())
+                        .try_fold(Polynomial::zero(), |acc, p| acc + p.clone())
+                        .unwrap()
                 })
             },
         );
@@ -180,7 +184,8 @@ fn sum_polynomial_large_little(c: &mut Criterion) {
                 b.iter(|| {
                     polys
                         .iter()
-                        .fold(Polynomial::zero(), |acc, p| acc + p.clone())
+                        .try_fold(Polynomial::zero(), |acc, p| acc + p.clone())
+                        .unwrap()
                 })
             },
         );
@@ -208,7 +213,13 @@ fn add_small_many_linear_to_quadratic(c: &mut Criterion) {
         group.bench_with_input(
             BenchmarkId::new("add-small-many-linear-to-quadratic", num_lin.to_string()),
             &(lins, quad),
-            |b, (lins, quad)| b.iter(|| lins.iter().fold(quad.clone(), |acc, lin| acc + lin)),
+            |b, (lins, quad)| {
+                b.iter(|| {
+                    lins.iter()
+                        .try_fold(quad.clone(), |acc, lin| acc + lin)
+                        .unwrap()
+                })
+            },
         );
     }
     group.finish();
@@ -234,7 +245,13 @@ fn add_small_many_linear_to_polynomial(c: &mut Criterion) {
         group.bench_with_input(
             BenchmarkId::new("add-small-many-linear-to-polynomial", num_lin.to_string()),
             &(lins, poly),
-            |b, (lins, poly)| b.iter(|| lins.iter().fold(poly.clone(), |acc, lin| acc + lin)),
+            |b, (lins, poly)| {
+                b.iter(|| {
+                    lins.iter()
+                        .try_fold(poly.clone(), |acc, lin| acc + lin)
+                        .unwrap()
+                })
+            },
         );
     }
     group.finish();

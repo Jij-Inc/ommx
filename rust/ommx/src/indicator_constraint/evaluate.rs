@@ -273,7 +273,7 @@ mod tests {
         let mut ic = IndicatorConstraint::new(
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
-            Function::from(linear!(1) + linear!(2) + coeff!(-5.0)),
+            Function::from(((linear!(1) + linear!(2)).unwrap() + coeff!(-5.0)).unwrap()),
         );
 
         // Fix x1 = 3, but leave x2 and indicator x10 free
@@ -397,7 +397,7 @@ mod tests {
         let ic = IndicatorConstraint::new(
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
-            Function::from(linear!(1) + linear!(2) + coeff!(-5.0)),
+            Function::from(((linear!(1) + linear!(2)).unwrap() + coeff!(-5.0)).unwrap()),
         );
 
         // x1 = 3 (not indicator) → Active: function partial-evaluated
@@ -419,7 +419,7 @@ mod tests {
         let ic = IndicatorConstraint::new(
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
-            Function::from(linear!(1) + linear!(2) + coeff!(-5.0)),
+            Function::from(((linear!(1) + linear!(2)).unwrap() + coeff!(-5.0)).unwrap()),
         );
 
         // x10=1, x1=3 → Transformed with x1 substituted in promoted function

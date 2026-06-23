@@ -148,7 +148,8 @@ mod tests {
             DecisionVariable::continuous(VariableID::from(2)),
         );
 
-        let constraint_function = Function::from(linear!(1) + linear!(2) + coeff!(-10.0));
+        let constraint_function =
+            Function::from(((linear!(1) + linear!(2)).unwrap() + coeff!(-10.0)).unwrap());
         let mut constraints = BTreeMap::new();
         let constraint = Constraint {
             equality: Equality::LessThanOrEqualToZero,
@@ -208,7 +209,7 @@ mod tests {
 
         let mut instance = Instance::new(
             Sense::Minimize,
-            Function::from(linear!(1) + linear!(2) + linear!(3)),
+            Function::from(((linear!(1) + linear!(2)).unwrap() + linear!(3)).unwrap()),
             decision_variables,
             constraints,
         )
@@ -255,7 +256,7 @@ mod tests {
 
         let mut instance = Instance::new(
             Sense::Minimize,
-            Function::from(linear!(1) + linear!(2) + linear!(3)),
+            Function::from(((linear!(1) + linear!(2)).unwrap() + linear!(3)).unwrap()),
             decision_variables,
             constraints,
         )
@@ -420,7 +421,7 @@ mod tests {
         let ic = crate::IndicatorConstraint::new(
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
-            Function::from(linear!(1) + linear!(2) + coeff!(-5.0)),
+            Function::from(((linear!(1) + linear!(2)).unwrap() + coeff!(-5.0)).unwrap()),
         );
         instance
             .indicator_constraint_collection

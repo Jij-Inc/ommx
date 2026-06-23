@@ -7,7 +7,6 @@ use crate::{
     Constraint, Function, Linear,
 };
 use anyhow::{Context, Result};
-use num::Zero;
 
 impl Instance {
     #[cfg_attr(doc, katexit::katexit)]
@@ -42,8 +41,8 @@ impl Instance {
         let sum = one_hot
             .variables
             .iter()
-            .fold(Linear::zero(), |acc, v| acc + linear!(v.into_inner()));
-        let function = Function::from(sum + Linear::from(coeff!(-1.0)));
+            .try_fold(Linear::zero(), |acc, v| acc + linear!(v.into_inner()))?;
+        let function = Function::from((sum + Linear::from(coeff!(-1.0)))?);
 
         let new_constraint = Constraint::equal_to_zero(function);
         // Carry over the one-hot's metadata into the new regular constraint,
@@ -149,7 +148,9 @@ mod tests {
         // Newly inserted regular constraint is an equality `x1 + x2 - 1 == 0`.
         let new_constraint = instance.constraints().get(&new_id).unwrap();
         assert_eq!(new_constraint.equality, Equality::EqualToZero);
-        let expected = Function::from(linear!(1) + linear!(2) + Linear::from(coeff!(-1.0)));
+        let expected = Function::from(
+            ((linear!(1) + linear!(2)).unwrap() + Linear::from(coeff!(-1.0))).unwrap(),
+        );
         use ::approx::assert_abs_diff_eq;
         assert_abs_diff_eq!(new_constraint.function(), &expected);
 

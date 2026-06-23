@@ -324,6 +324,8 @@ impl Substitute for AcyclicAssignments {
 mod tests {
     use super::*;
     use crate::{assign, coeff, linear};
+    use ::approx::assert_abs_diff_eq;
+    use std::collections::BTreeSet;
 
     #[test]
     fn test_substitute_acyclic_success() {
@@ -339,12 +341,19 @@ mod tests {
 
         // Expected result: x1 <- x2 + x4 + 1, x3 <- x4 + 1
         let expected = assign! {
-            1 <- linear!(2) + linear!(4) + coeff!(1.0),
+            1 <- ((linear!(2) + linear!(4)).unwrap() + coeff!(1.0)).unwrap(),
             3 <- linear!(4) + coeff!(1.0)
         };
 
         let result = initial.substitute_acyclic(&substitution).unwrap();
-        assert_eq!(result, expected);
+        assert_eq!(result.assignments.len(), expected.assignments.len());
+        for (var_id, expected_function) in expected.iter() {
+            assert_abs_diff_eq!(result.get(var_id).unwrap(), expected_function);
+        }
+        assert_eq!(
+            result.dependency.all_edges().collect::<BTreeSet<_>>(),
+            expected.dependency.all_edges().collect::<BTreeSet<_>>()
+        );
     }
 
     #[test]

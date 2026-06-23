@@ -849,8 +849,11 @@ mod tests {
         assert_eq!(instance.removed_constraints().len(), 1);
 
         // Insert a new constraint with the same ID as the removed constraint
-        let new_constraint =
-            Constraint::equal_to_zero((linear!(1) + linear!(2) + coeff!(3.0)).into());
+        let new_constraint = Constraint::equal_to_zero(
+            ((linear!(1) + linear!(2)).unwrap() + coeff!(3.0))
+                .unwrap()
+                .into(),
+        );
         let result = instance
             .insert_constraint(ConstraintID::from(2), new_constraint.clone())
             .unwrap();

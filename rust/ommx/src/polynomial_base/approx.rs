@@ -8,7 +8,9 @@ impl<M: Monomial> AbsDiffEq for PolynomialBase<M> {
         crate::ATol::default()
     }
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
-        let residual = self - other;
+        let Ok(residual) = self - other else {
+            return false;
+        };
         residual
             .max_coefficient_abs()
             .is_none_or(|max| max <= *epsilon)
