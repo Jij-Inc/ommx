@@ -123,7 +123,7 @@ mod tests {
 
     #[test]
     fn test_polynomial_base_display_single_term() {
-        let poly = coeff!(3.0) * linear!(1);
+        let poly = (coeff!(3.0) * linear!(1)).unwrap();
         assert_eq!(format!("{poly}"), "3*x1");
     }
 
@@ -135,7 +135,9 @@ mod tests {
 
     #[test]
     fn test_polynomial_base_display_multiple_terms() {
-        let poly = coeff!(2.0) * linear!(1) - coeff!(3.0) * linear!(2) + coeff!(1.0);
+        let poly =
+            ((coeff!(2.0) * linear!(1)).unwrap() - (coeff!(3.0) * linear!(2)).unwrap()).unwrap();
+        let poly = (poly + coeff!(1.0)).unwrap();
 
         let result = format!("{poly}");
         // Terms should be sorted by degree (highest first), then lexicographically
@@ -144,7 +146,10 @@ mod tests {
 
     #[test]
     fn test_polynomial_base_display_quadratic() {
-        let poly = coeff!(4.0) * quadratic!(1, 2) - coeff!(2.0) * quadratic!(1) + coeff!(3.0);
+        let poly = ((coeff!(4.0) * quadratic!(1, 2)).unwrap()
+            - (coeff!(2.0) * quadratic!(1)).unwrap())
+        .unwrap();
+        let poly = (poly + coeff!(3.0)).unwrap();
 
         let result = format!("{poly}");
         // Quadratic term should come first (highest degree), then linear, then constant
@@ -159,7 +164,7 @@ mod tests {
 
     #[test]
     fn test_polynomial_base_display_coefficient_negative_one() {
-        let poly = coeff!(-1.0) * linear!(1);
+        let poly = (coeff!(-1.0) * linear!(1)).unwrap();
         assert_eq!(format!("{poly}"), "-x1");
     }
 }

@@ -24,12 +24,14 @@ impl<M: Monomial> Evaluate for PolynomialBase<M> {
         if state.entries.is_empty() {
             return Ok(());
         }
-        let current = std::mem::take(&mut self.terms);
-        for (monomial, coefficient) in current {
-            let (new_monomial, value) = monomial.partial_evaluate(state);
+        let mut updated = Self::default();
+        for (monomial, coefficient) in &self.terms {
+            let (new_monomial, value) = monomial.clone().partial_evaluate(state);
             match TryInto::<Coefficient>::try_into(value) {
                 Ok(value) => {
-                    self.add_term(new_monomial, value * coefficient);
+                    if let Some(coefficient) = (value * *coefficient)? {
+                        updated.add_term(new_monomial, coefficient)?;
+                    }
                 }
                 Err(crate::CoefficientError::Zero) => {
                     continue;
@@ -42,6 +44,7 @@ impl<M: Monomial> Evaluate for PolynomialBase<M> {
                 }
             }
         }
+        *self = updated;
         Ok(())
     }
 
@@ -65,7 +68,7 @@ impl<M: Monomial> Evaluate for PolynomialBase<M> {
 mod tests {
     use super::*;
     use crate::random::*;
-    use ::approx::AbsDiffEq;
+    use ::approx::{assert_abs_diff_eq, AbsDiffEq};
     use proptest::prelude::*;
 
     fn polynomial_and_state<M: Monomial>() -> impl Strategy<Value = (PolynomialBase<M>, State)> {
@@ -114,7 +117,7 @@ mod tests {
                 ) {
                     let v1 = l1.evaluate(&state, crate::ATol::default()).unwrap();
                     let v2 = l2.evaluate(&state, crate::ATol::default()).unwrap();
-                    let v3 = (&l1 $op &l2).evaluate(&state, crate::ATol::default()).unwrap();
+                    let v3 = (&l1 $op &l2).unwrap().evaluate(&state, crate::ATol::default()).unwrap();
                     prop_assert!((v1 $op v2).abs_diff_eq(&v3, 1e-9));
                 }
             }
@@ -176,6 +179,21 @@ mod tests {
     test_partial_evaluate!(LinearMonomial, test_partial_evaluate_linear);
     test_partial_evaluate!(QuadraticMonomial, test_partial_evaluate_quadratic);
     test_partial_evaluate!(MonomialDyn, test_partial_evaluate_polynomial);
+
+    #[test]
+    fn partial_evaluate_preserves_polynomial_on_coefficient_error() {
+        let huge = Coefficient::try_from(f64::MAX).unwrap();
+        let mut linear = Linear::single_term(crate::linear!(1), huge);
+        let before = linear.clone();
+        let state = State::from_iter([(1, 2.0)]);
+
+        let err = linear
+            .partial_evaluate(&state, crate::ATol::default())
+            .unwrap_err();
+
+        assert!(err.to_string().contains("Coefficient must be finite"));
+        assert_abs_diff_eq!(linear, before);
+    }
 
     fn polynomial_and_samples<M: Monomial>(
     ) -> impl Strategy<Value = (PolynomialBase<M>, Sampled<State>)> {

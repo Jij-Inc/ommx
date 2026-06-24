@@ -1,8 +1,10 @@
+#[cfg(test)]
+use crate::PolynomialBase;
 use crate::{
     Coefficient, Degree, Linear, MonomialDyn, Polynomial, Quadratic, VariableID, VariableIDPair,
 };
 use derive_more::From;
-use num::{traits::Inv, One, Zero};
+use num::traits::Inv;
 use std::borrow::Cow;
 
 mod add;
@@ -27,9 +29,6 @@ pub enum Function {
     #[default]
     Zero,
     /// Constant term stored as a [`Coefficient`].
-    ///
-    /// This variant inherits `Coefficient`'s unchecked arithmetic behavior: constructing from an
-    /// existing coefficient or applying later arithmetic can carry zero or +/-infinity.
     Constant(Coefficient),
     Linear(Linear),
     Quadratic(Quadratic),
@@ -81,6 +80,54 @@ impl TryFrom<f64> for Function {
         }
     }
 }
+
+#[cfg(test)]
+impl<M> From<Result<PolynomialBase<M>, crate::CoefficientError>> for Function
+where
+    M: crate::Monomial,
+    PolynomialBase<M>: Into<Function>,
+{
+    fn from(value: Result<PolynomialBase<M>, crate::CoefficientError>) -> Self {
+        value.unwrap().into()
+    }
+}
+
+#[doc(hidden)]
+pub trait IntoFunctionForMacro {
+    fn into_function_for_macro(self) -> Function;
+}
+
+impl<T> IntoFunctionForMacro for Result<T, crate::CoefficientError>
+where
+    Function: From<T>,
+{
+    fn into_function_for_macro(self) -> Function {
+        Function::from(self.unwrap())
+    }
+}
+
+macro_rules! impl_into_function_for_macro {
+    ($($ty:ty),* $(,)?) => {
+        $(
+            impl IntoFunctionForMacro for $ty {
+                fn into_function_for_macro(self) -> Function {
+                    Function::from(self)
+                }
+            }
+        )*
+    };
+}
+
+impl_into_function_for_macro!(
+    Function,
+    Coefficient,
+    Linear,
+    Quadratic,
+    Polynomial,
+    crate::LinearMonomial,
+    crate::QuadraticMonomial,
+    MonomialDyn,
+);
 
 impl Function {
     pub fn constant_term(&self) -> f64 {
@@ -213,7 +260,7 @@ impl Function {
             Function::Zero => Ok(Coefficient::one()),
             // The factor must be positive so that multiplying it preserves the sign of
             // the constraint, matching `PolynomialBase::content_factor` for Linear/Quadratic/Polynomial.
-            Function::Constant(c) => Ok(c.inv().abs()),
+            Function::Constant(c) => Ok(c.inv()?.abs()),
             Function::Linear(l) => l.content_factor(),
             Function::Quadratic(q) => q.content_factor(),
             Function::Polynomial(p) => p.content_factor(),

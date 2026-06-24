@@ -7,7 +7,9 @@
 ///
 /// # Panics
 ///
-/// Panics if the value is zero, infinite, or NaN.
+/// Panics if the value is an invalid coefficient value: zero, infinite, or NaN.
+/// This macro is intended for literals and other values that are known to be valid.
+/// Use [`crate::Coefficient::try_from`] for runtime input that may be invalid.
 ///
 /// # Examples
 ///
@@ -25,8 +27,9 @@
 /// let c5 = coeff!(x * 3.0);
 ///
 /// // Use in expressions
-/// let expr = c1 * linear!(1)
-///     + c2 * linear!(2);
+/// let expr = (c1 * linear!(1))?;
+/// let expr = (expr + (c2 * linear!(2))?)?;
+/// # Ok::<(), ommx::CoefficientError>(())
 /// ```
 ///
 /// # Note

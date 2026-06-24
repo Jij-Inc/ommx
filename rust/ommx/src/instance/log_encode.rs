@@ -73,7 +73,7 @@ impl Instance {
             let metadata = self.variable_metadata_mut();
             metadata.set_name(binary_id, "ommx.log_encode");
             metadata.set_subscripts(binary_id, vec![id.into_inner() as i64, i as i64]);
-            linear.add_term(binary_id.into(), *coefficient);
+            linear.add_term(binary_id.into(), *coefficient)?;
         }
         let f = linear.clone().into();
         // Safe unwrap: there is no recursive assignment and self-assignment

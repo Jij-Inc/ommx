@@ -3,7 +3,6 @@ use crate::{
     Coefficient, Linear, LinearParameters, Polynomial, PolynomialParameters, Quadratic,
     QuadraticParameters,
 };
-use num::Zero;
 use proptest::{prelude::*, strategy::Union};
 
 impl Arbitrary for Function {

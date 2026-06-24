@@ -16,17 +16,17 @@ let decision_variables = btreemap! {
 };
 
 // Create objective function: minimize x1 + 2*x2
-let objective = Function::from(linear!(1) + coeff!(2.0) * linear!(2));
+let objective = Function::from((linear!(1) + (coeff!(2.0) * linear!(2))?)?);
 
 // Create constraints
 let constraints = btreemap! {
     // x1 + x2 = 1
     ConstraintID::from(1) => Constraint::equal_to_zero(
-        Function::from(linear!(1) + linear!(2) + Linear::from(coeff!(-1.0)))
+        Function::from(((linear!(1) + linear!(2))? + Linear::from(coeff!(-1.0)))?)
     ),
     // x2 <= 5
     ConstraintID::from(2) => Constraint::less_than_or_equal_to_zero(
-        Function::from(linear!(2) + Linear::from(coeff!(-5.0)))
+        Function::from((linear!(2) + Linear::from(coeff!(-5.0)))?)
     ),
 };
 

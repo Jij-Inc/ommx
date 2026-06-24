@@ -37,15 +37,16 @@ pub use error::SubstitutionError;
 /// use ommx::{Function, LinearMonomial, coeff, linear, VariableID, Substitute};
 ///
 /// // Create f(x1, x2) = 2*x1 + 3*x2 + 1
-/// let f = Function::from(coeff!(2.0) * linear!(1) + coeff!(3.0) * linear!(2) + coeff!(1.0));
+/// let f = (coeff!(2.0) * linear!(1))?;
+/// let f = (f + (coeff!(3.0) * linear!(2))?)?;
+/// let f = Function::from((f + coeff!(1.0))?);
 ///
 /// // Substitute x1 = x3 + 5
-/// let substitution = Function::from(
-///     linear!(3) + coeff!(5.0)
-/// );
+/// let substitution = Function::from((linear!(3) + coeff!(5.0))?);
 ///
 /// let result = f.substitute_one(VariableID::from(1), &substitution).unwrap();
 /// // Result: 2*(x3 + 5) + 3*x2 + 1 = 2*x3 + 3*x2 + 11
+/// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 ///
 /// # Error Handling
@@ -61,10 +62,11 @@ pub use error::SubstitutionError;
 ///
 /// // Try to substitute x1 = x1 + 2 (illegal self-reference)
 /// let x1 = Function::from(linear!(1));
-/// let self_ref = Function::from(linear!(1) + coeff!(2.0));
+/// let self_ref = Function::from((linear!(1) + coeff!(2.0))?);
 ///
 /// let result = x1.substitute_one(VariableID::from(1), &self_ref);
 /// assert!(matches!(result, Err(SubstitutionError::RecursiveAssignment { var_id }) if var_id == VariableID::from(1)));
+/// # Ok::<(), ommx::CoefficientError>(())
 /// ```
 ///
 /// ## Cyclic Dependencies Error
@@ -76,13 +78,14 @@ pub use error::SubstitutionError;
 ///
 /// // Try to create cyclic substitution: x1 = x2 + 1, x2 = x1 + 2
 /// let assignments = vec![
-///     (VariableID::from(1), Function::from(linear!(2) + coeff!(1.0))),
-///     (VariableID::from(2), Function::from(linear!(1) + coeff!(2.0))),
+///     (VariableID::from(1), Function::from((linear!(2) + coeff!(1.0))?)),
+///     (VariableID::from(2), Function::from((linear!(1) + coeff!(2.0))?)),
 /// ];
 ///
 /// let f = Function::from(linear!(1));
 /// let result = f.substitute(assignments);
 /// assert!(matches!(result, Err(SubstitutionError::CyclicAssignmentDetected)));
+/// # Ok::<(), ommx::CoefficientError>(())
 /// ```
 ///
 /// # Complex Example with Multiple Substitutions
@@ -91,26 +94,24 @@ pub use error::SubstitutionError;
 /// use ommx::{Function, LinearMonomial, coeff, linear, VariableID, Substitute};
 ///
 /// // Create f(x1, x2, x3) = x1 + 2*x2 + 3*x3
-/// let f = Function::from(
-///     linear!(1)
-///     + coeff!(2.0) * linear!(2)
-///     + coeff!(3.0) * linear!(3)
-/// );
+/// let f = (linear!(1) + (coeff!(2.0) * linear!(2))?)?;
+/// let f = Function::from((f + (coeff!(3.0) * linear!(3))?)?);
 ///
 /// // Create substitutions: x1 = x4 + 1, x2 = 2*x4 + x5
 /// let assignments = vec![
 ///     (
 ///         VariableID::from(1),
-///         Function::from(linear!(4) + coeff!(1.0))
+///         Function::from((linear!(4) + coeff!(1.0))?)
 ///     ),
 ///     (
 ///         VariableID::from(2),
-///         Function::from(coeff!(2.0) * linear!(4) + linear!(5))
+///         Function::from(((coeff!(2.0) * linear!(4))? + linear!(5))?)
 ///     ),
 /// ];
 ///
 /// let result = f.substitute(assignments).unwrap();
 /// // Result: (x4 + 1) + 2*(2*x4 + x5) + 3*x3 = 5*x4 + 2*x5 + 3*x3 + 1
+/// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub trait Substitute: Sized {
     type Output;
@@ -135,26 +136,24 @@ pub trait Substitute: Sized {
     /// use ommx::{Function, LinearMonomial, coeff, linear, VariableID, Substitute, AcyclicAssignments};
     ///
     /// // Create f(x1, x2) = x1 + x2
-    /// let f = Function::from(
-    ///     linear!(1)
-    ///     + linear!(2)
-    /// );
+    /// let f = Function::from((linear!(1) + linear!(2))?);
     ///
     /// // Create acyclic assignments: x1 = x3 + 1, x2 = x4 + 2
     /// let assignments = vec![
     ///     (
     ///         VariableID::from(1),
-    ///         Function::from(linear!(3) + coeff!(1.0))
+    ///         Function::from((linear!(3) + coeff!(1.0))?)
     ///     ),
     ///     (
     ///         VariableID::from(2),
-    ///         Function::from(linear!(4) + coeff!(2.0))
+    ///         Function::from((linear!(4) + coeff!(2.0))?)
     ///     ),
     /// ];
     ///
     /// let acyclic = AcyclicAssignments::new(assignments).unwrap();
     /// let result = f.substitute_acyclic(&acyclic);
     /// // Result: (x3 + 1) + (x4 + 2) = x3 + x4 + 3
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     fn substitute_acyclic(
         self,
@@ -222,13 +221,14 @@ pub trait Substitute: Sized {
     /// use ommx::{Function, coeff, linear, VariableID, Substitute};
     ///
     /// // f(x1) = 2*x1 + 3
-    /// let f = Function::from(coeff!(2.0) * linear!(1) + coeff!(3.0));
+    /// let f = Function::from(((coeff!(2.0) * linear!(1))? + coeff!(3.0))?);
     ///
     /// // Substitute x1 = x2 + 1
-    /// let substitution = Function::from(linear!(2) + coeff!(1.0));
+    /// let substitution = Function::from((linear!(2) + coeff!(1.0))?);
     ///
     /// let result = f.substitute_one(VariableID::from(1), &substitution).unwrap();
     /// // Result: 2*(x2 + 1) + 3 = 2*x2 + 5
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     fn substitute_one(
         self,

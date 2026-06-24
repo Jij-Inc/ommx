@@ -1,7 +1,6 @@
 use super::*;
 use crate::{constraint_type::ConstraintCollection, linear, v1, Function, VariableID};
 use anyhow::Result;
-use num::Zero;
 
 impl Instance {
     #[cfg_attr(doc, katexit::katexit)]
@@ -88,8 +87,10 @@ impl Instance {
 
             let f = constraint.function().clone();
             // Add penalty term: λ * f(x)^2
-            let penalty_term = Function::from(linear!(parameter_id)) * f.clone() * f;
-            objective += penalty_term;
+            let mut penalty_term = Function::from(linear!(parameter_id));
+            penalty_term.try_mul_assign_in_place(&f)?;
+            penalty_term.try_mul_assign_in_place(&f)?;
+            objective.try_add_assign_in_place(penalty_term)?;
 
             // Create removed constraint
             let removed_reason = crate::constraint::RemovedReason {
@@ -237,7 +238,9 @@ impl Instance {
 
         for (constraint_id, constraint) in active_constraints.into_iter() {
             let f = constraint.function().clone();
-            quad_sum += f.clone() * f;
+            let mut squared = f.clone();
+            squared.try_mul_assign_in_place(&f)?;
+            quad_sum.try_add_assign_in_place(squared)?;
 
             // Create removed constraint
             let removed_reason = crate::constraint::RemovedReason {
@@ -248,7 +251,9 @@ impl Instance {
             removed_constraints.insert(constraint_id, (constraint, removed_reason));
         }
 
-        objective += Function::from(linear!(parameter_id)) * quad_sum;
+        let mut penalty_term = Function::from(linear!(parameter_id));
+        penalty_term.try_mul_assign_in_place(&quad_sum)?;
+        objective.try_add_assign_in_place(penalty_term)?;
 
         let parameters = BTreeMap::from([(parameter_id, parameter)]);
 
@@ -293,7 +298,7 @@ mod tests {
             DecisionVariable::continuous(VariableID::from(2)),
         );
 
-        let objective = Function::from(linear!(1) + linear!(2));
+        let objective = Function::from((linear!(1) + linear!(2)).unwrap());
 
         let mut constraints = BTreeMap::new();
         constraints.insert(
@@ -301,7 +306,9 @@ mod tests {
             Constraint {
                 equality: Equality::LessThanOrEqualToZero,
                 stage: crate::constraint::CreatedData {
-                    function: Function::from(linear!(1) + linear!(2) + coeff!(-1.0)),
+                    function: Function::from(
+                        ((linear!(1) + linear!(2)).unwrap() + coeff!(-1.0)).unwrap(),
+                    ),
                 },
             },
         );

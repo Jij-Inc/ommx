@@ -11,7 +11,9 @@ impl AbsDiffEq for Function {
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
         // Compute residual function and check max absolute coefficient
-        let diff = self.clone() - other.clone();
+        let Ok(diff) = self.clone() - other.clone() else {
+            return false;
+        };
         diff.values()
             .map(|c| c.abs())
             .max()

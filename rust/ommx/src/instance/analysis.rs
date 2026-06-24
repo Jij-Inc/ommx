@@ -504,7 +504,8 @@ mod tests {
         }
 
         // Objective: x0 + x1 + x2
-        let objective = crate::Function::from(linear!(0) + linear!(1) + linear!(2));
+        let objective =
+            crate::Function::from(((linear!(0) + linear!(1)).unwrap() + linear!(2)).unwrap());
 
         // Constraints:
         // 0: x1 + x2 == 1
@@ -512,12 +513,19 @@ mod tests {
         let mut constraints = BTreeMap::new();
         constraints.insert(
             ConstraintID::from(0),
-            Constraint::equal_to_zero((linear!(1) + linear!(2) + coeff!(-1.0)).into()),
+            Constraint::equal_to_zero(
+                ((linear!(1) + linear!(2)).unwrap() + coeff!(-1.0))
+                    .unwrap()
+                    .into(),
+            ),
         );
         constraints.insert(
             ConstraintID::from(1),
             Constraint::equal_to_zero(
-                (linear!(3) + coeff!(-1.0) * linear!(0) + coeff!(-1.0) * linear!(1)).into(),
+                ((linear!(3) + (coeff!(-1.0) * linear!(0)).unwrap()).unwrap()
+                    + (coeff!(-1.0) * linear!(1)).unwrap())
+                .unwrap()
+                .into(),
             ),
         );
         let mut instance =

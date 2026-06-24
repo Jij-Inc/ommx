@@ -41,9 +41,10 @@ fn main() -> Result<()> {
         DecisionVariable::continuous(VariableID::from(4)),
     );
 
-    let objective = Function::from(linear!(1) + linear!(2));
-    let constraint =
-        Constraint::less_than_or_equal_to_zero((linear!(1) + linear!(2) + coeff!(-10.0)).into());
+    let objective = Function::from((linear!(1) + linear!(2))?);
+    let constraint = Constraint::less_than_or_equal_to_zero(Function::from(
+        ((linear!(1) + linear!(2))? + coeff!(-10.0))?,
+    ));
 
     let mut constraints = BTreeMap::new();
     constraints.insert(ConstraintID::from(1), constraint);
@@ -66,7 +67,7 @@ fn main() -> Result<()> {
     println!("=== Example 1: substitute_one ===");
     println!("Substituting x1 with x3 + x4 (makes x1 dependent on x3 and x4)");
 
-    let substitution = Function::from(linear!(3) + linear!(4));
+    let substitution = Function::from((linear!(3) + linear!(4))?);
     let instance = instance.substitute_one(VariableID::from(1), &substitution)?;
 
     println!("\nAfter substitution:");

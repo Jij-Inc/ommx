@@ -57,7 +57,7 @@ mod tests {
     #[test]
     fn bound_of_linear() {
         // f = 2*x1 + 3 with x1 in [0, 2]
-        let f = Function::from(coeff!(2.0) * linear!(1) + coeff!(3.0));
+        let f = Function::from(((coeff!(2.0) * linear!(1)).unwrap() + coeff!(3.0)).unwrap());
         let mut bounds = Bounds::new();
         bounds.insert(VariableID::from(1), Bound::new(0.0, 2.0).unwrap());
         assert_eq!(f.evaluate_bound(&bounds), Bound::new(3.0, 7.0).unwrap());
@@ -93,7 +93,9 @@ mod tests {
         //
         // Pins the documented tightness caveat: the returned bound contains
         // the true range but is strictly wider here.
-        let f = Function::from(quadratic!(1, 1)) + Function::from(-coeff!(1.0) * linear!(1));
+        let f = (Function::from(quadratic!(1, 1))
+            + Function::from((-coeff!(1.0) * linear!(1)).unwrap()))
+        .unwrap();
         let mut bounds = Bounds::new();
         bounds.insert(VariableID::from(1), Bound::new(0.0, 1.0).unwrap());
         assert_eq!(f.evaluate_bound(&bounds), Bound::new(-1.0, 1.0).unwrap());
