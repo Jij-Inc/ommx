@@ -730,12 +730,14 @@ mod reduce_capabilities_tests {
             [VariableID::from(0), VariableID::from(1)]
                 .into_iter()
                 .collect(),
-        );
+        )
+        .unwrap();
         let sos1 = Sos1Constraint::new(
             [VariableID::from(2), VariableID::from(3)]
                 .into_iter()
                 .collect(),
-        );
+        )
+        .unwrap();
         // Indicator: y=1 => x0 <= 0 (trivially satisfied since x0 in [0,1], upper=1>0 emits upper Big-M)
         let indicator = IndicatorConstraint::new(
             VariableID::from(1),
@@ -835,7 +837,8 @@ mod reduce_capabilities_tests {
             [VariableID::from(0), VariableID::from(1)]
                 .into_iter()
                 .collect(),
-        );
+        )
+        .unwrap();
         let mut instance = Instance::builder()
             .sense(Sense::Minimize)
             .objective(Function::from(linear!(0)))
@@ -858,7 +861,8 @@ mod reduce_capabilities_tests {
         // SOS1 over a continuous variable with infinite bound cannot be Big-M
         // converted; reduce_capabilities surfaces the underlying error.
         let dv = DecisionVariable::continuous(VariableID::from(0));
-        let sos1 = Sos1Constraint::new([VariableID::from(0)].into_iter().collect::<BTreeSet<_>>());
+        let sos1 = Sos1Constraint::new([VariableID::from(0)].into_iter().collect::<BTreeSet<_>>())
+            .unwrap();
         let mut instance = Instance::builder()
             .sense(Sense::Minimize)
             .objective(Function::from(linear!(0)))
@@ -886,7 +890,8 @@ mod reduce_capabilities_tests {
             crate::ATol::default(),
         )
         .unwrap();
-        let sos1 = Sos1Constraint::new([VariableID::from(0)].into_iter().collect::<BTreeSet<_>>());
+        let sos1 = Sos1Constraint::new([VariableID::from(0)].into_iter().collect::<BTreeSet<_>>())
+            .unwrap();
         let mut instance = Instance::builder()
             .sense(Sense::Minimize)
             .objective(Function::from(linear!(0)))

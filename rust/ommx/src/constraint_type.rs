@@ -34,7 +34,7 @@ use crate::{
         ConstraintID, ConstraintMetadata, ConstraintMetadataStore, EvaluatedConstraint,
         RemovedReason, SampledConstraint,
     },
-    v1, ATol, Constraint, Evaluate, SampleID, VariableIDSet,
+    v1, ATol, Constraint, Evaluate, SampleID, SampleIDSet, VariableIDSet,
 };
 use std::collections::BTreeMap;
 
@@ -70,6 +70,16 @@ where
         crate::bail!({ ?id }, "Removed reason references unknown constraint ID {id:?}");
     }
     Ok(())
+}
+
+/// Return the sample IDs carried by a sample-keyed side map.
+///
+/// Sampled stage data is split across multiple per-sample side maps
+/// (`feasible`, `active_variable`, `indicator_active`, ...). Constraint
+/// families use this helper to validate that those maps stay aligned with the
+/// canonical sampled values for the same constraint.
+pub(crate) fn sample_ids_from_map<V>(map: &BTreeMap<SampleID, V>) -> SampleIDSet {
+    map.keys().copied().collect()
 }
 
 /// Marker trait for ID types used throughout the crate.
@@ -151,6 +161,12 @@ pub trait SampledConstraintBehavior {
 
     fn is_feasible_for(&self, sample_id: SampleID) -> Option<bool>;
 
+    /// Validate that every sample-keyed field inside this sampled constraint
+    /// uses exactly `expected` sample IDs.
+    ///
+    /// Returns the first offending sample ID set when a side map is out of sync.
+    fn validate_sample_ids(&self, expected: &SampleIDSet) -> std::result::Result<(), SampleIDSet>;
+
     /// Extract an evaluated constraint for a specific sample.
     ///
     /// Returns [`None`] if `sample_id` is not present in the sampled data.
@@ -175,6 +191,23 @@ impl SampledConstraintBehavior for SampledConstraint {
     fn is_feasible_for(&self, sample_id: SampleID) -> Option<bool> {
         self.stage.feasible.get(&sample_id).copied()
     }
+
+    fn validate_sample_ids(&self, expected: &SampleIDSet) -> std::result::Result<(), SampleIDSet> {
+        if !self.stage.evaluated_values.has_same_ids(expected) {
+            return Err(self.stage.evaluated_values.ids());
+        }
+        let feasible_ids = sample_ids_from_map(&self.stage.feasible);
+        if &feasible_ids != expected {
+            return Err(feasible_ids);
+        }
+        if let Some(dual_variables) = &self.stage.dual_variables {
+            if !dual_variables.has_same_ids(expected) {
+                return Err(dual_variables.ids());
+            }
+        }
+        Ok(())
+    }
+
     fn get(&self, sample_id: SampleID) -> Option<Self::Evaluated> {
         use crate::constraint::EvaluatedData;
         let evaluated_value = *self.stage.evaluated_values.get(sample_id)?;
@@ -695,6 +728,18 @@ impl<T: ConstraintType> SampledCollection<T> {
 
     pub fn into_inner(self) -> BTreeMap<T::ID, T::Sampled> {
         self.constraints
+    }
+
+    /// Validate that every sampled constraint in this collection carries the
+    /// same sample IDs as `expected` across all of its per-sample side maps.
+    pub fn validate_sample_ids(
+        &self,
+        expected: &SampleIDSet,
+    ) -> std::result::Result<(), SampleIDSet> {
+        for constraint in self.constraints.values() {
+            constraint.validate_sample_ids(expected)?;
+        }
+        Ok(())
     }
 
     /// Access the removed reasons map.

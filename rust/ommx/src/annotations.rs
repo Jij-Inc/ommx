@@ -582,7 +582,8 @@ mod tests {
         let one_hot = crate::OneHotConstraint::new(BTreeSet::from([
             crate::VariableID::from(1),
             crate::VariableID::from(2),
-        ]));
+        ]))
+        .unwrap();
         let instance = crate::Instance::builder()
             .sense(crate::Sense::Minimize)
             .objective(crate::Function::Zero)

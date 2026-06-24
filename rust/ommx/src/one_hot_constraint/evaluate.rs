@@ -174,7 +174,7 @@ mod tests {
 
     fn make_one_hot(_id: u64, var_ids: &[u64]) -> OneHotConstraint {
         let vars = var_ids.iter().copied().map(VariableID::from).collect();
-        OneHotConstraint::new(vars)
+        OneHotConstraint::new(vars).unwrap()
     }
 
     #[test]

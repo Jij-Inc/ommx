@@ -724,7 +724,8 @@ mod tests {
         )
         .unwrap();
 
-        let oh = OneHotConstraint::new([1, 2, 3].into_iter().map(VariableID::from).collect());
+        let oh =
+            OneHotConstraint::new([1, 2, 3].into_iter().map(VariableID::from).collect()).unwrap();
         instance
             .one_hot_constraint_collection
             .active_mut()
@@ -773,7 +774,8 @@ mod tests {
         )
         .unwrap();
 
-        let oh = OneHotConstraint::new([1, 2, 3].into_iter().map(VariableID::from).collect());
+        let oh =
+            OneHotConstraint::new([1, 2, 3].into_iter().map(VariableID::from).collect()).unwrap();
         instance
             .one_hot_constraint_collection
             .active_mut()
@@ -814,13 +816,13 @@ mod tests {
         )
         .unwrap();
 
-        let oh = OneHotConstraint::new([1, 2].into_iter().map(VariableID::from).collect());
+        let oh = OneHotConstraint::new([1, 2].into_iter().map(VariableID::from).collect()).unwrap();
         instance
             .one_hot_constraint_collection
             .active_mut()
             .insert(OneHotConstraintID::from(1), oh);
 
-        let sos1 = Sos1Constraint::new([2, 3].into_iter().map(VariableID::from).collect());
+        let sos1 = Sos1Constraint::new([2, 3].into_iter().map(VariableID::from).collect()).unwrap();
         instance
             .sos1_constraint_collection
             .active_mut()

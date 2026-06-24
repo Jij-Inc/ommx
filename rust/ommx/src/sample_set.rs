@@ -575,31 +575,30 @@ impl SampleSetBuilder {
             }
         }
 
-        for sampled_constraint in constraints.values() {
-            if !sampled_constraint
-                .stage
-                .evaluated_values
-                .has_same_ids(&objective_sample_ids)
-            {
-                return Err(SampleSetError::InconsistentSampleIDs {
-                    expected: objective_sample_ids.clone(),
-                    found: sampled_constraint.stage.evaluated_values.ids(),
-                });
-            }
-        }
-
-        for sampled_ic in self.indicator_constraints.values() {
-            if !sampled_ic
-                .stage
-                .evaluated_values
-                .has_same_ids(&objective_sample_ids)
-            {
-                return Err(SampleSetError::InconsistentSampleIDs {
-                    expected: objective_sample_ids.clone(),
-                    found: sampled_ic.stage.evaluated_values.ids(),
-                });
-            }
-        }
+        constraints
+            .validate_sample_ids(&objective_sample_ids)
+            .map_err(|found| SampleSetError::InconsistentSampleIDs {
+                expected: objective_sample_ids.clone(),
+                found,
+            })?;
+        self.indicator_constraints
+            .validate_sample_ids(&objective_sample_ids)
+            .map_err(|found| SampleSetError::InconsistentSampleIDs {
+                expected: objective_sample_ids.clone(),
+                found,
+            })?;
+        self.one_hot_constraints
+            .validate_sample_ids(&objective_sample_ids)
+            .map_err(|found| SampleSetError::InconsistentSampleIDs {
+                expected: objective_sample_ids.clone(),
+                found,
+            })?;
+        self.sos1_constraints
+            .validate_sample_ids(&objective_sample_ids)
+            .map_err(|found| SampleSetError::InconsistentSampleIDs {
+                expected: objective_sample_ids.clone(),
+                found,
+            })?;
 
         for sampled_named_function in self.named_functions.values() {
             if !sampled_named_function
@@ -740,6 +739,54 @@ mod tests {
         SampledDecisionVariable, Sense, VariableID,
     };
     use std::collections::BTreeMap;
+
+    #[test]
+    fn builder_rejects_sampled_one_hot_side_map_id_mismatch() {
+        let var_id = VariableID::from(1);
+        let sample_id = SampleID::from(0);
+        let unexpected_sample_id = SampleID::from(1);
+
+        let decision_variable = DecisionVariable::binary(var_id);
+        let mut variable_samples = crate::Sampled::default();
+        variable_samples.append([sample_id], 1.0).unwrap();
+        let sampled_variable = SampledDecisionVariable::new(
+            decision_variable.clone(),
+            variable_samples,
+            ATol::default(),
+        )
+        .unwrap();
+
+        let mut objectives = crate::Sampled::default();
+        objectives.append([sample_id], 0.0).unwrap();
+
+        let sampled_one_hot: crate::SampledOneHotConstraint = crate::OneHotConstraint {
+            variables: [var_id].into_iter().collect(),
+            stage: crate::OneHotSampledData {
+                feasible: BTreeMap::from([(sample_id, true)]),
+                active_variable: BTreeMap::from([(unexpected_sample_id, Some(var_id))]),
+                used_decision_variable_ids: [var_id].into_iter().collect(),
+            },
+        };
+        let one_hot_constraints = crate::SampledCollection::new(
+            BTreeMap::from([(crate::OneHotConstraintID::from(1), sampled_one_hot)]),
+            BTreeMap::new(),
+        )
+        .unwrap();
+
+        let err = SampleSet::builder()
+            .decision_variables(BTreeMap::from([(var_id, sampled_variable)]))
+            .objectives(objectives)
+            .constraints(BTreeMap::new())
+            .one_hot_constraints_collection(one_hot_constraints)
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap_err();
+
+        assert!(
+            err.to_string().contains("Inconsistent sample IDs"),
+            "unexpected error: {err}"
+        );
+    }
 
     /// Regression: `SampleSet::get(sid)` must propagate the variable AND
     /// constraint metadata stores into the returned per-sample `Solution`.

@@ -282,7 +282,13 @@ impl InstanceBuilder {
         }
 
         // Validate one-hot constraints
-        for value in self.one_hot_constraints.values() {
+        for (id, value) in &self.one_hot_constraints {
+            if value.variables.is_empty() {
+                crate::bail!(
+                    { ?id },
+                    "One-hot constraint {id:?} has no variables; one-hot constraints must contain at least one variable",
+                );
+            }
             for var_id in &value.variables {
                 let Some(dv) = decision_variables.get(var_id) else {
                     crate::bail!(
@@ -538,6 +544,36 @@ mod tests {
             msg.contains("both constraints and removed_constraints")
                 && msg.contains(&format!("{:?}", constraint_id)),
             "unexpected error: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_builder_rejects_empty_one_hot() {
+        use maplit::btreemap;
+
+        let var_id = VariableID::from(1);
+        let empty_one_hot = crate::OneHotConstraint {
+            variables: std::collections::BTreeSet::new(),
+            stage: crate::OneHotCreatedData,
+        };
+
+        let err = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(btreemap! {
+                var_id => DecisionVariable::binary(var_id),
+            })
+            .constraints(BTreeMap::new())
+            .one_hot_constraints(btreemap! {
+                crate::OneHotConstraintID::from(42) => empty_one_hot,
+            })
+            .build()
+            .unwrap_err();
+
+        let msg = err.to_string();
+        assert!(
+            msg.contains("no variables") && msg.contains("42"),
+            "expected empty one-hot error mentioning the id, got: {msg}"
         );
     }
 

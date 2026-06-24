@@ -13,26 +13,26 @@ use crate::{
 /// constraint collection (they are subsumed by the new first-class constraints).
 fn convert_hints_to_collections(
     hints: &ConstraintHints,
-) -> (
+) -> crate::Result<(
     BTreeMap<crate::OneHotConstraintID, crate::OneHotConstraint>,
     BTreeMap<crate::Sos1ConstraintID, crate::Sos1Constraint>,
     std::collections::BTreeSet<crate::ConstraintID>,
-) {
+)> {
     let mut one_hot_active = BTreeMap::new();
     let mut absorbed_constraint_ids = std::collections::BTreeSet::new();
     for hint in &hints.one_hot_constraints {
         let id = crate::OneHotConstraintID::from(*hint.id);
-        one_hot_active.insert(id, crate::OneHotConstraint::new(hint.variables.clone()));
+        one_hot_active.insert(id, crate::OneHotConstraint::new(hint.variables.clone())?);
         absorbed_constraint_ids.insert(hint.id);
     }
     let mut sos1_active = BTreeMap::new();
     for hint in &hints.sos1_constraints {
         let id = crate::Sos1ConstraintID::from(*hint.binary_constraint_id);
-        sos1_active.insert(id, crate::Sos1Constraint::new(hint.variables.clone()));
+        sos1_active.insert(id, crate::Sos1Constraint::new(hint.variables.clone())?);
         absorbed_constraint_ids.insert(hint.binary_constraint_id);
         absorbed_constraint_ids.extend(&hint.big_m_constraint_ids);
     }
-    (one_hot_active, sos1_active, absorbed_constraint_ids)
+    Ok((one_hot_active, sos1_active, absorbed_constraint_ids))
 }
 
 impl Parse for v1::instance::Sense {
@@ -233,7 +233,9 @@ impl Parse for v1::Instance {
         let (decision_variables, mut constraints, removed_constraints) = context;
 
         let (one_hot_active, sos1_active, absorbed_ids) =
-            convert_hints_to_collections(&constraint_hints);
+            convert_hints_to_collections(&constraint_hints).map_err(|e| {
+                RawParseError::InvalidInstance(e.to_string()).context(message, "constraint_hints")
+            })?;
         // Remove regular constraints that are absorbed by OneHot/SOS1
         for id in &absorbed_ids {
             constraints.remove(id);
@@ -480,7 +482,9 @@ impl Parse for v1::ParametricInstance {
         let (decision_variables, mut constraints, removed_constraints) = context;
 
         let (one_hot_active, sos1_active, absorbed_ids) =
-            convert_hints_to_collections(&constraint_hints);
+            convert_hints_to_collections(&constraint_hints).map_err(|e| {
+                RawParseError::InvalidInstance(e.to_string()).context(message, "constraint_hints")
+            })?;
         // Remove regular constraints that are absorbed by OneHot/SOS1
         for id in &absorbed_ids {
             constraints.remove(id);
