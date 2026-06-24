@@ -312,6 +312,14 @@ In the direct-map candidate, sampled one-hot and SOS1 data need to distinguish:
 Use a wrapper message for map values so `None` can be represented for a present
 sample.
 
+File placement note: `SampledValues` currently lives in
+`proto/ommx/v1/sample_set.proto`. If sampled constraint messages move into the
+new per-constraint proto files sketched below, `SampledValues` must move first
+to a shared proto such as `sampled_values.proto`. Otherwise `sample_set.proto`
+would need to import the new sampled constraint messages while those messages
+also import `SampledValues` from `sample_set.proto`, creating a protobuf import
+cycle.
+
 ```proto
 message SampledActiveVariable {
   optional uint64 variable_id = 1;
@@ -463,6 +471,7 @@ proto/ommx/v1/
   provenance.proto                 # new
   removed_reason.proto             # new
   constraint_metadata.proto        # new
+  sampled_values.proto             # new/shared: SampledValues
   regular_constraint.proto         # new: created/evaluated/sampled regular messages
   indicator_constraint.proto       # new: created/evaluated/sampled indicator messages
   one_hot_constraint.proto         # new: created/evaluated/sampled one-hot messages
@@ -564,6 +573,8 @@ Recommended PR sequence:
      sketched here or a collection wrapper that mirrors the Rust owner more
      closely.
 3. Create the protobuf schema PR.
+   - Move `SampledValues` out of `sample_set.proto` into a shared proto before
+     splitting sampled constraint messages across new constraint proto files.
    - Add proto messages and regenerate `rust/ommx/src/ommx.v1.rs`.
    - Implement v3 parse/write for `Instance` and `ParametricInstance`.
    - Implement v3 parse/write for `Solution` and `SampleSet`.
