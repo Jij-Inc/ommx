@@ -38,6 +38,33 @@ use crate::{
 };
 use std::collections::BTreeMap;
 
+fn assert_no_key_overlap<ID, L, R>(
+    left: &BTreeMap<ID, L>,
+    right: &BTreeMap<ID, R>,
+    left_name: &str,
+    right_name: &str,
+) where
+    ID: IDType,
+{
+    if let Some(id) = left.keys().find(|id| right.contains_key(id)) {
+        panic!("constraint id {id:?} appears in both {left_name} and {right_name}");
+    }
+}
+
+fn assert_removed_reasons_reference_entries<ID, V>(
+    constraints: &BTreeMap<ID, V>,
+    removed_reasons: &BTreeMap<ID, RemovedReason>,
+) where
+    ID: IDType,
+{
+    if let Some(id) = removed_reasons
+        .keys()
+        .find(|id| !constraints.contains_key(id))
+    {
+        panic!("removed reason references unknown constraint id {id:?}");
+    }
+}
+
 /// Marker trait for ID types used throughout the crate.
 ///
 /// Every constraint and decision-variable ID newtype in `ommx`
@@ -201,10 +228,21 @@ impl<T: ConstraintType> Default for ConstraintCollection<T> {
 }
 
 impl<T: ConstraintType> ConstraintCollection<T> {
+    /// Construct a collection from active and removed constraint maps.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the same constraint ID appears in both `active` and `removed`.
     pub fn new(
         active: BTreeMap<T::ID, T::Created>,
         removed: BTreeMap<T::ID, (T::Created, RemovedReason)>,
     ) -> Self {
+        assert_no_key_overlap(
+            &active,
+            &removed,
+            "active constraints",
+            "removed constraints",
+        );
         Self {
             active,
             removed,
@@ -215,11 +253,21 @@ impl<T: ConstraintType> ConstraintCollection<T> {
     /// Construct a collection together with its metadata store. Used by the
     /// parse boundary, where metadata for both active and removed entries is
     /// drained from the per-element protobuf messages into a single store.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the same constraint ID appears in both `active` and `removed`.
     pub fn with_metadata(
         active: BTreeMap<T::ID, T::Created>,
         removed: BTreeMap<T::ID, (T::Created, RemovedReason)>,
         metadata: ConstraintMetadataStore<T::ID>,
     ) -> Self {
+        assert_no_key_overlap(
+            &active,
+            &removed,
+            "active constraints",
+            "removed constraints",
+        );
         Self {
             active,
             removed,
@@ -284,9 +332,22 @@ impl<T: ConstraintType> ConstraintCollection<T> {
         id: T::ID,
         constraint: T::Created,
         metadata: ConstraintMetadata,
-    ) {
+    ) -> crate::Result<()> {
+        if self.active.contains_key(&id) {
+            crate::bail!(
+                { ?id },
+                "Constraint ID {id:?} already exists in the active constraint collection",
+            );
+        }
+        if self.removed.contains_key(&id) {
+            crate::bail!(
+                { ?id },
+                "Constraint ID {id:?} already exists in the removed constraint collection",
+            );
+        }
         self.active.insert(id, constraint);
         self.metadata.insert(id, metadata);
+        Ok(())
     }
 
     /// Return an ID that is not used by any active or removed constraint in this collection.
@@ -443,12 +504,6 @@ impl<T: ConstraintType> std::ops::Deref for EvaluatedCollection<T> {
     }
 }
 
-impl<T: ConstraintType> std::ops::DerefMut for EvaluatedCollection<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.constraints
-    }
-}
-
 impl<T: ConstraintType> Default for EvaluatedCollection<T> {
     fn default() -> Self {
         Self {
@@ -460,10 +515,17 @@ impl<T: ConstraintType> Default for EvaluatedCollection<T> {
 }
 
 impl<T: ConstraintType> EvaluatedCollection<T> {
+    /// Construct an evaluated collection without metadata.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `removed_reasons` contains an ID that is not present in
+    /// `constraints`.
     pub fn new(
         constraints: BTreeMap<T::ID, T::Evaluated>,
         removed_reasons: BTreeMap<T::ID, RemovedReason>,
     ) -> Self {
+        assert_removed_reasons_reference_entries(&constraints, &removed_reasons);
         Self {
             constraints,
             removed_reasons,
@@ -474,11 +536,17 @@ impl<T: ConstraintType> EvaluatedCollection<T> {
     /// Construct an evaluated collection together with its metadata store.
     /// Used by [`ConstraintCollection::evaluate`] to thread the source
     /// collection's metadata through unchanged.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `removed_reasons` contains an ID that is not present in
+    /// `constraints`.
     pub fn with_metadata(
         constraints: BTreeMap<T::ID, T::Evaluated>,
         removed_reasons: BTreeMap<T::ID, RemovedReason>,
         metadata: ConstraintMetadataStore<T::ID>,
     ) -> Self {
+        assert_removed_reasons_reference_entries(&constraints, &removed_reasons);
         Self {
             constraints,
             removed_reasons,
@@ -488,6 +556,12 @@ impl<T: ConstraintType> EvaluatedCollection<T> {
 
     pub fn inner(&self) -> &BTreeMap<T::ID, T::Evaluated> {
         &self.constraints
+    }
+
+    /// Crate-internal mutable lookup for owner methods that update evaluated
+    /// stage data without changing collection membership or sidecars.
+    pub(crate) fn get_mut(&mut self, id: &T::ID) -> Option<&mut T::Evaluated> {
+        self.constraints.get_mut(id)
     }
 
     pub fn into_inner(self) -> BTreeMap<T::ID, T::Evaluated> {
@@ -577,10 +651,17 @@ impl<T: ConstraintType> Default for SampledCollection<T> {
 }
 
 impl<T: ConstraintType> SampledCollection<T> {
+    /// Construct a sampled collection without metadata.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `removed_reasons` contains an ID that is not present in
+    /// `constraints`.
     pub fn new(
         constraints: BTreeMap<T::ID, T::Sampled>,
         removed_reasons: BTreeMap<T::ID, RemovedReason>,
     ) -> Self {
+        assert_removed_reasons_reference_entries(&constraints, &removed_reasons);
         Self {
             constraints,
             removed_reasons,
@@ -591,11 +672,17 @@ impl<T: ConstraintType> SampledCollection<T> {
     /// Construct a sampled collection together with its metadata store.
     /// Used by [`ConstraintCollection::evaluate_samples`] to thread the
     /// source collection's metadata through unchanged.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `removed_reasons` contains an ID that is not present in
+    /// `constraints`.
     pub fn with_metadata(
         constraints: BTreeMap<T::ID, T::Sampled>,
         removed_reasons: BTreeMap<T::ID, RemovedReason>,
         metadata: ConstraintMetadataStore<T::ID>,
     ) -> Self {
+        assert_removed_reasons_reference_entries(&constraints, &removed_reasons);
         Self {
             constraints,
             removed_reasons,
@@ -668,6 +755,13 @@ mod tests {
     use super::*;
     use crate::{coeff, constraint::ConstraintID, linear, Function};
 
+    fn removed_reason() -> RemovedReason {
+        RemovedReason {
+            reason: "test".to_string(),
+            parameters: Default::default(),
+        }
+    }
+
     #[test]
     fn constraint_type_aliases() {
         let c = Constraint::equal_to_zero(Function::Zero);
@@ -717,5 +811,72 @@ mod tests {
         let collection = ConstraintCollection::<Constraint>::new(active, BTreeMap::new());
         assert_eq!(collection.active().len(), 1);
         assert_eq!(collection.removed().len(), 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "appears in both active constraints and removed constraints")]
+    fn collection_rejects_active_removed_overlap() {
+        let id = ConstraintID::from(1);
+        let active = BTreeMap::from([(id, Constraint::equal_to_zero(Function::Zero))]);
+        let removed = BTreeMap::from([(
+            id,
+            (Constraint::equal_to_zero(Function::Zero), removed_reason()),
+        )]);
+
+        let _ = ConstraintCollection::<Constraint>::new(active, removed);
+    }
+
+    #[test]
+    fn insert_with_rejects_duplicate_ids() {
+        let id = ConstraintID::from(1);
+        let mut collection = ConstraintCollection::<Constraint>::new(
+            BTreeMap::from([(id, Constraint::equal_to_zero(Function::Zero))]),
+            BTreeMap::new(),
+        );
+
+        let err = collection
+            .insert_with(
+                id,
+                Constraint::equal_to_zero(Function::Zero),
+                ConstraintMetadata::default(),
+            )
+            .unwrap_err();
+        assert!(err.to_string().contains("already exists in the active"));
+
+        let removed_id = ConstraintID::from(2);
+        let mut collection = ConstraintCollection::<Constraint>::new(
+            BTreeMap::new(),
+            BTreeMap::from([(
+                removed_id,
+                (Constraint::equal_to_zero(Function::Zero), removed_reason()),
+            )]),
+        );
+
+        let err = collection
+            .insert_with(
+                removed_id,
+                Constraint::equal_to_zero(Function::Zero),
+                ConstraintMetadata::default(),
+            )
+            .unwrap_err();
+        assert!(err.to_string().contains("already exists in the removed"));
+    }
+
+    #[test]
+    #[should_panic(expected = "removed reason references unknown constraint id")]
+    fn evaluated_collection_rejects_removed_reason_without_constraint() {
+        let constraints: BTreeMap<ConstraintID, EvaluatedConstraint> = BTreeMap::new();
+        let removed_reasons = BTreeMap::from([(ConstraintID::from(1), removed_reason())]);
+
+        let _ = EvaluatedCollection::<Constraint>::new(constraints, removed_reasons);
+    }
+
+    #[test]
+    #[should_panic(expected = "removed reason references unknown constraint id")]
+    fn sampled_collection_rejects_removed_reason_without_constraint() {
+        let constraints: BTreeMap<ConstraintID, SampledConstraint> = BTreeMap::new();
+        let removed_reasons = BTreeMap::from([(ConstraintID::from(1), removed_reason())]);
+
+        let _ = SampledCollection::<Constraint>::new(constraints, removed_reasons);
     }
 }

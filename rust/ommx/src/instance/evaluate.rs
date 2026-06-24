@@ -460,7 +460,7 @@ impl Instance {
                             .provenance
                             .push(crate::constraint::Provenance::IndicatorConstraint(id));
                         self.constraint_collection
-                            .insert_with(cid, constraint, new_metadata);
+                            .insert_with(cid, constraint, new_metadata)?;
                         self.indicator_constraint_collection
                             .removed_mut()
                             .insert(id, (original, propagation_reason.clone()));

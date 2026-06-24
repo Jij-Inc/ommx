@@ -86,7 +86,7 @@ impl Instance {
         self.validate_required_ids(constraint.required_ids())?;
         let id = self.constraint_collection.unused_id();
         self.constraint_collection
-            .insert_with(id, constraint, metadata);
+            .insert_with(id, constraint, metadata)?;
         Ok(id)
     }
 
@@ -123,7 +123,7 @@ impl Instance {
         self.require_binary_variable(constraint.indicator_variable)?;
         let id = self.indicator_constraint_collection.unused_id();
         self.indicator_constraint_collection
-            .insert_with(id, constraint, metadata);
+            .insert_with(id, constraint, metadata)?;
         Ok(id)
     }
 
@@ -143,7 +143,7 @@ impl Instance {
         }
         let id = self.one_hot_constraint_collection.unused_id();
         self.one_hot_constraint_collection
-            .insert_with(id, constraint, metadata);
+            .insert_with(id, constraint, metadata)?;
         Ok(id)
     }
 
@@ -163,7 +163,7 @@ impl Instance {
         self.validate_required_ids(constraint.required_ids())?;
         let id = self.sos1_constraint_collection.unused_id();
         self.sos1_constraint_collection
-            .insert_with(id, constraint, metadata);
+            .insert_with(id, constraint, metadata)?;
         Ok(id)
     }
 
@@ -379,7 +379,7 @@ impl ParametricInstance {
         self.validate_required_ids(constraint.required_ids())?;
         let id = self.constraint_collection.unused_id();
         self.constraint_collection
-            .insert_with(id, constraint, metadata);
+            .insert_with(id, constraint, metadata)?;
         Ok(id)
     }
 
@@ -453,7 +453,7 @@ impl ParametricInstance {
         self.validate_required_ids(constraint.required_ids())?;
         let id = self.indicator_constraint_collection.unused_id();
         self.indicator_constraint_collection
-            .insert_with(id, constraint, metadata);
+            .insert_with(id, constraint, metadata)?;
         Ok(id)
     }
 
@@ -473,7 +473,7 @@ impl ParametricInstance {
         self.validate_required_ids(constraint.required_ids())?;
         let id = self.one_hot_constraint_collection.unused_id();
         self.one_hot_constraint_collection
-            .insert_with(id, constraint, metadata);
+            .insert_with(id, constraint, metadata)?;
         Ok(id)
     }
 
@@ -496,7 +496,7 @@ impl ParametricInstance {
         self.validate_required_ids(required_ids)?;
         let id = self.sos1_constraint_collection.unused_id();
         self.sos1_constraint_collection
-            .insert_with(id, constraint, metadata);
+            .insert_with(id, constraint, metadata)?;
         Ok(id)
     }
 
