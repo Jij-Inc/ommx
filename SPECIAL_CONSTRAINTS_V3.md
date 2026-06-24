@@ -13,6 +13,12 @@ into API Reference text and protobuf comments, then delete this proposal file.
 Bring the OMMX v1 protobuf wire format in line with the current Rust/Python v3
 runtime model for special constraints.
 
+Terminology note: this document uses "v3" for the current Rust/Python SDK and
+runtime model. It does not rename the protobuf package: the wire messages still
+live under `ommx.v1`. Wire-format compatibility is governed by each top-level
+message's `format_version`; this proposal discusses the semantic break from
+`format_version == 0` to `format_version == 1`.
+
 The current runtime already treats non-standard constraints as first-class
 domain objects:
 
@@ -58,8 +64,12 @@ The runtime source of truth remains the collection owner, not the individual
 constraint value.
 
 - Constraint IDs are owned by the enclosing collection.
-- ID spaces are independent per constraint family. For example, regular
-  constraint ID `1` and one-hot constraint ID `1` are distinct.
+- ID spaces are independent per constraint family in the new
+  `format_version == 1` collection fields. For example, regular constraint ID
+  `1` and one-hot constraint ID `1` are distinct. This deliberately replaces the
+  legacy global-uniqueness rule documented on the deprecated v2 `Constraint`
+  message, which applies only to legacy fields read from `format_version == 0`
+  payloads.
 - Active and removed constraints are owned by the same
   `ConstraintCollection<T>`.
 - `RemovedReason` is collection-level removal metadata in Rust.
