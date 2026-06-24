@@ -590,10 +590,10 @@ impl SolutionBuilder {
         mut self,
         evaluated_constraints: BTreeMap<ConstraintID, EvaluatedConstraint>,
     ) -> Self {
-        self.evaluated_constraints = Some(EvaluatedCollection::new(
-            evaluated_constraints,
-            BTreeMap::new(),
-        ));
+        self.evaluated_constraints = Some(
+            EvaluatedCollection::new(evaluated_constraints, BTreeMap::new())
+                .expect("empty removed reasons cannot reference unknown constraints"),
+        );
         self
     }
 
@@ -624,7 +624,8 @@ impl SolutionBuilder {
         >,
     ) -> Self {
         self.evaluated_indicator_constraints =
-            EvaluatedCollection::new(evaluated_indicator_constraints, BTreeMap::new());
+            EvaluatedCollection::new(evaluated_indicator_constraints, BTreeMap::new())
+                .expect("empty removed reasons cannot reference unknown constraints");
         self
     }
 

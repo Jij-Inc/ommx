@@ -388,19 +388,22 @@ impl InstanceBuilder {
             objective,
             decision_variables,
             variable_metadata: Default::default(),
-            constraint_collection: ConstraintCollection::new(constraints, self.removed_constraints),
+            constraint_collection: ConstraintCollection::new(
+                constraints,
+                self.removed_constraints,
+            )?,
             indicator_constraint_collection: ConstraintCollection::new(
                 self.indicator_constraints,
                 self.removed_indicator_constraints,
-            ),
+            )?,
             one_hot_constraint_collection: ConstraintCollection::new(
                 self.one_hot_constraints,
                 BTreeMap::new(),
-            ),
+            )?,
             sos1_constraint_collection: ConstraintCollection::new(
                 self.sos1_constraints,
                 BTreeMap::new(),
-            ),
+            )?,
             named_functions: self.named_functions,
             named_function_metadata: Default::default(),
             decision_variable_dependency: self.decision_variable_dependency,

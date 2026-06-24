@@ -248,13 +248,23 @@ impl Parse for v1::Instance {
                 constraints,
                 removed_constraints,
                 constraint_metadata,
-            ),
+            )
+            .map_err(|e| {
+                RawParseError::InvalidInstance(e.to_string()).context(message, "constraints")
+            })?,
             indicator_constraint_collection: Default::default(),
             one_hot_constraint_collection: ConstraintCollection::new(
                 one_hot_active,
                 BTreeMap::new(),
-            ),
-            sos1_constraint_collection: ConstraintCollection::new(sos1_active, BTreeMap::new()),
+            )
+            .map_err(|e| {
+                RawParseError::InvalidInstance(e.to_string()).context(message, "constraint_hints")
+            })?,
+            sos1_constraint_collection: ConstraintCollection::new(sos1_active, BTreeMap::new())
+                .map_err(|e| {
+                    RawParseError::InvalidInstance(e.to_string())
+                        .context(message, "constraint_hints")
+                })?,
             decision_variable_dependency,
             parameters: self.parameters,
             description: self.description,
@@ -486,13 +496,23 @@ impl Parse for v1::ParametricInstance {
                 constraints,
                 removed_constraints,
                 constraint_metadata,
-            ),
+            )
+            .map_err(|e| {
+                RawParseError::InvalidInstance(e.to_string()).context(message, "constraints")
+            })?,
             indicator_constraint_collection: Default::default(),
             one_hot_constraint_collection: ConstraintCollection::new(
                 one_hot_active,
                 BTreeMap::new(),
-            ),
-            sos1_constraint_collection: ConstraintCollection::new(sos1_active, BTreeMap::new()),
+            )
+            .map_err(|e| {
+                RawParseError::InvalidInstance(e.to_string()).context(message, "constraint_hints")
+            })?,
+            sos1_constraint_collection: ConstraintCollection::new(sos1_active, BTreeMap::new())
+                .map_err(|e| {
+                    RawParseError::InvalidInstance(e.to_string())
+                        .context(message, "constraint_hints")
+                })?,
             named_functions,
             named_function_metadata,
             decision_variable_dependency,

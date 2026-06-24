@@ -257,26 +257,38 @@ impl SampleSet {
         // provenance that were attached at the SampleSet level.
         Some(unsafe {
             Solution::builder()
-                .evaluated_constraints_collection(EvaluatedCollection::with_metadata(
-                    evaluated_constraints,
-                    BTreeMap::new(),
-                    self.constraints.metadata().clone(),
-                ))
-                .evaluated_indicator_constraints_collection(EvaluatedCollection::with_metadata(
-                    evaluated_indicator_constraints,
-                    BTreeMap::new(),
-                    self.indicator_constraints.metadata().clone(),
-                ))
-                .evaluated_one_hot_constraints_collection(EvaluatedCollection::with_metadata(
-                    evaluated_one_hot_constraints,
-                    BTreeMap::new(),
-                    self.one_hot_constraints.metadata().clone(),
-                ))
-                .evaluated_sos1_constraints_collection(EvaluatedCollection::with_metadata(
-                    evaluated_sos1_constraints,
-                    BTreeMap::new(),
-                    self.sos1_constraints.metadata().clone(),
-                ))
+                .evaluated_constraints_collection(
+                    EvaluatedCollection::with_metadata(
+                        evaluated_constraints,
+                        BTreeMap::new(),
+                        self.constraints.metadata().clone(),
+                    )
+                    .expect("empty removed reasons cannot reference unknown constraints"),
+                )
+                .evaluated_indicator_constraints_collection(
+                    EvaluatedCollection::with_metadata(
+                        evaluated_indicator_constraints,
+                        BTreeMap::new(),
+                        self.indicator_constraints.metadata().clone(),
+                    )
+                    .expect("empty removed reasons cannot reference unknown constraints"),
+                )
+                .evaluated_one_hot_constraints_collection(
+                    EvaluatedCollection::with_metadata(
+                        evaluated_one_hot_constraints,
+                        BTreeMap::new(),
+                        self.one_hot_constraints.metadata().clone(),
+                    )
+                    .expect("empty removed reasons cannot reference unknown constraints"),
+                )
+                .evaluated_sos1_constraints_collection(
+                    EvaluatedCollection::with_metadata(
+                        evaluated_sos1_constraints,
+                        BTreeMap::new(),
+                        self.sos1_constraints.metadata().clone(),
+                    )
+                    .expect("empty removed reasons cannot reference unknown constraints"),
+                )
                 .objective(objective)
                 .evaluated_named_functions(evaluated_named_functions)
                 .decision_variables(decision_variables)
@@ -402,7 +414,10 @@ impl SampleSetBuilder {
 
     /// Sets the constraints.
     pub fn constraints(mut self, constraints: BTreeMap<ConstraintID, SampledConstraint>) -> Self {
-        self.constraints = Some(SampledCollection::new(constraints, BTreeMap::new()));
+        self.constraints = Some(
+            SampledCollection::new(constraints, BTreeMap::new())
+                .expect("empty removed reasons cannot reference unknown constraints"),
+        );
         self
     }
 
@@ -420,7 +435,8 @@ impl SampleSetBuilder {
             crate::indicator_constraint::SampledIndicatorConstraint,
         >,
     ) -> Self {
-        self.indicator_constraints = SampledCollection::new(indicator_constraints, BTreeMap::new());
+        self.indicator_constraints = SampledCollection::new(indicator_constraints, BTreeMap::new())
+            .expect("empty removed reasons cannot reference unknown constraints");
         self
     }
 
@@ -441,7 +457,8 @@ impl SampleSetBuilder {
             crate::one_hot_constraint::SampledOneHotConstraint,
         >,
     ) -> Self {
-        self.one_hot_constraints = SampledCollection::new(one_hot_constraints, BTreeMap::new());
+        self.one_hot_constraints = SampledCollection::new(one_hot_constraints, BTreeMap::new())
+            .expect("empty removed reasons cannot reference unknown constraints");
         self
     }
 
@@ -462,7 +479,8 @@ impl SampleSetBuilder {
             crate::sos1_constraint::SampledSos1Constraint,
         >,
     ) -> Self {
-        self.sos1_constraints = SampledCollection::new(sos1_constraints, BTreeMap::new());
+        self.sos1_constraints = SampledCollection::new(sos1_constraints, BTreeMap::new())
+            .expect("empty removed reasons cannot reference unknown constraints");
         self
     }
 
@@ -785,7 +803,8 @@ mod tests {
             constraints_map,
             BTreeMap::new(),
             constraint_metadata,
-        );
+        )
+        .unwrap();
 
         let mut objectives = crate::Sampled::default();
         objectives.append([sample_id], 1.0).unwrap();

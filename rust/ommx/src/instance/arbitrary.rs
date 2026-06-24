@@ -232,7 +232,8 @@ impl Arbitrary for Instance {
                                     constraint_collection: ConstraintCollection::new(
                                         constraints,
                                         Default::default(),
-                                    ),
+                                    )
+                                    .expect("empty removed constraints cannot overlap active constraints"),
                                     named_functions,
                                     named_function_metadata: Default::default(),
                                     sense,
