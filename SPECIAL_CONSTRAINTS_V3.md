@@ -47,16 +47,45 @@ constraints.
 
 ## Serialization Boundary
 
-Starting with v3, protobuf serialization is a public SDK operation only for
-top-level exchange objects such as `Instance`, `ParametricInstance`, `Solution`,
-and `SampleSet`. Leaf values such as `Function`, individual constraints,
-decision variables, or metadata stores may appear inside protobuf messages, but
-they are serialized only as implementation details of those top-level objects.
+Starting with v3, distinguish protobuf schema components from SDK
+serialization roots.
 
-The Rust and Python SDKs should therefore avoid exposing standalone protobuf
-round-trip APIs for leaf values. Parser/writer helpers for leaf messages may
-exist internally, but the supported public boundary remains the top-level object
-that owns the surrounding domain context and invariants.
+A serialization root is a message whose Rust/Python owner carries enough
+context to validate OMMX domain invariants at the protobuf boundary. Public SDK
+protobuf serialization is supported only for these roots:
+
+- `Instance`
+- `ParametricInstance`
+- `Solution`
+- `SampleSet`
+
+These objects own the surrounding context needed to validate references and
+sidecars: decision-variable definitions, variable kinds, constraint collection
+IDs, removed-state ownership, metadata stores, evaluation/sample ID universes,
+and top-level materialized summaries.
+
+Leaf messages such as `Function`, polynomial pieces, individual constraints,
+decision variables, named functions, and metadata records are protobuf schema
+components, not SDK serialization roots. For example, a standalone `Function`
+cannot validate whether referenced decision variables exist or whether their
+kinds are compatible with the enclosing constraint. Likewise, an individual
+constraint value does not own its collection ID, removed-state placement, or
+metadata sidecars.
+
+The Rust and Python SDKs should therefore avoid exposing standalone public
+protobuf round-trip APIs for leaf values. Parser/writer helpers for leaf
+messages may exist internally, but the supported SDK validation contract remains
+the top-level object that owns the surrounding domain context and invariants.
+Other lightweight protobuf readers may still inspect sub-messages directly, but
+they should treat such inspection as schema-level access rather than an
+SDK-validated OMMX round-trip.
+
+Top-level summaries such as `SampleSet.feasible` and
+`SampleSet.feasible_relaxed` are part of this root-level contract. They are
+materialized summaries for lightweight consumers that should not need a full
+constraint evaluator just to preview sample feasibility. OMMX SDK readers should
+still validate those fields against the sampled constraint data, and SDK writers
+should emit the values computed from the root object.
 
 ## Domain Model
 
