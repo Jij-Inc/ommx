@@ -187,42 +187,6 @@ See [`PYTHON_SDK_MIGRATION_GUIDE.md`](https://github.com/Jij-Inc/ommx/blob/main/
 The migration guide's [Modeling labels and constraint context](crate::doc::migration_guide#modeling-labels-and-constraint-context)
 section has the per-host accessor list and the store API reference.
 
-## Fixed decision-variable values on the host ([#959](https://github.com/Jij-Inc/ommx/pull/959))
-
-Fixed decision-variable values are now owned by [`Instance`](crate::Instance)
-and [`ParametricInstance`](crate::ParametricInstance), not by
-[`DecisionVariable`](crate::DecisionVariable). This follows the same ownership
-rule as IDs and modeling labels: the variable struct contains only its intrinsic
-definition (`id`, `kind`, `bound`), while state derived by
-`partial_evaluate` or legacy protobuf `substituted_value` fields lives on the
-host that can validate the whole model.
-
-Public Rust API changes:
-
-- [`DecisionVariable::new`](crate::DecisionVariable::new) no longer takes
-  `substituted_value`.
-- `DecisionVariable::substituted_value()` and `DecisionVariable::substitute`
-  are removed.
-- [`EvaluatedDecisionVariable::new`](crate::EvaluatedDecisionVariable::new)
-  and [`SampledDecisionVariable::new`](crate::SampledDecisionVariable::new)
-  no longer take `ATol`; legacy protobuf consistency against
-  `substituted_value` is checked by the owning `Solution` / `SampleSet` parse
-  paths instead.
-- Use
-  [`Instance::fixed_decision_variable_values`](crate::Instance::fixed_decision_variable_values)
-  or
-  [`Instance::fixed_decision_variable_value`](crate::Instance::fixed_decision_variable_value)
-  to inspect fixed values, and the matching `ParametricInstance` methods for
-  parametric models.
-- Builders accept root-owned fixed values through
-  `InstanceBuilder::fixed_decision_variable_values` and
-  `ParametricInstanceBuilder::fixed_decision_variable_values`.
-
-The host builders and parsers enforce the invariant that fixed variables are
-not also solver-used or dependent. Legacy v1 protobuf `substituted_value`
-fields are still accepted on read, but they are drained into the host-owned
-fixed-value table before domain objects are constructed.
-
 ## Capability model ([#790](https://github.com/Jij-Inc/ommx/pull/790), [#805](https://github.com/Jij-Inc/ommx/pull/805), [#810](https://github.com/Jij-Inc/ommx/pull/810), [#811](https://github.com/Jij-Inc/ommx/pull/811), [#814](https://github.com/Jij-Inc/ommx/pull/814))
 
 First-class special constraints raise a deployment question: not every
