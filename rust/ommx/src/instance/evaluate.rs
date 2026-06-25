@@ -340,7 +340,7 @@ impl Evaluate for Instance {
             dv.check_value_consistency(*value, atol)?;
             let var_id = VariableID::from(*id);
             if let Some(previous_value) = working.fixed_decision_variable_values.get(&var_id) {
-                if (*previous_value - *value).abs() >= *atol {
+                if !values_are_consistent(*previous_value, *value, atol) {
                     return Err(crate::DecisionVariableError::SubstitutedValueOverwrite {
                         id: var_id,
                         previous_value: *previous_value,
@@ -556,6 +556,37 @@ mod tests {
 
         let err = instance.populate_state(state, ATol::default()).unwrap_err();
         assert!(err.to_string().contains("must be finite"));
+    }
+
+    #[test]
+    fn test_partial_evaluate_accepts_existing_fixed_value_at_atol_boundary() {
+        let decision_variables = BTreeMap::from([
+            (
+                VariableID::from(1),
+                crate::DecisionVariable::continuous(VariableID::from(1)),
+            ),
+            (
+                VariableID::from(2),
+                crate::DecisionVariable::continuous(VariableID::from(2)),
+            ),
+        ]);
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(linear!(1)))
+            .decision_variables(decision_variables)
+            .fixed_decision_variable_values(BTreeMap::from([(VariableID::from(2), 0.0)]))
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap();
+
+        let atol = ATol::default();
+        let state = v1::State::from(HashMap::from([(2, *atol)]));
+        instance.partial_evaluate(&state, atol).unwrap();
+
+        assert_eq!(
+            instance.fixed_decision_variable_value(VariableID::from(2)),
+            Some(0.0)
+        );
     }
 
     #[test]

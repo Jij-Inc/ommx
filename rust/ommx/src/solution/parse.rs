@@ -79,7 +79,7 @@ impl Parse for crate::v1::Solution {
             let value = match (state.entries.get(&dv_id), parsed_fixed_value.as_ref()) {
                 (Some(value), None) | (None, Some(value)) => *value,
                 (Some(value), Some(substituted_value)) => {
-                    if (*value - *substituted_value).abs() >= *atol {
+                    if (*value - *substituted_value).abs() > *atol {
                         return Err(crate::RawParseError::InvalidDecisionVariable(
                             crate::DecisionVariableError::SubstitutedValueOverwrite {
                                 id: crate::VariableID::from(dv_id),
@@ -510,6 +510,42 @@ mod tests {
         └─ommx.v1.Solution[decision_variables]
         Substituted value for ID=1 cannot be overwritten: previous=3, new=2, atol=ATol(1e-6)
         "###);
+    }
+
+    #[test]
+    fn test_variable_value_accepts_substituted_value_at_atol_boundary() {
+        use crate::v1;
+
+        let atol = *ATol::default();
+        let v1_solution = v1::Solution {
+            state: Some(v1::State {
+                entries: [(1, atol)].iter().cloned().collect(),
+            }),
+            objective: 42.5,
+            decision_variables: vec![v1::DecisionVariable {
+                id: 1,
+                substituted_value: Some(0.0),
+                kind: v1::decision_variable::Kind::Continuous as i32,
+                bound: Some(v1::Bound {
+                    lower: 0.0,
+                    upper: 10.0,
+                }),
+                ..Default::default()
+            }],
+            feasible: true,
+            feasible_relaxed: Some(true),
+            ..Default::default()
+        };
+
+        let parsed: Solution = v1_solution.parse(&()).unwrap();
+        assert_eq!(
+            *parsed
+                .decision_variables()
+                .get(&crate::VariableID::from(1))
+                .unwrap()
+                .value(),
+            atol
+        );
     }
 
     #[test]

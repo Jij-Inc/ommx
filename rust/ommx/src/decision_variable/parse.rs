@@ -206,7 +206,7 @@ impl Parse for v1::SampledDecisionVariable {
         if let Some(fixed_value) = parsed_dv.fixed_value {
             let atol = crate::ATol::default();
             for (_, &sample_value) in samples.iter() {
-                if !sample_value.is_finite() || (sample_value - fixed_value).abs() >= *atol {
+                if !sample_value.is_finite() || (sample_value - fixed_value).abs() > *atol {
                     return Err(RawParseError::InvalidDecisionVariable(
                         DecisionVariableError::SubstitutedValueOverwrite {
                             id: parsed_dv.variable.id,
@@ -354,6 +354,39 @@ mod tests {
         └─ommx.v1.SampledDecisionVariable[decision_variable]
         Substituted value for ID=42 cannot be overwritten: previous=1, new=2, atol=ATol(1e-6)
         "###);
+    }
+
+    #[test]
+    fn test_parse_sampled_decision_variable_accepts_substituted_value_at_atol_boundary() {
+        let atol = *crate::ATol::default();
+        let v1_sampled_dv = v1::SampledDecisionVariable {
+            decision_variable: Some(v1::DecisionVariable {
+                id: 42,
+                kind: v1::decision_variable::Kind::Continuous as i32,
+                bound: Some(v1::Bound {
+                    lower: 0.0,
+                    upper: 10.0,
+                }),
+                substituted_value: Some(0.0),
+                ..Default::default()
+            }),
+            samples: Some(v1::SampledValues {
+                entries: vec![v1::sampled_values::SampledValuesEntry {
+                    ids: vec![0],
+                    value: atol,
+                }],
+            }),
+        };
+
+        let parsed: ParsedSampledDecisionVariable = v1_sampled_dv.parse(&()).unwrap();
+        assert_eq!(
+            *parsed
+                .variable
+                .samples()
+                .get(crate::SampleID::from(0))
+                .unwrap(),
+            atol
+        );
     }
 
     #[test]
