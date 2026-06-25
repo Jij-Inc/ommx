@@ -3226,10 +3226,11 @@ class Instance:
         Function(x2 + 1)
         ```
 
-        Substituted value is stored in the decision variable:
+        Fixed values are owned by the instance and exposed through the
+        attached decision-variable view:
 
         ```python
-        >>> x = new_instance.get_decision_variable_by_id(1)
+        >>> x = new_instance.attached_decision_variable(1)
         >>> x.substituted_value
         1.0
         ```
