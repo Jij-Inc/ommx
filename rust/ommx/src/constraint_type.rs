@@ -259,7 +259,7 @@ impl ConstraintType for Constraint {
 /// A collection of active and removed constraints of the same type.
 ///
 /// Removed constraints are stored as `(T::Created, RemovedReason)` pairs.
-/// The `RemovedReason` is collection-level context, not part of the constraint itself.
+/// The `RemovedReason` is removal state, not part of the constraint itself.
 ///
 /// Per-constraint modeling labels and transformation provenance are held by
 /// [`Self::context`] in Struct-of-Arrays form keyed by `T::ID`. The store

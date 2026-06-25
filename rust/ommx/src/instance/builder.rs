@@ -509,6 +509,7 @@ impl Instance {
 mod tests {
     use super::*;
     use crate::{coeff, linear};
+    use std::collections::BTreeSet;
 
     #[test]
     fn test_builder_basic() {
@@ -604,6 +605,61 @@ mod tests {
     }
 
     #[test]
+    fn test_builder_preserves_special_constraint_contexts() {
+        let var_id = VariableID::from(1);
+        let indicator_id = crate::IndicatorConstraintID::from(10);
+        let one_hot_id = crate::OneHotConstraintID::from(11);
+        let sos1_id = crate::Sos1ConstraintID::from(12);
+
+        let mut indicator_context = ConstraintContextStore::default();
+        indicator_context.set_name(indicator_id, "activation");
+        let mut one_hot_context = ConstraintContextStore::default();
+        one_hot_context.set_name(one_hot_id, "choice");
+        let mut sos1_context = ConstraintContextStore::default();
+        sos1_context.set_name(sos1_id, "exclusive");
+
+        let instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::from([(var_id, DecisionVariable::binary(var_id))]))
+            .constraints(BTreeMap::new())
+            .indicator_constraints(BTreeMap::from([(
+                indicator_id,
+                crate::IndicatorConstraint::new(
+                    var_id,
+                    crate::Equality::LessThanOrEqualToZero,
+                    Function::Zero,
+                ),
+            )]))
+            .indicator_constraint_context(indicator_context)
+            .one_hot_constraints(BTreeMap::from([(
+                one_hot_id,
+                crate::OneHotConstraint::new(BTreeSet::from([var_id])).unwrap(),
+            )]))
+            .one_hot_constraint_context(one_hot_context)
+            .sos1_constraints(BTreeMap::from([(
+                sos1_id,
+                crate::Sos1Constraint::new(BTreeSet::from([var_id])).unwrap(),
+            )]))
+            .sos1_constraint_context(sos1_context)
+            .build()
+            .unwrap();
+
+        assert_eq!(
+            instance.indicator_constraint_context().name(indicator_id),
+            Some("activation")
+        );
+        assert_eq!(
+            instance.one_hot_constraint_context().name(one_hot_id),
+            Some("choice")
+        );
+        assert_eq!(
+            instance.sos1_constraint_context().name(sos1_id),
+            Some("exclusive")
+        );
+    }
+
+    #[test]
     fn test_builder_rejects_orphan_variable_labels() {
         let mut variable_labels = VariableLabelStore::default();
         variable_labels.set_name(VariableID::from(99), "orphan");
@@ -641,6 +697,57 @@ mod tests {
         assert!(
             err.to_string().contains("unknown constraint ID")
                 && err.to_string().contains("ConstraintID(99)"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_builder_rejects_orphan_special_constraint_contexts() {
+        let mut indicator_context = ConstraintContextStore::default();
+        indicator_context.set_name(crate::IndicatorConstraintID::from(99), "orphan");
+        let err = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::new())
+            .constraints(BTreeMap::new())
+            .indicator_constraint_context(indicator_context)
+            .build()
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("unknown constraint ID")
+                && err.to_string().contains("IndicatorConstraintID(99)"),
+            "unexpected error: {err}"
+        );
+
+        let mut one_hot_context = ConstraintContextStore::default();
+        one_hot_context.set_name(crate::OneHotConstraintID::from(99), "orphan");
+        let err = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::new())
+            .constraints(BTreeMap::new())
+            .one_hot_constraint_context(one_hot_context)
+            .build()
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("unknown constraint ID")
+                && err.to_string().contains("OneHotConstraintID(99)"),
+            "unexpected error: {err}"
+        );
+
+        let mut sos1_context = ConstraintContextStore::default();
+        sos1_context.set_name(crate::Sos1ConstraintID::from(99), "orphan");
+        let err = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::new())
+            .constraints(BTreeMap::new())
+            .sos1_constraint_context(sos1_context)
+            .build()
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("unknown constraint ID")
+                && err.to_string().contains("Sos1ConstraintID(99)"),
             "unexpected error: {err}"
         );
     }
