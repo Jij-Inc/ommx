@@ -329,22 +329,22 @@ df = solution.constraints_df
 df = solution.constraints_df()
 ```
 
-ワイドな `*_df` メソッドには `include` 引数が追加され、メタデータ系・パラメータ系のカラムをそれぞれ ON/OFF できます。デフォルトの `include=("metadata", "parameters")` は v2 互換のワイド形を維持します:
+ワイドな `*_df` メソッドには `include` 引数が追加され、ラベル系・パラメータ系のカラムをそれぞれ ON/OFF できます。デフォルトの `include=("label", "parameters")` は v2 互換のワイド形を維持します:
 
 ```python
-solution.decision_variables_df()                       # core + metadata + parameters
+solution.decision_variables_df()                       # core + label + parameters
 solution.decision_variables_df(include=[])             # core only
-solution.decision_variables_df(include=["metadata"])   # core + metadata
+solution.decision_variables_df(include=["label"])      # core + label
 solution.decision_variables_df(include=["parameters"]) # core + parameters
 ```
 
-加えて、SoA メタデータストアを直接読む 6 種類の long-format / id-indexed sidecar アクセサが追加されました。`kind=` で対象の制約ファミリーを切り替えます (`"regular"` / `"indicator"` / `"one_hot"` / `"sos1"`、デフォルト `"regular"`):
+加えて、SoA の label/context store を直接読む 6 種類の long-format / id-indexed sidecar アクセサが追加されました。`kind=` で対象の制約ファミリーを切り替えます (`"regular"` / `"indicator"` / `"one_hot"` / `"sos1"`、デフォルト `"regular"`):
 
-- `constraint_metadata_df(kind=...)` — id-indexed (`name` / `subscripts` / `description`)
+- `constraint_context_df(kind=...)` — id-indexed (`name` / `subscripts` / `description`)
 - `constraint_parameters_df(kind=...)` — long format (`{kind}_constraint_id` / `key` / `value`)
 - `constraint_provenance_df(kind=...)` — long format (`{kind}_constraint_id` / `step` / `source_kind` / `source_id`)
 - `constraint_removed_reasons_df(kind=...)` — long format (`{kind}_constraint_id` / `reason` / `key` / `value`)
-- `variable_metadata_df()` — id-indexed
+- `variable_labels_df()` — id-indexed
 - `variable_parameters_df()` — long format
 
 Sidecar の index 名はファミリーごとに qualified (`regular_constraint_id` / `indicator_constraint_id` / `one_hot_constraint_id` / `sos1_constraint_id` / `variable_id`) になっており、別 ID 空間どうしを誤って `df.join()` した場合に `df.head()` 等で気づきやすくなっています。`*_parameters_df` / `*_removed_reasons_df` の行は `(id, key)` 順にソート済み、空の long-format DataFrame もスキーマ列だけ持つ形で返ります。
@@ -359,7 +359,7 @@ df = solution.constraints_df  # 'removed_reason' カラムを含む
 
 # After (3.0.0a3 — `*_df` はメソッドになりました)
 df = solution.constraints_df()  # removed_reason カラムなし
-df = solution.constraints_df(include=("metadata", "parameters", "removed_reason"))
+df = solution.constraints_df(include=("label", "parameters", "removed_reason"))
 # ↳ removed_reason / removed_reason.{key} が追加（active 行は NA）
 ```
 
@@ -374,11 +374,11 @@ df = solution.constraints_df(include=("metadata", "parameters", "removed_reason"
 - {class}`~ommx.v1.NamedFunction`, {class}`~ommx.v1.EvaluatedNamedFunction`, {class}`~ommx.v1.SampledNamedFunction`
 - {class}`~ommx.v1.DecisionVariable`, {class}`~ommx.v1.EvaluatedDecisionVariable`, {class}`~ommx.v1.SampledDecisionVariable`
 
-これらのメソッドは元々、Python SDK が独自の protobuf ベースのラッパー層を持っていた時代に Python ↔ Rust 境界を跨ぐたびにシリアライズが必要だったために用意されていたものでした。v3 で全型を PyO3 から直接再エクスポートする方針に切り替わったことでこの境界自体が消え、要素単位のバイト列ラウンドトリップは役目を終えています。今後予定しているメタデータ管理方式の見直しに合わせて維持し続けるコストも見合わなくなったため、ここで廃止します。永続化やプロセス間でのデータ交換が必要な場合は、これまで通りコンテナ型（{class}`~ommx.v1.Instance` / {class}`~ommx.v1.ParametricInstance` / {class}`~ommx.v1.Solution` / {class}`~ommx.v1.SampleSet`）と evaluate 用の DTO（{class}`~ommx.v1.State` / {class}`~ommx.v1.Samples` / {class}`~ommx.v1.Parameters`）の `to_bytes` / `from_bytes` をご利用ください。
+これらのメソッドは元々、Python SDK が独自の protobuf ベースのラッパー層を持っていた時代に Python ↔ Rust 境界を跨ぐたびにシリアライズが必要だったために用意されていたものでした。v3 で全型を PyO3 から直接再エクスポートする方針に切り替わったことでこの境界自体が消え、要素単位のバイト列ラウンドトリップは役目を終えています。label/context storage の整理に合わせて維持し続けるコストも見合わなくなったため、ここで廃止します。永続化やプロセス間でのデータ交換が必要な場合は、これまで通りコンテナ型（{class}`~ommx.v1.Instance` / {class}`~ommx.v1.ParametricInstance` / {class}`~ommx.v1.Solution` / {class}`~ommx.v1.SampleSet`）と evaluate 用の DTO（{class}`~ommx.v1.State` / {class}`~ommx.v1.Samples` / {class}`~ommx.v1.Parameters`）の `to_bytes` / `from_bytes` をご利用ください。
 
-### 🆕 メタデータ書き込みスルーラッパー: `AttachedConstraint` / `AttachedDecisionVariable` ([#849](https://github.com/Jij-Inc/ommx/pull/849), [#850](https://github.com/Jij-Inc/ommx/pull/850), [#852](https://github.com/Jij-Inc/ommx/pull/852))
+### 🆕 label/context 書き込みスルーラッパー: `AttachedConstraint` / `AttachedDecisionVariable` ([#849](https://github.com/Jij-Inc/ommx/pull/849), [#850](https://github.com/Jij-Inc/ommx/pull/850), [#852](https://github.com/Jij-Inc/ommx/pull/852))
 
-`Instance.add_constraint` / `instance.constraints[id]` と `ParametricInstance` 側の対応するアクセサが、snapshot のコピーではなく親ホストに紐付いた書き込みスルーハンドルを返すようになりました。読み出しはホストから live に取得し、メタデータの setter はホスト側 SoA メタデータストアに直接書き込まれるため、同じ id を指す 2 つのハンドルは常に同じ状態を観測します。
+`Instance.add_constraint` / `instance.constraints[id]` と `ParametricInstance` 側の対応するアクセサが、snapshot のコピーではなく親ホストに紐付いた書き込みスルーハンドルを返すようになりました。読み出しはホストから live に取得し、label/context の setter はホスト側 SoA store に直接書き込まれるため、同じ id を指す 2 つのハンドルは常に同じ状態を観測します。
 
 ```python
 c = instance.add_constraint(x + y == 0)         # AttachedConstraint が返る

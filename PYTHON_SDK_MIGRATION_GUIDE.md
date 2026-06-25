@@ -21,8 +21,8 @@ Themes you will encounter:
 2. `Constraint` no longer has an `id` — constraint IDs live only as the keys of the `dict[int, Constraint]` you pass to `Instance.from_components`. All `.id` getters, `set_id()` / `id=` kwargs, and global ID-counter helpers are gone.
 3. Container types flipped: every constraint-valued argument and getter on `Instance` / `ParametricInstance` / `Solution` is now `dict[int, T]`, not `list[T]`. `decision_variables` stays a `list`.
 4. A handful of renames and small signature changes (`write_mps` → `save_mps`, `Parameters(entries=...)` → plain `dict`, …).
-5. Every `*_df` accessor is a method now, with `kind=` / `include=` / `removed=` parameters consolidating the per-kind / active-vs-removed family. Long-format sidecar DataFrames (`constraint_metadata_df`, `constraint_provenance_df`, `variable_parameters_df`, …) are new.
-6. `instance.constraints[id]` and `instance.decision_variables` return write-through `AttachedX` handles instead of snapshot wrappers; metadata mutations through them propagate back to the host.
+5. Every `*_df` accessor is a method now, with `kind=` / `include=` / `removed=` parameters consolidating the per-kind / active-vs-removed family. Long-format sidecar DataFrames (`constraint_context_df`, `constraint_provenance_df`, `variable_parameters_df`, …) are new.
+6. `instance.constraints[id]` and `instance.decision_variables` return write-through `AttachedX` handles instead of snapshot wrappers; label/context updates through them propagate back to the host.
 
 ## 1. Import changes
 
@@ -457,13 +457,13 @@ df = solution.constraints_df()           # no removed= (no active/removed
 
 `kind` accepts `Literal["regular", "indicator", "one_hot", "sos1"]` (default `"regular"`); unknown values raise `ValueError`. Solution / SampleSet have no `removed=` parameter — at the evaluated / sampled stage every row is materialized regardless of how it was lifecycled, and reason data is gated by `"removed_reason"` in `include=` instead.
 
-`include` accepts a `Sequence[str]` of `"metadata"` / `"parameters"` / `"removed_reason"` (singular). The default (`None`) preserves the v2 wide shape (`("metadata", "parameters")`); `include=[]` drops every optional column family.
+`include` accepts a `Sequence[str]` of `"label"` / `"parameters"` / `"removed_reason"` (singular). The default (`None`) preserves the v2 wide shape (`("label", "parameters")`); `include=[]` drops every optional column family.
 
 ```python
-# Default — v2-equivalent shape (metadata + parameters columns)
+# Default — v2-equivalent shape (label + parameters columns)
 df = instance.constraints_df()
 
-# Core only — drop metadata and parameters
+# Core only — drop label and parameters
 df = instance.constraints_df(include=[])
 
 # Active + removed in one DataFrame; reason columns auto-added
@@ -483,11 +483,11 @@ The wide `constraints_df()` index column was renamed from unqualified `id` to `{
 
 ## 10. Long-format sidecar DataFrames (`3.0.0a3`, [#846](https://github.com/Jij-Inc/ommx/pull/846))
 
-`Instance` / `ParametricInstance` / `Solution` / `SampleSet` gained six long-format / id-indexed sidecar DataFrame methods that read directly from the SoA metadata stores:
+`Instance` / `ParametricInstance` / `Solution` / `SampleSet` gained six long-format / id-indexed sidecar DataFrame methods that read directly from the SoA label/context stores:
 
 ```python
 # Constraint-side — kind= dispatches across the four constraint families
-instance.constraint_metadata_df(kind="regular")
+instance.constraint_context_df(kind="regular")
                                           # name, subscripts, description
                                           # index: regular_constraint_id
 instance.constraint_parameters_df(kind="regular")
@@ -500,7 +500,7 @@ instance.constraint_removed_reasons_df(kind="regular")
                                           #          key, value
 
 # Variable-side — single ID space, no kind=
-instance.variable_metadata_df()
+instance.variable_labels_df()
 instance.variable_parameters_df()
 ```
 
@@ -510,7 +510,7 @@ Use these for tidy-data joins / aggregation; reach for the wide `constraints_df(
 
 ## 11. Constraint and variable accessors return `AttachedX` write-through handles (`3.0.0a3`, [#849](https://github.com/Jij-Inc/ommx/pull/849), [#850](https://github.com/Jij-Inc/ommx/pull/850), [#852](https://github.com/Jij-Inc/ommx/pull/852))
 
-The dict / list accessors that previously returned snapshot wrapper objects now return `AttachedX` write-through handles bound to the parent host (`Instance` or `ParametricInstance`). Reads pull live from the host's SoA store; metadata setters write back through to it.
+The dict / list accessors that previously returned snapshot wrapper objects now return `AttachedX` write-through handles bound to the parent host (`Instance` or `ParametricInstance`). Reads pull live from the host's SoA stores; label/context setters write back through to them.
 
 ```python
 # v2.5.1 — id-keyed lookup via get_constraint_by_id; snapshot wrapper,

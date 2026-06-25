@@ -201,7 +201,7 @@ The Indicator DataFrame includes an `indicator_active` column that disambiguates
 
 ```python
 df = solution.constraints_df(
-    include=("metadata", "parameters", "removed_reason"),
+    include=("label", "parameters", "removed_reason"),
 )
 ```
 
