@@ -88,7 +88,10 @@ pub use substitute::*;
 pub const CURRENT_FORMAT_VERSION: u32 = 0;
 
 /// Module created from `ommx.v1` proto files
-#[allow(clippy::doc_overindented_list_items)] // prost breaks markdown indents
+#[allow(
+    clippy::doc_overindented_list_items, // prost breaks markdown indents
+    clippy::large_enum_variant,          // generated enums mirror protobuf oneofs
+)]
 pub mod v1 {
     include!("ommx.v1.rs");
 }

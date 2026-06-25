@@ -8,16 +8,18 @@ use crate::{
     Constraint, ConstraintID, VariableID,
 };
 
+type ConvertedConstraintHints = (
+    BTreeMap<crate::OneHotConstraintID, crate::OneHotConstraint>,
+    BTreeMap<crate::Sos1ConstraintID, crate::Sos1Constraint>,
+    std::collections::BTreeSet<crate::ConstraintID>,
+);
+
 /// Convert parsed `ConstraintHints` to first-class OneHot/SOS1 constraint collections,
 /// and return the set of regular constraint IDs that should be removed from the
 /// constraint collection (they are subsumed by the new first-class constraints).
 fn convert_hints_to_collections(
     hints: &ConstraintHints,
-) -> crate::Result<(
-    BTreeMap<crate::OneHotConstraintID, crate::OneHotConstraint>,
-    BTreeMap<crate::Sos1ConstraintID, crate::Sos1Constraint>,
-    std::collections::BTreeSet<crate::ConstraintID>,
-)> {
+) -> crate::Result<ConvertedConstraintHints> {
     let mut one_hot_active = BTreeMap::new();
     let mut absorbed_constraint_ids = std::collections::BTreeSet::new();
     for hint in &hints.one_hot_constraints {

@@ -331,15 +331,14 @@ impl Instance {
     pub fn fixed_decision_variables(&self) -> BTreeMap<VariableID, f64> {
         self.decision_variable_roles()
             .into_iter()
-            .filter_map(|(id, role)| {
-                (role == DecisionVariableRole::Fixed).then(|| {
-                    let value = self
-                        .decision_variables
-                        .get(&id)
-                        .and_then(DecisionVariable::substituted_value)
-                        .expect("fixed role requires substituted_value");
-                    (id, value)
-                })
+            .filter(|(_, role)| *role == DecisionVariableRole::Fixed)
+            .map(|(id, _)| {
+                let value = self
+                    .decision_variables
+                    .get(&id)
+                    .and_then(DecisionVariable::substituted_value)
+                    .expect("fixed role requires substituted_value");
+                (id, value)
             })
             .collect()
     }
