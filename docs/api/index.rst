@@ -24,6 +24,14 @@ Utilities
    ../autoapi/ommx/qplib/index
    ../autoapi/ommx/tracing/index
 
+Algorithms
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   ../autoapi/ommx_column_generation/index
+
 Adapters
 --------
 
