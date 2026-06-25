@@ -206,7 +206,16 @@ impl Parse for v1::SampledDecisionVariable {
         if let Some(fixed_value) = parsed_dv.fixed_value {
             let atol = crate::ATol::default();
             for (_, &sample_value) in samples.iter() {
-                if !sample_value.is_finite() || (sample_value - fixed_value).abs() > *atol {
+                if !sample_value.is_finite() {
+                    return Err(RawParseError::InvalidDecisionVariable(
+                        DecisionVariableError::NonFiniteValue {
+                            id: parsed_dv.variable.id,
+                            value: sample_value,
+                        },
+                    )
+                    .context(message, "samples"));
+                }
+                if (sample_value - fixed_value).abs() > *atol {
                     return Err(RawParseError::InvalidDecisionVariable(
                         DecisionVariableError::SubstitutedValueOverwrite {
                             id: parsed_dv.variable.id,
@@ -387,6 +396,35 @@ mod tests {
                 .unwrap(),
             atol
         );
+    }
+
+    #[test]
+    fn test_parse_sampled_decision_variable_rejects_non_finite_sample_with_substituted_value() {
+        let v1_sampled_dv = v1::SampledDecisionVariable {
+            decision_variable: Some(v1::DecisionVariable {
+                id: 42,
+                kind: v1::decision_variable::Kind::Continuous as i32,
+                bound: Some(v1::Bound {
+                    lower: 0.0,
+                    upper: 10.0,
+                }),
+                substituted_value: Some(1.0),
+                ..Default::default()
+            }),
+            samples: Some(v1::SampledValues {
+                entries: vec![v1::sampled_values::SampledValuesEntry {
+                    ids: vec![0],
+                    value: f64::NAN,
+                }],
+            }),
+        };
+
+        let result: Result<ParsedSampledDecisionVariable, _> = v1_sampled_dv.parse(&());
+        insta::assert_snapshot!(result.unwrap_err(), @r###"
+        Traceback for OMMX Message parse error:
+        └─ommx.v1.SampledDecisionVariable[samples]
+        Decision variable value for ID=42 must be finite: value=NaN
+        "###);
     }
 
     #[test]
