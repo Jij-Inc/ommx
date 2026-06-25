@@ -328,14 +328,9 @@ def test_sos1_accepts_non_binary_variable():
 
 
 def test_sos1_rejects_empty_variable_set():
-    """SOS1 must contain at least one variable — same builder invariant."""
-    instance = _instance_with_mixed_kinds()
-    bad = Sos1Constraint(variables=[])
-
+    """SOS1 must contain at least one variable."""
     with pytest.raises(Exception, match="(at least one|empty)"):
-        instance.add_sos1_constraint(bad)
-
-    assert instance.sos1_constraints == {}
+        Sos1Constraint(variables=[])
 
 
 def test_one_hot_rejects_non_binary_on_parametric_host():

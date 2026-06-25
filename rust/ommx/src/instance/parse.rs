@@ -8,31 +8,64 @@ use crate::{
     Constraint, ConstraintID, VariableID,
 };
 
+type ConvertedConstraintHints = (
+    BTreeMap<crate::OneHotConstraintID, crate::OneHotConstraint>,
+    BTreeMap<crate::Sos1ConstraintID, crate::Sos1Constraint>,
+    std::collections::BTreeSet<crate::ConstraintID>,
+);
+
 /// Convert parsed `ConstraintHints` to first-class OneHot/SOS1 constraint collections,
 /// and return the set of regular constraint IDs that should be removed from the
 /// constraint collection (they are subsumed by the new first-class constraints).
 fn convert_hints_to_collections(
     hints: &ConstraintHints,
-) -> (
-    BTreeMap<crate::OneHotConstraintID, crate::OneHotConstraint>,
-    BTreeMap<crate::Sos1ConstraintID, crate::Sos1Constraint>,
-    std::collections::BTreeSet<crate::ConstraintID>,
-) {
+) -> crate::Result<ConvertedConstraintHints> {
     let mut one_hot_active = BTreeMap::new();
     let mut absorbed_constraint_ids = std::collections::BTreeSet::new();
     for hint in &hints.one_hot_constraints {
         let id = crate::OneHotConstraintID::from(*hint.id);
-        one_hot_active.insert(id, crate::OneHotConstraint::new(hint.variables.clone()));
+        one_hot_active.insert(id, crate::OneHotConstraint::new(hint.variables.clone())?);
         absorbed_constraint_ids.insert(hint.id);
     }
     let mut sos1_active = BTreeMap::new();
     for hint in &hints.sos1_constraints {
         let id = crate::Sos1ConstraintID::from(*hint.binary_constraint_id);
-        sos1_active.insert(id, crate::Sos1Constraint::new(hint.variables.clone()));
+        sos1_active.insert(id, crate::Sos1Constraint::new(hint.variables.clone())?);
         absorbed_constraint_ids.insert(hint.binary_constraint_id);
         absorbed_constraint_ids.extend(&hint.big_m_constraint_ids);
     }
-    (one_hot_active, sos1_active, absorbed_constraint_ids)
+    Ok((one_hot_active, sos1_active, absorbed_constraint_ids))
+}
+
+fn drain_absorbed_hint_metadata(
+    hints: &ConstraintHints,
+    absorbed_ids: &std::collections::BTreeSet<ConstraintID>,
+    regular_metadata: &mut crate::ConstraintMetadataStore<ConstraintID>,
+) -> (
+    crate::ConstraintMetadataStore<crate::OneHotConstraintID>,
+    crate::ConstraintMetadataStore<crate::Sos1ConstraintID>,
+) {
+    let mut one_hot_metadata = crate::ConstraintMetadataStore::default();
+    let mut sos1_metadata = crate::ConstraintMetadataStore::default();
+
+    for hint in &hints.one_hot_constraints {
+        one_hot_metadata.insert(
+            crate::OneHotConstraintID::from(*hint.id),
+            regular_metadata.remove(hint.id),
+        );
+    }
+    for hint in &hints.sos1_constraints {
+        sos1_metadata.insert(
+            crate::Sos1ConstraintID::from(*hint.binary_constraint_id),
+            regular_metadata.remove(hint.binary_constraint_id),
+        );
+    }
+
+    for id in absorbed_ids {
+        regular_metadata.remove(*id);
+    }
+
+    (one_hot_metadata, sos1_metadata)
 }
 
 impl Parse for v1::instance::Sense {
@@ -233,7 +266,14 @@ impl Parse for v1::Instance {
         let (decision_variables, mut constraints, removed_constraints) = context;
 
         let (one_hot_active, sos1_active, absorbed_ids) =
-            convert_hints_to_collections(&constraint_hints);
+            convert_hints_to_collections(&constraint_hints).map_err(|e| {
+                RawParseError::InvalidInstance(e.to_string()).context(message, "constraint_hints")
+            })?;
+        let (one_hot_metadata, sos1_metadata) = drain_absorbed_hint_metadata(
+            &constraint_hints,
+            &absorbed_ids,
+            &mut constraint_metadata,
+        );
         // Remove regular constraints that are absorbed by OneHot/SOS1
         for id in &absorbed_ids {
             constraints.remove(id);
@@ -248,13 +288,27 @@ impl Parse for v1::Instance {
                 constraints,
                 removed_constraints,
                 constraint_metadata,
-            ),
+            )
+            .map_err(|e| {
+                RawParseError::InvalidInstance(e.to_string()).context(message, "constraints")
+            })?,
             indicator_constraint_collection: Default::default(),
-            one_hot_constraint_collection: ConstraintCollection::new(
+            one_hot_constraint_collection: ConstraintCollection::with_metadata(
                 one_hot_active,
                 BTreeMap::new(),
-            ),
-            sos1_constraint_collection: ConstraintCollection::new(sos1_active, BTreeMap::new()),
+                one_hot_metadata,
+            )
+            .map_err(|e| {
+                RawParseError::InvalidInstance(e.to_string()).context(message, "constraint_hints")
+            })?,
+            sos1_constraint_collection: ConstraintCollection::with_metadata(
+                sos1_active,
+                BTreeMap::new(),
+                sos1_metadata,
+            )
+            .map_err(|e| {
+                RawParseError::InvalidInstance(e.to_string()).context(message, "constraint_hints")
+            })?,
             decision_variable_dependency,
             parameters: self.parameters,
             description: self.description,
@@ -470,7 +524,14 @@ impl Parse for v1::ParametricInstance {
         let (decision_variables, mut constraints, removed_constraints) = context;
 
         let (one_hot_active, sos1_active, absorbed_ids) =
-            convert_hints_to_collections(&constraint_hints);
+            convert_hints_to_collections(&constraint_hints).map_err(|e| {
+                RawParseError::InvalidInstance(e.to_string()).context(message, "constraint_hints")
+            })?;
+        let (one_hot_metadata, sos1_metadata) = drain_absorbed_hint_metadata(
+            &constraint_hints,
+            &absorbed_ids,
+            &mut constraint_metadata,
+        );
         // Remove regular constraints that are absorbed by OneHot/SOS1
         for id in &absorbed_ids {
             constraints.remove(id);
@@ -486,13 +547,27 @@ impl Parse for v1::ParametricInstance {
                 constraints,
                 removed_constraints,
                 constraint_metadata,
-            ),
+            )
+            .map_err(|e| {
+                RawParseError::InvalidInstance(e.to_string()).context(message, "constraints")
+            })?,
             indicator_constraint_collection: Default::default(),
-            one_hot_constraint_collection: ConstraintCollection::new(
+            one_hot_constraint_collection: ConstraintCollection::with_metadata(
                 one_hot_active,
                 BTreeMap::new(),
-            ),
-            sos1_constraint_collection: ConstraintCollection::new(sos1_active, BTreeMap::new()),
+                one_hot_metadata,
+            )
+            .map_err(|e| {
+                RawParseError::InvalidInstance(e.to_string()).context(message, "constraint_hints")
+            })?,
+            sos1_constraint_collection: ConstraintCollection::with_metadata(
+                sos1_active,
+                BTreeMap::new(),
+                sos1_metadata,
+            )
+            .map_err(|e| {
+                RawParseError::InvalidInstance(e.to_string()).context(message, "constraint_hints")
+            })?,
             named_functions,
             named_function_metadata,
             decision_variable_dependency,
@@ -591,6 +666,30 @@ mod tests {
     use proptest::prelude::*;
     use std::collections::HashMap;
 
+    fn binary_decision_variables() -> Vec<v1::DecisionVariable> {
+        [0, 1]
+            .into_iter()
+            .map(|id| {
+                crate::decision_variable::parse::decision_variable_to_v1(
+                    crate::DecisionVariable::binary(VariableID::from(id)),
+                    Default::default(),
+                )
+            })
+            .collect()
+    }
+
+    fn labeled_constraint(id: u64, name: &str) -> v1::Constraint {
+        constraint_to_v1(
+            ConstraintID::from(id),
+            Constraint::equal_to_zero(crate::Function::Zero),
+            ConstraintMetadata {
+                name: Some(name.to_string()),
+                subscripts: vec![id as i64],
+                ..Default::default()
+            },
+        )
+    }
+
     proptest! {
         #[test]
         fn instance_roundtrip(original_instance in Instance::arbitrary()) {
@@ -615,6 +714,112 @@ mod tests {
         └─ommx.v1.Instance[annotations]
         Annotation key `org.ommx.v1.instance.title` is reserved for OMMX metadata and cannot be stored in extension annotations.
         "###);
+    }
+
+    #[test]
+    fn test_instance_parse_transfers_one_hot_hint_metadata() {
+        let v1_instance = v1::Instance {
+            sense: v1::instance::Sense::Minimize as i32,
+            objective: Some(crate::Function::Zero.into()),
+            decision_variables: binary_decision_variables(),
+            constraints: vec![labeled_constraint(1, "exactly_one")],
+            constraint_hints: Some(v1::ConstraintHints {
+                one_hot_constraints: vec![v1::OneHot {
+                    constraint_id: 1,
+                    decision_variables: vec![0, 1],
+                }],
+                sos1_constraints: vec![],
+            }),
+            ..Default::default()
+        };
+
+        let parsed = v1_instance.parse(&()).unwrap();
+        let regular_id = ConstraintID::from(1);
+        let one_hot_id = crate::OneHotConstraintID::from(1);
+
+        assert!(!parsed.constraints().contains_key(&regular_id));
+        assert!(!parsed.constraint_metadata().contains(regular_id));
+        assert!(parsed.one_hot_constraints().contains_key(&one_hot_id));
+        assert_eq!(
+            parsed.one_hot_constraint_metadata().name(one_hot_id),
+            Some("exactly_one")
+        );
+        assert_eq!(
+            parsed.one_hot_constraint_metadata().subscripts(one_hot_id),
+            &[1]
+        );
+    }
+
+    #[test]
+    fn test_parametric_instance_parse_transfers_one_hot_hint_metadata() {
+        let v1_parametric_instance = v1::ParametricInstance {
+            sense: v1::instance::Sense::Minimize as i32,
+            objective: Some(crate::Function::Zero.into()),
+            decision_variables: binary_decision_variables(),
+            constraints: vec![labeled_constraint(1, "exactly_one")],
+            constraint_hints: Some(v1::ConstraintHints {
+                one_hot_constraints: vec![v1::OneHot {
+                    constraint_id: 1,
+                    decision_variables: vec![0, 1],
+                }],
+                sos1_constraints: vec![],
+            }),
+            ..Default::default()
+        };
+
+        let parsed = v1_parametric_instance.parse(&()).unwrap();
+        let regular_id = ConstraintID::from(1);
+        let one_hot_id = crate::OneHotConstraintID::from(1);
+
+        assert!(!parsed.constraints().contains_key(&regular_id));
+        assert!(!parsed.constraint_metadata().contains(regular_id));
+        assert!(parsed.one_hot_constraints().contains_key(&one_hot_id));
+        assert_eq!(
+            parsed.one_hot_constraint_metadata().name(one_hot_id),
+            Some("exactly_one")
+        );
+        assert_eq!(
+            parsed.one_hot_constraint_metadata().subscripts(one_hot_id),
+            &[1]
+        );
+    }
+
+    #[test]
+    fn test_instance_parse_transfers_sos1_binary_hint_metadata_only() {
+        let v1_instance = v1::Instance {
+            sense: v1::instance::Sense::Minimize as i32,
+            objective: Some(crate::Function::Zero.into()),
+            decision_variables: binary_decision_variables(),
+            constraints: vec![
+                labeled_constraint(10, "sos1_cardinality"),
+                labeled_constraint(11, "big_m_encoding"),
+            ],
+            constraint_hints: Some(v1::ConstraintHints {
+                one_hot_constraints: vec![],
+                sos1_constraints: vec![v1::Sos1 {
+                    binary_constraint_id: 10,
+                    big_m_constraint_ids: vec![11],
+                    decision_variables: vec![0, 1],
+                }],
+            }),
+            ..Default::default()
+        };
+
+        let parsed = v1_instance.parse(&()).unwrap();
+        let binary_id = ConstraintID::from(10);
+        let big_m_id = ConstraintID::from(11);
+        let sos1_id = crate::Sos1ConstraintID::from(10);
+
+        assert!(!parsed.constraints().contains_key(&binary_id));
+        assert!(!parsed.constraints().contains_key(&big_m_id));
+        assert!(!parsed.constraint_metadata().contains(binary_id));
+        assert!(!parsed.constraint_metadata().contains(big_m_id));
+        assert!(parsed.sos1_constraints().contains_key(&sos1_id));
+        assert_eq!(
+            parsed.sos1_constraint_metadata().name(sos1_id),
+            Some("sos1_cardinality")
+        );
+        assert_eq!(parsed.sos1_constraint_metadata().subscripts(sos1_id), &[10]);
     }
 
     #[test]

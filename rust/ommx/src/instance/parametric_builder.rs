@@ -310,7 +310,13 @@ impl ParametricInstanceBuilder {
 
         // Validate one-hot constraints. Every variable is structural; must
         // be a binary decision variable (parameter ids rejected).
-        for value in self.one_hot_constraints.values() {
+        for (id, value) in &self.one_hot_constraints {
+            if value.variables.is_empty() {
+                crate::bail!(
+                    { ?id },
+                    "One-hot constraint {id:?} has no variables; one-hot constraints must contain at least one variable",
+                );
+            }
             for var_id in &value.variables {
                 let Some(dv) = decision_variables.get(var_id) else {
                     if parameter_ids.contains(var_id) {
@@ -439,19 +445,22 @@ impl ParametricInstanceBuilder {
             decision_variables,
             parameters,
             variable_metadata: Default::default(),
-            constraint_collection: ConstraintCollection::new(constraints, self.removed_constraints),
+            constraint_collection: ConstraintCollection::new(
+                constraints,
+                self.removed_constraints,
+            )?,
             indicator_constraint_collection: ConstraintCollection::new(
                 self.indicator_constraints,
                 self.removed_indicator_constraints,
-            ),
+            )?,
             one_hot_constraint_collection: ConstraintCollection::new(
                 self.one_hot_constraints,
                 BTreeMap::new(),
-            ),
+            )?,
             sos1_constraint_collection: ConstraintCollection::new(
                 self.sos1_constraints,
                 BTreeMap::new(),
-            ),
+            )?,
             named_functions: self.named_functions,
             named_function_metadata: Default::default(),
             decision_variable_dependency: self.decision_variable_dependency,
@@ -766,7 +775,8 @@ mod tests {
             [VariableID::from(1), VariableID::from(100)] // 100 is a parameter
                 .into_iter()
                 .collect(),
-        );
+        )
+        .unwrap();
 
         let err = ParametricInstance::builder()
             .sense(Sense::Minimize)
@@ -795,7 +805,10 @@ mod tests {
     fn test_parametric_builder_rejects_empty_sos1() {
         use maplit::btreemap;
 
-        let sos1 = crate::Sos1Constraint::new(std::collections::BTreeSet::new());
+        let sos1 = crate::Sos1Constraint {
+            variables: std::collections::BTreeSet::new(),
+            stage: crate::Sos1CreatedData,
+        };
 
         let err = ParametricInstance::builder()
             .sense(Sense::Minimize)

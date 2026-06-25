@@ -245,12 +245,11 @@ impl Instance {
 
     /// Mutable access to the per-constraint metadata store.
     ///
-    /// Metadata is outside the constraint-collection invariants (it is a sparse
-    /// ID-keyed store of names / subscripts / parameters / description /
-    /// provenance), so exposing it as `&mut` is safe. For invariant-affecting
-    /// operations like adding or removing constraints, use the dedicated
-    /// `Instance` methods instead — there is no public mutable accessor for the
-    /// full [`ConstraintCollection`].
+    /// This store is a sidecar of [`Self::constraint_collection`]: every
+    /// non-empty label/provenance entry must refer to an active or removed
+    /// constraint ID owned by that collection. Checked construction and parse
+    /// boundaries reject unknown metadata IDs. For operations that change
+    /// collection membership, use the dedicated `Instance` methods instead.
     pub fn constraint_metadata_mut(&mut self) -> &mut ConstraintMetadataStore<ConstraintID> {
         self.constraint_collection.metadata_mut()
     }
@@ -282,8 +281,7 @@ impl Instance {
     }
 
     /// Mutable access to the per-indicator-constraint metadata store. See
-    /// [`Self::constraint_metadata_mut`] for the rationale on exposing only
-    /// metadata mutation publicly.
+    /// [`Self::constraint_metadata_mut`] for the sidecar ownership rule.
     pub fn indicator_constraint_metadata_mut(
         &mut self,
     ) -> &mut ConstraintMetadataStore<crate::IndicatorConstraintID> {
@@ -315,8 +313,7 @@ impl Instance {
     }
 
     /// Mutable access to the per-one-hot-constraint metadata store. See
-    /// [`Self::constraint_metadata_mut`] for the rationale on exposing only
-    /// metadata mutation publicly.
+    /// [`Self::constraint_metadata_mut`] for the sidecar ownership rule.
     pub fn one_hot_constraint_metadata_mut(
         &mut self,
     ) -> &mut ConstraintMetadataStore<crate::OneHotConstraintID> {
@@ -346,8 +343,7 @@ impl Instance {
     }
 
     /// Mutable access to the per-SOS1-constraint metadata store. See
-    /// [`Self::constraint_metadata_mut`] for the rationale on exposing only
-    /// metadata mutation publicly.
+    /// [`Self::constraint_metadata_mut`] for the sidecar ownership rule.
     pub fn sos1_constraint_metadata_mut(
         &mut self,
     ) -> &mut ConstraintMetadataStore<crate::Sos1ConstraintID> {
@@ -598,8 +594,7 @@ impl ParametricInstance {
     }
 
     /// Mutable access to the per-constraint metadata store. See
-    /// [`Instance::constraint_metadata_mut`] for the rationale on exposing only
-    /// metadata mutation publicly.
+    /// [`Instance::constraint_metadata_mut`] for the sidecar ownership rule.
     pub fn constraint_metadata_mut(&mut self) -> &mut ConstraintMetadataStore<ConstraintID> {
         self.constraint_collection.metadata_mut()
     }
@@ -631,8 +626,7 @@ impl ParametricInstance {
     }
 
     /// Mutable access to the per-indicator-constraint metadata store. See
-    /// [`Instance::constraint_metadata_mut`] for the rationale on exposing only
-    /// metadata mutation publicly.
+    /// [`Instance::constraint_metadata_mut`] for the sidecar ownership rule.
     pub fn indicator_constraint_metadata_mut(
         &mut self,
     ) -> &mut ConstraintMetadataStore<crate::IndicatorConstraintID> {
@@ -664,8 +658,7 @@ impl ParametricInstance {
     }
 
     /// Mutable access to the per-one-hot-constraint metadata store. See
-    /// [`Instance::constraint_metadata_mut`] for the rationale on exposing only
-    /// metadata mutation publicly.
+    /// [`Instance::constraint_metadata_mut`] for the sidecar ownership rule.
     pub fn one_hot_constraint_metadata_mut(
         &mut self,
     ) -> &mut ConstraintMetadataStore<crate::OneHotConstraintID> {
@@ -695,8 +688,7 @@ impl ParametricInstance {
     }
 
     /// Mutable access to the per-SOS1-constraint metadata store. See
-    /// [`Instance::constraint_metadata_mut`] for the rationale on exposing only
-    /// metadata mutation publicly.
+    /// [`Instance::constraint_metadata_mut`] for the sidecar ownership rule.
     pub fn sos1_constraint_metadata_mut(
         &mut self,
     ) -> &mut ConstraintMetadataStore<crate::Sos1ConstraintID> {
@@ -730,12 +722,14 @@ mod reduce_capabilities_tests {
             [VariableID::from(0), VariableID::from(1)]
                 .into_iter()
                 .collect(),
-        );
+        )
+        .unwrap();
         let sos1 = Sos1Constraint::new(
             [VariableID::from(2), VariableID::from(3)]
                 .into_iter()
                 .collect(),
-        );
+        )
+        .unwrap();
         // Indicator: y=1 => x0 <= 0 (trivially satisfied since x0 in [0,1], upper=1>0 emits upper Big-M)
         let indicator = IndicatorConstraint::new(
             VariableID::from(1),
@@ -835,7 +829,8 @@ mod reduce_capabilities_tests {
             [VariableID::from(0), VariableID::from(1)]
                 .into_iter()
                 .collect(),
-        );
+        )
+        .unwrap();
         let mut instance = Instance::builder()
             .sense(Sense::Minimize)
             .objective(Function::from(linear!(0)))
@@ -858,7 +853,8 @@ mod reduce_capabilities_tests {
         // SOS1 over a continuous variable with infinite bound cannot be Big-M
         // converted; reduce_capabilities surfaces the underlying error.
         let dv = DecisionVariable::continuous(VariableID::from(0));
-        let sos1 = Sos1Constraint::new([VariableID::from(0)].into_iter().collect::<BTreeSet<_>>());
+        let sos1 = Sos1Constraint::new([VariableID::from(0)].into_iter().collect::<BTreeSet<_>>())
+            .unwrap();
         let mut instance = Instance::builder()
             .sense(Sense::Minimize)
             .objective(Function::from(linear!(0)))
@@ -886,7 +882,8 @@ mod reduce_capabilities_tests {
             crate::ATol::default(),
         )
         .unwrap();
-        let sos1 = Sos1Constraint::new([VariableID::from(0)].into_iter().collect::<BTreeSet<_>>());
+        let sos1 = Sos1Constraint::new([VariableID::from(0)].into_iter().collect::<BTreeSet<_>>())
+            .unwrap();
         let mut instance = Instance::builder()
             .sense(Sense::Minimize)
             .objective(Function::from(linear!(0)))

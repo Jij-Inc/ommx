@@ -120,7 +120,11 @@ impl Parse for crate::v1::Solution {
                 evaluated_constraints,
                 removed_reasons,
                 constraint_metadata,
-            ),
+            )
+            .map_err(|e| {
+                crate::RawParseError::InvalidInstance(e.to_string())
+                    .context(message, "evaluated_constraints")
+            })?,
             evaluated_indicator_constraints: Default::default(),
             evaluated_one_hot_constraints: Default::default(),
             evaluated_sos1_constraints: Default::default(),
@@ -583,7 +587,8 @@ mod tests {
         constraint_metadata.set_name(cid, "balance");
         constraint_metadata.set_description(cid, "demand-balance row");
         let evaluated_constraints =
-            EvaluatedCollection::with_metadata(evaluated_map, BTreeMap::new(), constraint_metadata);
+            EvaluatedCollection::with_metadata(evaluated_map, BTreeMap::new(), constraint_metadata)
+                .unwrap();
 
         // Add an evaluated named function with non-empty metadata so the
         // round-trip exercises the named_function_metadata SoA store too.

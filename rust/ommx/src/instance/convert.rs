@@ -155,12 +155,12 @@ impl ParametricInstance {
                 constraints,
                 removed_constraints,
                 constraint_metadata,
-            ),
+            )?,
             indicator_constraint_collection: ConstraintCollection::with_metadata(
                 indicator_active,
                 indicator_removed,
                 indicator_metadata,
-            ),
+            )?,
             // OneHot / SOS1 constraints are purely structural — their
             // variable sets are always real decision variables (the
             // parametric builder rejects parameter IDs there), so there is

@@ -1,5 +1,12 @@
 use super::*;
 
+fn validate_one_hot_non_empty(constraint: &crate::OneHotConstraint) -> crate::Result<()> {
+    if constraint.variables.is_empty() {
+        crate::bail!("One-hot constraint must contain at least one variable");
+    }
+    Ok(())
+}
+
 impl Instance {
     /// Internal helper to validate required IDs against precomputed sets.
     ///
@@ -86,7 +93,7 @@ impl Instance {
         self.validate_required_ids(constraint.required_ids())?;
         let id = self.constraint_collection.unused_id();
         self.constraint_collection
-            .insert_with(id, constraint, metadata);
+            .insert_with(id, constraint, metadata)?;
         Ok(id)
     }
 
@@ -123,27 +130,29 @@ impl Instance {
         self.require_binary_variable(constraint.indicator_variable)?;
         let id = self.indicator_constraint_collection.unused_id();
         self.indicator_constraint_collection
-            .insert_with(id, constraint, metadata);
+            .insert_with(id, constraint, metadata)?;
         Ok(id)
     }
 
     /// Insert a new one-hot constraint with its metadata, picking an unused id.
     ///
     /// Returns the newly assigned [`crate::OneHotConstraintID`]. Enforces
-    /// the [`Instance`] builder's invariants: every variable in the one-hot
-    /// set must be defined and have [`Kind::Binary`](crate::decision_variable::Kind).
+    /// the [`Instance`] builder's invariants: the one-hot set must be
+    /// non-empty and every variable in it must be defined and have
+    /// [`Kind::Binary`](crate::decision_variable::Kind).
     pub fn add_one_hot_constraint(
         &mut self,
         constraint: crate::OneHotConstraint,
         metadata: crate::ConstraintMetadata,
     ) -> crate::Result<crate::OneHotConstraintID> {
+        validate_one_hot_non_empty(&constraint)?;
         self.validate_required_ids(constraint.required_ids())?;
         for var_id in &constraint.variables {
             self.require_binary_variable(*var_id)?;
         }
         let id = self.one_hot_constraint_collection.unused_id();
         self.one_hot_constraint_collection
-            .insert_with(id, constraint, metadata);
+            .insert_with(id, constraint, metadata)?;
         Ok(id)
     }
 
@@ -163,7 +172,7 @@ impl Instance {
         self.validate_required_ids(constraint.required_ids())?;
         let id = self.sos1_constraint_collection.unused_id();
         self.sos1_constraint_collection
-            .insert_with(id, constraint, metadata);
+            .insert_with(id, constraint, metadata)?;
         Ok(id)
     }
 
@@ -379,7 +388,7 @@ impl ParametricInstance {
         self.validate_required_ids(constraint.required_ids())?;
         let id = self.constraint_collection.unused_id();
         self.constraint_collection
-            .insert_with(id, constraint, metadata);
+            .insert_with(id, constraint, metadata)?;
         Ok(id)
     }
 
@@ -453,27 +462,28 @@ impl ParametricInstance {
         self.validate_required_ids(constraint.required_ids())?;
         let id = self.indicator_constraint_collection.unused_id();
         self.indicator_constraint_collection
-            .insert_with(id, constraint, metadata);
+            .insert_with(id, constraint, metadata)?;
         Ok(id)
     }
 
     /// Insert a new one-hot constraint with its metadata, picking an unused id.
     ///
-    /// All variables in the one-hot set are structural and must be binary
-    /// decision variables (parameter ids and non-binary kinds are rejected).
-    /// Dependency keys are also rejected.
+    /// The one-hot set must be non-empty. All variables in the set are
+    /// structural and must be binary decision variables (parameter ids and
+    /// non-binary kinds are rejected). Dependency keys are also rejected.
     pub fn add_one_hot_constraint(
         &mut self,
         constraint: crate::OneHotConstraint,
         metadata: crate::ConstraintMetadata,
     ) -> crate::Result<crate::OneHotConstraintID> {
+        validate_one_hot_non_empty(&constraint)?;
         for var_id in &constraint.variables {
             self.require_binary_variable(*var_id)?;
         }
         self.validate_required_ids(constraint.required_ids())?;
         let id = self.one_hot_constraint_collection.unused_id();
         self.one_hot_constraint_collection
-            .insert_with(id, constraint, metadata);
+            .insert_with(id, constraint, metadata)?;
         Ok(id)
     }
 
@@ -496,7 +506,7 @@ impl ParametricInstance {
         self.validate_required_ids(required_ids)?;
         let id = self.sos1_constraint_collection.unused_id();
         self.sos1_constraint_collection
-            .insert_with(id, constraint, metadata);
+            .insert_with(id, constraint, metadata)?;
         Ok(id)
     }
 
@@ -543,6 +553,14 @@ mod tests {
     };
 
     use maplit::btreemap;
+    use std::collections::BTreeSet;
+
+    fn empty_one_hot_constraint() -> crate::OneHotConstraint {
+        crate::OneHotConstraint {
+            variables: BTreeSet::new(),
+            stage: crate::OneHotCreatedData,
+        }
+    }
 
     #[test]
     fn test_insert_constraint_success() {
@@ -786,6 +804,55 @@ mod tests {
             "unexpected error: {err}"
         );
         assert!(instance.constraints().is_empty());
+    }
+
+    #[test]
+    fn test_add_one_hot_constraint_rejects_empty_variable_set() {
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            Function::Zero,
+            BTreeMap::new(),
+            BTreeMap::new(),
+        )
+        .unwrap();
+
+        let err = instance
+            .add_one_hot_constraint(
+                empty_one_hot_constraint(),
+                crate::ConstraintMetadata::default(),
+            )
+            .unwrap_err();
+
+        assert!(
+            err.to_string().contains("at least one variable"),
+            "unexpected error: {err}"
+        );
+        assert!(instance.one_hot_constraints().is_empty());
+    }
+
+    #[test]
+    fn test_parametric_add_one_hot_constraint_rejects_empty_variable_set() {
+        let mut instance = ParametricInstance::new(
+            Sense::Minimize,
+            Function::Zero,
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+        )
+        .unwrap();
+
+        let err = instance
+            .add_one_hot_constraint(
+                empty_one_hot_constraint(),
+                crate::ConstraintMetadata::default(),
+            )
+            .unwrap_err();
+
+        assert!(
+            err.to_string().contains("at least one variable"),
+            "unexpected error: {err}"
+        );
+        assert!(instance.one_hot_constraints().is_empty());
     }
 
     #[test]

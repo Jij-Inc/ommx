@@ -2,8 +2,10 @@ mod evaluate;
 
 use crate::{
     constraint::{stage, Created, CreatedData, Equality, Evaluated, Stage},
-    constraint_type::{ConstraintType, EvaluatedConstraintBehavior, SampledConstraintBehavior},
-    Function, SampleID, VariableID, VariableIDSet,
+    constraint_type::{
+        sample_ids_from_map, ConstraintType, EvaluatedConstraintBehavior, SampledConstraintBehavior,
+    },
+    Function, SampleID, SampleIDSet, VariableID, VariableIDSet,
 };
 use derive_more::{Deref, From};
 use std::collections::BTreeMap;
@@ -130,6 +132,22 @@ impl SampledConstraintBehavior for SampledIndicatorConstraint {
     fn is_feasible_for(&self, sample_id: SampleID) -> Option<bool> {
         self.stage.feasible.get(&sample_id).copied()
     }
+
+    fn validate_sample_ids(&self, expected: &SampleIDSet) -> std::result::Result<(), SampleIDSet> {
+        if !self.stage.evaluated_values.has_same_ids(expected) {
+            return Err(self.stage.evaluated_values.ids());
+        }
+        let feasible_ids = sample_ids_from_map(&self.stage.feasible);
+        if &feasible_ids != expected {
+            return Err(feasible_ids);
+        }
+        let indicator_active_ids = sample_ids_from_map(&self.stage.indicator_active);
+        if &indicator_active_ids != expected {
+            return Err(indicator_active_ids);
+        }
+        Ok(())
+    }
+
     fn get(&self, sample_id: SampleID) -> Option<Self::Evaluated> {
         let evaluated_value = *self.stage.evaluated_values.get(sample_id)?;
         let feasible = *self.stage.feasible.get(&sample_id)?;

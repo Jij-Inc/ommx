@@ -78,11 +78,17 @@ impl Parse for crate::v1::SampleSet {
             .decision_variables(decision_variables)
             .variable_metadata(variable_metadata)
             .objectives(objectives)
-            .constraints_collection(crate::constraint_type::SampledCollection::with_metadata(
-                constraints,
-                constraint_removed_reasons,
-                constraint_metadata,
-            ))
+            .constraints_collection(
+                crate::constraint_type::SampledCollection::with_metadata(
+                    constraints,
+                    constraint_removed_reasons,
+                    constraint_metadata,
+                )
+                .map_err(|e| {
+                    crate::RawParseError::InvalidInstance(e.to_string())
+                        .context(message, "constraints")
+                })?,
+            )
             .named_functions(named_functions)
             .named_function_metadata(named_function_metadata)
             .sense(sense)
@@ -481,7 +487,8 @@ mod tests {
             constraints_map,
             BTreeMap::new(),
             constraint_metadata,
-        );
+        )
+        .unwrap();
 
         // Add a sampled named function with non-empty metadata so the
         // round-trip exercises the named_function_metadata SoA store too.

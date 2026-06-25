@@ -205,7 +205,8 @@ mod tests {
             [VariableID::from(1), VariableID::from(2)]
                 .into_iter()
                 .collect::<BTreeSet<_>>(),
-        );
+        )
+        .unwrap();
         instance
             .one_hot_constraint_collection
             .active_mut()

@@ -14,7 +14,6 @@ use crate::logical_memory::LogicalMemoryProfile;
 use crate::{ATol, Bound, Parse, RawParseError, SampleID, Sampled};
 use ::approx::AbsDiffEq;
 use derive_more::{Deref, From};
-use fnv::FnvHashMap;
 use getset::Getters;
 use std::collections::BTreeSet;
 
@@ -410,14 +409,8 @@ pub enum DecisionVariableError {
     },
 }
 
-/// Auxiliary metadata for decision variables (excluding essential id, kind, bound, substituted_value)
-#[derive(Debug, Clone, PartialEq, Default, LogicalMemoryProfile)]
-pub struct DecisionVariableMetadata {
-    pub name: Option<String>,
-    pub subscripts: Vec<i64>,
-    pub parameters: FnvHashMap<String, String>,
-    pub description: Option<String>,
-}
+/// Modeling label for decision variables.
+pub type DecisionVariableMetadata = crate::ModelingLabel;
 
 /// Single evaluation result with data integrity guarantees
 #[derive(Debug, Clone, PartialEq, Getters)]

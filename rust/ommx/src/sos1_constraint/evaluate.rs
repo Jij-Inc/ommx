@@ -170,7 +170,7 @@ mod tests {
 
     fn make_sos1(_id: u64, var_ids: &[u64]) -> Sos1Constraint {
         let vars = var_ids.iter().copied().map(VariableID::from).collect();
-        Sos1Constraint::new(vars)
+        Sos1Constraint::new(vars).unwrap()
     }
 
     #[test]

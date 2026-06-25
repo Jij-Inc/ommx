@@ -2,8 +2,10 @@ mod evaluate;
 
 use crate::{
     constraint::{stage, Created, Evaluated, Stage},
-    constraint_type::{ConstraintType, EvaluatedConstraintBehavior, SampledConstraintBehavior},
-    SampleID, VariableID, VariableIDSet,
+    constraint_type::{
+        sample_ids_from_map, ConstraintType, EvaluatedConstraintBehavior, SampledConstraintBehavior,
+    },
+    SampleID, SampleIDSet, VariableID, VariableIDSet,
 };
 use derive_more::{Deref, From};
 use std::collections::{BTreeMap, BTreeSet};
@@ -127,6 +129,19 @@ impl SampledConstraintBehavior for SampledSos1Constraint {
     fn is_feasible_for(&self, sample_id: SampleID) -> Option<bool> {
         self.stage.feasible.get(&sample_id).copied()
     }
+
+    fn validate_sample_ids(&self, expected: &SampleIDSet) -> std::result::Result<(), SampleIDSet> {
+        let feasible_ids = sample_ids_from_map(&self.stage.feasible);
+        if &feasible_ids != expected {
+            return Err(feasible_ids);
+        }
+        let active_variable_ids = sample_ids_from_map(&self.stage.active_variable);
+        if &active_variable_ids != expected {
+            return Err(active_variable_ids);
+        }
+        Ok(())
+    }
+
     fn get(&self, sample_id: SampleID) -> Option<Self::Evaluated> {
         let feasible = *self.stage.feasible.get(&sample_id)?;
         let active_variable = *self.stage.active_variable.get(&sample_id)?;
@@ -155,11 +170,18 @@ impl ConstraintType for Sos1Constraint {
 
 impl Sos1Constraint<Created> {
     /// Create a new SOS1 constraint.
-    pub fn new(variables: BTreeSet<VariableID>) -> Self {
-        Self {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `variables` is empty.
+    pub fn new(variables: BTreeSet<VariableID>) -> crate::Result<Self> {
+        if variables.is_empty() {
+            crate::bail!("SOS1 constraints must contain at least one variable");
+        }
+        Ok(Self {
             variables,
             stage: Sos1CreatedData,
-        }
+        })
     }
 }
 
@@ -185,14 +207,20 @@ mod tests {
     #[test]
     fn test_create_sos1_constraint() {
         let vars: BTreeSet<_> = [1, 2, 3].into_iter().map(VariableID::from).collect();
-        let c = Sos1Constraint::new(vars.clone());
+        let c = Sos1Constraint::new(vars.clone()).unwrap();
         assert_eq!(c.variables, vars);
+    }
+
+    #[test]
+    fn sos1_constraint_rejects_empty_variable_set() {
+        let err = Sos1Constraint::new(BTreeSet::new()).unwrap_err();
+        assert!(err.to_string().contains("at least one variable"));
     }
 
     #[test]
     fn test_display() {
         let vars: BTreeSet<_> = [1, 2, 3].into_iter().map(VariableID::from).collect();
-        let c = Sos1Constraint::new(vars);
+        let c = Sos1Constraint::new(vars).unwrap();
         let s = format!("{}", c);
         assert!(s.contains("Sos1Constraint"));
         assert!(s.contains("x1"));
@@ -201,7 +229,7 @@ mod tests {
     #[test]
     fn test_constraint_type_impl() {
         let vars: BTreeSet<_> = [1, 2].into_iter().map(VariableID::from).collect();
-        let c = Sos1Constraint::new(vars);
+        let c = Sos1Constraint::new(vars).unwrap();
         let _: <Sos1Constraint as ConstraintType>::Created = c;
     }
 }

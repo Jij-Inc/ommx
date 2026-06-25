@@ -44,6 +44,7 @@ mod indicator_constraint;
 mod infeasible_detected;
 mod instance;
 mod macros;
+mod modeling_label;
 mod named_function;
 mod one_hot_constraint;
 mod polynomial_base;
@@ -66,6 +67,7 @@ pub use function::*;
 pub use indicator_constraint::*;
 pub use infeasible_detected::*;
 pub use instance::*;
+pub use modeling_label::*;
 pub use named_function::*;
 pub use one_hot_constraint::*;
 pub use parse::*;
@@ -86,7 +88,10 @@ pub use substitute::*;
 pub const CURRENT_FORMAT_VERSION: u32 = 0;
 
 /// Module created from `ommx.v1` proto files
-#[allow(clippy::doc_overindented_list_items)] // prost breaks markdown indents
+#[allow(
+    clippy::doc_overindented_list_items, // prost breaks markdown indents
+    clippy::large_enum_variant,          // generated enums mirror protobuf oneofs
+)]
 pub mod v1 {
     include!("ommx.v1.rs");
 }

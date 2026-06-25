@@ -55,7 +55,7 @@ impl Instance {
             .provenance
             .push(Provenance::OneHotConstraint(id));
         self.constraint_collection
-            .insert_with(new_id, new_constraint, new_metadata);
+            .insert_with(new_id, new_constraint, new_metadata)?;
 
         let mut parameters = fnv::FnvHashMap::default();
         parameters.insert("constraint_id".to_string(), new_id.into_inner().to_string());
@@ -107,7 +107,7 @@ mod tests {
             );
         }
         let vars: BTreeSet<_> = [1u64, 2].into_iter().map(VariableID::from).collect();
-        let one_hot = OneHotConstraint::new(vars);
+        let one_hot = OneHotConstraint::new(vars).unwrap();
 
         Instance::builder()
             .sense(Sense::Minimize)
@@ -190,8 +190,10 @@ mod tests {
                 DecisionVariable::binary(VariableID::from(id)),
             );
         }
-        let a = OneHotConstraint::new([1u64, 2].into_iter().map(VariableID::from).collect());
-        let b = OneHotConstraint::new([3u64, 4].into_iter().map(VariableID::from).collect());
+        let a =
+            OneHotConstraint::new([1u64, 2].into_iter().map(VariableID::from).collect()).unwrap();
+        let b =
+            OneHotConstraint::new([3u64, 4].into_iter().map(VariableID::from).collect()).unwrap();
 
         let mut instance = Instance::builder()
             .sense(Sense::Minimize)

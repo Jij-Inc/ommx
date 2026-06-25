@@ -2,8 +2,10 @@ mod evaluate;
 
 use crate::{
     constraint::{stage, Created, Evaluated, Stage},
-    constraint_type::{ConstraintType, EvaluatedConstraintBehavior, SampledConstraintBehavior},
-    SampleID, VariableID, VariableIDSet,
+    constraint_type::{
+        sample_ids_from_map, ConstraintType, EvaluatedConstraintBehavior, SampledConstraintBehavior,
+    },
+    SampleID, SampleIDSet, VariableID, VariableIDSet,
 };
 use derive_more::{Deref, From};
 use std::collections::{BTreeMap, BTreeSet};
@@ -127,6 +129,19 @@ impl SampledConstraintBehavior for SampledOneHotConstraint {
     fn is_feasible_for(&self, sample_id: SampleID) -> Option<bool> {
         self.stage.feasible.get(&sample_id).copied()
     }
+
+    fn validate_sample_ids(&self, expected: &SampleIDSet) -> std::result::Result<(), SampleIDSet> {
+        let feasible_ids = sample_ids_from_map(&self.stage.feasible);
+        if &feasible_ids != expected {
+            return Err(feasible_ids);
+        }
+        let active_variable_ids = sample_ids_from_map(&self.stage.active_variable);
+        if &active_variable_ids != expected {
+            return Err(active_variable_ids);
+        }
+        Ok(())
+    }
+
     fn get(&self, sample_id: SampleID) -> Option<Self::Evaluated> {
         let feasible = *self.stage.feasible.get(&sample_id)?;
         let active_variable = *self.stage.active_variable.get(&sample_id)?;
@@ -155,11 +170,18 @@ impl ConstraintType for OneHotConstraint {
 
 impl OneHotConstraint<Created> {
     /// Create a new one-hot constraint.
-    pub fn new(variables: BTreeSet<VariableID>) -> Self {
-        Self {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `variables` is empty.
+    pub fn new(variables: BTreeSet<VariableID>) -> crate::Result<Self> {
+        if variables.is_empty() {
+            crate::bail!("One-hot constraints must contain at least one variable");
+        }
+        Ok(Self {
             variables,
             stage: OneHotCreatedData,
-        }
+        })
     }
 }
 
@@ -185,14 +207,20 @@ mod tests {
     #[test]
     fn test_create_one_hot_constraint() {
         let vars: BTreeSet<_> = [1, 2, 3].into_iter().map(VariableID::from).collect();
-        let c = OneHotConstraint::new(vars.clone());
+        let c = OneHotConstraint::new(vars.clone()).unwrap();
         assert_eq!(c.variables, vars);
+    }
+
+    #[test]
+    fn one_hot_constraint_rejects_empty_variable_set() {
+        let err = OneHotConstraint::new(BTreeSet::new()).unwrap_err();
+        assert!(err.to_string().contains("at least one variable"));
     }
 
     #[test]
     fn test_display() {
         let vars: BTreeSet<_> = [1, 2, 3].into_iter().map(VariableID::from).collect();
-        let c = OneHotConstraint::new(vars);
+        let c = OneHotConstraint::new(vars).unwrap();
         let s = format!("{}", c);
         assert!(s.contains("OneHotConstraint"));
         assert!(s.contains("x1"));
@@ -203,7 +231,7 @@ mod tests {
     #[test]
     fn test_constraint_type_impl() {
         let vars: BTreeSet<_> = [1, 2].into_iter().map(VariableID::from).collect();
-        let c = OneHotConstraint::new(vars);
+        let c = OneHotConstraint::new(vars).unwrap();
         let _: <OneHotConstraint as ConstraintType>::Created = c;
     }
 }

@@ -288,7 +288,7 @@ mod tests {
             VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
         };
         let vars: BTreeSet<_> = [0u64, 1].into_iter().map(VariableID::from).collect();
-        let sos1 = Sos1Constraint::new(vars);
+        let sos1 = Sos1Constraint::new(vars).unwrap();
 
         Instance::builder()
             .sense(Sense::Minimize)
@@ -311,7 +311,7 @@ mod tests {
         )
         .unwrap();
         let vars: BTreeSet<_> = [VariableID::from(0)].into_iter().collect();
-        let sos1 = Sos1Constraint::new(vars);
+        let sos1 = Sos1Constraint::new(vars).unwrap();
         Instance::builder()
             .sense(Sense::Minimize)
             .objective(Function::from(linear!(0)))
@@ -448,7 +448,7 @@ mod tests {
         // Continuous x0 with default (infinite) bound cannot be Big-M converted.
         let dv = DecisionVariable::continuous(VariableID::from(0));
         let vars: BTreeSet<_> = [VariableID::from(0)].into_iter().collect();
-        let sos1 = Sos1Constraint::new(vars);
+        let sos1 = Sos1Constraint::new(vars).unwrap();
         let mut instance = Instance::builder()
             .sense(Sense::Minimize)
             .objective(Function::from(linear!(0)))
@@ -492,7 +492,8 @@ mod tests {
         ] {
             let kind = dv.kind();
             let sos1 =
-                Sos1Constraint::new([VariableID::from(0)].into_iter().collect::<BTreeSet<_>>());
+                Sos1Constraint::new([VariableID::from(0)].into_iter().collect::<BTreeSet<_>>())
+                    .unwrap();
             let mut instance = Instance::builder()
                 .sense(Sense::Minimize)
                 .objective(Function::from(linear!(0)))
@@ -547,12 +548,14 @@ mod tests {
             [VariableID::from(0), VariableID::from(1)]
                 .into_iter()
                 .collect(),
-        );
+        )
+        .unwrap();
         let b = Sos1Constraint::new(
             [VariableID::from(2), VariableID::from(3)]
                 .into_iter()
                 .collect(),
-        );
+        )
+        .unwrap();
         let mut instance = Instance::builder()
             .sense(Sense::Minimize)
             .objective(Function::from(linear!(0) + linear!(2)))
@@ -581,7 +584,10 @@ mod tests {
         // Big-M cardinality constraint would degenerate to the tautology `-1 <= 0`.
         // The builder should reject empty SOS1 instead of letting it through.
         let dv = DecisionVariable::binary(VariableID::from(0));
-        let empty_sos1 = Sos1Constraint::new(BTreeSet::new());
+        let empty_sos1 = Sos1Constraint {
+            variables: BTreeSet::new(),
+            stage: crate::Sos1CreatedData,
+        };
         let err = Instance::builder()
             .sense(Sense::Minimize)
             .objective(Function::from(linear!(0)))
@@ -611,9 +617,11 @@ mod tests {
             [VariableID::from(0), VariableID::from(1)]
                 .into_iter()
                 .collect(),
-        );
+        )
+        .unwrap();
         let invalid =
-            Sos1Constraint::new([VariableID::from(2)].into_iter().collect::<BTreeSet<_>>());
+            Sos1Constraint::new([VariableID::from(2)].into_iter().collect::<BTreeSet<_>>())
+                .unwrap();
         let mut instance = Instance::builder()
             .sense(Sense::Minimize)
             .objective(Function::from(linear!(0) + linear!(2)))
