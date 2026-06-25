@@ -266,7 +266,7 @@ impl SampleSet {
                         BTreeMap::new(),
                         self.constraints.metadata().clone(),
                     )
-                    .expect("empty removed reasons cannot reference unknown constraints"),
+                    .expect("SampleSet sidecars must reference constraints present in this sample"),
                 )
                 .evaluated_indicator_constraints_collection(
                     EvaluatedCollection::with_metadata(
@@ -274,7 +274,7 @@ impl SampleSet {
                         BTreeMap::new(),
                         self.indicator_constraints.metadata().clone(),
                     )
-                    .expect("empty removed reasons cannot reference unknown constraints"),
+                    .expect("SampleSet sidecars must reference constraints present in this sample"),
                 )
                 .evaluated_one_hot_constraints_collection(
                     EvaluatedCollection::with_metadata(
@@ -282,7 +282,7 @@ impl SampleSet {
                         BTreeMap::new(),
                         self.one_hot_constraints.metadata().clone(),
                     )
-                    .expect("empty removed reasons cannot reference unknown constraints"),
+                    .expect("SampleSet sidecars must reference constraints present in this sample"),
                 )
                 .evaluated_sos1_constraints_collection(
                     EvaluatedCollection::with_metadata(
@@ -290,7 +290,7 @@ impl SampleSet {
                         BTreeMap::new(),
                         self.sos1_constraints.metadata().clone(),
                     )
-                    .expect("empty removed reasons cannot reference unknown constraints"),
+                    .expect("SampleSet sidecars must reference constraints present in this sample"),
                 )
                 .objective(objective)
                 .evaluated_named_functions(evaluated_named_functions)

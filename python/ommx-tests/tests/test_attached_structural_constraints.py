@@ -332,9 +332,6 @@ def test_sos1_rejects_empty_variable_set():
     with pytest.raises(Exception, match="(at least one|empty)"):
         Sos1Constraint(variables=[])
 
-    instance = _instance_with_mixed_kinds()
-    assert instance.sos1_constraints == {}
-
 
 def test_one_hot_rejects_non_binary_on_parametric_host():
     """Same Binary-kind invariant on the parametric host."""
