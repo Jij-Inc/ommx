@@ -441,7 +441,7 @@ mod tests {
     fn test_sample_set_roundtrip_preserves_labels_and_context() {
         use crate::constraint::SampledData;
         use crate::{
-            ATol, ConstraintID, DecisionVariable, Equality, NamedFunctionID, SampleID,
+            ConstraintID, DecisionVariable, Equality, NamedFunctionID, SampleID,
             SampledDecisionVariable, Sense, VariableID,
         };
         use std::collections::BTreeMap;
@@ -455,10 +455,7 @@ mod tests {
         let mut x_samples = crate::Sampled::default();
         x_samples.append([sample_id], 1.0).unwrap();
         let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(
-            var_id,
-            SampledDecisionVariable::new(dv, x_samples, ATol::default()).unwrap(),
-        );
+        decision_variables.insert(var_id, SampledDecisionVariable::new(dv, x_samples).unwrap());
 
         let mut variable_labels = crate::VariableLabelStore::default();
         variable_labels.set_name(var_id, "x");

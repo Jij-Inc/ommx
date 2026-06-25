@@ -1105,7 +1105,7 @@ mod tests {
 
         decision_variables.insert(
             VariableID::from(1),
-            EvaluatedDecisionVariable::new(dv, 1.0, crate::ATol::default()).unwrap(),
+            EvaluatedDecisionVariable::new(dv, 1.0).unwrap(),
         );
 
         // SAFETY: Test data is constructed to satisfy invariants
@@ -1163,7 +1163,7 @@ mod tests {
 
         decision_variables.insert(
             VariableID::from(1),
-            EvaluatedDecisionVariable::new(dv1, 1.0, crate::ATol::default()).unwrap(),
+            EvaluatedDecisionVariable::new(dv1, 1.0).unwrap(),
         );
 
         // Second variable with same name and subscripts
@@ -1190,7 +1190,7 @@ mod tests {
 
         decision_variables.insert(
             VariableID::from(2),
-            EvaluatedDecisionVariable::new(dv2, 2.0, crate::ATol::default()).unwrap(),
+            EvaluatedDecisionVariable::new(dv2, 2.0).unwrap(),
         );
 
         // SAFETY: Test data is constructed to satisfy invariants
@@ -1270,7 +1270,7 @@ mod tests {
         let var_id_1 = VariableID::from(1);
         let var_id_2 = VariableID::from(2);
         let dv = DecisionVariable::binary(var_id_1);
-        let evaluated_dv = EvaluatedDecisionVariable::new(dv, 1.0, crate::ATol::default()).unwrap();
+        let evaluated_dv = EvaluatedDecisionVariable::new(dv, 1.0).unwrap();
 
         // Map key (2) doesn't match value's id (1)
         let mut decision_variables = BTreeMap::new();
@@ -1328,7 +1328,7 @@ mod tests {
 
         let var_id = VariableID::from(1);
         let dv = DecisionVariable::binary(var_id);
-        let evaluated_dv = EvaluatedDecisionVariable::new(dv, 1.0, crate::ATol::default()).unwrap();
+        let evaluated_dv = EvaluatedDecisionVariable::new(dv, 1.0).unwrap();
 
         let mut decision_variables = BTreeMap::new();
         decision_variables.insert(var_id, evaluated_dv);

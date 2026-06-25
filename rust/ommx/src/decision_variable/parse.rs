@@ -221,12 +221,8 @@ impl Parse for v1::SampledDecisionVariable {
         }
 
         // Create SampledDecisionVariable with validation
-        let sampled = crate::SampledDecisionVariable::new(
-            parsed_dv.variable,
-            samples,
-            crate::ATol::default(),
-        )
-        .map_err(RawParseError::InvalidDecisionVariable)?;
+        let sampled = crate::SampledDecisionVariable::new(parsed_dv.variable, samples)
+            .map_err(RawParseError::InvalidDecisionVariable)?;
         Ok(ParsedSampledDecisionVariable {
             variable: sampled,
             label: parsed_dv.label,

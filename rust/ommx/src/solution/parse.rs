@@ -100,7 +100,7 @@ impl Parse for crate::v1::Solution {
                 }
             };
 
-            let evaluated_dv = crate::EvaluatedDecisionVariable::new(parsed_dv, value, atol)
+            let evaluated_dv = crate::EvaluatedDecisionVariable::new(parsed_dv, value)
                 .map_err(crate::RawParseError::InvalidDecisionVariable)
                 .map_err(|e| ParseError::from(e).context(message, "decision_variables"))?;
 
@@ -564,7 +564,7 @@ mod tests {
     #[test]
     fn test_solution_roundtrip_preserves_labels_and_context() {
         use crate::{
-            constraint::EvaluatedData, constraint_type::EvaluatedCollection, ATol, ConstraintID,
+            constraint::EvaluatedData, constraint_type::EvaluatedCollection, ConstraintID,
             DecisionVariable, Equality, EvaluatedConstraint, EvaluatedDecisionVariable,
             NamedFunctionID, Sense, VariableID,
         };
@@ -575,7 +575,7 @@ mod tests {
         let nf_id = NamedFunctionID::from(0);
 
         let dv = DecisionVariable::binary(var_id);
-        let evaluated_dv = EvaluatedDecisionVariable::new(dv, 1.0, ATol::default()).unwrap();
+        let evaluated_dv = EvaluatedDecisionVariable::new(dv, 1.0).unwrap();
         let mut decision_variables = BTreeMap::new();
         decision_variables.insert(var_id, evaluated_dv);
 

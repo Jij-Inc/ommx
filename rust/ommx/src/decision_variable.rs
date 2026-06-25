@@ -377,7 +377,6 @@ impl EvaluatedDecisionVariable {
     pub fn new(
         decision_variable: DecisionVariable,
         value: f64,
-        _atol: crate::ATol,
     ) -> Result<Self, DecisionVariableError> {
         ensure_finite_value(decision_variable.id, value)?;
 
@@ -435,7 +434,6 @@ impl SampledDecisionVariable {
     pub fn new(
         decision_variable: DecisionVariable,
         samples: Sampled<f64>,
-        _atol: crate::ATol,
     ) -> Result<Self, DecisionVariableError> {
         for (_, &sample_value) in samples.iter() {
             ensure_finite_value(decision_variable.id, sample_value)?;
@@ -464,7 +462,7 @@ impl SampledDecisionVariable {
             bound: self.bound,
         };
 
-        Some(EvaluatedDecisionVariable::new(dv, value, crate::ATol::default()).unwrap())
+        Some(EvaluatedDecisionVariable::new(dv, value).unwrap())
     }
 }
 
@@ -472,14 +470,18 @@ impl crate::Evaluate for DecisionVariable {
     type Output = EvaluatedDecisionVariable;
     type SampledOutput = SampledDecisionVariable;
 
-    fn evaluate(&self, state: &crate::v1::State, atol: crate::ATol) -> crate::Result<Self::Output> {
+    fn evaluate(
+        &self,
+        state: &crate::v1::State,
+        _atol: crate::ATol,
+    ) -> crate::Result<Self::Output> {
         let value = state
             .entries
             .get(&self.id.into_inner())
             .copied()
             .ok_or_else(|| crate::error!("Variable ID {} not found in state", self.id))?;
 
-        Ok(EvaluatedDecisionVariable::new(self.clone(), value, atol)?)
+        Ok(EvaluatedDecisionVariable::new(self.clone(), value)?)
     }
 
     fn evaluate_samples(
@@ -508,7 +510,7 @@ impl crate::Evaluate for DecisionVariable {
         let values: Vec<f64> = grouped_values.keys().map(|k| k.into_inner()).collect();
         let samples = crate::Sampled::new(ids, values)?;
 
-        Ok(SampledDecisionVariable::new(self.clone(), samples, _atol)?)
+        Ok(SampledDecisionVariable::new(self.clone(), samples)?)
     }
 
     fn partial_evaluate(
@@ -576,7 +578,7 @@ impl std::convert::TryFrom<crate::v1::DecisionVariable> for EvaluatedDecisionVar
             .context(message, "substituted_value"),
         )?;
 
-        EvaluatedDecisionVariable::new(dv, value, crate::ATol::default())
+        EvaluatedDecisionVariable::new(dv, value)
             .map_err(|e| crate::RawParseError::InvalidDecisionVariable(e).into())
     }
 }
@@ -707,7 +709,7 @@ mod tests {
             Err(DecisionVariableError::NonFiniteValue { .. })
         ));
         assert!(matches!(
-            EvaluatedDecisionVariable::new(dv, f64::NEG_INFINITY, ATol::default()),
+            EvaluatedDecisionVariable::new(dv, f64::NEG_INFINITY),
             Err(DecisionVariableError::NonFiniteValue { .. })
         ));
     }
@@ -719,7 +721,7 @@ mod tests {
         let samples = Sampled::new([vec![crate::SampleID::from(0)]], [f64::NAN]).unwrap();
 
         assert!(matches!(
-            SampledDecisionVariable::new(dv, samples, ATol::default()),
+            SampledDecisionVariable::new(dv, samples),
             Err(DecisionVariableError::NonFiniteValue { .. })
         ));
     }
