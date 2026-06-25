@@ -50,7 +50,7 @@ def _make_variable() -> DecisionVariable:
 # --- Instance host ---
 
 
-def test_add_returns_attached_with_drained_metadata():
+def test_add_returns_attached_with_drained_label():
     instance = _empty_instance()
     variable = _make_variable()
 

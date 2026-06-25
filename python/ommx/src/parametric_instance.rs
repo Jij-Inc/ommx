@@ -51,21 +51,21 @@ impl ParametricInstance {
         description: Option<crate::InstanceDescription>,
     ) -> Result<Self> {
         let mut rust_decision_variables = BTreeMap::new();
-        let mut variable_metadata = ommx::VariableMetadataStore::default();
+        let mut variable_labels = ommx::VariableLabelStore::default();
         for var in decision_variables {
             let id = var.0.id();
-            variable_metadata.insert(id, var.1);
+            variable_labels.insert(id, var.1);
             if rust_decision_variables.insert(id, var.0).is_some() {
                 anyhow::bail!("Duplicate decision variable ID: {}", id.into_inner());
             }
         }
 
-        let mut constraint_metadata = ommx::ConstraintMetadataStore::default();
+        let mut constraint_context = ommx::ConstraintContextStore::default();
         let rust_constraints: BTreeMap<ConstraintID, ommx::Constraint> = constraints
             .into_iter()
             .map(|(id, c)| {
                 let cid = ConstraintID::from(id);
-                constraint_metadata.insert(cid, c.1);
+                constraint_context.insert(cid, c.1);
                 (cid, c.0)
             })
             .collect();
@@ -82,13 +82,13 @@ impl ParametricInstance {
             .sense(sense.into())
             .objective(objective.0)
             .decision_variables(rust_decision_variables)
-            .variable_metadata(variable_metadata)
+            .variable_labels(variable_labels)
             .constraints(rust_constraints)
             .parameters(rust_parameters);
 
-        let mut indicator_metadata_pairs: Vec<(
+        let mut indicator_context_pairs: Vec<(
             ommx::IndicatorConstraintID,
-            ommx::ConstraintMetadata,
+            ommx::ConstraintContext,
         )> = Vec::new();
         if let Some(ics) = indicator_constraints {
             let rust_indicator_constraints: BTreeMap<
@@ -98,14 +98,14 @@ impl ParametricInstance {
                 .into_iter()
                 .map(|(id, ic)| {
                     let iid = ommx::IndicatorConstraintID::from(id);
-                    indicator_metadata_pairs.push((iid, ic.1));
+                    indicator_context_pairs.push((iid, ic.1));
                     (iid, ic.0)
                 })
                 .collect();
             builder = builder.indicator_constraints(rust_indicator_constraints);
         }
 
-        let mut one_hot_metadata = ommx::ConstraintMetadataStore::default();
+        let mut one_hot_context = ommx::ConstraintContextStore::default();
         if let Some(ohs) = one_hot_constraints {
             let rust_one_hot_constraints: BTreeMap<
                 ommx::OneHotConstraintID,
@@ -114,32 +114,32 @@ impl ParametricInstance {
                 .into_iter()
                 .map(|(id, oh)| {
                     let oid = ommx::OneHotConstraintID::from(id);
-                    one_hot_metadata.insert(oid, oh.1);
+                    one_hot_context.insert(oid, oh.1);
                     (oid, oh.0)
                 })
                 .collect();
             builder = builder.one_hot_constraints(rust_one_hot_constraints);
         }
 
-        let mut sos1_metadata = ommx::ConstraintMetadataStore::default();
+        let mut sos1_context = ommx::ConstraintContextStore::default();
         if let Some(s1s) = sos1_constraints {
             let rust_sos1_constraints: BTreeMap<ommx::Sos1ConstraintID, ommx::Sos1Constraint> = s1s
                 .into_iter()
                 .map(|(id, s1)| {
                     let sid = ommx::Sos1ConstraintID::from(id);
-                    sos1_metadata.insert(sid, s1.1);
+                    sos1_context.insert(sid, s1.1);
                     (sid, s1.0)
                 })
                 .collect();
             builder = builder.sos1_constraints(rust_sos1_constraints);
         }
 
-        let mut named_function_metadata = ommx::NamedFunctionMetadataStore::default();
+        let mut named_function_labels = ommx::NamedFunctionLabelStore::default();
         if let Some(nfs) = named_functions {
             let mut rust_named_functions = BTreeMap::new();
             for nf in nfs {
                 let id = nf.0.id;
-                named_function_metadata.insert(id, nf.1);
+                named_function_labels.insert(id, nf.1);
                 if rust_named_functions.insert(id, nf.0).is_some() {
                     anyhow::bail!("Duplicate named function ID: {}", id.into_inner());
                 }
@@ -151,16 +151,16 @@ impl ParametricInstance {
             builder = builder.description(desc.0);
         }
 
-        let mut indicator_metadata = ommx::ConstraintMetadataStore::default();
-        for (id, m) in indicator_metadata_pairs {
-            indicator_metadata.insert(id, m);
+        let mut indicator_context = ommx::ConstraintContextStore::default();
+        for (id, context) in indicator_context_pairs {
+            indicator_context.insert(id, context);
         }
         let inner = builder
-            .constraint_metadata(constraint_metadata)
-            .indicator_constraint_metadata(indicator_metadata)
-            .one_hot_constraint_metadata(one_hot_metadata)
-            .sos1_constraint_metadata(sos1_metadata)
-            .named_function_metadata(named_function_metadata)
+            .constraint_context(constraint_context)
+            .indicator_constraint_context(indicator_context)
+            .one_hot_constraint_context(one_hot_context)
+            .sos1_constraint_context(sos1_context)
+            .named_function_labels(named_function_labels)
             .build()?;
 
         Ok(Self { inner })
@@ -269,7 +269,7 @@ impl ParametricInstance {
 
     /// Add a decision variable to this parametric instance. Returns an
     /// {class}`~ommx.v1.AttachedDecisionVariable` bound to the variable's
-    /// id — a write-through handle for further metadata mutation.
+    /// id — a write-through handle for further label updates.
     pub fn add_decision_variable(
         slf: Bound<'_, Self>,
         variable: DecisionVariable,
@@ -306,7 +306,7 @@ impl ParametricInstance {
     ///
     /// Each value is an {class}`~ommx.v1.AttachedConstraint`: a write-through
     /// handle whose getters read from this parametric instance's SoA store
-    /// and whose metadata setters write back through to it. Use
+    /// and whose context setters write back through to it. Use
     /// {meth}`~ommx.v1.AttachedConstraint.detach` to materialize a
     /// {class}`~ommx.v1.Constraint` snapshot if you need an independent copy.
     #[getter]
@@ -327,7 +327,7 @@ impl ParametricInstance {
     /// Add a regular constraint to this parametric instance.
     ///
     /// Picks an unused {class}`~ommx.v1.ConstraintID`, drains the wrapper's
-    /// metadata snapshot into this parametric instance's SoA store, and
+    /// context snapshot into this parametric instance's SoA store, and
     /// returns an {class}`~ommx.v1.AttachedConstraint` bound to the new id.
     /// The input {class}`~ommx.v1.Constraint` is not mutated; subsequent
     /// writes that should land on this parametric instance must go through
@@ -349,14 +349,14 @@ impl ParametricInstance {
 
     #[getter]
     pub fn removed_constraints(&self) -> BTreeMap<u64, RemovedConstraint> {
-        let metadata = self.inner.constraint_collection().metadata();
+        let context = self.inner.constraint_collection().context();
         self.inner
             .removed_constraints()
             .iter()
             .map(|(id, (c, r))| {
                 (
                     id.into_inner(),
-                    RemovedConstraint::from_parts(c.clone(), metadata.collect_for(*id), r.clone()),
+                    RemovedConstraint::from_parts(c.clone(), context.collect_for(*id), r.clone()),
                 )
             })
             .collect()
@@ -367,7 +367,7 @@ impl ParametricInstance {
     ///
     /// Each value is an {class}`~ommx.v1.AttachedIndicatorConstraint`: a
     /// write-through handle whose getters read from this parametric
-    /// instance's SoA store and whose metadata setters write back through
+    /// instance's SoA store and whose context setters write back through
     /// to it.
     #[getter]
     pub fn indicator_constraints(
@@ -398,7 +398,7 @@ impl ParametricInstance {
     /// Add an indicator constraint to this parametric instance.
     ///
     /// Picks an unused {class}`~ommx.v1.IndicatorConstraintID`, drains the
-    /// wrapper's metadata snapshot into this parametric instance's SoA
+    /// wrapper's context snapshot into this parametric instance's SoA
     /// store, and returns an
     /// {class}`~ommx.v1.AttachedIndicatorConstraint` bound to the new id.
     ///
@@ -427,7 +427,7 @@ impl ParametricInstance {
     pub fn removed_indicator_constraints(
         &self,
     ) -> BTreeMap<u64, crate::RemovedIndicatorConstraint> {
-        let metadata = self.inner.indicator_constraint_metadata();
+        let context = self.inner.indicator_constraint_context();
         self.inner
             .removed_indicator_constraints()
             .iter()
@@ -436,7 +436,7 @@ impl ParametricInstance {
                     id.into_inner(),
                     crate::RemovedIndicatorConstraint::from_parts(
                         c.clone(),
-                        metadata.collect_for(*id),
+                        context.collect_for(*id),
                         r.clone(),
                     ),
                 )
@@ -496,7 +496,7 @@ impl ParametricInstance {
     /// `ParametricInstance` via `From<Instance>`.
     #[getter]
     pub fn removed_one_hot_constraints(&self) -> BTreeMap<u64, crate::RemovedOneHotConstraint> {
-        let metadata = self.inner.one_hot_constraint_metadata();
+        let context = self.inner.one_hot_constraint_context();
         self.inner
             .removed_one_hot_constraints()
             .iter()
@@ -505,7 +505,7 @@ impl ParametricInstance {
                     id.into_inner(),
                     crate::RemovedOneHotConstraint::from_parts(
                         c.clone(),
-                        metadata.collect_for(*id),
+                        context.collect_for(*id),
                         r.clone(),
                     ),
                 )
@@ -556,7 +556,7 @@ impl ParametricInstance {
     /// round-trip rationale.
     #[getter]
     pub fn removed_sos1_constraints(&self) -> BTreeMap<u64, crate::RemovedSos1Constraint> {
-        let metadata = self.inner.sos1_constraint_metadata();
+        let context = self.inner.sos1_constraint_context();
         self.inner
             .removed_sos1_constraints()
             .iter()
@@ -565,7 +565,7 @@ impl ParametricInstance {
                     id.into_inner(),
                     crate::RemovedSos1Constraint::from_parts(
                         c.clone(),
-                        metadata.collect_for(*id),
+                        context.collect_for(*id),
                         r.clone(),
                     ),
                 )
@@ -575,11 +575,11 @@ impl ParametricInstance {
 
     #[getter]
     pub fn named_functions(&self) -> Vec<NamedFunction> {
-        let metadata = self.inner.named_function_metadata();
+        let labels = self.inner.named_function_labels();
         self.inner
             .named_functions()
             .iter()
-            .map(|(id, nf)| NamedFunction(nf.clone(), metadata.collect_for(*id)))
+            .map(|(id, nf)| NamedFunction(nf.clone(), labels.collect_for(*id)))
             .collect()
     }
 
@@ -621,11 +621,11 @@ impl ParametricInstance {
     /// Get a specific decision variable by ID
     pub fn get_decision_variable_by_id(&self, variable_id: u64) -> PyResult<DecisionVariable> {
         let var_id = VariableID::from(variable_id);
-        let metadata = self.inner.variable_metadata();
+        let labels = self.inner.variable_labels();
         self.inner
             .decision_variables()
             .get(&var_id)
-            .map(|var| DecisionVariable::from_parts(var.clone(), metadata.collect_for(var_id)))
+            .map(|var| DecisionVariable::from_parts(var.clone(), labels.collect_for(var_id)))
             .ok_or_else(|| {
                 PyKeyError::new_err(format!("Decision variable with ID {variable_id} not found"))
             })
@@ -634,11 +634,11 @@ impl ParametricInstance {
     /// Get a specific constraint by ID
     pub fn get_constraint_by_id(&self, constraint_id: u64) -> PyResult<Constraint> {
         let cid = ConstraintID::from(constraint_id);
-        let metadata = self.inner.constraint_collection().metadata();
+        let context = self.inner.constraint_collection().context();
         self.inner
             .constraints()
             .get(&cid)
-            .map(|c| Constraint::from_parts(c.clone(), metadata.collect_for(cid)))
+            .map(|c| Constraint::from_parts(c.clone(), context.collect_for(cid)))
             .ok_or_else(|| {
                 PyKeyError::new_err(format!("Constraint with ID {constraint_id} not found"))
             })
@@ -647,12 +647,12 @@ impl ParametricInstance {
     /// Get a specific removed constraint by ID
     pub fn get_removed_constraint_by_id(&self, constraint_id: u64) -> PyResult<RemovedConstraint> {
         let cid = ConstraintID::from(constraint_id);
-        let metadata = self.inner.constraint_collection().metadata();
+        let context = self.inner.constraint_collection().context();
         self.inner
             .removed_constraints()
             .get(&cid)
             .map(|(c, r)| {
-                RemovedConstraint::from_parts(c.clone(), metadata.collect_for(cid), r.clone())
+                RemovedConstraint::from_parts(c.clone(), context.collect_for(cid), r.clone())
             })
             .ok_or_else(|| {
                 PyKeyError::new_err(format!(
@@ -670,7 +670,7 @@ impl ParametricInstance {
             .map(|nf| {
                 NamedFunction(
                     nf.clone(),
-                    self.inner.named_function_metadata().collect_for(id),
+                    self.inner.named_function_labels().collect_for(id),
                 )
             })
             .ok_or_else(|| {
@@ -699,8 +699,8 @@ impl ParametricInstance {
         include: Option<Vec<String>>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let flags = crate::pandas::IncludeFlags::from_optional(include)?;
-        let var_meta_store = self.inner.variable_metadata().clone();
-        let view: Vec<(ommx::DecisionVariableMetadata, &ommx::DecisionVariable)> = self
+        let var_meta_store = self.inner.variable_labels().clone();
+        let view: Vec<(ommx::DecisionVariableLabel, &ommx::DecisionVariable)> = self
             .inner
             .decision_variables()
             .iter()
@@ -709,7 +709,7 @@ impl ParametricInstance {
         entries_to_dataframe(
             py,
             view.iter()
-                .map(|(m, dv)| crate::pandas::WithMetadata::new(*dv, m)),
+                .map(|(m, dv)| crate::pandas::WithModelingContext::new(*dv, m)),
             "id",
             flags,
         )
@@ -741,7 +741,7 @@ impl ParametricInstance {
                 sos1_constraint_collection
             ],
             |coll| {
-                let meta = coll.metadata().clone();
+                let meta = coll.context().clone();
                 let active = coll.active();
                 let removed_map = coll.removed();
                 let mut entries: Vec<Bound<'py, pyo3::types::PyAny>> = Vec::new();
@@ -758,7 +758,7 @@ impl ParametricInstance {
                         if pick_active {
                             let (id, c) = ai.next().unwrap();
                             let m = meta.collect_for(*id);
-                            let dict = crate::pandas::WithMetadata::new((*id, c), &m)
+                            let dict = crate::pandas::WithModelingContext::new((*id, c), &m)
                                 .to_pandas_entry(py)?;
                             crate::pandas::set_removed_reason_na(&dict)?;
                             crate::pandas::apply_include_filter(&dict, flags)?;
@@ -767,7 +767,7 @@ impl ParametricInstance {
                         } else {
                             let (id, pair) = ri.next().unwrap();
                             let m = meta.collect_for(*id);
-                            let dict = crate::pandas::WithMetadata::new((*id, pair), &m)
+                            let dict = crate::pandas::WithModelingContext::new((*id, pair), &m)
                                 .to_pandas_entry(py)?;
                             crate::pandas::apply_include_filter(&dict, flags)?;
                             crate::pandas::rename_id_column(&dict, id_col)?;
@@ -777,8 +777,8 @@ impl ParametricInstance {
                 } else {
                     for (id, c) in active.iter() {
                         let m = meta.collect_for(*id);
-                        let dict =
-                            crate::pandas::WithMetadata::new((*id, c), &m).to_pandas_entry(py)?;
+                        let dict = crate::pandas::WithModelingContext::new((*id, c), &m)
+                            .to_pandas_entry(py)?;
                         if flags.removed_reason {
                             crate::pandas::set_removed_reason_na(&dict)?;
                         }
@@ -800,8 +800,8 @@ impl ParametricInstance {
         include: Option<Vec<String>>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let flags = crate::pandas::IncludeFlags::from_optional(include)?;
-        let nf_meta_store = self.inner.named_function_metadata().clone();
-        let nf_meta_view: Vec<(ommx::NamedFunctionMetadata, &ommx::NamedFunction)> = self
+        let nf_meta_store = self.inner.named_function_labels().clone();
+        let nf_meta_view: Vec<(ommx::NamedFunctionLabel, &ommx::NamedFunction)> = self
             .inner
             .named_functions()
             .iter()
@@ -811,7 +811,7 @@ impl ParametricInstance {
             py,
             nf_meta_view
                 .iter()
-                .map(|(m, nf)| crate::pandas::WithMetadata::new(*nf, m)),
+                .map(|(m, nf)| crate::pandas::WithModelingContext::new(*nf, m)),
             "id",
             flags,
         )
@@ -828,11 +828,11 @@ impl ParametricInstance {
         entries_to_dataframe(py, self.inner.parameters().values(), "id", flags)
     }
 
-    /// Constraint metadata DataFrame (id-indexed). See
-    /// {meth}`ommx.v1.Instance.constraint_metadata_df` for column / `kind=`
+    /// Constraint context DataFrame (id-indexed). See
+    /// {meth}`ommx.v1.Instance.constraint_context_df` for column / `kind=`
     /// semantics.
     #[pyo3(signature = (kind = ConstraintKind::Regular))]
-    pub fn constraint_metadata_df<'py>(
+    pub fn constraint_context_df<'py>(
         &self,
         py: Python<'py>,
         kind: ConstraintKind,
@@ -848,9 +848,9 @@ impl ParametricInstance {
                 sos1_constraint_collection
             ],
             |coll| {
-                crate::pandas::constraint_metadata_dataframe(
+                crate::pandas::constraint_context_dataframe(
                     py,
-                    coll.metadata(),
+                    coll.context(),
                     coll.active().keys().chain(coll.removed().keys()).copied(),
                     id_col,
                 )
@@ -878,7 +878,7 @@ impl ParametricInstance {
             |coll| {
                 crate::pandas::constraint_parameters_dataframe(
                     py,
-                    coll.metadata(),
+                    coll.context(),
                     coll.active().keys().chain(coll.removed().keys()).copied(),
                     id_col,
                 )
@@ -906,7 +906,7 @@ impl ParametricInstance {
             |coll| {
                 crate::pandas::constraint_provenance_dataframe(
                     py,
-                    coll.metadata(),
+                    coll.context(),
                     coll.active().keys().chain(coll.removed().keys()).copied(),
                     id_col,
                 )
@@ -941,11 +941,11 @@ impl ParametricInstance {
         )
     }
 
-    /// Decision-variable metadata DataFrame (id-indexed).
-    pub fn variable_metadata_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
-        crate::pandas::variable_metadata_dataframe(
+    /// Decision-variable modeling-label DataFrame (id-indexed).
+    pub fn variable_labels_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
+        crate::pandas::variable_labels_dataframe(
             py,
-            self.inner.variable_metadata(),
+            self.inner.variable_labels(),
             self.inner.decision_variables().keys().copied(),
             "variable_id",
         )
@@ -958,7 +958,7 @@ impl ParametricInstance {
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         crate::pandas::variable_parameters_dataframe(
             py,
-            self.inner.variable_metadata(),
+            self.inner.variable_labels(),
             self.inner.decision_variables().keys().copied(),
             "variable_id",
         )

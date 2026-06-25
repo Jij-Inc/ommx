@@ -11,11 +11,11 @@
 //!
 //! 1. Define a new struct `NewConstraint<S: Stage<Self> = Created>` with the
 //!    type's intrinsic fields (`equality`, `stage`, plus anything specific to
-//!    the new type). **Do not add a `metadata` field**: modeling labels
+//!    the new type). **Do not add a `context` field**: modeling labels
 //!    (`name`, `subscripts`, `parameters`, `description`) and constraint
 //!    transformation provenance live on the enclosing
 //!    `ConstraintCollection<NewConstraint>`'s
-//!    [`ConstraintMetadataStore`](crate::ConstraintMetadataStore) keyed by id.
+//!    [`ConstraintContextStore`](crate::ConstraintContextStore) keyed by id.
 //!    The constraint's `ConstraintID` is also held by the collection rather
 //!    than the struct itself.
 //! 2. Implement `Stage<NewConstraint<S>>` for each stage marker (reuse `CreatedData`,
@@ -32,7 +32,7 @@
 use crate::Result;
 use crate::{
     constraint::{
-        ConstraintID, ConstraintMetadata, ConstraintMetadataStore, EvaluatedConstraint,
+        ConstraintContext, ConstraintContextStore, ConstraintID, EvaluatedConstraint,
         RemovedReason, SampledConstraint,
     },
     v1, ATol, Constraint, Evaluate, SampleID, SampleIDSet, VariableIDSet,
@@ -73,18 +73,14 @@ where
     Ok(())
 }
 
-fn validate_metadata_reference_ids<ID>(
-    metadata: &ConstraintMetadataStore<ID>,
+fn validate_context_reference_ids<ID>(
+    context: &ConstraintContextStore<ID>,
     owned_ids: &BTreeSet<ID>,
 ) -> crate::Result<()>
 where
     ID: IDType,
 {
-    if let Some(id) = metadata
-        .ids()
-        .into_iter()
-        .find(|id| !owned_ids.contains(id))
-    {
+    if let Some(id) = context.ids().into_iter().find(|id| !owned_ids.contains(id)) {
         crate::bail!(
             { ?id },
             "Constraint label/provenance references unknown constraint ID {id:?}",
@@ -112,7 +108,7 @@ pub(crate) fn sample_ids_from_map<V>(map: &BTreeMap<SampleID, V>) -> SampleIDSet
 /// round-trips through `u64`, and participates in logical memory
 /// profiling. Bundling those bounds into one trait removes the need
 /// to repeat them at every generic site (e.g.
-/// `ConstraintMetadataStore<ID>` and `ConstraintType::ID`).
+/// `ConstraintContextStore<ID>` and `ConstraintType::ID`).
 ///
 /// `SampleID` is intentionally excluded: it is a sample-set index, not
 /// a modeling-label-bearing entity, and does not currently impl
@@ -263,10 +259,10 @@ impl ConstraintType for Constraint {
 /// A collection of active and removed constraints of the same type.
 ///
 /// Removed constraints are stored as `(T::Created, RemovedReason)` pairs.
-/// The `RemovedReason` is collection-level metadata, not part of the constraint itself.
+/// The `RemovedReason` is collection-level context, not part of the constraint itself.
 ///
 /// Per-constraint modeling labels and transformation provenance are held by
-/// [`Self::metadata`] in Struct-of-Arrays form keyed by `T::ID`. The store
+/// [`Self::context`] in Struct-of-Arrays form keyed by `T::ID`. The store
 /// rides through to [`EvaluatedCollection`] / [`SampledCollection`] on
 /// evaluation, so the modeling, Solution, and SampleSet layers all read from
 /// one canonical sidecar source per collection.
@@ -274,7 +270,7 @@ impl ConstraintType for Constraint {
 pub struct ConstraintCollection<T: ConstraintType> {
     active: BTreeMap<T::ID, T::Created>,
     removed: BTreeMap<T::ID, (T::Created, RemovedReason)>,
-    metadata: ConstraintMetadataStore<T::ID>,
+    context: ConstraintContextStore<T::ID>,
 }
 
 impl<T: ConstraintType> Default for ConstraintCollection<T> {
@@ -282,7 +278,7 @@ impl<T: ConstraintType> Default for ConstraintCollection<T> {
         Self {
             active: BTreeMap::new(),
             removed: BTreeMap::new(),
-            metadata: ConstraintMetadataStore::default(),
+            context: ConstraintContextStore::default(),
         }
     }
 }
@@ -306,7 +302,7 @@ impl<T: ConstraintType> ConstraintCollection<T> {
         Ok(Self {
             active,
             removed,
-            metadata: ConstraintMetadataStore::default(),
+            context: ConstraintContextStore::default(),
         })
     }
 
@@ -317,10 +313,10 @@ impl<T: ConstraintType> ConstraintCollection<T> {
     /// # Errors
     ///
     /// Returns an error if the same constraint ID appears in both `active` and `removed`.
-    pub fn with_metadata(
+    pub fn with_context(
         active: BTreeMap<T::ID, T::Created>,
         removed: BTreeMap<T::ID, (T::Created, RemovedReason)>,
-        metadata: ConstraintMetadataStore<T::ID>,
+        context: ConstraintContextStore<T::ID>,
     ) -> crate::Result<Self> {
         validate_no_key_overlap(
             &active,
@@ -333,37 +329,37 @@ impl<T: ConstraintType> ConstraintCollection<T> {
             .chain(removed.keys())
             .copied()
             .collect::<BTreeSet<_>>();
-        validate_metadata_reference_ids(&metadata, &owned_ids)?;
+        validate_context_reference_ids(&context, &owned_ids)?;
         Ok(Self {
             active,
             removed,
-            metadata,
+            context,
         })
     }
 
     /// Access the per-constraint label/provenance store.
-    pub fn metadata(&self) -> &ConstraintMetadataStore<T::ID> {
-        &self.metadata
+    pub fn context(&self) -> &ConstraintContextStore<T::ID> {
+        &self.context
     }
 
     /// Crate-internal mutable access to the per-constraint label/provenance store.
     ///
-    /// Collection membership owns the valid ID set, so public metadata writes go
+    /// Collection membership owns the valid ID set, so public context writes go
     /// through the top-level owner (`Instance`, `ParametricInstance`, `Solution`,
     /// or `SampleSet`) rather than exposing this raw sidecar store.
-    pub(crate) fn metadata_mut(&mut self) -> &mut ConstraintMetadataStore<T::ID> {
-        &mut self.metadata
+    pub(crate) fn context_mut(&mut self) -> &mut ConstraintContextStore<T::ID> {
+        &mut self.context
     }
 
     /// Validate that every label/provenance ID is owned by this collection.
-    pub fn validate_metadata_ids(&self) -> crate::Result<()> {
+    pub fn validate_context_ids(&self) -> crate::Result<()> {
         let owned_ids = self
             .active
             .keys()
             .chain(self.removed.keys())
             .copied()
             .collect::<BTreeSet<_>>();
-        validate_metadata_reference_ids(&self.metadata, &owned_ids)
+        validate_context_reference_ids(&self.context, &owned_ids)
     }
 
     /// Access active constraints.
@@ -395,11 +391,11 @@ impl<T: ConstraintType> ConstraintCollection<T> {
         &mut self.removed
     }
 
-    /// Insert an active constraint along with its metadata in one step.
+    /// Insert an active constraint along with its context in one step.
     ///
     /// `id` must not already be present in either the active or removed map.
-    /// The metadata is written to the store; empty metadata fields are stored
-    /// sparsely (i.e. omitted) by [`ConstraintMetadataStore::insert`].
+    /// The context is written to the store; empty context fields are stored
+    /// sparsely (i.e. omitted) by [`ConstraintContextStore::insert`].
     ///
     /// Crate-internal: external callers use the validating `Instance::add_*`
     /// entry points. This primitive bypasses `validate_required_ids`, so the
@@ -410,7 +406,7 @@ impl<T: ConstraintType> ConstraintCollection<T> {
         &mut self,
         id: T::ID,
         constraint: T::Created,
-        metadata: ConstraintMetadata,
+        context: ConstraintContext,
     ) -> crate::Result<()> {
         if self.active.contains_key(&id) {
             crate::bail!(
@@ -425,7 +421,7 @@ impl<T: ConstraintType> ConstraintCollection<T> {
             );
         }
         self.active.insert(id, constraint);
-        self.metadata.insert(id, metadata);
+        self.context.insert(id, context);
         Ok(())
     }
 
@@ -458,9 +454,9 @@ impl<T: ConstraintType> ConstraintCollection<T> {
     ) -> (
         BTreeMap<T::ID, T::Created>,
         BTreeMap<T::ID, (T::Created, RemovedReason)>,
-        ConstraintMetadataStore<T::ID>,
+        ConstraintContextStore<T::ID>,
     ) {
-        (self.active, self.removed, self.metadata)
+        (self.active, self.removed, self.context)
     }
 
     /// Move an active constraint to the removed set with a reason.
@@ -513,7 +509,7 @@ impl<T: ConstraintType> Evaluate for ConstraintCollection<T> {
             results.insert(*id, evaluated);
             removed_reasons.insert(*id, reason.clone());
         }
-        EvaluatedCollection::with_metadata(results, removed_reasons, self.metadata.clone())
+        EvaluatedCollection::with_context(results, removed_reasons, self.context.clone())
     }
 
     fn evaluate_samples(
@@ -536,7 +532,7 @@ impl<T: ConstraintType> Evaluate for ConstraintCollection<T> {
             results.insert(*id, evaluated);
             removed_reasons.insert(*id, reason.clone());
         }
-        SampledCollection::with_metadata(results, removed_reasons, self.metadata.clone())
+        SampledCollection::with_context(results, removed_reasons, self.context.clone())
     }
 
     fn partial_evaluate(&mut self, state: &v1::State, atol: ATol) -> Result<()> {
@@ -565,7 +561,7 @@ impl<T: ConstraintType> Evaluate for ConstraintCollection<T> {
 pub struct EvaluatedCollection<T: ConstraintType> {
     constraints: BTreeMap<T::ID, T::Evaluated>,
     removed_reasons: BTreeMap<T::ID, RemovedReason>,
-    metadata: ConstraintMetadataStore<T::ID>,
+    context: ConstraintContextStore<T::ID>,
 }
 
 impl<T: ConstraintType> std::ops::Deref for EvaluatedCollection<T> {
@@ -580,7 +576,7 @@ impl<T: ConstraintType> Default for EvaluatedCollection<T> {
         Self {
             constraints: BTreeMap::new(),
             removed_reasons: BTreeMap::new(),
-            metadata: ConstraintMetadataStore::default(),
+            context: ConstraintContextStore::default(),
         }
     }
 }
@@ -600,7 +596,7 @@ impl<T: ConstraintType> EvaluatedCollection<T> {
         Ok(Self {
             constraints,
             removed_reasons,
-            metadata: ConstraintMetadataStore::default(),
+            context: ConstraintContextStore::default(),
         })
     }
 
@@ -612,18 +608,18 @@ impl<T: ConstraintType> EvaluatedCollection<T> {
     ///
     /// Returns an error if `removed_reasons` contains an ID that is not present in
     /// `constraints`.
-    pub fn with_metadata(
+    pub fn with_context(
         constraints: BTreeMap<T::ID, T::Evaluated>,
         removed_reasons: BTreeMap<T::ID, RemovedReason>,
-        metadata: ConstraintMetadataStore<T::ID>,
+        context: ConstraintContextStore<T::ID>,
     ) -> crate::Result<Self> {
         validate_removed_reasons_reference_entries(&constraints, &removed_reasons)?;
         let owned_ids = constraints.keys().copied().collect::<BTreeSet<_>>();
-        validate_metadata_reference_ids(&metadata, &owned_ids)?;
+        validate_context_reference_ids(&context, &owned_ids)?;
         Ok(Self {
             constraints,
             removed_reasons,
-            metadata,
+            context,
         })
     }
 
@@ -643,14 +639,14 @@ impl<T: ConstraintType> EvaluatedCollection<T> {
     }
 
     /// Access the per-constraint label/provenance store.
-    pub fn metadata(&self) -> &ConstraintMetadataStore<T::ID> {
-        &self.metadata
+    pub fn context(&self) -> &ConstraintContextStore<T::ID> {
+        &self.context
     }
 
     /// Validate that every label/provenance ID is owned by this collection.
-    pub fn validate_metadata_ids(&self) -> crate::Result<()> {
+    pub fn validate_context_ids(&self) -> crate::Result<()> {
         let owned_ids = self.constraints.keys().copied().collect::<BTreeSet<_>>();
-        validate_metadata_reference_ids(&self.metadata, &owned_ids)
+        validate_context_reference_ids(&self.context, &owned_ids)
     }
 
     /// Consume and return constraints, removed reasons, and sidecars.
@@ -660,9 +656,9 @@ impl<T: ConstraintType> EvaluatedCollection<T> {
     ) -> (
         BTreeMap<T::ID, T::Evaluated>,
         BTreeMap<T::ID, RemovedReason>,
-        ConstraintMetadataStore<T::ID>,
+        ConstraintContextStore<T::ID>,
     ) {
-        (self.constraints, self.removed_reasons, self.metadata)
+        (self.constraints, self.removed_reasons, self.context)
     }
 
     /// Check if a constraint was removed.
@@ -700,7 +696,7 @@ impl<T: ConstraintType> EvaluatedCollection<T> {
 pub struct SampledCollection<T: ConstraintType> {
     constraints: BTreeMap<T::ID, T::Sampled>,
     removed_reasons: BTreeMap<T::ID, RemovedReason>,
-    metadata: ConstraintMetadataStore<T::ID>,
+    context: ConstraintContextStore<T::ID>,
 }
 
 impl<T: ConstraintType> std::ops::Deref for SampledCollection<T> {
@@ -715,7 +711,7 @@ impl<T: ConstraintType> Default for SampledCollection<T> {
         Self {
             constraints: BTreeMap::new(),
             removed_reasons: BTreeMap::new(),
-            metadata: ConstraintMetadataStore::default(),
+            context: ConstraintContextStore::default(),
         }
     }
 }
@@ -735,7 +731,7 @@ impl<T: ConstraintType> SampledCollection<T> {
         Ok(Self {
             constraints,
             removed_reasons,
-            metadata: ConstraintMetadataStore::default(),
+            context: ConstraintContextStore::default(),
         })
     }
 
@@ -747,18 +743,18 @@ impl<T: ConstraintType> SampledCollection<T> {
     ///
     /// Returns an error if `removed_reasons` contains an ID that is not present in
     /// `constraints`.
-    pub fn with_metadata(
+    pub fn with_context(
         constraints: BTreeMap<T::ID, T::Sampled>,
         removed_reasons: BTreeMap<T::ID, RemovedReason>,
-        metadata: ConstraintMetadataStore<T::ID>,
+        context: ConstraintContextStore<T::ID>,
     ) -> crate::Result<Self> {
         validate_removed_reasons_reference_entries(&constraints, &removed_reasons)?;
         let owned_ids = constraints.keys().copied().collect::<BTreeSet<_>>();
-        validate_metadata_reference_ids(&metadata, &owned_ids)?;
+        validate_context_reference_ids(&context, &owned_ids)?;
         Ok(Self {
             constraints,
             removed_reasons,
-            metadata,
+            context,
         })
     }
 
@@ -784,14 +780,14 @@ impl<T: ConstraintType> SampledCollection<T> {
     }
 
     /// Access the per-constraint label/provenance store.
-    pub fn metadata(&self) -> &ConstraintMetadataStore<T::ID> {
-        &self.metadata
+    pub fn context(&self) -> &ConstraintContextStore<T::ID> {
+        &self.context
     }
 
     /// Validate that every label/provenance ID is owned by this collection.
-    pub fn validate_metadata_ids(&self) -> crate::Result<()> {
+    pub fn validate_context_ids(&self) -> crate::Result<()> {
         let owned_ids = self.constraints.keys().copied().collect::<BTreeSet<_>>();
-        validate_metadata_reference_ids(&self.metadata, &owned_ids)
+        validate_context_reference_ids(&self.context, &owned_ids)
     }
 
     /// Consume and return constraints, removed reasons, and sidecars.
@@ -801,9 +797,9 @@ impl<T: ConstraintType> SampledCollection<T> {
     ) -> (
         BTreeMap<T::ID, T::Sampled>,
         BTreeMap<T::ID, RemovedReason>,
-        ConstraintMetadataStore<T::ID>,
+        ConstraintContextStore<T::ID>,
     ) {
-        (self.constraints, self.removed_reasons, self.metadata)
+        (self.constraints, self.removed_reasons, self.context)
     }
 
     /// Check if a constraint was removed.
@@ -914,11 +910,11 @@ mod tests {
         let id = ConstraintID::from(1);
         let orphan_id = ConstraintID::from(99);
         let active = BTreeMap::from([(id, Constraint::equal_to_zero(Function::Zero))]);
-        let mut metadata = ConstraintMetadataStore::default();
-        metadata.set_name(orphan_id, "orphan");
+        let mut context = ConstraintContextStore::default();
+        context.set_name(orphan_id, "orphan");
 
         let err =
-            ConstraintCollection::<Constraint>::with_metadata(active, BTreeMap::new(), metadata)
+            ConstraintCollection::<Constraint>::with_context(active, BTreeMap::new(), context)
                 .unwrap_err();
 
         assert!(
@@ -941,7 +937,7 @@ mod tests {
             .insert_with(
                 id,
                 Constraint::equal_to_zero(Function::Zero),
-                ConstraintMetadata::default(),
+                ConstraintContext::default(),
             )
             .unwrap_err();
         assert!(err.to_string().contains("already exists in the active"));
@@ -960,7 +956,7 @@ mod tests {
             .insert_with(
                 removed_id,
                 Constraint::equal_to_zero(Function::Zero),
-                ConstraintMetadata::default(),
+                ConstraintContext::default(),
             )
             .unwrap_err();
         assert!(err.to_string().contains("already exists in the removed"));

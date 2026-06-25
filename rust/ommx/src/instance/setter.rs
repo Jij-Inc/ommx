@@ -75,11 +75,11 @@ impl Instance {
         Ok(())
     }
 
-    /// Insert a new constraint with its metadata, picking an unused id.
+    /// Insert a new constraint with its context, picking an unused id.
     ///
-    /// Returns the newly assigned [`ConstraintID`]. The metadata is
-    /// drained into the per-constraint [`ConstraintMetadataStore`]; pass
-    /// `ConstraintMetadata::default()` for an unannotated constraint.
+    /// Returns the newly assigned [`ConstraintID`]. The context is
+    /// drained into the per-constraint [`ConstraintContextStore`]; pass
+    /// `ConstraintContext::default()` for an unannotated constraint.
     ///
     /// All variable IDs referenced by the constraint must already be
     /// present in `decision_variables` and must not be substitution-
@@ -88,12 +88,12 @@ impl Instance {
     pub fn add_constraint(
         &mut self,
         constraint: Constraint,
-        metadata: crate::ConstraintMetadata,
+        context: crate::ConstraintContext,
     ) -> crate::Result<ConstraintID> {
         self.validate_required_ids(constraint.required_ids())?;
         let id = self.constraint_collection.unused_id();
         self.constraint_collection
-            .insert_with(id, constraint, metadata)?;
+            .insert_with(id, constraint, context)?;
         Ok(id)
     }
 
@@ -113,7 +113,7 @@ impl Instance {
         Ok(())
     }
 
-    /// Insert a new indicator constraint with its metadata, picking an unused id.
+    /// Insert a new indicator constraint with its context, picking an unused id.
     ///
     /// Returns the newly assigned [`crate::IndicatorConstraintID`].
     /// Enforces the same invariants as the [`Instance`] builder:
@@ -124,17 +124,17 @@ impl Instance {
     pub fn add_indicator_constraint(
         &mut self,
         constraint: crate::IndicatorConstraint,
-        metadata: crate::ConstraintMetadata,
+        context: crate::ConstraintContext,
     ) -> crate::Result<crate::IndicatorConstraintID> {
         self.validate_required_ids(constraint.required_ids())?;
         self.require_binary_variable(constraint.indicator_variable)?;
         let id = self.indicator_constraint_collection.unused_id();
         self.indicator_constraint_collection
-            .insert_with(id, constraint, metadata)?;
+            .insert_with(id, constraint, context)?;
         Ok(id)
     }
 
-    /// Insert a new one-hot constraint with its metadata, picking an unused id.
+    /// Insert a new one-hot constraint with its context, picking an unused id.
     ///
     /// Returns the newly assigned [`crate::OneHotConstraintID`]. Enforces
     /// the [`Instance`] builder's invariants: the one-hot set must be
@@ -143,7 +143,7 @@ impl Instance {
     pub fn add_one_hot_constraint(
         &mut self,
         constraint: crate::OneHotConstraint,
-        metadata: crate::ConstraintMetadata,
+        context: crate::ConstraintContext,
     ) -> crate::Result<crate::OneHotConstraintID> {
         validate_one_hot_non_empty(&constraint)?;
         self.validate_required_ids(constraint.required_ids())?;
@@ -152,11 +152,11 @@ impl Instance {
         }
         let id = self.one_hot_constraint_collection.unused_id();
         self.one_hot_constraint_collection
-            .insert_with(id, constraint, metadata)?;
+            .insert_with(id, constraint, context)?;
         Ok(id)
     }
 
-    /// Insert a new SOS1 constraint with its metadata, picking an unused id.
+    /// Insert a new SOS1 constraint with its context, picking an unused id.
     ///
     /// Returns the newly assigned [`crate::Sos1ConstraintID`]. Enforces the
     /// [`Instance`] builder's invariants: the variable set must be non-empty
@@ -164,7 +164,7 @@ impl Instance {
     pub fn add_sos1_constraint(
         &mut self,
         constraint: crate::Sos1Constraint,
-        metadata: crate::ConstraintMetadata,
+        context: crate::ConstraintContext,
     ) -> crate::Result<crate::Sos1ConstraintID> {
         if constraint.variables.is_empty() {
             crate::bail!("SOS1 constraint must contain at least one variable");
@@ -172,11 +172,11 @@ impl Instance {
         self.validate_required_ids(constraint.required_ids())?;
         let id = self.sos1_constraint_collection.unused_id();
         self.sos1_constraint_collection
-            .insert_with(id, constraint, metadata)?;
+            .insert_with(id, constraint, context)?;
         Ok(id)
     }
 
-    /// Insert a decision variable with its metadata.
+    /// Insert a decision variable with its modeling label.
     ///
     /// The decision variable's `id()` must not collide with any existing
     /// variable, and must not be a substitution-dependency key. Returns the
@@ -184,7 +184,7 @@ impl Instance {
     pub fn add_decision_variable(
         &mut self,
         variable: crate::DecisionVariable,
-        metadata: crate::DecisionVariableMetadata,
+        label: crate::DecisionVariableLabel,
     ) -> crate::Result<crate::VariableID> {
         let id = variable.id();
         if self.decision_variables.contains_key(&id) {
@@ -197,7 +197,7 @@ impl Instance {
             );
         }
         self.decision_variables.insert(id, variable);
-        self.variable_metadata.insert(id, metadata);
+        self.variable_labels.insert(id, label);
         Ok(id)
     }
 
@@ -369,12 +369,12 @@ impl ParametricInstance {
         Ok(())
     }
 
-    /// Insert a new constraint with its metadata, picking an unused id.
+    /// Insert a new constraint with its context, picking an unused id.
     ///
     /// Mirrors [`Instance::add_constraint`] for parametric instances.
-    /// Returns the newly assigned [`ConstraintID`]. The metadata is drained
-    /// into the per-constraint [`ConstraintMetadataStore`]; pass
-    /// [`ConstraintMetadata::default`](crate::ConstraintMetadata) for an
+    /// Returns the newly assigned [`ConstraintID`]. The context is drained
+    /// into the per-constraint [`ConstraintContextStore`]; pass
+    /// [`ConstraintContext::default`](crate::ConstraintContext) for an
     /// unannotated constraint.
     ///
     /// All IDs referenced by the constraint must already be present in either
@@ -383,12 +383,12 @@ impl ParametricInstance {
     pub fn add_constraint(
         &mut self,
         constraint: Constraint,
-        metadata: crate::ConstraintMetadata,
+        context: crate::ConstraintContext,
     ) -> crate::Result<ConstraintID> {
         self.validate_required_ids(constraint.required_ids())?;
         let id = self.constraint_collection.unused_id();
         self.constraint_collection
-            .insert_with(id, constraint, metadata)?;
+            .insert_with(id, constraint, context)?;
         Ok(id)
     }
 
@@ -439,7 +439,7 @@ impl ParametricInstance {
         Ok(())
     }
 
-    /// Insert a new indicator constraint with its metadata, picking an unused id.
+    /// Insert a new indicator constraint with its context, picking an unused id.
     ///
     /// Mirrors [`Instance::add_indicator_constraint`] for parametric
     /// instances. The function body may reference either decision variables
@@ -449,7 +449,7 @@ impl ParametricInstance {
     pub fn add_indicator_constraint(
         &mut self,
         constraint: crate::IndicatorConstraint,
-        metadata: crate::ConstraintMetadata,
+        context: crate::ConstraintContext,
     ) -> crate::Result<crate::IndicatorConstraintID> {
         // Structural position: the indicator variable must be a binary
         // decision variable, not a parameter or a non-binary variable.
@@ -462,11 +462,11 @@ impl ParametricInstance {
         self.validate_required_ids(constraint.required_ids())?;
         let id = self.indicator_constraint_collection.unused_id();
         self.indicator_constraint_collection
-            .insert_with(id, constraint, metadata)?;
+            .insert_with(id, constraint, context)?;
         Ok(id)
     }
 
-    /// Insert a new one-hot constraint with its metadata, picking an unused id.
+    /// Insert a new one-hot constraint with its context, picking an unused id.
     ///
     /// The one-hot set must be non-empty. All variables in the set are
     /// structural and must be binary decision variables (parameter ids and
@@ -474,7 +474,7 @@ impl ParametricInstance {
     pub fn add_one_hot_constraint(
         &mut self,
         constraint: crate::OneHotConstraint,
-        metadata: crate::ConstraintMetadata,
+        context: crate::ConstraintContext,
     ) -> crate::Result<crate::OneHotConstraintID> {
         validate_one_hot_non_empty(&constraint)?;
         for var_id in &constraint.variables {
@@ -483,11 +483,11 @@ impl ParametricInstance {
         self.validate_required_ids(constraint.required_ids())?;
         let id = self.one_hot_constraint_collection.unused_id();
         self.one_hot_constraint_collection
-            .insert_with(id, constraint, metadata)?;
+            .insert_with(id, constraint, context)?;
         Ok(id)
     }
 
-    /// Insert a new SOS1 constraint with its metadata, picking an unused id.
+    /// Insert a new SOS1 constraint with its context, picking an unused id.
     ///
     /// All variables in the SOS1 set are structural and must be decision
     /// variables (parameter ids are rejected). The set must be non-empty.
@@ -496,7 +496,7 @@ impl ParametricInstance {
     pub fn add_sos1_constraint(
         &mut self,
         constraint: crate::Sos1Constraint,
-        metadata: crate::ConstraintMetadata,
+        context: crate::ConstraintContext,
     ) -> crate::Result<crate::Sos1ConstraintID> {
         if constraint.variables.is_empty() {
             crate::bail!("SOS1 constraint must contain at least one variable");
@@ -506,18 +506,18 @@ impl ParametricInstance {
         self.validate_required_ids(required_ids)?;
         let id = self.sos1_constraint_collection.unused_id();
         self.sos1_constraint_collection
-            .insert_with(id, constraint, metadata)?;
+            .insert_with(id, constraint, context)?;
         Ok(id)
     }
 
-    /// Insert a decision variable with its metadata.
+    /// Insert a decision variable with its modeling label.
     ///
     /// The variable's id must not collide with any existing decision
     /// variable, parameter, or substitution-dependency key.
     pub fn add_decision_variable(
         &mut self,
         variable: crate::DecisionVariable,
-        metadata: crate::DecisionVariableMetadata,
+        label: crate::DecisionVariableLabel,
     ) -> crate::Result<crate::VariableID> {
         let id = variable.id();
         if self.decision_variables().contains_key(&id) {
@@ -536,7 +536,7 @@ impl ParametricInstance {
             );
         }
         self.decision_variables.insert(id, variable);
-        self.variable_metadata.insert(id, metadata);
+        self.variable_labels.insert(id, label);
         Ok(id)
     }
 }
@@ -797,7 +797,7 @@ mod tests {
 
         let bad = crate::Constraint::equal_to_zero((linear!(2) + coeff!(1.0)).into());
         let err = instance
-            .add_constraint(bad, crate::ConstraintMetadata::default())
+            .add_constraint(bad, crate::ConstraintContext::default())
             .unwrap_err();
         assert!(
             err.to_string().contains("Fixed variable") && err.to_string().contains("VariableID(2)"),
@@ -819,7 +819,7 @@ mod tests {
         let err = instance
             .add_one_hot_constraint(
                 empty_one_hot_constraint(),
-                crate::ConstraintMetadata::default(),
+                crate::ConstraintContext::default(),
             )
             .unwrap_err();
 
@@ -844,7 +844,7 @@ mod tests {
         let err = instance
             .add_one_hot_constraint(
                 empty_one_hot_constraint(),
-                crate::ConstraintMetadata::default(),
+                crate::ConstraintContext::default(),
             )
             .unwrap_err();
 

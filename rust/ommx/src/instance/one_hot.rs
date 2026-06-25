@@ -45,17 +45,14 @@ impl Instance {
         let function = Function::from((sum + Linear::from(coeff!(-1.0)))?);
 
         let new_constraint = Constraint::equal_to_zero(function);
-        // Carry over the one-hot's metadata into the new regular constraint,
+        // Carry over the one-hot's context into the new regular constraint,
         // appending the OneHot promotion to provenance.
-        let mut new_metadata = self
-            .one_hot_constraint_collection
-            .metadata()
-            .collect_for(id);
-        new_metadata
+        let mut new_context = self.one_hot_constraint_collection.context().collect_for(id);
+        new_context
             .provenance
             .push(Provenance::OneHotConstraint(id));
         self.constraint_collection
-            .insert_with(new_id, new_constraint, new_metadata)?;
+            .insert_with(new_id, new_constraint, new_context)?;
 
         let mut parameters = fnv::FnvHashMap::default();
         parameters.insert("constraint_id".to_string(), new_id.into_inner().to_string());
@@ -158,7 +155,7 @@ mod tests {
         assert_eq!(
             instance
                 .constraint_collection()
-                .metadata()
+                .context()
                 .provenance(new_id),
             &[Provenance::OneHotConstraint(OneHotConstraintID::from(7))],
         );

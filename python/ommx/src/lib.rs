@@ -93,7 +93,7 @@ pub(crate) fn comparison_constraint(
             equality,
             stage: ommx::CreatedData { function },
         },
-        ommx::ConstraintMetadata::default(),
+        ommx::ConstraintContext::default(),
     ))
 }
 

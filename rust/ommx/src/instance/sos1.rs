@@ -167,9 +167,9 @@ impl Instance {
                     let y = self.new_binary();
                     let y_id = y.id();
                     let _ = y;
-                    let metadata = self.variable_metadata_mut();
-                    metadata.set_name(y_id, "ommx.sos1_indicator");
-                    metadata.set_subscripts(
+                    let labels = self.variable_labels_mut();
+                    labels.set_name(y_id, "ommx.sos1_indicator");
+                    labels.set_subscripts(
                         y_id,
                         vec![id.into_inner() as i64, x_id.into_inner() as i64],
                     );
@@ -265,7 +265,7 @@ impl Instance {
             .active_mut()
             .insert(new_id, constraint);
         self.constraint_collection
-            .metadata_mut()
+            .context_mut()
             .push_provenance(new_id, Provenance::Sos1Constraint(sos1_id));
         new_id
     }
@@ -348,7 +348,7 @@ mod tests {
         assert_eq!(
             instance
                 .constraint_collection()
-                .metadata()
+                .context()
                 .provenance(new_ids[0]),
             &[Provenance::Sos1Constraint(Sos1ConstraintID::from(5))]
         );
@@ -384,7 +384,7 @@ mod tests {
             .expect("fresh indicator should exist");
         assert_eq!(y.kind(), Kind::Binary);
         assert_eq!(
-            instance.variable_metadata().name(y_id),
+            instance.variable_labels().name(y_id),
             Some("ommx.sos1_indicator")
         );
 

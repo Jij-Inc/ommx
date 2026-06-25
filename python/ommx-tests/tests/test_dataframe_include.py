@@ -1,8 +1,8 @@
 """Tests for the `include=` parameter on wide `*_df` methods.
 
-Default `include` matches the v2-equivalent wide shape (`("metadata",
-"parameters")`); `include=[]` drops both metadata and parameter columns;
-`include=["metadata"]` and `include=["parameters"]` keep only the named
+Default `include` matches the v2-equivalent wide shape (`("label",
+"parameters")`); `include=[]` drops both label and parameter columns;
+`include=["label"]` and `include=["parameters"]` keep only the named
 family.
 
 Most assertions are snapshot-based (syrupy) — the `.ambr` file is the
@@ -23,7 +23,7 @@ from ommx.v1 import (
 
 
 def _build_instance() -> Instance:
-    """Instance with metadata + parameters on decision variables and constraints."""
+    """Instance with label + parameters on decision variables and constraints."""
     x = [
         DecisionVariable.binary(
             i,
@@ -50,24 +50,24 @@ def _df_snap(df: pd.DataFrame) -> str:
 
 
 # ---------------------------------------------------------------------------
-# decision_variables_df — DV has both metadata and parameters columns
+# decision_variables_df — DV has both label and parameters columns
 # ---------------------------------------------------------------------------
 
 
 def test_decision_variables_df_default(snapshot):
-    """Default include=("metadata","parameters") — both column families on."""
+    """Default include=("label","parameters") — both column families on."""
     assert _df_snap(_build_instance().decision_variables_df()) == snapshot
 
 
 def test_decision_variables_df_include_empty(snapshot):
-    """include=[] — metadata + parameters columns dropped, core columns remain."""
+    """include=[] — label + parameters columns dropped, core columns remain."""
     assert _df_snap(_build_instance().decision_variables_df(include=[])) == snapshot
 
 
-def test_decision_variables_df_include_metadata_only(snapshot):
-    """include=["metadata"] — name/subscripts/description kept, parameters.* dropped."""
+def test_decision_variables_df_include_label_only(snapshot):
+    """include=["label"] — name/subscripts/description kept, parameters.* dropped."""
     assert (
-        _df_snap(_build_instance().decision_variables_df(include=["metadata"]))
+        _df_snap(_build_instance().decision_variables_df(include=["label"]))
         == snapshot
     )
 
@@ -101,7 +101,7 @@ def test_decision_variables_df_state_role():
 
 
 # ---------------------------------------------------------------------------
-# constraints_df — Constraint has only metadata columns; parameters family
+# constraints_df — Constraint has only label columns; parameters family
 # is currently not emitted by the wide *_df, so include=("parameters",) is
 # a no-op there. (The constraint's own `parameters` map is exposed only
 # via the long-format `constraint_parameters_df` sidecar.)
@@ -113,7 +113,7 @@ def test_constraints_df_default(snapshot):
 
 
 def test_constraints_df_include_empty(snapshot):
-    """include=[] drops metadata columns; equality / function_type / used_ids stay."""
+    """include=[] drops label columns; equality / function_type / used_ids stay."""
     assert _df_snap(_build_instance().constraints_df(include=[])) == snapshot
 
 

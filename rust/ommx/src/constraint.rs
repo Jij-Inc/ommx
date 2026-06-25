@@ -1,19 +1,19 @@
 mod approx;
 mod arbitrary;
+mod context_store;
 mod evaluate;
 mod logical_memory;
-mod metadata_store;
 mod parse;
 mod reduce_binary_power;
 pub(crate) mod stage;
 
-pub use metadata_store::ConstraintMetadataStore;
+pub use context_store::ConstraintContextStore;
 
 use crate::logical_memory::LogicalMemoryProfile;
 use crate::{Function, SampleID, VariableID};
 pub use arbitrary::*;
 use derive_more::{Deref, From};
-use fnv::{FnvHashMap, FnvHashSet};
+use fnv::FnvHashSet;
 pub use stage::{
     Created, CreatedData, Evaluated, EvaluatedData, RemovedReason, SampledData, Stage,
 };
@@ -83,18 +83,14 @@ pub enum Provenance {
     Sos1Constraint(crate::Sos1ConstraintID),
 }
 
-/// Constraint sidecar data used when transferring labels and provenance.
+/// Constraint context outside the intrinsic mathematical constraint.
 ///
-/// The modeling label fields (`name`, `subscripts`, `parameters`,
-/// `description`) describe the original mathematical-model notation for the
-/// constraint family. `provenance` is separate transformation lineage, not part
-/// of that label.
+/// [`ModelingLabel`] describes the original mathematical-model notation for
+/// the constraint family. `provenance` is separate transformation lineage, not
+/// part of that label.
 #[derive(Debug, Clone, PartialEq, Default, LogicalMemoryProfile)]
-pub struct ConstraintMetadata {
-    pub name: Option<String>,
-    pub subscripts: Vec<i64>,
-    pub parameters: FnvHashMap<String, String>,
-    pub description: Option<String>,
+pub struct ConstraintContext {
+    pub label: crate::ModelingLabel,
     /// Chain of transformations that produced this constraint.
     ///
     /// Empty for constraints that were directly authored. When a constraint is
@@ -109,8 +105,8 @@ pub struct ConstraintMetadata {
 ///
 /// Holds only the constraint's intrinsic data (`equality` plus stage-specific
 /// data in `stage`). Modeling labels and transformation provenance live on the
-/// enclosing collection's [`ConstraintMetadataStore`] keyed by id; per-element
-/// storage was retired in the v3 metadata redesign.
+/// enclosing collection's [`ConstraintContextStore`] keyed by id; per-element
+/// storage was retired in the v3 context redesign.
 ///
 /// The constraint's [`ConstraintID`] is not stored in this struct — it is
 /// held by the enclosing collection (e.g. the `BTreeMap` key in
@@ -118,7 +114,7 @@ pub struct ConstraintMetadata {
 /// constraints are identity-less until inserted into a collection.
 ///
 /// [`Instance`]: crate::Instance
-/// [`ConstraintMetadataStore`]: crate::ConstraintMetadataStore
+/// [`ConstraintContextStore`]: crate::ConstraintContextStore
 #[derive(Debug, Clone, PartialEq)]
 pub struct Constraint<S: Stage<Self> = Created> {
     pub equality: Equality,
@@ -198,22 +194,23 @@ impl EvaluatedConstraint {
 
 // NOTE: There are intentionally no `impl From<(ConstraintID,
 // EvaluatedConstraint)> for v1::EvaluatedConstraint` (or the Sampled
-// variant). v3 keeps metadata at the collection layer, so a per-element
-// conversion would have to default every metadata field — silently
-// dropping any caller-supplied metadata. Callers must instead go through
+// variant). v3 keeps context at the collection layer, so a per-element
+// conversion would have to default every context field — silently
+// dropping any caller-supplied context. Callers must instead go through
 // [`evaluated_constraint_to_v1`] / [`sampled_constraint_to_v1`], which
-// take the metadata explicitly. Top-level container serialization
+// take the context explicitly. Top-level container serialization
 // (`From<Solution> for v1::Solution`, etc.) drains the SoA store and
-// threads the metadata through these helpers.
+// threads the context through these helpers.
 
 /// Build a v1 `EvaluatedConstraint` from a per-element constraint plus its
-/// metadata. The metadata comes from the enclosing collection's
-/// [`ConstraintMetadataStore`]; the per-element struct no longer carries it.
+/// context. The context comes from the enclosing collection's
+/// [`ConstraintContextStore`]; the per-element struct no longer carries it.
 pub(crate) fn evaluated_constraint_to_v1(
     id: ConstraintID,
     c: EvaluatedConstraint,
-    metadata: ConstraintMetadata,
+    context: ConstraintContext,
 ) -> crate::v1::EvaluatedConstraint {
+    let label = context.label;
     crate::v1::EvaluatedConstraint {
         id: id.into_inner(),
         equality: c.equality.into(),
@@ -224,10 +221,10 @@ pub(crate) fn evaluated_constraint_to_v1(
             .into_iter()
             .map(|id| id.into_inner())
             .collect(),
-        subscripts: metadata.subscripts,
-        parameters: metadata.parameters.into_iter().collect(),
-        name: metadata.name,
-        description: metadata.description,
+        subscripts: label.subscripts,
+        parameters: label.parameters.into_iter().collect(),
+        name: label.name,
+        description: label.description,
         dual_variable: c.stage.dual_variable,
         removed_reason: None,
         removed_reason_parameters: Default::default(),
@@ -292,13 +289,14 @@ impl SampledConstraint {
 }
 
 /// Build a v1 `SampledConstraint` from a per-element sampled constraint plus
-/// its metadata. The metadata comes from the enclosing collection's
-/// [`ConstraintMetadataStore`]; the per-element struct no longer carries it.
+/// its context. The context comes from the enclosing collection's
+/// [`ConstraintContextStore`]; the per-element struct no longer carries it.
 pub(crate) fn sampled_constraint_to_v1(
     id: ConstraintID,
     c: SampledConstraint,
-    metadata: ConstraintMetadata,
+    context: ConstraintContext,
 ) -> crate::v1::SampledConstraint {
+    let label = context.label;
     let evaluated_values: crate::v1::SampledValues = c.stage.evaluated_values.into();
     let feasible = c
         .stage
@@ -310,10 +308,10 @@ pub(crate) fn sampled_constraint_to_v1(
     crate::v1::SampledConstraint {
         id: id.into_inner(),
         equality: c.equality.into(),
-        name: metadata.name,
-        subscripts: metadata.subscripts,
-        parameters: metadata.parameters.into_iter().collect(),
-        description: metadata.description,
+        name: label.name,
+        subscripts: label.subscripts,
+        parameters: label.parameters.into_iter().collect(),
+        description: label.description,
         removed_reason: None,
         removed_reason_parameters: Default::default(),
         evaluated_values: Some(evaluated_values),

@@ -1,4 +1,4 @@
-"""Tests for Constraint.provenance metadata (issue #819)."""
+"""Tests for Constraint.provenance context (issue #819)."""
 
 from ommx.v1 import (
     Constraint,

@@ -22,7 +22,7 @@ impl Propagate for IndicatorConstraint<Created> {
                 // NOTE: per-element metadata is gone in v3; the caller is
                 // responsible for moving the IndicatorConstraint's metadata
                 // (looked up via the IndicatorConstraintCollection's
-                // ConstraintMetadataStore) into the regular ConstraintCollection's
+                // ConstraintContextStore) into the regular ConstraintCollection's
                 // store under the new id at insertion time.
                 let new = Constraint {
                     equality: self.equality,
@@ -369,7 +369,7 @@ mod tests {
                 assert_eq!(new.equality, Equality::LessThanOrEqualToZero);
                 // Per-element metadata is gone in v3; provenance and other
                 // metadata are added by the caller (Instance) into its
-                // ConstraintMetadataStore at the collection level.
+                // ConstraintContextStore at the collection level.
                 // Original indicator constraint preserved for removed set
                 assert_eq!(original.indicator_variable, VariableID::from(10));
             }

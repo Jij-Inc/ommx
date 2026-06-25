@@ -57,8 +57,8 @@ impl From<OneHotConstraintID> for u64 {
 /// The implicit constraint is `sum(x_i) = 1` where all `x_i` are binary.
 ///
 /// The constraint's [`OneHotConstraintID`] is not stored in this struct — it is held
-/// by the enclosing collection. Auxiliary metadata also lives on the enclosing
-/// collection's [`ConstraintMetadataStore`](crate::ConstraintMetadataStore).
+/// by the enclosing collection. Modeling labels and provenance live on the
+/// enclosing collection's [`ConstraintContextStore`](crate::ConstraintContextStore).
 ///
 /// [`Instance`]: crate::Instance
 #[derive(Debug, Clone, PartialEq)]

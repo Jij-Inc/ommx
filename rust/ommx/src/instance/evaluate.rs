@@ -244,8 +244,8 @@ impl Evaluate for Instance {
                 .evaluated_sos1_constraints_collection(evaluated_sos1_constraints)
                 .evaluated_named_functions(evaluated_named_functions)
                 .decision_variables(decision_variables)
-                .variable_metadata(self.variable_metadata.clone())
-                .named_function_metadata(self.named_function_metadata.clone())
+                .variable_labels(self.variable_labels.clone())
+                .named_function_labels(self.named_function_labels.clone())
                 .sense(sense)
                 .build_unchecked()?
         };
@@ -308,14 +308,14 @@ impl Evaluate for Instance {
 
         Ok(crate::SampleSet::builder()
             .decision_variables(decision_variables)
-            .variable_metadata(self.variable_metadata.clone())
+            .variable_labels(self.variable_labels.clone())
             .objectives(objectives)
             .constraints_collection(sampled_constraints)
             .indicator_constraints_collection(sampled_indicator_constraints)
             .one_hot_constraints_collection(sampled_one_hot_constraints)
             .sos1_constraints_collection(sampled_sos1_constraints)
             .named_functions(named_functions)
-            .named_function_metadata(self.named_function_metadata.clone())
+            .named_function_labels(self.named_function_labels.clone())
             .sense(self.sense)
             .build()?)
     }
@@ -449,18 +449,18 @@ impl Instance {
                         new: constraint,
                     } => {
                         // Indicator=1 → promote inner constraint to regular constraint.
-                        // Carry over the indicator's metadata into the regular collection's
+                        // Carry over the indicator's context into the regular collection's
                         // store and record the promotion in provenance.
                         let cid = self.constraint_collection.unused_id();
-                        let mut new_metadata = self
+                        let mut new_context = self
                             .indicator_constraint_collection
-                            .metadata()
+                            .context()
                             .collect_for(id);
-                        new_metadata
+                        new_context
                             .provenance
                             .push(crate::constraint::Provenance::IndicatorConstraint(id));
                         self.constraint_collection
-                            .insert_with(cid, constraint, new_metadata)?;
+                            .insert_with(cid, constraint, new_context)?;
                         self.indicator_constraint_collection
                             .removed_mut()
                             .insert(id, (original, propagation_reason.clone()));
@@ -900,7 +900,7 @@ mod tests {
             .next()
             .unwrap();
         assert_eq!(
-            instance.constraint_collection.metadata().provenance(*cid),
+            instance.constraint_collection.context().provenance(*cid),
             &[crate::constraint::Provenance::IndicatorConstraint(
                 IndicatorConstraintID::from(100)
             )]

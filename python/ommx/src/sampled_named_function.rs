@@ -4,14 +4,11 @@ use std::collections::{BTreeMap, HashSet};
 /// SampledNamedFunction wrapper for Python.
 ///
 /// Holds the Rust `SampledNamedFunction` plus an owned snapshot of its
-/// metadata. See `NamedFunction` for the snapshot-model rationale.
+/// label. See `NamedFunction` for the snapshot-model rationale.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
-pub struct SampledNamedFunction(
-    pub ommx::SampledNamedFunction,
-    pub ommx::NamedFunctionMetadata,
-);
+pub struct SampledNamedFunction(pub ommx::SampledNamedFunction, pub ommx::NamedFunctionLabel);
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]

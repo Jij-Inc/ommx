@@ -7,26 +7,26 @@ use std::collections::HashMap;
 /// Constraint wrapper for Python.
 ///
 /// Carries the inner Rust `Constraint<Created>` plus a snapshot of its
-/// auxiliary metadata. When this wrapper is read from an [`Instance`], the
-/// snapshot is filled from the instance's `ConstraintMetadataStore`. When the
+/// auxiliary context. When this wrapper is read from an [`Instance`], the
+/// snapshot is filled from the instance's `ConstraintContextStore`. When the
 /// wrapper is handed back to an instance (e.g. via `from_components`), the
-/// snapshot is drained into that instance's metadata store. Mutations on a
+/// snapshot is drained into that instance's context store. Mutations on a
 /// wrapper retrieved from an instance therefore do not propagate back; the
 /// caller must re-add the constraint to apply changes.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
-pub struct Constraint(pub ommx::Constraint, pub ommx::ConstraintMetadata);
+pub struct Constraint(pub ommx::Constraint, pub ommx::ConstraintContext);
 
 impl Constraint {
-    /// Create a wrapper holding `inner` with empty (default) metadata.
+    /// Create a wrapper holding `inner` with empty (default) context.
     pub fn standalone(inner: ommx::Constraint) -> Self {
-        Self(inner, ommx::ConstraintMetadata::default())
+        Self(inner, ommx::ConstraintContext::default())
     }
 
-    /// Create a wrapper from explicit `(inner, metadata)` parts.
-    pub fn from_parts(inner: ommx::Constraint, metadata: ommx::ConstraintMetadata) -> Self {
-        Self(inner, metadata)
+    /// Create a wrapper from explicit `(inner, context)` parts.
+    pub fn from_parts(inner: ommx::Constraint, context: ommx::ConstraintContext) -> Self {
+        Self(inner, context)
     }
 }
 
@@ -76,15 +76,17 @@ impl Constraint {
                 function: rust_function,
             },
         };
-        let metadata = ommx::ConstraintMetadata {
-            name,
-            subscripts,
-            parameters: parameters.into_iter().collect(),
-            description,
+        let context = ommx::ConstraintContext {
+            label: ommx::ModelingLabel {
+                name,
+                subscripts,
+                parameters: parameters.into_iter().collect(),
+                description,
+            },
             provenance: Vec::new(),
         };
 
-        Ok(Self(constraint, metadata))
+        Ok(Self(constraint, context))
     }
 
     #[getter]
@@ -99,22 +101,23 @@ impl Constraint {
 
     #[getter]
     pub fn name(&self) -> Option<String> {
-        self.1.name.clone()
+        self.1.label.name.clone()
     }
 
     #[getter]
     pub fn subscripts(&self) -> Vec<i64> {
-        self.1.subscripts.clone()
+        self.1.label.subscripts.clone()
     }
 
     #[getter]
     pub fn description(&self) -> Option<String> {
-        self.1.description.clone()
+        self.1.label.description.clone()
     }
 
     #[getter]
     pub fn parameters(&self) -> HashMap<String, String> {
         self.1
+            .label
             .parameters
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
@@ -181,7 +184,7 @@ impl Constraint {
     /// Set the name of the constraint
     /// Returns self for method chaining
     pub fn set_name(&mut self, name: String) -> Self {
-        self.1.name = Some(name);
+        self.1.label.name = Some(name);
         self.clone()
     }
 
@@ -194,21 +197,21 @@ impl Constraint {
     /// Set the subscripts of the constraint
     /// Returns self for method chaining
     pub fn set_subscripts(&mut self, subscripts: Vec<i64>) -> Self {
-        self.1.subscripts = subscripts;
+        self.1.label.subscripts = subscripts;
         self.clone()
     }
 
     /// Add subscripts to the constraint
     /// Returns self for method chaining
     pub fn add_subscripts(&mut self, subscripts: Vec<i64>) -> Self {
-        self.1.subscripts.extend(subscripts);
+        self.1.label.subscripts.extend(subscripts);
         self.clone()
     }
 
     /// Set the description of the constraint
     /// Returns self for method chaining
     pub fn set_description(&mut self, description: String) -> Self {
-        self.1.description = Some(description);
+        self.1.label.description = Some(description);
         self.clone()
     }
 
@@ -221,7 +224,7 @@ impl Constraint {
     /// Set the parameters of the constraint
     /// Returns self for method chaining
     pub fn set_parameters(&mut self, parameters: HashMap<String, String>) -> Self {
-        self.1.parameters = parameters.into_iter().collect();
+        self.1.label.parameters = parameters.into_iter().collect();
         self.clone()
     }
 
@@ -234,7 +237,7 @@ impl Constraint {
     /// Add a parameter to the constraint
     /// Returns self for method chaining
     pub fn add_parameter(&mut self, key: String, value: String) -> Self {
-        self.1.parameters.insert(key, value);
+        self.1.label.parameters.insert(key, value);
         self.clone()
     }
 
@@ -271,27 +274,27 @@ impl Constraint {
 
 /// RemovedConstraint wrapper for Python.
 ///
-/// Holds the inner `Constraint`, a snapshot of its metadata, and the removal
-/// reason. As with [`Constraint`], the metadata snapshot does not propagate
+/// Holds the inner `Constraint`, a snapshot of its context, and the removal
+/// reason. As with [`Constraint`], the context snapshot does not propagate
 /// back to the originating instance — it is read-only context for inspection.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
 pub struct RemovedConstraint {
     pub constraint: ommx::Constraint,
-    pub metadata: ommx::ConstraintMetadata,
+    pub context: ommx::ConstraintContext,
     pub removed_reason: ommx::RemovedReason,
 }
 
 impl RemovedConstraint {
     pub fn from_parts(
         constraint: ommx::Constraint,
-        metadata: ommx::ConstraintMetadata,
+        context: ommx::ConstraintContext,
         removed_reason: ommx::RemovedReason,
     ) -> Self {
         Self {
             constraint,
-            metadata,
+            context,
             removed_reason,
         }
     }
@@ -309,7 +312,7 @@ impl RemovedConstraint {
     ) -> Self {
         Self {
             constraint: constraint.0,
-            metadata: constraint.1,
+            context: constraint.1,
             removed_reason: ommx::RemovedReason {
                 reason: removed_reason,
                 parameters: removed_reason_parameters
@@ -321,7 +324,7 @@ impl RemovedConstraint {
 
     #[getter]
     pub fn constraint(&self) -> Constraint {
-        Constraint::from_parts(self.constraint.clone(), self.metadata.clone())
+        Constraint::from_parts(self.constraint.clone(), self.context.clone())
     }
 
     #[getter]
@@ -340,7 +343,7 @@ impl RemovedConstraint {
 
     #[getter]
     pub fn name(&self) -> Option<String> {
-        self.metadata.name.clone()
+        self.context.label.name.clone()
     }
 
     /// Get the equality type from the underlying constraint
@@ -358,19 +361,20 @@ impl RemovedConstraint {
     /// Get the description from the underlying constraint
     #[getter]
     pub fn description(&self) -> Option<String> {
-        self.metadata.description.clone()
+        self.context.label.description.clone()
     }
 
     /// Get the subscripts from the underlying constraint
     #[getter]
     pub fn subscripts(&self) -> Vec<i64> {
-        self.metadata.subscripts.clone()
+        self.context.label.subscripts.clone()
     }
 
     /// Get the parameters from the underlying constraint
     #[getter]
     pub fn parameters(&self) -> HashMap<String, String> {
-        self.metadata
+        self.context
+            .label
             .parameters
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
@@ -382,7 +386,7 @@ impl RemovedConstraint {
     /// See {attr}`~ommx.v1.Constraint.provenance` for semantics.
     #[getter]
     pub fn provenance(&self) -> Vec<crate::Provenance> {
-        crate::provenance_list(&self.metadata)
+        crate::provenance_list(&self.context)
     }
 
     pub fn __repr__(&self) -> String {
@@ -423,8 +427,8 @@ impl RemovedConstraint {
 /// `AttachedConstraint` is returned by `Instance.add_constraint` /
 /// `ParametricInstance.add_constraint` and by their `constraints[id]`
 /// getters. Unlike {class}`~ommx.v1.Constraint`, which is a snapshot, reads
-/// pull live data from the parent host and metadata setters write through
-/// to its SoA metadata store. Two `AttachedConstraint` instances pointing
+/// pull live data from the parent host and context setters write through
+/// to its SoA context store. Two `AttachedConstraint` instances pointing
 /// at the same id on the same host observe the same state.
 ///
 /// The handle keeps the parent host alive through a refcount; drop the
@@ -508,14 +512,14 @@ impl AttachedConstraint {
             ConstraintHost::Instance(p) => {
                 let inst = p.borrow(py);
                 let c = lookup_constraint(&inst.inner, self.id)?.clone();
-                let metadata = inst.inner.constraint_metadata().collect_for(self.id);
-                Ok(Constraint(c, metadata))
+                let context = inst.inner.constraint_context().collect_for(self.id);
+                Ok(Constraint(c, context))
             }
             ConstraintHost::Parametric(p) => {
                 let inst = p.borrow(py);
                 let c = lookup_constraint_parametric(&inst.inner, self.id)?.clone();
-                let metadata = inst.inner.constraint_metadata().collect_for(self.id);
-                Ok(Constraint(c, metadata))
+                let context = inst.inner.constraint_context().collect_for(self.id);
+                Ok(Constraint(c, context))
             }
         }
     }
@@ -582,8 +586,8 @@ impl AttachedConstraint {
                 let evaluated = lookup_constraint(&inst.inner, self.id)?
                     .evaluate(&state.0, atol)
                     .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-                let metadata = inst.inner.constraint_metadata().collect_for(self.id);
-                Ok(EvaluatedConstraint::from_parts(evaluated, metadata))
+                let context = inst.inner.constraint_context().collect_for(self.id);
+                Ok(EvaluatedConstraint::from_parts(evaluated, context))
             }
             ConstraintHost::Parametric(_) => Err(pyo3::exceptions::PyValueError::new_err(
                 "AttachedConstraint.evaluate is not supported on a ParametricInstance host; \
@@ -629,9 +633,9 @@ impl AttachedConstraint {
     }
 }
 
-crate::attached_metadata_methods!(
+crate::attached_constraint_context_methods!(
     AttachedConstraint,
     ommx::ConstraintID,
-    constraint_metadata,
-    set_constraint_metadata
+    constraint_context,
+    set_constraint_context
 );

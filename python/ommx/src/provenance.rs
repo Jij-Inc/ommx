@@ -62,8 +62,8 @@ impl From<&ommx::Provenance> for Provenance {
     }
 }
 
-pub fn provenance_list(metadata: &ommx::ConstraintMetadata) -> Vec<Provenance> {
-    metadata.provenance.iter().map(Provenance::from).collect()
+pub fn provenance_list(context: &ommx::ConstraintContext) -> Vec<Provenance> {
+    context.provenance.iter().map(Provenance::from).collect()
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]

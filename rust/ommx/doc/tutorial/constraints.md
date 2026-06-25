@@ -57,7 +57,7 @@ Each constraint type implements the
 [`ConstraintType`](crate::ConstraintType) trait, which maps all three
 stages as associated types — a defunctionalization of `Stage → Type`
 since Rust lacks HKTs. "Removed" is **not** a stage: removal is
-collection-level metadata tracked as a
+collection-level state tracked as a
 [`RemovedReason`](crate::RemovedReason) paired with the original
 `Created` constraint.
 

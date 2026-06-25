@@ -7,7 +7,7 @@ use super::{
 };
 use crate::{decision_variable::Kind as DecisionVariableKind, Coefficient, Quadratic};
 use crate::{
-    v1, Bound, Constraint, ConstraintID, ConstraintMetadata, DecisionVariable, Equality, Function,
+    v1, Bound, Constraint, ConstraintContext, ConstraintID, DecisionVariable, Equality, Function,
     Instance, ModelingLabel, Sense, VariableID,
 };
 
@@ -33,7 +33,7 @@ pub fn convert(mps: Mps) -> crate::Result<Instance> {
     // Drain name metadata through the instance owner boundary; per-element
     // metadata storage was retired in v3.
     for (id, name) in var_names {
-        instance.set_variable_metadata(
+        instance.set_variable_label(
             id,
             ModelingLabel {
                 name: Some(name),
@@ -42,10 +42,13 @@ pub fn convert(mps: Mps) -> crate::Result<Instance> {
         )?;
     }
     for (id, name) in constraint_names {
-        instance.set_constraint_metadata(
+        instance.set_constraint_context(
             id,
-            ConstraintMetadata {
-                name: Some(name),
+            ConstraintContext {
+                label: ModelingLabel {
+                    name: Some(name),
+                    ..Default::default()
+                },
                 ..Default::default()
             },
         )?;

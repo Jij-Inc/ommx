@@ -5,8 +5,8 @@ use std::collections::HashMap;
 
 /// NamedFunction wrapper for Python.
 ///
-/// Holds the Rust `NamedFunction` plus an owned snapshot of its metadata
-/// (`name` / `subscripts` / `parameters` / `description`). The metadata
+/// Holds the Rust `NamedFunction` plus an owned snapshot of its label
+/// (`name` / `subscripts` / `parameters` / `description`). The label
 /// store lives at the host (`Instance` / `Solution` / `SampleSet`) level;
 /// when a wrapper is created via a host accessor, the host snapshots its
 /// store into the second tuple slot. Mutations on a wrapper do NOT
@@ -16,7 +16,7 @@ use std::collections::HashMap;
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
-pub struct NamedFunction(pub ommx::NamedFunction, pub ommx::NamedFunctionMetadata);
+pub struct NamedFunction(pub ommx::NamedFunction, pub ommx::NamedFunctionLabel);
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
@@ -48,14 +48,14 @@ impl NamedFunction {
             id: named_function_id,
             function: rust_function,
         };
-        let metadata = ommx::NamedFunctionMetadata {
+        let label = ommx::NamedFunctionLabel {
             name,
             subscripts,
             parameters: parameters.into_iter().collect(),
             description,
         };
 
-        Ok(Self(named_function, metadata))
+        Ok(Self(named_function, label))
     }
 
     #[getter]
@@ -107,8 +107,8 @@ impl NamedFunction {
             .0
             .evaluate(&state.0, atol)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-        // Per-element evaluate doesn't see the host's metadata store, so the
-        // metadata snapshot from the source `NamedFunction` carries over.
+        // Per-element evaluate doesn't see the host's label store, so the
+        // label snapshot from the source `NamedFunction` carries over.
         Ok(EvaluatedNamedFunction(evaluated, self.1.clone()))
     }
 

@@ -24,22 +24,22 @@ pub struct InstanceBuilder {
     sense: Option<Sense>,
     objective: Option<Function>,
     decision_variables: Option<BTreeMap<VariableID, DecisionVariable>>,
-    variable_metadata: VariableMetadataStore,
+    variable_labels: VariableLabelStore,
     constraints: Option<BTreeMap<ConstraintID, Constraint>>,
-    constraint_metadata: ConstraintMetadataStore<ConstraintID>,
+    constraint_context: ConstraintContextStore<ConstraintID>,
     named_functions: BTreeMap<NamedFunctionID, NamedFunction>,
-    named_function_metadata: crate::named_function::NamedFunctionMetadataStore,
+    named_function_labels: crate::named_function::NamedFunctionLabelStore,
     removed_constraints: BTreeMap<ConstraintID, (Constraint, crate::constraint::RemovedReason)>,
     indicator_constraints: BTreeMap<crate::IndicatorConstraintID, crate::IndicatorConstraint>,
-    indicator_constraint_metadata: ConstraintMetadataStore<crate::IndicatorConstraintID>,
+    indicator_constraint_context: ConstraintContextStore<crate::IndicatorConstraintID>,
     removed_indicator_constraints: BTreeMap<
         crate::IndicatorConstraintID,
         (crate::IndicatorConstraint, crate::constraint::RemovedReason),
     >,
     one_hot_constraints: BTreeMap<crate::OneHotConstraintID, crate::OneHotConstraint>,
-    one_hot_constraint_metadata: ConstraintMetadataStore<crate::OneHotConstraintID>,
+    one_hot_constraint_context: ConstraintContextStore<crate::OneHotConstraintID>,
     sos1_constraints: BTreeMap<crate::Sos1ConstraintID, crate::Sos1Constraint>,
-    sos1_constraint_metadata: ConstraintMetadataStore<crate::Sos1ConstraintID>,
+    sos1_constraint_context: ConstraintContextStore<crate::Sos1ConstraintID>,
     decision_variable_dependency: AcyclicAssignments,
     parameters: Option<v1::Parameters>,
     description: Option<v1::instance::Description>,
@@ -73,8 +73,8 @@ impl InstanceBuilder {
     }
 
     /// Sets the per-variable modeling labels.
-    pub fn variable_metadata(mut self, variable_metadata: VariableMetadataStore) -> Self {
-        self.variable_metadata = variable_metadata;
+    pub fn variable_labels(mut self, variable_labels: VariableLabelStore) -> Self {
+        self.variable_labels = variable_labels;
         self
     }
 
@@ -84,12 +84,12 @@ impl InstanceBuilder {
         self
     }
 
-    /// Sets the per-regular-constraint metadata.
-    pub fn constraint_metadata(
+    /// Sets the per-regular-constraint context.
+    pub fn constraint_context(
         mut self,
-        constraint_metadata: ConstraintMetadataStore<ConstraintID>,
+        constraint_context: ConstraintContextStore<ConstraintID>,
     ) -> Self {
-        self.constraint_metadata = constraint_metadata;
+        self.constraint_context = constraint_context;
         self
     }
 
@@ -103,11 +103,11 @@ impl InstanceBuilder {
     }
 
     /// Sets the per-named-function modeling labels.
-    pub fn named_function_metadata(
+    pub fn named_function_labels(
         mut self,
-        named_function_metadata: crate::named_function::NamedFunctionMetadataStore,
+        named_function_labels: crate::named_function::NamedFunctionLabelStore,
     ) -> Self {
-        self.named_function_metadata = named_function_metadata;
+        self.named_function_labels = named_function_labels;
         self
     }
 
@@ -129,12 +129,12 @@ impl InstanceBuilder {
         self
     }
 
-    /// Sets the per-indicator-constraint metadata.
-    pub fn indicator_constraint_metadata(
+    /// Sets the per-indicator-constraint context.
+    pub fn indicator_constraint_context(
         mut self,
-        indicator_constraint_metadata: ConstraintMetadataStore<crate::IndicatorConstraintID>,
+        indicator_constraint_context: ConstraintContextStore<crate::IndicatorConstraintID>,
     ) -> Self {
-        self.indicator_constraint_metadata = indicator_constraint_metadata;
+        self.indicator_constraint_context = indicator_constraint_context;
         self
     }
 
@@ -159,12 +159,12 @@ impl InstanceBuilder {
         self
     }
 
-    /// Sets the per-one-hot-constraint metadata.
-    pub fn one_hot_constraint_metadata(
+    /// Sets the per-one-hot-constraint context.
+    pub fn one_hot_constraint_context(
         mut self,
-        one_hot_constraint_metadata: ConstraintMetadataStore<crate::OneHotConstraintID>,
+        one_hot_constraint_context: ConstraintContextStore<crate::OneHotConstraintID>,
     ) -> Self {
-        self.one_hot_constraint_metadata = one_hot_constraint_metadata;
+        self.one_hot_constraint_context = one_hot_constraint_context;
         self
     }
 
@@ -177,12 +177,12 @@ impl InstanceBuilder {
         self
     }
 
-    /// Sets the per-SOS1-constraint metadata.
-    pub fn sos1_constraint_metadata(
+    /// Sets the per-SOS1-constraint context.
+    pub fn sos1_constraint_context(
         mut self,
-        sos1_constraint_metadata: ConstraintMetadataStore<crate::Sos1ConstraintID>,
+        sos1_constraint_context: ConstraintContextStore<crate::Sos1ConstraintID>,
     ) -> Self {
-        self.sos1_constraint_metadata = sos1_constraint_metadata;
+        self.sos1_constraint_context = sos1_constraint_context;
         self
     }
 
@@ -215,8 +215,8 @@ impl InstanceBuilder {
     /// - Map keys don't match their value's ID (decision_variables, constraints, removed_constraints)
     /// - The objective function or constraints reference undefined variable IDs
     /// - The keys of `constraints` and `removed_constraints` are not disjoint
-    /// - Metadata stores contain IDs that are not owned by the corresponding
-    ///   decision-variable, named-function, or constraint collection
+    /// - Label/context stores contain IDs that are not owned by the
+    ///   corresponding decision-variable, named-function, or constraint collection
     /// - The keys of `decision_variable_dependency` are not in `decision_variables`
     /// - Construction-time `used`, `fixed`, and `dependent` sets are not pairwise disjoint
     pub fn build(self) -> crate::Result<Instance> {
@@ -247,7 +247,7 @@ impl InstanceBuilder {
         // Collect all variable IDs for validation
         let variable_ids: VariableIDSet = decision_variables.keys().cloned().collect();
         crate::modeling_label::validate_modeling_label_ids(
-            &self.variable_metadata,
+            &self.variable_labels,
             &variable_ids,
             "decision variable",
         )?;
@@ -296,7 +296,7 @@ impl InstanceBuilder {
             .copied()
             .collect::<std::collections::BTreeSet<_>>();
         crate::modeling_label::validate_modeling_label_ids(
-            &self.named_function_metadata,
+            &self.named_function_labels,
             &named_function_ids,
             "named function",
         )?;
@@ -467,29 +467,29 @@ impl InstanceBuilder {
             sense,
             objective,
             decision_variables,
-            variable_metadata: self.variable_metadata,
-            constraint_collection: ConstraintCollection::with_metadata(
+            variable_labels: self.variable_labels,
+            constraint_collection: ConstraintCollection::with_context(
                 constraints,
                 self.removed_constraints,
-                self.constraint_metadata,
+                self.constraint_context,
             )?,
-            indicator_constraint_collection: ConstraintCollection::with_metadata(
+            indicator_constraint_collection: ConstraintCollection::with_context(
                 self.indicator_constraints,
                 self.removed_indicator_constraints,
-                self.indicator_constraint_metadata,
+                self.indicator_constraint_context,
             )?,
-            one_hot_constraint_collection: ConstraintCollection::with_metadata(
+            one_hot_constraint_collection: ConstraintCollection::with_context(
                 self.one_hot_constraints,
                 BTreeMap::new(),
-                self.one_hot_constraint_metadata,
+                self.one_hot_constraint_context,
             )?,
-            sos1_constraint_collection: ConstraintCollection::with_metadata(
+            sos1_constraint_collection: ConstraintCollection::with_context(
                 self.sos1_constraints,
                 BTreeMap::new(),
-                self.sos1_constraint_metadata,
+                self.sos1_constraint_context,
             )?,
             named_functions: self.named_functions,
-            named_function_metadata: self.named_function_metadata,
+            named_function_labels: self.named_function_labels,
             decision_variable_dependency: self.decision_variable_dependency,
             parameters: self.parameters,
             description: self.description,
@@ -573,46 +573,46 @@ mod tests {
     }
 
     #[test]
-    fn test_builder_preserves_metadata() {
+    fn test_builder_preserves_labels_and_context() {
         let var_id = VariableID::from(1);
         let constraint_id = ConstraintID::from(2);
-        let mut variable_metadata = VariableMetadataStore::default();
-        variable_metadata.set_name(var_id, "x");
-        variable_metadata.set_subscripts(var_id, vec![0]);
-        let mut constraint_metadata = ConstraintMetadataStore::default();
-        constraint_metadata.set_name(constraint_id, "balance");
+        let mut variable_labels = VariableLabelStore::default();
+        variable_labels.set_name(var_id, "x");
+        variable_labels.set_subscripts(var_id, vec![0]);
+        let mut constraint_context = ConstraintContextStore::default();
+        constraint_context.set_name(constraint_id, "balance");
 
         let instance = Instance::builder()
             .sense(Sense::Minimize)
             .objective(Function::Zero)
             .decision_variables(BTreeMap::from([(var_id, DecisionVariable::binary(var_id))]))
-            .variable_metadata(variable_metadata)
+            .variable_labels(variable_labels)
             .constraints(BTreeMap::from([(
                 constraint_id,
                 Constraint::equal_to_zero(Function::Zero),
             )]))
-            .constraint_metadata(constraint_metadata)
+            .constraint_context(constraint_context)
             .build()
             .unwrap();
 
-        assert_eq!(instance.variable_metadata().name(var_id), Some("x"));
-        assert_eq!(instance.variable_metadata().subscripts(var_id), &[0]);
+        assert_eq!(instance.variable_labels().name(var_id), Some("x"));
+        assert_eq!(instance.variable_labels().subscripts(var_id), &[0]);
         assert_eq!(
-            instance.constraint_metadata().name(constraint_id),
+            instance.constraint_context().name(constraint_id),
             Some("balance")
         );
     }
 
     #[test]
-    fn test_builder_rejects_orphan_variable_metadata() {
-        let mut variable_metadata = VariableMetadataStore::default();
-        variable_metadata.set_name(VariableID::from(99), "orphan");
+    fn test_builder_rejects_orphan_variable_labels() {
+        let mut variable_labels = VariableLabelStore::default();
+        variable_labels.set_name(VariableID::from(99), "orphan");
 
         let err = Instance::builder()
             .sense(Sense::Minimize)
             .objective(Function::Zero)
             .decision_variables(BTreeMap::new())
-            .variable_metadata(variable_metadata)
+            .variable_labels(variable_labels)
             .constraints(BTreeMap::new())
             .build()
             .unwrap_err();
@@ -625,16 +625,16 @@ mod tests {
     }
 
     #[test]
-    fn test_builder_rejects_orphan_constraint_metadata() {
-        let mut constraint_metadata = ConstraintMetadataStore::default();
-        constraint_metadata.set_name(ConstraintID::from(99), "orphan");
+    fn test_builder_rejects_orphan_constraint_context() {
+        let mut constraint_context = ConstraintContextStore::default();
+        constraint_context.set_name(ConstraintID::from(99), "orphan");
 
         let err = Instance::builder()
             .sense(Sense::Minimize)
             .objective(Function::Zero)
             .decision_variables(BTreeMap::new())
             .constraints(BTreeMap::new())
-            .constraint_metadata(constraint_metadata)
+            .constraint_context(constraint_context)
             .build()
             .unwrap_err();
 
@@ -646,7 +646,7 @@ mod tests {
     }
 
     #[test]
-    fn test_metadata_setters_reject_unknown_ids() {
+    fn test_sidecar_setters_reject_unknown_ids() {
         let mut instance = Instance::builder()
             .sense(Sense::Minimize)
             .objective(Function::Zero)
@@ -656,19 +656,19 @@ mod tests {
             .unwrap();
 
         let err = instance
-            .set_variable_metadata(VariableID::from(99), ModelingLabel::default())
+            .set_variable_label(VariableID::from(99), ModelingLabel::default())
             .unwrap_err();
         assert!(err.to_string().contains("unknown decision variable ID"));
 
         let err = instance
-            .set_constraint_metadata(ConstraintID::from(99), ConstraintMetadata::default())
+            .set_constraint_context(ConstraintID::from(99), ConstraintContext::default())
             .unwrap_err();
         assert!(err.to_string().contains("unknown constraint ID"));
 
         let err = instance
-            .set_one_hot_constraint_metadata(
+            .set_one_hot_constraint_context(
                 crate::OneHotConstraintID::from(99),
-                ConstraintMetadata::default(),
+                ConstraintContext::default(),
             )
             .unwrap_err();
         assert!(err.to_string().contains("unknown one-hot constraint ID"));

@@ -5,8 +5,8 @@ use std::collections::HashMap;
 use std::hash::BuildHasher;
 
 use ommx::{
-    ConstraintMetadata, ConstraintMetadataStore, DecisionVariableMetadata, Evaluate, IDType,
-    Provenance, RemovedReason, VariableID, VariableIDSet, VariableMetadataStore,
+    ConstraintContext, ConstraintContextStore, DecisionVariableLabel, Evaluate, IDType, Provenance,
+    RemovedReason, VariableID, VariableIDSet, VariableLabelStore,
 };
 use pyo3::{
     exceptions::PyValueError,
@@ -76,25 +76,25 @@ impl pyo3_stub_gen::PyStubType for PyDataFrame {
 
 /// Which optional column families to fold into a wide `*_df` DataFrame.
 ///
-/// `metadata` toggles the `name` / `subscripts` / `description` columns.
+/// `label` toggles the `name` / `subscripts` / `description` columns.
 /// `parameters` toggles the `parameters.{key}` columns. `removed_reason`
 /// is a unit flag that gates both the `removed_reason` (reason name)
 /// column and the `removed_reason.{key}` (reason parameters) columns
 /// together — the name without its parameters is rarely useful. The
 /// default (`Self::default_wide()`) preserves the v2-equivalent wide
-/// shape: metadata + parameters on, removed_reason off.
+/// shape: label + parameters on, removed_reason off.
 #[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
 pub struct IncludeFlags {
-    pub metadata: bool,
+    pub label: bool,
     pub parameters: bool,
     pub removed_reason: bool,
 }
 
 impl IncludeFlags {
-    /// Default for wide `*_df` — metadata and parameters on, removed_reason off.
+    /// Default for wide `*_df` — label and parameters on, removed_reason off.
     pub fn default_wide() -> Self {
         Self {
-            metadata: true,
+            label: true,
             parameters: true,
             removed_reason: false,
         }
@@ -108,12 +108,12 @@ impl IncludeFlags {
                 let mut flags = Self::default();
                 for v in &values {
                     match v.as_str() {
-                        "metadata" => flags.metadata = true,
+                        "label" => flags.label = true,
                         "parameters" => flags.parameters = true,
                         "removed_reason" => flags.removed_reason = true,
                         other => {
                             return Err(PyValueError::new_err(format!(
-                                "unknown include flag: {other:?} (expected one of \"metadata\", \"parameters\", \"removed_reason\")"
+                                "unknown include flag: {other:?} (expected one of \"label\", \"parameters\", \"removed_reason\")"
                             )));
                         }
                     }
@@ -124,7 +124,7 @@ impl IncludeFlags {
     }
 }
 
-const METADATA_KEYS: &[&str] = &["name", "subscripts", "description"];
+const LABEL_KEYS: &[&str] = &["name", "subscripts", "description"];
 const REMOVED_REASON_KEY: &str = "removed_reason";
 const REMOVED_REASON_PREFIX: &str = "removed_reason.";
 
@@ -267,20 +267,20 @@ pub(crate) use constraint_kind_collection;
 // ---------------------------------------------------------------------------
 // Sidecar DataFrame builders
 //
-// Long-format / id-indexed views over the SoA metadata stores. Each builder
+// Long-format / id-indexed views over the SoA label/context stores. Each builder
 // reads the store directly and produces a DataFrame with a documented column
-// schema. Used by the `*_metadata_df`, `*_parameters_df`, `*_provenance_df`,
+// schema. Used by the `*_labels_df`, `*_context_df`, `*_parameters_df`, `*_provenance_df`,
 // and `*_removed_reasons_df` accessors on Instance / ParametricInstance /
 // Solution / SampleSet.
 // ---------------------------------------------------------------------------
 
-/// Wide id-indexed metadata DataFrame for constraints.
+/// Wide id-indexed context DataFrame for constraints.
 ///
 /// One row per id from `ids`, in iteration order. Columns: `name`,
 /// `subscripts`, `description`. Index column = `id_col`.
-pub fn constraint_metadata_dataframe<'py, ID>(
+pub fn constraint_context_dataframe<'py, ID>(
     py: Python<'py>,
-    store: &ConstraintMetadataStore<ID>,
+    store: &ConstraintContextStore<ID>,
     ids: impl Iterator<Item = ID>,
     id_col: &str,
 ) -> PyResult<Bound<'py, PyDataFrame>>
@@ -291,7 +291,7 @@ where
         .map(|id| -> PyResult<_> {
             let dict = PyDict::new(py);
             dict.set_item(id_col, Into::<u64>::into(id))?;
-            set_metadata(
+            set_label_columns(
                 &dict,
                 store.name(id),
                 store.subscripts(id),
@@ -311,7 +311,7 @@ where
 /// `value`. Default RangeIndex (no `set_index`).
 pub fn constraint_parameters_dataframe<'py, ID>(
     py: Python<'py>,
-    store: &ConstraintMetadataStore<ID>,
+    store: &ConstraintContextStore<ID>,
     ids: impl Iterator<Item = ID>,
     id_col: &str,
 ) -> PyResult<Bound<'py, PyDataFrame>>
@@ -347,7 +347,7 @@ where
 /// `source_id`. Default RangeIndex.
 pub fn constraint_provenance_dataframe<'py, ID>(
     py: Python<'py>,
-    store: &ConstraintMetadataStore<ID>,
+    store: &ConstraintContextStore<ID>,
     ids: impl Iterator<Item = ID>,
     id_col: &str,
 ) -> PyResult<Bound<'py, PyDataFrame>>
@@ -454,13 +454,13 @@ where
     long_format_dataframe(py, entries, &[id_col, "reason", "key", "value"])
 }
 
-/// Wide id-indexed metadata DataFrame for decision variables.
+/// Wide id-indexed label DataFrame for decision variables.
 ///
-/// Identical column shape to [`constraint_metadata_dataframe`], reading from
-/// a [`VariableMetadataStore`] instead.
-pub fn variable_metadata_dataframe<'py>(
+/// Identical column shape to [`constraint_context_dataframe`], reading from
+/// a [`VariableLabelStore`] instead.
+pub fn variable_labels_dataframe<'py>(
     py: Python<'py>,
-    store: &VariableMetadataStore,
+    store: &VariableLabelStore,
     ids: impl Iterator<Item = VariableID>,
     id_col: &str,
 ) -> PyResult<Bound<'py, PyDataFrame>> {
@@ -468,7 +468,7 @@ pub fn variable_metadata_dataframe<'py>(
         .map(|id| -> PyResult<_> {
             let dict = PyDict::new(py);
             dict.set_item(id_col, Into::<u64>::into(id))?;
-            set_metadata(
+            set_label_columns(
                 &dict,
                 store.name(id),
                 store.subscripts(id),
@@ -485,7 +485,7 @@ pub fn variable_metadata_dataframe<'py>(
 /// Rows sorted by `(id, key)` for deterministic rendering.
 pub fn variable_parameters_dataframe<'py>(
     py: Python<'py>,
-    store: &VariableMetadataStore,
+    store: &VariableLabelStore,
     ids: impl Iterator<Item = VariableID>,
     id_col: &str,
 ) -> PyResult<Bound<'py, PyDataFrame>> {
@@ -544,13 +544,13 @@ fn long_format_dataframe<'py>(
 
 /// Drop columns from a per-row dict according to the include flags.
 ///
-/// `metadata` columns are dropped by name; `parameters.*` and
+/// `label` columns are dropped by name; `parameters.*` and
 /// `removed_reason` (name + `removed_reason.*` parameters) columns are
 /// dropped by prefix. Missing keys are silently skipped (some impls
 /// don't emit every key).
 pub(crate) fn apply_include_filter(dict: &Bound<PyDict>, include: IncludeFlags) -> PyResult<()> {
-    if !include.metadata {
-        for key in METADATA_KEYS {
+    if !include.label {
+        for key in LABEL_KEYS {
             if dict.contains(key)? {
                 dict.del_item(key)?;
             }
@@ -663,18 +663,18 @@ pub trait ToPandasEntry {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>>;
 }
 
-/// Pairs a borrowed item with a borrowed metadata snapshot for pandas rendering.
+/// Pairs a borrowed item with a borrowed label/context snapshot for pandas rendering.
 ///
 /// Used as the input to `ToPandasEntry` impls that need access to the SoA
-/// metadata that no longer lives on the per-element struct.
-pub struct WithMetadata<'a, T, M> {
+/// label/context that no longer lives on the per-element struct.
+pub struct WithModelingContext<'a, T, M> {
     pub item: T,
-    pub metadata: &'a M,
+    pub context: &'a M,
 }
 
-impl<'a, T, M> WithMetadata<'a, T, M> {
-    pub fn new(item: T, metadata: &'a M) -> Self {
-        Self { item, metadata }
+impl<'a, T, M> WithModelingContext<'a, T, M> {
+    pub fn new(item: T, context: &'a M) -> Self {
+        Self { item, context }
     }
 }
 
@@ -768,13 +768,13 @@ pub fn sorted_entries_to_dataframe<'py>(
 }
 
 // ---------------------------------------------------------------------------
-// Helpers: metadata fields
+// Helpers: modeling-label fields
 // ---------------------------------------------------------------------------
 
-/// Set common metadata fields (name, subscripts, description) on a PyDict.
+/// Set common modeling-label fields (name, subscripts, description) on a PyDict.
 ///
 /// Uses cached `pandas.NA` for missing optional values.
-pub fn set_metadata<'py>(
+pub fn set_label_columns<'py>(
     dict: &Bound<'py, PyDict>,
     name: Option<&str>,
     subscripts: &[i64],
@@ -863,17 +863,17 @@ pub fn set_function_type(dict: &Bound<PyDict>, function: &ommx::Function) -> PyR
 // ToPandasEntry implementations for unevaluated types
 // ---------------------------------------------------------------------------
 
-impl<'m> ToPandasEntry for WithMetadata<'m, &ommx::DecisionVariable, DecisionVariableMetadata> {
+impl<'m> ToPandasEntry for WithModelingContext<'m, &ommx::DecisionVariable, DecisionVariableLabel> {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let na = get_na(py)?;
         let dict = PyDict::new(py);
         let dv = self.item;
-        let m = self.metadata;
+        let m = self.context;
         dict.set_item("id", dv.id().into_inner())?;
         set_kind(&dict, dv.kind())?;
         dict.set_item("lower", dv.bound().lower())?;
         dict.set_item("upper", dv.bound().upper())?;
-        set_metadata(
+        set_label_columns(
             &dict,
             m.name.as_deref(),
             &m.subscripts,
@@ -890,17 +890,17 @@ impl<'m> ToPandasEntry for WithMetadata<'m, &ommx::DecisionVariable, DecisionVar
 }
 
 impl<'m> ToPandasEntry
-    for WithMetadata<'m, (ommx::ConstraintID, &ommx::Constraint), ConstraintMetadata>
+    for WithModelingContext<'m, (ommx::ConstraintID, &ommx::Constraint), ConstraintContext>
 {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let (id, c) = self.item;
-        let m = self.metadata;
+        let m = &self.context.label;
         let dict = PyDict::new(py);
         dict.set_item("id", id.into_inner())?;
         set_equality(&dict, c.equality)?;
         set_function_type(&dict, &c.stage.function)?;
         set_used_ids(&dict, &c.stage.function.required_ids())?;
-        set_metadata(
+        set_label_columns(
             &dict,
             m.name.as_deref(),
             &m.subscripts,
@@ -912,15 +912,15 @@ impl<'m> ToPandasEntry
 }
 
 impl<'m> ToPandasEntry
-    for WithMetadata<
+    for WithModelingContext<
         'm,
         (ommx::IndicatorConstraintID, &ommx::IndicatorConstraint),
-        ConstraintMetadata,
+        ConstraintContext,
     >
 {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let (id, c) = self.item;
-        let m = self.metadata;
+        let m = &self.context.label;
         let dict = PyDict::new(py);
         dict.set_item("id", id.into_inner())?;
         dict.set_item("indicator_variable_id", c.indicator_variable.into_inner())?;
@@ -930,7 +930,7 @@ impl<'m> ToPandasEntry
         let mut used_ids = c.stage.function.required_ids();
         used_ids.insert(c.indicator_variable);
         set_used_ids(&dict, &used_ids)?;
-        set_metadata(
+        set_label_columns(
             &dict,
             m.name.as_deref(),
             &m.subscripts,
@@ -942,18 +942,18 @@ impl<'m> ToPandasEntry
 }
 
 impl<'m> ToPandasEntry
-    for WithMetadata<
+    for WithModelingContext<
         'm,
         (
             ommx::IndicatorConstraintID,
             &ommx::EvaluatedIndicatorConstraint,
         ),
-        ConstraintMetadata,
+        ConstraintContext,
     >
 {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let (id, c) = self.item;
-        let m = self.metadata;
+        let m = &self.context.label;
         let dict = PyDict::new(py);
         dict.set_item("id", id.into_inner())?;
         dict.set_item("indicator_variable_id", c.indicator_variable.into_inner())?;
@@ -961,7 +961,7 @@ impl<'m> ToPandasEntry
         dict.set_item("value", c.stage.evaluated_value)?;
         dict.set_item("indicator_active", c.stage.indicator_active)?;
         set_used_ids(&dict, &c.stage.used_decision_variable_ids)?;
-        set_metadata(
+        set_label_columns(
             &dict,
             m.name.as_deref(),
             &m.subscripts,
@@ -973,7 +973,7 @@ impl<'m> ToPandasEntry
 }
 
 impl<'a, 'm> ToPandasEntry
-    for WithMetadata<
+    for WithModelingContext<
         'm,
         WithSampleIds<
             'a,
@@ -982,18 +982,18 @@ impl<'a, 'm> ToPandasEntry
                 &'a ommx::SampledIndicatorConstraint,
             ),
         >,
-        ConstraintMetadata,
+        ConstraintContext,
     >
 {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let (id, ic) = &self.item.item;
-        let m = self.metadata;
+        let m = &self.context.label;
         let dict = PyDict::new(py);
         dict.set_item("id", id.into_inner())?;
         dict.set_item("indicator_variable_id", ic.indicator_variable.into_inner())?;
         set_equality(&dict, ic.equality)?;
         set_used_ids(&dict, &ic.stage.used_decision_variable_ids)?;
-        set_metadata(
+        set_label_columns(
             &dict,
             m.name.as_deref(),
             &m.subscripts,
@@ -1016,34 +1016,34 @@ impl<'a, 'm> ToPandasEntry
 }
 
 impl<'m> ToPandasEntry
-    for WithMetadata<
+    for WithModelingContext<
         'm,
         (
             ommx::IndicatorConstraintID,
             &(ommx::IndicatorConstraint, ommx::RemovedReason),
         ),
-        ConstraintMetadata,
+        ConstraintContext,
     >
 {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let (id, inner) = self.item;
         let (ic, reason) = inner;
-        let dict = WithMetadata::new((id, ic), self.metadata).to_pandas_entry(py)?;
+        let dict = WithModelingContext::new((id, ic), self.context).to_pandas_entry(py)?;
         set_removed_reason_columns(&dict, reason)?;
         Ok(dict)
     }
 }
 
 impl<'m> ToPandasEntry
-    for WithMetadata<
+    for WithModelingContext<
         'm,
         (ommx::OneHotConstraintID, &ommx::EvaluatedOneHotConstraint),
-        ConstraintMetadata,
+        ConstraintContext,
     >
 {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let (id, c) = self.item;
-        let m = self.metadata;
+        let m = &self.context.label;
         let na = get_na(py)?;
         let dict = PyDict::new(py);
         dict.set_item("id", id.into_inner())?;
@@ -1053,7 +1053,7 @@ impl<'m> ToPandasEntry
             None => dict.set_item("active_variable", &na)?,
         }
         set_used_ids(&dict, &c.stage.used_decision_variable_ids)?;
-        set_metadata(
+        set_label_columns(
             &dict,
             m.name.as_deref(),
             &m.subscripts,
@@ -1065,20 +1065,20 @@ impl<'m> ToPandasEntry
 }
 
 impl<'a, 'm> ToPandasEntry
-    for WithMetadata<
+    for WithModelingContext<
         'm,
         WithSampleIds<'a, (ommx::OneHotConstraintID, &'a ommx::SampledOneHotConstraint)>,
-        ConstraintMetadata,
+        ConstraintContext,
     >
 {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let (id, c) = &self.item.item;
-        let m = self.metadata;
+        let m = &self.context.label;
         let na = get_na(py)?;
         let dict = PyDict::new(py);
         dict.set_item("id", id.into_inner())?;
         set_used_ids(&dict, &c.stage.used_decision_variable_ids)?;
-        set_metadata(
+        set_label_columns(
             &dict,
             m.name.as_deref(),
             &m.subscripts,
@@ -1099,15 +1099,15 @@ impl<'a, 'm> ToPandasEntry
 }
 
 impl<'m> ToPandasEntry
-    for WithMetadata<
+    for WithModelingContext<
         'm,
         (ommx::Sos1ConstraintID, &ommx::EvaluatedSos1Constraint),
-        ConstraintMetadata,
+        ConstraintContext,
     >
 {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let (id, c) = self.item;
-        let m = self.metadata;
+        let m = &self.context.label;
         let na = get_na(py)?;
         let dict = PyDict::new(py);
         dict.set_item("id", id.into_inner())?;
@@ -1117,7 +1117,7 @@ impl<'m> ToPandasEntry
             None => dict.set_item("active_variable", &na)?,
         }
         set_used_ids(&dict, &c.stage.used_decision_variable_ids)?;
-        set_metadata(
+        set_label_columns(
             &dict,
             m.name.as_deref(),
             &m.subscripts,
@@ -1129,20 +1129,20 @@ impl<'m> ToPandasEntry
 }
 
 impl<'a, 'm> ToPandasEntry
-    for WithMetadata<
+    for WithModelingContext<
         'm,
         WithSampleIds<'a, (ommx::Sos1ConstraintID, &'a ommx::SampledSos1Constraint)>,
-        ConstraintMetadata,
+        ConstraintContext,
     >
 {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let (id, c) = &self.item.item;
-        let m = self.metadata;
+        let m = &self.context.label;
         let na = get_na(py)?;
         let dict = PyDict::new(py);
         dict.set_item("id", id.into_inner())?;
         set_used_ids(&dict, &c.stage.used_decision_variable_ids)?;
-        set_metadata(
+        set_label_columns(
             &dict,
             m.name.as_deref(),
             &m.subscripts,
@@ -1163,18 +1163,22 @@ impl<'a, 'm> ToPandasEntry
 }
 
 impl<'m> ToPandasEntry
-    for WithMetadata<'m, (ommx::OneHotConstraintID, &ommx::OneHotConstraint), ConstraintMetadata>
+    for WithModelingContext<
+        'm,
+        (ommx::OneHotConstraintID, &ommx::OneHotConstraint),
+        ConstraintContext,
+    >
 {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let (id, one_hot) = self.item;
-        let m = self.metadata;
+        let m = &self.context.label;
         let dict = PyDict::new(py);
         dict.set_item("id", id.into_inner())?;
         let vars: Vec<u64> = one_hot.variables.iter().map(|v| v.into_inner()).collect();
         dict.set_item("variables", PySet::new(py, &vars)?)?;
         dict.set_item("num_variables", vars.len())?;
         set_used_ids(&dict, &one_hot.variables)?;
-        set_metadata(
+        set_label_columns(
             &dict,
             m.name.as_deref(),
             &m.subscripts,
@@ -1186,37 +1190,37 @@ impl<'m> ToPandasEntry
 }
 
 impl<'m> ToPandasEntry
-    for WithMetadata<
+    for WithModelingContext<
         'm,
         (
             ommx::OneHotConstraintID,
             &(ommx::OneHotConstraint, ommx::RemovedReason),
         ),
-        ConstraintMetadata,
+        ConstraintContext,
     >
 {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let (id, inner) = self.item;
         let (one_hot, reason) = inner;
-        let dict = WithMetadata::new((id, one_hot), self.metadata).to_pandas_entry(py)?;
+        let dict = WithModelingContext::new((id, one_hot), self.context).to_pandas_entry(py)?;
         set_removed_reason_columns(&dict, reason)?;
         Ok(dict)
     }
 }
 
 impl<'m> ToPandasEntry
-    for WithMetadata<'m, (ommx::Sos1ConstraintID, &ommx::Sos1Constraint), ConstraintMetadata>
+    for WithModelingContext<'m, (ommx::Sos1ConstraintID, &ommx::Sos1Constraint), ConstraintContext>
 {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let (id, sos1) = self.item;
-        let m = self.metadata;
+        let m = &self.context.label;
         let dict = PyDict::new(py);
         dict.set_item("id", id.into_inner())?;
         let vars: Vec<u64> = sos1.variables.iter().map(|v| v.into_inner()).collect();
         dict.set_item("variables", PySet::new(py, &vars)?)?;
         dict.set_item("num_variables", vars.len())?;
         set_used_ids(&dict, &sos1.variables)?;
-        set_metadata(
+        set_label_columns(
             &dict,
             m.name.as_deref(),
             &m.subscripts,
@@ -1228,50 +1232,50 @@ impl<'m> ToPandasEntry
 }
 
 impl<'m> ToPandasEntry
-    for WithMetadata<
+    for WithModelingContext<
         'm,
         (
             ommx::Sos1ConstraintID,
             &(ommx::Sos1Constraint, ommx::RemovedReason),
         ),
-        ConstraintMetadata,
+        ConstraintContext,
     >
 {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let (id, inner) = self.item;
         let (sos1, reason) = inner;
-        let dict = WithMetadata::new((id, sos1), self.metadata).to_pandas_entry(py)?;
+        let dict = WithModelingContext::new((id, sos1), self.context).to_pandas_entry(py)?;
         set_removed_reason_columns(&dict, reason)?;
         Ok(dict)
     }
 }
 
 impl<'m> ToPandasEntry
-    for WithMetadata<
+    for WithModelingContext<
         'm,
         (ommx::ConstraintID, &(ommx::Constraint, ommx::RemovedReason)),
-        ConstraintMetadata,
+        ConstraintContext,
     >
 {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let (id, inner) = self.item;
         let (constraint, reason) = inner;
-        let dict = WithMetadata::new((id, constraint), self.metadata).to_pandas_entry(py)?;
+        let dict = WithModelingContext::new((id, constraint), self.context).to_pandas_entry(py)?;
         set_removed_reason_columns(&dict, reason)?;
         Ok(dict)
     }
 }
 
-impl<'m> ToPandasEntry for WithMetadata<'m, &ommx::NamedFunction, ommx::NamedFunctionMetadata> {
+impl<'m> ToPandasEntry for WithModelingContext<'m, &ommx::NamedFunction, ommx::NamedFunctionLabel> {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let nf = self.item;
-        let m = self.metadata;
+        let m = self.context;
         let dict = PyDict::new(py);
         dict.set_item("id", nf.id.into_inner())?;
         set_function_type(&dict, &nf.function)?;
         dict.set_item("function", crate::Function(nf.function.clone()))?;
         set_used_ids(&dict, &nf.function.required_ids())?;
-        set_metadata(
+        set_label_columns(
             &dict,
             m.name.as_deref(),
             &m.subscripts,
@@ -1286,7 +1290,7 @@ impl ToPandasEntry for ommx::v1::Parameter {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let dict = PyDict::new(py);
         dict.set_item("id", self.id)?;
-        set_metadata(
+        set_label_columns(
             &dict,
             self.name.as_deref(),
             &self.subscripts,
@@ -1302,18 +1306,18 @@ impl ToPandasEntry for ommx::v1::Parameter {
 // ---------------------------------------------------------------------------
 
 impl<'m> ToPandasEntry
-    for WithMetadata<'m, &ommx::EvaluatedDecisionVariable, DecisionVariableMetadata>
+    for WithModelingContext<'m, &ommx::EvaluatedDecisionVariable, DecisionVariableLabel>
 {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let dv = self.item;
-        let m = self.metadata;
+        let m = self.context;
         let na = get_na(py)?;
         let dict = PyDict::new(py);
         dict.set_item("id", dv.id().into_inner())?;
         set_kind(&dict, *dv.kind())?;
         dict.set_item("lower", dv.bound().lower())?;
         dict.set_item("upper", dv.bound().upper())?;
-        set_metadata(
+        set_label_columns(
             &dict,
             m.name.as_deref(),
             &m.subscripts,
@@ -1329,18 +1333,18 @@ impl<'m> ToPandasEntry
 }
 
 impl<'m> ToPandasEntry
-    for WithMetadata<'m, (ommx::ConstraintID, &ommx::EvaluatedConstraint), ConstraintMetadata>
+    for WithModelingContext<'m, (ommx::ConstraintID, &ommx::EvaluatedConstraint), ConstraintContext>
 {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let (id, c) = self.item;
-        let m = self.metadata;
+        let m = &self.context.label;
         let na = get_na(py)?;
         let dict = PyDict::new(py);
         dict.set_item("id", id.into_inner())?;
         set_equality(&dict, c.equality)?;
         dict.set_item("value", c.stage.evaluated_value)?;
         set_used_ids(&dict, &c.stage.used_decision_variable_ids)?;
-        set_metadata(
+        set_label_columns(
             &dict,
             m.name.as_deref(),
             &m.subscripts,
@@ -1356,16 +1360,16 @@ impl<'m> ToPandasEntry
 }
 
 impl<'m> ToPandasEntry
-    for WithMetadata<'m, &ommx::EvaluatedNamedFunction, ommx::NamedFunctionMetadata>
+    for WithModelingContext<'m, &ommx::EvaluatedNamedFunction, ommx::NamedFunctionLabel>
 {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let enf = self.item;
-        let m = self.metadata;
+        let m = self.context;
         let dict = PyDict::new(py);
         dict.set_item("id", enf.id.into_inner())?;
         dict.set_item("value", enf.evaluated_value())?;
         set_used_ids(&dict, enf.used_decision_variable_ids())?;
-        set_metadata(
+        set_label_columns(
             &dict,
             m.name.as_deref(),
             &m.subscripts,
@@ -1388,21 +1392,21 @@ pub struct WithSampleIds<'a, T> {
 }
 
 impl<'a, 'm> ToPandasEntry
-    for WithMetadata<
+    for WithModelingContext<
         'm,
         WithSampleIds<'a, &'a ommx::SampledDecisionVariable>,
-        DecisionVariableMetadata,
+        DecisionVariableLabel,
     >
 {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let dv = self.item.item;
-        let m = self.metadata;
+        let m = self.context;
         let dict = PyDict::new(py);
         dict.set_item("id", dv.id().into_inner())?;
         set_kind(&dict, *dv.kind())?;
         dict.set_item("lower", dv.bound().lower())?;
         dict.set_item("upper", dv.bound().upper())?;
-        set_metadata(
+        set_label_columns(
             &dict,
             m.name.as_deref(),
             &m.subscripts,
@@ -1418,20 +1422,20 @@ impl<'a, 'm> ToPandasEntry
 }
 
 impl<'a, 'm> ToPandasEntry
-    for WithMetadata<
+    for WithModelingContext<
         'm,
         WithSampleIds<'a, (ommx::ConstraintID, &'a ommx::SampledConstraint)>,
-        ConstraintMetadata,
+        ConstraintContext,
     >
 {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let (id, sc) = &self.item.item;
-        let m = self.metadata;
+        let m = &self.context.label;
         let dict = PyDict::new(py);
         dict.set_item("id", id.into_inner())?;
         set_equality(&dict, sc.equality)?;
         set_used_ids(&dict, &sc.stage.used_decision_variable_ids)?;
-        set_metadata(
+        set_label_columns(
             &dict,
             m.name.as_deref(),
             &m.subscripts,
@@ -1449,19 +1453,19 @@ impl<'a, 'm> ToPandasEntry
 }
 
 impl<'a, 'm> ToPandasEntry
-    for WithMetadata<
+    for WithModelingContext<
         'm,
         WithSampleIds<'a, &'a ommx::SampledNamedFunction>,
-        ommx::NamedFunctionMetadata,
+        ommx::NamedFunctionLabel,
     >
 {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let nf = self.item.item;
-        let m = self.metadata;
+        let m = self.context;
         let dict = PyDict::new(py);
         dict.set_item("id", nf.id().into_inner())?;
         set_used_ids(&dict, nf.used_decision_variable_ids())?;
-        set_metadata(
+        set_label_columns(
             &dict,
             m.name.as_deref(),
             &m.subscripts,

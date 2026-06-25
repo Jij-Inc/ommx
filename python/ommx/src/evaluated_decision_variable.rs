@@ -4,19 +4,19 @@ use pyo3::prelude::*;
 #[pyclass]
 pub struct EvaluatedDecisionVariable(
     pub ommx::EvaluatedDecisionVariable,
-    pub ommx::DecisionVariableMetadata,
+    pub ommx::DecisionVariableLabel,
 );
 
 impl EvaluatedDecisionVariable {
     pub fn standalone(inner: ommx::EvaluatedDecisionVariable) -> Self {
-        Self(inner, ommx::DecisionVariableMetadata::default())
+        Self(inner, ommx::DecisionVariableLabel::default())
     }
 
     pub fn from_parts(
         inner: ommx::EvaluatedDecisionVariable,
-        metadata: ommx::DecisionVariableMetadata,
+        label: ommx::DecisionVariableLabel,
     ) -> Self {
-        Self(inner, metadata)
+        Self(inner, label)
     }
 }
 

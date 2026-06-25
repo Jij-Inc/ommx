@@ -1,6 +1,6 @@
 use super::*;
 use crate::{
-    constraint::{ConstraintMetadata, RemovedReason},
+    constraint::{ConstraintContext, RemovedReason},
     constraint_hints::ConstraintHints,
     constraint_type::ConstraintCollection,
     parse::{as_variable_id, Parse, ParseError, RawParseError},
@@ -37,35 +37,35 @@ fn convert_hints_to_collections(
     Ok((one_hot_active, sos1_active, absorbed_constraint_ids))
 }
 
-fn drain_absorbed_hint_metadata(
+fn drain_absorbed_hint_context(
     hints: &ConstraintHints,
     absorbed_ids: &std::collections::BTreeSet<ConstraintID>,
-    regular_metadata: &mut crate::ConstraintMetadataStore<ConstraintID>,
+    regular_context: &mut crate::ConstraintContextStore<ConstraintID>,
 ) -> (
-    crate::ConstraintMetadataStore<crate::OneHotConstraintID>,
-    crate::ConstraintMetadataStore<crate::Sos1ConstraintID>,
+    crate::ConstraintContextStore<crate::OneHotConstraintID>,
+    crate::ConstraintContextStore<crate::Sos1ConstraintID>,
 ) {
-    let mut one_hot_metadata = crate::ConstraintMetadataStore::default();
-    let mut sos1_metadata = crate::ConstraintMetadataStore::default();
+    let mut one_hot_context = crate::ConstraintContextStore::default();
+    let mut sos1_context = crate::ConstraintContextStore::default();
 
     for hint in &hints.one_hot_constraints {
-        one_hot_metadata.insert(
+        one_hot_context.insert(
             crate::OneHotConstraintID::from(*hint.id),
-            regular_metadata.remove(hint.id),
+            regular_context.remove(hint.id),
         );
     }
     for hint in &hints.sos1_constraints {
-        sos1_metadata.insert(
+        sos1_context.insert(
             crate::Sos1ConstraintID::from(*hint.binary_constraint_id),
-            regular_metadata.remove(hint.binary_constraint_id),
+            regular_context.remove(hint.binary_constraint_id),
         );
     }
 
     for id in absorbed_ids {
-        regular_metadata.remove(*id);
+        regular_context.remove(*id);
     }
 
-    (one_hot_metadata, sos1_metadata)
+    (one_hot_context, sos1_context)
 }
 
 impl Parse for v1::instance::Sense {
@@ -116,49 +116,50 @@ impl From<Sense> for i32 {
     }
 }
 
-/// Build a v1 `Constraint` from per-element data plus drained metadata.
+/// Build a v1 `Constraint` from per-element data plus drained context.
 ///
-/// Per-element constraint structs no longer carry metadata; the enclosing
+/// Per-element constraint structs no longer carry context; the enclosing
 /// collection is the canonical source. Serialization paths fetch the
-/// metadata from the collection's [`ConstraintMetadataStore`] and join it
+/// context from the collection's [`ConstraintContextStore`] and join it
 /// at this boundary.
 pub(crate) fn constraint_to_v1(
     id: ConstraintID,
     value: Constraint,
-    metadata: ConstraintMetadata,
+    context: ConstraintContext,
 ) -> v1::Constraint {
+    let label = context.label;
     v1::Constraint {
         id: id.into_inner(),
         equality: value.equality.into(),
         function: Some(value.stage.function.into()),
-        name: metadata.name,
-        subscripts: metadata.subscripts,
-        parameters: metadata.parameters.into_iter().collect(),
-        description: metadata.description,
+        name: label.name,
+        subscripts: label.subscripts,
+        parameters: label.parameters.into_iter().collect(),
+        description: label.description,
     }
 }
 
 pub(crate) fn removed_constraint_to_v1(
     id: ConstraintID,
     constraint: Constraint,
-    metadata: ConstraintMetadata,
+    context: ConstraintContext,
     removed_reason: RemovedReason,
 ) -> v1::RemovedConstraint {
     v1::RemovedConstraint {
-        constraint: Some(constraint_to_v1(id, constraint, metadata)),
+        constraint: Some(constraint_to_v1(id, constraint, context)),
         removed_reason: removed_reason.reason,
         removed_reason_parameters: removed_reason.parameters.into_iter().collect(),
     }
 }
 
 // NOTE: There are intentionally no `impl From<(ConstraintID, Constraint)>
-// for v1::Constraint` (or `v1::RemovedConstraint`). v3 keeps metadata at
+// for v1::Constraint` (or `v1::RemovedConstraint`). v3 keeps context at
 // the collection layer, so a per-element conversion would have to default
-// every metadata field — silently dropping any caller-supplied metadata.
+// every context field — silently dropping any caller-supplied context.
 // Callers must instead go through [`constraint_to_v1`] /
-// [`removed_constraint_to_v1`], which take the metadata explicitly.
+// [`removed_constraint_to_v1`], which take the context explicitly.
 // `From<Instance> for v1::Instance` (above) drains the SoA store and
-// threads the metadata through these helpers.
+// threads the context through these helpers.
 
 impl Parse for v1::Instance {
     type Output = Instance;
@@ -169,9 +170,9 @@ impl Parse for v1::Instance {
         crate::parse::validate_extension_annotations(&self.annotations, message)?;
         let sense = self.sense().parse_as(&(), message, "sense")?;
 
-        let (decision_variables, variable_metadata): (
+        let (decision_variables, variable_labels): (
             BTreeMap<VariableID, DecisionVariable>,
-            crate::VariableMetadataStore,
+            crate::VariableLabelStore,
         ) = self
             .decision_variables
             .parse_as(&(), message, "decision_variables")?;
@@ -195,9 +196,9 @@ impl Parse for v1::Instance {
             }
         }
 
-        let (constraints, mut constraint_metadata): (
+        let (constraints, mut constraint_context): (
             BTreeMap<ConstraintID, Constraint>,
-            crate::ConstraintMetadataStore<ConstraintID>,
+            crate::ConstraintContextStore<ConstraintID>,
         ) = self.constraints.parse_as(&(), message, "constraints")?;
 
         // Validate that all variables used in constraints are defined as decision variables
@@ -212,24 +213,24 @@ impl Parse for v1::Instance {
             }
         }
         // `parse_as` for `Vec<v1::RemovedConstraint>` returns the active constraints
-        // joined with metadata + removed reason. Strip metadata into the SoA store
+        // joined with context + removed reason. Strip context into the SoA store
         // so the collection-level `(active, removed)` shape stays uniform.
-        let removed_constraints_with_metadata: BTreeMap<
+        let removed_constraints_with_context: BTreeMap<
             ConstraintID,
-            (Constraint, ConstraintMetadata, RemovedReason),
+            (Constraint, ConstraintContext, RemovedReason),
         > = self
             .removed_constraints
             .parse_as(&constraints, message, "removed_constraints")?;
         let mut removed_constraints: BTreeMap<ConstraintID, (Constraint, RemovedReason)> =
             BTreeMap::new();
-        for (id, (c, metadata, reason)) in removed_constraints_with_metadata {
-            constraint_metadata.insert(id, metadata);
+        for (id, (c, context, reason)) in removed_constraints_with_context {
+            constraint_context.insert(id, context);
             removed_constraints.insert(id, (c, reason));
         }
 
-        let (named_functions, named_function_metadata): (
+        let (named_functions, named_function_labels): (
             BTreeMap<NamedFunctionID, NamedFunction>,
-            crate::named_function::NamedFunctionMetadataStore,
+            crate::named_function::NamedFunctionLabelStore,
         ) = self
             .named_functions
             .parse_as(&(), message, "named_functions")?;
@@ -269,11 +270,8 @@ impl Parse for v1::Instance {
             convert_hints_to_collections(&constraint_hints).map_err(|e| {
                 RawParseError::InvalidInstance(e.to_string()).context(message, "constraint_hints")
             })?;
-        let (one_hot_metadata, sos1_metadata) = drain_absorbed_hint_metadata(
-            &constraint_hints,
-            &absorbed_ids,
-            &mut constraint_metadata,
-        );
+        let (one_hot_context, sos1_context) =
+            drain_absorbed_hint_context(&constraint_hints, &absorbed_ids, &mut constraint_context);
         // Remove regular constraints that are absorbed by OneHot/SOS1
         for id in &absorbed_ids {
             constraints.remove(id);
@@ -283,28 +281,28 @@ impl Parse for v1::Instance {
             sense,
             objective,
             decision_variables,
-            variable_metadata,
-            constraint_collection: ConstraintCollection::with_metadata(
+            variable_labels,
+            constraint_collection: ConstraintCollection::with_context(
                 constraints,
                 removed_constraints,
-                constraint_metadata,
+                constraint_context,
             )
             .map_err(|e| {
                 RawParseError::InvalidInstance(e.to_string()).context(message, "constraints")
             })?,
             indicator_constraint_collection: Default::default(),
-            one_hot_constraint_collection: ConstraintCollection::with_metadata(
+            one_hot_constraint_collection: ConstraintCollection::with_context(
                 one_hot_active,
                 BTreeMap::new(),
-                one_hot_metadata,
+                one_hot_context,
             )
             .map_err(|e| {
                 RawParseError::InvalidInstance(e.to_string()).context(message, "constraint_hints")
             })?,
-            sos1_constraint_collection: ConstraintCollection::with_metadata(
+            sos1_constraint_collection: ConstraintCollection::with_context(
                 sos1_active,
                 BTreeMap::new(),
-                sos1_metadata,
+                sos1_context,
             )
             .map_err(|e| {
                 RawParseError::InvalidInstance(e.to_string()).context(message, "constraint_hints")
@@ -314,7 +312,7 @@ impl Parse for v1::Instance {
             description: self.description,
             annotations: self.annotations,
             named_functions,
-            named_function_metadata,
+            named_function_labels,
         })
     }
 }
@@ -328,33 +326,33 @@ impl TryFrom<v1::Instance> for Instance {
 
 impl From<Instance> for v1::Instance {
     fn from(value: Instance) -> Self {
-        // Drain per-element data and join with metadata from the SoA stores.
-        let variable_metadata = value.variable_metadata;
+        // Drain per-element data and join with labels/context from the SoA stores.
+        let variable_labels = value.variable_labels;
         let decision_variables = value
             .decision_variables
             .into_iter()
             .map(|(id, dv)| {
-                let metadata = variable_metadata.collect_for(id);
-                crate::decision_variable::parse::decision_variable_to_v1(dv, metadata)
+                let label = variable_labels.collect_for(id);
+                crate::decision_variable::parse::decision_variable_to_v1(dv, label)
             })
             .collect();
-        let (active, removed, mut constraint_metadata) = value.constraint_collection.into_parts();
+        let (active, removed, mut constraint_context) = value.constraint_collection.into_parts();
         let constraints = active
             .into_iter()
-            .map(|(id, c)| constraint_to_v1(id, c, constraint_metadata.remove(id)))
+            .map(|(id, c)| constraint_to_v1(id, c, constraint_context.remove(id)))
             .collect();
-        let mut named_function_metadata = value.named_function_metadata;
+        let mut named_function_labels = value.named_function_labels;
         let named_functions = value
             .named_functions
             .into_iter()
             .map(|(id, nf)| {
-                let metadata = named_function_metadata.remove(id);
-                crate::named_function::parse::named_function_to_v1(nf, metadata)
+                let label = named_function_labels.remove(id);
+                crate::named_function::parse::named_function_to_v1(nf, label)
             })
             .collect();
         let removed_constraints = removed
             .into_iter()
-            .map(|(id, (c, r))| removed_constraint_to_v1(id, c, constraint_metadata.remove(id), r))
+            .map(|(id, (c, r))| removed_constraint_to_v1(id, c, constraint_context.remove(id), r))
             .collect();
         let decision_variable_dependency = value
             .decision_variable_dependency
@@ -404,9 +402,9 @@ impl Parse for v1::ParametricInstance {
         crate::parse::validate_extension_annotations(&self.annotations, message)?;
         let sense = self.sense().parse_as(&(), message, "sense")?;
 
-        let (decision_variables, variable_metadata): (
+        let (decision_variables, variable_labels): (
             BTreeMap<VariableID, DecisionVariable>,
-            crate::VariableMetadataStore,
+            crate::VariableLabelStore,
         ) = self
             .decision_variables
             .parse_as(&(), message, "decision_variables")?;
@@ -453,9 +451,9 @@ impl Parse for v1::ParametricInstance {
             }
         }
 
-        let (constraints, mut constraint_metadata): (
+        let (constraints, mut constraint_context): (
             BTreeMap<ConstraintID, Constraint>,
-            crate::ConstraintMetadataStore<ConstraintID>,
+            crate::ConstraintContextStore<ConstraintID>,
         ) = self.constraints.parse_as(&(), message, "constraints")?;
 
         // Validate that all variables used in constraints are defined (either as decision variables or parameters)
@@ -470,24 +468,24 @@ impl Parse for v1::ParametricInstance {
             }
         }
 
-        // Drain removed-constraint metadata into the SoA store, then keep
-        // (active, removed) tuples without metadata for the collection.
-        let removed_constraints_with_metadata: BTreeMap<
+        // Drain removed-constraint context into the SoA store, then keep
+        // (active, removed) tuples without context for the collection.
+        let removed_constraints_with_context: BTreeMap<
             ConstraintID,
-            (Constraint, ConstraintMetadata, RemovedReason),
+            (Constraint, ConstraintContext, RemovedReason),
         > = self
             .removed_constraints
             .parse_as(&constraints, message, "removed_constraints")?;
         let mut removed_constraints: BTreeMap<ConstraintID, (Constraint, RemovedReason)> =
             BTreeMap::new();
-        for (id, (c, metadata, reason)) in removed_constraints_with_metadata {
-            constraint_metadata.insert(id, metadata);
+        for (id, (c, context, reason)) in removed_constraints_with_context {
+            constraint_context.insert(id, context);
             removed_constraints.insert(id, (c, reason));
         }
 
-        let (named_functions, named_function_metadata): (
+        let (named_functions, named_function_labels): (
             BTreeMap<NamedFunctionID, NamedFunction>,
-            crate::named_function::NamedFunctionMetadataStore,
+            crate::named_function::NamedFunctionLabelStore,
         ) = self
             .named_functions
             .parse_as(&(), message, "named_functions")?;
@@ -527,11 +525,8 @@ impl Parse for v1::ParametricInstance {
             convert_hints_to_collections(&constraint_hints).map_err(|e| {
                 RawParseError::InvalidInstance(e.to_string()).context(message, "constraint_hints")
             })?;
-        let (one_hot_metadata, sos1_metadata) = drain_absorbed_hint_metadata(
-            &constraint_hints,
-            &absorbed_ids,
-            &mut constraint_metadata,
-        );
+        let (one_hot_context, sos1_context) =
+            drain_absorbed_hint_context(&constraint_hints, &absorbed_ids, &mut constraint_context);
         // Remove regular constraints that are absorbed by OneHot/SOS1
         for id in &absorbed_ids {
             constraints.remove(id);
@@ -542,34 +537,34 @@ impl Parse for v1::ParametricInstance {
             objective,
             decision_variables,
             parameters,
-            variable_metadata,
-            constraint_collection: ConstraintCollection::with_metadata(
+            variable_labels,
+            constraint_collection: ConstraintCollection::with_context(
                 constraints,
                 removed_constraints,
-                constraint_metadata,
+                constraint_context,
             )
             .map_err(|e| {
                 RawParseError::InvalidInstance(e.to_string()).context(message, "constraints")
             })?,
             indicator_constraint_collection: Default::default(),
-            one_hot_constraint_collection: ConstraintCollection::with_metadata(
+            one_hot_constraint_collection: ConstraintCollection::with_context(
                 one_hot_active,
                 BTreeMap::new(),
-                one_hot_metadata,
+                one_hot_context,
             )
             .map_err(|e| {
                 RawParseError::InvalidInstance(e.to_string()).context(message, "constraint_hints")
             })?,
-            sos1_constraint_collection: ConstraintCollection::with_metadata(
+            sos1_constraint_collection: ConstraintCollection::with_context(
                 sos1_active,
                 BTreeMap::new(),
-                sos1_metadata,
+                sos1_context,
             )
             .map_err(|e| {
                 RawParseError::InvalidInstance(e.to_string()).context(message, "constraint_hints")
             })?,
             named_functions,
-            named_function_metadata,
+            named_function_labels,
             decision_variable_dependency,
             description: self.description,
             annotations: self.annotations,
@@ -584,7 +579,7 @@ impl From<ParametricInstance> for v1::ParametricInstance {
             objective,
             decision_variables,
             parameters,
-            variable_metadata,
+            variable_labels,
             constraint_collection,
             indicator_constraint_collection,
             one_hot_constraint_collection,
@@ -592,7 +587,7 @@ impl From<ParametricInstance> for v1::ParametricInstance {
             decision_variable_dependency,
             description,
             named_functions,
-            named_function_metadata,
+            named_function_labels,
             annotations,
         }: ParametricInstance,
     ) -> Self {
@@ -612,31 +607,31 @@ impl From<ParametricInstance> for v1::ParametricInstance {
         {
             unimplemented!("Serialization of Sos1Constraint to v1 proto is not yet supported");
         }
-        // Drain per-element data and join with metadata from the SoA stores.
+        // Drain per-element data and join with labels/context from the SoA stores.
         // (Same shape as `From<Instance> for v1::Instance` above; a stale
-        // version of this conversion silently dropped both metadata stores.)
+        // version of this conversion silently dropped both sidecar stores.)
         let v1_decision_variables = decision_variables
             .into_iter()
             .map(|(id, dv)| {
-                let metadata = variable_metadata.collect_for(id);
-                crate::decision_variable::parse::decision_variable_to_v1(dv, metadata)
+                let label = variable_labels.collect_for(id);
+                crate::decision_variable::parse::decision_variable_to_v1(dv, label)
             })
             .collect();
-        let (active, removed, mut constraint_metadata) = constraint_collection.into_parts();
+        let (active, removed, mut constraint_context) = constraint_collection.into_parts();
         let v1_constraints = active
             .into_iter()
-            .map(|(id, c)| constraint_to_v1(id, c, constraint_metadata.remove(id)))
+            .map(|(id, c)| constraint_to_v1(id, c, constraint_context.remove(id)))
             .collect();
         let v1_removed_constraints = removed
             .into_iter()
-            .map(|(id, (c, r))| removed_constraint_to_v1(id, c, constraint_metadata.remove(id), r))
+            .map(|(id, (c, r))| removed_constraint_to_v1(id, c, constraint_context.remove(id), r))
             .collect();
-        let mut named_function_metadata = named_function_metadata;
+        let mut named_function_labels = named_function_labels;
         let v1_named_functions = named_functions
             .into_iter()
             .map(|(id, nf)| {
-                let metadata = named_function_metadata.remove(id);
-                crate::named_function::parse::named_function_to_v1(nf, metadata)
+                let label = named_function_labels.remove(id);
+                crate::named_function::parse::named_function_to_v1(nf, label)
             })
             .collect();
         Self {
@@ -682,9 +677,12 @@ mod tests {
         constraint_to_v1(
             ConstraintID::from(id),
             Constraint::equal_to_zero(crate::Function::Zero),
-            ConstraintMetadata {
-                name: Some(name.to_string()),
-                subscripts: vec![id as i64],
+            ConstraintContext {
+                label: crate::ModelingLabel {
+                    name: Some(name.to_string()),
+                    subscripts: vec![id as i64],
+                    ..Default::default()
+                },
                 ..Default::default()
             },
         )
@@ -717,7 +715,7 @@ mod tests {
     }
 
     #[test]
-    fn test_instance_parse_transfers_one_hot_hint_metadata() {
+    fn test_instance_parse_transfers_one_hot_hint_context() {
         let v1_instance = v1::Instance {
             sense: v1::instance::Sense::Minimize as i32,
             objective: Some(crate::Function::Zero.into()),
@@ -738,20 +736,20 @@ mod tests {
         let one_hot_id = crate::OneHotConstraintID::from(1);
 
         assert!(!parsed.constraints().contains_key(&regular_id));
-        assert!(!parsed.constraint_metadata().contains(regular_id));
+        assert!(!parsed.constraint_context().contains(regular_id));
         assert!(parsed.one_hot_constraints().contains_key(&one_hot_id));
         assert_eq!(
-            parsed.one_hot_constraint_metadata().name(one_hot_id),
+            parsed.one_hot_constraint_context().name(one_hot_id),
             Some("exactly_one")
         );
         assert_eq!(
-            parsed.one_hot_constraint_metadata().subscripts(one_hot_id),
+            parsed.one_hot_constraint_context().subscripts(one_hot_id),
             &[1]
         );
     }
 
     #[test]
-    fn test_parametric_instance_parse_transfers_one_hot_hint_metadata() {
+    fn test_parametric_instance_parse_transfers_one_hot_hint_context() {
         let v1_parametric_instance = v1::ParametricInstance {
             sense: v1::instance::Sense::Minimize as i32,
             objective: Some(crate::Function::Zero.into()),
@@ -772,20 +770,20 @@ mod tests {
         let one_hot_id = crate::OneHotConstraintID::from(1);
 
         assert!(!parsed.constraints().contains_key(&regular_id));
-        assert!(!parsed.constraint_metadata().contains(regular_id));
+        assert!(!parsed.constraint_context().contains(regular_id));
         assert!(parsed.one_hot_constraints().contains_key(&one_hot_id));
         assert_eq!(
-            parsed.one_hot_constraint_metadata().name(one_hot_id),
+            parsed.one_hot_constraint_context().name(one_hot_id),
             Some("exactly_one")
         );
         assert_eq!(
-            parsed.one_hot_constraint_metadata().subscripts(one_hot_id),
+            parsed.one_hot_constraint_context().subscripts(one_hot_id),
             &[1]
         );
     }
 
     #[test]
-    fn test_instance_parse_transfers_sos1_binary_hint_metadata_only() {
+    fn test_instance_parse_transfers_sos1_binary_hint_context_only() {
         let v1_instance = v1::Instance {
             sense: v1::instance::Sense::Minimize as i32,
             objective: Some(crate::Function::Zero.into()),
@@ -812,14 +810,14 @@ mod tests {
 
         assert!(!parsed.constraints().contains_key(&binary_id));
         assert!(!parsed.constraints().contains_key(&big_m_id));
-        assert!(!parsed.constraint_metadata().contains(binary_id));
-        assert!(!parsed.constraint_metadata().contains(big_m_id));
+        assert!(!parsed.constraint_context().contains(binary_id));
+        assert!(!parsed.constraint_context().contains(big_m_id));
         assert!(parsed.sos1_constraints().contains_key(&sos1_id));
         assert_eq!(
-            parsed.sos1_constraint_metadata().name(sos1_id),
+            parsed.sos1_constraint_context().name(sos1_id),
             Some("sos1_cardinality")
         );
-        assert_eq!(parsed.sos1_constraint_metadata().subscripts(sos1_id), &[10]);
+        assert_eq!(parsed.sos1_constraint_context().subscripts(sos1_id), &[10]);
     }
 
     #[test]
@@ -1410,17 +1408,17 @@ mod tests {
     }
 
     /// Regression: `From<ParametricInstance> for v1::ParametricInstance`
-    /// must drain both the variable and the constraint metadata stores
+    /// must drain both the variable labels and constraint context stores
     /// onto each per-element proto, the same way `Instance` does. A
-    /// previous version of this conversion bound `variable_metadata: _`
-    /// and `let (.., _metadata) = into_parts()`, silently dropping every
+    /// previous version of this conversion bound `variable_labels: _`
+    /// and `let (.., _context) = into_parts()`, silently dropping every
     /// name / subscript / parameter / description across a bytes
     /// round-trip.
     #[test]
-    fn test_parametric_instance_roundtrip_preserves_metadata() {
+    fn test_parametric_instance_roundtrip_preserves_labels_and_context() {
         use crate::{
-            coeff, linear, Constraint, ConstraintID, ConstraintMetadata, DecisionVariable,
-            Function, ModelingLabel, Sense, VariableID,
+            coeff, linear, Constraint, ConstraintContext, ConstraintID, DecisionVariable, Function,
+            ModelingLabel, Sense, VariableID,
         };
 
         let var_id = VariableID::from(1);
@@ -1440,7 +1438,7 @@ mod tests {
             .unwrap();
 
         instance
-            .set_variable_metadata(
+            .set_variable_label(
                 var_id,
                 ModelingLabel {
                     name: Some("x".to_string()),
@@ -1450,11 +1448,14 @@ mod tests {
             )
             .unwrap();
         instance
-            .set_constraint_metadata(
+            .set_constraint_context(
                 cid,
-                ConstraintMetadata {
-                    name: Some("balance".to_string()),
-                    description: Some("demand-balance row".to_string()),
+                ConstraintContext {
+                    label: ModelingLabel {
+                        name: Some("balance".to_string()),
+                        description: Some("demand-balance row".to_string()),
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
             )
@@ -1463,27 +1464,24 @@ mod tests {
         let bytes = instance.to_bytes();
         let recovered = ParametricInstance::from_bytes(&bytes).unwrap();
 
-        assert_eq!(recovered.variable_metadata().name(var_id), Some("x"));
-        assert_eq!(recovered.variable_metadata().subscripts(var_id), &[0]);
+        assert_eq!(recovered.variable_labels().name(var_id), Some("x"));
+        assert_eq!(recovered.variable_labels().subscripts(var_id), &[0]);
         assert_eq!(
-            recovered.constraint_collection().metadata().name(cid),
+            recovered.constraint_collection().context().name(cid),
             Some("balance"),
         );
         assert_eq!(
-            recovered
-                .constraint_collection()
-                .metadata()
-                .description(cid),
+            recovered.constraint_collection().context().description(cid),
             Some("demand-balance row"),
         );
     }
 
     /// Regression: `From<Instance> for v1::Instance` and the matching
     /// `Parse for v1::Instance` must drain / re-attach the
-    /// `named_function_metadata` SoA store across a bytes round-trip,
-    /// the same way constraint and variable metadata do.
+    /// `named_function_labels` SoA store across a bytes round-trip,
+    /// the same way constraint context and variable labels do.
     #[test]
-    fn test_instance_roundtrip_preserves_named_function_metadata() {
+    fn test_instance_roundtrip_preserves_named_function_labels() {
         use crate::{
             coeff, linear, DecisionVariable, Function, NamedFunctionID, Sense, VariableID,
         };
@@ -1515,12 +1513,12 @@ mod tests {
         let recovered = Instance::from_bytes(&bytes).unwrap();
 
         assert_eq!(
-            recovered.named_function_metadata().name(nf_id),
+            recovered.named_function_labels().name(nf_id),
             Some("offset_x"),
         );
-        assert_eq!(recovered.named_function_metadata().subscripts(nf_id), &[0]);
+        assert_eq!(recovered.named_function_labels().subscripts(nf_id), &[0]);
         assert_eq!(
-            recovered.named_function_metadata().description(nf_id),
+            recovered.named_function_labels().description(nf_id),
             Some("x plus a constant"),
         );
     }

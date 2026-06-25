@@ -1,8 +1,8 @@
 """Tests for AttachedOneHotConstraint and AttachedSos1Constraint write-through wrappers.
 
 These two share the same shape (structural constraints over a `variables` set
-plus metadata), so they are tested together. The bulk of the coverage focuses
-on metadata write-through; kind-specific behavior is just `variables`.
+plus context), so they are tested together. The bulk of the coverage focuses
+on context write-through; kind-specific behavior is just `variables`.
 """
 
 import copy
@@ -56,7 +56,7 @@ def _empty_parametric_instance() -> ParametricInstance:
 # --------------------------------------------------------------------------- #
 
 
-def test_one_hot_add_returns_attached_with_drained_metadata():
+def test_one_hot_add_returns_attached_with_drained_context():
     instance = _empty_instance()
     snapshot = OneHotConstraint(
         variables=[0, 1, 2],
@@ -184,7 +184,7 @@ def test_one_hot_on_parametric_host():
 # --------------------------------------------------------------------------- #
 
 
-def test_sos1_add_returns_attached_with_drained_metadata():
+def test_sos1_add_returns_attached_with_drained_context():
     instance = _empty_instance()
     snapshot = Sos1Constraint(
         variables=[0, 1, 2],

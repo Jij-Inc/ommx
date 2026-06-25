@@ -36,7 +36,7 @@ def _df_snap(df: pd.DataFrame) -> str:
 
 
 def _instance_all_kinds() -> Instance:
-    """Instance with one constraint of each kind, all carrying metadata."""
+    """Instance with one constraint of each kind, all carrying context."""
     x = [
         DecisionVariable.binary(0, name="x0"),
         DecisionVariable.binary(1, name="x1"),
@@ -119,7 +119,7 @@ def _sample_set_basic():
 
 @pytest.mark.parametrize("kind", ["regular", "indicator", "one_hot", "sos1"])
 def test_instance_constraints_df_kind(snapshot, kind):
-    """Default `include=` (metadata + parameters); index is `{kind}_constraint_id`."""
+    """Default `include=` (label + parameters); index is `{kind}_constraint_id`."""
     assert _df_snap(_instance_all_kinds().constraints_df(kind=kind)) == snapshot
 
 
@@ -143,14 +143,14 @@ def test_instance_constraints_df_unknown_include_flag():
 
 
 def test_instance_constraints_df_include_empty(snapshot):
-    """`include=[]` strips metadata + parameters columns; only core columns remain."""
+    """`include=[]` strips label + parameters columns; only core columns remain."""
     assert _df_snap(_instance_all_kinds().constraints_df(include=[])) == snapshot
 
 
-def test_instance_constraints_df_include_metadata_only(snapshot):
-    """`include=("metadata",)` keeps name/subscripts/description, drops parameters."""
+def test_instance_constraints_df_include_label_only(snapshot):
+    """`include=("label",)` keeps name/subscripts/description, drops parameters."""
     assert (
-        _df_snap(_instance_all_kinds().constraints_df(include=["metadata"])) == snapshot
+        _df_snap(_instance_all_kinds().constraints_df(include=["label"])) == snapshot
     )
 
 
@@ -177,7 +177,7 @@ def test_instance_constraints_df_removed_true_includes_both(snapshot):
     assert _df_snap(_instance_with_removed().constraints_df(removed=True)) == snapshot
 
 
-def test_instance_constraints_df_removed_true_no_metadata(snapshot):
+def test_instance_constraints_df_removed_true_no_label(snapshot):
     """`removed=True` together with `include=[]` keeps removed_reason columns
     (the `removed=True` flag overrides include= for `removed_reason`)."""
     assert (
@@ -219,7 +219,7 @@ def test_instance_constraints_df_removed_reason_active_only_keeps_column(
     guard against the column silently disappearing when no row in
     the view carries a reason."""
     df = _instance_all_kinds().constraints_df(
-        kind="regular", include=["metadata", "removed_reason"]
+        kind="regular", include=["label", "removed_reason"]
     )
     assert "removed_reason" in df.columns
     assert _df_snap(df) == snapshot
@@ -292,7 +292,7 @@ def test_parametric_instance_constraints_df_special_kinds_empty(
 @pytest.mark.parametrize("kind", ["regular", "indicator", "one_hot", "sos1"])
 def test_solution_constraints_df_kind(snapshot, kind):
     """`Solution.constraints_df(kind=...)` — evaluated stage core columns +
-    metadata. No `removed=` parameter at this stage."""
+    context. No `removed=` parameter at this stage."""
     assert _df_snap(_solution_basic().constraints_df(kind=kind)) == snapshot
 
 
@@ -308,7 +308,7 @@ def test_solution_constraints_df_removed_reason_include(snapshot):
     assert (
         _df_snap(
             _solution_with_removed().constraints_df(
-                include=["metadata", "removed_reason"]
+                include=["label", "removed_reason"]
             )
         )
         == snapshot
@@ -322,7 +322,7 @@ def test_solution_constraints_df_removed_reason_no_removals_keeps_column(snapsho
     column silently disappearing when no row in the view carries a
     reason."""
     df = _solution_basic().constraints_df(
-        kind="regular", include=["metadata", "removed_reason"]
+        kind="regular", include=["label", "removed_reason"]
     )
     assert "removed_reason" in df.columns
     assert _df_snap(df) == snapshot

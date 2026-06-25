@@ -88,7 +88,7 @@ pub enum SampleSetError {
     },
 
     #[error("{message}")]
-    InvalidMetadata { message: String },
+    InvalidSidecar { message: String },
 }
 
 /// Multiple sample solution results with deduplication
@@ -107,9 +107,9 @@ pub enum SampleSetError {
 pub struct SampleSet {
     #[getset(get = "pub")]
     decision_variables: BTreeMap<VariableID, SampledDecisionVariable>,
-    /// Per-variable auxiliary metadata (sibling of [`Self::decision_variables`]).
+    /// Per-variable modeling labels (sibling of [`Self::decision_variables`]).
     #[getset(get = "pub")]
-    variable_metadata: crate::decision_variable::VariableMetadataStore,
+    variable_labels: crate::decision_variable::VariableLabelStore,
     #[getset(get = "pub")]
     objectives: Sampled<f64>,
     #[getset(get = "pub")]
@@ -122,9 +122,9 @@ pub struct SampleSet {
     sos1_constraints: SampledCollection<crate::Sos1Constraint>,
     #[getset(get = "pub")]
     named_functions: BTreeMap<NamedFunctionID, SampledNamedFunction>,
-    /// Per-named-function auxiliary metadata (sibling of [`Self::named_functions`]).
+    /// Per-named-function modeling labels (sibling of [`Self::named_functions`]).
     #[getset(get = "pub")]
-    named_function_metadata: crate::named_function::NamedFunctionMetadataStore,
+    named_function_labels: crate::named_function::NamedFunctionLabelStore,
     #[getset(get = "pub")]
     sense: Sense,
     #[getset(get = "pub")]
@@ -262,42 +262,42 @@ impl SampleSet {
         Some(unsafe {
             Solution::builder()
                 .evaluated_constraints_collection(
-                    EvaluatedCollection::with_metadata(
+                    EvaluatedCollection::with_context(
                         evaluated_constraints,
                         self.constraints.removed_reasons().clone(),
-                        self.constraints.metadata().clone(),
+                        self.constraints.context().clone(),
                     )
                     .expect("SampleSet sidecars must reference constraints present in this sample"),
                 )
                 .evaluated_indicator_constraints_collection(
-                    EvaluatedCollection::with_metadata(
+                    EvaluatedCollection::with_context(
                         evaluated_indicator_constraints,
                         self.indicator_constraints.removed_reasons().clone(),
-                        self.indicator_constraints.metadata().clone(),
+                        self.indicator_constraints.context().clone(),
                     )
                     .expect("SampleSet sidecars must reference constraints present in this sample"),
                 )
                 .evaluated_one_hot_constraints_collection(
-                    EvaluatedCollection::with_metadata(
+                    EvaluatedCollection::with_context(
                         evaluated_one_hot_constraints,
                         self.one_hot_constraints.removed_reasons().clone(),
-                        self.one_hot_constraints.metadata().clone(),
+                        self.one_hot_constraints.context().clone(),
                     )
                     .expect("SampleSet sidecars must reference constraints present in this sample"),
                 )
                 .evaluated_sos1_constraints_collection(
-                    EvaluatedCollection::with_metadata(
+                    EvaluatedCollection::with_context(
                         evaluated_sos1_constraints,
                         self.sos1_constraints.removed_reasons().clone(),
-                        self.sos1_constraints.metadata().clone(),
+                        self.sos1_constraints.context().clone(),
                     )
                     .expect("SampleSet sidecars must reference constraints present in this sample"),
                 )
                 .objective(objective)
                 .evaluated_named_functions(evaluated_named_functions)
                 .decision_variables(decision_variables)
-                .variable_metadata(self.variable_metadata.clone())
-                .named_function_metadata(self.named_function_metadata.clone())
+                .variable_labels(self.variable_labels.clone())
+                .named_function_labels(self.named_function_labels.clone())
                 .sense(sense)
                 .build_unchecked()
                 .expect("SampleSet invariants guarantee Solution invariants")
@@ -375,14 +375,14 @@ impl SampleSet {
 #[derive(Debug, Clone, Default)]
 pub struct SampleSetBuilder {
     decision_variables: Option<BTreeMap<VariableID, SampledDecisionVariable>>,
-    variable_metadata: crate::decision_variable::VariableMetadataStore,
+    variable_labels: crate::decision_variable::VariableLabelStore,
     objectives: Option<Sampled<f64>>,
     constraints: Option<SampledCollection<Constraint>>,
     indicator_constraints: SampledCollection<IndicatorConstraint>,
     one_hot_constraints: SampledCollection<crate::OneHotConstraint>,
     sos1_constraints: SampledCollection<crate::Sos1Constraint>,
     named_functions: BTreeMap<NamedFunctionID, SampledNamedFunction>,
-    named_function_metadata: crate::named_function::NamedFunctionMetadataStore,
+    named_function_labels: crate::named_function::NamedFunctionLabelStore,
     sense: Option<Sense>,
 }
 
@@ -393,11 +393,11 @@ impl SampleSetBuilder {
     }
 
     /// Sets the per-variable modeling-label store.
-    pub fn variable_metadata(
+    pub fn variable_labels(
         mut self,
-        variable_metadata: crate::decision_variable::VariableMetadataStore,
+        variable_labels: crate::decision_variable::VariableLabelStore,
     ) -> Self {
-        self.variable_metadata = variable_metadata;
+        self.variable_labels = variable_labels;
         self
     }
 
@@ -507,11 +507,11 @@ impl SampleSetBuilder {
     }
 
     /// Sets the per-named-function modeling-label store.
-    pub fn named_function_metadata(
+    pub fn named_function_labels(
         mut self,
-        named_function_metadata: crate::named_function::NamedFunctionMetadataStore,
+        named_function_labels: crate::named_function::NamedFunctionLabelStore,
     ) -> Self {
-        self.named_function_metadata = named_function_metadata;
+        self.named_function_labels = named_function_labels;
         self
     }
 
@@ -568,11 +568,11 @@ impl SampleSetBuilder {
         }
         let decision_variable_ids = decision_variables.keys().copied().collect::<BTreeSet<_>>();
         crate::modeling_label::validate_modeling_label_ids(
-            &self.variable_metadata,
+            &self.variable_labels,
             &decision_variable_ids,
             "decision variable",
         )
-        .map_err(|e| SampleSetError::InvalidMetadata {
+        .map_err(|e| SampleSetError::InvalidSidecar {
             message: e.to_string(),
         })?;
         let named_function_ids = self
@@ -581,30 +581,30 @@ impl SampleSetBuilder {
             .copied()
             .collect::<BTreeSet<_>>();
         crate::modeling_label::validate_modeling_label_ids(
-            &self.named_function_metadata,
+            &self.named_function_labels,
             &named_function_ids,
             "named function",
         )
-        .map_err(|e| SampleSetError::InvalidMetadata {
+        .map_err(|e| SampleSetError::InvalidSidecar {
             message: e.to_string(),
         })?;
         constraints
-            .validate_metadata_ids()
-            .map_err(|e| SampleSetError::InvalidMetadata {
+            .validate_context_ids()
+            .map_err(|e| SampleSetError::InvalidSidecar {
                 message: e.to_string(),
             })?;
         self.indicator_constraints
-            .validate_metadata_ids()
-            .map_err(|e| SampleSetError::InvalidMetadata {
+            .validate_context_ids()
+            .map_err(|e| SampleSetError::InvalidSidecar {
                 message: e.to_string(),
             })?;
         self.one_hot_constraints
-            .validate_metadata_ids()
-            .map_err(|e| SampleSetError::InvalidMetadata {
+            .validate_context_ids()
+            .map_err(|e| SampleSetError::InvalidSidecar {
                 message: e.to_string(),
             })?;
-        self.sos1_constraints.validate_metadata_ids().map_err(|e| {
-            SampleSetError::InvalidMetadata {
+        self.sos1_constraints.validate_context_ids().map_err(|e| {
+            SampleSetError::InvalidSidecar {
                 message: e.to_string(),
             }
         })?;
@@ -669,14 +669,14 @@ impl SampleSetBuilder {
 
         Ok(SampleSet {
             decision_variables,
-            variable_metadata: self.variable_metadata.clone(),
+            variable_labels: self.variable_labels.clone(),
             objectives,
             constraints,
             indicator_constraints: self.indicator_constraints,
             one_hot_constraints: self.one_hot_constraints,
             sos1_constraints: self.sos1_constraints,
             named_functions: self.named_functions,
-            named_function_metadata: self.named_function_metadata.clone(),
+            named_function_labels: self.named_function_labels.clone(),
             sense,
             feasible,
             feasible_relaxed,
@@ -732,14 +732,14 @@ impl SampleSetBuilder {
 
         Ok(SampleSet {
             decision_variables,
-            variable_metadata: self.variable_metadata.clone(),
+            variable_labels: self.variable_labels.clone(),
             objectives,
             constraints,
             indicator_constraints: self.indicator_constraints,
             one_hot_constraints: self.one_hot_constraints,
             sos1_constraints: self.sos1_constraints,
             named_functions: self.named_functions,
-            named_function_metadata: self.named_function_metadata.clone(),
+            named_function_labels: self.named_function_labels.clone(),
             sense,
             feasible,
             feasible_relaxed,
@@ -836,12 +836,12 @@ mod tests {
 
     #[test]
     fn builder_rejects_orphan_variable_label_id() {
-        let mut variable_metadata = crate::VariableMetadataStore::default();
-        variable_metadata.set_name(VariableID::from(99), "orphan");
+        let mut variable_labels = crate::VariableLabelStore::default();
+        variable_labels.set_name(VariableID::from(99), "orphan");
 
         let err = SampleSet::builder()
             .decision_variables(BTreeMap::new())
-            .variable_metadata(variable_metadata)
+            .variable_labels(variable_labels)
             .objectives(crate::Sampled::default())
             .constraints(BTreeMap::new())
             .sense(Sense::Minimize)
@@ -858,7 +858,7 @@ mod tests {
     /// Regression: `SampleSet::get(sid)` must propagate variable modeling
     /// labels, constraint label/provenance sidecars, and removed reasons into
     /// the returned per-sample `Solution`. A previous version threaded
-    /// `variable_metadata` only and rebuilt the constraint collections via
+    /// `variable_labels` only and rebuilt the constraint collections via
     /// `EvaluatedCollection::new(map, BTreeMap::new())`, silently discarding
     /// constraint labels, provenance, and relaxed-state semantics.
     #[test]
@@ -877,9 +877,9 @@ mod tests {
             SampledDecisionVariable::new(dv, x_samples, ATol::default()).unwrap(),
         );
 
-        let mut variable_metadata = crate::VariableMetadataStore::default();
-        variable_metadata.set_name(var_id, "x");
-        variable_metadata.set_subscripts(var_id, vec![0]);
+        let mut variable_labels = crate::VariableLabelStore::default();
+        variable_labels.set_name(var_id, "x");
+        variable_labels.set_subscripts(var_id, vec![0]);
 
         // Sampled constraint (constructed directly without going through evaluate)
         let evaluated_per_sample = EvaluatedConstraint {
@@ -909,18 +909,18 @@ mod tests {
         let mut constraints_map = BTreeMap::new();
         constraints_map.insert(cid, sampled_constraint);
 
-        // Build a SampledCollection<Constraint> with metadata via builder
-        let mut constraint_metadata = crate::ConstraintMetadataStore::<ConstraintID>::default();
-        constraint_metadata.set_name(cid, "balance");
-        constraint_metadata.set_description(cid, "demand-balance row");
+        // Build a SampledCollection<Constraint> with context via builder
+        let mut constraint_context = crate::ConstraintContextStore::<ConstraintID>::default();
+        constraint_context.set_name(cid, "balance");
+        constraint_context.set_description(cid, "demand-balance row");
         let removed_reason = crate::RemovedReason {
             reason: "relaxed for test".to_string(),
             parameters: Default::default(),
         };
-        let constraints = crate::constraint_type::SampledCollection::with_metadata(
+        let constraints = crate::constraint_type::SampledCollection::with_context(
             constraints_map,
             BTreeMap::from([(cid, removed_reason)]),
-            constraint_metadata,
+            constraint_context,
         )
         .unwrap();
 
@@ -929,7 +929,7 @@ mod tests {
 
         let sample_set = SampleSet::builder()
             .decision_variables(decision_variables)
-            .variable_metadata(variable_metadata)
+            .variable_labels(variable_labels)
             .objectives(objectives)
             .constraints_collection(constraints)
             .sense(Sense::Minimize)
@@ -943,9 +943,9 @@ mod tests {
         assert!(!solution.feasible());
         assert!(solution.feasible_relaxed());
         assert!(solution.evaluated_constraints().is_removed(&cid));
-        assert_eq!(solution.variable_metadata().name(var_id), Some("x"));
-        assert_eq!(solution.variable_metadata().subscripts(var_id), &[0]);
-        let constraint_meta = solution.evaluated_constraints().metadata();
+        assert_eq!(solution.variable_labels().name(var_id), Some("x"));
+        assert_eq!(solution.variable_labels().subscripts(var_id), &[0]);
+        let constraint_meta = solution.evaluated_constraints().context();
         assert_eq!(constraint_meta.name(cid), Some("balance"));
         assert_eq!(constraint_meta.description(cid), Some("demand-balance row"));
     }

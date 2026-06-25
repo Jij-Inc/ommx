@@ -10,7 +10,7 @@ impl Instance {
     pub fn named_function_names(&self) -> std::collections::BTreeSet<String> {
         self.named_functions
             .keys()
-            .filter_map(|id| self.named_function_metadata().name(*id).map(str::to_owned))
+            .filter_map(|id| self.named_function_labels().name(*id).map(str::to_owned))
             .collect()
     }
 
@@ -40,7 +40,7 @@ impl Instance {
         subscripts: Vec<i64>,
     ) -> Option<&NamedFunction> {
         self.named_functions.iter().find_map(|(id, nf)| {
-            let store = self.named_function_metadata();
+            let store = self.named_function_labels();
             if store.name(*id) == Some(name) && store.subscripts(*id) == subscripts.as_slice() {
                 Some(nf)
             } else {
@@ -82,13 +82,13 @@ impl Instance {
 
         let named_function = NamedFunction { id, function };
         self.named_functions.insert(id, named_function);
-        let metadata = crate::named_function::NamedFunctionMetadata {
+        let label = crate::named_function::NamedFunctionLabel {
             name,
             subscripts,
             parameters,
             description,
         };
-        self.named_function_metadata_mut().insert(id, metadata);
+        self.named_function_labels_mut().insert(id, label);
         Ok(self.named_functions.get_mut(&id).unwrap())
     }
 }
@@ -168,9 +168,9 @@ mod tests {
         let found = instance.get_named_function_by_name("f", vec![1, 2]);
         assert!(found.is_some());
         let found_id = found.unwrap().id;
-        assert_eq!(instance.named_function_metadata().name(found_id), Some("f"));
+        assert_eq!(instance.named_function_labels().name(found_id), Some("f"));
         assert_eq!(
-            instance.named_function_metadata().subscripts(found_id),
+            instance.named_function_labels().subscripts(found_id),
             &[1, 2]
         );
 
@@ -239,7 +239,7 @@ mod tests {
 
         let nf_id = nf.id;
         assert_eq!(nf_id, NamedFunctionID::from(0));
-        let store = instance.named_function_metadata();
+        let store = instance.named_function_labels();
         assert_eq!(store.name(nf_id), Some("obj"));
         assert_eq!(store.subscripts(nf_id), &[0]);
         assert_eq!(store.description(nf_id), Some("test function"));

@@ -17,7 +17,7 @@ use std::collections::{BTreeMap, BTreeSet};
 ///
 /// - Similar to `Solution` rather than the raw `State` message.
 ///   This class contains the sampled values of decision variables with the objective value, constraint violations,
-///   feasibility, and metadata of constraints and decision variables.
+///   feasibility, and modeling labels/context of constraints and decision variables.
 /// - This class is usually created via `Instance.evaluate_samples`.
 ///
 /// # Examples
@@ -230,23 +230,23 @@ impl SampleSet {
     /// Get named functions for compatibility with existing Python code
     #[getter]
     pub fn named_functions(&self) -> Vec<crate::SampledNamedFunction> {
-        let metadata = self.inner.named_function_metadata();
+        let labels = self.inner.named_function_labels();
         self.inner
             .named_functions()
             .iter()
-            .map(|(id, nf)| crate::SampledNamedFunction(nf.clone(), metadata.collect_for(*id)))
+            .map(|(id, nf)| crate::SampledNamedFunction(nf.clone(), labels.collect_for(*id)))
             .collect()
     }
 
     /// Get constraints for compatibility with existing Python code
     #[getter]
     pub fn constraints(&self) -> Vec<crate::SampledConstraint> {
-        let metadata = self.inner.constraints().metadata();
+        let context = self.inner.constraints().context();
         self.inner
             .constraints()
             .iter()
             .map(|(id, constraint)| {
-                crate::SampledConstraint::from_parts(constraint.clone(), metadata.collect_for(*id))
+                crate::SampledConstraint::from_parts(constraint.clone(), context.collect_for(*id))
             })
             .collect()
     }
@@ -254,14 +254,14 @@ impl SampleSet {
     /// Get decision variables for compatibility with existing Python code
     #[getter]
     pub fn decision_variables(&self) -> Vec<crate::SampledDecisionVariable> {
-        let metadata = self.inner.variable_metadata();
+        let labels = self.inner.variable_labels();
         self.inner
             .decision_variables()
             .iter()
             .map(|(id, variable)| {
                 crate::SampledDecisionVariable::from_parts(
                     variable.clone(),
-                    metadata.collect_for(*id),
+                    labels.collect_for(*id),
                 )
             })
             .collect()
@@ -431,12 +431,12 @@ impl SampleSet {
         variable_id: u64,
     ) -> PyResult<crate::SampledDecisionVariable> {
         let var_id = ommx::VariableID::from(variable_id);
-        let metadata = self.inner.variable_metadata();
+        let labels = self.inner.variable_labels();
         self.inner
             .decision_variables()
             .get(&var_id)
             .map(|dv| {
-                crate::SampledDecisionVariable::from_parts(dv.clone(), metadata.collect_for(var_id))
+                crate::SampledDecisionVariable::from_parts(dv.clone(), labels.collect_for(var_id))
             })
             .ok_or_else(|| {
                 pyo3::exceptions::PyKeyError::new_err(format!(
@@ -448,15 +448,12 @@ impl SampleSet {
     /// Get a specific sampled constraint by ID
     pub fn get_constraint_by_id(&self, constraint_id: u64) -> PyResult<crate::SampledConstraint> {
         let constraint_id = ommx::ConstraintID::from(constraint_id);
-        let metadata = self.inner.constraints().metadata();
+        let context = self.inner.constraints().context();
         self.inner
             .constraints()
             .get(&constraint_id)
             .map(|sc| {
-                crate::SampledConstraint::from_parts(
-                    sc.clone(),
-                    metadata.collect_for(constraint_id),
-                )
+                crate::SampledConstraint::from_parts(sc.clone(), context.collect_for(constraint_id))
             })
             .ok_or_else(|| {
                 pyo3::exceptions::PyKeyError::new_err(format!(
@@ -478,7 +475,7 @@ impl SampleSet {
                 crate::SampledNamedFunction(
                     nf.clone(),
                     self.inner
-                        .named_function_metadata()
+                        .named_function_labels()
                         .collect_for(named_function_id),
                 )
             })
@@ -539,13 +536,13 @@ impl SampleSet {
         let ascending = matches!(self.inner.sense(), ommx::Sense::Minimize);
 
         // Build constraint labels
-        let constraint_metadata = self.inner.constraints().metadata();
+        let constraint_context = self.inner.constraints().context();
         let constraint_labels: Vec<(ommx::ConstraintID, String)> = constraints
             .iter()
             .map(|(&id, _sc)| {
-                let label = match constraint_metadata.name(id).filter(|n| !n.is_empty()) {
+                let label = match constraint_context.name(id).filter(|n| !n.is_empty()) {
                     Some(name) => {
-                        let subs = constraint_metadata.subscripts(id);
+                        let subs = constraint_context.subscripts(id);
                         if subs.is_empty() {
                             name.to_string()
                         } else {
@@ -604,11 +601,8 @@ impl SampleSet {
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         let sample_ids = sorted_sample_ids(&self.inner);
-        let var_meta_store = self.inner.variable_metadata().clone();
-        let view: Vec<(
-            ommx::DecisionVariableMetadata,
-            &ommx::SampledDecisionVariable,
-        )> = self
+        let var_meta_store = self.inner.variable_labels().clone();
+        let view: Vec<(ommx::DecisionVariableLabel, &ommx::SampledDecisionVariable)> = self
             .inner
             .decision_variables()
             .iter()
@@ -617,7 +611,7 @@ impl SampleSet {
         entries_to_dataframe(
             py,
             view.iter().map(|(m, dv)| {
-                crate::pandas::WithMetadata::new(
+                crate::pandas::WithModelingContext::new(
                     WithSampleIds {
                         item: *dv,
                         sample_ids: &sample_ids,
@@ -659,12 +653,12 @@ impl SampleSet {
                 sos1_constraints
             ],
             |coll| {
-                let meta = coll.metadata().clone();
+                let meta = coll.context().clone();
                 let removed_reasons = coll.removed_reasons();
                 let mut entries: Vec<Bound<'py, pyo3::types::PyAny>> = Vec::new();
                 for (id, c) in coll.inner().iter() {
                     let m = meta.collect_for(*id);
-                    let dict = crate::pandas::WithMetadata::new(
+                    let dict = crate::pandas::WithModelingContext::new(
                         WithSampleIds {
                             item: (*id, c),
                             sample_ids: &sample_ids,
@@ -699,8 +693,8 @@ impl SampleSet {
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         let sample_ids = sorted_sample_ids(&self.inner);
-        let nf_meta_store = self.inner.named_function_metadata().clone();
-        let nf_meta_view: Vec<(ommx::NamedFunctionMetadata, &ommx::SampledNamedFunction)> = self
+        let nf_meta_store = self.inner.named_function_labels().clone();
+        let nf_meta_view: Vec<(ommx::NamedFunctionLabel, &ommx::SampledNamedFunction)> = self
             .inner
             .named_functions()
             .iter()
@@ -709,7 +703,7 @@ impl SampleSet {
         entries_to_dataframe(
             py,
             nf_meta_view.iter().map(|(m, nf)| {
-                crate::pandas::WithMetadata::new(
+                crate::pandas::WithModelingContext::new(
                     WithSampleIds {
                         item: *nf,
                         sample_ids: &sample_ids,
@@ -722,11 +716,11 @@ impl SampleSet {
         )
     }
 
-    /// Constraint metadata DataFrame (id-indexed). See
-    /// {meth}`ommx.v1.Instance.constraint_metadata_df` for column / `kind=`
-    /// semantics. Reads from the sampled collection's metadata store.
+    /// Constraint context DataFrame (id-indexed). See
+    /// {meth}`ommx.v1.Instance.constraint_context_df` for column / `kind=`
+    /// semantics. Reads from the sampled collection's context store.
     #[pyo3(signature = (kind = ConstraintKind::Regular))]
-    pub fn constraint_metadata_df<'py>(
+    pub fn constraint_context_df<'py>(
         &self,
         py: Python<'py>,
         kind: ConstraintKind,
@@ -742,9 +736,9 @@ impl SampleSet {
                 sos1_constraints
             ],
             |coll| {
-                crate::pandas::constraint_metadata_dataframe(
+                crate::pandas::constraint_context_dataframe(
                     py,
-                    coll.metadata(),
+                    coll.context(),
                     coll.inner().keys().copied(),
                     id_col,
                 )
@@ -772,7 +766,7 @@ impl SampleSet {
             |coll| {
                 crate::pandas::constraint_parameters_dataframe(
                     py,
-                    coll.metadata(),
+                    coll.context(),
                     coll.inner().keys().copied(),
                     id_col,
                 )
@@ -800,7 +794,7 @@ impl SampleSet {
             |coll| {
                 crate::pandas::constraint_provenance_dataframe(
                     py,
-                    coll.metadata(),
+                    coll.context(),
                     coll.inner().keys().copied(),
                     id_col,
                 )
@@ -835,11 +829,11 @@ impl SampleSet {
         )
     }
 
-    /// Decision-variable metadata DataFrame (id-indexed).
-    pub fn variable_metadata_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
-        crate::pandas::variable_metadata_dataframe(
+    /// Decision-variable modeling-label DataFrame (id-indexed).
+    pub fn variable_labels_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
+        crate::pandas::variable_labels_dataframe(
             py,
-            self.inner.variable_metadata(),
+            self.inner.variable_labels(),
             self.inner.decision_variables().keys().copied(),
             "variable_id",
         )
@@ -852,7 +846,7 @@ impl SampleSet {
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         crate::pandas::variable_parameters_dataframe(
             py,
-            self.inner.variable_metadata(),
+            self.inner.variable_labels(),
             self.inner.decision_variables().keys().copied(),
             "variable_id",
         )

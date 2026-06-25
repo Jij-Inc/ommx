@@ -3,14 +3,14 @@
 //! The `AttachedConstraint`, `AttachedDecisionVariable`,
 //! `AttachedIndicatorConstraint`, etc. pyclasses each hold a back-reference to
 //! their parent host (either an `Instance` or a `ParametricInstance`) plus an
-//! id. They share the same metadata read / write surface — the ID type and the
-//! collection-level metadata accessor differ, but the field set
+//! id. They share the same context read / write surface — the ID type and the
+//! collection-level context accessor differ, but the field set
 //! (`name` / `subscripts` / `description` / `parameters` / `provenance`) is
 //! identical.
 //!
 //! [`ConstraintHost`] models the host fork as an enum so a single Python class
-//! per kind covers both hosts, and [`attached_metadata_methods!`] stamps out
-//! the metadata getter / setter boilerplate against a caller-supplied metadata
+//! per kind covers both hosts, and [`attached_constraint_context_methods!`]
+//! stamps out the getter / setter boilerplate against a caller-supplied context
 //! accessor pair.
 
 use crate::{Instance, ParametricInstance};
@@ -19,9 +19,9 @@ use pyo3::prelude::*;
 /// Back-reference to the parent host of an `AttachedX` write-through wrapper.
 ///
 /// Both [`Instance`] and [`ParametricInstance`] expose collection-level
-/// metadata stores under the same getter names (e.g. `constraint_metadata()`)
-/// and owner-checked setters (e.g. `set_constraint_metadata(...)`), so generated
-/// metadata methods can dispatch on the variant without changing the call shape.
+/// context stores under the same getter names (e.g. `constraint_context()`)
+/// and owner-checked setters (e.g. `set_constraint_context(...)`), so generated
+/// context methods can dispatch on the variant without changing the call shape.
 pub enum ConstraintHost {
     Instance(Py<Instance>),
     Parametric(Py<ParametricInstance>),
@@ -37,20 +37,20 @@ impl ConstraintHost {
     }
 }
 
-/// Generate the metadata getters and setters for an `AttachedX` pyclass.
+/// Generate the constraint-context getters and setters for an `AttachedX` pyclass.
 ///
 /// Expects the wrapper struct to have a `host: ConstraintHost` field and an
 /// `id: $ID` field. `$get` / `$set` are the matching method names exposed
 /// by both `Instance` and `ParametricInstance` for reading the relevant
-/// `ConstraintMetadataStore<$ID>` and replacing one ID's metadata (e.g.
-/// `constraint_metadata` / `set_constraint_metadata`).
+/// `ConstraintContextStore<$ID>` and replacing one ID's context (e.g.
+/// `constraint_context` / `set_constraint_context`).
 ///
 /// The macro emits `name` / `subscripts` / `description` / `parameters` /
 /// `provenance` getters and the corresponding `set_*` / `add_*` write-through
 /// setters in a separate `#[pymethods]` block, so call sites can keep
 /// kind-specific accessors in their own `#[pymethods]` block.
 #[macro_export]
-macro_rules! attached_metadata_methods {
+macro_rules! attached_constraint_context_methods {
     ($Self:ident, $ID:ty, $get:ident, $set:ident) => {
         #[pyo3_stub_gen::derive::gen_stub_pymethods]
         #[pymethods]
@@ -118,20 +118,20 @@ macro_rules! attached_metadata_methods {
                 }
             }
 
-            /// Set the name. Writes through to the parent host's SoA metadata store.
+            /// Set the name. Writes through to the parent host's context store.
             pub fn set_name(&self, py: pyo3::Python<'_>, name: String) -> anyhow::Result<()> {
                 match &self.host {
                     $crate::ConstraintHost::Instance(p) => {
                         let mut host = p.borrow_mut(py);
-                        let mut metadata = host.inner.$get().collect_for(self.id);
-                        metadata.name = Some(name);
-                        host.inner.$set(self.id, metadata)?;
+                        let mut context = host.inner.$get().collect_for(self.id);
+                        context.label.name = Some(name);
+                        host.inner.$set(self.id, context)?;
                     }
                     $crate::ConstraintHost::Parametric(p) => {
                         let mut host = p.borrow_mut(py);
-                        let mut metadata = host.inner.$get().collect_for(self.id);
-                        metadata.name = Some(name);
-                        host.inner.$set(self.id, metadata)?;
+                        let mut context = host.inner.$get().collect_for(self.id);
+                        context.label.name = Some(name);
+                        host.inner.$set(self.id, context)?;
                     }
                 }
                 Ok(())
@@ -142,7 +142,7 @@ macro_rules! attached_metadata_methods {
                 self.set_name(py, name)
             }
 
-            /// Set the subscripts. Writes through to the parent host's SoA metadata store.
+            /// Set the subscripts. Writes through to the parent host's context store.
             pub fn set_subscripts(
                 &self,
                 py: pyo3::Python<'_>,
@@ -151,21 +151,21 @@ macro_rules! attached_metadata_methods {
                 match &self.host {
                     $crate::ConstraintHost::Instance(p) => {
                         let mut host = p.borrow_mut(py);
-                        let mut metadata = host.inner.$get().collect_for(self.id);
-                        metadata.subscripts = subscripts;
-                        host.inner.$set(self.id, metadata)?;
+                        let mut context = host.inner.$get().collect_for(self.id);
+                        context.label.subscripts = subscripts;
+                        host.inner.$set(self.id, context)?;
                     }
                     $crate::ConstraintHost::Parametric(p) => {
                         let mut host = p.borrow_mut(py);
-                        let mut metadata = host.inner.$get().collect_for(self.id);
-                        metadata.subscripts = subscripts;
-                        host.inner.$set(self.id, metadata)?;
+                        let mut context = host.inner.$get().collect_for(self.id);
+                        context.label.subscripts = subscripts;
+                        host.inner.$set(self.id, context)?;
                     }
                 }
                 Ok(())
             }
 
-            /// Append subscripts. Writes through to the parent host's SoA metadata store.
+            /// Append subscripts. Writes through to the parent host's context store.
             pub fn add_subscripts(
                 &self,
                 py: pyo3::Python<'_>,
@@ -174,21 +174,21 @@ macro_rules! attached_metadata_methods {
                 match &self.host {
                     $crate::ConstraintHost::Instance(p) => {
                         let mut host = p.borrow_mut(py);
-                        let mut metadata = host.inner.$get().collect_for(self.id);
-                        metadata.subscripts.extend(subscripts);
-                        host.inner.$set(self.id, metadata)?;
+                        let mut context = host.inner.$get().collect_for(self.id);
+                        context.label.subscripts.extend(subscripts);
+                        host.inner.$set(self.id, context)?;
                     }
                     $crate::ConstraintHost::Parametric(p) => {
                         let mut host = p.borrow_mut(py);
-                        let mut metadata = host.inner.$get().collect_for(self.id);
-                        metadata.subscripts.extend(subscripts);
-                        host.inner.$set(self.id, metadata)?;
+                        let mut context = host.inner.$get().collect_for(self.id);
+                        context.label.subscripts.extend(subscripts);
+                        host.inner.$set(self.id, context)?;
                     }
                 }
                 Ok(())
             }
 
-            /// Set the description. Writes through to the parent host's SoA metadata store.
+            /// Set the description. Writes through to the parent host's context store.
             pub fn set_description(
                 &self,
                 py: pyo3::Python<'_>,
@@ -197,15 +197,15 @@ macro_rules! attached_metadata_methods {
                 match &self.host {
                     $crate::ConstraintHost::Instance(p) => {
                         let mut host = p.borrow_mut(py);
-                        let mut metadata = host.inner.$get().collect_for(self.id);
-                        metadata.description = Some(description);
-                        host.inner.$set(self.id, metadata)?;
+                        let mut context = host.inner.$get().collect_for(self.id);
+                        context.label.description = Some(description);
+                        host.inner.$set(self.id, context)?;
                     }
                     $crate::ConstraintHost::Parametric(p) => {
                         let mut host = p.borrow_mut(py);
-                        let mut metadata = host.inner.$get().collect_for(self.id);
-                        metadata.description = Some(description);
-                        host.inner.$set(self.id, metadata)?;
+                        let mut context = host.inner.$get().collect_for(self.id);
+                        context.label.description = Some(description);
+                        host.inner.$set(self.id, context)?;
                     }
                 }
                 Ok(())
@@ -220,7 +220,7 @@ macro_rules! attached_metadata_methods {
                 self.set_description(py, description)
             }
 
-            /// Replace all parameters. Writes through to the parent host's SoA metadata store.
+            /// Replace all parameters. Writes through to the parent host's context store.
             pub fn set_parameters(
                 &self,
                 py: pyo3::Python<'_>,
@@ -230,15 +230,15 @@ macro_rules! attached_metadata_methods {
                 match &self.host {
                     $crate::ConstraintHost::Instance(p) => {
                         let mut host = p.borrow_mut(py);
-                        let mut metadata = host.inner.$get().collect_for(self.id);
-                        metadata.parameters = params;
-                        host.inner.$set(self.id, metadata)?;
+                        let mut context = host.inner.$get().collect_for(self.id);
+                        context.label.parameters = params;
+                        host.inner.$set(self.id, context)?;
                     }
                     $crate::ConstraintHost::Parametric(p) => {
                         let mut host = p.borrow_mut(py);
-                        let mut metadata = host.inner.$get().collect_for(self.id);
-                        metadata.parameters = params;
-                        host.inner.$set(self.id, metadata)?;
+                        let mut context = host.inner.$get().collect_for(self.id);
+                        context.label.parameters = params;
+                        host.inner.$set(self.id, context)?;
                     }
                 }
                 Ok(())
@@ -253,7 +253,7 @@ macro_rules! attached_metadata_methods {
                 self.set_parameters(py, parameters)
             }
 
-            /// Add a single parameter entry. Writes through to the parent host's SoA metadata store.
+            /// Add a single parameter entry. Writes through to the parent host's context store.
             pub fn add_parameter(
                 &self,
                 py: pyo3::Python<'_>,
@@ -263,15 +263,15 @@ macro_rules! attached_metadata_methods {
                 match &self.host {
                     $crate::ConstraintHost::Instance(p) => {
                         let mut host = p.borrow_mut(py);
-                        let mut metadata = host.inner.$get().collect_for(self.id);
-                        metadata.parameters.insert(key, value);
-                        host.inner.$set(self.id, metadata)?;
+                        let mut context = host.inner.$get().collect_for(self.id);
+                        context.label.parameters.insert(key, value);
+                        host.inner.$set(self.id, context)?;
                     }
                     $crate::ConstraintHost::Parametric(p) => {
                         let mut host = p.borrow_mut(py);
-                        let mut metadata = host.inner.$get().collect_for(self.id);
-                        metadata.parameters.insert(key, value);
-                        host.inner.$set(self.id, metadata)?;
+                        let mut context = host.inner.$get().collect_for(self.id);
+                        context.label.parameters.insert(key, value);
+                        host.inner.$set(self.id, context)?;
                     }
                 }
                 Ok(())
@@ -302,10 +302,10 @@ macro_rules! attached_metadata_methods {
     };
 }
 
-/// Like [`attached_metadata_methods!`] but for hosts with a
-/// [`VariableMetadataStore`](ommx::VariableMetadataStore), which lacks a
+/// Like [`attached_constraint_context_methods!`] but for hosts with a
+/// [`VariableLabelStore`](ommx::VariableLabelStore), which lacks a
 /// `provenance` field. The store API is otherwise identical on reads; writes
-/// go back through the host's checked `set_*_metadata` method.
+/// go back through the host's checked `set_*_label` method.
 ///
 /// `name` and `description` getters mirror [`DecisionVariable`](crate::DecisionVariable)
 /// — they return `String` with the empty string for missing entries, *not*
@@ -314,7 +314,7 @@ macro_rules! attached_metadata_methods {
 /// `instance.attached_decision_variable(id).name` produce the same value
 /// for the same id).
 #[macro_export]
-macro_rules! attached_variable_metadata_methods {
+macro_rules! attached_variable_labels_methods {
     ($Self:ident, $get:ident, $set:ident) => {
         #[pyo3_stub_gen::derive::gen_stub_pymethods]
         #[pymethods]
@@ -392,20 +392,20 @@ macro_rules! attached_variable_metadata_methods {
                 }
             }
 
-            /// Set the name. Writes through to the parent host's SoA metadata store.
+            /// Set the name. Writes through to the parent host's label store.
             pub fn set_name(&self, py: pyo3::Python<'_>, name: String) -> anyhow::Result<()> {
                 match &self.host {
                     $crate::ConstraintHost::Instance(p) => {
                         let mut host = p.borrow_mut(py);
-                        let mut metadata = host.inner.$get().collect_for(self.id);
-                        metadata.name = Some(name);
-                        host.inner.$set(self.id, metadata)?;
+                        let mut label = host.inner.$get().collect_for(self.id);
+                        label.name = Some(name);
+                        host.inner.$set(self.id, label)?;
                     }
                     $crate::ConstraintHost::Parametric(p) => {
                         let mut host = p.borrow_mut(py);
-                        let mut metadata = host.inner.$get().collect_for(self.id);
-                        metadata.name = Some(name);
-                        host.inner.$set(self.id, metadata)?;
+                        let mut label = host.inner.$get().collect_for(self.id);
+                        label.name = Some(name);
+                        host.inner.$set(self.id, label)?;
                     }
                 }
                 Ok(())
@@ -423,15 +423,15 @@ macro_rules! attached_variable_metadata_methods {
                 match &self.host {
                     $crate::ConstraintHost::Instance(p) => {
                         let mut host = p.borrow_mut(py);
-                        let mut metadata = host.inner.$get().collect_for(self.id);
-                        metadata.subscripts = subscripts;
-                        host.inner.$set(self.id, metadata)?;
+                        let mut label = host.inner.$get().collect_for(self.id);
+                        label.subscripts = subscripts;
+                        host.inner.$set(self.id, label)?;
                     }
                     $crate::ConstraintHost::Parametric(p) => {
                         let mut host = p.borrow_mut(py);
-                        let mut metadata = host.inner.$get().collect_for(self.id);
-                        metadata.subscripts = subscripts;
-                        host.inner.$set(self.id, metadata)?;
+                        let mut label = host.inner.$get().collect_for(self.id);
+                        label.subscripts = subscripts;
+                        host.inner.$set(self.id, label)?;
                     }
                 }
                 Ok(())
@@ -445,15 +445,15 @@ macro_rules! attached_variable_metadata_methods {
                 match &self.host {
                     $crate::ConstraintHost::Instance(p) => {
                         let mut host = p.borrow_mut(py);
-                        let mut metadata = host.inner.$get().collect_for(self.id);
-                        metadata.subscripts.extend(subscripts);
-                        host.inner.$set(self.id, metadata)?;
+                        let mut label = host.inner.$get().collect_for(self.id);
+                        label.subscripts.extend(subscripts);
+                        host.inner.$set(self.id, label)?;
                     }
                     $crate::ConstraintHost::Parametric(p) => {
                         let mut host = p.borrow_mut(py);
-                        let mut metadata = host.inner.$get().collect_for(self.id);
-                        metadata.subscripts.extend(subscripts);
-                        host.inner.$set(self.id, metadata)?;
+                        let mut label = host.inner.$get().collect_for(self.id);
+                        label.subscripts.extend(subscripts);
+                        host.inner.$set(self.id, label)?;
                     }
                 }
                 Ok(())
@@ -467,15 +467,15 @@ macro_rules! attached_variable_metadata_methods {
                 match &self.host {
                     $crate::ConstraintHost::Instance(p) => {
                         let mut host = p.borrow_mut(py);
-                        let mut metadata = host.inner.$get().collect_for(self.id);
-                        metadata.description = Some(description);
-                        host.inner.$set(self.id, metadata)?;
+                        let mut label = host.inner.$get().collect_for(self.id);
+                        label.description = Some(description);
+                        host.inner.$set(self.id, label)?;
                     }
                     $crate::ConstraintHost::Parametric(p) => {
                         let mut host = p.borrow_mut(py);
-                        let mut metadata = host.inner.$get().collect_for(self.id);
-                        metadata.description = Some(description);
-                        host.inner.$set(self.id, metadata)?;
+                        let mut label = host.inner.$get().collect_for(self.id);
+                        label.description = Some(description);
+                        host.inner.$set(self.id, label)?;
                     }
                 }
                 Ok(())
@@ -498,15 +498,15 @@ macro_rules! attached_variable_metadata_methods {
                 match &self.host {
                     $crate::ConstraintHost::Instance(p) => {
                         let mut host = p.borrow_mut(py);
-                        let mut metadata = host.inner.$get().collect_for(self.id);
-                        metadata.parameters = params;
-                        host.inner.$set(self.id, metadata)?;
+                        let mut label = host.inner.$get().collect_for(self.id);
+                        label.parameters = params;
+                        host.inner.$set(self.id, label)?;
                     }
                     $crate::ConstraintHost::Parametric(p) => {
                         let mut host = p.borrow_mut(py);
-                        let mut metadata = host.inner.$get().collect_for(self.id);
-                        metadata.parameters = params;
-                        host.inner.$set(self.id, metadata)?;
+                        let mut label = host.inner.$get().collect_for(self.id);
+                        label.parameters = params;
+                        host.inner.$set(self.id, label)?;
                     }
                 }
                 Ok(())
@@ -529,15 +529,15 @@ macro_rules! attached_variable_metadata_methods {
                 match &self.host {
                     $crate::ConstraintHost::Instance(p) => {
                         let mut host = p.borrow_mut(py);
-                        let mut metadata = host.inner.$get().collect_for(self.id);
-                        metadata.parameters.insert(key, value);
-                        host.inner.$set(self.id, metadata)?;
+                        let mut label = host.inner.$get().collect_for(self.id);
+                        label.parameters.insert(key, value);
+                        host.inner.$set(self.id, label)?;
                     }
                     $crate::ConstraintHost::Parametric(p) => {
                         let mut host = p.borrow_mut(py);
-                        let mut metadata = host.inner.$get().collect_for(self.id);
-                        metadata.parameters.insert(key, value);
-                        host.inner.$set(self.id, metadata)?;
+                        let mut label = host.inner.$get().collect_for(self.id);
+                        label.parameters.insert(key, value);
+                        host.inner.$set(self.id, label)?;
                     }
                 }
                 Ok(())

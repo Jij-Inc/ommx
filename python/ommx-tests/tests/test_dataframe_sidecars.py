@@ -1,8 +1,8 @@
 """Tests for the long-format / id-indexed sidecar DataFrames.
 
 The 6 sidecar accessors on Instance / ParametricInstance / Solution /
-SampleSet are derived views over the SoA metadata stores. They expose
-metadata in shapes that the wide `*_df` cannot represent without
+SampleSet are derived views over the SoA label/context stores. They expose
+labels and context in shapes that the wide `*_df` cannot represent without
 column-space explosion (provenance chains, per-id parameter maps with
 arbitrary keys).
 
@@ -26,8 +26,8 @@ from ommx.v1 import (
 )
 
 
-def _instance_with_metadata() -> Instance:
-    """Instance carrying metadata + parameters on regular constraints + variables.
+def _instance_with_context() -> Instance:
+    """Instance carrying labels/context + parameters on regular constraints + variables.
 
     Variable 0 has 2 parameters; variables 1, 2 have none. The single
     regular constraint has 2 parameters and a 2-entry subscripts list.
@@ -61,57 +61,57 @@ def _df_snap(df: pd.DataFrame) -> str:
 
 
 # ---------------------------------------------------------------------------
-# variable_metadata_df / variable_parameters_df
+# variable_labels_df / variable_parameters_df
 # ---------------------------------------------------------------------------
 
 
-def test_variable_metadata_df(snapshot):
+def test_variable_labels_df(snapshot):
     """id-indexed wide; columns name / subscripts / description; index = variable_id."""
-    assert _df_snap(_instance_with_metadata().variable_metadata_df()) == snapshot
+    assert _df_snap(_instance_with_context().variable_labels_df()) == snapshot
 
 
 def test_variable_parameters_df(snapshot):
     """Long format. Variable 0 has 2 parameters, 1 and 2 have none → 2 rows."""
-    assert _df_snap(_instance_with_metadata().variable_parameters_df()) == snapshot
+    assert _df_snap(_instance_with_context().variable_parameters_df()) == snapshot
 
 
 # ---------------------------------------------------------------------------
-# constraint_metadata_df / constraint_parameters_df with kind dispatch
+# constraint_context_df / constraint_parameters_df with kind dispatch
 # ---------------------------------------------------------------------------
 
 
-def test_constraint_metadata_df_default_kind_is_regular(snapshot):
+def test_constraint_context_df_default_kind_is_regular(snapshot):
     """No kind= argument → kind="regular"; index = regular_constraint_id."""
-    assert _df_snap(_instance_with_metadata().constraint_metadata_df()) == snapshot
+    assert _df_snap(_instance_with_context().constraint_context_df()) == snapshot
 
 
 def test_constraint_parameters_df(snapshot):
     """Long format with regular_constraint_id, key, value columns."""
-    assert _df_snap(_instance_with_metadata().constraint_parameters_df()) == snapshot
+    assert _df_snap(_instance_with_context().constraint_parameters_df()) == snapshot
 
 
 def test_unknown_kind_raises_value_error():
-    instance = _instance_with_metadata()
+    instance = _instance_with_context()
     with pytest.raises(ValueError):
-        instance.constraint_metadata_df(kind="bogus")  # type: ignore[arg-type]
+        instance.constraint_context_df(kind="bogus")  # type: ignore[arg-type]
 
 
-def test_indicator_kind_metadata_df(snapshot):
+def test_indicator_kind_context_df(snapshot):
     """Each constraint family's id column carries a kind-qualified index name."""
     assert (
-        _df_snap(_special_instance().constraint_metadata_df(kind="indicator"))
+        _df_snap(_special_instance().constraint_context_df(kind="indicator"))
         == snapshot
     )
 
 
-def test_one_hot_kind_metadata_df(snapshot):
+def test_one_hot_kind_context_df(snapshot):
     assert (
-        _df_snap(_special_instance().constraint_metadata_df(kind="one_hot")) == snapshot
+        _df_snap(_special_instance().constraint_context_df(kind="one_hot")) == snapshot
     )
 
 
-def test_sos1_kind_metadata_df(snapshot):
-    assert _df_snap(_special_instance().constraint_metadata_df(kind="sos1")) == snapshot
+def test_sos1_kind_context_df(snapshot):
+    assert _df_snap(_special_instance().constraint_context_df(kind="sos1")) == snapshot
 
 
 def _special_instance() -> Instance:
@@ -141,7 +141,7 @@ def _special_instance() -> Instance:
 
 def test_provenance_empty_when_no_chain(snapshot):
     """Directly-authored constraints have no provenance chain."""
-    assert _df_snap(_instance_with_metadata().constraint_provenance_df()) == snapshot
+    assert _df_snap(_instance_with_context().constraint_provenance_df()) == snapshot
 
 
 def test_provenance_after_one_hot_conversion(snapshot):
@@ -167,7 +167,7 @@ def test_provenance_after_one_hot_conversion(snapshot):
 
 def test_removed_reasons_df_after_relax(snapshot):
     """relax_constraint with no extra parameters → 1 row, key/value = NA."""
-    instance = _instance_with_metadata()
+    instance = _instance_with_context()
     instance.relax_constraint(10, "test_reason")
     assert _df_snap(instance.constraint_removed_reasons_df()) == snapshot
 
@@ -189,25 +189,25 @@ def test_removed_reasons_df_with_parameters_after_one_hot_conversion(snapshot):
 
 
 # ---------------------------------------------------------------------------
-# Solution / SampleSet expose the same surface; the metadata stores are
+# Solution / SampleSet expose the same surface; the label/context stores are
 # stage-independent so the rendered DataFrame is byte-identical to
 # Instance's.
 # ---------------------------------------------------------------------------
 
 
-def test_solution_constraint_metadata_df_matches_instance():
-    instance = _instance_with_metadata()
+def test_solution_constraint_context_df_matches_instance():
+    instance = _instance_with_context()
     sol = instance.evaluate({0: 1, 1: 0, 2: 0})
     pd.testing.assert_frame_equal(
-        instance.constraint_metadata_df(), sol.constraint_metadata_df()
+        instance.constraint_context_df(), sol.constraint_context_df()
     )
 
 
-def test_sample_set_variable_metadata_df_matches_instance():
-    instance = _instance_with_metadata()
+def test_sample_set_variable_label_df_matches_instance():
+    instance = _instance_with_context()
     ss = instance.evaluate_samples({0: {0: 1, 1: 0, 2: 0}})
     pd.testing.assert_frame_equal(
-        instance.variable_metadata_df(), ss.variable_metadata_df()
+        instance.variable_labels_df(), ss.variable_labels_df()
     )
 
 
@@ -241,7 +241,7 @@ def test_solution_sidecar_no_duplicate_rows_for_removed():
     instance = _instance_with_relaxed_constraint()
     sol = instance.evaluate({0: 1, 1: 0, 2: 0})
 
-    meta = sol.constraint_metadata_df()
+    meta = sol.constraint_context_df()
     assert sorted(meta.index.tolist()) == [10, 11]
 
     params = sol.constraint_parameters_df()
@@ -253,7 +253,7 @@ def test_sample_set_sidecar_no_duplicate_rows_for_removed():
     instance = _instance_with_relaxed_constraint()
     ss = instance.evaluate_samples({0: {0: 1, 1: 0, 2: 0}})
 
-    meta = ss.constraint_metadata_df()
+    meta = ss.constraint_context_df()
     assert sorted(meta.index.tolist()) == [10, 11]
 
     params = ss.constraint_parameters_df()
@@ -268,7 +268,7 @@ def test_sample_set_sidecar_no_duplicate_rows_for_removed():
 
 
 def test_solution_decision_variables_df_emits_parameter_columns():
-    instance = _instance_with_metadata()
+    instance = _instance_with_context()
     sol = instance.evaluate({0: 1, 1: 0, 2: 0})
     df = sol.decision_variables_df(include=["parameters"])
     assert "parameters.role" in df.columns
@@ -276,7 +276,7 @@ def test_solution_decision_variables_df_emits_parameter_columns():
 
 
 def test_sample_set_decision_variables_df_emits_parameter_columns():
-    instance = _instance_with_metadata()
+    instance = _instance_with_context()
     ss = instance.evaluate_samples({0: {0: 1, 1: 0, 2: 0}})
     df = ss.decision_variables_df(include=["parameters"])
     assert "parameters.role" in df.columns

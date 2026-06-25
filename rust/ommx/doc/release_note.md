@@ -22,12 +22,13 @@ The 3.0.0 line is a major revision of the Rust SDK:
   **host is the natural unit of serialization**
   (`Instance::to_bytes`, `ParametricInstance::to_bytes`,
   `Solution::to_bytes`, `SampleSet::to_bytes`).
-- Metadata (`name`, `subscripts`, `parameters`, `description`, plus
-  `provenance` on constraints) moves off each constraint, decision
-  variable, and named function into per-collection **Struct-of-Arrays
-  metadata stores**, queried through narrow per-host accessors
-  (`instance.constraint_metadata()`, `instance.variable_metadata()`,
-  `instance.named_function_metadata()`, …). One canonical store per
+- Modeling labels (`name`, `subscripts`, `parameters`, `description`) move
+  off each constraint, decision variable, and named function into
+  per-collection **Struct-of-Arrays label/context stores**. Constraint
+  `provenance` is kept in `ConstraintContext`, separate from the label.
+  These stores are queried through narrow per-host accessors
+  (`instance.constraint_context()`, `instance.variable_labels()`,
+  `instance.named_function_labels()`, …). One canonical store per
   collection, two views on top: per-id wrapper getters for one-off
   reads and `*_df` for bulk analysis.
 - A **capability model** lets adapters declare what they natively
@@ -54,8 +55,7 @@ why.
 ## First-class special constraint types ([#790](https://github.com/Jij-Inc/ommx/pull/790), [#798](https://github.com/Jij-Inc/ommx/pull/798))
 
 Special-structure constraints are now first-class domain objects, parallel to
-the regular [`Constraint`](crate::Constraint) rather than metadata hanging off
-it:
+the regular [`Constraint`](crate::Constraint) rather than hints hanging off it:
 
 - [`IndicatorConstraint`](crate::IndicatorConstraint) — encoding
   `indicator_variable = 1 → f(x) {=,≤} 0`. **New in v3.**
@@ -120,7 +120,7 @@ across every constraint kind at every stage, so adapter / Solution /
 SampleSet code doesn't need to special-case the four kinds.
 
 **Serialization moves to the host level.** With the `id` field gone
-from individual constraints and metadata living in a per-collection
+from individual constraints and labels/context living in a per-collection
 SoA store (next section), a single element can no longer round-trip
 on its own. Per-element `to_bytes` / `from_bytes` are not provided on
 any constraint kind or its evaluated / sampled counterpart; use
@@ -128,34 +128,34 @@ any constraint kind or its evaluated / sampled counterpart; use
 `ParametricInstance::to_bytes` / `from_bytes`,
 `Solution::to_bytes` / `from_bytes`, or
 `SampleSet::to_bytes` / `from_bytes` as the entry points — each
-encodes every constraint kind together with IDs and metadata in one
+encodes every constraint kind together with IDs and labels/context in one
 `v1::*` protobuf message.
 
 The migration guide's [ConstraintCollection](crate::doc::migration_guide#constraintcollection)
 and [EvaluatedCollection / SampledCollection](crate::doc::migration_guide#evaluatedcollection--sampledcollection)
 reference cards list the public methods on each.
 
-## Metadata storage: SoA store on the enclosing collection ([#843](https://github.com/Jij-Inc/ommx/pull/843), [#848](https://github.com/Jij-Inc/ommx/pull/848), [#850](https://github.com/Jij-Inc/ommx/pull/850), [#853](https://github.com/Jij-Inc/ommx/pull/853))
+## Modeling labels and constraint context on the enclosing collection ([#843](https://github.com/Jij-Inc/ommx/pull/843), [#848](https://github.com/Jij-Inc/ommx/pull/848), [#850](https://github.com/Jij-Inc/ommx/pull/850), [#853](https://github.com/Jij-Inc/ommx/pull/853))
 
-Constraints, decision variables, and named functions used to carry
-their metadata (`name`, `subscripts`, `parameters`, `description`, and
-— for constraints only — `provenance`) inline on each element. In v3
-the same fact lives in **one canonical place per collection**: a
-Struct-of-Arrays metadata store keyed by ID, riding alongside the
-constraint / variable / named-function map. Per-element structs shrink
-to their intrinsic data and the SoA store is the canonical source for
-both per-id reads and bulk DataFrame analysis.
+Constraints, decision variables, and named functions used to carry their
+labels (`name`, `subscripts`, `parameters`, `description`) inline on each
+element. In v3 the same modeling-label fact lives in **one canonical place
+per collection**: a Struct-of-Arrays label/context store keyed by ID, riding
+alongside the constraint / variable / named-function map. Constraint
+`provenance` is part of `ConstraintContext`, not part of `ModelingLabel`.
+Per-element structs shrink to their intrinsic data and the SoA store is the
+canonical source for both per-id reads and bulk DataFrame analysis.
 
 Three store families share one shape:
-[`ConstraintMetadataStore<ID>`](crate::ConstraintMetadataStore) on
+[`ConstraintContextStore<ID>`](crate::ConstraintContextStore) on
 every constraint-kind collection (the same store rides through
 [`EvaluatedCollection<T>`](crate::EvaluatedCollection) and
-[`SampledCollection<T>`](crate::SampledCollection) so metadata is
+[`SampledCollection<T>`](crate::SampledCollection) so context is
 available at every stage),
-[`VariableMetadataStore`](crate::VariableMetadataStore) as a sibling
+[`VariableLabelStore`](crate::VariableLabelStore) as a sibling
 field on `Instance` / `ParametricInstance` / `Solution` / `SampleSet`
 (no separate `DecisionVariableCollection` was introduced), and
-[`NamedFunctionMetadataStore`](crate::NamedFunctionMetadataStore) the
+[`NamedFunctionLabelStore`](crate::NamedFunctionLabelStore) the
 same way for named functions.
 
 The split lets the type system enforce invariants more tightly. The
@@ -165,7 +165,7 @@ raw active/removed map mutators on `ConstraintCollection<T>` are
 the validating `Instance::add_*` / `relax_*` / `restore_*` family —
 which keep variable-id validity (every `id` referenced by a constraint
 exists in `decision_variables`) and active/removed disjointness as
-crate-internal invariants. Metadata mutation rides on its own `_mut()`
+crate-internal invariants. Label/context mutation rides on its own `_mut()`
 accessor and can't break either.
 
 The Python side wraps the same SoA store with two parallel
@@ -184,7 +184,7 @@ user-facing changes:
 See [`PYTHON_SDK_MIGRATION_GUIDE.md`](https://github.com/Jij-Inc/ommx/blob/main/PYTHON_SDK_MIGRATION_GUIDE.md)
 §9–11 for the user-facing version.
 
-The migration guide's [Metadata stores](crate::doc::migration_guide#metadata-stores)
+The migration guide's [Modeling labels and constraint context](crate::doc::migration_guide#modeling-labels-and-constraint-context)
 section has the per-host accessor list and the store API reference.
 
 ## Capability model ([#790](https://github.com/Jij-Inc/ommx/pull/790), [#805](https://github.com/Jij-Inc/ommx/pull/805), [#810](https://github.com/Jij-Inc/ommx/pull/810), [#811](https://github.com/Jij-Inc/ommx/pull/811), [#814](https://github.com/Jij-Inc/ommx/pull/814))
@@ -280,7 +280,7 @@ Two new domain traits accompany this shift:
   by the state, move to removed), or `Transformed { original, new }` (kind
   change, e.g. an indicator constraint promoted to a regular constraint).
   Callers that need provenance bookkeeping append a `Provenance` entry to
-  the host's [`ConstraintMetadataStore`](crate::ConstraintMetadataStore)
+  the host's [`ConstraintContextStore`](crate::ConstraintContextStore)
   when they apply the outcome.
 - [`Substitute`](crate::Substitute) performs symbolic variable substitution,
   with an acyclic fast path and full cycle detection.

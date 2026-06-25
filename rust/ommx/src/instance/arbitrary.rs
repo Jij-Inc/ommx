@@ -235,10 +235,10 @@ impl Arbitrary for Instance {
                                     )
                                     .expect("empty removed constraints cannot overlap active constraints"),
                                     named_functions,
-                                    named_function_metadata: Default::default(),
+                                    named_function_labels: Default::default(),
                                     sense,
                                     decision_variables,
-                                    variable_metadata: Default::default(),
+                                    variable_labels: Default::default(),
                                     parameters: Default::default(),
                                     indicator_constraint_collection: Default::default(),
                                     one_hot_constraint_collection: Default::default(),

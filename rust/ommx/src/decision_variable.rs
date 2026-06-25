@@ -1,12 +1,12 @@
 mod approx;
 mod arbitrary;
+mod label_store;
 mod logical_memory;
-mod metadata_store;
 pub(crate) mod parse;
 
 pub use arbitrary::*;
 use getset::CopyGetters;
-pub use metadata_store::VariableMetadataStore;
+pub use label_store::VariableLabelStore;
 
 pub(crate) use parse::sampled_decision_variable_to_v1;
 
@@ -161,10 +161,10 @@ fn values_are_consistent(left: f64, right: f64, atol: ATol) -> bool {
 /// The decision variable's intrinsic data.
 ///
 /// Holds only `id`, `kind`, `bound`, and `substituted_value`. Auxiliary
-/// metadata (`name`, `subscripts`, `parameters`, `description`) lives on
+/// modeling label (`name`, `subscripts`, `parameters`, `description`) lives on
 /// the enclosing [`Instance`](crate::Instance)'s
-/// [`VariableMetadataStore`](crate::VariableMetadataStore) keyed by
-/// [`VariableID`]; per-element metadata storage was retired in the v3
+/// [`VariableLabelStore`](crate::VariableLabelStore) keyed by
+/// [`VariableID`]; per-element label storage was retired in the v3
 /// redesign.
 ///
 /// Invariants
@@ -410,7 +410,7 @@ pub enum DecisionVariableError {
 }
 
 /// Modeling label for decision variables.
-pub type DecisionVariableMetadata = crate::ModelingLabel;
+pub type DecisionVariableLabel = crate::ModelingLabel;
 
 /// Single evaluation result with data integrity guarantees
 #[derive(Debug, Clone, PartialEq, Getters)]
@@ -615,33 +615,33 @@ impl crate::Evaluate for DecisionVariable {
 }
 
 /// Build a v1 `DecisionVariable` from an evaluated variable plus its
-/// metadata. The metadata comes from the enclosing collection's
-/// [`VariableMetadataStore`]; the per-element struct no longer carries it.
+/// modeling label. The label comes from the enclosing collection's
+/// [`VariableLabelStore`]; the per-element struct no longer carries it.
 pub(crate) fn evaluated_decision_variable_to_v1(
     eval_dv: EvaluatedDecisionVariable,
-    metadata: DecisionVariableMetadata,
+    label: DecisionVariableLabel,
 ) -> crate::v1::DecisionVariable {
     crate::v1::DecisionVariable {
         id: eval_dv.id.into_inner(),
         kind: eval_dv.kind.into(),
         bound: Some(eval_dv.bound.into()),
         substituted_value: Some(eval_dv.value),
-        name: metadata.name,
-        subscripts: metadata.subscripts,
-        parameters: metadata.parameters.into_iter().collect(),
-        description: metadata.description,
+        name: label.name,
+        subscripts: label.subscripts,
+        parameters: label.parameters.into_iter().collect(),
+        description: label.description,
     }
 }
 
 // NOTE: There are intentionally no `impl From<DecisionVariable> for
 // v1::DecisionVariable` (or the Evaluated / Sampled variants). v3 keeps
-// metadata at the collection layer, so a per-element conversion would
-// have to default every metadata field — silently dropping any
-// caller-supplied metadata. Callers must instead go through
+// modeling labels at the collection layer, so a per-element conversion would
+// have to default every label field — silently dropping any caller-supplied
+// label. Callers must instead go through
 // [`decision_variable::parse::decision_variable_to_v1`] (and the Evaluated
-// / Sampled siblings), which take the metadata explicitly. Top-level
+// / Sampled siblings), which take the label explicitly. Top-level
 // container serialization (`From<Instance> for v1::Instance` etc.) drains
-// the SoA store and threads the metadata through these helpers.
+// the SoA store and threads the label through these helpers.
 
 impl std::convert::TryFrom<crate::v1::DecisionVariable> for EvaluatedDecisionVariable {
     type Error = crate::ParseError;
@@ -842,9 +842,9 @@ mod tests {
         assert_eq!(*evaluated_dv.kind(), crate::Kind::Integer);
         assert_eq!(*evaluated_dv.value(), 5.0);
 
-        // Note: per-element metadata is gone in v3; the standalone TryFrom
-        // path drops metadata. End-to-end name preservation flows through
-        // Solution / SampleSet, which carry a VariableMetadataStore.
+        // Note: per-element labels are gone in v3; the standalone TryFrom
+        // path drops labels. End-to-end name preservation flows through
+        // Solution / SampleSet, which carry a VariableLabelStore.
         // Test round-trip conversion at the intrinsic-data level via the
         // explicit `evaluated_decision_variable_to_v1` helper.
         let v1_converted = evaluated_decision_variable_to_v1(evaluated_dv, Default::default());

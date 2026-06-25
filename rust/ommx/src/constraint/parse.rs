@@ -39,18 +39,20 @@ impl From<Equality> for i32 {
 }
 
 impl Parse for v1::Constraint {
-    type Output = (ConstraintID, Constraint<Created>, ConstraintMetadata);
+    type Output = (ConstraintID, Constraint<Created>, ConstraintContext);
     type Context = ();
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v1.Constraint";
         let id = ConstraintID(self.id);
         let equality = self.equality().parse_as(&(), message, "equality")?;
-        let metadata = ConstraintMetadata {
-            name: self.name,
-            subscripts: self.subscripts,
-            parameters: self.parameters.into_iter().collect(),
-            description: self.description,
+        let context = ConstraintContext {
+            label: crate::ModelingLabel {
+                name: self.name,
+                subscripts: self.subscripts,
+                parameters: self.parameters.into_iter().collect(),
+                description: self.description,
+            },
             provenance: Vec::new(),
         };
         let function = self
@@ -66,7 +68,7 @@ impl Parse for v1::Constraint {
                 equality,
                 stage: CreatedData { function },
             },
-            metadata,
+            context,
         ))
     }
 }
@@ -75,14 +77,14 @@ impl Parse for v1::RemovedConstraint {
     type Output = (
         ConstraintID,
         Constraint<Created>,
-        ConstraintMetadata,
+        ConstraintContext,
         RemovedReason,
     );
     type Context = ();
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v1.RemovedConstraint";
-        let (id, constraint, metadata) = self
+        let (id, constraint, context) = self
             .constraint
             .ok_or(RawParseError::MissingField {
                 message,
@@ -93,21 +95,21 @@ impl Parse for v1::RemovedConstraint {
             reason: self.removed_reason,
             parameters: self.removed_reason_parameters.into_iter().collect(),
         };
-        Ok((id, constraint, metadata, removed_reason))
+        Ok((id, constraint, context, removed_reason))
     }
 }
 
 impl Parse for Vec<v1::Constraint> {
     type Output = (
         BTreeMap<ConstraintID, Constraint<Created>>,
-        ConstraintMetadataStore<ConstraintID>,
+        ConstraintContextStore<ConstraintID>,
     );
     type Context = ();
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let mut constraints = BTreeMap::default();
-        let mut metadata_store = ConstraintMetadataStore::default();
+        let mut context_store = ConstraintContextStore::default();
         for c in self {
-            let (id, c, metadata): (ConstraintID, Constraint<Created>, ConstraintMetadata) =
+            let (id, c, context): (ConstraintID, Constraint<Created>, ConstraintContext) =
                 c.parse(&())?;
             if constraints.insert(id, c).is_some() {
                 return Err(RawParseError::InvalidInstance(format!(
@@ -115,19 +117,19 @@ impl Parse for Vec<v1::Constraint> {
                 ))
                 .into());
             }
-            metadata_store.insert(id, metadata);
+            context_store.insert(id, context);
         }
-        Ok((constraints, metadata_store))
+        Ok((constraints, context_store))
     }
 }
 
 impl Parse for Vec<v1::RemovedConstraint> {
-    type Output = BTreeMap<ConstraintID, (Constraint<Created>, ConstraintMetadata, RemovedReason)>;
+    type Output = BTreeMap<ConstraintID, (Constraint<Created>, ConstraintContext, RemovedReason)>;
     type Context = BTreeMap<ConstraintID, Constraint<Created>>;
     fn parse(self, constraints: &Self::Context) -> Result<Self::Output, ParseError> {
         let mut removed_constraints = BTreeMap::default();
         for c in self {
-            let (id, constraint, metadata, reason) = c.parse(&())?;
+            let (id, constraint, context, reason) = c.parse(&())?;
             if constraints.contains_key(&id) {
                 return Err(RawParseError::InvalidInstance(format!(
                     "Duplicated constraint ID is found in definition: {id:?}"
@@ -135,7 +137,7 @@ impl Parse for Vec<v1::RemovedConstraint> {
                 .into());
             }
             if removed_constraints
-                .insert(id, (constraint, metadata, reason))
+                .insert(id, (constraint, context, reason))
                 .is_some()
             {
                 return Err(RawParseError::InvalidInstance(format!(
@@ -152,7 +154,7 @@ impl Parse for v1::EvaluatedConstraint {
     type Output = (
         ConstraintID,
         EvaluatedConstraint,
-        ConstraintMetadata,
+        ConstraintContext,
         Option<RemovedReason>,
     );
     type Context = ();
@@ -162,11 +164,13 @@ impl Parse for v1::EvaluatedConstraint {
 
         let equality = self.equality().parse_as(&(), message, "equality")?;
 
-        let metadata = ConstraintMetadata {
-            name: self.name,
-            subscripts: self.subscripts,
-            parameters: self.parameters.into_iter().collect(),
-            description: self.description,
+        let context = ConstraintContext {
+            label: crate::ModelingLabel {
+                name: self.name,
+                subscripts: self.subscripts,
+                parameters: self.parameters.into_iter().collect(),
+                description: self.description,
+            },
             provenance: Vec::new(),
         };
 
@@ -195,7 +199,7 @@ impl Parse for v1::EvaluatedConstraint {
                         .collect(),
                 },
             },
-            metadata,
+            context,
             removed_reason,
         ))
     }
@@ -205,7 +209,7 @@ impl Parse for v1::SampledConstraint {
     type Output = (
         ConstraintID,
         SampledConstraint,
-        ConstraintMetadata,
+        ConstraintContext,
         Option<RemovedReason>,
     );
     type Context = ();
@@ -224,11 +228,13 @@ impl Parse for v1::SampledConstraint {
             })?
             .parse_as(&(), message, "evaluated_values")?;
 
-        let metadata = ConstraintMetadata {
-            name: self.name,
-            subscripts: self.subscripts,
-            parameters: self.parameters.into_iter().collect(),
-            description: self.description,
+        let context = ConstraintContext {
+            label: crate::ModelingLabel {
+                name: self.name,
+                subscripts: self.subscripts,
+                parameters: self.parameters.into_iter().collect(),
+                description: self.description,
+            },
             provenance: Vec::new(),
         };
 
@@ -256,7 +262,7 @@ impl Parse for v1::SampledConstraint {
                         .collect(),
                 },
             },
-            metadata,
+            context,
             removed_reason,
         ))
     }
@@ -274,7 +280,7 @@ mod tests {
             (
                 ConstraintID,
                 Constraint<Created>,
-                ConstraintMetadata,
+                ConstraintContext,
                 RemovedReason,
             ),
             ParseError,
@@ -317,10 +323,10 @@ mod tests {
             removed_reason_parameters: Default::default(),
         };
 
-        let (id, parsed, metadata, removed_reason): (
+        let (id, parsed, context, removed_reason): (
             ConstraintID,
             EvaluatedConstraint,
-            ConstraintMetadata,
+            ConstraintContext,
             _,
         ) = v1_constraint.parse(&()).unwrap();
         assert!(removed_reason.is_none());
@@ -333,11 +339,14 @@ mod tests {
             parsed.stage.used_decision_variable_ids,
             btreeset! {1.into(), 2.into(), 3.into()}
         );
-        // Metadata is now returned as a separate value alongside the parsed
+        // Context is now returned as a separate value alongside the parsed
         // constraint (drained into the SoA store at the collection level).
-        assert_eq!(metadata.name, Some("test_constraint".to_string()));
-        assert_eq!(metadata.description, Some("A test constraint".to_string()));
-        assert_eq!(metadata.subscripts, vec![10, 20]);
+        assert_eq!(context.label.name, Some("test_constraint".to_string()));
+        assert_eq!(
+            context.label.description,
+            Some("A test constraint".to_string())
+        );
+        assert_eq!(context.label.subscripts, vec![10, 20]);
         // feasible should be false because 1.5 > ATol::default() for EqualToZero constraint
         assert!(!parsed.stage.feasible);
     }

@@ -267,7 +267,7 @@ def test_convert_sos1_rejects_domain_excluding_zero():
     assert 10 in instance.sos1_constraints
 
 
-def test_sos1_constraints_df_roundtrips_removed_metadata(snapshot):
+def test_sos1_constraints_df_roundtrips_removed_context(snapshot):
     """`constraints_df(kind="sos1", removed=True)` surfaces reason + constraint_ids
     parameter as columns on removed rows. Active is empty after conversion."""
     x = [DecisionVariable.binary(i) for i in range(3)]
@@ -409,7 +409,7 @@ def test_solution_one_hot_removed_reasons_df_after_conversion(snapshot):
     sol = instance.evaluate({0: 1.0, 1: 0.0, 2: 0.0})
     assert (
         _df_snap(
-            sol.constraints_df(kind="one_hot", include=["metadata", "removed_reason"])
+            sol.constraints_df(kind="one_hot", include=["label", "removed_reason"])
         )
         == snapshot
     )
@@ -431,7 +431,7 @@ def test_solution_sos1_removed_reasons_df_after_conversion(snapshot):
     sol = instance.evaluate({0: 1.0, 1: 0.0, 2: 0.0})
     assert (
         _df_snap(
-            sol.constraints_df(kind="sos1", include=["metadata", "removed_reason"])
+            sol.constraints_df(kind="sos1", include=["label", "removed_reason"])
         )
         == snapshot
     )
@@ -505,7 +505,7 @@ def test_sample_set_one_hot_removed_reasons_df_after_conversion(snapshot):
     ss = instance.evaluate_samples({0: {0: 1.0, 1: 0.0, 2: 0.0}})
     assert (
         _df_snap(
-            ss.constraints_df(kind="one_hot", include=["metadata", "removed_reason"])
+            ss.constraints_df(kind="one_hot", include=["label", "removed_reason"])
         )
         == snapshot
     )

@@ -31,7 +31,7 @@
   2   Binary    0.0    1.0              <NA>       used
   '''
 # ---
-# name: test_decision_variables_df_include_metadata_only
+# name: test_decision_variables_df_include_label_only
   '''
         kind  lower  upper name subscripts description substituted_value state_role
   id

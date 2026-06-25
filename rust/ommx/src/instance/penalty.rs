@@ -73,7 +73,7 @@ impl Instance {
         let mut parameters = BTreeMap::new();
         let mut removed_constraints = BTreeMap::new();
 
-        let (active_constraints, existing_removed, constraint_metadata) =
+        let (active_constraints, existing_removed, constraint_context) =
             self.constraint_collection.into_parts();
         removed_constraints.extend(existing_removed);
         for (i, (constraint_id, constraint)) in active_constraints.into_iter().enumerate() {
@@ -114,11 +114,11 @@ impl Instance {
             objective,
             decision_variables: self.decision_variables,
             parameters,
-            variable_metadata: self.variable_metadata,
-            constraint_collection: ConstraintCollection::with_metadata(
+            variable_labels: self.variable_labels,
+            constraint_collection: ConstraintCollection::with_context(
                 BTreeMap::new(),
                 removed_constraints,
-                constraint_metadata,
+                constraint_context,
             )?,
             indicator_constraint_collection: self.indicator_constraint_collection,
             one_hot_constraint_collection: self.one_hot_constraint_collection,
@@ -126,7 +126,7 @@ impl Instance {
             decision_variable_dependency: self.decision_variable_dependency,
             description: self.description,
             named_functions: self.named_functions,
-            named_function_metadata: self.named_function_metadata,
+            named_function_labels: self.named_function_labels,
             annotations: self.annotations,
         })
     }
@@ -184,18 +184,18 @@ impl Instance {
 
         // Early return if no active constraints (preserve any existing removed constraints)
         if self.constraints().is_empty() {
-            let (_active, existing_removed, constraint_metadata) =
+            let (_active, existing_removed, constraint_context) =
                 self.constraint_collection.into_parts();
             return Ok(ParametricInstance {
                 sense: self.sense,
                 objective: self.objective,
                 decision_variables: self.decision_variables,
                 parameters: BTreeMap::new(),
-                variable_metadata: self.variable_metadata,
-                constraint_collection: ConstraintCollection::with_metadata(
+                variable_labels: self.variable_labels,
+                constraint_collection: ConstraintCollection::with_context(
                     BTreeMap::new(),
                     existing_removed,
-                    constraint_metadata,
+                    constraint_context,
                 )?,
                 indicator_constraint_collection: self.indicator_constraint_collection,
                 one_hot_constraint_collection: self.one_hot_constraint_collection,
@@ -203,7 +203,7 @@ impl Instance {
                 decision_variable_dependency: self.decision_variable_dependency,
                 description: self.description,
                 named_functions: self.named_functions,
-                named_function_metadata: self.named_function_metadata,
+                named_function_labels: self.named_function_labels,
                 annotations: self.annotations,
             });
         }
@@ -232,7 +232,7 @@ impl Instance {
 
         let mut removed_constraints = BTreeMap::new();
         let mut quad_sum = Function::zero();
-        let (active_constraints, existing_removed, constraint_metadata) =
+        let (active_constraints, existing_removed, constraint_context) =
             self.constraint_collection.into_parts();
         removed_constraints.extend(existing_removed);
 
@@ -262,11 +262,11 @@ impl Instance {
             objective,
             decision_variables: self.decision_variables,
             parameters,
-            variable_metadata: self.variable_metadata,
-            constraint_collection: ConstraintCollection::with_metadata(
+            variable_labels: self.variable_labels,
+            constraint_collection: ConstraintCollection::with_context(
                 BTreeMap::new(),
                 removed_constraints,
-                constraint_metadata,
+                constraint_context,
             )?,
             indicator_constraint_collection: self.indicator_constraint_collection,
             one_hot_constraint_collection: self.one_hot_constraint_collection,
@@ -274,7 +274,7 @@ impl Instance {
             decision_variable_dependency: self.decision_variable_dependency,
             description: self.description,
             named_functions: self.named_functions,
-            named_function_metadata: self.named_function_metadata,
+            named_function_labels: self.named_function_labels,
             annotations: self.annotations,
         })
     }
