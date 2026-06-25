@@ -13,7 +13,7 @@ impl Instance {
     /// Mirrors the `used / fixed / dependent` disjointness invariant the
     /// builder enforces (`builder.rs`): a constraint or objective cannot
     /// reference a variable whose value has been pinned via
-    /// [`DecisionVariable::substituted_value`] (`fixed`), nor a variable
+    /// a root-owned fixed value (`fixed`), nor a variable
     /// used as a substitution-dependency key (`dependent`).
     fn validate_required_ids_with_sets(
         required_ids: &VariableIDSet,
@@ -35,11 +35,11 @@ impl Instance {
             );
         }
 
-        // Check if any required ID is a fixed (substituted) variable.
+        // Check if any required ID is a fixed variable.
         if let Some(&id) = required_ids.intersection(fixed_ids).next() {
             crate::bail!(
                 { ?id },
-                "Fixed variable {id:?} (substituted_value set) cannot be used in objectives or constraints",
+                "Fixed variable {id:?} cannot be used in objectives or constraints",
             );
         }
 
@@ -49,15 +49,14 @@ impl Instance {
     /// Validate that all required variable IDs are defined in the instance
     /// and are not dependent variables (i.e., not used as keys in
     /// decision_variable_dependency) and are not fixed variables
-    /// (substituted_value set).
+    /// (root-owned fixed value set).
     fn validate_required_ids(&self, required_ids: VariableIDSet) -> crate::Result<()> {
         let variable_ids: VariableIDSet = self.decision_variables.keys().cloned().collect();
         let dependency_keys: VariableIDSet = self.decision_variable_dependency.keys().collect();
         let fixed_ids: VariableIDSet = self
-            .decision_variables
-            .values()
-            .filter(|dv| dv.substituted_value().is_some())
-            .map(|dv| dv.id())
+            .fixed_decision_variable_values
+            .keys()
+            .copied()
             .collect();
         Self::validate_required_ids_with_sets(
             &required_ids,
@@ -257,10 +256,9 @@ impl Instance {
         let variable_ids: VariableIDSet = self.decision_variables.keys().cloned().collect();
         let dependency_keys: VariableIDSet = self.decision_variable_dependency.keys().collect();
         let fixed_ids: VariableIDSet = self
-            .decision_variables
-            .values()
-            .filter(|dv| dv.substituted_value().is_some())
-            .map(|dv| dv.id())
+            .fixed_decision_variable_values
+            .keys()
+            .copied()
             .collect();
 
         // Validate all constraints first (atomic: fail before any insertion)
@@ -344,10 +342,9 @@ impl ParametricInstance {
         let known_ids: VariableIDSet = variable_ids.union(&parameter_ids).cloned().collect();
         let dependency_keys: VariableIDSet = self.decision_variable_dependency().keys().collect();
         let fixed_ids: VariableIDSet = self
-            .decision_variables()
-            .values()
-            .filter(|dv| dv.substituted_value().is_some())
-            .map(|dv| dv.id())
+            .fixed_decision_variable_values
+            .keys()
+            .copied()
             .collect();
 
         if !required_ids.is_subset(&known_ids) {
@@ -363,7 +360,7 @@ impl ParametricInstance {
         if let Some(&id) = required_ids.intersection(&fixed_ids).next() {
             crate::bail!(
                 { ?id },
-                "Fixed variable {id:?} (substituted_value set) cannot be used in objectives or constraints",
+                "Fixed variable {id:?} cannot be used in objectives or constraints",
             );
         }
         Ok(())
@@ -773,27 +770,24 @@ mod tests {
 
     #[test]
     fn test_add_constraint_rejects_fixed_variable() {
-        // Pin variable 2's value via substituted_value, then try to add a
-        // constraint that references it. The setter must reject — same rule
-        // the builder enforces (used ∩ fixed = ∅).
-        let mut decision_variables = btreemap! {
+        // Pin variable 2's value, then try to add a constraint that references it.
+        // The setter must reject — same rule the builder enforces (used ∩ fixed = ∅).
+        let decision_variables = btreemap! {
             VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
             VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
         };
-        decision_variables
-            .get_mut(&VariableID::from(2))
-            .unwrap()
-            .substitute(0.0, crate::ATol::default())
-            .unwrap();
 
         let objective = linear!(1) + coeff!(1.0);
-        let mut instance = Instance::new(
-            Sense::Minimize,
-            objective.into(),
-            decision_variables,
-            BTreeMap::new(),
-        )
-        .unwrap();
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(objective.into())
+            .decision_variables(decision_variables)
+            .fixed_decision_variable_values(btreemap! {
+                VariableID::from(2) => 0.0,
+            })
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap();
 
         let bad = crate::Constraint::equal_to_zero((linear!(2) + coeff!(1.0)).into());
         let err = instance

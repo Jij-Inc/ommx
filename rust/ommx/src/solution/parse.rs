@@ -67,17 +67,31 @@ impl Parse for crate::v1::Solution {
         let mut variable_labels = crate::VariableLabelStore::default();
         for dv in self.decision_variables {
             let dv_id = dv.id;
-            let dv_substituted_value = dv.substituted_value;
             // Parse the DecisionVariable to get strongly-typed version + drained label
             let parsed: crate::decision_variable::parse::ParsedDecisionVariable =
                 dv.parse_as(&(), message, "decision_variables")?;
             let parsed_dv = parsed.variable;
             let label = parsed.label;
+            let parsed_fixed_value = parsed.fixed_value;
 
             // Get the value from state or substituted_value
-            let value = match (state.entries.get(&dv_id), dv_substituted_value.as_ref()) {
+            let atol = ATol::default();
+            let value = match (state.entries.get(&dv_id), parsed_fixed_value.as_ref()) {
                 (Some(value), None) | (None, Some(value)) => *value,
-                (Some(value), Some(_substituted_value)) => *value, // EvaluatedDecisionVariable::new will check consistency
+                (Some(value), Some(substituted_value)) => {
+                    if (*value - *substituted_value).abs() >= *atol {
+                        return Err(crate::RawParseError::InvalidDecisionVariable(
+                            crate::DecisionVariableError::SubstitutedValueOverwrite {
+                                id: crate::VariableID::from(dv_id),
+                                previous_value: *substituted_value,
+                                new_value: *value,
+                                atol,
+                            },
+                        )
+                        .context(message, "decision_variables"));
+                    }
+                    *value
+                }
                 (None, None) => {
                     return Err(crate::RawParseError::SolutionError(
                         SolutionError::MissingVariableValue { id: dv_id },
@@ -86,11 +100,9 @@ impl Parse for crate::v1::Solution {
                 }
             };
 
-            // Use EvaluatedDecisionVariable::new which handles consistency validation
-            let evaluated_dv =
-                crate::EvaluatedDecisionVariable::new(parsed_dv, value, ATol::default())
-                    .map_err(crate::RawParseError::InvalidDecisionVariable)
-                    .map_err(|e| ParseError::from(e).context(message, "decision_variables"))?;
+            let evaluated_dv = crate::EvaluatedDecisionVariable::new(parsed_dv, value, atol)
+                .map_err(crate::RawParseError::InvalidDecisionVariable)
+                .map_err(|e| ParseError::from(e).context(message, "decision_variables"))?;
 
             let id = *evaluated_dv.id();
             variable_labels.insert(id, label);

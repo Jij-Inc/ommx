@@ -154,13 +154,9 @@ fn ensure_finite_value(id: VariableID, value: f64) -> Result<(), DecisionVariabl
     }
 }
 
-fn values_are_consistent(left: f64, right: f64, atol: ATol) -> bool {
-    left.is_finite() && right.is_finite() && (left - right).abs() <= *atol
-}
-
 /// The decision variable's intrinsic data.
 ///
-/// Holds only `id`, `kind`, `bound`, and `substituted_value`. Auxiliary
+/// Holds only `id`, `kind`, and `bound` as its intrinsic definition. Auxiliary
 /// modeling label (`name`, `subscripts`, `parameters`, `description`) lives on
 /// the enclosing [`Instance`](crate::Instance)'s
 /// [`VariableLabelStore`](crate::VariableLabelStore) keyed by
@@ -171,7 +167,6 @@ fn values_are_consistent(left: f64, right: f64, atol: ATol) -> bool {
 /// ----------
 /// - `kind` and `bound` are consistent
 ///   - i.e. `bound` is invariant under `|bound| kind.consistent_bound(bound, atol).unwrap()` for appropriate `atol`.
-/// - If `substituted_value` is set, it is consistent to `kind` and `bound`.
 ///
 #[derive(Debug, Clone, PartialEq, CopyGetters, LogicalMemoryProfile)]
 pub struct DecisionVariable {
@@ -181,8 +176,6 @@ pub struct DecisionVariable {
     kind: Kind,
     #[getset(get_copy = "pub")]
     bound: Bound,
-    #[getset(get_copy = "pub")]
-    substituted_value: Option<f64>,
 }
 
 impl DecisionVariable {
@@ -191,69 +184,39 @@ impl DecisionVariable {
         id: VariableID,
         kind: Kind,
         bound: Bound,
-        substituted_value: Option<f64>,
         atol: ATol,
     ) -> Result<Self, DecisionVariableError> {
-        let mut new = Self {
+        Ok(Self {
             id,
             kind,
             bound: kind
                 .consistent_bound(bound, atol)
                 .ok_or(DecisionVariableError::BoundInconsistentToKind { id, kind, bound })?,
-            substituted_value: None, // will be set later
-        };
-        if let Some(substituted_value) = substituted_value {
-            new.check_value_consistency(substituted_value, atol)?;
-            new.substituted_value = Some(substituted_value);
-        }
-        Ok(new)
+        })
     }
 
     pub fn binary(id: VariableID) -> Self {
-        Self::new(id, Kind::Binary, Bound::of_binary(), None, ATol::default()).unwrap()
+        Self::new(id, Kind::Binary, Bound::of_binary(), ATol::default()).unwrap()
     }
 
     /// Unbounded integer decision variable.
     pub fn integer(id: VariableID) -> Self {
-        Self::new(id, Kind::Integer, Bound::default(), None, ATol::default()).unwrap()
+        Self::new(id, Kind::Integer, Bound::default(), ATol::default()).unwrap()
     }
 
     /// Unbounded continuous decision variable.
     pub fn continuous(id: VariableID) -> Self {
-        Self::new(
-            id,
-            Kind::Continuous,
-            Bound::default(),
-            None,
-            ATol::default(),
-        )
-        .unwrap()
+        Self::new(id, Kind::Continuous, Bound::default(), ATol::default()).unwrap()
     }
 
     /// Unbounded semi-integer decision variable.
     pub fn semi_integer(id: VariableID) -> Self {
-        // substituted_value is None, so it is always valid
-        Self::new(
-            id,
-            Kind::SemiInteger,
-            Bound::default(),
-            None,
-            ATol::default(),
-        )
-        .unwrap()
+        Self::new(id, Kind::SemiInteger, Bound::default(), ATol::default()).unwrap()
     }
 
     /// Unbounded semi-continuous decision variable.
     pub fn semi_continuous(id: VariableID) -> Self {
-        // substituted_value is None, so it is always valid
-        Self::new(
-            id,
-            Kind::SemiContinuous,
-            Bound::default(),
-            None,
-            ATol::default(),
-        )
-        .unwrap()
+        Self::new(id, Kind::SemiContinuous, Bound::default(), ATol::default()).unwrap()
     }
 
     /// Check if the substituted value is consistent to the bound and kind
@@ -268,7 +231,6 @@ impl DecisionVariable {
     ///     0.into(),
     ///     Kind::Integer,
     ///     Bound::new(0.0, 2.0).unwrap(),
-    ///     None,
     ///     ATol::default(),
     /// ).unwrap();
     ///
@@ -351,24 +313,6 @@ impl DecisionVariable {
             Ok(true)
         }
     }
-
-    pub fn substitute(&mut self, new_value: f64, atol: ATol) -> Result<(), DecisionVariableError> {
-        ensure_finite_value(self.id, new_value)?;
-        if let Some(previous_value) = self.substituted_value {
-            if !values_are_consistent(new_value, previous_value, atol) {
-                return Err(DecisionVariableError::SubstitutedValueOverwrite {
-                    id: self.id,
-                    previous_value,
-                    new_value,
-                    atol,
-                });
-            }
-        } else {
-            self.check_value_consistency(new_value, atol)?;
-            self.substituted_value = Some(new_value);
-        }
-        Ok(())
-    }
 }
 
 #[non_exhaustive]
@@ -428,27 +372,14 @@ pub struct EvaluatedDecisionVariable {
 impl EvaluatedDecisionVariable {
     /// Create a new EvaluatedDecisionVariable from a DecisionVariable and value
     ///
-    /// If the DecisionVariable has a substituted_value, this method verifies consistency.
     /// This method does not enforce kind or bound constraints - those are checked
     /// as part of solution feasibility validation.
     pub fn new(
         decision_variable: DecisionVariable,
         value: f64,
-        atol: crate::ATol,
+        _atol: crate::ATol,
     ) -> Result<Self, DecisionVariableError> {
         ensure_finite_value(decision_variable.id, value)?;
-
-        // Check consistency with existing substituted_value if present
-        if let Some(substituted_value) = decision_variable.substituted_value {
-            if !values_are_consistent(substituted_value, value, atol) {
-                return Err(DecisionVariableError::SubstitutedValueOverwrite {
-                    id: decision_variable.id,
-                    previous_value: substituted_value,
-                    new_value: value,
-                    atol,
-                });
-            }
-        }
 
         // Note: Kind and bound checking is intentionally omitted to allow infeasible solutions.
         // These will be checked as part of Solution::feasible() validation.
@@ -499,31 +430,15 @@ pub struct SampledDecisionVariable {
 impl SampledDecisionVariable {
     /// Create a new SampledDecisionVariable from a DecisionVariable and samples
     ///
-    /// If the DecisionVariable has a substituted_value, this method verifies consistency
-    /// with all samples. This method does not enforce kind or bound constraints - those are
-    /// checked as part of solution feasibility validation.
+    /// This method does not enforce kind or bound constraints - those are checked
+    /// as part of sample-set feasibility validation.
     pub fn new(
         decision_variable: DecisionVariable,
         samples: Sampled<f64>,
-        atol: crate::ATol,
+        _atol: crate::ATol,
     ) -> Result<Self, DecisionVariableError> {
         for (_, &sample_value) in samples.iter() {
             ensure_finite_value(decision_variable.id, sample_value)?;
-        }
-
-        // Check consistency with existing substituted_value if present
-        if let Some(substituted_value) = decision_variable.substituted_value {
-            // Check that all sample values are consistent with substituted_value
-            for (_, &sample_value) in samples.iter() {
-                if !values_are_consistent(substituted_value, sample_value, atol) {
-                    return Err(DecisionVariableError::SubstitutedValueOverwrite {
-                        id: decision_variable.id,
-                        previous_value: substituted_value,
-                        new_value: sample_value,
-                        atol,
-                    });
-                }
-            }
         }
 
         // Note: Kind and bound checking is intentionally omitted to allow infeasible solutions.
@@ -547,10 +462,8 @@ impl SampledDecisionVariable {
             id: self.id,
             kind: self.kind,
             bound: self.bound,
-            substituted_value: None, // No substituted value when getting from samples
         };
 
-        // unwrap is safe here since there's no substituted_value to check
         Some(EvaluatedDecisionVariable::new(dv, value, crate::ATol::default()).unwrap())
     }
 }
@@ -604,7 +517,7 @@ impl crate::Evaluate for DecisionVariable {
         atol: crate::ATol,
     ) -> crate::Result<()> {
         if let Some(value) = state.entries.get(&self.id.into_inner()) {
-            self.substitute(*value, atol)?;
+            self.check_value_consistency(*value, atol)?;
         }
         Ok(())
     }
@@ -783,20 +696,14 @@ mod tests {
     #[test]
     fn test_decision_variable_rejects_non_finite_values() {
         let id = VariableID::from(1);
-        let mut dv = DecisionVariable::continuous(id);
+        let dv = DecisionVariable::continuous(id);
 
         assert!(matches!(
-            dv.substitute(f64::NAN, ATol::default()),
+            dv.check_value_consistency(f64::NAN, ATol::default()),
             Err(DecisionVariableError::NonFiniteValue { .. })
         ));
         assert!(matches!(
-            DecisionVariable::new(
-                id,
-                Kind::Continuous,
-                Bound::default(),
-                Some(f64::INFINITY),
-                ATol::default()
-            ),
+            dv.check_value_consistency(f64::INFINITY, ATol::default()),
             Err(DecisionVariableError::NonFiniteValue { .. })
         ));
         assert!(matches!(

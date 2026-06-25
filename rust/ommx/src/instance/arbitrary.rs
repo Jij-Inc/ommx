@@ -239,6 +239,7 @@ impl Arbitrary for Instance {
                                     sense,
                                     decision_variables,
                                     variable_labels: Default::default(),
+                                    fixed_decision_variable_values: Default::default(),
                                     parameters: Default::default(),
                                     indicator_constraint_collection: Default::default(),
                                     one_hot_constraint_collection: Default::default(),

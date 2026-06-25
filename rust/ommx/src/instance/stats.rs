@@ -43,7 +43,7 @@ pub struct VariableStatsByUsage {
 /// The usage-based categories (used, fixed, dependent, irrelevant) are mutually exclusive.
 /// A variable belongs to exactly one category, determined by this priority:
 /// 1. `used`: Variables appearing in objective or active constraints
-/// 2. `fixed`: Variables with substituted values (not in category 1)
+/// 2. `fixed`: Variables with root-owned fixed values (not in category 1)
 /// 3. `dependent`: Variables defined by assignments in decision_variable_dependency (not in categories 1-2)
 /// 4. `irrelevant`: All other variables (not in categories 1-3)
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

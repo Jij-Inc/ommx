@@ -67,9 +67,7 @@ impl Instance {
         let mut linear = Linear::try_from(offset).unwrap();
         for (i, coefficient) in coefficients.iter().enumerate() {
             // Create binary variables for each coefficient
-            let binary = self.new_binary();
-            let binary_id = binary.id();
-            let _ = binary;
+            let binary_id = self.new_binary();
             let labels = self.variable_labels_mut();
             labels.set_name(binary_id, "ommx.log_encode");
             labels.set_subscripts(binary_id, vec![id.into_inner() as i64, i as i64]);
@@ -96,7 +94,6 @@ mod tests {
             id,
             Kind::Integer,
             Bound::new(2.0, 7.0).unwrap(),
-            None,
             crate::ATol::default(),
         )
         .unwrap();

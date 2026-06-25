@@ -119,6 +119,14 @@ The protobuf shape should therefore preserve collection ownership:
 - No second source of truth between active entries, removed entries, removed
   reasons, and constraint contexts.
 
+## Broader Normalization Tracking
+
+Broader root-owned entity normalization is tracked separately in
+[#958](https://github.com/Jij-Inc/ommx/issues/958). Resolve that issue before
+the forward-incompatible protobuf format is finalized, so this proposal does
+not become the only durable record for decisions about decision-variable,
+named-function, parameter, and sample-ID ownership.
+
 The exact wire shape is intentionally left as a follow-up decision. Two viable
 shapes remain:
 
@@ -617,6 +625,9 @@ Recommended PR sequence:
    - Verify that `ConstraintCollection<T>`, `EvaluatedCollection<T>`, and
      `SampledCollection<T>` have explicit ownership of their maps, removed
      reasons, and constraint-context stores.
+   - Resolve [#958](https://github.com/Jij-Inc/ommx/issues/958) before the
+     protobuf schema PR, so broader root-owned entity normalization is decided
+     before the new wire shape is finalized.
    - Remove or narrow public raw mutation that can desynchronize sidecars, in
      particular the `DerefMut` exposure on `EvaluatedCollection<T>`.
    - Make `ConstraintCollection::insert_with` enforce the documented
@@ -679,3 +690,7 @@ Recommended PR sequence:
    that still assume `instance.constraints` is the entire constraint universe
    need to use `required_capabilities` / `reduce_capabilities` or consume the
    special collections directly.
+6. Broader root-owned entity normalization is tracked in
+   [#958](https://github.com/Jij-Inc/ommx/issues/958), including inline IDs on
+   variables/named functions/parameters, parameter labeling, and SampleSet's
+   sample-ID universe.

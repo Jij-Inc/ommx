@@ -34,7 +34,6 @@ mod tests {
         DecisionVariable.bound 16
         DecisionVariable.id 8
         DecisionVariable.kind 1
-        DecisionVariable.substituted_value;Option[stack] 16
         "###);
     }
 
@@ -48,7 +47,6 @@ mod tests {
             VariableID::from(1),
             Kind::Integer,
             Bound::new(0.0, 10.0).unwrap(),
-            None,
             ATol::default(),
         )
         .unwrap();
@@ -58,7 +56,6 @@ mod tests {
         DecisionVariable.bound 16
         DecisionVariable.id 8
         DecisionVariable.kind 1
-        DecisionVariable.substituted_value;Option[stack] 16
         "###);
     }
 }

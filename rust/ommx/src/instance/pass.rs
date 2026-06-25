@@ -85,10 +85,8 @@ impl Instance {
         }
 
         if self
-            .decision_variables
-            .get(&indicator_variable)
-            .and_then(|dv| dv.substituted_value())
-            .is_some()
+            .fixed_decision_variable_values
+            .contains_key(&indicator_variable)
         {
             crate::bail!(
                 { ?id, ?indicator_variable },
@@ -118,13 +116,13 @@ impl Instance {
         Ok(())
     }
 
-    /// Build a State containing all fixed (substituted) variable values.
+    /// Build a State containing all root-owned fixed variable values.
     fn fixed_state(&self) -> v1::State {
         v1::State {
             entries: self
-                .decision_variables
+                .fixed_decision_variable_values
                 .iter()
-                .filter_map(|(id, dv)| dv.substituted_value().map(|v| (id.into_inner(), v)))
+                .map(|(id, value)| (id.into_inner(), *value))
                 .collect(),
         }
     }

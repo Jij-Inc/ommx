@@ -11,8 +11,8 @@ use std::collections::{BTreeMap, BTreeSet};
 ///
 /// - [`DecisionVariableRole::Used`] means the variable appears in the objective
 ///   function or in an active constraint family that affects solver input.
-/// - [`DecisionVariableRole::Fixed`] means the variable has
-///   [`DecisionVariable::substituted_value`] and is not solver-used.
+/// - [`DecisionVariableRole::Fixed`] means the variable has a root-owned fixed
+///   value and is not solver-used.
 /// - [`DecisionVariableRole::Dependent`] means the variable is defined by
 ///   `decision_variable_dependency` and is neither solver-used nor fixed.
 /// - [`DecisionVariableRole::Irrelevant`] is the remaining case.
@@ -317,14 +317,14 @@ impl Instance {
         let used = self.used_decision_variable_ids();
         self.decision_variables
             .get(&id)
-            .map(|dv| self.decision_variable_role_with_used(id, dv, &used))
+            .map(|_| self.decision_variable_role_with_used(id, &used))
     }
 
     pub fn decision_variable_roles(&self) -> BTreeMap<VariableID, DecisionVariableRole> {
         let used = self.used_decision_variable_ids();
         self.decision_variables
-            .iter()
-            .map(|(id, dv)| (*id, self.decision_variable_role_with_used(*id, dv, &used)))
+            .keys()
+            .map(|id| (*id, self.decision_variable_role_with_used(*id, &used)))
             .collect()
     }
 
@@ -334,10 +334,10 @@ impl Instance {
             .filter(|(_, role)| *role == DecisionVariableRole::Fixed)
             .map(|(id, _)| {
                 let value = self
-                    .decision_variables
+                    .fixed_decision_variable_values
                     .get(&id)
-                    .and_then(DecisionVariable::substituted_value)
-                    .expect("fixed role requires substituted_value");
+                    .copied()
+                    .expect("fixed role requires a root-owned fixed value");
                 (id, value)
             })
             .collect()
@@ -360,12 +360,11 @@ impl Instance {
     fn decision_variable_role_with_used(
         &self,
         id: VariableID,
-        dv: &DecisionVariable,
         used: &VariableIDSet,
     ) -> DecisionVariableRole {
         if used.contains(&id) {
             DecisionVariableRole::Used
-        } else if dv.substituted_value().is_some() {
+        } else if self.fixed_decision_variable_values.contains_key(&id) {
             DecisionVariableRole::Fixed
         } else if self.decision_variable_dependency.get(&id).is_some() {
             DecisionVariableRole::Dependent

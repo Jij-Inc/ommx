@@ -263,7 +263,6 @@ mod tests {
             VariableID::from(1),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
-            None,
             crate::ATol::default(),
         )
         .unwrap();
@@ -281,7 +280,6 @@ mod tests {
             VariableID::from(2),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
-            None,
             crate::ATol::default(),
         )
         .unwrap();
@@ -299,7 +297,6 @@ mod tests {
             VariableID::from(3),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
-            None,
             crate::ATol::default(),
         )
         .unwrap();
@@ -406,7 +403,6 @@ mod tests {
             VariableID::from(1),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
-            None,
             crate::ATol::default(),
         )
         .unwrap();
@@ -423,7 +419,6 @@ mod tests {
             VariableID::from(2),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
-            None,
             crate::ATol::default(),
         )
         .unwrap();
@@ -512,7 +507,6 @@ mod tests {
             VariableID::from(1),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
-            None,
             crate::ATol::default(),
         )
         .unwrap();
@@ -529,7 +523,6 @@ mod tests {
             VariableID::from(2),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
-            None,
             crate::ATol::default(),
         )
         .unwrap();
@@ -546,7 +539,6 @@ mod tests {
             VariableID::from(3),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
-            None,
             crate::ATol::default(),
         )
         .unwrap();
@@ -615,7 +607,6 @@ mod tests {
             VariableID::from(1),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
-            None,
             crate::ATol::default(),
         )
         .unwrap();
@@ -632,7 +623,6 @@ mod tests {
             VariableID::from(2),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
-            None,
             crate::ATol::default(),
         )
         .unwrap();
@@ -649,7 +639,6 @@ mod tests {
             VariableID::from(3),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
-            None,
             crate::ATol::default(),
         )
         .unwrap();
@@ -733,7 +722,6 @@ mod tests {
             VariableID::from(1),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
-            None,
             crate::ATol::default(),
         )
         .unwrap();
@@ -799,7 +787,6 @@ mod tests {
             VariableID::from(1),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
-            None,
             crate::ATol::default(),
         )
         .unwrap();
@@ -830,7 +817,6 @@ mod tests {
             VariableID::from(2),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
-            None,
             crate::ATol::default(),
         )
         .unwrap();

@@ -50,7 +50,6 @@ impl Arbitrary for DecisionVariable {
                 id: VariableID::from(0), // Should be replaced with a unique ID, but cannot be generated here
                 kind,
                 bound,
-                substituted_value: None, // To keep consistency in Instance level, keep this None here.
             })
             .boxed()
     }

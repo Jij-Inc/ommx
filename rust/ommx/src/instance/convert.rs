@@ -42,6 +42,7 @@ impl From<Instance> for ParametricInstance {
             sense,
             objective,
             decision_variables,
+            fixed_decision_variable_values,
             variable_labels,
             constraint_collection,
             indicator_constraint_collection,
@@ -61,6 +62,7 @@ impl From<Instance> for ParametricInstance {
             decision_variables,
             parameters: BTreeMap::default(),
             variable_labels,
+            fixed_decision_variable_values,
             constraint_collection,
             indicator_constraint_collection,
             one_hot_constraint_collection,
@@ -150,6 +152,7 @@ impl ParametricInstance {
             sense: self.sense,
             objective,
             decision_variables: self.decision_variables,
+            fixed_decision_variable_values: self.fixed_decision_variable_values,
             variable_labels: self.variable_labels,
             constraint_collection: ConstraintCollection::with_context(
                 constraints,

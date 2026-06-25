@@ -134,7 +134,7 @@ pub enum Sense {
 ///   These are "dependent variables" whose values are computed from other variables.
 /// - Decision variables are classified into mutually exclusive roles:
 ///   - **used**: Variable IDs appearing in the objective function or active constraints
-///   - **fixed**: Variable IDs with `substituted_value` set and not used
+///   - **fixed**: Variable IDs present in [`Self::fixed_decision_variable_values`] and not used
 ///   - **dependent**: Keys of `decision_variable_dependency` that are not used or fixed
 /// - [`DecisionVariableUsage`] is the reverse-usage index for used decision variables only.
 /// - [`Self::removed_constraints`] may contain fixed or dependent variable IDs.
@@ -147,6 +147,10 @@ pub enum Sense {
 ///   corresponding top-level collection; every label/context ID must refer to an
 ///   existing decision variable, named function, or active/removed constraint
 ///   in that collection.
+/// - Fixed decision-variable values are owned by [`Self`], not by individual
+///   [`DecisionVariable`] values. Fixed-value IDs must refer to existing
+///   decision variables and must be disjoint from solver-used and dependent
+///   variables.
 ///
 /// ## Special-constraint invariants
 ///
@@ -198,6 +202,13 @@ pub struct Instance {
     /// `description`). Sibling field of [`Self::decision_variables`]; together
     /// they form the canonical decision-variable storage.
     variable_labels: VariableLabelStore,
+
+    /// Fixed decision-variable values keyed by variable ID.
+    ///
+    /// This is root-owned instance state. It is not intrinsic
+    /// decision-variable definition data, so it is kept outside
+    /// [`DecisionVariable`].
+    fixed_decision_variable_values: BTreeMap<VariableID, f64>,
 
     /// Regular constraints collection (active + removed).
     constraint_collection: ConstraintCollection<Constraint>,
@@ -260,6 +271,16 @@ impl Instance {
         )?;
         self.variable_labels.insert(id, label);
         Ok(())
+    }
+
+    /// Access root-owned fixed decision-variable values.
+    pub fn fixed_decision_variable_values(&self) -> &BTreeMap<VariableID, f64> {
+        &self.fixed_decision_variable_values
+    }
+
+    /// Return the fixed value for one decision variable, if it is fixed.
+    pub fn fixed_decision_variable_value(&self, id: VariableID) -> Option<f64> {
+        self.fixed_decision_variable_values.get(&id).copied()
     }
 
     /// Access the per-named-function modeling-label store.
@@ -561,7 +582,7 @@ impl Instance {
 ///   evaluated by [`Self::with_parameters`].
 /// - Decision variables are classified into mutually exclusive roles:
 ///   - **used**: Variable IDs appearing in the objective function or active constraints
-///   - **fixed**: Variable IDs with `substituted_value` set and not used
+///   - **fixed**: Variable IDs present in [`Self::fixed_decision_variable_values`] and not used
 ///   - **dependent**: Keys of `decision_variable_dependency` that are not used or fixed
 /// - [`DecisionVariableUsage`] is the reverse-usage index for used decision variables only.
 /// - The keys of [`Self::named_functions`] match the `id()` of their values.
@@ -629,6 +650,12 @@ pub struct ParametricInstance {
     /// independent from this label store.
     variable_labels: VariableLabelStore,
 
+    /// Fixed decision-variable values keyed by variable ID.
+    ///
+    /// This is root-owned parametric-instance state, not intrinsic
+    /// decision-variable definition data.
+    fixed_decision_variable_values: BTreeMap<VariableID, f64>,
+
     /// Regular constraints collection (active + removed).
     constraint_collection: ConstraintCollection<Constraint>,
 
@@ -681,6 +708,16 @@ impl ParametricInstance {
         )?;
         self.variable_labels.insert(id, label);
         Ok(())
+    }
+
+    /// Access root-owned fixed decision-variable values.
+    pub fn fixed_decision_variable_values(&self) -> &BTreeMap<VariableID, f64> {
+        &self.fixed_decision_variable_values
+    }
+
+    /// Return the fixed value for one decision variable, if it is fixed.
+    pub fn fixed_decision_variable_value(&self, id: VariableID) -> Option<f64> {
+        self.fixed_decision_variable_values.get(&id).copied()
     }
 
     /// Access the per-named-function modeling-label store.
@@ -1057,7 +1094,6 @@ mod reduce_capabilities_tests {
             VariableID::from(0),
             Kind::Integer,
             Bound::new(-2.0, 3.0).unwrap(),
-            None,
             crate::ATol::default(),
         )
         .unwrap();

@@ -106,7 +106,7 @@ fn convert_dvars(mps: &Mps) -> ConvertedDecisionVariables {
             // in the future
             let id = VariableID::from(i as u64);
             name_id_map.insert(var_name.clone(), id);
-            let dvar = DecisionVariable::new(id, kind, bound, None, crate::ATol::default())
+            let dvar = DecisionVariable::new(id, kind, bound, crate::ATol::default())
                 .expect("Failed to create decision variable");
             dvars.insert(id, dvar);
             var_names.push((id, var_name.0.clone()));
@@ -121,7 +121,7 @@ fn convert_dvars(mps: &Mps) -> ConvertedDecisionVariables {
             let bound = get_dvar_bound(var_name, l, u);
             let id = VariableID::from(id_value);
             name_id_map.insert(var_name.clone(), id);
-            let dvar = DecisionVariable::new(id, kind, bound, None, crate::ATol::default())
+            let dvar = DecisionVariable::new(id, kind, bound, crate::ATol::default())
                 .expect("Failed to create decision variable");
             // Do not add name here since it means OMMX ID, not user-defined name
             dvars.insert(id, dvar);

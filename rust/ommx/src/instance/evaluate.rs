@@ -164,9 +164,9 @@ impl Instance {
         let used = self.used_decision_variable_ids();
 
         let fixed: Vec<_> = self
-            .decision_variables
+            .fixed_decision_variable_values
             .iter()
-            .filter_map(|(id, dv)| dv.substituted_value().map(|value| (*id, value)))
+            .map(|(id, value)| (*id, *value))
             .collect();
         let fixed_ids: VariableIDSet = fixed.iter().map(|(id, _)| *id).collect();
         let dependent_ids: VariableIDSet = self.decision_variable_dependency.keys().collect();
@@ -330,14 +330,30 @@ impl Evaluate for Instance {
         // Phase 1: Propagate through special constraints (unit propagation).
         let expanded_state = working.propagate_special_constraints(state, atol)?;
 
-        // Phase 2: Substitute fixed values into decision variables.
+        // Phase 2: Store fixed values in the root-owned table.
         for (id, value) in expanded_state.entries.iter() {
             let Some(dv) = working.decision_variables.get_mut(&VariableID::from(*id)) else {
                 return Err(crate::error!(
                     "Unknown decision variable (ID={id}) in state."
                 ));
             };
-            dv.substitute(*value, atol)?;
+            dv.check_value_consistency(*value, atol)?;
+            let var_id = VariableID::from(*id);
+            if let Some(previous_value) = working.fixed_decision_variable_values.get(&var_id) {
+                if (*previous_value - *value).abs() >= *atol {
+                    return Err(crate::DecisionVariableError::SubstitutedValueOverwrite {
+                        id: var_id,
+                        previous_value: *previous_value,
+                        new_value: *value,
+                        atol,
+                    }
+                    .into());
+                }
+            } else {
+                working
+                    .fixed_decision_variable_values
+                    .insert(var_id, *value);
+            }
         }
 
         // Phase 3: Regular partial evaluation with expanded state.
@@ -518,22 +534,24 @@ mod tests {
 
     #[test]
     fn test_populate_state_rejects_non_finite_fixed_value_from_state() {
-        let mut x2 = crate::DecisionVariable::continuous(VariableID::from(2));
-        x2.substitute(3.0, ATol::default()).unwrap();
         let decision_variables = BTreeMap::from([
             (
                 VariableID::from(1),
                 crate::DecisionVariable::continuous(VariableID::from(1)),
             ),
-            (VariableID::from(2), x2),
+            (
+                VariableID::from(2),
+                crate::DecisionVariable::continuous(VariableID::from(2)),
+            ),
         ]);
-        let instance = Instance::new(
-            Sense::Minimize,
-            Function::from(linear!(1)),
-            decision_variables,
-            BTreeMap::new(),
-        )
-        .unwrap();
+        let instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(linear!(1)))
+            .decision_variables(decision_variables)
+            .fixed_decision_variable_values(BTreeMap::from([(VariableID::from(2), 3.0)]))
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap();
         let state = v1::State::from(HashMap::from([(1, 1.0), (2, f64::NAN)]));
 
         let err = instance.populate_state(state, ATol::default()).unwrap_err();
@@ -604,14 +622,13 @@ mod tests {
 
         // Create decision variables:
         // x1 (id=1): used in objective
-        // x2 (id=2): fixed variable (substituted_value = 3.0)
+        // x2 (id=2): fixed variable (value = 3.0)
         // x3 (id=3): dependent on x4 (x3 = 2 * x4)
         // x4 (id=4): irrelevant (not used in objective/constraints)
         // x5 (id=5): only used in named_functions
 
         let x1 = DecisionVariable::continuous(VariableID::from(1));
-        let mut x2 = DecisionVariable::continuous(VariableID::from(2));
-        x2.substitute(3.0, ATol::default()).unwrap(); // fixed to 3.0
+        let x2 = DecisionVariable::continuous(VariableID::from(2));
         let x3 = DecisionVariable::continuous(VariableID::from(3));
         let x4 = DecisionVariable::continuous(VariableID::from(4));
         let x5 = DecisionVariable::continuous(VariableID::from(5));
@@ -651,13 +668,16 @@ mod tests {
             NamedFunctionID::from(1) => named_function,
         };
 
-        let mut instance = Instance::new(
-            Sense::Minimize,
-            objective,
-            decision_variables,
-            BTreeMap::new(), // No constraints
-        )
-        .unwrap();
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(objective)
+            .decision_variables(decision_variables)
+            .fixed_decision_variable_values(btreemap! {
+                VariableID::from(2) => 3.0,
+            })
+            .constraints(BTreeMap::new()) // No constraints
+            .build()
+            .unwrap();
         instance.decision_variable_dependency = decision_variable_dependency;
         instance.named_functions = named_functions;
 
@@ -737,15 +757,15 @@ mod tests {
 
         // All three variables should be substituted
         assert_eq!(
-            instance.decision_variables[&VariableID::from(1)].substituted_value(),
+            instance.fixed_decision_variable_value(VariableID::from(1)),
             Some(0.0)
         );
         assert_eq!(
-            instance.decision_variables[&VariableID::from(2)].substituted_value(),
+            instance.fixed_decision_variable_value(VariableID::from(2)),
             Some(1.0)
         );
         assert_eq!(
-            instance.decision_variables[&VariableID::from(3)].substituted_value(),
+            instance.fixed_decision_variable_value(VariableID::from(3)),
             Some(0.0)
         );
 
@@ -786,7 +806,7 @@ mod tests {
         instance.partial_evaluate(&state, ATol::default()).unwrap();
 
         assert_eq!(
-            instance.decision_variables[&VariableID::from(3)].substituted_value(),
+            instance.fixed_decision_variable_value(VariableID::from(3)),
             Some(1.0)
         );
     }
@@ -834,7 +854,7 @@ mod tests {
 
         // x2 should be fixed to 0 by propagation
         assert_eq!(
-            instance.decision_variables[&VariableID::from(2)].substituted_value(),
+            instance.fixed_decision_variable_value(VariableID::from(2)),
             Some(0.0)
         );
 
