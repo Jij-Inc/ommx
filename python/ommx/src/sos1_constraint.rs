@@ -376,5 +376,5 @@ crate::attached_metadata_methods!(
     AttachedSos1Constraint,
     ommx::Sos1ConstraintID,
     sos1_constraint_metadata,
-    sos1_constraint_metadata_mut
+    set_sos1_constraint_metadata
 );

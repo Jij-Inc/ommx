@@ -385,5 +385,5 @@ crate::attached_metadata_methods!(
     AttachedOneHotConstraint,
     ommx::OneHotConstraintID,
     one_hot_constraint_metadata,
-    one_hot_constraint_metadata_mut
+    set_one_hot_constraint_metadata
 );

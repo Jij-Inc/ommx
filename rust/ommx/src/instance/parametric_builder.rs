@@ -22,17 +22,23 @@ pub struct ParametricInstanceBuilder {
     sense: Option<Sense>,
     objective: Option<Function>,
     decision_variables: Option<BTreeMap<VariableID, DecisionVariable>>,
+    variable_metadata: VariableMetadataStore,
     parameters: Option<BTreeMap<VariableID, v1::Parameter>>,
     constraints: Option<BTreeMap<ConstraintID, Constraint>>,
+    constraint_metadata: ConstraintMetadataStore<ConstraintID>,
     named_functions: BTreeMap<NamedFunctionID, NamedFunction>,
+    named_function_metadata: crate::named_function::NamedFunctionMetadataStore,
     removed_constraints: BTreeMap<ConstraintID, (Constraint, crate::constraint::RemovedReason)>,
     indicator_constraints: BTreeMap<crate::IndicatorConstraintID, crate::IndicatorConstraint>,
+    indicator_constraint_metadata: ConstraintMetadataStore<crate::IndicatorConstraintID>,
     removed_indicator_constraints: BTreeMap<
         crate::IndicatorConstraintID,
         (crate::IndicatorConstraint, crate::constraint::RemovedReason),
     >,
     one_hot_constraints: BTreeMap<crate::OneHotConstraintID, crate::OneHotConstraint>,
+    one_hot_constraint_metadata: ConstraintMetadataStore<crate::OneHotConstraintID>,
     sos1_constraints: BTreeMap<crate::Sos1ConstraintID, crate::Sos1Constraint>,
+    sos1_constraint_metadata: ConstraintMetadataStore<crate::Sos1ConstraintID>,
     decision_variable_dependency: AcyclicAssignments,
     description: Option<v1::instance::Description>,
 }
@@ -64,6 +70,12 @@ impl ParametricInstanceBuilder {
         self
     }
 
+    /// Sets the per-decision-variable modeling labels.
+    pub fn variable_metadata(mut self, variable_metadata: VariableMetadataStore) -> Self {
+        self.variable_metadata = variable_metadata;
+        self
+    }
+
     /// Sets the parameters.
     pub fn parameters(mut self, parameters: BTreeMap<VariableID, v1::Parameter>) -> Self {
         self.parameters = Some(parameters);
@@ -76,12 +88,30 @@ impl ParametricInstanceBuilder {
         self
     }
 
+    /// Sets the per-regular-constraint metadata.
+    pub fn constraint_metadata(
+        mut self,
+        constraint_metadata: ConstraintMetadataStore<ConstraintID>,
+    ) -> Self {
+        self.constraint_metadata = constraint_metadata;
+        self
+    }
+
     /// Sets the named functions.
     pub fn named_functions(
         mut self,
         named_functions: BTreeMap<NamedFunctionID, NamedFunction>,
     ) -> Self {
         self.named_functions = named_functions;
+        self
+    }
+
+    /// Sets the per-named-function modeling labels.
+    pub fn named_function_metadata(
+        mut self,
+        named_function_metadata: crate::named_function::NamedFunctionMetadataStore,
+    ) -> Self {
+        self.named_function_metadata = named_function_metadata;
         self
     }
 
@@ -100,6 +130,15 @@ impl ParametricInstanceBuilder {
         indicator_constraints: BTreeMap<crate::IndicatorConstraintID, crate::IndicatorConstraint>,
     ) -> Self {
         self.indicator_constraints = indicator_constraints;
+        self
+    }
+
+    /// Sets the per-indicator-constraint metadata.
+    pub fn indicator_constraint_metadata(
+        mut self,
+        indicator_constraint_metadata: ConstraintMetadataStore<crate::IndicatorConstraintID>,
+    ) -> Self {
+        self.indicator_constraint_metadata = indicator_constraint_metadata;
         self
     }
 
@@ -124,12 +163,30 @@ impl ParametricInstanceBuilder {
         self
     }
 
+    /// Sets the per-one-hot-constraint metadata.
+    pub fn one_hot_constraint_metadata(
+        mut self,
+        one_hot_constraint_metadata: ConstraintMetadataStore<crate::OneHotConstraintID>,
+    ) -> Self {
+        self.one_hot_constraint_metadata = one_hot_constraint_metadata;
+        self
+    }
+
     /// Sets the SOS1 constraints.
     pub fn sos1_constraints(
         mut self,
         sos1_constraints: BTreeMap<crate::Sos1ConstraintID, crate::Sos1Constraint>,
     ) -> Self {
         self.sos1_constraints = sos1_constraints;
+        self
+    }
+
+    /// Sets the per-SOS1-constraint metadata.
+    pub fn sos1_constraint_metadata(
+        mut self,
+        sos1_constraint_metadata: ConstraintMetadataStore<crate::Sos1ConstraintID>,
+    ) -> Self {
+        self.sos1_constraint_metadata = sos1_constraint_metadata;
         self
     }
 
@@ -156,6 +213,8 @@ impl ParametricInstanceBuilder {
     /// - Decision variable IDs and parameter IDs overlap
     /// - The objective function or constraints reference undefined variable IDs
     /// - The keys of `constraints` and `removed_constraints` are not disjoint
+    /// - Metadata stores contain IDs that are not owned by the corresponding
+    ///   decision-variable, named-function, or constraint collection
     /// - The keys of `decision_variable_dependency` are not in `decision_variables`
     /// - The RHS expressions of `decision_variable_dependency` reference IDs
     ///   outside `decision_variables` or `parameters`
@@ -202,6 +261,11 @@ impl ParametricInstanceBuilder {
         // Check that decision variable IDs and parameter IDs are disjoint
         let decision_variable_ids: VariableIDSet = decision_variables.keys().cloned().collect();
         let parameter_ids: VariableIDSet = parameters.keys().cloned().collect();
+        crate::modeling_label::validate_modeling_label_ids(
+            &self.variable_metadata,
+            &decision_variable_ids,
+            "decision variable",
+        )?;
 
         let intersection: VariableIDSet = decision_variable_ids
             .intersection(&parameter_ids)
@@ -259,6 +323,16 @@ impl ParametricInstanceBuilder {
                 }
             }
         }
+        let named_function_ids = self
+            .named_functions
+            .keys()
+            .copied()
+            .collect::<std::collections::BTreeSet<_>>();
+        crate::modeling_label::validate_modeling_label_ids(
+            &self.named_function_metadata,
+            &named_function_ids,
+            "named function",
+        )?;
 
         // Validate indicator constraints. Function bodies may reference
         // parameters; the indicator variable is a *structural* position and
@@ -444,25 +518,29 @@ impl ParametricInstanceBuilder {
             objective,
             decision_variables,
             parameters,
-            variable_metadata: Default::default(),
-            constraint_collection: ConstraintCollection::new(
+            variable_metadata: self.variable_metadata,
+            constraint_collection: ConstraintCollection::with_metadata(
                 constraints,
                 self.removed_constraints,
+                self.constraint_metadata,
             )?,
-            indicator_constraint_collection: ConstraintCollection::new(
+            indicator_constraint_collection: ConstraintCollection::with_metadata(
                 self.indicator_constraints,
                 self.removed_indicator_constraints,
+                self.indicator_constraint_metadata,
             )?,
-            one_hot_constraint_collection: ConstraintCollection::new(
+            one_hot_constraint_collection: ConstraintCollection::with_metadata(
                 self.one_hot_constraints,
                 BTreeMap::new(),
+                self.one_hot_constraint_metadata,
             )?,
-            sos1_constraint_collection: ConstraintCollection::new(
+            sos1_constraint_collection: ConstraintCollection::with_metadata(
                 self.sos1_constraints,
                 BTreeMap::new(),
+                self.sos1_constraint_metadata,
             )?,
             named_functions: self.named_functions,
-            named_function_metadata: Default::default(),
+            named_function_metadata: self.named_function_metadata,
             decision_variable_dependency: self.decision_variable_dependency,
             description: self.description,
             annotations: Default::default(),
@@ -496,6 +574,116 @@ mod tests {
         assert!(instance.decision_variables().is_empty());
         assert!(instance.parameters().is_empty());
         assert!(instance.constraints().is_empty());
+    }
+
+    #[test]
+    fn test_parametric_builder_preserves_metadata() {
+        let var_id = VariableID::from(1);
+        let constraint_id = ConstraintID::from(2);
+        let mut variable_metadata = VariableMetadataStore::default();
+        variable_metadata.set_name(var_id, "x");
+        let mut constraint_metadata = ConstraintMetadataStore::default();
+        constraint_metadata.set_name(constraint_id, "balance");
+
+        let instance = ParametricInstance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::from([(var_id, DecisionVariable::binary(var_id))]))
+            .variable_metadata(variable_metadata)
+            .parameters(BTreeMap::new())
+            .constraints(BTreeMap::from([(
+                constraint_id,
+                Constraint::equal_to_zero(Function::Zero),
+            )]))
+            .constraint_metadata(constraint_metadata)
+            .build()
+            .unwrap();
+
+        assert_eq!(instance.variable_metadata().name(var_id), Some("x"));
+        assert_eq!(
+            instance.constraint_metadata().name(constraint_id),
+            Some("balance")
+        );
+    }
+
+    #[test]
+    fn test_parametric_builder_rejects_orphan_variable_metadata() {
+        let parameter_id = VariableID::from(99);
+        let mut variable_metadata = VariableMetadataStore::default();
+        variable_metadata.set_name(parameter_id, "p");
+
+        let err = ParametricInstance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::new())
+            .variable_metadata(variable_metadata)
+            .parameters(BTreeMap::from([(
+                parameter_id,
+                v1::Parameter {
+                    id: parameter_id.into_inner(),
+                    ..Default::default()
+                },
+            )]))
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap_err();
+
+        assert!(
+            err.to_string().contains("unknown decision variable ID")
+                && err.to_string().contains("VariableID(99)"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_parametric_builder_rejects_orphan_constraint_metadata() {
+        let mut constraint_metadata = ConstraintMetadataStore::default();
+        constraint_metadata.set_name(ConstraintID::from(99), "orphan");
+
+        let err = ParametricInstance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::new())
+            .parameters(BTreeMap::new())
+            .constraints(BTreeMap::new())
+            .constraint_metadata(constraint_metadata)
+            .build()
+            .unwrap_err();
+
+        assert!(
+            err.to_string().contains("unknown constraint ID")
+                && err.to_string().contains("ConstraintID(99)"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_parametric_metadata_setters_reject_unknown_ids() {
+        let parameter_id = VariableID::from(99);
+        let mut instance = ParametricInstance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::new())
+            .parameters(BTreeMap::from([(
+                parameter_id,
+                v1::Parameter {
+                    id: parameter_id.into_inner(),
+                    ..Default::default()
+                },
+            )]))
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap();
+
+        let err = instance
+            .set_variable_metadata(parameter_id, ModelingLabel::default())
+            .unwrap_err();
+        assert!(err.to_string().contains("unknown decision variable ID"));
+
+        let err = instance
+            .set_constraint_metadata(ConstraintID::from(99), ConstraintMetadata::default())
+            .unwrap_err();
+        assert!(err.to_string().contains("unknown constraint ID"));
     }
 
     #[test]

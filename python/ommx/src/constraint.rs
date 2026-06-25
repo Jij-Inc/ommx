@@ -633,5 +633,5 @@ crate::attached_metadata_methods!(
     AttachedConstraint,
     ommx::ConstraintID,
     constraint_metadata,
-    constraint_metadata_mut
+    set_constraint_metadata
 );

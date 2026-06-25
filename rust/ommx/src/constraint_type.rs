@@ -346,10 +346,12 @@ impl<T: ConstraintType> ConstraintCollection<T> {
         &self.metadata
     }
 
-    /// Mutable access to the per-constraint label/provenance store. Used by setters
-    /// (e.g. `instance.add_name(id, ...)`) and by adapters that want to
-    /// rewrite metadata in bulk.
-    pub fn metadata_mut(&mut self) -> &mut ConstraintMetadataStore<T::ID> {
+    /// Crate-internal mutable access to the per-constraint label/provenance store.
+    ///
+    /// Collection membership owns the valid ID set, so public metadata writes go
+    /// through the top-level owner (`Instance`, `ParametricInstance`, `Solution`,
+    /// or `SampleSet`) rather than exposing this raw sidecar store.
+    pub(crate) fn metadata_mut(&mut self) -> &mut ConstraintMetadataStore<T::ID> {
         &mut self.metadata
     }
 
@@ -635,10 +637,6 @@ impl<T: ConstraintType> EvaluatedCollection<T> {
         self.constraints.get_mut(id)
     }
 
-    pub fn into_inner(self) -> BTreeMap<T::ID, T::Evaluated> {
-        self.constraints
-    }
-
     /// Access the removed reasons map.
     pub fn removed_reasons(&self) -> &BTreeMap<T::ID, RemovedReason> {
         &self.removed_reasons
@@ -647,11 +645,6 @@ impl<T: ConstraintType> EvaluatedCollection<T> {
     /// Access the per-constraint label/provenance store.
     pub fn metadata(&self) -> &ConstraintMetadataStore<T::ID> {
         &self.metadata
-    }
-
-    /// Mutable access to the per-constraint label/provenance store.
-    pub fn metadata_mut(&mut self) -> &mut ConstraintMetadataStore<T::ID> {
-        &mut self.metadata
     }
 
     /// Validate that every label/provenance ID is owned by this collection.
@@ -773,10 +766,6 @@ impl<T: ConstraintType> SampledCollection<T> {
         &self.constraints
     }
 
-    pub fn into_inner(self) -> BTreeMap<T::ID, T::Sampled> {
-        self.constraints
-    }
-
     /// Validate that every sampled constraint in this collection carries the
     /// same sample IDs as `expected` across all of its per-sample side maps.
     pub fn validate_sample_ids(
@@ -797,11 +786,6 @@ impl<T: ConstraintType> SampledCollection<T> {
     /// Access the per-constraint label/provenance store.
     pub fn metadata(&self) -> &ConstraintMetadataStore<T::ID> {
         &self.metadata
-    }
-
-    /// Mutable access to the per-constraint label/provenance store.
-    pub fn metadata_mut(&mut self) -> &mut ConstraintMetadataStore<T::ID> {
-        &mut self.metadata
     }
 
     /// Validate that every label/provenance ID is owned by this collection.

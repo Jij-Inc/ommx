@@ -39,10 +39,38 @@ use crate::{
     named_function::NamedFunctionID,
     one_hot_constraint::OneHotConstraint,
     sos1_constraint::Sos1Constraint,
-    v1, AcyclicAssignments, Constraint, ConstraintID, DecisionVariable, Evaluate, Function,
-    NamedFunction, VariableID, VariableIDSet,
+    v1, AcyclicAssignments, Constraint, ConstraintID, ConstraintMetadata, DecisionVariable,
+    Evaluate, Function, ModelingLabel, NamedFunction, VariableID, VariableIDSet,
 };
 use std::collections::{BTreeMap, HashMap};
+
+fn ensure_modeling_label_target<ID: std::fmt::Debug>(
+    contains: bool,
+    owner_name: &str,
+    id: ID,
+) -> crate::Result<()> {
+    if !contains {
+        crate::bail!(
+            { ?id },
+            "Modeling label references unknown {owner_name} ID {id:?}",
+        );
+    }
+    Ok(())
+}
+
+fn ensure_constraint_metadata_target<ID: std::fmt::Debug>(
+    contains: bool,
+    owner_name: &str,
+    id: ID,
+) -> crate::Result<()> {
+    if !contains {
+        crate::bail!(
+            { ?id },
+            "Constraint label/provenance references unknown {owner_name} ID {id:?}",
+        );
+    }
+    Ok(())
+}
 
 /// A constraint type capability flag for non-standard constraint types.
 ///
@@ -115,6 +143,10 @@ pub enum Sense {
 /// - [`Self::named_functions`] may contain fixed or dependent variable IDs (like `removed_constraints`).
 ///   Variable IDs in `named_functions` must be registered in [`Self::decision_variables`],
 ///   but are NOT included in the "used" set calculation.
+/// - Modeling-label and constraint-metadata sidecars are owned by their
+///   corresponding top-level collection; every metadata ID must refer to an
+///   existing decision variable, named function, or active/removed constraint
+///   in that collection.
 ///
 /// ## Special-constraint invariants
 ///
@@ -206,9 +238,27 @@ impl Instance {
         &self.variable_metadata
     }
 
-    /// Mutable access to the per-variable metadata store.
-    pub fn variable_metadata_mut(&mut self) -> &mut VariableMetadataStore {
+    /// Crate-internal mutable access to the per-variable metadata store.
+    ///
+    /// Public callers should use [`Self::set_variable_metadata`], which checks
+    /// that the metadata ID belongs to this instance.
+    fn variable_metadata_mut(&mut self) -> &mut VariableMetadataStore {
         &mut self.variable_metadata
+    }
+
+    /// Replace the modeling label for a decision variable owned by this instance.
+    pub fn set_variable_metadata(
+        &mut self,
+        id: VariableID,
+        metadata: ModelingLabel,
+    ) -> crate::Result<()> {
+        ensure_modeling_label_target(
+            self.decision_variables.contains_key(&id),
+            "decision variable",
+            id,
+        )?;
+        self.variable_metadata.insert(id, metadata);
+        Ok(())
     }
 
     /// Access the per-named-function metadata store.
@@ -216,11 +266,25 @@ impl Instance {
         &self.named_function_metadata
     }
 
-    /// Mutable access to the per-named-function metadata store.
-    pub fn named_function_metadata_mut(
+    /// Crate-internal mutable access to the per-named-function metadata store.
+    ///
+    /// Public callers should use [`Self::set_named_function_metadata`], which
+    /// checks that the metadata ID belongs to this instance.
+    fn named_function_metadata_mut(
         &mut self,
     ) -> &mut crate::named_function::NamedFunctionMetadataStore {
         &mut self.named_function_metadata
+    }
+
+    /// Replace the modeling label for a named function owned by this instance.
+    pub fn set_named_function_metadata(
+        &mut self,
+        id: NamedFunctionID,
+        metadata: ModelingLabel,
+    ) -> crate::Result<()> {
+        ensure_modeling_label_target(self.named_functions.contains_key(&id), "named function", id)?;
+        self.named_function_metadata.insert(id, metadata);
+        Ok(())
     }
 
     /// Active constraints.
@@ -243,15 +307,22 @@ impl Instance {
         self.constraint_collection.metadata()
     }
 
-    /// Mutable access to the per-constraint metadata store.
-    ///
-    /// This store is a sidecar of [`Self::constraint_collection`]: every
-    /// non-empty label/provenance entry must refer to an active or removed
-    /// constraint ID owned by that collection. Checked construction and parse
-    /// boundaries reject unknown metadata IDs. For operations that change
-    /// collection membership, use the dedicated `Instance` methods instead.
-    pub fn constraint_metadata_mut(&mut self) -> &mut ConstraintMetadataStore<ConstraintID> {
-        self.constraint_collection.metadata_mut()
+    /// Replace the metadata for a regular constraint owned by this instance.
+    pub fn set_constraint_metadata(
+        &mut self,
+        id: ConstraintID,
+        metadata: ConstraintMetadata,
+    ) -> crate::Result<()> {
+        ensure_constraint_metadata_target(
+            self.constraint_collection.active().contains_key(&id)
+                || self.constraint_collection.removed().contains_key(&id),
+            "constraint",
+            id,
+        )?;
+        self.constraint_collection
+            .metadata_mut()
+            .insert(id, metadata);
+        Ok(())
     }
 
     /// Active indicator constraints.
@@ -280,12 +351,27 @@ impl Instance {
         self.indicator_constraint_collection.metadata()
     }
 
-    /// Mutable access to the per-indicator-constraint metadata store. See
-    /// [`Self::constraint_metadata_mut`] for the sidecar ownership rule.
-    pub fn indicator_constraint_metadata_mut(
+    /// Replace the metadata for an indicator constraint owned by this instance.
+    pub fn set_indicator_constraint_metadata(
         &mut self,
-    ) -> &mut ConstraintMetadataStore<crate::IndicatorConstraintID> {
-        self.indicator_constraint_collection.metadata_mut()
+        id: crate::IndicatorConstraintID,
+        metadata: ConstraintMetadata,
+    ) -> crate::Result<()> {
+        ensure_constraint_metadata_target(
+            self.indicator_constraint_collection
+                .active()
+                .contains_key(&id)
+                || self
+                    .indicator_constraint_collection
+                    .removed()
+                    .contains_key(&id),
+            "indicator constraint",
+            id,
+        )?;
+        self.indicator_constraint_collection
+            .metadata_mut()
+            .insert(id, metadata);
+        Ok(())
     }
 
     /// Active one-hot constraints.
@@ -312,12 +398,27 @@ impl Instance {
         self.one_hot_constraint_collection.metadata()
     }
 
-    /// Mutable access to the per-one-hot-constraint metadata store. See
-    /// [`Self::constraint_metadata_mut`] for the sidecar ownership rule.
-    pub fn one_hot_constraint_metadata_mut(
+    /// Replace the metadata for a one-hot constraint owned by this instance.
+    pub fn set_one_hot_constraint_metadata(
         &mut self,
-    ) -> &mut ConstraintMetadataStore<crate::OneHotConstraintID> {
-        self.one_hot_constraint_collection.metadata_mut()
+        id: crate::OneHotConstraintID,
+        metadata: ConstraintMetadata,
+    ) -> crate::Result<()> {
+        ensure_constraint_metadata_target(
+            self.one_hot_constraint_collection
+                .active()
+                .contains_key(&id)
+                || self
+                    .one_hot_constraint_collection
+                    .removed()
+                    .contains_key(&id),
+            "one-hot constraint",
+            id,
+        )?;
+        self.one_hot_constraint_collection
+            .metadata_mut()
+            .insert(id, metadata);
+        Ok(())
     }
 
     /// Active SOS1 constraints.
@@ -342,12 +443,22 @@ impl Instance {
         self.sos1_constraint_collection.metadata()
     }
 
-    /// Mutable access to the per-SOS1-constraint metadata store. See
-    /// [`Self::constraint_metadata_mut`] for the sidecar ownership rule.
-    pub fn sos1_constraint_metadata_mut(
+    /// Replace the metadata for an SOS1 constraint owned by this instance.
+    pub fn set_sos1_constraint_metadata(
         &mut self,
-    ) -> &mut ConstraintMetadataStore<crate::Sos1ConstraintID> {
-        self.sos1_constraint_collection.metadata_mut()
+        id: crate::Sos1ConstraintID,
+        metadata: ConstraintMetadata,
+    ) -> crate::Result<()> {
+        ensure_constraint_metadata_target(
+            self.sos1_constraint_collection.active().contains_key(&id)
+                || self.sos1_constraint_collection.removed().contains_key(&id),
+            "SOS1 constraint",
+            id,
+        )?;
+        self.sos1_constraint_collection
+            .metadata_mut()
+            .insert(id, metadata);
+        Ok(())
     }
 
     /// Returns the set of non-standard constraint capabilities required by this instance.
@@ -461,6 +572,10 @@ impl Instance {
 /// - [`Self::named_functions`] may contain fixed or dependent variable IDs (like `removed_constraints`).
 ///   Variable IDs in `named_functions` must be registered in [`Self::decision_variables`],
 ///   but are NOT included in the "used" set calculation.
+/// - Modeling-label and constraint-metadata sidecars are owned by their
+///   corresponding top-level collection; every metadata ID must refer to an
+///   existing decision variable, named function, or active/removed constraint
+///   in that collection. Parameter IDs are not valid variable metadata IDs.
 ///
 /// ## Special-constraint invariants
 ///
@@ -556,9 +671,20 @@ impl ParametricInstance {
         &self.variable_metadata
     }
 
-    /// Mutable access to the per-variable metadata store.
-    pub fn variable_metadata_mut(&mut self) -> &mut VariableMetadataStore {
-        &mut self.variable_metadata
+    /// Replace the modeling label for a decision variable owned by this
+    /// parametric instance.
+    pub fn set_variable_metadata(
+        &mut self,
+        id: VariableID,
+        metadata: ModelingLabel,
+    ) -> crate::Result<()> {
+        ensure_modeling_label_target(
+            self.decision_variables.contains_key(&id),
+            "decision variable",
+            id,
+        )?;
+        self.variable_metadata.insert(id, metadata);
+        Ok(())
     }
 
     /// Access the per-named-function metadata store.
@@ -566,11 +692,16 @@ impl ParametricInstance {
         &self.named_function_metadata
     }
 
-    /// Mutable access to the per-named-function metadata store.
-    pub fn named_function_metadata_mut(
+    /// Replace the modeling label for a named function owned by this parametric
+    /// instance.
+    pub fn set_named_function_metadata(
         &mut self,
-    ) -> &mut crate::named_function::NamedFunctionMetadataStore {
-        &mut self.named_function_metadata
+        id: NamedFunctionID,
+        metadata: ModelingLabel,
+    ) -> crate::Result<()> {
+        ensure_modeling_label_target(self.named_functions.contains_key(&id), "named function", id)?;
+        self.named_function_metadata.insert(id, metadata);
+        Ok(())
     }
 
     /// Active constraints.
@@ -593,10 +724,23 @@ impl ParametricInstance {
         self.constraint_collection.metadata()
     }
 
-    /// Mutable access to the per-constraint metadata store. See
-    /// [`Instance::constraint_metadata_mut`] for the sidecar ownership rule.
-    pub fn constraint_metadata_mut(&mut self) -> &mut ConstraintMetadataStore<ConstraintID> {
-        self.constraint_collection.metadata_mut()
+    /// Replace the metadata for a regular constraint owned by this parametric
+    /// instance.
+    pub fn set_constraint_metadata(
+        &mut self,
+        id: ConstraintID,
+        metadata: ConstraintMetadata,
+    ) -> crate::Result<()> {
+        ensure_constraint_metadata_target(
+            self.constraint_collection.active().contains_key(&id)
+                || self.constraint_collection.removed().contains_key(&id),
+            "constraint",
+            id,
+        )?;
+        self.constraint_collection
+            .metadata_mut()
+            .insert(id, metadata);
+        Ok(())
     }
 
     /// Active indicator constraints.
@@ -625,12 +769,28 @@ impl ParametricInstance {
         self.indicator_constraint_collection.metadata()
     }
 
-    /// Mutable access to the per-indicator-constraint metadata store. See
-    /// [`Instance::constraint_metadata_mut`] for the sidecar ownership rule.
-    pub fn indicator_constraint_metadata_mut(
+    /// Replace the metadata for an indicator constraint owned by this parametric
+    /// instance.
+    pub fn set_indicator_constraint_metadata(
         &mut self,
-    ) -> &mut ConstraintMetadataStore<crate::IndicatorConstraintID> {
-        self.indicator_constraint_collection.metadata_mut()
+        id: crate::IndicatorConstraintID,
+        metadata: ConstraintMetadata,
+    ) -> crate::Result<()> {
+        ensure_constraint_metadata_target(
+            self.indicator_constraint_collection
+                .active()
+                .contains_key(&id)
+                || self
+                    .indicator_constraint_collection
+                    .removed()
+                    .contains_key(&id),
+            "indicator constraint",
+            id,
+        )?;
+        self.indicator_constraint_collection
+            .metadata_mut()
+            .insert(id, metadata);
+        Ok(())
     }
 
     /// Active one-hot constraints.
@@ -657,12 +817,28 @@ impl ParametricInstance {
         self.one_hot_constraint_collection.metadata()
     }
 
-    /// Mutable access to the per-one-hot-constraint metadata store. See
-    /// [`Instance::constraint_metadata_mut`] for the sidecar ownership rule.
-    pub fn one_hot_constraint_metadata_mut(
+    /// Replace the metadata for a one-hot constraint owned by this parametric
+    /// instance.
+    pub fn set_one_hot_constraint_metadata(
         &mut self,
-    ) -> &mut ConstraintMetadataStore<crate::OneHotConstraintID> {
-        self.one_hot_constraint_collection.metadata_mut()
+        id: crate::OneHotConstraintID,
+        metadata: ConstraintMetadata,
+    ) -> crate::Result<()> {
+        ensure_constraint_metadata_target(
+            self.one_hot_constraint_collection
+                .active()
+                .contains_key(&id)
+                || self
+                    .one_hot_constraint_collection
+                    .removed()
+                    .contains_key(&id),
+            "one-hot constraint",
+            id,
+        )?;
+        self.one_hot_constraint_collection
+            .metadata_mut()
+            .insert(id, metadata);
+        Ok(())
     }
 
     /// Active SOS1 constraints.
@@ -687,12 +863,23 @@ impl ParametricInstance {
         self.sos1_constraint_collection.metadata()
     }
 
-    /// Mutable access to the per-SOS1-constraint metadata store. See
-    /// [`Instance::constraint_metadata_mut`] for the sidecar ownership rule.
-    pub fn sos1_constraint_metadata_mut(
+    /// Replace the metadata for an SOS1 constraint owned by this parametric
+    /// instance.
+    pub fn set_sos1_constraint_metadata(
         &mut self,
-    ) -> &mut ConstraintMetadataStore<crate::Sos1ConstraintID> {
-        self.sos1_constraint_collection.metadata_mut()
+        id: crate::Sos1ConstraintID,
+        metadata: ConstraintMetadata,
+    ) -> crate::Result<()> {
+        ensure_constraint_metadata_target(
+            self.sos1_constraint_collection.active().contains_key(&id)
+                || self.sos1_constraint_collection.removed().contains_key(&id),
+            "SOS1 constraint",
+            id,
+        )?;
+        self.sos1_constraint_collection
+            .metadata_mut()
+            .insert(id, metadata);
+        Ok(())
     }
 }
 

@@ -51,23 +51,21 @@ impl ParametricInstance {
         description: Option<crate::InstanceDescription>,
     ) -> Result<Self> {
         let mut rust_decision_variables = BTreeMap::new();
-        let mut variable_metadata_pairs: Vec<(VariableID, ommx::DecisionVariableMetadata)> =
-            Vec::new();
+        let mut variable_metadata = ommx::VariableMetadataStore::default();
         for var in decision_variables {
             let id = var.0.id();
-            variable_metadata_pairs.push((id, var.1.clone()));
+            variable_metadata.insert(id, var.1);
             if rust_decision_variables.insert(id, var.0).is_some() {
                 anyhow::bail!("Duplicate decision variable ID: {}", id.into_inner());
             }
         }
 
-        let mut constraint_metadata_pairs: Vec<(ConstraintID, ommx::ConstraintMetadata)> =
-            Vec::new();
+        let mut constraint_metadata = ommx::ConstraintMetadataStore::default();
         let rust_constraints: BTreeMap<ConstraintID, ommx::Constraint> = constraints
             .into_iter()
             .map(|(id, c)| {
                 let cid = ConstraintID::from(id);
-                constraint_metadata_pairs.push((cid, c.1));
+                constraint_metadata.insert(cid, c.1);
                 (cid, c.0)
             })
             .collect();
@@ -84,6 +82,7 @@ impl ParametricInstance {
             .sense(sense.into())
             .objective(objective.0)
             .decision_variables(rust_decision_variables)
+            .variable_metadata(variable_metadata)
             .constraints(rust_constraints)
             .parameters(rust_parameters);
 
@@ -106,8 +105,7 @@ impl ParametricInstance {
             builder = builder.indicator_constraints(rust_indicator_constraints);
         }
 
-        let mut one_hot_metadata_pairs: Vec<(ommx::OneHotConstraintID, ommx::ConstraintMetadata)> =
-            Vec::new();
+        let mut one_hot_metadata = ommx::ConstraintMetadataStore::default();
         if let Some(ohs) = one_hot_constraints {
             let rust_one_hot_constraints: BTreeMap<
                 ommx::OneHotConstraintID,
@@ -116,36 +114,32 @@ impl ParametricInstance {
                 .into_iter()
                 .map(|(id, oh)| {
                     let oid = ommx::OneHotConstraintID::from(id);
-                    one_hot_metadata_pairs.push((oid, oh.1));
+                    one_hot_metadata.insert(oid, oh.1);
                     (oid, oh.0)
                 })
                 .collect();
             builder = builder.one_hot_constraints(rust_one_hot_constraints);
         }
 
-        let mut sos1_metadata_pairs: Vec<(ommx::Sos1ConstraintID, ommx::ConstraintMetadata)> =
-            Vec::new();
+        let mut sos1_metadata = ommx::ConstraintMetadataStore::default();
         if let Some(s1s) = sos1_constraints {
             let rust_sos1_constraints: BTreeMap<ommx::Sos1ConstraintID, ommx::Sos1Constraint> = s1s
                 .into_iter()
                 .map(|(id, s1)| {
                     let sid = ommx::Sos1ConstraintID::from(id);
-                    sos1_metadata_pairs.push((sid, s1.1));
+                    sos1_metadata.insert(sid, s1.1);
                     (sid, s1.0)
                 })
                 .collect();
             builder = builder.sos1_constraints(rust_sos1_constraints);
         }
 
-        let mut named_function_metadata_pairs: Vec<(
-            ommx::NamedFunctionID,
-            ommx::NamedFunctionMetadata,
-        )> = Vec::new();
+        let mut named_function_metadata = ommx::NamedFunctionMetadataStore::default();
         if let Some(nfs) = named_functions {
             let mut rust_named_functions = BTreeMap::new();
             for nf in nfs {
                 let id = nf.0.id;
-                named_function_metadata_pairs.push((id, nf.1));
+                named_function_metadata.insert(id, nf.1);
                 if rust_named_functions.insert(id, nf.0).is_some() {
                     anyhow::bail!("Duplicate named function ID: {}", id.into_inner());
                 }
@@ -157,33 +151,17 @@ impl ParametricInstance {
             builder = builder.description(desc.0);
         }
 
-        let mut inner = builder.build()?;
-        // Drain wrapper-side metadata snapshots into the parametric
-        // instance's SoA stores, mirroring `Instance.from_components`.
-        let var_meta = inner.variable_metadata_mut();
-        for (id, m) in variable_metadata_pairs {
-            var_meta.insert(id, m);
-        }
-        let constraint_meta = inner.constraint_metadata_mut();
-        for (id, m) in constraint_metadata_pairs {
-            constraint_meta.insert(id, m);
-        }
-        let indicator_meta = inner.indicator_constraint_metadata_mut();
+        let mut indicator_metadata = ommx::ConstraintMetadataStore::default();
         for (id, m) in indicator_metadata_pairs {
-            indicator_meta.insert(id, m);
+            indicator_metadata.insert(id, m);
         }
-        let one_hot_meta = inner.one_hot_constraint_metadata_mut();
-        for (id, m) in one_hot_metadata_pairs {
-            one_hot_meta.insert(id, m);
-        }
-        let sos1_meta = inner.sos1_constraint_metadata_mut();
-        for (id, m) in sos1_metadata_pairs {
-            sos1_meta.insert(id, m);
-        }
-        let nf_meta = inner.named_function_metadata_mut();
-        for (id, m) in named_function_metadata_pairs {
-            nf_meta.insert(id, m);
-        }
+        let inner = builder
+            .constraint_metadata(constraint_metadata)
+            .indicator_constraint_metadata(indicator_metadata)
+            .one_hot_constraint_metadata(one_hot_metadata)
+            .sos1_constraint_metadata(sos1_metadata)
+            .named_function_metadata(named_function_metadata)
+            .build()?;
 
         Ok(Self { inner })
     }

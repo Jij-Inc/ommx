@@ -419,5 +419,5 @@ crate::attached_metadata_methods!(
     AttachedIndicatorConstraint,
     ommx::IndicatorConstraintID,
     indicator_constraint_metadata,
-    indicator_constraint_metadata_mut
+    set_indicator_constraint_metadata
 );

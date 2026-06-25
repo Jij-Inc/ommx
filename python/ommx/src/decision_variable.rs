@@ -1012,5 +1012,5 @@ impl AttachedDecisionVariable {
 crate::attached_variable_metadata_methods!(
     AttachedDecisionVariable,
     variable_metadata,
-    variable_metadata_mut
+    set_variable_metadata
 );

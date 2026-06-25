@@ -1419,7 +1419,8 @@ mod tests {
     #[test]
     fn test_parametric_instance_roundtrip_preserves_metadata() {
         use crate::{
-            coeff, linear, Constraint, ConstraintID, DecisionVariable, Function, Sense, VariableID,
+            coeff, linear, Constraint, ConstraintID, ConstraintMetadata, DecisionVariable,
+            Function, ModelingLabel, Sense, VariableID,
         };
 
         let var_id = VariableID::from(1);
@@ -1438,14 +1439,26 @@ mod tests {
             .build()
             .unwrap();
 
-        instance.variable_metadata_mut().set_name(var_id, "x");
         instance
-            .variable_metadata_mut()
-            .set_subscripts(var_id, vec![0]);
-        instance.constraint_metadata_mut().set_name(cid, "balance");
+            .set_variable_metadata(
+                var_id,
+                ModelingLabel {
+                    name: Some("x".to_string()),
+                    subscripts: vec![0],
+                    ..Default::default()
+                },
+            )
+            .unwrap();
         instance
-            .constraint_metadata_mut()
-            .set_description(cid, "demand-balance row");
+            .set_constraint_metadata(
+                cid,
+                ConstraintMetadata {
+                    name: Some("balance".to_string()),
+                    description: Some("demand-balance row".to_string()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
 
         let bytes = instance.to_bytes();
         let recovered = ParametricInstance::from_bytes(&bytes).unwrap();

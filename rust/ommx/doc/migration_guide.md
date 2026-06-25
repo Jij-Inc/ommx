@@ -478,18 +478,24 @@ pub struct VariableMetadataStore       { /* same, no provenance */ }
 pub struct NamedFunctionMetadataStore  { /* same, no provenance */ }
 ```
 
-Per-host accessors on `Instance` and `ParametricInstance` give direct
-read / write access to every store:
+Per-host accessors on `Instance` and `ParametricInstance` give read
+access to every store. Metadata writes go through owner-checked setters
+so labels/provenance cannot be attached to IDs that the host does not
+own:
 
 ```rust,ignore
 instance.constraint_metadata()              // &ConstraintMetadataStore<ConstraintID>
-instance.constraint_metadata_mut()          // &mut …
+instance.set_constraint_metadata(id, metadata)?
 instance.indicator_constraint_metadata()    // &ConstraintMetadataStore<IndicatorConstraintID>
-instance.indicator_constraint_metadata_mut()
-instance.one_hot_constraint_metadata() / _mut()
-instance.sos1_constraint_metadata()    / _mut()
-instance.variable_metadata()           / _mut()        // &VariableMetadataStore
-instance.named_function_metadata()     / _mut()        // &NamedFunctionMetadataStore
+instance.set_indicator_constraint_metadata(id, metadata)?
+instance.one_hot_constraint_metadata()
+instance.set_one_hot_constraint_metadata(id, metadata)?
+instance.sos1_constraint_metadata()
+instance.set_sos1_constraint_metadata(id, metadata)?
+instance.variable_metadata()                // &VariableMetadataStore
+instance.set_variable_metadata(id, label)?
+instance.named_function_metadata()          // &NamedFunctionMetadataStore
+instance.set_named_function_metadata(id, label)?
 ```
 
 `Solution` and `SampleSet` expose the variable / named-function stores
