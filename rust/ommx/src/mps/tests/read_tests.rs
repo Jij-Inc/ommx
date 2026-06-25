@@ -29,7 +29,7 @@ ENDATA
     // Check variable
     assert_eq!(instance.decision_variables().len(), 1);
     let (var_id, var) = instance.decision_variables().iter().next().unwrap();
-    assert_eq!(instance.variable_metadata().name(*var_id), Some("X1"));
+    assert_eq!(instance.variable_labels().name(*var_id), Some("X1"));
     assert_eq!(var.kind(), crate::decision_variable::Kind::Continuous);
     assert_eq!(var.bound(), Bound::new(0.0, 4.0).unwrap());
 
@@ -45,7 +45,7 @@ ENDATA
     );
     assert_eq!(constraint.equality, crate::Equality::LessThanOrEqualToZero);
     assert_eq!(
-        instance.constraint_collection().metadata().name(*cid),
+        instance.constraint_collection().context().name(*cid),
         Some("R1")
     );
 }
@@ -77,7 +77,7 @@ ENDATA
 
     // Check basic structure
     assert_eq!(instance.decision_variables().len(), 2);
-    let var_metadata = instance.variable_metadata();
+    let var_metadata = instance.variable_labels();
     let mut iter = instance.decision_variables().iter();
     let (x1_id, x1) = iter.next().unwrap();
     let (x2_id, x2) = iter.next().unwrap();
@@ -99,7 +99,7 @@ ENDATA
 
     // Check constraints
     assert_eq!(instance.constraints().len(), 4);
-    let constraint_metadata = instance.constraint_collection().metadata();
+    let constraint_context = instance.constraint_collection().context();
     let mut iter = instance.constraints().iter();
     let (r1_id, r1) = iter.next().unwrap();
     let (r2_id, r2) = iter.next().unwrap();
@@ -113,14 +113,14 @@ ENDATA
         )
     );
     assert_eq!(r1.equality, crate::Equality::LessThanOrEqualToZero);
-    assert_eq!(constraint_metadata.name(*r1_id), Some("R1"));
+    assert_eq!(constraint_context.name(*r1_id), Some("R1"));
     // -x1 - x2 + 5 <= 0
     assert_abs_diff_eq!(
         r2.function(),
         &Function::from(((-linear!(x1.id()) - linear!(x2.id())).unwrap() + coeff!(5.0)).unwrap())
     );
     assert_eq!(r2.equality, crate::Equality::LessThanOrEqualToZero);
-    assert_eq!(constraint_metadata.name(*r2_id), Some("R2"));
+    assert_eq!(constraint_context.name(*r2_id), Some("R2"));
     // -x1 - 2*x2 + 8 <= 0
     assert_abs_diff_eq!(
         r1_range.function(),
@@ -129,14 +129,14 @@ ENDATA
         )
     );
     assert_eq!(r1_range.equality, crate::Equality::LessThanOrEqualToZero);
-    assert_eq!(constraint_metadata.name(*r1_range_id), Some("R1_"));
+    assert_eq!(constraint_context.name(*r1_range_id), Some("R1_"));
     // x1 + x2 - 8 <= 0
     assert_abs_diff_eq!(
         r2_range.function(),
         &Function::from(((linear!(x1.id()) + linear!(x2.id())).unwrap() + coeff!(-8.0)).unwrap())
     );
     assert_eq!(r2_range.equality, crate::Equality::LessThanOrEqualToZero);
-    assert_eq!(constraint_metadata.name(*r2_range_id), Some("R2_"));
+    assert_eq!(constraint_context.name(*r2_range_id), Some("R2_"));
 }
 
 // Test integer variables
@@ -181,9 +181,9 @@ ENDATA
     assert_eq!(x2.bound(), Bound::new(0.0, 5.0).unwrap());
     assert_eq!(x3.bound(), Bound::new(0.0, 5.0).unwrap());
     // Check variable names
-    assert_eq!(instance.variable_metadata().name(*x1_id).unwrap(), "X1");
-    assert_eq!(instance.variable_metadata().name(*x2_id).unwrap(), "X2");
-    assert_eq!(instance.variable_metadata().name(*x3_id).unwrap(), "X3");
+    assert_eq!(instance.variable_labels().name(*x1_id).unwrap(), "X1");
+    assert_eq!(instance.variable_labels().name(*x2_id).unwrap(), "X2");
+    assert_eq!(instance.variable_labels().name(*x3_id).unwrap(), "X3");
 
     // Check objective: x1 + 2*x2 + 3*x3
     assert_abs_diff_eq!(
@@ -210,7 +210,7 @@ ENDATA
     assert_eq!(
         instance
             .constraint_collection()
-            .metadata()
+            .context()
             .name(*cid)
             .unwrap(),
         "C1"
@@ -250,8 +250,8 @@ ENDATA
     assert_eq!(x1.kind(), crate::decision_variable::Kind::Binary);
     assert_eq!(x2.kind(), crate::decision_variable::Kind::Binary);
     // Check variable names
-    assert_eq!(instance.variable_metadata().name(*x1_id).unwrap(), "X1");
-    assert_eq!(instance.variable_metadata().name(*x2_id).unwrap(), "X2");
+    assert_eq!(instance.variable_labels().name(*x1_id).unwrap(), "X1");
+    assert_eq!(instance.variable_labels().name(*x2_id).unwrap(), "X2");
 
     // Check objective: x1 + 2*x2
     assert_abs_diff_eq!(
@@ -270,7 +270,7 @@ ENDATA
     assert_eq!(
         instance
             .constraint_collection()
-            .metadata()
+            .context()
             .name(*cid)
             .unwrap(),
         "C1"
@@ -316,8 +316,8 @@ ENDATA
         Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap()
     );
     // Check variable names
-    assert_eq!(instance.variable_metadata().name(*x1_id).unwrap(), "X1");
-    assert_eq!(instance.variable_metadata().name(*x2_id).unwrap(), "X2");
+    assert_eq!(instance.variable_labels().name(*x1_id).unwrap(), "X1");
+    assert_eq!(instance.variable_labels().name(*x2_id).unwrap(), "X2");
 
     // Check objective: x1 - x2
     assert_abs_diff_eq!(
@@ -336,7 +336,7 @@ ENDATA
     assert_eq!(
         instance
             .constraint_collection()
-            .metadata()
+            .context()
             .name(*cid)
             .unwrap(),
         "C1"
@@ -373,8 +373,8 @@ ENDATA
     let (x1_id, x1) = iter.next().unwrap();
     let (x2_id, x2) = iter.next().unwrap();
     // Check variable names
-    assert_eq!(instance.variable_metadata().name(*x1_id).unwrap(), "X1");
-    assert_eq!(instance.variable_metadata().name(*x2_id).unwrap(), "X2");
+    assert_eq!(instance.variable_labels().name(*x1_id).unwrap(), "X1");
+    assert_eq!(instance.variable_labels().name(*x2_id).unwrap(), "X2");
 
     // Check objective: x1 + 2*x2
     assert_abs_diff_eq!(
@@ -393,7 +393,7 @@ ENDATA
     assert_eq!(
         instance
             .constraint_collection()
-            .metadata()
+            .context()
             .name(*cid)
             .unwrap(),
         "C1"
@@ -447,9 +447,9 @@ ENDATA
     assert_eq!(x2.bound(), Bound::new(-1.0, 1.0).unwrap());
     assert_eq!(x3.bound(), Bound::new(0.0, f64::INFINITY).unwrap());
     // Check variable names
-    assert_eq!(instance.variable_metadata().name(*x1_id).unwrap(), "X1");
-    assert_eq!(instance.variable_metadata().name(*x2_id).unwrap(), "X2");
-    assert_eq!(instance.variable_metadata().name(*x3_id).unwrap(), "X3");
+    assert_eq!(instance.variable_labels().name(*x1_id).unwrap(), "X1");
+    assert_eq!(instance.variable_labels().name(*x2_id).unwrap(), "X2");
+    assert_eq!(instance.variable_labels().name(*x3_id).unwrap(), "X3");
 
     // Check objective: x1 + 4*x2 + 9*x3
     assert_abs_diff_eq!(

@@ -36,8 +36,8 @@ def _make_constraint(name: str | None = "balance") -> Constraint:
     )
 
 
-def test_add_constraint_returns_attached_with_drained_metadata():
-    """add_constraint returns AttachedConstraint reading the staged metadata."""
+def test_add_constraint_returns_attached_with_drained_context():
+    """add_constraint returns AttachedConstraint reading the staged context."""
     instance = _empty_instance()
     snapshot = _make_constraint(name="balance")
 
@@ -154,7 +154,7 @@ def test_attached_keeps_instance_alive_after_del():
     # Write-through still works.
     attached.set_name("demand")
     assert attached.name == "demand"
-    # detach() still finds the constraint and its metadata in the store.
+    # detach() still finds the constraint and its context in the store.
     snapshot = attached.detach()
     assert snapshot.name == "demand"
 
@@ -200,7 +200,7 @@ def test_add_parameters_replaces_existing_parameter_dict():
 def test_attached_after_relax_constraint_still_reads_through():
     """relax_constraint moves a constraint from active to removed; the
     AttachedConstraint handle stays valid because lookup_constraint checks
-    both maps and the SoA metadata store is keyed by id regardless."""
+    both maps and the SoA context store is keyed by id regardless."""
     instance = _empty_instance()
     attached = instance.add_constraint(_make_constraint(name="balance"))
     cid = attached.constraint_id
@@ -210,7 +210,7 @@ def test_attached_after_relax_constraint_still_reads_through():
     assert cid not in instance.constraints
 
     # The handle still resolves: getters fall through to the removed map for
-    # core data and to the SoA store for metadata.
+    # core data and to the SoA store for context.
     assert attached.name == "balance"
     assert attached.subscripts == [7]
     snapshot = attached.detach()

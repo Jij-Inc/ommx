@@ -57,8 +57,8 @@ impl From<Sos1ConstraintID> for u64 {
 /// Unlike [`OneHotConstraint`](crate::OneHotConstraint), SOS1 allows all variables to be zero.
 ///
 /// The constraint's [`Sos1ConstraintID`] is not stored in this struct — it is held
-/// by the enclosing collection. Auxiliary metadata also lives on the enclosing
-/// collection's [`ConstraintMetadataStore`](crate::ConstraintMetadataStore).
+/// by the enclosing collection. Modeling labels and provenance live on the
+/// enclosing collection's [`ConstraintContextStore`](crate::ConstraintContextStore).
 ///
 /// [`Instance`]: crate::Instance
 #[derive(Debug, Clone, PartialEq)]

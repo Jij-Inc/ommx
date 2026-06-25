@@ -1,6 +1,6 @@
 mod arbitrary;
 mod evaluate;
-mod metadata_store;
+mod label_store;
 pub(crate) mod parse;
 
 use derive_more::{Deref, From};
@@ -9,7 +9,7 @@ use getset::*;
 use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
 use crate::{Function, SampleID, Sampled, VariableIDSet};
 pub use arbitrary::*;
-pub use metadata_store::NamedFunctionMetadataStore;
+pub use label_store::NamedFunctionLabelStore;
 
 /// ID for named function
 #[derive(
@@ -58,7 +58,7 @@ impl LogicalMemoryProfile for NamedFunctionID {
     }
 }
 
-/// A named function represents an arbitrary mathematical function with associated metadata.
+/// A named function represents an arbitrary mathematical function with an associated modeling label.
 ///
 /// Named functions allow attaching names, subscripts, parameters, and descriptions to
 /// mathematical expressions. This is useful for tracking auxiliary quantities, objectives,
@@ -74,8 +74,8 @@ impl LogicalMemoryProfile for NamedFunctionID {
 /// Named function IDs are managed separately from decision variable IDs and constraint IDs,
 /// so the same ID value can be used across these different namespaces.
 ///
-/// Metadata (`name`, `subscripts`, `parameters`, `description`) is stored in a
-/// per-collection [`NamedFunctionMetadataStore`] keyed by [`NamedFunctionID`];
+/// The modeling label (`name`, `subscripts`, `parameters`, `description`) is stored in a
+/// per-collection [`NamedFunctionLabelStore`] keyed by [`NamedFunctionID`];
 /// the per-element struct no longer carries it.
 ///
 /// Corresponds to `ommx.v1.NamedFunction`.
@@ -92,12 +92,12 @@ impl std::fmt::Display for NamedFunction {
 }
 
 /// Modeling label for named functions.
-pub type NamedFunctionMetadata = crate::ModelingLabel;
+pub type NamedFunctionLabel = crate::ModelingLabel;
 
 /// `ommx.v1.EvaluatedNamedFunction` with validated, typed fields.
 ///
-/// Metadata moved to a per-collection
-/// [`NamedFunctionMetadataStore`] on `Solution`; the struct only carries
+/// Modeling labels moved to a per-collection
+/// [`NamedFunctionLabelStore`] on `Solution`; the struct only carries
 /// intrinsic evaluated data.
 #[derive(Debug, Clone, PartialEq, CopyGetters, Getters)]
 pub struct EvaluatedNamedFunction {
@@ -121,8 +121,8 @@ impl std::fmt::Display for EvaluatedNamedFunction {
 
 /// Multiple sample evaluation results with deduplication.
 ///
-/// Metadata moved to a per-collection
-/// [`NamedFunctionMetadataStore`] on `SampleSet`; the struct only carries
+/// Modeling labels moved to a per-collection
+/// [`NamedFunctionLabelStore`] on `SampleSet`; the struct only carries
 /// intrinsic sampled data.
 #[derive(Debug, Clone, PartialEq, Getters)]
 pub struct SampledNamedFunction {

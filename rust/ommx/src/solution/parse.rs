@@ -35,45 +35,44 @@ impl Parse for crate::v1::Solution {
             crate::v1::instance::Sense::Maximize => Some(crate::Sense::Maximize),
         };
 
-        // Parse evaluated constraints and extract removed reasons + metadata
+        // Parse evaluated constraints and extract removed reasons + context
         let mut evaluated_constraints = std::collections::BTreeMap::default();
         let mut removed_reasons = std::collections::BTreeMap::default();
-        let mut constraint_metadata =
-            crate::ConstraintMetadataStore::<crate::ConstraintID>::default();
+        let mut constraint_context =
+            crate::ConstraintContextStore::<crate::ConstraintID>::default();
         for ec in self.evaluated_constraints {
-            let (id, parsed_constraint, metadata, removed_reason): (
+            let (id, parsed_constraint, context, removed_reason): (
                 crate::ConstraintID,
                 crate::EvaluatedConstraint,
-                crate::ConstraintMetadata,
+                crate::ConstraintContext,
                 Option<crate::RemovedReason>,
             ) = ec.parse_as(&(), message, "evaluated_constraints")?;
             if let Some(reason) = removed_reason {
                 removed_reasons.insert(id, reason);
             }
-            constraint_metadata.insert(id, metadata);
+            constraint_context.insert(id, context);
             evaluated_constraints.insert(id, parsed_constraint);
         }
         let mut evaluated_named_functions = std::collections::BTreeMap::default();
-        let mut named_function_metadata =
-            crate::named_function::NamedFunctionMetadataStore::default();
+        let mut named_function_labels = crate::named_function::NamedFunctionLabelStore::default();
         for enf in self.evaluated_named_functions {
             let parsed: crate::named_function::parse::ParsedEvaluatedNamedFunction =
                 enf.parse_as(&(), message, "evaluated_named_functions")?;
             let id = parsed.evaluated_named_function.id();
             evaluated_named_functions.insert(id, parsed.evaluated_named_function);
-            named_function_metadata.insert(id, parsed.metadata);
+            named_function_labels.insert(id, parsed.label);
         }
 
         let mut decision_variables = std::collections::BTreeMap::default();
-        let mut variable_metadata = crate::VariableMetadataStore::default();
+        let mut variable_labels = crate::VariableLabelStore::default();
         for dv in self.decision_variables {
             let dv_id = dv.id;
             let dv_substituted_value = dv.substituted_value;
-            // Parse the DecisionVariable to get strongly-typed version + drained metadata
+            // Parse the DecisionVariable to get strongly-typed version + drained label
             let parsed: crate::decision_variable::parse::ParsedDecisionVariable =
                 dv.parse_as(&(), message, "decision_variables")?;
             let parsed_dv = parsed.variable;
-            let metadata = parsed.metadata;
+            let label = parsed.label;
 
             // Get the value from state or substituted_value
             let value = match (state.entries.get(&dv_id), dv_substituted_value.as_ref()) {
@@ -94,7 +93,7 @@ impl Parse for crate::v1::Solution {
                     .map_err(|e| ParseError::from(e).context(message, "decision_variables"))?;
 
             let id = *evaluated_dv.id();
-            variable_metadata.insert(id, metadata);
+            variable_labels.insert(id, label);
             decision_variables.insert(id, evaluated_dv);
         }
         let optimality = self
@@ -116,10 +115,10 @@ impl Parse for crate::v1::Solution {
 
         let solution = Solution {
             objective,
-            evaluated_constraints: crate::constraint_type::EvaluatedCollection::with_metadata(
+            evaluated_constraints: crate::constraint_type::EvaluatedCollection::with_context(
                 evaluated_constraints,
                 removed_reasons,
-                constraint_metadata,
+                constraint_context,
             )
             .map_err(|e| {
                 crate::RawParseError::InvalidInstance(e.to_string())
@@ -130,8 +129,8 @@ impl Parse for crate::v1::Solution {
             evaluated_sos1_constraints: Default::default(),
             evaluated_named_functions,
             decision_variables,
-            variable_metadata,
-            named_function_metadata,
+            variable_labels,
+            named_function_labels,
             optimality,
             relaxation,
             sense,
@@ -171,25 +170,25 @@ impl Parse for crate::v1::Solution {
 /// regular constraints — it has no fields for indicator / one-hot / sos1
 /// evaluated constraints, so any data the in-memory [`Solution`] holds
 /// in those collections is dropped on serialization. This is a wire-format
-/// limitation that pre-dates the metadata SoA refactor; the matching
+/// limitation that pre-dates the label/context SoA refactor; the matching
 /// `Parse` impl above initializes those collections to
 /// `Default::default()` for symmetry. Round-trip through `to_bytes` /
-/// `from_bytes` preserves variable and regular-constraint metadata.
+/// `from_bytes` preserves variable labels and regular-constraint context.
 impl From<Solution> for crate::v1::Solution {
     fn from(solution: Solution) -> Self {
         let state = solution.state();
         let objective = *solution.objective();
-        // Drain metadata from the SoA stores and overlay it on per-element
+        // Drain labels/context from the SoA stores and overlay them on per-element
         // proto messages.
-        let constraint_metadata_store = solution.evaluated_constraints().metadata().clone();
+        let constraint_context_store = solution.evaluated_constraints().context().clone();
         let removed_reasons = solution.evaluated_constraints().removed_reasons().clone();
         let evaluated_constraints: Vec<crate::v1::EvaluatedConstraint> = solution
             .evaluated_constraints()
             .iter()
             .map(|(id, ec)| {
-                let metadata = constraint_metadata_store.collect_for(*id);
+                let context = constraint_context_store.collect_for(*id);
                 let mut v1_ec =
-                    crate::constraint::evaluated_constraint_to_v1(*id, ec.clone(), metadata);
+                    crate::constraint::evaluated_constraint_to_v1(*id, ec.clone(), context);
                 if let Some(reason) = removed_reasons.get(id) {
                     v1_ec.removed_reason = Some(reason.reason.clone());
                     v1_ec.removed_reason_parameters = reason
@@ -201,22 +200,22 @@ impl From<Solution> for crate::v1::Solution {
                 v1_ec
             })
             .collect();
-        let named_function_metadata_store = solution.named_function_metadata().clone();
+        let named_function_labels_store = solution.named_function_labels().clone();
         let evaluated_named_functions: Vec<crate::v1::EvaluatedNamedFunction> = solution
             .evaluated_named_functions()
             .iter()
             .map(|(id, enf)| {
-                let metadata = named_function_metadata_store.collect_for(*id);
-                crate::named_function::parse::evaluated_named_function_to_v1(enf.clone(), metadata)
+                let label = named_function_labels_store.collect_for(*id);
+                crate::named_function::parse::evaluated_named_function_to_v1(enf.clone(), label)
             })
             .collect();
-        let variable_metadata_store = solution.variable_metadata().clone();
+        let variable_labels_store = solution.variable_labels().clone();
         let decision_variables: Vec<crate::v1::DecisionVariable> = solution
             .decision_variables()
             .iter()
             .map(|(id, dv)| {
-                let metadata = variable_metadata_store.collect_for(*id);
-                crate::decision_variable::evaluated_decision_variable_to_v1(dv.clone(), metadata)
+                let label = variable_labels_store.collect_for(*id);
+                crate::decision_variable::evaluated_decision_variable_to_v1(dv.clone(), label)
             })
             .collect();
         let feasible = solution.feasible();
@@ -546,12 +545,12 @@ mod tests {
     }
 
     /// Regression: `Solution::to_bytes` / `from_bytes` must preserve the
-    /// variable and (regular-constraint) metadata stores. Indicator /
-    /// one-hot / sos1 evaluated metadata is dropped because `v1::Solution`
+    /// variable-label and regular-constraint-context stores. Indicator /
+    /// one-hot / sos1 evaluated context is dropped because `v1::Solution`
     /// has no fields for those collections — that's a wire-format
     /// limitation older than the SoA refactor and is out of scope here.
     #[test]
-    fn test_solution_roundtrip_preserves_metadata() {
+    fn test_solution_roundtrip_preserves_labels_and_context() {
         use crate::{
             constraint::EvaluatedData, constraint_type::EvaluatedCollection, ATol, ConstraintID,
             DecisionVariable, Equality, EvaluatedConstraint, EvaluatedDecisionVariable,
@@ -568,9 +567,9 @@ mod tests {
         let mut decision_variables = BTreeMap::new();
         decision_variables.insert(var_id, evaluated_dv);
 
-        let mut variable_metadata = crate::VariableMetadataStore::default();
-        variable_metadata.set_name(var_id, "x");
-        variable_metadata.set_subscripts(var_id, vec![0]);
+        let mut variable_labels = crate::VariableLabelStore::default();
+        variable_labels.set_name(var_id, "x");
+        variable_labels.set_subscripts(var_id, vec![0]);
 
         let evaluated = EvaluatedConstraint {
             equality: Equality::EqualToZero,
@@ -583,15 +582,15 @@ mod tests {
         };
         let mut evaluated_map = BTreeMap::new();
         evaluated_map.insert(cid, evaluated);
-        let mut constraint_metadata = crate::ConstraintMetadataStore::<ConstraintID>::default();
-        constraint_metadata.set_name(cid, "balance");
-        constraint_metadata.set_description(cid, "demand-balance row");
+        let mut constraint_context = crate::ConstraintContextStore::<ConstraintID>::default();
+        constraint_context.set_name(cid, "balance");
+        constraint_context.set_description(cid, "demand-balance row");
         let evaluated_constraints =
-            EvaluatedCollection::with_metadata(evaluated_map, BTreeMap::new(), constraint_metadata)
+            EvaluatedCollection::with_context(evaluated_map, BTreeMap::new(), constraint_context)
                 .unwrap();
 
-        // Add an evaluated named function with non-empty metadata so the
-        // round-trip exercises the named_function_metadata SoA store too.
+        // Add an evaluated named function with a non-empty label so the
+        // round-trip exercises the named_function_labels SoA store too.
         // Construct via the v1 parse helper because
         // `used_decision_variable_ids` is module-private on
         // `EvaluatedNamedFunction`.
@@ -609,11 +608,10 @@ mod tests {
         };
         let mut evaluated_named_functions = BTreeMap::new();
         evaluated_named_functions.insert(nf_id, evaluated_nf);
-        let mut named_function_metadata =
-            crate::named_function::NamedFunctionMetadataStore::default();
-        named_function_metadata.set_name(nf_id, "offset_x");
-        named_function_metadata.set_subscripts(nf_id, vec![0]);
-        named_function_metadata.set_description(nf_id, "x plus a constant");
+        let mut named_function_labels = crate::named_function::NamedFunctionLabelStore::default();
+        named_function_labels.set_name(nf_id, "offset_x");
+        named_function_labels.set_subscripts(nf_id, vec![0]);
+        named_function_labels.set_description(nf_id, "x plus a constant");
 
         // SAFETY: the inputs above satisfy Solution invariants (one DV,
         // one evaluated constraint over that DV, one named function over
@@ -624,8 +622,8 @@ mod tests {
                 .evaluated_constraints_collection(evaluated_constraints)
                 .evaluated_named_functions(evaluated_named_functions)
                 .decision_variables(decision_variables)
-                .variable_metadata(variable_metadata)
-                .named_function_metadata(named_function_metadata)
+                .variable_labels(variable_labels)
+                .named_function_labels(named_function_labels)
                 .sense(Sense::Minimize)
                 .build_unchecked()
                 .unwrap()
@@ -634,12 +632,12 @@ mod tests {
         let bytes = solution.to_bytes();
         let recovered = Solution::from_bytes(&bytes).unwrap();
 
-        assert_eq!(recovered.variable_metadata().name(var_id), Some("x"));
-        assert_eq!(recovered.variable_metadata().subscripts(var_id), &[0]);
-        let constraint_meta = recovered.evaluated_constraints().metadata();
+        assert_eq!(recovered.variable_labels().name(var_id), Some("x"));
+        assert_eq!(recovered.variable_labels().subscripts(var_id), &[0]);
+        let constraint_meta = recovered.evaluated_constraints().context();
         assert_eq!(constraint_meta.name(cid), Some("balance"));
         assert_eq!(constraint_meta.description(cid), Some("demand-balance row"));
-        let nf_meta = recovered.named_function_metadata();
+        let nf_meta = recovered.named_function_labels();
         assert_eq!(nf_meta.name(nf_id), Some("offset_x"));
         assert_eq!(nf_meta.subscripts(nf_id), &[0]);
         assert_eq!(nf_meta.description(nf_id), Some("x plus a constant"));

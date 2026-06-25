@@ -6,7 +6,7 @@
   10                          =0  Linear  {0, 1, 2}
   '''
 # ---
-# name: test_instance_constraints_df_include_metadata_only
+# name: test_instance_constraints_df_include_label_only
   '''
                         equality    type   used_ids     name subscripts description
   regular_constraint_id                                                            
@@ -86,7 +86,7 @@
   10                          =0  Linear  {0, 1, 2}  balance     [0, 1]  demand row           us-east   manual_relax              warm-up
   '''
 # ---
-# name: test_instance_constraints_df_removed_true_no_metadata
+# name: test_instance_constraints_df_removed_true_no_label
   '''
                         equality    type   used_ids removed_reason removed_reason.phase
   regular_constraint_id                                                                

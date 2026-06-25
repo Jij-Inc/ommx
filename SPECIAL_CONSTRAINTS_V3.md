@@ -61,11 +61,12 @@ protobuf serialization is supported only for these roots:
 
 These objects own the surrounding context needed to validate references and
 sidecars: decision-variable definitions, variable kinds, constraint collection
-IDs, removed-state ownership, modeling-label stores, provenance sidecars,
+IDs, removed-state ownership, modeling-label stores, constraint-context stores,
 evaluation/sample ID universes, and top-level materialized summaries.
 
 Leaf messages such as `Function`, polynomial pieces, individual constraints,
-decision variables, named functions, modeling labels, and provenance records
+decision variables, named functions, modeling labels, constraint contexts, and
+provenance records
 are protobuf schema components, not SDK serialization roots. For example, a
 standalone `Function` cannot validate whether referenced decision variables
 exist or whether their kinds are compatible with the enclosing constraint.
@@ -101,29 +102,32 @@ constraint value.
   payloads.
 - Active and removed constraints are owned by the same
   `ConstraintCollection<T>`.
-- `RemovedReason` is collection-level removal metadata in Rust.
+- `RemovedReason` is removal state in Rust, not part of the constraint's
+  modeling context.
 - `ModelingLabel` (`name`, `subscripts`, `parameters`, `description`) records
   the original mathematical-model notation and indexing context, such as
   `x[i, j]` or `flow limit` parameterized by `place`.
-- `Provenance` is not a modeling label. It is constraint-transformation lineage
-  and remains a constraint-only sidecar.
+- Constraint-side labels and transformation lineage are grouped as
+  `ConstraintContext` in Rust. Its `label` field is a `ModelingLabel`;
+  `provenance` is separate transformation lineage and is not part of the
+  modeling label itself.
 
 The protobuf shape should therefore preserve collection ownership:
 
 - No `id` field inside the new v3 constraint messages.
 - One first-class collection per constraint family.
 - No second source of truth between active entries, removed entries, removed
-  reasons, modeling labels, and provenance.
+  reasons, and constraint contexts.
 
 The exact wire shape is intentionally left as a follow-up decision. Two viable
 shapes remain:
 
 - A direct `map<uint64, T>` per constraint family where each value carries
-  optional `modeling_label`, `provenance`, and `removed_reason` fields. This
+  optional `context` and `removed_reason` fields. This
   keeps each map entry self-contained at the protobuf boundary.
 - A collection wrapper message per constraint family that mirrors the Rust
   owner more closely, for example by separating active entries, removed entries,
-  removed reasons, a modeling-label store, and a provenance sidecar. This may
+  removed reasons, and a constraint-context store. This may
   better match the current Rust SoA representation after the SDK normalization
   pass.
 
@@ -131,15 +135,14 @@ On parse, the protobuf representation is split into:
 
 - the ID from the map key,
 - the intrinsic constraint data from the message,
-- modeling labels inserted into the collection label store,
-- provenance inserted into the collection provenance sidecar,
+- constraint contexts inserted into the collection context store,
 - active vs. removed placement determined by either `removed_reason` presence
   in the direct-map shape or by the removed-entry set in the wrapper shape.
 
-If the wrapper shape is chosen and `modeling_label` / `provenance` are stored
+If the wrapper shape is chosen and constraint contexts are stored
 as independent ID-keyed fields, unknown IDs must be rejected at parse/build
-boundaries. Dropping orphan labels or provenance would silently lose malformed
-input and would make the wrapper's sidecars a second, weaker source of truth.
+boundaries. Dropping orphan context entries would silently lose malformed input
+and would make the wrapper's sidecars a second, weaker source of truth.
 
 On write, the collection owner is the source of truth. If the direct-map shape
 is chosen, active and removed maps are joined into one protobuf map, with
@@ -174,7 +177,7 @@ Use `RegularConstraint` as the wire name for the v3 form of the existing Rust
 Rationale:
 
 - The existing protobuf message name `Constraint` is the v2 message with an
-  inline `id` and inline metadata. Keeping it as the deprecated legacy message
+  inline `id` and inline label fields. Keeping it as the deprecated legacy message
   makes the migration explicit.
 - "Regular constraint" is the wording already used in the Rust docs for
   `f(x) = 0` / `f(x) <= 0` constraints.
@@ -200,7 +203,7 @@ message Provenance {
 ```
 
 This is not a general "absorbed legacy regular constraint ID" mechanism. The
-v2 `ConstraintHints` migration labeling policy is described separately below.
+v2 `ConstraintHints` migration context policy is described separately below.
 
 ### `RemovedReason`
 
@@ -218,7 +221,7 @@ message RemovedReason {
 ### `ModelingLabel`
 
 Rust `ModelingLabel` is the common label shape for decision variables, named
-functions, and constraints.
+functions, and the label component of constraint contexts.
 
 ```proto
 // proto/ommx/v1/modeling_label.proto
@@ -230,14 +233,27 @@ message ModelingLabel {
 }
 ```
 
+### `ConstraintContext`
+
+Rust `ConstraintContext` groups the modeling label for a constraint together
+with constraint-transformation provenance. This is the per-id transfer object
+for `ConstraintContextStore<ID>`.
+
+```proto
+// proto/ommx/v1/constraint_context.proto
+message ConstraintContext {
+  ModelingLabel label = 1;
+  repeated Provenance provenance = 2;
+}
+```
+
 ## Created-stage Messages
 
 In the direct-map candidate, all created-stage messages use the same outer
 shape:
 
 - intrinsic fields,
-- `ModelingLabel modeling_label`,
-- `repeated Provenance provenance`,
+- `ConstraintContext context`,
 - `RemovedReason removed_reason`.
 
 ### `RegularConstraint`
@@ -247,9 +263,8 @@ shape:
 message RegularConstraint {
   Equality equality = 1;
   Function function = 2;
-  ModelingLabel modeling_label = 3;
-  repeated Provenance provenance = 4;
-  RemovedReason removed_reason = 5;
+  ConstraintContext context = 3;
+  RemovedReason removed_reason = 4;
 }
 ```
 
@@ -262,9 +277,8 @@ message IndicatorConstraint {
   uint64 indicator_variable = 1;
   Equality equality = 2;
   Function function = 3;
-  ModelingLabel modeling_label = 4;
-  repeated Provenance provenance = 5;
-  RemovedReason removed_reason = 6;
+  ConstraintContext context = 4;
+  RemovedReason removed_reason = 5;
 }
 ```
 
@@ -275,9 +289,8 @@ message IndicatorConstraint {
 message OneHotConstraint {
   // Binary decision variables, exactly one of which must be 1.
   repeated uint64 decision_variables = 1;
-  ModelingLabel modeling_label = 2;
-  repeated Provenance provenance = 3;
-  RemovedReason removed_reason = 4;
+  ConstraintContext context = 2;
+  RemovedReason removed_reason = 3;
 }
 ```
 
@@ -288,16 +301,15 @@ message OneHotConstraint {
 message Sos1Constraint {
   // Decision variables, at most one of which can be non-zero.
   repeated uint64 decision_variables = 1;
-  ModelingLabel modeling_label = 2;
-  repeated Provenance provenance = 3;
-  RemovedReason removed_reason = 4;
+  ConstraintContext context = 2;
+  RemovedReason removed_reason = 3;
 }
 ```
 
 ## Evaluated-stage Messages
 
 In the direct-map candidate, evaluated-stage messages mirror the current
-runtime stage data and carry modeling-label/provenance/removal sidecars inline.
+runtime stage data and carry context/removal sidecars inline.
 Unlike the v2 `EvaluatedConstraint`, the regular evaluated message stores
 `feasible` explicitly because Rust `EvaluatedData` owns it.
 
@@ -308,9 +320,8 @@ message EvaluatedRegularConstraint {
   bool feasible = 3;
   repeated uint64 used_decision_variable_ids = 4;
   optional double dual_variable = 5;
-  ModelingLabel modeling_label = 6;
-  repeated Provenance provenance = 7;
-  RemovedReason removed_reason = 8;
+  ConstraintContext context = 6;
+  RemovedReason removed_reason = 7;
 }
 
 message EvaluatedIndicatorConstraint {
@@ -321,9 +332,8 @@ message EvaluatedIndicatorConstraint {
   // Whether the indicator variable was active (= 1) at evaluation time.
   bool indicator_active = 5;
   repeated uint64 used_decision_variable_ids = 6;
-  ModelingLabel modeling_label = 7;
-  repeated Provenance provenance = 8;
-  RemovedReason removed_reason = 9;
+  ConstraintContext context = 7;
+  RemovedReason removed_reason = 8;
 }
 
 message EvaluatedOneHotConstraint {
@@ -332,9 +342,8 @@ message EvaluatedOneHotConstraint {
   // Which variable was 1, if exactly one was. Unset if infeasible.
   optional uint64 active_variable = 3;
   repeated uint64 used_decision_variable_ids = 4;
-  ModelingLabel modeling_label = 5;
-  repeated Provenance provenance = 6;
-  RemovedReason removed_reason = 7;
+  ConstraintContext context = 5;
+  RemovedReason removed_reason = 6;
 }
 
 message EvaluatedSos1Constraint {
@@ -343,9 +352,8 @@ message EvaluatedSos1Constraint {
   // Which variable was non-zero, if exactly one was. Unset if all-zero or infeasible.
   optional uint64 active_variable = 3;
   repeated uint64 used_decision_variable_ids = 4;
-  ModelingLabel modeling_label = 5;
-  repeated Provenance provenance = 6;
-  RemovedReason removed_reason = 7;
+  ConstraintContext context = 5;
+  RemovedReason removed_reason = 6;
 }
 ```
 
@@ -378,9 +386,8 @@ message SampledRegularConstraint {
   map<uint64, bool> feasible = 3;
   repeated uint64 used_decision_variable_ids = 4;
   optional SampledValues dual_variables = 5;
-  ModelingLabel modeling_label = 6;
-  repeated Provenance provenance = 7;
-  RemovedReason removed_reason = 8;
+  ConstraintContext context = 6;
+  RemovedReason removed_reason = 7;
 }
 
 message SampledIndicatorConstraint {
@@ -390,9 +397,8 @@ message SampledIndicatorConstraint {
   map<uint64, bool> feasible = 4;
   map<uint64, bool> indicator_active = 5;
   repeated uint64 used_decision_variable_ids = 6;
-  ModelingLabel modeling_label = 7;
-  repeated Provenance provenance = 8;
-  RemovedReason removed_reason = 9;
+  ConstraintContext context = 7;
+  RemovedReason removed_reason = 8;
 }
 
 message SampledOneHotConstraint {
@@ -400,9 +406,8 @@ message SampledOneHotConstraint {
   map<uint64, bool> feasible = 2;
   map<uint64, SampledActiveVariable> active_variable = 3;
   repeated uint64 used_decision_variable_ids = 4;
-  ModelingLabel modeling_label = 5;
-  repeated Provenance provenance = 6;
-  RemovedReason removed_reason = 7;
+  ConstraintContext context = 5;
+  RemovedReason removed_reason = 6;
 }
 
 message SampledSos1Constraint {
@@ -410,15 +415,15 @@ message SampledSos1Constraint {
   map<uint64, bool> feasible = 2;
   map<uint64, SampledActiveVariable> active_variable = 3;
   repeated uint64 used_decision_variable_ids = 4;
-  ModelingLabel modeling_label = 5;
-  repeated Provenance provenance = 6;
-  RemovedReason removed_reason = 7;
+  ConstraintContext context = 5;
+  RemovedReason removed_reason = 6;
 }
 ```
 
 ## Top-level Message Changes
 
-The field numbers below are based on current `main` as of 2026-06-24.
+The field numbers below are based on the currently assigned fields in `main`;
+verify them against the target commit before editing proto files.
 
 The snippets use the direct-map candidate shape. If the Rust SDK normalization
 PR concludes that collection wrapper messages are the better representation,
@@ -522,6 +527,7 @@ proto/ommx/v1/
   provenance.proto                 # new
   removed_reason.proto             # new
   modeling_label.proto             # new
+  constraint_context.proto          # new: ModelingLabel + Provenance for constraints
   sampled_values.proto             # new/shared: SampledValues
   regular_constraint.proto         # new: created/evaluated/sampled regular messages
   indicator_constraint.proto       # new: created/evaluated/sampled indicator messages
@@ -550,12 +556,12 @@ For `Instance` and `ParametricInstance`:
 3. Convert one-hot and SOS1 hints to first-class collections.
 4. Remove absorbed regular constraints from the regular collection.
 
-Modeling-label policy for v2 hint conversion:
+Constraint-context policy for v2 hint conversion:
 
-- One-hot: copy the modeling label from the referenced legacy regular constraint
-  (`constraint_id`) to the new one-hot entry.
-- SOS1: copy the modeling label from the legacy binary/cardinality constraint
-  (`binary_constraint_id`) to the new SOS1 entry.
+- One-hot: copy the modeling label component from the referenced legacy regular
+  constraint (`constraint_id`) to the new one-hot entry.
+- SOS1: copy the modeling label component from the legacy binary/cardinality
+  constraint (`binary_constraint_id`) to the new SOS1 entry.
 - Modeling labels from legacy big-M constraints are not merged automatically.
   They belong to the encoding details being absorbed, not to the semantic SOS1
   object.
@@ -578,12 +584,11 @@ For each top-level message:
 3. Split each collection entry into active vs. removed according to the final
    wire shape: `removed_reason` presence for the direct-map shape, or the
    wrapper's active/removed partition for the wrapper shape.
-4. Insert modeling labels and provenance into the corresponding collection
-   sidecars.
+4. Insert constraint contexts into the corresponding collection context stores.
 5. Run the same invariant validation currently enforced by builders/parsers:
    defined variables, binary requirements for indicator/one-hot, non-empty SOS1,
    active/removed consistency, evaluated/sample ID consistency, and
-   label/provenance IDs that refer only to owned entries.
+   context IDs that refer only to owned entries.
 
 ### Format version 1 output
 
@@ -611,18 +616,18 @@ Recommended PR sequence:
 2. Create a Rust SDK normalization PR.
    - Verify that `ConstraintCollection<T>`, `EvaluatedCollection<T>`, and
      `SampledCollection<T>` have explicit ownership of their maps, removed
-     reasons, modeling-label stores, and provenance sidecars.
+     reasons, and constraint-context stores.
    - Remove or narrow public raw mutation that can desynchronize sidecars, in
      particular the `DerefMut` exposure on `EvaluatedCollection<T>`.
    - Make `ConstraintCollection::insert_with` enforce the documented
      no-overwrite precondition, either by returning `Result` or by asserting at
      the crate-internal boundary.
    - Add validation helpers or tests for sidecar consistency:
-     `removed_reasons`, modeling-label, and provenance keys must refer to
-     existing entries.
-   - Consider common modeling-label-store or sidecar-store helpers only if they
-     clarify the ownership model; avoid merging independent constraint families
-     into one enum-based collection.
+     `removed_reasons` and constraint-context keys must refer to existing
+     entries.
+   - Consider common `ModelingLabelStore` / `ConstraintContextStore` helpers
+     only if they clarify the ownership model; avoid merging independent
+     constraint families into one enum-based collection.
    - Decide whether the protobuf representation should be the direct-map shape
      sketched here or a collection wrapper that mirrors the Rust owner more
      closely.
@@ -640,13 +645,16 @@ Recommended PR sequence:
      - indicator active and removed constraints,
      - one-hot active and removed constraints,
      - SOS1 active and removed constraints,
-     - modeling-label/provenance round-trips,
+     - modeling-label / constraint-context / provenance round-trips,
      - evaluated and sampled special constraints.
    - Bump `CURRENT_FORMAT_VERSION` to `1`.
    - Regenerate Python stubs/docs artifacts if PyO3-visible signatures or
      generated exports move.
 4. After the PR series lands, remove this proposal document.
    - Move stable API semantics into Rust/Python API Reference text.
+   - Use the current label/context public wording in Python docs and examples:
+     `variable_labels_df`, `constraint_context_df`, `constraint_provenance_df`,
+     and `include="label"` rather than legacy `metadata` names.
    - Move wire-format semantics into protobuf comments.
    - Keep migration behavior in tests and migration/user-guide documentation,
      not in this temporary proposal file.

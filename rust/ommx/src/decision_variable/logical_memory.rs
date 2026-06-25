@@ -14,7 +14,7 @@ impl LogicalMemoryProfile for Kind {
     }
 }
 
-// DecisionVariable and DecisionVariableMetadata use
+// DecisionVariable and DecisionVariableLabel use
 // `#[derive(LogicalMemoryProfile)]` on their definition sites.
 
 #[cfg(test)]
@@ -27,9 +27,9 @@ mod tests {
     fn test_decision_variable_minimal_snapshot() {
         let dv = DecisionVariable::binary(VariableID::from(1));
         let folded = logical_memory_to_folded(&dv);
-        // Per-element metadata storage was retired in v3 — only the
-        // intrinsic fields appear here; per-variable metadata lives at
-        // `Instance::variable_metadata` (see `instance/logical_memory.rs`).
+        // Per-element label storage was retired in v3 — only the
+        // intrinsic fields appear here; per-variable modeling labels live at
+        // `Instance::variable_labels` (see `instance/logical_memory.rs`).
         insta::assert_snapshot!(folded, @r###"
         DecisionVariable.bound 16
         DecisionVariable.id 8
@@ -38,12 +38,12 @@ mod tests {
         "###);
     }
 
-    // The previous `test_decision_variable_with_metadata_snapshot` exercised
-    // per-element `DecisionVariable.metadata` storage, which was retired
-    // in v3. Per-variable metadata is now accounted for at the
-    // `Instance::variable_metadata` SoA-store level.
+    // The previous `test_decision_variable_with_label_snapshot` exercised
+    // per-element `DecisionVariable` label storage, which was retired
+    // in v3. Per-variable modeling labels are now accounted for at the
+    // `Instance::variable_labels` SoA-store level.
     #[test]
-    fn test_decision_variable_minimal_no_metadata_snapshot() {
+    fn test_decision_variable_minimal_no_label_snapshot() {
         let dv = DecisionVariable::new(
             VariableID::from(1),
             Kind::Integer,

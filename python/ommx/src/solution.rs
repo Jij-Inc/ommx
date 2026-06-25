@@ -140,12 +140,12 @@ impl Solution {
     #[getter]
     pub fn decision_variables(&self) -> Vec<crate::EvaluatedDecisionVariable> {
         // BTreeMap is already sorted by key
-        let metadata = self.inner.variable_metadata();
+        let labels = self.inner.variable_labels();
         self.inner
             .decision_variables()
             .iter()
             .map(|(id, dv)| {
-                crate::EvaluatedDecisionVariable::from_parts(dv.clone(), metadata.collect_for(*id))
+                crate::EvaluatedDecisionVariable::from_parts(dv.clone(), labels.collect_for(*id))
             })
             .collect()
     }
@@ -153,14 +153,14 @@ impl Solution {
     /// Get evaluated constraints as a dict keyed by constraint ID
     #[getter]
     pub fn constraints(&self) -> std::collections::BTreeMap<u64, crate::EvaluatedConstraint> {
-        let metadata = self.inner.evaluated_constraints().metadata();
+        let context = self.inner.evaluated_constraints().context();
         self.inner
             .evaluated_constraints()
             .iter()
             .map(|(id, ec)| {
                 (
                     id.into_inner(),
-                    crate::EvaluatedConstraint::from_parts(ec.clone(), metadata.collect_for(*id)),
+                    crate::EvaluatedConstraint::from_parts(ec.clone(), context.collect_for(*id)),
                 )
             })
             .collect()
@@ -169,11 +169,11 @@ impl Solution {
     /// Get evaluated named functions as a list sorted by ID
     #[getter]
     pub fn named_functions(&self) -> Vec<crate::EvaluatedNamedFunction> {
-        let metadata = self.inner.named_function_metadata();
+        let labels = self.inner.named_function_labels();
         self.inner
             .evaluated_named_functions()
             .iter()
-            .map(|(id, nf)| crate::EvaluatedNamedFunction(nf.clone(), metadata.collect_for(*id)))
+            .map(|(id, nf)| crate::EvaluatedNamedFunction(nf.clone(), labels.collect_for(*id)))
             .collect()
     }
 
@@ -387,15 +387,12 @@ impl Solution {
         variable_id: u64,
     ) -> PyResult<crate::EvaluatedDecisionVariable> {
         let var_id = ommx::VariableID::from(variable_id);
-        let metadata = self.inner.variable_metadata();
+        let labels = self.inner.variable_labels();
         self.inner
             .decision_variables()
             .get(&var_id)
             .map(|dv| {
-                crate::EvaluatedDecisionVariable::from_parts(
-                    dv.clone(),
-                    metadata.collect_for(var_id),
-                )
+                crate::EvaluatedDecisionVariable::from_parts(dv.clone(), labels.collect_for(var_id))
             })
             .ok_or_else(|| {
                 PyKeyError::new_err(format!("Unknown decision variable ID: {variable_id}"))
@@ -435,14 +432,14 @@ impl Solution {
     /// Get a specific evaluated constraint by ID
     pub fn get_constraint_by_id(&self, constraint_id: u64) -> PyResult<crate::EvaluatedConstraint> {
         let constraint_id = ommx::ConstraintID::from(constraint_id);
-        let metadata = self.inner.evaluated_constraints().metadata();
+        let context = self.inner.evaluated_constraints().context();
         self.inner
             .evaluated_constraints()
             .get(&constraint_id)
             .map(|ec| {
                 crate::EvaluatedConstraint::from_parts(
                     ec.clone(),
-                    metadata.collect_for(constraint_id),
+                    context.collect_for(constraint_id),
                 )
             })
             .ok_or_else(|| {
@@ -466,7 +463,7 @@ impl Solution {
                 crate::EvaluatedNamedFunction(
                     nf.clone(),
                     self.inner
-                        .named_function_metadata()
+                        .named_function_labels()
                         .collect_for(named_function_id),
                 )
             })
@@ -488,9 +485,9 @@ impl Solution {
         include: Option<Vec<String>>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let flags = crate::pandas::IncludeFlags::from_optional(include)?;
-        let var_meta_store = self.inner.variable_metadata().clone();
+        let var_meta_store = self.inner.variable_labels().clone();
         let view: Vec<(
-            ommx::DecisionVariableMetadata,
+            ommx::DecisionVariableLabel,
             &ommx::EvaluatedDecisionVariable,
         )> = self
             .inner
@@ -501,7 +498,7 @@ impl Solution {
         entries_to_dataframe(
             py,
             view.iter()
-                .map(|(m, dv)| crate::pandas::WithMetadata::new(*dv, m)),
+                .map(|(m, dv)| crate::pandas::WithModelingContext::new(*dv, m)),
             "id",
             flags,
         )
@@ -535,13 +532,13 @@ impl Solution {
                 evaluated_sos1_constraints
             ],
             |coll| {
-                let meta = coll.metadata().clone();
+                let meta = coll.context().clone();
                 let removed_reasons = coll.removed_reasons();
                 let mut entries: Vec<Bound<'py, pyo3::types::PyAny>> = Vec::new();
                 for (id, c) in coll.inner().iter() {
                     let m = meta.collect_for(*id);
-                    let dict =
-                        crate::pandas::WithMetadata::new((*id, c), &m).to_pandas_entry(py)?;
+                    let dict = crate::pandas::WithModelingContext::new((*id, c), &m)
+                        .to_pandas_entry(py)?;
                     if flags.removed_reason {
                         // Always emit the `removed_reason` column when
                         // requested so its existence in the resulting
@@ -572,8 +569,8 @@ impl Solution {
         include: Option<Vec<String>>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let flags = crate::pandas::IncludeFlags::from_optional(include)?;
-        let nf_meta_store = self.inner.named_function_metadata().clone();
-        let nf_meta_view: Vec<(ommx::NamedFunctionMetadata, &ommx::EvaluatedNamedFunction)> = self
+        let nf_meta_store = self.inner.named_function_labels().clone();
+        let nf_meta_view: Vec<(ommx::NamedFunctionLabel, &ommx::EvaluatedNamedFunction)> = self
             .inner
             .evaluated_named_functions()
             .iter()
@@ -583,17 +580,17 @@ impl Solution {
             py,
             nf_meta_view
                 .iter()
-                .map(|(m, nf)| crate::pandas::WithMetadata::new(*nf, m)),
+                .map(|(m, nf)| crate::pandas::WithModelingContext::new(*nf, m)),
             "id",
             flags,
         )
     }
 
-    /// Constraint metadata DataFrame (id-indexed). See
-    /// {meth}`ommx.v1.Instance.constraint_metadata_df` for column / `kind=`
-    /// semantics. Reads from the evaluated collection's metadata store.
+    /// Constraint context DataFrame (id-indexed). See
+    /// {meth}`ommx.v1.Instance.constraint_context_df` for column / `kind=`
+    /// semantics. Reads from the evaluated collection's context store.
     #[pyo3(signature = (kind = ConstraintKind::Regular))]
-    pub fn constraint_metadata_df<'py>(
+    pub fn constraint_context_df<'py>(
         &self,
         py: Python<'py>,
         kind: ConstraintKind,
@@ -609,9 +606,9 @@ impl Solution {
                 evaluated_sos1_constraints
             ],
             |coll| {
-                crate::pandas::constraint_metadata_dataframe(
+                crate::pandas::constraint_context_dataframe(
                     py,
-                    coll.metadata(),
+                    coll.context(),
                     coll.inner().keys().copied(),
                     id_col,
                 )
@@ -639,7 +636,7 @@ impl Solution {
             |coll| {
                 crate::pandas::constraint_parameters_dataframe(
                     py,
-                    coll.metadata(),
+                    coll.context(),
                     coll.inner().keys().copied(),
                     id_col,
                 )
@@ -667,7 +664,7 @@ impl Solution {
             |coll| {
                 crate::pandas::constraint_provenance_dataframe(
                     py,
-                    coll.metadata(),
+                    coll.context(),
                     coll.inner().keys().copied(),
                     id_col,
                 )
@@ -702,11 +699,11 @@ impl Solution {
         )
     }
 
-    /// Decision-variable metadata DataFrame (id-indexed).
-    pub fn variable_metadata_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
-        crate::pandas::variable_metadata_dataframe(
+    /// Decision-variable modeling-label DataFrame (id-indexed).
+    pub fn variable_labels_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
+        crate::pandas::variable_labels_dataframe(
             py,
-            self.inner.variable_metadata(),
+            self.inner.variable_labels(),
             self.inner.decision_variables().keys().copied(),
             "variable_id",
         )
@@ -719,7 +716,7 @@ impl Solution {
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         crate::pandas::variable_parameters_dataframe(
             py,
-            self.inner.variable_metadata(),
+            self.inner.variable_labels(),
             self.inner.decision_variables().keys().copied(),
             "variable_id",
         )

@@ -3,15 +3,15 @@ use std::collections::{BTreeMap, BTreeSet};
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
-pub struct SampledConstraint(pub ommx::SampledConstraint, pub ommx::ConstraintMetadata);
+pub struct SampledConstraint(pub ommx::SampledConstraint, pub ommx::ConstraintContext);
 
 impl SampledConstraint {
     pub fn standalone(inner: ommx::SampledConstraint) -> Self {
-        Self(inner, ommx::ConstraintMetadata::default())
+        Self(inner, ommx::ConstraintContext::default())
     }
 
-    pub fn from_parts(inner: ommx::SampledConstraint, metadata: ommx::ConstraintMetadata) -> Self {
-        Self(inner, metadata)
+    pub fn from_parts(inner: ommx::SampledConstraint, context: ommx::ConstraintContext) -> Self {
+        Self(inner, context)
     }
 }
 
@@ -27,19 +27,19 @@ impl SampledConstraint {
     /// Get the constraint name
     #[getter]
     pub fn name(&self) -> Option<String> {
-        self.1.name.clone()
+        self.1.label.name.clone()
     }
 
     /// Get the subscripts
     #[getter]
     pub fn subscripts(&self) -> Vec<i64> {
-        self.1.subscripts.clone()
+        self.1.label.subscripts.clone()
     }
 
     /// Get the description
     #[getter]
     pub fn description(&self) -> Option<String> {
-        self.1.description.clone()
+        self.1.label.description.clone()
     }
 
     /// Get the provenance chain.

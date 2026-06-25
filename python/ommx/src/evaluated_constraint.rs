@@ -4,18 +4,15 @@ use pyo3::prelude::*;
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
-pub struct EvaluatedConstraint(pub ommx::EvaluatedConstraint, pub ommx::ConstraintMetadata);
+pub struct EvaluatedConstraint(pub ommx::EvaluatedConstraint, pub ommx::ConstraintContext);
 
 impl EvaluatedConstraint {
     pub fn standalone(inner: ommx::EvaluatedConstraint) -> Self {
-        Self(inner, ommx::ConstraintMetadata::default())
+        Self(inner, ommx::ConstraintContext::default())
     }
 
-    pub fn from_parts(
-        inner: ommx::EvaluatedConstraint,
-        metadata: ommx::ConstraintMetadata,
-    ) -> Self {
-        Self(inner, metadata)
+    pub fn from_parts(inner: ommx::EvaluatedConstraint, context: ommx::ConstraintContext) -> Self {
+        Self(inner, context)
     }
 }
 
@@ -55,19 +52,20 @@ impl EvaluatedConstraint {
     /// Get the constraint name
     #[getter]
     pub fn name(&self) -> Option<String> {
-        self.1.name.clone()
+        self.1.label.name.clone()
     }
 
     /// Get the subscripts
     #[getter]
     pub fn subscripts(&self) -> Vec<i64> {
-        self.1.subscripts.clone()
+        self.1.label.subscripts.clone()
     }
 
     /// Get the parameters
     #[getter]
     pub fn parameters(&self) -> std::collections::HashMap<String, String> {
         self.1
+            .label
             .parameters
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
@@ -77,7 +75,7 @@ impl EvaluatedConstraint {
     /// Get the description
     #[getter]
     pub fn description(&self) -> Option<String> {
-        self.1.description.clone()
+        self.1.label.description.clone()
     }
 
     /// Get the provenance chain.

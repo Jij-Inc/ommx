@@ -11,15 +11,15 @@ use crate::ConstraintHost;
 #[gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
-pub struct OneHotConstraint(pub ommx::OneHotConstraint, pub ommx::ConstraintMetadata);
+pub struct OneHotConstraint(pub ommx::OneHotConstraint, pub ommx::ConstraintContext);
 
 impl OneHotConstraint {
     pub fn standalone(inner: ommx::OneHotConstraint) -> Self {
-        Self(inner, ommx::ConstraintMetadata::default())
+        Self(inner, ommx::ConstraintContext::default())
     }
 
-    pub fn from_parts(inner: ommx::OneHotConstraint, metadata: ommx::ConstraintMetadata) -> Self {
-        Self(inner, metadata)
+    pub fn from_parts(inner: ommx::OneHotConstraint, context: ommx::ConstraintContext) -> Self {
+        Self(inner, context)
     }
 }
 
@@ -32,7 +32,7 @@ impl OneHotConstraint {
     ///
     /// - `variables`: List of binary decision variable IDs (exactly one must be 1)
     /// - `name` / `subscripts` / `description` / `parameters`: Optional
-    ///   metadata. Drained into the host's SoA store on insertion.
+    ///   context. Drained into the host's SoA store on insertion.
     #[new]
     #[pyo3(signature = (*, variables, name=None, subscripts=Vec::new(), description=None, parameters=HashMap::default()))]
     pub fn new(
@@ -44,16 +44,18 @@ impl OneHotConstraint {
     ) -> PyResult<Self> {
         let vars: BTreeSet<ommx::VariableID> =
             variables.into_iter().map(ommx::VariableID::from).collect();
-        let metadata = ommx::ConstraintMetadata {
-            name,
-            subscripts,
-            parameters: parameters.into_iter().collect(),
-            description,
+        let context = ommx::ConstraintContext {
+            label: ommx::ModelingLabel {
+                name,
+                subscripts,
+                parameters: parameters.into_iter().collect(),
+                description,
+            },
             provenance: Vec::new(),
         };
         let constraint = ommx::OneHotConstraint::new(vars)
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
-        Ok(Self(constraint, metadata))
+        Ok(Self(constraint, context))
     }
 
     #[getter]
@@ -63,22 +65,23 @@ impl OneHotConstraint {
 
     #[getter]
     pub fn name(&self) -> Option<String> {
-        self.1.name.clone()
+        self.1.label.name.clone()
     }
 
     #[getter]
     pub fn subscripts(&self) -> Vec<i64> {
-        self.1.subscripts.clone()
+        self.1.label.subscripts.clone()
     }
 
     #[getter]
     pub fn description(&self) -> Option<String> {
-        self.1.description.clone()
+        self.1.label.description.clone()
     }
 
     #[getter]
     pub fn parameters(&self) -> HashMap<String, String> {
         self.1
+            .label
             .parameters
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
@@ -87,25 +90,25 @@ impl OneHotConstraint {
 
     /// Set the name. Returns self for method chaining (snapshot mutation).
     pub fn set_name(&mut self, name: String) -> Self {
-        self.1.name = Some(name);
+        self.1.label.name = Some(name);
         self.clone()
     }
 
     /// Set the subscripts. Returns self for method chaining (snapshot mutation).
     pub fn set_subscripts(&mut self, subscripts: Vec<i64>) -> Self {
-        self.1.subscripts = subscripts;
+        self.1.label.subscripts = subscripts;
         self.clone()
     }
 
     /// Set the description. Returns self for method chaining (snapshot mutation).
     pub fn set_description(&mut self, description: String) -> Self {
-        self.1.description = Some(description);
+        self.1.label.description = Some(description);
         self.clone()
     }
 
     /// Replace all parameters. Returns self for method chaining (snapshot mutation).
     pub fn set_parameters(&mut self, parameters: HashMap<String, String>) -> Self {
-        self.1.parameters = parameters.into_iter().collect();
+        self.1.label.parameters = parameters.into_iter().collect();
         self.clone()
     }
 
@@ -128,19 +131,19 @@ impl OneHotConstraint {
 #[derive(Clone)]
 pub struct RemovedOneHotConstraint {
     pub constraint: ommx::OneHotConstraint,
-    pub metadata: ommx::ConstraintMetadata,
+    pub context: ommx::ConstraintContext,
     pub removed_reason: ommx::RemovedReason,
 }
 
 impl RemovedOneHotConstraint {
     pub fn from_parts(
         constraint: ommx::OneHotConstraint,
-        metadata: ommx::ConstraintMetadata,
+        context: ommx::ConstraintContext,
         removed_reason: ommx::RemovedReason,
     ) -> Self {
         Self {
             constraint,
-            metadata,
+            context,
             removed_reason,
         }
     }
@@ -151,7 +154,7 @@ impl RemovedOneHotConstraint {
 impl RemovedOneHotConstraint {
     #[getter]
     pub fn constraint(&self) -> OneHotConstraint {
-        OneHotConstraint(self.constraint.clone(), self.metadata.clone())
+        OneHotConstraint(self.constraint.clone(), self.context.clone())
     }
 
     #[getter]
@@ -165,22 +168,23 @@ impl RemovedOneHotConstraint {
 
     #[getter]
     pub fn name(&self) -> Option<String> {
-        self.metadata.name.clone()
+        self.context.label.name.clone()
     }
 
     #[getter]
     pub fn subscripts(&self) -> Vec<i64> {
-        self.metadata.subscripts.clone()
+        self.context.label.subscripts.clone()
     }
 
     #[getter]
     pub fn description(&self) -> Option<String> {
-        self.metadata.description.clone()
+        self.context.label.description.clone()
     }
 
     #[getter]
     pub fn parameters(&self) -> HashMap<String, String> {
-        self.metadata
+        self.context
+            .label
             .parameters
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
@@ -224,7 +228,7 @@ impl RemovedOneHotConstraint {
 /// Returned by `Instance.add_one_hot_constraint` /
 /// `ParametricInstance.add_one_hot_constraint` and by their
 /// `one_hot_constraints[id]` getters. Reads pull live data from the parent
-/// host and metadata setters write through to its SoA metadata store.
+/// host and context setters write through to its SoA context store.
 #[gen_stub_pyclass]
 #[pyclass]
 pub struct AttachedOneHotConstraint {
@@ -304,20 +308,14 @@ impl AttachedOneHotConstraint {
             ConstraintHost::Instance(p) => {
                 let inst = p.borrow(py);
                 let c = lookup_one_hot(&inst.inner, self.id)?.clone();
-                let metadata = inst
-                    .inner
-                    .one_hot_constraint_metadata()
-                    .collect_for(self.id);
-                Ok(OneHotConstraint::from_parts(c, metadata))
+                let context = inst.inner.one_hot_constraint_context().collect_for(self.id);
+                Ok(OneHotConstraint::from_parts(c, context))
             }
             ConstraintHost::Parametric(p) => {
                 let inst = p.borrow(py);
                 let c = lookup_one_hot_parametric(&inst.inner, self.id)?.clone();
-                let metadata = inst
-                    .inner
-                    .one_hot_constraint_metadata()
-                    .collect_for(self.id);
-                Ok(OneHotConstraint::from_parts(c, metadata))
+                let context = inst.inner.one_hot_constraint_context().collect_for(self.id);
+                Ok(OneHotConstraint::from_parts(c, context))
             }
         }
     }
@@ -381,9 +379,9 @@ impl AttachedOneHotConstraint {
     }
 }
 
-crate::attached_metadata_methods!(
+crate::attached_constraint_context_methods!(
     AttachedOneHotConstraint,
     ommx::OneHotConstraintID,
-    one_hot_constraint_metadata,
-    one_hot_constraint_metadata_mut
+    one_hot_constraint_context,
+    set_one_hot_constraint_context
 );

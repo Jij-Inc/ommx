@@ -30,10 +30,7 @@ use std::collections::HashMap;
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
-pub struct DecisionVariable(
-    pub ommx::DecisionVariable,
-    pub ommx::DecisionVariableMetadata,
-);
+pub struct DecisionVariable(pub ommx::DecisionVariable, pub ommx::DecisionVariableLabel);
 
 impl DecisionVariable {
     /// Helper to create a Linear term from this decision variable with coefficient 1
@@ -42,14 +39,11 @@ impl DecisionVariable {
     }
 
     pub fn standalone(inner: ommx::DecisionVariable) -> Self {
-        Self(inner, ommx::DecisionVariableMetadata::default())
+        Self(inner, ommx::DecisionVariableLabel::default())
     }
 
-    pub fn from_parts(
-        inner: ommx::DecisionVariable,
-        metadata: ommx::DecisionVariableMetadata,
-    ) -> Self {
-        Self(inner, metadata)
+    pub fn from_parts(inner: ommx::DecisionVariable, label: ommx::DecisionVariableLabel) -> Self {
+        Self(inner, label)
     }
 }
 
@@ -141,14 +135,14 @@ impl DecisionVariable {
             ATol::default(),
         )?;
 
-        let metadata = ommx::DecisionVariableMetadata {
+        let label = ommx::DecisionVariableLabel {
             name,
             subscripts,
             parameters: parameters.into_iter().collect(),
             description,
         };
 
-        Ok(Self(decision_variable, metadata))
+        Ok(Self(decision_variable, label))
     }
 
     #[getter]
@@ -558,14 +552,14 @@ impl DecisionVariable {
 /// `AttachedDecisionVariable` is returned by `add_decision_variable(v)`
 /// (insertion), `attached_decision_variable(id)` (lookup), and the
 /// `decision_variables` getter on both hosts. Reads pull live data from
-/// the parent host's SoA store and metadata setters write back through to
+/// the parent host's SoA store and label setters write back through to
 /// it. Handles also participate in arithmetic (`x + y`, `2 * x` etc.) via
 /// `ToFunction` — only the id is consumed for that, no host borrow is
 /// taken, so arithmetic works even while the host is mutably borrowed
 /// elsewhere. Call {meth}`detach` for an independent
 /// {class}`~ommx.v1.DecisionVariable` snapshot.
 ///
-/// `DecisionVariableMetadata` has no `provenance` field, so the
+/// `DecisionVariableLabel` has no `provenance` field, so the
 /// write-through surface omits the corresponding getter.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
@@ -713,14 +707,14 @@ impl AttachedDecisionVariable {
             crate::ConstraintHost::Instance(p) => {
                 let inst = p.borrow(py);
                 let v = lookup_variable(&inst.inner, self.id)?.clone();
-                let metadata = inst.inner.variable_metadata().collect_for(self.id);
-                Ok(DecisionVariable::from_parts(v, metadata))
+                let label = inst.inner.variable_labels().collect_for(self.id);
+                Ok(DecisionVariable::from_parts(v, label))
             }
             crate::ConstraintHost::Parametric(p) => {
                 let inst = p.borrow(py);
                 let v = lookup_variable_parametric(&inst.inner, self.id)?.clone();
-                let metadata = inst.inner.variable_metadata().collect_for(self.id);
-                Ok(DecisionVariable::from_parts(v, metadata))
+                let label = inst.inner.variable_labels().collect_for(self.id);
+                Ok(DecisionVariable::from_parts(v, label))
             }
         }
     }
@@ -791,7 +785,7 @@ impl AttachedDecisionVariable {
             crate::ConstraintHost::Instance(p) => {
                 let inst = p.borrow(py);
                 match lookup_variable(&inst.inner, self.id) {
-                    Ok(v) => render(v, inst.inner.variable_metadata().name(self.id)),
+                    Ok(v) => render(v, inst.inner.variable_labels().name(self.id)),
                     Err(_) => format!(
                         "AttachedDecisionVariable(id={}, dropped)",
                         self.id.into_inner()
@@ -801,7 +795,7 @@ impl AttachedDecisionVariable {
             crate::ConstraintHost::Parametric(p) => {
                 let inst = p.borrow(py);
                 match lookup_variable_parametric(&inst.inner, self.id) {
-                    Ok(v) => render(v, inst.inner.variable_metadata().name(self.id)),
+                    Ok(v) => render(v, inst.inner.variable_labels().name(self.id)),
                     Err(_) => format!(
                         "AttachedDecisionVariable(id={}, dropped)",
                         self.id.into_inner()
@@ -1009,8 +1003,8 @@ impl AttachedDecisionVariable {
     }
 }
 
-crate::attached_variable_metadata_methods!(
+crate::attached_variable_labels_methods!(
     AttachedDecisionVariable,
-    variable_metadata,
-    variable_metadata_mut
+    variable_labels,
+    set_variable_label
 );

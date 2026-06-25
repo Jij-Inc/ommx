@@ -2,7 +2,7 @@ mod parse;
 mod serialize;
 
 use crate::{
-    constraint_type::EvaluatedCollection, decision_variable::VariableMetadataStore,
+    constraint_type::EvaluatedCollection, decision_variable::VariableLabelStore,
     indicator_constraint::IndicatorConstraint, Constraint, ConstraintID, EvaluatedConstraint,
     EvaluatedDecisionVariable, EvaluatedNamedFunction, NamedFunctionID, Sense, VariableID,
 };
@@ -121,12 +121,12 @@ pub struct Solution {
     evaluated_named_functions: BTreeMap<NamedFunctionID, EvaluatedNamedFunction>,
     #[getset(get = "pub")]
     decision_variables: BTreeMap<VariableID, EvaluatedDecisionVariable>,
-    /// Per-variable auxiliary metadata (sibling of [`Self::decision_variables`]).
+    /// Per-variable modeling labels (sibling of [`Self::decision_variables`]).
     #[getset(get = "pub")]
-    variable_metadata: VariableMetadataStore,
-    /// Per-named-function auxiliary metadata (sibling of [`Self::evaluated_named_functions`]).
+    variable_labels: VariableLabelStore,
+    /// Per-named-function modeling labels (sibling of [`Self::evaluated_named_functions`]).
     #[getset(get = "pub")]
-    named_function_metadata: crate::named_function::NamedFunctionMetadataStore,
+    named_function_labels: crate::named_function::NamedFunctionLabelStore,
     /// Optimality status - not guaranteed by Solution itself
     pub optimality: crate::v1::Optimality,
     /// Relaxation status - not guaranteed by Solution itself
@@ -287,7 +287,7 @@ impl Solution {
     pub fn decision_variable_names(&self) -> BTreeSet<String> {
         self.decision_variables
             .keys()
-            .filter_map(|id| self.variable_metadata.name(*id).map(|s| s.to_owned()))
+            .filter_map(|id| self.variable_labels.name(*id).map(|s| s.to_owned()))
             .collect()
     }
 
@@ -296,7 +296,7 @@ impl Solution {
     /// Returns a mapping from subscripts (as a vector) to the variable's value.
     /// This is useful for extracting variables that have the same name but different subscripts.
     ///
-    /// Note: Parameters in decision variable metadata are ignored. Only subscripts are used as keys.
+    /// Note: Parameters in decision variable labels are ignored. Only subscripts are used as keys.
     ///
     /// # Errors
     ///
@@ -312,7 +312,7 @@ impl Solution {
         let variables_with_name: Vec<&EvaluatedDecisionVariable> = self
             .decision_variables
             .iter()
-            .filter(|(id, _)| self.variable_metadata.name(**id) == Some(name))
+            .filter(|(id, _)| self.variable_labels.name(**id) == Some(name))
             .map(|(_, v)| v)
             .collect();
         if variables_with_name.is_empty() {
@@ -323,7 +323,7 @@ impl Solution {
 
         let mut result = BTreeMap::new();
         for dv in &variables_with_name {
-            let key = self.variable_metadata.subscripts(*dv.id()).to_vec();
+            let key = self.variable_labels.subscripts(*dv.id()).to_vec();
             if result.contains_key(&key) {
                 return Err(SolutionError::DuplicateSubscript { subscripts: key });
             }
@@ -338,7 +338,7 @@ impl Solution {
     /// This is useful for extracting all variables at once in a structured format.
     /// Variables without names are not included in the result.
     ///
-    /// Note: Parameters in decision variable metadata are ignored. Only subscripts are used as keys.
+    /// Note: Parameters in decision variable labels are ignored. Only subscripts are used as keys.
     ///
     /// # Errors
     ///
@@ -351,12 +351,12 @@ impl Solution {
         let mut result: BTreeMap<String, BTreeMap<Vec<i64>, f64>> = BTreeMap::new();
 
         for (id, dv) in self.decision_variables.iter() {
-            let name = match self.variable_metadata.name(*id) {
+            let name = match self.variable_labels.name(*id) {
                 Some(n) => n.to_owned(),
                 None => continue, // Skip variables without names
             };
 
-            let subscripts = self.variable_metadata.subscripts(*id).to_vec();
+            let subscripts = self.variable_labels.subscripts(*id).to_vec();
             let value = *dv.value();
 
             let vars_map = result.entry(name).or_default();
@@ -387,11 +387,11 @@ impl Solution {
     ) -> Result<BTreeMap<Vec<i64>, f64>, SolutionError> {
         // Collect all constraints with the given name from the collection's
         // modeling-label sidecar.
-        let metadata = self.evaluated_constraints.metadata();
+        let context = self.evaluated_constraints.context();
         let matches: Vec<(ConstraintID, &EvaluatedConstraint)> = self
             .evaluated_constraints
             .iter()
-            .filter(|(id, _)| metadata.name(**id) == Some(name))
+            .filter(|(id, _)| context.name(**id) == Some(name))
             .map(|(id, c)| (*id, c))
             .collect();
         if matches.is_empty() {
@@ -402,10 +402,10 @@ impl Solution {
 
         let mut result = BTreeMap::new();
         for (id, ec) in &matches {
-            if !metadata.parameters(*id).is_empty() {
+            if !context.parameters(*id).is_empty() {
                 return Err(SolutionError::ParameterizedConstraint);
             }
-            let key = metadata.subscripts(*id).to_vec();
+            let key = context.subscripts(*id).to_vec();
             if result.contains_key(&key) {
                 return Err(SolutionError::DuplicateSubscript { subscripts: key });
             }
@@ -454,7 +454,7 @@ impl Solution {
     pub fn named_function_names(&self) -> BTreeSet<String> {
         self.evaluated_named_functions
             .keys()
-            .filter_map(|id| self.named_function_metadata.name(*id).map(str::to_owned))
+            .filter_map(|id| self.named_function_labels.name(*id).map(str::to_owned))
             .collect()
     }
 
@@ -478,7 +478,7 @@ impl Solution {
         let functions_with_name: Vec<&EvaluatedNamedFunction> = self
             .evaluated_named_functions
             .iter()
-            .filter(|(id, _)| self.named_function_metadata.name(**id) == Some(name))
+            .filter(|(id, _)| self.named_function_labels.name(**id) == Some(name))
             .map(|(_, nf)| nf)
             .collect();
         if functions_with_name.is_empty() {
@@ -489,7 +489,7 @@ impl Solution {
 
         let mut result = BTreeMap::new();
         for nf in &functions_with_name {
-            let key = self.named_function_metadata.subscripts(nf.id()).to_vec();
+            let key = self.named_function_labels.subscripts(nf.id()).to_vec();
             if result.contains_key(&key) {
                 return Err(SolutionError::DuplicateSubscript { subscripts: key });
             }
@@ -514,12 +514,12 @@ impl Solution {
         let mut result: BTreeMap<String, BTreeMap<Vec<i64>, f64>> = BTreeMap::new();
 
         for (id, nf) in &self.evaluated_named_functions {
-            let name = match self.named_function_metadata.name(*id) {
+            let name = match self.named_function_labels.name(*id) {
                 Some(n) => n.to_string(),
                 None => continue, // Skip named functions without names
             };
 
-            let subscripts = self.named_function_metadata.subscripts(*id).to_vec();
+            let subscripts = self.named_function_labels.subscripts(*id).to_vec();
             let value = nf.evaluated_value();
 
             let funcs_map = result.entry(name).or_default();
@@ -562,8 +562,8 @@ pub struct SolutionBuilder {
     evaluated_sos1_constraints: EvaluatedCollection<crate::Sos1Constraint>,
     evaluated_named_functions: BTreeMap<NamedFunctionID, EvaluatedNamedFunction>,
     decision_variables: Option<BTreeMap<VariableID, EvaluatedDecisionVariable>>,
-    variable_metadata: VariableMetadataStore,
-    named_function_metadata: crate::named_function::NamedFunctionMetadataStore,
+    variable_labels: VariableLabelStore,
+    named_function_labels: crate::named_function::NamedFunctionLabelStore,
     sense: Option<Sense>,
     optimality: crate::v1::Optimality,
     relaxation: crate::v1::Relaxation,
@@ -666,17 +666,17 @@ impl SolutionBuilder {
     }
 
     /// Sets the per-variable modeling-label store.
-    pub fn variable_metadata(mut self, variable_metadata: VariableMetadataStore) -> Self {
-        self.variable_metadata = variable_metadata;
+    pub fn variable_labels(mut self, variable_labels: VariableLabelStore) -> Self {
+        self.variable_labels = variable_labels;
         self
     }
 
     /// Sets the per-named-function modeling-label store.
-    pub fn named_function_metadata(
+    pub fn named_function_labels(
         mut self,
-        named_function_metadata: crate::named_function::NamedFunctionMetadataStore,
+        named_function_labels: crate::named_function::NamedFunctionLabelStore,
     ) -> Self {
-        self.named_function_metadata = named_function_metadata;
+        self.named_function_labels = named_function_labels;
         self
     }
 
@@ -747,7 +747,7 @@ impl SolutionBuilder {
         }
         let decision_variable_ids = decision_variables.keys().copied().collect::<BTreeSet<_>>();
         crate::modeling_label::validate_modeling_label_ids(
-            &self.variable_metadata,
+            &self.variable_labels,
             &decision_variable_ids,
             "decision variable",
         )?;
@@ -757,15 +757,15 @@ impl SolutionBuilder {
             .copied()
             .collect::<BTreeSet<_>>();
         crate::modeling_label::validate_modeling_label_ids(
-            &self.named_function_metadata,
+            &self.named_function_labels,
             &named_function_ids,
             "named function",
         )?;
-        evaluated_constraints.validate_metadata_ids()?;
+        evaluated_constraints.validate_context_ids()?;
         self.evaluated_indicator_constraints
-            .validate_metadata_ids()?;
-        self.evaluated_one_hot_constraints.validate_metadata_ids()?;
-        self.evaluated_sos1_constraints.validate_metadata_ids()?;
+            .validate_context_ids()?;
+        self.evaluated_one_hot_constraints.validate_context_ids()?;
+        self.evaluated_sos1_constraints.validate_context_ids()?;
 
         // Validate all used_decision_variable_ids in indicator constraints
         for (ic_id, ic) in self.evaluated_indicator_constraints.iter() {
@@ -824,8 +824,8 @@ impl SolutionBuilder {
             evaluated_sos1_constraints: self.evaluated_sos1_constraints,
             evaluated_named_functions: self.evaluated_named_functions,
             decision_variables,
-            variable_metadata: self.variable_metadata.clone(),
-            named_function_metadata: self.named_function_metadata.clone(),
+            variable_labels: self.variable_labels.clone(),
+            named_function_labels: self.named_function_labels.clone(),
             optimality: self.optimality,
             relaxation: self.relaxation,
             sense: Some(sense),
@@ -876,8 +876,8 @@ impl SolutionBuilder {
             evaluated_sos1_constraints: self.evaluated_sos1_constraints,
             evaluated_named_functions: self.evaluated_named_functions,
             decision_variables,
-            variable_metadata: self.variable_metadata.clone(),
-            named_function_metadata: self.named_function_metadata.clone(),
+            variable_labels: self.variable_labels.clone(),
+            named_function_labels: self.named_function_labels.clone(),
             optimality: self.optimality,
             relaxation: self.relaxation,
             sense: Some(sense),
@@ -1074,7 +1074,7 @@ mod tests {
     #[test]
     fn test_extract_parameterized_variable_success() {
         use crate::{
-            decision_variable::{DecisionVariable, DecisionVariableMetadata, Kind},
+            decision_variable::{DecisionVariable, DecisionVariableLabel, Kind},
             EvaluatedDecisionVariable, Sense, VariableID,
         };
 
@@ -1089,10 +1089,10 @@ mod tests {
             crate::ATol::default(),
         )
         .unwrap();
-        let mut variable_metadata = VariableMetadataStore::default();
-        variable_metadata.insert(
+        let mut variable_labels = VariableLabelStore::default();
+        variable_labels.insert(
             VariableID::from(1),
-            DecisionVariableMetadata {
+            DecisionVariableLabel {
                 name: Some("x".to_string()),
                 subscripts: vec![0],
                 parameters: {
@@ -1115,7 +1115,7 @@ mod tests {
                 .objective(0.0)
                 .evaluated_constraints(BTreeMap::new())
                 .decision_variables(decision_variables)
-                .variable_metadata(variable_metadata)
+                .variable_labels(variable_labels)
                 .sense(Sense::Minimize)
                 .build_unchecked()
                 .unwrap()
@@ -1132,13 +1132,13 @@ mod tests {
     #[test]
     fn test_extract_duplicate_subscripts_error() {
         use crate::{
-            decision_variable::{DecisionVariable, DecisionVariableMetadata, Kind},
+            decision_variable::{DecisionVariable, DecisionVariableLabel, Kind},
             EvaluatedDecisionVariable, Sense, VariableID,
         };
 
         // Create two variables with same name and subscripts but different parameters
         let mut decision_variables = BTreeMap::new();
-        let mut variable_metadata = VariableMetadataStore::default();
+        let mut variable_labels = VariableLabelStore::default();
 
         // First variable
         let dv1 = DecisionVariable::new(
@@ -1149,9 +1149,9 @@ mod tests {
             crate::ATol::default(),
         )
         .unwrap();
-        variable_metadata.insert(
+        variable_labels.insert(
             VariableID::from(1),
-            DecisionVariableMetadata {
+            DecisionVariableLabel {
                 name: Some("x".to_string()),
                 subscripts: vec![0],
                 parameters: {
@@ -1177,9 +1177,9 @@ mod tests {
             crate::ATol::default(),
         )
         .unwrap();
-        variable_metadata.insert(
+        variable_labels.insert(
             VariableID::from(2),
-            DecisionVariableMetadata {
+            DecisionVariableLabel {
                 name: Some("x".to_string()),
                 subscripts: vec![0], // Same subscripts
                 parameters: {
@@ -1202,7 +1202,7 @@ mod tests {
                 .objective(0.0)
                 .evaluated_constraints(BTreeMap::new())
                 .decision_variables(decision_variables)
-                .variable_metadata(variable_metadata)
+                .variable_labels(variable_labels)
                 .sense(Sense::Minimize)
                 .build_unchecked()
                 .unwrap()
@@ -1247,14 +1247,14 @@ mod tests {
 
     #[test]
     fn builder_rejects_orphan_variable_label_id() {
-        let mut variable_metadata = VariableMetadataStore::default();
-        variable_metadata.set_name(VariableID::from(99), "orphan");
+        let mut variable_labels = VariableLabelStore::default();
+        variable_labels.set_name(VariableID::from(99), "orphan");
 
         let err = Solution::builder()
             .objective(0.0)
             .evaluated_constraints(BTreeMap::new())
             .decision_variables(BTreeMap::new())
-            .variable_metadata(variable_metadata)
+            .variable_labels(variable_labels)
             .sense(Sense::Minimize)
             .build()
             .unwrap_err();

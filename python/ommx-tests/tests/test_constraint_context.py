@@ -1,5 +1,5 @@
 """
-Test metadata modification functionality for Constraint
+Test context-field modification functionality for Constraint
 """
 
 from ommx.v1 import DecisionVariable, Constraint
@@ -103,8 +103,8 @@ def test_constraint_parameters():
     assert result.parameters == {"precision": "1e-6"}
 
 
-def test_constraint_complete_metadata():
-    """Test all metadata methods together"""
+def test_constraint_complete_context():
+    """Test all context methods together"""
     x = DecisionVariable.binary(0)
     constraint = (
         (x == 1)
@@ -114,19 +114,19 @@ def test_constraint_complete_metadata():
         .add_parameters({"method": "branch_and_bound", "threads": "4"})
     )
 
-    # Verify all metadata is set correctly
+    # Verify all context is set correctly
     assert constraint.name == "comprehensive_test"
     assert constraint.description == "A comprehensive test constraint"
     assert constraint.subscripts == [10, 20, 30]
     assert constraint.parameters == {"method": "branch_and_bound", "threads": "4"}
 
 
-def test_constraint_metadata_efficiency():
-    """Test that all metadata methods can be chained together"""
+def test_constraint_context_efficiency():
+    """Test that all context methods can be chained together"""
     x = DecisionVariable.binary(0)
     constraint = x == 1
 
-    # Chain all metadata modifications
+    # Chain all context-field modifications
     result = (
         constraint.add_name("efficient")
         .add_description("Efficient test")
@@ -141,13 +141,13 @@ def test_constraint_metadata_efficiency():
     assert result.parameters == {"key": "value"}
 
 
-def test_constraint_constructor_with_metadata():
+def test_constraint_constructor_with_context():
     """Test Constraint constructor properly handles description and parameters"""
 
     x = DecisionVariable.binary(0)
     function = x + 1
 
-    # Create constraint with all metadata in constructor
+    # Create constraint with all context in constructor
     constraint = Constraint(
         function=function,
         equality=Constraint.EQUAL_TO_ZERO,
@@ -157,26 +157,26 @@ def test_constraint_constructor_with_metadata():
         parameters={"method": "constructor", "priority": "high"},
     )
 
-    # Verify all metadata is set correctly
+    # Verify all context is set correctly
     assert constraint.name == "constructor_test"
     assert constraint.description == "Created via constructor"
     assert constraint.subscripts == [5, 10, 15]
     assert constraint.parameters == {"method": "constructor", "priority": "high"}
 
 
-def test_constraint_constructor_partial_metadata():
-    """Test Constraint constructor with partial metadata"""
+def test_constraint_constructor_partial_context():
+    """Test Constraint constructor with partial context"""
     x = DecisionVariable.binary(0)
     function = x - 2
 
-    # Create constraint with only some metadata
+    # Create constraint with only some context fields
     constraint = Constraint(
         function=function,
         equality=Constraint.LESS_THAN_OR_EQUAL_TO_ZERO,
         description="Only description set",
     )
 
-    # Verify metadata
+    # Verify context fields
     assert constraint.description == "Only description set"
     assert constraint.parameters == {}  # Should be empty
     assert constraint.name is None  # Should be None

@@ -11,15 +11,15 @@ use crate::ConstraintHost;
 #[gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
-pub struct Sos1Constraint(pub ommx::Sos1Constraint, pub ommx::ConstraintMetadata);
+pub struct Sos1Constraint(pub ommx::Sos1Constraint, pub ommx::ConstraintContext);
 
 impl Sos1Constraint {
     pub fn standalone(inner: ommx::Sos1Constraint) -> Self {
-        Self(inner, ommx::ConstraintMetadata::default())
+        Self(inner, ommx::ConstraintContext::default())
     }
 
-    pub fn from_parts(inner: ommx::Sos1Constraint, metadata: ommx::ConstraintMetadata) -> Self {
-        Self(inner, metadata)
+    pub fn from_parts(inner: ommx::Sos1Constraint, context: ommx::ConstraintContext) -> Self {
+        Self(inner, context)
     }
 }
 
@@ -32,7 +32,7 @@ impl Sos1Constraint {
     ///
     /// - `variables`: List of decision variable IDs (at most one can be non-zero)
     /// - `name` / `subscripts` / `description` / `parameters`: Optional
-    ///   metadata. Drained into the host's SoA store on insertion.
+    ///   context. Drained into the host's SoA store on insertion.
     #[new]
     #[pyo3(signature = (*, variables, name=None, subscripts=Vec::new(), description=None, parameters=HashMap::default()))]
     pub fn new(
@@ -44,16 +44,18 @@ impl Sos1Constraint {
     ) -> PyResult<Self> {
         let vars: BTreeSet<ommx::VariableID> =
             variables.into_iter().map(ommx::VariableID::from).collect();
-        let metadata = ommx::ConstraintMetadata {
-            name,
-            subscripts,
-            parameters: parameters.into_iter().collect(),
-            description,
+        let context = ommx::ConstraintContext {
+            label: ommx::ModelingLabel {
+                name,
+                subscripts,
+                parameters: parameters.into_iter().collect(),
+                description,
+            },
             provenance: Vec::new(),
         };
         let constraint = ommx::Sos1Constraint::new(vars)
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
-        Ok(Self(constraint, metadata))
+        Ok(Self(constraint, context))
     }
 
     #[getter]
@@ -63,22 +65,23 @@ impl Sos1Constraint {
 
     #[getter]
     pub fn name(&self) -> Option<String> {
-        self.1.name.clone()
+        self.1.label.name.clone()
     }
 
     #[getter]
     pub fn subscripts(&self) -> Vec<i64> {
-        self.1.subscripts.clone()
+        self.1.label.subscripts.clone()
     }
 
     #[getter]
     pub fn description(&self) -> Option<String> {
-        self.1.description.clone()
+        self.1.label.description.clone()
     }
 
     #[getter]
     pub fn parameters(&self) -> HashMap<String, String> {
         self.1
+            .label
             .parameters
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
@@ -87,25 +90,25 @@ impl Sos1Constraint {
 
     /// Set the name. Returns self for method chaining (snapshot mutation).
     pub fn set_name(&mut self, name: String) -> Self {
-        self.1.name = Some(name);
+        self.1.label.name = Some(name);
         self.clone()
     }
 
     /// Set the subscripts. Returns self for method chaining (snapshot mutation).
     pub fn set_subscripts(&mut self, subscripts: Vec<i64>) -> Self {
-        self.1.subscripts = subscripts;
+        self.1.label.subscripts = subscripts;
         self.clone()
     }
 
     /// Set the description. Returns self for method chaining (snapshot mutation).
     pub fn set_description(&mut self, description: String) -> Self {
-        self.1.description = Some(description);
+        self.1.label.description = Some(description);
         self.clone()
     }
 
     /// Replace all parameters. Returns self for method chaining (snapshot mutation).
     pub fn set_parameters(&mut self, parameters: HashMap<String, String>) -> Self {
-        self.1.parameters = parameters.into_iter().collect();
+        self.1.label.parameters = parameters.into_iter().collect();
         self.clone()
     }
 
@@ -128,19 +131,19 @@ impl Sos1Constraint {
 #[derive(Clone)]
 pub struct RemovedSos1Constraint {
     pub constraint: ommx::Sos1Constraint,
-    pub metadata: ommx::ConstraintMetadata,
+    pub context: ommx::ConstraintContext,
     pub removed_reason: ommx::RemovedReason,
 }
 
 impl RemovedSos1Constraint {
     pub fn from_parts(
         constraint: ommx::Sos1Constraint,
-        metadata: ommx::ConstraintMetadata,
+        context: ommx::ConstraintContext,
         removed_reason: ommx::RemovedReason,
     ) -> Self {
         Self {
             constraint,
-            metadata,
+            context,
             removed_reason,
         }
     }
@@ -151,7 +154,7 @@ impl RemovedSos1Constraint {
 impl RemovedSos1Constraint {
     #[getter]
     pub fn constraint(&self) -> Sos1Constraint {
-        Sos1Constraint(self.constraint.clone(), self.metadata.clone())
+        Sos1Constraint(self.constraint.clone(), self.context.clone())
     }
 
     #[getter]
@@ -165,22 +168,23 @@ impl RemovedSos1Constraint {
 
     #[getter]
     pub fn name(&self) -> Option<String> {
-        self.metadata.name.clone()
+        self.context.label.name.clone()
     }
 
     #[getter]
     pub fn subscripts(&self) -> Vec<i64> {
-        self.metadata.subscripts.clone()
+        self.context.label.subscripts.clone()
     }
 
     #[getter]
     pub fn description(&self) -> Option<String> {
-        self.metadata.description.clone()
+        self.context.label.description.clone()
     }
 
     #[getter]
     pub fn parameters(&self) -> HashMap<String, String> {
-        self.metadata
+        self.context
+            .label
             .parameters
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
@@ -301,14 +305,14 @@ impl AttachedSos1Constraint {
             ConstraintHost::Instance(p) => {
                 let inst = p.borrow(py);
                 let c = lookup_sos1(&inst.inner, self.id)?.clone();
-                let metadata = inst.inner.sos1_constraint_metadata().collect_for(self.id);
-                Ok(Sos1Constraint::from_parts(c, metadata))
+                let context = inst.inner.sos1_constraint_context().collect_for(self.id);
+                Ok(Sos1Constraint::from_parts(c, context))
             }
             ConstraintHost::Parametric(p) => {
                 let inst = p.borrow(py);
                 let c = lookup_sos1_parametric(&inst.inner, self.id)?.clone();
-                let metadata = inst.inner.sos1_constraint_metadata().collect_for(self.id);
-                Ok(Sos1Constraint::from_parts(c, metadata))
+                let context = inst.inner.sos1_constraint_context().collect_for(self.id);
+                Ok(Sos1Constraint::from_parts(c, context))
             }
         }
     }
@@ -372,9 +376,9 @@ impl AttachedSos1Constraint {
     }
 }
 
-crate::attached_metadata_methods!(
+crate::attached_constraint_context_methods!(
     AttachedSos1Constraint,
     ommx::Sos1ConstraintID,
-    sos1_constraint_metadata,
-    sos1_constraint_metadata_mut
+    sos1_constraint_context,
+    set_sos1_constraint_context
 );

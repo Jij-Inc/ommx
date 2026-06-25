@@ -7,18 +7,15 @@ use crate::{ConstraintHost, DecisionVariable, Equality, Function};
 #[gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
-pub struct IndicatorConstraint(pub ommx::IndicatorConstraint, pub ommx::ConstraintMetadata);
+pub struct IndicatorConstraint(pub ommx::IndicatorConstraint, pub ommx::ConstraintContext);
 
 impl IndicatorConstraint {
     pub fn standalone(inner: ommx::IndicatorConstraint) -> Self {
-        Self(inner, ommx::ConstraintMetadata::default())
+        Self(inner, ommx::ConstraintContext::default())
     }
 
-    pub fn from_parts(
-        inner: ommx::IndicatorConstraint,
-        metadata: ommx::ConstraintMetadata,
-    ) -> Self {
-        Self(inner, metadata)
+    pub fn from_parts(inner: ommx::IndicatorConstraint, context: ommx::ConstraintContext) -> Self {
+        Self(inner, context)
     }
 }
 
@@ -51,14 +48,16 @@ impl IndicatorConstraint {
     ) -> PyResult<Self> {
         let ic =
             ommx::IndicatorConstraint::new(indicator_variable.0.id(), equality.into(), function.0);
-        let metadata = ommx::ConstraintMetadata {
-            name,
-            subscripts,
-            parameters: parameters.into_iter().collect(),
-            description,
+        let context = ommx::ConstraintContext {
+            label: ommx::ModelingLabel {
+                name,
+                subscripts,
+                parameters: parameters.into_iter().collect(),
+                description,
+            },
             provenance: Vec::new(),
         };
-        Ok(Self(ic, metadata))
+        Ok(Self(ic, context))
     }
 
     #[getter]
@@ -78,45 +77,45 @@ impl IndicatorConstraint {
 
     #[getter]
     pub fn name(&self) -> Option<String> {
-        self.1.name.clone()
+        self.1.label.name.clone()
     }
 
     #[getter]
     pub fn subscripts(&self) -> Vec<i64> {
-        self.1.subscripts.clone()
+        self.1.label.subscripts.clone()
     }
 
     #[getter]
     pub fn description(&self) -> Option<String> {
-        self.1.description.clone()
+        self.1.label.description.clone()
     }
 
     #[getter]
     pub fn parameters(&self) -> HashMap<String, String> {
-        self.1.parameters.clone().into_iter().collect()
+        self.1.label.parameters.clone().into_iter().collect()
     }
 
     /// Set the name. Returns self for method chaining (snapshot mutation).
     pub fn set_name(&mut self, name: String) -> Self {
-        self.1.name = Some(name);
+        self.1.label.name = Some(name);
         self.clone()
     }
 
     /// Set the subscripts. Returns self for method chaining (snapshot mutation).
     pub fn set_subscripts(&mut self, subscripts: Vec<i64>) -> Self {
-        self.1.subscripts = subscripts;
+        self.1.label.subscripts = subscripts;
         self.clone()
     }
 
     /// Set the description. Returns self for method chaining (snapshot mutation).
     pub fn set_description(&mut self, description: String) -> Self {
-        self.1.description = Some(description);
+        self.1.label.description = Some(description);
         self.clone()
     }
 
     /// Replace all parameters. Returns self for method chaining (snapshot mutation).
     pub fn set_parameters(&mut self, parameters: HashMap<String, String>) -> Self {
-        self.1.parameters = parameters.into_iter().collect();
+        self.1.label.parameters = parameters.into_iter().collect();
         self.clone()
     }
 
@@ -139,19 +138,19 @@ impl IndicatorConstraint {
 #[derive(Clone)]
 pub struct RemovedIndicatorConstraint {
     pub constraint: ommx::IndicatorConstraint,
-    pub metadata: ommx::ConstraintMetadata,
+    pub context: ommx::ConstraintContext,
     pub removed_reason: ommx::RemovedReason,
 }
 
 impl RemovedIndicatorConstraint {
     pub fn from_parts(
         constraint: ommx::IndicatorConstraint,
-        metadata: ommx::ConstraintMetadata,
+        context: ommx::ConstraintContext,
         removed_reason: ommx::RemovedReason,
     ) -> Self {
         Self {
             constraint,
-            metadata,
+            context,
             removed_reason,
         }
     }
@@ -162,7 +161,7 @@ impl RemovedIndicatorConstraint {
 impl RemovedIndicatorConstraint {
     #[getter]
     pub fn constraint(&self) -> IndicatorConstraint {
-        IndicatorConstraint(self.constraint.clone(), self.metadata.clone())
+        IndicatorConstraint(self.constraint.clone(), self.context.clone())
     }
 
     #[getter]
@@ -218,7 +217,7 @@ impl RemovedIndicatorConstraint {
 /// `Instance.add_indicator_constraint` /
 /// `ParametricInstance.add_indicator_constraint` and by their
 /// `indicator_constraints[id]` getters. Reads pull live data from the parent
-/// host and metadata setters write through to its SoA metadata store.
+/// host and context setters write through to its SoA context store.
 #[gen_stub_pyclass]
 #[pyclass]
 pub struct AttachedIndicatorConstraint {
@@ -306,20 +305,20 @@ impl AttachedIndicatorConstraint {
             ConstraintHost::Instance(p) => {
                 let inst = p.borrow(py);
                 let c = lookup_indicator(&inst.inner, self.id)?.clone();
-                let metadata = inst
+                let context = inst
                     .inner
-                    .indicator_constraint_metadata()
+                    .indicator_constraint_context()
                     .collect_for(self.id);
-                Ok(IndicatorConstraint::from_parts(c, metadata))
+                Ok(IndicatorConstraint::from_parts(c, context))
             }
             ConstraintHost::Parametric(p) => {
                 let inst = p.borrow(py);
                 let c = lookup_indicator_parametric(&inst.inner, self.id)?.clone();
-                let metadata = inst
+                let context = inst
                     .inner
-                    .indicator_constraint_metadata()
+                    .indicator_constraint_context()
                     .collect_for(self.id);
-                Ok(IndicatorConstraint::from_parts(c, metadata))
+                Ok(IndicatorConstraint::from_parts(c, context))
             }
         }
     }
@@ -415,9 +414,9 @@ impl AttachedIndicatorConstraint {
     }
 }
 
-crate::attached_metadata_methods!(
+crate::attached_constraint_context_methods!(
     AttachedIndicatorConstraint,
     ommx::IndicatorConstraintID,
-    indicator_constraint_metadata,
-    indicator_constraint_metadata_mut
+    indicator_constraint_context,
+    set_indicator_constraint_context
 );

@@ -8,7 +8,7 @@ impl Instance {
     pub fn decision_variable_names(&self) -> std::collections::BTreeSet<String> {
         self.decision_variables
             .keys()
-            .filter_map(|id| self.variable_metadata().name(*id).map(|s| s.to_owned()))
+            .filter_map(|id| self.variable_labels().name(*id).map(|s| s.to_owned()))
             .collect()
     }
 
@@ -37,7 +37,7 @@ impl Instance {
         name: &str,
         subscripts: Vec<i64>,
     ) -> Option<&DecisionVariable> {
-        let store = self.variable_metadata();
+        let store = self.variable_labels();
         self.decision_variables.iter().find_map(|(id, var)| {
             (store.name(*id) == Some(name) && store.subscripts(*id) == subscripts.as_slice())
                 .then_some(var)

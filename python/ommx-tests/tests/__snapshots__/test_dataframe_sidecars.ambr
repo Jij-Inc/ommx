@@ -1,5 +1,5 @@
 # serializer version: 1
-# name: test_constraint_metadata_df_default_kind_is_regular
+# name: test_constraint_context_df_default_kind_is_regular
   '''
                             name subscripts         description
   regular_constraint_id                                        
@@ -13,14 +13,14 @@
   1                     10    tier     gold
   '''
 # ---
-# name: test_indicator_kind_metadata_df
+# name: test_indicator_kind_context_df
   '''
                            name subscripts description
   indicator_constraint_id                             
   5                        <NA>         []        <NA>
   '''
 # ---
-# name: test_one_hot_kind_metadata_df
+# name: test_one_hot_kind_context_df
   '''
                          name subscripts description
   one_hot_constraint_id                             
@@ -52,14 +52,14 @@
   0                      7  ommx.Instance.convert_one_hot_to_constraint  constraint_id     0
   '''
 # ---
-# name: test_sos1_kind_metadata_df
+# name: test_sos1_kind_context_df
   '''
                       name subscripts description
   sos1_constraint_id                             
   7                   <NA>         []        <NA>
   '''
 # ---
-# name: test_variable_metadata_df
+# name: test_variable_labels_df
   '''
               name subscripts   description
   variable_id                              

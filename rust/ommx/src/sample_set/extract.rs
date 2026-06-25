@@ -11,7 +11,7 @@ impl SampleSet {
     pub fn decision_variable_names(&self) -> std::collections::BTreeSet<String> {
         self.decision_variables
             .keys()
-            .filter_map(|id| self.variable_metadata.name(*id).map(|s| s.to_owned()))
+            .filter_map(|id| self.variable_labels.name(*id).map(|s| s.to_owned()))
             .collect()
     }
 
@@ -21,7 +21,7 @@ impl SampleSet {
     pub fn named_function_names(&self) -> std::collections::BTreeSet<String> {
         self.named_functions
             .keys()
-            .filter_map(|id| self.named_function_metadata.name(*id).map(str::to_owned))
+            .filter_map(|id| self.named_function_labels.name(*id).map(str::to_owned))
             .collect()
     }
 
@@ -29,7 +29,7 @@ impl SampleSet {
     ///
     /// Returns a map from subscripts to values for the specified sample.
     ///
-    /// Note: Parameters in decision variable metadata are ignored. Only subscripts are used as keys.
+    /// Note: Parameters in decision variable labels are ignored. Only subscripts are used as keys.
     ///
     /// # Errors
     ///
@@ -42,11 +42,11 @@ impl SampleSet {
         name: &str,
         sample_id: SampleID,
     ) -> Result<BTreeMap<Vec<i64>, f64>, SampleSetError> {
-        // Collect all variables with the given name (looked up via the metadata store)
+        // Collect all variables with the given name from their modeling labels.
         let variables_with_name: Vec<(VariableID, &SampledDecisionVariable)> = self
             .decision_variables
             .iter()
-            .filter(|(id, _)| self.variable_metadata.name(**id) == Some(name))
+            .filter(|(id, _)| self.variable_labels.name(**id) == Some(name))
             .map(|(id, v)| (*id, v))
             .collect();
         if variables_with_name.is_empty() {
@@ -56,7 +56,7 @@ impl SampleSet {
         }
         let mut result = BTreeMap::new();
         for (id, variable) in &variables_with_name {
-            let subscripts = self.variable_metadata.subscripts(*id).to_vec();
+            let subscripts = self.variable_labels.subscripts(*id).to_vec();
             let value = *variable
                 .samples()
                 .get(sample_id)
@@ -77,7 +77,7 @@ impl SampleSet {
     /// This is useful for extracting all variables at once in a structured format.
     /// Variables without names are not included in the result.
     ///
-    /// Note: Parameters in decision variable metadata are ignored. Only subscripts are used as keys.
+    /// Note: Parameters in decision variable labels are ignored. Only subscripts are used as keys.
     ///
     /// # Errors
     ///
@@ -92,12 +92,12 @@ impl SampleSet {
         let mut result: BTreeMap<String, BTreeMap<Vec<i64>, f64>> = BTreeMap::new();
 
         for (id, variable) in self.decision_variables.iter() {
-            let name = match self.variable_metadata.name(*id) {
+            let name = match self.variable_labels.name(*id) {
                 Some(n) => n.to_owned(),
                 None => continue, // Skip variables without names
             };
 
-            let subscripts = self.variable_metadata.subscripts(*id).to_vec();
+            let subscripts = self.variable_labels.subscripts(*id).to_vec();
             let value = *variable
                 .samples()
                 .get(sample_id)
@@ -121,12 +121,12 @@ impl SampleSet {
         name: &str,
         sample_id: SampleID,
     ) -> Result<BTreeMap<Vec<i64>, f64>, SampleSetError> {
-        // Collect all constraints with the given name (via the collection's metadata store)
-        let metadata = self.constraints.metadata();
+        // Collect all constraints with the given name from their context store.
+        let context = self.constraints.context();
         let matches: Vec<(crate::ConstraintID, &SampledConstraint)> = self
             .constraints
             .iter()
-            .filter(|(id, _)| metadata.name(**id) == Some(name))
+            .filter(|(id, _)| context.name(**id) == Some(name))
             .map(|(id, c)| (*id, c))
             .collect();
         if matches.is_empty() {
@@ -136,10 +136,10 @@ impl SampleSet {
         }
         let mut result = BTreeMap::new();
         for (id, constraint) in &matches {
-            if !metadata.parameters(*id).is_empty() {
+            if !context.parameters(*id).is_empty() {
                 return Err(SampleSetError::ParameterizedConstraint);
             }
-            let subscripts = metadata.subscripts(*id).to_vec();
+            let subscripts = context.subscripts(*id).to_vec();
             let value = *constraint
                 .stage
                 .evaluated_values
@@ -176,12 +176,12 @@ impl SampleSet {
         let mut result: BTreeMap<String, BTreeMap<Vec<i64>, f64>> = BTreeMap::new();
 
         for (id, nf) in &self.named_functions {
-            let name = match self.named_function_metadata.name(*id) {
+            let name = match self.named_function_labels.name(*id) {
                 Some(n) => n.to_string(),
                 None => continue, // Skip functions without names
             };
 
-            let subscripts = self.named_function_metadata.subscripts(*id).to_vec();
+            let subscripts = self.named_function_labels.subscripts(*id).to_vec();
             let value = *nf
                 .evaluated_values()
                 .get(sample_id)
@@ -218,7 +218,7 @@ impl SampleSet {
         let named_functions_with_name: Vec<(NamedFunctionID, &SampledNamedFunction)> = self
             .named_functions
             .iter()
-            .filter(|(id, _)| self.named_function_metadata.name(**id) == Some(name))
+            .filter(|(id, _)| self.named_function_labels.name(**id) == Some(name))
             .map(|(id, nf)| (*id, nf))
             .collect();
         if named_functions_with_name.is_empty() {
@@ -228,7 +228,7 @@ impl SampleSet {
         }
         let mut result = BTreeMap::new();
         for (id, nf) in &named_functions_with_name {
-            let subscripts = self.named_function_metadata.subscripts(*id).to_vec();
+            let subscripts = self.named_function_labels.subscripts(*id).to_vec();
             let value = *nf
                 .evaluated_values()
                 .get(sample_id)
@@ -248,15 +248,15 @@ impl SampleSet {
 mod tests {
     use super::*;
     use crate::{
-        decision_variable::{DecisionVariable, DecisionVariableMetadata, Kind},
+        decision_variable::{DecisionVariable, DecisionVariableLabel, Kind},
         SampleID, SampledDecisionVariable, Sense, VariableID,
     };
 
     #[test]
     fn test_extract_decision_variables() {
-        // Create sample decision variables with metadata stored in the SoA store
+        // Create sample decision variables with labels stored in the SoA store
         let mut decision_variables = BTreeMap::new();
-        let mut variable_metadata = crate::VariableMetadataStore::default();
+        let mut variable_labels = crate::VariableLabelStore::default();
 
         // Variable x[0]
         let dv1 = DecisionVariable::new(
@@ -267,9 +267,9 @@ mod tests {
             crate::ATol::default(),
         )
         .unwrap();
-        variable_metadata.insert(
+        variable_labels.insert(
             VariableID::from(1),
-            DecisionVariableMetadata {
+            DecisionVariableLabel {
                 name: Some("x".to_string()),
                 subscripts: vec![0],
                 ..Default::default()
@@ -285,9 +285,9 @@ mod tests {
             crate::ATol::default(),
         )
         .unwrap();
-        variable_metadata.insert(
+        variable_labels.insert(
             VariableID::from(2),
-            DecisionVariableMetadata {
+            DecisionVariableLabel {
                 name: Some("x".to_string()),
                 subscripts: vec![1],
                 ..Default::default()
@@ -303,9 +303,9 @@ mod tests {
             crate::ATol::default(),
         )
         .unwrap();
-        variable_metadata.insert(
+        variable_labels.insert(
             VariableID::from(3),
-            DecisionVariableMetadata {
+            DecisionVariableLabel {
                 name: Some("y".to_string()),
                 subscripts: vec![0],
                 ..Default::default()
@@ -346,7 +346,7 @@ mod tests {
         // Create sample set
         let sample_set = SampleSet::builder()
             .decision_variables(decision_variables)
-            .variable_metadata(variable_metadata)
+            .variable_labels(variable_labels)
             .objectives(objectives)
             .constraints(BTreeMap::new())
             .sense(Sense::Minimize)
@@ -394,13 +394,13 @@ mod tests {
     #[test]
     fn test_extract_duplicate_subscripts() {
         use crate::{
-            decision_variable::{DecisionVariable, DecisionVariableMetadata, Kind},
+            decision_variable::{DecisionVariable, DecisionVariableLabel, Kind},
             SampleID, SampledDecisionVariable, Sense, VariableID,
         };
 
         // Create two decision variables with the same name and subscripts (should cause error)
         let mut decision_variables = BTreeMap::new();
-        let mut variable_metadata = crate::VariableMetadataStore::default();
+        let mut variable_labels = crate::VariableLabelStore::default();
 
         let dv1 = DecisionVariable::new(
             VariableID::from(1),
@@ -410,9 +410,9 @@ mod tests {
             crate::ATol::default(),
         )
         .unwrap();
-        variable_metadata.insert(
+        variable_labels.insert(
             VariableID::from(1),
-            DecisionVariableMetadata {
+            DecisionVariableLabel {
                 name: Some("x".to_string()),
                 subscripts: vec![0],
                 ..Default::default()
@@ -427,9 +427,9 @@ mod tests {
             crate::ATol::default(),
         )
         .unwrap();
-        variable_metadata.insert(
+        variable_labels.insert(
             VariableID::from(2),
-            DecisionVariableMetadata {
+            DecisionVariableLabel {
                 name: Some("x".to_string()),
                 subscripts: vec![0], // Same subscripts as dv1
                 ..Default::default()
@@ -459,7 +459,7 @@ mod tests {
         // Create sample set
         let sample_set = SampleSet::builder()
             .decision_variables(decision_variables)
-            .variable_metadata(variable_metadata)
+            .variable_labels(variable_labels)
             .objectives(objectives)
             .constraints(BTreeMap::new())
             .sense(Sense::Minimize)
@@ -500,13 +500,13 @@ mod tests {
     #[test]
     fn test_decision_variable_names() {
         use crate::{
-            decision_variable::{DecisionVariable, DecisionVariableMetadata, Kind},
+            decision_variable::{DecisionVariable, DecisionVariableLabel, Kind},
             SampleID, SampledDecisionVariable, Sense, VariableID,
         };
 
         // Create sample decision variables with different names
         let mut decision_variables = BTreeMap::new();
-        let mut variable_metadata = crate::VariableMetadataStore::default();
+        let mut variable_labels = crate::VariableLabelStore::default();
 
         let dv1 = DecisionVariable::new(
             VariableID::from(1),
@@ -516,9 +516,9 @@ mod tests {
             crate::ATol::default(),
         )
         .unwrap();
-        variable_metadata.insert(
+        variable_labels.insert(
             VariableID::from(1),
-            DecisionVariableMetadata {
+            DecisionVariableLabel {
                 name: Some("x".to_string()),
                 subscripts: vec![0],
                 ..Default::default()
@@ -533,9 +533,9 @@ mod tests {
             crate::ATol::default(),
         )
         .unwrap();
-        variable_metadata.insert(
+        variable_labels.insert(
             VariableID::from(2),
-            DecisionVariableMetadata {
+            DecisionVariableLabel {
                 name: Some("x".to_string()),
                 subscripts: vec![1],
                 ..Default::default()
@@ -550,9 +550,9 @@ mod tests {
             crate::ATol::default(),
         )
         .unwrap();
-        variable_metadata.insert(
+        variable_labels.insert(
             VariableID::from(3),
-            DecisionVariableMetadata {
+            DecisionVariableLabel {
                 name: Some("y".to_string()),
                 subscripts: vec![0],
                 ..Default::default()
@@ -586,7 +586,7 @@ mod tests {
 
         let sample_set = SampleSet::builder()
             .decision_variables(decision_variables)
-            .variable_metadata(variable_metadata.clone())
+            .variable_labels(variable_labels.clone())
             .objectives(objectives)
             .constraints(BTreeMap::new())
             .sense(Sense::Minimize)
@@ -603,13 +603,13 @@ mod tests {
     #[test]
     fn test_extract_all_decision_variables() {
         use crate::{
-            decision_variable::{DecisionVariable, DecisionVariableMetadata, Kind},
+            decision_variable::{DecisionVariable, DecisionVariableLabel, Kind},
             SampleID, SampledDecisionVariable, Sense, VariableID,
         };
 
         // Create sample decision variables with different names
         let mut decision_variables = BTreeMap::new();
-        let mut variable_metadata = crate::VariableMetadataStore::default();
+        let mut variable_labels = crate::VariableLabelStore::default();
 
         let dv1 = DecisionVariable::new(
             VariableID::from(1),
@@ -619,9 +619,9 @@ mod tests {
             crate::ATol::default(),
         )
         .unwrap();
-        variable_metadata.insert(
+        variable_labels.insert(
             VariableID::from(1),
-            DecisionVariableMetadata {
+            DecisionVariableLabel {
                 name: Some("x".to_string()),
                 subscripts: vec![0],
                 ..Default::default()
@@ -636,9 +636,9 @@ mod tests {
             crate::ATol::default(),
         )
         .unwrap();
-        variable_metadata.insert(
+        variable_labels.insert(
             VariableID::from(2),
-            DecisionVariableMetadata {
+            DecisionVariableLabel {
                 name: Some("x".to_string()),
                 subscripts: vec![1],
                 ..Default::default()
@@ -653,9 +653,9 @@ mod tests {
             crate::ATol::default(),
         )
         .unwrap();
-        variable_metadata.insert(
+        variable_labels.insert(
             VariableID::from(3),
-            DecisionVariableMetadata {
+            DecisionVariableLabel {
                 name: Some("y".to_string()),
                 subscripts: vec![0],
                 ..Default::default()
@@ -689,7 +689,7 @@ mod tests {
 
         let sample_set = SampleSet::builder()
             .decision_variables(decision_variables)
-            .variable_metadata(variable_metadata.clone())
+            .variable_labels(variable_labels.clone())
             .objectives(objectives)
             .constraints(BTreeMap::new())
             .sense(Sense::Minimize)
@@ -721,13 +721,13 @@ mod tests {
     #[test]
     fn test_extract_parameterized_variable_success() {
         use crate::{
-            decision_variable::{DecisionVariable, DecisionVariableMetadata, Kind},
+            decision_variable::{DecisionVariable, DecisionVariableLabel, Kind},
             SampleID, SampledDecisionVariable, Sense, VariableID,
         };
 
         // Create a parameterized decision variable (should succeed - parameters are ignored)
         let mut decision_variables = BTreeMap::new();
-        let mut variable_metadata = crate::VariableMetadataStore::default();
+        let mut variable_labels = crate::VariableLabelStore::default();
 
         let dv = DecisionVariable::new(
             VariableID::from(1),
@@ -737,9 +737,9 @@ mod tests {
             crate::ATol::default(),
         )
         .unwrap();
-        variable_metadata.insert(
+        variable_labels.insert(
             VariableID::from(1),
-            DecisionVariableMetadata {
+            DecisionVariableLabel {
                 name: Some("x".to_string()),
                 subscripts: vec![0],
                 parameters: {
@@ -767,7 +767,7 @@ mod tests {
         // Create sample set
         let sample_set = SampleSet::builder()
             .decision_variables(decision_variables)
-            .variable_metadata(variable_metadata)
+            .variable_labels(variable_labels)
             .objectives(objectives)
             .constraints(BTreeMap::new())
             .sense(Sense::Minimize)
@@ -785,14 +785,14 @@ mod tests {
     #[test]
     fn test_extract_duplicate_subscripts_error() {
         use crate::{
-            decision_variable::{DecisionVariable, DecisionVariableMetadata, Kind},
+            decision_variable::{DecisionVariable, DecisionVariableLabel, Kind},
             SampleID, SampledDecisionVariable, Sense, VariableID,
         };
 
         // Create two variables with same name and subscripts but different parameters
         // This should cause a DuplicateSubscripts error
         let mut decision_variables = BTreeMap::new();
-        let mut variable_metadata = crate::VariableMetadataStore::default();
+        let mut variable_labels = crate::VariableLabelStore::default();
 
         // First variable with param1
         let dv1 = DecisionVariable::new(
@@ -803,9 +803,9 @@ mod tests {
             crate::ATol::default(),
         )
         .unwrap();
-        variable_metadata.insert(
+        variable_labels.insert(
             VariableID::from(1),
-            DecisionVariableMetadata {
+            DecisionVariableLabel {
                 name: Some("x".to_string()),
                 subscripts: vec![0],
                 parameters: {
@@ -834,9 +834,9 @@ mod tests {
             crate::ATol::default(),
         )
         .unwrap();
-        variable_metadata.insert(
+        variable_labels.insert(
             VariableID::from(2),
-            DecisionVariableMetadata {
+            DecisionVariableLabel {
                 name: Some("x".to_string()),
                 subscripts: vec![0], // Same subscripts as dv1
                 parameters: {
@@ -863,7 +863,7 @@ mod tests {
         // Create sample set
         let sample_set = SampleSet::builder()
             .decision_variables(decision_variables)
-            .variable_metadata(variable_metadata.clone())
+            .variable_labels(variable_labels.clone())
             .objectives(objectives)
             .constraints(BTreeMap::new())
             .sense(Sense::Minimize)
@@ -879,7 +879,7 @@ mod tests {
     }
 
     /// Helper to create a SampledNamedFunction via the Parse trait from v1 types.
-    /// Returns the parsed function plus its drained metadata snapshot, which the
+    /// Returns the parsed function plus its drained label snapshot, which the
     /// caller is responsible for inserting into a host store.
     fn make_sampled_named_function(
         id: u64,
@@ -888,7 +888,7 @@ mod tests {
         subscripts: Vec<i64>,
         parameters: std::collections::HashMap<String, String>,
         description: Option<&str>,
-    ) -> (crate::SampledNamedFunction, crate::NamedFunctionMetadata) {
+    ) -> (crate::SampledNamedFunction, crate::NamedFunctionLabel) {
         use crate::parse::Parse;
         let v1_entries = entries
             .into_iter()
@@ -907,15 +907,14 @@ mod tests {
         };
         let parsed: crate::named_function::parse::ParsedSampledNamedFunction =
             v1_snf.parse(&()).unwrap();
-        (parsed.sampled_named_function, parsed.metadata)
+        (parsed.sampled_named_function, parsed.label)
     }
 
     #[test]
     fn test_extract_named_functions() {
         // SampleSet with named functions: extract by name + sample_id
         let mut named_functions = BTreeMap::new();
-        let mut named_function_metadata =
-            crate::named_function::NamedFunctionMetadataStore::default();
+        let mut named_function_labels = crate::named_function::NamedFunctionLabelStore::default();
 
         // Named function "cost" with subscript [0]
         let (snf1, meta1) = make_sampled_named_function(
@@ -928,7 +927,7 @@ mod tests {
         );
         let id1 = crate::NamedFunctionID::from(1);
         named_functions.insert(id1, snf1);
-        named_function_metadata.insert(id1, meta1);
+        named_function_labels.insert(id1, meta1);
 
         // Named function "cost" with subscript [1]
         let (snf2, meta2) = make_sampled_named_function(
@@ -941,7 +940,7 @@ mod tests {
         );
         let id2 = crate::NamedFunctionID::from(2);
         named_functions.insert(id2, snf2);
-        named_function_metadata.insert(id2, meta2);
+        named_function_labels.insert(id2, meta2);
 
         let mut objectives = crate::Sampled::default();
         objectives.append([SampleID::from(0)], 0.0).unwrap();
@@ -952,7 +951,7 @@ mod tests {
             .objectives(objectives)
             .constraints(BTreeMap::new())
             .named_functions(named_functions)
-            .named_function_metadata(named_function_metadata)
+            .named_function_labels(named_function_labels)
             .sense(Sense::Minimize)
             .build()
             .unwrap();
@@ -997,8 +996,7 @@ mod tests {
     fn test_extract_named_functions_with_parameters() {
         // Parameters are now allowed (ignored) - only subscripts are used as keys
         let mut named_functions = BTreeMap::new();
-        let mut named_function_metadata =
-            crate::named_function::NamedFunctionMetadataStore::default();
+        let mut named_function_labels = crate::named_function::NamedFunctionLabelStore::default();
 
         let (snf, meta) = make_sampled_named_function(
             1,
@@ -1012,7 +1010,7 @@ mod tests {
         );
         let id = crate::NamedFunctionID::from(1);
         named_functions.insert(id, snf);
-        named_function_metadata.insert(id, meta);
+        named_function_labels.insert(id, meta);
 
         let mut objectives = crate::Sampled::default();
         objectives.append([SampleID::from(0)], 0.0).unwrap();
@@ -1022,7 +1020,7 @@ mod tests {
             .objectives(objectives)
             .constraints(BTreeMap::new())
             .named_functions(named_functions)
-            .named_function_metadata(named_function_metadata)
+            .named_function_labels(named_function_labels)
             .sense(Sense::Minimize)
             .build()
             .unwrap();
@@ -1038,8 +1036,7 @@ mod tests {
     #[test]
     fn test_extract_all_named_functions() {
         let mut named_functions = BTreeMap::new();
-        let mut named_function_metadata =
-            crate::named_function::NamedFunctionMetadataStore::default();
+        let mut named_function_labels = crate::named_function::NamedFunctionLabelStore::default();
 
         // "cost" [0]
         let (snf1, meta1) = make_sampled_named_function(
@@ -1052,7 +1049,7 @@ mod tests {
         );
         let id1 = crate::NamedFunctionID::from(1);
         named_functions.insert(id1, snf1);
-        named_function_metadata.insert(id1, meta1);
+        named_function_labels.insert(id1, meta1);
 
         // "penalty" [0]
         let (snf2, meta2) = make_sampled_named_function(
@@ -1065,7 +1062,7 @@ mod tests {
         );
         let id2 = crate::NamedFunctionID::from(2);
         named_functions.insert(id2, snf2);
-        named_function_metadata.insert(id2, meta2);
+        named_function_labels.insert(id2, meta2);
 
         // Unnamed (should be skipped)
         let (snf3, meta3) = make_sampled_named_function(
@@ -1078,7 +1075,7 @@ mod tests {
         );
         let id3 = crate::NamedFunctionID::from(3);
         named_functions.insert(id3, snf3);
-        named_function_metadata.insert(id3, meta3);
+        named_function_labels.insert(id3, meta3);
 
         let mut objectives = crate::Sampled::default();
         objectives.append([SampleID::from(0)], 0.0).unwrap();
@@ -1088,7 +1085,7 @@ mod tests {
             .objectives(objectives)
             .constraints(BTreeMap::new())
             .named_functions(named_functions)
-            .named_function_metadata(named_function_metadata)
+            .named_function_labels(named_function_labels)
             .sense(Sense::Minimize)
             .build()
             .unwrap();
@@ -1104,8 +1101,7 @@ mod tests {
     #[test]
     fn test_named_function_names() {
         let mut named_functions = BTreeMap::new();
-        let mut named_function_metadata =
-            crate::named_function::NamedFunctionMetadataStore::default();
+        let mut named_function_labels = crate::named_function::NamedFunctionLabelStore::default();
 
         let (snf1, meta1) = make_sampled_named_function(
             1,
@@ -1117,7 +1113,7 @@ mod tests {
         );
         let id1 = crate::NamedFunctionID::from(1);
         named_functions.insert(id1, snf1);
-        named_function_metadata.insert(id1, meta1);
+        named_function_labels.insert(id1, meta1);
 
         let (snf2, meta2) = make_sampled_named_function(
             2,
@@ -1129,7 +1125,7 @@ mod tests {
         );
         let id2 = crate::NamedFunctionID::from(2);
         named_functions.insert(id2, snf2);
-        named_function_metadata.insert(id2, meta2);
+        named_function_labels.insert(id2, meta2);
 
         let mut objectives = crate::Sampled::default();
         objectives.append([SampleID::from(0)], 0.0).unwrap();
@@ -1139,7 +1135,7 @@ mod tests {
             .objectives(objectives)
             .constraints(BTreeMap::new())
             .named_functions(named_functions)
-            .named_function_metadata(named_function_metadata)
+            .named_function_labels(named_function_labels)
             .sense(Sense::Minimize)
             .build()
             .unwrap();

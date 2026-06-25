@@ -78,7 +78,7 @@ use std::fmt;
 /// delegate to their children.
 ///
 /// The trait is declared `pub` so it can appear in the bound of `pub`
-/// types within this crate (e.g. `ConstraintMetadataStore<ID>` requires
+/// types within this crate (e.g. `ConstraintContextStore<ID>` requires
 /// `ID: LogicalMemoryProfile`) without triggering the `private_bounds`
 /// lint, and so `#[derive(LogicalMemoryProfile)]` can be used at every
 /// struct that participates in profiling — the derive prevents

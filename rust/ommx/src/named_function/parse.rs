@@ -7,15 +7,15 @@ use crate::{
 };
 use anyhow::Result;
 
-/// Parsed v1 `NamedFunction` together with its drained metadata.
+/// Parsed v1 `NamedFunction` together with its drained modeling label.
 ///
-/// Per-element parse no longer attaches metadata to the [`NamedFunction`]
-/// itself — the metadata is returned alongside so the collection-level
-/// parse can drain it into the [`NamedFunctionMetadataStore`].
+/// Per-element parse no longer attaches a label to the [`NamedFunction`]
+/// itself — the label is returned alongside so the collection-level
+/// parse can drain it into the [`NamedFunctionLabelStore`].
 #[derive(Debug)]
 pub struct ParsedNamedFunction {
     pub named_function: NamedFunction,
-    pub metadata: NamedFunctionMetadata,
+    pub label: NamedFunctionLabel,
 }
 
 impl Parse for v1::NamedFunction {
@@ -35,7 +35,7 @@ impl Parse for v1::NamedFunction {
             id: NamedFunctionID(self.id),
             function,
         };
-        let metadata = NamedFunctionMetadata {
+        let label = NamedFunctionLabel {
             name: self.name,
             subscripts: self.subscripts,
             parameters: self.parameters.into_iter().collect(),
@@ -43,7 +43,7 @@ impl Parse for v1::NamedFunction {
         };
         Ok(ParsedNamedFunction {
             named_function,
-            metadata,
+            label,
         })
     }
 }
@@ -51,13 +51,13 @@ impl Parse for v1::NamedFunction {
 impl Parse for Vec<v1::NamedFunction> {
     type Output = (
         BTreeMap<NamedFunctionID, NamedFunction>,
-        NamedFunctionMetadataStore,
+        NamedFunctionLabelStore,
     );
     type Context = ();
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let mut named_functions = BTreeMap::new();
-        let mut metadata_store = NamedFunctionMetadataStore::default();
+        let mut label_store = NamedFunctionLabelStore::default();
         for v in self {
             let parsed: ParsedNamedFunction = v.parse(&())?;
             let id = parsed.named_function.id;
@@ -67,32 +67,32 @@ impl Parse for Vec<v1::NamedFunction> {
                 ))
                 .into());
             }
-            metadata_store.insert(id, parsed.metadata);
+            label_store.insert(id, parsed.label);
         }
-        Ok((named_functions, metadata_store))
+        Ok((named_functions, label_store))
     }
 }
 
-/// Build a v1 `NamedFunction` from its intrinsic data plus drained metadata.
+/// Build a v1 `NamedFunction` from its intrinsic data plus drained modeling label.
 pub(crate) fn named_function_to_v1(
     NamedFunction { id, function }: NamedFunction,
-    metadata: NamedFunctionMetadata,
+    label: NamedFunctionLabel,
 ) -> v1::NamedFunction {
     v1::NamedFunction {
         id: id.into_inner(),
         function: Some(function.into()),
-        name: metadata.name,
-        subscripts: metadata.subscripts,
-        parameters: metadata.parameters.into_iter().collect(),
-        description: metadata.description,
+        name: label.name,
+        subscripts: label.subscripts,
+        parameters: label.parameters.into_iter().collect(),
+        description: label.description,
     }
 }
 
-/// Parsed v1 `EvaluatedNamedFunction` together with its drained metadata.
+/// Parsed v1 `EvaluatedNamedFunction` together with its drained modeling label.
 #[derive(Debug)]
 pub struct ParsedEvaluatedNamedFunction {
     pub evaluated_named_function: EvaluatedNamedFunction,
-    pub metadata: NamedFunctionMetadata,
+    pub label: NamedFunctionLabel,
 }
 
 impl Parse for v1::EvaluatedNamedFunction {
@@ -109,7 +109,7 @@ impl Parse for v1::EvaluatedNamedFunction {
                 .map(VariableID::from)
                 .collect(),
         };
-        let metadata = NamedFunctionMetadata {
+        let label = NamedFunctionLabel {
             name: self.name,
             subscripts: self.subscripts,
             parameters: self.parameters.into_iter().collect(),
@@ -117,27 +117,27 @@ impl Parse for v1::EvaluatedNamedFunction {
         };
         Ok(ParsedEvaluatedNamedFunction {
             evaluated_named_function,
-            metadata,
+            label,
         })
     }
 }
 
-/// Build a v1 `EvaluatedNamedFunction` from its intrinsic data plus drained metadata.
+/// Build a v1 `EvaluatedNamedFunction` from its intrinsic data plus drained modeling label.
 pub(crate) fn evaluated_named_function_to_v1(
     EvaluatedNamedFunction {
         id,
         evaluated_value,
         used_decision_variable_ids,
     }: EvaluatedNamedFunction,
-    metadata: NamedFunctionMetadata,
+    label: NamedFunctionLabel,
 ) -> v1::EvaluatedNamedFunction {
     v1::EvaluatedNamedFunction {
         id: id.into_inner(),
         evaluated_value,
-        name: metadata.name,
-        subscripts: metadata.subscripts,
-        parameters: metadata.parameters.into_iter().collect(),
-        description: metadata.description,
+        name: label.name,
+        subscripts: label.subscripts,
+        parameters: label.parameters.into_iter().collect(),
+        description: label.description,
         used_decision_variable_ids: used_decision_variable_ids
             .into_iter()
             .map(|id| id.into_inner())
@@ -145,11 +145,11 @@ pub(crate) fn evaluated_named_function_to_v1(
     }
 }
 
-/// Parsed v1 `SampledNamedFunction` together with its drained metadata.
+/// Parsed v1 `SampledNamedFunction` together with its drained modeling label.
 #[derive(Debug)]
 pub struct ParsedSampledNamedFunction {
     pub sampled_named_function: SampledNamedFunction,
-    pub metadata: NamedFunctionMetadata,
+    pub label: NamedFunctionLabel,
 }
 
 impl Parse for v1::SampledNamedFunction {
@@ -174,7 +174,7 @@ impl Parse for v1::SampledNamedFunction {
                 .map(VariableID::from)
                 .collect(),
         };
-        let metadata = NamedFunctionMetadata {
+        let label = NamedFunctionLabel {
             name: self.name,
             subscripts: self.subscripts,
             parameters: self.parameters.into_iter().collect(),
@@ -182,15 +182,15 @@ impl Parse for v1::SampledNamedFunction {
         };
         Ok(ParsedSampledNamedFunction {
             sampled_named_function,
-            metadata,
+            label,
         })
     }
 }
 
-/// Build a v1 `SampledNamedFunction` from its intrinsic data plus drained metadata.
+/// Build a v1 `SampledNamedFunction` from its intrinsic data plus drained modeling label.
 pub(crate) fn sampled_named_function_to_v1(
     sampled: SampledNamedFunction,
-    metadata: NamedFunctionMetadata,
+    label: NamedFunctionLabel,
 ) -> v1::SampledNamedFunction {
     let SampledNamedFunction {
         id,
@@ -200,10 +200,10 @@ pub(crate) fn sampled_named_function_to_v1(
     v1::SampledNamedFunction {
         id: id.into_inner(),
         evaluated_values: Some(evaluated_values.into()),
-        name: metadata.name,
-        subscripts: metadata.subscripts,
-        parameters: metadata.parameters.into_iter().collect(),
-        description: metadata.description,
+        name: label.name,
+        subscripts: label.subscripts,
+        parameters: label.parameters.into_iter().collect(),
+        description: label.description,
         used_decision_variable_ids: used_decision_variable_ids
             .into_iter()
             .map(|id| id.into_inner())
@@ -266,7 +266,7 @@ mod tests {
 
     #[test]
     fn test_parse_evaluated_named_function() {
-        // Parse EvaluatedNamedFunction with full metadata
+        // Parse EvaluatedNamedFunction with a full modeling label
         let v1_enf = v1::EvaluatedNamedFunction {
             id: 42,
             evaluated_value: 3.14,
@@ -282,7 +282,7 @@ mod tests {
 
         let parsed: ParsedEvaluatedNamedFunction = v1_enf.parse(&()).unwrap();
         let enf = parsed.evaluated_named_function;
-        let metadata = parsed.metadata;
+        let label = parsed.label;
 
         assert_eq!(enf.id(), NamedFunctionID::from(42));
         assert_eq!(enf.evaluated_value(), 3.14);
@@ -290,19 +290,16 @@ mod tests {
             *enf.used_decision_variable_ids(),
             btreeset! { VariableID::from(1), VariableID::from(2), VariableID::from(3) }
         );
-        assert_eq!(metadata.name, Some("objective_penalty".to_string()));
-        assert_eq!(metadata.subscripts, vec![10, 20]);
-        assert_eq!(
-            metadata.description,
-            Some("A test named function".to_string())
-        );
-        assert!(metadata.parameters.contains_key("key1"));
-        assert_eq!(metadata.parameters["key1"], "value1");
+        assert_eq!(label.name, Some("objective_penalty".to_string()));
+        assert_eq!(label.subscripts, vec![10, 20]);
+        assert_eq!(label.description, Some("A test named function".to_string()));
+        assert!(label.parameters.contains_key("key1"));
+        assert_eq!(label.parameters["key1"], "value1");
     }
 
     #[test]
     fn test_parse_sampled_named_function() {
-        // Parse SampledNamedFunction with full metadata and round-trip test
+        // Parse SampledNamedFunction with a full modeling label and round-trip test
         let v1_snf = v1::SampledNamedFunction {
             id: 7,
             evaluated_values: Some(v1::SampledValues {
@@ -329,20 +326,20 @@ mod tests {
 
         let parsed: ParsedSampledNamedFunction = v1_snf.parse(&()).unwrap();
         let snf = parsed.sampled_named_function;
-        let metadata = parsed.metadata;
+        let label = parsed.label;
 
         assert_eq!(*snf.id(), NamedFunctionID::from(7));
-        assert_eq!(metadata.name, Some("cost".to_string()));
-        assert_eq!(metadata.subscripts, vec![1, 2]);
-        assert_eq!(metadata.description, Some("A sampled function".to_string()));
-        assert!(metadata.parameters.contains_key("p"));
+        assert_eq!(label.name, Some("cost".to_string()));
+        assert_eq!(label.subscripts, vec![1, 2]);
+        assert_eq!(label.description, Some("A sampled function".to_string()));
+        assert!(label.parameters.contains_key("p"));
         assert_eq!(
             *snf.used_decision_variable_ids(),
             btreeset! { VariableID::from(10), VariableID::from(20) }
         );
 
-        // Round-trip: SampledNamedFunction + metadata -> v1::SampledNamedFunction
-        let v1_converted = sampled_named_function_to_v1(snf, metadata);
+        // Round-trip: SampledNamedFunction + label -> v1::SampledNamedFunction
+        let v1_converted = sampled_named_function_to_v1(snf, label);
         assert_eq!(v1_converted.id, 7);
         assert_eq!(v1_converted.name, Some("cost".to_string()));
         assert!(v1_converted.evaluated_values.is_some());

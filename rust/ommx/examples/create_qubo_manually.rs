@@ -6,13 +6,16 @@
 //! Note: OMMX also provides functionality to convert general instances to QUBO format.
 //! This example shows the manual construction approach.
 //!
-//! In v3, per-variable auxiliary metadata (name, subscripts, …) lives in
-//! the [`VariableMetadataStore`] sibling field of [`Instance`] rather
+//! In v3, per-variable modeling labels (name, subscripts, ...) live in
+//! the [`VariableLabelStore`] sibling field of [`Instance`] rather
 //! than on each [`DecisionVariable`]. Set it via
-//! [`Instance::variable_metadata_mut`] after construction.
+//! [`Instance::set_variable_label`] after construction.
 
 use anyhow::Result;
-use ommx::{coeff, quadratic, Constraint, DecisionVariable, Function, Instance, Sense, VariableID};
+use ommx::{
+    coeff, quadratic, Constraint, DecisionVariable, Function, Instance, ModelingLabel, Sense,
+    VariableID,
+};
 use std::collections::BTreeMap;
 
 fn main() -> Result<()> {
@@ -45,14 +48,23 @@ fn main() -> Result<()> {
     // Minimize the objective function
     let mut instance = Instance::new(Sense::Minimize, objective, decision_variables, constraints)?;
 
-    // Attach per-variable metadata via the SoA store on the instance.
-    {
-        let meta = instance.variable_metadata_mut();
-        meta.set_name(VariableID::from(0), "x");
-        meta.set_subscripts(VariableID::from(0), vec![0, 0]);
-        meta.set_name(VariableID::from(1), "x");
-        meta.set_subscripts(VariableID::from(1), vec![1, 0]);
-    }
+    // Attach per-variable modeling labels through the instance owner boundary.
+    instance.set_variable_label(
+        VariableID::from(0),
+        ModelingLabel {
+            name: Some("x".to_string()),
+            subscripts: vec![0, 0],
+            ..Default::default()
+        },
+    )?;
+    instance.set_variable_label(
+        VariableID::from(1),
+        ModelingLabel {
+            name: Some("x".to_string()),
+            subscripts: vec![1, 0],
+            ..Default::default()
+        },
+    )?;
 
     // Display instance information
     println!("Sense: {:?}", instance.sense());
@@ -63,9 +75,9 @@ fn main() -> Result<()> {
     println!("Constraints: {}", instance.constraints().len());
     println!("Objective: {:?}", instance.objective());
 
-    // Display decision variable metadata
+    // Display decision variable modeling labels
     println!("\nDecision variables:");
-    let meta = instance.variable_metadata();
+    let meta = instance.variable_labels();
     for id in instance.decision_variables().keys() {
         println!(
             "  Variable {}: name={:?}, subscripts={:?}",

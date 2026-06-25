@@ -59,9 +59,9 @@ def _make_indicator(name: str | None = "balance") -> IndicatorConstraint:
     )
 
 
-def test_add_returns_attached_with_drained_metadata():
+def test_add_returns_attached_with_drained_context():
     """add_indicator_constraint returns AttachedIndicatorConstraint reading
-    the staged metadata."""
+    the staged context."""
     instance = _empty_instance()
     snapshot = _make_indicator(name="balance")
 

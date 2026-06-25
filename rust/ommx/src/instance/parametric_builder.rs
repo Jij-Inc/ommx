@@ -22,17 +22,23 @@ pub struct ParametricInstanceBuilder {
     sense: Option<Sense>,
     objective: Option<Function>,
     decision_variables: Option<BTreeMap<VariableID, DecisionVariable>>,
+    variable_labels: VariableLabelStore,
     parameters: Option<BTreeMap<VariableID, v1::Parameter>>,
     constraints: Option<BTreeMap<ConstraintID, Constraint>>,
+    constraint_context: ConstraintContextStore<ConstraintID>,
     named_functions: BTreeMap<NamedFunctionID, NamedFunction>,
+    named_function_labels: crate::named_function::NamedFunctionLabelStore,
     removed_constraints: BTreeMap<ConstraintID, (Constraint, crate::constraint::RemovedReason)>,
     indicator_constraints: BTreeMap<crate::IndicatorConstraintID, crate::IndicatorConstraint>,
+    indicator_constraint_context: ConstraintContextStore<crate::IndicatorConstraintID>,
     removed_indicator_constraints: BTreeMap<
         crate::IndicatorConstraintID,
         (crate::IndicatorConstraint, crate::constraint::RemovedReason),
     >,
     one_hot_constraints: BTreeMap<crate::OneHotConstraintID, crate::OneHotConstraint>,
+    one_hot_constraint_context: ConstraintContextStore<crate::OneHotConstraintID>,
     sos1_constraints: BTreeMap<crate::Sos1ConstraintID, crate::Sos1Constraint>,
+    sos1_constraint_context: ConstraintContextStore<crate::Sos1ConstraintID>,
     decision_variable_dependency: AcyclicAssignments,
     description: Option<v1::instance::Description>,
 }
@@ -64,6 +70,12 @@ impl ParametricInstanceBuilder {
         self
     }
 
+    /// Sets the per-decision-variable modeling labels.
+    pub fn variable_labels(mut self, variable_labels: VariableLabelStore) -> Self {
+        self.variable_labels = variable_labels;
+        self
+    }
+
     /// Sets the parameters.
     pub fn parameters(mut self, parameters: BTreeMap<VariableID, v1::Parameter>) -> Self {
         self.parameters = Some(parameters);
@@ -76,12 +88,30 @@ impl ParametricInstanceBuilder {
         self
     }
 
+    /// Sets the per-regular-constraint context.
+    pub fn constraint_context(
+        mut self,
+        constraint_context: ConstraintContextStore<ConstraintID>,
+    ) -> Self {
+        self.constraint_context = constraint_context;
+        self
+    }
+
     /// Sets the named functions.
     pub fn named_functions(
         mut self,
         named_functions: BTreeMap<NamedFunctionID, NamedFunction>,
     ) -> Self {
         self.named_functions = named_functions;
+        self
+    }
+
+    /// Sets the per-named-function modeling labels.
+    pub fn named_function_labels(
+        mut self,
+        named_function_labels: crate::named_function::NamedFunctionLabelStore,
+    ) -> Self {
+        self.named_function_labels = named_function_labels;
         self
     }
 
@@ -100,6 +130,15 @@ impl ParametricInstanceBuilder {
         indicator_constraints: BTreeMap<crate::IndicatorConstraintID, crate::IndicatorConstraint>,
     ) -> Self {
         self.indicator_constraints = indicator_constraints;
+        self
+    }
+
+    /// Sets the per-indicator-constraint context.
+    pub fn indicator_constraint_context(
+        mut self,
+        indicator_constraint_context: ConstraintContextStore<crate::IndicatorConstraintID>,
+    ) -> Self {
+        self.indicator_constraint_context = indicator_constraint_context;
         self
     }
 
@@ -124,12 +163,30 @@ impl ParametricInstanceBuilder {
         self
     }
 
+    /// Sets the per-one-hot-constraint context.
+    pub fn one_hot_constraint_context(
+        mut self,
+        one_hot_constraint_context: ConstraintContextStore<crate::OneHotConstraintID>,
+    ) -> Self {
+        self.one_hot_constraint_context = one_hot_constraint_context;
+        self
+    }
+
     /// Sets the SOS1 constraints.
     pub fn sos1_constraints(
         mut self,
         sos1_constraints: BTreeMap<crate::Sos1ConstraintID, crate::Sos1Constraint>,
     ) -> Self {
         self.sos1_constraints = sos1_constraints;
+        self
+    }
+
+    /// Sets the per-SOS1-constraint context.
+    pub fn sos1_constraint_context(
+        mut self,
+        sos1_constraint_context: ConstraintContextStore<crate::Sos1ConstraintID>,
+    ) -> Self {
+        self.sos1_constraint_context = sos1_constraint_context;
         self
     }
 
@@ -156,6 +213,8 @@ impl ParametricInstanceBuilder {
     /// - Decision variable IDs and parameter IDs overlap
     /// - The objective function or constraints reference undefined variable IDs
     /// - The keys of `constraints` and `removed_constraints` are not disjoint
+    /// - Label/context stores contain IDs that are not owned by the
+    ///   corresponding decision-variable, named-function, or constraint collection
     /// - The keys of `decision_variable_dependency` are not in `decision_variables`
     /// - The RHS expressions of `decision_variable_dependency` reference IDs
     ///   outside `decision_variables` or `parameters`
@@ -202,6 +261,11 @@ impl ParametricInstanceBuilder {
         // Check that decision variable IDs and parameter IDs are disjoint
         let decision_variable_ids: VariableIDSet = decision_variables.keys().cloned().collect();
         let parameter_ids: VariableIDSet = parameters.keys().cloned().collect();
+        crate::modeling_label::validate_modeling_label_ids(
+            &self.variable_labels,
+            &decision_variable_ids,
+            "decision variable",
+        )?;
 
         let intersection: VariableIDSet = decision_variable_ids
             .intersection(&parameter_ids)
@@ -259,6 +323,16 @@ impl ParametricInstanceBuilder {
                 }
             }
         }
+        let named_function_ids = self
+            .named_functions
+            .keys()
+            .copied()
+            .collect::<std::collections::BTreeSet<_>>();
+        crate::modeling_label::validate_modeling_label_ids(
+            &self.named_function_labels,
+            &named_function_ids,
+            "named function",
+        )?;
 
         // Validate indicator constraints. Function bodies may reference
         // parameters; the indicator variable is a *structural* position and
@@ -444,25 +518,29 @@ impl ParametricInstanceBuilder {
             objective,
             decision_variables,
             parameters,
-            variable_metadata: Default::default(),
-            constraint_collection: ConstraintCollection::new(
+            variable_labels: self.variable_labels,
+            constraint_collection: ConstraintCollection::with_context(
                 constraints,
                 self.removed_constraints,
+                self.constraint_context,
             )?,
-            indicator_constraint_collection: ConstraintCollection::new(
+            indicator_constraint_collection: ConstraintCollection::with_context(
                 self.indicator_constraints,
                 self.removed_indicator_constraints,
+                self.indicator_constraint_context,
             )?,
-            one_hot_constraint_collection: ConstraintCollection::new(
+            one_hot_constraint_collection: ConstraintCollection::with_context(
                 self.one_hot_constraints,
                 BTreeMap::new(),
+                self.one_hot_constraint_context,
             )?,
-            sos1_constraint_collection: ConstraintCollection::new(
+            sos1_constraint_collection: ConstraintCollection::with_context(
                 self.sos1_constraints,
                 BTreeMap::new(),
+                self.sos1_constraint_context,
             )?,
             named_functions: self.named_functions,
-            named_function_metadata: Default::default(),
+            named_function_labels: self.named_function_labels,
             decision_variable_dependency: self.decision_variable_dependency,
             description: self.description,
             annotations: Default::default(),
@@ -480,6 +558,7 @@ impl ParametricInstance {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeSet;
 
     #[test]
     fn test_parametric_builder_basic() {
@@ -496,6 +575,226 @@ mod tests {
         assert!(instance.decision_variables().is_empty());
         assert!(instance.parameters().is_empty());
         assert!(instance.constraints().is_empty());
+    }
+
+    #[test]
+    fn test_parametric_builder_preserves_labels_and_context() {
+        let var_id = VariableID::from(1);
+        let constraint_id = ConstraintID::from(2);
+        let mut variable_labels = VariableLabelStore::default();
+        variable_labels.set_name(var_id, "x");
+        let mut constraint_context = ConstraintContextStore::default();
+        constraint_context.set_name(constraint_id, "balance");
+
+        let instance = ParametricInstance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::from([(var_id, DecisionVariable::binary(var_id))]))
+            .variable_labels(variable_labels)
+            .parameters(BTreeMap::new())
+            .constraints(BTreeMap::from([(
+                constraint_id,
+                Constraint::equal_to_zero(Function::Zero),
+            )]))
+            .constraint_context(constraint_context)
+            .build()
+            .unwrap();
+
+        assert_eq!(instance.variable_labels().name(var_id), Some("x"));
+        assert_eq!(
+            instance.constraint_context().name(constraint_id),
+            Some("balance")
+        );
+    }
+
+    #[test]
+    fn test_parametric_builder_preserves_special_constraint_contexts() {
+        let var_id = VariableID::from(1);
+        let indicator_id = crate::IndicatorConstraintID::from(10);
+        let one_hot_id = crate::OneHotConstraintID::from(11);
+        let sos1_id = crate::Sos1ConstraintID::from(12);
+
+        let mut indicator_context = ConstraintContextStore::default();
+        indicator_context.set_name(indicator_id, "activation");
+        let mut one_hot_context = ConstraintContextStore::default();
+        one_hot_context.set_name(one_hot_id, "choice");
+        let mut sos1_context = ConstraintContextStore::default();
+        sos1_context.set_name(sos1_id, "exclusive");
+
+        let instance = ParametricInstance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::from([(var_id, DecisionVariable::binary(var_id))]))
+            .parameters(BTreeMap::new())
+            .constraints(BTreeMap::new())
+            .indicator_constraints(BTreeMap::from([(
+                indicator_id,
+                crate::IndicatorConstraint::new(
+                    var_id,
+                    crate::Equality::LessThanOrEqualToZero,
+                    Function::Zero,
+                ),
+            )]))
+            .indicator_constraint_context(indicator_context)
+            .one_hot_constraints(BTreeMap::from([(
+                one_hot_id,
+                crate::OneHotConstraint::new(BTreeSet::from([var_id])).unwrap(),
+            )]))
+            .one_hot_constraint_context(one_hot_context)
+            .sos1_constraints(BTreeMap::from([(
+                sos1_id,
+                crate::Sos1Constraint::new(BTreeSet::from([var_id])).unwrap(),
+            )]))
+            .sos1_constraint_context(sos1_context)
+            .build()
+            .unwrap();
+
+        assert_eq!(
+            instance.indicator_constraint_context().name(indicator_id),
+            Some("activation")
+        );
+        assert_eq!(
+            instance.one_hot_constraint_context().name(one_hot_id),
+            Some("choice")
+        );
+        assert_eq!(
+            instance.sos1_constraint_context().name(sos1_id),
+            Some("exclusive")
+        );
+    }
+
+    #[test]
+    fn test_parametric_builder_rejects_orphan_variable_labels() {
+        let parameter_id = VariableID::from(99);
+        let mut variable_labels = VariableLabelStore::default();
+        variable_labels.set_name(parameter_id, "p");
+
+        let err = ParametricInstance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::new())
+            .variable_labels(variable_labels)
+            .parameters(BTreeMap::from([(
+                parameter_id,
+                v1::Parameter {
+                    id: parameter_id.into_inner(),
+                    ..Default::default()
+                },
+            )]))
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap_err();
+
+        assert!(
+            err.to_string().contains("unknown decision variable ID")
+                && err.to_string().contains("VariableID(99)"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_parametric_builder_rejects_orphan_constraint_context() {
+        let mut constraint_context = ConstraintContextStore::default();
+        constraint_context.set_name(ConstraintID::from(99), "orphan");
+
+        let err = ParametricInstance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::new())
+            .parameters(BTreeMap::new())
+            .constraints(BTreeMap::new())
+            .constraint_context(constraint_context)
+            .build()
+            .unwrap_err();
+
+        assert!(
+            err.to_string().contains("unknown constraint ID")
+                && err.to_string().contains("ConstraintID(99)"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_parametric_builder_rejects_orphan_special_constraint_contexts() {
+        let mut indicator_context = ConstraintContextStore::default();
+        indicator_context.set_name(crate::IndicatorConstraintID::from(99), "orphan");
+        let err = ParametricInstance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::new())
+            .parameters(BTreeMap::new())
+            .constraints(BTreeMap::new())
+            .indicator_constraint_context(indicator_context)
+            .build()
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("unknown constraint ID")
+                && err.to_string().contains("IndicatorConstraintID(99)"),
+            "unexpected error: {err}"
+        );
+
+        let mut one_hot_context = ConstraintContextStore::default();
+        one_hot_context.set_name(crate::OneHotConstraintID::from(99), "orphan");
+        let err = ParametricInstance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::new())
+            .parameters(BTreeMap::new())
+            .constraints(BTreeMap::new())
+            .one_hot_constraint_context(one_hot_context)
+            .build()
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("unknown constraint ID")
+                && err.to_string().contains("OneHotConstraintID(99)"),
+            "unexpected error: {err}"
+        );
+
+        let mut sos1_context = ConstraintContextStore::default();
+        sos1_context.set_name(crate::Sos1ConstraintID::from(99), "orphan");
+        let err = ParametricInstance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::new())
+            .parameters(BTreeMap::new())
+            .constraints(BTreeMap::new())
+            .sos1_constraint_context(sos1_context)
+            .build()
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("unknown constraint ID")
+                && err.to_string().contains("Sos1ConstraintID(99)"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_parametric_sidecar_setters_reject_unknown_ids() {
+        let parameter_id = VariableID::from(99);
+        let mut instance = ParametricInstance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::new())
+            .parameters(BTreeMap::from([(
+                parameter_id,
+                v1::Parameter {
+                    id: parameter_id.into_inner(),
+                    ..Default::default()
+                },
+            )]))
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap();
+
+        let err = instance
+            .set_variable_label(parameter_id, ModelingLabel::default())
+            .unwrap_err();
+        assert!(err.to_string().contains("unknown decision variable ID"));
+
+        let err = instance
+            .set_constraint_context(ConstraintID::from(99), ConstraintContext::default())
+            .unwrap_err();
+        assert!(err.to_string().contains("unknown constraint ID"));
     }
 
     #[test]

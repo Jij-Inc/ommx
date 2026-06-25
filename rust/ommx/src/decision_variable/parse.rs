@@ -49,15 +49,15 @@ impl From<Kind> for i32 {
     }
 }
 
-/// Parsed v1 `DecisionVariable` together with its drained metadata.
+/// Parsed v1 `DecisionVariable` together with its drained modeling label.
 ///
-/// Per-element parse no longer attaches metadata to the [`DecisionVariable`]
-/// itself — the metadata is returned alongside so the collection-level
-/// parse can drain it into the [`VariableMetadataStore`].
+/// Per-element parse no longer attaches a label to the [`DecisionVariable`]
+/// itself — the label is returned alongside so the collection-level
+/// parse can drain it into the [`VariableLabelStore`].
 #[derive(Debug)]
 pub struct ParsedDecisionVariable {
     pub variable: DecisionVariable,
-    pub metadata: DecisionVariableMetadata,
+    pub label: DecisionVariableLabel,
 }
 
 impl Parse for v1::DecisionVariable {
@@ -78,7 +78,7 @@ impl Parse for v1::DecisionVariable {
             ATol::default(), // FIXME: user should provide this
         )
         .map_err(|e| RawParseError::InvalidDecisionVariable(e).context(message, "bound"))?;
-        let metadata = DecisionVariableMetadata {
+        let label = DecisionVariableLabel {
             name: self.name,
             subscripts: self.subscripts,
             parameters: self.parameters.into_iter().collect(),
@@ -86,7 +86,7 @@ impl Parse for v1::DecisionVariable {
         };
         Ok(ParsedDecisionVariable {
             variable: dv,
-            metadata,
+            label,
         })
     }
 }
@@ -101,12 +101,12 @@ impl TryFrom<v1::DecisionVariable> for DecisionVariable {
 impl Parse for Vec<v1::DecisionVariable> {
     type Output = (
         BTreeMap<VariableID, DecisionVariable>,
-        crate::VariableMetadataStore,
+        crate::VariableLabelStore,
     );
     type Context = ();
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let mut decision_variables = BTreeMap::default();
-        let mut metadata_store = crate::VariableMetadataStore::default();
+        let mut label_store = crate::VariableLabelStore::default();
         for v in self {
             let parsed: ParsedDecisionVariable = v.parse(&())?;
             let id = parsed.variable.id;
@@ -116,13 +116,13 @@ impl Parse for Vec<v1::DecisionVariable> {
                 ))
                 .into());
             }
-            metadata_store.insert(id, parsed.metadata);
+            label_store.insert(id, parsed.label);
         }
-        Ok((decision_variables, metadata_store))
+        Ok((decision_variables, label_store))
     }
 }
 
-/// Build a v1 `DecisionVariable` from its intrinsic data plus drained metadata.
+/// Build a v1 `DecisionVariable` from its intrinsic data plus drained modeling label.
 pub(crate) fn decision_variable_to_v1(
     DecisionVariable {
         id,
@@ -130,25 +130,25 @@ pub(crate) fn decision_variable_to_v1(
         bound,
         substituted_value,
     }: DecisionVariable,
-    metadata: DecisionVariableMetadata,
+    label: DecisionVariableLabel,
 ) -> v1::DecisionVariable {
     v1::DecisionVariable {
         id: id.into_inner(),
         kind: kind.into(),
         bound: Some(bound.into()),
         substituted_value,
-        name: metadata.name,
-        subscripts: metadata.subscripts,
-        parameters: metadata.parameters.into_iter().collect(),
-        description: metadata.description,
+        name: label.name,
+        subscripts: label.subscripts,
+        parameters: label.parameters.into_iter().collect(),
+        description: label.description,
     }
 }
 
-/// Parsed v1 `SampledDecisionVariable` together with its drained metadata.
+/// Parsed v1 `SampledDecisionVariable` together with its drained modeling label.
 #[derive(Debug)]
 pub struct ParsedSampledDecisionVariable {
     pub variable: SampledDecisionVariable,
-    pub metadata: DecisionVariableMetadata,
+    pub label: DecisionVariableLabel,
 }
 
 impl Parse for v1::SampledDecisionVariable {
@@ -185,7 +185,7 @@ impl Parse for v1::SampledDecisionVariable {
         .map_err(RawParseError::InvalidDecisionVariable)?;
         Ok(ParsedSampledDecisionVariable {
             variable: sampled,
-            metadata: parsed_dv.metadata,
+            label: parsed_dv.label,
         })
     }
 }
@@ -197,10 +197,10 @@ impl TryFrom<v1::SampledDecisionVariable> for SampledDecisionVariable {
     }
 }
 
-/// Build a v1 `SampledDecisionVariable` from its intrinsic data plus drained metadata.
+/// Build a v1 `SampledDecisionVariable` from its intrinsic data plus drained modeling label.
 pub(crate) fn sampled_decision_variable_to_v1(
     sampled_dv: SampledDecisionVariable,
-    metadata: DecisionVariableMetadata,
+    label: DecisionVariableLabel,
 ) -> v1::SampledDecisionVariable {
     let dv = DecisionVariable {
         id: sampled_dv.id,
@@ -210,7 +210,7 @@ pub(crate) fn sampled_decision_variable_to_v1(
     };
 
     v1::SampledDecisionVariable {
-        decision_variable: Some(decision_variable_to_v1(dv, metadata)),
+        decision_variable: Some(decision_variable_to_v1(dv, label)),
         samples: Some(sampled_dv.samples.into()),
     }
 }
@@ -272,17 +272,17 @@ mod tests {
 
         let parsed: ParsedSampledDecisionVariable = v1_sampled_dv.parse(&()).unwrap();
         let sampled_dv = parsed.variable;
-        let metadata = parsed.metadata;
+        let label = parsed.label;
 
         assert_eq!(*sampled_dv.id(), VariableID::from(42));
         assert_eq!(*sampled_dv.kind(), Kind::Continuous);
-        assert_eq!(metadata.name, Some("test_var".to_string()));
-        assert_eq!(metadata.subscripts, vec![1, 2]);
-        assert_eq!(metadata.description, Some("A test variable".to_string()));
+        assert_eq!(label.name, Some("test_var".to_string()));
+        assert_eq!(label.subscripts, vec![1, 2]);
+        assert_eq!(label.description, Some("A test variable".to_string()));
 
         // Test round-trip conversion: name is reattached at serialize time
         // by `sampled_decision_variable_to_v1`.
-        let v1_converted = sampled_decision_variable_to_v1(sampled_dv, metadata);
+        let v1_converted = sampled_decision_variable_to_v1(sampled_dv, label);
         let decision_variable = v1_converted.decision_variable.unwrap();
         assert_eq!(decision_variable.id, 42);
         assert_eq!(decision_variable.name, Some("test_var".to_string()));

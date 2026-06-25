@@ -5,19 +5,19 @@ use std::collections::BTreeMap;
 #[pyclass]
 pub struct SampledDecisionVariable(
     pub ommx::SampledDecisionVariable,
-    pub ommx::DecisionVariableMetadata,
+    pub ommx::DecisionVariableLabel,
 );
 
 impl SampledDecisionVariable {
     pub fn standalone(inner: ommx::SampledDecisionVariable) -> Self {
-        Self(inner, ommx::DecisionVariableMetadata::default())
+        Self(inner, ommx::DecisionVariableLabel::default())
     }
 
     pub fn from_parts(
         inner: ommx::SampledDecisionVariable,
-        metadata: ommx::DecisionVariableMetadata,
+        label: ommx::DecisionVariableLabel,
     ) -> Self {
-        Self(inner, metadata)
+        Self(inner, label)
     }
 }
 

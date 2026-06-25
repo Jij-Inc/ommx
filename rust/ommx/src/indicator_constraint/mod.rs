@@ -57,10 +57,10 @@ impl From<IndicatorConstraintID> for u64 {
 /// When it is 1, the constraint `f(x) <= 0` (or `f(x) = 0`) must hold.
 ///
 /// The constraint's [`IndicatorConstraintID`] is not stored in this struct — it is held
-/// by the enclosing collection (e.g. the `BTreeMap` key in [`Instance`]). Auxiliary
-/// metadata also lives on the enclosing collection's
-/// [`ConstraintMetadataStore`](crate::ConstraintMetadataStore); per-element
-/// metadata storage was retired in the v3 redesign.
+/// by the enclosing collection (e.g. the `BTreeMap` key in [`Instance`]).
+/// Modeling labels and provenance live on the enclosing collection's
+/// [`ConstraintContextStore`](crate::ConstraintContextStore); per-element
+/// context storage was retired in the v3 redesign.
 ///
 /// [`Instance`]: crate::Instance
 #[derive(Debug, Clone, PartialEq)]

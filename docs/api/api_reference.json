@@ -5560,7 +5560,7 @@
         {
           "kind": "Class",
           "name": "AttachedConstraint",
-          "doc": "Attached constraint — a write-through handle bound to a host\n({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).\n\n`AttachedConstraint` is returned by `Instance.add_constraint` /\n`ParametricInstance.add_constraint` and by their `constraints[id]`\ngetters. Unlike {class}`~ommx.v1.Constraint`, which is a snapshot, reads\npull live data from the parent host and metadata setters write through\nto its SoA metadata store. Two `AttachedConstraint` instances pointing\nat the same id on the same host observe the same state.\n\nThe handle keeps the parent host alive through a refcount; drop the\nwrapper to release the back-reference.",
+          "doc": "Attached constraint — a write-through handle bound to a host\n({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).\n\n`AttachedConstraint` is returned by `Instance.add_constraint` /\n`ParametricInstance.add_constraint` and by their `constraints[id]`\ngetters. Unlike {class}`~ommx.v1.Constraint`, which is a snapshot, reads\npull live data from the parent host and context setters write through\nto its SoA context store. Two `AttachedConstraint` instances pointing\nat the same id on the same host observe the same state.\n\nThe handle keeps the parent host alive through a refcount; drop the\nwrapper to release the back-reference.",
           "bases": [],
           "methods": [
             {
@@ -5675,7 +5675,7 @@
             },
             {
               "name": "add_parameter",
-              "doc": "Add a single parameter entry. Writes through to the parent host's SoA metadata store.",
+              "doc": "Add a single parameter entry. Writes through to the parent host's context store.",
               "signatures": [
                 {
                   "parameters": [
@@ -5747,7 +5747,7 @@
             },
             {
               "name": "add_subscripts",
-              "doc": "Append subscripts. Writes through to the parent host's SoA metadata store.",
+              "doc": "Append subscripts. Writes through to the parent host's context store.",
               "signatures": [
                 {
                   "parameters": [
@@ -5844,7 +5844,7 @@
             },
             {
               "name": "set_description",
-              "doc": "Set the description. Writes through to the parent host's SoA metadata store.",
+              "doc": "Set the description. Writes through to the parent host's context store.",
               "signatures": [
                 {
                   "parameters": [
@@ -5870,7 +5870,7 @@
             },
             {
               "name": "set_name",
-              "doc": "Set the name. Writes through to the parent host's SoA metadata store.",
+              "doc": "Set the name. Writes through to the parent host's context store.",
               "signatures": [
                 {
                   "parameters": [
@@ -5896,7 +5896,7 @@
             },
             {
               "name": "set_parameters",
-              "doc": "Replace all parameters. Writes through to the parent host's SoA metadata store.",
+              "doc": "Replace all parameters. Writes through to the parent host's context store.",
               "signatures": [
                 {
                   "parameters": [
@@ -5933,7 +5933,7 @@
             },
             {
               "name": "set_subscripts",
-              "doc": "Set the subscripts. Writes through to the parent host's SoA metadata store.",
+              "doc": "Set the subscripts. Writes through to the parent host's context store.",
               "signatures": [
                 {
                   "parameters": [
@@ -6110,7 +6110,7 @@
         {
           "kind": "Class",
           "name": "AttachedDecisionVariable",
-          "doc": "Attached decision variable — a write-through handle bound to a host\n({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).\n\n`AttachedDecisionVariable` is returned by `add_decision_variable(v)`\n(insertion), `attached_decision_variable(id)` (lookup), and the\n`decision_variables` getter on both hosts. Reads pull live data from\nthe parent host's SoA store and metadata setters write back through to\nit. Handles also participate in arithmetic (`x + y`, `2 * x` etc.) via\n`ToFunction` — only the id is consumed for that, no host borrow is\ntaken, so arithmetic works even while the host is mutably borrowed\nelsewhere. Call {meth}`detach` for an independent\n{class}`~ommx.v1.DecisionVariable` snapshot.\n\n`DecisionVariableMetadata` has no `provenance` field, so the\nwrite-through surface omits the corresponding getter.",
+          "doc": "Attached decision variable — a write-through handle bound to a host\n({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).\n\n`AttachedDecisionVariable` is returned by `add_decision_variable(v)`\n(insertion), `attached_decision_variable(id)` (lookup), and the\n`decision_variables` getter on both hosts. Reads pull live data from\nthe parent host's SoA store and label setters write back through to\nit. Handles also participate in arithmetic (`x + y`, `2 * x` etc.) via\n`ToFunction` — only the id is consumed for that, no host borrow is\ntaken, so arithmetic works even while the host is mutably borrowed\nelsewhere. Call {meth}`detach` for an independent\n{class}`~ommx.v1.DecisionVariable` snapshot.\n\n`DecisionVariableLabel` has no `provenance` field, so the\nwrite-through surface omits the corresponding getter.",
           "bases": [],
           "methods": [
             {
@@ -7068,7 +7068,7 @@
             },
             {
               "name": "set_name",
-              "doc": "Set the name. Writes through to the parent host's SoA metadata store.",
+              "doc": "Set the name. Writes through to the parent host's label store.",
               "signatures": [
                 {
                   "parameters": [
@@ -7291,7 +7291,7 @@
         {
           "kind": "Class",
           "name": "AttachedIndicatorConstraint",
-          "doc": "Attached indicator constraint — a write-through handle bound to a host\n({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).\n\n`AttachedIndicatorConstraint` is returned by\n`Instance.add_indicator_constraint` /\n`ParametricInstance.add_indicator_constraint` and by their\n`indicator_constraints[id]` getters. Reads pull live data from the parent\nhost and metadata setters write through to its SoA metadata store.",
+          "doc": "Attached indicator constraint — a write-through handle bound to a host\n({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).\n\n`AttachedIndicatorConstraint` is returned by\n`Instance.add_indicator_constraint` /\n`ParametricInstance.add_indicator_constraint` and by their\n`indicator_constraints[id]` getters. Reads pull live data from the parent\nhost and context setters write through to its SoA context store.",
           "bases": [],
           "methods": [
             {
@@ -7406,7 +7406,7 @@
             },
             {
               "name": "add_parameter",
-              "doc": "Add a single parameter entry. Writes through to the parent host's SoA metadata store.",
+              "doc": "Add a single parameter entry. Writes through to the parent host's context store.",
               "signatures": [
                 {
                   "parameters": [
@@ -7478,7 +7478,7 @@
             },
             {
               "name": "add_subscripts",
-              "doc": "Append subscripts. Writes through to the parent host's SoA metadata store.",
+              "doc": "Append subscripts. Writes through to the parent host's context store.",
               "signatures": [
                 {
                   "parameters": [
@@ -7526,7 +7526,7 @@
             },
             {
               "name": "set_description",
-              "doc": "Set the description. Writes through to the parent host's SoA metadata store.",
+              "doc": "Set the description. Writes through to the parent host's context store.",
               "signatures": [
                 {
                   "parameters": [
@@ -7552,7 +7552,7 @@
             },
             {
               "name": "set_name",
-              "doc": "Set the name. Writes through to the parent host's SoA metadata store.",
+              "doc": "Set the name. Writes through to the parent host's context store.",
               "signatures": [
                 {
                   "parameters": [
@@ -7578,7 +7578,7 @@
             },
             {
               "name": "set_parameters",
-              "doc": "Replace all parameters. Writes through to the parent host's SoA metadata store.",
+              "doc": "Replace all parameters. Writes through to the parent host's context store.",
               "signatures": [
                 {
                   "parameters": [
@@ -7615,7 +7615,7 @@
             },
             {
               "name": "set_subscripts",
-              "doc": "Set the subscripts. Writes through to the parent host's SoA metadata store.",
+              "doc": "Set the subscripts. Writes through to the parent host's context store.",
               "signatures": [
                 {
                   "parameters": [
@@ -7803,7 +7803,7 @@
         {
           "kind": "Class",
           "name": "AttachedOneHotConstraint",
-          "doc": "Attached one-hot constraint — a write-through handle bound to a host\n({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).\n\nReturned by `Instance.add_one_hot_constraint` /\n`ParametricInstance.add_one_hot_constraint` and by their\n`one_hot_constraints[id]` getters. Reads pull live data from the parent\nhost and metadata setters write through to its SoA metadata store.",
+          "doc": "Attached one-hot constraint — a write-through handle bound to a host\n({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).\n\nReturned by `Instance.add_one_hot_constraint` /\n`ParametricInstance.add_one_hot_constraint` and by their\n`one_hot_constraints[id]` getters. Reads pull live data from the parent\nhost and context setters write through to its SoA context store.",
           "bases": [],
           "methods": [
             {
@@ -7918,7 +7918,7 @@
             },
             {
               "name": "add_parameter",
-              "doc": "Add a single parameter entry. Writes through to the parent host's SoA metadata store.",
+              "doc": "Add a single parameter entry. Writes through to the parent host's context store.",
               "signatures": [
                 {
                   "parameters": [
@@ -7990,7 +7990,7 @@
             },
             {
               "name": "add_subscripts",
-              "doc": "Append subscripts. Writes through to the parent host's SoA metadata store.",
+              "doc": "Append subscripts. Writes through to the parent host's context store.",
               "signatures": [
                 {
                   "parameters": [
@@ -8038,7 +8038,7 @@
             },
             {
               "name": "set_description",
-              "doc": "Set the description. Writes through to the parent host's SoA metadata store.",
+              "doc": "Set the description. Writes through to the parent host's context store.",
               "signatures": [
                 {
                   "parameters": [
@@ -8064,7 +8064,7 @@
             },
             {
               "name": "set_name",
-              "doc": "Set the name. Writes through to the parent host's SoA metadata store.",
+              "doc": "Set the name. Writes through to the parent host's context store.",
               "signatures": [
                 {
                   "parameters": [
@@ -8090,7 +8090,7 @@
             },
             {
               "name": "set_parameters",
-              "doc": "Replace all parameters. Writes through to the parent host's SoA metadata store.",
+              "doc": "Replace all parameters. Writes through to the parent host's context store.",
               "signatures": [
                 {
                   "parameters": [
@@ -8127,7 +8127,7 @@
             },
             {
               "name": "set_subscripts",
-              "doc": "Set the subscripts. Writes through to the parent host's SoA metadata store.",
+              "doc": "Set the subscripts. Writes through to the parent host's context store.",
               "signatures": [
                 {
                   "parameters": [
@@ -8409,7 +8409,7 @@
             },
             {
               "name": "add_parameter",
-              "doc": "Add a single parameter entry. Writes through to the parent host's SoA metadata store.",
+              "doc": "Add a single parameter entry. Writes through to the parent host's context store.",
               "signatures": [
                 {
                   "parameters": [
@@ -8481,7 +8481,7 @@
             },
             {
               "name": "add_subscripts",
-              "doc": "Append subscripts. Writes through to the parent host's SoA metadata store.",
+              "doc": "Append subscripts. Writes through to the parent host's context store.",
               "signatures": [
                 {
                   "parameters": [
@@ -8529,7 +8529,7 @@
             },
             {
               "name": "set_description",
-              "doc": "Set the description. Writes through to the parent host's SoA metadata store.",
+              "doc": "Set the description. Writes through to the parent host's context store.",
               "signatures": [
                 {
                   "parameters": [
@@ -8555,7 +8555,7 @@
             },
             {
               "name": "set_name",
-              "doc": "Set the name. Writes through to the parent host's SoA metadata store.",
+              "doc": "Set the name. Writes through to the parent host's context store.",
               "signatures": [
                 {
                   "parameters": [
@@ -8581,7 +8581,7 @@
             },
             {
               "name": "set_parameters",
-              "doc": "Replace all parameters. Writes through to the parent host's SoA metadata store.",
+              "doc": "Replace all parameters. Writes through to the parent host's context store.",
               "signatures": [
                 {
                   "parameters": [
@@ -8618,7 +8618,7 @@
             },
             {
               "name": "set_subscripts",
-              "doc": "Set the subscripts. Writes through to the parent host's SoA metadata store.",
+              "doc": "Set the subscripts. Writes through to the parent host's context store.",
               "signatures": [
                 {
                   "parameters": [
@@ -9116,7 +9116,7 @@
         {
           "kind": "Class",
           "name": "Constraint",
-          "doc": "Constraint wrapper for Python.\n\nCarries the inner Rust `Constraint<Created>` plus a snapshot of its\nauxiliary metadata. When this wrapper is read from an [`Instance`], the\nsnapshot is filled from the instance's `ConstraintMetadataStore`. When the\nwrapper is handed back to an instance (e.g. via `from_components`), the\nsnapshot is drained into that instance's metadata store. Mutations on a\nwrapper retrieved from an instance therefore do not propagate back; the\ncaller must re-add the constraint to apply changes.",
+          "doc": "Constraint wrapper for Python.\n\nCarries the inner Rust `Constraint<Created>` plus a snapshot of its\nauxiliary context. When this wrapper is read from an [`Instance`], the\nsnapshot is filled from the instance's `ConstraintContextStore`. When the\nwrapper is handed back to an instance (e.g. via `from_components`), the\nsnapshot is drained into that instance's context store. Mutations on a\nwrapper retrieved from an instance therefore do not propagate back; the\ncaller must re-add the constraint to apply changes.",
           "bases": [],
           "methods": [
             {
@@ -11889,7 +11889,7 @@
         {
           "kind": "Class",
           "name": "EvaluatedNamedFunction",
-          "doc": "EvaluatedNamedFunction wrapper for Python.\n\nHolds the Rust `EvaluatedNamedFunction` plus an owned snapshot of its\nmetadata. See `NamedFunction` for the snapshot-model rationale.",
+          "doc": "EvaluatedNamedFunction wrapper for Python.\n\nHolds the Rust `EvaluatedNamedFunction` plus an owned snapshot of its\nlabel. See `NamedFunction` for the snapshot-model rationale.",
           "bases": [],
           "methods": [
             {
@@ -13902,7 +13902,7 @@
             },
             {
               "name": "add_constraint",
-              "doc": "Add a regular constraint to this instance.\n\nPicks an unused {class}`~ommx.v1.ConstraintID`, drains the wrapper's\nmetadata snapshot into this instance's SoA store, and returns an\n{class}`~ommx.v1.AttachedConstraint` bound to the new id. The input\n{class}`~ommx.v1.Constraint` is not mutated; subsequent writes that\nshould land in the instance must go through the returned handle.\n\nRaises {class}`ValueError` if the constraint references an undefined\ndecision variable or one currently used as a substitution-dependency\nkey, matching the validation performed by other constraint-insertion\npaths.",
+              "doc": "Add a regular constraint to this instance.\n\nPicks an unused {class}`~ommx.v1.ConstraintID`, drains the wrapper's\ncontext snapshot into this instance's SoA store, and returns an\n{class}`~ommx.v1.AttachedConstraint` bound to the new id. The input\n{class}`~ommx.v1.Constraint` is not mutated; subsequent writes that\nshould land in the instance must go through the returned handle.\n\nRaises {class}`ValueError` if the constraint references an undefined\ndecision variable or one currently used as a substitution-dependency\nkey, matching the validation performed by other constraint-insertion\npaths.",
               "signatures": [
                 {
                   "parameters": [
@@ -13928,7 +13928,7 @@
             },
             {
               "name": "add_decision_variable",
-              "doc": "Add a decision variable to this instance.\n\nDrains the wrapper's metadata snapshot into this instance's SoA\nstore and returns an {class}`~ommx.v1.AttachedDecisionVariable`\nbound to the variable's id — a write-through handle for further\nmetadata mutation. The original wrapper is not modified.\n\nRaises {class}`ValueError` if the variable's id collides with an\nexisting variable, parameter, or substitution-dependency key.",
+              "doc": "Add a decision variable to this instance.\n\nDrains the wrapper's modeling-label snapshot into this instance's SoA\nstore and returns an {class}`~ommx.v1.AttachedDecisionVariable`\nbound to the variable's id — a write-through handle for further\nlabel updates. The original wrapper is not modified.\n\nRaises {class}`ValueError` if the variable's id collides with an\nexisting variable, parameter, or substitution-dependency key.",
               "signatures": [
                 {
                   "parameters": [
@@ -13954,7 +13954,7 @@
             },
             {
               "name": "add_indicator_constraint",
-              "doc": "Add an indicator constraint to this instance.\n\nPicks an unused {class}`~ommx.v1.IndicatorConstraintID`, drains the\nwrapper's metadata snapshot into this instance's SoA store, and\nreturns an {class}`~ommx.v1.AttachedIndicatorConstraint` bound to the\nnew id.\n\nRaises {class}`ValueError` if the constraint references an undefined\ndecision variable or one currently used as a substitution-dependency\nkey.",
+              "doc": "Add an indicator constraint to this instance.\n\nPicks an unused {class}`~ommx.v1.IndicatorConstraintID`, drains the\nwrapper's context snapshot into this instance's SoA store, and\nreturns an {class}`~ommx.v1.AttachedIndicatorConstraint` bound to the\nnew id.\n\nRaises {class}`ValueError` if the constraint references an undefined\ndecision variable or one currently used as a substitution-dependency\nkey.",
               "signatures": [
                 {
                   "parameters": [
@@ -14271,7 +14271,7 @@
             },
             {
               "name": "attached_decision_variable",
-              "doc": "Return an {class}`~ommx.v1.AttachedDecisionVariable` bound to the\ngiven id — a write-through handle whose metadata setters update\nthis instance's SoA store. The handle also participates in\narithmetic via `ToFunction` (only its id is consumed). Call\n{meth}`~ommx.v1.AttachedDecisionVariable.detach` to obtain an\nindependent {class}`~ommx.v1.DecisionVariable` snapshot.\n\nRaises {class}`KeyError` if no variable with `variable_id` exists.",
+              "doc": "Return an {class}`~ommx.v1.AttachedDecisionVariable` bound to the\ngiven id — a write-through handle whose label setters update\nthis instance's SoA store. The handle also participates in\narithmetic via `ToFunction` (only its id is consumed). Call\n{meth}`~ommx.v1.AttachedDecisionVariable.detach` to obtain an\nindependent {class}`~ommx.v1.DecisionVariable` snapshot.\n\nRaises {class}`KeyError` if no variable with `variable_id` exists.",
               "signatures": [
                 {
                   "parameters": [
@@ -14296,8 +14296,8 @@
               "deprecated": null
             },
             {
-              "name": "constraint_metadata_df",
-              "doc": "Constraint metadata DataFrame (id-indexed wide format).\n\nOne row per constraint id (active + removed) with columns\n`name`, `subscripts`, `description`. Index column is\n`{kind}_constraint_id`. `kind` selects which constraint family\nto read: `\"regular\"`, `\"indicator\"`, `\"one_hot\"`, or `\"sos1\"`.",
+              "name": "constraint_context_df",
+              "doc": "Constraint context DataFrame (id-indexed wide format).\n\nOne row per constraint id (active + removed) with columns\n`name`, `subscripts`, `description`. Index column is\n`{kind}_constraint_id`. `kind` selects which constraint family\nto read: `\"regular\"`, `\"indicator\"`, `\"one_hot\"`, or `\"sos1\"`.",
               "signatures": [
                 {
                   "parameters": [
@@ -14497,7 +14497,7 @@
             },
             {
               "name": "constraints_df",
-              "doc": "DataFrame of constraints, dispatched on `kind=`.\n\n`kind` selects the constraint family — `\"regular\"`, `\"indicator\"`,\n`\"one_hot\"`, or `\"sos1\"`. The DataFrame is indexed by the kind-\nqualified id column (`{kind}_constraint_id`).\n\n`include` selects which optional column families to fold in. It\naccepts a sequence of `\"metadata\"` / `\"parameters\"` /\n`\"removed_reason\"`; passing `None` (the default) yields the\nv2-equivalent shape (`metadata` + `parameters`). `\"removed_reason\"`\nis a unit flag that gates both the `removed_reason` column and the\n`removed_reason.{key}` parameter columns together.\n\n`removed=False` (default) returns active constraints only.\n`removed=True` returns active + removed rows in the same DataFrame\nand auto-sets `\"removed_reason\"` so removed rows are\ndistinguishable (active rows have NA in the reason columns).",
+              "doc": "DataFrame of constraints, dispatched on `kind=`.\n\n`kind` selects the constraint family — `\"regular\"`, `\"indicator\"`,\n`\"one_hot\"`, or `\"sos1\"`. The DataFrame is indexed by the kind-\nqualified id column (`{kind}_constraint_id`).\n\n`include` selects which optional column families to fold in. It\naccepts a sequence of `\"label\"` / `\"parameters\"` /\n`\"removed_reason\"`; passing `None` (the default) yields the\nv2-equivalent shape (`label` + `parameters`). `\"removed_reason\"`\nis a unit flag that gates both the `removed_reason` column and the\n`removed_reason.{key}` parameter columns together.\n\n`removed=False` (default) returns active constraints only.\n`removed=True` returns active + removed rows in the same DataFrame\nand auto-sets `\"removed_reason\"` so removed rows are\ndistinguishable (active rows have NA in the reason columns).",
               "signatures": [
                 {
                   "parameters": [
@@ -16414,8 +16414,8 @@
               "deprecated": null
             },
             {
-              "name": "variable_metadata_df",
-              "doc": "Decision-variable metadata DataFrame (id-indexed wide format).\n\nColumns: `name`, `subscripts`, `description`. Index column =\n`variable_id`.",
+              "name": "variable_labels_df",
+              "doc": "Decision-variable modeling-label DataFrame (id-indexed wide format).\n\nColumns: `name`, `subscripts`, `description`. Index column =\n`variable_id`.",
               "signatures": [
                 {
                   "parameters": [],
@@ -16520,7 +16520,7 @@
             },
             {
               "name": "constraints",
-              "doc": "Dict of all active constraints in the instance keyed by their IDs.\n\nEach value is an {class}`~ommx.v1.AttachedConstraint`: a write-through\nhandle whose getters read from this instance's SoA store and whose\nmetadata setters write back through to it. Use\n{meth}`~ommx.v1.AttachedConstraint.detach` to materialize a\n{class}`~ommx.v1.Constraint` snapshot if you need an independent copy.",
+              "doc": "Dict of all active constraints in the instance keyed by their IDs.\n\nEach value is an {class}`~ommx.v1.AttachedConstraint`: a write-through\nhandle whose getters read from this instance's SoA store and whose\ncontext setters write back through to it. Use\n{meth}`~ommx.v1.AttachedConstraint.detach` to materialize a\n{class}`~ommx.v1.Constraint` snapshot if you need an independent copy.",
               "type_": {
                 "display": "dict[int, AttachedConstraint]",
                 "link_target": null,
@@ -16591,7 +16591,7 @@
             },
             {
               "name": "decision_variables",
-              "doc": "List of all decision variables in the instance sorted by their IDs.\n\nReturns a list of {class}`~ommx.v1.AttachedDecisionVariable` write-through\nhandles. Each handle reads its kind / bound / metadata live from this\ninstance's SoA store and writes metadata mutations back through to it.\nHandles also participate in arithmetic to build expressions\n(`x + y`, `2 * x` etc.) — only their id is consumed for that, no host\nborrow is taken. Call\n{meth}`~ommx.v1.AttachedDecisionVariable.detach` if you need an\nindependent {class}`~ommx.v1.DecisionVariable` snapshot.",
+              "doc": "List of all decision variables in the instance sorted by their IDs.\n\nReturns a list of {class}`~ommx.v1.AttachedDecisionVariable` write-through\nhandles. Each handle reads its kind / bound / label live from this\ninstance's SoA store and writes label updates back through to it.\nHandles also participate in arithmetic to build expressions\n(`x + y`, `2 * x` etc.) — only their id is consumed for that, no host\nborrow is taken. Call\n{meth}`~ommx.v1.AttachedDecisionVariable.detach` if you need an\nindependent {class}`~ommx.v1.DecisionVariable` snapshot.",
               "type_": {
                 "display": "list[AttachedDecisionVariable]",
                 "link_target": null,
@@ -16625,7 +16625,7 @@
             },
             {
               "name": "indicator_constraints",
-              "doc": "Dict of all active indicator constraints in the instance keyed by\ntheir IDs.\n\nEach value is an {class}`~ommx.v1.AttachedIndicatorConstraint`: a\nwrite-through handle whose getters read from this instance's SoA\nstore and whose metadata setters write back through to it.",
+              "doc": "Dict of all active indicator constraints in the instance keyed by\ntheir IDs.\n\nEach value is an {class}`~ommx.v1.AttachedIndicatorConstraint`: a\nwrite-through handle whose getters read from this instance's SoA\nstore and whose context setters write back through to it.",
               "type_": {
                 "display": "dict[int, AttachedIndicatorConstraint]",
                 "link_target": null,
@@ -16746,7 +16746,7 @@
             },
             {
               "name": "one_hot_constraints",
-              "doc": "Dict of all active one-hot constraints in the instance keyed by their IDs.\n\nEach value is an {class}`~ommx.v1.AttachedOneHotConstraint`: a\nwrite-through handle whose getters read from this instance's SoA\nstore and whose metadata setters write back through to it.",
+              "doc": "Dict of all active one-hot constraints in the instance keyed by their IDs.\n\nEach value is an {class}`~ommx.v1.AttachedOneHotConstraint`: a\nwrite-through handle whose getters read from this instance's SoA\nstore and whose context setters write back through to it.",
               "type_": {
                 "display": "dict[int, AttachedOneHotConstraint]",
                 "link_target": null,
@@ -16884,7 +16884,7 @@
             },
             {
               "name": "sos1_constraints",
-              "doc": "Dict of all active SOS1 constraints in the instance keyed by their IDs.\n\nEach value is an {class}`~ommx.v1.AttachedSos1Constraint`: a\nwrite-through handle whose getters read from this instance's SoA\nstore and whose metadata setters write back through to it.",
+              "doc": "Dict of all active SOS1 constraints in the instance keyed by their IDs.\n\nEach value is an {class}`~ommx.v1.AttachedSos1Constraint`: a\nwrite-through handle whose getters read from this instance's SoA\nstore and whose context setters write back through to it.",
               "type_": {
                 "display": "dict[int, AttachedSos1Constraint]",
                 "link_target": null,
@@ -18193,7 +18193,7 @@
         {
           "kind": "Class",
           "name": "NamedFunction",
-          "doc": "NamedFunction wrapper for Python.\n\nHolds the Rust `NamedFunction` plus an owned snapshot of its metadata\n(`name` / `subscripts` / `parameters` / `description`). The metadata\nstore lives at the host (`Instance` / `Solution` / `SampleSet`) level;\nwhen a wrapper is created via a host accessor, the host snapshots its\nstore into the second tuple slot. Mutations on a wrapper do NOT\npropagate back to the host — re-insert via `Instance.from_components`\n(or equivalent) to apply changes. Same shape as `Constraint` /\n`DecisionVariable` after PR #843.",
+          "doc": "NamedFunction wrapper for Python.\n\nHolds the Rust `NamedFunction` plus an owned snapshot of its label\n(`name` / `subscripts` / `parameters` / `description`). The label\nstore lives at the host (`Instance` / `Solution` / `SampleSet`) level;\nwhen a wrapper is created via a host accessor, the host snapshots its\nstore into the second tuple slot. Mutations on a wrapper do NOT\npropagate back to the host — re-insert via `Instance.from_components`\n(or equivalent) to apply changes. Same shape as `Constraint` /\n`DecisionVariable` after PR #843.",
           "bases": [],
           "methods": [
             {
@@ -18954,7 +18954,7 @@
             },
             {
               "name": "__new__",
-              "doc": "Create a new one-hot constraint.\n\n**Args:**\n\n- `variables`: List of binary decision variable IDs (exactly one must be 1)\n- `name` / `subscripts` / `description` / `parameters`: Optional\n  metadata. Drained into the host's SoA store on insertion.",
+              "doc": "Create a new one-hot constraint.\n\n**Args:**\n\n- `variables`: List of binary decision variable IDs (exactly one must be 1)\n- `name` / `subscripts` / `description` / `parameters`: Optional\n  context. Drained into the host's SoA store on insertion.",
               "signatures": [
                 {
                   "parameters": [
@@ -20309,7 +20309,7 @@
             },
             {
               "name": "add_constraint",
-              "doc": "Add a regular constraint to this parametric instance.\n\nPicks an unused {class}`~ommx.v1.ConstraintID`, drains the wrapper's\nmetadata snapshot into this parametric instance's SoA store, and\nreturns an {class}`~ommx.v1.AttachedConstraint` bound to the new id.\nThe input {class}`~ommx.v1.Constraint` is not mutated; subsequent\nwrites that should land on this parametric instance must go through\nthe returned handle.\n\nRaises {class}`ValueError` if the constraint references an id that is\nneither a defined decision variable nor a defined parameter, or if it\nreferences an id currently used as a substitution-dependency key.",
+              "doc": "Add a regular constraint to this parametric instance.\n\nPicks an unused {class}`~ommx.v1.ConstraintID`, drains the wrapper's\ncontext snapshot into this parametric instance's SoA store, and\nreturns an {class}`~ommx.v1.AttachedConstraint` bound to the new id.\nThe input {class}`~ommx.v1.Constraint` is not mutated; subsequent\nwrites that should land on this parametric instance must go through\nthe returned handle.\n\nRaises {class}`ValueError` if the constraint references an id that is\nneither a defined decision variable nor a defined parameter, or if it\nreferences an id currently used as a substitution-dependency key.",
               "signatures": [
                 {
                   "parameters": [
@@ -20335,7 +20335,7 @@
             },
             {
               "name": "add_decision_variable",
-              "doc": "Add a decision variable to this parametric instance. Returns an\n{class}`~ommx.v1.AttachedDecisionVariable` bound to the variable's\nid — a write-through handle for further metadata mutation.",
+              "doc": "Add a decision variable to this parametric instance. Returns an\n{class}`~ommx.v1.AttachedDecisionVariable` bound to the variable's\nid — a write-through handle for further label updates.",
               "signatures": [
                 {
                   "parameters": [
@@ -20361,7 +20361,7 @@
             },
             {
               "name": "add_indicator_constraint",
-              "doc": "Add an indicator constraint to this parametric instance.\n\nPicks an unused {class}`~ommx.v1.IndicatorConstraintID`, drains the\nwrapper's metadata snapshot into this parametric instance's SoA\nstore, and returns an\n{class}`~ommx.v1.AttachedIndicatorConstraint` bound to the new id.\n\nRaises {class}`ValueError` if the constraint references an id that\nis neither a defined decision variable nor a defined parameter, or\nif it references an id currently used as a substitution-dependency\nkey.",
+              "doc": "Add an indicator constraint to this parametric instance.\n\nPicks an unused {class}`~ommx.v1.IndicatorConstraintID`, drains the\nwrapper's context snapshot into this parametric instance's SoA\nstore, and returns an\n{class}`~ommx.v1.AttachedIndicatorConstraint` bound to the new id.\n\nRaises {class}`ValueError` if the constraint references an id that\nis neither a defined decision variable nor a defined parameter, or\nif it references an id currently used as a substitution-dependency\nkey.",
               "signatures": [
                 {
                   "parameters": [
@@ -20560,8 +20560,8 @@
               "deprecated": null
             },
             {
-              "name": "constraint_metadata_df",
-              "doc": "Constraint metadata DataFrame (id-indexed). See\n{meth}`ommx.v1.Instance.constraint_metadata_df` for column / `kind=`\nsemantics.",
+              "name": "constraint_context_df",
+              "doc": "Constraint context DataFrame (id-indexed). See\n{meth}`ommx.v1.Instance.constraint_context_df` for column / `kind=`\nsemantics.",
               "signatures": [
                 {
                   "parameters": [
@@ -21533,8 +21533,8 @@
               "deprecated": null
             },
             {
-              "name": "variable_metadata_df",
-              "doc": "Decision-variable metadata DataFrame (id-indexed).",
+              "name": "variable_labels_df",
+              "doc": "Decision-variable modeling-label DataFrame (id-indexed).",
               "signatures": [
                 {
                   "parameters": [],
@@ -21643,7 +21643,7 @@
             },
             {
               "name": "constraints",
-              "doc": "Dict of all active constraints in the instance keyed by their IDs.\n\nEach value is an {class}`~ommx.v1.AttachedConstraint`: a write-through\nhandle whose getters read from this parametric instance's SoA store\nand whose metadata setters write back through to it. Use\n{meth}`~ommx.v1.AttachedConstraint.detach` to materialize a\n{class}`~ommx.v1.Constraint` snapshot if you need an independent copy.",
+              "doc": "Dict of all active constraints in the instance keyed by their IDs.\n\nEach value is an {class}`~ommx.v1.AttachedConstraint`: a write-through\nhandle whose getters read from this parametric instance's SoA store\nand whose context setters write back through to it. Use\n{meth}`~ommx.v1.AttachedConstraint.detach` to materialize a\n{class}`~ommx.v1.Constraint` snapshot if you need an independent copy.",
               "type_": {
                 "display": "dict[int, AttachedConstraint]",
                 "link_target": null,
@@ -21748,7 +21748,7 @@
             },
             {
               "name": "indicator_constraints",
-              "doc": "Dict of all active indicator constraints in the parametric instance\nkeyed by their IDs.\n\nEach value is an {class}`~ommx.v1.AttachedIndicatorConstraint`: a\nwrite-through handle whose getters read from this parametric\ninstance's SoA store and whose metadata setters write back through\nto it.",
+              "doc": "Dict of all active indicator constraints in the parametric instance\nkeyed by their IDs.\n\nEach value is an {class}`~ommx.v1.AttachedIndicatorConstraint`: a\nwrite-through handle whose getters read from this parametric\ninstance's SoA store and whose context setters write back through\nto it.",
               "type_": {
                 "display": "dict[int, AttachedIndicatorConstraint]",
                 "link_target": null,
@@ -24428,7 +24428,7 @@
         {
           "kind": "Class",
           "name": "RemovedConstraint",
-          "doc": "RemovedConstraint wrapper for Python.\n\nHolds the inner `Constraint`, a snapshot of its metadata, and the removal\nreason. As with [`Constraint`], the metadata snapshot does not propagate\nback to the originating instance — it is read-only context for inspection.",
+          "doc": "RemovedConstraint wrapper for Python.\n\nHolds the inner `Constraint`, a snapshot of its context, and the removal\nreason. As with [`Constraint`], the context snapshot does not propagate\nback to the originating instance — it is read-only context for inspection.",
           "bases": [],
           "methods": [
             {
@@ -25179,7 +25179,7 @@
         {
           "kind": "Class",
           "name": "SampleSet",
-          "doc": "The output of sampling-based optimization algorithms, e.g. simulated annealing (SA).\n\n- Similar to `Solution` rather than the raw `State` message.\n  This class contains the sampled values of decision variables with the objective value, constraint violations,\n  feasibility, and metadata of constraints and decision variables.\n- This class is usually created via `Instance.evaluate_samples`.\n\n# Examples\n\nLet's consider a simple optimization problem:\n\nmaximize x_1 + 2 x_2 + 3 x_3\nsubject to x_1 + x_2 + x_3 = 1\nx_1, x_2, x_3 in {0, 1}\n\n```python\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=x[0] + 2*x[1] + 3*x[2],\n...     constraints=[sum(x) == 1],\n...     sense=Instance.MAXIMIZE,\n... )\n```\n\nwith three samples:\n\n```python\n>>> samples = {\n...     0: {0: 1, 1: 0, 2: 0},  # x1 = 1, x2 = x3 = 0\n...     1: {0: 0, 1: 0, 2: 1},  # x3 = 1, x1 = x2 = 0\n...     2: {0: 1, 1: 1, 2: 0},  # x1 = x2 = 1, x3 = 0 (infeasible)\n... } # ^ sample ID\n```\n\nNote that this will be done by sampling-based solvers, but we do it manually here.\nWe can evaluate the samples via `Instance.evaluate_samples`:\n\n```python\n>>> sample_set = instance.evaluate_samples(samples)\n>>> sample_set.summary  # doctest: +NORMALIZE_WHITESPACE\n           objective  feasible\nsample_id\n1                3.0      True\n0                1.0      True\n2                3.0     False\n```\n\nThe `summary` attribute shows the objective value, feasibility of each sample.\nNote that this `feasible` column represents the feasibility of the original constraints, not the relaxed constraints.\nYou can get each sample by `get` as a `Solution` format:\n\n```python\n>>> solution = sample_set.get(sample_id=0)\n>>> solution.objective\n1.0\n```\n\n`best_feasible` returns the best feasible sample, i.e. the largest objective value among feasible samples:\n\n```python\n>>> solution = sample_set.best_feasible\n>>> solution.objective\n3.0\n```\n\nOf course, the sample of smallest objective value is returned for minimization problems.",
+          "doc": "The output of sampling-based optimization algorithms, e.g. simulated annealing (SA).\n\n- Similar to `Solution` rather than the raw `State` message.\n  This class contains the sampled values of decision variables with the objective value, constraint violations,\n  feasibility, and modeling labels/context of constraints and decision variables.\n- This class is usually created via `Instance.evaluate_samples`.\n\n# Examples\n\nLet's consider a simple optimization problem:\n\nmaximize x_1 + 2 x_2 + 3 x_3\nsubject to x_1 + x_2 + x_3 = 1\nx_1, x_2, x_3 in {0, 1}\n\n```python\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=x[0] + 2*x[1] + 3*x[2],\n...     constraints=[sum(x) == 1],\n...     sense=Instance.MAXIMIZE,\n... )\n```\n\nwith three samples:\n\n```python\n>>> samples = {\n...     0: {0: 1, 1: 0, 2: 0},  # x1 = 1, x2 = x3 = 0\n...     1: {0: 0, 1: 0, 2: 1},  # x3 = 1, x1 = x2 = 0\n...     2: {0: 1, 1: 1, 2: 0},  # x1 = x2 = 1, x3 = 0 (infeasible)\n... } # ^ sample ID\n```\n\nNote that this will be done by sampling-based solvers, but we do it manually here.\nWe can evaluate the samples via `Instance.evaluate_samples`:\n\n```python\n>>> sample_set = instance.evaluate_samples(samples)\n>>> sample_set.summary  # doctest: +NORMALIZE_WHITESPACE\n           objective  feasible\nsample_id\n1                3.0      True\n0                1.0      True\n2                3.0     False\n```\n\nThe `summary` attribute shows the objective value, feasibility of each sample.\nNote that this `feasible` column represents the feasibility of the original constraints, not the relaxed constraints.\nYou can get each sample by `get` as a `Solution` format:\n\n```python\n>>> solution = sample_set.get(sample_id=0)\n>>> solution.objective\n1.0\n```\n\n`best_feasible` returns the best feasible sample, i.e. the largest objective value among feasible samples:\n\n```python\n>>> solution = sample_set.best_feasible\n>>> solution.objective\n3.0\n```\n\nOf course, the sample of smallest objective value is returned for minimization problems.",
           "bases": [],
           "methods": [
             {
@@ -25321,8 +25321,8 @@
               "deprecated": null
             },
             {
-              "name": "constraint_metadata_df",
-              "doc": "Constraint metadata DataFrame (id-indexed). See\n{meth}`ommx.v1.Instance.constraint_metadata_df` for column / `kind=`\nsemantics. Reads from the sampled collection's metadata store.",
+              "name": "constraint_context_df",
+              "doc": "Constraint context DataFrame (id-indexed). See\n{meth}`ommx.v1.Instance.constraint_context_df` for column / `kind=`\nsemantics. Reads from the sampled collection's context store.",
               "signatures": [
                 {
                   "parameters": [
@@ -26225,8 +26225,8 @@
               "deprecated": null
             },
             {
-              "name": "variable_metadata_df",
-              "doc": "Decision-variable metadata DataFrame (id-indexed).",
+              "name": "variable_labels_df",
+              "doc": "Decision-variable modeling-label DataFrame (id-indexed).",
               "signatures": [
                 {
                   "parameters": [],
@@ -26980,7 +26980,7 @@
         {
           "kind": "Class",
           "name": "SampledNamedFunction",
-          "doc": "SampledNamedFunction wrapper for Python.\n\nHolds the Rust `SampledNamedFunction` plus an owned snapshot of its\nmetadata. See `NamedFunction` for the snapshot-model rationale.",
+          "doc": "SampledNamedFunction wrapper for Python.\n\nHolds the Rust `SampledNamedFunction` plus an owned snapshot of its\nlabel. See `NamedFunction` for the snapshot-model rationale.",
           "bases": [],
           "methods": [
             {
@@ -27542,8 +27542,8 @@
               "deprecated": null
             },
             {
-              "name": "constraint_metadata_df",
-              "doc": "Constraint metadata DataFrame (id-indexed). See\n{meth}`ommx.v1.Instance.constraint_metadata_df` for column / `kind=`\nsemantics. Reads from the evaluated collection's metadata store.",
+              "name": "constraint_context_df",
+              "doc": "Constraint context DataFrame (id-indexed). See\n{meth}`ommx.v1.Instance.constraint_context_df` for column / `kind=`\nsemantics. Reads from the evaluated collection's context store.",
               "signatures": [
                 {
                   "parameters": [
@@ -28374,8 +28374,8 @@
               "deprecated": null
             },
             {
-              "name": "variable_metadata_df",
-              "doc": "Decision-variable metadata DataFrame (id-indexed).",
+              "name": "variable_labels_df",
+              "doc": "Decision-variable modeling-label DataFrame (id-indexed).",
               "signatures": [
                 {
                   "parameters": [],
@@ -28869,7 +28869,7 @@
             },
             {
               "name": "__new__",
-              "doc": "Create a new SOS1 constraint.\n\n**Args:**\n\n- `variables`: List of decision variable IDs (at most one can be non-zero)\n- `name` / `subscripts` / `description` / `parameters`: Optional\n  metadata. Drained into the host's SoA store on insertion.",
+              "doc": "Create a new SOS1 constraint.\n\n**Args:**\n\n- `variables`: List of decision variable IDs (at most one can be non-zero)\n- `name` / `subscripts` / `description` / `parameters`: Optional\n  context. Drained into the host's SoA store on insertion.",
               "signatures": [
                 {
                   "parameters": [

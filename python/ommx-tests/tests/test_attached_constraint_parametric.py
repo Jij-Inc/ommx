@@ -42,9 +42,9 @@ def _make_constraint(name: str | None = "balance") -> Constraint:
     )
 
 
-def test_add_constraint_returns_attached_with_drained_metadata():
+def test_add_constraint_returns_attached_with_drained_context():
     """ParametricInstance.add_constraint mirrors Instance: returns an
-    AttachedConstraint reading the staged metadata."""
+    AttachedConstraint reading the staged context."""
     parametric = _empty_parametric_instance()
     snapshot = _make_constraint(name="balance")
 

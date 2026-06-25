@@ -70,9 +70,9 @@ impl Instance {
             let binary = self.new_binary();
             let binary_id = binary.id();
             let _ = binary;
-            let metadata = self.variable_metadata_mut();
-            metadata.set_name(binary_id, "ommx.log_encode");
-            metadata.set_subscripts(binary_id, vec![id.into_inner() as i64, i as i64]);
+            let labels = self.variable_labels_mut();
+            labels.set_name(binary_id, "ommx.log_encode");
+            labels.set_subscripts(binary_id, vec![id.into_inner() as i64, i as i64]);
             linear.add_term(binary_id.into(), *coefficient)?;
         }
         let f = linear.clone().into();
@@ -108,8 +108,8 @@ mod tests {
         // The original variable is still present but substituted
         assert!(instance.decision_variables.contains_key(&id));
 
-        // Check binary variables were created with correct metadata
-        let store = instance.variable_metadata();
+        // Check binary variables were created with correct labels
+        let store = instance.variable_labels();
         let binary_vars: Vec<_> = instance
             .decision_variables
             .iter()

@@ -42,7 +42,7 @@ impl From<Instance> for ParametricInstance {
             sense,
             objective,
             decision_variables,
-            variable_metadata,
+            variable_labels,
             constraint_collection,
             indicator_constraint_collection,
             one_hot_constraint_collection,
@@ -51,7 +51,7 @@ impl From<Instance> for ParametricInstance {
             description,
             annotations,
             named_functions,
-            named_function_metadata,
+            named_function_labels,
             ..
         }: Instance,
     ) -> Self {
@@ -60,7 +60,7 @@ impl From<Instance> for ParametricInstance {
             objective,
             decision_variables,
             parameters: BTreeMap::default(),
-            variable_metadata,
+            variable_labels,
             constraint_collection,
             indicator_constraint_collection,
             one_hot_constraint_collection,
@@ -69,7 +69,7 @@ impl From<Instance> for ParametricInstance {
             description,
             annotations,
             named_functions,
-            named_function_metadata,
+            named_function_labels,
         }
     }
 }
@@ -113,7 +113,7 @@ impl ParametricInstance {
         // substitution applied — otherwise the resulting `Instance` would
         // carry dangling parameter IDs in `removed_constraints`, violating
         // its own invariants.
-        let (mut constraints, mut removed_constraints, constraint_metadata) =
+        let (mut constraints, mut removed_constraints, constraint_context) =
             self.constraint_collection.into_parts();
         for (_, constraint) in constraints.iter_mut() {
             constraint.stage.function.partial_evaluate(&state, atol)?;
@@ -125,7 +125,7 @@ impl ParametricInstance {
         // Indicator constraint function bodies may also reference parameter
         // IDs (the structural indicator variable does not, by construction).
         // Apply the same substitution to active and removed maps.
-        let (mut indicator_active, mut indicator_removed, indicator_metadata) =
+        let (mut indicator_active, mut indicator_removed, indicator_context) =
             self.indicator_constraint_collection.into_parts();
         for (_, ic) in indicator_active.iter_mut() {
             ic.stage.function.partial_evaluate(&state, atol)?;
@@ -150,16 +150,16 @@ impl ParametricInstance {
             sense: self.sense,
             objective,
             decision_variables: self.decision_variables,
-            variable_metadata: self.variable_metadata,
-            constraint_collection: ConstraintCollection::with_metadata(
+            variable_labels: self.variable_labels,
+            constraint_collection: ConstraintCollection::with_context(
                 constraints,
                 removed_constraints,
-                constraint_metadata,
+                constraint_context,
             )?,
-            indicator_constraint_collection: ConstraintCollection::with_metadata(
+            indicator_constraint_collection: ConstraintCollection::with_context(
                 indicator_active,
                 indicator_removed,
-                indicator_metadata,
+                indicator_context,
             )?,
             // OneHot / SOS1 constraints are purely structural — their
             // variable sets are always real decision variables (the
@@ -169,7 +169,7 @@ impl ParametricInstance {
             one_hot_constraint_collection: self.one_hot_constraint_collection,
             sos1_constraint_collection: self.sos1_constraint_collection,
             named_functions,
-            named_function_metadata: self.named_function_metadata,
+            named_function_labels: self.named_function_labels,
             decision_variable_dependency,
             parameters: Some(parameters),
             description: self.description,

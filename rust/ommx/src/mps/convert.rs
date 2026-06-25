@@ -7,8 +7,8 @@ use super::{
 };
 use crate::{decision_variable::Kind as DecisionVariableKind, Coefficient, Quadratic};
 use crate::{
-    v1, Bound, Constraint, ConstraintID, DecisionVariable, Equality, Function, Instance, Sense,
-    VariableID,
+    v1, Bound, Constraint, ConstraintContext, ConstraintID, DecisionVariable, Equality, Function,
+    Instance, ModelingLabel, Sense, VariableID,
 };
 
 type ConvertedDecisionVariables = (
@@ -30,13 +30,28 @@ pub fn convert(mps: Mps) -> crate::Result<Instance> {
 
     let mut instance = Instance::new(sense, objective, decision_variables, constraints)?;
 
-    // Drain name metadata into the SoA stores; per-element metadata storage
-    // was retired in v3.
+    // Drain MPS names as modeling labels through the instance owner boundary;
+    // per-element label storage was retired in v3.
     for (id, name) in var_names {
-        instance.variable_metadata_mut().set_name(id, name);
+        instance.set_variable_label(
+            id,
+            ModelingLabel {
+                name: Some(name),
+                ..Default::default()
+            },
+        )?;
     }
     for (id, name) in constraint_names {
-        instance.constraint_metadata_mut().set_name(id, name);
+        instance.set_constraint_context(
+            id,
+            ConstraintContext {
+                label: ModelingLabel {
+                    name: Some(name),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+        )?;
     }
 
     instance.description = convert_description(&mps);

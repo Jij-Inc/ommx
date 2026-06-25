@@ -253,7 +253,7 @@ impl Instance {
             .active_mut()
             .insert(new_id, constraint);
         self.constraint_collection
-            .metadata_mut()
+            .context_mut()
             .push_provenance(new_id, Provenance::IndicatorConstraint(indicator_id));
         new_id
     }
@@ -335,7 +335,7 @@ mod tests {
         assert_eq!(
             instance
                 .constraint_collection()
-                .metadata()
+                .context()
                 .provenance(new_ids[0]),
             &[Provenance::IndicatorConstraint(
                 IndicatorConstraintID::from(7)
