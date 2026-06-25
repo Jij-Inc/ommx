@@ -96,12 +96,13 @@ pub enum SampleSetError {
 /// Invariants
 /// -----------
 /// - The keys of [`Self::decision_variables`] match the `id()` of their values.
-/// - The keys of [`Self::constraints`] match the `id()` of their values.
 /// - The keys of [`Self::named_functions`] match the `id()` of their values.
-/// - All [`Self::decision_variables`], [`Self::objectives`], [`Self::constraints`], and [`Self::named_functions`] have the same sample ID set.
-/// - [`Self::feasible`] and [`Self::feasible_relaxed`] are computed from [`Self::constraints`]:
-///   - `feasible`: true if all constraints are satisfied for that sample
-///   - `feasible_relaxed`: true if all non-removed constraints (where `removed_reason.is_none()`) are satisfied
+/// - All [`Self::decision_variables`], [`Self::objectives`], sampled constraint
+///   collections, and [`Self::named_functions`] have the same sample ID set.
+/// - [`Self::feasible`] and [`Self::feasible_relaxed`] are computed from all
+///   sampled constraint collections:
+///   - `feasible`: true if all constraints are satisfied for that sample.
+///   - `feasible_relaxed`: true if all non-removed constraints are satisfied.
 #[derive(Debug, Clone, Getters)]
 pub struct SampleSet {
     #[getset(get = "pub")]
@@ -263,7 +264,7 @@ impl SampleSet {
                 .evaluated_constraints_collection(
                     EvaluatedCollection::with_metadata(
                         evaluated_constraints,
-                        BTreeMap::new(),
+                        self.constraints.removed_reasons().clone(),
                         self.constraints.metadata().clone(),
                     )
                     .expect("SampleSet sidecars must reference constraints present in this sample"),
@@ -271,7 +272,7 @@ impl SampleSet {
                 .evaluated_indicator_constraints_collection(
                     EvaluatedCollection::with_metadata(
                         evaluated_indicator_constraints,
-                        BTreeMap::new(),
+                        self.indicator_constraints.removed_reasons().clone(),
                         self.indicator_constraints.metadata().clone(),
                     )
                     .expect("SampleSet sidecars must reference constraints present in this sample"),
@@ -279,7 +280,7 @@ impl SampleSet {
                 .evaluated_one_hot_constraints_collection(
                     EvaluatedCollection::with_metadata(
                         evaluated_one_hot_constraints,
-                        BTreeMap::new(),
+                        self.one_hot_constraints.removed_reasons().clone(),
                         self.one_hot_constraints.metadata().clone(),
                     )
                     .expect("SampleSet sidecars must reference constraints present in this sample"),
@@ -287,7 +288,7 @@ impl SampleSet {
                 .evaluated_sos1_constraints_collection(
                     EvaluatedCollection::with_metadata(
                         evaluated_sos1_constraints,
-                        BTreeMap::new(),
+                        self.sos1_constraints.removed_reasons().clone(),
                         self.sos1_constraints.metadata().clone(),
                     )
                     .expect("SampleSet sidecars must reference constraints present in this sample"),
@@ -855,13 +856,13 @@ mod tests {
     }
 
     /// Regression: `SampleSet::get(sid)` must propagate variable modeling
-    /// labels and constraint label/provenance sidecars into the returned
-    /// per-sample `Solution`. A previous version threaded `variable_metadata`
-    /// only and rebuilt the constraint collections via
+    /// labels, constraint label/provenance sidecars, and removed reasons into
+    /// the returned per-sample `Solution`. A previous version threaded
+    /// `variable_metadata` only and rebuilt the constraint collections via
     /// `EvaluatedCollection::new(map, BTreeMap::new())`, silently discarding
-    /// constraint labels and provenance for sampled solutions.
+    /// constraint labels, provenance, and relaxed-state semantics.
     #[test]
-    fn test_sample_set_get_preserves_metadata() {
+    fn test_sample_set_get_preserves_sidecars() {
         let var_id = VariableID::from(1);
         let cid = ConstraintID::from(10);
         let sample_id = SampleID::from(0);
@@ -884,9 +885,9 @@ mod tests {
         let evaluated_per_sample = EvaluatedConstraint {
             equality: Equality::EqualToZero,
             stage: EvaluatedData {
-                evaluated_value: 0.0,
+                evaluated_value: 1.0,
                 dual_variable: None,
-                feasible: true,
+                feasible: false,
                 used_decision_variable_ids: [var_id].into_iter().collect(),
             },
         };
@@ -895,7 +896,7 @@ mod tests {
             .append([sample_id], evaluated_per_sample.stage.evaluated_value)
             .unwrap();
         let mut feasible = BTreeMap::new();
-        feasible.insert(sample_id, true);
+        feasible.insert(sample_id, false);
         let sampled_constraint = crate::Constraint {
             equality: Equality::EqualToZero,
             stage: crate::constraint::SampledData {
@@ -912,9 +913,13 @@ mod tests {
         let mut constraint_metadata = crate::ConstraintMetadataStore::<ConstraintID>::default();
         constraint_metadata.set_name(cid, "balance");
         constraint_metadata.set_description(cid, "demand-balance row");
+        let removed_reason = crate::RemovedReason {
+            reason: "relaxed for test".to_string(),
+            parameters: Default::default(),
+        };
         let constraints = crate::constraint_type::SampledCollection::with_metadata(
             constraints_map,
-            BTreeMap::new(),
+            BTreeMap::from([(cid, removed_reason)]),
             constraint_metadata,
         )
         .unwrap();
@@ -931,7 +936,13 @@ mod tests {
             .build()
             .unwrap();
 
+        assert_eq!(sample_set.is_sample_feasible(sample_id), Some(false));
+        assert_eq!(sample_set.is_sample_feasible_relaxed(sample_id), Some(true));
+
         let solution = sample_set.get(sample_id).unwrap();
+        assert!(!solution.feasible());
+        assert!(solution.feasible_relaxed());
+        assert!(solution.evaluated_constraints().is_removed(&cid));
         assert_eq!(solution.variable_metadata().name(var_id), Some("x"));
         assert_eq!(solution.variable_metadata().subscripts(var_id), &[0]);
         let constraint_meta = solution.evaluated_constraints().metadata();
