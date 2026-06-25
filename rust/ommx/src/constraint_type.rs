@@ -11,9 +11,10 @@
 //!
 //! 1. Define a new struct `NewConstraint<S: Stage<Self> = Created>` with the
 //!    type's intrinsic fields (`equality`, `stage`, plus anything specific to
-//!    the new type). **Do not add a `metadata` field**: auxiliary metadata
-//!    (`name`, `subscripts`, `parameters`, `description`, `provenance`) lives
-//!    on the enclosing `ConstraintCollection<NewConstraint>`'s
+//!    the new type). **Do not add a `metadata` field**: modeling labels
+//!    (`name`, `subscripts`, `parameters`, `description`) and constraint
+//!    transformation provenance live on the enclosing
+//!    `ConstraintCollection<NewConstraint>`'s
 //!    [`ConstraintMetadataStore`](crate::ConstraintMetadataStore) keyed by id.
 //!    The constraint's `ConstraintID` is also held by the collection rather
 //!    than the struct itself.
@@ -36,7 +37,7 @@ use crate::{
     },
     v1, ATol, Constraint, Evaluate, SampleID, SampleIDSet, VariableIDSet,
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 fn validate_no_key_overlap<ID, L, R>(
     left: &BTreeMap<ID, L>,
@@ -72,6 +73,26 @@ where
     Ok(())
 }
 
+fn validate_metadata_reference_ids<ID>(
+    metadata: &ConstraintMetadataStore<ID>,
+    owned_ids: &BTreeSet<ID>,
+) -> crate::Result<()>
+where
+    ID: IDType,
+{
+    if let Some(id) = metadata
+        .ids()
+        .into_iter()
+        .find(|id| !owned_ids.contains(id))
+    {
+        crate::bail!(
+            { ?id },
+            "Constraint label/provenance references unknown constraint ID {id:?}",
+        );
+    }
+    Ok(())
+}
+
 /// Return the sample IDs carried by a sample-keyed side map.
 ///
 /// Sampled stage data is split across multiple per-sample side maps
@@ -94,7 +115,7 @@ pub(crate) fn sample_ids_from_map<V>(map: &BTreeMap<SampleID, V>) -> SampleIDSet
 /// `ConstraintMetadataStore<ID>` and `ConstraintType::ID`).
 ///
 /// `SampleID` is intentionally excluded: it is a sample-set index, not
-/// a metadata-bearing entity, and does not currently impl
+/// a modeling-label-bearing entity, and does not currently impl
 /// `LogicalMemoryProfile`.
 ///
 /// A blanket impl makes any concrete type satisfying the bounds an
@@ -244,12 +265,11 @@ impl ConstraintType for Constraint {
 /// Removed constraints are stored as `(T::Created, RemovedReason)` pairs.
 /// The `RemovedReason` is collection-level metadata, not part of the constraint itself.
 ///
-/// Per-constraint auxiliary metadata (`name`, `subscripts`, `parameters`,
-/// `description`, `provenance`) is held by [`Self::metadata`] in a
-/// Struct-of-Arrays form keyed by `T::ID`. The store rides through to
-/// [`EvaluatedCollection`] / [`SampledCollection`] on evaluation, so the
-/// modeling, Solution, and SampleSet layers all read from one canonical
-/// metadata source per collection.
+/// Per-constraint modeling labels and transformation provenance are held by
+/// [`Self::metadata`] in Struct-of-Arrays form keyed by `T::ID`. The store
+/// rides through to [`EvaluatedCollection`] / [`SampledCollection`] on
+/// evaluation, so the modeling, Solution, and SampleSet layers all read from
+/// one canonical sidecar source per collection.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConstraintCollection<T: ConstraintType> {
     active: BTreeMap<T::ID, T::Created>,
@@ -290,9 +310,9 @@ impl<T: ConstraintType> ConstraintCollection<T> {
         })
     }
 
-    /// Construct a collection together with its metadata store. Used by the
-    /// parse boundary, where metadata for both active and removed entries is
-    /// drained from the per-element protobuf messages into a single store.
+    /// Construct a collection together with its label/provenance sidecar store.
+    /// Used by the parse boundary, where sidecars for both active and removed
+    /// entries are drained from per-element protobuf messages into one store.
     ///
     /// # Errors
     ///
@@ -308,6 +328,12 @@ impl<T: ConstraintType> ConstraintCollection<T> {
             "active constraints",
             "removed constraints",
         )?;
+        let owned_ids = active
+            .keys()
+            .chain(removed.keys())
+            .copied()
+            .collect::<BTreeSet<_>>();
+        validate_metadata_reference_ids(&metadata, &owned_ids)?;
         Ok(Self {
             active,
             removed,
@@ -315,16 +341,27 @@ impl<T: ConstraintType> ConstraintCollection<T> {
         })
     }
 
-    /// Access the per-constraint metadata store.
+    /// Access the per-constraint label/provenance store.
     pub fn metadata(&self) -> &ConstraintMetadataStore<T::ID> {
         &self.metadata
     }
 
-    /// Mutable access to the per-constraint metadata store. Used by setters
+    /// Mutable access to the per-constraint label/provenance store. Used by setters
     /// (e.g. `instance.add_name(id, ...)`) and by adapters that want to
     /// rewrite metadata in bulk.
     pub fn metadata_mut(&mut self) -> &mut ConstraintMetadataStore<T::ID> {
         &mut self.metadata
+    }
+
+    /// Validate that every label/provenance ID is owned by this collection.
+    pub fn validate_metadata_ids(&self) -> crate::Result<()> {
+        let owned_ids = self
+            .active
+            .keys()
+            .chain(self.removed.keys())
+            .copied()
+            .collect::<BTreeSet<_>>();
+        validate_metadata_reference_ids(&self.metadata, &owned_ids)
     }
 
     /// Access active constraints.
@@ -412,7 +449,7 @@ impl<T: ConstraintType> ConstraintCollection<T> {
         T::ID::from(next)
     }
 
-    /// Consume the collection and return the active map, removed map, and metadata store.
+    /// Consume the collection and return active entries, removed entries, and sidecars.
     #[allow(clippy::type_complexity)]
     pub fn into_parts(
         self,
@@ -519,8 +556,8 @@ impl<T: ConstraintType> Evaluate for ConstraintCollection<T> {
 /// This is the Solution-side counterpart of [`ConstraintCollection`],
 /// providing generic feasibility checks via [`EvaluatedConstraintBehavior`].
 ///
-/// Carries the source [`ConstraintCollection`]'s metadata store so that the
-/// Solution layer reads the same canonical metadata as the originating
+/// Carries the source [`ConstraintCollection`]'s label/provenance store so that
+/// the Solution layer reads the same canonical sidecars as the originating
 /// instance.
 #[derive(Debug, Clone, PartialEq)]
 pub struct EvaluatedCollection<T: ConstraintType> {
@@ -547,7 +584,7 @@ impl<T: ConstraintType> Default for EvaluatedCollection<T> {
 }
 
 impl<T: ConstraintType> EvaluatedCollection<T> {
-    /// Construct an evaluated collection without metadata.
+    /// Construct an evaluated collection without label/provenance sidecars.
     ///
     /// # Errors
     ///
@@ -565,9 +602,9 @@ impl<T: ConstraintType> EvaluatedCollection<T> {
         })
     }
 
-    /// Construct an evaluated collection together with its metadata store.
+    /// Construct an evaluated collection together with its label/provenance store.
     /// Used by [`ConstraintCollection::evaluate`] to thread the source
-    /// collection's metadata through unchanged.
+    /// collection's sidecars through unchanged.
     ///
     /// # Errors
     ///
@@ -579,6 +616,8 @@ impl<T: ConstraintType> EvaluatedCollection<T> {
         metadata: ConstraintMetadataStore<T::ID>,
     ) -> crate::Result<Self> {
         validate_removed_reasons_reference_entries(&constraints, &removed_reasons)?;
+        let owned_ids = constraints.keys().copied().collect::<BTreeSet<_>>();
+        validate_metadata_reference_ids(&metadata, &owned_ids)?;
         Ok(Self {
             constraints,
             removed_reasons,
@@ -605,17 +644,23 @@ impl<T: ConstraintType> EvaluatedCollection<T> {
         &self.removed_reasons
     }
 
-    /// Access the per-constraint metadata store.
+    /// Access the per-constraint label/provenance store.
     pub fn metadata(&self) -> &ConstraintMetadataStore<T::ID> {
         &self.metadata
     }
 
-    /// Mutable access to the per-constraint metadata store.
+    /// Mutable access to the per-constraint label/provenance store.
     pub fn metadata_mut(&mut self) -> &mut ConstraintMetadataStore<T::ID> {
         &mut self.metadata
     }
 
-    /// Consume and return constraints, removed reasons, and metadata store.
+    /// Validate that every label/provenance ID is owned by this collection.
+    pub fn validate_metadata_ids(&self) -> crate::Result<()> {
+        let owned_ids = self.constraints.keys().copied().collect::<BTreeSet<_>>();
+        validate_metadata_reference_ids(&self.metadata, &owned_ids)
+    }
+
+    /// Consume and return constraints, removed reasons, and sidecars.
     #[allow(clippy::type_complexity)]
     pub fn into_parts(
         self,
@@ -655,8 +700,8 @@ impl<T: ConstraintType> EvaluatedCollection<T> {
 /// This is the SampleSet-side counterpart of [`ConstraintCollection`],
 /// providing generic per-sample feasibility checks via [`SampledConstraintBehavior`].
 ///
-/// Carries the source [`ConstraintCollection`]'s metadata store so that the
-/// SampleSet layer reads the same canonical metadata as the originating
+/// Carries the source [`ConstraintCollection`]'s label/provenance store so that
+/// the SampleSet layer reads the same canonical sidecars as the originating
 /// instance.
 #[derive(Debug, Clone)]
 pub struct SampledCollection<T: ConstraintType> {
@@ -683,7 +728,7 @@ impl<T: ConstraintType> Default for SampledCollection<T> {
 }
 
 impl<T: ConstraintType> SampledCollection<T> {
-    /// Construct a sampled collection without metadata.
+    /// Construct a sampled collection without label/provenance sidecars.
     ///
     /// # Errors
     ///
@@ -701,9 +746,9 @@ impl<T: ConstraintType> SampledCollection<T> {
         })
     }
 
-    /// Construct a sampled collection together with its metadata store.
+    /// Construct a sampled collection together with its label/provenance store.
     /// Used by [`ConstraintCollection::evaluate_samples`] to thread the
-    /// source collection's metadata through unchanged.
+    /// source collection's sidecars through unchanged.
     ///
     /// # Errors
     ///
@@ -715,6 +760,8 @@ impl<T: ConstraintType> SampledCollection<T> {
         metadata: ConstraintMetadataStore<T::ID>,
     ) -> crate::Result<Self> {
         validate_removed_reasons_reference_entries(&constraints, &removed_reasons)?;
+        let owned_ids = constraints.keys().copied().collect::<BTreeSet<_>>();
+        validate_metadata_reference_ids(&metadata, &owned_ids)?;
         Ok(Self {
             constraints,
             removed_reasons,
@@ -747,17 +794,23 @@ impl<T: ConstraintType> SampledCollection<T> {
         &self.removed_reasons
     }
 
-    /// Access the per-constraint metadata store.
+    /// Access the per-constraint label/provenance store.
     pub fn metadata(&self) -> &ConstraintMetadataStore<T::ID> {
         &self.metadata
     }
 
-    /// Mutable access to the per-constraint metadata store.
+    /// Mutable access to the per-constraint label/provenance store.
     pub fn metadata_mut(&mut self) -> &mut ConstraintMetadataStore<T::ID> {
         &mut self.metadata
     }
 
-    /// Consume and return constraints, removed reasons, and metadata store.
+    /// Validate that every label/provenance ID is owned by this collection.
+    pub fn validate_metadata_ids(&self) -> crate::Result<()> {
+        let owned_ids = self.constraints.keys().copied().collect::<BTreeSet<_>>();
+        validate_metadata_reference_ids(&self.metadata, &owned_ids)
+    }
+
+    /// Consume and return constraints, removed reasons, and sidecars.
     #[allow(clippy::type_complexity)]
     pub fn into_parts(
         self,
@@ -870,6 +923,25 @@ mod tests {
         assert!(err
             .to_string()
             .contains("appears in both active constraints and removed constraints"));
+    }
+
+    #[test]
+    fn collection_rejects_orphan_metadata_id() {
+        let id = ConstraintID::from(1);
+        let orphan_id = ConstraintID::from(99);
+        let active = BTreeMap::from([(id, Constraint::equal_to_zero(Function::Zero))]);
+        let mut metadata = ConstraintMetadataStore::default();
+        metadata.set_name(orphan_id, "orphan");
+
+        let err =
+            ConstraintCollection::<Constraint>::with_metadata(active, BTreeMap::new(), metadata)
+                .unwrap_err();
+
+        assert!(
+            err.to_string().contains("unknown constraint ID")
+                && err.to_string().contains("ConstraintID(99)"),
+            "unexpected error: {err}"
+        );
     }
 
     #[test]

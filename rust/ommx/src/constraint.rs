@@ -83,7 +83,12 @@ pub enum Provenance {
     Sos1Constraint(crate::Sos1ConstraintID),
 }
 
-/// Auxiliary metadata for constraints (excluding essential id and equality)
+/// Constraint sidecar data used when transferring labels and provenance.
+///
+/// The modeling label fields (`name`, `subscripts`, `parameters`,
+/// `description`) describe the original mathematical-model notation for the
+/// constraint family. `provenance` is separate transformation lineage, not part
+/// of that label.
 #[derive(Debug, Clone, PartialEq, Default, LogicalMemoryProfile)]
 pub struct ConstraintMetadata {
     pub name: Option<String>,
@@ -103,10 +108,9 @@ pub struct ConstraintMetadata {
 /// A constraint parameterized by its lifecycle stage.
 ///
 /// Holds only the constraint's intrinsic data (`equality` plus stage-specific
-/// data in `stage`). Auxiliary metadata (`name`, `subscripts`, `parameters`,
-/// `description`, `provenance`) lives on the enclosing collection's
-/// [`ConstraintMetadataStore`] keyed by id; per-element storage was retired
-/// in the v3 metadata redesign.
+/// data in `stage`). Modeling labels and transformation provenance live on the
+/// enclosing collection's [`ConstraintMetadataStore`] keyed by id; per-element
+/// storage was retired in the v3 metadata redesign.
 ///
 /// The constraint's [`ConstraintID`] is not stored in this struct — it is
 /// held by the enclosing collection (e.g. the `BTreeMap` key in

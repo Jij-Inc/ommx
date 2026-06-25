@@ -308,7 +308,7 @@ impl Solution {
         &self,
         name: &str,
     ) -> Result<BTreeMap<Vec<i64>, f64>, SolutionError> {
-        // Collect all variables with the given name (looked up via the metadata store)
+        // Collect all variables with the given name from their modeling labels.
         let variables_with_name: Vec<&EvaluatedDecisionVariable> = self
             .decision_variables
             .iter()
@@ -385,8 +385,8 @@ impl Solution {
         &self,
         name: &str,
     ) -> Result<BTreeMap<Vec<i64>, f64>, SolutionError> {
-        // Collect all constraints with the given name (looked up via the
-        // collection's metadata store)
+        // Collect all constraints with the given name from the collection's
+        // modeling-label sidecar.
         let metadata = self.evaluated_constraints.metadata();
         let matches: Vec<(ConstraintID, &EvaluatedConstraint)> = self
             .evaluated_constraints
@@ -665,13 +665,13 @@ impl SolutionBuilder {
         self
     }
 
-    /// Sets the per-variable metadata store.
+    /// Sets the per-variable modeling-label store.
     pub fn variable_metadata(mut self, variable_metadata: VariableMetadataStore) -> Self {
         self.variable_metadata = variable_metadata;
         self
     }
 
-    /// Sets the per-named-function metadata store.
+    /// Sets the per-named-function modeling-label store.
     pub fn named_function_metadata(
         mut self,
         named_function_metadata: crate::named_function::NamedFunctionMetadataStore,
@@ -745,6 +745,27 @@ impl SolutionBuilder {
                 .into());
             }
         }
+        let decision_variable_ids = decision_variables.keys().copied().collect::<BTreeSet<_>>();
+        crate::modeling_label::validate_modeling_label_ids(
+            &self.variable_metadata,
+            &decision_variable_ids,
+            "decision variable",
+        )?;
+        let named_function_ids = self
+            .evaluated_named_functions
+            .keys()
+            .copied()
+            .collect::<BTreeSet<_>>();
+        crate::modeling_label::validate_modeling_label_ids(
+            &self.named_function_metadata,
+            &named_function_ids,
+            "named function",
+        )?;
+        evaluated_constraints.validate_metadata_ids()?;
+        self.evaluated_indicator_constraints
+            .validate_metadata_ids()?;
+        self.evaluated_one_hot_constraints.validate_metadata_ids()?;
+        self.evaluated_sos1_constraints.validate_metadata_ids()?;
 
         // Validate all used_decision_variable_ids in indicator constraints
         for (ic_id, ic) in self.evaluated_indicator_constraints.iter() {
@@ -1222,6 +1243,27 @@ mod tests {
             solution_err,
             SolutionError::MissingRequiredField { field: "sense" }
         ));
+    }
+
+    #[test]
+    fn builder_rejects_orphan_variable_label_id() {
+        let mut variable_metadata = VariableMetadataStore::default();
+        variable_metadata.set_name(VariableID::from(99), "orphan");
+
+        let err = Solution::builder()
+            .objective(0.0)
+            .evaluated_constraints(BTreeMap::new())
+            .decision_variables(BTreeMap::new())
+            .variable_metadata(variable_metadata)
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap_err();
+
+        assert!(
+            err.to_string().contains("unknown decision variable ID")
+                && err.to_string().contains("VariableID(99)"),
+            "unexpected error: {err}"
+        );
     }
 
     #[test]

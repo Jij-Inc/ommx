@@ -10,7 +10,7 @@ use crate::{
     SampledDecisionVariable, SampledNamedFunction, Sense, Solution, VariableID,
 };
 use getset::Getters;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 /// Error occurred during SampleSet validation
 #[non_exhaustive]
@@ -86,6 +86,9 @@ pub enum SampleSetError {
         key: NamedFunctionID,
         value_id: NamedFunctionID,
     },
+
+    #[error("{message}")]
+    InvalidMetadata { message: String },
 }
 
 /// Multiple sample solution results with deduplication
@@ -252,9 +255,9 @@ impl SampleSet {
         let sense = *self.sense();
 
         // SAFETY: SampleSet invariants guarantee Solution invariants.
-        // Constraint metadata stores ride along from the source SampledCollection
-        // so per-sample Solutions retain names / descriptions / parameters /
-        // provenance that were attached at the SampleSet level.
+        // Constraint label/provenance stores ride along from the source
+        // SampledCollection so per-sample Solutions retain modeling labels and
+        // transformation lineage attached at the SampleSet level.
         Some(unsafe {
             Solution::builder()
                 .evaluated_constraints_collection(
@@ -388,7 +391,7 @@ impl SampleSetBuilder {
         Self::default()
     }
 
-    /// Sets the per-variable metadata store.
+    /// Sets the per-variable modeling-label store.
     pub fn variable_metadata(
         mut self,
         variable_metadata: crate::decision_variable::VariableMetadataStore,
@@ -502,7 +505,7 @@ impl SampleSetBuilder {
         self
     }
 
-    /// Sets the per-named-function metadata store.
+    /// Sets the per-named-function modeling-label store.
     pub fn named_function_metadata(
         mut self,
         named_function_metadata: crate::named_function::NamedFunctionMetadataStore,
@@ -562,6 +565,48 @@ impl SampleSetBuilder {
                 });
             }
         }
+        let decision_variable_ids = decision_variables.keys().copied().collect::<BTreeSet<_>>();
+        crate::modeling_label::validate_modeling_label_ids(
+            &self.variable_metadata,
+            &decision_variable_ids,
+            "decision variable",
+        )
+        .map_err(|e| SampleSetError::InvalidMetadata {
+            message: e.to_string(),
+        })?;
+        let named_function_ids = self
+            .named_functions
+            .keys()
+            .copied()
+            .collect::<BTreeSet<_>>();
+        crate::modeling_label::validate_modeling_label_ids(
+            &self.named_function_metadata,
+            &named_function_ids,
+            "named function",
+        )
+        .map_err(|e| SampleSetError::InvalidMetadata {
+            message: e.to_string(),
+        })?;
+        constraints
+            .validate_metadata_ids()
+            .map_err(|e| SampleSetError::InvalidMetadata {
+                message: e.to_string(),
+            })?;
+        self.indicator_constraints
+            .validate_metadata_ids()
+            .map_err(|e| SampleSetError::InvalidMetadata {
+                message: e.to_string(),
+            })?;
+        self.one_hot_constraints
+            .validate_metadata_ids()
+            .map_err(|e| SampleSetError::InvalidMetadata {
+                message: e.to_string(),
+            })?;
+        self.sos1_constraints.validate_metadata_ids().map_err(|e| {
+            SampleSetError::InvalidMetadata {
+                message: e.to_string(),
+            }
+        })?;
 
         // Validate sample ID consistency
         let objective_sample_ids = objectives.ids();
@@ -788,12 +833,33 @@ mod tests {
         );
     }
 
-    /// Regression: `SampleSet::get(sid)` must propagate the variable AND
-    /// constraint metadata stores into the returned per-sample `Solution`.
-    /// A previous version threaded `variable_metadata` only and rebuilt
-    /// the constraint collections via `EvaluatedCollection::new(map,
-    /// BTreeMap::new())`, silently discarding all constraint names /
-    /// descriptions / parameters / provenance for sampled solutions.
+    #[test]
+    fn builder_rejects_orphan_variable_label_id() {
+        let mut variable_metadata = crate::VariableMetadataStore::default();
+        variable_metadata.set_name(VariableID::from(99), "orphan");
+
+        let err = SampleSet::builder()
+            .decision_variables(BTreeMap::new())
+            .variable_metadata(variable_metadata)
+            .objectives(crate::Sampled::default())
+            .constraints(BTreeMap::new())
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap_err();
+
+        assert!(
+            err.to_string().contains("unknown decision variable ID")
+                && err.to_string().contains("VariableID(99)"),
+            "unexpected error: {err}"
+        );
+    }
+
+    /// Regression: `SampleSet::get(sid)` must propagate variable modeling
+    /// labels and constraint label/provenance sidecars into the returned
+    /// per-sample `Solution`. A previous version threaded `variable_metadata`
+    /// only and rebuilt the constraint collections via
+    /// `EvaluatedCollection::new(map, BTreeMap::new())`, silently discarding
+    /// constraint labels and provenance for sampled solutions.
     #[test]
     fn test_sample_set_get_preserves_metadata() {
         let var_id = VariableID::from(1);

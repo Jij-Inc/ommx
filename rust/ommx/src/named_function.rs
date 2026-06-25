@@ -4,7 +4,6 @@ mod metadata_store;
 pub(crate) mod parse;
 
 use derive_more::{Deref, From};
-use fnv::FnvHashMap;
 use getset::*;
 
 use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
@@ -47,6 +46,12 @@ impl NamedFunctionID {
     }
 }
 
+impl From<NamedFunctionID> for u64 {
+    fn from(id: NamedFunctionID) -> Self {
+        id.0
+    }
+}
+
 impl LogicalMemoryProfile for NamedFunctionID {
     fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
         visitor.visit_leaf(path, std::mem::size_of::<NamedFunctionID>());
@@ -86,17 +91,8 @@ impl std::fmt::Display for NamedFunction {
     }
 }
 
-/// Auxiliary metadata for named functions (excluding intrinsic id and function).
-///
-/// Sibling type to [`DecisionVariableMetadata`](crate::DecisionVariableMetadata).
-/// Stored ID-keyed in [`NamedFunctionMetadataStore`].
-#[derive(Debug, Clone, PartialEq, Default, LogicalMemoryProfile)]
-pub struct NamedFunctionMetadata {
-    pub name: Option<String>,
-    pub subscripts: Vec<i64>,
-    pub parameters: FnvHashMap<String, String>,
-    pub description: Option<String>,
-}
+/// Modeling label for named functions.
+pub type NamedFunctionMetadata = crate::ModelingLabel;
 
 /// `ommx.v1.EvaluatedNamedFunction` with validated, typed fields.
 ///
