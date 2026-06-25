@@ -67,8 +67,7 @@ def test_decision_variables_df_include_empty(snapshot):
 def test_decision_variables_df_include_label_only(snapshot):
     """include=["label"] — name/subscripts/description kept, parameters.* dropped."""
     assert (
-        _df_snap(_build_instance().decision_variables_df(include=["label"]))
-        == snapshot
+        _df_snap(_build_instance().decision_variables_df(include=["label"])) == snapshot
     )
 
 

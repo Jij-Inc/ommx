@@ -238,7 +238,8 @@ impl Instance {
         &self.variable_labels
     }
 
-    /// Crate-internal mutable access to the per-variable modeling-label store.
+    /// Mutable access to the per-variable modeling-label store, limited to the
+    /// `instance` module tree.
     ///
     /// Public callers should use [`Self::set_variable_label`], which checks
     /// that the label ID belongs to this instance.
@@ -266,7 +267,8 @@ impl Instance {
         &self.named_function_labels
     }
 
-    /// Crate-internal mutable access to the per-named-function modeling-label store.
+    /// Mutable access to the per-named-function modeling-label store, limited
+    /// to the `instance` module tree.
     ///
     /// Public callers should use [`Self::set_named_function_label`], which
     /// checks that the label ID belongs to this instance.

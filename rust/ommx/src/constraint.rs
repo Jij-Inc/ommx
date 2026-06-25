@@ -85,9 +85,9 @@ pub enum Provenance {
 
 /// Constraint context outside the intrinsic mathematical constraint.
 ///
-/// [`ModelingLabel`] describes the original mathematical-model notation for
-/// the constraint family. `provenance` is separate transformation lineage, not
-/// part of that label.
+/// [`crate::ModelingLabel`] describes the original mathematical-model notation
+/// for the constraint family. `provenance` is separate transformation lineage,
+/// not part of that label.
 #[derive(Debug, Clone, PartialEq, Default, LogicalMemoryProfile)]
 pub struct ConstraintContext {
     pub label: crate::ModelingLabel,

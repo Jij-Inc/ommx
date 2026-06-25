@@ -430,9 +430,7 @@ def test_solution_sos1_removed_reasons_df_after_conversion(snapshot):
     instance.convert_sos1_to_constraints(7)
     sol = instance.evaluate({0: 1.0, 1: 0.0, 2: 0.0})
     assert (
-        _df_snap(
-            sol.constraints_df(kind="sos1", include=["label", "removed_reason"])
-        )
+        _df_snap(sol.constraints_df(kind="sos1", include=["label", "removed_reason"]))
         == snapshot
     )
 
@@ -504,8 +502,6 @@ def test_sample_set_one_hot_removed_reasons_df_after_conversion(snapshot):
     instance.convert_one_hot_to_constraint(7)
     ss = instance.evaluate_samples({0: {0: 1.0, 1: 0.0, 2: 0.0}})
     assert (
-        _df_snap(
-            ss.constraints_df(kind="one_hot", include=["label", "removed_reason"])
-        )
+        _df_snap(ss.constraints_df(kind="one_hot", include=["label", "removed_reason"]))
         == snapshot
     )

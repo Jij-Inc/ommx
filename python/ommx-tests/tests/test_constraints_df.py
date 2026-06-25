@@ -149,9 +149,7 @@ def test_instance_constraints_df_include_empty(snapshot):
 
 def test_instance_constraints_df_include_label_only(snapshot):
     """`include=("label",)` keeps name/subscripts/description, drops parameters."""
-    assert (
-        _df_snap(_instance_all_kinds().constraints_df(include=["label"])) == snapshot
-    )
+    assert _df_snap(_instance_all_kinds().constraints_df(include=["label"])) == snapshot
 
 
 def test_instance_constraints_df_include_parameters_only(snapshot):
@@ -307,9 +305,7 @@ def test_solution_constraints_df_removed_reason_include(snapshot):
     `removed_reason.{key}` columns when the flag is in `include=`."""
     assert (
         _df_snap(
-            _solution_with_removed().constraints_df(
-                include=["label", "removed_reason"]
-            )
+            _solution_with_removed().constraints_df(include=["label", "removed_reason"])
         )
         == snapshot
     )
