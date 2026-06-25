@@ -65,7 +65,7 @@ mod tests {
     }
 
     // The previous `test_constraint_with_context_snapshot` exercised
-    // per-element `Constraint.metadata` storage, which was retired in v3.
+    // per-element `Constraint` context storage, which was retired in v3.
     // Per-constraint context is now visited at the
     // `ConstraintCollection::context()` SoA-store level (see
     // `instance/logical_memory.rs`), so the equivalent snapshot lives

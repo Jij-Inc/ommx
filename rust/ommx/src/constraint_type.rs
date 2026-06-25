@@ -906,7 +906,7 @@ mod tests {
     }
 
     #[test]
-    fn collection_rejects_orphan_metadata_id() {
+    fn collection_rejects_orphan_context_id() {
         let id = ConstraintID::from(1);
         let orphan_id = ConstraintID::from(99);
         let active = BTreeMap::from([(id, Constraint::equal_to_zero(Function::Zero))]);

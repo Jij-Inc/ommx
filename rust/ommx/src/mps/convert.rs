@@ -30,8 +30,8 @@ pub fn convert(mps: Mps) -> crate::Result<Instance> {
 
     let mut instance = Instance::new(sense, objective, decision_variables, constraints)?;
 
-    // Drain name metadata through the instance owner boundary; per-element
-    // metadata storage was retired in v3.
+    // Drain MPS names as modeling labels through the instance owner boundary;
+    // per-element label storage was retired in v3.
     for (id, name) in var_names {
         instance.set_variable_label(
             id,

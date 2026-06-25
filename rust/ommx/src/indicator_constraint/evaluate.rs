@@ -19,8 +19,8 @@ impl Propagate for IndicatorConstraint<Created> {
                 promoted_function.partial_evaluate(state, atol)?;
 
                 // Provenance is added by the caller that has the original IndicatorConstraintID.
-                // NOTE: per-element metadata is gone in v3; the caller is
-                // responsible for moving the IndicatorConstraint's metadata
+                // NOTE: per-element constraint context is gone in v3; the caller is
+                // responsible for moving the IndicatorConstraint's context
                 // (looked up via the IndicatorConstraintCollection's
                 // ConstraintContextStore) into the regular ConstraintCollection's
                 // store under the new id at insertion time.
@@ -367,8 +367,8 @@ mod tests {
         match outcome {
             PropagateOutcome::Transformed { original, new } => {
                 assert_eq!(new.equality, Equality::LessThanOrEqualToZero);
-                // Per-element metadata is gone in v3; provenance and other
-                // metadata are added by the caller (Instance) into its
+                // Per-element constraint context is gone in v3; provenance and
+                // modeling labels are added by the caller (Instance) into its
                 // ConstraintContextStore at the collection level.
                 // Original indicator constraint preserved for removed set
                 assert_eq!(original.indicator_variable, VariableID::from(10));

@@ -39,7 +39,7 @@ mod tests {
     }
 
     // The previous `test_decision_variable_with_label_snapshot` exercised
-    // per-element `DecisionVariable.metadata` storage, which was retired
+    // per-element `DecisionVariable` label storage, which was retired
     // in v3. Per-variable modeling labels are now accounted for at the
     // `Instance::variable_labels` SoA-store level.
     #[test]
