@@ -222,7 +222,7 @@ impl InstanceBuilder {
     /// # Errors
     /// Returns an error if:
     /// - Required fields (`sense`, `objective`, `decision_variables`, `constraints`) are not set
-    /// - Map keys don't match their value's ID (decision_variables, constraints, removed_constraints)
+    /// - Named-function map keys don't match their value's ID
     /// - The objective function or constraints reference undefined variable IDs
     /// - The keys of `constraints` and `removed_constraints` are not disjoint
     /// - Label/context stores contain IDs that are not owned by the

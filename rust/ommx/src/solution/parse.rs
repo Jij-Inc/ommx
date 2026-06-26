@@ -106,7 +106,12 @@ impl Parse for crate::v1::Solution {
                 .map_err(|e| ParseError::from(e).context(message, "decision_variables"))?;
 
             variable_labels.insert(parsed_id, label);
-            decision_variables.insert(parsed_id, evaluated_dv);
+            if decision_variables.insert(parsed_id, evaluated_dv).is_some() {
+                return Err(crate::RawParseError::InvalidInstance(format!(
+                    "Duplicated variable ID is found in definition: {parsed_id:?}"
+                ))
+                .context(message, "decision_variables"));
+            }
         }
         let optimality = self
             .optimality
@@ -573,6 +578,38 @@ mod tests {
         Traceback for OMMX Message parse error:
         └─ommx.v1.Solution[decision_variables]
         Missing value for variable 1: not found in state and no substituted_value
+        "###);
+    }
+
+    #[test]
+    fn test_solution_parse_fails_with_duplicated_variable_id() {
+        use crate::v1;
+
+        let decision_variable = v1::DecisionVariable {
+            id: 1,
+            kind: v1::decision_variable::Kind::Continuous as i32,
+            bound: Some(v1::Bound {
+                lower: 0.0,
+                upper: 10.0,
+            }),
+            ..Default::default()
+        };
+        let v1_solution = v1::Solution {
+            state: Some(v1::State {
+                entries: [(1, 2.0)].iter().cloned().collect(),
+            }),
+            objective: 42.5,
+            decision_variables: vec![decision_variable.clone(), decision_variable],
+            feasible: true,
+            feasible_relaxed: Some(true),
+            ..Default::default()
+        };
+
+        let result: Result<Solution, ParseError> = v1_solution.parse(&());
+        insta::assert_snapshot!(result.unwrap_err().to_string(), @r###"
+        Traceback for OMMX Message parse error:
+        └─ommx.v1.Solution[decision_variables]
+        Duplicated variable ID is found in definition: VariableID(1)
         "###);
     }
 

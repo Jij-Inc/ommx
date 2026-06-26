@@ -19,7 +19,12 @@ impl Parse for crate::v1::SampleSet {
                 v1_sampled_dv.parse_as(&(), message, "decision_variables")?;
             let dv_id = parsed.id;
             variable_labels.insert(dv_id, parsed.label);
-            decision_variables.insert(dv_id, parsed.variable);
+            if decision_variables.insert(dv_id, parsed.variable).is_some() {
+                return Err(crate::RawParseError::InvalidInstance(format!(
+                    "Duplicated variable ID is found in definition: {dv_id:?}"
+                ))
+                .context(message, "decision_variables"));
+            }
         }
 
         // Parse objectives - required, not optional
@@ -429,6 +434,46 @@ mod tests {
         Traceback for OMMX Message parse error:
         └─ommx.v1.SampleSet[format_version]
         Unsupported ommx format version: data has format_version=1, but this SDK supports up to 0. Please upgrade the OMMX SDK.
+        "###);
+    }
+
+    #[test]
+    fn test_sample_set_parse_fails_with_duplicated_variable_id() {
+        let sample_id = crate::SampleID::from(0);
+        let v1_sampled_dv = crate::v1::SampledDecisionVariable {
+            decision_variable: Some(crate::v1::DecisionVariable {
+                id: 1,
+                kind: crate::v1::decision_variable::Kind::Continuous as i32,
+                bound: Some(crate::v1::Bound {
+                    lower: 0.0,
+                    upper: 10.0,
+                }),
+                ..Default::default()
+            }),
+            samples: Some(crate::v1::SampledValues {
+                entries: vec![crate::v1::sampled_values::SampledValuesEntry {
+                    ids: vec![sample_id.into_inner()],
+                    value: 2.0,
+                }],
+            }),
+        };
+        let v1_sample_set = crate::v1::SampleSet {
+            decision_variables: vec![v1_sampled_dv.clone(), v1_sampled_dv],
+            objectives: Some(crate::v1::SampledValues {
+                entries: vec![crate::v1::sampled_values::SampledValuesEntry {
+                    ids: vec![sample_id.into_inner()],
+                    value: 0.0,
+                }],
+            }),
+            sense: crate::v1::instance::Sense::Minimize as i32,
+            ..Default::default()
+        };
+
+        let result: Result<SampleSet, ParseError> = v1_sample_set.parse(&());
+        insta::assert_snapshot!(result.unwrap_err().to_string(), @r###"
+        Traceback for OMMX Message parse error:
+        └─ommx.v1.SampleSet[decision_variables]
+        Duplicated variable ID is found in definition: VariableID(1)
         "###);
     }
 

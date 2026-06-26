@@ -522,7 +522,6 @@ impl SampleSetBuilder {
     /// Returns an error if:
     /// - Required fields (`decision_variables`, `objectives`, `constraints`, `sense`) are not set
     /// - Sample IDs are inconsistent across decision variables, objectives, constraints, and named functions
-    /// - Sample IDs are inconsistent across decision variables, objectives, constraints, and named functions
     pub fn build(self) -> Result<SampleSet, SampleSetError> {
         let decision_variables =
             self.decision_variables
