@@ -17,7 +17,7 @@ impl Parse for crate::v1::SampleSet {
         for v1_sampled_dv in self.decision_variables {
             let parsed: crate::decision_variable::parse::ParsedSampledDecisionVariable =
                 v1_sampled_dv.parse_as(&(), message, "decision_variables")?;
-            let dv_id = *parsed.variable.id();
+            let dv_id = parsed.id;
             variable_labels.insert(dv_id, parsed.label);
             decision_variables.insert(dv_id, parsed.variable);
         }
@@ -154,7 +154,7 @@ impl From<SampleSet> for crate::v1::SampleSet {
             .iter()
             .map(|(id, dv)| {
                 let label = variable_labels.collect_for(*id);
-                crate::decision_variable::sampled_decision_variable_to_v1(dv.clone(), label)
+                crate::decision_variable::sampled_decision_variable_to_v1(*id, dv.clone(), label)
             })
             .collect();
         let objectives = Some(sample_set.objectives().clone().into());
@@ -451,11 +451,14 @@ mod tests {
         let nf_id = NamedFunctionID::from(0);
         let sample_id = SampleID::from(0);
 
-        let dv = DecisionVariable::binary(var_id);
+        let dv = DecisionVariable::binary();
         let mut x_samples = crate::Sampled::default();
         x_samples.append([sample_id], 1.0).unwrap();
         let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(var_id, SampledDecisionVariable::new(dv, x_samples).unwrap());
+        decision_variables.insert(
+            var_id,
+            SampledDecisionVariable::new(var_id, dv, x_samples).unwrap(),
+        );
 
         let mut variable_labels = crate::VariableLabelStore::default();
         variable_labels.set_name(var_id, "x");

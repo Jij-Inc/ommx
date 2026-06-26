@@ -145,7 +145,11 @@ impl Solution {
             .decision_variables()
             .iter()
             .map(|(id, dv)| {
-                crate::EvaluatedDecisionVariable::from_parts(dv.clone(), labels.collect_for(*id))
+                crate::EvaluatedDecisionVariable::from_parts(
+                    *id,
+                    dv.clone(),
+                    labels.collect_for(*id),
+                )
             })
             .collect()
     }
@@ -392,7 +396,11 @@ impl Solution {
             .decision_variables()
             .get(&var_id)
             .map(|dv| {
-                crate::EvaluatedDecisionVariable::from_parts(dv.clone(), labels.collect_for(var_id))
+                crate::EvaluatedDecisionVariable::from_parts(
+                    var_id,
+                    dv.clone(),
+                    labels.collect_for(var_id),
+                )
             })
             .ok_or_else(|| {
                 PyKeyError::new_err(format!("Unknown decision variable ID: {variable_id}"))
@@ -488,17 +496,18 @@ impl Solution {
         let var_meta_store = self.inner.variable_labels().clone();
         let view: Vec<(
             ommx::DecisionVariableLabel,
+            ommx::VariableID,
             &ommx::EvaluatedDecisionVariable,
         )> = self
             .inner
             .decision_variables()
             .iter()
-            .map(|(id, dv)| (var_meta_store.collect_for(*id), dv))
+            .map(|(id, dv)| (var_meta_store.collect_for(*id), *id, dv))
             .collect();
         entries_to_dataframe(
             py,
             view.iter()
-                .map(|(m, dv)| crate::pandas::WithModelingContext::new(*dv, m)),
+                .map(|(m, id, dv)| crate::pandas::WithModelingContext::new((*id, *dv), m)),
             "id",
             flags,
         )

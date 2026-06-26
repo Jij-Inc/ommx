@@ -98,10 +98,7 @@ mod tests {
     fn instance_with_one_one_hot() -> Instance {
         let mut decision_variables = BTreeMap::new();
         for id in [1u64, 2] {
-            decision_variables.insert(
-                VariableID::from(id),
-                DecisionVariable::binary(VariableID::from(id)),
-            );
+            decision_variables.insert(VariableID::from(id), DecisionVariable::binary());
         }
         let vars: BTreeSet<_> = [1u64, 2].into_iter().map(VariableID::from).collect();
         let one_hot = OneHotConstraint::new(vars).unwrap();
@@ -182,10 +179,7 @@ mod tests {
         // Two disjoint one-hots → both converted, none left active.
         let mut decision_variables = BTreeMap::new();
         for id in [1u64, 2, 3, 4] {
-            decision_variables.insert(
-                VariableID::from(id),
-                DecisionVariable::binary(VariableID::from(id)),
-            );
+            decision_variables.insert(VariableID::from(id), DecisionVariable::binary());
         }
         let a =
             OneHotConstraint::new([1u64, 2].into_iter().map(VariableID::from).collect()).unwrap();

@@ -75,12 +75,6 @@ pub enum SampleSetError {
     #[error("Required field is missing: {field}")]
     MissingRequiredField { field: &'static str },
 
-    #[error("Decision variable key {key:?} does not match value's id {value_id:?}")]
-    InconsistentDecisionVariableID {
-        key: VariableID,
-        value_id: VariableID,
-    },
-
     #[error("Named function key {key:?} does not match value's id {value_id:?}")]
     InconsistentNamedFunctionID {
         key: NamedFunctionID,
@@ -209,7 +203,7 @@ impl SampleSet {
         let mut decision_variables: BTreeMap<VariableID, EvaluatedDecisionVariable> =
             BTreeMap::default();
         for (variable_id, sampled_dv) in &self.decision_variables {
-            let evaluated_dv = sampled_dv.get(sample_id)?;
+            let evaluated_dv = sampled_dv.get(*variable_id, sample_id)?;
             decision_variables.insert(*variable_id, evaluated_dv);
         }
 
@@ -526,7 +520,7 @@ impl SampleSetBuilder {
     /// # Errors
     /// Returns an error if:
     /// - Required fields (`decision_variables`, `objectives`, `constraints`, `sense`) are not set
-    /// - Keys do not match the `id()` of their values
+    /// - Sample IDs are inconsistent across decision variables, objectives, constraints, and named functions
     /// - Sample IDs are inconsistent across decision variables, objectives, constraints, and named functions
     pub fn build(self) -> Result<SampleSet, SampleSetError> {
         let decision_variables =
@@ -547,16 +541,6 @@ impl SampleSetBuilder {
         let sense = self
             .sense
             .ok_or(SampleSetError::MissingRequiredField { field: "sense" })?;
-
-        // Validate key/id consistency
-        for (key, value) in &decision_variables {
-            if key != value.id() {
-                return Err(SampleSetError::InconsistentDecisionVariableID {
-                    key: *key,
-                    value_id: *value.id(),
-                });
-            }
-        }
 
         for (key, value) in &self.named_functions {
             if key != value.id() {
@@ -690,7 +674,6 @@ impl SampleSetBuilder {
     /// # Safety
     /// This method does not validate that the SampleSet invariants hold.
     /// The caller must ensure:
-    /// - Decision variable keys match their value's `id()`
     /// - Constraint keys match their value's `id()`
     /// - Named function keys match their value's `id()`
     /// - Sample IDs are consistent across all components
@@ -792,11 +775,12 @@ mod tests {
         let sample_id = SampleID::from(0);
         let unexpected_sample_id = SampleID::from(1);
 
-        let decision_variable = DecisionVariable::binary(var_id);
+        let decision_variable = DecisionVariable::binary();
         let mut variable_samples = crate::Sampled::default();
         variable_samples.append([sample_id], 1.0).unwrap();
         let sampled_variable =
-            SampledDecisionVariable::new(decision_variable.clone(), variable_samples).unwrap();
+            SampledDecisionVariable::new(var_id, decision_variable.clone(), variable_samples)
+                .unwrap();
 
         let mut objectives = crate::Sampled::default();
         objectives.append([sample_id], 0.0).unwrap();
@@ -864,11 +848,14 @@ mod tests {
         let sample_id = SampleID::from(0);
 
         // Decision variable + sample
-        let dv = DecisionVariable::binary(var_id);
+        let dv = DecisionVariable::binary();
         let mut x_samples = crate::Sampled::default();
         x_samples.append([sample_id], 1.0).unwrap();
         let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(var_id, SampledDecisionVariable::new(dv, x_samples).unwrap());
+        decision_variables.insert(
+            var_id,
+            SampledDecisionVariable::new(var_id, dv, x_samples).unwrap(),
+        );
 
         let mut variable_labels = crate::VariableLabelStore::default();
         variable_labels.set_name(var_id, "x");

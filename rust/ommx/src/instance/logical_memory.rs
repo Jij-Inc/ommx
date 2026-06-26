@@ -146,7 +146,9 @@ mod tests {
     use super::*;
     use crate::constraint::CreatedData;
     use crate::logical_memory::logical_memory_to_folded;
-    use crate::{coeff, linear, Constraint, ConstraintID, DecisionVariable, Equality, Function};
+    use crate::{
+        coeff, linear, Constraint, ConstraintID, DecisionVariable, Equality, Function, VariableID,
+    };
     use std::collections::BTreeMap;
 
     #[test]
@@ -207,12 +209,12 @@ mod tests {
 
     #[test]
     fn test_instance_with_objective_and_variables_snapshot() {
-        let dv1 = DecisionVariable::continuous(1.into());
-        let dv2 = DecisionVariable::continuous(2.into());
+        let dv1 = DecisionVariable::continuous();
+        let dv2 = DecisionVariable::continuous();
 
         let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(dv1.id(), dv1);
-        decision_variables.insert(dv2.id(), dv2);
+        decision_variables.insert(VariableID::from(1), dv1);
+        decision_variables.insert(VariableID::from(2), dv2);
 
         let objective = Function::Linear(
             ((coeff!(2.0) * linear!(1)).unwrap() + (coeff!(3.0) * linear!(2)).unwrap()).unwrap(),
@@ -242,7 +244,6 @@ mod tests {
         Instance.decision_variables;BTreeMap[key] 16
         Instance.decision_variables;BTreeMap[stack] 24
         Instance.decision_variables;DecisionVariable.bound 32
-        Instance.decision_variables;DecisionVariable.id 16
         Instance.decision_variables;DecisionVariable.kind 2
         Instance.description;Option[stack] 168
         Instance.fixed_decision_variable_values;BTreeMap[stack] 24
@@ -284,12 +285,12 @@ mod tests {
 
     #[test]
     fn test_instance_with_constraints_snapshot() {
-        let dv1 = DecisionVariable::continuous(1.into());
-        let dv2 = DecisionVariable::continuous(2.into());
+        let dv1 = DecisionVariable::continuous();
+        let dv2 = DecisionVariable::continuous();
 
         let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(dv1.id(), dv1);
-        decision_variables.insert(dv2.id(), dv2);
+        decision_variables.insert(VariableID::from(1), dv1);
+        decision_variables.insert(VariableID::from(2), dv2);
 
         let objective = Function::Linear(
             ((coeff!(2.0) * linear!(1)).unwrap() + (coeff!(3.0) * linear!(2)).unwrap()).unwrap(),
@@ -332,7 +333,6 @@ mod tests {
         Instance.decision_variables;BTreeMap[key] 16
         Instance.decision_variables;BTreeMap[stack] 24
         Instance.decision_variables;DecisionVariable.bound 32
-        Instance.decision_variables;DecisionVariable.id 16
         Instance.decision_variables;DecisionVariable.kind 2
         Instance.description;Option[stack] 168
         Instance.fixed_decision_variable_values;BTreeMap[stack] 24
@@ -375,14 +375,14 @@ mod tests {
     #[test]
     fn test_instance_with_multiple_variables_with_labels_snapshot() {
         // Create 3 decision variables with names (stored in the SoA store)
-        let dv1 = DecisionVariable::continuous(1.into());
-        let dv2 = DecisionVariable::continuous(2.into());
-        let dv3 = DecisionVariable::continuous(3.into());
+        let dv1 = DecisionVariable::continuous();
+        let dv2 = DecisionVariable::continuous();
+        let dv3 = DecisionVariable::continuous();
 
         let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(dv1.id(), dv1);
-        decision_variables.insert(dv2.id(), dv2);
-        decision_variables.insert(dv3.id(), dv3);
+        decision_variables.insert(VariableID::from(1), dv1);
+        decision_variables.insert(VariableID::from(2), dv2);
+        decision_variables.insert(VariableID::from(3), dv3);
 
         let mut instance = Instance::new(
             crate::instance::Sense::Minimize,
@@ -414,7 +414,6 @@ mod tests {
         Instance.decision_variables;BTreeMap[key] 24
         Instance.decision_variables;BTreeMap[stack] 24
         Instance.decision_variables;DecisionVariable.bound 48
-        Instance.decision_variables;DecisionVariable.id 24
         Instance.decision_variables;DecisionVariable.kind 3
         Instance.description;Option[stack] 168
         Instance.fixed_decision_variable_values;BTreeMap[stack] 24
@@ -458,9 +457,9 @@ mod tests {
 
     #[test]
     fn test_instance_with_parameters_and_description_snapshot() {
-        let dv1 = DecisionVariable::continuous(1.into());
+        let dv1 = DecisionVariable::continuous();
         let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(dv1.id(), dv1);
+        decision_variables.insert(VariableID::from(1), dv1);
 
         let mut instance = Instance::new(
             crate::instance::Sense::Minimize,
@@ -506,7 +505,6 @@ mod tests {
         Instance.decision_variables;BTreeMap[key] 8
         Instance.decision_variables;BTreeMap[stack] 24
         Instance.decision_variables;DecisionVariable.bound 16
-        Instance.decision_variables;DecisionVariable.id 8
         Instance.decision_variables;DecisionVariable.kind 1
         Instance.description;Description.authors 56
         Instance.description;Description.authors;Vec[stack] 24

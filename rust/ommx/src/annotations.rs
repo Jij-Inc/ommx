@@ -572,11 +572,11 @@ mod tests {
         let decision_variables = BTreeMap::from([
             (
                 crate::VariableID::from(1),
-                crate::DecisionVariable::binary(crate::VariableID::from(1)),
+                crate::DecisionVariable::binary(),
             ),
             (
                 crate::VariableID::from(2),
-                crate::DecisionVariable::binary(crate::VariableID::from(2)),
+                crate::DecisionVariable::binary(),
             ),
         ]);
         let one_hot = crate::OneHotConstraint::new(BTreeSet::from([

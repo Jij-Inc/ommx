@@ -177,15 +177,15 @@ impl Instance {
 
     /// Insert a decision variable with its modeling label.
     ///
-    /// The decision variable's `id()` must not collide with any existing
-    /// variable, and must not be a substitution-dependency key. Returns the
-    /// inserted variable's id for symmetry with `add_constraint`.
+    /// The table key must not collide with any existing variable and must not
+    /// be a substitution-dependency key. Returns the inserted variable's id for
+    /// symmetry with `add_constraint`.
     pub fn add_decision_variable(
         &mut self,
+        id: crate::VariableID,
         variable: crate::DecisionVariable,
         label: crate::DecisionVariableLabel,
     ) -> crate::Result<crate::VariableID> {
-        let id = variable.id();
         if self.decision_variables.contains_key(&id) {
             crate::bail!({ ?id }, "Duplicate decision variable ID: {id:?}");
         }
@@ -509,14 +509,14 @@ impl ParametricInstance {
 
     /// Insert a decision variable with its modeling label.
     ///
-    /// The variable's id must not collide with any existing decision
+    /// The table key must not collide with any existing decision
     /// variable, parameter, or substitution-dependency key.
     pub fn add_decision_variable(
         &mut self,
+        id: crate::VariableID,
         variable: crate::DecisionVariable,
         label: crate::DecisionVariableLabel,
     ) -> crate::Result<crate::VariableID> {
-        let id = variable.id();
         if self.decision_variables().contains_key(&id) {
             crate::bail!({ ?id }, "Duplicate decision variable ID: {id:?}");
         }
@@ -563,8 +563,8 @@ mod tests {
     fn test_insert_constraint_success() {
         // Create a simple instance with two decision variables
         let decision_variables = btreemap! {
-            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
-            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
+            VariableID::from(1) => DecisionVariable::binary(),
+            VariableID::from(2) => DecisionVariable::binary(),
         };
 
         let objective = linear!(1) + coeff!(1.0);
@@ -596,14 +596,8 @@ mod tests {
     fn test_insert_constraint_replace_existing() {
         // Create instance with one constraint
         let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(
-            VariableID::from(1),
-            DecisionVariable::binary(VariableID::from(1)),
-        );
-        decision_variables.insert(
-            VariableID::from(2),
-            DecisionVariable::binary(VariableID::from(2)),
-        );
+        decision_variables.insert(VariableID::from(1), DecisionVariable::binary());
+        decision_variables.insert(VariableID::from(2), DecisionVariable::binary());
 
         let objective = Function::Linear(Linear::single_term(
             LinearMonomial::Variable(VariableID::from(1)),
@@ -636,14 +630,8 @@ mod tests {
     fn test_insert_constraint_undefined_variable() {
         // Create instance with only variable 1 and 2
         let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(
-            VariableID::from(1),
-            DecisionVariable::binary(VariableID::from(1)),
-        );
-        decision_variables.insert(
-            VariableID::from(2),
-            DecisionVariable::binary(VariableID::from(2)),
-        );
+        decision_variables.insert(VariableID::from(1), DecisionVariable::binary());
+        decision_variables.insert(VariableID::from(2), DecisionVariable::binary());
 
         let objective = Function::Linear(Linear::single_term(
             LinearMonomial::Variable(VariableID::from(1)),
@@ -677,18 +665,9 @@ mod tests {
     fn test_insert_constraint_multiple_operations() {
         // Test multiple insertions and replacements
         let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(
-            VariableID::from(1),
-            DecisionVariable::binary(VariableID::from(1)),
-        );
-        decision_variables.insert(
-            VariableID::from(2),
-            DecisionVariable::binary(VariableID::from(2)),
-        );
-        decision_variables.insert(
-            VariableID::from(3),
-            DecisionVariable::binary(VariableID::from(3)),
-        );
+        decision_variables.insert(VariableID::from(1), DecisionVariable::binary());
+        decision_variables.insert(VariableID::from(2), DecisionVariable::binary());
+        decision_variables.insert(VariableID::from(3), DecisionVariable::binary());
 
         let objective = Function::Linear(Linear::single_term(
             LinearMonomial::Variable(VariableID::from(1)),
@@ -739,9 +718,9 @@ mod tests {
     fn test_insert_constraint_with_dependency_key() {
         // Create instance with decision variables and dependency
         let decision_variables = btreemap! {
-            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
-            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
-            VariableID::from(3) => DecisionVariable::binary(VariableID::from(3)),
+            VariableID::from(1) => DecisionVariable::binary(),
+            VariableID::from(2) => DecisionVariable::binary(),
+            VariableID::from(3) => DecisionVariable::binary(),
         };
         let objective = linear!(1) + coeff!(1.0);
         let mut instance = Instance::new(
@@ -773,8 +752,8 @@ mod tests {
         // Pin variable 2's value, then try to add a constraint that references it.
         // The setter must reject — same rule the builder enforces (used ∩ fixed = ∅).
         let decision_variables = btreemap! {
-            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
-            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
+            VariableID::from(1) => DecisionVariable::binary(),
+            VariableID::from(2) => DecisionVariable::binary(),
         };
 
         let objective = linear!(1) + coeff!(1.0);
@@ -853,8 +832,8 @@ mod tests {
     fn test_set_objective_with_dependency_key() {
         // Create instance with decision variables and dependency
         let decision_variables = btreemap! {
-            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
-            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
+            VariableID::from(1) => DecisionVariable::binary(),
+            VariableID::from(2) => DecisionVariable::binary(),
         };
         let objective = linear!(1) + coeff!(1.0);
         let mut instance = Instance::new(
@@ -887,8 +866,8 @@ mod tests {
     fn test_insert_constraint_replace_removed_constraint() {
         // Create instance with one active constraint and one removed constraint
         let decision_variables = btreemap! {
-            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
-            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
+            VariableID::from(1) => DecisionVariable::binary(),
+            VariableID::from(2) => DecisionVariable::binary(),
         };
 
         let objective = (linear!(1) + coeff!(1.0)).into();
@@ -939,9 +918,9 @@ mod tests {
     fn test_insert_constraints_bulk() {
         // Create instance with decision variables
         let decision_variables = btreemap! {
-            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
-            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
-            VariableID::from(3) => DecisionVariable::binary(VariableID::from(3)),
+            VariableID::from(1) => DecisionVariable::binary(),
+            VariableID::from(2) => DecisionVariable::binary(),
+            VariableID::from(3) => DecisionVariable::binary(),
         };
         let objective = linear!(1) + coeff!(1.0);
         let mut instance = Instance::new(
@@ -984,8 +963,8 @@ mod tests {
     fn test_insert_constraints_bulk_with_undefined_variable() {
         // Create instance with only variables 1 and 2
         let decision_variables = btreemap! {
-            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
-            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
+            VariableID::from(1) => DecisionVariable::binary(),
+            VariableID::from(2) => DecisionVariable::binary(),
         };
         let objective = linear!(1) + coeff!(1.0);
         let mut instance = Instance::new(
@@ -1028,8 +1007,8 @@ mod tests {
     fn test_insert_constraints_bulk_replace_existing() {
         // Create instance with existing constraints
         let decision_variables = btreemap! {
-            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
-            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
+            VariableID::from(1) => DecisionVariable::binary(),
+            VariableID::from(2) => DecisionVariable::binary(),
         };
         let objective = linear!(1) + coeff!(1.0);
         let constraints = btreemap! {
@@ -1072,8 +1051,8 @@ mod tests {
     fn test_insert_constraints_bulk_replace_removed() {
         // Create instance with a removed constraint
         let decision_variables = btreemap! {
-            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
-            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
+            VariableID::from(1) => DecisionVariable::binary(),
+            VariableID::from(2) => DecisionVariable::binary(),
         };
         let objective = linear!(1) + coeff!(1.0);
         let constraints = btreemap! {
@@ -1114,9 +1093,9 @@ mod tests {
     fn test_insert_constraints_bulk_with_dependent_variable() {
         // Create instance with decision variables and dependency
         let decision_variables = btreemap! {
-            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
-            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
-            VariableID::from(3) => DecisionVariable::binary(VariableID::from(3)),
+            VariableID::from(1) => DecisionVariable::binary(),
+            VariableID::from(2) => DecisionVariable::binary(),
+            VariableID::from(3) => DecisionVariable::binary(),
         };
         let objective = linear!(1) + coeff!(1.0);
         let mut instance = Instance::new(
@@ -1160,7 +1139,7 @@ mod tests {
     fn test_next_constraint_id() {
         // Test basic case: empty instance
         let decision_variables = btreemap! {
-            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
+            VariableID::from(1) => DecisionVariable::binary(),
         };
         let objective = (linear!(1) + coeff!(1.0)).into();
         let instance = Instance::new(
@@ -1174,7 +1153,7 @@ mod tests {
 
         // Test considering both active and removed constraints
         let decision_variables = btreemap! {
-            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
+            VariableID::from(1) => DecisionVariable::binary(),
         };
         let objective = (linear!(1) + coeff!(1.0)).into();
         let constraints = btreemap! {

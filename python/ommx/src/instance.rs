@@ -109,9 +109,9 @@ impl Instance {
         let mut rust_decision_variables = BTreeMap::new();
         let mut variable_labels = ommx::VariableLabelStore::default();
         for var in decision_variables {
-            let id = var.0.id();
-            variable_labels.insert(id, var.1);
-            if rust_decision_variables.insert(id, var.0).is_some() {
+            let id = var.0;
+            variable_labels.insert(id, var.2);
+            if rust_decision_variables.insert(id, var.1).is_some() {
                 anyhow::bail!("Duplicate decision variable ID: {}", id.into_inner());
             }
         }
@@ -326,7 +326,8 @@ impl Instance {
     ) -> Result<crate::AttachedDecisionVariable> {
         let id = {
             let mut inst = slf.borrow_mut();
-            inst.inner.add_decision_variable(variable.0, variable.1)?
+            inst.inner
+                .add_decision_variable(variable.0, variable.1, variable.2)?
         };
         Ok(crate::AttachedDecisionVariable::from_instance(
             slf.unbind(),
@@ -691,7 +692,9 @@ impl Instance {
         self.inner
             .used_decision_variables()
             .iter()
-            .map(|(id, &var)| DecisionVariable::from_parts(var.clone(), labels.collect_for(*id)))
+            .map(|(id, &var)| {
+                DecisionVariable::from_parts(*id, var.clone(), labels.collect_for(*id))
+            })
             .collect()
     }
 
@@ -2007,7 +2010,7 @@ impl Instance {
             .map(|(id, dv)| {
                 let label = label_store.collect_for(*id);
                 let dict = crate::pandas::WithModelingContext::new(
-                    (dv, self.inner.fixed_decision_variable_value(*id)),
+                    (*id, dv, self.inner.fixed_decision_variable_value(*id)),
                     &label,
                 )
                 .to_pandas_entry(py)?;
@@ -2406,7 +2409,9 @@ impl Instance {
         self.inner
             .decision_variables()
             .get(&var_id)
-            .map(|var| DecisionVariable::from_parts(var.clone(), labels.collect_for(var_id)))
+            .map(|var| {
+                DecisionVariable::from_parts(var_id, var.clone(), labels.collect_for(var_id))
+            })
             .ok_or_else(|| {
                 PyKeyError::new_err(format!("Decision variable with ID {variable_id} not found"))
             })

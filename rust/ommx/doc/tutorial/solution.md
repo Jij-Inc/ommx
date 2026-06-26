@@ -21,8 +21,8 @@ use std::collections::{BTreeMap, HashMap};
 
 // Create an instance with variables and constraints
 let decision_variables = btreemap! {
-    VariableID::from(1) => DecisionVariable::continuous(VariableID::from(1)),
-    VariableID::from(2) => DecisionVariable::continuous(VariableID::from(2)),
+    VariableID::from(1) => DecisionVariable::continuous(),
+    VariableID::from(2) => DecisionVariable::continuous(),
 };
 
 let objective = Function::from((linear!(1) + (coeff!(2.0) * linear!(2))?)?);
@@ -87,8 +87,8 @@ use maplit::btreemap;
 use std::collections::HashMap;
 
 let decision_variables = btreemap! {
-    VariableID::from(1) => DecisionVariable::continuous(VariableID::from(1)),
-    VariableID::from(2) => DecisionVariable::continuous(VariableID::from(2)),
+    VariableID::from(1) => DecisionVariable::continuous(),
+    VariableID::from(2) => DecisionVariable::continuous(),
 };
 let objective = Function::from((linear!(1) + (coeff!(2.0) * linear!(2))?)?);
 let constraints = btreemap! {

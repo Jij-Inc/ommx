@@ -19,7 +19,7 @@ impl Instance {
     /// * `subscripts` - The subscripts of the decision variable (can be empty)
     ///
     /// # Returns
-    /// * `Some(&DecisionVariable)` if a variable with the given name and subscripts is found
+    /// * `Some((VariableID, &DecisionVariable))` if a variable with the given name and subscripts is found
     /// * `None` if no matching variable is found
     ///
     /// # Example
@@ -36,11 +36,11 @@ impl Instance {
         &self,
         name: &str,
         subscripts: Vec<i64>,
-    ) -> Option<&DecisionVariable> {
+    ) -> Option<(VariableID, &DecisionVariable)> {
         let store = self.variable_labels();
         self.decision_variables.iter().find_map(|(id, var)| {
             (store.name(*id) == Some(name) && store.subscripts(*id) == subscripts.as_slice())
-                .then_some(var)
+                .then_some((*id, var))
         })
     }
 
@@ -66,9 +66,9 @@ impl Instance {
         atol: ATol,
     ) -> Result<VariableID, DecisionVariableError> {
         let id = self.next_variable_id();
-        let dv = DecisionVariable::new(id, kind, bound, atol)?;
+        let dv = DecisionVariable::new(kind, bound, atol)?;
         if let Some(value) = fixed_value {
-            dv.check_value_consistency(value, atol)?;
+            dv.check_value_consistency(id, value, atol)?;
             self.fixed_decision_variable_values.insert(id, value);
         }
         self.decision_variables.insert(id, dv);
@@ -129,9 +129,9 @@ mod tests {
 
         // Instance with variables should return max_id + 1
         let decision_variables = btreemap! {
-            VariableID::from(5) => DecisionVariable::binary(VariableID::from(5)),
-            VariableID::from(8) => DecisionVariable::binary(VariableID::from(8)),
-            VariableID::from(100) => DecisionVariable::binary(VariableID::from(100)),
+            VariableID::from(5) => DecisionVariable::binary(),
+            VariableID::from(8) => DecisionVariable::binary(),
+            VariableID::from(100) => DecisionVariable::binary(),
         };
         let objective = (linear!(5) + coeff!(1.0)).into();
         let instance = Instance::new(

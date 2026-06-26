@@ -34,14 +34,14 @@ ENDATA
     assert_eq!(var.bound(), Bound::new(0.0, 4.0).unwrap());
 
     // Check objective: x1
-    assert_abs_diff_eq!(instance.objective(), &Function::from(linear!(var.id())));
+    assert_abs_diff_eq!(instance.objective(), &Function::from(linear!(*var_id)));
 
     // Check constraint: x1 - 5 <= 0
     assert_eq!(instance.constraints().len(), 1);
     let (cid, constraint) = instance.constraints().iter().next().unwrap();
     assert_abs_diff_eq!(
         constraint.function(),
-        &Function::from(linear!(var.id()) + coeff!(-5.0))
+        &Function::from(linear!(*var_id) + coeff!(-5.0))
     );
     assert_eq!(constraint.equality, crate::Equality::LessThanOrEqualToZero);
     assert_eq!(
@@ -94,7 +94,7 @@ ENDATA
     // Check objective: x1 + 2*x2
     assert_abs_diff_eq!(
         instance.objective(),
-        &Function::from(linear!(x1.id()) + coeff!(2.0) * linear!(x2.id()))
+        &Function::from(linear!(*x1_id) + coeff!(2.0) * linear!(*x2_id))
     );
 
     // Check constraints
@@ -109,7 +109,7 @@ ENDATA
     assert_abs_diff_eq!(
         r1.function(),
         &Function::from(
-            ((linear!(x1.id()) + coeff!(2.0) * linear!(x2.id())).unwrap() + coeff!(-10.0)).unwrap()
+            ((linear!(*x1_id) + coeff!(2.0) * linear!(*x2_id)).unwrap() + coeff!(-10.0)).unwrap()
         )
     );
     assert_eq!(r1.equality, crate::Equality::LessThanOrEqualToZero);
@@ -117,7 +117,7 @@ ENDATA
     // -x1 - x2 + 5 <= 0
     assert_abs_diff_eq!(
         r2.function(),
-        &Function::from(((-linear!(x1.id()) - linear!(x2.id())).unwrap() + coeff!(5.0)).unwrap())
+        &Function::from(((-linear!(*x1_id) - linear!(*x2_id)).unwrap() + coeff!(5.0)).unwrap())
     );
     assert_eq!(r2.equality, crate::Equality::LessThanOrEqualToZero);
     assert_eq!(constraint_context.name(*r2_id), Some("R2"));
@@ -125,7 +125,7 @@ ENDATA
     assert_abs_diff_eq!(
         r1_range.function(),
         &Function::from(
-            ((-linear!(x1.id()) - coeff!(2.0) * linear!(x2.id())).unwrap() + coeff!(8.0)).unwrap()
+            ((-linear!(*x1_id) - coeff!(2.0) * linear!(*x2_id)).unwrap() + coeff!(8.0)).unwrap()
         )
     );
     assert_eq!(r1_range.equality, crate::Equality::LessThanOrEqualToZero);
@@ -133,7 +133,7 @@ ENDATA
     // x1 + x2 - 8 <= 0
     assert_abs_diff_eq!(
         r2_range.function(),
-        &Function::from(((linear!(x1.id()) + linear!(x2.id())).unwrap() + coeff!(-8.0)).unwrap())
+        &Function::from(((linear!(*x1_id) + linear!(*x2_id)).unwrap() + coeff!(-8.0)).unwrap())
     );
     assert_eq!(r2_range.equality, crate::Equality::LessThanOrEqualToZero);
     assert_eq!(constraint_context.name(*r2_range_id), Some("R2_"));
@@ -189,8 +189,8 @@ ENDATA
     assert_abs_diff_eq!(
         instance.objective(),
         &Function::from(
-            ((linear!(x1.id()) + coeff!(2.0) * linear!(x2.id())).unwrap()
-                + (coeff!(3.0) * linear!(x3.id())).unwrap())
+            ((linear!(*x1_id) + coeff!(2.0) * linear!(*x2_id)).unwrap()
+                + (coeff!(3.0) * linear!(*x3_id)).unwrap())
             .unwrap()
         )
     );
@@ -201,7 +201,7 @@ ENDATA
     assert_abs_diff_eq!(
         constraint.function(),
         &Function::from(
-            (((linear!(x1.id()) + linear!(x2.id())).unwrap() + linear!(x3.id())).unwrap()
+            (((linear!(*x1_id) + linear!(*x2_id)).unwrap() + linear!(*x3_id)).unwrap()
                 + coeff!(-10.0))
             .unwrap()
         )
@@ -256,7 +256,7 @@ ENDATA
     // Check objective: x1 + 2*x2
     assert_abs_diff_eq!(
         instance.objective(),
-        &Function::from(linear!(x1.id()) + coeff!(2.0) * linear!(x2.id()))
+        &Function::from(linear!(*x1_id) + coeff!(2.0) * linear!(*x2_id))
     );
 
     // Check constraint: x1 + x2 - 1 <= 0
@@ -264,7 +264,7 @@ ENDATA
     let (cid, constraint) = instance.constraints().iter().next().unwrap();
     assert_abs_diff_eq!(
         constraint.function(),
-        &Function::from(((linear!(x1.id()) + linear!(x2.id())).unwrap() + coeff!(-1.0)).unwrap())
+        &Function::from(((linear!(*x1_id) + linear!(*x2_id)).unwrap() + coeff!(-1.0)).unwrap())
     );
     assert_eq!(constraint.equality, crate::Equality::LessThanOrEqualToZero);
     assert_eq!(
@@ -322,7 +322,7 @@ ENDATA
     // Check objective: x1 - x2
     assert_abs_diff_eq!(
         instance.objective(),
-        &Function::from(linear!(x1.id()) + coeff!(-1.0) * linear!(x2.id()))
+        &Function::from(linear!(*x1_id) + coeff!(-1.0) * linear!(*x2_id))
     );
 
     // Check constraint: x1 - x2 = 0
@@ -330,7 +330,7 @@ ENDATA
     let (cid, constraint) = instance.constraints().iter().next().unwrap();
     assert_abs_diff_eq!(
         constraint.function(),
-        &Function::from(linear!(x1.id()) + coeff!(-1.0) * linear!(x2.id()))
+        &Function::from(linear!(*x1_id) + coeff!(-1.0) * linear!(*x2_id))
     );
     assert_eq!(constraint.equality, crate::Equality::EqualToZero);
     assert_eq!(
@@ -370,8 +370,8 @@ ENDATA
     // Check variables
     assert_eq!(instance.decision_variables().len(), 2);
     let mut iter = instance.decision_variables().iter();
-    let (x1_id, x1) = iter.next().unwrap();
-    let (x2_id, x2) = iter.next().unwrap();
+    let (x1_id, _x1) = iter.next().unwrap();
+    let (x2_id, _x2) = iter.next().unwrap();
     // Check variable names
     assert_eq!(instance.variable_labels().name(*x1_id).unwrap(), "X1");
     assert_eq!(instance.variable_labels().name(*x2_id).unwrap(), "X2");
@@ -379,7 +379,7 @@ ENDATA
     // Check objective: x1 + 2*x2
     assert_abs_diff_eq!(
         instance.objective(),
-        &Function::from(linear!(x1.id()) + coeff!(2.0) * linear!(x2.id()))
+        &Function::from(linear!(*x1_id) + coeff!(2.0) * linear!(*x2_id))
     );
 
     // Check constraint: x1 + x2 - 10 <= 0
@@ -387,7 +387,7 @@ ENDATA
     let (cid, constraint) = instance.constraints().iter().next().unwrap();
     assert_abs_diff_eq!(
         constraint.function(),
-        &Function::from(((linear!(x1.id()) + linear!(x2.id())).unwrap() + coeff!(-10.0)).unwrap())
+        &Function::from(((linear!(*x1_id) + linear!(*x2_id)).unwrap() + coeff!(-10.0)).unwrap())
     );
     assert_eq!(constraint.equality, crate::Equality::LessThanOrEqualToZero);
     assert_eq!(
@@ -455,8 +455,8 @@ ENDATA
     assert_abs_diff_eq!(
         instance.objective(),
         &Function::from(
-            ((linear!(x1.id()) + coeff!(4.0) * linear!(x2.id())).unwrap()
-                + (coeff!(9.0) * linear!(x3.id())).unwrap())
+            ((linear!(*x1_id) + coeff!(4.0) * linear!(*x2_id)).unwrap()
+                + (coeff!(9.0) * linear!(*x3_id)).unwrap())
             .unwrap()
         )
     );
@@ -513,14 +513,12 @@ ENDATA
     assert_eq!(instance.objective().degree(), 2);
 
     // Get variables using the new helper method
-    let x1 = instance
+    let (x1_id, _x1) = instance
         .get_decision_variable_by_name("X1", vec![])
         .unwrap();
-    let x2 = instance
+    let (x2_id, _x2) = instance
         .get_decision_variable_by_name("X2", vec![])
         .unwrap();
-    let x1_id = x1.id();
-    let x2_id = x2.id();
 
     // Build expected objective function: x1 + 3*x2 + 0.5*x1^2 + x1*x2 + 2*x2^2
     let expected_objective =
@@ -564,14 +562,12 @@ ENDATA
     assert_eq!(instance.constraints().len(), 1);
 
     // Get variables using the helper method
-    let x1 = instance
+    let (x1_id, _x1) = instance
         .get_decision_variable_by_name("X1", vec![])
         .unwrap();
-    let x2 = instance
+    let (x2_id, _x2) = instance
         .get_decision_variable_by_name("X2", vec![])
         .unwrap();
-    let x1_id = x1.id();
-    let x2_id = x2.id();
 
     // The constraint should be quadratic
     let (_cid, constraint) = instance.constraints().iter().next().unwrap();

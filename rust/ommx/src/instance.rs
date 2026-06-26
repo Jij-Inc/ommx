@@ -929,10 +929,10 @@ mod reduce_capabilities_tests {
     /// for Big-M conversion (binary variables have bound [0, 1]).
     fn instance_with_all_capabilities() -> Instance {
         let decision_variables = btreemap! {
-            VariableID::from(0) => DecisionVariable::binary(VariableID::from(0)),
-            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
-            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
-            VariableID::from(3) => DecisionVariable::binary(VariableID::from(3)),
+            VariableID::from(0) => DecisionVariable::binary(),
+            VariableID::from(1) => DecisionVariable::binary(),
+            VariableID::from(2) => DecisionVariable::binary(),
+            VariableID::from(3) => DecisionVariable::binary(),
         };
         let one_hot = OneHotConstraint::new(
             [VariableID::from(0), VariableID::from(1)]
@@ -1038,8 +1038,8 @@ mod reduce_capabilities_tests {
         // as converted; Indicator / SOS1 aren't in the returned set since they
         // were never present to begin with.
         let decision_variables = btreemap! {
-            VariableID::from(0) => DecisionVariable::binary(VariableID::from(0)),
-            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
+            VariableID::from(0) => DecisionVariable::binary(),
+            VariableID::from(1) => DecisionVariable::binary(),
         };
         let one_hot = OneHotConstraint::new(
             [VariableID::from(0), VariableID::from(1)]
@@ -1068,7 +1068,7 @@ mod reduce_capabilities_tests {
     fn conversion_failure_is_propagated() {
         // SOS1 over a continuous variable with infinite bound cannot be Big-M
         // converted; reduce_capabilities surfaces the underlying error.
-        let dv = DecisionVariable::continuous(VariableID::from(0));
+        let dv = DecisionVariable::continuous();
         let sos1 = Sos1Constraint::new([VariableID::from(0)].into_iter().collect::<BTreeSet<_>>())
             .unwrap();
         let mut instance = Instance::builder()
@@ -1091,7 +1091,6 @@ mod reduce_capabilities_tests {
         // reduce_capabilities should invoke the SOS1 Big-M conversion which
         // allocates a fresh binary indicator.
         let dv = DecisionVariable::new(
-            VariableID::from(0),
             Kind::Integer,
             Bound::new(-2.0, 3.0).unwrap(),
             crate::ATol::default(),

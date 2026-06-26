@@ -282,8 +282,8 @@ mod tests {
     /// Build an instance with binary x0, x1 and a SOS1 over {x0, x1}.
     fn binary_sos1_instance() -> Instance {
         let decision_variables = btreemap! {
-            VariableID::from(0) => DecisionVariable::binary(VariableID::from(0)),
-            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
+            VariableID::from(0) => DecisionVariable::binary(),
+            VariableID::from(1) => DecisionVariable::binary(),
         };
         let vars: BTreeSet<_> = [0u64, 1].into_iter().map(VariableID::from).collect();
         let sos1 = Sos1Constraint::new(vars).unwrap();
@@ -301,7 +301,6 @@ mod tests {
     /// Build an instance with a single integer x0 in [-2, 3] and a SOS1 over just {x0}.
     fn integer_sos1_instance(lower: f64, upper: f64) -> Instance {
         let dv = DecisionVariable::new(
-            VariableID::from(0),
             Kind::Integer,
             Bound::new(lower, upper).unwrap(),
             ATol::default(),
@@ -443,7 +442,7 @@ mod tests {
     #[test]
     fn infinite_bound_is_rejected_without_mutation() {
         // Continuous x0 with default (infinite) bound cannot be Big-M converted.
-        let dv = DecisionVariable::continuous(VariableID::from(0));
+        let dv = DecisionVariable::continuous();
         let vars: BTreeSet<_> = [VariableID::from(0)].into_iter().collect();
         let sos1 = Sos1Constraint::new(vars).unwrap();
         let mut instance = Instance::builder()
@@ -484,8 +483,8 @@ mod tests {
         // isn't uniformly implemented across the codebase; Big-M conversion is
         // explicitly not supported for them and must error before mutation.
         for dv in [
-            DecisionVariable::semi_integer(VariableID::from(0)),
-            DecisionVariable::semi_continuous(VariableID::from(0)),
+            DecisionVariable::semi_integer(),
+            DecisionVariable::semi_continuous(),
         ] {
             let kind = dv.kind();
             let sos1 =
@@ -536,10 +535,10 @@ mod tests {
     fn bulk_conversion_returns_per_sos1_ids() {
         // Two disjoint SOS1 constraints, both binary — bulk call produces one entry each.
         let decision_variables = btreemap! {
-            VariableID::from(0) => DecisionVariable::binary(VariableID::from(0)),
-            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
-            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
-            VariableID::from(3) => DecisionVariable::binary(VariableID::from(3)),
+            VariableID::from(0) => DecisionVariable::binary(),
+            VariableID::from(1) => DecisionVariable::binary(),
+            VariableID::from(2) => DecisionVariable::binary(),
+            VariableID::from(3) => DecisionVariable::binary(),
         };
         let a = Sos1Constraint::new(
             [VariableID::from(0), VariableID::from(1)]
@@ -580,7 +579,7 @@ mod tests {
         // An empty Sos1Constraint carries no variables to constrain, so the
         // Big-M cardinality constraint would degenerate to the tautology `-1 <= 0`.
         // The builder should reject empty SOS1 instead of letting it through.
-        let dv = DecisionVariable::binary(VariableID::from(0));
+        let dv = DecisionVariable::binary();
         let empty_sos1 = Sos1Constraint {
             variables: BTreeSet::new(),
             stage: crate::Sos1CreatedData,
@@ -606,9 +605,9 @@ mod tests {
         // (continuous with default, infinite bound). The bulk call must fail
         // without applying the valid one either.
         let decision_variables = btreemap! {
-            VariableID::from(0) => DecisionVariable::binary(VariableID::from(0)),
-            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
-            VariableID::from(2) => DecisionVariable::continuous(VariableID::from(2)),
+            VariableID::from(0) => DecisionVariable::binary(),
+            VariableID::from(1) => DecisionVariable::binary(),
+            VariableID::from(2) => DecisionVariable::continuous(),
         };
         let valid = Sos1Constraint::new(
             [VariableID::from(0), VariableID::from(1)]

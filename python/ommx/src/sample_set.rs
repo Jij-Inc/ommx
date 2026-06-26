@@ -260,6 +260,7 @@ impl SampleSet {
             .iter()
             .map(|(id, variable)| {
                 crate::SampledDecisionVariable::from_parts(
+                    *id,
                     variable.clone(),
                     labels.collect_for(*id),
                 )
@@ -436,7 +437,11 @@ impl SampleSet {
             .decision_variables()
             .get(&var_id)
             .map(|dv| {
-                crate::SampledDecisionVariable::from_parts(dv.clone(), labels.collect_for(var_id))
+                crate::SampledDecisionVariable::from_parts(
+                    var_id,
+                    dv.clone(),
+                    labels.collect_for(var_id),
+                )
             })
             .ok_or_else(|| {
                 pyo3::exceptions::PyKeyError::new_err(format!(
@@ -602,18 +607,22 @@ impl SampleSet {
         let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         let sample_ids = sorted_sample_ids(&self.inner);
         let var_meta_store = self.inner.variable_labels().clone();
-        let view: Vec<(ommx::DecisionVariableLabel, &ommx::SampledDecisionVariable)> = self
+        let view: Vec<(
+            ommx::DecisionVariableLabel,
+            ommx::VariableID,
+            &ommx::SampledDecisionVariable,
+        )> = self
             .inner
             .decision_variables()
             .iter()
-            .map(|(id, dv)| (var_meta_store.collect_for(*id), dv))
+            .map(|(id, dv)| (var_meta_store.collect_for(*id), *id, dv))
             .collect();
         entries_to_dataframe(
             py,
-            view.iter().map(|(m, dv)| {
+            view.iter().map(|(m, id, dv)| {
                 crate::pandas::WithModelingContext::new(
                     WithSampleIds {
-                        item: *dv,
+                        item: (*id, *dv),
                         sample_ids: &sample_ids,
                     },
                     m,

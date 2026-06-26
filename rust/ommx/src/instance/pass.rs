@@ -137,14 +137,8 @@ mod tests {
     #[test]
     fn test_restore_constraint_with_fixed_variable() {
         let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(
-            VariableID::from(1),
-            DecisionVariable::continuous(VariableID::from(1)),
-        );
-        decision_variables.insert(
-            VariableID::from(2),
-            DecisionVariable::continuous(VariableID::from(2)),
-        );
+        decision_variables.insert(VariableID::from(1), DecisionVariable::continuous());
+        decision_variables.insert(VariableID::from(2), DecisionVariable::continuous());
 
         let constraint_function =
             Function::from(((linear!(1) + linear!(2)).unwrap() + coeff!(-10.0)).unwrap());
@@ -188,10 +182,7 @@ mod tests {
     fn test_restore_constraint_with_dependent_variable() {
         let mut decision_variables = BTreeMap::new();
         for i in 1..=3 {
-            decision_variables.insert(
-                VariableID::from(i),
-                DecisionVariable::continuous(VariableID::from(i)),
-            );
+            decision_variables.insert(VariableID::from(i), DecisionVariable::continuous());
         }
 
         let mut constraints = BTreeMap::new();
@@ -235,10 +226,7 @@ mod tests {
     fn test_restore_constraint_with_fixed_variable_in_dependency() {
         let mut decision_variables = BTreeMap::new();
         for i in 1..=3 {
-            decision_variables.insert(
-                VariableID::from(i),
-                DecisionVariable::continuous(VariableID::from(i)),
-            );
+            decision_variables.insert(VariableID::from(i), DecisionVariable::continuous());
         }
 
         let mut constraints = BTreeMap::new();
@@ -290,14 +278,8 @@ mod tests {
         use crate::IndicatorConstraintID;
 
         let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(
-            VariableID::from(1),
-            DecisionVariable::continuous(VariableID::from(1)),
-        );
-        decision_variables.insert(
-            VariableID::from(10),
-            DecisionVariable::binary(VariableID::from(10)),
-        );
+        decision_variables.insert(VariableID::from(1), DecisionVariable::continuous());
+        decision_variables.insert(VariableID::from(10), DecisionVariable::binary());
 
         let mut instance = Instance::new(
             Sense::Minimize,
@@ -339,14 +321,8 @@ mod tests {
         use crate::IndicatorConstraintID;
 
         let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(
-            VariableID::from(1),
-            DecisionVariable::continuous(VariableID::from(1)),
-        );
-        decision_variables.insert(
-            VariableID::from(10),
-            DecisionVariable::binary(VariableID::from(10)),
-        );
+        decision_variables.insert(VariableID::from(1), DecisionVariable::continuous());
+        decision_variables.insert(VariableID::from(10), DecisionVariable::binary());
 
         let mut instance = Instance::new(
             Sense::Minimize,
@@ -394,18 +370,9 @@ mod tests {
         use crate::IndicatorConstraintID;
 
         let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(
-            VariableID::from(1),
-            DecisionVariable::continuous(VariableID::from(1)),
-        );
-        decision_variables.insert(
-            VariableID::from(2),
-            DecisionVariable::continuous(VariableID::from(2)),
-        );
-        decision_variables.insert(
-            VariableID::from(10),
-            DecisionVariable::binary(VariableID::from(10)),
-        );
+        decision_variables.insert(VariableID::from(1), DecisionVariable::continuous());
+        decision_variables.insert(VariableID::from(2), DecisionVariable::continuous());
+        decision_variables.insert(VariableID::from(10), DecisionVariable::binary());
 
         let mut instance = Instance::new(
             Sense::Minimize,
@@ -467,18 +434,9 @@ mod tests {
         use crate::IndicatorConstraintID;
 
         let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(
-            VariableID::from(1),
-            DecisionVariable::continuous(VariableID::from(1)),
-        );
-        decision_variables.insert(
-            VariableID::from(10),
-            DecisionVariable::binary(VariableID::from(10)),
-        );
-        decision_variables.insert(
-            VariableID::from(20),
-            DecisionVariable::binary(VariableID::from(20)),
-        );
+        decision_variables.insert(VariableID::from(1), DecisionVariable::continuous());
+        decision_variables.insert(VariableID::from(10), DecisionVariable::binary());
+        decision_variables.insert(VariableID::from(20), DecisionVariable::binary());
 
         let mut instance = Instance::new(
             Sense::Minimize,

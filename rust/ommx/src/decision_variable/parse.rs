@@ -56,6 +56,7 @@ impl From<Kind> for i32 {
 /// parse can drain it into the [`VariableLabelStore`].
 #[derive(Debug)]
 pub struct ParsedDecisionVariable {
+    pub id: VariableID,
     pub variable: DecisionVariable,
     pub label: DecisionVariableLabel,
     pub fixed_value: Option<f64>,
@@ -71,16 +72,12 @@ impl Parse for v1::DecisionVariable {
             .bound
             .unwrap_or_default()
             .parse_as(&(), message, "bound")?;
-        let dv = DecisionVariable::new(
-            VariableID(self.id),
-            kind,
-            bound,
-            ATol::default(), // FIXME: user should provide this
-        )
+        let id = VariableID::from(self.id);
+        let dv = DecisionVariable::new(kind, bound, ATol::default()) // FIXME: user should provide this
         .map_err(|e| RawParseError::InvalidDecisionVariable(e).context(message, "bound"))?;
         let fixed_value = self.substituted_value;
         if let Some(value) = fixed_value {
-            dv.check_value_consistency(value, ATol::default())
+            dv.check_value_consistency(id, value, ATol::default())
                 .map_err(|e| {
                     RawParseError::InvalidDecisionVariable(e).context(message, "substituted_value")
                 })?;
@@ -92,6 +89,7 @@ impl Parse for v1::DecisionVariable {
             description: self.description,
         };
         Ok(ParsedDecisionVariable {
+            id,
             variable: dv,
             label,
             fixed_value,
@@ -119,7 +117,7 @@ impl Parse for Vec<v1::DecisionVariable> {
         let mut fixed_values = BTreeMap::default();
         for v in self {
             let parsed: ParsedDecisionVariable = v.parse(&())?;
-            let id = parsed.variable.id;
+            let id = parsed.id;
             if decision_variables.insert(id, parsed.variable).is_some() {
                 return Err(RawParseError::InvalidInstance(format!(
                     "Duplicated variable ID is found in definition: {id:?}"
@@ -137,7 +135,8 @@ impl Parse for Vec<v1::DecisionVariable> {
 
 /// Build a v1 `DecisionVariable` from its intrinsic data plus drained modeling label.
 pub(crate) fn decision_variable_to_v1(
-    DecisionVariable { id, kind, bound }: DecisionVariable,
+    id: VariableID,
+    DecisionVariable { kind, bound }: DecisionVariable,
     label: DecisionVariableLabel,
 ) -> v1::DecisionVariable {
     decision_variable_fields_to_v1(id, kind, bound, label, None)
@@ -145,7 +144,8 @@ pub(crate) fn decision_variable_to_v1(
 
 /// Build a v1 `DecisionVariable` and overlay the root-owned fixed value.
 pub(crate) fn decision_variable_to_v1_with_fixed_value(
-    DecisionVariable { id, kind, bound }: DecisionVariable,
+    id: VariableID,
+    DecisionVariable { kind, bound }: DecisionVariable,
     label: DecisionVariableLabel,
     substituted_value: Option<f64>,
 ) -> v1::DecisionVariable {
@@ -174,6 +174,7 @@ fn decision_variable_fields_to_v1(
 /// Parsed v1 `SampledDecisionVariable` together with its drained modeling label.
 #[derive(Debug)]
 pub struct ParsedSampledDecisionVariable {
+    pub id: VariableID,
     pub variable: SampledDecisionVariable,
     pub label: DecisionVariableLabel,
 }
@@ -209,7 +210,7 @@ impl Parse for v1::SampledDecisionVariable {
                 if !sample_value.is_finite() {
                     return Err(RawParseError::InvalidDecisionVariable(
                         DecisionVariableError::NonFiniteValue {
-                            id: parsed_dv.variable.id,
+                            id: parsed_dv.id,
                             value: sample_value,
                         },
                     )
@@ -218,7 +219,7 @@ impl Parse for v1::SampledDecisionVariable {
                 if (sample_value - fixed_value).abs() > *atol {
                     return Err(RawParseError::InvalidDecisionVariable(
                         DecisionVariableError::SubstitutedValueOverwrite {
-                            id: parsed_dv.variable.id,
+                            id: parsed_dv.id,
                             previous_value: fixed_value,
                             new_value: sample_value,
                             atol,
@@ -230,9 +231,11 @@ impl Parse for v1::SampledDecisionVariable {
         }
 
         // Create SampledDecisionVariable with validation
-        let sampled = crate::SampledDecisionVariable::new(parsed_dv.variable, samples)
-            .map_err(RawParseError::InvalidDecisionVariable)?;
+        let sampled =
+            crate::SampledDecisionVariable::new(parsed_dv.id, parsed_dv.variable, samples)
+                .map_err(RawParseError::InvalidDecisionVariable)?;
         Ok(ParsedSampledDecisionVariable {
+            id: parsed_dv.id,
             variable: sampled,
             label: parsed_dv.label,
         })
@@ -248,17 +251,17 @@ impl TryFrom<v1::SampledDecisionVariable> for SampledDecisionVariable {
 
 /// Build a v1 `SampledDecisionVariable` from its intrinsic data plus drained modeling label.
 pub(crate) fn sampled_decision_variable_to_v1(
+    id: VariableID,
     sampled_dv: SampledDecisionVariable,
     label: DecisionVariableLabel,
 ) -> v1::SampledDecisionVariable {
     let dv = DecisionVariable {
-        id: sampled_dv.id,
         kind: sampled_dv.kind,
         bound: sampled_dv.bound,
     };
 
     v1::SampledDecisionVariable {
-        decision_variable: Some(decision_variable_to_v1(dv, label)),
+        decision_variable: Some(decision_variable_to_v1(id, dv, label)),
         samples: Some(sampled_dv.samples.into()),
     }
 }
@@ -282,7 +285,7 @@ mod tests {
         insta::assert_snapshot!(res.unwrap_err(), @r###"
         Traceback for OMMX Message parse error:
         └─ommx.v1.DecisionVariable[bound]
-        Bound for ID=1 is inconsistent to kind: kind=Integer, bound=[1.1, 1.9]
+        Bound is inconsistent to kind: kind=Integer, bound=[1.1, 1.9]
         "###);
     }
 
@@ -319,10 +322,11 @@ mod tests {
         };
 
         let parsed: ParsedSampledDecisionVariable = v1_sampled_dv.parse(&()).unwrap();
+        let sampled_id = parsed.id;
         let sampled_dv = parsed.variable;
         let label = parsed.label;
 
-        assert_eq!(*sampled_dv.id(), VariableID::from(42));
+        assert_eq!(sampled_id, VariableID::from(42));
         assert_eq!(*sampled_dv.kind(), Kind::Continuous);
         assert_eq!(label.name, Some("test_var".to_string()));
         assert_eq!(label.subscripts, vec![1, 2]);
@@ -330,7 +334,7 @@ mod tests {
 
         // Test round-trip conversion: name is reattached at serialize time
         // by `sampled_decision_variable_to_v1`.
-        let v1_converted = sampled_decision_variable_to_v1(sampled_dv, label);
+        let v1_converted = sampled_decision_variable_to_v1(sampled_id, sampled_dv, label);
         let decision_variable = v1_converted.decision_variable.unwrap();
         assert_eq!(decision_variable.id, 42);
         assert_eq!(decision_variable.name, Some("test_var".to_string()));

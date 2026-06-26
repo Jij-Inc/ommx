@@ -10,19 +10,16 @@ fn test_unused_variable_filtering() {
     // Create instance with 3 variables but only use 2
     let decision_variables = btreemap! {
         VariableID::from(0) => DecisionVariable::new(
-            VariableID::from(0),
             crate::decision_variable::Kind::Continuous,
             Bound::new(0.0, 10.0).unwrap(),
             crate::ATol::default()
         ).unwrap(),
         VariableID::from(1) => DecisionVariable::new(
-            VariableID::from(1),
             crate::decision_variable::Kind::Continuous,
             Bound::new(0.0, 10.0).unwrap(),
             crate::ATol::default()
         ).unwrap(),
         VariableID::from(2) => DecisionVariable::new(
-            VariableID::from(2),
             crate::decision_variable::Kind::Continuous,
             Bound::new(0.0, 10.0).unwrap(),
             crate::ATol::default()
@@ -65,13 +62,11 @@ fn test_removed_constraint_variable_preservation() {
     // Create instance with variables and constraints, then relax one
     let decision_variables = btreemap! {
         VariableID::from(0) => DecisionVariable::new(
-            VariableID::from(0),
             crate::decision_variable::Kind::Continuous,
             Bound::new(0.0, 10.0).unwrap(),
             crate::ATol::default()
         ).unwrap(),
         VariableID::from(1) => DecisionVariable::new(
-            VariableID::from(1),
             crate::decision_variable::Kind::Continuous,
             Bound::new(0.0, 10.0).unwrap(),
             crate::ATol::default()
@@ -126,7 +121,6 @@ fn test_removed_constraint_information_loss() {
     // Create instance with both active and removed constraints
     let decision_variables = btreemap! {
         VariableID::from(0) => DecisionVariable::new(
-            VariableID::from(0),
             crate::decision_variable::Kind::Continuous,
             Bound::new(0.0, 10.0).unwrap(),
             crate::ATol::default()

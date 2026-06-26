@@ -391,6 +391,7 @@ impl From<Instance> for v1::Instance {
             .map(|(id, dv)| {
                 let label = variable_labels.collect_for(id);
                 crate::decision_variable::parse::decision_variable_to_v1_with_fixed_value(
+                    id,
                     dv,
                     label,
                     fixed_decision_variable_values.get(&id).copied(),
@@ -688,6 +689,7 @@ impl From<ParametricInstance> for v1::ParametricInstance {
             .map(|(id, dv)| {
                 let label = variable_labels.collect_for(id);
                 crate::decision_variable::parse::decision_variable_to_v1_with_fixed_value(
+                    id,
                     dv,
                     label,
                     fixed_decision_variable_values.get(&id).copied(),
@@ -743,7 +745,8 @@ mod tests {
             .into_iter()
             .map(|id| {
                 crate::decision_variable::parse::decision_variable_to_v1(
-                    crate::DecisionVariable::binary(VariableID::from(id)),
+                    crate::VariableID::from(id),
+                    crate::DecisionVariable::binary(),
                     Default::default(),
                 )
             })
@@ -972,7 +975,8 @@ mod tests {
             sense: v1::instance::Sense::Minimize as i32,
             objective: Some(Function::from(linear!(999) + coeff!(1.0)).into()),
             decision_variables: vec![crate::decision_variable::parse::decision_variable_to_v1(
-                DecisionVariable::binary(VariableID::from(1)),
+                VariableID::from(1),
+                DecisionVariable::binary(),
                 Default::default(),
             )],
             parameters: vec![v1::Parameter {
@@ -1010,7 +1014,8 @@ mod tests {
             sense: v1::instance::Sense::Minimize as i32,
             objective: Some(Function::from(linear!(1) + coeff!(1.0)).into()),
             decision_variables: vec![crate::decision_variable::parse::decision_variable_to_v1(
-                DecisionVariable::binary(VariableID::from(1)),
+                VariableID::from(1),
+                DecisionVariable::binary(),
                 Default::default(),
             )],
             parameters: vec![v1::Parameter {
@@ -1050,7 +1055,8 @@ mod tests {
             sense: v1::instance::Sense::Minimize as i32,
             objective: Some(Function::from(linear!(999) + coeff!(1.0)).into()),
             decision_variables: vec![crate::decision_variable::parse::decision_variable_to_v1(
-                DecisionVariable::binary(VariableID::from(1)),
+                VariableID::from(1),
+                DecisionVariable::binary(),
                 Default::default(),
             )],
             constraints: vec![],
@@ -1117,7 +1123,8 @@ mod tests {
             sense: v1::instance::Sense::Minimize as i32,
             objective: Some(Function::from(linear!(1) + coeff!(1.0)).into()),
             decision_variables: vec![crate::decision_variable::parse::decision_variable_to_v1(
-                DecisionVariable::binary(VariableID::from(1)),
+                VariableID::from(1),
+                DecisionVariable::binary(),
                 Default::default(),
             )],
             constraints: vec![constraint_to_v1(
@@ -1164,7 +1171,8 @@ mod tests {
             sense: v1::instance::Sense::Minimize as i32,
             objective: Some(Function::from(linear!(1) + coeff!(1.0)).into()),
             decision_variables: vec![crate::decision_variable::parse::decision_variable_to_v1(
-                DecisionVariable::binary(VariableID::from(1)),
+                VariableID::from(1),
+                DecisionVariable::binary(),
                 Default::default(),
             )],
             parameters: vec![v1::Parameter {
@@ -1211,7 +1219,8 @@ mod tests {
             sense: v1::instance::Sense::Minimize as i32,
             objective: Some(Function::from(linear!(1) + coeff!(1.0)).into()),
             decision_variables: vec![crate::decision_variable::parse::decision_variable_to_v1(
-                DecisionVariable::binary(VariableID::from(1)),
+                VariableID::from(1),
+                DecisionVariable::binary(),
                 Default::default(),
             )],
             constraints: vec![constraint_to_v1(cid, constraint, Default::default())],
@@ -1243,7 +1252,8 @@ mod tests {
             sense: 999, // Invalid sense value
             objective: Some(Function::from(linear!(1) + coeff!(1.0)).into()),
             decision_variables: vec![crate::decision_variable::parse::decision_variable_to_v1(
-                DecisionVariable::binary(VariableID::from(1)),
+                VariableID::from(1),
+                DecisionVariable::binary(),
                 Default::default(),
             )],
             parameters: vec![v1::Parameter {
@@ -1277,7 +1287,8 @@ mod tests {
             sense: 999, // Invalid sense value
             objective: Some(Function::from(linear!(1) + coeff!(1.0)).into()),
             decision_variables: vec![crate::decision_variable::parse::decision_variable_to_v1(
-                DecisionVariable::binary(VariableID::from(1)),
+                VariableID::from(1),
+                DecisionVariable::binary(),
                 Default::default(),
             )],
             constraints: vec![],
@@ -1307,7 +1318,8 @@ mod tests {
             sense: v1::instance::Sense::Minimize as i32,
             objective: None, // Missing objective
             decision_variables: vec![crate::decision_variable::parse::decision_variable_to_v1(
-                DecisionVariable::binary(VariableID::from(1)),
+                VariableID::from(1),
+                DecisionVariable::binary(),
                 Default::default(),
             )],
             parameters: vec![v1::Parameter {
@@ -1342,7 +1354,8 @@ mod tests {
             sense: v1::instance::Sense::Minimize as i32,
             objective: None, // Missing objective
             decision_variables: vec![crate::decision_variable::parse::decision_variable_to_v1(
-                DecisionVariable::binary(VariableID::from(1)),
+                VariableID::from(1),
+                DecisionVariable::binary(),
                 Default::default(),
             )],
             constraints: vec![],
@@ -1373,7 +1386,8 @@ mod tests {
             sense: v1::instance::Sense::Minimize as i32,
             objective: Some(Function::from(linear!(1) + coeff!(1.0)).into()),
             decision_variables: vec![crate::decision_variable::parse::decision_variable_to_v1(
-                DecisionVariable::binary(VariableID::from(1)),
+                VariableID::from(1),
+                DecisionVariable::binary(),
                 Default::default(),
             )],
             parameters: vec![v1::Parameter {
@@ -1415,7 +1429,8 @@ mod tests {
             sense: v1::instance::Sense::Minimize as i32,
             objective: Some(Function::from(linear!(1) + coeff!(1.0)).into()),
             decision_variables: vec![crate::decision_variable::parse::decision_variable_to_v1(
-                DecisionVariable::binary(VariableID::from(1)),
+                VariableID::from(1),
+                DecisionVariable::binary(),
                 Default::default(),
             )],
             parameters: vec![v1::Parameter {
@@ -1460,7 +1475,8 @@ mod tests {
             sense: v1::instance::Sense::Minimize as i32,
             objective: Some(Function::from(linear!(1) + coeff!(1.0)).into()),
             decision_variables: vec![crate::decision_variable::parse::decision_variable_to_v1(
-                DecisionVariable::binary(VariableID::from(1)),
+                VariableID::from(1),
+                DecisionVariable::binary(),
                 Default::default(),
             )],
             constraints: vec![
@@ -1540,7 +1556,7 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::from(linear!(1)))
             .decision_variables(maplit::btreemap! {
-                var_id => DecisionVariable::binary(var_id),
+                var_id => DecisionVariable::binary(),
             })
             .parameters(BTreeMap::new())
             .constraints(maplit::btreemap! {
@@ -1605,7 +1621,7 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::from(linear!(1)))
             .decision_variables(maplit::btreemap! {
-                var_id => DecisionVariable::binary(var_id),
+                var_id => DecisionVariable::binary(),
             })
             .constraints(BTreeMap::new())
             .build()

@@ -249,7 +249,7 @@ impl Constraint {
         indicator_variable: &crate::DecisionVariable,
     ) -> crate::IndicatorConstraint {
         let ic = ommx::IndicatorConstraint::new(
-            indicator_variable.0.id(),
+            indicator_variable.0,
             self.0.equality,
             self.0.stage.function.clone(),
         );

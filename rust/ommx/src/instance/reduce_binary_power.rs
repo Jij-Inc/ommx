@@ -38,14 +38,10 @@ mod tests {
     fn test_instance_reduce_binary_power() {
         // Create instance with binary and continuous variables
         let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(
-            VariableID::from(1),
-            DecisionVariable::binary(VariableID::from(1)),
-        );
+        decision_variables.insert(VariableID::from(1), DecisionVariable::binary());
         decision_variables.insert(
             VariableID::from(2),
             DecisionVariable::new(
-                VariableID::from(2),
                 Kind::Continuous,
                 Bound::new(0.0, 10.0).unwrap(),
                 ATol::default(),
@@ -110,14 +106,8 @@ mod tests {
     fn test_instance_reduce_binary_power_no_binary() {
         // Create instance with only continuous variables
         let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(
-            VariableID::from(1),
-            DecisionVariable::continuous(VariableID::from(1)),
-        );
-        decision_variables.insert(
-            VariableID::from(2),
-            DecisionVariable::integer(VariableID::from(2)),
-        );
+        decision_variables.insert(VariableID::from(1), DecisionVariable::continuous());
+        decision_variables.insert(VariableID::from(2), DecisionVariable::integer());
 
         let objective = Function::Quadratic(
             (quadratic!(1, 1) + (coeff!(2.0) * quadratic!(2, 2)).unwrap()).unwrap(),
@@ -140,10 +130,7 @@ mod tests {
     #[test]
     fn reduce_binary_power_preserves_instance_on_coefficient_error() {
         let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(
-            VariableID::from(1),
-            DecisionVariable::binary(VariableID::from(1)),
-        );
+        decision_variables.insert(VariableID::from(1), DecisionVariable::binary());
 
         let objective = Function::Quadratic(quadratic!(1, 1).into());
         let huge = Coefficient::try_from(f64::MAX).unwrap();

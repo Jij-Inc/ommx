@@ -219,10 +219,10 @@ mod tests {
         // min x1 + x2 s.t. x1 + x2 - 4 <= 0, with x1, x2 integer in [0, 3]
         let dv = btreemap! {
             VariableID::from(1) => DecisionVariable::new(
-                VariableID::from(1), Kind::Integer, Bound::new(0.0, 3.0).unwrap(), ATol::default()
+                Kind::Integer, Bound::new(0.0, 3.0).unwrap(), ATol::default()
             ).unwrap(),
             VariableID::from(2) => DecisionVariable::new(
-                VariableID::from(2), Kind::Integer, Bound::new(0.0, 3.0).unwrap(), ATol::default()
+                Kind::Integer, Bound::new(0.0, 3.0).unwrap(), ATol::default()
             ).unwrap(),
         };
         let objective = (Function::from(linear!(1)) + Function::from(linear!(2))).unwrap();
@@ -257,7 +257,7 @@ mod tests {
         // min x1 s.t. x1 - 2 <= 0, x1 integer in [0, 3]
         let dv = btreemap! {
             VariableID::from(1) => DecisionVariable::new(
-                VariableID::from(1), Kind::Integer, Bound::new(0.0, 3.0).unwrap(), ATol::default()
+                Kind::Integer, Bound::new(0.0, 3.0).unwrap(), ATol::default()
             ).unwrap(),
         };
         let objective = Function::from(linear!(1));
@@ -291,7 +291,7 @@ mod tests {
         // x1 - 10 <= 0 with x1 in [0, 3] is always satisfied
         let dv = btreemap! {
             VariableID::from(1) => DecisionVariable::new(
-                VariableID::from(1), Kind::Integer, Bound::new(0.0, 3.0).unwrap(), ATol::default()
+                Kind::Integer, Bound::new(0.0, 3.0).unwrap(), ATol::default()
             ).unwrap(),
         };
         let objective = Function::from(linear!(1));
@@ -315,7 +315,7 @@ mod tests {
         // leaving behind an orphan slack decision variable.
         let dv = btreemap! {
             VariableID::from(1) => DecisionVariable::new(
-                VariableID::from(1), Kind::Integer, Bound::new(0.0, 3.0).unwrap(), ATol::default()
+                Kind::Integer, Bound::new(0.0, 3.0).unwrap(), ATol::default()
             ).unwrap(),
         };
         let objective = Function::from(linear!(1));
@@ -344,7 +344,7 @@ mod tests {
         // `add_integer_slack_to_inequality`.
         let dv = btreemap! {
             VariableID::from(1) => DecisionVariable::new(
-                VariableID::from(1), Kind::Integer, Bound::new(0.0, 3.0).unwrap(), ATol::default()
+                Kind::Integer, Bound::new(0.0, 3.0).unwrap(), ATol::default()
             ).unwrap(),
         };
         let objective = Function::from(linear!(1));
@@ -364,7 +364,7 @@ mod tests {
     #[test]
     fn rejects_constraint_with_continuous_variable() {
         let dv = btreemap! {
-            VariableID::from(1) => DecisionVariable::continuous(VariableID::from(1)),
+            VariableID::from(1) => DecisionVariable::continuous(),
         };
         let objective = Function::from(linear!(1));
         let constraint_fn = (Function::from(linear!(1)) + coeff!(-2.0)).unwrap();

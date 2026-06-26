@@ -50,8 +50,8 @@ mod tests {
     fn test_instance_new_fails_with_undefined_variable_in_objective() {
         // Create decision variables that do not include variable ID 999
         let decision_variables = btreemap! {
-            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
-            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
+            VariableID::from(1) => DecisionVariable::binary(),
+            VariableID::from(2) => DecisionVariable::binary(),
         };
 
         // Create objective function that uses undefined variable ID 999
@@ -76,8 +76,8 @@ mod tests {
     fn test_instance_new_fails_with_undefined_variable_in_constraint() {
         // Create decision variables that do not include variable ID 999
         let decision_variables = btreemap! {
-            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
-            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
+            VariableID::from(1) => DecisionVariable::binary(),
+            VariableID::from(2) => DecisionVariable::binary(),
         };
 
         // Create simple objective function using defined variables
@@ -105,8 +105,8 @@ mod tests {
     fn test_parametric_instance_new_succeeds() {
         // Test successful creation with decision variables and parameters in both objective and constraints
         let decision_variables = btreemap! {
-            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
-            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
+            VariableID::from(1) => DecisionVariable::binary(),
+            VariableID::from(2) => DecisionVariable::binary(),
         };
 
         let parameters = btreemap! {
@@ -144,8 +144,8 @@ mod tests {
     fn test_parametric_instance_new_fails_with_duplicated_variable_id() {
         // Test detection of ID collision between decision variables and parameters
         let decision_variables = btreemap! {
-            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
-            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
+            VariableID::from(1) => DecisionVariable::binary(),
+            VariableID::from(2) => DecisionVariable::binary(),
         };
 
         // Parameter with same ID as decision variable
@@ -174,8 +174,8 @@ mod tests {
     fn test_parametric_instance_new_fails_with_undefined_variable_in_objective() {
         // Test detection of undefined variable ID in objective function
         let decision_variables = btreemap! {
-            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
-            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
+            VariableID::from(1) => DecisionVariable::binary(),
+            VariableID::from(2) => DecisionVariable::binary(),
         };
 
         let parameters = btreemap! {
@@ -204,8 +204,8 @@ mod tests {
     fn test_parametric_instance_new_fails_with_undefined_variable_in_constraint() {
         // Test detection of undefined variable ID in constraint
         let decision_variables = btreemap! {
-            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
-            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
+            VariableID::from(1) => DecisionVariable::binary(),
+            VariableID::from(2) => DecisionVariable::binary(),
         };
 
         let parameters = btreemap! {
