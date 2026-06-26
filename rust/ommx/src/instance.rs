@@ -1090,7 +1090,12 @@ mod reduce_capabilities_tests {
         // A single SOS1 over an integer variable with finite bound [-2, 3]:
         // reduce_capabilities should invoke the SOS1 Big-M conversion which
         // allocates a fresh binary indicator.
-        let dv = DecisionVariable::new(Kind::Integer, Bound::new(-2.0, 3.0).unwrap()).unwrap();
+        let dv = DecisionVariable::new(
+            Kind::Integer,
+            Bound::new(-2.0, 3.0).unwrap(),
+            crate::ATol::default(),
+        )
+        .unwrap();
         let sos1 = Sos1Constraint::new([VariableID::from(0)].into_iter().collect::<BTreeSet<_>>())
             .unwrap();
         let mut instance = Instance::builder()

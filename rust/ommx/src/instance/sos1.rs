@@ -298,7 +298,12 @@ mod tests {
 
     /// Build an instance with a single integer x0 in [-2, 3] and a SOS1 over just {x0}.
     fn integer_sos1_instance(lower: f64, upper: f64) -> Instance {
-        let dv = DecisionVariable::new(Kind::Integer, Bound::new(lower, upper).unwrap()).unwrap();
+        let dv = DecisionVariable::new(
+            Kind::Integer,
+            Bound::new(lower, upper).unwrap(),
+            crate::ATol::default(),
+        )
+        .unwrap();
         let vars: BTreeSet<_> = [VariableID::from(0)].into_iter().collect();
         let sos1 = Sos1Constraint::new(vars).unwrap();
         Instance::builder()

@@ -278,7 +278,7 @@ mod tests {
         equality: Equality,
         function: Function,
     ) -> Instance {
-        let x = DecisionVariable::new(Kind::Continuous, x_bound).unwrap();
+        let x = DecisionVariable::new(Kind::Continuous, x_bound, crate::ATol::default()).unwrap();
         let y = DecisionVariable::binary();
 
         let ic = IndicatorConstraint::new(VariableID::from(10), equality, function);
@@ -497,8 +497,12 @@ mod tests {
         // but the true `sup f = 0.5` at `x = 0` means the upper Big-M is needed.
         // Since this is unsafe, planner must reject semi kinds before using
         // `evaluate_bound`, matching `convert_sos1_to_constraints`.
-        let x_semi =
-            DecisionVariable::new(Kind::SemiContinuous, Bound::new(2.0, 5.0).unwrap()).unwrap();
+        let x_semi = DecisionVariable::new(
+            Kind::SemiContinuous,
+            Bound::new(2.0, 5.0).unwrap(),
+            crate::ATol::default(),
+        )
+        .unwrap();
         let y = DecisionVariable::binary();
         let ic = IndicatorConstraint::new(
             VariableID::from(10),
@@ -562,7 +566,12 @@ mod tests {
         // Two indicators on the same indicator variable, both convertible:
         // #1: y=1 → x - 2 <= 0   → 1 big-M upper
         // #2: y=1 → x - 2 = 0    → 2 big-M (upper + lower)
-        let x = DecisionVariable::new(Kind::Continuous, Bound::new(0.0, 5.0).unwrap()).unwrap();
+        let x = DecisionVariable::new(
+            Kind::Continuous,
+            Bound::new(0.0, 5.0).unwrap(),
+            crate::ATol::default(),
+        )
+        .unwrap();
         let y = DecisionVariable::binary();
         let f = || Function::from(linear!(1) + coeff!(-2.0));
         let ic_le =
@@ -597,7 +606,12 @@ mod tests {
         // Two indicators: first is convertible (bounded x), second has an unbounded
         // variable in its function. The bulk call must fail without applying the
         // first one either.
-        let x1 = DecisionVariable::new(Kind::Continuous, Bound::new(0.0, 5.0).unwrap()).unwrap();
+        let x1 = DecisionVariable::new(
+            Kind::Continuous,
+            Bound::new(0.0, 5.0).unwrap(),
+            crate::ATol::default(),
+        )
+        .unwrap();
         let x2 = DecisionVariable::continuous(); // infinite bound
         let y = DecisionVariable::binary();
         let ic_ok = IndicatorConstraint::new(

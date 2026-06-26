@@ -202,8 +202,8 @@ is used by `Solution` and `SampleSet` for evaluated and sampled decision
 variables.
 
 This removes the remaining duplicate ID source from the Rust-side row structs.
-Construct `DecisionVariable` rows with `DecisionVariable::new(kind, bound)` or
-no-argument factories such as `DecisionVariable::binary()`, then insert them
+Construct `DecisionVariable` rows with `DecisionVariable::new(kind, bound, atol)`
+or no-argument factories such as `DecisionVariable::binary()`, then insert them
 under the desired `VariableID` key. `EvaluatedDecisionVariable::new`
 and `SampledDecisionVariable::new` still take the ID as a separate argument so
 non-finite value errors can report the table key, but the resulting row data

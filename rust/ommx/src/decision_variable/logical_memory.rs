@@ -42,7 +42,12 @@ mod tests {
     // `Instance::variable_labels` SoA-store level.
     #[test]
     fn test_decision_variable_minimal_no_label_snapshot() {
-        let dv = DecisionVariable::new(Kind::Integer, Bound::new(0.0, 10.0).unwrap()).unwrap();
+        let dv = DecisionVariable::new(
+            Kind::Integer,
+            Bound::new(0.0, 10.0).unwrap(),
+            crate::ATol::default(),
+        )
+        .unwrap();
 
         let folded = logical_memory_to_folded(&dv);
         insta::assert_snapshot!(folded, @r###"

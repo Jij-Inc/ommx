@@ -41,7 +41,12 @@ mod tests {
         decision_variables.insert(VariableID::from(1), DecisionVariable::binary());
         decision_variables.insert(
             VariableID::from(2),
-            DecisionVariable::new(Kind::Continuous, Bound::new(0.0, 10.0).unwrap()).unwrap(),
+            DecisionVariable::new(
+                Kind::Continuous,
+                Bound::new(0.0, 10.0).unwrap(),
+                crate::ATol::default(),
+            )
+            .unwrap(),
         );
 
         // Objective: x1^2 + x1*x2 + x2^2

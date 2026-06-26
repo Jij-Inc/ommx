@@ -68,9 +68,19 @@ mod tests {
 
     #[test]
     fn test_equal_rows_are_equal_independent_of_table_key() {
-        let var1 = DecisionVariable::new(Kind::Continuous, Bound::new(0.0, 1.0).unwrap()).unwrap();
+        let var1 = DecisionVariable::new(
+            Kind::Continuous,
+            Bound::new(0.0, 1.0).unwrap(),
+            crate::ATol::default(),
+        )
+        .unwrap();
 
-        let var2 = DecisionVariable::new(Kind::Continuous, Bound::new(0.0, 1.0).unwrap()).unwrap();
+        let var2 = DecisionVariable::new(
+            Kind::Continuous,
+            Bound::new(0.0, 1.0).unwrap(),
+            crate::ATol::default(),
+        )
+        .unwrap();
 
         assert_abs_diff_eq!(var1, var2);
     }
@@ -78,9 +88,19 @@ mod tests {
     #[test]
     fn test_different_bounds_not_equal() {
         // Variables with different bounds are not equal
-        let var1 = DecisionVariable::new(Kind::Continuous, Bound::new(0.0, 1.0).unwrap()).unwrap();
+        let var1 = DecisionVariable::new(
+            Kind::Continuous,
+            Bound::new(0.0, 1.0).unwrap(),
+            crate::ATol::default(),
+        )
+        .unwrap();
 
-        let var2 = DecisionVariable::new(Kind::Continuous, Bound::new(0.0, 2.0).unwrap()).unwrap();
+        let var2 = DecisionVariable::new(
+            Kind::Continuous,
+            Bound::new(0.0, 2.0).unwrap(),
+            crate::ATol::default(),
+        )
+        .unwrap();
 
         assert_abs_diff_ne!(var1, var2);
     }
@@ -88,9 +108,19 @@ mod tests {
     #[test]
     fn test_same_kind_and_bound_equal() {
         // Variables with same ID, kind, and bounds are equal
-        let var1 = DecisionVariable::new(Kind::Integer, Bound::new(0.0, 10.0).unwrap()).unwrap();
+        let var1 = DecisionVariable::new(
+            Kind::Integer,
+            Bound::new(0.0, 10.0).unwrap(),
+            crate::ATol::default(),
+        )
+        .unwrap();
 
-        let var2 = DecisionVariable::new(Kind::Integer, Bound::new(0.0, 10.0).unwrap()).unwrap();
+        let var2 = DecisionVariable::new(
+            Kind::Integer,
+            Bound::new(0.0, 10.0).unwrap(),
+            crate::ATol::default(),
+        )
+        .unwrap();
 
         assert_abs_diff_eq!(var1, var2);
     }
@@ -98,9 +128,19 @@ mod tests {
     #[test]
     fn test_point_bound_continuous_integer_equal() {
         // Continuous[a, a] and Integer[a, a] are equal for point bounds
-        let var1 = DecisionVariable::new(Kind::Continuous, Bound::new(5.0, 5.0).unwrap()).unwrap();
+        let var1 = DecisionVariable::new(
+            Kind::Continuous,
+            Bound::new(5.0, 5.0).unwrap(),
+            crate::ATol::default(),
+        )
+        .unwrap();
 
-        let var2 = DecisionVariable::new(Kind::Integer, Bound::new(5.0, 5.0).unwrap()).unwrap();
+        let var2 = DecisionVariable::new(
+            Kind::Integer,
+            Bound::new(5.0, 5.0).unwrap(),
+            crate::ATol::default(),
+        )
+        .unwrap();
 
         assert_abs_diff_eq!(var1, var2);
     }
@@ -108,18 +148,40 @@ mod tests {
     #[test]
     fn test_point_bound_zero_all_kinds_equal() {
         // For point bound [0, 0], all kinds are considered equal
-        let continuous =
-            DecisionVariable::new(Kind::Continuous, Bound::new(0.0, 0.0).unwrap()).unwrap();
+        let continuous = DecisionVariable::new(
+            Kind::Continuous,
+            Bound::new(0.0, 0.0).unwrap(),
+            crate::ATol::default(),
+        )
+        .unwrap();
 
-        let integer = DecisionVariable::new(Kind::Integer, Bound::new(0.0, 0.0).unwrap()).unwrap();
+        let integer = DecisionVariable::new(
+            Kind::Integer,
+            Bound::new(0.0, 0.0).unwrap(),
+            crate::ATol::default(),
+        )
+        .unwrap();
 
-        let binary = DecisionVariable::new(Kind::Binary, Bound::new(0.0, 0.0).unwrap()).unwrap();
+        let binary = DecisionVariable::new(
+            Kind::Binary,
+            Bound::new(0.0, 0.0).unwrap(),
+            crate::ATol::default(),
+        )
+        .unwrap();
 
-        let semi_continuous =
-            DecisionVariable::new(Kind::SemiContinuous, Bound::new(0.0, 0.0).unwrap()).unwrap();
+        let semi_continuous = DecisionVariable::new(
+            Kind::SemiContinuous,
+            Bound::new(0.0, 0.0).unwrap(),
+            crate::ATol::default(),
+        )
+        .unwrap();
 
-        let semi_integer =
-            DecisionVariable::new(Kind::SemiInteger, Bound::new(0.0, 0.0).unwrap()).unwrap();
+        let semi_integer = DecisionVariable::new(
+            Kind::SemiInteger,
+            Bound::new(0.0, 0.0).unwrap(),
+            crate::ATol::default(),
+        )
+        .unwrap();
 
         // All combinations should be equal
         assert_abs_diff_eq!(continuous, integer);
@@ -133,11 +195,19 @@ mod tests {
     fn test_point_bound_nonzero_semi_not_equal() {
         // For point bound [a, a] where a != 0, semi-continuous/semi-integer
         // are not equal to continuous/integer/binary
-        let continuous =
-            DecisionVariable::new(Kind::Continuous, Bound::new(5.0, 5.0).unwrap()).unwrap();
+        let continuous = DecisionVariable::new(
+            Kind::Continuous,
+            Bound::new(5.0, 5.0).unwrap(),
+            crate::ATol::default(),
+        )
+        .unwrap();
 
-        let semi_continuous =
-            DecisionVariable::new(Kind::SemiContinuous, Bound::new(5.0, 5.0).unwrap()).unwrap();
+        let semi_continuous = DecisionVariable::new(
+            Kind::SemiContinuous,
+            Bound::new(5.0, 5.0).unwrap(),
+            crate::ATol::default(),
+        )
+        .unwrap();
 
         assert_abs_diff_ne!(continuous, semi_continuous);
     }
@@ -145,26 +215,52 @@ mod tests {
     #[test]
     fn test_bound_contains_zero_semi_equal() {
         // When bound contains 0, semi-integer equals integer and semi-continuous equals continuous
-        let integer = DecisionVariable::new(Kind::Integer, Bound::new(-5.0, 5.0).unwrap()).unwrap();
+        let integer = DecisionVariable::new(
+            Kind::Integer,
+            Bound::new(-5.0, 5.0).unwrap(),
+            crate::ATol::default(),
+        )
+        .unwrap();
 
-        let semi_integer =
-            DecisionVariable::new(Kind::SemiInteger, Bound::new(-5.0, 5.0).unwrap()).unwrap();
+        let semi_integer = DecisionVariable::new(
+            Kind::SemiInteger,
+            Bound::new(-5.0, 5.0).unwrap(),
+            crate::ATol::default(),
+        )
+        .unwrap();
 
-        let continuous =
-            DecisionVariable::new(Kind::Continuous, Bound::new(-5.0, 5.0).unwrap()).unwrap();
+        let continuous = DecisionVariable::new(
+            Kind::Continuous,
+            Bound::new(-5.0, 5.0).unwrap(),
+            crate::ATol::default(),
+        )
+        .unwrap();
 
-        let semi_continuous =
-            DecisionVariable::new(Kind::SemiContinuous, Bound::new(-5.0, 5.0).unwrap()).unwrap();
+        let semi_continuous = DecisionVariable::new(
+            Kind::SemiContinuous,
+            Bound::new(-5.0, 5.0).unwrap(),
+            crate::ATol::default(),
+        )
+        .unwrap();
 
         assert_abs_diff_eq!(integer, semi_integer);
         assert_abs_diff_eq!(continuous, semi_continuous);
 
         // Test binary-integer equality with compatible bounds
         // Binary is always [0, 1], so test with integer that has same bound
-        let binary = DecisionVariable::new(Kind::Binary, Bound::new(0.0, 1.0).unwrap()).unwrap();
+        let binary = DecisionVariable::new(
+            Kind::Binary,
+            Bound::new(0.0, 1.0).unwrap(),
+            crate::ATol::default(),
+        )
+        .unwrap();
 
-        let integer_01 =
-            DecisionVariable::new(Kind::Integer, Bound::new(0.0, 1.0).unwrap()).unwrap();
+        let integer_01 = DecisionVariable::new(
+            Kind::Integer,
+            Bound::new(0.0, 1.0).unwrap(),
+            crate::ATol::default(),
+        )
+        .unwrap();
 
         assert_abs_diff_eq!(binary, integer_01);
     }
@@ -173,12 +269,26 @@ mod tests {
     fn test_point_bound_nonzero_all_basic_kinds_equal() {
         // For point bound [a, a] where a != 0, binary, integer, and continuous are all equal
         // This is according to the logic in lines 36-43 of the implementation
-        let binary = DecisionVariable::new(Kind::Binary, Bound::new(1.0, 1.0).unwrap()).unwrap();
+        let binary = DecisionVariable::new(
+            Kind::Binary,
+            Bound::new(1.0, 1.0).unwrap(),
+            crate::ATol::default(),
+        )
+        .unwrap();
 
-        let integer = DecisionVariable::new(Kind::Integer, Bound::new(1.0, 1.0).unwrap()).unwrap();
+        let integer = DecisionVariable::new(
+            Kind::Integer,
+            Bound::new(1.0, 1.0).unwrap(),
+            crate::ATol::default(),
+        )
+        .unwrap();
 
-        let continuous =
-            DecisionVariable::new(Kind::Continuous, Bound::new(1.0, 1.0).unwrap()).unwrap();
+        let continuous = DecisionVariable::new(
+            Kind::Continuous,
+            Bound::new(1.0, 1.0).unwrap(),
+            crate::ATol::default(),
+        )
+        .unwrap();
 
         // For point bound [1,1] (not zero), binary, integer, and continuous are all equal
         assert_abs_diff_eq!(binary, integer);
@@ -189,11 +299,19 @@ mod tests {
     #[test]
     fn test_tolerance_in_point_bound() {
         // Test that tolerance is considered for point bounds
-        let var1 =
-            DecisionVariable::new(Kind::Continuous, Bound::new(1.0, 1.0 + 1e-10).unwrap()).unwrap();
+        let var1 = DecisionVariable::new(
+            Kind::Continuous,
+            Bound::new(1.0, 1.0 + 1e-10).unwrap(),
+            crate::ATol::default(),
+        )
+        .unwrap();
 
-        let var2 =
-            DecisionVariable::new(Kind::Integer, Bound::new(1.0, 1.0 + 1e-10).unwrap()).unwrap();
+        let var2 = DecisionVariable::new(
+            Kind::Integer,
+            Bound::new(1.0, 1.0 + 1e-10).unwrap(),
+            crate::ATol::default(),
+        )
+        .unwrap();
 
         // Should be equal with default tolerance
         assert_abs_diff_eq!(var1, var2);

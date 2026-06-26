@@ -90,7 +90,12 @@ mod tests {
         // Create instance with integer variable in range [2, 7]
         let mut instance = Instance::default();
         let id = VariableID::from(0);
-        let var = DecisionVariable::new(Kind::Integer, Bound::new(2.0, 7.0).unwrap()).unwrap();
+        let var = DecisionVariable::new(
+            Kind::Integer,
+            Bound::new(2.0, 7.0).unwrap(),
+            crate::ATol::default(),
+        )
+        .unwrap();
         instance.decision_variables.insert(id, var);
 
         // Perform log encoding

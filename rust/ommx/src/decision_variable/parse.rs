@@ -73,7 +73,7 @@ impl Parse for v1::DecisionVariable {
             .unwrap_or_default()
             .parse_as(&(), message, "bound")?;
         let id = VariableID::from(self.id);
-        let dv = DecisionVariable::new(kind, bound) // FIXME: user should provide this
+        let dv = DecisionVariable::new(kind, bound, ATol::default()) // FIXME: user should provide this
         .map_err(|e| RawParseError::InvalidDecisionVariable(e).context(message, "bound"))?;
         let fixed_value = self.substituted_value;
         if let Some(value) = fixed_value {
@@ -205,7 +205,7 @@ impl Parse for v1::SampledDecisionVariable {
             .parse_as(&(), message, "samples")?;
 
         if let Some(fixed_value) = parsed_dv.fixed_value {
-            let atol = crate::ATol::default();
+            let atol = ATol::default();
             for (_, &sample_value) in samples.iter() {
                 if !sample_value.is_finite() {
                     return Err(RawParseError::InvalidDecisionVariable(
@@ -371,7 +371,7 @@ mod tests {
 
     #[test]
     fn test_parse_sampled_decision_variable_accepts_substituted_value_at_atol_boundary() {
-        let atol = *crate::ATol::default();
+        let atol = *ATol::default();
         let v1_sampled_dv = v1::SampledDecisionVariable {
             decision_variable: Some(v1::DecisionVariable {
                 id: 42,
