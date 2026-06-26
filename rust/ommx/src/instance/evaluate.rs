@@ -612,12 +612,12 @@ mod tests {
             .decision_variables(decision_variables)
             .constraints(BTreeMap::new())
             .decision_variable_dependency(crate::assign! {
-                10 <- linear!(1)
+                10 <- coeff!(2.0) * linear!(1)
             })
             .build()
             .unwrap();
 
-        let state = v1::State::from(HashMap::from([(10, 1.0)]));
+        let state = v1::State::from(HashMap::from([(1, 2.0), (10, 4.0)]));
         let err = instance
             .partial_evaluate(&state, ATol::default())
             .unwrap_err();

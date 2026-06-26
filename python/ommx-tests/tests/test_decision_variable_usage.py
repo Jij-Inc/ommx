@@ -64,6 +64,9 @@ def test_partial_evaluate_rejects_dependent_variable_value():
     with pytest.raises(ValueError, match="cannot be fixed"):
         instance.partial_evaluate({10: 4.0})
 
+    with pytest.raises(ValueError, match="cannot be fixed"):
+        instance.partial_evaluate({1: 2.0, 10: 4.0})
+
     assert instance.fixed_decision_variables() == {}
     assert instance.dependent_decision_variable_ids() == {10}
 
