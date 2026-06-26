@@ -89,7 +89,8 @@ pub enum SampleSetError {
 ///
 /// Invariants
 /// -----------
-/// - The keys of [`Self::decision_variables`] match the `id()` of their values.
+/// - [`Self::decision_variables`] is keyed by the table-owned
+///   [`VariableID`]; sampled decision-variable rows do not carry IDs.
 /// - The keys of [`Self::named_functions`] match the `id()` of their values.
 /// - All [`Self::decision_variables`], [`Self::objectives`], sampled constraint
 ///   collections, and [`Self::named_functions`] have the same sample ID set.
@@ -674,7 +675,8 @@ impl SampleSetBuilder {
     /// # Safety
     /// This method does not validate that the SampleSet invariants hold.
     /// The caller must ensure:
-    /// - Constraint keys match their value's `id()`
+    /// - `decision_variables` is keyed by the intended [`VariableID`] for each row
+    /// - Sampled constraint collection keys and sidecars are internally consistent
     /// - Named function keys match their value's `id()`
     /// - Sample IDs are consistent across all components
     ///

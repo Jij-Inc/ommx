@@ -90,8 +90,10 @@ pub enum SolutionError {
 ///
 /// Invariants
 /// -----------
-/// - The keys of [`Self::decision_variables`] match the `id()` of their values.
-/// - The keys of [`Self::evaluated_constraints`] match the `id()` of their values.
+/// - [`Self::decision_variables`] is keyed by the table-owned
+///   [`VariableID`]; evaluated decision-variable rows do not carry IDs.
+/// - The keys of the evaluated constraint collections are the table-owned
+///   constraint IDs for each constraint family.
 /// - The keys of [`Self::evaluated_named_functions`] match the `id()` of their values.
 /// - [`Self::decision_variables`] contains all variable IDs referenced in `used_decision_variable_ids` of each constraint.
 ///
@@ -697,7 +699,8 @@ impl SolutionBuilder {
     /// # Errors
     /// Returns an error if:
     /// - Required fields (`objective`, `evaluated_constraints`, `decision_variables`, `sense`) are not set
-    /// - Constraint keys don't match their value's `id()`
+    /// - Constraint collection sidecars contain invalid keys
+    /// - Named function keys don't match their value's `id()`
     /// - Variables referenced in constraints' `used_decision_variable_ids` are not in `decision_variables`
     pub fn build(self) -> crate::Result<Solution> {
         let objective = self
@@ -821,8 +824,8 @@ impl SolutionBuilder {
     /// # Safety
     /// This method does not validate that the Solution invariants hold.
     /// The caller must ensure:
-    /// - Decision variable keys match their value's `id()`
-    /// - Constraint keys match their value's `id()`
+    /// - `decision_variables` is keyed by the intended [`VariableID`] for each row
+    /// - Evaluated constraint collection keys and sidecars are internally consistent
     /// - Named function keys match their value's `id()`
     /// - All `used_decision_variable_ids` in constraints exist in `decision_variables`
     ///
