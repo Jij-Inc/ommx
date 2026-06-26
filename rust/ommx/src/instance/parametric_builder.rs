@@ -246,17 +246,6 @@ impl ParametricInstanceBuilder {
             .constraints
             .ok_or_else(|| crate::error!("Required field is missing: constraints"))?;
 
-        // Validate that decision variable map keys match their value's id
-        for (key, value) in &decision_variables {
-            if *key != value.id() {
-                let value_id = value.id();
-                crate::bail!(
-                    { ?key, ?value_id },
-                    "Decision variable map key {key:?} does not match value's id {value_id:?}",
-                );
-            }
-        }
-
         // Validate that parameter map keys match their value's id
         for (key, value) in &parameters {
             if key.into_inner() != value.id {
@@ -285,7 +274,7 @@ impl ParametricInstanceBuilder {
                     "Fixed decision-variable value references unknown decision variable ID {id:?}",
                 );
             };
-            dv.check_value_consistency(*value, crate::ATol::default())?;
+            dv.check_value_consistency(*id, *value, crate::ATol::default())?;
         }
 
         let intersection: VariableIDSet = decision_variable_ids
@@ -607,7 +596,7 @@ mod tests {
         let instance = ParametricInstance::builder()
             .sense(Sense::Minimize)
             .objective(Function::Zero)
-            .decision_variables(BTreeMap::from([(var_id, DecisionVariable::binary(var_id))]))
+            .decision_variables(BTreeMap::from([(var_id, DecisionVariable::binary())]))
             .variable_labels(variable_labels)
             .parameters(BTreeMap::new())
             .constraints(BTreeMap::from([(
@@ -642,7 +631,7 @@ mod tests {
         let instance = ParametricInstance::builder()
             .sense(Sense::Minimize)
             .objective(Function::Zero)
-            .decision_variables(BTreeMap::from([(var_id, DecisionVariable::binary(var_id))]))
+            .decision_variables(BTreeMap::from([(var_id, DecisionVariable::binary())]))
             .parameters(BTreeMap::new())
             .constraints(BTreeMap::new())
             .indicator_constraints(BTreeMap::from([(
@@ -842,7 +831,7 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::Zero)
             .decision_variables(btreemap! {
-                var_id => DecisionVariable::binary(var_id),
+                var_id => DecisionVariable::binary(),
             })
             .parameters(btreemap! {
                 var_id => v1::Parameter { id: 1, ..Default::default() },
@@ -936,8 +925,8 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::Zero)
             .decision_variables(btreemap! {
-                VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
-                VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
+                VariableID::from(1) => DecisionVariable::binary(),
+                VariableID::from(2) => DecisionVariable::binary(),
             })
             .parameters(btreemap! {
                 VariableID::from(100) => v1::Parameter { id: 100, ..Default::default() },
@@ -972,8 +961,8 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::Zero)
             .decision_variables(btreemap! {
-                dep => DecisionVariable::binary(dep),
-                x => DecisionVariable::binary(x),
+                dep => DecisionVariable::binary(),
+                x => DecisionVariable::binary(),
             })
             .parameters(btreemap! {
                 p => v1::Parameter { id: 100, ..Default::default() },
@@ -1001,7 +990,7 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::Zero)
             .decision_variables(btreemap! {
-                dep => DecisionVariable::binary(dep),
+                dep => DecisionVariable::binary(),
             })
             .parameters(BTreeMap::new())
             .constraints(BTreeMap::new())
@@ -1034,7 +1023,7 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::Zero)
             .decision_variables(btreemap! {
-                VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
+                VariableID::from(1) => DecisionVariable::binary(),
             })
             .parameters(btreemap! {
                 VariableID::from(100) => v1::Parameter { id: 100, ..Default::default() },
@@ -1069,8 +1058,8 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::Zero)
             .decision_variables(btreemap! {
-                VariableID::from(1) => DecisionVariable::integer(VariableID::from(1)),
-                VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
+                VariableID::from(1) => DecisionVariable::integer(),
+                VariableID::from(2) => DecisionVariable::binary(),
             })
             .parameters(BTreeMap::new())
             .constraints(BTreeMap::new())
@@ -1099,7 +1088,7 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::Zero)
             .decision_variables(btreemap! {
-                VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
+                VariableID::from(1) => DecisionVariable::binary(),
             })
             .parameters(btreemap! {
                 VariableID::from(100) => v1::Parameter { id: 100, ..Default::default() },
@@ -1131,7 +1120,7 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::Zero)
             .decision_variables(btreemap! {
-                VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
+                VariableID::from(1) => DecisionVariable::binary(),
             })
             .parameters(BTreeMap::new())
             .constraints(BTreeMap::new())
@@ -1166,7 +1155,7 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::Zero)
             .decision_variables(btreemap! {
-                var_id => DecisionVariable::binary(var_id),
+                var_id => DecisionVariable::binary(),
             })
             .parameters(btreemap! {
                 param_id => v1::Parameter { id: 2, ..Default::default() },

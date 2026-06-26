@@ -154,24 +154,25 @@ fn ensure_finite_value(id: VariableID, value: f64) -> Result<(), DecisionVariabl
     }
 }
 
-/// The decision variable's intrinsic data.
+/// Row data for a decision variable table.
 ///
-/// Holds only `id`, `kind`, and `bound` as its intrinsic definition. Auxiliary
-/// modeling label (`name`, `subscripts`, `parameters`, `description`) lives on
-/// the enclosing [`Instance`](crate::Instance)'s
+/// Holds only `kind` and `bound` as its intrinsic definition. The
+/// [`VariableID`] is owned by the enclosing decision-variable table key.
+/// Auxiliary modeling label (`name`, `subscripts`, `parameters`,
+/// `description`) lives on the enclosing [`Instance`](crate::Instance)'s
 /// [`VariableLabelStore`](crate::VariableLabelStore) keyed by
 /// [`VariableID`]; per-element label storage was retired in the v3
 /// redesign.
 ///
 /// Invariants
 /// ----------
-/// - `kind` and `bound` are consistent
-///   - i.e. `bound` is invariant under `|bound| kind.consistent_bound(bound, atol).unwrap()` for appropriate `atol`.
+/// - `bound` is normalized for `kind` at construction or bound mutation time.
+///   - i.e. `bound` is invariant under `|bound| kind.consistent_bound(bound, atol).unwrap()` for the caller-provided `atol`.
+/// - A [`DecisionVariable`] row therefore never stores an unnormalized
+///   integer, binary, or semi-integer bound when built through the safe API.
 ///
 #[derive(Debug, Clone, PartialEq, CopyGetters, LogicalMemoryProfile)]
 pub struct DecisionVariable {
-    #[getset(get_copy = "pub")]
-    id: VariableID,
     #[getset(get_copy = "pub")]
     kind: Kind,
     #[getset(get_copy = "pub")]
@@ -180,43 +181,37 @@ pub struct DecisionVariable {
 
 impl DecisionVariable {
     /// Create a new decision variable.
-    pub fn new(
-        id: VariableID,
-        kind: Kind,
-        bound: Bound,
-        atol: ATol,
-    ) -> Result<Self, DecisionVariableError> {
+    pub fn new(kind: Kind, bound: Bound, atol: ATol) -> Result<Self, DecisionVariableError> {
         Ok(Self {
-            id,
             kind,
             bound: kind
                 .consistent_bound(bound, atol)
-                .ok_or(DecisionVariableError::BoundInconsistentToKind { id, kind, bound })?,
+                .ok_or(DecisionVariableError::BoundInconsistentToKind { kind, bound })?,
         })
     }
 
-    pub fn binary(id: VariableID) -> Self {
-        Self::new(id, Kind::Binary, Bound::of_binary(), ATol::default()).unwrap()
+    pub fn binary() -> Self {
+        Self::new(Kind::Binary, Bound::of_binary(), ATol::default()).unwrap()
     }
 
     /// Unbounded integer decision variable.
-    pub fn integer(id: VariableID) -> Self {
-        Self::new(id, Kind::Integer, Bound::default(), ATol::default()).unwrap()
+    pub fn integer() -> Self {
+        Self::new(Kind::Integer, Bound::default(), ATol::default()).unwrap()
     }
 
     /// Unbounded continuous decision variable.
-    pub fn continuous(id: VariableID) -> Self {
-        Self::new(id, Kind::Continuous, Bound::default(), ATol::default()).unwrap()
+    pub fn continuous() -> Self {
+        Self::new(Kind::Continuous, Bound::default(), ATol::default()).unwrap()
     }
 
     /// Unbounded semi-integer decision variable.
-    pub fn semi_integer(id: VariableID) -> Self {
-        Self::new(id, Kind::SemiInteger, Bound::default(), ATol::default()).unwrap()
+    pub fn semi_integer() -> Self {
+        Self::new(Kind::SemiInteger, Bound::default(), ATol::default()).unwrap()
     }
 
     /// Unbounded semi-continuous decision variable.
-    pub fn semi_continuous(id: VariableID) -> Self {
-        Self::new(id, Kind::SemiContinuous, Bound::default(), ATol::default()).unwrap()
+    pub fn semi_continuous() -> Self {
+        Self::new(Kind::SemiContinuous, Bound::default(), ATol::default()).unwrap()
     }
 
     /// Check if the substituted value is consistent to the bound and kind
@@ -228,32 +223,32 @@ impl DecisionVariable {
     /// use ommx::{DecisionVariable, Kind, Bound, ATol};
     ///
     /// let dv = DecisionVariable::new(
-    ///     0.into(),
     ///     Kind::Integer,
     ///     Bound::new(0.0, 2.0).unwrap(),
     ///     ATol::default(),
     /// ).unwrap();
     ///
     /// // 1 \in [0, 2]
-    /// assert!(dv.check_value_consistency(1.0, ATol::default()).is_ok());
+    /// assert!(dv.check_value_consistency(0.into(), 1.0, ATol::default()).is_ok());
     /// // 3 \in [0, 2]
-    /// assert!(dv.check_value_consistency(3.0, ATol::default()).is_err());
+    /// assert!(dv.check_value_consistency(0.into(), 3.0, ATol::default()).is_err());
     /// // 0.5 \in [0, 2], but not consistent to Kind::Integer
-    /// assert!(dv.check_value_consistency(0.5, ATol::default()).is_err());
+    /// assert!(dv.check_value_consistency(0.into(), 0.5, ATol::default()).is_err());
     /// ```
     pub fn check_value_consistency(
         &self,
+        id: VariableID,
         value: f64,
         atol: ATol,
     ) -> Result<(), DecisionVariableError> {
         let err = || DecisionVariableError::SubstitutedValueInconsistent {
-            id: self.id,
+            id,
             kind: self.kind,
             bound: self.bound,
             substituted_value: value,
             atol,
         };
-        ensure_finite_value(self.id, value)?;
+        ensure_finite_value(id, value)?;
         if !self.bound.contains(value, atol) {
             return Err(err());
         }
@@ -273,7 +268,6 @@ impl DecisionVariable {
     pub fn set_bound(&mut self, bound: Bound, atol: ATol) -> Result<(), DecisionVariableError> {
         let bound = self.kind.consistent_bound(bound, atol).ok_or(
             DecisionVariableError::BoundInconsistentToKind {
-                id: self.id,
                 kind: self.kind,
                 bound,
             },
@@ -296,10 +290,15 @@ impl DecisionVariable {
     ///
     /// Returns `Ok(true)` if the bound was actually changed, `Ok(false)` if the bound
     /// remained the same.
-    pub fn clip_bound(&mut self, bound: Bound, atol: ATol) -> Result<bool, DecisionVariableError> {
+    pub fn clip_bound(
+        &mut self,
+        id: VariableID,
+        bound: Bound,
+        atol: ATol,
+    ) -> Result<bool, DecisionVariableError> {
         let intersected = self.bound.intersection(&bound).ok_or(
             DecisionVariableError::EmptyBoundIntersection {
-                id: self.id,
+                id,
                 existing_bound: self.bound,
                 new_bound: bound,
             },
@@ -318,11 +317,13 @@ impl DecisionVariable {
 #[non_exhaustive]
 #[derive(Debug, thiserror::Error)]
 pub enum DecisionVariableError {
-    #[error("Bound for ID={id} is inconsistent to kind: kind={kind:?}, bound={bound}")]
-    BoundInconsistentToKind {
+    #[error("Bound is inconsistent to kind: kind={kind:?}, bound={bound}")]
+    BoundInconsistentToKind { kind: Kind, bound: Bound },
+
+    #[error("Invalid decision variable ID={id}: {source}")]
+    InvalidDefinition {
         id: VariableID,
-        kind: Kind,
-        bound: Bound,
+        source: Box<DecisionVariableError>,
     },
 
     #[error("Decision variable value for ID={id} must be finite: value={value}")]
@@ -360,8 +361,6 @@ pub type DecisionVariableLabel = crate::ModelingLabel;
 #[derive(Debug, Clone, PartialEq, Getters)]
 pub struct EvaluatedDecisionVariable {
     #[getset(get = "pub")]
-    id: VariableID,
-    #[getset(get = "pub")]
     kind: Kind,
     #[getset(get = "pub")]
     bound: Bound,
@@ -370,21 +369,23 @@ pub struct EvaluatedDecisionVariable {
 }
 
 impl EvaluatedDecisionVariable {
-    /// Create a new EvaluatedDecisionVariable from a DecisionVariable and value
+    /// Create a new evaluated decision-variable row from an ID, row definition,
+    /// and value.
     ///
     /// This method does not enforce kind or bound constraints - those are checked
-    /// as part of solution feasibility validation.
+    /// as part of solution feasibility validation. The ID is used for error
+    /// reporting only; the returned row does not store it.
     pub fn new(
+        id: VariableID,
         decision_variable: DecisionVariable,
         value: f64,
     ) -> Result<Self, DecisionVariableError> {
-        ensure_finite_value(decision_variable.id, value)?;
+        ensure_finite_value(id, value)?;
 
         // Note: Kind and bound checking is intentionally omitted to allow infeasible solutions.
         // These will be checked as part of Solution::feasible() validation.
 
         Ok(Self {
-            id: decision_variable.id,
             kind: decision_variable.kind,
             bound: decision_variable.bound,
             value,
@@ -417,8 +418,6 @@ impl EvaluatedDecisionVariable {
 #[derive(Debug, Clone, Getters)]
 pub struct SampledDecisionVariable {
     #[getset(get = "pub")]
-    id: VariableID,
-    #[getset(get = "pub")]
     kind: Kind,
     #[getset(get = "pub")]
     bound: Bound,
@@ -427,22 +426,24 @@ pub struct SampledDecisionVariable {
 }
 
 impl SampledDecisionVariable {
-    /// Create a new SampledDecisionVariable from a DecisionVariable and samples
+    /// Create a new sampled decision-variable row from an ID, row definition,
+    /// and samples.
     ///
     /// This method does not enforce kind or bound constraints - those are checked
-    /// as part of sample-set feasibility validation.
+    /// as part of sample-set feasibility validation. The ID is used for error
+    /// reporting only; the returned row does not store it.
     pub fn new(
+        id: VariableID,
         decision_variable: DecisionVariable,
         samples: Sampled<f64>,
     ) -> Result<Self, DecisionVariableError> {
         for (_, &sample_value) in samples.iter() {
-            ensure_finite_value(decision_variable.id, sample_value)?;
+            ensure_finite_value(id, sample_value)?;
         }
 
         // Note: Kind and bound checking is intentionally omitted to allow infeasible solutions.
 
         Ok(Self {
-            id: decision_variable.id,
             kind: decision_variable.kind,
             bound: decision_variable.bound,
             samples,
@@ -452,80 +453,16 @@ impl SampledDecisionVariable {
     /// Get a specific evaluated decision variable by sample ID.
     ///
     /// Returns [`None`] if `sample_id` is not present in the sampled data.
-    pub fn get(&self, sample_id: SampleID) -> Option<EvaluatedDecisionVariable> {
+    pub fn get(&self, id: VariableID, sample_id: SampleID) -> Option<EvaluatedDecisionVariable> {
         let value = *self.samples.get(sample_id)?;
 
         // Create a DecisionVariable to use with EvaluatedDecisionVariable::new
         let dv = DecisionVariable {
-            id: self.id,
             kind: self.kind,
             bound: self.bound,
         };
 
-        Some(EvaluatedDecisionVariable::new(dv, value).unwrap())
-    }
-}
-
-impl crate::Evaluate for DecisionVariable {
-    type Output = EvaluatedDecisionVariable;
-    type SampledOutput = SampledDecisionVariable;
-
-    fn evaluate(
-        &self,
-        state: &crate::v1::State,
-        _atol: crate::ATol,
-    ) -> crate::Result<Self::Output> {
-        let value = state
-            .entries
-            .get(&self.id.into_inner())
-            .copied()
-            .ok_or_else(|| crate::error!("Variable ID {} not found in state", self.id))?;
-
-        Ok(EvaluatedDecisionVariable::new(self.clone(), value)?)
-    }
-
-    fn evaluate_samples(
-        &self,
-        samples: &crate::Sampled<crate::v1::State>,
-        _atol: crate::ATol,
-    ) -> crate::Result<Self::SampledOutput> {
-        let variable_id = self.id.into_inner();
-
-        // Extract values for this variable from all samples
-        let mut grouped_values: std::collections::HashMap<
-            ordered_float::OrderedFloat<f64>,
-            Vec<crate::SampleID>,
-        > = std::collections::HashMap::new();
-        for (sample_id, state) in samples.iter() {
-            if let Some(value) = state.entries.get(&variable_id) {
-                grouped_values
-                    .entry(ordered_float::OrderedFloat(*value))
-                    .or_default()
-                    .push(*sample_id);
-            }
-        }
-
-        // Convert to Sampled format
-        let ids: Vec<Vec<crate::SampleID>> = grouped_values.values().cloned().collect();
-        let values: Vec<f64> = grouped_values.keys().map(|k| k.into_inner()).collect();
-        let samples = crate::Sampled::new(ids, values)?;
-
-        Ok(SampledDecisionVariable::new(self.clone(), samples)?)
-    }
-
-    fn partial_evaluate(
-        &mut self,
-        state: &crate::v1::State,
-        atol: crate::ATol,
-    ) -> crate::Result<()> {
-        if let Some(value) = state.entries.get(&self.id.into_inner()) {
-            self.check_value_consistency(*value, atol)?;
-        }
-        Ok(())
-    }
-
-    fn required_ids(&self) -> crate::VariableIDSet {
-        [self.id].into_iter().collect()
+        Some(EvaluatedDecisionVariable::new(id, dv, value).unwrap())
     }
 }
 
@@ -533,11 +470,12 @@ impl crate::Evaluate for DecisionVariable {
 /// modeling label. The label comes from the enclosing collection's
 /// [`VariableLabelStore`]; the per-element struct no longer carries it.
 pub(crate) fn evaluated_decision_variable_to_v1(
+    id: VariableID,
     eval_dv: EvaluatedDecisionVariable,
     label: DecisionVariableLabel,
 ) -> crate::v1::DecisionVariable {
     crate::v1::DecisionVariable {
-        id: eval_dv.id.into_inner(),
+        id: id.into_inner(),
         kind: eval_dv.kind.into(),
         bound: Some(eval_dv.bound.into()),
         substituted_value: Some(eval_dv.value),
@@ -578,7 +516,7 @@ impl std::convert::TryFrom<crate::v1::DecisionVariable> for EvaluatedDecisionVar
             .context(message, "substituted_value"),
         )?;
 
-        EvaluatedDecisionVariable::new(dv, value)
+        EvaluatedDecisionVariable::new(parsed.id, dv, value)
             .map_err(|e| crate::RawParseError::InvalidDecisionVariable(e).into())
     }
 }
@@ -591,51 +529,71 @@ mod tests {
     #[test]
     fn test_clip_bound_normal_intersection() {
         // Test case 1: Normal intersection
-        let mut dv = DecisionVariable::continuous(VariableID::from(1))
+        let mut dv = DecisionVariable::continuous()
             .with_bound(Bound::new(0.0, 10.0).unwrap(), ATol::default())
             .unwrap();
         let changed = dv
-            .clip_bound(Bound::new(5.0, 15.0).unwrap(), ATol::default())
+            .clip_bound(
+                VariableID::from(1),
+                Bound::new(5.0, 15.0).unwrap(),
+                ATol::default(),
+            )
             .unwrap();
         assert!(changed);
         assert_eq!(dv.bound(), Bound::new(5.0, 10.0).unwrap());
 
         // Test case 2: Intersection with infinite bounds
-        let mut dv = DecisionVariable::continuous(VariableID::from(2))
+        let mut dv = DecisionVariable::continuous()
             .with_bound(
                 Bound::new(f64::NEG_INFINITY, 10.0).unwrap(),
                 ATol::default(),
             )
             .unwrap();
         let changed = dv
-            .clip_bound(Bound::new(5.0, f64::INFINITY).unwrap(), ATol::default())
+            .clip_bound(
+                VariableID::from(2),
+                Bound::new(5.0, f64::INFINITY).unwrap(),
+                ATol::default(),
+            )
             .unwrap();
         assert!(changed);
         assert_eq!(dv.bound(), Bound::new(5.0, 10.0).unwrap());
 
         // Test case 3: Clip bound is completely contained
-        let mut dv = DecisionVariable::continuous(VariableID::from(3))
+        let mut dv = DecisionVariable::continuous()
             .with_bound(Bound::new(0.0, 10.0).unwrap(), ATol::default())
             .unwrap();
         let changed = dv
-            .clip_bound(Bound::new(2.0, 8.0).unwrap(), ATol::default())
+            .clip_bound(
+                VariableID::from(3),
+                Bound::new(2.0, 8.0).unwrap(),
+                ATol::default(),
+            )
             .unwrap();
         assert!(changed);
         assert_eq!(dv.bound(), Bound::new(2.0, 8.0).unwrap());
 
         // Test case 4: No change (clip with same bound)
-        let mut dv = DecisionVariable::continuous(VariableID::from(4))
+        let mut dv = DecisionVariable::continuous()
             .with_bound(Bound::new(0.0, 10.0).unwrap(), ATol::default())
             .unwrap();
         let changed = dv
-            .clip_bound(Bound::new(0.0, 10.0).unwrap(), ATol::default())
+            .clip_bound(
+                VariableID::from(4),
+                Bound::new(0.0, 10.0).unwrap(),
+                ATol::default(),
+            )
             .unwrap();
         assert!(!changed);
         assert_eq!(dv.bound(), Bound::new(0.0, 10.0).unwrap());
 
         // Test case 5: No change (clip with larger bound)
         let changed = dv
-            .clip_bound(Bound::new(-5.0, 15.0).unwrap(), ATol::default())
+            .clip_bound(
+                VariableID::from(4),
+                Bound::new(-5.0, 15.0).unwrap(),
+                ATol::default(),
+            )
             .unwrap();
         assert!(!changed);
         assert_eq!(dv.bound(), Bound::new(0.0, 10.0).unwrap());
@@ -644,20 +602,28 @@ mod tests {
     #[test]
     fn test_clip_bound_empty_intersection() {
         // Test case 1: Non-overlapping bounds [0, 5] and [10, 15]
-        let mut dv = DecisionVariable::continuous(VariableID::from(1))
+        let mut dv = DecisionVariable::continuous()
             .with_bound(Bound::new(0.0, 5.0).unwrap(), ATol::default())
             .unwrap();
-        let result = dv.clip_bound(Bound::new(10.0, 15.0).unwrap(), ATol::default());
+        let result = dv.clip_bound(
+            VariableID::from(1),
+            Bound::new(10.0, 15.0).unwrap(),
+            ATol::default(),
+        );
         assert!(matches!(
             result,
             Err(DecisionVariableError::EmptyBoundIntersection { .. })
         ));
 
         // Test case 2: Reverse order
-        let mut dv = DecisionVariable::continuous(VariableID::from(2))
+        let mut dv = DecisionVariable::continuous()
             .with_bound(Bound::new(10.0, 15.0).unwrap(), ATol::default())
             .unwrap();
-        let result = dv.clip_bound(Bound::new(0.0, 5.0).unwrap(), ATol::default());
+        let result = dv.clip_bound(
+            VariableID::from(2),
+            Bound::new(0.0, 5.0).unwrap(),
+            ATol::default(),
+        );
         assert!(matches!(
             result,
             Err(DecisionVariableError::EmptyBoundIntersection { .. })
@@ -667,28 +633,40 @@ mod tests {
     #[test]
     fn test_clip_bound_with_kinds() {
         // Test with Integer kind
-        let mut dv = DecisionVariable::integer(VariableID::from(1))
+        let mut dv = DecisionVariable::integer()
             .with_bound(Bound::new(1.1, 5.9).unwrap(), ATol::default())
             .unwrap();
         assert_eq!(dv.bound(), Bound::new(2.0, 5.0).unwrap()); // Rounded to integer bounds
         let changed = dv
-            .clip_bound(Bound::new(2.1, 4.9).unwrap(), ATol::default())
+            .clip_bound(
+                VariableID::from(1),
+                Bound::new(2.1, 4.9).unwrap(),
+                ATol::default(),
+            )
             .unwrap();
         assert!(changed);
         assert_eq!(dv.bound(), Bound::new(3.0, 4.0).unwrap());
 
         // Test with Binary kind - clip to [0, 0]
-        let mut dv = DecisionVariable::binary(VariableID::from(2));
+        let mut dv = DecisionVariable::binary();
         assert_eq!(dv.bound(), Bound::new(0.0, 1.0).unwrap());
         let changed = dv
-            .clip_bound(Bound::new(-1.0, 0.5).unwrap(), ATol::default())
+            .clip_bound(
+                VariableID::from(2),
+                Bound::new(-1.0, 0.5).unwrap(),
+                ATol::default(),
+            )
             .unwrap();
         assert!(changed);
         assert_eq!(dv.bound(), Bound::new(0.0, 0.0).unwrap());
 
         // Test with Binary kind - empty intersection
-        let mut dv = DecisionVariable::binary(VariableID::from(3));
-        let result = dv.clip_bound(Bound::new(1.1, 2.0).unwrap(), ATol::default());
+        let mut dv = DecisionVariable::binary();
+        let result = dv.clip_bound(
+            VariableID::from(3),
+            Bound::new(1.1, 2.0).unwrap(),
+            ATol::default(),
+        );
         assert!(matches!(
             result,
             Err(DecisionVariableError::EmptyBoundIntersection { .. })
@@ -698,18 +676,18 @@ mod tests {
     #[test]
     fn test_decision_variable_rejects_non_finite_values() {
         let id = VariableID::from(1);
-        let dv = DecisionVariable::continuous(id);
+        let dv = DecisionVariable::continuous();
 
         assert!(matches!(
-            dv.check_value_consistency(f64::NAN, ATol::default()),
+            dv.check_value_consistency(id, f64::NAN, ATol::default()),
             Err(DecisionVariableError::NonFiniteValue { .. })
         ));
         assert!(matches!(
-            dv.check_value_consistency(f64::INFINITY, ATol::default()),
+            dv.check_value_consistency(id, f64::INFINITY, ATol::default()),
             Err(DecisionVariableError::NonFiniteValue { .. })
         ));
         assert!(matches!(
-            EvaluatedDecisionVariable::new(dv, f64::NEG_INFINITY),
+            EvaluatedDecisionVariable::new(id, dv, f64::NEG_INFINITY),
             Err(DecisionVariableError::NonFiniteValue { .. })
         ));
     }
@@ -717,11 +695,11 @@ mod tests {
     #[test]
     fn test_sampled_decision_variable_rejects_non_finite_values() {
         let id = VariableID::from(1);
-        let dv = DecisionVariable::continuous(id);
+        let dv = DecisionVariable::continuous();
         let samples = Sampled::new([vec![crate::SampleID::from(0)]], [f64::NAN]).unwrap();
 
         assert!(matches!(
-            SampledDecisionVariable::new(dv, samples),
+            SampledDecisionVariable::new(id, dv, samples),
             Err(DecisionVariableError::NonFiniteValue { .. })
         ));
     }
@@ -747,7 +725,6 @@ mod tests {
 
         let evaluated_dv: EvaluatedDecisionVariable = v1_dv.try_into().unwrap();
 
-        assert_eq!(*evaluated_dv.id(), VariableID::from(42));
         assert_eq!(*evaluated_dv.kind(), crate::Kind::Integer);
         assert_eq!(*evaluated_dv.value(), 5.0);
 
@@ -756,7 +733,11 @@ mod tests {
         // Solution / SampleSet, which carry a VariableLabelStore.
         // Test round-trip conversion at the intrinsic-data level via the
         // explicit `evaluated_decision_variable_to_v1` helper.
-        let v1_converted = evaluated_decision_variable_to_v1(evaluated_dv, Default::default());
+        let v1_converted = evaluated_decision_variable_to_v1(
+            VariableID::from(42),
+            evaluated_dv,
+            Default::default(),
+        );
         assert_eq!(v1_converted.id, 42);
         assert_eq!(v1_converted.substituted_value, Some(5.0));
     }

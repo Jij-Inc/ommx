@@ -17,9 +17,14 @@ impl Parse for crate::v1::SampleSet {
         for v1_sampled_dv in self.decision_variables {
             let parsed: crate::decision_variable::parse::ParsedSampledDecisionVariable =
                 v1_sampled_dv.parse_as(&(), message, "decision_variables")?;
-            let dv_id = *parsed.variable.id();
+            let dv_id = parsed.id;
             variable_labels.insert(dv_id, parsed.label);
-            decision_variables.insert(dv_id, parsed.variable);
+            if decision_variables.insert(dv_id, parsed.variable).is_some() {
+                return Err(crate::RawParseError::SampleSetError(
+                    crate::SampleSetError::DuplicatedVariableID { id: dv_id },
+                )
+                .context(message, "decision_variables"));
+            }
         }
 
         // Parse objectives - required, not optional
@@ -154,7 +159,7 @@ impl From<SampleSet> for crate::v1::SampleSet {
             .iter()
             .map(|(id, dv)| {
                 let label = variable_labels.collect_for(*id);
-                crate::decision_variable::sampled_decision_variable_to_v1(dv.clone(), label)
+                crate::decision_variable::sampled_decision_variable_to_v1(*id, dv.clone(), label)
             })
             .collect();
         let objectives = Some(sample_set.objectives().clone().into());
@@ -432,6 +437,52 @@ mod tests {
         "###);
     }
 
+    #[test]
+    fn test_sample_set_parse_fails_with_duplicated_variable_id() {
+        let sample_id = crate::SampleID::from(0);
+        let v1_sampled_dv = crate::v1::SampledDecisionVariable {
+            decision_variable: Some(crate::v1::DecisionVariable {
+                id: 1,
+                kind: crate::v1::decision_variable::Kind::Continuous as i32,
+                bound: Some(crate::v1::Bound {
+                    lower: 0.0,
+                    upper: 10.0,
+                }),
+                ..Default::default()
+            }),
+            samples: Some(crate::v1::SampledValues {
+                entries: vec![crate::v1::sampled_values::SampledValuesEntry {
+                    ids: vec![sample_id.into_inner()],
+                    value: 2.0,
+                }],
+            }),
+        };
+        let v1_sample_set = crate::v1::SampleSet {
+            decision_variables: vec![v1_sampled_dv.clone(), v1_sampled_dv],
+            objectives: Some(crate::v1::SampledValues {
+                entries: vec![crate::v1::sampled_values::SampledValuesEntry {
+                    ids: vec![sample_id.into_inner()],
+                    value: 0.0,
+                }],
+            }),
+            sense: crate::v1::instance::Sense::Minimize as i32,
+            ..Default::default()
+        };
+
+        let result: Result<SampleSet, ParseError> = v1_sample_set.parse(&());
+        let error = result.unwrap_err();
+        assert!(matches!(
+            error.error,
+            crate::RawParseError::SampleSetError(crate::SampleSetError::DuplicatedVariableID { id })
+                if id == crate::VariableID::from(1)
+        ));
+        insta::assert_snapshot!(error.to_string(), @r###"
+        Traceback for OMMX Message parse error:
+        └─ommx.v1.SampleSet[decision_variables]
+        Duplicated variable ID is found in definition: VariableID(1)
+        "###);
+    }
+
     /// Regression: `SampleSet::to_bytes` / `from_bytes` must preserve the
     /// variable-label and regular-constraint-context stores. Indicator /
     /// one-hot / sos1 sampled context is dropped because `v1::SampleSet`
@@ -451,11 +502,14 @@ mod tests {
         let nf_id = NamedFunctionID::from(0);
         let sample_id = SampleID::from(0);
 
-        let dv = DecisionVariable::binary(var_id);
+        let dv = DecisionVariable::binary();
         let mut x_samples = crate::Sampled::default();
         x_samples.append([sample_id], 1.0).unwrap();
         let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(var_id, SampledDecisionVariable::new(dv, x_samples).unwrap());
+        decision_variables.insert(
+            var_id,
+            SampledDecisionVariable::new(var_id, dv, x_samples).unwrap(),
+        );
 
         let mut variable_labels = crate::VariableLabelStore::default();
         variable_labels.set_name(var_id, "x");

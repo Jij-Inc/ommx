@@ -379,10 +379,9 @@ mod tests {
     fn test_write_bounds_unbounded() {
         let decision_variables = btreemap! {
             VariableID::from(0) => DecisionVariable::new(
-                VariableID::from(0),
                 Kind::Continuous,
                 Bound::unbounded(),
-                crate::ATol::default()
+                crate::ATol::default(),
             ).unwrap(),
         };
 
@@ -408,10 +407,9 @@ mod tests {
     fn test_write_bounds_positive() {
         let decision_variables = btreemap! {
             VariableID::from(0) => DecisionVariable::new(
-                VariableID::from(0),
                 Kind::Continuous,
                 Bound::positive(),
-                crate::ATol::default()
+                crate::ATol::default(),
             ).unwrap(),
         };
 
@@ -438,10 +436,9 @@ mod tests {
     fn test_write_bounds_negative() {
         let decision_variables = btreemap! {
             VariableID::from(0) => DecisionVariable::new(
-                VariableID::from(0),
                 Kind::Continuous,
                 Bound::negative(),
-                crate::ATol::default()
+                crate::ATol::default(),
             ).unwrap(),
         };
 
@@ -468,16 +465,14 @@ mod tests {
     fn test_write_bounds_integer_types() {
         let decision_variables = btreemap! {
             VariableID::from(0) => DecisionVariable::new(
-                VariableID::from(0),
                 Kind::Binary,
                 Bound::of_binary(),
-                crate::ATol::default()
+                crate::ATol::default(),
             ).unwrap(),
             VariableID::from(1) => DecisionVariable::new(
-                VariableID::from(1),
                 Kind::Integer,
                 Bound::new(-10.0, 20.0).unwrap(),
-                crate::ATol::default()
+                crate::ATol::default(),
             ).unwrap(),
         };
 
@@ -506,22 +501,19 @@ mod tests {
     fn test_write_bounds_mixed_types() {
         let decision_variables = btreemap! {
             VariableID::from(0) => DecisionVariable::new(
-                VariableID::from(0),
                 Kind::Continuous,
                 Bound::unbounded(),
-                crate::ATol::default()
+                crate::ATol::default(),
             ).unwrap(),
             VariableID::from(1) => DecisionVariable::new(
-                VariableID::from(1),
                 Kind::Continuous,
                 Bound::positive(),
-                crate::ATol::default()
+                crate::ATol::default(),
             ).unwrap(),
             VariableID::from(2) => DecisionVariable::new(
-                VariableID::from(2),
                 Kind::Integer,
                 Bound::negative(),
-                crate::ATol::default()
+                crate::ATol::default(),
             ).unwrap(),
         };
 

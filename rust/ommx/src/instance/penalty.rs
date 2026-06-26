@@ -292,14 +292,8 @@ mod tests {
     /// Helper function to create a test instance with two decision variables and two constraints
     fn create_test_instance_with_constraints() -> Instance {
         let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(
-            VariableID::from(1),
-            DecisionVariable::continuous(VariableID::from(1)),
-        );
-        decision_variables.insert(
-            VariableID::from(2),
-            DecisionVariable::continuous(VariableID::from(2)),
-        );
+        decision_variables.insert(VariableID::from(1), DecisionVariable::continuous());
+        decision_variables.insert(VariableID::from(2), DecisionVariable::continuous());
 
         let objective = Function::from((linear!(1) + linear!(2)).unwrap());
 
@@ -415,10 +409,7 @@ mod tests {
     fn test_penalty_methods_with_no_constraints() {
         // Create instance without constraints
         let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(
-            VariableID::from(1),
-            DecisionVariable::continuous(VariableID::from(1)),
-        );
+        decision_variables.insert(VariableID::from(1), DecisionVariable::continuous());
 
         let objective = Function::from(linear!(1));
         let constraints = BTreeMap::new();

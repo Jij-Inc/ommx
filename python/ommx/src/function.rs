@@ -138,7 +138,7 @@ impl<'py> FromPyObject<'_, 'py> for FunctionInput {
         }
         if let Ok(dv) = ob.extract::<PyRef<DecisionVariable>>() {
             return Ok(Self::Linear(ommx::Linear::single_term(
-                LinearMonomial::Variable(dv.0.id()),
+                LinearMonomial::Variable(dv.0),
                 ommx::coeff!(1.0),
             )));
         }

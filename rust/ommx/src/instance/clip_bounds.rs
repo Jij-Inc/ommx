@@ -21,7 +21,7 @@ impl Instance {
 
                 // Store original bound only if it actually changes
                 let original_bound = decision_variable.bound();
-                let changed = decision_variable.clip_bound(*new_bound, atol)?;
+                let changed = decision_variable.clip_bound(*id, *new_bound, atol)?;
 
                 if changed {
                     original_bounds.insert(*id, original_bound);
@@ -54,13 +54,13 @@ mod tests {
     fn test_clip_bounds_normal() {
         // Create instance with 3 variables
         let decision_variables = btreemap! {
-            VariableID::from(1) => DecisionVariable::continuous(VariableID::from(1))
+            VariableID::from(1) => DecisionVariable::continuous()
                 .with_bound(Bound::new(0.0, 10.0).unwrap(), ATol::default())
                 .unwrap(),
-            VariableID::from(2) => DecisionVariable::continuous(VariableID::from(2))
+            VariableID::from(2) => DecisionVariable::continuous()
                 .with_bound(Bound::new(0.0, 10.0).unwrap(), ATol::default())
                 .unwrap(),
-            VariableID::from(3) => DecisionVariable::continuous(VariableID::from(3))
+            VariableID::from(3) => DecisionVariable::continuous()
                 .with_bound(Bound::new(0.0, 10.0).unwrap(), ATol::default())
                 .unwrap(),
         };
@@ -96,7 +96,7 @@ mod tests {
     #[test]
     fn test_clip_bounds_undefined_variable() {
         let decision_variables = btreemap! {
-            VariableID::from(1) => DecisionVariable::continuous(VariableID::from(1)),
+            VariableID::from(1) => DecisionVariable::continuous(),
         };
 
         let mut instance = Instance {
@@ -120,7 +120,7 @@ mod tests {
         // Create instance with 3 variables
         let mut decision_variables = btreemap! {};
         for i in 1..=3 {
-            let dv = DecisionVariable::continuous(VariableID::from(i))
+            let dv = DecisionVariable::continuous()
                 .with_bound(Bound::new(0.0, 10.0).unwrap(), ATol::default())
                 .unwrap();
             decision_variables.insert(VariableID::from(i), dv);
@@ -159,7 +159,7 @@ mod tests {
 
     #[test]
     fn test_clip_bounds_empty() {
-        let dv = DecisionVariable::continuous(VariableID::from(1))
+        let dv = DecisionVariable::continuous()
             .with_bound(Bound::new(0.0, 10.0).unwrap(), ATol::default())
             .unwrap();
         let original_bound = dv.bound();

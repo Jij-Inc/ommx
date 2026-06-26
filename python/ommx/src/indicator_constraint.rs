@@ -46,8 +46,7 @@ impl IndicatorConstraint {
         description: Option<String>,
         parameters: HashMap<String, String>,
     ) -> PyResult<Self> {
-        let ic =
-            ommx::IndicatorConstraint::new(indicator_variable.0.id(), equality.into(), function.0);
+        let ic = ommx::IndicatorConstraint::new(indicator_variable.0, equality.into(), function.0);
         let context = ommx::ConstraintContext {
             label: ommx::ModelingLabel {
                 name,

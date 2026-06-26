@@ -66,10 +66,11 @@ impl Parse for crate::v1::Solution {
         let mut decision_variables = std::collections::BTreeMap::default();
         let mut variable_labels = crate::VariableLabelStore::default();
         for dv in self.decision_variables {
-            let dv_id = dv.id;
             // Parse the DecisionVariable to get strongly-typed version + drained label
             let parsed: crate::decision_variable::parse::ParsedDecisionVariable =
                 dv.parse_as(&(), message, "decision_variables")?;
+            let parsed_id = parsed.id;
+            let dv_id = parsed_id.into_inner();
             let parsed_dv = parsed.variable;
             let label = parsed.label;
             let parsed_fixed_value = parsed.fixed_value;
@@ -100,13 +101,17 @@ impl Parse for crate::v1::Solution {
                 }
             };
 
-            let evaluated_dv = crate::EvaluatedDecisionVariable::new(parsed_dv, value)
+            let evaluated_dv = crate::EvaluatedDecisionVariable::new(parsed_id, parsed_dv, value)
                 .map_err(crate::RawParseError::InvalidDecisionVariable)
                 .map_err(|e| ParseError::from(e).context(message, "decision_variables"))?;
 
-            let id = *evaluated_dv.id();
-            variable_labels.insert(id, label);
-            decision_variables.insert(id, evaluated_dv);
+            variable_labels.insert(parsed_id, label);
+            if decision_variables.insert(parsed_id, evaluated_dv).is_some() {
+                return Err(crate::RawParseError::SolutionError(
+                    SolutionError::DuplicatedVariableID { id: parsed_id },
+                )
+                .context(message, "decision_variables"));
+            }
         }
         let optimality = self
             .optimality
@@ -227,7 +232,7 @@ impl From<Solution> for crate::v1::Solution {
             .iter()
             .map(|(id, dv)| {
                 let label = variable_labels_store.collect_for(*id);
-                crate::decision_variable::evaluated_decision_variable_to_v1(dv.clone(), label)
+                crate::decision_variable::evaluated_decision_variable_to_v1(*id, dv.clone(), label)
             })
             .collect();
         let feasible = solution.feasible();
@@ -576,6 +581,44 @@ mod tests {
         "###);
     }
 
+    #[test]
+    fn test_solution_parse_fails_with_duplicated_variable_id() {
+        use crate::v1;
+
+        let decision_variable = v1::DecisionVariable {
+            id: 1,
+            kind: v1::decision_variable::Kind::Continuous as i32,
+            bound: Some(v1::Bound {
+                lower: 0.0,
+                upper: 10.0,
+            }),
+            ..Default::default()
+        };
+        let v1_solution = v1::Solution {
+            state: Some(v1::State {
+                entries: [(1, 2.0)].iter().cloned().collect(),
+            }),
+            objective: 42.5,
+            decision_variables: vec![decision_variable.clone(), decision_variable],
+            feasible: true,
+            feasible_relaxed: Some(true),
+            ..Default::default()
+        };
+
+        let result: Result<Solution, ParseError> = v1_solution.parse(&());
+        let error = result.unwrap_err();
+        assert!(matches!(
+            error.error,
+            crate::RawParseError::SolutionError(SolutionError::DuplicatedVariableID { id })
+                if id == crate::VariableID::from(1)
+        ));
+        insta::assert_snapshot!(error.to_string(), @r###"
+        Traceback for OMMX Message parse error:
+        └─ommx.v1.Solution[decision_variables]
+        Duplicated variable ID is found in definition: VariableID(1)
+        "###);
+    }
+
     // Data produced by a future SDK whose format version exceeds what this SDK supports
     // must be rejected with a clear upgrade-the-SDK error rather than silently misread.
     #[test]
@@ -610,8 +653,8 @@ mod tests {
         let cid = ConstraintID::from(10);
         let nf_id = NamedFunctionID::from(0);
 
-        let dv = DecisionVariable::binary(var_id);
-        let evaluated_dv = EvaluatedDecisionVariable::new(dv, 1.0).unwrap();
+        let dv = DecisionVariable::binary();
+        let evaluated_dv = EvaluatedDecisionVariable::new(var_id, dv, 1.0).unwrap();
         let mut decision_variables = BTreeMap::new();
         decision_variables.insert(var_id, evaluated_dv);
 

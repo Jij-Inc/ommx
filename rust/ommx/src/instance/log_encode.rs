@@ -91,7 +91,6 @@ mod tests {
         let mut instance = Instance::default();
         let id = VariableID::from(0);
         let var = DecisionVariable::new(
-            id,
             Kind::Integer,
             Bound::new(2.0, 7.0).unwrap(),
             crate::ATol::default(),

@@ -22,15 +22,9 @@ fn main() -> Result<()> {
     let mut decision_variables = BTreeMap::new();
 
     // Binary variable x_{0, 0}
-    decision_variables.insert(
-        VariableID::from(0),
-        DecisionVariable::binary(VariableID::from(0)),
-    );
+    decision_variables.insert(VariableID::from(0), DecisionVariable::binary());
     // Binary variable x_{1, 0}
-    decision_variables.insert(
-        VariableID::from(1),
-        DecisionVariable::binary(VariableID::from(1)),
-    );
+    decision_variables.insert(VariableID::from(1), DecisionVariable::binary());
 
     // Objective function: 2.0 * x_{0, 0} * x_{1, 0} - x_{0, 0} - x_{1, 0} + 3.0
     // Quadratic term: 2.0 * x_{0,0} * x_{1, 0}

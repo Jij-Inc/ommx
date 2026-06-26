@@ -260,7 +260,6 @@ mod tests {
 
         // Variable x[0]
         let dv1 = DecisionVariable::new(
-            VariableID::from(1),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
             crate::ATol::default(),
@@ -277,7 +276,6 @@ mod tests {
 
         // Variable x[1]
         let dv2 = DecisionVariable::new(
-            VariableID::from(2),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
             crate::ATol::default(),
@@ -294,7 +292,6 @@ mod tests {
 
         // Variable y[0]
         let dv3 = DecisionVariable::new(
-            VariableID::from(3),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
             crate::ATol::default(),
@@ -324,15 +321,15 @@ mod tests {
 
         decision_variables.insert(
             VariableID::from(1),
-            SampledDecisionVariable::new(dv1, x0_samples).unwrap(),
+            SampledDecisionVariable::new(VariableID::from(1), dv1, x0_samples).unwrap(),
         );
         decision_variables.insert(
             VariableID::from(2),
-            SampledDecisionVariable::new(dv2, x1_samples).unwrap(),
+            SampledDecisionVariable::new(VariableID::from(2), dv2, x1_samples).unwrap(),
         );
         decision_variables.insert(
             VariableID::from(3),
-            SampledDecisionVariable::new(dv3, y0_samples).unwrap(),
+            SampledDecisionVariable::new(VariableID::from(3), dv3, y0_samples).unwrap(),
         );
 
         // Create objectives
@@ -400,7 +397,6 @@ mod tests {
         let mut variable_labels = crate::VariableLabelStore::default();
 
         let dv1 = DecisionVariable::new(
-            VariableID::from(1),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
             crate::ATol::default(),
@@ -416,7 +412,6 @@ mod tests {
         );
 
         let dv2 = DecisionVariable::new(
-            VariableID::from(2),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
             crate::ATol::default(),
@@ -440,11 +435,11 @@ mod tests {
 
         decision_variables.insert(
             VariableID::from(1),
-            SampledDecisionVariable::new(dv1, samples1).unwrap(),
+            SampledDecisionVariable::new(VariableID::from(1), dv1, samples1).unwrap(),
         );
         decision_variables.insert(
             VariableID::from(2),
-            SampledDecisionVariable::new(dv2, samples2).unwrap(),
+            SampledDecisionVariable::new(VariableID::from(2), dv2, samples2).unwrap(),
         );
 
         // Create objectives
@@ -504,7 +499,6 @@ mod tests {
         let mut variable_labels = crate::VariableLabelStore::default();
 
         let dv1 = DecisionVariable::new(
-            VariableID::from(1),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
             crate::ATol::default(),
@@ -520,7 +514,6 @@ mod tests {
         );
 
         let dv2 = DecisionVariable::new(
-            VariableID::from(2),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
             crate::ATol::default(),
@@ -536,7 +529,6 @@ mod tests {
         );
 
         let dv3 = DecisionVariable::new(
-            VariableID::from(3),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
             crate::ATol::default(),
@@ -562,15 +554,15 @@ mod tests {
 
         decision_variables.insert(
             VariableID::from(1),
-            SampledDecisionVariable::new(dv1, samples1).unwrap(),
+            SampledDecisionVariable::new(VariableID::from(1), dv1, samples1).unwrap(),
         );
         decision_variables.insert(
             VariableID::from(2),
-            SampledDecisionVariable::new(dv2, samples2).unwrap(),
+            SampledDecisionVariable::new(VariableID::from(2), dv2, samples2).unwrap(),
         );
         decision_variables.insert(
             VariableID::from(3),
-            SampledDecisionVariable::new(dv3, samples3).unwrap(),
+            SampledDecisionVariable::new(VariableID::from(3), dv3, samples3).unwrap(),
         );
 
         let mut objectives = crate::Sampled::default();
@@ -604,7 +596,6 @@ mod tests {
         let mut variable_labels = crate::VariableLabelStore::default();
 
         let dv1 = DecisionVariable::new(
-            VariableID::from(1),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
             crate::ATol::default(),
@@ -620,7 +611,6 @@ mod tests {
         );
 
         let dv2 = DecisionVariable::new(
-            VariableID::from(2),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
             crate::ATol::default(),
@@ -636,7 +626,6 @@ mod tests {
         );
 
         let dv3 = DecisionVariable::new(
-            VariableID::from(3),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
             crate::ATol::default(),
@@ -662,15 +651,15 @@ mod tests {
 
         decision_variables.insert(
             VariableID::from(1),
-            SampledDecisionVariable::new(dv1, samples1).unwrap(),
+            SampledDecisionVariable::new(VariableID::from(1), dv1, samples1).unwrap(),
         );
         decision_variables.insert(
             VariableID::from(2),
-            SampledDecisionVariable::new(dv2, samples2).unwrap(),
+            SampledDecisionVariable::new(VariableID::from(2), dv2, samples2).unwrap(),
         );
         decision_variables.insert(
             VariableID::from(3),
-            SampledDecisionVariable::new(dv3, samples3).unwrap(),
+            SampledDecisionVariable::new(VariableID::from(3), dv3, samples3).unwrap(),
         );
 
         let mut objectives = crate::Sampled::default();
@@ -719,7 +708,6 @@ mod tests {
         let mut variable_labels = crate::VariableLabelStore::default();
 
         let dv = DecisionVariable::new(
-            VariableID::from(1),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
             crate::ATol::default(),
@@ -745,7 +733,7 @@ mod tests {
 
         decision_variables.insert(
             VariableID::from(1),
-            SampledDecisionVariable::new(dv, samples).unwrap(),
+            SampledDecisionVariable::new(VariableID::from(1), dv, samples).unwrap(),
         );
 
         // Create objectives
@@ -784,7 +772,6 @@ mod tests {
 
         // First variable with param1
         let dv1 = DecisionVariable::new(
-            VariableID::from(1),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
             crate::ATol::default(),
@@ -809,12 +796,11 @@ mod tests {
 
         decision_variables.insert(
             VariableID::from(1),
-            SampledDecisionVariable::new(dv1, samples1).unwrap(),
+            SampledDecisionVariable::new(VariableID::from(1), dv1, samples1).unwrap(),
         );
 
         // Second variable with param2 but same name and subscripts
         let dv2 = DecisionVariable::new(
-            VariableID::from(2),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
             crate::ATol::default(),
@@ -839,7 +825,7 @@ mod tests {
 
         decision_variables.insert(
             VariableID::from(2),
-            SampledDecisionVariable::new(dv2, samples2).unwrap(),
+            SampledDecisionVariable::new(VariableID::from(2), dv2, samples2).unwrap(),
         );
 
         // Create objectives

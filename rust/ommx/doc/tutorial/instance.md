@@ -11,8 +11,8 @@ use std::collections::BTreeMap;
 
 // Create decision variables
 let decision_variables = btreemap! {
-    VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
-    VariableID::from(2) => DecisionVariable::continuous(VariableID::from(2)),
+    VariableID::from(1) => DecisionVariable::binary(),
+    VariableID::from(2) => DecisionVariable::continuous(),
 };
 
 // Create objective function: minimize x1 + 2*x2

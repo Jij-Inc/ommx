@@ -207,8 +207,8 @@ mod with_parameters_tests {
             .sense(Sense::Minimize)
             .objective(Function::Zero)
             .decision_variables(btreemap! {
-                x => DecisionVariable::binary(x),
-                dep => DecisionVariable::binary(dep),
+                x => DecisionVariable::binary(),
+                dep => DecisionVariable::binary(),
             })
             .parameters(btreemap! {
                 p => crate::v1::Parameter { id: 100, ..Default::default() },
@@ -254,7 +254,7 @@ mod with_parameters_tests {
             .sense(Sense::Minimize)
             .objective(Function::Zero)
             .decision_variables(btreemap! {
-                x => DecisionVariable::binary(x),
+                x => DecisionVariable::binary(),
             })
             .parameters(btreemap! {
                 p => crate::v1::Parameter { id: 100, ..Default::default() },
@@ -310,8 +310,8 @@ mod with_parameters_tests {
             .sense(Sense::Minimize)
             .objective(Function::Zero)
             .decision_variables(btreemap! {
-                y => DecisionVariable::binary(y),
-                x => DecisionVariable::binary(x),
+                y => DecisionVariable::binary(),
+                x => DecisionVariable::binary(),
             })
             .parameters(btreemap! {
                 p => crate::v1::Parameter { id: 100, ..Default::default() },
@@ -367,8 +367,8 @@ mod with_parameters_tests {
             .sense(Sense::Minimize)
             .objective(Function::Zero)
             .decision_variables(btreemap! {
-                y => DecisionVariable::binary(y),
-                x => DecisionVariable::binary(x),
+                y => DecisionVariable::binary(),
+                x => DecisionVariable::binary(),
             })
             .parameters(btreemap! {
                 p => crate::v1::Parameter { id: 100, ..Default::default() },

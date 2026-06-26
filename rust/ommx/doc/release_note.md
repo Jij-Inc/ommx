@@ -31,6 +31,11 @@ The 3.0.0 line is a major revision of the Rust SDK:
   `instance.named_function_labels()`, …). One canonical store per
   collection, two views on top: per-id wrapper getters for one-off
   reads and `*_df` for bulk analysis.
+- Decision variables now follow the same table ownership rule:
+  [`DecisionVariable`](crate::DecisionVariable) is row data containing
+  only `kind` and `bound`; the [`VariableID`](crate::VariableID) and
+  fixed values live on the enclosing `Instance` /
+  `ParametricInstance` / `Solution` / `SampleSet` tables.
 - A **capability model** lets adapters declare what they natively
   support and auto-converts unsupported kinds at the boundary, so a
   valid OMMX instance can be fed to any adapter (the conversion path
@@ -186,6 +191,25 @@ See [`PYTHON_SDK_MIGRATION_GUIDE.md`](https://github.com/Jij-Inc/ommx/blob/main/
 
 The migration guide's [Modeling labels and constraint context](crate::doc::migration_guide#modeling-labels-and-constraint-context)
 section has the per-host accessor list and the store API reference.
+
+## Decision-variable table ownership ([#958](https://github.com/Jij-Inc/ommx/issues/958))
+
+The Rust SDK now treats `Instance::decision_variables` as the
+decision-variable table: the map key owns the `VariableID`, the row owns only
+`kind` and `bound`, `variable_labels` owns modeling labels, and
+`fixed_decision_variable_values` owns fixed values. The same key-owned ID model
+is used by `Solution` and `SampleSet` for evaluated and sampled decision
+variables.
+
+This removes the remaining duplicate ID source from the Rust-side row structs.
+Construct `DecisionVariable` rows with `DecisionVariable::new(kind, bound, atol)`
+or no-argument factories such as `DecisionVariable::binary()`, then insert them
+under the desired `VariableID` key. The row still owns the `kind`/`bound`
+invariant: safe construction and bound mutation normalize `bound` with the
+caller-provided `ATol`. `EvaluatedDecisionVariable::new`
+and `SampledDecisionVariable::new` still take the ID as a separate argument so
+non-finite value errors can report the table key, but the resulting row data
+does not store that ID.
 
 ## Capability model ([#790](https://github.com/Jij-Inc/ommx/pull/790), [#805](https://github.com/Jij-Inc/ommx/pull/805), [#810](https://github.com/Jij-Inc/ommx/pull/810), [#811](https://github.com/Jij-Inc/ommx/pull/811), [#814](https://github.com/Jij-Inc/ommx/pull/814))
 

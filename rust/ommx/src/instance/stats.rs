@@ -202,10 +202,10 @@ mod tests {
     #[test]
     fn test_instance_with_variables_stats() {
         let decision_variables = btreemap! {
-            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
-            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
-            VariableID::from(3) => DecisionVariable::integer(VariableID::from(3)),
-            VariableID::from(4) => DecisionVariable::continuous(VariableID::from(4)),
+            VariableID::from(1) => DecisionVariable::binary(),
+            VariableID::from(2) => DecisionVariable::binary(),
+            VariableID::from(3) => DecisionVariable::integer(),
+            VariableID::from(4) => DecisionVariable::continuous(),
         };
 
         // Set objective using variable 1 and 2
@@ -233,9 +233,9 @@ mod tests {
     #[test]
     fn test_instance_with_constraints_stats() {
         let decision_variables = btreemap! {
-            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
-            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
-            VariableID::from(3) => DecisionVariable::binary(VariableID::from(3)),
+            VariableID::from(1) => DecisionVariable::binary(),
+            VariableID::from(2) => DecisionVariable::binary(),
+            VariableID::from(3) => DecisionVariable::binary(),
         };
 
         let objective = (linear!(1) + coeff!(1.0)).unwrap().into();
@@ -270,7 +270,7 @@ mod tests {
     #[test]
     fn test_stats_serialization() {
         let decision_variables = btreemap! {
-            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
+            VariableID::from(1) => DecisionVariable::binary(),
         };
 
         let objective = (linear!(1) + coeff!(1.0)).into();
@@ -302,11 +302,11 @@ mod tests {
     #[test]
     fn test_stats_snapshot_with_variables() {
         let decision_variables = btreemap! {
-            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
-            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
-            VariableID::from(3) => DecisionVariable::integer(VariableID::from(3)),
-            VariableID::from(4) => DecisionVariable::continuous(VariableID::from(4)),
-            VariableID::from(5) => DecisionVariable::semi_integer(VariableID::from(5)),
+            VariableID::from(1) => DecisionVariable::binary(),
+            VariableID::from(2) => DecisionVariable::binary(),
+            VariableID::from(3) => DecisionVariable::integer(),
+            VariableID::from(4) => DecisionVariable::continuous(),
+            VariableID::from(5) => DecisionVariable::semi_integer(),
         };
 
         let objective = (linear!(1) + linear!(2)).into();
@@ -326,9 +326,9 @@ mod tests {
     #[test]
     fn test_stats_snapshot_with_constraints() {
         let decision_variables = btreemap! {
-            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
-            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
-            VariableID::from(3) => DecisionVariable::integer(VariableID::from(3)),
+            VariableID::from(1) => DecisionVariable::binary(),
+            VariableID::from(2) => DecisionVariable::binary(),
+            VariableID::from(3) => DecisionVariable::integer(),
         };
 
         let objective = (linear!(1) + coeff!(1.0)).unwrap().into();

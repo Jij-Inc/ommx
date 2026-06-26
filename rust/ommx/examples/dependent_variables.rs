@@ -24,22 +24,10 @@ fn main() -> Result<()> {
 
     // Create initial instance: minimize x1 + x2 subject to x1 + x2 <= 10
     let mut decision_variables = BTreeMap::new();
-    decision_variables.insert(
-        VariableID::from(1),
-        DecisionVariable::continuous(VariableID::from(1)),
-    );
-    decision_variables.insert(
-        VariableID::from(2),
-        DecisionVariable::continuous(VariableID::from(2)),
-    );
-    decision_variables.insert(
-        VariableID::from(3),
-        DecisionVariable::continuous(VariableID::from(3)),
-    );
-    decision_variables.insert(
-        VariableID::from(4),
-        DecisionVariable::continuous(VariableID::from(4)),
-    );
+    decision_variables.insert(VariableID::from(1), DecisionVariable::continuous());
+    decision_variables.insert(VariableID::from(2), DecisionVariable::continuous());
+    decision_variables.insert(VariableID::from(3), DecisionVariable::continuous());
+    decision_variables.insert(VariableID::from(4), DecisionVariable::continuous());
 
     let objective = Function::from((linear!(1) + linear!(2))?);
     let constraint = Constraint::less_than_or_equal_to_zero(Function::from(

@@ -222,7 +222,7 @@ impl InstanceBuilder {
     /// # Errors
     /// Returns an error if:
     /// - Required fields (`sense`, `objective`, `decision_variables`, `constraints`) are not set
-    /// - Map keys don't match their value's ID (decision_variables, constraints, removed_constraints)
+    /// - Named-function map keys don't match their value's ID
     /// - The objective function or constraints reference undefined variable IDs
     /// - The keys of `constraints` and `removed_constraints` are not disjoint
     /// - Label/context stores contain IDs that are not owned by the
@@ -243,17 +243,6 @@ impl InstanceBuilder {
             .constraints
             .ok_or_else(|| crate::error!("Required field is missing: constraints"))?;
 
-        // Validate that decision variable map keys match their value's id
-        for (key, value) in &decision_variables {
-            if *key != value.id() {
-                let value_id = value.id();
-                crate::bail!(
-                    { ?key, ?value_id },
-                    "Decision variable map key {key:?} does not match value's id {value_id:?}",
-                );
-            }
-        }
-
         // Collect all variable IDs for validation
         let variable_ids: VariableIDSet = decision_variables.keys().cloned().collect();
         crate::modeling_label::validate_modeling_label_ids(
@@ -270,7 +259,7 @@ impl InstanceBuilder {
                     "Fixed decision-variable value references unknown decision variable ID {id:?}",
                 );
             };
-            dv.check_value_consistency(*value, crate::ATol::default())?;
+            dv.check_value_consistency(*id, *value, crate::ATol::default())?;
         }
 
         // Validate that all variable IDs in objective and constraints are defined
@@ -604,7 +593,7 @@ mod tests {
         let instance = Instance::builder()
             .sense(Sense::Minimize)
             .objective(Function::Zero)
-            .decision_variables(BTreeMap::from([(var_id, DecisionVariable::binary(var_id))]))
+            .decision_variables(BTreeMap::from([(var_id, DecisionVariable::binary())]))
             .variable_labels(variable_labels)
             .constraints(BTreeMap::from([(
                 constraint_id,
@@ -639,7 +628,7 @@ mod tests {
         let instance = Instance::builder()
             .sense(Sense::Minimize)
             .objective(Function::Zero)
-            .decision_variables(BTreeMap::from([(var_id, DecisionVariable::binary(var_id))]))
+            .decision_variables(BTreeMap::from([(var_id, DecisionVariable::binary())]))
             .constraints(BTreeMap::new())
             .indicator_constraints(BTreeMap::from([(
                 indicator_id,
@@ -866,7 +855,7 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::Zero)
             .decision_variables(btreemap! {
-                var_id => DecisionVariable::binary(var_id),
+                var_id => DecisionVariable::binary(),
             })
             .constraints(BTreeMap::new())
             .one_hot_constraints(btreemap! {
@@ -889,7 +878,7 @@ mod tests {
         let var_id = VariableID::from(1);
         let undefined_var_id = VariableID::from(999);
         let decision_variables = btreemap! {
-            var_id => DecisionVariable::binary(var_id),
+            var_id => DecisionVariable::binary(),
         };
 
         // Create a dependency that references a variable not in decision_variables
@@ -921,7 +910,7 @@ mod tests {
 
         let var_id = VariableID::from(1);
         let decision_variables = btreemap! {
-            var_id => DecisionVariable::binary(var_id),
+            var_id => DecisionVariable::binary(),
         };
 
         // Create a dependency for a variable that IS in decision_variables (this is valid)
@@ -950,7 +939,7 @@ mod tests {
 
         let var_id = VariableID::from(1);
         let decision_variables = btreemap! {
-            var_id => DecisionVariable::binary(var_id),
+            var_id => DecisionVariable::binary(),
         };
 
         // Create a dependency for var_id
@@ -985,7 +974,7 @@ mod tests {
         let var_id = VariableID::from(1);
         let constraint_id = ConstraintID::from(1);
         let decision_variables = btreemap! {
-            var_id => DecisionVariable::binary(var_id),
+            var_id => DecisionVariable::binary(),
         };
 
         // Create a dependency for var_id
@@ -1018,7 +1007,7 @@ mod tests {
         use maplit::btreemap;
 
         let var_id = VariableID::from(1);
-        let dv = DecisionVariable::binary(var_id);
+        let dv = DecisionVariable::binary();
         let decision_variables = btreemap! {
             var_id => dv,
         };
@@ -1084,7 +1073,7 @@ mod tests {
         use maplit::btreemap;
 
         let var_id = VariableID::from(1);
-        let dv = DecisionVariable::binary(var_id);
+        let dv = DecisionVariable::binary();
         let decision_variables = btreemap! {
             var_id => dv,
         };

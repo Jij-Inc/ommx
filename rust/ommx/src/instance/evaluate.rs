@@ -30,6 +30,52 @@ fn values_are_consistent(left: f64, right: f64, atol: ATol) -> bool {
     left.is_finite() && right.is_finite() && (left - right).abs() <= *atol
 }
 
+fn evaluate_decision_variable(
+    id: VariableID,
+    decision_variable: &DecisionVariable,
+    state: &v1::State,
+) -> Result<crate::EvaluatedDecisionVariable> {
+    let value = state
+        .entries
+        .get(&id.into_inner())
+        .copied()
+        .ok_or_else(|| crate::error!("Variable ID {id} not found in state"))?;
+    Ok(crate::EvaluatedDecisionVariable::new(
+        id,
+        decision_variable.clone(),
+        value,
+    )?)
+}
+
+fn evaluate_decision_variable_samples(
+    id: VariableID,
+    decision_variable: &DecisionVariable,
+    samples: &crate::Sampled<v1::State>,
+) -> Result<crate::SampledDecisionVariable> {
+    let variable_id = id.into_inner();
+    let mut grouped_values: BTreeMap<ordered_float::OrderedFloat<f64>, Vec<crate::SampleID>> =
+        BTreeMap::new();
+    for (sample_id, state) in samples.iter() {
+        if let Some(value) = state.entries.get(&variable_id) {
+            grouped_values
+                .entry(ordered_float::OrderedFloat(*value))
+                .or_default()
+                .push(*sample_id);
+        }
+    }
+
+    let (ids, values): (Vec<Vec<crate::SampleID>>, Vec<f64>) = grouped_values
+        .into_iter()
+        .map(|(value, ids)| (ids, value.into_inner()))
+        .unzip();
+    let samples = crate::Sampled::new(ids, values)?;
+    Ok(crate::SampledDecisionVariable::new(
+        id,
+        decision_variable.clone(),
+        samples,
+    )?)
+}
+
 /// Merge additional variable fixings from propagation into `expanded` state.
 ///
 /// Returns `Err` if any fixing conflicts with an existing value in `expanded`
@@ -221,9 +267,9 @@ impl Evaluate for Instance {
         let evaluated_sos1_constraints = self.sos1_constraint_collection.evaluate(&state, atol)?;
 
         let mut decision_variables = BTreeMap::default();
-        for dv in self.decision_variables.values() {
-            let evaluated_dv = dv.evaluate(&state, atol)?;
-            decision_variables.insert(*evaluated_dv.id(), evaluated_dv);
+        for (id, dv) in self.decision_variables.iter() {
+            let evaluated_dv = evaluate_decision_variable(*id, dv, &state)?;
+            decision_variables.insert(*id, evaluated_dv);
         }
 
         let mut evaluated_named_functions = BTreeMap::default();
@@ -294,9 +340,9 @@ impl Evaluate for Instance {
 
         // Reconstruct decision variable values
         let mut decision_variables = std::collections::BTreeMap::new();
-        for dv in self.decision_variables.values() {
-            let sampled_dv = dv.evaluate_samples(&samples, atol)?;
-            decision_variables.insert(dv.id(), sampled_dv);
+        for (id, dv) in self.decision_variables.iter() {
+            let sampled_dv = evaluate_decision_variable_samples(*id, dv, &samples)?;
+            decision_variables.insert(*id, sampled_dv);
         }
 
         // Reconstruct named function values
@@ -343,7 +389,7 @@ impl Evaluate for Instance {
                     "Unknown decision variable (ID={id}) in state."
                 ));
             };
-            dv.check_value_consistency(*value, atol)?;
+            dv.check_value_consistency(var_id, *value, atol)?;
             if let Some(previous_value) = working.fixed_decision_variable_values.get(&var_id) {
                 if !values_are_consistent(*previous_value, *value, atol) {
                     return Err(crate::DecisionVariableError::SubstitutedValueOverwrite {
@@ -540,14 +586,8 @@ mod tests {
     #[test]
     fn test_populate_state_rejects_non_finite_fixed_value_from_state() {
         let decision_variables = BTreeMap::from([
-            (
-                VariableID::from(1),
-                crate::DecisionVariable::continuous(VariableID::from(1)),
-            ),
-            (
-                VariableID::from(2),
-                crate::DecisionVariable::continuous(VariableID::from(2)),
-            ),
+            (VariableID::from(1), crate::DecisionVariable::continuous()),
+            (VariableID::from(2), crate::DecisionVariable::continuous()),
         ]);
         let instance = Instance::builder()
             .sense(Sense::Minimize)
@@ -566,14 +606,8 @@ mod tests {
     #[test]
     fn test_partial_evaluate_accepts_existing_fixed_value_at_atol_boundary() {
         let decision_variables = BTreeMap::from([
-            (
-                VariableID::from(1),
-                crate::DecisionVariable::continuous(VariableID::from(1)),
-            ),
-            (
-                VariableID::from(2),
-                crate::DecisionVariable::continuous(VariableID::from(2)),
-            ),
+            (VariableID::from(1), crate::DecisionVariable::continuous()),
+            (VariableID::from(2), crate::DecisionVariable::continuous()),
         ]);
         let mut instance = Instance::builder()
             .sense(Sense::Minimize)
@@ -595,16 +629,60 @@ mod tests {
     }
 
     #[test]
+    fn test_evaluate_samples_preserves_sample_groups_for_decision_variables() {
+        let instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(linear!(1)))
+            .decision_variables(BTreeMap::from([(
+                VariableID::from(1),
+                crate::DecisionVariable::continuous(),
+            )]))
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap();
+        let samples = crate::Sampled::new(
+            [
+                vec![crate::SampleID::from(0)],
+                vec![crate::SampleID::from(1)],
+                vec![crate::SampleID::from(2)],
+            ],
+            [
+                v1::State::from(HashMap::from([(1, 2.0)])),
+                v1::State::from(HashMap::from([(1, 7.0)])),
+                v1::State::from(HashMap::from([(1, 2.0)])),
+            ],
+        )
+        .unwrap();
+
+        let sample_set = instance
+            .evaluate_samples(&samples, ATol::default())
+            .unwrap();
+        let sampled = sample_set
+            .decision_variables()
+            .get(&VariableID::from(1))
+            .unwrap()
+            .samples();
+
+        assert_eq!(sampled.get(crate::SampleID::from(0)), Some(&2.0));
+        assert_eq!(sampled.get(crate::SampleID::from(1)), Some(&7.0));
+        assert_eq!(sampled.get(crate::SampleID::from(2)), Some(&2.0));
+
+        let chunks = sampled.clone().chunk();
+        assert_eq!(chunks.len(), 2);
+        assert_eq!(chunks[0].0, 2.0);
+        assert_eq!(chunks[0].1.len(), 2);
+        assert!(chunks[0].1.contains(&crate::SampleID::from(0)));
+        assert!(chunks[0].1.contains(&crate::SampleID::from(2)));
+        assert_eq!(chunks[1].0, 7.0);
+        assert_eq!(chunks[1].1.len(), 1);
+        assert!(chunks[1].1.contains(&crate::SampleID::from(1)));
+    }
+
+    #[test]
     fn test_partial_evaluate_rejects_dependent_variable_fixing() {
         let decision_variables = BTreeMap::from([
-            (
-                VariableID::from(1),
-                crate::DecisionVariable::continuous(VariableID::from(1)),
-            ),
-            (
-                VariableID::from(10),
-                crate::DecisionVariable::continuous(VariableID::from(10)),
-            ),
+            (VariableID::from(1), crate::DecisionVariable::continuous()),
+            (VariableID::from(10), crate::DecisionVariable::continuous()),
         ]);
         let mut instance = Instance::builder()
             .sense(Sense::Minimize)
@@ -640,14 +718,8 @@ mod tests {
     #[test]
     fn test_populate_state_rejects_non_finite_existing_dependent_value() {
         let decision_variables = BTreeMap::from([
-            (
-                VariableID::from(1),
-                crate::DecisionVariable::continuous(VariableID::from(1)),
-            ),
-            (
-                VariableID::from(10),
-                crate::DecisionVariable::continuous(VariableID::from(10)),
-            ),
+            (VariableID::from(1), crate::DecisionVariable::continuous()),
+            (VariableID::from(10), crate::DecisionVariable::continuous()),
         ]);
         let mut instance = Instance::new(
             Sense::Minimize,
@@ -668,14 +740,8 @@ mod tests {
     #[test]
     fn test_populate_state_rejects_non_finite_dependent_evaluation() {
         let decision_variables = BTreeMap::from([
-            (
-                VariableID::from(1),
-                crate::DecisionVariable::continuous(VariableID::from(1)),
-            ),
-            (
-                VariableID::from(10),
-                crate::DecisionVariable::continuous(VariableID::from(10)),
-            ),
+            (VariableID::from(1), crate::DecisionVariable::continuous()),
+            (VariableID::from(10), crate::DecisionVariable::continuous()),
         ]);
         let mut instance = Instance::new(
             Sense::Minimize,
@@ -706,11 +772,11 @@ mod tests {
         // x4 (id=4): irrelevant (not used in objective/constraints)
         // x5 (id=5): only used in named_functions
 
-        let x1 = DecisionVariable::continuous(VariableID::from(1));
-        let x2 = DecisionVariable::continuous(VariableID::from(2));
-        let x3 = DecisionVariable::continuous(VariableID::from(3));
-        let x4 = DecisionVariable::continuous(VariableID::from(4));
-        let x5 = DecisionVariable::continuous(VariableID::from(5));
+        let x1 = DecisionVariable::continuous();
+        let x2 = DecisionVariable::continuous();
+        let x3 = DecisionVariable::continuous();
+        let x4 = DecisionVariable::continuous();
+        let x5 = DecisionVariable::continuous();
 
         let decision_variables = btreemap! {
             VariableID::from(1) => x1,
@@ -809,9 +875,9 @@ mod tests {
 
         // Binary variables x1, x2, x3 with OneHot{x1, x2, x3}
         let decision_variables = btreemap! {
-            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
-            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
-            VariableID::from(3) => DecisionVariable::binary(VariableID::from(3)),
+            VariableID::from(1) => DecisionVariable::binary(),
+            VariableID::from(2) => DecisionVariable::binary(),
+            VariableID::from(3) => DecisionVariable::binary(),
         };
         let objective = Function::from(((linear!(1) + linear!(2)).unwrap() + linear!(3)).unwrap());
 
@@ -859,9 +925,9 @@ mod tests {
         use maplit::btreemap;
 
         let decision_variables = btreemap! {
-            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
-            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
-            VariableID::from(3) => DecisionVariable::binary(VariableID::from(3)),
+            VariableID::from(1) => DecisionVariable::binary(),
+            VariableID::from(2) => DecisionVariable::binary(),
+            VariableID::from(3) => DecisionVariable::binary(),
         };
         let objective = Function::from(((linear!(1) + linear!(2)).unwrap() + linear!(3)).unwrap());
 
@@ -901,9 +967,9 @@ mod tests {
         // x1, x2 in OneHot; x2, x3 in SOS1
         // Fix x1=1 → OneHot propagates x2=0 → SOS1 shrinks (x2 removed)
         let decision_variables = btreemap! {
-            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
-            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
-            VariableID::from(3) => DecisionVariable::continuous(VariableID::from(3)),
+            VariableID::from(1) => DecisionVariable::binary(),
+            VariableID::from(2) => DecisionVariable::binary(),
+            VariableID::from(3) => DecisionVariable::continuous(),
         };
         let objective = Function::from(((linear!(1) + linear!(2)).unwrap() + linear!(3)).unwrap());
 
@@ -953,9 +1019,9 @@ mod tests {
 
         // x10 (indicator), x1, x2 (function variables)
         let decision_variables = btreemap! {
-            VariableID::from(1) => DecisionVariable::continuous(VariableID::from(1)),
-            VariableID::from(2) => DecisionVariable::continuous(VariableID::from(2)),
-            VariableID::from(10) => DecisionVariable::binary(VariableID::from(10)),
+            VariableID::from(1) => DecisionVariable::continuous(),
+            VariableID::from(2) => DecisionVariable::continuous(),
+            VariableID::from(10) => DecisionVariable::binary(),
         };
         let objective = Function::from(linear!(1) + linear!(2));
 
@@ -1012,8 +1078,8 @@ mod tests {
         use maplit::btreemap;
 
         let decision_variables = btreemap! {
-            VariableID::from(1) => DecisionVariable::continuous(VariableID::from(1)),
-            VariableID::from(10) => DecisionVariable::binary(VariableID::from(10)),
+            VariableID::from(1) => DecisionVariable::continuous(),
+            VariableID::from(10) => DecisionVariable::binary(),
         };
         let objective = Function::from(linear!(1));
 

@@ -495,10 +495,7 @@ mod tests {
         // Create instance with 5 binary variables
         let mut decision_variables = BTreeMap::new();
         for i in 0..5 {
-            decision_variables.insert(
-                VariableID::from(i),
-                crate::DecisionVariable::binary(VariableID::from(i)),
-            );
+            decision_variables.insert(VariableID::from(i), crate::DecisionVariable::binary());
         }
 
         // Objective: x0 + x1 + x2
@@ -570,10 +567,10 @@ mod tests {
         //
         // Note: x_5 < x_10 in BTreeMap order, but x_10 must be evaluated first
         let decision_variables = btreemap! {
-            VariableID::from(1) => DecisionVariable::continuous(VariableID::from(1)),
-            VariableID::from(2) => DecisionVariable::continuous(VariableID::from(2)),
-            VariableID::from(5) => DecisionVariable::continuous(VariableID::from(5)),
-            VariableID::from(10) => DecisionVariable::continuous(VariableID::from(10)),
+            VariableID::from(1) => DecisionVariable::continuous(),
+            VariableID::from(2) => DecisionVariable::continuous(),
+            VariableID::from(5) => DecisionVariable::continuous(),
+            VariableID::from(10) => DecisionVariable::continuous(),
         };
 
         // x_10 = x_1 + x_2
@@ -619,8 +616,8 @@ mod tests {
         use maplit::btreemap;
 
         let decision_variables = btreemap! {
-            VariableID::from(1) => DecisionVariable::continuous(VariableID::from(1)),
-            VariableID::from(2) => DecisionVariable::continuous(VariableID::from(2)),
+            VariableID::from(1) => DecisionVariable::continuous(),
+            VariableID::from(2) => DecisionVariable::continuous(),
         };
         let named_function = NamedFunction {
             id: NamedFunctionID::from(7),

@@ -117,7 +117,7 @@ mod tests {
         ids.into_iter()
             .map(|i| {
                 let id = VariableID::from(i);
-                (id, DecisionVariable::binary(id))
+                (id, DecisionVariable::binary())
             })
             .collect()
     }
@@ -177,7 +177,7 @@ mod tests {
     fn qubo_rejects_non_binary_decision_variables() {
         let mut dv = binary_vars([1]);
         let id = VariableID::from(2);
-        dv.insert(id, DecisionVariable::integer(id));
+        dv.insert(id, DecisionVariable::integer());
         let instance = Instance::new(
             Sense::Minimize,
             (linear!(1) + linear!(2)).into(),

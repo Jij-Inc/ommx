@@ -263,7 +263,7 @@ impl Instance {
 mod tests {
     use super::*;
     use crate::{
-        coeff, indicator_constraint::IndicatorConstraint, linear, ATol, Bound, DecisionVariable,
+        coeff, indicator_constraint::IndicatorConstraint, linear, Bound, DecisionVariable,
         Function, Kind, Sense, VariableID,
     };
     use ::approx::assert_abs_diff_eq;
@@ -278,14 +278,8 @@ mod tests {
         equality: Equality,
         function: Function,
     ) -> Instance {
-        let x = DecisionVariable::new(
-            VariableID::from(1),
-            Kind::Continuous,
-            x_bound,
-            ATol::default(),
-        )
-        .unwrap();
-        let y = DecisionVariable::binary(VariableID::from(10));
+        let x = DecisionVariable::new(Kind::Continuous, x_bound, crate::ATol::default()).unwrap();
+        let y = DecisionVariable::binary();
 
         let ic = IndicatorConstraint::new(VariableID::from(10), equality, function);
 
@@ -434,8 +428,8 @@ mod tests {
     fn infinite_bound_is_rejected_without_mutation() {
         // Continuous x with default (infinite) bound → upper side bound = +∞.
         // Conversion must bail before any mutation.
-        let x = DecisionVariable::continuous(VariableID::from(1));
-        let y = DecisionVariable::binary(VariableID::from(10));
+        let x = DecisionVariable::continuous();
+        let y = DecisionVariable::binary();
         let ic = IndicatorConstraint::new(
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
@@ -504,13 +498,12 @@ mod tests {
         // Since this is unsafe, planner must reject semi kinds before using
         // `evaluate_bound`, matching `convert_sos1_to_constraints`.
         let x_semi = DecisionVariable::new(
-            VariableID::from(1),
             Kind::SemiContinuous,
             Bound::new(2.0, 5.0).unwrap(),
-            ATol::default(),
+            crate::ATol::default(),
         )
         .unwrap();
-        let y = DecisionVariable::binary(VariableID::from(10));
+        let y = DecisionVariable::binary();
         let ic = IndicatorConstraint::new(
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,
@@ -574,13 +567,12 @@ mod tests {
         // #1: y=1 → x - 2 <= 0   → 1 big-M upper
         // #2: y=1 → x - 2 = 0    → 2 big-M (upper + lower)
         let x = DecisionVariable::new(
-            VariableID::from(1),
             Kind::Continuous,
             Bound::new(0.0, 5.0).unwrap(),
-            ATol::default(),
+            crate::ATol::default(),
         )
         .unwrap();
-        let y = DecisionVariable::binary(VariableID::from(10));
+        let y = DecisionVariable::binary();
         let f = || Function::from(linear!(1) + coeff!(-2.0));
         let ic_le =
             IndicatorConstraint::new(VariableID::from(10), Equality::LessThanOrEqualToZero, f());
@@ -615,14 +607,13 @@ mod tests {
         // variable in its function. The bulk call must fail without applying the
         // first one either.
         let x1 = DecisionVariable::new(
-            VariableID::from(1),
             Kind::Continuous,
             Bound::new(0.0, 5.0).unwrap(),
-            ATol::default(),
+            crate::ATol::default(),
         )
         .unwrap();
-        let x2 = DecisionVariable::continuous(VariableID::from(2)); // infinite bound
-        let y = DecisionVariable::binary(VariableID::from(10));
+        let x2 = DecisionVariable::continuous(); // infinite bound
+        let y = DecisionVariable::binary();
         let ic_ok = IndicatorConstraint::new(
             VariableID::from(10),
             Equality::LessThanOrEqualToZero,

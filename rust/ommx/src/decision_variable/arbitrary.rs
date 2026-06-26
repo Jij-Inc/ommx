@@ -46,11 +46,7 @@ impl Arbitrary for DecisionVariable {
                 let bound = kind.consistent_bound(bound, ATol::default())?;
                 Some((kind, bound))
             })
-            .prop_map(|(kind, bound)| DecisionVariable {
-                id: VariableID::from(0), // Should be replaced with a unique ID, but cannot be generated here
-                kind,
-                bound,
-            })
+            .prop_map(|(kind, bound)| DecisionVariable { kind, bound })
             .boxed()
     }
 }
@@ -73,14 +69,6 @@ pub fn arbitrary_decision_variables(
         unique_ids.len(),
     );
     (Just(unique_ids), variables)
-        .prop_map(|(ids, variables)| {
-            ids.into_iter()
-                .zip(variables)
-                .map(|(id, mut variable)| {
-                    variable.id = id;
-                    (id, variable)
-                })
-                .collect()
-        })
+        .prop_map(|(ids, variables)| ids.into_iter().zip(variables).collect())
         .boxed()
 }

@@ -35,6 +35,9 @@ pub enum SolutionError {
     #[error("Missing value for variable {id}: not found in state and no substituted_value")]
     MissingVariableValue { id: u64 },
 
+    #[error("Duplicated variable ID is found in definition: {id:?}")]
+    DuplicatedVariableID { id: VariableID },
+
     #[deprecated(
         note = "Parameters are now ignored in extract_decision_variables and extract_all_decision_variables"
     )]
@@ -71,12 +74,6 @@ pub enum SolutionError {
     #[error("Required field is missing: {field}")]
     MissingRequiredField { field: &'static str },
 
-    #[error("Decision variable key {key:?} does not match value's id {value_id:?}")]
-    InconsistentDecisionVariableID {
-        key: VariableID,
-        value_id: VariableID,
-    },
-
     #[error(
         "Variable ID {id:?} used in constraint {constraint_id:?} is not in decision_variables"
     )]
@@ -96,8 +93,10 @@ pub enum SolutionError {
 ///
 /// Invariants
 /// -----------
-/// - The keys of [`Self::decision_variables`] match the `id()` of their values.
-/// - The keys of [`Self::evaluated_constraints`] match the `id()` of their values.
+/// - [`Self::decision_variables`] is keyed by the table-owned
+///   [`VariableID`]; evaluated decision-variable rows do not carry IDs.
+/// - The keys of the evaluated constraint collections are the table-owned
+///   constraint IDs for each constraint family.
 /// - The keys of [`Self::evaluated_named_functions`] match the `id()` of their values.
 /// - [`Self::decision_variables`] contains all variable IDs referenced in `used_decision_variable_ids` of each constraint.
 ///
@@ -309,11 +308,11 @@ impl Solution {
         name: &str,
     ) -> Result<BTreeMap<Vec<i64>, f64>, SolutionError> {
         // Collect all variables with the given name from their modeling labels.
-        let variables_with_name: Vec<&EvaluatedDecisionVariable> = self
+        let variables_with_name: Vec<(VariableID, &EvaluatedDecisionVariable)> = self
             .decision_variables
             .iter()
             .filter(|(id, _)| self.variable_labels.name(**id) == Some(name))
-            .map(|(_, v)| v)
+            .map(|(id, v)| (*id, v))
             .collect();
         if variables_with_name.is_empty() {
             return Err(SolutionError::UnknownVariableName {
@@ -322,8 +321,8 @@ impl Solution {
         }
 
         let mut result = BTreeMap::new();
-        for dv in &variables_with_name {
-            let key = self.variable_labels.subscripts(*dv.id()).to_vec();
+        for (id, dv) in &variables_with_name {
+            let key = self.variable_labels.subscripts(*id).to_vec();
             if result.contains_key(&key) {
                 return Err(SolutionError::DuplicateSubscript { subscripts: key });
             }
@@ -703,8 +702,8 @@ impl SolutionBuilder {
     /// # Errors
     /// Returns an error if:
     /// - Required fields (`objective`, `evaluated_constraints`, `decision_variables`, `sense`) are not set
-    /// - Decision variable keys don't match their value's `id()`
-    /// - Constraint keys don't match their value's `id()`
+    /// - Constraint collection sidecars contain invalid keys
+    /// - Named function keys don't match their value's `id()`
     /// - Variables referenced in constraints' `used_decision_variable_ids` are not in `decision_variables`
     pub fn build(self) -> crate::Result<Solution> {
         let objective = self
@@ -723,17 +722,6 @@ impl SolutionBuilder {
         let sense = self
             .sense
             .ok_or(SolutionError::MissingRequiredField { field: "sense" })?;
-
-        // Validate decision variable keys match their id
-        for (key, value) in &decision_variables {
-            if key != value.id() {
-                return Err(SolutionError::InconsistentDecisionVariableID {
-                    key: *key,
-                    value_id: *value.id(),
-                }
-                .into());
-            }
-        }
 
         // Validate named function keys match their id
         for (key, value) in &self.evaluated_named_functions {
@@ -839,8 +827,8 @@ impl SolutionBuilder {
     /// # Safety
     /// This method does not validate that the Solution invariants hold.
     /// The caller must ensure:
-    /// - Decision variable keys match their value's `id()`
-    /// - Constraint keys match their value's `id()`
+    /// - `decision_variables` is keyed by the intended [`VariableID`] for each row
+    /// - Evaluated constraint collection keys and sidecars are internally consistent
     /// - Named function keys match their value's `id()`
     /// - All `used_decision_variable_ids` in constraints exist in `decision_variables`
     ///
@@ -1082,7 +1070,6 @@ mod tests {
         let mut decision_variables = BTreeMap::new();
 
         let dv = DecisionVariable::new(
-            VariableID::from(1),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
             crate::ATol::default(),
@@ -1105,7 +1092,7 @@ mod tests {
 
         decision_variables.insert(
             VariableID::from(1),
-            EvaluatedDecisionVariable::new(dv, 1.0).unwrap(),
+            EvaluatedDecisionVariable::new(VariableID::from(1), dv, 1.0).unwrap(),
         );
 
         // SAFETY: Test data is constructed to satisfy invariants
@@ -1141,7 +1128,6 @@ mod tests {
 
         // First variable
         let dv1 = DecisionVariable::new(
-            VariableID::from(1),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
             crate::ATol::default(),
@@ -1163,12 +1149,11 @@ mod tests {
 
         decision_variables.insert(
             VariableID::from(1),
-            EvaluatedDecisionVariable::new(dv1, 1.0).unwrap(),
+            EvaluatedDecisionVariable::new(VariableID::from(1), dv1, 1.0).unwrap(),
         );
 
         // Second variable with same name and subscripts
         let dv2 = DecisionVariable::new(
-            VariableID::from(2),
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
             crate::ATol::default(),
@@ -1190,7 +1175,7 @@ mod tests {
 
         decision_variables.insert(
             VariableID::from(2),
-            EvaluatedDecisionVariable::new(dv2, 2.0).unwrap(),
+            EvaluatedDecisionVariable::new(VariableID::from(2), dv2, 2.0).unwrap(),
         );
 
         // SAFETY: Test data is constructed to satisfy invariants
@@ -1264,34 +1249,6 @@ mod tests {
     }
 
     #[test]
-    fn test_builder_inconsistent_decision_variable_id() {
-        use crate::DecisionVariable;
-
-        let var_id_1 = VariableID::from(1);
-        let var_id_2 = VariableID::from(2);
-        let dv = DecisionVariable::binary(var_id_1);
-        let evaluated_dv = EvaluatedDecisionVariable::new(dv, 1.0).unwrap();
-
-        // Map key (2) doesn't match value's id (1)
-        let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(var_id_2, evaluated_dv);
-
-        let err = Solution::builder()
-            .objective(0.0)
-            .evaluated_constraints(BTreeMap::new())
-            .decision_variables(decision_variables)
-            .sense(Sense::Minimize)
-            .build()
-            .unwrap_err();
-        let solution_err = err.downcast_ref::<SolutionError>().unwrap();
-        assert!(matches!(
-            solution_err,
-            SolutionError::InconsistentDecisionVariableID { key, value_id }
-                if *key == var_id_2 && *value_id == var_id_1
-        ));
-    }
-
-    #[test]
     fn test_builder_undefined_variable_in_constraint() {
         use crate::linear;
 
@@ -1327,8 +1284,8 @@ mod tests {
         use crate::DecisionVariable;
 
         let var_id = VariableID::from(1);
-        let dv = DecisionVariable::binary(var_id);
-        let evaluated_dv = EvaluatedDecisionVariable::new(dv, 1.0).unwrap();
+        let dv = DecisionVariable::binary();
+        let evaluated_dv = EvaluatedDecisionVariable::new(var_id, dv, 1.0).unwrap();
 
         let mut decision_variables = BTreeMap::new();
         decision_variables.insert(var_id, evaluated_dv);

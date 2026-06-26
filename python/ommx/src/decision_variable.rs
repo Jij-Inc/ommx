@@ -30,20 +30,24 @@ use std::collections::HashMap;
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
-pub struct DecisionVariable(pub ommx::DecisionVariable, pub ommx::DecisionVariableLabel);
+pub struct DecisionVariable(
+    pub VariableID,
+    pub ommx::DecisionVariable,
+    pub ommx::DecisionVariableLabel,
+);
 
 impl DecisionVariable {
     /// Helper to create a Linear term from this decision variable with coefficient 1
     fn as_linear(&self) -> ommx::Linear {
-        ommx::Linear::single_term(LinearMonomial::Variable(self.0.id()), ommx::coeff!(1.0))
+        ommx::Linear::single_term(LinearMonomial::Variable(self.0), ommx::coeff!(1.0))
     }
 
-    pub fn standalone(inner: ommx::DecisionVariable) -> Self {
-        Self(inner, ommx::DecisionVariableLabel::default())
-    }
-
-    pub fn from_parts(inner: ommx::DecisionVariable, label: ommx::DecisionVariableLabel) -> Self {
-        Self(inner, label)
+    pub fn from_parts(
+        id: VariableID,
+        inner: ommx::DecisionVariable,
+        label: ommx::DecisionVariableLabel,
+    ) -> Self {
+        Self(id, inner, label)
     }
 }
 
@@ -127,8 +131,7 @@ impl DecisionVariable {
         let variable_id = VariableID::from(id);
         let kind = v1::decision_variable::Kind::try_from(kind)?.try_into()?;
 
-        let decision_variable =
-            ommx::DecisionVariable::new(variable_id, kind, bound.0, ATol::default())?;
+        let decision_variable = ommx::DecisionVariable::new(kind, bound.0, ATol::default())?;
 
         let label = ommx::DecisionVariableLabel {
             name,
@@ -137,38 +140,38 @@ impl DecisionVariable {
             description,
         };
 
-        Ok(Self(decision_variable, label))
+        Ok(Self(variable_id, decision_variable, label))
     }
 
     #[getter]
     pub fn id(&self) -> u64 {
-        self.0.id().into_inner()
+        self.0.into_inner()
     }
 
     #[getter]
     pub fn kind(&self) -> i32 {
-        let kind: v1::decision_variable::Kind = self.0.kind().into();
+        let kind: v1::decision_variable::Kind = self.1.kind().into();
         kind as i32
     }
 
     #[getter]
     pub fn bound(&self) -> VariableBound {
-        VariableBound(self.0.bound())
+        VariableBound(self.1.bound())
     }
 
     #[getter]
     pub fn name(&self) -> String {
-        self.1.name.clone().unwrap_or_default()
+        self.2.name.clone().unwrap_or_default()
     }
 
     #[getter]
     pub fn subscripts(&self) -> Vec<i64> {
-        self.1.subscripts.clone()
+        self.2.subscripts.clone()
     }
 
     #[getter]
     pub fn parameters(&self) -> HashMap<String, String> {
-        self.1
+        self.2
             .parameters
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
@@ -177,7 +180,7 @@ impl DecisionVariable {
 
     #[getter]
     pub fn description(&self) -> String {
-        self.1.description.clone().unwrap_or_default()
+        self.2.description.clone().unwrap_or_default()
     }
 
     #[staticmethod]
@@ -294,8 +297,8 @@ impl DecisionVariable {
             self.id(),
             self.kind(),
             self.name(),
-            self.0.bound().lower(),
-            self.0.bound().upper()
+            self.1.bound().lower(),
+            self.1.bound().upper()
         )
     }
 
@@ -338,9 +341,7 @@ impl DecisionVariable {
     /// This is different from `__eq__` which creates a Constraint.
     /// Use this method when you want to check if two variables represent the same variable.
     pub fn equals_to(&self, other: &DecisionVariable) -> bool {
-        self.0.id() == other.0.id()
-            && self.0.kind() == other.0.kind()
-            && self.0.bound() == other.0.bound()
+        self.0 == other.0 && self.1.kind() == other.1.kind() && self.1.bound() == other.1.bound()
     }
 
     // =====================
@@ -350,7 +351,7 @@ impl DecisionVariable {
     /// Negation operator: -x → Linear(-1 * x)
     pub fn __neg__(&self) -> Linear {
         Linear(ommx::Linear::single_term(
-            LinearMonomial::Variable(self.0.id()),
+            LinearMonomial::Variable(self.0),
             ommx::coeff!(-1.0),
         ))
     }
@@ -698,13 +699,13 @@ impl AttachedDecisionVariable {
                 let inst = p.borrow(py);
                 let v = lookup_variable(&inst.inner, self.id)?.clone();
                 let label = inst.inner.variable_labels().collect_for(self.id);
-                Ok(DecisionVariable::from_parts(v, label))
+                Ok(DecisionVariable::from_parts(self.id, v, label))
             }
             crate::ConstraintHost::Parametric(p) => {
                 let inst = p.borrow(py);
                 let v = lookup_variable_parametric(&inst.inner, self.id)?.clone();
                 let label = inst.inner.variable_labels().collect_for(self.id);
-                Ok(DecisionVariable::from_parts(v, label))
+                Ok(DecisionVariable::from_parts(self.id, v, label))
             }
         }
     }
@@ -762,22 +763,23 @@ impl AttachedDecisionVariable {
     }
 
     pub fn __repr__(&self, py: Python<'_>) -> String {
-        let render = |v: &ommx::DecisionVariable, name: Option<&str>| -> String {
-            let kind: ommx::v1::decision_variable::Kind = v.kind().into();
-            format!(
-                "AttachedDecisionVariable(id={}, kind={}, name=\"{}\", bound=[{}, {}])",
-                v.id().into_inner(),
-                kind as i32,
-                name.unwrap_or(""),
-                v.bound().lower(),
-                v.bound().upper()
-            )
-        };
+        let render =
+            |id: ommx::VariableID, v: &ommx::DecisionVariable, name: Option<&str>| -> String {
+                let kind: ommx::v1::decision_variable::Kind = v.kind().into();
+                format!(
+                    "AttachedDecisionVariable(id={}, kind={}, name=\"{}\", bound=[{}, {}])",
+                    id.into_inner(),
+                    kind as i32,
+                    name.unwrap_or(""),
+                    v.bound().lower(),
+                    v.bound().upper()
+                )
+            };
         match &self.host {
             crate::ConstraintHost::Instance(p) => {
                 let inst = p.borrow(py);
                 match lookup_variable(&inst.inner, self.id) {
-                    Ok(v) => render(v, inst.inner.variable_labels().name(self.id)),
+                    Ok(v) => render(self.id, v, inst.inner.variable_labels().name(self.id)),
                     Err(_) => format!(
                         "AttachedDecisionVariable(id={}, dropped)",
                         self.id.into_inner()
@@ -787,7 +789,7 @@ impl AttachedDecisionVariable {
             crate::ConstraintHost::Parametric(p) => {
                 let inst = p.borrow(py);
                 match lookup_variable_parametric(&inst.inner, self.id) {
-                    Ok(v) => render(v, inst.inner.variable_labels().name(self.id)),
+                    Ok(v) => render(self.id, v, inst.inner.variable_labels().name(self.id)),
                     Err(_) => format!(
                         "AttachedDecisionVariable(id={}, dropped)",
                         self.id.into_inner()

@@ -228,14 +228,8 @@ mod tests {
     fn test_instance_substitute() {
         // Create decision variables
         let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(
-            VariableID::from(1),
-            DecisionVariable::continuous(VariableID::from(1)),
-        );
-        decision_variables.insert(
-            VariableID::from(2),
-            DecisionVariable::continuous(VariableID::from(2)),
-        );
+        decision_variables.insert(VariableID::from(1), DecisionVariable::continuous());
+        decision_variables.insert(VariableID::from(2), DecisionVariable::continuous());
 
         // Create a simple instance: minimize x1 + 2*x2, subject to x1 + x2 <= 10
         let objective = Function::from((linear!(1) + coeff!(2.0) * linear!(2)).unwrap());
@@ -271,14 +265,8 @@ mod tests {
     #[test]
     fn test_parametric_instance_substitute_parameterized_rhs() {
         let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(
-            VariableID::from(0),
-            DecisionVariable::continuous(VariableID::from(0)),
-        );
-        decision_variables.insert(
-            VariableID::from(1),
-            DecisionVariable::continuous(VariableID::from(1)),
-        );
+        decision_variables.insert(VariableID::from(0), DecisionVariable::continuous());
+        decision_variables.insert(VariableID::from(1), DecisionVariable::continuous());
 
         let mut parameters = BTreeMap::new();
         parameters.insert(
@@ -326,10 +314,7 @@ mod tests {
     #[test]
     fn test_parametric_instance_substitute_parameter_target_fails() {
         let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(
-            VariableID::from(0),
-            DecisionVariable::continuous(VariableID::from(0)),
-        );
+        decision_variables.insert(VariableID::from(0), DecisionVariable::continuous());
 
         let mut parameters = BTreeMap::new();
         parameters.insert(
@@ -362,10 +347,7 @@ mod tests {
     #[test]
     fn test_parametric_instance_substitute_undefined_rhs_fails() {
         let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(
-            VariableID::from(0),
-            DecisionVariable::continuous(VariableID::from(0)),
-        );
+        decision_variables.insert(VariableID::from(0), DecisionVariable::continuous());
 
         let parametric = ParametricInstance::new(
             Sense::Minimize,
@@ -390,18 +372,9 @@ mod tests {
     fn test_substitute_indicator_function() {
         // Substituting a variable in the indicator's function should work
         let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(
-            VariableID::from(1),
-            DecisionVariable::continuous(VariableID::from(1)),
-        );
-        decision_variables.insert(
-            VariableID::from(2),
-            DecisionVariable::continuous(VariableID::from(2)),
-        );
-        decision_variables.insert(
-            VariableID::from(10),
-            DecisionVariable::binary(VariableID::from(10)),
-        );
+        decision_variables.insert(VariableID::from(1), DecisionVariable::continuous());
+        decision_variables.insert(VariableID::from(2), DecisionVariable::continuous());
+        decision_variables.insert(VariableID::from(10), DecisionVariable::binary());
 
         let objective = Function::from(linear!(1));
 
@@ -441,14 +414,8 @@ mod tests {
     fn test_substitute_indicator_variable_fails() {
         // Substituting the indicator variable itself should fail
         let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(
-            VariableID::from(1),
-            DecisionVariable::continuous(VariableID::from(1)),
-        );
-        decision_variables.insert(
-            VariableID::from(10),
-            DecisionVariable::binary(VariableID::from(10)),
-        );
+        decision_variables.insert(VariableID::from(1), DecisionVariable::continuous());
+        decision_variables.insert(VariableID::from(10), DecisionVariable::binary());
 
         let objective = Function::from(linear!(1));
 

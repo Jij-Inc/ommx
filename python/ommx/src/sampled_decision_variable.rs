@@ -4,20 +4,18 @@ use std::collections::BTreeMap;
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 pub struct SampledDecisionVariable(
+    pub ommx::VariableID,
     pub ommx::SampledDecisionVariable,
     pub ommx::DecisionVariableLabel,
 );
 
 impl SampledDecisionVariable {
-    pub fn standalone(inner: ommx::SampledDecisionVariable) -> Self {
-        Self(inner, ommx::DecisionVariableLabel::default())
-    }
-
     pub fn from_parts(
+        id: ommx::VariableID,
         inner: ommx::SampledDecisionVariable,
         label: ommx::DecisionVariableLabel,
     ) -> Self {
-        Self(inner, label)
+        Self(id, inner, label)
     }
 }
 
@@ -27,43 +25,43 @@ impl SampledDecisionVariable {
     /// Get the decision variable ID
     #[getter]
     pub fn id(&self) -> u64 {
-        self.0.id().into_inner()
+        self.0.into_inner()
     }
 
     /// Get the decision variable kind
     #[getter]
     pub fn kind(&self) -> crate::Kind {
-        (*self.0.kind()).into()
+        (*self.1.kind()).into()
     }
 
     /// Get the decision variable bound
     #[getter]
     pub fn bound(&self) -> crate::VariableBound {
-        crate::VariableBound(*self.0.bound())
+        crate::VariableBound(*self.1.bound())
     }
 
     /// Get the decision variable name
     #[getter]
     pub fn name(&self) -> Option<String> {
-        self.1.name.clone()
+        self.2.name.clone()
     }
 
     /// Get the subscripts
     #[getter]
     pub fn subscripts(&self) -> Vec<i64> {
-        self.1.subscripts.clone()
+        self.2.subscripts.clone()
     }
 
     /// Get the description
     #[getter]
     pub fn description(&self) -> Option<String> {
-        self.1.description.clone()
+        self.2.description.clone()
     }
 
     /// Get the parameters
     #[getter]
     pub fn parameters(&self) -> std::collections::HashMap<String, String> {
-        self.1
+        self.2
             .parameters
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
@@ -73,7 +71,7 @@ impl SampledDecisionVariable {
     /// Get the sampled values for all samples
     #[getter]
     pub fn samples(&self) -> BTreeMap<u64, f64> {
-        self.0
+        self.1
             .samples()
             .iter()
             .map(|(sample_id, value)| (sample_id.into_inner(), *value))

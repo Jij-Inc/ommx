@@ -565,12 +565,19 @@ subscripts via `set_subscripts(id, new_vec)` instead.
 
 ### Fixed decision-variable values
 
-Fixed decision-variable values no longer live on
-[`DecisionVariable`](crate::DecisionVariable). The variable struct now contains
-only its intrinsic definition (`id`, `kind`, `bound`); fixed values are owned by
-the enclosing [`Instance`](crate::Instance) /
+Decision-variable IDs and fixed values no longer live on
+[`DecisionVariable`](crate::DecisionVariable). The variable struct is now the
+row data of the host's decision-variable table and contains only its intrinsic
+definition (`kind`, `bound`). The [`VariableID`](crate::VariableID) is owned by
+the enclosing map key, and fixed values are owned by the enclosing
+[`Instance`](crate::Instance) /
 [`ParametricInstance`](crate::ParametricInstance), where they can be validated
 against the full model.
+
+The row still owns the `kind`/`bound` invariant: `DecisionVariable::new` and
+bound mutation normalize `bound` through `kind.consistent_bound(bound, atol)`.
+This preserves the main-branch guarantee that a safely constructed
+`DecisionVariable` never stores an unnormalized bound for its kind.
 
 Construction signatures changed accordingly:
 
@@ -578,6 +585,7 @@ Construction signatures changed accordingly:
 // ❌ Before
 let x = DecisionVariable::new(id, kind, bound, Some(value), atol)?;
 let y = DecisionVariable::new(id, kind, bound, None, atol)?;
+let z = DecisionVariable::binary(id);
 dv.substitute(value, atol)?;
 let fixed = dv.substituted_value();
 
@@ -585,7 +593,8 @@ let evaluated = EvaluatedDecisionVariable::new(dv, value, atol)?;
 let sampled = SampledDecisionVariable::new(dv, samples, atol)?;
 
 // ✅ After
-let y = DecisionVariable::new(id, kind, bound, atol)?;
+let y = DecisionVariable::new(kind, bound, atol)?;
+let z = DecisionVariable::binary();
 
 let instance = Instance::builder()
     .decision_variables(BTreeMap::from([(id, y.clone())]))
@@ -595,8 +604,8 @@ let instance = Instance::builder()
 let fixed = instance.fixed_decision_variable_value(id);
 let all_fixed = instance.fixed_decision_variable_values();
 
-let evaluated = EvaluatedDecisionVariable::new(y, value)?;
-let sampled = SampledDecisionVariable::new(y, samples)?;
+let evaluated = EvaluatedDecisionVariable::new(id, y, value)?;
+let sampled = SampledDecisionVariable::new(id, y, samples)?;
 ```
 
 `Instance::partial_evaluate` writes new fixed values into the host-owned table.
@@ -605,6 +614,11 @@ the parser drains them into the same host-owned table before constructing the
 domain model. The host builder rejects states where a fixed variable is also
 solver-used or dependent; this invariant can no longer be checked by an
 individual `DecisionVariable`.
+
+`EvaluatedDecisionVariable::new(id, ...)` and
+`SampledDecisionVariable::new(id, ...)` accept an ID so non-finite value errors
+can still report the table key. The evaluated/sampled row data itself does not
+store the ID; `Solution` and `SampleSet` own it as the map key.
 
 ### ConstraintContext
 
@@ -639,8 +653,10 @@ pub struct ConstraintContext {
 - [ ] Remove any `getset` usage for constraint types
 - [ ] Update any `InstanceError` / `MpsParseError` / `QplibParseError` / `StateValidationError` / `LogEncodingError` / `UnknownSampleIDError` matches → inspect `err.to_string()` or use `err.downcast_ref::<T>()` for signal types
 - [ ] Replace `Result<T, UnknownSampleIDError>` key-lookup methods with `Option<T>` on the call site
-- [ ] Replace `DecisionVariable::new(..., substituted_value, atol)`, `DecisionVariable::substituted_value()`, and `DecisionVariable::substitute(...)` with host-owned fixed values: `InstanceBuilder::fixed_decision_variable_values(...)`, `Instance::fixed_decision_variable_value(id)`, or `Instance::fixed_decision_variable_values()`
-- [ ] Drop the `atol` argument from `EvaluatedDecisionVariable::new(...)` and `SampledDecisionVariable::new(...)`
+- [ ] Replace `DecisionVariable::new(id, kind, bound, ..., atol)` with `DecisionVariable::new(kind, bound, atol)`, and insert it under the desired `VariableID` key in the host table
+- [ ] Replace `DecisionVariable::binary(id)` / `integer(id)` / `continuous(id)` / etc. with the no-argument row factories, and keep the ID on the enclosing map key
+- [ ] Replace `DecisionVariable::substituted_value()` and `DecisionVariable::substitute(...)` with host-owned fixed values: `InstanceBuilder::fixed_decision_variable_values(...)`, `Instance::fixed_decision_variable_value(id)`, or `Instance::fixed_decision_variable_values()`
+- [ ] Update `EvaluatedDecisionVariable::new(...)` and `SampledDecisionVariable::new(...)`: drop the `atol` argument, pass the `VariableID` separately for diagnostics, and keep using the enclosing `Solution` / `SampleSet` map key as the source of truth
 
 ---
 

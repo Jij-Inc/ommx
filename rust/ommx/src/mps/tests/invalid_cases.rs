@@ -9,8 +9,8 @@ use std::collections::BTreeMap;
 #[test]
 fn test_nonlinear_objective_error() {
     let decision_variables = btreemap! {
-        VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
-        VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
+        VariableID::from(1) => DecisionVariable::binary(),
+        VariableID::from(2) => DecisionVariable::binary(),
     };
     // Create a cubic function: x1 * x2 * x1 (degree 3, not supported)
     let cubic_function = (quadratic!(1, 2) * quadratic!(1)).into();
@@ -34,7 +34,7 @@ fn test_nonlinear_objective_error() {
 #[test]
 fn test_nonlinear_constraint_error() {
     let decision_variables = btreemap! {
-        VariableID::from(0) => DecisionVariable::continuous(VariableID::from(0))
+        VariableID::from(0) => DecisionVariable::continuous()
     };
 
     // Create constraint with cubic function: x^3 <= 0 (degree 3, not supported)
