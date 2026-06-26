@@ -166,8 +166,10 @@ fn ensure_finite_value(id: VariableID, value: f64) -> Result<(), DecisionVariabl
 ///
 /// Invariants
 /// ----------
-/// - `kind` and `bound` are consistent
-///   - i.e. `bound` is invariant under `|bound| kind.consistent_bound(bound, atol).unwrap()` for appropriate `atol`.
+/// - `bound` is normalized for `kind` at construction or bound mutation time.
+///   - i.e. `bound` is invariant under `|bound| kind.consistent_bound(bound, atol).unwrap()` for the caller-provided `atol`.
+/// - A [`DecisionVariable`] row therefore never stores an unnormalized
+///   integer, binary, or semi-integer bound when built through the safe API.
 ///
 #[derive(Debug, Clone, PartialEq, CopyGetters, LogicalMemoryProfile)]
 pub struct DecisionVariable {

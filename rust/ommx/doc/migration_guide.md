@@ -574,6 +574,11 @@ the enclosing map key, and fixed values are owned by the enclosing
 [`ParametricInstance`](crate::ParametricInstance), where they can be validated
 against the full model.
 
+The row still owns the `kind`/`bound` invariant: `DecisionVariable::new` and
+bound mutation normalize `bound` through `kind.consistent_bound(bound, atol)`.
+This preserves the main-branch guarantee that a safely constructed
+`DecisionVariable` never stores an unnormalized bound for its kind.
+
 Construction signatures changed accordingly:
 
 ```rust,ignore
