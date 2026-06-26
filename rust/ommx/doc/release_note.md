@@ -31,11 +31,14 @@ The 3.0.0 line is a major revision of the Rust SDK:
   `instance.named_function_labels()`, …). One canonical store per
   collection, two views on top: per-id wrapper getters for one-off
   reads and `*_df` for bulk analysis.
-- Decision variables now follow the same table ownership rule:
+- Decision variables and named functions now follow the same table ownership rule:
   [`DecisionVariable`](crate::DecisionVariable) is row data containing
   only `kind` and `bound`; the [`VariableID`](crate::VariableID) and
   fixed values live on the enclosing `Instance` /
   `ParametricInstance` / `Solution` / `SampleSet` tables.
+  [`NamedFunction`](crate::NamedFunction) likewise stores only the
+  [`Function`](crate::Function); [`NamedFunctionID`](crate::NamedFunctionID)
+  lives on the enclosing named-function maps.
 - A **capability model** lets adapters declare what they natively
   support and auto-converts unsupported kinds at the boundary, so a
   valid OMMX instance can be fed to any adapter (the conversion path
@@ -210,6 +213,27 @@ caller-provided `ATol`. `EvaluatedDecisionVariable::new`
 and `SampledDecisionVariable::new` still take the ID as a separate argument so
 non-finite value errors can report the table key, but the resulting row data
 does not store that ID.
+
+## Named-function table ownership ([#964](https://github.com/Jij-Inc/ommx/pull/964))
+
+Named functions now follow the same table-owned ID model as constraints and
+decision variables. The Rust SDK row structs no longer carry their own
+[`NamedFunctionID`](crate::NamedFunctionID):
+
+- [`NamedFunction`](crate::NamedFunction) stores only the intrinsic
+  [`Function`](crate::Function).
+- [`EvaluatedNamedFunction`](crate::EvaluatedNamedFunction) stores the
+  evaluated value and used decision-variable IDs.
+- [`SampledNamedFunction`](crate::SampledNamedFunction) stores sampled values
+  and used decision-variable IDs.
+
+The ID lives on the enclosing maps of [`Instance`](crate::Instance),
+[`ParametricInstance`](crate::ParametricInstance),
+[`Solution`](crate::Solution), and [`SampleSet`](crate::SampleSet), while
+modeling labels live in
+[`NamedFunctionLabelStore`](crate::NamedFunctionLabelStore). Legacy
+`ommx.v1` protobuf messages still carry inline IDs; Rust parse drains them into
+map keys and Rust serialization fills them from map keys.
 
 ## Capability model ([#790](https://github.com/Jij-Inc/ommx/pull/790), [#805](https://github.com/Jij-Inc/ommx/pull/805), [#810](https://github.com/Jij-Inc/ommx/pull/810), [#811](https://github.com/Jij-Inc/ommx/pull/811), [#814](https://github.com/Jij-Inc/ommx/pull/814))
 
