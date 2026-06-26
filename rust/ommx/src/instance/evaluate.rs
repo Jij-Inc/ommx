@@ -53,10 +53,8 @@ fn evaluate_decision_variable_samples(
     samples: &crate::Sampled<v1::State>,
 ) -> Result<crate::SampledDecisionVariable> {
     let variable_id = id.into_inner();
-    let mut grouped_values: std::collections::HashMap<
-        ordered_float::OrderedFloat<f64>,
-        Vec<crate::SampleID>,
-    > = std::collections::HashMap::new();
+    let mut grouped_values: BTreeMap<ordered_float::OrderedFloat<f64>, Vec<crate::SampleID>> =
+        BTreeMap::new();
     for (sample_id, state) in samples.iter() {
         if let Some(value) = state.entries.get(&variable_id) {
             grouped_values
@@ -66,8 +64,10 @@ fn evaluate_decision_variable_samples(
         }
     }
 
-    let ids: Vec<Vec<crate::SampleID>> = grouped_values.values().cloned().collect();
-    let values: Vec<f64> = grouped_values.keys().map(|k| k.into_inner()).collect();
+    let (ids, values): (Vec<Vec<crate::SampleID>>, Vec<f64>) = grouped_values
+        .into_iter()
+        .map(|(value, ids)| (ids, value.into_inner()))
+        .unzip();
     let samples = crate::Sampled::new(ids, values)?;
     Ok(crate::SampledDecisionVariable::new(
         id,
@@ -626,6 +626,56 @@ mod tests {
             instance.fixed_decision_variable_value(VariableID::from(2)),
             Some(0.0)
         );
+    }
+
+    #[test]
+    fn test_evaluate_samples_preserves_sample_groups_for_decision_variables() {
+        let instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(linear!(1)))
+            .decision_variables(BTreeMap::from([(
+                VariableID::from(1),
+                crate::DecisionVariable::continuous(),
+            )]))
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap();
+        let samples = crate::Sampled::new(
+            [
+                vec![crate::SampleID::from(0)],
+                vec![crate::SampleID::from(1)],
+                vec![crate::SampleID::from(2)],
+            ],
+            [
+                v1::State::from(HashMap::from([(1, 2.0)])),
+                v1::State::from(HashMap::from([(1, 7.0)])),
+                v1::State::from(HashMap::from([(1, 2.0)])),
+            ],
+        )
+        .unwrap();
+
+        let sample_set = instance
+            .evaluate_samples(&samples, ATol::default())
+            .unwrap();
+        let sampled = sample_set
+            .decision_variables()
+            .get(&VariableID::from(1))
+            .unwrap()
+            .samples();
+
+        assert_eq!(sampled.get(crate::SampleID::from(0)), Some(&2.0));
+        assert_eq!(sampled.get(crate::SampleID::from(1)), Some(&7.0));
+        assert_eq!(sampled.get(crate::SampleID::from(2)), Some(&2.0));
+
+        let chunks = sampled.clone().chunk();
+        assert_eq!(chunks.len(), 2);
+        assert_eq!(chunks[0].0, 2.0);
+        assert_eq!(chunks[0].1.len(), 2);
+        assert!(chunks[0].1.contains(&crate::SampleID::from(0)));
+        assert!(chunks[0].1.contains(&crate::SampleID::from(2)));
+        assert_eq!(chunks[1].0, 7.0);
+        assert_eq!(chunks[1].1.len(), 1);
+        assert!(chunks[1].1.contains(&crate::SampleID::from(1)));
     }
 
     #[test]
