@@ -1,5 +1,7 @@
 """Test decision-variable role and used-variable APIs."""
 
+import pytest
+
 from ommx.v1 import DecisionVariable, DecisionVariableRole, Instance
 
 
@@ -46,6 +48,43 @@ def test_decision_variable_role_partitions():
     assert instance.attached_decision_variable(1).substituted_value == 2.0
     assert instance.dependent_decision_variable_ids() == {2}
     assert instance.irrelevant_decision_variable_ids() == {3}
+
+
+def test_partial_evaluate_rejects_dependent_variable_value():
+    """A dependent variable is owned by decision_variable_dependency, not fixed values."""
+    x = {i: DecisionVariable.continuous(i) for i in [1, 10]}
+    instance = Instance.from_components(
+        decision_variables=list(x.values()),
+        objective=x[1],
+        constraints={},
+        sense=Instance.MINIMIZE,
+    )
+    instance.substitute({10: x[1] + x[1]})
+
+    with pytest.raises(ValueError, match="cannot be fixed"):
+        instance.partial_evaluate({10: 4.0})
+
+    assert instance.fixed_decision_variables() == {}
+    assert instance.dependent_decision_variable_ids() == {10}
+
+
+def test_partial_evaluate_keeps_constant_dependency_dependent():
+    """Fixing dependency inputs can make the RHS constant without making the key fixed."""
+    x = {i: DecisionVariable.continuous(i) for i in [1, 10]}
+    instance = Instance.from_components(
+        decision_variables=list(x.values()),
+        objective=x[1],
+        constraints={},
+        sense=Instance.MINIMIZE,
+    )
+    instance.substitute({10: x[1] + x[1]})
+
+    updated = instance.partial_evaluate({1: 2.0})
+
+    assert updated.fixed_decision_variables() == {1: 2.0}
+    assert updated.dependent_decision_variable_ids() == {10}
+    assert updated.decision_variable_role(10) == DecisionVariableRole.Dependent
+    assert updated.populate_state({}).entries == {1: 2.0, 10: 4.0}
 
 
 def test_bound_wrapper_functionality():
