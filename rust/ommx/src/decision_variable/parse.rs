@@ -74,7 +74,13 @@ impl Parse for v1::DecisionVariable {
             .parse_as(&(), message, "bound")?;
         let id = VariableID::from(self.id);
         let dv = DecisionVariable::new(kind, bound, ATol::default()) // FIXME: user should provide this
-        .map_err(|e| RawParseError::InvalidDecisionVariable(e).context(message, "bound"))?;
+            .map_err(|source| {
+                RawParseError::InvalidDecisionVariable(DecisionVariableError::InvalidDefinition {
+                    id,
+                    source: Box::new(source),
+                })
+                .context(message, "bound")
+            })?;
         let fixed_value = self.substituted_value;
         if let Some(value) = fixed_value {
             dv.check_value_consistency(id, value, ATol::default())
@@ -285,7 +291,7 @@ mod tests {
         insta::assert_snapshot!(res.unwrap_err(), @r###"
         Traceback for OMMX Message parse error:
         └─ommx.v1.DecisionVariable[bound]
-        Bound is inconsistent to kind: kind=Integer, bound=[1.1, 1.9]
+        Invalid decision variable ID=1: Bound is inconsistent to kind: kind=Integer, bound=[1.1, 1.9]
         "###);
     }
 

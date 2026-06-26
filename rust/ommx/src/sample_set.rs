@@ -36,6 +36,9 @@ pub enum SampleSetError {
         found: SampleIDSet,
     },
 
+    #[error("Duplicated variable ID is found in definition: {id:?}")]
+    DuplicatedVariableID { id: VariableID },
+
     #[error("Duplicate subscripts for {name}: {subscripts:?}")]
     DuplicateSubscripts { name: String, subscripts: Vec<i64> },
 

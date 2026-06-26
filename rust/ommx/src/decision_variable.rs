@@ -320,6 +320,12 @@ pub enum DecisionVariableError {
     #[error("Bound is inconsistent to kind: kind={kind:?}, bound={bound}")]
     BoundInconsistentToKind { kind: Kind, bound: Bound },
 
+    #[error("Invalid decision variable ID={id}: {source}")]
+    InvalidDefinition {
+        id: VariableID,
+        source: Box<DecisionVariableError>,
+    },
+
     #[error("Decision variable value for ID={id} must be finite: value={value}")]
     NonFiniteValue { id: VariableID, value: f64 },
 

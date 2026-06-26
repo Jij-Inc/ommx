@@ -20,9 +20,9 @@ impl Parse for crate::v1::SampleSet {
             let dv_id = parsed.id;
             variable_labels.insert(dv_id, parsed.label);
             if decision_variables.insert(dv_id, parsed.variable).is_some() {
-                return Err(crate::RawParseError::InvalidInstance(format!(
-                    "Duplicated variable ID is found in definition: {dv_id:?}"
-                ))
+                return Err(crate::RawParseError::SampleSetError(
+                    crate::SampleSetError::DuplicatedVariableID { id: dv_id },
+                )
                 .context(message, "decision_variables"));
             }
         }
@@ -470,7 +470,13 @@ mod tests {
         };
 
         let result: Result<SampleSet, ParseError> = v1_sample_set.parse(&());
-        insta::assert_snapshot!(result.unwrap_err().to_string(), @r###"
+        let error = result.unwrap_err();
+        assert!(matches!(
+            error.error,
+            crate::RawParseError::SampleSetError(crate::SampleSetError::DuplicatedVariableID { id })
+                if id == crate::VariableID::from(1)
+        ));
+        insta::assert_snapshot!(error.to_string(), @r###"
         Traceback for OMMX Message parse error:
         └─ommx.v1.SampleSet[decision_variables]
         Duplicated variable ID is found in definition: VariableID(1)
