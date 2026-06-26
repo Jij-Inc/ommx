@@ -332,13 +332,18 @@ impl Evaluate for Instance {
 
         // Phase 2: Store fixed values in the root-owned table.
         for (id, value) in expanded_state.entries.iter() {
-            let Some(dv) = working.decision_variables.get_mut(&VariableID::from(*id)) else {
+            let var_id = VariableID::from(*id);
+            if working.decision_variable_dependency.get(&var_id).is_some() {
+                return Err(crate::error!(
+                    "Dependent variable {var_id:?} cannot be fixed by partial_evaluate"
+                ));
+            }
+            let Some(dv) = working.decision_variables.get_mut(&var_id) else {
                 return Err(crate::error!(
                     "Unknown decision variable (ID={id}) in state."
                 ));
             };
             dv.check_value_consistency(*value, atol)?;
-            let var_id = VariableID::from(*id);
             if let Some(previous_value) = working.fixed_decision_variable_values.get(&var_id) {
                 if !values_are_consistent(*previous_value, *value, atol) {
                     return Err(crate::DecisionVariableError::SubstitutedValueOverwrite {
@@ -587,6 +592,48 @@ mod tests {
             instance.fixed_decision_variable_value(VariableID::from(2)),
             Some(0.0)
         );
+    }
+
+    #[test]
+    fn test_partial_evaluate_rejects_dependent_variable_fixing() {
+        let decision_variables = BTreeMap::from([
+            (
+                VariableID::from(1),
+                crate::DecisionVariable::continuous(VariableID::from(1)),
+            ),
+            (
+                VariableID::from(10),
+                crate::DecisionVariable::continuous(VariableID::from(10)),
+            ),
+        ]);
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(linear!(1)))
+            .decision_variables(decision_variables)
+            .constraints(BTreeMap::new())
+            .decision_variable_dependency(crate::assign! {
+                10 <- linear!(1)
+            })
+            .build()
+            .unwrap();
+
+        let state = v1::State::from(HashMap::from([(10, 1.0)]));
+        let err = instance
+            .partial_evaluate(&state, ATol::default())
+            .unwrap_err();
+
+        assert!(
+            err.to_string().contains("cannot be fixed"),
+            "unexpected error: {err}"
+        );
+        assert_eq!(
+            instance.fixed_decision_variable_value(VariableID::from(10)),
+            None
+        );
+        assert!(instance
+            .decision_variable_dependency
+            .get(&VariableID::from(10))
+            .is_some());
     }
 
     #[test]
