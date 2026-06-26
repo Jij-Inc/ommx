@@ -5,7 +5,9 @@ description: Use when reviewing OMMX code, PR diffs, or proposed fixes to analyz
 
 # Domain Responsibility Review
 
-Use this skill at the start of every review. The goal is to review code shape through OMMX domain semantics before judging implementation details.
+Use this skill at the start of every OMMX review. The goal is to review code shape through OMMX domain semantics before judging implementation details.
+
+Treat this as a review pre-pass, not as the required final response order. When writing a code review, still lead with actionable findings; use the domain model to decide which findings matter and how to explain them.
 
 ## Review Flow
 
@@ -34,6 +36,18 @@ Use this skill at the start of every review. The goal is to review code shape th
    - Lead each finding with the broken responsibility or invariant.
    - Then point to the concrete code path and explain how the operation can violate that domain rule.
    - Proposed fixes should name the owning abstraction and route the operation through it.
+   - If the task is addressing review feedback rather than writing a review, keep the workflow self-contained: read the exact comment and surrounding diff, reconstruct the reviewer concern, search for sibling defects, and fix the responsibility boundary rather than only the commented line.
+
+## Recurring OMMX Review Checks
+
+- Check every root object and constraint family affected by a change: `Instance`, `ParametricInstance`, `Solution`, `SampleSet`, regular constraints, indicator, one-hot, and SOS1. A fix for only the regular path is suspect when sidecars, annotations, parsing, serialization, or statistics are involved.
+- For parse/serialize/projection changes, verify round-trips preserve one source of truth: prune or transfer sidecars when absorbing constraints, reject or filter reserved annotation keys at protobuf boundaries, and make projected counts include special constraint families.
+- For fallible mutation paths, check atomicity before side effects. Build fallible derived values before inserting constraints, clear stale cached outputs before retryable operations, and validate reserved IDs before registry or storage writes.
+- For numeric consistency checks, handle boundary and invalid values explicitly. Absolute tolerances are inclusive unless the API documents otherwise, and NaN/Inf must not pass through `(a - b).abs() > atol` style comparisons silently.
+- For public API changes, check all user-facing surfaces together: Rust docs, Python docs, migration guides, stubs, examples, DataFrame flags, docstrings, and Python magic-method return contracts.
+- For public Rust structs, check whether the struct-level Rustdoc states the invariants that the type owns: valid IDs, active/removed disjointness, sidecar key coverage, non-empty sets, finite/non-zero numeric values, reserved annotation namespaces, or host-level serialization requirements. If callers can construct or mutate the struct, the docs should name the intended constructors or owner APIs that preserve those invariants.
+- For new builder/setter/attachment APIs, add focused tests for both preservation and rejection paths, such as sidecar round-trips and orphan-ID validation.
+- For derived analysis or table-building code, avoid recomputing whole-instance partitions inside per-variable or per-row loops; compute the owner-side role/set partition once when the operation needs it repeatedly.
 
 ## Review Checklist
 

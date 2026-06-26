@@ -24,12 +24,17 @@ Use `.agents/skills/domain-responsibility-review/SKILL.md` first when a change h
    - Use public crate API only when the item is an intentional SDK commitment.
    - Use `pub(crate)` only when the item must cross top-level module boundaries in this crate.
 
-3. Avoid visibility as a shortcut.
+3. Document public owner invariants.
+   - For each public Rust struct, put the invariants it owns in the struct-level Rustdoc when possible.
+   - Name the constructor, parser, builder, or owning host API that preserves those invariants.
+   - If public fields or public mutation methods exist, the docs should make clear which values callers may set directly and which owner-level invariants still must hold.
+
+4. Avoid visibility as a shortcut.
    - Do not use `pub(super)` or `pub(in ...)` to patch around an awkward module hierarchy.
    - First reconsider whether the module tree should express the ownership boundary more directly.
    - Do not expose raw registry, descriptor, config, or persistence plumbing just to make a caller convenient.
 
-4. Document crate-wide visibility.
+5. Document crate-wide visibility.
    - If `pub(crate)` is necessary, add a short comment or documentation explaining why the item must cross top-level module boundaries.
    - The reason should name the owner boundary or cross-module contract, not just "used elsewhere".
 
@@ -42,6 +47,7 @@ Use `.agents/skills/domain-responsibility-review/SKILL.md` first when a change h
 2. Check for hidden API commitments.
    - Public Rust items are SDK commitments unless they are protected by a private module boundary.
    - Raw OCI descriptors, registry handles, config internals, and persistence helpers should not leak into public APIs unless the low-level API is explicitly intended.
+   - Public structs should document the invariants they expect callers and owner APIs to preserve; missing Rustdoc is a review risk when the struct has public fields or construction paths.
 
 3. Check for invariant bypass.
    - A caller should not be able to mutate or construct state in a way that skips the owning abstraction's validation.
@@ -57,6 +63,7 @@ Use `.agents/skills/domain-responsibility-review/SKILL.md` first when a change h
 - Which domain abstraction or subsystem owns this item?
 - Which callers genuinely need access?
 - Is this an SDK commitment, crate-internal contract, private-module contract, or implementation detail?
+- Does each public struct document its owned invariants and intended construction/mutation paths?
 - Does the module tree express that boundary without `pub(super)` or `pub(in ...)`?
 - If `pub(crate)` is used, is the cross-module reason documented?
 - Can any visible item let callers bypass validation, persistence, or source-of-truth invariants?
