@@ -620,7 +620,6 @@ mod tests {
             VariableID::from(2) => DecisionVariable::continuous(),
         };
         let named_function = NamedFunction {
-            id: NamedFunctionID::from(7),
             function: linear!(2).into(),
         };
         let instance = Instance::builder()

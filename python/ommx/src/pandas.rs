@@ -1289,12 +1289,18 @@ impl<'m> ToPandasEntry
     }
 }
 
-impl<'m> ToPandasEntry for WithModelingContext<'m, &ommx::NamedFunction, ommx::NamedFunctionLabel> {
+impl<'m> ToPandasEntry
+    for WithModelingContext<
+        'm,
+        (ommx::NamedFunctionID, &ommx::NamedFunction),
+        ommx::NamedFunctionLabel,
+    >
+{
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let nf = self.item;
+        let (id, nf) = self.item;
         let m = self.context;
         let dict = PyDict::new(py);
-        dict.set_item("id", nf.id.into_inner())?;
+        dict.set_item("id", id.into_inner())?;
         set_function_type(&dict, &nf.function)?;
         dict.set_item("function", crate::Function(nf.function.clone()))?;
         set_used_ids(&dict, &nf.function.required_ids())?;
@@ -1387,13 +1393,17 @@ impl<'m> ToPandasEntry
 }
 
 impl<'m> ToPandasEntry
-    for WithModelingContext<'m, &ommx::EvaluatedNamedFunction, ommx::NamedFunctionLabel>
+    for WithModelingContext<
+        'm,
+        (ommx::NamedFunctionID, &ommx::EvaluatedNamedFunction),
+        ommx::NamedFunctionLabel,
+    >
 {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let enf = self.item;
+        let (id, enf) = self.item;
         let m = self.context;
         let dict = PyDict::new(py);
-        dict.set_item("id", enf.id.into_inner())?;
+        dict.set_item("id", id.into_inner())?;
         dict.set_item("value", enf.evaluated_value())?;
         set_used_ids(&dict, enf.used_decision_variable_ids())?;
         set_label_columns(
@@ -1482,15 +1492,15 @@ impl<'a, 'm> ToPandasEntry
 impl<'a, 'm> ToPandasEntry
     for WithModelingContext<
         'm,
-        WithSampleIds<'a, &'a ommx::SampledNamedFunction>,
+        WithSampleIds<'a, (ommx::NamedFunctionID, &'a ommx::SampledNamedFunction)>,
         ommx::NamedFunctionLabel,
     >
 {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let nf = self.item.item;
+        let (id, nf) = self.item.item;
         let m = self.context;
         let dict = PyDict::new(py);
-        dict.set_item("id", nf.id().into_inner())?;
+        dict.set_item("id", id.into_inner())?;
         set_used_ids(&dict, nf.used_decision_variable_ids())?;
         set_label_columns(
             &dict,

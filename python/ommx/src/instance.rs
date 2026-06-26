@@ -185,9 +185,9 @@ impl Instance {
         if let Some(nfs) = named_functions {
             let mut rust_named_functions = BTreeMap::new();
             for nf in nfs {
-                let id = nf.0.id;
-                named_function_labels.insert(id, nf.1);
-                if rust_named_functions.insert(id, nf.0).is_some() {
+                let id = nf.0;
+                named_function_labels.insert(id, nf.2);
+                if rust_named_functions.insert(id, nf.1).is_some() {
                     anyhow::bail!("Duplicate named function ID: {}", id.into_inner());
                 }
             }
@@ -676,7 +676,7 @@ impl Instance {
             .named_functions()
             .iter()
             .map(|(id, named_function)| {
-                NamedFunction(named_function.clone(), labels.collect_for(*id))
+                NamedFunction(*id, named_function.clone(), labels.collect_for(*id))
             })
             .collect()
     }
@@ -2133,17 +2133,21 @@ impl Instance {
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         let nf_meta_store = self.inner.named_function_labels().clone();
-        let nf_meta_view: Vec<(ommx::NamedFunctionLabel, &ommx::NamedFunction)> = self
+        let nf_meta_view: Vec<(
+            ommx::NamedFunctionLabel,
+            ommx::NamedFunctionID,
+            &ommx::NamedFunction,
+        )> = self
             .inner
             .named_functions()
             .iter()
-            .map(|(id, nf)| (nf_meta_store.collect_for(*id), nf))
+            .map(|(id, nf)| (nf_meta_store.collect_for(*id), *id, nf))
             .collect();
         entries_to_dataframe(
             py,
             nf_meta_view
                 .iter()
-                .map(|(m, nf)| crate::pandas::WithModelingContext::new(*nf, m)),
+                .map(|(m, id, nf)| crate::pandas::WithModelingContext::new((*id, *nf), m)),
             "id",
             flags,
         )
@@ -2456,6 +2460,7 @@ impl Instance {
             .get(&id)
             .map(|named_function| {
                 NamedFunction(
+                    id,
                     named_function.clone(),
                     self.inner.named_function_labels().collect_for(id),
                 )

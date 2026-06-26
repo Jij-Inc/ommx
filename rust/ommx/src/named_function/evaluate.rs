@@ -13,7 +13,6 @@ impl Evaluate for NamedFunction {
         let evaluated_value = self.function.evaluate(solution, atol)?;
         let used_decision_variable_ids = self.function.required_ids();
         Ok(EvaluatedNamedFunction {
-            id: self.id,
             evaluated_value,
             used_decision_variable_ids,
         })
@@ -39,7 +38,6 @@ impl Evaluate for NamedFunction {
         let evaluated_values = self.function.evaluate_samples(samples, atol)?;
         let used_decision_variable_ids = self.function.required_ids();
         Ok(SampledNamedFunction {
-            id: self.id,
             evaluated_values,
             used_decision_variable_ids,
         })
@@ -56,14 +54,12 @@ mod tests {
     fn test_evaluate_constant_function() {
         // NamedFunction with a constant function
         let nf = NamedFunction {
-            id: NamedFunctionID::from(1),
             function: Function::Constant(Coefficient::try_from(42.0).unwrap()),
         };
 
         let state = crate::v1::State::default();
         let result = nf.evaluate(&state, crate::ATol::default()).unwrap();
 
-        assert_eq!(result.id(), NamedFunctionID::from(1));
         assert_eq!(result.evaluated_value(), 42.0);
         assert!(result.used_decision_variable_ids().is_empty());
     }
@@ -72,7 +68,6 @@ mod tests {
     fn test_evaluate_linear_function() {
         // NamedFunction with 2*x1 + 3*x2
         let nf = NamedFunction {
-            id: NamedFunctionID::from(2),
             function: Function::Linear(
                 ((coeff!(2.0) * linear!(1)).unwrap() + (coeff!(3.0) * linear!(2)).unwrap())
                     .unwrap(),
@@ -96,7 +91,6 @@ mod tests {
     fn test_required_ids() {
         // NamedFunction with a linear function referencing variables 1 and 2
         let nf = NamedFunction {
-            id: NamedFunctionID::from(3),
             function: Function::Linear(
                 ((coeff!(2.0) * linear!(1)).unwrap() + (coeff!(3.0) * linear!(2)).unwrap())
                     .unwrap(),

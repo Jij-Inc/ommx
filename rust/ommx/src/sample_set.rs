@@ -78,12 +78,6 @@ pub enum SampleSetError {
     #[error("Required field is missing: {field}")]
     MissingRequiredField { field: &'static str },
 
-    #[error("Named function key {key:?} does not match value's id {value_id:?}")]
-    InconsistentNamedFunctionID {
-        key: NamedFunctionID,
-        value_id: NamedFunctionID,
-    },
-
     #[error("{message}")]
     InvalidSidecar { message: String },
 }
@@ -94,7 +88,8 @@ pub enum SampleSetError {
 /// -----------
 /// - [`Self::decision_variables`] is keyed by the table-owned
 ///   [`VariableID`]; sampled decision-variable rows do not carry IDs.
-/// - The keys of [`Self::named_functions`] match the `id()` of their values.
+/// - [`Self::named_functions`] is keyed by the table-owned
+///   [`NamedFunctionID`]; sampled named-function rows do not carry IDs.
 /// - All [`Self::decision_variables`], [`Self::objectives`], sampled constraint
 ///   collections, and [`Self::named_functions`] have the same sample ID set.
 /// - [`Self::feasible`] and [`Self::feasible_relaxed`] are computed from all
@@ -545,14 +540,6 @@ impl SampleSetBuilder {
             .sense
             .ok_or(SampleSetError::MissingRequiredField { field: "sense" })?;
 
-        for (key, value) in &self.named_functions {
-            if key != value.id() {
-                return Err(SampleSetError::InconsistentNamedFunctionID {
-                    key: *key,
-                    value_id: *value.id(),
-                });
-            }
-        }
         let decision_variable_ids = decision_variables.keys().copied().collect::<BTreeSet<_>>();
         crate::modeling_label::validate_modeling_label_ids(
             &self.variable_labels,

@@ -80,7 +80,7 @@ impl Instance {
         }
         let id = self.next_named_function_id();
 
-        let named_function = NamedFunction { id, function };
+        let named_function = NamedFunction { function };
         self.named_functions.insert(id, named_function);
         let label = crate::named_function::NamedFunctionLabel {
             name,
@@ -167,7 +167,11 @@ mod tests {
         // Lookup by correct name and subscripts
         let found = instance.get_named_function_by_name("f", vec![1, 2]);
         assert!(found.is_some());
-        let found_id = found.unwrap().id;
+        let found_id = NamedFunctionID::from(0);
+        assert_eq!(
+            found.unwrap().function,
+            Function::Constant(Coefficient::try_from(1.0).unwrap())
+        );
         assert_eq!(instance.named_function_labels().name(found_id), Some("f"));
         assert_eq!(
             instance.named_function_labels().subscripts(found_id),
@@ -227,7 +231,7 @@ mod tests {
         instance.new_continuous();
 
         // Add a named function that references variable 0
-        let nf = instance
+        instance
             .new_named_function(
                 Function::Linear((coeff!(2.0) * linear!(0)).unwrap()),
                 Some("obj".to_string()),
@@ -237,7 +241,8 @@ mod tests {
             )
             .unwrap();
 
-        let nf_id = nf.id;
+        let nf_id = NamedFunctionID::from(0);
+        assert!(instance.named_functions().contains_key(&nf_id));
         assert_eq!(nf_id, NamedFunctionID::from(0));
         let store = instance.named_function_labels();
         assert_eq!(store.name(nf_id), Some("obj"));

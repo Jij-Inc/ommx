@@ -409,7 +409,7 @@ impl From<Instance> for v1::Instance {
             .into_iter()
             .map(|(id, nf)| {
                 let label = named_function_labels.remove(id);
-                crate::named_function::parse::named_function_to_v1(nf, label)
+                crate::named_function::parse::named_function_to_v1(id, nf, label)
             })
             .collect();
         let removed_constraints = removed
@@ -710,7 +710,7 @@ impl From<ParametricInstance> for v1::ParametricInstance {
             .into_iter()
             .map(|(id, nf)| {
                 let label = named_function_labels.remove(id);
-                crate::named_function::parse::named_function_to_v1(nf, label)
+                crate::named_function::parse::named_function_to_v1(id, nf, label)
             })
             .collect();
         Self {

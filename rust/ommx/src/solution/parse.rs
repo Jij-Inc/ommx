@@ -58,7 +58,7 @@ impl Parse for crate::v1::Solution {
         for enf in self.evaluated_named_functions {
             let parsed: crate::named_function::parse::ParsedEvaluatedNamedFunction =
                 enf.parse_as(&(), message, "evaluated_named_functions")?;
-            let id = parsed.evaluated_named_function.id();
+            let id = parsed.id;
             evaluated_named_functions.insert(id, parsed.evaluated_named_function);
             named_function_labels.insert(id, parsed.label);
         }
@@ -223,7 +223,11 @@ impl From<Solution> for crate::v1::Solution {
             .iter()
             .map(|(id, enf)| {
                 let label = named_function_labels_store.collect_for(*id);
-                crate::named_function::parse::evaluated_named_function_to_v1(enf.clone(), label)
+                crate::named_function::parse::evaluated_named_function_to_v1(
+                    *id,
+                    enf.clone(),
+                    label,
+                )
             })
             .collect();
         let variable_labels_store = solution.variable_labels().clone();

@@ -139,7 +139,8 @@ pub enum Sense {
 /// - [`DecisionVariableUsage`] is the reverse-usage index for used decision variables only.
 /// - [`Self::removed_constraints`] may contain fixed or dependent variable IDs.
 ///   These are substituted when the constraint is restored via [`Self::restore_constraint`].
-/// - The keys of [`Self::named_functions`] match the `id()` of their values.
+/// - [`Self::named_functions`] is keyed by the table-owned
+///   [`NamedFunctionID`]; named-function rows do not carry IDs.
 /// - [`Self::named_functions`] may contain fixed or dependent variable IDs (like `removed_constraints`).
 ///   Variable IDs in `named_functions` must be registered in [`Self::decision_variables`],
 ///   but are NOT included in the "used" set calculation.
@@ -585,7 +586,8 @@ impl Instance {
 ///   - **fixed**: Variable IDs present in [`Self::fixed_decision_variable_values`] and not used
 ///   - **dependent**: Keys of `decision_variable_dependency` that are not used or fixed
 /// - [`DecisionVariableUsage`] is the reverse-usage index for used decision variables only.
-/// - The keys of [`Self::named_functions`] match the `id()` of their values.
+/// - [`Self::named_functions`] is keyed by the table-owned
+///   [`NamedFunctionID`]; named-function rows do not carry IDs.
 /// - [`Self::named_functions`] may contain fixed or dependent variable IDs (like `removed_constraints`).
 ///   Variable IDs in `named_functions` must be registered in [`Self::decision_variables`],
 ///   but are NOT included in the "used" set calculation.

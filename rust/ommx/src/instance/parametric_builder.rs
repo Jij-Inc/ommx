@@ -318,15 +318,8 @@ impl ParametricInstanceBuilder {
             }
         }
 
-        // Validate named_functions: key must match value's id, and all variable IDs must exist
-        for (key, nf) in &self.named_functions {
-            if *key != nf.id {
-                let id = nf.id;
-                crate::bail!(
-                    { ?key, ?id },
-                    "Named function map key {key:?} does not match value's id {id:?}",
-                );
-            }
+        // Validate named_functions: map keys own IDs, and all referenced variable IDs must exist.
+        for nf in self.named_functions.values() {
             for id in nf.function.required_ids() {
                 if !all_variable_ids.contains(&id) {
                     crate::bail!({ ?id }, "Undefined variable ID is used: {id:?}");
@@ -848,45 +841,12 @@ mod tests {
     }
 
     #[test]
-    fn test_parametric_builder_inconsistent_named_function_id() {
-        use crate::{NamedFunction, NamedFunctionID};
-        use maplit::btreemap;
-
-        // Create a named function with id=1 but use key=2 in the map
-        let named_function = NamedFunction {
-            id: NamedFunctionID::from(1),
-            function: Function::Zero,
-        };
-
-        let err = ParametricInstance::builder()
-            .sense(Sense::Minimize)
-            .objective(Function::Zero)
-            .decision_variables(BTreeMap::new())
-            .parameters(BTreeMap::new())
-            .constraints(BTreeMap::new())
-            .named_functions(btreemap! {
-                NamedFunctionID::from(2) => named_function,  // key=2 but id=1
-            })
-            .build()
-            .unwrap_err();
-
-        let msg = err.to_string();
-        assert!(
-            msg.contains("Named function map key")
-                && msg.contains("NamedFunctionID(2)")
-                && msg.contains("NamedFunctionID(1)"),
-            "unexpected error: {msg}"
-        );
-    }
-
-    #[test]
     fn test_parametric_builder_undefined_variable_in_named_function() {
         use crate::{coeff, linear, NamedFunction, NamedFunctionID};
         use maplit::btreemap;
 
         // Create a named function that references undefined variable ID 999
         let named_function = NamedFunction {
-            id: NamedFunctionID::from(1),
             function: Function::from(linear!(999) + coeff!(1.0)),
         };
 
@@ -1147,7 +1107,6 @@ mod tests {
         let param_id = VariableID::from(2);
 
         let named_function = NamedFunction {
-            id: NamedFunctionID::from(1),
             function: Function::from(linear!(1) + linear!(2)), // uses both decision var and param
         };
 

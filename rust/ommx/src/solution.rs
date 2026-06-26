@@ -81,12 +81,6 @@ pub enum SolutionError {
         id: VariableID,
         constraint_id: ConstraintID,
     },
-
-    #[error("Named function key {key:?} does not match value's id {value_id:?}")]
-    InconsistentNamedFunctionID {
-        key: NamedFunctionID,
-        value_id: NamedFunctionID,
-    },
 }
 
 /// Single solution result with data integrity guarantees
@@ -97,7 +91,8 @@ pub enum SolutionError {
 ///   [`VariableID`]; evaluated decision-variable rows do not carry IDs.
 /// - The keys of the evaluated constraint collections are the table-owned
 ///   constraint IDs for each constraint family.
-/// - The keys of [`Self::evaluated_named_functions`] match the `id()` of their values.
+/// - [`Self::evaluated_named_functions`] is keyed by the table-owned
+///   [`NamedFunctionID`]; evaluated named-function rows do not carry IDs.
 /// - [`Self::decision_variables`] contains all variable IDs referenced in `used_decision_variable_ids` of each constraint.
 ///
 /// Note
@@ -474,11 +469,11 @@ impl Solution {
         name: &str,
     ) -> Result<BTreeMap<Vec<i64>, f64>, SolutionError> {
         // Collect all named functions with the given name
-        let functions_with_name: Vec<&EvaluatedNamedFunction> = self
+        let functions_with_name: Vec<(NamedFunctionID, &EvaluatedNamedFunction)> = self
             .evaluated_named_functions
             .iter()
             .filter(|(id, _)| self.named_function_labels.name(**id) == Some(name))
-            .map(|(_, nf)| nf)
+            .map(|(id, nf)| (*id, nf))
             .collect();
         if functions_with_name.is_empty() {
             return Err(SolutionError::UnknownNamedFunctionName {
@@ -487,8 +482,8 @@ impl Solution {
         }
 
         let mut result = BTreeMap::new();
-        for nf in &functions_with_name {
-            let key = self.named_function_labels.subscripts(nf.id()).to_vec();
+        for (id, nf) in &functions_with_name {
+            let key = self.named_function_labels.subscripts(*id).to_vec();
             if result.contains_key(&key) {
                 return Err(SolutionError::DuplicateSubscript { subscripts: key });
             }
@@ -723,16 +718,6 @@ impl SolutionBuilder {
             .sense
             .ok_or(SolutionError::MissingRequiredField { field: "sense" })?;
 
-        // Validate named function keys match their id
-        for (key, value) in &self.evaluated_named_functions {
-            if *key != value.id() {
-                return Err(SolutionError::InconsistentNamedFunctionID {
-                    key: *key,
-                    value_id: value.id(),
-                }
-                .into());
-            }
-        }
         let decision_variable_ids = decision_variables.keys().copied().collect::<BTreeSet<_>>();
         crate::modeling_label::validate_modeling_label_ids(
             &self.variable_labels,

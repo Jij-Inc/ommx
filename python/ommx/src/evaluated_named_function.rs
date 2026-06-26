@@ -9,6 +9,7 @@ use std::collections::{HashMap, HashSet};
 #[pyclass]
 #[derive(Clone)]
 pub struct EvaluatedNamedFunction(
+    pub ommx::NamedFunctionID,
     pub ommx::EvaluatedNamedFunction,
     pub ommx::NamedFunctionLabel,
 );
@@ -18,37 +19,37 @@ pub struct EvaluatedNamedFunction(
 impl EvaluatedNamedFunction {
     #[getter]
     pub fn id(&self) -> u64 {
-        self.0.id.into_inner()
+        self.0.into_inner()
     }
 
     #[getter]
     pub fn evaluated_value(&self) -> f64 {
-        self.0.evaluated_value()
+        self.1.evaluated_value()
     }
 
     #[getter]
     pub fn name(&self) -> Option<String> {
-        self.1.name.clone()
+        self.2.name.clone()
     }
 
     #[getter]
     pub fn subscripts(&self) -> Vec<i64> {
-        self.1.subscripts.clone()
+        self.2.subscripts.clone()
     }
 
     #[getter]
     pub fn parameters(&self) -> HashMap<String, String> {
-        self.1.parameters.clone().into_iter().collect()
+        self.2.parameters.clone().into_iter().collect()
     }
 
     #[getter]
     pub fn description(&self) -> Option<String> {
-        self.1.description.clone()
+        self.2.description.clone()
     }
 
     #[getter]
     pub fn used_decision_variable_ids(&self) -> HashSet<u64> {
-        self.0
+        self.1
             .used_decision_variable_ids()
             .iter()
             .map(|id| id.into_inner())
@@ -56,7 +57,11 @@ impl EvaluatedNamedFunction {
     }
 
     pub fn __repr__(&self) -> String {
-        self.0.to_string()
+        format!(
+            "EvaluatedNamedFunction(id={}, value={})",
+            self.0.into_inner(),
+            self.1.evaluated_value()
+        )
     }
 
     fn __copy__(&self) -> Self {

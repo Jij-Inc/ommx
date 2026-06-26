@@ -10,10 +10,7 @@ impl Arbitrary for NamedFunction {
     type Strategy = BoxedStrategy<Self>;
     fn arbitrary_with(params: Self::Parameters) -> Self::Strategy {
         Function::arbitrary_with(params)
-            .prop_map(|function| NamedFunction {
-                id: NamedFunctionID(0), // Should be replaced with a unique ID, but cannot be generated here
-                function,
-            })
+            .prop_map(|function| NamedFunction { function })
             .boxed()
     }
 }
@@ -60,10 +57,7 @@ pub fn arbitrary_named_functions(
             ids.into_iter()
                 .map(NamedFunctionID::from)
                 .zip(named_functions)
-                .map(|(id, mut named_function)| {
-                    named_function.id = id;
-                    (id, named_function)
-                })
+                .map(|(id, named_function)| (id, named_function))
                 .collect()
         })
         .boxed()

@@ -14,6 +14,7 @@ use anyhow::Result;
 /// parse can drain it into the [`NamedFunctionLabelStore`].
 #[derive(Debug)]
 pub struct ParsedNamedFunction {
+    pub id: NamedFunctionID,
     pub named_function: NamedFunction,
     pub label: NamedFunctionLabel,
 }
@@ -31,10 +32,8 @@ impl Parse for v1::NamedFunction {
                 field: "function",
             })?
             .parse_as(&(), message, "function")?;
-        let named_function = NamedFunction {
-            id: NamedFunctionID(self.id),
-            function,
-        };
+        let id = NamedFunctionID(self.id);
+        let named_function = NamedFunction { function };
         let label = NamedFunctionLabel {
             name: self.name,
             subscripts: self.subscripts,
@@ -42,6 +41,7 @@ impl Parse for v1::NamedFunction {
             description: self.description,
         };
         Ok(ParsedNamedFunction {
+            id,
             named_function,
             label,
         })
@@ -60,7 +60,7 @@ impl Parse for Vec<v1::NamedFunction> {
         let mut label_store = NamedFunctionLabelStore::default();
         for v in self {
             let parsed: ParsedNamedFunction = v.parse(&())?;
-            let id = parsed.named_function.id;
+            let id = parsed.id;
             if named_functions.insert(id, parsed.named_function).is_some() {
                 return Err(RawParseError::InvalidInstance(format!(
                     "Duplicated named function ID is found in definition: {id:?}"
@@ -75,7 +75,8 @@ impl Parse for Vec<v1::NamedFunction> {
 
 /// Build a v1 `NamedFunction` from its intrinsic data plus drained modeling label.
 pub(crate) fn named_function_to_v1(
-    NamedFunction { id, function }: NamedFunction,
+    id: NamedFunctionID,
+    NamedFunction { function }: NamedFunction,
     label: NamedFunctionLabel,
 ) -> v1::NamedFunction {
     v1::NamedFunction {
@@ -91,6 +92,7 @@ pub(crate) fn named_function_to_v1(
 /// Parsed v1 `EvaluatedNamedFunction` together with its drained modeling label.
 #[derive(Debug)]
 pub struct ParsedEvaluatedNamedFunction {
+    pub id: NamedFunctionID,
     pub evaluated_named_function: EvaluatedNamedFunction,
     pub label: NamedFunctionLabel,
 }
@@ -100,8 +102,8 @@ impl Parse for v1::EvaluatedNamedFunction {
     type Context = ();
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+        let id = NamedFunctionID(self.id);
         let evaluated_named_function = EvaluatedNamedFunction {
-            id: NamedFunctionID(self.id),
             evaluated_value: self.evaluated_value,
             used_decision_variable_ids: self
                 .used_decision_variable_ids
@@ -116,6 +118,7 @@ impl Parse for v1::EvaluatedNamedFunction {
             description: self.description,
         };
         Ok(ParsedEvaluatedNamedFunction {
+            id,
             evaluated_named_function,
             label,
         })
@@ -124,8 +127,8 @@ impl Parse for v1::EvaluatedNamedFunction {
 
 /// Build a v1 `EvaluatedNamedFunction` from its intrinsic data plus drained modeling label.
 pub(crate) fn evaluated_named_function_to_v1(
+    id: NamedFunctionID,
     EvaluatedNamedFunction {
-        id,
         evaluated_value,
         used_decision_variable_ids,
     }: EvaluatedNamedFunction,
@@ -148,6 +151,7 @@ pub(crate) fn evaluated_named_function_to_v1(
 /// Parsed v1 `SampledNamedFunction` together with its drained modeling label.
 #[derive(Debug)]
 pub struct ParsedSampledNamedFunction {
+    pub id: NamedFunctionID,
     pub sampled_named_function: SampledNamedFunction,
     pub label: NamedFunctionLabel,
 }
@@ -165,8 +169,8 @@ impl Parse for v1::SampledNamedFunction {
                 field: "evaluated_values",
             })?
             .parse_as(&(), message, "evaluated_values")?;
+        let id = NamedFunctionID(self.id);
         let sampled_named_function = SampledNamedFunction {
-            id: NamedFunctionID(self.id),
             evaluated_values,
             used_decision_variable_ids: self
                 .used_decision_variable_ids
@@ -181,6 +185,7 @@ impl Parse for v1::SampledNamedFunction {
             description: self.description,
         };
         Ok(ParsedSampledNamedFunction {
+            id,
             sampled_named_function,
             label,
         })
@@ -189,11 +194,11 @@ impl Parse for v1::SampledNamedFunction {
 
 /// Build a v1 `SampledNamedFunction` from its intrinsic data plus drained modeling label.
 pub(crate) fn sampled_named_function_to_v1(
+    id: NamedFunctionID,
     sampled: SampledNamedFunction,
     label: NamedFunctionLabel,
 ) -> v1::SampledNamedFunction {
     let SampledNamedFunction {
-        id,
         evaluated_values,
         used_decision_variable_ids,
     } = sampled;
@@ -281,10 +286,11 @@ mod tests {
         };
 
         let parsed: ParsedEvaluatedNamedFunction = v1_enf.parse(&()).unwrap();
+        let id = parsed.id;
         let enf = parsed.evaluated_named_function;
         let label = parsed.label;
 
-        assert_eq!(enf.id(), NamedFunctionID::from(42));
+        assert_eq!(id, NamedFunctionID::from(42));
         assert_eq!(enf.evaluated_value(), 3.14);
         assert_eq!(
             *enf.used_decision_variable_ids(),
@@ -325,10 +331,11 @@ mod tests {
         };
 
         let parsed: ParsedSampledNamedFunction = v1_snf.parse(&()).unwrap();
+        let id = parsed.id;
         let snf = parsed.sampled_named_function;
         let label = parsed.label;
 
-        assert_eq!(*snf.id(), NamedFunctionID::from(7));
+        assert_eq!(id, NamedFunctionID::from(7));
         assert_eq!(label.name, Some("cost".to_string()));
         assert_eq!(label.subscripts, vec![1, 2]);
         assert_eq!(label.description, Some("A sampled function".to_string()));
@@ -339,7 +346,7 @@ mod tests {
         );
 
         // Round-trip: SampledNamedFunction + label -> v1::SampledNamedFunction
-        let v1_converted = sampled_named_function_to_v1(snf, label);
+        let v1_converted = sampled_named_function_to_v1(id, snf, label);
         assert_eq!(v1_converted.id, 7);
         assert_eq!(v1_converted.name, Some("cost".to_string()));
         assert!(v1_converted.evaluated_values.is_some());

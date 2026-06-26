@@ -16,7 +16,11 @@ use std::collections::HashMap;
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
-pub struct NamedFunction(pub ommx::NamedFunction, pub ommx::NamedFunctionLabel);
+pub struct NamedFunction(
+    pub ommx::NamedFunctionID,
+    pub ommx::NamedFunction,
+    pub ommx::NamedFunctionLabel,
+);
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
@@ -45,7 +49,6 @@ impl NamedFunction {
         let named_function_id = NamedFunctionID::from(id);
 
         let named_function = ommx::NamedFunction {
-            id: named_function_id,
             function: rust_function,
         };
         let label = ommx::NamedFunctionLabel {
@@ -55,37 +58,37 @@ impl NamedFunction {
             description,
         };
 
-        Ok(Self(named_function, label))
+        Ok(Self(named_function_id, named_function, label))
     }
 
     #[getter]
     pub fn id(&self) -> u64 {
-        self.0.id.into_inner()
+        self.0.into_inner()
     }
 
     #[getter]
     pub fn function(&self) -> Function {
-        Function(self.0.function.clone())
+        Function(self.1.function.clone())
     }
 
     #[getter]
     pub fn name(&self) -> Option<String> {
-        self.1.name.clone()
+        self.2.name.clone()
     }
 
     #[getter]
     pub fn subscripts(&self) -> Vec<i64> {
-        self.1.subscripts.clone()
+        self.2.subscripts.clone()
     }
 
     #[getter]
     pub fn parameters(&self) -> HashMap<String, String> {
-        self.1.parameters.clone().into_iter().collect()
+        self.2.parameters.clone().into_iter().collect()
     }
 
     #[getter]
     pub fn description(&self) -> Option<String> {
-        self.1.description.clone()
+        self.2.description.clone()
     }
 
     /// Evaluate the named function with the given state.
@@ -104,12 +107,12 @@ impl NamedFunction {
             None => ommx::ATol::default(),
         };
         let evaluated = self
-            .0
+            .1
             .evaluate(&state.0, atol)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         // Per-element evaluate doesn't see the host's label store, so the
         // label snapshot from the source `NamedFunction` carries over.
-        Ok(EvaluatedNamedFunction(evaluated, self.1.clone()))
+        Ok(EvaluatedNamedFunction(self.0, evaluated, self.2.clone()))
     }
 
     /// Partially evaluate the named function with the given state.
@@ -129,7 +132,7 @@ impl NamedFunction {
                 .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?,
             None => ommx::ATol::default(),
         };
-        self.0
+        self.1
             .partial_evaluate(&state.0, atol)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         Ok(self.clone())
@@ -155,7 +158,7 @@ impl NamedFunction {
     /// Reverse subtraction: returns other - self.function
     pub fn __rsub__(&self, other: Function) -> PyResult<Function> {
         Ok(Function(
-            (&other.0 - &self.0.function).map_err(crate::coefficient_error_to_pyerr)?,
+            (&other.0 - &self.1.function).map_err(crate::coefficient_error_to_pyerr)?,
         ))
     }
 
@@ -171,7 +174,7 @@ impl NamedFunction {
 
     /// Negation: returns -self.function
     pub fn __neg__(&self) -> Function {
-        Function(-self.0.function.clone())
+        Function(-self.1.function.clone())
     }
 
     // Comparison operators - return Constraint
@@ -184,7 +187,7 @@ impl NamedFunction {
     #[gen_stub(type_ignore = ["override"])]
     #[pyo3(name = "__eq__")]
     pub fn py_eq(&self, other: Function) -> PyResult<Constraint> {
-        crate::comparison_constraint(-other.0 + &self.0.function, ommx::Equality::EqualToZero)
+        crate::comparison_constraint(-other.0 + &self.1.function, ommx::Equality::EqualToZero)
     }
 
     /// Create a less-than-or-equal constraint: self.function <= other → Constraint with LessThanOrEqualToZero
@@ -193,7 +196,7 @@ impl NamedFunction {
     #[pyo3(name = "__le__")]
     pub fn py_le(&self, other: Function) -> PyResult<Constraint> {
         crate::comparison_constraint(
-            -other.0 + &self.0.function,
+            -other.0 + &self.1.function,
             ommx::Equality::LessThanOrEqualToZero,
         )
     }
@@ -204,13 +207,17 @@ impl NamedFunction {
     #[pyo3(name = "__ge__")]
     pub fn py_ge(&self, other: Function) -> PyResult<Constraint> {
         crate::comparison_constraint(
-            other.0 - &self.0.function,
+            other.0 - &self.1.function,
             ommx::Equality::LessThanOrEqualToZero,
         )
     }
 
     pub fn __repr__(&self) -> String {
-        self.0.to_string()
+        format!(
+            "NamedFunction(id={}, {})",
+            self.0.into_inner(),
+            self.1.function
+        )
     }
 
     fn __copy__(&self) -> Self {

@@ -803,7 +803,6 @@ mod tests {
         // - x4: irrelevant variable
         // - x5: only used in named function
         let named_function = NamedFunction {
-            id: NamedFunctionID::from(1),
             function: Function::from(
                 (((linear!(2) + linear!(3)).unwrap() + linear!(4)).unwrap() + linear!(5)).unwrap(),
             ),

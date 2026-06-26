@@ -71,23 +71,25 @@ impl LogicalMemoryProfile for NamedFunctionID {
 /// - `name`: A human-readable identifier (e.g., "f")
 /// - `subscripts`: The index values (e.g., `[1, 5]` for `f[1, 5]`)
 ///
-/// Named function IDs are managed separately from decision variable IDs and constraint IDs,
-/// so the same ID value can be used across these different namespaces.
+/// Named function IDs are managed by the enclosing named-function table key,
+/// separately from decision variable IDs and constraint IDs, so the same ID
+/// value can be used across these different namespaces.
 ///
 /// The modeling label (`name`, `subscripts`, `parameters`, `description`) is stored in a
 /// per-collection [`NamedFunctionLabelStore`] keyed by [`NamedFunctionID`];
-/// the per-element struct no longer carries it.
+/// the per-element struct no longer carries it or the ID.
 ///
-/// Corresponds to `ommx.v1.NamedFunction`.
+/// Corresponds to `ommx.v1.NamedFunction`, but the legacy protobuf inline `id`
+/// is drained into / filled from the enclosing map key at the parse/serialize
+/// boundary.
 #[derive(Debug, Clone, PartialEq, LogicalMemoryProfile)]
 pub struct NamedFunction {
-    pub id: NamedFunctionID,
     pub function: Function,
 }
 
 impl std::fmt::Display for NamedFunction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "NamedFunction(id={}, {})", self.id, self.function)
+        write!(f, "NamedFunction({})", self.function)
     }
 }
 
@@ -98,11 +100,10 @@ pub type NamedFunctionLabel = crate::ModelingLabel;
 ///
 /// Modeling labels moved to a per-collection
 /// [`NamedFunctionLabelStore`] on `Solution`; the struct only carries
-/// intrinsic evaluated data.
+/// intrinsic evaluated data. The legacy protobuf inline `id` is owned by the
+/// enclosing `Solution` map key in the Rust domain model.
 #[derive(Debug, Clone, PartialEq, CopyGetters, Getters)]
 pub struct EvaluatedNamedFunction {
-    #[getset(get_copy = "pub")]
-    pub id: NamedFunctionID,
     #[getset(get_copy = "pub")]
     pub evaluated_value: f64,
     #[getset(get = "pub")]
@@ -111,11 +112,7 @@ pub struct EvaluatedNamedFunction {
 
 impl std::fmt::Display for EvaluatedNamedFunction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "EvaluatedNamedFunction(id={}, value={})",
-            self.id, self.evaluated_value
-        )
+        write!(f, "EvaluatedNamedFunction(value={})", self.evaluated_value)
     }
 }
 
@@ -123,11 +120,10 @@ impl std::fmt::Display for EvaluatedNamedFunction {
 ///
 /// Modeling labels moved to a per-collection
 /// [`NamedFunctionLabelStore`] on `SampleSet`; the struct only carries
-/// intrinsic sampled data.
+/// intrinsic sampled data. The legacy protobuf inline `id` is owned by the
+/// enclosing `SampleSet` map key in the Rust domain model.
 #[derive(Debug, Clone, PartialEq, Getters)]
 pub struct SampledNamedFunction {
-    #[getset(get = "pub")]
-    id: NamedFunctionID,
     #[getset(get = "pub")]
     evaluated_values: Sampled<f64>,
     #[getset(get = "pub")]
@@ -138,8 +134,7 @@ impl std::fmt::Display for SampledNamedFunction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "SampledNamedFunction(id={}, num_samples={})",
-            self.id,
+            "SampledNamedFunction(num_samples={})",
             self.evaluated_values.num_samples()
         )
     }
@@ -153,7 +148,6 @@ impl SampledNamedFunction {
         let evaluated_value = *self.evaluated_values.get(sample_id)?;
 
         Some(EvaluatedNamedFunction {
-            id: *self.id(),
             evaluated_value,
             used_decision_variable_ids: self.used_decision_variable_ids.clone(),
         })

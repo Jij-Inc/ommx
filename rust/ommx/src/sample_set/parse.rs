@@ -64,7 +64,7 @@ impl Parse for crate::v1::SampleSet {
         for v1_named_function in self.named_functions {
             let parsed: crate::named_function::parse::ParsedSampledNamedFunction =
                 v1_named_function.parse_as(&(), message, "named_functions")?;
-            let id = *parsed.sampled_named_function.id();
+            let id = parsed.id;
             named_functions.insert(id, parsed.sampled_named_function);
             named_function_labels.insert(id, parsed.label);
         }
@@ -189,7 +189,7 @@ impl From<SampleSet> for crate::v1::SampleSet {
             .iter()
             .map(|(id, nf)| {
                 let label = named_function_labels_store.collect_for(*id);
-                crate::named_function::parse::sampled_named_function_to_v1(nf.clone(), label)
+                crate::named_function::parse::sampled_named_function_to_v1(*id, nf.clone(), label)
             })
             .collect();
         let sense = (*sample_set.sense()).into();
