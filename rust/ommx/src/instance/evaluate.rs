@@ -335,7 +335,7 @@ impl Evaluate for Instance {
             let var_id = VariableID::from(*id);
             if working.decision_variable_dependency.get(&var_id).is_some() {
                 return Err(crate::error!(
-                    "Dependent variable {var_id:?} cannot be fixed by partial_evaluate"
+                    "Dependent variable (ID={id}) cannot be fixed by partial_evaluate"
                 ));
             }
             let Some(dv) = working.decision_variables.get_mut(&var_id) else {
@@ -623,7 +623,8 @@ mod tests {
             .unwrap_err();
 
         assert!(
-            err.to_string().contains("cannot be fixed"),
+            err.to_string()
+                .contains("Dependent variable (ID=10) cannot be fixed"),
             "unexpected error: {err}"
         );
         assert_eq!(

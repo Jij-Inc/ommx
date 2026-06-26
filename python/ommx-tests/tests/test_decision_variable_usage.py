@@ -61,10 +61,10 @@ def test_partial_evaluate_rejects_dependent_variable_value():
     )
     instance.substitute({10: x[1] + x[1]})
 
-    with pytest.raises(ValueError, match="cannot be fixed"):
+    with pytest.raises(ValueError, match=r"ID=10.*cannot be fixed"):
         instance.partial_evaluate({10: 4.0})
 
-    with pytest.raises(ValueError, match="cannot be fixed"):
+    with pytest.raises(ValueError, match=r"ID=10.*cannot be fixed"):
         instance.partial_evaluate({1: 2.0, 10: 4.0})
 
     assert instance.fixed_decision_variables() == {}
