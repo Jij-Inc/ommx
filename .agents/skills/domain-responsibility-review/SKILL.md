@@ -5,7 +5,9 @@ description: Use when reviewing OMMX code, PR diffs, or proposed fixes to analyz
 
 # Domain Responsibility Review
 
-Use this skill at the start of every review. The goal is to review code shape through OMMX domain semantics before judging implementation details.
+Use this skill at the start of every OMMX review. The goal is to review code shape through OMMX domain semantics before judging implementation details.
+
+Treat this as a review pre-pass, not as the required final response order. When writing a code review, still lead with actionable findings; use the domain model to decide which findings matter and how to explain them.
 
 ## Review Flow
 
@@ -34,6 +36,7 @@ Use this skill at the start of every review. The goal is to review code shape th
    - Lead each finding with the broken responsibility or invariant.
    - Then point to the concrete code path and explain how the operation can violate that domain rule.
    - Proposed fixes should name the owning abstraction and route the operation through it.
+   - If the task is addressing review feedback rather than writing a review, combine this pre-pass with the user-level `review-response` skill: reconstruct the reviewer concern, search for sibling defects, and fix the responsibility boundary rather than only the commented line.
 
 ## Review Checklist
 
