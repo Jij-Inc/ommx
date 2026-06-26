@@ -168,6 +168,7 @@ mod tests {
         Instance.decision_variable_dependency;AcyclicAssignments.topological_order;Vec[stack] 24
         Instance.decision_variables;BTreeMap[stack] 24
         Instance.description;Option[stack] 168
+        Instance.fixed_decision_variable_values;BTreeMap[stack] 24
         Instance.indicator_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.description;FnvHashMap[stack] 32
         Instance.indicator_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.name;FnvHashMap[stack] 32
         Instance.indicator_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.parameters;FnvHashMap[stack] 32
@@ -243,8 +244,8 @@ mod tests {
         Instance.decision_variables;DecisionVariable.bound 32
         Instance.decision_variables;DecisionVariable.id 16
         Instance.decision_variables;DecisionVariable.kind 2
-        Instance.decision_variables;DecisionVariable.substituted_value;Option[stack] 32
         Instance.description;Option[stack] 168
+        Instance.fixed_decision_variable_values;BTreeMap[stack] 24
         Instance.indicator_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.description;FnvHashMap[stack] 32
         Instance.indicator_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.name;FnvHashMap[stack] 32
         Instance.indicator_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.parameters;FnvHashMap[stack] 32
@@ -333,8 +334,8 @@ mod tests {
         Instance.decision_variables;DecisionVariable.bound 32
         Instance.decision_variables;DecisionVariable.id 16
         Instance.decision_variables;DecisionVariable.kind 2
-        Instance.decision_variables;DecisionVariable.substituted_value;Option[stack] 32
         Instance.description;Option[stack] 168
+        Instance.fixed_decision_variable_values;BTreeMap[stack] 24
         Instance.indicator_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.description;FnvHashMap[stack] 32
         Instance.indicator_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.name;FnvHashMap[stack] 32
         Instance.indicator_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.parameters;FnvHashMap[stack] 32
@@ -415,8 +416,8 @@ mod tests {
         Instance.decision_variables;DecisionVariable.bound 48
         Instance.decision_variables;DecisionVariable.id 24
         Instance.decision_variables;DecisionVariable.kind 3
-        Instance.decision_variables;DecisionVariable.substituted_value;Option[stack] 48
         Instance.description;Option[stack] 168
+        Instance.fixed_decision_variable_values;BTreeMap[stack] 24
         Instance.indicator_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.description;FnvHashMap[stack] 32
         Instance.indicator_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.name;FnvHashMap[stack] 32
         Instance.indicator_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.parameters;FnvHashMap[stack] 32
@@ -507,12 +508,12 @@ mod tests {
         Instance.decision_variables;DecisionVariable.bound 16
         Instance.decision_variables;DecisionVariable.id 8
         Instance.decision_variables;DecisionVariable.kind 1
-        Instance.decision_variables;DecisionVariable.substituted_value;Option[stack] 16
         Instance.description;Description.authors 56
         Instance.description;Description.authors;Vec[stack] 24
         Instance.description;Description.created_by 39
         Instance.description;Description.description 51
         Instance.description;Description.name 37
+        Instance.fixed_decision_variable_values;BTreeMap[stack] 24
         Instance.indicator_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.description;FnvHashMap[stack] 32
         Instance.indicator_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.name;FnvHashMap[stack] 32
         Instance.indicator_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.parameters;FnvHashMap[stack] 32

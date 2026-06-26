@@ -781,7 +781,7 @@ mod tests {
     use super::*;
     use crate::constraint::EvaluatedData;
     use crate::{
-        ATol, ConstraintID, DecisionVariable, Equality, EvaluatedConstraint, SampleID,
+        ConstraintID, DecisionVariable, Equality, EvaluatedConstraint, SampleID,
         SampledDecisionVariable, Sense, VariableID,
     };
     use std::collections::BTreeMap;
@@ -795,12 +795,8 @@ mod tests {
         let decision_variable = DecisionVariable::binary(var_id);
         let mut variable_samples = crate::Sampled::default();
         variable_samples.append([sample_id], 1.0).unwrap();
-        let sampled_variable = SampledDecisionVariable::new(
-            decision_variable.clone(),
-            variable_samples,
-            ATol::default(),
-        )
-        .unwrap();
+        let sampled_variable =
+            SampledDecisionVariable::new(decision_variable.clone(), variable_samples).unwrap();
 
         let mut objectives = crate::Sampled::default();
         objectives.append([sample_id], 0.0).unwrap();
@@ -872,10 +868,7 @@ mod tests {
         let mut x_samples = crate::Sampled::default();
         x_samples.append([sample_id], 1.0).unwrap();
         let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(
-            var_id,
-            SampledDecisionVariable::new(dv, x_samples, ATol::default()).unwrap(),
-        );
+        decision_variables.insert(var_id, SampledDecisionVariable::new(dv, x_samples).unwrap());
 
         let mut variable_labels = crate::VariableLabelStore::default();
         variable_labels.set_name(var_id, "x");

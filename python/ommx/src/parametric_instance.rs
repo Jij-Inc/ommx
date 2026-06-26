@@ -700,16 +700,27 @@ impl ParametricInstance {
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         let var_meta_store = self.inner.variable_labels().clone();
-        let view: Vec<(ommx::DecisionVariableLabel, &ommx::DecisionVariable)> = self
+        let view: Vec<(
+            ommx::DecisionVariableLabel,
+            &ommx::DecisionVariable,
+            Option<f64>,
+        )> = self
             .inner
             .decision_variables()
             .iter()
-            .map(|(id, dv)| (var_meta_store.collect_for(*id), dv))
+            .map(|(id, dv)| {
+                (
+                    var_meta_store.collect_for(*id),
+                    dv,
+                    self.inner.fixed_decision_variable_value(*id),
+                )
+            })
             .collect();
         entries_to_dataframe(
             py,
-            view.iter()
-                .map(|(m, dv)| crate::pandas::WithModelingContext::new(*dv, m)),
+            view.iter().map(|(m, dv, fixed_value)| {
+                crate::pandas::WithModelingContext::new((*dv, *fixed_value), m)
+            }),
             "id",
             flags,
         )

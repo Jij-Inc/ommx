@@ -282,7 +282,6 @@ mod tests {
             VariableID::from(1),
             Kind::Continuous,
             x_bound,
-            None,
             ATol::default(),
         )
         .unwrap();
@@ -508,7 +507,6 @@ mod tests {
             VariableID::from(1),
             Kind::SemiContinuous,
             Bound::new(2.0, 5.0).unwrap(),
-            None,
             ATol::default(),
         )
         .unwrap();
@@ -579,7 +577,6 @@ mod tests {
             VariableID::from(1),
             Kind::Continuous,
             Bound::new(0.0, 5.0).unwrap(),
-            None,
             ATol::default(),
         )
         .unwrap();
@@ -621,7 +618,6 @@ mod tests {
             VariableID::from(1),
             Kind::Continuous,
             Bound::new(0.0, 5.0).unwrap(),
-            None,
             ATol::default(),
         )
         .unwrap();

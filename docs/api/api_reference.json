@@ -11494,23 +11494,6 @@
               },
               "is_property": true,
               "is_readonly": true
-            },
-            {
-              "name": "substituted_value",
-              "doc": "",
-              "type_": {
-                "display": "Optional[float]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "float",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
             }
           ],
           "deprecated": null
@@ -11529,7 +11512,7 @@
             },
             {
               "name": "Fixed",
-              "doc": "Fixed by substituted_value and not used by solver input",
+              "doc": "Fixed by the instance-owned fixed-value table and not used by solver input",
               "type_": null
             },
             {
@@ -15032,7 +15015,7 @@
             },
             {
               "name": "fixed_decision_variables",
-              "doc": "Return fixed decision variables as ``{id: substituted_value}``.",
+              "doc": "Return fixed decision variables as ``{id: fixed_value}``.",
               "signatures": [
                 {
                   "parameters": [],
@@ -15637,7 +15620,7 @@
             },
             {
               "name": "partial_evaluate",
-              "doc": "Creates a new instance with specific decision variables fixed to given values.\n\nThis method substitutes the specified decision variables with their provided values,\ncreating a new problem instance where these variables are fixed. This is useful for\nscenarios such as:\n\n- Creating simplified sub-problems with some variables fixed\n- Incrementally solving a problem by fixing some variables and optimizing the rest\n- Testing specific configurations of a problem\n\n**Args:**\n- `state`: Maps decision variable IDs to their fixed values.\n  Can be a {class}`~ommx.v1.State` object or a dictionary mapping variable IDs to values.\n- `atol`: Absolute tolerance for floating point comparisons. If None, uses the default tolerance.\n\n**Returns:**\nA new instance with the specified decision variables fixed to their given values.\n\n# Examples\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable\n>>> x = DecisionVariable.binary(1)\n>>> y = DecisionVariable.binary(2)\n>>> instance = Instance.from_components(\n...     decision_variables=[x, y],\n...     objective=x + y,\n...     constraints=[x + y <= 1],\n...     sense=Instance.MINIMIZE\n... )\n>>> new_instance = instance.partial_evaluate({1: 1})\n>>> new_instance.objective\nFunction(x2 + 1)\n```\n\nSubstituted value is stored in the decision variable:\n\n```python\n>>> x = new_instance.get_decision_variable_by_id(1)\n>>> x.substituted_value\n1.0\n```",
+              "doc": "Creates a new instance with specific decision variables fixed to given values.\n\nThis method substitutes the specified decision variables with their provided values,\ncreating a new problem instance where these variables are fixed. This is useful for\nscenarios such as:\n\n- Creating simplified sub-problems with some variables fixed\n- Incrementally solving a problem by fixing some variables and optimizing the rest\n- Testing specific configurations of a problem\n\n**Args:**\n- `state`: Maps decision variable IDs to their fixed values.\n  Can be a {class}`~ommx.v1.State` object or a dictionary mapping variable IDs to values.\n- `atol`: Absolute tolerance for floating point comparisons. If None, uses the default tolerance.\n\n**Returns:**\nA new instance with the specified decision variables fixed to their given values.\n\n# Examples\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable\n>>> x = DecisionVariable.binary(1)\n>>> y = DecisionVariable.binary(2)\n>>> instance = Instance.from_components(\n...     decision_variables=[x, y],\n...     objective=x + y,\n...     constraints=[x + y <= 1],\n...     sense=Instance.MINIMIZE\n... )\n>>> new_instance = instance.partial_evaluate({1: 1})\n>>> new_instance.objective\nFunction(x2 + 1)\n```\n\nFixed values are owned by the instance and exposed through the\nattached decision-variable view:\n\n```python\n>>> x = new_instance.attached_decision_variable(1)\n>>> x.substituted_value\n1.0\n```",
               "signatures": [
                 {
                   "parameters": [

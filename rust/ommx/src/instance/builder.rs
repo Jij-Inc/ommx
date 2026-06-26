@@ -25,6 +25,7 @@ pub struct InstanceBuilder {
     objective: Option<Function>,
     decision_variables: Option<BTreeMap<VariableID, DecisionVariable>>,
     variable_labels: VariableLabelStore,
+    fixed_decision_variable_values: BTreeMap<VariableID, f64>,
     constraints: Option<BTreeMap<ConstraintID, Constraint>>,
     constraint_context: ConstraintContextStore<ConstraintID>,
     named_functions: BTreeMap<NamedFunctionID, NamedFunction>,
@@ -75,6 +76,15 @@ impl InstanceBuilder {
     /// Sets the per-variable modeling labels.
     pub fn variable_labels(mut self, variable_labels: VariableLabelStore) -> Self {
         self.variable_labels = variable_labels;
+        self
+    }
+
+    /// Sets root-owned fixed decision-variable values.
+    pub fn fixed_decision_variable_values(
+        mut self,
+        fixed_decision_variable_values: BTreeMap<VariableID, f64>,
+    ) -> Self {
+        self.fixed_decision_variable_values = fixed_decision_variable_values;
         self
     }
 
@@ -252,6 +262,17 @@ impl InstanceBuilder {
             "decision variable",
         )?;
 
+        let fixed_decision_variable_values = self.fixed_decision_variable_values;
+        for (id, value) in &fixed_decision_variable_values {
+            let Some(dv) = decision_variables.get(id) else {
+                crate::bail!(
+                    { ?id },
+                    "Fixed decision-variable value references unknown decision variable ID {id:?}",
+                );
+            };
+            dv.check_value_consistency(*value, crate::ATol::default())?;
+        }
+
         // Validate that all variable IDs in objective and constraints are defined
         for id in objective.required_ids() {
             if !variable_ids.contains(&id) {
@@ -417,7 +438,7 @@ impl InstanceBuilder {
 
         // Construction invariant: raw used, fixed, and dependent sets must be pairwise disjoint.
         // - used: IDs appearing in objective or constraints
-        // - fixed: IDs with substituted_value set
+        // - fixed: IDs in the root-owned fixed_decision_variable_values table
         // - dependent: keys of decision_variable_dependency
         let mut used: VariableIDSet = objective.required_ids().into_iter().collect();
         for constraint in constraints.values() {
@@ -432,11 +453,7 @@ impl InstanceBuilder {
         for sos1 in self.sos1_constraints.values() {
             used.extend(sos1.required_ids());
         }
-        let fixed: VariableIDSet = decision_variables
-            .values()
-            .filter(|dv| dv.substituted_value().is_some())
-            .map(|dv| dv.id())
-            .collect();
+        let fixed: VariableIDSet = fixed_decision_variable_values.keys().copied().collect();
         let dependent: VariableIDSet = self.decision_variable_dependency.keys().collect();
 
         // Check used ∩ dependent = ∅
@@ -451,7 +468,7 @@ impl InstanceBuilder {
         if let Some(id) = used.intersection(&fixed).next() {
             crate::bail!(
                 { ?id },
-                "Fixed variable {id:?} (substituted_value set) cannot be used in objectives or constraints",
+                "Fixed variable {id:?} cannot be used in objectives or constraints",
             );
         }
 
@@ -459,7 +476,7 @@ impl InstanceBuilder {
         if let Some(id) = fixed.intersection(&dependent).next() {
             crate::bail!(
                 { ?id },
-                "Variable {id:?} cannot be both fixed (substituted_value set) and dependent",
+                "Variable {id:?} cannot be both fixed and dependent",
             );
         }
 
@@ -468,6 +485,7 @@ impl InstanceBuilder {
             objective,
             decision_variables,
             variable_labels: self.variable_labels,
+            fixed_decision_variable_values,
             constraint_collection: ConstraintCollection::with_context(
                 constraints,
                 self.removed_constraints,
@@ -1000,9 +1018,7 @@ mod tests {
         use maplit::btreemap;
 
         let var_id = VariableID::from(1);
-        // Create a decision variable with substituted_value (fixed)
-        let mut dv = DecisionVariable::binary(var_id);
-        dv.substitute(1.0, crate::ATol::default()).unwrap();
+        let dv = DecisionVariable::binary(var_id);
         let decision_variables = btreemap! {
             var_id => dv,
         };
@@ -1017,6 +1033,9 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::Zero)
             .decision_variables(decision_variables)
+            .fixed_decision_variable_values(btreemap! {
+                var_id => 1.0,
+            })
             .constraints(BTreeMap::new())
             .decision_variable_dependency(dependency)
             .build()
@@ -1065,9 +1084,7 @@ mod tests {
         use maplit::btreemap;
 
         let var_id = VariableID::from(1);
-        // Create a decision variable with substituted_value (fixed)
-        let mut dv = DecisionVariable::binary(var_id);
-        dv.substitute(1.0, crate::ATol::default()).unwrap();
+        let dv = DecisionVariable::binary(var_id);
         let decision_variables = btreemap! {
             var_id => dv,
         };
@@ -1077,6 +1094,9 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::from(linear!(1)))
             .decision_variables(decision_variables)
+            .fixed_decision_variable_values(btreemap! {
+                var_id => 1.0,
+            })
             .constraints(BTreeMap::new())
             .build()
             .unwrap_err();

@@ -48,7 +48,6 @@ mod tests {
                 VariableID::from(2),
                 Kind::Continuous,
                 Bound::new(0.0, 10.0).unwrap(),
-                None,
                 ATol::default(),
             )
             .unwrap(),

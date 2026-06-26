@@ -1399,8 +1399,6 @@ class DecisionVariable:
     def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
     @property
     def description(self) -> builtins.str: ...
-    @property
-    def substituted_value(self) -> typing.Optional[builtins.float]: ...
     @typing.overload
     def __add__(self, rhs: ScalarLike | LinearLike | Parameter) -> Linear: ...
     @typing.overload
@@ -3228,10 +3226,11 @@ class Instance:
         Function(x2 + 1)
         ```
 
-        Substituted value is stored in the decision variable:
+        Fixed values are owned by the instance and exposed through the
+        attached decision-variable view:
 
         ```python
-        >>> x = new_instance.get_decision_variable_by_id(1)
+        >>> x = new_instance.attached_decision_variable(1)
         >>> x.substituted_value
         1.0
         ```
@@ -3856,7 +3855,7 @@ class Instance:
         """
     def fixed_decision_variables(self) -> builtins.dict[builtins.int, builtins.float]:
         r"""
-        Return fixed decision variables as ``{id: substituted_value}``.
+        Return fixed decision variables as ``{id: fixed_value}``.
         """
     def dependent_decision_variable_ids(self) -> builtins.set[builtins.int]:
         r"""
@@ -6938,7 +6937,7 @@ class DecisionVariableRole(enum.Enum):
     """
     Fixed = ...
     r"""
-    Fixed by substituted_value and not used by solver input
+    Fixed by the instance-owned fixed-value table and not used by solver input
     """
     Dependent = ...
     r"""

@@ -382,7 +382,6 @@ mod tests {
                 VariableID::from(0),
                 Kind::Continuous,
                 Bound::unbounded(),
-                None,
                 crate::ATol::default()
             ).unwrap(),
         };
@@ -412,7 +411,6 @@ mod tests {
                 VariableID::from(0),
                 Kind::Continuous,
                 Bound::positive(),
-                None,
                 crate::ATol::default()
             ).unwrap(),
         };
@@ -443,7 +441,6 @@ mod tests {
                 VariableID::from(0),
                 Kind::Continuous,
                 Bound::negative(),
-                None,
                 crate::ATol::default()
             ).unwrap(),
         };
@@ -474,14 +471,12 @@ mod tests {
                 VariableID::from(0),
                 Kind::Binary,
                 Bound::of_binary(),
-                None,
                 crate::ATol::default()
             ).unwrap(),
             VariableID::from(1) => DecisionVariable::new(
                 VariableID::from(1),
                 Kind::Integer,
                 Bound::new(-10.0, 20.0).unwrap(),
-                None,
                 crate::ATol::default()
             ).unwrap(),
         };
@@ -514,21 +509,18 @@ mod tests {
                 VariableID::from(0),
                 Kind::Continuous,
                 Bound::unbounded(),
-                None,
                 crate::ATol::default()
             ).unwrap(),
             VariableID::from(1) => DecisionVariable::new(
                 VariableID::from(1),
                 Kind::Continuous,
                 Bound::positive(),
-                None,
                 crate::ATol::default()
             ).unwrap(),
             VariableID::from(2) => DecisionVariable::new(
                 VariableID::from(2),
                 Kind::Integer,
                 Bound::negative(),
-                None,
                 crate::ATol::default()
             ).unwrap(),
         };

@@ -55,6 +55,12 @@ The Python SDK no longer exposes `DecisionVariableUsage` or `DecisionVariableUsa
 
 {meth}`~ommx.v1.Instance.decision_variables_df` continues to include the `state_role` column, so DataFrame-based workflows can inspect `used`, `fixed`, `dependent`, and `irrelevant` roles without constructing a separate usage object.
 
+### ⚠ Fixed decision-variable values are owned by instances ([#959](https://github.com/Jij-Inc/ommx/pull/959))
+
+Fixed decision-variable values are now owned by {class}`~ommx.v1.Instance` / {class}`~ommx.v1.ParametricInstance` instead of detached {class}`~ommx.v1.DecisionVariable` objects. A detached {class}`~ommx.v1.DecisionVariable` remains a modeling snapshot for the variable definition and label, but it no longer carries owner-side fixed-value state, so `DecisionVariable.substituted_value` is no longer available.
+
+Use {meth}`~ommx.v1.Instance.fixed_decision_variables` to inspect all fixed values, or `instance.attached_decision_variable(id).substituted_value` when you need the value through a variable handle. {meth}`~ommx.v1.Instance.decision_variables_df` continues to include the `substituted_value` column, populated from the owning instance.
+
 ## 3.0.0 Alpha 7
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0a7-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0a7)

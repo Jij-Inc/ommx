@@ -97,6 +97,8 @@ def test_decision_variables_df_state_role():
         2: "dependent",
         3: "irrelevant",
     }
+    assert df["substituted_value"].to_dict()[1] == 2.0
+    assert pd.isna(df.loc[0, "substituted_value"])
 
 
 # ---------------------------------------------------------------------------

@@ -77,7 +77,6 @@ mod tests {
             VariableID::from(1),
             Kind::Continuous,
             Bound::new(0.0, 1.0).unwrap(),
-            None,
             ATol::default(),
         )
         .unwrap();
@@ -86,7 +85,6 @@ mod tests {
             VariableID::from(2),
             Kind::Continuous,
             Bound::new(0.0, 1.0).unwrap(),
-            None,
             ATol::default(),
         )
         .unwrap();
@@ -101,7 +99,6 @@ mod tests {
             VariableID::from(1),
             Kind::Continuous,
             Bound::new(0.0, 1.0).unwrap(),
-            None,
             ATol::default(),
         )
         .unwrap();
@@ -110,7 +107,6 @@ mod tests {
             VariableID::from(1),
             Kind::Continuous,
             Bound::new(0.0, 2.0).unwrap(),
-            None,
             ATol::default(),
         )
         .unwrap();
@@ -125,7 +121,6 @@ mod tests {
             VariableID::from(1),
             Kind::Integer,
             Bound::new(0.0, 10.0).unwrap(),
-            None,
             ATol::default(),
         )
         .unwrap();
@@ -134,7 +129,6 @@ mod tests {
             VariableID::from(1),
             Kind::Integer,
             Bound::new(0.0, 10.0).unwrap(),
-            None,
             ATol::default(),
         )
         .unwrap();
@@ -149,7 +143,6 @@ mod tests {
             VariableID::from(1),
             Kind::Continuous,
             Bound::new(5.0, 5.0).unwrap(),
-            None,
             ATol::default(),
         )
         .unwrap();
@@ -158,7 +151,6 @@ mod tests {
             VariableID::from(1),
             Kind::Integer,
             Bound::new(5.0, 5.0).unwrap(),
-            None,
             ATol::default(),
         )
         .unwrap();
@@ -173,7 +165,6 @@ mod tests {
             VariableID::from(1),
             Kind::Continuous,
             Bound::new(0.0, 0.0).unwrap(),
-            None,
             ATol::default(),
         )
         .unwrap();
@@ -182,7 +173,6 @@ mod tests {
             VariableID::from(1),
             Kind::Integer,
             Bound::new(0.0, 0.0).unwrap(),
-            None,
             ATol::default(),
         )
         .unwrap();
@@ -191,7 +181,6 @@ mod tests {
             VariableID::from(1),
             Kind::Binary,
             Bound::new(0.0, 0.0).unwrap(),
-            None,
             ATol::default(),
         )
         .unwrap();
@@ -200,7 +189,6 @@ mod tests {
             VariableID::from(1),
             Kind::SemiContinuous,
             Bound::new(0.0, 0.0).unwrap(),
-            None,
             ATol::default(),
         )
         .unwrap();
@@ -209,7 +197,6 @@ mod tests {
             VariableID::from(1),
             Kind::SemiInteger,
             Bound::new(0.0, 0.0).unwrap(),
-            None,
             ATol::default(),
         )
         .unwrap();
@@ -230,7 +217,6 @@ mod tests {
             VariableID::from(1),
             Kind::Continuous,
             Bound::new(5.0, 5.0).unwrap(),
-            None,
             ATol::default(),
         )
         .unwrap();
@@ -239,7 +225,6 @@ mod tests {
             VariableID::from(1),
             Kind::SemiContinuous,
             Bound::new(5.0, 5.0).unwrap(),
-            None,
             ATol::default(),
         )
         .unwrap();
@@ -254,7 +239,6 @@ mod tests {
             VariableID::from(1),
             Kind::Integer,
             Bound::new(-5.0, 5.0).unwrap(),
-            None,
             ATol::default(),
         )
         .unwrap();
@@ -263,7 +247,6 @@ mod tests {
             VariableID::from(1),
             Kind::SemiInteger,
             Bound::new(-5.0, 5.0).unwrap(),
-            None,
             ATol::default(),
         )
         .unwrap();
@@ -272,7 +255,6 @@ mod tests {
             VariableID::from(1),
             Kind::Continuous,
             Bound::new(-5.0, 5.0).unwrap(),
-            None,
             ATol::default(),
         )
         .unwrap();
@@ -281,7 +263,6 @@ mod tests {
             VariableID::from(1),
             Kind::SemiContinuous,
             Bound::new(-5.0, 5.0).unwrap(),
-            None,
             ATol::default(),
         )
         .unwrap();
@@ -295,7 +276,6 @@ mod tests {
             VariableID::from(1),
             Kind::Binary,
             Bound::new(0.0, 1.0).unwrap(),
-            None,
             ATol::default(),
         )
         .unwrap();
@@ -304,7 +284,6 @@ mod tests {
             VariableID::from(1),
             Kind::Integer,
             Bound::new(0.0, 1.0).unwrap(),
-            None,
             ATol::default(),
         )
         .unwrap();
@@ -320,7 +299,6 @@ mod tests {
             VariableID::from(1),
             Kind::Binary,
             Bound::new(1.0, 1.0).unwrap(),
-            None,
             ATol::default(),
         )
         .unwrap();
@@ -329,7 +307,6 @@ mod tests {
             VariableID::from(1),
             Kind::Integer,
             Bound::new(1.0, 1.0).unwrap(),
-            None,
             ATol::default(),
         )
         .unwrap();
@@ -338,7 +315,6 @@ mod tests {
             VariableID::from(1),
             Kind::Continuous,
             Bound::new(1.0, 1.0).unwrap(),
-            None,
             ATol::default(),
         )
         .unwrap();
@@ -356,7 +332,6 @@ mod tests {
             VariableID::from(1),
             Kind::Continuous,
             Bound::new(1.0, 1.0 + 1e-10).unwrap(),
-            None,
             ATol::default(),
         )
         .unwrap();
@@ -365,7 +340,6 @@ mod tests {
             VariableID::from(1),
             Kind::Integer,
             Bound::new(1.0, 1.0 + 1e-10).unwrap(),
-            None,
             ATol::default(),
         )
         .unwrap();

@@ -43,6 +43,7 @@ def test_decision_variable_role_partitions():
         3: DecisionVariableRole.Irrelevant,
     }
     assert instance.fixed_decision_variables() == {1: 2.0}
+    assert instance.attached_decision_variable(1).substituted_value == 2.0
     assert instance.dependent_decision_variable_ids() == {2}
     assert instance.irrelevant_decision_variable_ids() == {3}
 

@@ -127,13 +127,8 @@ impl DecisionVariable {
         let variable_id = VariableID::from(id);
         let kind = v1::decision_variable::Kind::try_from(kind)?.try_into()?;
 
-        let decision_variable = ommx::DecisionVariable::new(
-            variable_id,
-            kind,
-            bound.0,
-            None, // substituted_value
-            ATol::default(),
-        )?;
+        let decision_variable =
+            ommx::DecisionVariable::new(variable_id, kind, bound.0, ATol::default())?;
 
         let label = ommx::DecisionVariableLabel {
             name,
@@ -183,11 +178,6 @@ impl DecisionVariable {
     #[getter]
     pub fn description(&self) -> String {
         self.1.description.clone().unwrap_or_default()
-    }
-
-    #[getter]
-    pub fn substituted_value(&self) -> Option<f64> {
-        self.0.substituted_value()
     }
 
     #[staticmethod]
@@ -760,11 +750,13 @@ impl AttachedDecisionVariable {
         match &self.host {
             crate::ConstraintHost::Instance(p) => {
                 let inst = p.borrow(py);
-                Ok(lookup_variable(&inst.inner, self.id)?.substituted_value())
+                lookup_variable(&inst.inner, self.id)?;
+                Ok(inst.inner.fixed_decision_variable_value(self.id))
             }
             crate::ConstraintHost::Parametric(p) => {
                 let inst = p.borrow(py);
-                Ok(lookup_variable_parametric(&inst.inner, self.id)?.substituted_value())
+                lookup_variable_parametric(&inst.inner, self.id)?;
+                Ok(inst.inner.fixed_decision_variable_value(self.id))
             }
         }
     }

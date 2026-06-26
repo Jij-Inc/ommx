@@ -68,6 +68,51 @@ fn drain_absorbed_hint_context(
     (one_hot_context, sos1_context)
 }
 
+fn validate_fixed_decision_variable_partition(
+    message: &'static str,
+    objective: &Function,
+    constraints: &BTreeMap<ConstraintID, Constraint>,
+    one_hot_constraints: &BTreeMap<crate::OneHotConstraintID, crate::OneHotConstraint>,
+    sos1_constraints: &BTreeMap<crate::Sos1ConstraintID, crate::Sos1Constraint>,
+    decision_variable_dependency: &AcyclicAssignments,
+    fixed_decision_variable_values: &BTreeMap<VariableID, f64>,
+) -> Result<(), ParseError> {
+    let mut used: VariableIDSet = objective.required_ids();
+    for constraint in constraints.values() {
+        used.extend(constraint.required_ids());
+    }
+    for one_hot in one_hot_constraints.values() {
+        used.extend(one_hot.required_ids());
+    }
+    for sos1 in sos1_constraints.values() {
+        used.extend(sos1.required_ids());
+    }
+
+    let fixed: VariableIDSet = fixed_decision_variable_values.keys().copied().collect();
+    let dependent: VariableIDSet = decision_variable_dependency.keys().collect();
+
+    if let Some(id) = used.intersection(&dependent).next() {
+        return Err(RawParseError::InvalidInstance(format!(
+            "Dependent variable cannot be used in objectives or constraints: {id:?}"
+        ))
+        .context(message, "decision_variables"));
+    }
+    if let Some(id) = used.intersection(&fixed).next() {
+        return Err(RawParseError::InvalidInstance(format!(
+            "Fixed variable {id:?} cannot be used in objectives or constraints"
+        ))
+        .context(message, "decision_variables"));
+    }
+    if let Some(id) = fixed.intersection(&dependent).next() {
+        return Err(RawParseError::InvalidInstance(format!(
+            "Variable {id:?} cannot be both fixed and dependent"
+        ))
+        .context(message, "decision_variables"));
+    }
+
+    Ok(())
+}
+
 impl Parse for v1::instance::Sense {
     type Output = Sense;
     type Context = ();
@@ -170,9 +215,10 @@ impl Parse for v1::Instance {
         crate::parse::validate_extension_annotations(&self.annotations, message)?;
         let sense = self.sense().parse_as(&(), message, "sense")?;
 
-        let (decision_variables, variable_labels): (
+        let (decision_variables, variable_labels, fixed_decision_variable_values): (
             BTreeMap<VariableID, DecisionVariable>,
             crate::VariableLabelStore,
+            BTreeMap<VariableID, f64>,
         ) = self
             .decision_variables
             .parse_as(&(), message, "decision_variables")?;
@@ -276,12 +322,22 @@ impl Parse for v1::Instance {
         for id in &absorbed_ids {
             constraints.remove(id);
         }
+        validate_fixed_decision_variable_partition(
+            message,
+            &objective,
+            &constraints,
+            &one_hot_active,
+            &sos1_active,
+            &decision_variable_dependency,
+            &fixed_decision_variable_values,
+        )?;
 
         Ok(Instance {
             sense,
             objective,
             decision_variables,
             variable_labels,
+            fixed_decision_variable_values,
             constraint_collection: ConstraintCollection::with_context(
                 constraints,
                 removed_constraints,
@@ -328,12 +384,17 @@ impl From<Instance> for v1::Instance {
     fn from(value: Instance) -> Self {
         // Drain per-element data and join with labels/context from the SoA stores.
         let variable_labels = value.variable_labels;
+        let fixed_decision_variable_values = value.fixed_decision_variable_values;
         let decision_variables = value
             .decision_variables
             .into_iter()
             .map(|(id, dv)| {
                 let label = variable_labels.collect_for(id);
-                crate::decision_variable::parse::decision_variable_to_v1(dv, label)
+                crate::decision_variable::parse::decision_variable_to_v1_with_fixed_value(
+                    dv,
+                    label,
+                    fixed_decision_variable_values.get(&id).copied(),
+                )
             })
             .collect();
         let (active, removed, mut constraint_context) = value.constraint_collection.into_parts();
@@ -402,9 +463,10 @@ impl Parse for v1::ParametricInstance {
         crate::parse::validate_extension_annotations(&self.annotations, message)?;
         let sense = self.sense().parse_as(&(), message, "sense")?;
 
-        let (decision_variables, variable_labels): (
+        let (decision_variables, variable_labels, fixed_decision_variable_values): (
             BTreeMap<VariableID, DecisionVariable>,
             crate::VariableLabelStore,
+            BTreeMap<VariableID, f64>,
         ) = self
             .decision_variables
             .parse_as(&(), message, "decision_variables")?;
@@ -531,6 +593,15 @@ impl Parse for v1::ParametricInstance {
         for id in &absorbed_ids {
             constraints.remove(id);
         }
+        validate_fixed_decision_variable_partition(
+            message,
+            &objective,
+            &constraints,
+            &one_hot_active,
+            &sos1_active,
+            &decision_variable_dependency,
+            &fixed_decision_variable_values,
+        )?;
 
         Ok(ParametricInstance {
             sense,
@@ -538,6 +609,7 @@ impl Parse for v1::ParametricInstance {
             decision_variables,
             parameters,
             variable_labels,
+            fixed_decision_variable_values,
             constraint_collection: ConstraintCollection::with_context(
                 constraints,
                 removed_constraints,
@@ -584,6 +656,7 @@ impl From<ParametricInstance> for v1::ParametricInstance {
             indicator_constraint_collection,
             one_hot_constraint_collection,
             sos1_constraint_collection,
+            fixed_decision_variable_values,
             decision_variable_dependency,
             description,
             named_functions,
@@ -614,7 +687,11 @@ impl From<ParametricInstance> for v1::ParametricInstance {
             .into_iter()
             .map(|(id, dv)| {
                 let label = variable_labels.collect_for(id);
-                crate::decision_variable::parse::decision_variable_to_v1(dv, label)
+                crate::decision_variable::parse::decision_variable_to_v1_with_fixed_value(
+                    dv,
+                    label,
+                    fixed_decision_variable_values.get(&id).copied(),
+                )
             })
             .collect();
         let (active, removed, mut constraint_context) = constraint_collection.into_parts();
@@ -842,14 +919,16 @@ mod tests {
 
     #[test]
     fn test_instance_to_bytes_filters_reserved_annotation_key() {
-        let mut instance = Instance::default();
-        instance.annotations = HashMap::from([
-            (
-                crate::annotation_keys::INSTANCE_TITLE.to_string(),
-                "invalid extension title".to_string(),
-            ),
-            ("org.example.owner".to_string(), "domain".to_string()),
-        ]);
+        let instance = Instance {
+            annotations: HashMap::from([
+                (
+                    crate::annotation_keys::INSTANCE_TITLE.to_string(),
+                    "invalid extension title".to_string(),
+                ),
+                ("org.example.owner".to_string(), "domain".to_string()),
+            ]),
+            ..Default::default()
+        };
 
         let restored = Instance::from_bytes(&instance.to_bytes()).unwrap();
 
@@ -990,6 +1069,39 @@ mod tests {
         Traceback for OMMX Message parse error:
         └─ommx.v1.Instance[objective]
         Undefined variable ID is used: VariableID(999)
+        "###);
+    }
+
+    #[test]
+    fn test_instance_parse_rejects_fixed_variable_used_in_objective() {
+        use crate::{linear, Function};
+        use std::collections::HashMap;
+
+        let v1_instance = v1::Instance {
+            sense: v1::instance::Sense::Minimize as i32,
+            objective: Some(Function::from(linear!(1)).into()),
+            decision_variables: vec![v1::DecisionVariable {
+                id: 1,
+                kind: v1::decision_variable::Kind::Binary as i32,
+                bound: Some(crate::Bound::of_binary().into()),
+                substituted_value: Some(1.0),
+                ..Default::default()
+            }],
+            constraints: vec![],
+            named_functions: vec![],
+            removed_constraints: vec![],
+            decision_variable_dependency: HashMap::new(),
+            parameters: None,
+            description: None,
+            constraint_hints: None,
+            ..Default::default()
+        };
+
+        let result = v1_instance.parse(&());
+        insta::assert_snapshot!(result.unwrap_err(), @r###"
+        Traceback for OMMX Message parse error:
+        └─ommx.v1.Instance[decision_variables]
+        Fixed variable VariableID(1) cannot be used in objectives or constraints
         "###);
     }
 

@@ -13,21 +13,18 @@ fn test_unused_variable_filtering() {
             VariableID::from(0),
             crate::decision_variable::Kind::Continuous,
             Bound::new(0.0, 10.0).unwrap(),
-            None,
             crate::ATol::default()
         ).unwrap(),
         VariableID::from(1) => DecisionVariable::new(
             VariableID::from(1),
             crate::decision_variable::Kind::Continuous,
             Bound::new(0.0, 10.0).unwrap(),
-            None,
             crate::ATol::default()
         ).unwrap(),
         VariableID::from(2) => DecisionVariable::new(
             VariableID::from(2),
             crate::decision_variable::Kind::Continuous,
             Bound::new(0.0, 10.0).unwrap(),
-            None,
             crate::ATol::default()
         ).unwrap(),  // This variable is unused
     };
@@ -71,14 +68,12 @@ fn test_removed_constraint_variable_preservation() {
             VariableID::from(0),
             crate::decision_variable::Kind::Continuous,
             Bound::new(0.0, 10.0).unwrap(),
-            None,
             crate::ATol::default()
         ).unwrap(),
         VariableID::from(1) => DecisionVariable::new(
             VariableID::from(1),
             crate::decision_variable::Kind::Continuous,
             Bound::new(0.0, 10.0).unwrap(),
-            None,
             crate::ATol::default()
         ).unwrap(),
     };
@@ -134,7 +129,6 @@ fn test_removed_constraint_information_loss() {
             VariableID::from(0),
             crate::decision_variable::Kind::Continuous,
             Bound::new(0.0, 10.0).unwrap(),
-            None,
             crate::ATol::default()
         ).unwrap(),
     };

@@ -863,29 +863,44 @@ pub fn set_function_type(dict: &Bound<PyDict>, function: &ommx::Function) -> PyR
 // ToPandasEntry implementations for unevaluated types
 // ---------------------------------------------------------------------------
 
+fn decision_variable_to_pandas_entry<'py>(
+    py: Python<'py>,
+    dv: &ommx::DecisionVariable,
+    label: &DecisionVariableLabel,
+    fixed_value: Option<f64>,
+) -> PyResult<Bound<'py, PyDict>> {
+    let na = get_na(py)?;
+    let dict = PyDict::new(py);
+    dict.set_item("id", dv.id().into_inner())?;
+    set_kind(&dict, dv.kind())?;
+    dict.set_item("lower", dv.bound().lower())?;
+    dict.set_item("upper", dv.bound().upper())?;
+    set_label_columns(
+        &dict,
+        label.name.as_deref(),
+        &label.subscripts,
+        label.description.as_deref(),
+    )?;
+    set_parameter_columns(&dict, &label.parameters)?;
+    match fixed_value {
+        Some(v) => dict.set_item("substituted_value", v)?,
+        None => dict.set_item("substituted_value", &na)?,
+    }
+    Ok(dict)
+}
+
 impl<'m> ToPandasEntry for WithModelingContext<'m, &ommx::DecisionVariable, DecisionVariableLabel> {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let na = get_na(py)?;
-        let dict = PyDict::new(py);
-        let dv = self.item;
-        let m = self.context;
-        dict.set_item("id", dv.id().into_inner())?;
-        set_kind(&dict, dv.kind())?;
-        dict.set_item("lower", dv.bound().lower())?;
-        dict.set_item("upper", dv.bound().upper())?;
-        set_label_columns(
-            &dict,
-            m.name.as_deref(),
-            &m.subscripts,
-            m.description.as_deref(),
-        )?;
-        set_parameter_columns(&dict, &m.parameters)?;
-        match dv.substituted_value() {
-            Some(v) => dict.set_item("substituted_value", v)?,
-            None => dict.set_item("substituted_value", &na)?,
-        }
-        set_parameter_columns(&dict, &m.parameters)?;
-        Ok(dict)
+        decision_variable_to_pandas_entry(py, self.item, self.context, None)
+    }
+}
+
+impl<'m> ToPandasEntry
+    for WithModelingContext<'m, (&ommx::DecisionVariable, Option<f64>), DecisionVariableLabel>
+{
+    fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let (dv, fixed_value) = self.item;
+        decision_variable_to_pandas_entry(py, dv, self.context, fixed_value)
     }
 }
 

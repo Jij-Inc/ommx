@@ -62,36 +62,40 @@ impl Instance {
         &mut self,
         kind: Kind,
         bound: Bound,
-        substituted_value: Option<f64>,
+        fixed_value: Option<f64>,
         atol: ATol,
-    ) -> Result<&mut DecisionVariable, DecisionVariableError> {
+    ) -> Result<VariableID, DecisionVariableError> {
         let id = self.next_variable_id();
-        let dv = DecisionVariable::new(id, kind, bound, substituted_value, atol)?;
+        let dv = DecisionVariable::new(id, kind, bound, atol)?;
+        if let Some(value) = fixed_value {
+            dv.check_value_consistency(value, atol)?;
+            self.fixed_decision_variable_values.insert(id, value);
+        }
         self.decision_variables.insert(id, dv);
-        Ok(self.decision_variables.get_mut(&id).unwrap())
+        Ok(id)
     }
 
-    pub fn new_binary(&mut self) -> &mut DecisionVariable {
+    pub fn new_binary(&mut self) -> VariableID {
         self.new_decision_variable(Kind::Binary, Bound::of_binary(), None, ATol::default())
             .unwrap()
     }
 
-    pub fn new_integer(&mut self) -> &mut DecisionVariable {
+    pub fn new_integer(&mut self) -> VariableID {
         self.new_decision_variable(Kind::Integer, Bound::default(), None, ATol::default())
             .unwrap()
     }
 
-    pub fn new_continuous(&mut self) -> &mut DecisionVariable {
+    pub fn new_continuous(&mut self) -> VariableID {
         self.new_decision_variable(Kind::Continuous, Bound::default(), None, ATol::default())
             .unwrap()
     }
 
-    pub fn new_semi_integer(&mut self) -> &mut DecisionVariable {
+    pub fn new_semi_integer(&mut self) -> VariableID {
         self.new_decision_variable(Kind::SemiInteger, Bound::default(), None, ATol::default())
             .unwrap()
     }
 
-    pub fn new_semi_continuous(&mut self) -> &mut DecisionVariable {
+    pub fn new_semi_continuous(&mut self) -> VariableID {
         self.new_decision_variable(
             Kind::SemiContinuous,
             Bound::default(),
@@ -155,10 +159,10 @@ mod tests {
         .unwrap();
 
         let var1 = instance.new_binary();
-        assert_eq!(var1.id(), VariableID::from(0));
+        assert_eq!(var1, VariableID::from(0));
 
         let var2 = instance.new_binary();
-        assert_eq!(var2.id(), VariableID::from(1));
+        assert_eq!(var2, VariableID::from(1));
 
         assert_eq!(instance.next_variable_id(), VariableID::from(2));
     }

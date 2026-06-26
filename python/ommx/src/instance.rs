@@ -1119,10 +1119,11 @@ impl Instance {
     /// Function(x2 + 1)
     /// ```
     ///
-    /// Substituted value is stored in the decision variable:
+    /// Fixed values are owned by the instance and exposed through the
+    /// attached decision-variable view:
     ///
     /// ```python
-    /// >>> x = new_instance.get_decision_variable_by_id(1)
+    /// >>> x = new_instance.attached_decision_variable(1)
     /// >>> x.substituted_value
     /// 1.0
     /// ```
@@ -1908,7 +1909,7 @@ impl Instance {
             .collect()
     }
 
-    /// Return fixed decision variables as ``{id: substituted_value}``.
+    /// Return fixed decision variables as ``{id: fixed_value}``.
     pub fn fixed_decision_variables(&self) -> BTreeMap<u64, f64> {
         self.inner
             .fixed_decision_variables()
@@ -2005,8 +2006,11 @@ impl Instance {
             .iter()
             .map(|(id, dv)| {
                 let label = label_store.collect_for(*id);
-                let dict =
-                    crate::pandas::WithModelingContext::new(dv, &label).to_pandas_entry(py)?;
+                let dict = crate::pandas::WithModelingContext::new(
+                    (dv, self.inner.fixed_decision_variable_value(*id)),
+                    &label,
+                )
+                .to_pandas_entry(py)?;
                 let role = roles
                     .get(id)
                     .expect("role query uses the same decision_variables map");

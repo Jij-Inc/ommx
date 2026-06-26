@@ -563,6 +563,49 @@ subscript append helpers (`push_subscript`, `extend_subscripts`);
 `NamedFunctionLabelStore` does not — extend a named function's
 subscripts via `set_subscripts(id, new_vec)` instead.
 
+### Fixed decision-variable values
+
+Fixed decision-variable values no longer live on
+[`DecisionVariable`](crate::DecisionVariable). The variable struct now contains
+only its intrinsic definition (`id`, `kind`, `bound`); fixed values are owned by
+the enclosing [`Instance`](crate::Instance) /
+[`ParametricInstance`](crate::ParametricInstance), where they can be validated
+against the full model.
+
+Construction signatures changed accordingly:
+
+```rust,ignore
+// ❌ Before
+let x = DecisionVariable::new(id, kind, bound, Some(value), atol)?;
+let y = DecisionVariable::new(id, kind, bound, None, atol)?;
+dv.substitute(value, atol)?;
+let fixed = dv.substituted_value();
+
+let evaluated = EvaluatedDecisionVariable::new(dv, value, atol)?;
+let sampled = SampledDecisionVariable::new(dv, samples, atol)?;
+
+// ✅ After
+let y = DecisionVariable::new(id, kind, bound, atol)?;
+
+let instance = Instance::builder()
+    .decision_variables(BTreeMap::from([(id, y.clone())]))
+    .fixed_decision_variable_values(BTreeMap::from([(id, value)]))
+    .build()?;
+
+let fixed = instance.fixed_decision_variable_value(id);
+let all_fixed = instance.fixed_decision_variable_values();
+
+let evaluated = EvaluatedDecisionVariable::new(y, value)?;
+let sampled = SampledDecisionVariable::new(y, samples)?;
+```
+
+`Instance::partial_evaluate` writes new fixed values into the host-owned table.
+Legacy v1 protobuf `substituted_value` fields are still accepted on parse, but
+the parser drains them into the same host-owned table before constructing the
+domain model. The host builder rejects states where a fixed variable is also
+solver-used or dependent; this invariant can no longer be checked by an
+individual `DecisionVariable`.
+
 ### ConstraintContext
 
 Owned struct used as the I/O type for constraint context (insertion via
@@ -596,6 +639,8 @@ pub struct ConstraintContext {
 - [ ] Remove any `getset` usage for constraint types
 - [ ] Update any `InstanceError` / `MpsParseError` / `QplibParseError` / `StateValidationError` / `LogEncodingError` / `UnknownSampleIDError` matches → inspect `err.to_string()` or use `err.downcast_ref::<T>()` for signal types
 - [ ] Replace `Result<T, UnknownSampleIDError>` key-lookup methods with `Option<T>` on the call site
+- [ ] Replace `DecisionVariable::new(..., substituted_value, atol)`, `DecisionVariable::substituted_value()`, and `DecisionVariable::substitute(...)` with host-owned fixed values: `InstanceBuilder::fixed_decision_variable_values(...)`, `Instance::fixed_decision_variable_value(id)`, or `Instance::fixed_decision_variable_values()`
+- [ ] Drop the `atol` argument from `EvaluatedDecisionVariable::new(...)` and `SampledDecisionVariable::new(...)`
 
 ---
 

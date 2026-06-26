@@ -67,17 +67,31 @@ impl Parse for crate::v1::Solution {
         let mut variable_labels = crate::VariableLabelStore::default();
         for dv in self.decision_variables {
             let dv_id = dv.id;
-            let dv_substituted_value = dv.substituted_value;
             // Parse the DecisionVariable to get strongly-typed version + drained label
             let parsed: crate::decision_variable::parse::ParsedDecisionVariable =
                 dv.parse_as(&(), message, "decision_variables")?;
             let parsed_dv = parsed.variable;
             let label = parsed.label;
+            let parsed_fixed_value = parsed.fixed_value;
 
             // Get the value from state or substituted_value
-            let value = match (state.entries.get(&dv_id), dv_substituted_value.as_ref()) {
+            let atol = ATol::default();
+            let value = match (state.entries.get(&dv_id), parsed_fixed_value.as_ref()) {
                 (Some(value), None) | (None, Some(value)) => *value,
-                (Some(value), Some(_substituted_value)) => *value, // EvaluatedDecisionVariable::new will check consistency
+                (Some(value), Some(substituted_value)) => {
+                    if (*value - *substituted_value).abs() > *atol {
+                        return Err(crate::RawParseError::InvalidDecisionVariable(
+                            crate::DecisionVariableError::SubstitutedValueOverwrite {
+                                id: crate::VariableID::from(dv_id),
+                                previous_value: *substituted_value,
+                                new_value: *value,
+                                atol,
+                            },
+                        )
+                        .context(message, "decision_variables"));
+                    }
+                    *value
+                }
                 (None, None) => {
                     return Err(crate::RawParseError::SolutionError(
                         SolutionError::MissingVariableValue { id: dv_id },
@@ -86,11 +100,9 @@ impl Parse for crate::v1::Solution {
                 }
             };
 
-            // Use EvaluatedDecisionVariable::new which handles consistency validation
-            let evaluated_dv =
-                crate::EvaluatedDecisionVariable::new(parsed_dv, value, ATol::default())
-                    .map_err(crate::RawParseError::InvalidDecisionVariable)
-                    .map_err(|e| ParseError::from(e).context(message, "decision_variables"))?;
+            let evaluated_dv = crate::EvaluatedDecisionVariable::new(parsed_dv, value)
+                .map_err(crate::RawParseError::InvalidDecisionVariable)
+                .map_err(|e| ParseError::from(e).context(message, "decision_variables"))?;
 
             let id = *evaluated_dv.id();
             variable_labels.insert(id, label);
@@ -501,6 +513,42 @@ mod tests {
     }
 
     #[test]
+    fn test_variable_value_accepts_substituted_value_at_atol_boundary() {
+        use crate::v1;
+
+        let atol = *ATol::default();
+        let v1_solution = v1::Solution {
+            state: Some(v1::State {
+                entries: [(1, atol)].iter().cloned().collect(),
+            }),
+            objective: 42.5,
+            decision_variables: vec![v1::DecisionVariable {
+                id: 1,
+                substituted_value: Some(0.0),
+                kind: v1::decision_variable::Kind::Continuous as i32,
+                bound: Some(v1::Bound {
+                    lower: 0.0,
+                    upper: 10.0,
+                }),
+                ..Default::default()
+            }],
+            feasible: true,
+            feasible_relaxed: Some(true),
+            ..Default::default()
+        };
+
+        let parsed: Solution = v1_solution.parse(&()).unwrap();
+        assert_eq!(
+            *parsed
+                .decision_variables()
+                .get(&crate::VariableID::from(1))
+                .unwrap()
+                .value(),
+            atol
+        );
+    }
+
+    #[test]
     fn test_missing_variable_value() {
         use crate::v1;
 
@@ -552,7 +600,7 @@ mod tests {
     #[test]
     fn test_solution_roundtrip_preserves_labels_and_context() {
         use crate::{
-            constraint::EvaluatedData, constraint_type::EvaluatedCollection, ATol, ConstraintID,
+            constraint::EvaluatedData, constraint_type::EvaluatedCollection, ConstraintID,
             DecisionVariable, Equality, EvaluatedConstraint, EvaluatedDecisionVariable,
             NamedFunctionID, Sense, VariableID,
         };
@@ -563,7 +611,7 @@ mod tests {
         let nf_id = NamedFunctionID::from(0);
 
         let dv = DecisionVariable::binary(var_id);
-        let evaluated_dv = EvaluatedDecisionVariable::new(dv, 1.0, ATol::default()).unwrap();
+        let evaluated_dv = EvaluatedDecisionVariable::new(dv, 1.0).unwrap();
         let mut decision_variables = BTreeMap::new();
         decision_variables.insert(var_id, evaluated_dv);
 

@@ -164,9 +164,7 @@ impl Instance {
             let y_id = match plan {
                 IndicatorPlan::Reuse => *x_id,
                 IndicatorPlan::Fresh { .. } => {
-                    let y = self.new_binary();
-                    let y_id = y.id();
-                    let _ = y;
+                    let y_id = self.new_binary();
                     let labels = self.variable_labels_mut();
                     labels.set_name(y_id, "ommx.sos1_indicator");
                     labels.set_subscripts(
@@ -306,7 +304,6 @@ mod tests {
             VariableID::from(0),
             Kind::Integer,
             Bound::new(lower, upper).unwrap(),
-            None,
             ATol::default(),
         )
         .unwrap();

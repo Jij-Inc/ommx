@@ -25,7 +25,7 @@ pub enum AdditionalCapability {
 pub enum DecisionVariableRole {
     /// Used by the objective or active constraints passed to solvers
     Used = 1,
-    /// Fixed by substituted_value and not used by solver input
+    /// Fixed by the instance-owned fixed-value table and not used by solver input
     Fixed = 2,
     /// Defined by decision_variable_dependency
     Dependent = 3,

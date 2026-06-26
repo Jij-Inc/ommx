@@ -557,6 +557,24 @@ av.set_name("x_0")
 
 Two `AttachedX` instances pointing at the same id observe the same state — a write through one is visible through any other and through the next `*_df` call. The host stays alive as long as any `AttachedX` references it (the handle holds a refcounted `Py<Instance>` / `Py<ParametricInstance>`); drop the handles to release the host.
 
+### 11.1 Fixed decision-variable values live on the owning instance ([#959](https://github.com/Jij-Inc/ommx/pull/959))
+
+Detached `DecisionVariable` objects remain modeling snapshots for the variable definition and label, but they no longer carry owner-side fixed-value state. Fixed values produced by `partial_evaluate(...)` or parsed from legacy protobuf `substituted_value` fields are stored on the owning `Instance` / `ParametricInstance`, not inside the detached variable object. As a result, `DecisionVariable.substituted_value` is no longer available on detached variables.
+
+Use the owner when you need fixed-value state:
+
+```python
+fixed = instance.fixed_decision_variables()
+
+attached = instance.attached_decision_variable(1)
+assert attached.substituted_value == fixed.get(1)
+
+df = instance.decision_variables_df()
+print(df["substituted_value"])
+```
+
+`decision_variables_df()` on `Instance` and `ParametricInstance` continues to include the `substituted_value` column, but that value is populated from the owner-side fixed-value table. If you call `.detach()` on an `AttachedDecisionVariable`, the result is a modeling snapshot and no longer carries the owner-side fixed value.
+
 ## 12. `to_bytes` / `from_bytes` removed from non-top-level types (`3.0.0a3`, [#845](https://github.com/Jij-Inc/ommx/pull/845))
 
 Element-level bytes serialisation is removed from these types:
@@ -789,6 +807,7 @@ expr = 2 * p + 3  # Linear
 - [ ] If you depended on the unqualified `id` index column on a wide constraint `*_df`, switch to the kind-qualified `{kind}_constraint_id` name. `decision_variables_df()` keeps `id` (only one variable ID space); long-format variable sidecars use `variable_id`.
 - [ ] Drop the in-place `c.add_name(...)` mutation pattern on snapshot wrappers retrieved from an instance — those calls return a new object and don't write through to the host. Use the live handle returned by `instance.constraints[id]` (an `AttachedConstraint`) and call its `set_*` / `add_*` methods, or re-add via `from_components`.
 - [ ] Update return-type annotations / static analysis for `instance.constraints` etc. to expect `AttachedX` (`dict[int, AttachedConstraint]`, `list[AttachedDecisionVariable]`, …). Call `.detach()` if you need an independent snapshot.
+- [ ] Replace detached `DecisionVariable.substituted_value` reads with owner-side queries: `Instance.fixed_decision_variables()`, `instance.attached_decision_variable(id).substituted_value`, or `instance.decision_variables_df()["substituted_value"]`.
 - [ ] Replace element-level `to_bytes()` / `from_bytes()` calls on `Function` / `Linear` / `Quadratic` / `Polynomial` / `Parameter` / the `NamedFunction` family / the `DecisionVariable` family with whole-`Instance` / `Solution` / `SampleSet` round-trips (or the `State` / `Samples` / `Parameters` DTOs for evaluate plumbing). See §12.
 - [ ] Replace `ArtifactBuilder.new_archive(path, image_name).build()` with `ArtifactDraft.new(image_name).commit()` + `artifact.save(path)`. See §13.1.
 - [ ] Replace `ArtifactBuilder.new_archive_unnamed(path).build()` with `ArtifactDraft.new_anonymous().commit()` + `artifact.save(path)`. Audit code that branched on `artifact.image_name is None` — anonymous artifacts now have a synthesized `<...>.ommx.local/anonymous:...` name. See §13.2.

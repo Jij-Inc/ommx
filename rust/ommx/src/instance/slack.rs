@@ -78,10 +78,7 @@ impl Instance {
             );
         }
 
-        let slack = self.new_decision_variable(Kind::Integer, slack_bound, None, atol)?;
-        let slack_id = slack.id();
-        // Drop borrow before writing to the label store on `self`.
-        let _ = slack;
+        let slack_id = self.new_decision_variable(Kind::Integer, slack_bound, None, atol)?;
         let labels = self.variable_labels_mut();
         labels.set_name(slack_id, "ommx.slack");
         labels.set_subscripts(slack_id, vec![constraint_id.into_inner() as i64]);
@@ -170,10 +167,8 @@ impl Instance {
             Err(e) => return Err(e).context("Slack coefficient must be finite"),
         };
 
-        let slack =
+        let slack_id =
             self.new_decision_variable(Kind::Integer, slack_bound, None, ATol::default())?;
-        let slack_id = slack.id();
-        let _ = slack;
         let labels = self.variable_labels_mut();
         labels.set_name(slack_id, "ommx.slack");
         labels.set_subscripts(slack_id, vec![constraint_id.into_inner() as i64]);
@@ -224,10 +219,10 @@ mod tests {
         // min x1 + x2 s.t. x1 + x2 - 4 <= 0, with x1, x2 integer in [0, 3]
         let dv = btreemap! {
             VariableID::from(1) => DecisionVariable::new(
-                VariableID::from(1), Kind::Integer, Bound::new(0.0, 3.0).unwrap(), None, ATol::default()
+                VariableID::from(1), Kind::Integer, Bound::new(0.0, 3.0).unwrap(), ATol::default()
             ).unwrap(),
             VariableID::from(2) => DecisionVariable::new(
-                VariableID::from(2), Kind::Integer, Bound::new(0.0, 3.0).unwrap(), None, ATol::default()
+                VariableID::from(2), Kind::Integer, Bound::new(0.0, 3.0).unwrap(), ATol::default()
             ).unwrap(),
         };
         let objective = (Function::from(linear!(1)) + Function::from(linear!(2))).unwrap();
@@ -262,7 +257,7 @@ mod tests {
         // min x1 s.t. x1 - 2 <= 0, x1 integer in [0, 3]
         let dv = btreemap! {
             VariableID::from(1) => DecisionVariable::new(
-                VariableID::from(1), Kind::Integer, Bound::new(0.0, 3.0).unwrap(), None, ATol::default()
+                VariableID::from(1), Kind::Integer, Bound::new(0.0, 3.0).unwrap(), ATol::default()
             ).unwrap(),
         };
         let objective = Function::from(linear!(1));
@@ -296,7 +291,7 @@ mod tests {
         // x1 - 10 <= 0 with x1 in [0, 3] is always satisfied
         let dv = btreemap! {
             VariableID::from(1) => DecisionVariable::new(
-                VariableID::from(1), Kind::Integer, Bound::new(0.0, 3.0).unwrap(), None, ATol::default()
+                VariableID::from(1), Kind::Integer, Bound::new(0.0, 3.0).unwrap(), ATol::default()
             ).unwrap(),
         };
         let objective = Function::from(linear!(1));
@@ -320,7 +315,7 @@ mod tests {
         // leaving behind an orphan slack decision variable.
         let dv = btreemap! {
             VariableID::from(1) => DecisionVariable::new(
-                VariableID::from(1), Kind::Integer, Bound::new(0.0, 3.0).unwrap(), None, ATol::default()
+                VariableID::from(1), Kind::Integer, Bound::new(0.0, 3.0).unwrap(), ATol::default()
             ).unwrap(),
         };
         let objective = Function::from(linear!(1));
@@ -349,7 +344,7 @@ mod tests {
         // `add_integer_slack_to_inequality`.
         let dv = btreemap! {
             VariableID::from(1) => DecisionVariable::new(
-                VariableID::from(1), Kind::Integer, Bound::new(0.0, 3.0).unwrap(), None, ATol::default()
+                VariableID::from(1), Kind::Integer, Bound::new(0.0, 3.0).unwrap(), ATol::default()
             ).unwrap(),
         };
         let objective = Function::from(linear!(1));
