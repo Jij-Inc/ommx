@@ -36,7 +36,7 @@ Treat this as a review pre-pass, not as the required final response order. When 
    - Lead each finding with the broken responsibility or invariant.
    - Then point to the concrete code path and explain how the operation can violate that domain rule.
    - Proposed fixes should name the owning abstraction and route the operation through it.
-   - If the task is addressing review feedback rather than writing a review, combine this pre-pass with the user-level `review-response` skill: reconstruct the reviewer concern, search for sibling defects, and fix the responsibility boundary rather than only the commented line.
+   - If the task is addressing review feedback rather than writing a review, keep the workflow self-contained: read the exact comment and surrounding diff, reconstruct the reviewer concern, search for sibling defects, and fix the responsibility boundary rather than only the commented line.
 
 ## Recurring OMMX Review Checks
 
