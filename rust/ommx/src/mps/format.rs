@@ -380,8 +380,7 @@ mod tests {
         let decision_variables = btreemap! {
             VariableID::from(0) => DecisionVariable::new(
                 Kind::Continuous,
-                Bound::unbounded(),
-                crate::ATol::default()
+                Bound::unbounded()
             ).unwrap(),
         };
 
@@ -408,8 +407,7 @@ mod tests {
         let decision_variables = btreemap! {
             VariableID::from(0) => DecisionVariable::new(
                 Kind::Continuous,
-                Bound::positive(),
-                crate::ATol::default()
+                Bound::positive()
             ).unwrap(),
         };
 
@@ -437,8 +435,7 @@ mod tests {
         let decision_variables = btreemap! {
             VariableID::from(0) => DecisionVariable::new(
                 Kind::Continuous,
-                Bound::negative(),
-                crate::ATol::default()
+                Bound::negative()
             ).unwrap(),
         };
 
@@ -466,13 +463,11 @@ mod tests {
         let decision_variables = btreemap! {
             VariableID::from(0) => DecisionVariable::new(
                 Kind::Binary,
-                Bound::of_binary(),
-                crate::ATol::default()
+                Bound::of_binary()
             ).unwrap(),
             VariableID::from(1) => DecisionVariable::new(
                 Kind::Integer,
-                Bound::new(-10.0, 20.0).unwrap(),
-                crate::ATol::default()
+                Bound::new(-10.0, 20.0).unwrap()
             ).unwrap(),
         };
 
@@ -502,18 +497,15 @@ mod tests {
         let decision_variables = btreemap! {
             VariableID::from(0) => DecisionVariable::new(
                 Kind::Continuous,
-                Bound::unbounded(),
-                crate::ATol::default()
+                Bound::unbounded()
             ).unwrap(),
             VariableID::from(1) => DecisionVariable::new(
                 Kind::Continuous,
-                Bound::positive(),
-                crate::ATol::default()
+                Bound::positive()
             ).unwrap(),
             VariableID::from(2) => DecisionVariable::new(
                 Kind::Integer,
-                Bound::negative(),
-                crate::ATol::default()
+                Bound::negative()
             ).unwrap(),
         };
 

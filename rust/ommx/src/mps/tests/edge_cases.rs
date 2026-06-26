@@ -11,18 +11,15 @@ fn test_unused_variable_filtering() {
     let decision_variables = btreemap! {
         VariableID::from(0) => DecisionVariable::new(
             crate::decision_variable::Kind::Continuous,
-            Bound::new(0.0, 10.0).unwrap(),
-            crate::ATol::default()
+            Bound::new(0.0, 10.0).unwrap()
         ).unwrap(),
         VariableID::from(1) => DecisionVariable::new(
             crate::decision_variable::Kind::Continuous,
-            Bound::new(0.0, 10.0).unwrap(),
-            crate::ATol::default()
+            Bound::new(0.0, 10.0).unwrap()
         ).unwrap(),
         VariableID::from(2) => DecisionVariable::new(
             crate::decision_variable::Kind::Continuous,
-            Bound::new(0.0, 10.0).unwrap(),
-            crate::ATol::default()
+            Bound::new(0.0, 10.0).unwrap()
         ).unwrap(),  // This variable is unused
     };
 
@@ -63,13 +60,11 @@ fn test_removed_constraint_variable_preservation() {
     let decision_variables = btreemap! {
         VariableID::from(0) => DecisionVariable::new(
             crate::decision_variable::Kind::Continuous,
-            Bound::new(0.0, 10.0).unwrap(),
-            crate::ATol::default()
+            Bound::new(0.0, 10.0).unwrap()
         ).unwrap(),
         VariableID::from(1) => DecisionVariable::new(
             crate::decision_variable::Kind::Continuous,
-            Bound::new(0.0, 10.0).unwrap(),
-            crate::ATol::default()
+            Bound::new(0.0, 10.0).unwrap()
         ).unwrap(),
     };
 
@@ -122,8 +117,7 @@ fn test_removed_constraint_information_loss() {
     let decision_variables = btreemap! {
         VariableID::from(0) => DecisionVariable::new(
             crate::decision_variable::Kind::Continuous,
-            Bound::new(0.0, 10.0).unwrap(),
-            crate::ATol::default()
+            Bound::new(0.0, 10.0).unwrap()
         ).unwrap(),
     };
 

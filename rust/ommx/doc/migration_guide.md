@@ -588,7 +588,7 @@ let evaluated = EvaluatedDecisionVariable::new(dv, value, atol)?;
 let sampled = SampledDecisionVariable::new(dv, samples, atol)?;
 
 // ✅ After
-let y = DecisionVariable::new(kind, bound, atol)?;
+let y = DecisionVariable::new(kind, bound)?;
 let z = DecisionVariable::binary();
 
 let instance = Instance::builder()
@@ -648,7 +648,7 @@ pub struct ConstraintContext {
 - [ ] Remove any `getset` usage for constraint types
 - [ ] Update any `InstanceError` / `MpsParseError` / `QplibParseError` / `StateValidationError` / `LogEncodingError` / `UnknownSampleIDError` matches → inspect `err.to_string()` or use `err.downcast_ref::<T>()` for signal types
 - [ ] Replace `Result<T, UnknownSampleIDError>` key-lookup methods with `Option<T>` on the call site
-- [ ] Replace `DecisionVariable::new(id, kind, bound, ..., atol)` with `DecisionVariable::new(kind, bound, atol)`, and insert it under the desired `VariableID` key in the host table
+- [ ] Replace `DecisionVariable::new(id, kind, bound, ..., atol)` with `DecisionVariable::new(kind, bound)`, and insert it under the desired `VariableID` key in the host table
 - [ ] Replace `DecisionVariable::binary(id)` / `integer(id)` / `continuous(id)` / etc. with the no-argument row factories, and keep the ID on the enclosing map key
 - [ ] Replace `DecisionVariable::substituted_value()` and `DecisionVariable::substitute(...)` with host-owned fixed values: `InstanceBuilder::fixed_decision_variable_values(...)`, `Instance::fixed_decision_variable_value(id)`, or `Instance::fixed_decision_variable_values()`
 - [ ] Update `EvaluatedDecisionVariable::new(...)` and `SampledDecisionVariable::new(...)`: drop the `atol` argument, pass the `VariableID` separately for diagnostics, and keep using the enclosing `Solution` / `SampleSet` map key as the source of truth

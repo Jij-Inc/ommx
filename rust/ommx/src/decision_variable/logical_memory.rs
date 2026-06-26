@@ -21,7 +21,7 @@ impl LogicalMemoryProfile for Kind {
 mod tests {
     use crate::decision_variable::{DecisionVariable, Kind};
     use crate::logical_memory::logical_memory_to_folded;
-    use crate::{ATol, Bound};
+    use crate::Bound;
 
     #[test]
     fn test_decision_variable_minimal_snapshot() {
@@ -42,12 +42,7 @@ mod tests {
     // `Instance::variable_labels` SoA-store level.
     #[test]
     fn test_decision_variable_minimal_no_label_snapshot() {
-        let dv = DecisionVariable::new(
-            Kind::Integer,
-            Bound::new(0.0, 10.0).unwrap(),
-            ATol::default(),
-        )
-        .unwrap();
+        let dv = DecisionVariable::new(Kind::Integer, Bound::new(0.0, 10.0).unwrap()).unwrap();
 
         let folded = logical_memory_to_folded(&dv);
         insta::assert_snapshot!(folded, @r###"

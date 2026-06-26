@@ -1,6 +1,6 @@
 use crate::{Constraint, Function, Linear, Polynomial, Quadratic, VariableBound};
 use anyhow::Result;
-use ommx::{v1, ATol, LinearMonomial, VariableID};
+use ommx::{v1, LinearMonomial, VariableID};
 use pyo3::{prelude::*, Bound, PyAny};
 use std::collections::HashMap;
 
@@ -131,7 +131,7 @@ impl DecisionVariable {
         let variable_id = VariableID::from(id);
         let kind = v1::decision_variable::Kind::try_from(kind)?.try_into()?;
 
-        let decision_variable = ommx::DecisionVariable::new(kind, bound.0, ATol::default())?;
+        let decision_variable = ommx::DecisionVariable::new(kind, bound.0)?;
 
         let label = ommx::DecisionVariableLabel {
             name,

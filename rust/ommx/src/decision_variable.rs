@@ -179,7 +179,15 @@ pub struct DecisionVariable {
 
 impl DecisionVariable {
     /// Create a new decision variable.
-    pub fn new(kind: Kind, bound: Bound, atol: ATol) -> Result<Self, DecisionVariableError> {
+    pub fn new(kind: Kind, bound: Bound) -> Result<Self, DecisionVariableError> {
+        Self::new_with_atol(kind, bound, ATol::default())
+    }
+
+    pub(crate) fn new_with_atol(
+        kind: Kind,
+        bound: Bound,
+        atol: ATol,
+    ) -> Result<Self, DecisionVariableError> {
         Ok(Self {
             kind,
             bound: kind
@@ -189,27 +197,27 @@ impl DecisionVariable {
     }
 
     pub fn binary() -> Self {
-        Self::new(Kind::Binary, Bound::of_binary(), ATol::default()).unwrap()
+        Self::new(Kind::Binary, Bound::of_binary()).unwrap()
     }
 
     /// Unbounded integer decision variable.
     pub fn integer() -> Self {
-        Self::new(Kind::Integer, Bound::default(), ATol::default()).unwrap()
+        Self::new(Kind::Integer, Bound::default()).unwrap()
     }
 
     /// Unbounded continuous decision variable.
     pub fn continuous() -> Self {
-        Self::new(Kind::Continuous, Bound::default(), ATol::default()).unwrap()
+        Self::new(Kind::Continuous, Bound::default()).unwrap()
     }
 
     /// Unbounded semi-integer decision variable.
     pub fn semi_integer() -> Self {
-        Self::new(Kind::SemiInteger, Bound::default(), ATol::default()).unwrap()
+        Self::new(Kind::SemiInteger, Bound::default()).unwrap()
     }
 
     /// Unbounded semi-continuous decision variable.
     pub fn semi_continuous() -> Self {
-        Self::new(Kind::SemiContinuous, Bound::default(), ATol::default()).unwrap()
+        Self::new(Kind::SemiContinuous, Bound::default()).unwrap()
     }
 
     /// Check if the substituted value is consistent to the bound and kind
@@ -223,7 +231,6 @@ impl DecisionVariable {
     /// let dv = DecisionVariable::new(
     ///     Kind::Integer,
     ///     Bound::new(0.0, 2.0).unwrap(),
-    ///     ATol::default(),
     /// ).unwrap();
     ///
     /// // 1 \in [0, 2]

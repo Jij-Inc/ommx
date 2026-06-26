@@ -1069,7 +1069,6 @@ mod tests {
         let dv = DecisionVariable::new(
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
-            crate::ATol::default(),
         )
         .unwrap();
         let mut variable_labels = VariableLabelStore::default();
@@ -1127,7 +1126,6 @@ mod tests {
         let dv1 = DecisionVariable::new(
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
-            crate::ATol::default(),
         )
         .unwrap();
         variable_labels.insert(
@@ -1153,7 +1151,6 @@ mod tests {
         let dv2 = DecisionVariable::new(
             Kind::Continuous,
             crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
-            crate::ATol::default(),
         )
         .unwrap();
         variable_labels.insert(

@@ -28,7 +28,7 @@ impl Instance {
 mod tests {
     use super::*;
     use crate::{
-        coeff, constraint::CreatedData, quadratic, ATol, Bound, Coefficient, Constraint,
+        coeff, constraint::CreatedData, quadratic, Bound, Coefficient, Constraint,
         DecisionVariable, Equality, Kind, Sense,
     };
     use ::approx::assert_abs_diff_eq;
@@ -41,12 +41,7 @@ mod tests {
         decision_variables.insert(VariableID::from(1), DecisionVariable::binary());
         decision_variables.insert(
             VariableID::from(2),
-            DecisionVariable::new(
-                Kind::Continuous,
-                Bound::new(0.0, 10.0).unwrap(),
-                ATol::default(),
-            )
-            .unwrap(),
+            DecisionVariable::new(Kind::Continuous, Bound::new(0.0, 10.0).unwrap()).unwrap(),
         );
 
         // Objective: x1^2 + x1*x2 + x2^2

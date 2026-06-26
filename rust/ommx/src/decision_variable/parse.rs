@@ -73,7 +73,7 @@ impl Parse for v1::DecisionVariable {
             .unwrap_or_default()
             .parse_as(&(), message, "bound")?;
         let id = VariableID::from(self.id);
-        let dv = DecisionVariable::new(kind, bound, ATol::default()) // FIXME: user should provide this
+        let dv = DecisionVariable::new(kind, bound) // FIXME: user should provide this
         .map_err(|e| RawParseError::InvalidDecisionVariable(e).context(message, "bound"))?;
         let fixed_value = self.substituted_value;
         if let Some(value) = fixed_value {

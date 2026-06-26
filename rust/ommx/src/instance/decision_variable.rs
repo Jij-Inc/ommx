@@ -66,7 +66,7 @@ impl Instance {
         atol: ATol,
     ) -> Result<VariableID, DecisionVariableError> {
         let id = self.next_variable_id();
-        let dv = DecisionVariable::new(kind, bound, atol)?;
+        let dv = DecisionVariable::new_with_atol(kind, bound, atol)?;
         if let Some(value) = fixed_value {
             dv.check_value_consistency(id, value, atol)?;
             self.fixed_decision_variable_values.insert(id, value);
