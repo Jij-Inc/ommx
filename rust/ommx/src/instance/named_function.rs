@@ -154,7 +154,7 @@ mod tests {
     fn test_get_named_function_by_name() {
         let mut instance = Instance::default();
 
-        instance
+        let inserted_id = instance
             .new_named_function(
                 Function::Constant(Coefficient::try_from(1.0).unwrap()),
                 Some("f".to_string()),
@@ -168,7 +168,7 @@ mod tests {
         let found = instance.get_named_function_by_name("f", vec![1, 2]);
         assert!(found.is_some());
         let (found_id, found) = found.unwrap();
-        assert_eq!(found_id, NamedFunctionID::from(0));
+        assert_eq!(found_id, inserted_id);
         assert_eq!(
             found.function,
             Function::Constant(Coefficient::try_from(1.0).unwrap())
@@ -232,7 +232,7 @@ mod tests {
         instance.new_continuous();
 
         // Add a named function that references variable 0
-        instance
+        let nf_id = instance
             .new_named_function(
                 Function::Linear((coeff!(2.0) * linear!(0)).unwrap()),
                 Some("obj".to_string()),
@@ -242,9 +242,7 @@ mod tests {
             )
             .unwrap();
 
-        let nf_id = NamedFunctionID::from(0);
         assert!(instance.named_functions().contains_key(&nf_id));
-        assert_eq!(nf_id, NamedFunctionID::from(0));
         let store = instance.named_function_labels();
         assert_eq!(store.name(nf_id), Some("obj"));
         assert_eq!(store.subscripts(nf_id), &[0]);
