@@ -391,11 +391,33 @@ mod tests {
             BTreeMap::new(),
         )
         .unwrap();
-        instance.variable_labels_mut().set_name(1.into(), "x1");
-        instance.variable_labels_mut().set_name(2.into(), "x2");
         instance
-            .variable_labels_mut()
-            .set_name(3.into(), "x3_with_longer_name");
+            .set_variable_label(
+                1.into(),
+                crate::ModelingLabel {
+                    name: Some("x1".to_string()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        instance
+            .set_variable_label(
+                2.into(),
+                crate::ModelingLabel {
+                    name: Some("x2".to_string()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        instance
+            .set_variable_label(
+                3.into(),
+                crate::ModelingLabel {
+                    name: Some("x3_with_longer_name".to_string()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
 
         let folded = logical_memory_to_folded(&instance);
         // Note: Same path appears multiple times, flamegraph tools will aggregate them

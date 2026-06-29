@@ -236,15 +236,6 @@ impl Instance {
         self.decision_variables.labels()
     }
 
-    /// Mutable access to the per-variable modeling-label store, limited to the
-    /// `instance` module tree.
-    ///
-    /// Public callers should use [`Self::set_variable_label`], which checks
-    /// that the label ID belongs to this instance.
-    fn variable_labels_mut(&mut self) -> &mut VariableLabelStore {
-        self.decision_variables.labels_mut()
-    }
-
     /// Replace the modeling label for a decision variable owned by this instance.
     pub fn set_variable_label(
         &mut self,

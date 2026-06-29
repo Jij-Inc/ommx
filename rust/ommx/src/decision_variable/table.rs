@@ -1,9 +1,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
-use crate::{ATol, ModelingLabel};
+use crate::{ATol, Bound, ModelingLabel};
 
-use super::{DecisionVariable, DecisionVariableLabel, VariableID, VariableLabelStore};
+use super::{
+    DecisionVariable, DecisionVariableError, DecisionVariableLabel, VariableID, VariableLabelStore,
+};
 
 /// Owner of decision-variable rows and their modeling labels.
 ///
@@ -72,7 +74,11 @@ impl<T> DecisionVariableTable<T> {
     ///
     /// This is for host-level unchecked constructors whose caller already owns
     /// the invariant. Prefer [`Self::new`] at external input boundaries.
-    pub(crate) fn from_parts_unchecked(
+    ///
+    /// # Safety
+    /// The caller must ensure every label ID refers to an entry owned by this
+    /// table.
+    pub(crate) unsafe fn from_parts_unchecked(
         entries: BTreeMap<VariableID, T>,
         labels: VariableLabelStore,
     ) -> Self {
@@ -96,24 +102,6 @@ impl<T> DecisionVariableTable<T> {
     /// Per-row modeling label store.
     pub fn labels(&self) -> &VariableLabelStore {
         &self.labels
-    }
-
-    /// Mutable access to the label store for modules that already own the
-    /// enclosing top-level invariant.
-    pub(crate) fn labels_mut(&mut self) -> &mut VariableLabelStore {
-        &mut self.labels
-    }
-
-    /// Mutable access to rows for modules that already own the enclosing
-    /// top-level invariant.
-    pub(crate) fn entries_mut(&mut self) -> &mut BTreeMap<VariableID, T> {
-        &mut self.entries
-    }
-
-    /// Mutable row access for modules that already own the enclosing
-    /// top-level invariant.
-    pub(crate) fn get_mut(&mut self, id: &VariableID) -> Option<&mut T> {
-        self.entries.get_mut(id)
     }
 
     /// Replace the modeling label for an existing decision-variable row.
@@ -257,38 +245,14 @@ impl CreatedDecisionVariableTable {
         self.table.entries()
     }
 
-    /// Mutable access to rows for modules that already own the enclosing
-    /// top-level invariant.
-    pub(crate) fn entries_mut(&mut self) -> &mut BTreeMap<VariableID, DecisionVariable> {
-        self.table.entries_mut()
-    }
-
-    /// Mutable row access for modules that already own the enclosing
-    /// top-level invariant.
-    pub(crate) fn get_mut(&mut self, id: &VariableID) -> Option<&mut DecisionVariable> {
-        self.table.get_mut(id)
-    }
-
     /// Per-row modeling label store.
     pub fn labels(&self) -> &VariableLabelStore {
         self.table.labels()
     }
 
-    /// Mutable access to the label store for modules that already own the
-    /// enclosing top-level invariant.
-    pub(crate) fn labels_mut(&mut self) -> &mut VariableLabelStore {
-        self.table.labels_mut()
-    }
-
     /// Fixed decision-variable values keyed by table-owned [`VariableID`].
     pub fn fixed_values(&self) -> &BTreeMap<VariableID, f64> {
         &self.fixed_values
-    }
-
-    /// Mutable access to fixed values for modules that already own the
-    /// enclosing top-level invariant.
-    pub(crate) fn fixed_values_mut(&mut self) -> &mut BTreeMap<VariableID, f64> {
-        &mut self.fixed_values
     }
 
     /// Return the fixed value for one decision variable, if it is fixed.
@@ -314,6 +278,36 @@ impl CreatedDecisionVariableTable {
         Ok(())
     }
 
+    /// Add a fixed value unless the row is already fixed consistently.
+    pub fn ensure_fixed_value(
+        &mut self,
+        id: VariableID,
+        value: f64,
+        atol: ATol,
+    ) -> crate::Result<()> {
+        let Some(row) = self.table.get(&id) else {
+            crate::bail!(
+                { ?id },
+                "Fixed decision-variable value references unknown decision variable ID {id:?}",
+            );
+        };
+        row.check_value_consistency(id, value, atol)?;
+        if let Some(previous_value) = self.fixed_values.get(&id).copied() {
+            if !previous_value.is_finite() || (previous_value - value).abs() > *atol {
+                return Err(DecisionVariableError::SubstitutedValueOverwrite {
+                    id,
+                    previous_value,
+                    new_value: value,
+                    atol,
+                }
+                .into());
+            }
+        } else {
+            self.fixed_values.insert(id, value);
+        }
+        Ok(())
+    }
+
     /// Insert or replace one row, its label, and optionally its fixed value.
     pub fn insert(
         &mut self,
@@ -322,8 +316,8 @@ impl CreatedDecisionVariableTable {
         label: DecisionVariableLabel,
         fixed_value: Option<f64>,
         atol: ATol,
-    ) -> crate::Result<Option<DecisionVariable>> {
-        if let Some(value) = fixed_value.or_else(|| self.fixed_values.get(&id).copied()) {
+    ) -> Result<Option<DecisionVariable>, DecisionVariableError> {
+        if let Some(value) = fixed_value {
             row.check_value_consistency(id, value, atol)?;
         }
         match fixed_value {
@@ -335,6 +329,22 @@ impl CreatedDecisionVariableTable {
             }
         }
         Ok(self.table.insert(id, row, label))
+    }
+
+    /// Impose an additional bound on one row while preserving table invariants.
+    pub fn clip_bound(&mut self, id: VariableID, bound: Bound, atol: ATol) -> crate::Result<bool> {
+        let Some(row) = self.table.entries.get(&id) else {
+            crate::bail!({ ?id }, "Undefined variable ID is used: {id:?}");
+        };
+        let mut updated = row.clone();
+        let changed = updated.clip_bound(id, bound, atol)?;
+        if changed {
+            if let Some(value) = self.fixed_values.get(&id).copied() {
+                updated.check_value_consistency(id, value, atol)?;
+            }
+            self.table.entries.insert(id, updated);
+        }
+        Ok(changed)
     }
 
     pub fn contains_key(&self, id: &VariableID) -> bool {
@@ -484,6 +494,26 @@ mod tests {
 
         assert_eq!(table.get(&id), Some(&row));
         assert_eq!(table.labels().name(id), Some("x"));
+        assert_eq!(table.fixed_value(id), Some(1.0));
+    }
+
+    #[test]
+    fn created_table_rejects_inconsistent_fixed_overwrite() {
+        let id = VariableID::from(1);
+        let mut table = CreatedDecisionVariableTable::from_entries(BTreeMap::from([(
+            id,
+            DecisionVariable::continuous(),
+        )]));
+        table.ensure_fixed_value(id, 1.0, ATol::default()).unwrap();
+
+        let err = table
+            .ensure_fixed_value(id, 2.0, ATol::default())
+            .unwrap_err();
+
+        assert!(
+            err.to_string().contains("cannot be overwritten") && err.to_string().contains("ID=1"),
+            "unexpected error: {err}"
+        );
         assert_eq!(table.fixed_value(id), Some(1.0));
     }
 }

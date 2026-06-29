@@ -1,5 +1,5 @@
 use super::Instance;
-use crate::{substitute_one, Bound, Coefficient, Linear, VariableID};
+use crate::{substitute_one, ATol, Bound, Coefficient, Kind, Linear, VariableID};
 
 /// Calculate log-encoding coefficients for a given bound.
 ///
@@ -66,11 +66,17 @@ impl Instance {
         // Safe unwrap: offset is always finite from log_encoding_coefficients
         let mut linear = Linear::try_from(offset).unwrap();
         for (i, coefficient) in coefficients.iter().enumerate() {
-            // Create binary variables for each coefficient
-            let binary_id = self.new_binary();
-            let labels = self.variable_labels_mut();
-            labels.set_name(binary_id, "ommx.log_encode");
-            labels.set_subscripts(binary_id, vec![id.into_inner() as i64, i as i64]);
+            let binary_id = self.new_decision_variable_with_label(
+                Kind::Binary,
+                Bound::of_binary(),
+                crate::ModelingLabel {
+                    name: Some("ommx.log_encode".to_string()),
+                    subscripts: vec![id.into_inner() as i64, i as i64],
+                    ..Default::default()
+                },
+                None,
+                ATol::default(),
+            )?;
             linear.add_term(binary_id.into(), *coefficient)?;
         }
         let f = linear.clone().into();
@@ -96,7 +102,9 @@ mod tests {
             crate::ATol::default(),
         )
         .unwrap();
-        instance.decision_variables.entries_mut().insert(id, var);
+        instance
+            .add_decision_variable(id, var, Default::default())
+            .unwrap();
 
         // Perform log encoding
         let encoded = instance.log_encode(id).unwrap();

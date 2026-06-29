@@ -1,4 +1,7 @@
-use crate::{ATol, Bound, DecisionVariable, DecisionVariableError, Instance, Kind, VariableID};
+use crate::{
+    ATol, Bound, DecisionVariable, DecisionVariableError, DecisionVariableLabel, Instance, Kind,
+    VariableID,
+};
 
 impl Instance {
     /// Get all unique decision variable names in this instance
@@ -65,13 +68,27 @@ impl Instance {
         fixed_value: Option<f64>,
         atol: ATol,
     ) -> Result<VariableID, DecisionVariableError> {
+        self.new_decision_variable_with_label(
+            kind,
+            bound,
+            DecisionVariableLabel::default(),
+            fixed_value,
+            atol,
+        )
+    }
+
+    pub(super) fn new_decision_variable_with_label(
+        &mut self,
+        kind: Kind,
+        bound: Bound,
+        label: DecisionVariableLabel,
+        fixed_value: Option<f64>,
+        atol: ATol,
+    ) -> Result<VariableID, DecisionVariableError> {
         let id = self.next_variable_id();
         let dv = DecisionVariable::new(kind, bound, atol)?;
-        if let Some(value) = fixed_value {
-            dv.check_value_consistency(id, value, atol)?;
-            self.decision_variables.fixed_values_mut().insert(id, value);
-        }
-        self.decision_variables.entries_mut().insert(id, dv);
+        self.decision_variables
+            .insert(id, dv, label, fixed_value, atol)?;
         Ok(id)
     }
 

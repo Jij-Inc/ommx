@@ -770,10 +770,12 @@ impl SampleSetBuilder {
                 .ok_or(SampleSetError::MissingRequiredField {
                     field: "decision_variables",
                 })?;
-        let decision_variables = crate::DecisionVariableTable::from_parts_unchecked(
-            decision_variables,
-            self.variable_labels,
-        );
+        let decision_variables = unsafe {
+            crate::DecisionVariableTable::from_parts_unchecked(
+                decision_variables,
+                self.variable_labels,
+            )
+        };
         let objectives = self
             .objectives
             .ok_or(SampleSetError::MissingRequiredField {

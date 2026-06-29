@@ -891,8 +891,9 @@ impl SolutionBuilder {
                 .ok_or(SolutionError::MissingRequiredField {
                     field: "decision_variables",
                 })?;
-        let decision_variables =
-            DecisionVariableTable::from_parts_unchecked(decision_variables, self.variable_labels);
+        let decision_variables = unsafe {
+            DecisionVariableTable::from_parts_unchecked(decision_variables, self.variable_labels)
+        };
         let sense = self
             .sense
             .ok_or(SolutionError::MissingRequiredField { field: "sense" })?;

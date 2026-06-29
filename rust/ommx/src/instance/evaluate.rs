@@ -379,28 +379,9 @@ impl Evaluate for Instance {
                     "Dependent variable (ID={id}) cannot be fixed by partial_evaluate"
                 ));
             }
-            let Some(dv) = working.decision_variables.get(&var_id) else {
-                return Err(crate::error!(
-                    "Unknown decision variable (ID={id}) in state."
-                ));
-            };
-            dv.check_value_consistency(var_id, *value, atol)?;
-            if let Some(previous_value) = working.fixed_decision_variable_value(var_id) {
-                if !values_are_consistent(previous_value, *value, atol) {
-                    return Err(crate::DecisionVariableError::SubstitutedValueOverwrite {
-                        id: var_id,
-                        previous_value,
-                        new_value: *value,
-                        atol,
-                    }
-                    .into());
-                }
-            } else {
-                working
-                    .decision_variables
-                    .fixed_values_mut()
-                    .insert(var_id, *value);
-            }
+            working
+                .decision_variables
+                .ensure_fixed_value(var_id, *value, atol)?;
         }
 
         // Phase 3: Regular partial evaluation with expanded state.

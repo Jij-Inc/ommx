@@ -78,10 +78,17 @@ impl Instance {
             );
         }
 
-        let slack_id = self.new_decision_variable(Kind::Integer, slack_bound, None, atol)?;
-        let labels = self.variable_labels_mut();
-        labels.set_name(slack_id, "ommx.slack");
-        labels.set_subscripts(slack_id, vec![constraint_id.into_inner() as i64]);
+        let slack_id = self.new_decision_variable_with_label(
+            Kind::Integer,
+            slack_bound,
+            crate::ModelingLabel {
+                name: Some("ommx.slack".to_string()),
+                subscripts: vec![constraint_id.into_inner() as i64],
+                ..Default::default()
+            },
+            None,
+            atol,
+        )?;
 
         let slack_term = Linear::single_term(LinearMonomial::Variable(slack_id), a.inv()?);
         let new_function = (function + slack_term)?;
@@ -167,11 +174,17 @@ impl Instance {
             Err(e) => return Err(e).context("Slack coefficient must be finite"),
         };
 
-        let slack_id =
-            self.new_decision_variable(Kind::Integer, slack_bound, None, ATol::default())?;
-        let labels = self.variable_labels_mut();
-        labels.set_name(slack_id, "ommx.slack");
-        labels.set_subscripts(slack_id, vec![constraint_id.into_inner() as i64]);
+        let slack_id = self.new_decision_variable_with_label(
+            Kind::Integer,
+            slack_bound,
+            crate::ModelingLabel {
+                name: Some("ommx.slack".to_string()),
+                subscripts: vec![constraint_id.into_inner() as i64],
+                ..Default::default()
+            },
+            None,
+            ATol::default(),
+        )?;
 
         let new_function = match b_coeff {
             Some(c) => {
