@@ -108,9 +108,17 @@ impl ParameterTable {
     }
 
     /// Insert one parameter ID and its modeling label.
+    ///
+    /// Returns `false` and leaves the existing label unchanged if the ID is
+    /// already present. Use [`Self::set_label`] to update an existing
+    /// parameter's label.
     pub fn insert(&mut self, id: VariableID, label: ParameterLabel) -> bool {
-        self.labels.insert(id, label);
-        self.ids.insert(id)
+        if self.ids.insert(id) {
+            self.labels.insert(id, label);
+            true
+        } else {
+            false
+        }
     }
 
     pub fn contains_key(&self, id: &VariableID) -> bool {
@@ -220,6 +228,29 @@ mod tests {
             Some("base")
         );
         assert_eq!(table.labels().description(id), Some("penalty"));
+    }
+
+    #[test]
+    fn duplicate_insert_does_not_replace_label() {
+        let id = VariableID::from(100);
+        let mut table = ParameterTable::default();
+
+        assert!(table.insert(
+            id,
+            ParameterLabel {
+                name: Some("p".to_string()),
+                ..Default::default()
+            }
+        ));
+        assert!(!table.insert(
+            id,
+            ParameterLabel {
+                name: Some("q".to_string()),
+                ..Default::default()
+            }
+        ));
+
+        assert_eq!(table.labels().name(id), Some("p"));
     }
 
     #[test]
