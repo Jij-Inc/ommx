@@ -238,9 +238,10 @@ impl Arbitrary for Instance {
                                         named_functions,
                                     ),
                                     sense,
-                                    decision_variables,
-                                    variable_labels: Default::default(),
-                                    fixed_decision_variable_values: Default::default(),
+                                    decision_variables:
+                                        crate::CreatedDecisionVariableTable::from_entries(
+                                            decision_variables,
+                                        ),
                                     parameters: Default::default(),
                                     indicator_constraint_collection: Default::default(),
                                     one_hot_constraint_collection: Default::default(),

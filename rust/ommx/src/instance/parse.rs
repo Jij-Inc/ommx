@@ -331,13 +331,20 @@ impl Parse for v1::Instance {
             &decision_variable_dependency,
             &fixed_decision_variable_values,
         )?;
+        let decision_variables = CreatedDecisionVariableTable::new(
+            decision_variables,
+            variable_labels,
+            fixed_decision_variable_values,
+            crate::ATol::default(),
+        )
+        .map_err(|e| {
+            RawParseError::InvalidInstance(e.to_string()).context(message, "decision_variables")
+        })?;
 
         Ok(Instance {
             sense,
             objective,
             decision_variables,
-            variable_labels,
-            fixed_decision_variable_values,
             constraint_collection: ConstraintCollection::with_context(
                 constraints,
                 removed_constraints,
@@ -386,13 +393,12 @@ impl TryFrom<v1::Instance> for Instance {
 impl From<Instance> for v1::Instance {
     fn from(value: Instance) -> Self {
         // Drain per-element data and join with labels/context from the SoA stores.
-        let variable_labels = value.variable_labels;
-        let fixed_decision_variable_values = value.fixed_decision_variable_values;
-        let decision_variables = value
-            .decision_variables
+        let (decision_variables, mut variable_labels, fixed_decision_variable_values) =
+            value.decision_variables.into_parts();
+        let decision_variables = decision_variables
             .into_iter()
             .map(|(id, dv)| {
-                let label = variable_labels.collect_for(id);
+                let label = variable_labels.remove(id);
                 crate::decision_variable::parse::decision_variable_to_v1_with_fixed_value(
                     id,
                     dv,
@@ -603,14 +609,21 @@ impl Parse for v1::ParametricInstance {
             &decision_variable_dependency,
             &fixed_decision_variable_values,
         )?;
+        let decision_variables = CreatedDecisionVariableTable::new(
+            decision_variables,
+            variable_labels,
+            fixed_decision_variable_values,
+            crate::ATol::default(),
+        )
+        .map_err(|e| {
+            RawParseError::InvalidInstance(e.to_string()).context(message, "decision_variables")
+        })?;
 
         Ok(ParametricInstance {
             sense,
             objective,
             decision_variables,
             parameters,
-            variable_labels,
-            fixed_decision_variable_values,
             constraint_collection: ConstraintCollection::with_context(
                 constraints,
                 removed_constraints,
@@ -655,12 +668,10 @@ impl From<ParametricInstance> for v1::ParametricInstance {
             objective,
             decision_variables,
             parameters,
-            variable_labels,
             constraint_collection,
             indicator_constraint_collection,
             one_hot_constraint_collection,
             sos1_constraint_collection,
-            fixed_decision_variable_values,
             decision_variable_dependency,
             description,
             named_functions,
@@ -686,10 +697,12 @@ impl From<ParametricInstance> for v1::ParametricInstance {
         // Drain per-element data and join with labels/context from the SoA stores.
         // (Same shape as `From<Instance> for v1::Instance` above; a stale
         // version of this conversion silently dropped both sidecar stores.)
+        let (decision_variables, mut variable_labels, fixed_decision_variable_values) =
+            decision_variables.into_parts();
         let v1_decision_variables = decision_variables
             .into_iter()
             .map(|(id, dv)| {
-                let label = variable_labels.collect_for(id);
+                let label = variable_labels.remove(id);
                 crate::decision_variable::parse::decision_variable_to_v1_with_fixed_value(
                     id,
                     dv,

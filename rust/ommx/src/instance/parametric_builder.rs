@@ -78,7 +78,7 @@ impl ParametricInstanceBuilder {
         self
     }
 
-    /// Sets root-owned fixed decision-variable values.
+    /// Sets table-owned fixed decision-variable values.
     pub fn fixed_decision_variable_values(
         mut self,
         fixed_decision_variable_values: BTreeMap<VariableID, f64>,
@@ -252,25 +252,16 @@ impl ParametricInstanceBuilder {
             .constraints
             .ok_or_else(|| crate::error!("Required field is missing: constraints"))?;
 
+        let decision_variables = CreatedDecisionVariableTable::new(
+            decision_variables,
+            self.variable_labels,
+            self.fixed_decision_variable_values,
+            crate::ATol::default(),
+        )?;
+
         // Check that decision variable IDs and parameter IDs are disjoint
         let decision_variable_ids: VariableIDSet = decision_variables.keys().cloned().collect();
         let parameter_ids: VariableIDSet = parameters.keys().cloned().collect();
-        crate::modeling_label::validate_modeling_label_ids(
-            &self.variable_labels,
-            &decision_variable_ids,
-            "decision variable",
-        )?;
-
-        let fixed_decision_variable_values = self.fixed_decision_variable_values;
-        for (id, value) in &fixed_decision_variable_values {
-            let Some(dv) = decision_variables.get(id) else {
-                crate::bail!(
-                    { ?id },
-                    "Fixed decision-variable value references unknown decision variable ID {id:?}",
-                );
-            };
-            dv.check_value_consistency(*id, *value, crate::ATol::default())?;
-        }
 
         let intersection: VariableIDSet = decision_variable_ids
             .intersection(&parameter_ids)
@@ -457,7 +448,7 @@ impl ParametricInstanceBuilder {
 
         // Construction invariant: raw used, fixed, and dependent sets must be pairwise disjoint.
         // - used: IDs appearing in objective or constraints
-        // - fixed: IDs in the root-owned fixed_decision_variable_values table
+        // - fixed: IDs in the decision-variable table's fixed-value column
         // - dependent: keys of decision_variable_dependency
         let mut used: VariableIDSet = objective.required_ids().into_iter().collect();
         for constraint in constraints.values() {
@@ -472,7 +463,7 @@ impl ParametricInstanceBuilder {
         for sos1 in self.sos1_constraints.values() {
             used.extend(sos1.required_ids());
         }
-        let fixed: VariableIDSet = fixed_decision_variable_values.keys().copied().collect();
+        let fixed: VariableIDSet = decision_variables.fixed_values().keys().copied().collect();
         let dependent: VariableIDSet = self.decision_variable_dependency.keys().collect();
 
         // Check used ∩ dependent = ∅
@@ -504,8 +495,6 @@ impl ParametricInstanceBuilder {
             objective,
             decision_variables,
             parameters,
-            variable_labels: self.variable_labels,
-            fixed_decision_variable_values,
             constraint_collection: ConstraintCollection::with_context(
                 constraints,
                 self.removed_constraints,

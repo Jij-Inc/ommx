@@ -54,7 +54,7 @@ impl Instance {
         let variable_ids: VariableIDSet = self.decision_variables.keys().cloned().collect();
         let dependency_keys: VariableIDSet = self.decision_variable_dependency.keys().collect();
         let fixed_ids: VariableIDSet = self
-            .fixed_decision_variable_values
+            .fixed_decision_variable_values()
             .keys()
             .copied()
             .collect();
@@ -195,8 +195,8 @@ impl Instance {
                 "Variable id {id:?} is currently used as a substitution-dependency key",
             );
         }
-        self.decision_variables.insert(id, variable);
-        self.variable_labels.insert(id, label);
+        self.decision_variables
+            .insert(id, variable, label, None, crate::ATol::default())?;
         Ok(id)
     }
 
@@ -256,7 +256,7 @@ impl Instance {
         let variable_ids: VariableIDSet = self.decision_variables.keys().cloned().collect();
         let dependency_keys: VariableIDSet = self.decision_variable_dependency.keys().collect();
         let fixed_ids: VariableIDSet = self
-            .fixed_decision_variable_values
+            .fixed_decision_variable_values()
             .keys()
             .copied()
             .collect();
@@ -342,7 +342,7 @@ impl ParametricInstance {
         let known_ids: VariableIDSet = variable_ids.union(&parameter_ids).cloned().collect();
         let dependency_keys: VariableIDSet = self.decision_variable_dependency().keys().collect();
         let fixed_ids: VariableIDSet = self
-            .fixed_decision_variable_values
+            .fixed_decision_variable_values()
             .keys()
             .copied()
             .collect();
@@ -532,8 +532,8 @@ impl ParametricInstance {
                 "Variable id {id:?} is currently used as a substitution-dependency key",
             );
         }
-        self.decision_variables.insert(id, variable);
-        self.variable_labels.insert(id, label);
+        self.decision_variables
+            .insert(id, variable, label, None, crate::ATol::default())?;
         Ok(id)
     }
 }

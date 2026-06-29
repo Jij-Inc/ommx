@@ -108,8 +108,12 @@ pub enum SampleSetError {
 ///
 /// Invariants
 /// -----------
-/// - [`Self::decision_variables`] is keyed by the table-owned
-///   [`VariableID`]; sampled decision-variable rows do not carry IDs.
+/// - [`Self::decision_variables`] owns a
+///   [`DecisionVariableTable<SampledDecisionVariable>`](crate::DecisionVariableTable);
+///   table keys own [`VariableID`] and sampled decision-variable rows do not
+///   carry IDs.
+/// - The decision-variable table rejects modeling labels for unknown variable
+///   IDs.
 /// - [`Self::named_functions`] is keyed by the table-owned
 ///   [`NamedFunctionID`]; sampled named-function rows do not carry IDs.
 /// - All [`Self::decision_variables`], [`Self::objectives`], sampled constraint
@@ -123,11 +127,8 @@ pub enum SampleSetError {
 ///   - `feasible_relaxed`: true if all non-removed constraints are satisfied.
 #[derive(Debug, Clone, Getters)]
 pub struct SampleSet {
-    #[getset(get = "pub")]
-    decision_variables: BTreeMap<VariableID, SampledDecisionVariable>,
-    /// Per-variable modeling labels (sibling of [`Self::decision_variables`]).
-    #[getset(get = "pub")]
-    variable_labels: crate::decision_variable::VariableLabelStore,
+    /// Sampled decision-variable rows plus their modeling labels.
+    decision_variables: crate::DecisionVariableTable<SampledDecisionVariable>,
     #[getset(get = "pub")]
     objectives: Sampled<f64>,
     #[getset(get = "pub")]
@@ -205,6 +206,23 @@ impl SampleSet {
     /// Access the per-named-function modeling-label store.
     pub fn named_function_labels(&self) -> &crate::named_function::NamedFunctionLabelStore {
         self.named_functions.labels()
+    }
+
+    /// Access sampled decision-variable rows plus their modeling labels.
+    pub fn decision_variable_table(
+        &self,
+    ) -> &crate::DecisionVariableTable<SampledDecisionVariable> {
+        &self.decision_variables
+    }
+
+    /// Access sampled decision-variable rows keyed by table-owned IDs.
+    pub fn decision_variables(&self) -> &BTreeMap<VariableID, SampledDecisionVariable> {
+        self.decision_variables.entries()
+    }
+
+    /// Access the per-variable modeling-label store.
+    pub fn variable_labels(&self) -> &crate::decision_variable::VariableLabelStore {
+        self.decision_variables.labels()
     }
 
     /// Get sample IDs available in this sample set
@@ -342,7 +360,7 @@ impl SampleSet {
                 .objective(objective)
                 .evaluated_named_functions(evaluated_named_functions)
                 .decision_variables(decision_variables)
-                .variable_labels(self.variable_labels.clone())
+                .variable_labels(self.variable_labels().clone())
                 .named_function_labels(self.named_functions.labels().clone())
                 .sense(sense)
                 .build_unchecked()
@@ -595,15 +613,13 @@ impl SampleSetBuilder {
             .sense
             .ok_or(SampleSetError::MissingRequiredField { field: "sense" })?;
 
+        let decision_variables =
+            crate::DecisionVariableTable::new(decision_variables, self.variable_labels).map_err(
+                |e| SampleSetError::InvalidSidecar {
+                    message: e.to_string(),
+                },
+            )?;
         let decision_variable_ids = decision_variables.keys().copied().collect::<BTreeSet<_>>();
-        crate::modeling_label::validate_modeling_label_ids(
-            &self.variable_labels,
-            &decision_variable_ids,
-            "decision variable",
-        )
-        .map_err(|e| SampleSetError::InvalidSidecar {
-            message: e.to_string(),
-        })?;
         let named_functions =
             NamedFunctionTable::new(self.named_functions, self.named_function_labels).map_err(
                 |e| SampleSetError::InvalidSidecar {
@@ -716,7 +732,6 @@ impl SampleSetBuilder {
 
         Ok(SampleSet {
             decision_variables,
-            variable_labels: self.variable_labels.clone(),
             objectives,
             constraints,
             indicator_constraints: self.indicator_constraints,
@@ -755,6 +770,10 @@ impl SampleSetBuilder {
                 .ok_or(SampleSetError::MissingRequiredField {
                     field: "decision_variables",
                 })?;
+        let decision_variables = crate::DecisionVariableTable::from_parts_unchecked(
+            decision_variables,
+            self.variable_labels,
+        );
         let objectives = self
             .objectives
             .ok_or(SampleSetError::MissingRequiredField {
@@ -780,7 +799,6 @@ impl SampleSetBuilder {
 
         Ok(SampleSet {
             decision_variables,
-            variable_labels: self.variable_labels.clone(),
             objectives,
             constraints,
             indicator_constraints: self.indicator_constraints,

@@ -2,10 +2,11 @@ mod parse;
 mod serialize;
 
 use crate::{
-    constraint_type::EvaluatedCollection, decision_variable::VariableLabelStore,
-    indicator_constraint::IndicatorConstraint, Constraint, ConstraintID, EvaluatedConstraint,
-    EvaluatedDecisionVariable, EvaluatedNamedFunction, NamedFunctionID, NamedFunctionTable, Sense,
-    VariableID,
+    constraint_type::EvaluatedCollection,
+    decision_variable::{DecisionVariableTable, VariableLabelStore},
+    indicator_constraint::IndicatorConstraint,
+    Constraint, ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable,
+    EvaluatedNamedFunction, NamedFunctionID, NamedFunctionTable, Sense, VariableID,
 };
 use getset::Getters;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -102,8 +103,11 @@ pub enum SolutionError {
 ///
 /// Invariants
 /// -----------
-/// - [`Self::decision_variables`] is keyed by the table-owned
-///   [`VariableID`]; evaluated decision-variable rows do not carry IDs.
+/// - [`Self::decision_variables`] owns a
+///   [`DecisionVariableTable<EvaluatedDecisionVariable>`]; table keys own
+///   [`VariableID`] and evaluated decision-variable rows do not carry IDs.
+/// - The decision-variable table rejects modeling labels for unknown variable
+///   IDs.
 /// - The keys of the evaluated constraint collections are the table-owned
 ///   constraint IDs for each constraint family.
 /// - [`Self::evaluated_named_functions`] is keyed by the table-owned
@@ -130,11 +134,8 @@ pub struct Solution {
     evaluated_sos1_constraints: EvaluatedCollection<crate::Sos1Constraint>,
     /// Evaluated named-function rows plus their modeling labels.
     evaluated_named_functions: NamedFunctionTable<EvaluatedNamedFunction>,
-    #[getset(get = "pub")]
-    decision_variables: BTreeMap<VariableID, EvaluatedDecisionVariable>,
-    /// Per-variable modeling labels (sibling of [`Self::decision_variables`]).
-    #[getset(get = "pub")]
-    variable_labels: VariableLabelStore,
+    /// Evaluated decision-variable rows plus their modeling labels.
+    decision_variables: DecisionVariableTable<EvaluatedDecisionVariable>,
     /// Optimality status - not guaranteed by Solution itself
     pub optimality: crate::v1::Optimality,
     /// Relaxation status - not guaranteed by Solution itself
@@ -148,7 +149,7 @@ pub struct Solution {
 }
 
 fn validate_evaluated_named_function_used_ids(
-    decision_variables: &BTreeMap<VariableID, EvaluatedDecisionVariable>,
+    decision_variables: &DecisionVariableTable<EvaluatedDecisionVariable>,
     evaluated_named_functions: &NamedFunctionTable<EvaluatedNamedFunction>,
 ) -> Result<(), SolutionError> {
     for (named_function_id, named_function) in evaluated_named_functions.iter() {
@@ -207,6 +208,21 @@ impl Solution {
     /// Access the per-named-function modeling-label store.
     pub fn named_function_labels(&self) -> &crate::named_function::NamedFunctionLabelStore {
         self.evaluated_named_functions.labels()
+    }
+
+    /// Access evaluated decision-variable rows plus their modeling labels.
+    pub fn decision_variable_table(&self) -> &DecisionVariableTable<EvaluatedDecisionVariable> {
+        &self.decision_variables
+    }
+
+    /// Access evaluated decision-variable rows keyed by table-owned IDs.
+    pub fn decision_variables(&self) -> &BTreeMap<VariableID, EvaluatedDecisionVariable> {
+        self.decision_variables.entries()
+    }
+
+    /// Access the per-variable modeling-label store.
+    pub fn variable_labels(&self) -> &VariableLabelStore {
+        self.decision_variables.labels()
     }
 
     /// Get decision variable IDs used in this solution
@@ -327,7 +343,7 @@ impl Solution {
     pub fn decision_variable_names(&self) -> BTreeSet<String> {
         self.decision_variables
             .keys()
-            .filter_map(|id| self.variable_labels.name(*id).map(|s| s.to_owned()))
+            .filter_map(|id| self.variable_labels().name(*id).map(|s| s.to_owned()))
             .collect()
     }
 
@@ -352,7 +368,7 @@ impl Solution {
         let variables_with_name: Vec<(VariableID, &EvaluatedDecisionVariable)> = self
             .decision_variables
             .iter()
-            .filter(|(id, _)| self.variable_labels.name(**id) == Some(name))
+            .filter(|(id, _)| self.variable_labels().name(**id) == Some(name))
             .map(|(id, v)| (*id, v))
             .collect();
         if variables_with_name.is_empty() {
@@ -363,7 +379,7 @@ impl Solution {
 
         let mut result = BTreeMap::new();
         for (id, dv) in &variables_with_name {
-            let key = self.variable_labels.subscripts(*id).to_vec();
+            let key = self.variable_labels().subscripts(*id).to_vec();
             if result.contains_key(&key) {
                 return Err(SolutionError::DuplicateSubscript { subscripts: key });
             }
@@ -391,12 +407,12 @@ impl Solution {
         let mut result: BTreeMap<String, BTreeMap<Vec<i64>, f64>> = BTreeMap::new();
 
         for (id, dv) in self.decision_variables.iter() {
-            let name = match self.variable_labels.name(*id) {
+            let name = match self.variable_labels().name(*id) {
                 Some(n) => n.to_owned(),
                 None => continue, // Skip variables without names
             };
 
-            let subscripts = self.variable_labels.subscripts(*id).to_vec();
+            let subscripts = self.variable_labels().subscripts(*id).to_vec();
             let value = *dv.value();
 
             let vars_map = result.entry(name).or_default();
@@ -765,12 +781,8 @@ impl SolutionBuilder {
             .sense
             .ok_or(SolutionError::MissingRequiredField { field: "sense" })?;
 
-        let decision_variable_ids = decision_variables.keys().copied().collect::<BTreeSet<_>>();
-        crate::modeling_label::validate_modeling_label_ids(
-            &self.variable_labels,
-            &decision_variable_ids,
-            "decision variable",
-        )?;
+        let decision_variables =
+            DecisionVariableTable::new(decision_variables, self.variable_labels)?;
         let evaluated_named_functions =
             NamedFunctionTable::new(self.evaluated_named_functions, self.named_function_labels)?;
         evaluated_constraints.validate_context_ids()?;
@@ -840,7 +852,6 @@ impl SolutionBuilder {
             evaluated_sos1_constraints: self.evaluated_sos1_constraints,
             evaluated_named_functions,
             decision_variables,
-            variable_labels: self.variable_labels.clone(),
             optimality: self.optimality,
             relaxation: self.relaxation,
             sense: Some(sense),
@@ -880,6 +891,8 @@ impl SolutionBuilder {
                 .ok_or(SolutionError::MissingRequiredField {
                     field: "decision_variables",
                 })?;
+        let decision_variables =
+            DecisionVariableTable::from_parts_unchecked(decision_variables, self.variable_labels);
         let sense = self
             .sense
             .ok_or(SolutionError::MissingRequiredField { field: "sense" })?;
@@ -895,7 +908,6 @@ impl SolutionBuilder {
                 self.named_function_labels,
             ),
             decision_variables,
-            variable_labels: self.variable_labels.clone(),
             optimality: self.optimality,
             relaxation: self.relaxation,
             sense: Some(sense),

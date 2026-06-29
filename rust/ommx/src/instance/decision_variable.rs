@@ -69,9 +69,9 @@ impl Instance {
         let dv = DecisionVariable::new(kind, bound, atol)?;
         if let Some(value) = fixed_value {
             dv.check_value_consistency(id, value, atol)?;
-            self.fixed_decision_variable_values.insert(id, value);
+            self.decision_variables.fixed_values_mut().insert(id, value);
         }
-        self.decision_variables.insert(id, dv);
+        self.decision_variables.entries_mut().insert(id, dv);
         Ok(id)
     }
 

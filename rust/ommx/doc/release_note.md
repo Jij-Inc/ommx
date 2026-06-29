@@ -33,9 +33,12 @@ The 3.0.0 line is a major revision of the Rust SDK:
   reads and `*_df` for bulk analysis.
 - Decision variables, parameters, and named functions now follow the same table ownership rule:
   [`DecisionVariable`](crate::DecisionVariable) is row data containing
-  only `kind` and `bound`; the [`VariableID`](crate::VariableID) and
-  fixed values live on the enclosing `Instance` /
-  `ParametricInstance` / `Solution` / `SampleSet` tables.
+  only `kind` and `bound`; the [`VariableID`](crate::VariableID),
+  modeling labels, and fixed values live on
+  [`CreatedDecisionVariableTable`](crate::CreatedDecisionVariableTable)
+  for `Instance` / `ParametricInstance`, while
+  [`DecisionVariableTable`](crate::DecisionVariableTable) owns evaluated
+  and sampled decision-variable rows on `Solution` / `SampleSet`.
   [`ParametricInstance`](crate::ParametricInstance) stores parameter IDs
   and labels in [`ParameterTable`](crate::ParameterTable), while concrete
   parameter values remain inputs to
@@ -164,9 +167,11 @@ every constraint-kind collection (the same store rides through
 [`EvaluatedCollection<T>`](crate::EvaluatedCollection) and
 [`SampledCollection<T>`](crate::SampledCollection) so context is
 available at every stage),
-[`VariableLabelStore`](crate::VariableLabelStore) as a sibling
-field on `Instance` / `ParametricInstance` / `Solution` / `SampleSet`
-(no separate `DecisionVariableCollection` was introduced), and
+[`DecisionVariableTable<T>`](crate::DecisionVariableTable), which owns
+decision-variable rows and the [`VariableLabelStore`](crate::VariableLabelStore)
+together on `Solution` / `SampleSet`,
+[`CreatedDecisionVariableTable`](crate::CreatedDecisionVariableTable), which
+adds fixed values for `Instance` / `ParametricInstance`, and
 [`NamedFunctionLabelStore`](crate::NamedFunctionLabelStore) inside
 [`NamedFunctionTable`](crate::NamedFunctionTable), which owns named-function
 rows and labels together.
@@ -202,12 +207,13 @@ section has the per-host accessor list and the store API reference.
 
 ## Decision-variable table ownership ([#958](https://github.com/Jij-Inc/ommx/issues/958))
 
-The Rust SDK now treats `Instance::decision_variables` as the
-decision-variable table: the map key owns the `VariableID`, the row owns only
-`kind` and `bound`, `variable_labels` owns modeling labels, and
-`fixed_decision_variable_values` owns fixed values. The same key-owned ID model
-is used by `Solution` and `SampleSet` for evaluated and sampled decision
-variables.
+The Rust SDK now has explicit decision-variable table owners. The map key owns
+the [`VariableID`](crate::VariableID), the row owns only intrinsic data, and the
+table owns modeling labels. `Instance` and `ParametricInstance` use
+[`CreatedDecisionVariableTable`](crate::CreatedDecisionVariableTable), which
+also owns fixed values; `Solution` and `SampleSet` use
+[`DecisionVariableTable<T>`](crate::DecisionVariableTable) for evaluated and
+sampled rows.
 
 This removes the remaining duplicate ID source from the Rust-side row structs.
 Construct `DecisionVariable` rows with `DecisionVariable::new(kind, bound, atol)`

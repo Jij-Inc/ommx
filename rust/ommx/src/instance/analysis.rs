@@ -334,7 +334,7 @@ impl Instance {
             .filter(|(_, role)| *role == DecisionVariableRole::Fixed)
             .map(|(id, _)| {
                 let value = self
-                    .fixed_decision_variable_values
+                    .fixed_decision_variable_values()
                     .get(&id)
                     .copied()
                     .expect("fixed role requires a root-owned fixed value");
@@ -364,7 +364,7 @@ impl Instance {
     ) -> DecisionVariableRole {
         if used.contains(&id) {
             DecisionVariableRole::Used
-        } else if self.fixed_decision_variable_values.contains_key(&id) {
+        } else if self.fixed_decision_variable_values().contains_key(&id) {
             DecisionVariableRole::Fixed
         } else if self.decision_variable_dependency.get(&id).is_some() {
             DecisionVariableRole::Dependent

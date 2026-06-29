@@ -3,10 +3,12 @@ mod arbitrary;
 mod label_store;
 mod logical_memory;
 pub(crate) mod parse;
+mod table;
 
 pub use arbitrary::*;
 use getset::CopyGetters;
 pub use label_store::VariableLabelStore;
+pub use table::*;
 
 pub(crate) use parse::sampled_decision_variable_to_v1;
 
@@ -159,10 +161,12 @@ fn ensure_finite_value(id: VariableID, value: f64) -> Result<(), DecisionVariabl
 /// Holds only `kind` and `bound` as its intrinsic definition. The
 /// [`VariableID`] is owned by the enclosing decision-variable table key.
 /// Auxiliary modeling label (`name`, `subscripts`, `parameters`,
-/// `description`) lives on the enclosing [`Instance`](crate::Instance)'s
-/// [`VariableLabelStore`](crate::VariableLabelStore) keyed by
-/// [`VariableID`]; per-element label storage was retired in the v3
-/// redesign.
+/// `description`) lives on the enclosing
+/// [`DecisionVariableTable`](crate::DecisionVariableTable) keyed by
+/// [`VariableID`]. Created-stage [`Instance`](crate::Instance) and
+/// [`ParametricInstance`](crate::ParametricInstance) values use
+/// [`CreatedDecisionVariableTable`](crate::CreatedDecisionVariableTable),
+/// which also owns fixed values.
 ///
 /// Invariants
 /// ----------

@@ -96,7 +96,7 @@ mod tests {
             crate::ATol::default(),
         )
         .unwrap();
-        instance.decision_variables.insert(id, var);
+        instance.decision_variables.entries_mut().insert(id, var);
 
         // Perform log encoding
         let encoded = instance.log_encode(id).unwrap();

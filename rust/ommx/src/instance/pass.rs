@@ -85,7 +85,7 @@ impl Instance {
         }
 
         if self
-            .fixed_decision_variable_values
+            .fixed_decision_variable_values()
             .contains_key(&indicator_variable)
         {
             crate::bail!(
@@ -120,7 +120,7 @@ impl Instance {
     fn fixed_state(&self) -> v1::State {
         v1::State {
             entries: self
-                .fixed_decision_variable_values
+                .fixed_decision_variable_values()
                 .iter()
                 .map(|(id, value)| (id.into_inner(), *value))
                 .collect(),

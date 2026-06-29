@@ -47,7 +47,7 @@ impl Instance {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Bound, DecisionVariable, VariableID};
+    use crate::{Bound, CreatedDecisionVariableTable, DecisionVariable, VariableID};
     use maplit::btreemap;
 
     #[test]
@@ -66,7 +66,7 @@ mod tests {
         };
 
         let mut instance = Instance {
-            decision_variables,
+            decision_variables: CreatedDecisionVariableTable::from_entries(decision_variables),
             ..Default::default()
         };
 
@@ -80,15 +80,15 @@ mod tests {
 
         // Check results
         assert_eq!(
-            instance.decision_variables[&VariableID::from(1)].bound(),
+            instance.decision_variables()[&VariableID::from(1)].bound(),
             Bound::new(2.0, 8.0).unwrap()
         );
         assert_eq!(
-            instance.decision_variables[&VariableID::from(2)].bound(),
+            instance.decision_variables()[&VariableID::from(2)].bound(),
             Bound::new(5.0, 10.0).unwrap() // Intersection of [0, 10] and [5, 15]
         );
         assert_eq!(
-            instance.decision_variables[&VariableID::from(3)].bound(),
+            instance.decision_variables()[&VariableID::from(3)].bound(),
             Bound::new(0.0, 10.0).unwrap() // Unchanged
         );
     }
@@ -100,7 +100,7 @@ mod tests {
         };
 
         let mut instance = Instance {
-            decision_variables,
+            decision_variables: CreatedDecisionVariableTable::from_entries(decision_variables),
             ..Default::default()
         };
 
@@ -127,7 +127,7 @@ mod tests {
         }
 
         let mut instance = Instance {
-            decision_variables,
+            decision_variables: CreatedDecisionVariableTable::from_entries(decision_variables),
             ..Default::default()
         };
 
@@ -169,7 +169,7 @@ mod tests {
         };
 
         let mut instance = Instance {
-            decision_variables,
+            decision_variables: CreatedDecisionVariableTable::from_entries(decision_variables),
             ..Default::default()
         };
 
@@ -179,7 +179,7 @@ mod tests {
 
         // Assert that the bound remains unchanged
         assert_eq!(
-            instance.decision_variables[&VariableID::from(1)].bound(),
+            instance.decision_variables()[&VariableID::from(1)].bound(),
             original_bound
         );
     }

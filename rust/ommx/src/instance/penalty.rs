@@ -113,8 +113,6 @@ impl Instance {
             objective,
             decision_variables: self.decision_variables,
             parameters,
-            variable_labels: self.variable_labels,
-            fixed_decision_variable_values: self.fixed_decision_variable_values,
             constraint_collection: ConstraintCollection::with_context(
                 BTreeMap::new(),
                 removed_constraints,
@@ -190,8 +188,6 @@ impl Instance {
                 objective: self.objective,
                 decision_variables: self.decision_variables,
                 parameters: ParameterTable::default(),
-                variable_labels: self.variable_labels,
-                fixed_decision_variable_values: self.fixed_decision_variable_values,
                 constraint_collection: ConstraintCollection::with_context(
                     BTreeMap::new(),
                     existing_removed,
@@ -261,8 +257,6 @@ impl Instance {
             objective,
             decision_variables: self.decision_variables,
             parameters,
-            variable_labels: self.variable_labels,
-            fixed_decision_variable_values: self.fixed_decision_variable_values,
             constraint_collection: ConstraintCollection::with_context(
                 BTreeMap::new(),
                 removed_constraints,
