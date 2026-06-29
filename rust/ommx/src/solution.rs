@@ -166,35 +166,6 @@ fn validate_evaluated_named_function_used_ids(
 }
 
 impl Solution {
-    /// Create a new Solution without validation.
-    ///
-    /// # Deprecated
-    /// This constructor does not validate invariants.
-    /// Use [`SolutionBuilder::build`] for validated construction,
-    /// or [`SolutionBuilder::build_unchecked`] if invariants are guaranteed by construction.
-    #[deprecated(
-        since = "2.5.0",
-        note = "Use Solution::builder().build() for validated construction, or Solution::builder().build_unchecked() for unchecked construction"
-    )]
-    pub fn new(
-        objective: f64,
-        evaluated_constraints: BTreeMap<ConstraintID, EvaluatedConstraint>,
-        decision_variables: BTreeMap<VariableID, EvaluatedDecisionVariable>,
-        sense: Sense,
-    ) -> Self {
-        // SAFETY: This is a deprecated method that doesn't validate invariants.
-        // Callers are responsible for ensuring data integrity.
-        unsafe {
-            Solution::builder()
-                .objective(objective)
-                .evaluated_constraints(evaluated_constraints)
-                .decision_variables(decision_variables)
-                .sense(sense)
-                .build_unchecked()
-                .expect("All required fields are provided")
-        }
-    }
-
     /// Access evaluated named-function rows plus their modeling labels.
     pub fn evaluated_named_function_table(&self) -> &NamedFunctionTable<EvaluatedNamedFunction> {
         &self.evaluated_named_functions

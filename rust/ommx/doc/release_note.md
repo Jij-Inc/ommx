@@ -225,6 +225,12 @@ and `SampledDecisionVariable::new` still take the ID as a separate argument so
 non-finite value errors can report the table key, but the resulting row data
 does not store that ID.
 
+The deprecated `Solution::new` constructor was removed. It was a safe API that
+skipped host-level validation by wrapping `SolutionBuilder::build_unchecked`.
+Use `Solution::builder().build()` for validated construction, or call the
+unsafe `build_unchecked` path only when the enclosing code has already
+guaranteed the `Solution` invariants.
+
 This is part of the normalization work tracked in
 [#958](https://github.com/Jij-Inc/ommx/issues/958).
 

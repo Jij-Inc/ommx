@@ -684,6 +684,11 @@ let solution = Solution::builder()
     .build()?;
 ```
 
+The deprecated `Solution::new(...)` constructor was removed because it was a
+safe API that skipped host-level validation. Construct solutions through
+`Solution::builder().build()?`; reserve `build_unchecked` for code paths where
+the enclosing owner has already guaranteed all `Solution` invariants.
+
 Legacy `ommx.v1` protobuf messages still carry an inline `id` field. Rust parse
 drains that field into the owning map key, and Rust serialization fills it from
 the map key; the domain row remains ID-less on both sides of the conversion.
