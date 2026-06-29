@@ -580,8 +580,8 @@ the enclosing table key. Created-stage hosts
 ([`Instance`](crate::Instance) and
 [`ParametricInstance`](crate::ParametricInstance)) store rows, modeling labels,
 and fixed values together in
-[`CreatedDecisionVariableTable`](crate::CreatedDecisionVariableTable). The
-created table validates that labels and fixed values target existing
+[`DecisionVariableTable`](crate::DecisionVariableTable). The table validates
+that labels and fixed values target existing
 decision-variable IDs and that fixed values satisfy the row kind/bound.
 
 The row still owns the `kind`/`bound` invariant: `DecisionVariable::new` and
@@ -631,7 +631,9 @@ be checked by an individual `DecisionVariable` or by the table alone.
 `SampledDecisionVariable::new(id, ...)` accept an ID so non-finite value errors
 can still report the table key. The evaluated/sampled row data itself does not
 store the ID; `Solution` and `SampleSet` own it through
-[`DecisionVariableTable`](crate::DecisionVariableTable).
+[`EvaluatedDecisionVariableTable`](crate::EvaluatedDecisionVariableTable) and
+[`SampledDecisionVariableTable`](crate::SampledDecisionVariableTable),
+respectively.
 
 ### Named-function table ownership
 

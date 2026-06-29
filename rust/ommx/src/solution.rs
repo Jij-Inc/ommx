@@ -3,7 +3,7 @@ mod serialize;
 
 use crate::{
     constraint_type::EvaluatedCollection,
-    decision_variable::{DecisionVariableTable, VariableLabelStore},
+    decision_variable::{EvaluatedDecisionVariableTable, VariableLabelStore},
     indicator_constraint::IndicatorConstraint,
     Constraint, ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable,
     EvaluatedNamedFunction, NamedFunctionID, NamedFunctionTable, Sense, VariableID,
@@ -104,7 +104,7 @@ pub enum SolutionError {
 /// Invariants
 /// -----------
 /// - [`Self::decision_variables`] owns a
-///   [`DecisionVariableTable<EvaluatedDecisionVariable>`]; table keys own
+///   [`EvaluatedDecisionVariableTable`]; table keys own
 ///   [`VariableID`] and evaluated decision-variable rows do not carry IDs.
 /// - The decision-variable table rejects modeling labels for unknown variable
 ///   IDs.
@@ -135,7 +135,7 @@ pub struct Solution {
     /// Evaluated named-function rows plus their modeling labels.
     evaluated_named_functions: NamedFunctionTable<EvaluatedNamedFunction>,
     /// Evaluated decision-variable rows plus their modeling labels.
-    decision_variables: DecisionVariableTable<EvaluatedDecisionVariable>,
+    decision_variables: EvaluatedDecisionVariableTable,
     /// Optimality status - not guaranteed by Solution itself
     pub optimality: crate::v1::Optimality,
     /// Relaxation status - not guaranteed by Solution itself
@@ -149,7 +149,7 @@ pub struct Solution {
 }
 
 fn validate_evaluated_named_function_used_ids(
-    decision_variables: &DecisionVariableTable<EvaluatedDecisionVariable>,
+    decision_variables: &EvaluatedDecisionVariableTable,
     evaluated_named_functions: &NamedFunctionTable<EvaluatedNamedFunction>,
 ) -> Result<(), SolutionError> {
     for (named_function_id, named_function) in evaluated_named_functions.iter() {
@@ -182,7 +182,7 @@ impl Solution {
     }
 
     /// Access evaluated decision-variable rows plus their modeling labels.
-    pub fn decision_variable_table(&self) -> &DecisionVariableTable<EvaluatedDecisionVariable> {
+    pub fn decision_variable_table(&self) -> &EvaluatedDecisionVariableTable {
         &self.decision_variables
     }
 
@@ -753,7 +753,7 @@ impl SolutionBuilder {
             .ok_or(SolutionError::MissingRequiredField { field: "sense" })?;
 
         let decision_variables =
-            DecisionVariableTable::new(decision_variables, self.variable_labels)?;
+            EvaluatedDecisionVariableTable::new(decision_variables, self.variable_labels)?;
         let evaluated_named_functions =
             NamedFunctionTable::new(self.evaluated_named_functions, self.named_function_labels)?;
         evaluated_constraints.validate_context_ids()?;
@@ -864,7 +864,7 @@ impl SolutionBuilder {
                     field: "decision_variables",
                 })?;
         let decision_variables =
-            DecisionVariableTable::new(decision_variables, self.variable_labels)?;
+            EvaluatedDecisionVariableTable::new(decision_variables, self.variable_labels)?;
         let sense = self
             .sense
             .ok_or(SolutionError::MissingRequiredField { field: "sense" })?;

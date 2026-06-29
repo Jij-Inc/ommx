@@ -109,7 +109,7 @@ pub enum SampleSetError {
 /// Invariants
 /// -----------
 /// - [`Self::decision_variables`] owns a
-///   [`DecisionVariableTable<SampledDecisionVariable>`](crate::DecisionVariableTable);
+///   [`SampledDecisionVariableTable`](crate::SampledDecisionVariableTable);
 ///   table keys own [`VariableID`] and sampled decision-variable rows do not
 ///   carry IDs.
 /// - The decision-variable table rejects modeling labels for unknown variable
@@ -128,7 +128,7 @@ pub enum SampleSetError {
 #[derive(Debug, Clone, Getters)]
 pub struct SampleSet {
     /// Sampled decision-variable rows plus their modeling labels.
-    decision_variables: crate::DecisionVariableTable<SampledDecisionVariable>,
+    decision_variables: crate::SampledDecisionVariableTable,
     #[getset(get = "pub")]
     objectives: Sampled<f64>,
     #[getset(get = "pub")]
@@ -209,9 +209,7 @@ impl SampleSet {
     }
 
     /// Access sampled decision-variable rows plus their modeling labels.
-    pub fn decision_variable_table(
-        &self,
-    ) -> &crate::DecisionVariableTable<SampledDecisionVariable> {
+    pub fn decision_variable_table(&self) -> &crate::SampledDecisionVariableTable {
         &self.decision_variables
     }
 
@@ -614,11 +612,10 @@ impl SampleSetBuilder {
             .ok_or(SampleSetError::MissingRequiredField { field: "sense" })?;
 
         let decision_variables =
-            crate::DecisionVariableTable::new(decision_variables, self.variable_labels).map_err(
-                |e| SampleSetError::InvalidSidecar {
+            crate::SampledDecisionVariableTable::new(decision_variables, self.variable_labels)
+                .map_err(|e| SampleSetError::InvalidSidecar {
                     message: e.to_string(),
-                },
-            )?;
+                })?;
         let decision_variable_ids = decision_variables.keys().copied().collect::<BTreeSet<_>>();
         let named_functions =
             NamedFunctionTable::new(self.named_functions, self.named_function_labels).map_err(
@@ -772,11 +769,10 @@ impl SampleSetBuilder {
                     field: "decision_variables",
                 })?;
         let decision_variables =
-            crate::DecisionVariableTable::new(decision_variables, self.variable_labels).map_err(
-                |e| SampleSetError::InvalidSidecar {
+            crate::SampledDecisionVariableTable::new(decision_variables, self.variable_labels)
+                .map_err(|e| SampleSetError::InvalidSidecar {
                     message: e.to_string(),
-                },
-            )?;
+                })?;
         let objectives = self
             .objectives
             .ok_or(SampleSetError::MissingRequiredField {

@@ -21,7 +21,7 @@ impl Instance {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Bound, CreatedDecisionVariableTable, DecisionVariable, VariableID};
+    use crate::{Bound, DecisionVariable, DecisionVariableTable, VariableID};
     use maplit::btreemap;
 
     #[test]
@@ -40,7 +40,7 @@ mod tests {
         };
 
         let mut instance = Instance {
-            decision_variables: CreatedDecisionVariableTable::from_entries(decision_variables),
+            decision_variables: DecisionVariableTable::from_entries(decision_variables),
             ..Default::default()
         };
 
@@ -74,7 +74,7 @@ mod tests {
         };
 
         let mut instance = Instance {
-            decision_variables: CreatedDecisionVariableTable::from_entries(decision_variables),
+            decision_variables: DecisionVariableTable::from_entries(decision_variables),
             ..Default::default()
         };
 
@@ -101,7 +101,7 @@ mod tests {
         }
 
         let mut instance = Instance {
-            decision_variables: CreatedDecisionVariableTable::from_entries(decision_variables),
+            decision_variables: DecisionVariableTable::from_entries(decision_variables),
             ..Default::default()
         };
 
@@ -142,7 +142,7 @@ mod tests {
         };
 
         let mut instance = Instance {
-            decision_variables: CreatedDecisionVariableTable::new(
+            decision_variables: DecisionVariableTable::new(
                 decision_variables,
                 Default::default(),
                 btreemap! { id => 5.0 },
@@ -176,7 +176,7 @@ mod tests {
         };
 
         let mut instance = Instance {
-            decision_variables: CreatedDecisionVariableTable::from_entries(decision_variables),
+            decision_variables: DecisionVariableTable::from_entries(decision_variables),
             ..Default::default()
         };
 

@@ -34,7 +34,7 @@ pub use stats::*;
 use crate::{
     constraint::{ConstraintContextStore, RemovedReason},
     constraint_type::ConstraintCollection,
-    decision_variable::{CreatedDecisionVariableTable, VariableLabelStore},
+    decision_variable::{DecisionVariableTable, VariableLabelStore},
     indicator_constraint::IndicatorConstraint,
     named_function::NamedFunctionID,
     one_hot_constraint::OneHotConstraint,
@@ -116,7 +116,7 @@ pub enum Sense {
 /// Invariants
 /// -----------
 /// - [`Self::decision_variables`] owns the
-///   [`CreatedDecisionVariableTable`]: row IDs, decision-variable modeling
+///   [`DecisionVariableTable`]: row IDs, decision-variable modeling
 ///   labels, and fixed values share one table owner.
 /// - The decision-variable table rejects labels or fixed values for unknown
 ///   variable IDs, and fixed values must satisfy the corresponding row's
@@ -142,7 +142,7 @@ pub enum Sense {
 ///   refer to an existing decision variable, named function, or active/removed
 ///   constraint in that owner.
 /// - Fixed decision-variable values are owned by
-///   [`CreatedDecisionVariableTable`], not by individual [`DecisionVariable`]
+///   [`DecisionVariableTable`], not by individual [`DecisionVariable`]
 ///   values. The root [`Instance`] owns the host-level invariant that fixed
 ///   IDs are disjoint from solver-used and dependent variables.
 ///
@@ -190,7 +190,7 @@ pub struct Instance {
     #[getset(get = "pub")]
     objective: Function,
     /// Created decision-variable rows, modeling labels, and fixed values.
-    decision_variables: CreatedDecisionVariableTable,
+    decision_variables: DecisionVariableTable,
 
     /// Regular constraints collection (active + removed).
     constraint_collection: ConstraintCollection<Constraint>,
@@ -221,8 +221,8 @@ pub struct Instance {
 }
 
 impl Instance {
-    /// Access the created decision-variable table.
-    pub fn decision_variable_table(&self) -> &CreatedDecisionVariableTable {
+    /// Access the decision-variable definition table.
+    pub fn decision_variable_table(&self) -> &DecisionVariableTable {
         &self.decision_variables
     }
 
@@ -542,7 +542,7 @@ impl Instance {
 /// Invariants
 /// -----------
 /// - [`Self::decision_variables`] owns the
-///   [`CreatedDecisionVariableTable`]: row IDs, decision-variable modeling
+///   [`DecisionVariableTable`]: row IDs, decision-variable modeling
 ///   labels, and fixed values share one table owner.
 /// - The decision-variable table rejects labels or fixed values for unknown
 ///   variable IDs, and fixed values must satisfy the corresponding row's
@@ -585,7 +585,7 @@ impl Instance {
 ///   active/removed constraint in that owner. Parameter labels are owned by
 ///   [`ParameterTable`]; parameter IDs are not valid variable-label IDs.
 /// - Fixed decision-variable values are owned by
-///   [`CreatedDecisionVariableTable`]. The root [`ParametricInstance`] owns
+///   [`DecisionVariableTable`]. The root [`ParametricInstance`] owns
 ///   the host-level invariant that fixed IDs are disjoint from solver-used and
 ///   dependent variables, and from parameter IDs via the shared namespace rule.
 ///
@@ -635,7 +635,7 @@ pub struct ParametricInstance {
     #[getset(get = "pub")]
     objective: Function,
     /// Created decision-variable rows, modeling labels, and fixed values.
-    decision_variables: CreatedDecisionVariableTable,
+    decision_variables: DecisionVariableTable,
     #[getset(get = "pub")]
     parameters: ParameterTable,
 
@@ -667,8 +667,8 @@ pub struct ParametricInstance {
 }
 
 impl ParametricInstance {
-    /// Access the created decision-variable table.
-    pub fn decision_variable_table(&self) -> &CreatedDecisionVariableTable {
+    /// Access the decision-variable definition table.
+    pub fn decision_variable_table(&self) -> &DecisionVariableTable {
         &self.decision_variables
     }
 

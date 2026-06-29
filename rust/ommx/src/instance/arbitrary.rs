@@ -239,7 +239,7 @@ impl Arbitrary for Instance {
                                     ),
                                     sense,
                                     decision_variables:
-                                        crate::CreatedDecisionVariableTable::from_entries(
+                                        crate::DecisionVariableTable::from_entries(
                                             decision_variables,
                                         ),
                                     parameters: Default::default(),

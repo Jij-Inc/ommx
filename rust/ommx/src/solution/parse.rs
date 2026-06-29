@@ -147,14 +147,13 @@ impl Parse for crate::v1::Solution {
                     .context(message, "evaluated_named_functions")
                 })?;
         let decision_variables =
-            crate::DecisionVariableTable::new(decision_variables, variable_labels).map_err(
-                |e| {
+            crate::EvaluatedDecisionVariableTable::new(decision_variables, variable_labels)
+                .map_err(|e| {
                     crate::RawParseError::SolutionError(crate::SolutionError::InvalidSidecar {
                         message: e.to_string(),
                     })
                     .context(message, "decision_variables")
-                },
-            )?;
+                })?;
         validate_evaluated_named_function_used_ids(&decision_variables, &evaluated_named_functions)
             .map_err(|e| {
                 crate::RawParseError::SolutionError(e).context(message, "evaluated_named_functions")

@@ -243,7 +243,7 @@ impl InstanceBuilder {
             .constraints
             .ok_or_else(|| crate::error!("Required field is missing: constraints"))?;
 
-        let decision_variables = CreatedDecisionVariableTable::new(
+        let decision_variables = DecisionVariableTable::new(
             decision_variables,
             self.variable_labels,
             self.fixed_decision_variable_values,

@@ -161,12 +161,9 @@ fn ensure_finite_value(id: VariableID, value: f64) -> Result<(), DecisionVariabl
 /// Holds only `kind` and `bound` as its intrinsic definition. The
 /// [`VariableID`] is owned by the enclosing decision-variable table key.
 /// Auxiliary modeling label (`name`, `subscripts`, `parameters`,
-/// `description`) lives on the enclosing
+/// `description`) and fixed values live on the enclosing
 /// [`DecisionVariableTable`](crate::DecisionVariableTable) keyed by
-/// [`VariableID`]. Created-stage [`Instance`](crate::Instance) and
-/// [`ParametricInstance`](crate::ParametricInstance) values use
-/// [`CreatedDecisionVariableTable`](crate::CreatedDecisionVariableTable),
-/// which also owns fixed values.
+/// [`VariableID`].
 ///
 /// Invariants
 /// ----------

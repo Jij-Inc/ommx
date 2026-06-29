@@ -4,41 +4,17 @@ use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
 use crate::{ATol, Bound, ModelingLabel};
 
 use super::{
-    DecisionVariable, DecisionVariableError, DecisionVariableLabel, VariableID, VariableLabelStore,
+    DecisionVariable, DecisionVariableError, DecisionVariableLabel, EvaluatedDecisionVariable,
+    SampledDecisionVariable, VariableID, VariableLabelStore,
 };
 
-/// Owner of decision-variable rows and their modeling labels.
-///
-/// The table key owns [`VariableID`], the row value owns intrinsic data
-/// (`DecisionVariable`, `EvaluatedDecisionVariable`, or
-/// `SampledDecisionVariable`), and [`VariableLabelStore`] owns `name`,
-/// `subscripts`, `parameters`, and `description`.
-///
-/// # Table-level invariants
-///
-/// - Every modeling-label ID is owned by this table; labels for unknown
-///   [`VariableID`] values are rejected by [`Self::new`] and
-///   [`Self::set_label`].
-/// - Public mutation preserves the row/label ownership boundary. Rows can be
-///   inserted or replaced only together with the corresponding label via
-///   [`Self::insert`]; mutable row iteration is not exposed.
-///
-/// # Host-level invariants
-///
-/// This table intentionally does not validate facts that require a surrounding
-/// top-level object. For example, whether created decision variables are
-/// referenced by objective or constraint functions, whether sampled rows all
-/// use the same sample-ID universe, or whether evaluated/sampled constraints
-/// reference known variables is validated by host builders such as
-/// [`crate::Instance::builder`], [`crate::Solution::builder`], and
-/// [`crate::SampleSet::builder`].
 #[derive(Debug, Clone, PartialEq)]
-pub struct DecisionVariableTable<T> {
+struct LabeledVariableRows<T> {
     entries: BTreeMap<VariableID, T>,
     labels: VariableLabelStore,
 }
 
-impl<T> Default for DecisionVariableTable<T> {
+impl<T> Default for LabeledVariableRows<T> {
     fn default() -> Self {
         Self {
             entries: BTreeMap::default(),
@@ -47,12 +23,8 @@ impl<T> Default for DecisionVariableTable<T> {
     }
 }
 
-impl<T> DecisionVariableTable<T> {
-    /// Construct a decision-variable table, rejecting labels for unknown IDs.
-    pub fn new(
-        entries: BTreeMap<VariableID, T>,
-        labels: VariableLabelStore,
-    ) -> crate::Result<Self> {
+impl<T> LabeledVariableRows<T> {
+    fn new(entries: BTreeMap<VariableID, T>, labels: VariableLabelStore) -> crate::Result<Self> {
         let owned_ids = entries.keys().copied().collect::<BTreeSet<_>>();
         crate::modeling_label::validate_modeling_label_ids(
             &labels,
@@ -62,35 +34,26 @@ impl<T> DecisionVariableTable<T> {
         Ok(Self { entries, labels })
     }
 
-    /// Construct a table with no labels.
-    pub fn from_entries(entries: BTreeMap<VariableID, T>) -> Self {
+    fn from_entries(entries: BTreeMap<VariableID, T>) -> Self {
         Self {
             entries,
             labels: VariableLabelStore::default(),
         }
     }
 
-    /// Split the table into its row map and label store.
-    ///
-    /// Use this at serialization or conversion boundaries that must join
-    /// labels back onto row payloads. Iterating by value is intentionally not
-    /// provided, so consuming code cannot silently drop labels.
-    pub fn into_parts(self) -> (BTreeMap<VariableID, T>, VariableLabelStore) {
+    fn into_parts(self) -> (BTreeMap<VariableID, T>, VariableLabelStore) {
         (self.entries, self.labels)
     }
 
-    /// Intrinsic row map, keyed by table-owned [`VariableID`].
-    pub fn entries(&self) -> &BTreeMap<VariableID, T> {
+    fn entries(&self) -> &BTreeMap<VariableID, T> {
         &self.entries
     }
 
-    /// Per-row modeling label store.
-    pub fn labels(&self) -> &VariableLabelStore {
+    fn labels(&self) -> &VariableLabelStore {
         &self.labels
     }
 
-    /// Replace the modeling label for an existing decision-variable row.
-    pub fn set_label(&mut self, id: VariableID, label: DecisionVariableLabel) -> crate::Result<()> {
+    fn set_label(&mut self, id: VariableID, label: DecisionVariableLabel) -> crate::Result<()> {
         if !self.entries.contains_key(&id) {
             crate::bail!(
                 { ?id },
@@ -101,46 +64,45 @@ impl<T> DecisionVariableTable<T> {
         Ok(())
     }
 
-    /// Insert or replace one row and its modeling label.
-    pub fn insert(&mut self, id: VariableID, row: T, label: ModelingLabel) -> Option<T> {
+    fn insert(&mut self, id: VariableID, row: T, label: ModelingLabel) -> Option<T> {
         self.labels.insert(id, label);
         self.entries.insert(id, row)
     }
 
-    pub fn contains_key(&self, id: &VariableID) -> bool {
+    fn contains_key(&self, id: &VariableID) -> bool {
         self.entries.contains_key(id)
     }
 
-    pub fn get(&self, id: &VariableID) -> Option<&T> {
+    fn get(&self, id: &VariableID) -> Option<&T> {
         self.entries.get(id)
     }
 
-    pub fn iter(&self) -> std::collections::btree_map::Iter<'_, VariableID, T> {
+    fn iter(&self) -> std::collections::btree_map::Iter<'_, VariableID, T> {
         self.entries.iter()
     }
 
-    pub fn keys(&self) -> std::collections::btree_map::Keys<'_, VariableID, T> {
+    fn keys(&self) -> std::collections::btree_map::Keys<'_, VariableID, T> {
         self.entries.keys()
     }
 
-    pub fn values(&self) -> std::collections::btree_map::Values<'_, VariableID, T> {
+    fn values(&self) -> std::collections::btree_map::Values<'_, VariableID, T> {
         self.entries.values()
     }
 
-    pub fn len(&self) -> usize {
+    fn len(&self) -> usize {
         self.entries.len()
     }
 
-    pub fn is_empty(&self) -> bool {
+    fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
 
-    pub fn last_key_value(&self) -> Option<(&VariableID, &T)> {
+    fn last_key_value(&self) -> Option<(&VariableID, &T)> {
         self.entries.last_key_value()
     }
 }
 
-impl<T: LogicalMemoryProfile> LogicalMemoryProfile for DecisionVariableTable<T> {
+impl<T: LogicalMemoryProfile> LogicalMemoryProfile for LabeledVariableRows<T> {
     fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
         self.entries
             .visit_logical_memory(path.with("entries").as_mut(), visitor);
@@ -149,7 +111,7 @@ impl<T: LogicalMemoryProfile> LogicalMemoryProfile for DecisionVariableTable<T> 
     }
 }
 
-impl<'a, T> IntoIterator for &'a DecisionVariableTable<T> {
+impl<'a, T> IntoIterator for &'a LabeledVariableRows<T> {
     type Item = (&'a VariableID, &'a T);
     type IntoIter = std::collections::btree_map::Iter<'a, VariableID, T>;
 
@@ -158,15 +120,18 @@ impl<'a, T> IntoIterator for &'a DecisionVariableTable<T> {
     }
 }
 
-/// Owner of created decision-variable rows, modeling labels, and fixed values.
+/// Owner of decision-variable definitions, modeling labels, and fixed values.
 ///
-/// Created-stage instances carry an additional fixed-value column. The table
-/// owns the fact that fixed-value IDs must belong to the row table and that
-/// each fixed value is finite and consistent with the row's kind/bound.
+/// [`Instance`](crate::Instance) and [`ParametricInstance`](crate::ParametricInstance)
+/// use this table for model variable declarations. The table key owns
+/// [`VariableID`], row values own intrinsic [`DecisionVariable`] definition
+/// data (`kind` and `bound`), [`VariableLabelStore`] owns modeling labels, and
+/// `fixed_values` is a sparse optional column for variables fixed before
+/// solving.
 ///
 /// # Table-level invariants
 ///
-/// - All [`DecisionVariableTable`] invariants hold.
+/// - Every modeling-label ID is owned by this table.
 /// - Every fixed-value ID is owned by this table.
 /// - Fixed values are finite and satisfy the corresponding row's kind/bound
 ///   under the [`ATol`] supplied to [`Self::new`] or [`Self::set_fixed_value`].
@@ -178,32 +143,28 @@ impl<'a, T> IntoIterator for &'a DecisionVariableTable<T> {
 /// [`crate::ParametricInstance`] validates role disjointness, expression
 /// references, and the shared decision-variable / parameter ID namespace.
 #[derive(Debug, Clone, PartialEq, Default)]
-pub struct CreatedDecisionVariableTable {
-    table: DecisionVariableTable<DecisionVariable>,
+pub struct DecisionVariableTable {
+    rows: LabeledVariableRows<DecisionVariable>,
     fixed_values: BTreeMap<VariableID, f64>,
 }
 
-impl CreatedDecisionVariableTable {
-    /// Construct a created decision-variable table.
+impl DecisionVariableTable {
+    /// Construct a decision-variable definition table.
     pub fn new(
         entries: BTreeMap<VariableID, DecisionVariable>,
         labels: VariableLabelStore,
         fixed_values: BTreeMap<VariableID, f64>,
         atol: ATol,
     ) -> crate::Result<Self> {
-        let table = DecisionVariableTable::new(entries, labels)?;
-        Self::validate_fixed_values(table.entries(), &fixed_values, atol)?;
-        Ok(Self {
-            table,
-            fixed_values,
-        })
+        let rows = LabeledVariableRows::new(entries, labels)?;
+        Self::validate_fixed_values(rows.entries(), &fixed_values, atol)?;
+        Ok(Self { rows, fixed_values })
     }
 
-    /// Construct a created decision-variable table with no labels or fixed
-    /// values.
+    /// Construct a table with no labels or fixed values.
     pub fn from_entries(entries: BTreeMap<VariableID, DecisionVariable>) -> Self {
         Self {
-            table: DecisionVariableTable::from_entries(entries),
+            rows: LabeledVariableRows::from_entries(entries),
             fixed_values: BTreeMap::default(),
         }
     }
@@ -216,23 +177,18 @@ impl CreatedDecisionVariableTable {
         VariableLabelStore,
         BTreeMap<VariableID, f64>,
     ) {
-        let (entries, labels) = self.table.into_parts();
+        let (entries, labels) = self.rows.into_parts();
         (entries, labels, self.fixed_values)
-    }
-
-    /// Intrinsic row table plus modeling labels.
-    pub fn table(&self) -> &DecisionVariableTable<DecisionVariable> {
-        &self.table
     }
 
     /// Intrinsic row map, keyed by table-owned [`VariableID`].
     pub fn entries(&self) -> &BTreeMap<VariableID, DecisionVariable> {
-        self.table.entries()
+        self.rows.entries()
     }
 
     /// Per-row modeling label store.
     pub fn labels(&self) -> &VariableLabelStore {
-        self.table.labels()
+        self.rows.labels()
     }
 
     /// Fixed decision-variable values keyed by table-owned [`VariableID`].
@@ -247,12 +203,12 @@ impl CreatedDecisionVariableTable {
 
     /// Replace the modeling label for an existing decision-variable row.
     pub fn set_label(&mut self, id: VariableID, label: DecisionVariableLabel) -> crate::Result<()> {
-        self.table.set_label(id, label)
+        self.rows.set_label(id, label)
     }
 
     /// Set a fixed value for an existing decision-variable row.
     pub fn set_fixed_value(&mut self, id: VariableID, value: f64, atol: ATol) -> crate::Result<()> {
-        let Some(row) = self.table.get(&id) else {
+        let Some(row) = self.rows.get(&id) else {
             crate::bail!(
                 { ?id },
                 "Fixed decision-variable value references unknown decision variable ID {id:?}",
@@ -270,7 +226,7 @@ impl CreatedDecisionVariableTable {
         value: f64,
         atol: ATol,
     ) -> crate::Result<()> {
-        let Some(row) = self.table.get(&id) else {
+        let Some(row) = self.rows.get(&id) else {
             crate::bail!(
                 { ?id },
                 "Fixed decision-variable value references unknown decision variable ID {id:?}",
@@ -313,12 +269,12 @@ impl CreatedDecisionVariableTable {
                 self.fixed_values.remove(&id);
             }
         }
-        Ok(self.table.insert(id, row, label))
+        Ok(self.rows.insert(id, row, label))
     }
 
     /// Impose an additional bound on one row while preserving table invariants.
     pub fn clip_bound(&mut self, id: VariableID, bound: Bound, atol: ATol) -> crate::Result<bool> {
-        let Some(row) = self.table.entries.get(&id) else {
+        let Some(row) = self.rows.entries.get(&id) else {
             crate::bail!({ ?id }, "Undefined variable ID is used: {id:?}");
         };
         let mut updated = row.clone();
@@ -327,41 +283,41 @@ impl CreatedDecisionVariableTable {
             if let Some(value) = self.fixed_values.get(&id).copied() {
                 updated.check_value_consistency(id, value, atol)?;
             }
-            self.table.entries.insert(id, updated);
+            self.rows.entries.insert(id, updated);
         }
         Ok(changed)
     }
 
     pub fn contains_key(&self, id: &VariableID) -> bool {
-        self.table.contains_key(id)
+        self.rows.contains_key(id)
     }
 
     pub fn get(&self, id: &VariableID) -> Option<&DecisionVariable> {
-        self.table.get(id)
+        self.rows.get(id)
     }
 
     pub fn iter(&self) -> std::collections::btree_map::Iter<'_, VariableID, DecisionVariable> {
-        self.table.iter()
+        self.rows.iter()
     }
 
     pub fn keys(&self) -> std::collections::btree_map::Keys<'_, VariableID, DecisionVariable> {
-        self.table.keys()
+        self.rows.keys()
     }
 
     pub fn values(&self) -> std::collections::btree_map::Values<'_, VariableID, DecisionVariable> {
-        self.table.values()
+        self.rows.values()
     }
 
     pub fn len(&self) -> usize {
-        self.table.len()
+        self.rows.len()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.table.is_empty()
+        self.rows.is_empty()
     }
 
     pub fn last_key_value(&self) -> Option<(&VariableID, &DecisionVariable)> {
-        self.table.last_key_value()
+        self.rows.last_key_value()
     }
 
     fn validate_fixed_values(
@@ -382,21 +338,252 @@ impl CreatedDecisionVariableTable {
     }
 }
 
-impl LogicalMemoryProfile for CreatedDecisionVariableTable {
+impl LogicalMemoryProfile for DecisionVariableTable {
     fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
-        self.table
-            .visit_logical_memory(path.with("table").as_mut(), visitor);
+        self.rows
+            .entries
+            .visit_logical_memory(path.with("entries").as_mut(), visitor);
+        self.rows
+            .labels
+            .visit_logical_memory(path.with("labels").as_mut(), visitor);
         self.fixed_values
             .visit_logical_memory(path.with("fixed_values").as_mut(), visitor);
     }
 }
 
-impl<'a> IntoIterator for &'a CreatedDecisionVariableTable {
+impl<'a> IntoIterator for &'a DecisionVariableTable {
     type Item = (&'a VariableID, &'a DecisionVariable);
     type IntoIter = std::collections::btree_map::Iter<'a, VariableID, DecisionVariable>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.table.iter()
+        self.rows.iter()
+    }
+}
+
+/// Owner of evaluated decision-variable rows and their modeling labels.
+///
+/// [`Solution`](crate::Solution) uses this table for variable values at one
+/// state. The table key owns [`VariableID`]; row values own evaluated
+/// `kind`/`bound`/`value` payloads. Host-level invariants, such as whether
+/// evaluated constraints reference known variables, remain owned by
+/// [`Solution`](crate::Solution).
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct EvaluatedDecisionVariableTable {
+    rows: LabeledVariableRows<EvaluatedDecisionVariable>,
+}
+
+impl EvaluatedDecisionVariableTable {
+    /// Construct an evaluated decision-variable table, rejecting labels for
+    /// unknown IDs.
+    pub fn new(
+        entries: BTreeMap<VariableID, EvaluatedDecisionVariable>,
+        labels: VariableLabelStore,
+    ) -> crate::Result<Self> {
+        Ok(Self {
+            rows: LabeledVariableRows::new(entries, labels)?,
+        })
+    }
+
+    /// Construct a table with no labels.
+    pub fn from_entries(entries: BTreeMap<VariableID, EvaluatedDecisionVariable>) -> Self {
+        Self {
+            rows: LabeledVariableRows::from_entries(entries),
+        }
+    }
+
+    /// Split the table into its row map and label store.
+    pub fn into_parts(
+        self,
+    ) -> (
+        BTreeMap<VariableID, EvaluatedDecisionVariable>,
+        VariableLabelStore,
+    ) {
+        self.rows.into_parts()
+    }
+
+    /// Evaluated row map, keyed by table-owned [`VariableID`].
+    pub fn entries(&self) -> &BTreeMap<VariableID, EvaluatedDecisionVariable> {
+        self.rows.entries()
+    }
+
+    /// Per-row modeling label store.
+    pub fn labels(&self) -> &VariableLabelStore {
+        self.rows.labels()
+    }
+
+    /// Replace the modeling label for an existing evaluated row.
+    pub fn set_label(&mut self, id: VariableID, label: DecisionVariableLabel) -> crate::Result<()> {
+        self.rows.set_label(id, label)
+    }
+
+    /// Insert or replace one evaluated row and its modeling label.
+    pub fn insert(
+        &mut self,
+        id: VariableID,
+        row: EvaluatedDecisionVariable,
+        label: DecisionVariableLabel,
+    ) -> Option<EvaluatedDecisionVariable> {
+        self.rows.insert(id, row, label)
+    }
+
+    pub fn contains_key(&self, id: &VariableID) -> bool {
+        self.rows.contains_key(id)
+    }
+
+    pub fn get(&self, id: &VariableID) -> Option<&EvaluatedDecisionVariable> {
+        self.rows.get(id)
+    }
+
+    pub fn iter(
+        &self,
+    ) -> std::collections::btree_map::Iter<'_, VariableID, EvaluatedDecisionVariable> {
+        self.rows.iter()
+    }
+
+    pub fn keys(
+        &self,
+    ) -> std::collections::btree_map::Keys<'_, VariableID, EvaluatedDecisionVariable> {
+        self.rows.keys()
+    }
+
+    pub fn values(
+        &self,
+    ) -> std::collections::btree_map::Values<'_, VariableID, EvaluatedDecisionVariable> {
+        self.rows.values()
+    }
+
+    pub fn len(&self) -> usize {
+        self.rows.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.rows.is_empty()
+    }
+
+    pub fn last_key_value(&self) -> Option<(&VariableID, &EvaluatedDecisionVariable)> {
+        self.rows.last_key_value()
+    }
+}
+
+impl<'a> IntoIterator for &'a EvaluatedDecisionVariableTable {
+    type Item = (&'a VariableID, &'a EvaluatedDecisionVariable);
+    type IntoIter = std::collections::btree_map::Iter<'a, VariableID, EvaluatedDecisionVariable>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.rows.iter()
+    }
+}
+
+/// Owner of sampled decision-variable rows and their modeling labels.
+///
+/// [`SampleSet`](crate::SampleSet) uses this table for per-sample variable
+/// values. The table key owns [`VariableID`]; row values own sampled
+/// `kind`/`bound`/`samples` payloads. The enclosing
+/// [`SampleSet`](crate::SampleSet) owns cross-table sample-ID consistency.
+#[derive(Debug, Clone, Default)]
+pub struct SampledDecisionVariableTable {
+    rows: LabeledVariableRows<SampledDecisionVariable>,
+}
+
+impl SampledDecisionVariableTable {
+    /// Construct a sampled decision-variable table, rejecting labels for
+    /// unknown IDs.
+    pub fn new(
+        entries: BTreeMap<VariableID, SampledDecisionVariable>,
+        labels: VariableLabelStore,
+    ) -> crate::Result<Self> {
+        Ok(Self {
+            rows: LabeledVariableRows::new(entries, labels)?,
+        })
+    }
+
+    /// Construct a table with no labels.
+    pub fn from_entries(entries: BTreeMap<VariableID, SampledDecisionVariable>) -> Self {
+        Self {
+            rows: LabeledVariableRows::from_entries(entries),
+        }
+    }
+
+    /// Split the table into its row map and label store.
+    pub fn into_parts(
+        self,
+    ) -> (
+        BTreeMap<VariableID, SampledDecisionVariable>,
+        VariableLabelStore,
+    ) {
+        self.rows.into_parts()
+    }
+
+    /// Sampled row map, keyed by table-owned [`VariableID`].
+    pub fn entries(&self) -> &BTreeMap<VariableID, SampledDecisionVariable> {
+        self.rows.entries()
+    }
+
+    /// Per-row modeling label store.
+    pub fn labels(&self) -> &VariableLabelStore {
+        self.rows.labels()
+    }
+
+    /// Replace the modeling label for an existing sampled row.
+    pub fn set_label(&mut self, id: VariableID, label: DecisionVariableLabel) -> crate::Result<()> {
+        self.rows.set_label(id, label)
+    }
+
+    /// Insert or replace one sampled row and its modeling label.
+    pub fn insert(
+        &mut self,
+        id: VariableID,
+        row: SampledDecisionVariable,
+        label: DecisionVariableLabel,
+    ) -> Option<SampledDecisionVariable> {
+        self.rows.insert(id, row, label)
+    }
+
+    pub fn contains_key(&self, id: &VariableID) -> bool {
+        self.rows.contains_key(id)
+    }
+
+    pub fn get(&self, id: &VariableID) -> Option<&SampledDecisionVariable> {
+        self.rows.get(id)
+    }
+
+    pub fn iter(
+        &self,
+    ) -> std::collections::btree_map::Iter<'_, VariableID, SampledDecisionVariable> {
+        self.rows.iter()
+    }
+
+    pub fn keys(
+        &self,
+    ) -> std::collections::btree_map::Keys<'_, VariableID, SampledDecisionVariable> {
+        self.rows.keys()
+    }
+
+    pub fn values(
+        &self,
+    ) -> std::collections::btree_map::Values<'_, VariableID, SampledDecisionVariable> {
+        self.rows.values()
+    }
+
+    pub fn len(&self) -> usize {
+        self.rows.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.rows.is_empty()
+    }
+
+    pub fn last_key_value(&self) -> Option<(&VariableID, &SampledDecisionVariable)> {
+        self.rows.last_key_value()
+    }
+}
+
+impl<'a> IntoIterator for &'a SampledDecisionVariableTable {
+    type Item = (&'a VariableID, &'a SampledDecisionVariable);
+    type IntoIter = std::collections::btree_map::Iter<'a, VariableID, SampledDecisionVariable>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.rows.iter()
     }
 }
 
@@ -412,7 +599,8 @@ mod tests {
         labels.set_name(id, "x");
 
         let err =
-            DecisionVariableTable::<DecisionVariable>::new(BTreeMap::new(), labels).unwrap_err();
+            DecisionVariableTable::new(BTreeMap::new(), labels, BTreeMap::new(), ATol::default())
+                .unwrap_err();
 
         assert!(
             err.to_string().contains("unknown decision variable ID")
@@ -422,9 +610,9 @@ mod tests {
     }
 
     #[test]
-    fn created_table_rejects_orphan_fixed_values() {
+    fn definition_table_rejects_orphan_fixed_values() {
         let id = VariableID::from(1);
-        let err = CreatedDecisionVariableTable::new(
+        let err = DecisionVariableTable::new(
             BTreeMap::new(),
             VariableLabelStore::default(),
             BTreeMap::from([(id, 0.0)]),
@@ -440,7 +628,7 @@ mod tests {
     }
 
     #[test]
-    fn created_table_rejects_inconsistent_fixed_values() {
+    fn definition_table_rejects_inconsistent_fixed_values() {
         let id = VariableID::from(1);
         let row = DecisionVariable::new(
             crate::Kind::Integer,
@@ -448,7 +636,7 @@ mod tests {
             ATol::default(),
         )
         .unwrap();
-        let err = CreatedDecisionVariableTable::new(
+        let err = DecisionVariableTable::new(
             BTreeMap::from([(id, row)]),
             VariableLabelStore::default(),
             BTreeMap::from([(id, 0.5)]),
@@ -463,13 +651,13 @@ mod tests {
     }
 
     #[test]
-    fn created_table_preserves_rows_labels_and_fixed_values() {
+    fn definition_table_preserves_rows_labels_and_fixed_values() {
         let id = VariableID::from(1);
         let row = DecisionVariable::binary();
         let mut labels = VariableLabelStore::default();
         labels.set_name(id, "x");
 
-        let table = CreatedDecisionVariableTable::new(
+        let table = DecisionVariableTable::new(
             BTreeMap::from([(id, row.clone())]),
             labels,
             BTreeMap::from([(id, 1.0)]),
@@ -483,9 +671,9 @@ mod tests {
     }
 
     #[test]
-    fn created_table_rejects_inconsistent_fixed_overwrite() {
+    fn definition_table_rejects_inconsistent_fixed_overwrite() {
         let id = VariableID::from(1);
-        let mut table = CreatedDecisionVariableTable::from_entries(BTreeMap::from([(
+        let mut table = DecisionVariableTable::from_entries(BTreeMap::from([(
             id,
             DecisionVariable::continuous(),
         )]));
@@ -500,5 +688,35 @@ mod tests {
             "unexpected error: {err}"
         );
         assert_eq!(table.fixed_value(id), Some(1.0));
+    }
+
+    #[test]
+    fn evaluated_table_rejects_orphan_labels() {
+        let id = VariableID::from(1);
+        let mut labels = VariableLabelStore::default();
+        labels.set_name(id, "x");
+
+        let err = EvaluatedDecisionVariableTable::new(BTreeMap::new(), labels).unwrap_err();
+
+        assert!(
+            err.to_string().contains("unknown decision variable ID")
+                && err.to_string().contains("VariableID(1)"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn sampled_table_rejects_orphan_labels() {
+        let id = VariableID::from(1);
+        let mut labels = VariableLabelStore::default();
+        labels.set_name(id, "x");
+
+        let err = SampledDecisionVariableTable::new(BTreeMap::new(), labels).unwrap_err();
+
+        assert!(
+            err.to_string().contains("unknown decision variable ID")
+                && err.to_string().contains("VariableID(1)"),
+            "unexpected error: {err}"
+        );
     }
 }
