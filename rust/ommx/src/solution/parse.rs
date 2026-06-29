@@ -144,10 +144,18 @@ impl Parse for crate::v1::Solution {
             evaluated_indicator_constraints: Default::default(),
             evaluated_one_hot_constraints: Default::default(),
             evaluated_sos1_constraints: Default::default(),
-            evaluated_named_functions,
+            evaluated_named_functions: crate::NamedFunctionTable::new(
+                evaluated_named_functions,
+                named_function_labels,
+            )
+            .map_err(|e| {
+                crate::RawParseError::SolutionError(crate::SolutionError::InvalidSidecar {
+                    message: e.to_string(),
+                })
+                .context(message, "evaluated_named_functions")
+            })?,
             decision_variables,
             variable_labels,
-            named_function_labels,
             optimality,
             relaxation,
             sense,

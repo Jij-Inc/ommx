@@ -21,7 +21,7 @@ impl SampleSet {
     pub fn named_function_names(&self) -> std::collections::BTreeSet<String> {
         self.named_functions
             .keys()
-            .filter_map(|id| self.named_function_labels.name(*id).map(str::to_owned))
+            .filter_map(|id| self.named_function_labels().name(*id).map(str::to_owned))
             .collect()
     }
 
@@ -176,12 +176,12 @@ impl SampleSet {
         let mut result: BTreeMap<String, BTreeMap<Vec<i64>, f64>> = BTreeMap::new();
 
         for (id, nf) in &self.named_functions {
-            let name = match self.named_function_labels.name(*id) {
+            let name = match self.named_function_labels().name(*id) {
                 Some(n) => n.to_string(),
                 None => continue, // Skip functions without names
             };
 
-            let subscripts = self.named_function_labels.subscripts(*id).to_vec();
+            let subscripts = self.named_function_labels().subscripts(*id).to_vec();
             let value = *nf
                 .evaluated_values()
                 .get(sample_id)
@@ -218,7 +218,7 @@ impl SampleSet {
         let named_functions_with_name: Vec<(NamedFunctionID, &SampledNamedFunction)> = self
             .named_functions
             .iter()
-            .filter(|(id, _)| self.named_function_labels.name(**id) == Some(name))
+            .filter(|(id, _)| self.named_function_labels().name(**id) == Some(name))
             .map(|(id, nf)| (*id, nf))
             .collect();
         if named_functions_with_name.is_empty() {
@@ -228,7 +228,7 @@ impl SampleSet {
         }
         let mut result = BTreeMap::new();
         for (id, nf) in &named_functions_with_name {
-            let subscripts = self.named_function_labels.subscripts(*id).to_vec();
+            let subscripts = self.named_function_labels().subscripts(*id).to_vec();
             let value = *nf
                 .evaluated_values()
                 .get(sample_id)

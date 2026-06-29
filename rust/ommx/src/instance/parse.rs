@@ -367,8 +367,11 @@ impl Parse for v1::Instance {
             parameters: self.parameters,
             description: self.description,
             annotations: self.annotations,
-            named_functions,
-            named_function_labels,
+            named_functions: crate::NamedFunctionTable::new(named_functions, named_function_labels)
+                .map_err(|e| {
+                    RawParseError::InvalidInstance(e.to_string())
+                        .context(message, "named_functions")
+                })?,
         })
     }
 }
@@ -403,9 +406,8 @@ impl From<Instance> for v1::Instance {
             .into_iter()
             .map(|(id, c)| constraint_to_v1(id, c, constraint_context.remove(id)))
             .collect();
-        let mut named_function_labels = value.named_function_labels;
-        let named_functions = value
-            .named_functions
+        let (named_functions, mut named_function_labels) = value.named_functions.into_parts();
+        let named_functions = named_functions
             .into_iter()
             .map(|(id, nf)| {
                 let label = named_function_labels.remove(id);
@@ -636,8 +638,11 @@ impl Parse for v1::ParametricInstance {
             .map_err(|e| {
                 RawParseError::InvalidInstance(e.to_string()).context(message, "constraint_hints")
             })?,
-            named_functions,
-            named_function_labels,
+            named_functions: crate::NamedFunctionTable::new(named_functions, named_function_labels)
+                .map_err(|e| {
+                    RawParseError::InvalidInstance(e.to_string())
+                        .context(message, "named_functions")
+                })?,
             decision_variable_dependency,
             description: self.description,
             annotations: self.annotations,
@@ -661,7 +666,6 @@ impl From<ParametricInstance> for v1::ParametricInstance {
             decision_variable_dependency,
             description,
             named_functions,
-            named_function_labels,
             annotations,
         }: ParametricInstance,
     ) -> Self {
@@ -705,7 +709,7 @@ impl From<ParametricInstance> for v1::ParametricInstance {
             .into_iter()
             .map(|(id, (c, r))| removed_constraint_to_v1(id, c, constraint_context.remove(id), r))
             .collect();
-        let mut named_function_labels = named_function_labels;
+        let (named_functions, mut named_function_labels) = named_functions.into_parts();
         let v1_named_functions = named_functions
             .into_iter()
             .map(|(id, nf)| {

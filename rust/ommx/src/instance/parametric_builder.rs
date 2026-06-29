@@ -326,16 +326,8 @@ impl ParametricInstanceBuilder {
                 }
             }
         }
-        let named_function_ids = self
-            .named_functions
-            .keys()
-            .copied()
-            .collect::<std::collections::BTreeSet<_>>();
-        crate::modeling_label::validate_modeling_label_ids(
-            &self.named_function_labels,
-            &named_function_ids,
-            "named function",
-        )?;
+        let named_functions =
+            NamedFunctionTable::new(self.named_functions, self.named_function_labels)?;
 
         // Validate indicator constraints. Function bodies may reference
         // parameters; the indicator variable is a *structural* position and
@@ -539,8 +531,7 @@ impl ParametricInstanceBuilder {
                 BTreeMap::new(),
                 self.sos1_constraint_context,
             )?,
-            named_functions: self.named_functions,
-            named_function_labels: self.named_function_labels,
+            named_functions,
             decision_variable_dependency: self.decision_variable_dependency,
             description: self.description,
             annotations: Default::default(),
@@ -688,6 +679,28 @@ mod tests {
         assert!(
             err.to_string().contains("unknown decision variable ID")
                 && err.to_string().contains("VariableID(99)"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_parametric_builder_rejects_orphan_named_function_labels() {
+        let mut named_function_labels = crate::named_function::NamedFunctionLabelStore::default();
+        named_function_labels.set_name(NamedFunctionID::from(99), "orphan");
+
+        let err = ParametricInstance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::new())
+            .parameters(BTreeMap::new())
+            .constraints(BTreeMap::new())
+            .named_function_labels(named_function_labels)
+            .build()
+            .unwrap_err();
+
+        assert!(
+            err.to_string().contains("unknown named function ID")
+                && err.to_string().contains("NamedFunctionID(99)"),
             "unexpected error: {err}"
         );
     }

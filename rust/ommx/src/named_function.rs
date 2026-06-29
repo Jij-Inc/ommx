@@ -5,6 +5,7 @@ pub(crate) mod parse;
 
 use derive_more::{Deref, From};
 use getset::*;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
 use crate::{Function, SampleID, Sampled, VariableIDSet};
@@ -96,6 +97,162 @@ impl std::fmt::Display for NamedFunction {
 /// Modeling label for named functions.
 pub type NamedFunctionLabel = crate::ModelingLabel;
 
+/// Owner of named-function rows and their modeling labels.
+///
+/// The table key owns [`NamedFunctionID`], the row value owns intrinsic data
+/// (`NamedFunction`, `EvaluatedNamedFunction`, or `SampledNamedFunction`), and
+/// [`NamedFunctionLabelStore`] owns `name`, `subscripts`, `parameters`, and
+/// `description`. This mirrors `ConstraintCollection` for named functions,
+/// without active/removed state.
+#[derive(Debug, Clone, PartialEq)]
+pub struct NamedFunctionTable<T> {
+    entries: BTreeMap<NamedFunctionID, T>,
+    labels: NamedFunctionLabelStore,
+}
+
+impl<T> Default for NamedFunctionTable<T> {
+    fn default() -> Self {
+        Self {
+            entries: BTreeMap::default(),
+            labels: NamedFunctionLabelStore::default(),
+        }
+    }
+}
+
+impl<T> NamedFunctionTable<T> {
+    /// Construct a named-function table, rejecting labels for unknown IDs.
+    pub fn new(
+        entries: BTreeMap<NamedFunctionID, T>,
+        labels: NamedFunctionLabelStore,
+    ) -> crate::Result<Self> {
+        let owned_ids = entries.keys().copied().collect::<BTreeSet<_>>();
+        crate::modeling_label::validate_modeling_label_ids(&labels, &owned_ids, "named function")?;
+        Ok(Self { entries, labels })
+    }
+
+    /// Construct a table with no labels.
+    pub fn from_entries(entries: BTreeMap<NamedFunctionID, T>) -> Self {
+        Self {
+            entries,
+            labels: NamedFunctionLabelStore::default(),
+        }
+    }
+
+    /// Construct a table without validating that labels refer to existing rows.
+    ///
+    /// This is for host-level unchecked constructors whose caller already owns
+    /// the invariant. Prefer [`Self::new`] at external input boundaries.
+    pub(crate) fn from_parts_unchecked(
+        entries: BTreeMap<NamedFunctionID, T>,
+        labels: NamedFunctionLabelStore,
+    ) -> Self {
+        Self { entries, labels }
+    }
+
+    /// Split the table into its row map and label store.
+    ///
+    /// Use this at serialization or conversion boundaries that must join
+    /// labels back onto row payloads. Iterating by value is intentionally not
+    /// provided, so consuming code cannot silently drop labels.
+    pub fn into_parts(self) -> (BTreeMap<NamedFunctionID, T>, NamedFunctionLabelStore) {
+        (self.entries, self.labels)
+    }
+
+    /// Intrinsic row map, keyed by table-owned [`NamedFunctionID`].
+    pub fn entries(&self) -> &BTreeMap<NamedFunctionID, T> {
+        &self.entries
+    }
+
+    /// Per-row modeling label store.
+    pub fn labels(&self) -> &NamedFunctionLabelStore {
+        &self.labels
+    }
+
+    /// Replace the modeling label for an existing named-function row.
+    pub fn set_label(
+        &mut self,
+        id: NamedFunctionID,
+        label: NamedFunctionLabel,
+    ) -> crate::Result<()> {
+        if !self.entries.contains_key(&id) {
+            crate::bail!(
+                { ?id },
+                "Modeling label references unknown named function ID {id:?}",
+            );
+        }
+        self.labels.insert(id, label);
+        Ok(())
+    }
+
+    /// Insert or replace one row and its modeling label.
+    pub fn insert(&mut self, id: NamedFunctionID, row: T, label: NamedFunctionLabel) -> Option<T> {
+        self.labels.insert(id, label);
+        self.entries.insert(id, row)
+    }
+
+    pub fn contains_key(&self, id: &NamedFunctionID) -> bool {
+        self.entries.contains_key(id)
+    }
+
+    pub fn get(&self, id: &NamedFunctionID) -> Option<&T> {
+        self.entries.get(id)
+    }
+
+    pub fn get_mut(&mut self, id: &NamedFunctionID) -> Option<&mut T> {
+        self.entries.get_mut(id)
+    }
+
+    pub fn iter(&self) -> std::collections::btree_map::Iter<'_, NamedFunctionID, T> {
+        self.entries.iter()
+    }
+
+    pub fn iter_mut(&mut self) -> std::collections::btree_map::IterMut<'_, NamedFunctionID, T> {
+        self.entries.iter_mut()
+    }
+
+    pub fn keys(&self) -> std::collections::btree_map::Keys<'_, NamedFunctionID, T> {
+        self.entries.keys()
+    }
+
+    pub fn values(&self) -> std::collections::btree_map::Values<'_, NamedFunctionID, T> {
+        self.entries.values()
+    }
+
+    pub fn values_mut(&mut self) -> std::collections::btree_map::ValuesMut<'_, NamedFunctionID, T> {
+        self.entries.values_mut()
+    }
+
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    pub fn last_key_value(&self) -> Option<(&NamedFunctionID, &T)> {
+        self.entries.last_key_value()
+    }
+}
+
+impl<T: LogicalMemoryProfile> LogicalMemoryProfile for NamedFunctionTable<T> {
+    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
+        self.entries
+            .visit_logical_memory(path.with("entries").as_mut(), visitor);
+        self.labels
+            .visit_logical_memory(path.with("labels").as_mut(), visitor);
+    }
+}
+
+impl<'a, T> IntoIterator for &'a NamedFunctionTable<T> {
+    type Item = (&'a NamedFunctionID, &'a T);
+    type IntoIter = std::collections::btree_map::Iter<'a, NamedFunctionID, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.entries.iter()
+    }
+}
+
 /// `ommx.v1.EvaluatedNamedFunction` with validated, typed fields.
 ///
 /// Modeling labels moved to a per-collection
@@ -151,5 +308,39 @@ impl SampledNamedFunction {
             evaluated_value,
             used_decision_variable_ids: self.used_decision_variable_ids.clone(),
         })
+    }
+}
+
+#[cfg(test)]
+mod table_tests {
+    use super::*;
+
+    #[test]
+    fn rejects_label_for_unknown_id() {
+        let mut labels = NamedFunctionLabelStore::default();
+        labels.set_name(NamedFunctionID::from(1), "unknown");
+
+        let err = NamedFunctionTable::<NamedFunction>::new(BTreeMap::new(), labels).unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("Modeling label references unknown named function ID"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn preserves_rows_and_labels() {
+        let id = NamedFunctionID::from(0);
+        let row = NamedFunction {
+            function: Function::Zero,
+        };
+        let mut labels = NamedFunctionLabelStore::default();
+        labels.set_name(id, "cost");
+
+        let table = NamedFunctionTable::new(BTreeMap::from([(id, row.clone())]), labels).unwrap();
+
+        assert_eq!(table.get(&id), Some(&row));
+        assert_eq!(table.labels().name(id), Some("cost"));
     }
 }

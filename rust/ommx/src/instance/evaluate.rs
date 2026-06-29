@@ -291,7 +291,7 @@ impl Evaluate for Instance {
                 .evaluated_named_functions(evaluated_named_functions)
                 .decision_variables(decision_variables)
                 .variable_labels(self.variable_labels.clone())
-                .named_function_labels(self.named_function_labels.clone())
+                .named_function_labels(self.named_function_labels().clone())
                 .sense(sense)
                 .build_unchecked()?
         };
@@ -361,7 +361,7 @@ impl Evaluate for Instance {
             .one_hot_constraints_collection(sampled_one_hot_constraints)
             .sos1_constraints_collection(sampled_sos1_constraints)
             .named_functions(named_functions)
-            .named_function_labels(self.named_function_labels.clone())
+            .named_function_labels(self.named_function_labels().clone())
             .sense(self.sense)
             .build()?)
     }
@@ -820,10 +820,10 @@ mod tests {
                 VariableID::from(2) => 3.0,
             })
             .constraints(BTreeMap::new()) // No constraints
+            .named_functions(named_functions)
             .build()
             .unwrap();
         instance.decision_variable_dependency = decision_variable_dependency;
-        instance.named_functions = named_functions;
 
         // Verify the usage: x1 is used, x2 is fixed, x3 is dependent,
         // x4 and x5 should be irrelevant (named_functions don't contribute to "used")

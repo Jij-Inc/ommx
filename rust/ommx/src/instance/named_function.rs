@@ -21,7 +21,8 @@ impl Instance {
     /// * `subscripts` - The subscripts of the named function (can be empty)
     ///
     /// # Returns
-    /// * `Some(&NamedFunction)` if a named function with the given name and subscripts is found
+    /// * `Some((NamedFunctionID, &NamedFunction))` if a named function with
+    ///   the given name and subscripts is found
     /// * `None` if no matching named function is found
     ///
     /// # Example
@@ -38,11 +39,11 @@ impl Instance {
         &self,
         name: &str,
         subscripts: Vec<i64>,
-    ) -> Option<&NamedFunction> {
+    ) -> Option<(NamedFunctionID, &NamedFunction)> {
         self.named_functions.iter().find_map(|(id, nf)| {
             let store = self.named_function_labels();
             if store.name(*id) == Some(name) && store.subscripts(*id) == subscripts.as_slice() {
-                Some(nf)
+                Some((*id, nf))
             } else {
                 None
             }
@@ -70,7 +71,7 @@ impl Instance {
         subscripts: Vec<i64>,
         parameters: FnvHashMap<String, String>,
         description: Option<String>,
-    ) -> crate::Result<&mut NamedFunction> {
+    ) -> crate::Result<(NamedFunctionID, &mut NamedFunction)> {
         let variable_ids: VariableIDSet = self.decision_variables.keys().cloned().collect();
 
         for id in function.required_ids() {
@@ -81,15 +82,14 @@ impl Instance {
         let id = self.next_named_function_id();
 
         let named_function = NamedFunction { function };
-        self.named_functions.insert(id, named_function);
         let label = crate::named_function::NamedFunctionLabel {
             name,
             subscripts,
             parameters,
             description,
         };
-        self.named_function_labels_mut().insert(id, label);
-        Ok(self.named_functions.get_mut(&id).unwrap())
+        self.named_functions.insert(id, named_function, label);
+        Ok((id, self.named_functions.get_mut(&id).unwrap()))
     }
 }
 
@@ -167,9 +167,10 @@ mod tests {
         // Lookup by correct name and subscripts
         let found = instance.get_named_function_by_name("f", vec![1, 2]);
         assert!(found.is_some());
-        let found_id = NamedFunctionID::from(0);
+        let (found_id, found) = found.unwrap();
+        assert_eq!(found_id, NamedFunctionID::from(0));
         assert_eq!(
-            found.unwrap().function,
+            found.function,
             Function::Constant(Coefficient::try_from(1.0).unwrap())
         );
         assert_eq!(instance.named_function_labels().name(found_id), Some("f"));

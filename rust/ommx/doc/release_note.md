@@ -163,8 +163,9 @@ available at every stage),
 [`VariableLabelStore`](crate::VariableLabelStore) as a sibling
 field on `Instance` / `ParametricInstance` / `Solution` / `SampleSet`
 (no separate `DecisionVariableCollection` was introduced), and
-[`NamedFunctionLabelStore`](crate::NamedFunctionLabelStore) the
-same way for named functions.
+[`NamedFunctionLabelStore`](crate::NamedFunctionLabelStore) inside
+[`NamedFunctionTable`](crate::NamedFunctionTable), which owns named-function
+rows and labels together.
 
 The split lets the type system enforce invariants more tightly. The
 raw active/removed map mutators on `ConstraintCollection<T>` are
@@ -227,13 +228,13 @@ decision variables. The Rust SDK row structs no longer carry their own
 - [`SampledNamedFunction`](crate::SampledNamedFunction) stores sampled values
   and used decision-variable IDs.
 
-The ID lives on the enclosing maps of [`Instance`](crate::Instance),
-[`ParametricInstance`](crate::ParametricInstance),
-[`Solution`](crate::Solution), and [`SampleSet`](crate::SampleSet), while
-modeling labels live in
-[`NamedFunctionLabelStore`](crate::NamedFunctionLabelStore). Legacy
-`ommx.v1` protobuf messages still carry inline IDs; Rust parse drains them into
-map keys and Rust serialization fills them from map keys.
+The ID, row map, and modeling labels now live together in
+[`NamedFunctionTable`](crate::NamedFunctionTable). `Instance` and
+`ParametricInstance` store `NamedFunctionTable<NamedFunction>`, `Solution`
+stores `NamedFunctionTable<EvaluatedNamedFunction>`, and `SampleSet` stores
+`NamedFunctionTable<SampledNamedFunction>`. Legacy `ommx.v1` protobuf messages
+still carry inline IDs; Rust parse drains them into table keys and Rust
+serialization fills them from table keys.
 
 ## Capability model ([#790](https://github.com/Jij-Inc/ommx/pull/790), [#805](https://github.com/Jij-Inc/ommx/pull/805), [#810](https://github.com/Jij-Inc/ommx/pull/810), [#811](https://github.com/Jij-Inc/ommx/pull/811), [#814](https://github.com/Jij-Inc/ommx/pull/814))
 

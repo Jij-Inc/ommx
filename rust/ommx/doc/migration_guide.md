@@ -505,12 +505,14 @@ instance.sos1_constraint_context()
 instance.set_sos1_constraint_context(id, context)?
 instance.variable_labels()                // &VariableLabelStore
 instance.set_variable_label(id, label)?
+instance.named_function_table()           // &NamedFunctionTable<NamedFunction>
 instance.named_function_labels()          // &NamedFunctionLabelStore
 instance.set_named_function_label(id, label)?
 ```
 
 `Solution` and `SampleSet` expose the variable / named-function stores
 the same way (`solution.variable_labels()`,
+`solution.evaluated_named_function_table()`,
 `solution.named_function_labels()`, same on `SampleSet`), but
 constraint context is reached through the evaluated / sampled
 collection getter then `.context()` on the collection — there are no
@@ -634,12 +636,14 @@ only intrinsic data:
 - `EvaluatedNamedFunction`: the evaluated value and used decision-variable IDs
 - `SampledNamedFunction`: sampled values and used decision-variable IDs
 
-The [`NamedFunctionID`](crate::NamedFunctionID) is owned by the enclosing
-`BTreeMap` key on [`Instance`](crate::Instance) /
-[`ParametricInstance`](crate::ParametricInstance), and by the corresponding
-evaluated/sampled maps on [`Solution`](crate::Solution) and
-[`SampleSet`](crate::SampleSet). Modeling labels are owned by
-[`NamedFunctionLabelStore`](crate::NamedFunctionLabelStore).
+The [`NamedFunctionID`](crate::NamedFunctionID) and modeling labels are owned by
+[`NamedFunctionTable`](crate::NamedFunctionTable). `Instance` and
+`ParametricInstance` store `NamedFunctionTable<NamedFunction>`, `Solution`
+stores `NamedFunctionTable<EvaluatedNamedFunction>`, and `SampleSet` stores
+`NamedFunctionTable<SampledNamedFunction>`. The table keeps row payloads and
+[`NamedFunctionLabelStore`](crate::NamedFunctionLabelStore) together so labels
+cannot be attached to unknown named-function IDs at validated construction
+boundaries.
 
 Construction changes mirror constraints and decision variables:
 
@@ -705,8 +709,8 @@ pub struct ConstraintContext {
 - [ ] Replace `DecisionVariable::binary(id)` / `integer(id)` / `continuous(id)` / etc. with the no-argument row factories, and keep the ID on the enclosing map key
 - [ ] Replace `DecisionVariable::substituted_value()` and `DecisionVariable::substitute(...)` with host-owned fixed values: `InstanceBuilder::fixed_decision_variable_values(...)`, `Instance::fixed_decision_variable_value(id)`, or `Instance::fixed_decision_variable_values()`
 - [ ] Update `EvaluatedDecisionVariable::new(...)` and `SampledDecisionVariable::new(...)`: drop the `atol` argument, pass the `VariableID` separately for diagnostics, and keep using the enclosing `Solution` / `SampleSet` map key as the source of truth
-- [ ] Remove `NamedFunction.id`, `EvaluatedNamedFunction::id()`, and `SampledNamedFunction::id()` reads in Rust. Use the enclosing `BTreeMap<NamedFunctionID, _>` key instead
-- [ ] Construct `NamedFunction { function }` rows and insert them under the desired `NamedFunctionID` key; keep labels in `NamedFunctionLabelStore`
+- [ ] Remove `NamedFunction.id`, `EvaluatedNamedFunction::id()`, and `SampledNamedFunction::id()` reads in Rust. Use the enclosing `NamedFunctionTable<_>` key instead
+- [ ] Construct `NamedFunction { function }` rows and insert them under the desired `NamedFunctionID` key; keep row maps and labels together with `NamedFunctionTable`
 
 ---
 

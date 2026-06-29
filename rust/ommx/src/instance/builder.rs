@@ -222,7 +222,7 @@ impl InstanceBuilder {
     /// # Errors
     /// Returns an error if:
     /// - Required fields (`sense`, `objective`, `decision_variables`, `constraints`) are not set
-    /// - Named-function map keys don't match their value's ID
+    /// - Named-function labels reference IDs not present in the named-function table
     /// - The objective function or constraints reference undefined variable IDs
     /// - The keys of `constraints` and `removed_constraints` are not disjoint
     /// - Label/context stores contain IDs that are not owned by the
@@ -293,16 +293,8 @@ impl InstanceBuilder {
                 }
             }
         }
-        let named_function_ids = self
-            .named_functions
-            .keys()
-            .copied()
-            .collect::<std::collections::BTreeSet<_>>();
-        crate::modeling_label::validate_modeling_label_ids(
-            &self.named_function_labels,
-            &named_function_ids,
-            "named function",
-        )?;
+        let named_functions =
+            NamedFunctionTable::new(self.named_functions, self.named_function_labels)?;
 
         // Validate indicator constraints
         for value in self.indicator_constraints.values() {
@@ -488,8 +480,7 @@ impl InstanceBuilder {
                 BTreeMap::new(),
                 self.sos1_constraint_context,
             )?,
-            named_functions: self.named_functions,
-            named_function_labels: self.named_function_labels,
+            named_functions,
             decision_variable_dependency: self.decision_variable_dependency,
             parameters: self.parameters,
             description: self.description,
@@ -676,6 +667,27 @@ mod tests {
         assert!(
             err.to_string().contains("unknown decision variable ID")
                 && err.to_string().contains("VariableID(99)"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_builder_rejects_orphan_named_function_labels() {
+        let mut named_function_labels = crate::named_function::NamedFunctionLabelStore::default();
+        named_function_labels.set_name(NamedFunctionID::from(99), "orphan");
+
+        let err = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::new())
+            .constraints(BTreeMap::new())
+            .named_function_labels(named_function_labels)
+            .build()
+            .unwrap_err();
+
+        assert!(
+            err.to_string().contains("unknown named function ID")
+                && err.to_string().contains("NamedFunctionID(99)"),
             "unexpected error: {err}"
         );
     }
