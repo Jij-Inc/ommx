@@ -39,6 +39,9 @@ pub enum SolutionError {
     #[error("Duplicated variable ID is found in definition: {id:?}")]
     DuplicatedVariableID { id: VariableID },
 
+    #[error("Duplicated named function ID is found in definition: {id:?}")]
+    DuplicatedNamedFunctionID { id: NamedFunctionID },
+
     #[deprecated(
         note = "Parameters are now ignored in extract_decision_variables and extract_all_decision_variables"
     )]

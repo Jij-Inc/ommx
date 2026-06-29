@@ -47,37 +47,6 @@ impl<M: Monomial> IntoIterator for PolynomialBase<M> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{coeff, linear, Linear};
-
-    #[test]
-    fn try_from_terms_combines_duplicate_terms() {
-        let polynomial =
-            Linear::try_from_terms([(linear!(1), coeff!(2.0)), (linear!(1), coeff!(3.0))]).unwrap();
-
-        assert_eq!(polynomial.terms[&linear!(1)], coeff!(5.0));
-    }
-
-    #[test]
-    fn try_from_terms_removes_cancelled_terms() {
-        let polynomial =
-            Linear::try_from_terms([(linear!(1), coeff!(1.0)), (linear!(1), coeff!(-1.0))])
-                .unwrap();
-
-        assert!(polynomial.is_zero());
-    }
-
-    #[test]
-    fn try_from_terms_returns_error_on_overflow() {
-        let huge = Coefficient::try_from(f64::MAX).unwrap();
-        let err = Linear::try_from_terms([(linear!(1), huge), (linear!(1), huge)]).unwrap_err();
-
-        assert_eq!(err, CoefficientError::Infinite);
-    }
-}
-
 impl<'a, M: Monomial> IntoIterator for &'a PolynomialBase<M> {
     type Item = (&'a M, &'a Coefficient);
     type IntoIter = std::collections::hash_map::Iter<'a, M, Coefficient>;
@@ -124,5 +93,36 @@ impl<M: Monomial> TryFrom<f64> for PolynomialBase<M> {
             Err(CoefficientError::Zero) => Ok(Self::default()),
             Err(e) => Err(e),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{coeff, linear, Linear};
+
+    #[test]
+    fn try_from_terms_combines_duplicate_terms() {
+        let polynomial =
+            Linear::try_from_terms([(linear!(1), coeff!(2.0)), (linear!(1), coeff!(3.0))]).unwrap();
+
+        assert_eq!(polynomial.terms[&linear!(1)], coeff!(5.0));
+    }
+
+    #[test]
+    fn try_from_terms_removes_cancelled_terms() {
+        let polynomial =
+            Linear::try_from_terms([(linear!(1), coeff!(1.0)), (linear!(1), coeff!(-1.0))])
+                .unwrap();
+
+        assert!(polynomial.is_zero());
+    }
+
+    #[test]
+    fn try_from_terms_returns_error_on_overflow() {
+        let huge = Coefficient::try_from(f64::MAX).unwrap();
+        let err = Linear::try_from_terms([(linear!(1), huge), (linear!(1), huge)]).unwrap_err();
+
+        assert_eq!(err, CoefficientError::Infinite);
     }
 }

@@ -41,6 +41,9 @@ pub enum SampleSetError {
     #[error("Duplicated variable ID is found in definition: {id:?}")]
     DuplicatedVariableID { id: VariableID },
 
+    #[error("Duplicated named function ID is found in definition: {id:?}")]
+    DuplicatedNamedFunctionID { id: NamedFunctionID },
+
     #[error("Duplicate subscripts for {name}: {subscripts:?}")]
     DuplicateSubscripts { name: String, subscripts: Vec<i64> },
 

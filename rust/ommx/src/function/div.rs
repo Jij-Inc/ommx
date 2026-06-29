@@ -61,9 +61,10 @@ mod tests {
         #[test]
         fn div_ref(a in any::<Function>(), c in any::<Coefficient>()) {
             if let Ok(expected) = a.clone() / c {
+                let c_ref = &c;
                 assert_abs_diff_eq!((&a / c).unwrap(), expected);
-                assert_abs_diff_eq!((a.clone() / &c).unwrap(), expected);
-                assert_abs_diff_eq!((&a / &c).unwrap(), expected);
+                assert_abs_diff_eq!((a.clone() / c_ref).unwrap(), expected);
+                assert_abs_diff_eq!((&a / c_ref).unwrap(), expected);
             }
         }
 

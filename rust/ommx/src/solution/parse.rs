@@ -59,7 +59,15 @@ impl Parse for crate::v1::Solution {
             let parsed: crate::named_function::parse::ParsedEvaluatedNamedFunction =
                 enf.parse_as(&(), message, "evaluated_named_functions")?;
             let id = parsed.id;
-            evaluated_named_functions.insert(id, parsed.evaluated_named_function);
+            if evaluated_named_functions
+                .insert(id, parsed.evaluated_named_function)
+                .is_some()
+            {
+                return Err(crate::RawParseError::SolutionError(
+                    SolutionError::DuplicatedNamedFunctionID { id },
+                )
+                .context(message, "evaluated_named_functions"));
+            }
             named_function_labels.insert(id, parsed.label);
         }
 
@@ -632,6 +640,44 @@ mod tests {
         Traceback for OMMX Message parse error:
         └─ommx.v1.Solution[decision_variables]
         Duplicated variable ID is found in definition: VariableID(1)
+        "###);
+    }
+
+    #[test]
+    fn test_solution_parse_fails_with_duplicated_named_function_id() {
+        use crate::v1;
+
+        let v1_solution = v1::Solution {
+            objective: 0.0,
+            evaluated_named_functions: vec![
+                v1::EvaluatedNamedFunction {
+                    id: 7,
+                    evaluated_value: 1.0,
+                    ..Default::default()
+                },
+                v1::EvaluatedNamedFunction {
+                    id: 7,
+                    evaluated_value: 2.0,
+                    ..Default::default()
+                },
+            ],
+            feasible: true,
+            feasible_relaxed: Some(true),
+            ..Default::default()
+        };
+
+        let result: Result<Solution, ParseError> = v1_solution.parse(&());
+        let error = result.unwrap_err();
+        assert!(matches!(
+            error.error,
+            crate::RawParseError::SolutionError(
+                SolutionError::DuplicatedNamedFunctionID { id }
+            ) if id == crate::NamedFunctionID::from(7)
+        ));
+        insta::assert_snapshot!(error.to_string(), @r###"
+        Traceback for OMMX Message parse error:
+        └─ommx.v1.Solution[evaluated_named_functions]
+        Duplicated named function ID is found in definition: NamedFunctionID(7)
         "###);
     }
 

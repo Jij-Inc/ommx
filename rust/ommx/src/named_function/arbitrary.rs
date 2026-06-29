@@ -57,7 +57,6 @@ pub fn arbitrary_named_functions(
             ids.into_iter()
                 .map(NamedFunctionID::from)
                 .zip(named_functions)
-                .map(|(id, named_function)| (id, named_function))
                 .collect()
         })
         .boxed()
