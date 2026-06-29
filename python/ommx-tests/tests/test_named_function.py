@@ -6,10 +6,13 @@ from ommx.v1 import (
     Instance,
     Linear,
     NamedFunction,
+    Parameter,
+    ParametricInstance,
     Constraint,
     State,
 )
 import ommx._ommx_rust as rust
+import pytest
 
 
 def _make_instance_with_named_functions():
@@ -226,6 +229,64 @@ class TestInstanceNamedFunctions:
             sense=Instance.MINIMIZE,
         )
         assert instance.named_functions == []
+
+    def test_from_components_rejects_duplicate_named_function_ids(self):
+        x = DecisionVariable.binary(0)
+        first = NamedFunction(id=0, function=x, name="first")
+        second = NamedFunction(id=0, function=x + 1, name="second")
+
+        with pytest.raises(RuntimeError, match="Duplicate named function ID: 0"):
+            Instance.from_components(
+                decision_variables=[x],
+                objective=x,
+                constraints={},
+                sense=Instance.MINIMIZE,
+                named_functions=[first, second],
+            )
+
+    def test_from_components_rejects_named_function_unknown_variable(self):
+        x = DecisionVariable.binary(0)
+        rogue = NamedFunction(id=0, function=DecisionVariable.binary(999))
+
+        with pytest.raises(RuntimeError, match="VariableID\\(999\\)"):
+            Instance.from_components(
+                decision_variables=[x],
+                objective=x,
+                constraints={},
+                sense=Instance.MINIMIZE,
+                named_functions=[rogue],
+            )
+
+    def test_parametric_from_components_accepts_named_function_parameter(self):
+        x = DecisionVariable.binary(0)
+        p = Parameter(100, name="p")
+        nf = NamedFunction(id=0, function=x + p, name="with_parameter")
+
+        parametric = ParametricInstance.from_components(
+            decision_variables=[x],
+            parameters=[p],
+            objective=x + p,
+            constraints={},
+            sense=Instance.MINIMIZE,
+            named_functions=[nf],
+        )
+
+        assert parametric.named_functions[0].name == "with_parameter"
+
+    def test_parametric_from_components_rejects_named_function_unknown_id(self):
+        x = DecisionVariable.binary(0)
+        p = Parameter(100, name="p")
+        rogue = NamedFunction(id=0, function=DecisionVariable.binary(999))
+
+        with pytest.raises(RuntimeError, match="VariableID\\(999\\)"):
+            ParametricInstance.from_components(
+                decision_variables=[x],
+                parameters=[p],
+                objective=x + p,
+                constraints={},
+                sense=Instance.MINIMIZE,
+                named_functions=[rogue],
+            )
 
 
 class TestSolutionNamedFunctions:
