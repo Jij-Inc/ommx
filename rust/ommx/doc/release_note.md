@@ -205,7 +205,7 @@ See [`PYTHON_SDK_MIGRATION_GUIDE.md`](https://github.com/Jij-Inc/ommx/blob/main/
 The migration guide's [Modeling labels and constraint context](crate::doc::migration_guide#modeling-labels-and-constraint-context)
 section has the per-host accessor list and the store API reference.
 
-## Decision-variable table ownership ([#958](https://github.com/Jij-Inc/ommx/issues/958))
+## Decision-variable table ownership ([#969](https://github.com/Jij-Inc/ommx/pull/969))
 
 The Rust SDK now has explicit decision-variable table owners. The map key owns
 the [`VariableID`](crate::VariableID), the row owns only intrinsic data, and the
@@ -224,6 +224,9 @@ caller-provided `ATol`. `EvaluatedDecisionVariable::new`
 and `SampledDecisionVariable::new` still take the ID as a separate argument so
 non-finite value errors can report the table key, but the resulting row data
 does not store that ID.
+
+This is part of the normalization work tracked in
+[#958](https://github.com/Jij-Inc/ommx/issues/958).
 
 ## Named-function table ownership ([#964](https://github.com/Jij-Inc/ommx/pull/964))
 
