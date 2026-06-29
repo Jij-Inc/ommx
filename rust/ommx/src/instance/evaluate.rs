@@ -272,11 +272,8 @@ impl Evaluate for Instance {
             decision_variables.insert(*id, evaluated_dv);
         }
 
-        let mut evaluated_named_functions = BTreeMap::default();
-        for (id, named_function) in self.named_functions.iter() {
-            let evaluated_named_function = named_function.evaluate(&state, atol)?;
-            evaluated_named_functions.insert(*id, evaluated_named_function);
-        }
+        let (evaluated_named_functions, evaluated_named_function_labels) =
+            self.named_functions.evaluate(&state, atol)?.into_parts();
 
         let sense = self.sense();
 
@@ -291,7 +288,7 @@ impl Evaluate for Instance {
                 .evaluated_named_functions(evaluated_named_functions)
                 .decision_variables(decision_variables)
                 .variable_labels(self.variable_labels.clone())
-                .named_function_labels(self.named_function_labels.clone())
+                .named_function_labels(evaluated_named_function_labels)
                 .sense(sense)
                 .build_unchecked()?
         };
@@ -345,12 +342,10 @@ impl Evaluate for Instance {
             decision_variables.insert(*id, sampled_dv);
         }
 
-        // Reconstruct named function values
-        let mut named_functions = std::collections::BTreeMap::new();
-        for (id, named_function) in self.named_functions.iter() {
-            let sampled_named_function = named_function.evaluate_samples(&samples, atol)?;
-            named_functions.insert(*id, sampled_named_function);
-        }
+        let (named_functions, named_function_labels) = self
+            .named_functions
+            .evaluate_samples(&samples, atol)?
+            .into_parts();
 
         Ok(crate::SampleSet::builder()
             .decision_variables(decision_variables)
@@ -361,7 +356,7 @@ impl Evaluate for Instance {
             .one_hot_constraints_collection(sampled_one_hot_constraints)
             .sos1_constraints_collection(sampled_sos1_constraints)
             .named_functions(named_functions)
-            .named_function_labels(self.named_function_labels.clone())
+            .named_function_labels(named_function_labels)
             .sense(self.sense)
             .build()?)
     }
@@ -413,9 +408,9 @@ impl Evaluate for Instance {
         working
             .constraint_collection
             .partial_evaluate(&expanded_state, atol)?;
-        for named_function in working.named_functions.values_mut() {
-            named_function.partial_evaluate(&expanded_state, atol)?;
-        }
+        working
+            .named_functions
+            .partial_evaluate(&expanded_state, atol)?;
         working
             .decision_variable_dependency
             .partial_evaluate(&expanded_state, atol)?;
@@ -803,7 +798,6 @@ mod tests {
         // - x4: irrelevant variable
         // - x5: only used in named function
         let named_function = NamedFunction {
-            id: NamedFunctionID::from(1),
             function: Function::from(
                 (((linear!(2) + linear!(3)).unwrap() + linear!(4)).unwrap() + linear!(5)).unwrap(),
             ),
@@ -821,10 +815,10 @@ mod tests {
                 VariableID::from(2) => 3.0,
             })
             .constraints(BTreeMap::new()) // No constraints
+            .named_functions(named_functions)
             .build()
             .unwrap();
         instance.decision_variable_dependency = decision_variable_dependency;
-        instance.named_functions = named_functions;
 
         // Verify the usage: x1 is used, x2 is fixed, x3 is dependent,
         // x4 and x5 should be irrelevant (named_functions don't contribute to "used")

@@ -40,7 +40,8 @@ use crate::{
     one_hot_constraint::OneHotConstraint,
     sos1_constraint::Sos1Constraint,
     v1, AcyclicAssignments, Constraint, ConstraintContext, ConstraintID, DecisionVariable,
-    Evaluate, Function, ModelingLabel, NamedFunction, VariableID, VariableIDSet,
+    Evaluate, Function, ModelingLabel, NamedFunction, NamedFunctionTable, VariableID,
+    VariableIDSet,
 };
 use std::collections::{BTreeMap, HashMap};
 
@@ -139,9 +140,10 @@ pub enum Sense {
 /// - [`DecisionVariableUsage`] is the reverse-usage index for used decision variables only.
 /// - [`Self::removed_constraints`] may contain fixed or dependent variable IDs.
 ///   These are substituted when the constraint is restored via [`Self::restore_constraint`].
-/// - The keys of [`Self::named_functions`] match the `id()` of their values.
+/// - [`Self::named_functions`] is keyed by the table-owned
+///   [`NamedFunctionID`]; named-function rows do not carry IDs.
 /// - [`Self::named_functions`] may contain fixed or dependent variable IDs (like `removed_constraints`).
-///   Variable IDs in `named_functions` must be registered in [`Self::decision_variables`],
+///   Variable IDs referenced by named functions must be registered in [`Self::decision_variables`],
 ///   but are NOT included in the "used" set calculation.
 /// - Modeling-label and constraint-context sidecars are owned by their
 ///   corresponding top-level collection; every label/context ID must refer to an
@@ -224,13 +226,8 @@ pub struct Instance {
 
     #[getset(get = "pub")]
     decision_variable_dependency: AcyclicAssignments,
-    #[getset(get = "pub")]
-    named_functions: BTreeMap<NamedFunctionID, NamedFunction>,
-
-    /// Per-named-function modeling labels. Sibling field of
-    /// [`Self::named_functions`]; together they form the canonical
-    /// named-function storage.
-    named_function_labels: crate::named_function::NamedFunctionLabelStore,
+    /// Named-function rows plus their modeling labels.
+    named_functions: NamedFunctionTable<NamedFunction>,
 
     // Optional fields for additional metadata.
     // These fields are public since arbitrary values can be set without validation.
@@ -283,18 +280,19 @@ impl Instance {
         self.fixed_decision_variable_values.get(&id).copied()
     }
 
-    /// Access the per-named-function modeling-label store.
-    pub fn named_function_labels(&self) -> &crate::named_function::NamedFunctionLabelStore {
-        &self.named_function_labels
+    /// Access named-function rows plus their modeling labels.
+    pub fn named_function_table(&self) -> &NamedFunctionTable<NamedFunction> {
+        &self.named_functions
     }
 
-    /// Mutable access to the per-named-function modeling-label store, limited
-    /// to the `instance` module tree.
-    ///
-    /// Public callers should use [`Self::set_named_function_label`], which
-    /// checks that the label ID belongs to this instance.
-    fn named_function_labels_mut(&mut self) -> &mut crate::named_function::NamedFunctionLabelStore {
-        &mut self.named_function_labels
+    /// Access named-function row payloads keyed by table-owned IDs.
+    pub fn named_functions(&self) -> &BTreeMap<NamedFunctionID, NamedFunction> {
+        self.named_functions.entries()
+    }
+
+    /// Access the per-named-function modeling-label store.
+    pub fn named_function_labels(&self) -> &crate::named_function::NamedFunctionLabelStore {
+        self.named_functions.labels()
     }
 
     /// Replace the modeling label for a named function owned by this instance.
@@ -303,9 +301,7 @@ impl Instance {
         id: NamedFunctionID,
         label: ModelingLabel,
     ) -> crate::Result<()> {
-        ensure_modeling_label_target(self.named_functions.contains_key(&id), "named function", id)?;
-        self.named_function_labels.insert(id, label);
-        Ok(())
+        self.named_functions.set_label(id, label)
     }
 
     /// Active constraints.
@@ -585,10 +581,14 @@ impl Instance {
 ///   - **fixed**: Variable IDs present in [`Self::fixed_decision_variable_values`] and not used
 ///   - **dependent**: Keys of `decision_variable_dependency` that are not used or fixed
 /// - [`DecisionVariableUsage`] is the reverse-usage index for used decision variables only.
-/// - The keys of [`Self::named_functions`] match the `id()` of their values.
-/// - [`Self::named_functions`] may contain fixed or dependent variable IDs (like `removed_constraints`).
-///   Variable IDs in `named_functions` must be registered in [`Self::decision_variables`],
-///   but are NOT included in the "used" set calculation.
+/// - [`Self::named_functions`] is keyed by the table-owned
+///   [`NamedFunctionID`]; named-function rows do not carry IDs.
+/// - [`Self::named_functions`] may contain fixed or dependent decision-variable
+///   IDs (like `removed_constraints`) and may also reference parameter IDs.
+///   Every referenced ID must be registered in either
+///   [`Self::decision_variables`] or [`Self::parameters`], but decision-variable
+///   IDs appearing only in named functions are NOT included in the "used" set
+///   calculation.
 /// - Modeling-label and constraint-context sidecars are owned by their
 ///   corresponding top-level collection; every label/context ID must refer to an
 ///   existing decision variable, named function, or active/removed constraint
@@ -670,13 +670,8 @@ pub struct ParametricInstance {
 
     #[getset(get = "pub")]
     decision_variable_dependency: AcyclicAssignments,
-    #[getset(get = "pub")]
-    named_functions: BTreeMap<NamedFunctionID, NamedFunction>,
-
-    /// Per-named-function modeling labels. Sibling field of
-    /// [`Self::named_functions`]; together they form the canonical
-    /// named-function storage.
-    named_function_labels: crate::named_function::NamedFunctionLabelStore,
+    /// Named-function rows plus their modeling labels.
+    named_functions: NamedFunctionTable<NamedFunction>,
 
     // Optional fields for additional metadata.
     // These fields are public since arbitrary values can be set without validation.
@@ -720,9 +715,19 @@ impl ParametricInstance {
         self.fixed_decision_variable_values.get(&id).copied()
     }
 
+    /// Access named-function rows plus their modeling labels.
+    pub fn named_function_table(&self) -> &NamedFunctionTable<NamedFunction> {
+        &self.named_functions
+    }
+
+    /// Access named-function row payloads keyed by table-owned IDs.
+    pub fn named_functions(&self) -> &BTreeMap<NamedFunctionID, NamedFunction> {
+        self.named_functions.entries()
+    }
+
     /// Access the per-named-function modeling-label store.
     pub fn named_function_labels(&self) -> &crate::named_function::NamedFunctionLabelStore {
-        &self.named_function_labels
+        self.named_functions.labels()
     }
 
     /// Replace the modeling label for a named function owned by this parametric
@@ -732,9 +737,7 @@ impl ParametricInstance {
         id: NamedFunctionID,
         label: ModelingLabel,
     ) -> crate::Result<()> {
-        ensure_modeling_label_target(self.named_functions.contains_key(&id), "named function", id)?;
-        self.named_function_labels.insert(id, label);
-        Ok(())
+        self.named_functions.set_label(id, label)
     }
 
     /// Active constraints.

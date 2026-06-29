@@ -148,6 +148,10 @@ impl SampledConstraintBehavior for SampledIndicatorConstraint {
         Ok(())
     }
 
+    fn used_decision_variable_ids(&self) -> &VariableIDSet {
+        &self.stage.used_decision_variable_ids
+    }
+
     fn get(&self, sample_id: SampleID) -> Option<Self::Evaluated> {
         let evaluated_value = *self.stage.evaluated_values.get(sample_id)?;
         let feasible = *self.stage.feasible.get(&sample_id)?;

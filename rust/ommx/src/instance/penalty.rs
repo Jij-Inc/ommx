@@ -127,7 +127,6 @@ impl Instance {
             decision_variable_dependency: self.decision_variable_dependency,
             description: self.description,
             named_functions: self.named_functions,
-            named_function_labels: self.named_function_labels,
             annotations: self.annotations,
         })
     }
@@ -205,7 +204,6 @@ impl Instance {
                 decision_variable_dependency: self.decision_variable_dependency,
                 description: self.description,
                 named_functions: self.named_functions,
-                named_function_labels: self.named_function_labels,
                 annotations: self.annotations,
             });
         }
@@ -277,7 +275,6 @@ impl Instance {
             decision_variable_dependency: self.decision_variable_dependency,
             description: self.description,
             named_functions: self.named_functions,
-            named_function_labels: self.named_function_labels,
             annotations: self.annotations,
         })
     }

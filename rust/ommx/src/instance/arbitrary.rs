@@ -234,8 +234,9 @@ impl Arbitrary for Instance {
                                         Default::default(),
                                     )
                                     .expect("empty removed constraints cannot overlap active constraints"),
-                                    named_functions,
-                                    named_function_labels: Default::default(),
+                                    named_functions: crate::NamedFunctionTable::from_entries(
+                                        named_functions,
+                                    ),
                                     sense,
                                     decision_variables,
                                     variable_labels: Default::default(),

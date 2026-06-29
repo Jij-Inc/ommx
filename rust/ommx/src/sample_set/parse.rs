@@ -64,8 +64,16 @@ impl Parse for crate::v1::SampleSet {
         for v1_named_function in self.named_functions {
             let parsed: crate::named_function::parse::ParsedSampledNamedFunction =
                 v1_named_function.parse_as(&(), message, "named_functions")?;
-            let id = *parsed.sampled_named_function.id();
-            named_functions.insert(id, parsed.sampled_named_function);
+            let id = parsed.id;
+            if named_functions
+                .insert(id, parsed.sampled_named_function)
+                .is_some()
+            {
+                return Err(crate::RawParseError::SampleSetError(
+                    crate::SampleSetError::DuplicatedNamedFunctionID { id },
+                )
+                .context(message, "named_functions"));
+            }
             named_function_labels.insert(id, parsed.label);
         }
 
@@ -189,7 +197,7 @@ impl From<SampleSet> for crate::v1::SampleSet {
             .iter()
             .map(|(id, nf)| {
                 let label = named_function_labels_store.collect_for(*id);
-                crate::named_function::parse::sampled_named_function_to_v1(nf.clone(), label)
+                crate::named_function::parse::sampled_named_function_to_v1(*id, nf.clone(), label)
             })
             .collect();
         let sense = (*sample_set.sense()).into();
@@ -480,6 +488,53 @@ mod tests {
         Traceback for OMMX Message parse error:
         └─ommx.v1.SampleSet[decision_variables]
         Duplicated variable ID is found in definition: VariableID(1)
+        "###);
+    }
+
+    #[test]
+    fn test_sample_set_parse_fails_with_duplicated_named_function_id() {
+        let sample_id = crate::SampleID::from(0);
+        let sampled_values = crate::v1::SampledValues {
+            entries: vec![crate::v1::sampled_values::SampledValuesEntry {
+                ids: vec![sample_id.into_inner()],
+                value: 1.0,
+            }],
+        };
+        let v1_sample_set = crate::v1::SampleSet {
+            objectives: Some(crate::v1::SampledValues {
+                entries: vec![crate::v1::sampled_values::SampledValuesEntry {
+                    ids: vec![sample_id.into_inner()],
+                    value: 0.0,
+                }],
+            }),
+            named_functions: vec![
+                crate::v1::SampledNamedFunction {
+                    id: 7,
+                    evaluated_values: Some(sampled_values.clone()),
+                    ..Default::default()
+                },
+                crate::v1::SampledNamedFunction {
+                    id: 7,
+                    evaluated_values: Some(sampled_values),
+                    ..Default::default()
+                },
+            ],
+            sense: crate::v1::instance::Sense::Minimize as i32,
+            ..Default::default()
+        };
+
+        let result: Result<SampleSet, ParseError> = v1_sample_set.parse(&());
+        let error = result.unwrap_err();
+        assert!(matches!(
+            error.error,
+            crate::RawParseError::SampleSetError(
+                crate::SampleSetError::DuplicatedNamedFunctionID { id }
+            ) if id == crate::NamedFunctionID::from(7)
+        ));
+        insta::assert_snapshot!(error.to_string(), @r###"
+        Traceback for OMMX Message parse error:
+        └─ommx.v1.SampleSet[named_functions]
+        Duplicated named function ID is found in definition: NamedFunctionID(7)
         "###);
     }
 

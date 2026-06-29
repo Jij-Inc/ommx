@@ -221,7 +221,7 @@ impl ParametricInstanceBuilder {
     /// Returns an error if:
     /// - Required fields (`sense`, `objective`, `decision_variables`, `parameters`, `constraints`) are not set
     /// - Decision variable IDs and parameter IDs overlap
-    /// - The objective function or constraints reference undefined variable IDs
+    /// - The objective function, constraints, or named functions reference undefined variable IDs
     /// - The keys of `constraints` and `removed_constraints` are not disjoint
     /// - Label/context stores contain IDs that are not owned by the
     ///   corresponding decision-variable, named-function, or constraint collection
@@ -318,31 +318,16 @@ impl ParametricInstanceBuilder {
             }
         }
 
-        // Validate named_functions: key must match value's id, and all variable IDs must exist
-        for (key, nf) in &self.named_functions {
-            if *key != nf.id {
-                let id = nf.id;
-                crate::bail!(
-                    { ?key, ?id },
-                    "Named function map key {key:?} does not match value's id {id:?}",
-                );
-            }
+        // Validate named_functions: map keys own IDs, and all referenced variable IDs must exist.
+        for nf in self.named_functions.values() {
             for id in nf.function.required_ids() {
                 if !all_variable_ids.contains(&id) {
                     crate::bail!({ ?id }, "Undefined variable ID is used: {id:?}");
                 }
             }
         }
-        let named_function_ids = self
-            .named_functions
-            .keys()
-            .copied()
-            .collect::<std::collections::BTreeSet<_>>();
-        crate::modeling_label::validate_modeling_label_ids(
-            &self.named_function_labels,
-            &named_function_ids,
-            "named function",
-        )?;
+        let named_functions =
+            NamedFunctionTable::new(self.named_functions, self.named_function_labels)?;
 
         // Validate indicator constraints. Function bodies may reference
         // parameters; the indicator variable is a *structural* position and
@@ -546,8 +531,7 @@ impl ParametricInstanceBuilder {
                 BTreeMap::new(),
                 self.sos1_constraint_context,
             )?,
-            named_functions: self.named_functions,
-            named_function_labels: self.named_function_labels,
+            named_functions,
             decision_variable_dependency: self.decision_variable_dependency,
             description: self.description,
             annotations: Default::default(),
@@ -695,6 +679,28 @@ mod tests {
         assert!(
             err.to_string().contains("unknown decision variable ID")
                 && err.to_string().contains("VariableID(99)"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_parametric_builder_rejects_orphan_named_function_labels() {
+        let mut named_function_labels = crate::named_function::NamedFunctionLabelStore::default();
+        named_function_labels.set_name(NamedFunctionID::from(99), "orphan");
+
+        let err = ParametricInstance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::new())
+            .parameters(BTreeMap::new())
+            .constraints(BTreeMap::new())
+            .named_function_labels(named_function_labels)
+            .build()
+            .unwrap_err();
+
+        assert!(
+            err.to_string().contains("unknown named function ID")
+                && err.to_string().contains("NamedFunctionID(99)"),
             "unexpected error: {err}"
         );
     }
@@ -848,45 +854,12 @@ mod tests {
     }
 
     #[test]
-    fn test_parametric_builder_inconsistent_named_function_id() {
-        use crate::{NamedFunction, NamedFunctionID};
-        use maplit::btreemap;
-
-        // Create a named function with id=1 but use key=2 in the map
-        let named_function = NamedFunction {
-            id: NamedFunctionID::from(1),
-            function: Function::Zero,
-        };
-
-        let err = ParametricInstance::builder()
-            .sense(Sense::Minimize)
-            .objective(Function::Zero)
-            .decision_variables(BTreeMap::new())
-            .parameters(BTreeMap::new())
-            .constraints(BTreeMap::new())
-            .named_functions(btreemap! {
-                NamedFunctionID::from(2) => named_function,  // key=2 but id=1
-            })
-            .build()
-            .unwrap_err();
-
-        let msg = err.to_string();
-        assert!(
-            msg.contains("Named function map key")
-                && msg.contains("NamedFunctionID(2)")
-                && msg.contains("NamedFunctionID(1)"),
-            "unexpected error: {msg}"
-        );
-    }
-
-    #[test]
     fn test_parametric_builder_undefined_variable_in_named_function() {
         use crate::{coeff, linear, NamedFunction, NamedFunctionID};
         use maplit::btreemap;
 
         // Create a named function that references undefined variable ID 999
         let named_function = NamedFunction {
-            id: NamedFunctionID::from(1),
             function: Function::from(linear!(999) + coeff!(1.0)),
         };
 
@@ -1147,7 +1120,6 @@ mod tests {
         let param_id = VariableID::from(2);
 
         let named_function = NamedFunction {
-            id: NamedFunctionID::from(1),
             function: Function::from(linear!(1) + linear!(2)), // uses both decision var and param
         };
 

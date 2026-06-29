@@ -8,7 +8,11 @@ use std::collections::{BTreeMap, HashSet};
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
-pub struct SampledNamedFunction(pub ommx::SampledNamedFunction, pub ommx::NamedFunctionLabel);
+pub struct SampledNamedFunction(
+    pub ommx::NamedFunctionID,
+    pub ommx::SampledNamedFunction,
+    pub ommx::NamedFunctionLabel,
+);
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
@@ -16,31 +20,31 @@ impl SampledNamedFunction {
     /// Get the named function ID
     #[getter]
     pub fn id(&self) -> u64 {
-        self.0.id().into_inner()
+        self.0.into_inner()
     }
 
     /// Get the named function name
     #[getter]
     pub fn name(&self) -> Option<String> {
-        self.1.name.clone()
+        self.2.name.clone()
     }
 
     /// Get the subscripts
     #[getter]
     pub fn subscripts(&self) -> Vec<i64> {
-        self.1.subscripts.clone()
+        self.2.subscripts.clone()
     }
 
     /// Get the description
     #[getter]
     pub fn description(&self) -> Option<String> {
-        self.1.description.clone()
+        self.2.description.clone()
     }
 
     /// Get the parameters
     #[getter]
     pub fn parameters(&self) -> std::collections::HashMap<String, String> {
-        self.1
+        self.2
             .parameters
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
@@ -50,7 +54,7 @@ impl SampledNamedFunction {
     /// Get the sampled values for all samples
     #[getter]
     pub fn evaluated_values(&self) -> BTreeMap<u64, f64> {
-        self.0
+        self.1
             .evaluated_values()
             .iter()
             .map(|(sample_id, value)| (sample_id.into_inner(), *value))
@@ -59,7 +63,7 @@ impl SampledNamedFunction {
 
     #[getter]
     pub fn used_decision_variable_ids(&self) -> HashSet<u64> {
-        self.0
+        self.1
             .used_decision_variable_ids()
             .iter()
             .map(|id| id.into_inner())
@@ -67,7 +71,11 @@ impl SampledNamedFunction {
     }
 
     pub fn __repr__(&self) -> String {
-        self.0.to_string()
+        format!(
+            "SampledNamedFunction(id={}, num_samples={})",
+            self.0.into_inner(),
+            self.1.evaluated_values().num_samples()
+        )
     }
 
     fn __copy__(&self) -> Self {

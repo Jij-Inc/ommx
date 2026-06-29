@@ -18,6 +18,10 @@ Treat this as a review pre-pass, not as the required final response order. When 
 
 2. Identify domain invariants.
    - For each domain object or boundary, state the invariants it must preserve.
+   - Separate invariants by the layer that can actually know and enforce them.
+     A collection/table can usually own key and sidecar consistency, while a
+     top-level object such as `Instance`, `Solution`, or `SampleSet` must own
+     cross-table semantic invariants such as "referenced variable IDs exist".
    - Check whether those invariants are explicit in code, types, config schema, constructors, validation functions, documentation, or tests.
    - If an invariant is only implicit, treat that as a review risk unless the surrounding code makes it unavoidable.
 
@@ -28,6 +32,11 @@ Treat this as a review pre-pass, not as the required final response order. When 
 
 4. Verify invariant preservation.
    - Look for operations that can create invalid states, bypass validation, duplicate the source of truth, expose internal descriptors, or let callers mutate state outside the owner boundary.
+   - Check every construction layer that can bypass another layer: builders,
+     parsers, unchecked constructors, restore/projection helpers, per-sample
+     extraction, and Python wrappers. If a lower-level collection cannot
+     validate a semantic invariant alone, verify that every host-level entry
+     point validates it before exposing the object.
    - Check load/restore paths as carefully as write paths; persisted config and runtime state must preserve the same invariants.
    - Check dynamic and sealed views against the same domain model.
    - Check lock scopes against domain ownership: keep mutexes only around the shared state protected by that owner, and move slow I/O, registry writes, or storage writes outside the lock when the final owner mutation can still enforce the invariant.
@@ -46,6 +55,12 @@ Treat this as a review pre-pass, not as the required final response order. When 
 - For numeric consistency checks, handle boundary and invalid values explicitly. Absolute tolerances are inclusive unless the API documents otherwise, and NaN/Inf must not pass through `(a - b).abs() > atol` style comparisons silently.
 - For public API changes, check all user-facing surfaces together: Rust docs, Python docs, migration guides, stubs, examples, DataFrame flags, docstrings, and Python magic-method return contracts.
 - For public Rust structs, check whether the struct-level Rustdoc states the invariants that the type owns: valid IDs, active/removed disjointness, sidecar key coverage, non-empty sets, finite/non-zero numeric values, reserved annotation namespaces, or host-level serialization requirements. If callers can construct or mutate the struct, the docs should name the intended constructors or owner APIs that preserve those invariants.
+- For table/collection refactors, distinguish table-level invariants from
+  host-level invariants. A table may own row IDs and label/context sidecars,
+  but only the enclosing `Instance`, `Solution`, or `SampleSet` can prove that
+  row payloads reference known decision variables, parameters, samples, or
+  constraints. Review both the lower-level table API and every top-level
+  builder/parser/unchecked path.
 - For new builder/setter/attachment APIs, add focused tests for both preservation and rejection paths, such as sidecar round-trips and orphan-ID validation.
 - For derived analysis or table-building code, avoid recomputing whole-instance partitions inside per-variable or per-row loops; compute the owner-side role/set partition once when the operation needs it repeatedly.
 
@@ -53,8 +68,11 @@ Treat this as a review pre-pass, not as the required final response order. When 
 
 - What is the global domain meaning of this change?
 - Which object owns each source of truth?
-- Which invariants are required by each domain object or boundary?
+- Which invariants are required by each domain object or boundary, and at what
+  layer are they enforceable?
 - Are those invariants explicitly represented or validated?
+- Are lower-level collection invariants and top-level semantic invariants both
+  documented and tested?
 - Which operations can bypass the owner or invalidate the invariant?
 - Are mutex or lock scopes limited to the protected domain state, with slow I/O or persistence kept outside when possible?
 - Do sealed, dynamic, persisted, and Python-facing paths preserve the same model?

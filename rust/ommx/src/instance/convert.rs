@@ -52,7 +52,6 @@ impl From<Instance> for ParametricInstance {
             description,
             annotations,
             named_functions,
-            named_function_labels,
             ..
         }: Instance,
     ) -> Self {
@@ -71,7 +70,6 @@ impl From<Instance> for ParametricInstance {
             description,
             annotations,
             named_functions,
-            named_function_labels,
         }
     }
 }
@@ -137,9 +135,7 @@ impl ParametricInstance {
         }
 
         let mut named_functions = self.named_functions;
-        for (_, named_function) in named_functions.iter_mut() {
-            named_function.partial_evaluate(&state, atol)?;
-        }
+        named_functions.partial_evaluate(&state, atol)?;
 
         // Decision-variable dependency RHS expressions can also reference
         // parameter IDs. Without substitution, dependent-variable
@@ -172,7 +168,6 @@ impl ParametricInstance {
             one_hot_constraint_collection: self.one_hot_constraint_collection,
             sos1_constraint_collection: self.sos1_constraint_collection,
             named_functions,
-            named_function_labels: self.named_function_labels,
             decision_variable_dependency,
             parameters: Some(parameters),
             description: self.description,

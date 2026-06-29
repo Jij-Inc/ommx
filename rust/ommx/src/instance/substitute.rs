@@ -97,7 +97,8 @@ impl Substitute for Instance {
             }
         }
 
-        // Apply substitution to the existing decision_variable_dependency
+        // Apply substitution to named functions and existing dependencies.
+        substitute_acyclic(&mut self.named_functions, acyclic)?;
         substitute_acyclic(&mut self.decision_variable_dependency, acyclic)?;
 
         Ok(self)
@@ -204,6 +205,8 @@ impl Substitute for ParametricInstance {
             }
         }
 
+        // Apply substitution to named functions and existing dependencies.
+        substitute_acyclic(&mut self.named_functions, acyclic)?;
         substitute_acyclic(&mut self.decision_variable_dependency, acyclic)?;
 
         Ok(self)
@@ -221,7 +224,7 @@ impl Substitute for ParametricInstance {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{coeff, constraint::Equality, linear, DecisionVariable, Sense};
+    use crate::{coeff, constraint::Equality, linear, DecisionVariable, Evaluate, Sense};
     use std::collections::BTreeMap;
 
     #[test]
@@ -245,8 +248,17 @@ mod tests {
         };
         constraints.insert(ConstraintID::from(1), constraint);
 
-        let instance =
+        let mut instance =
             Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
+        let named_function_id = instance
+            .new_named_function(
+                Function::from((linear!(1) + linear!(2)).unwrap()),
+                Some("tracked".to_string()),
+                vec![],
+                Default::default(),
+                None,
+            )
+            .unwrap();
 
         // Substitute x1 with x3 + 1
         let substitution = Function::from(linear!(3) + coeff!(1.0));
@@ -260,6 +272,13 @@ mod tests {
             .decision_variable_dependency
             .get(&VariableID::from(1))
             .is_some());
+
+        let named_function = result.named_functions().get(&named_function_id).unwrap();
+        let expected_ids: std::collections::BTreeSet<_> =
+            [VariableID::from(2), VariableID::from(3)]
+                .into_iter()
+                .collect();
+        assert_eq!(named_function.required_ids(), expected_ids);
     }
 
     #[test]

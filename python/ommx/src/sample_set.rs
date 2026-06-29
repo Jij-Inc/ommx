@@ -234,7 +234,7 @@ impl SampleSet {
         self.inner
             .named_functions()
             .iter()
-            .map(|(id, nf)| crate::SampledNamedFunction(nf.clone(), labels.collect_for(*id)))
+            .map(|(id, nf)| crate::SampledNamedFunction(*id, nf.clone(), labels.collect_for(*id)))
             .collect()
     }
 
@@ -478,6 +478,7 @@ impl SampleSet {
             .get(&named_function_id)
             .map(|nf| {
                 crate::SampledNamedFunction(
+                    named_function_id,
                     nf.clone(),
                     self.inner
                         .named_function_labels()
@@ -703,18 +704,22 @@ impl SampleSet {
         let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         let sample_ids = sorted_sample_ids(&self.inner);
         let nf_meta_store = self.inner.named_function_labels().clone();
-        let nf_meta_view: Vec<(ommx::NamedFunctionLabel, &ommx::SampledNamedFunction)> = self
+        let nf_meta_view: Vec<(
+            ommx::NamedFunctionLabel,
+            ommx::NamedFunctionID,
+            &ommx::SampledNamedFunction,
+        )> = self
             .inner
             .named_functions()
             .iter()
-            .map(|(id, nf)| (nf_meta_store.collect_for(*id), nf))
+            .map(|(id, nf)| (nf_meta_store.collect_for(*id), *id, nf))
             .collect();
         entries_to_dataframe(
             py,
-            nf_meta_view.iter().map(|(m, nf)| {
+            nf_meta_view.iter().map(|(m, id, nf)| {
                 crate::pandas::WithModelingContext::new(
                     WithSampleIds {
-                        item: *nf,
+                        item: (*id, *nf),
                         sample_ids: &sample_ids,
                     },
                     m,

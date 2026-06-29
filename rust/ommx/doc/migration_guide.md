@@ -44,6 +44,8 @@ pairs. "Removed" is not itself a stage.
 each lost its inline label/context fields, and the per-host label/context store
 is queried through narrow per-collection accessors on `Instance` /
 `ParametricInstance` (see [Modeling labels and constraint context](#modeling-labels-and-constraint-context)).
+Decision variables and named functions additionally follow the table-owned ID
+rule: the row data no longer stores its own ID.
 
 ## Breaking Changes
 
@@ -503,12 +505,14 @@ instance.sos1_constraint_context()
 instance.set_sos1_constraint_context(id, context)?
 instance.variable_labels()                // &VariableLabelStore
 instance.set_variable_label(id, label)?
+instance.named_function_table()           // &NamedFunctionTable<NamedFunction>
 instance.named_function_labels()          // &NamedFunctionLabelStore
 instance.set_named_function_label(id, label)?
 ```
 
 `Solution` and `SampleSet` expose the variable / named-function stores
 the same way (`solution.variable_labels()`,
+`solution.evaluated_named_function_table()`,
 `solution.named_function_labels()`, same on `SampleSet`), but
 constraint context is reached through the evaluated / sampled
 collection getter then `.context()` on the collection — there are no
@@ -620,6 +624,61 @@ individual `DecisionVariable`.
 can still report the table key. The evaluated/sampled row data itself does not
 store the ID; `Solution` and `SampleSet` own it as the map key.
 
+### Named-function table ownership
+
+Named-function IDs and labels no longer live on
+[`NamedFunction`](crate::NamedFunction),
+[`EvaluatedNamedFunction`](crate::EvaluatedNamedFunction), or
+[`SampledNamedFunction`](crate::SampledNamedFunction). The row structs carry
+only intrinsic data:
+
+- `NamedFunction`: the [`Function`](crate::Function)
+- `EvaluatedNamedFunction`: the evaluated value and used decision-variable IDs
+- `SampledNamedFunction`: sampled values and used decision-variable IDs
+
+The [`NamedFunctionID`](crate::NamedFunctionID) and modeling labels are owned by
+[`NamedFunctionTable`](crate::NamedFunctionTable). `Instance` and
+`ParametricInstance` store `NamedFunctionTable<NamedFunction>`, `Solution`
+stores `NamedFunctionTable<EvaluatedNamedFunction>`, and `SampleSet` stores
+`NamedFunctionTable<SampledNamedFunction>`. The table keeps row payloads and
+[`NamedFunctionLabelStore`](crate::NamedFunctionLabelStore) together so labels
+cannot be attached to unknown named-function IDs at validated construction
+boundaries.
+
+Host accessors expose shared table views only. They intentionally do not expose
+mutable row views because changing a named-function body after host validation
+could introduce undefined variable IDs. Add named functions through
+[`Instance::new_named_function`](crate::Instance::new_named_function) or the
+validated builders; `new_named_function` returns the allocated
+[`NamedFunctionID`](crate::NamedFunctionID), not a mutable row reference.
+
+Construction changes mirror constraints and decision variables:
+
+```rust,ignore
+// Before
+let nf = NamedFunction {
+    id,
+    function,
+};
+let evaluated = named_function.evaluate(&state, atol)?;
+let evaluated_id = evaluated.id();
+
+// After
+let nf = NamedFunction { function };
+let instance = Instance::builder()
+    .named_functions(BTreeMap::from([(id, nf.clone())]))
+    .build()?;
+
+let evaluated = nf.evaluate(&state, atol)?;
+let solution = Solution::builder()
+    .evaluated_named_functions(BTreeMap::from([(id, evaluated)]))
+    .build()?;
+```
+
+Legacy `ommx.v1` protobuf messages still carry an inline `id` field. Rust parse
+drains that field into the owning map key, and Rust serialization fills it from
+the map key; the domain row remains ID-less on both sides of the conversion.
+
 ### ConstraintContext
 
 Owned struct used as the I/O type for constraint context (insertion via
@@ -657,6 +716,9 @@ pub struct ConstraintContext {
 - [ ] Replace `DecisionVariable::binary(id)` / `integer(id)` / `continuous(id)` / etc. with the no-argument row factories, and keep the ID on the enclosing map key
 - [ ] Replace `DecisionVariable::substituted_value()` and `DecisionVariable::substitute(...)` with host-owned fixed values: `InstanceBuilder::fixed_decision_variable_values(...)`, `Instance::fixed_decision_variable_value(id)`, or `Instance::fixed_decision_variable_values()`
 - [ ] Update `EvaluatedDecisionVariable::new(...)` and `SampledDecisionVariable::new(...)`: drop the `atol` argument, pass the `VariableID` separately for diagnostics, and keep using the enclosing `Solution` / `SampleSet` map key as the source of truth
+- [ ] Remove `NamedFunction.id`, `EvaluatedNamedFunction::id()`, and `SampledNamedFunction::id()` reads in Rust. Use the enclosing `NamedFunctionTable<_>` key instead
+- [ ] Construct `NamedFunction { function }` rows and insert them under the desired `NamedFunctionID` key; keep row maps and labels together with `NamedFunctionTable`
+- [ ] Update `Instance::new_named_function(...)` callers to use the returned `NamedFunctionID`; it no longer returns `&mut NamedFunction`
 
 ---
 

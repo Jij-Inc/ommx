@@ -177,7 +177,7 @@ impl Solution {
         self.inner
             .evaluated_named_functions()
             .iter()
-            .map(|(id, nf)| crate::EvaluatedNamedFunction(nf.clone(), labels.collect_for(*id)))
+            .map(|(id, nf)| crate::EvaluatedNamedFunction(*id, nf.clone(), labels.collect_for(*id)))
             .collect()
     }
 
@@ -469,6 +469,7 @@ impl Solution {
             .get(&named_function_id)
             .map(|nf| {
                 crate::EvaluatedNamedFunction(
+                    named_function_id,
                     nf.clone(),
                     self.inner
                         .named_function_labels()
@@ -579,17 +580,21 @@ impl Solution {
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let flags = crate::pandas::IncludeFlags::from_optional(include)?;
         let nf_meta_store = self.inner.named_function_labels().clone();
-        let nf_meta_view: Vec<(ommx::NamedFunctionLabel, &ommx::EvaluatedNamedFunction)> = self
+        let nf_meta_view: Vec<(
+            ommx::NamedFunctionLabel,
+            ommx::NamedFunctionID,
+            &ommx::EvaluatedNamedFunction,
+        )> = self
             .inner
             .evaluated_named_functions()
             .iter()
-            .map(|(id, nf)| (nf_meta_store.collect_for(*id), nf))
+            .map(|(id, nf)| (nf_meta_store.collect_for(*id), *id, nf))
             .collect();
         entries_to_dataframe(
             py,
             nf_meta_view
                 .iter()
-                .map(|(m, nf)| crate::pandas::WithModelingContext::new(*nf, m)),
+                .map(|(m, id, nf)| crate::pandas::WithModelingContext::new((*id, *nf), m)),
             "id",
             flags,
         )

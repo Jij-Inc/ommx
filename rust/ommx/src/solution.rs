@@ -4,7 +4,8 @@ mod serialize;
 use crate::{
     constraint_type::EvaluatedCollection, decision_variable::VariableLabelStore,
     indicator_constraint::IndicatorConstraint, Constraint, ConstraintID, EvaluatedConstraint,
-    EvaluatedDecisionVariable, EvaluatedNamedFunction, NamedFunctionID, Sense, VariableID,
+    EvaluatedDecisionVariable, EvaluatedNamedFunction, NamedFunctionID, NamedFunctionTable, Sense,
+    VariableID,
 };
 use getset::Getters;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -37,6 +38,9 @@ pub enum SolutionError {
 
     #[error("Duplicated variable ID is found in definition: {id:?}")]
     DuplicatedVariableID { id: VariableID },
+
+    #[error("Duplicated named function ID is found in definition: {id:?}")]
+    DuplicatedNamedFunctionID { id: NamedFunctionID },
 
     #[deprecated(
         note = "Parameters are now ignored in extract_decision_variables and extract_all_decision_variables"
@@ -82,11 +86,16 @@ pub enum SolutionError {
         constraint_id: ConstraintID,
     },
 
-    #[error("Named function key {key:?} does not match value's id {value_id:?}")]
-    InconsistentNamedFunctionID {
-        key: NamedFunctionID,
-        value_id: NamedFunctionID,
+    #[error(
+        "Variable ID {id:?} used in named function {named_function_id:?} is not in decision_variables"
+    )]
+    UndefinedVariableInNamedFunction {
+        id: VariableID,
+        named_function_id: NamedFunctionID,
     },
+
+    #[error("{message}")]
+    InvalidSidecar { message: String },
 }
 
 /// Single solution result with data integrity guarantees
@@ -97,8 +106,11 @@ pub enum SolutionError {
 ///   [`VariableID`]; evaluated decision-variable rows do not carry IDs.
 /// - The keys of the evaluated constraint collections are the table-owned
 ///   constraint IDs for each constraint family.
-/// - The keys of [`Self::evaluated_named_functions`] match the `id()` of their values.
-/// - [`Self::decision_variables`] contains all variable IDs referenced in `used_decision_variable_ids` of each constraint.
+/// - [`Self::evaluated_named_functions`] is keyed by the table-owned
+///   [`NamedFunctionID`]; evaluated named-function rows do not carry IDs.
+/// - [`Self::decision_variables`] contains all variable IDs referenced in
+///   `used_decision_variable_ids` of each evaluated constraint and evaluated
+///   named function.
 ///
 /// Note
 /// -----
@@ -116,16 +128,13 @@ pub struct Solution {
     evaluated_one_hot_constraints: EvaluatedCollection<crate::OneHotConstraint>,
     #[getset(get = "pub")]
     evaluated_sos1_constraints: EvaluatedCollection<crate::Sos1Constraint>,
-    #[getset(get = "pub")]
-    evaluated_named_functions: BTreeMap<NamedFunctionID, EvaluatedNamedFunction>,
+    /// Evaluated named-function rows plus their modeling labels.
+    evaluated_named_functions: NamedFunctionTable<EvaluatedNamedFunction>,
     #[getset(get = "pub")]
     decision_variables: BTreeMap<VariableID, EvaluatedDecisionVariable>,
     /// Per-variable modeling labels (sibling of [`Self::decision_variables`]).
     #[getset(get = "pub")]
     variable_labels: VariableLabelStore,
-    /// Per-named-function modeling labels (sibling of [`Self::evaluated_named_functions`]).
-    #[getset(get = "pub")]
-    named_function_labels: crate::named_function::NamedFunctionLabelStore,
     /// Optimality status - not guaranteed by Solution itself
     pub optimality: crate::v1::Optimality,
     /// Relaxation status - not guaranteed by Solution itself
@@ -136,6 +145,23 @@ pub struct Solution {
     pub metadata: Option<crate::v1::ProcessMetadata>,
     /// User-defined or third-party extension annotations.
     pub annotations: HashMap<String, String>,
+}
+
+fn validate_evaluated_named_function_used_ids(
+    decision_variables: &BTreeMap<VariableID, EvaluatedDecisionVariable>,
+    evaluated_named_functions: &NamedFunctionTable<EvaluatedNamedFunction>,
+) -> Result<(), SolutionError> {
+    for (named_function_id, named_function) in evaluated_named_functions.iter() {
+        for var_id in named_function.used_decision_variable_ids() {
+            if !decision_variables.contains_key(var_id) {
+                return Err(SolutionError::UndefinedVariableInNamedFunction {
+                    id: *var_id,
+                    named_function_id: *named_function_id,
+                });
+            }
+        }
+    }
+    Ok(())
 }
 
 impl Solution {
@@ -166,6 +192,21 @@ impl Solution {
                 .build_unchecked()
                 .expect("All required fields are provided")
         }
+    }
+
+    /// Access evaluated named-function rows plus their modeling labels.
+    pub fn evaluated_named_function_table(&self) -> &NamedFunctionTable<EvaluatedNamedFunction> {
+        &self.evaluated_named_functions
+    }
+
+    /// Access evaluated named-function row payloads keyed by table-owned IDs.
+    pub fn evaluated_named_functions(&self) -> &BTreeMap<NamedFunctionID, EvaluatedNamedFunction> {
+        self.evaluated_named_functions.entries()
+    }
+
+    /// Access the per-named-function modeling-label store.
+    pub fn named_function_labels(&self) -> &crate::named_function::NamedFunctionLabelStore {
+        self.evaluated_named_functions.labels()
     }
 
     /// Get decision variable IDs used in this solution
@@ -453,7 +494,7 @@ impl Solution {
     pub fn named_function_names(&self) -> BTreeSet<String> {
         self.evaluated_named_functions
             .keys()
-            .filter_map(|id| self.named_function_labels.name(*id).map(str::to_owned))
+            .filter_map(|id| self.named_function_labels().name(*id).map(str::to_owned))
             .collect()
     }
 
@@ -474,11 +515,11 @@ impl Solution {
         name: &str,
     ) -> Result<BTreeMap<Vec<i64>, f64>, SolutionError> {
         // Collect all named functions with the given name
-        let functions_with_name: Vec<&EvaluatedNamedFunction> = self
+        let functions_with_name: Vec<(NamedFunctionID, &EvaluatedNamedFunction)> = self
             .evaluated_named_functions
             .iter()
-            .filter(|(id, _)| self.named_function_labels.name(**id) == Some(name))
-            .map(|(_, nf)| nf)
+            .filter(|(id, _)| self.named_function_labels().name(**id) == Some(name))
+            .map(|(id, nf)| (*id, nf))
             .collect();
         if functions_with_name.is_empty() {
             return Err(SolutionError::UnknownNamedFunctionName {
@@ -487,8 +528,8 @@ impl Solution {
         }
 
         let mut result = BTreeMap::new();
-        for nf in &functions_with_name {
-            let key = self.named_function_labels.subscripts(nf.id()).to_vec();
+        for (id, nf) in &functions_with_name {
+            let key = self.named_function_labels().subscripts(*id).to_vec();
             if result.contains_key(&key) {
                 return Err(SolutionError::DuplicateSubscript { subscripts: key });
             }
@@ -513,12 +554,12 @@ impl Solution {
         let mut result: BTreeMap<String, BTreeMap<Vec<i64>, f64>> = BTreeMap::new();
 
         for (id, nf) in &self.evaluated_named_functions {
-            let name = match self.named_function_labels.name(*id) {
+            let name = match self.named_function_labels().name(*id) {
                 Some(n) => n.to_string(),
                 None => continue, // Skip named functions without names
             };
 
-            let subscripts = self.named_function_labels.subscripts(*id).to_vec();
+            let subscripts = self.named_function_labels().subscripts(*id).to_vec();
             let value = nf.evaluated_value();
 
             let funcs_map = result.entry(name).or_default();
@@ -703,8 +744,9 @@ impl SolutionBuilder {
     /// Returns an error if:
     /// - Required fields (`objective`, `evaluated_constraints`, `decision_variables`, `sense`) are not set
     /// - Constraint collection sidecars contain invalid keys
-    /// - Named function keys don't match their value's `id()`
-    /// - Variables referenced in constraints' `used_decision_variable_ids` are not in `decision_variables`
+    /// - Named-function labels reference IDs not present in the evaluated named-function table
+    /// - Variables referenced in constraints' or named functions'
+    ///   `used_decision_variable_ids` are not in `decision_variables`
     pub fn build(self) -> crate::Result<Solution> {
         let objective = self
             .objective
@@ -723,32 +765,14 @@ impl SolutionBuilder {
             .sense
             .ok_or(SolutionError::MissingRequiredField { field: "sense" })?;
 
-        // Validate named function keys match their id
-        for (key, value) in &self.evaluated_named_functions {
-            if *key != value.id() {
-                return Err(SolutionError::InconsistentNamedFunctionID {
-                    key: *key,
-                    value_id: value.id(),
-                }
-                .into());
-            }
-        }
         let decision_variable_ids = decision_variables.keys().copied().collect::<BTreeSet<_>>();
         crate::modeling_label::validate_modeling_label_ids(
             &self.variable_labels,
             &decision_variable_ids,
             "decision variable",
         )?;
-        let named_function_ids = self
-            .evaluated_named_functions
-            .keys()
-            .copied()
-            .collect::<BTreeSet<_>>();
-        crate::modeling_label::validate_modeling_label_ids(
-            &self.named_function_labels,
-            &named_function_ids,
-            "named function",
-        )?;
+        let evaluated_named_functions =
+            NamedFunctionTable::new(self.evaluated_named_functions, self.named_function_labels)?;
         evaluated_constraints.validate_context_ids()?;
         self.evaluated_indicator_constraints
             .validate_context_ids()?;
@@ -803,6 +827,10 @@ impl SolutionBuilder {
                 }
             }
         }
+        validate_evaluated_named_function_used_ids(
+            &decision_variables,
+            &evaluated_named_functions,
+        )?;
 
         Ok(Solution {
             objective,
@@ -810,10 +838,9 @@ impl SolutionBuilder {
             evaluated_indicator_constraints: self.evaluated_indicator_constraints,
             evaluated_one_hot_constraints: self.evaluated_one_hot_constraints,
             evaluated_sos1_constraints: self.evaluated_sos1_constraints,
-            evaluated_named_functions: self.evaluated_named_functions,
+            evaluated_named_functions,
             decision_variables,
             variable_labels: self.variable_labels.clone(),
-            named_function_labels: self.named_function_labels.clone(),
             optimality: self.optimality,
             relaxation: self.relaxation,
             sense: Some(sense),
@@ -829,8 +856,9 @@ impl SolutionBuilder {
     /// The caller must ensure:
     /// - `decision_variables` is keyed by the intended [`VariableID`] for each row
     /// - Evaluated constraint collection keys and sidecars are internally consistent
-    /// - Named function keys match their value's `id()`
-    /// - All `used_decision_variable_ids` in constraints exist in `decision_variables`
+    /// - Evaluated named-function table keys and labels are internally consistent
+    /// - All `used_decision_variable_ids` in constraints and evaluated named
+    ///   functions exist in `decision_variables`
     ///
     /// Use [`Self::build`] for validated construction.
     /// This method is useful when invariants are guaranteed by construction,
@@ -862,10 +890,12 @@ impl SolutionBuilder {
             evaluated_indicator_constraints: self.evaluated_indicator_constraints,
             evaluated_one_hot_constraints: self.evaluated_one_hot_constraints,
             evaluated_sos1_constraints: self.evaluated_sos1_constraints,
-            evaluated_named_functions: self.evaluated_named_functions,
+            evaluated_named_functions: NamedFunctionTable::from_parts_unchecked(
+                self.evaluated_named_functions,
+                self.named_function_labels,
+            ),
             decision_variables,
             variable_labels: self.variable_labels.clone(),
-            named_function_labels: self.named_function_labels.clone(),
             optimality: self.optimality,
             relaxation: self.relaxation,
             sense: Some(sense),
@@ -1246,6 +1276,59 @@ mod tests {
                 && err.to_string().contains("VariableID(99)"),
             "unexpected error: {err}"
         );
+    }
+
+    #[test]
+    fn builder_rejects_orphan_named_function_label_id() {
+        let mut named_function_labels = crate::named_function::NamedFunctionLabelStore::default();
+        named_function_labels.set_name(NamedFunctionID::from(99), "orphan");
+
+        let err = Solution::builder()
+            .objective(0.0)
+            .evaluated_constraints(BTreeMap::new())
+            .decision_variables(BTreeMap::new())
+            .named_function_labels(named_function_labels)
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap_err();
+
+        assert!(
+            err.to_string().contains("unknown named function ID")
+                && err.to_string().contains("NamedFunctionID(99)"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn builder_rejects_undefined_variable_in_evaluated_named_function() {
+        use crate::parse::Parse as _;
+
+        let var_id = VariableID::from(1);
+        let nf_id = NamedFunctionID::from(7);
+        let parsed: crate::named_function::parse::ParsedEvaluatedNamedFunction =
+            crate::v1::EvaluatedNamedFunction {
+                id: nf_id.into_inner(),
+                evaluated_value: 1.0,
+                used_decision_variable_ids: vec![var_id.into_inner()],
+                ..Default::default()
+            }
+            .parse(&())
+            .unwrap();
+
+        let err = Solution::builder()
+            .objective(0.0)
+            .evaluated_constraints(BTreeMap::new())
+            .evaluated_named_functions(BTreeMap::from([(nf_id, parsed.evaluated_named_function)]))
+            .decision_variables(BTreeMap::new())
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap_err();
+        let solution_err = err.downcast_ref::<SolutionError>().unwrap();
+        assert!(matches!(
+            solution_err,
+            SolutionError::UndefinedVariableInNamedFunction { id, named_function_id }
+                if *id == var_id && *named_function_id == nf_id
+        ));
     }
 
     #[test]
