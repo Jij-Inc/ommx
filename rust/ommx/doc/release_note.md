@@ -31,11 +31,15 @@ The 3.0.0 line is a major revision of the Rust SDK:
   `instance.named_function_labels()`, …). One canonical store per
   collection, two views on top: per-id wrapper getters for one-off
   reads and `*_df` for bulk analysis.
-- Decision variables and named functions now follow the same table ownership rule:
+- Decision variables, parameters, and named functions now follow the same table ownership rule:
   [`DecisionVariable`](crate::DecisionVariable) is row data containing
   only `kind` and `bound`; the [`VariableID`](crate::VariableID) and
   fixed values live on the enclosing `Instance` /
   `ParametricInstance` / `Solution` / `SampleSet` tables.
+  [`ParametricInstance`](crate::ParametricInstance) stores parameter IDs
+  and labels in [`ParameterTable`](crate::ParameterTable), while concrete
+  parameter values remain inputs to
+  [`ParametricInstance::with_parameters`](crate::ParametricInstance::with_parameters).
   [`NamedFunction`](crate::NamedFunction) likewise stores only the
   [`Function`](crate::Function); [`NamedFunctionID`](crate::NamedFunctionID)
   lives on the enclosing named-function maps.
@@ -241,6 +245,30 @@ particular, [`Instance::new_named_function`](crate::Instance::new_named_function
 now returns the allocated [`NamedFunctionID`](crate::NamedFunctionID) rather
 than `&mut NamedFunction`, so callers cannot invalidate a checked `Instance` by
 editing the function body after insertion.
+
+## Parameter table ownership ([#967](https://github.com/Jij-Inc/ommx/pull/967))
+
+[`ParametricInstance`](crate::ParametricInstance) now stores its parameter
+universe as a [`ParameterTable`](crate::ParameterTable) rather than
+`BTreeMap<VariableID, v1::Parameter>`. Parameter IDs intentionally stay in the
+shared [`VariableID`](crate::VariableID) namespace with decision variables,
+because [`Function`](crate::Function) references can only be interpreted as
+decision variables or parameters by the enclosing `ParametricInstance`.
+
+`ParameterTable` owns the parameter ID set and
+[`ParameterLabelStore`](crate::ParameterLabelStore). It enforces the
+table-level invariant that labels cannot reference unknown parameter IDs.
+`ParametricInstance` remains responsible for the host-level invariants:
+parameter IDs and decision-variable IDs must be disjoint, expressions may only
+reference IDs from the combined namespace, and structural decision-variable
+positions such as indicator / one-hot / SOS1 members cannot use parameter IDs.
+
+Rust callers should pass `ParameterTable` to
+[`ParametricInstance::new`](crate::ParametricInstance::new) and
+[`ParametricInstanceBuilder::parameters`](crate::ParametricInstanceBuilder::parameters).
+Legacy `ommx.v1.Parameter` rows are still used at protobuf and Python API
+boundaries; Rust parsing drains their inline IDs and labels into
+`ParameterTable`, and Rust serialization materializes them back from the table.
 
 ## Capability model ([#790](https://github.com/Jij-Inc/ommx/pull/790), [#805](https://github.com/Jij-Inc/ommx/pull/805), [#810](https://github.com/Jij-Inc/ommx/pull/810), [#811](https://github.com/Jij-Inc/ommx/pull/811), [#814](https://github.com/Jij-Inc/ommx/pull/814))
 
