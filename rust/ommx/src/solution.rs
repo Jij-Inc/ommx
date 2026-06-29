@@ -860,14 +860,14 @@ impl SolutionBuilder {
         })
     }
 
-    /// Builds the `Solution` without invariant validation.
+    /// Builds the `Solution` without host-level revalidation.
     ///
     /// # Safety
-    /// This method does not validate that the Solution invariants hold.
-    /// The caller must ensure:
+    /// This method still constructs table owners through their checked
+    /// constructors, so table-level invariants such as label IDs referring to
+    /// existing table rows are enforced. It does not revalidate host-level
+    /// cross references. The caller must ensure:
     /// - `decision_variables` is keyed by the intended [`VariableID`] for each row
-    /// - Evaluated constraint collection keys and sidecars are internally consistent
-    /// - Evaluated named-function table keys and labels are internally consistent
     /// - All `used_decision_variable_ids` in constraints and evaluated named
     ///   functions exist in `decision_variables`
     ///
@@ -876,7 +876,8 @@ impl SolutionBuilder {
     /// such as when creating a Solution from `Instance::evaluate`.
     ///
     /// # Errors
-    /// Returns an error only if required fields are not set.
+    /// Returns an error if required fields are not set or table-level sidecar
+    /// invariants fail.
     pub unsafe fn build_unchecked(self) -> crate::Result<Solution> {
         let objective = self
             .objective
@@ -891,12 +892,13 @@ impl SolutionBuilder {
                 .ok_or(SolutionError::MissingRequiredField {
                     field: "decision_variables",
                 })?;
-        let decision_variables = unsafe {
-            DecisionVariableTable::from_parts_unchecked(decision_variables, self.variable_labels)
-        };
+        let decision_variables =
+            DecisionVariableTable::new(decision_variables, self.variable_labels)?;
         let sense = self
             .sense
             .ok_or(SolutionError::MissingRequiredField { field: "sense" })?;
+        let evaluated_named_functions =
+            NamedFunctionTable::new(self.evaluated_named_functions, self.named_function_labels)?;
 
         Ok(Solution {
             objective,
@@ -904,10 +906,7 @@ impl SolutionBuilder {
             evaluated_indicator_constraints: self.evaluated_indicator_constraints,
             evaluated_one_hot_constraints: self.evaluated_one_hot_constraints,
             evaluated_sos1_constraints: self.evaluated_sos1_constraints,
-            evaluated_named_functions: NamedFunctionTable::from_parts_unchecked(
-                self.evaluated_named_functions,
-                self.named_function_labels,
-            ),
+            evaluated_named_functions,
             decision_variables,
             optimality: self.optimality,
             relaxation: self.relaxation,
@@ -1292,6 +1291,31 @@ mod tests {
     }
 
     #[test]
+    fn unchecked_builder_rejects_orphan_variable_label_id() {
+        let mut variable_labels = VariableLabelStore::default();
+        variable_labels.set_name(VariableID::from(99), "orphan");
+
+        // SAFETY: This test intentionally exercises the unchecked host-level
+        // constructor boundary. Table-level label ownership is still checked.
+        let err = unsafe {
+            Solution::builder()
+                .objective(0.0)
+                .evaluated_constraints(BTreeMap::new())
+                .decision_variables(BTreeMap::new())
+                .variable_labels(variable_labels)
+                .sense(Sense::Minimize)
+                .build_unchecked()
+                .unwrap_err()
+        };
+
+        assert!(
+            err.to_string().contains("unknown decision variable ID")
+                && err.to_string().contains("VariableID(99)"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
     fn builder_rejects_orphan_named_function_label_id() {
         let mut named_function_labels = crate::named_function::NamedFunctionLabelStore::default();
         named_function_labels.set_name(NamedFunctionID::from(99), "orphan");
@@ -1304,6 +1328,31 @@ mod tests {
             .sense(Sense::Minimize)
             .build()
             .unwrap_err();
+
+        assert!(
+            err.to_string().contains("unknown named function ID")
+                && err.to_string().contains("NamedFunctionID(99)"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn unchecked_builder_rejects_orphan_named_function_label_id() {
+        let mut named_function_labels = crate::named_function::NamedFunctionLabelStore::default();
+        named_function_labels.set_name(NamedFunctionID::from(99), "orphan");
+
+        // SAFETY: This test intentionally exercises the unchecked host-level
+        // constructor boundary. Table-level label ownership is still checked.
+        let err = unsafe {
+            Solution::builder()
+                .objective(0.0)
+                .evaluated_constraints(BTreeMap::new())
+                .decision_variables(BTreeMap::new())
+                .named_function_labels(named_function_labels)
+                .sense(Sense::Minimize)
+                .build_unchecked()
+                .unwrap_err()
+        };
 
         assert!(
             err.to_string().contains("unknown named function ID")

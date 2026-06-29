@@ -70,21 +70,6 @@ impl<T> DecisionVariableTable<T> {
         }
     }
 
-    /// Construct a table without validating that labels refer to existing rows.
-    ///
-    /// This is for host-level unchecked constructors whose caller already owns
-    /// the invariant. Prefer [`Self::new`] at external input boundaries.
-    ///
-    /// # Safety
-    /// The caller must ensure every label ID refers to an entry owned by this
-    /// table.
-    pub(crate) unsafe fn from_parts_unchecked(
-        entries: BTreeMap<VariableID, T>,
-        labels: VariableLabelStore,
-    ) -> Self {
-        Self { entries, labels }
-    }
-
     /// Split the table into its row map and label store.
     ///
     /// Use this at serialization or conversion boundaries that must join
