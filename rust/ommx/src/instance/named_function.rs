@@ -71,7 +71,7 @@ impl Instance {
         subscripts: Vec<i64>,
         parameters: FnvHashMap<String, String>,
         description: Option<String>,
-    ) -> crate::Result<(NamedFunctionID, &mut NamedFunction)> {
+    ) -> crate::Result<NamedFunctionID> {
         let variable_ids: VariableIDSet = self.decision_variables.keys().cloned().collect();
 
         for id in function.required_ids() {
@@ -89,7 +89,7 @@ impl Instance {
             description,
         };
         self.named_functions.insert(id, named_function, label);
-        Ok((id, self.named_functions.get_mut(&id).unwrap()))
+        Ok(id)
     }
 }
 

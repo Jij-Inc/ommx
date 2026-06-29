@@ -198,16 +198,8 @@ impl<T> NamedFunctionTable<T> {
         self.entries.get(id)
     }
 
-    pub fn get_mut(&mut self, id: &NamedFunctionID) -> Option<&mut T> {
-        self.entries.get_mut(id)
-    }
-
     pub fn iter(&self) -> std::collections::btree_map::Iter<'_, NamedFunctionID, T> {
         self.entries.iter()
-    }
-
-    pub fn iter_mut(&mut self) -> std::collections::btree_map::IterMut<'_, NamedFunctionID, T> {
-        self.entries.iter_mut()
     }
 
     pub fn keys(&self) -> std::collections::btree_map::Keys<'_, NamedFunctionID, T> {
@@ -216,10 +208,6 @@ impl<T> NamedFunctionTable<T> {
 
     pub fn values(&self) -> std::collections::btree_map::Values<'_, NamedFunctionID, T> {
         self.entries.values()
-    }
-
-    pub fn values_mut(&mut self) -> std::collections::btree_map::ValuesMut<'_, NamedFunctionID, T> {
-        self.entries.values_mut()
     }
 
     pub fn len(&self) -> usize {

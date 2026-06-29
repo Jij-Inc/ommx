@@ -236,6 +236,12 @@ stores `NamedFunctionTable<EvaluatedNamedFunction>`, and `SampleSet` stores
 still carry inline IDs; Rust parse drains them into table keys and Rust
 serialization fills them from table keys.
 
+Mutable named-function row views are not exposed from host objects. In
+particular, [`Instance::new_named_function`](crate::Instance::new_named_function)
+now returns the allocated [`NamedFunctionID`](crate::NamedFunctionID) rather
+than `&mut NamedFunction`, so callers cannot invalidate a checked `Instance` by
+editing the function body after insertion.
+
 ## Capability model ([#790](https://github.com/Jij-Inc/ommx/pull/790), [#805](https://github.com/Jij-Inc/ommx/pull/805), [#810](https://github.com/Jij-Inc/ommx/pull/810), [#811](https://github.com/Jij-Inc/ommx/pull/811), [#814](https://github.com/Jij-Inc/ommx/pull/814))
 
 First-class special constraints raise a deployment question: not every

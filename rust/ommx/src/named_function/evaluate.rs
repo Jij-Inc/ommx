@@ -44,6 +44,33 @@ impl Evaluate for NamedFunction {
     }
 }
 
+impl NamedFunctionTable<NamedFunction> {
+    pub(crate) fn substitute_acyclic(
+        &mut self,
+        acyclic: &crate::AcyclicAssignments,
+    ) -> Result<(), crate::SubstitutionError> {
+        let mut updated = self.clone();
+        for named_function in updated.entries.values_mut() {
+            crate::substitute_acyclic(&mut named_function.function, acyclic)?;
+        }
+        *self = updated;
+        Ok(())
+    }
+
+    pub(crate) fn partial_evaluate(
+        &mut self,
+        state: &crate::v1::State,
+        atol: crate::ATol,
+    ) -> crate::Result<()> {
+        let mut updated = self.clone();
+        for named_function in updated.entries.values_mut() {
+            named_function.partial_evaluate(state, atol)?;
+        }
+        *self = updated;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -645,6 +645,13 @@ stores `NamedFunctionTable<EvaluatedNamedFunction>`, and `SampleSet` stores
 cannot be attached to unknown named-function IDs at validated construction
 boundaries.
 
+Host accessors expose shared table views only. They intentionally do not expose
+mutable row views because changing a named-function body after host validation
+could introduce undefined variable IDs. Add named functions through
+[`Instance::new_named_function`](crate::Instance::new_named_function) or the
+validated builders; `new_named_function` returns the allocated
+[`NamedFunctionID`](crate::NamedFunctionID), not a mutable row reference.
+
 Construction changes mirror constraints and decision variables:
 
 ```rust,ignore
@@ -711,6 +718,7 @@ pub struct ConstraintContext {
 - [ ] Update `EvaluatedDecisionVariable::new(...)` and `SampledDecisionVariable::new(...)`: drop the `atol` argument, pass the `VariableID` separately for diagnostics, and keep using the enclosing `Solution` / `SampleSet` map key as the source of truth
 - [ ] Remove `NamedFunction.id`, `EvaluatedNamedFunction::id()`, and `SampledNamedFunction::id()` reads in Rust. Use the enclosing `NamedFunctionTable<_>` key instead
 - [ ] Construct `NamedFunction { function }` rows and insert them under the desired `NamedFunctionID` key; keep row maps and labels together with `NamedFunctionTable`
+- [ ] Update `Instance::new_named_function(...)` callers to use the returned `NamedFunctionID`; it no longer returns `&mut NamedFunction`
 
 ---
 

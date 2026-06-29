@@ -413,9 +413,9 @@ impl Evaluate for Instance {
         working
             .constraint_collection
             .partial_evaluate(&expanded_state, atol)?;
-        for named_function in working.named_functions.values_mut() {
-            named_function.partial_evaluate(&expanded_state, atol)?;
-        }
+        working
+            .named_functions
+            .partial_evaluate(&expanded_state, atol)?;
         working
             .decision_variable_dependency
             .partial_evaluate(&expanded_state, atol)?;

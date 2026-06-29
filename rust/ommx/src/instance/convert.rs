@@ -135,9 +135,7 @@ impl ParametricInstance {
         }
 
         let mut named_functions = self.named_functions;
-        for (_, named_function) in named_functions.iter_mut() {
-            named_function.partial_evaluate(&state, atol)?;
-        }
+        named_functions.partial_evaluate(&state, atol)?;
 
         // Decision-variable dependency RHS expressions can also reference
         // parameter IDs. Without substitution, dependent-variable
