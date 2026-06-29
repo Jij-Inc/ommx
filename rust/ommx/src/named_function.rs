@@ -2,6 +2,7 @@ mod arbitrary;
 mod evaluate;
 mod label_store;
 pub(crate) mod parse;
+mod substitute;
 
 use derive_more::{Deref, From};
 use getset::*;

@@ -44,20 +44,6 @@ impl Evaluate for NamedFunction {
     }
 }
 
-impl NamedFunctionTable<NamedFunction> {
-    pub(crate) fn substitute_acyclic(
-        &mut self,
-        acyclic: &crate::AcyclicAssignments,
-    ) -> Result<(), crate::SubstitutionError> {
-        let mut updated = self.clone();
-        for named_function in updated.entries.values_mut() {
-            crate::substitute_acyclic(&mut named_function.function, acyclic)?;
-        }
-        *self = updated;
-        Ok(())
-    }
-}
-
 impl Evaluate for NamedFunctionTable<NamedFunction> {
     type Output = NamedFunctionTable<EvaluatedNamedFunction>;
     type SampledOutput = NamedFunctionTable<SampledNamedFunction>;

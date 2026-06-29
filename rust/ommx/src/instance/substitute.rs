@@ -98,7 +98,7 @@ impl Substitute for Instance {
         }
 
         // Apply substitution to named functions and existing dependencies.
-        self.named_functions.substitute_acyclic(acyclic)?;
+        substitute_acyclic(&mut self.named_functions, acyclic)?;
         substitute_acyclic(&mut self.decision_variable_dependency, acyclic)?;
 
         Ok(self)
@@ -206,7 +206,7 @@ impl Substitute for ParametricInstance {
         }
 
         // Apply substitution to named functions and existing dependencies.
-        self.named_functions.substitute_acyclic(acyclic)?;
+        substitute_acyclic(&mut self.named_functions, acyclic)?;
         substitute_acyclic(&mut self.decision_variable_dependency, acyclic)?;
 
         Ok(self)
