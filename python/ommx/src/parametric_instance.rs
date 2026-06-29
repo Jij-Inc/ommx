@@ -70,13 +70,8 @@ impl ParametricInstance {
             })
             .collect();
 
-        let mut rust_parameters = BTreeMap::new();
-        for p in parameters {
-            let id = VariableID::from(p.0.id);
-            if rust_parameters.insert(id, p.0).is_some() {
-                anyhow::bail!("Duplicate parameter ID: {}", id.into_inner());
-            }
-        }
+        let rust_parameters =
+            ommx::ParameterTable::from_v1_parameters(parameters.into_iter().map(|p| p.0))?;
 
         let mut builder = ommx::ParametricInstance::builder()
             .sense(sense.into())
@@ -588,8 +583,9 @@ impl ParametricInstance {
     pub fn parameters(&self) -> Vec<Parameter> {
         self.inner
             .parameters()
-            .values()
-            .map(|p| Parameter(p.clone()))
+            .to_v1_parameters()
+            .into_iter()
+            .map(Parameter)
             .collect()
     }
 
@@ -688,8 +684,8 @@ impl ParametricInstance {
     pub fn get_parameter_by_id(&self, parameter_id: u64) -> PyResult<Parameter> {
         self.inner
             .parameters()
-            .get(&VariableID::from(parameter_id))
-            .map(|p| Parameter(p.clone()))
+            .to_v1_parameter(VariableID::from(parameter_id))
+            .map(Parameter)
             .ok_or_else(|| {
                 PyKeyError::new_err(format!("Parameter with ID {parameter_id} not found"))
             })
@@ -846,7 +842,8 @@ impl ParametricInstance {
         include: Option<Vec<String>>,
     ) -> PyResult<Bound<'py, PyDataFrame>> {
         let flags = crate::pandas::IncludeFlags::from_optional(include)?;
-        entries_to_dataframe(py, self.inner.parameters().values(), "id", flags)
+        let parameters = self.inner.parameters().to_v1_parameters();
+        entries_to_dataframe(py, parameters.iter(), "id", flags)
     }
 
     /// Constraint context DataFrame (id-indexed). See

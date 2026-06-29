@@ -478,14 +478,15 @@ collection.context()                   // &ConstraintContextStore<T::ID>
 
 Per-collection Struct-of-Arrays stores replace the inline fields that
 used to live on every `Constraint` / `DecisionVariable` /
-`NamedFunction`. Decision variables and named functions carry
-`ModelingLabel`; constraints carry `ConstraintContext`, which contains a
-`ModelingLabel` plus constraint-only transformation provenance. Three
-families:
+`NamedFunction`, and on legacy `v1::Parameter` rows. Decision variables,
+parameters, and named functions carry `ModelingLabel`; constraints carry
+`ConstraintContext`, which contains a `ModelingLabel` plus constraint-only
+transformation provenance. Four families:
 
 ```rust,ignore
 pub struct ConstraintContextStore<ID> { /* label + provenance */ }
 pub struct VariableLabelStore       { /* same, no provenance */ }
+pub struct ParameterLabelStore      { /* same, no provenance */ }
 pub struct NamedFunctionLabelStore  { /* same, no provenance */ }
 ```
 
@@ -505,6 +506,8 @@ instance.sos1_constraint_context()
 instance.set_sos1_constraint_context(id, context)?
 instance.variable_labels()                // &VariableLabelStore
 instance.set_variable_label(id, label)?
+parametric.parameters()                   // &ParameterTable
+parametric.parameters().labels()          // &ParameterLabelStore
 instance.named_function_table()           // &NamedFunctionTable<NamedFunction>
 instance.named_function_labels()          // &NamedFunctionLabelStore
 instance.set_named_function_label(id, label)?
@@ -560,12 +563,12 @@ impl<ID> ConstraintContextStore<ID> {
 }
 ```
 
-`VariableLabelStore` and `NamedFunctionLabelStore` mirror the
-shape above with the provenance fields omitted (`provenance(id)`,
-`push_provenance`, `set_provenance`). `VariableLabelStore` keeps the
-subscript append helpers (`push_subscript`, `extend_subscripts`);
-`NamedFunctionLabelStore` does not — extend a named function's
-subscripts via `set_subscripts(id, new_vec)` instead.
+`VariableLabelStore`, `ParameterLabelStore`, and
+`NamedFunctionLabelStore` mirror the shape above with the provenance fields
+omitted (`provenance(id)`, `push_provenance`, `set_provenance`).
+`VariableLabelStore` keeps the subscript append helpers (`push_subscript`,
+`extend_subscripts`); `NamedFunctionLabelStore` does not — extend a named
+function's subscripts via `set_subscripts(id, new_vec)` instead.
 
 ### Fixed decision-variable values
 
@@ -679,6 +682,58 @@ Legacy `ommx.v1` protobuf messages still carry an inline `id` field. Rust parse
 drains that field into the owning map key, and Rust serialization fills it from
 the map key; the domain row remains ID-less on both sides of the conversion.
 
+### Parameter table ownership
+
+`ParametricInstance` parameters now follow the same owner-boundary rule, but
+with one important difference: parameters intentionally do **not** get a
+separate `ParameterID` type. Parameter references share the
+[`VariableID`](crate::VariableID) namespace with decision variables because a
+[`Function`](crate::Function) only carries variable IDs; only the enclosing
+[`ParametricInstance`](crate::ParametricInstance) can decide whether an ID is a
+decision variable or a parameter.
+
+The Rust domain model therefore stores parameters as a
+[`ParameterTable`](crate::ParameterTable):
+
+- [`ParameterTable`](crate::ParameterTable) owns the parameter ID set and the
+  [`ParameterLabelStore`](crate::ParameterLabelStore).
+- The table-level invariant is that label IDs are a subset of parameter IDs.
+- [`ParametricInstance`](crate::ParametricInstance) owns the host-level
+  invariants: parameter IDs and decision-variable IDs are disjoint, expression
+  bodies reference IDs from their union, and structural decision-variable
+  positions such as indicator / one-hot / SOS1 members never use parameter IDs.
+- Parameter values are not table data. They are supplied later through
+  [`ParametricInstance::with_parameters`](crate::ParametricInstance::with_parameters).
+
+This removes the former `BTreeMap<VariableID, v1::Parameter>` duplication where
+the map key and `v1::Parameter.id` both claimed to own the same ID. Legacy
+`ommx.v1.Parameter` protobuf rows are still parsed and written at the
+serialization boundary, but their inline IDs and labels are drained into /
+filled from the `ParameterTable`.
+
+```rust,ignore
+// Before
+let parameters = BTreeMap::from([(
+    id,
+    v1::Parameter {
+        id: id.into_inner(),
+        name: Some("p".to_string()),
+        ..Default::default()
+    },
+)]);
+let pi = ParametricInstance::builder()
+    .parameters(parameters)
+    .build()?;
+
+// After
+let mut labels = ParameterLabelStore::default();
+labels.set_name(id, "p");
+let parameters = ParameterTable::new(BTreeSet::from([id]), labels)?;
+let pi = ParametricInstance::builder()
+    .parameters(parameters)
+    .build()?;
+```
+
 ### ConstraintContext
 
 Owned struct used as the I/O type for constraint context (insertion via
@@ -719,6 +774,8 @@ pub struct ConstraintContext {
 - [ ] Remove `NamedFunction.id`, `EvaluatedNamedFunction::id()`, and `SampledNamedFunction::id()` reads in Rust. Use the enclosing `NamedFunctionTable<_>` key instead
 - [ ] Construct `NamedFunction { function }` rows and insert them under the desired `NamedFunctionID` key; keep row maps and labels together with `NamedFunctionTable`
 - [ ] Update `Instance::new_named_function(...)` callers to use the returned `NamedFunctionID`; it no longer returns `&mut NamedFunction`
+- [ ] Replace `BTreeMap<VariableID, v1::Parameter>` on Rust `ParametricInstance` builders / constructors with `ParameterTable`; keep parameter IDs as `VariableID` keys, not a separate `ParameterID`
+- [ ] Move parameter `name` / `subscripts` / `parameters` / `description` access to `parametric.parameters().labels()`, and keep concrete parameter values in `ParametricInstance::with_parameters(...)`
 
 ---
 

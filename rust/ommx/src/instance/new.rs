@@ -1,5 +1,5 @@
 use super::*;
-use crate::{v1, Constraint, ConstraintID, DecisionVariable, Function, VariableID};
+use crate::{Constraint, ConstraintID, DecisionVariable, Function, ParameterTable, VariableID};
 use std::collections::BTreeMap;
 
 impl Instance {
@@ -23,7 +23,7 @@ impl ParametricInstance {
         sense: Sense,
         objective: Function,
         decision_variables: BTreeMap<VariableID, DecisionVariable>,
-        parameters: BTreeMap<VariableID, v1::Parameter>,
+        parameters: ParameterTable,
         constraints: BTreeMap<ConstraintID, Constraint>,
     ) -> crate::Result<Self> {
         Self::builder()
@@ -45,6 +45,10 @@ mod tests {
         linear, DecisionVariable, VariableID,
     };
     use maplit::btreemap;
+
+    fn parameters(ids: impl IntoIterator<Item = VariableID>) -> ParameterTable {
+        ParameterTable::from_ids(ids.into_iter().collect())
+    }
 
     #[test]
     fn test_instance_new_fails_with_undefined_variable_in_objective() {
@@ -109,10 +113,7 @@ mod tests {
             VariableID::from(2) => DecisionVariable::binary(),
         };
 
-        let parameters = btreemap! {
-            VariableID::from(100) => v1::Parameter { id: 100, name: Some("p1".to_string()), ..Default::default() },
-            VariableID::from(101) => v1::Parameter { id: 101, name: Some("p2".to_string()), ..Default::default() },
-        };
+        let parameters = parameters([VariableID::from(100), VariableID::from(101)]);
 
         // Objective function uses both decision variables and parameters
         let objective = ((linear!(1) + linear!(100)).unwrap() + coeff!(1.0))
@@ -149,10 +150,7 @@ mod tests {
         };
 
         // Parameter with same ID as decision variable
-        let parameters = btreemap! {
-            VariableID::from(1) => v1::Parameter { id: 1, name: Some("p1".to_string()), ..Default::default() },
-            VariableID::from(100) => v1::Parameter { id: 100, name: Some("p2".to_string()), ..Default::default() },
-        };
+        let parameters = parameters([VariableID::from(1), VariableID::from(100)]);
 
         let objective = (linear!(1) + coeff!(1.0)).into();
         let constraints = BTreeMap::new();
@@ -178,9 +176,7 @@ mod tests {
             VariableID::from(2) => DecisionVariable::binary(),
         };
 
-        let parameters = btreemap! {
-            VariableID::from(100) => v1::Parameter { id: 100, name: Some("p1".to_string()), ..Default::default() },
-        };
+        let parameters = parameters([VariableID::from(100)]);
 
         // Objective function uses undefined variable ID 999
         let objective = (linear!(999) + coeff!(1.0)).into();
@@ -208,9 +204,7 @@ mod tests {
             VariableID::from(2) => DecisionVariable::binary(),
         };
 
-        let parameters = btreemap! {
-            VariableID::from(100) => v1::Parameter { id: 100, name: Some("p1".to_string()), ..Default::default() },
-        };
+        let parameters = parameters([VariableID::from(100)]);
 
         let objective = (linear!(1) + coeff!(1.0)).into();
 

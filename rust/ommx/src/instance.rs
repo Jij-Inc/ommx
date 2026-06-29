@@ -38,6 +38,7 @@ use crate::{
     indicator_constraint::IndicatorConstraint,
     named_function::NamedFunctionID,
     one_hot_constraint::OneHotConstraint,
+    parameter::ParameterTable,
     sos1_constraint::Sos1Constraint,
     v1, AcyclicAssignments, Constraint, ConstraintContext, ConstraintID, DecisionVariable,
     Evaluate, Function, ModelingLabel, NamedFunction, NamedFunctionTable, VariableID,
@@ -566,9 +567,19 @@ impl Instance {
 ///
 /// Invariants
 /// -----------
-/// - [`Self::decision_variables`] and [`Self::parameters`] contains all decision variables and parameters used in the problem.
-///   - This means every IDs appearing in the constraints and the objective function must be included in either of them.
-///   - The IDs of [`Self::decision_variables`] and [`Self::parameters`] are disjoint sets.
+/// - [`Self::decision_variables`] owns the decision-variable table.
+/// - [`Self::parameters`] owns the parameter ID universe and parameter
+///   modeling labels through [`ParameterTable`]. Parameter IDs intentionally
+///   use [`VariableID`] rather than a separate `ParameterID`, because
+///   algebraic expressions cannot distinguish decision-variable references
+///   from parameter references without the enclosing root.
+/// - [`Self::decision_variables`] and [`Self::parameters`] together contain
+///   every ID that may appear in the objective, regular/indicator constraint
+///   bodies, named functions, and dependency RHS expressions.
+/// - The IDs of [`Self::decision_variables`] and [`Self::parameters`] are
+///   disjoint sets. This shared-namespace invariant is host-level state and
+///   is validated by [`ParametricInstance::builder`] / protobuf parsing, not
+///   by [`ParameterTable`] alone.
 /// - The keys of [`Self::constraints`] and [`Self::removed_constraints`] are disjoint sets.
 /// - The keys of [`Self::decision_variable_dependency`] must be in [`Self::decision_variables`],
 ///   but must NOT be used in the objective function or constraints.
@@ -591,8 +602,9 @@ impl Instance {
 ///   calculation.
 /// - Modeling-label and constraint-context sidecars are owned by their
 ///   corresponding top-level collection; every label/context ID must refer to an
-///   existing decision variable, named function, or active/removed constraint
-///   in that collection. Parameter IDs are not valid variable-label IDs.
+///   existing decision variable, parameter, named function, or active/removed
+///   constraint in that collection. Parameter labels are owned by
+///   [`ParameterTable`]; parameter IDs are not valid variable-label IDs.
 ///
 /// ## Special-constraint invariants
 ///
@@ -642,12 +654,9 @@ pub struct ParametricInstance {
     #[getset(get = "pub")]
     decision_variables: BTreeMap<VariableID, DecisionVariable>,
     #[getset(get = "pub")]
-    parameters: BTreeMap<VariableID, v1::Parameter>,
+    parameters: ParameterTable,
 
     /// Per-variable modeling labels (sibling of [`Self::decision_variables`]).
-    /// The (unrelated) parametric `parameters` field above stores
-    /// per-id [`v1::Parameter`] data for parameterized instances and is
-    /// independent from this label store.
     variable_labels: VariableLabelStore,
 
     /// Fixed decision-variable values keyed by variable ID.

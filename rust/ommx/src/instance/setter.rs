@@ -809,7 +809,7 @@ mod tests {
             Sense::Minimize,
             Function::Zero,
             BTreeMap::new(),
-            BTreeMap::new(),
+            crate::ParameterTable::default(),
             BTreeMap::new(),
         )
         .unwrap();
