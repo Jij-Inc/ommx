@@ -287,14 +287,7 @@ mod tests {
         decision_variables.insert(VariableID::from(0), DecisionVariable::continuous());
         decision_variables.insert(VariableID::from(1), DecisionVariable::continuous());
 
-        let mut parameters = BTreeMap::new();
-        parameters.insert(
-            VariableID::from(100),
-            crate::v1::Parameter {
-                id: 100,
-                ..Default::default()
-            },
-        );
+        let parameters = ParameterTable::from_ids([VariableID::from(100)].into_iter().collect());
 
         let objective = Function::from(linear!(0) + linear!(100));
         let parametric = ParametricInstance::new(
@@ -335,14 +328,7 @@ mod tests {
         let mut decision_variables = BTreeMap::new();
         decision_variables.insert(VariableID::from(0), DecisionVariable::continuous());
 
-        let mut parameters = BTreeMap::new();
-        parameters.insert(
-            VariableID::from(100),
-            crate::v1::Parameter {
-                id: 100,
-                ..Default::default()
-            },
-        );
+        let parameters = ParameterTable::from_ids([VariableID::from(100)].into_iter().collect());
 
         let parametric = ParametricInstance::new(
             Sense::Minimize,
@@ -372,7 +358,7 @@ mod tests {
             Sense::Minimize,
             Function::from(linear!(0)),
             decision_variables,
-            BTreeMap::new(),
+            ParameterTable::default(),
             BTreeMap::new(),
         )
         .unwrap();

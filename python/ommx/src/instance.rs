@@ -2637,7 +2637,7 @@ impl Instance {
                 let pi = self.inner.clone().penalty_method()?;
                 // Map constraint IDs (from parameter subscripts) to penalty weights
                 let mut weights = HashMap::new();
-                for p in pi.parameters().values() {
+                for p in pi.parameters().to_v1_parameters() {
                     let constraint_id = p.subscripts.first().copied().ok_or_else(|| {
                         anyhow::anyhow!("Penalty parameter {} has no subscripts", p.id)
                     })? as u64;

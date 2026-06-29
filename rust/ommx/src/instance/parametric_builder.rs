@@ -6,13 +6,14 @@ use crate::constraint_type::ConstraintCollection;
 /// # Example
 /// ```
 /// use ommx::{ParametricInstance, Sense, Function};
+/// use ommx::ParameterTable;
 /// use std::collections::BTreeMap;
 ///
 /// let instance = ParametricInstance::builder()
 ///     .sense(Sense::Minimize)
 ///     .objective(Function::Zero)
 ///     .decision_variables(BTreeMap::new())
-///     .parameters(BTreeMap::new())
+///     .parameters(ParameterTable::default())
 ///     .constraints(BTreeMap::new())
 ///     .build()
 ///     .unwrap();
@@ -24,7 +25,7 @@ pub struct ParametricInstanceBuilder {
     decision_variables: Option<BTreeMap<VariableID, DecisionVariable>>,
     variable_labels: VariableLabelStore,
     fixed_decision_variable_values: BTreeMap<VariableID, f64>,
-    parameters: Option<BTreeMap<VariableID, v1::Parameter>>,
+    parameters: Option<ParameterTable>,
     constraints: Option<BTreeMap<ConstraintID, Constraint>>,
     constraint_context: ConstraintContextStore<ConstraintID>,
     named_functions: BTreeMap<NamedFunctionID, NamedFunction>,
@@ -86,8 +87,13 @@ impl ParametricInstanceBuilder {
         self
     }
 
-    /// Sets the parameters.
-    pub fn parameters(mut self, parameters: BTreeMap<VariableID, v1::Parameter>) -> Self {
+    /// Sets the parameter table.
+    ///
+    /// [`ParameterTable`] owns the parameter ID universe and parameter
+    /// modeling labels. The builder validates host-level invariants that the
+    /// table cannot know by itself, in particular disjointness from decision
+    /// variable IDs and all expression-reference checks.
+    pub fn parameters(mut self, parameters: ParameterTable) -> Self {
         self.parameters = Some(parameters);
         self
     }
@@ -245,17 +251,6 @@ impl ParametricInstanceBuilder {
         let constraints = self
             .constraints
             .ok_or_else(|| crate::error!("Required field is missing: constraints"))?;
-
-        // Validate that parameter map keys match their value's id
-        for (key, value) in &parameters {
-            if key.into_inner() != value.id {
-                let value_id = value.id;
-                crate::bail!(
-                    { ?key, value_id },
-                    "Parameter map key {key:?} does not match value's id {value_id}",
-                );
-            }
-        }
 
         // Check that decision variable IDs and parameter IDs are disjoint
         let decision_variable_ids: VariableIDSet = decision_variables.keys().cloned().collect();
@@ -549,7 +544,12 @@ impl ParametricInstance {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ParameterLabelStore;
     use std::collections::BTreeSet;
+
+    fn parameters(ids: impl IntoIterator<Item = VariableID>) -> ParameterTable {
+        ParameterTable::from_ids(ids.into_iter().collect())
+    }
 
     #[test]
     fn test_parametric_builder_basic() {
@@ -557,7 +557,7 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::Zero)
             .decision_variables(BTreeMap::new())
-            .parameters(BTreeMap::new())
+            .parameters(ParameterTable::default())
             .constraints(BTreeMap::new())
             .build()
             .unwrap();
@@ -571,9 +571,14 @@ mod tests {
     #[test]
     fn test_parametric_builder_preserves_labels_and_context() {
         let var_id = VariableID::from(1);
+        let parameter_id = VariableID::from(100);
         let constraint_id = ConstraintID::from(2);
         let mut variable_labels = VariableLabelStore::default();
         variable_labels.set_name(var_id, "x");
+        let mut parameter_labels = ParameterLabelStore::default();
+        parameter_labels.set_name(parameter_id, "p");
+        let parameters =
+            ParameterTable::new(BTreeSet::from([parameter_id]), parameter_labels).unwrap();
         let mut constraint_context = ConstraintContextStore::default();
         constraint_context.set_name(constraint_id, "balance");
 
@@ -582,7 +587,7 @@ mod tests {
             .objective(Function::Zero)
             .decision_variables(BTreeMap::from([(var_id, DecisionVariable::binary())]))
             .variable_labels(variable_labels)
-            .parameters(BTreeMap::new())
+            .parameters(parameters)
             .constraints(BTreeMap::from([(
                 constraint_id,
                 Constraint::equal_to_zero(Function::Zero),
@@ -592,6 +597,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(instance.variable_labels().name(var_id), Some("x"));
+        assert_eq!(instance.parameters().labels().name(parameter_id), Some("p"));
         assert_eq!(
             instance.constraint_context().name(constraint_id),
             Some("balance")
@@ -616,7 +622,7 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::Zero)
             .decision_variables(BTreeMap::from([(var_id, DecisionVariable::binary())]))
-            .parameters(BTreeMap::new())
+            .parameters(ParameterTable::default())
             .constraints(BTreeMap::new())
             .indicator_constraints(BTreeMap::from([(
                 indicator_id,
@@ -665,13 +671,7 @@ mod tests {
             .objective(Function::Zero)
             .decision_variables(BTreeMap::new())
             .variable_labels(variable_labels)
-            .parameters(BTreeMap::from([(
-                parameter_id,
-                v1::Parameter {
-                    id: parameter_id.into_inner(),
-                    ..Default::default()
-                },
-            )]))
+            .parameters(parameters([parameter_id]))
             .constraints(BTreeMap::new())
             .build()
             .unwrap_err();
@@ -692,7 +692,7 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::Zero)
             .decision_variables(BTreeMap::new())
-            .parameters(BTreeMap::new())
+            .parameters(ParameterTable::default())
             .constraints(BTreeMap::new())
             .named_function_labels(named_function_labels)
             .build()
@@ -714,7 +714,7 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::Zero)
             .decision_variables(BTreeMap::new())
-            .parameters(BTreeMap::new())
+            .parameters(ParameterTable::default())
             .constraints(BTreeMap::new())
             .constraint_context(constraint_context)
             .build()
@@ -735,7 +735,7 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::Zero)
             .decision_variables(BTreeMap::new())
-            .parameters(BTreeMap::new())
+            .parameters(ParameterTable::default())
             .constraints(BTreeMap::new())
             .indicator_constraint_context(indicator_context)
             .build()
@@ -752,7 +752,7 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::Zero)
             .decision_variables(BTreeMap::new())
-            .parameters(BTreeMap::new())
+            .parameters(ParameterTable::default())
             .constraints(BTreeMap::new())
             .one_hot_constraint_context(one_hot_context)
             .build()
@@ -769,7 +769,7 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::Zero)
             .decision_variables(BTreeMap::new())
-            .parameters(BTreeMap::new())
+            .parameters(ParameterTable::default())
             .constraints(BTreeMap::new())
             .sos1_constraint_context(sos1_context)
             .build()
@@ -788,13 +788,7 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::Zero)
             .decision_variables(BTreeMap::new())
-            .parameters(BTreeMap::from([(
-                parameter_id,
-                v1::Parameter {
-                    id: parameter_id.into_inner(),
-                    ..Default::default()
-                },
-            )]))
+            .parameters(parameters([parameter_id]))
             .constraints(BTreeMap::new())
             .build()
             .unwrap();
@@ -839,9 +833,7 @@ mod tests {
             .decision_variables(btreemap! {
                 var_id => DecisionVariable::binary(),
             })
-            .parameters(btreemap! {
-                var_id => v1::Parameter { id: 1, ..Default::default() },
-            })
+            .parameters(parameters([var_id]))
             .constraints(BTreeMap::new())
             .build()
             .unwrap_err();
@@ -867,7 +859,7 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::Zero)
             .decision_variables(BTreeMap::new())
-            .parameters(BTreeMap::new())
+            .parameters(ParameterTable::default())
             .constraints(BTreeMap::new())
             .named_functions(btreemap! {
                 NamedFunctionID::from(1) => named_function,
@@ -901,9 +893,7 @@ mod tests {
                 VariableID::from(1) => DecisionVariable::binary(),
                 VariableID::from(2) => DecisionVariable::binary(),
             })
-            .parameters(btreemap! {
-                VariableID::from(100) => v1::Parameter { id: 100, ..Default::default() },
-            })
+            .parameters(parameters([VariableID::from(100)]))
             .constraints(BTreeMap::new())
             .indicator_constraints(btreemap! {
                 crate::IndicatorConstraintID::from(7) => indicator,
@@ -937,9 +927,7 @@ mod tests {
                 dep => DecisionVariable::binary(),
                 x => DecisionVariable::binary(),
             })
-            .parameters(btreemap! {
-                p => v1::Parameter { id: 100, ..Default::default() },
-            })
+            .parameters(parameters([p]))
             .constraints(BTreeMap::new())
             .decision_variable_dependency(dependency)
             .build();
@@ -965,7 +953,7 @@ mod tests {
             .decision_variables(btreemap! {
                 dep => DecisionVariable::binary(),
             })
-            .parameters(BTreeMap::new())
+            .parameters(ParameterTable::default())
             .constraints(BTreeMap::new())
             .decision_variable_dependency(dependency)
             .build()
@@ -998,9 +986,7 @@ mod tests {
             .decision_variables(btreemap! {
                 VariableID::from(1) => DecisionVariable::binary(),
             })
-            .parameters(btreemap! {
-                VariableID::from(100) => v1::Parameter { id: 100, ..Default::default() },
-            })
+            .parameters(parameters([VariableID::from(100)]))
             .constraints(BTreeMap::new())
             .indicator_constraints(btreemap! {
                 crate::IndicatorConstraintID::from(0) => indicator,
@@ -1034,7 +1020,7 @@ mod tests {
                 VariableID::from(1) => DecisionVariable::integer(),
                 VariableID::from(2) => DecisionVariable::binary(),
             })
-            .parameters(BTreeMap::new())
+            .parameters(ParameterTable::default())
             .constraints(BTreeMap::new())
             .indicator_constraints(btreemap! {
                 crate::IndicatorConstraintID::from(0) => indicator,
@@ -1063,9 +1049,7 @@ mod tests {
             .decision_variables(btreemap! {
                 VariableID::from(1) => DecisionVariable::binary(),
             })
-            .parameters(btreemap! {
-                VariableID::from(100) => v1::Parameter { id: 100, ..Default::default() },
-            })
+            .parameters(parameters([VariableID::from(100)]))
             .constraints(BTreeMap::new())
             .one_hot_constraints(btreemap! {
                 crate::OneHotConstraintID::from(0) => one_hot,
@@ -1095,7 +1079,7 @@ mod tests {
             .decision_variables(btreemap! {
                 VariableID::from(1) => DecisionVariable::binary(),
             })
-            .parameters(BTreeMap::new())
+            .parameters(ParameterTable::default())
             .constraints(BTreeMap::new())
             .sos1_constraints(btreemap! {
                 crate::Sos1ConstraintID::from(0) => sos1,
@@ -1129,9 +1113,7 @@ mod tests {
             .decision_variables(btreemap! {
                 var_id => DecisionVariable::binary(),
             })
-            .parameters(btreemap! {
-                param_id => v1::Parameter { id: 2, ..Default::default() },
-            })
+            .parameters(parameters([param_id]))
             .constraints(BTreeMap::new())
             .named_functions(btreemap! {
                 NamedFunctionID::from(1) => named_function,
