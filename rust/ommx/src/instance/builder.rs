@@ -223,7 +223,7 @@ impl InstanceBuilder {
     /// Returns an error if:
     /// - Required fields (`sense`, `objective`, `decision_variables`, `constraints`) are not set
     /// - Named-function labels reference IDs not present in the named-function table
-    /// - The objective function or constraints reference undefined variable IDs
+    /// - The objective function, constraints, or named functions reference undefined variable IDs
     /// - The keys of `constraints` and `removed_constraints` are not disjoint
     /// - Label/context stores contain IDs that are not owned by the
     ///   corresponding decision-variable, named-function, or constraint collection

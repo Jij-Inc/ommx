@@ -142,6 +142,10 @@ impl SampledConstraintBehavior for SampledSos1Constraint {
         Ok(())
     }
 
+    fn used_decision_variable_ids(&self) -> &VariableIDSet {
+        &self.stage.used_decision_variable_ids
+    }
+
     fn get(&self, sample_id: SampleID) -> Option<Self::Evaluated> {
         let feasible = *self.stage.feasible.get(&sample_id)?;
         let active_variable = *self.stage.active_variable.get(&sample_id)?;

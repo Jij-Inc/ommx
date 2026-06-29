@@ -130,6 +130,19 @@ impl Parse for crate::v1::Solution {
             })
             .map_err(|e| ParseError::from(e).context(message, "relaxation"))?;
 
+        let evaluated_named_functions =
+            crate::NamedFunctionTable::new(evaluated_named_functions, named_function_labels)
+                .map_err(|e| {
+                    crate::RawParseError::SolutionError(crate::SolutionError::InvalidSidecar {
+                        message: e.to_string(),
+                    })
+                    .context(message, "evaluated_named_functions")
+                })?;
+        validate_evaluated_named_function_used_ids(&decision_variables, &evaluated_named_functions)
+            .map_err(|e| {
+                crate::RawParseError::SolutionError(e).context(message, "evaluated_named_functions")
+            })?;
+
         let solution = Solution {
             objective,
             evaluated_constraints: crate::constraint_type::EvaluatedCollection::with_context(
@@ -144,16 +157,7 @@ impl Parse for crate::v1::Solution {
             evaluated_indicator_constraints: Default::default(),
             evaluated_one_hot_constraints: Default::default(),
             evaluated_sos1_constraints: Default::default(),
-            evaluated_named_functions: crate::NamedFunctionTable::new(
-                evaluated_named_functions,
-                named_function_labels,
-            )
-            .map_err(|e| {
-                crate::RawParseError::SolutionError(crate::SolutionError::InvalidSidecar {
-                    message: e.to_string(),
-                })
-                .context(message, "evaluated_named_functions")
-            })?,
+            evaluated_named_functions,
             decision_variables,
             variable_labels,
             optimality,
@@ -628,6 +632,42 @@ mod tests {
         Traceback for OMMX Message parse error:
         └─ommx.v1.Solution[decision_variables]
         Duplicated variable ID is found in definition: VariableID(1)
+        "###);
+    }
+
+    #[test]
+    fn test_solution_parse_rejects_undefined_variable_in_named_function() {
+        use crate::v1;
+
+        let v1_solution = v1::Solution {
+            objective: 42.5,
+            evaluated_named_functions: vec![v1::EvaluatedNamedFunction {
+                id: 7,
+                evaluated_value: 1.0,
+                used_decision_variable_ids: vec![1],
+                ..Default::default()
+            }],
+            feasible: true,
+            feasible_relaxed: Some(true),
+            ..Default::default()
+        };
+
+        let result: Result<Solution, ParseError> = v1_solution.parse(&());
+        let error = result.unwrap_err();
+        assert!(matches!(
+            error.error,
+            crate::RawParseError::SolutionError(
+                SolutionError::UndefinedVariableInNamedFunction {
+                    id,
+                    named_function_id,
+                }
+            ) if id == crate::VariableID::from(1)
+                && named_function_id == crate::NamedFunctionID::from(7)
+        ));
+        insta::assert_snapshot!(error.to_string(), @r###"
+        Traceback for OMMX Message parse error:
+        └─ommx.v1.Solution[evaluated_named_functions]
+        Variable ID VariableID(1) used in named function NamedFunctionID(7) is not in decision_variables
         "###);
     }
 

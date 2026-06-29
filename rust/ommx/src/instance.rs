@@ -143,7 +143,7 @@ pub enum Sense {
 /// - [`Self::named_functions`] is keyed by the table-owned
 ///   [`NamedFunctionID`]; named-function rows do not carry IDs.
 /// - [`Self::named_functions`] may contain fixed or dependent variable IDs (like `removed_constraints`).
-///   Variable IDs in `named_functions` must be registered in [`Self::decision_variables`],
+///   Variable IDs referenced by named functions must be registered in [`Self::decision_variables`],
 ///   but are NOT included in the "used" set calculation.
 /// - Modeling-label and constraint-context sidecars are owned by their
 ///   corresponding top-level collection; every label/context ID must refer to an
@@ -583,9 +583,12 @@ impl Instance {
 /// - [`DecisionVariableUsage`] is the reverse-usage index for used decision variables only.
 /// - [`Self::named_functions`] is keyed by the table-owned
 ///   [`NamedFunctionID`]; named-function rows do not carry IDs.
-/// - [`Self::named_functions`] may contain fixed or dependent variable IDs (like `removed_constraints`).
-///   Variable IDs in `named_functions` must be registered in [`Self::decision_variables`],
-///   but are NOT included in the "used" set calculation.
+/// - [`Self::named_functions`] may contain fixed or dependent decision-variable
+///   IDs (like `removed_constraints`) and may also reference parameter IDs.
+///   Every referenced ID must be registered in either
+///   [`Self::decision_variables`] or [`Self::parameters`], but decision-variable
+///   IDs appearing only in named functions are NOT included in the "used" set
+///   calculation.
 /// - Modeling-label and constraint-context sidecars are owned by their
 ///   corresponding top-level collection; every label/context ID must refer to an
 ///   existing decision variable, named function, or active/removed constraint

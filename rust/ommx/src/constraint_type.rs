@@ -184,6 +184,9 @@ pub trait SampledConstraintBehavior {
     /// Returns the first offending sample ID set when a side map is out of sync.
     fn validate_sample_ids(&self, expected: &SampleIDSet) -> std::result::Result<(), SampleIDSet>;
 
+    /// Decision variable IDs recorded as used by this sampled constraint.
+    fn used_decision_variable_ids(&self) -> &VariableIDSet;
+
     /// Extract an evaluated constraint for a specific sample.
     ///
     /// Returns [`None`] if `sample_id` is not present in the sampled data.
@@ -223,6 +226,10 @@ impl SampledConstraintBehavior for SampledConstraint {
             }
         }
         Ok(())
+    }
+
+    fn used_decision_variable_ids(&self) -> &VariableIDSet {
+        &self.stage.used_decision_variable_ids
     }
 
     fn get(&self, sample_id: SampleID) -> Option<Self::Evaluated> {
@@ -770,6 +777,21 @@ impl<T: ConstraintType> SampledCollection<T> {
     ) -> std::result::Result<(), SampleIDSet> {
         for constraint in self.constraints.values() {
             constraint.validate_sample_ids(expected)?;
+        }
+        Ok(())
+    }
+
+    /// Validate that every sampled constraint only references known decision variables.
+    pub fn validate_used_decision_variable_ids(
+        &self,
+        decision_variable_ids: &BTreeSet<crate::VariableID>,
+    ) -> std::result::Result<(), (T::ID, crate::VariableID)> {
+        for (constraint_id, constraint) in &self.constraints {
+            for var_id in constraint.used_decision_variable_ids() {
+                if !decision_variable_ids.contains(var_id) {
+                    return Err((*constraint_id, *var_id));
+                }
+            }
         }
         Ok(())
     }

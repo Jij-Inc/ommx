@@ -105,6 +105,25 @@ pub type NamedFunctionLabel = crate::ModelingLabel;
 /// [`NamedFunctionLabelStore`] owns `name`, `subscripts`, `parameters`, and
 /// `description`. This mirrors `ConstraintCollection` for named functions,
 /// without active/removed state.
+///
+/// # Invariants
+///
+/// - Every modeling-label ID is owned by this table; labels for unknown
+///   [`NamedFunctionID`] values are rejected by [`Self::new`] and
+///   [`Self::set_label`].
+/// - Public mutation preserves the row/label ownership boundary. Rows can be
+///   inserted or replaced only together with the corresponding label via
+///   [`Self::insert`]; mutable row iteration is not exposed.
+///
+/// # Host-level invariants
+///
+/// This table intentionally does not validate row semantics that require a
+/// surrounding top-level object. For example, whether a created
+/// [`NamedFunction`] references defined decision variables, or whether an
+/// evaluated/sampled named function's `used_decision_variable_ids` exist in the
+/// evaluated/sampled decision-variable table, is validated by host builders such
+/// as [`crate::Instance::builder`], [`crate::Solution::builder`], and
+/// [`crate::SampleSet::builder`].
 #[derive(Debug, Clone, PartialEq)]
 pub struct NamedFunctionTable<T> {
     entries: BTreeMap<NamedFunctionID, T>,

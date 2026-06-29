@@ -3,7 +3,9 @@ mod parse;
 mod serialize;
 
 use crate::{
-    constraint_type::{EvaluatedCollection, SampledCollection, SampledConstraintBehavior},
+    constraint_type::{
+        ConstraintType, EvaluatedCollection, SampledCollection, SampledConstraintBehavior,
+    },
     indicator_constraint::IndicatorConstraint,
     Constraint, ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable,
     EvaluatedNamedFunction, NamedFunctionID, NamedFunctionTable, SampleID, SampleIDSet, Sampled,
@@ -78,6 +80,23 @@ pub enum SampleSetError {
     #[error("Required field is missing: {field}")]
     MissingRequiredField { field: &'static str },
 
+    #[error(
+        "Variable ID {id:?} used in {constraint_family} constraint {constraint_id} is not in decision_variables"
+    )]
+    UndefinedVariableInConstraint {
+        id: VariableID,
+        constraint_family: &'static str,
+        constraint_id: String,
+    },
+
+    #[error(
+        "Variable ID {id:?} used in named function {named_function_id:?} is not in decision_variables"
+    )]
+    UndefinedVariableInNamedFunction {
+        id: VariableID,
+        named_function_id: NamedFunctionID,
+    },
+
     #[error("{message}")]
     InvalidSidecar { message: String },
 }
@@ -92,6 +111,9 @@ pub enum SampleSetError {
 ///   [`NamedFunctionID`]; sampled named-function rows do not carry IDs.
 /// - All [`Self::decision_variables`], [`Self::objectives`], sampled constraint
 ///   collections, and [`Self::named_functions`] have the same sample ID set.
+/// - [`Self::decision_variables`] contains all variable IDs referenced in
+///   `used_decision_variable_ids` of each sampled constraint and sampled named
+///   function.
 /// - [`Self::feasible`] and [`Self::feasible_relaxed`] are computed from all
 ///   sampled constraint collections:
 ///   - `feasible`: true if all constraints are satisfied for that sample.
@@ -125,6 +147,22 @@ pub struct SampleSet {
     pub metadata: Option<crate::v1::ProcessMetadata>,
     /// User-defined or third-party extension annotations.
     pub annotations: HashMap<String, String>,
+}
+
+fn validate_sampled_constraint_used_ids<T: ConstraintType>(
+    constraint_family: &'static str,
+    constraints: &SampledCollection<T>,
+    decision_variable_ids: &BTreeSet<VariableID>,
+) -> Result<(), SampleSetError> {
+    constraints
+        .validate_used_decision_variable_ids(decision_variable_ids)
+        .map_err(
+            |(constraint_id, var_id)| SampleSetError::UndefinedVariableInConstraint {
+                id: var_id,
+                constraint_family,
+                constraint_id: format!("{constraint_id:?}"),
+            },
+        )
 }
 
 impl SampleSet {
@@ -532,6 +570,8 @@ impl SampleSetBuilder {
     /// Returns an error if:
     /// - Required fields (`decision_variables`, `objectives`, `constraints`, `sense`) are not set
     /// - Sample IDs are inconsistent across decision variables, objectives, constraints, and named functions
+    /// - Variables referenced in constraints' or named functions'
+    ///   `used_decision_variable_ids` are not in `decision_variables`
     pub fn build(self) -> Result<SampleSet, SampleSetError> {
         let decision_variables =
             self.decision_variables
@@ -625,7 +665,24 @@ impl SampleSetBuilder {
                 found,
             })?;
 
-        for sampled_named_function in named_functions.values() {
+        validate_sampled_constraint_used_ids("regular", &constraints, &decision_variable_ids)?;
+        validate_sampled_constraint_used_ids(
+            "indicator",
+            &self.indicator_constraints,
+            &decision_variable_ids,
+        )?;
+        validate_sampled_constraint_used_ids(
+            "one-hot",
+            &self.one_hot_constraints,
+            &decision_variable_ids,
+        )?;
+        validate_sampled_constraint_used_ids(
+            "SOS1",
+            &self.sos1_constraints,
+            &decision_variable_ids,
+        )?;
+
+        for (named_function_id, sampled_named_function) in named_functions.iter() {
             if !sampled_named_function
                 .evaluated_values()
                 .has_same_ids(&objective_sample_ids)
@@ -634,6 +691,14 @@ impl SampleSetBuilder {
                     expected: objective_sample_ids.clone(),
                     found: sampled_named_function.evaluated_values().ids(),
                 });
+            }
+            for var_id in sampled_named_function.used_decision_variable_ids() {
+                if !decision_variables.contains_key(var_id) {
+                    return Err(SampleSetError::UndefinedVariableInNamedFunction {
+                        id: *var_id,
+                        named_function_id: *named_function_id,
+                    });
+                }
             }
         }
 
@@ -671,6 +736,8 @@ impl SampleSetBuilder {
     /// - `decision_variables` is keyed by the intended [`VariableID`] for each row
     /// - Sampled constraint collection keys and sidecars are internally consistent
     /// - Sampled named-function table keys and labels are internally consistent
+    /// - All `used_decision_variable_ids` in sampled constraints and sampled
+    ///   named functions exist in `decision_variables`
     /// - Sample IDs are consistent across all components
     ///
     /// Use [`Self::build`] for validated construction.
@@ -851,6 +918,84 @@ mod tests {
                 && err.to_string().contains("NamedFunctionID(99)"),
             "unexpected error: {err}"
         );
+    }
+
+    #[test]
+    fn builder_rejects_undefined_variable_in_sampled_named_function() {
+        use crate::parse::Parse as _;
+
+        let var_id = VariableID::from(1);
+        let nf_id = NamedFunctionID::from(7);
+        let sample_id = SampleID::from(0);
+        let parsed: crate::named_function::parse::ParsedSampledNamedFunction =
+            crate::v1::SampledNamedFunction {
+                id: nf_id.into_inner(),
+                evaluated_values: Some(crate::v1::SampledValues {
+                    entries: vec![crate::v1::sampled_values::SampledValuesEntry {
+                        ids: vec![sample_id.into_inner()],
+                        value: 1.0,
+                    }],
+                }),
+                used_decision_variable_ids: vec![var_id.into_inner()],
+                ..Default::default()
+            }
+            .parse(&())
+            .unwrap();
+        let mut objectives = crate::Sampled::default();
+        objectives.append([sample_id], 0.0).unwrap();
+
+        let err = SampleSet::builder()
+            .decision_variables(BTreeMap::new())
+            .objectives(objectives)
+            .constraints(BTreeMap::new())
+            .named_functions(BTreeMap::from([(nf_id, parsed.sampled_named_function)]))
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap_err();
+
+        assert!(matches!(
+            err,
+            SampleSetError::UndefinedVariableInNamedFunction { id, named_function_id }
+                if id == var_id && named_function_id == nf_id
+        ));
+    }
+
+    #[test]
+    fn builder_rejects_undefined_variable_in_sampled_constraint() {
+        let var_id = VariableID::from(1);
+        let constraint_id = ConstraintID::from(2);
+        let sample_id = SampleID::from(0);
+
+        let mut evaluated_values = crate::Sampled::default();
+        evaluated_values.append([sample_id], 0.0).unwrap();
+        let sampled_constraint = crate::Constraint {
+            equality: Equality::EqualToZero,
+            stage: crate::constraint::SampledData {
+                evaluated_values,
+                dual_variables: None,
+                feasible: BTreeMap::from([(sample_id, true)]),
+                used_decision_variable_ids: [var_id].into_iter().collect(),
+            },
+        };
+        let mut objectives = crate::Sampled::default();
+        objectives.append([sample_id], 0.0).unwrap();
+
+        let err = SampleSet::builder()
+            .decision_variables(BTreeMap::new())
+            .objectives(objectives)
+            .constraints(BTreeMap::from([(constraint_id, sampled_constraint)]))
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap_err();
+
+        assert!(matches!(
+            err,
+            SampleSetError::UndefinedVariableInConstraint {
+                id,
+                constraint_family: "regular",
+                constraint_id: ref found_constraint_id,
+            } if id == var_id && found_constraint_id == &format!("{constraint_id:?}")
+        ));
     }
 
     /// Regression: `SampleSet::get(sid)` must propagate variable modeling
