@@ -272,11 +272,8 @@ impl Evaluate for Instance {
             decision_variables.insert(*id, evaluated_dv);
         }
 
-        let mut evaluated_named_functions = BTreeMap::default();
-        for (id, named_function) in self.named_functions.iter() {
-            let evaluated_named_function = named_function.evaluate(&state, atol)?;
-            evaluated_named_functions.insert(*id, evaluated_named_function);
-        }
+        let (evaluated_named_functions, evaluated_named_function_labels) =
+            self.named_functions.evaluate(&state, atol)?.into_parts();
 
         let sense = self.sense();
 
@@ -291,7 +288,7 @@ impl Evaluate for Instance {
                 .evaluated_named_functions(evaluated_named_functions)
                 .decision_variables(decision_variables)
                 .variable_labels(self.variable_labels.clone())
-                .named_function_labels(self.named_function_labels().clone())
+                .named_function_labels(evaluated_named_function_labels)
                 .sense(sense)
                 .build_unchecked()?
         };
@@ -345,12 +342,10 @@ impl Evaluate for Instance {
             decision_variables.insert(*id, sampled_dv);
         }
 
-        // Reconstruct named function values
-        let mut named_functions = std::collections::BTreeMap::new();
-        for (id, named_function) in self.named_functions.iter() {
-            let sampled_named_function = named_function.evaluate_samples(&samples, atol)?;
-            named_functions.insert(*id, sampled_named_function);
-        }
+        let (named_functions, named_function_labels) = self
+            .named_functions
+            .evaluate_samples(&samples, atol)?
+            .into_parts();
 
         Ok(crate::SampleSet::builder()
             .decision_variables(decision_variables)
@@ -361,7 +356,7 @@ impl Evaluate for Instance {
             .one_hot_constraints_collection(sampled_one_hot_constraints)
             .sos1_constraints_collection(sampled_sos1_constraints)
             .named_functions(named_functions)
-            .named_function_labels(self.named_function_labels().clone())
+            .named_function_labels(named_function_labels)
             .sense(self.sense)
             .build()?)
     }
