@@ -59,7 +59,7 @@ impl From<Instance> for ParametricInstance {
             sense,
             objective,
             decision_variables,
-            parameters: BTreeMap::default(),
+            parameters: ParameterTable::default(),
             variable_labels,
             fixed_decision_variable_values,
             constraint_collection,
@@ -182,6 +182,10 @@ mod with_parameters_tests {
     use crate::{coeff, linear, Equality, Function};
     use maplit::btreemap;
 
+    fn parameters(ids: impl IntoIterator<Item = VariableID>) -> ParameterTable {
+        ParameterTable::from_ids(ids.into_iter().collect())
+    }
+
     /// Parameter substitution must apply to the right-hand-side of
     /// `decision_variable_dependency` entries. The RHS is a `Function`
     /// over defined decision-variable or parameter IDs, so a parameter
@@ -205,9 +209,7 @@ mod with_parameters_tests {
                 x => DecisionVariable::binary(),
                 dep => DecisionVariable::binary(),
             })
-            .parameters(btreemap! {
-                p => crate::v1::Parameter { id: 100, ..Default::default() },
-            })
+            .parameters(parameters([p]))
             .constraints(BTreeMap::new())
             .decision_variable_dependency(assignments)
             .build()
@@ -251,9 +253,7 @@ mod with_parameters_tests {
             .decision_variables(btreemap! {
                 x => DecisionVariable::binary(),
             })
-            .parameters(btreemap! {
-                p => crate::v1::Parameter { id: 100, ..Default::default() },
-            })
+            .parameters(parameters([p]))
             .constraints(btreemap! {
                 ConstraintID::from(0) => c_active,
             })
@@ -308,9 +308,7 @@ mod with_parameters_tests {
                 y => DecisionVariable::binary(),
                 x => DecisionVariable::binary(),
             })
-            .parameters(btreemap! {
-                p => crate::v1::Parameter { id: 100, ..Default::default() },
-            })
+            .parameters(parameters([p]))
             .constraints(BTreeMap::new())
             .removed_indicator_constraints(btreemap! {
                 crate::IndicatorConstraintID::from(0) => (
@@ -365,9 +363,7 @@ mod with_parameters_tests {
                 y => DecisionVariable::binary(),
                 x => DecisionVariable::binary(),
             })
-            .parameters(btreemap! {
-                p => crate::v1::Parameter { id: 100, ..Default::default() },
-            })
+            .parameters(parameters([p]))
             .constraints(BTreeMap::new())
             .indicator_constraints(btreemap! {
                 crate::IndicatorConstraintID::from(0) => indicator,

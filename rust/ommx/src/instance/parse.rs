@@ -474,11 +474,9 @@ impl Parse for v1::ParametricInstance {
             .decision_variables
             .parse_as(&(), message, "decision_variables")?;
 
-        let parameters: BTreeMap<VariableID, v1::Parameter> = self
-            .parameters
-            .into_iter()
-            .map(|p| (VariableID::from(p.id), p))
-            .collect();
+        let parameters = ParameterTable::from_v1_parameters(self.parameters).map_err(|e| {
+            RawParseError::InvalidInstance(e.to_string()).context(message, "parameters")
+        })?;
 
         let decision_variable_ids: VariableIDSet = decision_variables.keys().cloned().collect();
         let parameter_ids: VariableIDSet = parameters.keys().cloned().collect();
@@ -722,7 +720,7 @@ impl From<ParametricInstance> for v1::ParametricInstance {
             sense: v1::instance::Sense::from(sense) as i32,
             objective: Some(objective.into()),
             decision_variables: v1_decision_variables,
-            parameters: parameters.into_values().collect(),
+            parameters: parameters.into_v1_parameters(),
             constraints: v1_constraints,
             named_functions: v1_named_functions,
             removed_constraints: v1_removed_constraints,
@@ -1418,6 +1416,48 @@ mod tests {
     }
 
     #[test]
+    fn test_parametric_instance_parse_fails_with_duplicated_parameter_id() {
+        use crate::{linear, DecisionVariable, Function, VariableID};
+        use std::collections::HashMap;
+
+        let v1_parametric_instance = v1::ParametricInstance {
+            sense: v1::instance::Sense::Minimize as i32,
+            objective: Some(Function::from(linear!(100)).into()),
+            decision_variables: vec![crate::decision_variable::parse::decision_variable_to_v1(
+                VariableID::from(1),
+                DecisionVariable::binary(),
+                Default::default(),
+            )],
+            parameters: vec![
+                v1::Parameter {
+                    id: 100,
+                    name: Some("p".to_string()),
+                    ..Default::default()
+                },
+                v1::Parameter {
+                    id: 100,
+                    name: Some("q".to_string()),
+                    ..Default::default()
+                },
+            ],
+            constraints: vec![],
+            named_functions: vec![],
+            removed_constraints: vec![],
+            decision_variable_dependency: HashMap::new(),
+            constraint_hints: None,
+            description: None,
+            ..Default::default()
+        };
+
+        let result = v1_parametric_instance.parse(&());
+        insta::assert_snapshot!(result.unwrap_err(), @r###"
+        Traceback for OMMX Message parse error:
+        └─ommx.v1.ParametricInstance[parameters]
+        Duplicated parameter ID is found in definition: VariableID(100)
+        "###);
+    }
+
+    #[test]
     fn test_parametric_instance_parse_fails_with_duplicated_constraint_id_in_constraints() {
         use crate::{
             coeff, linear, Constraint, ConstraintID, DecisionVariable, Function, VariableID,
@@ -1562,7 +1602,7 @@ mod tests {
             .decision_variables(maplit::btreemap! {
                 var_id => DecisionVariable::binary(),
             })
-            .parameters(BTreeMap::new())
+            .parameters(ParameterTable::default())
             .constraints(maplit::btreemap! {
                 cid => Constraint::equal_to_zero(Function::from(linear!(1) + coeff!(-1.0))),
             })

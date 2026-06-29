@@ -1,5 +1,5 @@
 use super::*;
-use crate::{constraint_type::ConstraintCollection, linear, v1, Function, VariableID};
+use crate::{constraint_type::ConstraintCollection, linear, Function, ParameterLabel, VariableID};
 use anyhow::Result;
 
 impl Instance {
@@ -70,7 +70,7 @@ impl Instance {
 
         let id_base = max_id + 1;
         let mut objective = self.objective.clone();
-        let mut parameters = BTreeMap::new();
+        let mut parameters = ParameterTable::default();
         let mut removed_constraints = BTreeMap::new();
 
         let (active_constraints, existing_removed, constraint_context) =
@@ -78,8 +78,7 @@ impl Instance {
         removed_constraints.extend(existing_removed);
         for (i, (constraint_id, constraint)) in active_constraints.into_iter().enumerate() {
             let parameter_id = VariableID::from(id_base + i as u64);
-            let parameter = v1::Parameter {
-                id: parameter_id.into_inner(),
+            let parameter_label = ParameterLabel {
                 name: Some("penalty_weight".to_string()),
                 subscripts: vec![constraint_id.into_inner() as i64],
                 ..Default::default()
@@ -105,7 +104,7 @@ impl Instance {
                 },
             };
 
-            parameters.insert(parameter_id, parameter);
+            parameters.insert(parameter_id, parameter_label);
             removed_constraints.insert(constraint_id, (constraint, removed_reason));
         }
 
@@ -190,7 +189,7 @@ impl Instance {
                 sense: self.sense,
                 objective: self.objective,
                 decision_variables: self.decision_variables,
-                parameters: BTreeMap::new(),
+                parameters: ParameterTable::default(),
                 variable_labels: self.variable_labels,
                 fixed_decision_variable_values: self.fixed_decision_variable_values,
                 constraint_collection: ConstraintCollection::with_context(
@@ -224,8 +223,7 @@ impl Instance {
 
         let parameter_id = VariableID::from(max_id + 1);
         let mut objective = self.objective.clone();
-        let parameter = v1::Parameter {
-            id: parameter_id.into_inner(),
+        let parameter_label = ParameterLabel {
             name: Some("uniform_penalty_weight".to_string()),
             ..Default::default()
         };
@@ -255,7 +253,8 @@ impl Instance {
         penalty_term.try_mul_assign_in_place(&quad_sum)?;
         objective.try_add_assign_in_place(penalty_term)?;
 
-        let parameters = BTreeMap::from([(parameter_id, parameter)]);
+        let mut parameters = ParameterTable::default();
+        parameters.insert(parameter_id, parameter_label);
 
         Ok(ParametricInstance {
             sense: self.sense,
@@ -335,11 +334,14 @@ mod tests {
         );
 
         // Check that correct number of parameters are created
-        assert_eq!(parametric_instance.parameters.len(), expected_param_count);
+        assert_eq!(parametric_instance.parameters().len(), expected_param_count);
 
         // Check parameter names
-        for parameter in parametric_instance.parameters.values() {
-            assert_eq!(parameter.name, Some(expected_param_name.to_string()));
+        for id in parametric_instance.parameters().keys() {
+            assert_eq!(
+                parametric_instance.parameters().labels().name(*id),
+                Some(expected_param_name)
+            );
         }
 
         // Verify ID separation
@@ -349,7 +351,7 @@ mod tests {
             .cloned()
             .collect();
         let p_ids: std::collections::BTreeSet<_> =
-            parametric_instance.parameters.keys().cloned().collect();
+            parametric_instance.parameters().keys().cloned().collect();
         assert!(dv_ids.is_disjoint(&p_ids));
 
         // Verify zero penalty weight behavior
