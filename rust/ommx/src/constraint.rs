@@ -22,7 +22,7 @@ pub use stage::{
 // name collision with `crate::Sampled<T>` (the sampled-values container).
 
 /// Constraint equality.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, LogicalMemoryProfile)]
 pub enum Equality {
     /// $f(x) = 0$ type constraint.
     EqualToZero,
@@ -43,6 +43,7 @@ pub enum Equality {
     Deref,
     serde::Serialize,
     serde::Deserialize,
+    LogicalMemoryProfile,
 )]
 #[serde(transparent)]
 pub struct ConstraintID(u64);
