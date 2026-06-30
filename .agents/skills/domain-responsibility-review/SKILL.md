@@ -65,8 +65,8 @@ Treat this as a review pre-pass, not as the required final response order. When 
   composite structs. Hand-written impls on composite types are a review risk
   because new fields can be forgotten. Reserve manual impls for leaf types
   only. Do not hand-write a composite impl to skip, rename, or collapse fields;
-  if a composite type cannot derive cleanly, treat that as a design issue to
-  fix rather than an exception.
+  if a composite type cannot derive cleanly, fix the derive macro or the type
+  shape so it can derive rather than treating the type as an exception.
 - For new builder/setter/attachment APIs, add focused tests for both preservation and rejection paths, such as sidecar round-trips and orphan-ID validation.
 - For derived analysis or table-building code, avoid recomputing whole-instance partitions inside per-variable or per-row loops; compute the owner-side role/set partition once when the operation needs it repeatedly.
 
