@@ -62,11 +62,13 @@ Treat this as a review pre-pass, not as the required final response order. When 
   constraints. Review both the lower-level table API and every top-level
   builder/parser/unchecked path.
 - For `LogicalMemoryProfile`, prefer `#[derive(LogicalMemoryProfile)]` for
-  composite structs. Hand-written impls on composite types are a review risk
-  because new fields can be forgotten. Reserve manual impls for leaf types
-  only. Do not hand-write a composite impl to skip, rename, or collapse fields;
-  if a composite type cannot derive cleanly, fix the derive macro rather than
-  treating the type as an exception.
+  local Rust data types, including newtypes, tuple structs, and fieldless enums.
+  Hand-written impls on ordinary data shapes are a review risk because new
+  fields can be forgotten or collapsed. If a type cannot derive cleanly, first
+  add the missing standard-library impl or extend the derive macro rather than
+  treating the type as an exception. Reserve manual impls for semantically
+  special profiling shapes such as foreign/generated types, data-carrying enums,
+  stage-specific owner wrappers, or shared ownership types like `Rc`/`Arc`.
 - For new builder/setter/attachment APIs, add focused tests for both preservation and rejection paths, such as sidecar round-trips and orphan-ID validation.
 - For derived analysis or table-building code, avoid recomputing whole-instance partitions inside per-variable or per-row loops; compute the owner-side role/set partition once when the operation needs it repeatedly.
 

@@ -23,6 +23,7 @@ use std::collections::{BTreeMap, BTreeSet};
     Deref,
     serde::Serialize,
     serde::Deserialize,
+    crate::logical_memory::LogicalMemoryProfile,
 )]
 #[serde(transparent)]
 pub struct Sos1ConstraintID(u64);
@@ -73,7 +74,7 @@ pub struct Sos1Constraint<S: Stage<Self> = Created> {
 /// Data carried by a SOS1 constraint in the Created stage.
 ///
 /// SOS1 constraints are structural — no function is stored.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, crate::logical_memory::LogicalMemoryProfile)]
 pub struct Sos1CreatedData;
 
 /// Data carried by a SOS1 constraint in the Evaluated stage.

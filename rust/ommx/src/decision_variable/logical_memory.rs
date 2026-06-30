@@ -1,19 +1,3 @@
-use crate::decision_variable::{Kind, VariableID};
-use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
-use std::mem::size_of;
-
-impl LogicalMemoryProfile for VariableID {
-    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
-        visitor.visit_leaf(path, size_of::<VariableID>());
-    }
-}
-
-impl LogicalMemoryProfile for Kind {
-    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
-        visitor.visit_leaf(path, size_of::<Kind>());
-    }
-}
-
 // DecisionVariable and DecisionVariableLabel use
 // `#[derive(LogicalMemoryProfile)]` on their definition sites.
 
@@ -31,7 +15,8 @@ mod tests {
         // intrinsic fields appear here; per-variable modeling labels live at
         // `Instance::variable_labels` (see `instance/logical_memory.rs`).
         insta::assert_snapshot!(folded, @r###"
-        DecisionVariable.bound 16
+        DecisionVariable.bound;Bound.lower 8
+        DecisionVariable.bound;Bound.upper 8
         DecisionVariable.kind 1
         "###);
     }
@@ -51,7 +36,8 @@ mod tests {
 
         let folded = logical_memory_to_folded(&dv);
         insta::assert_snapshot!(folded, @r###"
-        DecisionVariable.bound 16
+        DecisionVariable.bound;Bound.lower 8
+        DecisionVariable.bound;Bound.upper 8
         DecisionVariable.kind 1
         "###);
     }

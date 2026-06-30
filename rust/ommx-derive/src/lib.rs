@@ -21,29 +21,28 @@
 //!
 //! # `#[derive(LogicalMemoryProfile)]`
 //!
-//! Generates a `LogicalMemoryProfile` impl that delegates to each field
-//! of a named-field struct. Each field is emitted under the path frame
-//! `"TypeName.field_name"`. The `ommx` crate uses this derive at every
-//! struct definition that participates in memory profiling, so that
-//! adding or removing a field automatically adjusts the profile.
+//! Generates a `LogicalMemoryProfile` impl by following the type structure.
+//! Named-field structs delegate to each field under `"TypeName.field_name"`;
+//! tuple structs delegate under `"TypeName.0"`, `"TypeName.1"`, and so on.
+//! Unit structs emit no leaves. Fieldless enums emit one inline leaf of
+//! `std::mem::size_of::<Self>()`.
 //!
 //! ## Supported
 //!
-//! - Structs with named fields.
+//! - Structs with named fields, tuple fields, or no fields.
 //!   - All fields must implement `LogicalMemoryProfile`. Primitives,
-//!     `String`, `Option<T>`, `Vec<T>`, `BTreeMap`, `HashMap`,
-//!     `FnvHashMap`, and `BTreeSet` all have blanket impls in
-//!     `ommx::logical_memory::collections`.
+//!     `String`, `Option<T>`, arrays, `Box<T>`, `Vec<T>`,
+//!     `VecDeque<T>`, maps, sets, `PhantomData<T>`, and tuples all have
+//!     reusable impls in `ommx::logical_memory::collections`.
 //! - Generic structs: when a field type depends on a type parameter, the
 //!   generated impl adds a `FieldType: LogicalMemoryProfile` where-clause.
 //!   This keeps composite structs derivable without hand-written impls.
+//! - Fieldless enums. Data-carrying enums should keep a hand-written impl
+//!   until variant-aware enum decomposition is introduced.
 //!
 //! ## Not supported
 //!
-//! - Tuple structs and unit structs → emit a `compile_error!`. Use a
-//!   hand-written impl only for leaf-like wrappers; otherwise extend this
-//!   derive.
-//! - Enums → emit a `compile_error!`.
+//! - Data-carrying enum variants → emit a `compile_error!`.
 //! - Field skipping → there is no `#[logical_memory(skip)]` attribute.
 //!   Composite structs should not skip fields; extend this derive if a
 //!   composite profiling use case needs more macro support.
@@ -66,10 +65,10 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::{parse_quote, Data, DeriveInput, Fields, GenericArgument, PathArguments, Type};
 
-/// Derive `LogicalMemoryProfile` for a struct by delegating to each field.
+/// Derive `LogicalMemoryProfile` for a type.
 ///
-/// Only structs with named fields are supported. Each field's profile is
-/// emitted under the path frame `"TypeName.field_name"`.
+/// Struct fields are delegated structurally. Fieldless enums emit one
+/// `size_of::<Self>()` leaf.
 #[proc_macro_derive(LogicalMemoryProfile)]
 pub fn derive_logical_memory_profile(input: TokenStream) -> TokenStream {
     derive_logical_memory_profile_impl(input.into()).into()
@@ -85,52 +84,50 @@ fn derive_logical_memory_profile_impl(input: TokenStream2) -> TokenStream2 {
         Err(err) => return err.to_compile_error(),
     };
     let name = &input.ident;
-    let name_str = name.to_string();
 
-    let fields = match &input.data {
-        Data::Struct(data) => match &data.fields {
-            Fields::Named(fields) => &fields.named,
-            _ => {
+    let mut generics = input.generics.clone();
+    let body = match &input.data {
+        Data::Struct(data) => {
+            let field_visits = struct_field_visits(name, &data.fields);
+            if has_type_params(&generics) {
+                for field in data.fields.iter() {
+                    if type_uses_type_param(&field.ty, &generics) {
+                        let ty = &field.ty;
+                        generics
+                            .make_where_clause()
+                            .predicates
+                            .push(parse_quote!(#ty: ::ommx::logical_memory::LogicalMemoryProfile));
+                    }
+                }
+            }
+            quote! {
+                #( #field_visits )*
+            }
+        }
+        Data::Enum(data) => {
+            if let Some(variant) = data
+                .variants
+                .iter()
+                .find(|variant| !matches!(variant.fields, Fields::Unit))
+            {
                 return syn::Error::new_spanned(
-                    name,
-                    "LogicalMemoryProfile derive only supports structs with named fields",
+                    variant,
+                    "LogicalMemoryProfile derive only supports fieldless enums",
                 )
                 .to_compile_error();
             }
-        },
+            quote! {
+                visitor.visit_leaf(path, ::std::mem::size_of::<Self>());
+            }
+        }
         _ => {
             return syn::Error::new_spanned(
                 name,
-                "LogicalMemoryProfile derive only supports structs",
+                "LogicalMemoryProfile derive only supports structs and fieldless enums",
             )
             .to_compile_error();
         }
     };
-
-    let field_visits = fields.iter().map(|field| {
-        let field_name = field.ident.as_ref().expect("named field");
-        let frame = format!("{name_str}.{field_name}");
-        quote! {
-            ::ommx::logical_memory::LogicalMemoryProfile::visit_logical_memory(
-                &self.#field_name,
-                path.with(#frame).as_mut(),
-                visitor,
-            );
-        }
-    });
-
-    let mut generics = input.generics.clone();
-    if has_type_params(&generics) {
-        for field in fields {
-            if type_uses_type_param(&field.ty, &generics) {
-                let ty = &field.ty;
-                generics
-                    .make_where_clause()
-                    .predicates
-                    .push(parse_quote!(#ty: ::ommx::logical_memory::LogicalMemoryProfile));
-            }
-        }
-    }
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
     quote! {
@@ -142,10 +139,41 @@ fn derive_logical_memory_profile_impl(input: TokenStream2) -> TokenStream2 {
                 path: &mut ::ommx::logical_memory::Path,
                 visitor: &mut __V,
             ) {
-                #( #field_visits )*
+                #body
             }
         }
     }
+}
+
+fn struct_field_visits(name: &syn::Ident, fields: &Fields) -> Vec<TokenStream2> {
+    let name_str = name.to_string();
+    fields
+        .iter()
+        .enumerate()
+        .map(|(index, field)| {
+            let access = field
+                .ident
+                .as_ref()
+                .map(|ident| quote!(#ident))
+                .unwrap_or_else(|| {
+                    let index = syn::Index::from(index);
+                    quote!(#index)
+                });
+            let field_name = field
+                .ident
+                .as_ref()
+                .map(ToString::to_string)
+                .unwrap_or_else(|| index.to_string());
+            let frame = format!("{name_str}.{field_name}");
+            quote! {
+                ::ommx::logical_memory::LogicalMemoryProfile::visit_logical_memory(
+                    &self.#access,
+                    path.with(#frame).as_mut(),
+                    visitor,
+                );
+            }
+        })
+        .collect()
 }
 
 fn has_type_params(generics: &syn::Generics) -> bool {
@@ -371,28 +399,93 @@ mod tests {
     }
 
     #[test]
-    fn snapshot_rejects_enum() {
-        // Error output is also snapshot-tested to lock in the diagnostic
-        // message surface. The generated compile_error! invocation is the
-        // contract for non-struct inputs.
+    fn snapshot_fieldless_enum() {
         let input = quote! {
-            enum NotSupported { A, B }
+            enum Equality {
+                EqualToZero,
+                LessThanOrEqualToZero,
+            }
         };
         insta::assert_snapshot!(render(input), @r###"
-        ::core::compile_error! {
-            "LogicalMemoryProfile derive only supports structs"
+        impl ::ommx::logical_memory::LogicalMemoryProfile for Equality {
+            fn visit_logical_memory<__V: ::ommx::logical_memory::LogicalMemoryVisitor>(
+                &self,
+                path: &mut ::ommx::logical_memory::Path,
+                visitor: &mut __V,
+            ) {
+                visitor.visit_leaf(path, ::std::mem::size_of::<Self>());
+            }
         }
         "###);
     }
 
     #[test]
-    fn snapshot_rejects_tuple_struct() {
+    fn snapshot_tuple_struct() {
         let input = quote! {
             struct Tuple(u64, String);
         };
         insta::assert_snapshot!(render(input), @r###"
+        impl ::ommx::logical_memory::LogicalMemoryProfile for Tuple {
+            fn visit_logical_memory<__V: ::ommx::logical_memory::LogicalMemoryVisitor>(
+                &self,
+                path: &mut ::ommx::logical_memory::Path,
+                visitor: &mut __V,
+            ) {
+                ::ommx::logical_memory::LogicalMemoryProfile::visit_logical_memory(
+                    &self.0,
+                    path.with("Tuple.0").as_mut(),
+                    visitor,
+                );
+                ::ommx::logical_memory::LogicalMemoryProfile::visit_logical_memory(
+                    &self.1,
+                    path.with("Tuple.1").as_mut(),
+                    visitor,
+                );
+            }
+        }
+        "###);
+    }
+
+    #[test]
+    fn snapshot_unit_struct() {
+        let input = quote! {
+            struct Unit;
+        };
+        insta::assert_snapshot!(render(input), @r###"
+        impl ::ommx::logical_memory::LogicalMemoryProfile for Unit {
+            fn visit_logical_memory<__V: ::ommx::logical_memory::LogicalMemoryVisitor>(
+                &self,
+                path: &mut ::ommx::logical_memory::Path,
+                visitor: &mut __V,
+            ) {}
+        }
+        "###);
+    }
+
+    #[test]
+    fn snapshot_rejects_data_enum() {
+        let input = quote! {
+            enum Provenance {
+                IndicatorConstraint(IndicatorConstraintID),
+            }
+        };
+        insta::assert_snapshot!(render(input), @r###"
         ::core::compile_error! {
-            "LogicalMemoryProfile derive only supports structs with named fields"
+            "LogicalMemoryProfile derive only supports fieldless enums"
+        }
+        "###);
+    }
+
+    #[test]
+    fn snapshot_rejects_union() {
+        let input = quote! {
+            union Foo {
+                value: u64,
+            }
+        };
+        insta::assert_snapshot!(render(input), @r###"
+        ::core::compile_error! {
+            "LogicalMemoryProfile derive only supports structs and fieldless enums"
         }
         "###);
     }

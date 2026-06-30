@@ -1,27 +1,19 @@
-use crate::constraint::{Constraint, ConstraintID, Created, Equality, Provenance, RemovedReason};
+use crate::constraint::{Constraint, Created, Provenance};
 use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
 use std::mem::size_of;
 
-impl LogicalMemoryProfile for ConstraintID {
-    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
-        visitor.visit_leaf(path, size_of::<ConstraintID>());
-    }
-}
-
-impl LogicalMemoryProfile for Equality {
-    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
-        visitor.visit_leaf(path, size_of::<Equality>());
-    }
-}
-
+// ConstraintContext, CreatedData, and RemovedReason use
+// `#[derive(LogicalMemoryProfile)]` on their definition sites.
+//
+// Provenance is a data-carrying enum whose current variants contain only
+// inline ID payloads. Count the enum layout as one inline value until the derive
+// supports variant-aware enum decomposition without double-counting payload
+// stack bytes.
 impl LogicalMemoryProfile for Provenance {
     fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
         visitor.visit_leaf(path, size_of::<Provenance>());
     }
 }
-
-// ConstraintContext, CreatedData, and RemovedReason use
-// `#[derive(LogicalMemoryProfile)]` on their definition sites.
 
 // Constraint<Created> - manually implemented because generic types
 // cannot be used with the simple ident-based macro form.
@@ -35,17 +27,6 @@ impl LogicalMemoryProfile for Constraint<Created> {
             .visit_logical_memory(path.with("Constraint.equality").as_mut(), visitor);
         self.stage
             .visit_logical_memory(path.with("Constraint.stage").as_mut(), visitor);
-    }
-}
-
-impl LogicalMemoryProfile for (Constraint<Created>, RemovedReason) {
-    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
-        self.0
-            .visit_logical_memory(path.with("RemovedConstraint").as_mut(), visitor);
-        self.1.visit_logical_memory(
-            path.with("RemovedConstraint.removed_reason").as_mut(),
-            visitor,
-        );
     }
 }
 

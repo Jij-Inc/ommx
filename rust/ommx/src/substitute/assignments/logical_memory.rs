@@ -57,11 +57,11 @@ mod tests {
 
         let folded = logical_memory_to_folded(&assignments);
         insta::assert_snapshot!(folded, @r###"
-        AcyclicAssignments.assignments;FnvHashMap[key] 16
+        AcyclicAssignments.assignments;FnvHashMap[key];VariableID.0 16
         AcyclicAssignments.assignments;FnvHashMap[stack] 32
         AcyclicAssignments.assignments;Linear;PolynomialBase.terms 160
         AcyclicAssignments.dependency 224
-        AcyclicAssignments.topological_order 16
+        AcyclicAssignments.topological_order;VariableID.0 16
         AcyclicAssignments.topological_order;Vec[stack] 24
         "###);
     }

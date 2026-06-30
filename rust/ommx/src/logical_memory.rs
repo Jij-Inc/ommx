@@ -39,17 +39,19 @@
 //!   owning type and the field name, which makes the hierarchy
 //!   easy to read at a glance.
 //!
-//! - **Never write `size_of::<Self>()` at a struct leaf.** That would
-//!   double-count: the struct's stack slot already includes every field
-//!   by layout. Delegate to each field instead. Padding between fields
-//!   is the only thing missed — an acceptable trade-off.
+//! - **Do not collapse composite owners to `size_of::<Self>()`.** That would
+//!   double-count if the fields are also visited, and would hide child
+//!   structure if they are not. Delegate to each field instead. Padding
+//!   between fields is the only thing missed — an acceptable trade-off.
 //!
-//! - **Stack vs heap.** Primitives and POD structs (`Bound`, `Kind`, ...)
-//!   emit a single leaf of `size_of::<T>()`. Collections emit a
-//!   `Type[stack]` leaf for their header (`size_of::<Vec<T>>()` etc.)
-//!   and then delegate to their elements; unused capacity is deliberately
-//!   ignored. `String` emits `size_of::<String>() + len()` (heap
-//!   bytes actually present).
+//! - **Stack vs heap.** Primitive scalars and fieldless enums emit a single
+//!   leaf of `size_of::<T>()`. Local composite data types, including POD-like
+//!   wrappers such as `Bound`, delegate to their fields. Owning containers
+//!   (`Vec`, `VecDeque`, maps, sets, `Box`) emit a `Type[stack]` leaf for their
+//!   handle/header and then delegate to their live contents; unused capacity
+//!   is deliberately ignored. `String` emits `size_of::<String>() + len()`
+//!   (heap bytes actually present). Arrays and tuples delegate to their
+//!   elements under `Array[element]` / `Tuple.0`, `Tuple.1`, ... frames.
 //!
 //! - **Aggregation.** Multiple visits to the same path accumulate in
 //!   [`MemoryProfile`]. So profiling a `BTreeMap<Id, T>` with 1000
@@ -239,9 +241,8 @@ pub(crate) fn logical_total_bytes<T: LogicalMemoryProfile>(value: &T) -> usize {
 // Macro to implement LogicalMemoryProfile for structs with fields
 /// Generates a LogicalMemoryProfile implementation that delegates to each field.
 ///
-/// Kept for leaf-like wrappers and foreign types where we need an explicit
-/// type-name override. Prefer `#[derive(LogicalMemoryProfile)]` for composite
-/// structs.
+/// Kept for foreign types where we need an explicit type-name override.
+/// Prefer `#[derive(LogicalMemoryProfile)]` for local Rust data types.
 ///
 /// # Example
 /// ```ignore
@@ -326,7 +327,23 @@ macro_rules! impl_logical_memory_profile_for_primitive {
 }
 
 impl_logical_memory_profile_for_primitive!(
-    u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize, f32, f64
+    (),
+    bool,
+    char,
+    u8,
+    u16,
+    u32,
+    u64,
+    u128,
+    usize,
+    i8,
+    i16,
+    i32,
+    i64,
+    i128,
+    isize,
+    f32,
+    f64
 );
 
 #[cfg(test)]
