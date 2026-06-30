@@ -5622,58 +5622,6 @@
               "deprecated": null
             },
             {
-              "name": "add_description",
-              "doc": "Alias for {meth}`set_description` (backward compatibility).",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "description",
-                      "type_": {
-                        "display": "str",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "None",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "add_name",
-              "doc": "Alias for {meth}`set_name` (backward compatibility).",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "name",
-                      "type_": {
-                        "display": "str",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "None",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
               "name": "add_parameter",
               "doc": "Add a single parameter entry. Writes through to the parent host's context store.",
               "signatures": [
@@ -5710,7 +5658,7 @@
             },
             {
               "name": "add_parameters",
-              "doc": "Alias for {meth}`set_parameters` (backward compatibility).",
+              "doc": "Add parameter entries. Writes through to the parent host's context store.\n\nExisting keys are overwritten, and keys not mentioned in `parameters`\nare preserved. Use `set_parameters` to replace the whole map.",
               "signatures": [
                 {
                   "parameters": [
@@ -6869,58 +6817,6 @@
               "deprecated": null
             },
             {
-              "name": "add_description",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "description",
-                      "type_": {
-                        "display": "str",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "None",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "add_name",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "name",
-                      "type_": {
-                        "display": "str",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "None",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
               "name": "add_parameter",
               "doc": "",
               "signatures": [
@@ -7353,58 +7249,6 @@
               "deprecated": null
             },
             {
-              "name": "add_description",
-              "doc": "Alias for {meth}`set_description` (backward compatibility).",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "description",
-                      "type_": {
-                        "display": "str",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "None",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "add_name",
-              "doc": "Alias for {meth}`set_name` (backward compatibility).",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "name",
-                      "type_": {
-                        "display": "str",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "None",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
               "name": "add_parameter",
               "doc": "Add a single parameter entry. Writes through to the parent host's context store.",
               "signatures": [
@@ -7441,7 +7285,7 @@
             },
             {
               "name": "add_parameters",
-              "doc": "Alias for {meth}`set_parameters` (backward compatibility).",
+              "doc": "Add parameter entries. Writes through to the parent host's context store.\n\nExisting keys are overwritten, and keys not mentioned in `parameters`\nare preserved. Use `set_parameters` to replace the whole map.",
               "signatures": [
                 {
                   "parameters": [
@@ -7865,58 +7709,6 @@
               "deprecated": null
             },
             {
-              "name": "add_description",
-              "doc": "Alias for {meth}`set_description` (backward compatibility).",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "description",
-                      "type_": {
-                        "display": "str",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "None",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "add_name",
-              "doc": "Alias for {meth}`set_name` (backward compatibility).",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "name",
-                      "type_": {
-                        "display": "str",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "None",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
               "name": "add_parameter",
               "doc": "Add a single parameter entry. Writes through to the parent host's context store.",
               "signatures": [
@@ -7953,7 +7745,7 @@
             },
             {
               "name": "add_parameters",
-              "doc": "Alias for {meth}`set_parameters` (backward compatibility).",
+              "doc": "Add parameter entries. Writes through to the parent host's context store.\n\nExisting keys are overwritten, and keys not mentioned in `parameters`\nare preserved. Use `set_parameters` to replace the whole map.",
               "signatures": [
                 {
                   "parameters": [
@@ -8356,58 +8148,6 @@
               "deprecated": null
             },
             {
-              "name": "add_description",
-              "doc": "Alias for {meth}`set_description` (backward compatibility).",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "description",
-                      "type_": {
-                        "display": "str",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "None",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "add_name",
-              "doc": "Alias for {meth}`set_name` (backward compatibility).",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "name",
-                      "type_": {
-                        "display": "str",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "None",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
               "name": "add_parameter",
               "doc": "Add a single parameter entry. Writes through to the parent host's context store.",
               "signatures": [
@@ -8444,7 +8184,7 @@
             },
             {
               "name": "add_parameters",
-              "doc": "Alias for {meth}`set_parameters` (backward compatibility).",
+              "doc": "Add parameter entries. Writes through to the parent host's context store.\n\nExisting keys are overwritten, and keys not mentioned in `parameters`\nare preserved. Use `set_parameters` to replace the whole map.",
               "signatures": [
                 {
                   "parameters": [
@@ -9295,58 +9035,6 @@
               "deprecated": null
             },
             {
-              "name": "add_description",
-              "doc": "Alias for set_description (backward compatibility)\nReturns self for method chaining",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "description",
-                      "type_": {
-                        "display": "str",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "Constraint",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "add_name",
-              "doc": "Alias for set_name (backward compatibility)\nReturns self for method chaining",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "name",
-                      "type_": {
-                        "display": "str",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "Constraint",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
               "name": "add_parameter",
               "doc": "Add a parameter to the constraint\nReturns self for method chaining",
               "signatures": [
@@ -9383,7 +9071,7 @@
             },
             {
               "name": "add_parameters",
-              "doc": "Alias for set_parameters (backward compatibility)\nReturns self for method chaining",
+              "doc": "Add parameters to the constraint.\n\nExisting keys are overwritten, and keys not mentioned in `parameters`\nare preserved. Use `set_parameters` to replace the whole map.\nReturns self for method chaining",
               "signatures": [
                 {
                   "parameters": [
@@ -27873,7 +27561,7 @@
             },
             {
               "name": "extract_constraints",
-              "doc": "Extract the values of constraints based on the `name` with `subscripts` key.\n\nRaises ValueError if the constraint with parameters is found, or if the same subscript is found.\n\n# Examples\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> c0 = (x[0] + x[1] == 1).add_name(\"c\").add_subscripts([0])\n>>> c1 = (x[1] + x[2] == 1).add_name(\"c\").add_subscripts([1])\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[c0, c1],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> solution = instance.evaluate({0: 1, 1: 0, 2: 1})\n>>> solution.extract_constraints(\"c\")\n{(0,): 0.0, (1,): 0.0}\n```",
+              "doc": "Extract the values of constraints based on the `name` with `subscripts` key.\n\nRaises ValueError if the constraint with parameters is found, or if the same subscript is found.\n\n# Examples\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> c0 = (x[0] + x[1] == 1).set_name(\"c\").add_subscripts([0])\n>>> c1 = (x[1] + x[2] == 1).set_name(\"c\").add_subscripts([1])\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[c0, c1],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> solution = instance.evaluate({0: 1, 1: 0, 2: 1})\n>>> solution.extract_constraints(\"c\")\n{(0,): 0.0, (1,): 0.0}\n```",
               "signatures": [
                 {
                   "parameters": [

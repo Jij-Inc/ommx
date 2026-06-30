@@ -188,12 +188,6 @@ impl Constraint {
         self.clone()
     }
 
-    /// Alias for set_name (backward compatibility)
-    /// Returns self for method chaining
-    pub fn add_name(&mut self, name: String) -> Self {
-        self.set_name(name)
-    }
-
     /// Set the subscripts of the constraint
     /// Returns self for method chaining
     pub fn set_subscripts(&mut self, subscripts: Vec<i64>) -> Self {
@@ -215,12 +209,6 @@ impl Constraint {
         self.clone()
     }
 
-    /// Alias for set_description (backward compatibility)
-    /// Returns self for method chaining
-    pub fn add_description(&mut self, description: String) -> Self {
-        self.set_description(description)
-    }
-
     /// Set the parameters of the constraint
     /// Returns self for method chaining
     pub fn set_parameters(&mut self, parameters: HashMap<String, String>) -> Self {
@@ -228,10 +216,14 @@ impl Constraint {
         self.clone()
     }
 
-    /// Alias for set_parameters (backward compatibility)
+    /// Add parameters to the constraint.
+    ///
+    /// Existing keys are overwritten, and keys not mentioned in `parameters`
+    /// are preserved. Use `set_parameters` to replace the whole map.
     /// Returns self for method chaining
     pub fn add_parameters(&mut self, parameters: HashMap<String, String>) -> Self {
-        self.set_parameters(parameters)
+        self.1.label.parameters.extend(parameters);
+        self.clone()
     }
 
     /// Add a parameter to the constraint

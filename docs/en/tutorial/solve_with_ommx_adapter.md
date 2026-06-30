@@ -101,7 +101,7 @@ x = [
 objective = sum(v[i] * x[i] for i in range(N))
 
 # Define the constraint
-constraint = (sum(w[i] * x[i] for i in range(N)) <= W).add_name("Weight limit")
+constraint = (sum(w[i] * x[i] for i in range(N)) <= W).set_name("Weight limit")
 
 # Create an instance
 instance = Instance.from_components(

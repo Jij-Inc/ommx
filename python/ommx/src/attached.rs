@@ -137,11 +137,6 @@ macro_rules! attached_constraint_context_methods {
                 Ok(())
             }
 
-            /// Alias for {meth}`set_name` (backward compatibility).
-            pub fn add_name(&self, py: pyo3::Python<'_>, name: String) -> anyhow::Result<()> {
-                self.set_name(py, name)
-            }
-
             /// Set the subscripts. Writes through to the parent host's context store.
             pub fn set_subscripts(
                 &self,
@@ -211,15 +206,6 @@ macro_rules! attached_constraint_context_methods {
                 Ok(())
             }
 
-            /// Alias for {meth}`set_description` (backward compatibility).
-            pub fn add_description(
-                &self,
-                py: pyo3::Python<'_>,
-                description: String,
-            ) -> anyhow::Result<()> {
-                self.set_description(py, description)
-            }
-
             /// Replace all parameters. Writes through to the parent host's context store.
             pub fn set_parameters(
                 &self,
@@ -244,13 +230,30 @@ macro_rules! attached_constraint_context_methods {
                 Ok(())
             }
 
-            /// Alias for {meth}`set_parameters` (backward compatibility).
+            /// Add parameter entries. Writes through to the parent host's context store.
+            ///
+            /// Existing keys are overwritten, and keys not mentioned in `parameters`
+            /// are preserved. Use `set_parameters` to replace the whole map.
             pub fn add_parameters(
                 &self,
                 py: pyo3::Python<'_>,
                 parameters: std::collections::HashMap<String, String>,
             ) -> anyhow::Result<()> {
-                self.set_parameters(py, parameters)
+                match &self.host {
+                    $crate::ConstraintHost::Instance(p) => {
+                        let mut host = p.borrow_mut(py);
+                        let mut context = host.inner.$get().collect_for(self.id);
+                        context.label.parameters.extend(parameters);
+                        host.inner.$set(self.id, context)?;
+                    }
+                    $crate::ConstraintHost::Parametric(p) => {
+                        let mut host = p.borrow_mut(py);
+                        let mut context = host.inner.$get().collect_for(self.id);
+                        context.label.parameters.extend(parameters);
+                        host.inner.$set(self.id, context)?;
+                    }
+                }
+                Ok(())
             }
 
             /// Add a single parameter entry. Writes through to the parent host's context store.
@@ -411,10 +414,6 @@ macro_rules! attached_variable_labels_methods {
                 Ok(())
             }
 
-            pub fn add_name(&self, py: pyo3::Python<'_>, name: String) -> anyhow::Result<()> {
-                self.set_name(py, name)
-            }
-
             pub fn set_subscripts(
                 &self,
                 py: pyo3::Python<'_>,
@@ -481,14 +480,6 @@ macro_rules! attached_variable_labels_methods {
                 Ok(())
             }
 
-            pub fn add_description(
-                &self,
-                py: pyo3::Python<'_>,
-                description: String,
-            ) -> anyhow::Result<()> {
-                self.set_description(py, description)
-            }
-
             pub fn set_parameters(
                 &self,
                 py: pyo3::Python<'_>,
@@ -517,7 +508,21 @@ macro_rules! attached_variable_labels_methods {
                 py: pyo3::Python<'_>,
                 parameters: std::collections::HashMap<String, String>,
             ) -> anyhow::Result<()> {
-                self.set_parameters(py, parameters)
+                match &self.host {
+                    $crate::ConstraintHost::Instance(p) => {
+                        let mut host = p.borrow_mut(py);
+                        let mut label = host.inner.$get().collect_for(self.id);
+                        label.parameters.extend(parameters);
+                        host.inner.$set(self.id, label)?;
+                    }
+                    $crate::ConstraintHost::Parametric(p) => {
+                        let mut host = p.borrow_mut(py);
+                        let mut label = host.inner.$get().collect_for(self.id);
+                        label.parameters.extend(parameters);
+                        host.inner.$set(self.id, label)?;
+                    }
+                }
+                Ok(())
             }
 
             pub fn add_parameter(
