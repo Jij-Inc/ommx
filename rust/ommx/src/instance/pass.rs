@@ -116,7 +116,7 @@ impl Instance {
         Ok(())
     }
 
-    /// Build a State containing all root-owned fixed variable values.
+    /// Build a State containing all table-owned fixed variable values.
     fn fixed_state(&self) -> v1::State {
         v1::State {
             entries: self

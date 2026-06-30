@@ -9,12 +9,7 @@ impl Instance {
     ///
     /// If any operation fails, all changes are rolled back to maintain consistency.
     pub fn clip_bounds(&mut self, bounds: &Bounds, atol: ATol) -> crate::Result<()> {
-        let mut decision_variables = self.decision_variables.clone();
-        for (id, new_bound) in bounds {
-            decision_variables.clip_bound(*id, *new_bound, atol)?;
-        }
-        self.decision_variables = decision_variables;
-        Ok(())
+        self.decision_variables.clip_bounds(bounds, atol)
     }
 }
 

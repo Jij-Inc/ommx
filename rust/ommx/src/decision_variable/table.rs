@@ -315,6 +315,9 @@ impl DecisionVariableTable<Created> {
     }
 
     /// Insert or replace one row, its label, and optionally its fixed value.
+    ///
+    /// Passing `fixed_value: None` clears any existing fixed value for `id`;
+    /// it does not preserve the previous fixed-value column entry.
     pub fn insert(
         &mut self,
         id: VariableID,
@@ -351,6 +354,34 @@ impl DecisionVariableTable<Created> {
             self.entries.insert(id, updated);
         }
         Ok(changed)
+    }
+
+    /// Apply additional bounds atomically.
+    ///
+    /// This uses a plan-and-commit flow: all row updates are computed and
+    /// checked first, then only the changed rows are written back. If any
+    /// update fails, this table remains unchanged.
+    pub fn clip_bounds(&mut self, bounds: &crate::Bounds, atol: ATol) -> crate::Result<()> {
+        let mut updates = BTreeMap::new();
+
+        for (id, bound) in bounds {
+            let Some(row) = self.entries.get(id) else {
+                crate::bail!({ ?id }, "Undefined variable ID is used: {id:?}");
+            };
+            let mut updated = row.clone();
+            let changed = updated.clip_bound(*id, *bound, atol)?;
+            if changed {
+                if let Some(value) = self.columns.fixed_values.get(id).copied() {
+                    updated.check_value_consistency(*id, value, atol)?;
+                }
+                updates.insert(*id, updated);
+            }
+        }
+
+        for (id, row) in updates {
+            self.entries.insert(id, row);
+        }
+        Ok(())
     }
 }
 

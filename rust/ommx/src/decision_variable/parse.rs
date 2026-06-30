@@ -148,7 +148,7 @@ pub(crate) fn decision_variable_to_v1(
     decision_variable_fields_to_v1(id, kind, bound, label, None)
 }
 
-/// Build a v1 `DecisionVariable` and overlay the root-owned fixed value.
+/// Build a v1 `DecisionVariable` and overlay the table-owned fixed value.
 pub(crate) fn decision_variable_to_v1_with_fixed_value(
     id: VariableID,
     DecisionVariable { kind, bound }: DecisionVariable,

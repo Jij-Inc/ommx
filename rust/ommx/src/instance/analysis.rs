@@ -11,7 +11,7 @@ use std::collections::{BTreeMap, BTreeSet};
 ///
 /// - [`DecisionVariableRole::Used`] means the variable appears in the objective
 ///   function or in an active constraint family that affects solver input.
-/// - [`DecisionVariableRole::Fixed`] means the variable has a root-owned fixed
+/// - [`DecisionVariableRole::Fixed`] means the variable has a table-owned fixed
 ///   value and is not solver-used.
 /// - [`DecisionVariableRole::Dependent`] means the variable is defined by
 ///   `decision_variable_dependency` and is neither solver-used nor fixed.
@@ -337,7 +337,7 @@ impl Instance {
                     .fixed_decision_variable_values()
                     .get(&id)
                     .copied()
-                    .expect("fixed role requires a root-owned fixed value");
+                    .expect("fixed role requires a table-owned fixed value");
                 (id, value)
             })
             .collect()
