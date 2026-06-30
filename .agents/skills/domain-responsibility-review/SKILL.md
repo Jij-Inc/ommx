@@ -27,6 +27,8 @@ Treat this as a review pre-pass, not as the required final response order. When 
 
 3. Map operations to owners.
    - For every read, write, conversion, validation, persistence, recovery, mutation, or user-facing API exposure, identify the domain owner responsible for that operation.
+   - When the change affects access scope or mutation authority, first describe the underlying mathematical or domain operation on the root object. Then list which data that operation must read and which data it must change.
+   - Treat lower-level tables and collections as implementation targets unless the operation is genuinely local to that table or collection.
    - A free function, associated function, trait method, module boundary, or public API is appropriate only when it matches the domain owner.
    - Do not accept a mechanical move into an associated function as a fix. The code should route through the abstraction that owns the domain responsibility.
 

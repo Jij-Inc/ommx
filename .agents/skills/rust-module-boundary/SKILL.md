@@ -11,10 +11,32 @@ Use this skill whenever Rust code changes introduce, remove, or review module bo
 
 Use `.agents/skills/domain-responsibility-review/SKILL.md` first when a change has domain meaning. This skill is the next step: translate that responsibility model into Rust modules, ownership boundaries, and visibility.
 
+## Access Scope Design Principle
+
+When designing access scope, do not start from the field, method, or visibility
+keyword that would make the current call site compile. First return to the
+underlying mathematical or domain operation system.
+
+For each operation, state:
+
+- which operation is being performed on the root domain object;
+- which data the operation must read;
+- which data the operation must change;
+- which smaller storage components are only implementation targets of that
+  root operation.
+
+Derive access scope from that analysis. Grant mutation authority only to the
+object that owns the mathematical/domain operation. Lower-level tables or
+collections may expose storage primitives only for the specific row-level
+effects needed by that owner; they should not expose broad `&mut` access that
+lets sibling modules perform part of the root operation without the owner.
+
 ## Writing Flow
 
 1. Identify the owner before choosing visibility.
    - Name the domain abstraction or internal subsystem that owns the operation.
+   - Restate the mathematical or domain operation first, then identify which
+     data it must read or modify.
    - Identify its callers and whether those callers are inside the same module, sibling modules, the crate, or SDK users.
    - State the invariant or API commitment that the boundary must protect.
 
