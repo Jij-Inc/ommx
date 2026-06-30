@@ -33,7 +33,7 @@ Three lifecycle stages are defined:
 |---|---|---|
 | `Constraint` | `Constraint<Created>` | `CreatedData { function }` |
 | `EvaluatedConstraint` | `Constraint<Evaluated>` | `EvaluatedData { evaluated_value, feasible, ... }` |
-| `SampledConstraint` | `Constraint<stage::Sampled>` | `SampledData { evaluated_values, feasible, ... }` |
+| `SampledConstraint` | `Constraint<SampledStage>` | `SampledData { evaluated_values, feasible, ... }` |
 
 Removed constraints are managed at the collection level —
 `ConstraintCollection` stores them as `(Constraint<Created>, RemovedReason)`
@@ -583,7 +583,8 @@ and fixed values together in
 [`DecisionVariableTable`](crate::DecisionVariableTable). The table validates
 that labels and fixed values target existing
 decision-variable IDs and that fixed values satisfy the row kind/bound.
-`DecisionVariableTable` is stage-parameterized internally:
+`DecisionVariableTable` is parameterized by the same shared lifecycle stages as
+constraints:
 [`EvaluatedDecisionVariableTable`](crate::EvaluatedDecisionVariableTable) and
 [`SampledDecisionVariableTable`](crate::SampledDecisionVariableTable) are the
 evaluated and sampled stage aliases, sharing the same row-ID and label-owner

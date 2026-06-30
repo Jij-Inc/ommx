@@ -35,7 +35,7 @@ The 3.0.0 line is a major revision of the Rust SDK:
   [`DecisionVariable`](crate::DecisionVariable) is row data containing
   only `kind` and `bound`; the [`VariableID`](crate::VariableID),
   modeling labels, and fixed values live on
-  stage-parameterized [`DecisionVariableTable`](crate::DecisionVariableTable)
+  lifecycle-stage-parameterized [`DecisionVariableTable`](crate::DecisionVariableTable)
   for `Instance` / `ParametricInstance`, while
   [`EvaluatedDecisionVariableTable`](crate::EvaluatedDecisionVariableTable)
   and [`SampledDecisionVariableTable`](crate::SampledDecisionVariableTable)
@@ -218,9 +218,9 @@ values; `Solution` uses
 [`EvaluatedDecisionVariableTable`](crate::EvaluatedDecisionVariableTable), and
 `SampleSet` uses
 [`SampledDecisionVariableTable`](crate::SampledDecisionVariableTable).
-Internally these are the same stage-parameterized table owner, so row IDs and
-modeling labels are validated by one implementation while fixed values remain a
-created-stage column.
+These are the same table owner parameterized by the shared lifecycle stages used
+by constraints, so row IDs and modeling labels are validated by one
+implementation while fixed values remain a created-stage column.
 
 This removes the remaining duplicate ID source from the Rust-side row structs.
 Construct `DecisionVariable` rows with `DecisionVariable::new(kind, bound, atol)`

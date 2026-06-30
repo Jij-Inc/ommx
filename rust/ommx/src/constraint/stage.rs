@@ -13,8 +13,8 @@ pub trait Stage<C> {
     type Data;
 }
 
-/// The constraint as defined in the problem, before evaluation.
-#[derive(Debug, Clone, PartialEq)]
+/// The created stage, before evaluation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Created;
 
 // ===== Common types =====
@@ -48,12 +48,12 @@ pub struct CreatedData {
     pub function: crate::Function,
 }
 
-/// The constraint has been evaluated against a single state.
-#[derive(Debug, Clone, PartialEq)]
+/// The evaluated stage, after evaluation against a single state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Evaluated;
 
-/// The constraint has been evaluated against multiple samples.
-#[derive(Debug, Clone)]
+/// The sampled stage, after evaluation against multiple samples.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Sampled;
 
 // ===== Stage data types for Evaluated/Sampled =====

@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::logical_memory::LogicalMemoryProfile;
-use crate::{ATol, Bound, ModelingLabel};
+use crate::{ATol, Bound, Created, Evaluated, ModelingLabel, SampledStage};
 
 use super::{
     DecisionVariable, DecisionVariableError, DecisionVariableLabel, EvaluatedDecisionVariable,
@@ -12,10 +12,12 @@ mod sealed {
     pub trait Sealed {}
 }
 
-/// Stage marker for [`DecisionVariableTable`] rows and stage-specific columns.
+/// Maps a lifecycle stage to [`DecisionVariableTable`] rows and columns.
 ///
-/// This trait is sealed; OMMX owns the supported table stages so the table can
-/// keep one invariant model for definition, evaluated, and sampled variables.
+/// The stage marker itself is shared with constraints: [`Created`],
+/// [`Evaluated`], or [`SampledStage`]. This trait is the decision-variable
+/// table-specific binding from that lifecycle stage to the intrinsic row payload
+/// and any sparse columns owned by the table at that stage.
 pub trait DecisionVariableTableStage: sealed::Sealed {
     /// Intrinsic row payload stored in the table.
     type Row;
@@ -23,21 +25,9 @@ pub trait DecisionVariableTableStage: sealed::Sealed {
     type Columns: Default;
 }
 
-/// Definition-stage decision-variable table marker.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct CreatedDecisionVariableStage;
-
-/// Evaluated-stage decision-variable table marker.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct EvaluatedDecisionVariableStage;
-
-/// Sampled-stage decision-variable table marker.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct SampledDecisionVariableStage;
-
-impl sealed::Sealed for CreatedDecisionVariableStage {}
-impl sealed::Sealed for EvaluatedDecisionVariableStage {}
-impl sealed::Sealed for SampledDecisionVariableStage {}
+impl sealed::Sealed for Created {}
+impl sealed::Sealed for Evaluated {}
+impl sealed::Sealed for SampledStage {}
 
 /// Definition-stage sparse columns.
 #[derive(Debug, Clone, PartialEq, Default, LogicalMemoryProfile)]
@@ -53,17 +43,17 @@ pub struct EvaluatedDecisionVariableColumns {}
 #[derive(Debug, Clone, PartialEq, Default, LogicalMemoryProfile)]
 pub struct SampledDecisionVariableColumns {}
 
-impl DecisionVariableTableStage for CreatedDecisionVariableStage {
+impl DecisionVariableTableStage for Created {
     type Row = DecisionVariable;
     type Columns = CreatedDecisionVariableColumns;
 }
 
-impl DecisionVariableTableStage for EvaluatedDecisionVariableStage {
+impl DecisionVariableTableStage for Evaluated {
     type Row = EvaluatedDecisionVariable;
     type Columns = EvaluatedDecisionVariableColumns;
 }
 
-impl DecisionVariableTableStage for SampledDecisionVariableStage {
+impl DecisionVariableTableStage for SampledStage {
     type Row = SampledDecisionVariable;
     type Columns = SampledDecisionVariableColumns;
 }
@@ -95,17 +85,17 @@ impl DecisionVariableTableStage for SampledDecisionVariableStage {
 /// sample-ID consistency, and the shared decision-variable / parameter ID
 /// namespace.
 #[derive(Debug, Clone, PartialEq, LogicalMemoryProfile)]
-pub struct DecisionVariableTable<S: DecisionVariableTableStage = CreatedDecisionVariableStage> {
+pub struct DecisionVariableTable<S: DecisionVariableTableStage = Created> {
     entries: BTreeMap<VariableID, S::Row>,
     labels: VariableLabelStore,
     columns: S::Columns,
 }
 
 /// Evaluated-stage decision-variable table used by [`crate::Solution`].
-pub type EvaluatedDecisionVariableTable = DecisionVariableTable<EvaluatedDecisionVariableStage>;
+pub type EvaluatedDecisionVariableTable = DecisionVariableTable<Evaluated>;
 
 /// Sampled-stage decision-variable table used by [`crate::SampleSet`].
-pub type SampledDecisionVariableTable = DecisionVariableTable<SampledDecisionVariableStage>;
+pub type SampledDecisionVariableTable = DecisionVariableTable<SampledStage>;
 
 impl<S: DecisionVariableTableStage> DecisionVariableTable<S> {
     /// Construct a decision-variable table with no stage-specific columns.
@@ -232,7 +222,7 @@ impl<S: DecisionVariableTableStage> Default for DecisionVariableTable<S> {
     }
 }
 
-impl DecisionVariableTable<CreatedDecisionVariableStage> {
+impl DecisionVariableTable<Created> {
     /// Construct a decision-variable definition table with fixed values.
     pub fn with_fixed_values(
         entries: BTreeMap<VariableID, DecisionVariable>,
@@ -436,7 +426,7 @@ mod tests {
         let mut labels = VariableLabelStore::default();
         labels.set_name(id, "x");
 
-        let err = DecisionVariableTable::<CreatedDecisionVariableStage>::new(
+        let err = DecisionVariableTable::<Created>::new(
             BTreeMap::<VariableID, DecisionVariable>::new(),
             labels,
         )
