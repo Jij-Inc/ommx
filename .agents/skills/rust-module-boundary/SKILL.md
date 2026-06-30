@@ -11,10 +11,49 @@ Use this skill whenever Rust code changes introduce, remove, or review module bo
 
 Use `.agents/skills/domain-responsibility-review/SKILL.md` first when a change has domain meaning. This skill is the next step: translate that responsibility model into Rust modules, ownership boundaries, and visibility.
 
+## Access Scope Design Principle
+
+When designing access scope, do not start from the field, method, or visibility
+keyword that would make the current call site compile. First return to the
+underlying mathematical or domain operation system.
+
+Always keep this order explicit:
+
+1. Mathematical/domain operation.
+   - State which operation is being performed on the root domain object.
+   - Describe the action independently of the current Rust fields or helper
+     methods.
+2. Representation and invariants.
+   - State which data structures represent the operation's state.
+   - State which invariants each structure owns, and which invariants require
+     the root object because they cross table or collection boundaries.
+3. API shape and visibility.
+   - Derive the callable API and its visibility from the operation and
+     invariant analysis.
+   - Expose only the table-local or collection-local effects required by the
+     root operation.
+
+For each operation, state:
+
+- which data the operation must read;
+- which data the operation must change;
+- which smaller storage components are only implementation targets of that
+  root operation;
+- which API preserves the invariants without granting broader mutation
+  authority.
+
+Derive access scope from that analysis. Grant mutation authority only to the
+object that owns the mathematical/domain operation. Lower-level tables or
+collections may expose storage primitives only for the specific row-level
+effects needed by that owner; they should not expose broad `&mut` access that
+lets sibling modules perform part of the root operation without the owner.
+
 ## Writing Flow
 
 1. Identify the owner before choosing visibility.
    - Name the domain abstraction or internal subsystem that owns the operation.
+   - Restate the mathematical or domain operation first, then identify which
+     data it must read or modify.
    - Identify its callers and whether those callers are inside the same module, sibling modules, the crate, or SDK users.
    - State the invariant or API commitment that the boundary must protect.
 

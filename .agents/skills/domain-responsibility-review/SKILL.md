@@ -9,6 +9,27 @@ Use this skill at the start of every OMMX review. The goal is to review code sha
 
 Treat this as a review pre-pass, not as the required final response order. When writing a code review, still lead with actionable findings; use the domain model to decide which findings matter and how to explain them.
 
+## Mandatory Design Order
+
+For any change that affects mutation authority, table/collection APIs, access
+scope, or invariant ownership, keep this order explicit throughout the work:
+
+1. Name the mathematical or domain operation that must be performed.
+   - State the root object the operation acts on, such as `Instance`,
+     `ParametricInstance`, `Solution`, or `SampleSet`.
+   - Describe the algebraic action before discussing fields, methods, or
+     visibility.
+2. Describe the data structures and invariants that represent that operation.
+   - Identify which rows, sidecars, lifecycle states, labels, or provenance
+     stores represent the domain state.
+   - Separate invariants owned by lower-level tables/collections from
+     invariants that only the root object can know.
+3. Derive the API shape from the first two steps.
+   - Expose only the operations needed to realize the mathematical action while
+     preserving the stated invariants.
+   - If the API design is not a consequence of the operation and representation
+     analysis, stop and redo the analysis.
+
 ## Review Flow
 
 1. Restate the global domain semantics.
@@ -27,6 +48,8 @@ Treat this as a review pre-pass, not as the required final response order. When 
 
 3. Map operations to owners.
    - For every read, write, conversion, validation, persistence, recovery, mutation, or user-facing API exposure, identify the domain owner responsible for that operation.
+   - When the change affects access scope or mutation authority, first describe the underlying mathematical or domain operation on the root object. Then list which data that operation must read and which data it must change.
+   - Treat lower-level tables and collections as implementation targets unless the operation is genuinely local to that table or collection.
    - A free function, associated function, trait method, module boundary, or public API is appropriate only when it matches the domain owner.
    - Do not accept a mechanical move into an associated function as a fix. The code should route through the abstraction that owns the domain responsibility.
 

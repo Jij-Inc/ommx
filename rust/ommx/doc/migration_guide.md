@@ -293,10 +293,9 @@ For mutable access, downstream code goes through invariant-safe
 `Instance` / `ParametricInstance` methods (`add_constraint`,
 `insert_constraint`, `relax_constraint`, `restore_constraint`, …) —
 these validate that every `id` referenced by the constraint exists in
-`decision_variables` and keep the active / removed maps disjoint. The
-raw `active_mut()` / `removed_mut()` mutators on
-`ConstraintCollection<T>` are `pub(crate)` and not callable from
-outside the crate.
+`decision_variables` and keep the active / removed maps disjoint.
+Crate-internal transformation code also routes through operation-level
+collection effects rather than raw active / removed / context map mutation.
 
 ### 6. getset Removal
 
@@ -435,9 +434,9 @@ collection.removed()                   // &BTreeMap<T::ID, (T::Created, RemovedR
 collection.context()                   // &ConstraintContextStore<T::ID>
 collection.into_parts()                // (active, removed, context)
 // Mutation goes through Instance / ParametricInstance methods so
-// invariants (active/removed disjointness, variable-id validity)
-// are enforced; the raw `active_mut` / `removed_mut` / `insert_with`
-// primitives on this type are `pub(crate)`.
+// invariants (active/removed disjointness, variable-id validity,
+// and context ownership) are enforced. Crate-internal transformations
+// use operation-level row effects rather than raw map mutation.
 
 // Evaluate trait impl
 collection.evaluate(state, atol)           // EvaluatedCollection<T>

@@ -101,13 +101,18 @@ pub type NamedFunctionLabel = crate::ModelingLabel;
 /// `description`. This mirrors `ConstraintCollection` for named functions,
 /// without active/removed state.
 ///
+/// Mathematically, this table is the named-expression component
+/// `N = {named_function_id -> expression row}` of an enclosing root object.
+/// The table owns row identity and labels; the root object owns the meaning of
+/// the expression row in its variable, parameter, solution, or sample space.
+///
 /// # Invariants
 ///
 /// - Every modeling-label ID is owned by this table; labels for unknown
 ///   [`NamedFunctionID`] values are rejected by [`Self::new`] and
 ///   [`Self::set_label`].
 /// - Public mutation preserves the row/label ownership boundary. Rows can be
-///   inserted or replaced only together with the corresponding label via
+///   freshly inserted only together with the corresponding label via
 ///   [`Self::insert`]; mutable row iteration is not exposed.
 ///
 /// # Host-level invariants
@@ -119,6 +124,18 @@ pub type NamedFunctionLabel = crate::ModelingLabel;
 /// evaluated/sampled decision-variable table, is validated by host builders such
 /// as [`crate::Instance::builder`], [`crate::Solution::builder`], and
 /// [`crate::SampleSet::builder`].
+///
+/// # Table-local operations
+///
+/// The table supports construction from rows and labels, read access, fresh
+/// insertion of a row with its label, label updates for existing rows, and
+/// consuming rows and labels at serialization or conversion boundaries.
+/// Duplicate insertion is rejected rather than interpreted as replacement.
+///
+/// Expression substitution, evaluation, and sampling are root-object
+/// operations. They may induce host-validated row replacement, but the table
+/// does not expose raw mutable access that would let callers edit expression
+/// rows without the enclosing root operation.
 #[derive(Debug, Clone, PartialEq, LogicalMemoryProfile)]
 pub struct NamedFunctionTable<T> {
     entries: BTreeMap<NamedFunctionID, T>,
@@ -188,10 +205,19 @@ impl<T> NamedFunctionTable<T> {
         Ok(())
     }
 
-    /// Insert or replace one row and its modeling label.
-    pub fn insert(&mut self, id: NamedFunctionID, row: T, label: NamedFunctionLabel) -> Option<T> {
+    /// Insert one fresh row and its modeling label.
+    pub fn insert(
+        &mut self,
+        id: NamedFunctionID,
+        row: T,
+        label: NamedFunctionLabel,
+    ) -> crate::Result<()> {
+        if self.entries.contains_key(&id) {
+            crate::bail!({ ?id }, "Duplicate named function ID: {id:?}");
+        }
         self.labels.insert(id, label);
-        self.entries.insert(id, row)
+        self.entries.insert(id, row);
+        Ok(())
     }
 
     pub fn contains_key(&self, id: &NamedFunctionID) -> bool {
@@ -323,6 +349,35 @@ mod table_tests {
 
         let table = NamedFunctionTable::new(BTreeMap::from([(id, row.clone())]), labels).unwrap();
 
+        assert_eq!(table.get(&id), Some(&row));
+        assert_eq!(table.labels().name(id), Some("cost"));
+    }
+
+    #[test]
+    fn insert_rejects_duplicate_without_replacing_label() {
+        let id = NamedFunctionID::from(0);
+        let row = NamedFunction {
+            function: Function::Zero,
+        };
+        let mut labels = NamedFunctionLabelStore::default();
+        labels.set_name(id, "cost");
+        let mut table =
+            NamedFunctionTable::new(BTreeMap::from([(id, row.clone())]), labels).unwrap();
+
+        let err = table
+            .insert(
+                id,
+                NamedFunction {
+                    function: Function::Zero,
+                },
+                NamedFunctionLabel {
+                    name: Some("new".to_string()),
+                    ..Default::default()
+                },
+            )
+            .unwrap_err();
+
+        assert!(err.to_string().contains("Duplicate named function ID"));
         assert_eq!(table.get(&id), Some(&row));
         assert_eq!(table.labels().name(id), Some("cost"));
     }
