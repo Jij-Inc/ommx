@@ -29,7 +29,6 @@ pub use label_store::NamedFunctionLabelStore;
     LogicalMemoryProfile,
 )]
 #[serde(transparent)]
-#[logical_memory(leaf)]
 pub struct NamedFunctionID(u64);
 
 impl std::fmt::Debug for NamedFunctionID {

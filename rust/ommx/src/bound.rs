@@ -76,7 +76,6 @@ pub type Bounds = BTreeMap<VariableID, Bound>;
     serde::Deserialize,
     crate::logical_memory::LogicalMemoryProfile,
 )]
-#[logical_memory(leaf)]
 pub struct Bound {
     lower: f64,
     upper: f64,

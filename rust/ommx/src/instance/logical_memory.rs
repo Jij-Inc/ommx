@@ -202,9 +202,10 @@ mod tests {
         Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
         Instance.decision_variable_dependency;AcyclicAssignments.topological_order;Vec[stack] 24
         Instance.decision_variables;DecisionVariableTable.columns;CreatedDecisionVariableColumns.fixed_values;BTreeMap[stack] 24
-        Instance.decision_variables;DecisionVariableTable.entries;BTreeMap[key] 16
+        Instance.decision_variables;DecisionVariableTable.entries;BTreeMap[key];VariableID.0 16
         Instance.decision_variables;DecisionVariableTable.entries;BTreeMap[stack] 24
-        Instance.decision_variables;DecisionVariableTable.entries;DecisionVariable.bound 32
+        Instance.decision_variables;DecisionVariableTable.entries;DecisionVariable.bound;Bound.lower 16
+        Instance.decision_variables;DecisionVariableTable.entries;DecisionVariable.bound;Bound.upper 16
         Instance.decision_variables;DecisionVariableTable.entries;DecisionVariable.kind 2
         Instance.decision_variables;DecisionVariableTable.labels;ModelingLabelStore.description;FnvHashMap[stack] 32
         Instance.decision_variables;DecisionVariableTable.labels;ModelingLabelStore.name;FnvHashMap[stack] 32
@@ -277,7 +278,7 @@ mod tests {
         let folded = logical_memory_to_folded(&instance);
         insta::assert_snapshot!(folded, @r###"
         Instance.annotations;HashMap[stack] 48
-        Instance.constraint_collection;constraints;BTreeMap[key] 8
+        Instance.constraint_collection;constraints;BTreeMap[key];ConstraintID.0 8
         Instance.constraint_collection;constraints;BTreeMap[stack] 24
         Instance.constraint_collection;constraints;Constraint.equality 1
         Instance.constraint_collection;constraints;Constraint.stage;CreatedData.function;Linear;PolynomialBase.terms 80
@@ -291,9 +292,10 @@ mod tests {
         Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
         Instance.decision_variable_dependency;AcyclicAssignments.topological_order;Vec[stack] 24
         Instance.decision_variables;DecisionVariableTable.columns;CreatedDecisionVariableColumns.fixed_values;BTreeMap[stack] 24
-        Instance.decision_variables;DecisionVariableTable.entries;BTreeMap[key] 16
+        Instance.decision_variables;DecisionVariableTable.entries;BTreeMap[key];VariableID.0 16
         Instance.decision_variables;DecisionVariableTable.entries;BTreeMap[stack] 24
-        Instance.decision_variables;DecisionVariableTable.entries;DecisionVariable.bound 32
+        Instance.decision_variables;DecisionVariableTable.entries;DecisionVariable.bound;Bound.lower 16
+        Instance.decision_variables;DecisionVariableTable.entries;DecisionVariable.bound;Bound.upper 16
         Instance.decision_variables;DecisionVariableTable.entries;DecisionVariable.kind 2
         Instance.decision_variables;DecisionVariableTable.labels;ModelingLabelStore.description;FnvHashMap[stack] 32
         Instance.decision_variables;DecisionVariableTable.labels;ModelingLabelStore.name;FnvHashMap[stack] 32
@@ -394,13 +396,14 @@ mod tests {
         Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
         Instance.decision_variable_dependency;AcyclicAssignments.topological_order;Vec[stack] 24
         Instance.decision_variables;DecisionVariableTable.columns;CreatedDecisionVariableColumns.fixed_values;BTreeMap[stack] 24
-        Instance.decision_variables;DecisionVariableTable.entries;BTreeMap[key] 24
+        Instance.decision_variables;DecisionVariableTable.entries;BTreeMap[key];VariableID.0 24
         Instance.decision_variables;DecisionVariableTable.entries;BTreeMap[stack] 24
-        Instance.decision_variables;DecisionVariableTable.entries;DecisionVariable.bound 48
+        Instance.decision_variables;DecisionVariableTable.entries;DecisionVariable.bound;Bound.lower 24
+        Instance.decision_variables;DecisionVariableTable.entries;DecisionVariable.bound;Bound.upper 24
         Instance.decision_variables;DecisionVariableTable.entries;DecisionVariable.kind 3
         Instance.decision_variables;DecisionVariableTable.labels;ModelingLabelStore.description;FnvHashMap[stack] 32
         Instance.decision_variables;DecisionVariableTable.labels;ModelingLabelStore.name 95
-        Instance.decision_variables;DecisionVariableTable.labels;ModelingLabelStore.name;FnvHashMap[key] 24
+        Instance.decision_variables;DecisionVariableTable.labels;ModelingLabelStore.name;FnvHashMap[key];VariableID.0 24
         Instance.decision_variables;DecisionVariableTable.labels;ModelingLabelStore.name;FnvHashMap[stack] 32
         Instance.decision_variables;DecisionVariableTable.labels;ModelingLabelStore.parameters;FnvHashMap[stack] 32
         Instance.decision_variables;DecisionVariableTable.labels;ModelingLabelStore.subscripts;FnvHashMap[stack] 32
@@ -485,9 +488,10 @@ mod tests {
         Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
         Instance.decision_variable_dependency;AcyclicAssignments.topological_order;Vec[stack] 24
         Instance.decision_variables;DecisionVariableTable.columns;CreatedDecisionVariableColumns.fixed_values;BTreeMap[stack] 24
-        Instance.decision_variables;DecisionVariableTable.entries;BTreeMap[key] 8
+        Instance.decision_variables;DecisionVariableTable.entries;BTreeMap[key];VariableID.0 8
         Instance.decision_variables;DecisionVariableTable.entries;BTreeMap[stack] 24
-        Instance.decision_variables;DecisionVariableTable.entries;DecisionVariable.bound 16
+        Instance.decision_variables;DecisionVariableTable.entries;DecisionVariable.bound;Bound.lower 8
+        Instance.decision_variables;DecisionVariableTable.entries;DecisionVariable.bound;Bound.upper 8
         Instance.decision_variables;DecisionVariableTable.entries;DecisionVariable.kind 1
         Instance.decision_variables;DecisionVariableTable.labels;ModelingLabelStore.description;FnvHashMap[stack] 32
         Instance.decision_variables;DecisionVariableTable.labels;ModelingLabelStore.name;FnvHashMap[stack] 32

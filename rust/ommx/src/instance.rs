@@ -97,7 +97,6 @@ pub type Capabilities = std::collections::BTreeSet<AdditionalCapability>;
     Default,
     crate::logical_memory::LogicalMemoryProfile,
 )]
-#[logical_memory(leaf)]
 pub enum Sense {
     #[default]
     Minimize,

@@ -23,7 +23,6 @@ pub use stage::{
 
 /// Constraint equality.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, LogicalMemoryProfile)]
-#[logical_memory(leaf)]
 pub enum Equality {
     /// $f(x) = 0$ type constraint.
     EqualToZero,
@@ -47,7 +46,6 @@ pub enum Equality {
     LogicalMemoryProfile,
 )]
 #[serde(transparent)]
-#[logical_memory(leaf)]
 pub struct ConstraintID(u64);
 
 impl std::fmt::Debug for ConstraintID {
@@ -79,8 +77,7 @@ impl From<ConstraintID> for u64 {
 /// For example, when an indicator constraint with indicator=1 is propagated,
 /// it is promoted to a regular `Constraint` with a provenance step recording
 /// the original indicator constraint ID.
-#[derive(Debug, Clone, PartialEq, Eq, LogicalMemoryProfile)]
-#[logical_memory(leaf)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Provenance {
     IndicatorConstraint(crate::IndicatorConstraintID),
     OneHotConstraint(crate::OneHotConstraintID),

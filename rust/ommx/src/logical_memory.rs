@@ -43,8 +43,6 @@
 //!   double-count if the fields are also visited, and would hide child
 //!   structure if they are not. Delegate to each field instead. Padding
 //!   between fields is the only thing missed — an acceptable trade-off.
-//!   Use `#[logical_memory(leaf)]` only for inline POD wrappers/enums whose
-//!   fields should not be semantically decomposed.
 //!
 //! - **Stack vs heap.** Primitives and POD structs (`Bound`, `Kind`, ...)
 //!   emit a single leaf of `size_of::<T>()`. Owning containers (`Vec`,
@@ -243,9 +241,7 @@ pub(crate) fn logical_total_bytes<T: LogicalMemoryProfile>(value: &T) -> usize {
 /// Generates a LogicalMemoryProfile implementation that delegates to each field.
 ///
 /// Kept for foreign types where we need an explicit type-name override.
-/// Prefer `#[derive(LogicalMemoryProfile)]` for composite structs and
-/// `#[derive(LogicalMemoryProfile)] #[logical_memory(leaf)]` for leaf-like
-/// local types.
+/// Prefer `#[derive(LogicalMemoryProfile)]` for local composite types.
 ///
 /// # Example
 /// ```ignore

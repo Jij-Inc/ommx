@@ -1,8 +1,19 @@
-use crate::constraint::{Constraint, Created};
+use crate::constraint::{Constraint, Created, Provenance};
 use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
+use std::mem::size_of;
 
 // ConstraintContext, CreatedData, and RemovedReason use
 // `#[derive(LogicalMemoryProfile)]` on their definition sites.
+//
+// Provenance is a data-carrying enum whose current variants contain only
+// inline ID payloads. Count the enum layout as one inline value until the derive
+// supports variant-aware enum decomposition without double-counting payload
+// stack bytes.
+impl LogicalMemoryProfile for Provenance {
+    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
+        visitor.visit_leaf(path, size_of::<Provenance>());
+    }
+}
 
 // Constraint<Created> - manually implemented because generic types
 // cannot be used with the simple ident-based macro form.

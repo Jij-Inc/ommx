@@ -155,7 +155,7 @@ fn test_btreemap_with_linear() {
 
     let folded = logical_memory_to_folded(&map);
     insta::assert_snapshot!(folded, @r###"
-    BTreeMap[key] 16
+    BTreeMap[key];VariableID.0 16
     BTreeMap[stack] 24
     PolynomialBase.terms 112
     "###);
@@ -173,7 +173,7 @@ fn test_hashmap_with_linear() {
     let folded = logical_memory_to_folded(&map);
     // Note: HashMap iteration order is non-deterministic, but snapshots should still be stable
     insta::assert_snapshot!(folded, @r###"
-    HashMap[key] 16
+    HashMap[key];VariableID.0 16
     HashMap[stack] 48
     PolynomialBase.terms 112
     "###);
@@ -338,7 +338,6 @@ struct DeriveTargetNested {
 }
 
 #[derive(LogicalMemoryProfile)]
-#[logical_memory(leaf)]
 #[allow(dead_code)]
 struct DeriveTargetLeaf(u64);
 
@@ -386,12 +385,12 @@ fn test_derive_nested_struct_snapshot() {
 }
 
 #[test]
-fn test_derive_leaf_snapshot() {
+fn test_derive_tuple_struct_snapshot() {
     let value = DeriveLeafHolder {
         leaf: DeriveTargetLeaf(0),
     };
     let folded = logical_memory_to_folded(&value);
-    insta::assert_snapshot!(folded, @"DeriveLeafHolder.leaf 8");
+    insta::assert_snapshot!(folded, @"DeriveLeafHolder.leaf;DeriveTargetLeaf.0 8");
 }
 
 #[test]

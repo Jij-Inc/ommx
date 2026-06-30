@@ -26,7 +26,6 @@ use std::collections::{BTreeMap, BTreeSet};
     crate::logical_memory::LogicalMemoryProfile,
 )]
 #[serde(transparent)]
-#[logical_memory(leaf)]
 pub struct Sos1ConstraintID(u64);
 
 impl std::fmt::Debug for Sos1ConstraintID {
