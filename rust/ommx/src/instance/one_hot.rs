@@ -51,8 +51,11 @@ impl Instance {
         new_context
             .provenance
             .push(Provenance::OneHotConstraint(id));
-        self.constraint_collection
-            .insert_with(new_id, new_constraint, new_context)?;
+        self.constraint_collection.insert_active_with_context(
+            new_id,
+            new_constraint,
+            new_context,
+        )?;
 
         let mut parameters = fnv::FnvHashMap::default();
         parameters.insert("constraint_id".to_string(), new_id.into_inner().to_string());

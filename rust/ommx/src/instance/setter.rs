@@ -92,7 +92,7 @@ impl Instance {
         self.validate_required_ids(constraint.required_ids())?;
         let id = self.constraint_collection.unused_id();
         self.constraint_collection
-            .insert_with(id, constraint, context)?;
+            .insert_active_with_context(id, constraint, context)?;
         Ok(id)
     }
 
@@ -129,7 +129,7 @@ impl Instance {
         self.require_binary_variable(constraint.indicator_variable)?;
         let id = self.indicator_constraint_collection.unused_id();
         self.indicator_constraint_collection
-            .insert_with(id, constraint, context)?;
+            .insert_active_with_context(id, constraint, context)?;
         Ok(id)
     }
 
@@ -151,7 +151,7 @@ impl Instance {
         }
         let id = self.one_hot_constraint_collection.unused_id();
         self.one_hot_constraint_collection
-            .insert_with(id, constraint, context)?;
+            .insert_active_with_context(id, constraint, context)?;
         Ok(id)
     }
 
@@ -171,7 +171,7 @@ impl Instance {
         self.validate_required_ids(constraint.required_ids())?;
         let id = self.sos1_constraint_collection.unused_id();
         self.sos1_constraint_collection
-            .insert_with(id, constraint, context)?;
+            .insert_active_with_context(id, constraint, context)?;
         Ok(id)
     }
 
@@ -200,6 +200,27 @@ impl Instance {
         Ok(id)
     }
 
+    fn apply_validated_constraint_insert(
+        &mut self,
+        id: ConstraintID,
+        constraint: Constraint,
+    ) -> crate::Result<Option<Constraint>> {
+        if self.constraint_collection.contains_id(id) {
+            let old = self
+                .constraint_collection
+                .replace_preserving_lifecycle(id, constraint)
+                .expect("contains_id returned true for this constraint");
+            Ok(Some(old))
+        } else {
+            self.constraint_collection.insert_active_with_context(
+                id,
+                constraint,
+                crate::ConstraintContext::default(),
+            )?;
+            Ok(None)
+        }
+    }
+
     /// Insert a constraint into the instance under the given [`ConstraintID`].
     ///
     /// - If the constraint already exists, it will be replaced.
@@ -213,23 +234,7 @@ impl Instance {
     ) -> crate::Result<Option<Constraint>> {
         // Validate that all variables in the constraints are defined
         self.validate_required_ids(constraint.required_ids())?;
-        use std::collections::btree_map::Entry;
-        if let Entry::Occupied(mut o) = self.constraint_collection.removed_mut().entry(id) {
-            let (rc, _reason) = o.get_mut();
-            let old_function = std::mem::replace(&mut rc.stage.function, constraint.stage.function);
-            let old_equality = std::mem::replace(&mut rc.equality, constraint.equality);
-            let removed = Constraint {
-                equality: old_equality,
-                stage: crate::constraint::CreatedData {
-                    function: old_function,
-                },
-            };
-            return Ok(Some(removed));
-        }
-        Ok(self
-            .constraint_collection
-            .active_mut()
-            .insert(id, constraint))
+        self.apply_validated_constraint_insert(id, constraint)
     }
 
     /// Insert multiple `(id, constraint)` pairs into the instance with a single validation pass.
@@ -275,26 +280,7 @@ impl Instance {
         // Insert all constraints (validation already done)
         let mut replaced = BTreeMap::new();
         for (id, constraint) in constraints {
-            use std::collections::btree_map::Entry;
-            let old = if let Entry::Occupied(mut o) =
-                self.constraint_collection.removed_mut().entry(id)
-            {
-                let (rc, _reason) = o.get_mut();
-                let old_function =
-                    std::mem::replace(&mut rc.stage.function, constraint.stage.function);
-                let old_equality = std::mem::replace(&mut rc.equality, constraint.equality);
-                Some(Constraint {
-                    equality: old_equality,
-                    stage: crate::constraint::CreatedData {
-                        function: old_function,
-                    },
-                })
-            } else {
-                self.constraint_collection
-                    .active_mut()
-                    .insert(id, constraint)
-            };
-            if let Some(old_constraint) = old {
+            if let Some(old_constraint) = self.apply_validated_constraint_insert(id, constraint)? {
                 replaced.insert(id, old_constraint);
             }
         }
@@ -385,7 +371,7 @@ impl ParametricInstance {
         self.validate_required_ids(constraint.required_ids())?;
         let id = self.constraint_collection.unused_id();
         self.constraint_collection
-            .insert_with(id, constraint, context)?;
+            .insert_active_with_context(id, constraint, context)?;
         Ok(id)
     }
 
@@ -459,7 +445,7 @@ impl ParametricInstance {
         self.validate_required_ids(constraint.required_ids())?;
         let id = self.indicator_constraint_collection.unused_id();
         self.indicator_constraint_collection
-            .insert_with(id, constraint, context)?;
+            .insert_active_with_context(id, constraint, context)?;
         Ok(id)
     }
 
@@ -480,7 +466,7 @@ impl ParametricInstance {
         self.validate_required_ids(constraint.required_ids())?;
         let id = self.one_hot_constraint_collection.unused_id();
         self.one_hot_constraint_collection
-            .insert_with(id, constraint, context)?;
+            .insert_active_with_context(id, constraint, context)?;
         Ok(id)
     }
 
@@ -503,7 +489,7 @@ impl ParametricInstance {
         self.validate_required_ids(required_ids)?;
         let id = self.sos1_constraint_collection.unused_id();
         self.sos1_constraint_collection
-            .insert_with(id, constraint, context)?;
+            .insert_active_with_context(id, constraint, context)?;
         Ok(id)
     }
 

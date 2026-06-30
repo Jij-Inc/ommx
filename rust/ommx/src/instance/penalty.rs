@@ -104,7 +104,7 @@ impl Instance {
                 },
             };
 
-            parameters.insert(parameter_id, parameter_label);
+            parameters.insert(parameter_id, parameter_label)?;
             removed_constraints.insert(constraint_id, (constraint, removed_reason));
         }
 
@@ -250,7 +250,7 @@ impl Instance {
         objective.try_add_assign_in_place(penalty_term)?;
 
         let mut parameters = ParameterTable::default();
-        parameters.insert(parameter_id, parameter_label);
+        parameters.insert(parameter_id, parameter_label)?;
 
         Ok(ParametricInstance {
             sense: self.sense,

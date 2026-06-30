@@ -117,6 +117,10 @@ impl DecisionVariableTableStage for SampledStage {
 /// owns modeling labels as sidecar columns, and the stage column store owns any
 /// additional sparse columns such as created-stage fixed values.
 ///
+/// Mathematically, this table is the variable-space component
+/// `X = {variable_id -> domain row}` of an enclosing root object. It may enforce
+/// only facts expressible from its own rows, labels, and stage columns.
+///
 /// # Table-level invariants
 ///
 /// - Every modeling-label ID is owned by this table.
@@ -133,6 +137,24 @@ impl DecisionVariableTableStage for SampledStage {
 /// [`crate::SampleSet`] validates role disjointness, expression references,
 /// sample-ID consistency, and the shared decision-variable / parameter ID
 /// namespace.
+///
+/// # Table-local operations
+///
+/// The table supports operations that are local to `X`:
+///
+/// - construction from rows, labels, and stage columns with key consistency
+///   checks;
+/// - read access to keys, rows, labels, and stage columns;
+/// - fresh insertion of a created, evaluated, or sampled row with its label;
+/// - created-stage fixed-value updates for existing rows;
+/// - label updates for existing rows;
+/// - created-stage domain intersection, preserving fixed-value consistency;
+/// - host-computed by-value row replacement plans.
+///
+/// It intentionally does not expose arbitrary deletion or raw mutable row
+/// access. Removing or semantically replacing a decision variable requires the
+/// enclosing root object to prove that objective, constraints, named functions,
+/// dependencies, fixed values, and parameter namespaces remain valid.
 #[derive(Debug, Clone, PartialEq, LogicalMemoryProfile)]
 pub struct DecisionVariableTable<S: DecisionVariableTableStage = Created> {
     entries: BTreeMap<VariableID, S::Row>,
@@ -189,9 +211,13 @@ impl<S: DecisionVariableTableStage> DecisionVariableTable<S> {
         id: VariableID,
         row: S::Row,
         label: ModelingLabel,
-    ) -> Option<S::Row> {
+    ) -> Result<(), DecisionVariableError> {
+        if self.entries.contains_key(&id) {
+            return Err(DecisionVariableError::DuplicateID { id });
+        }
         self.labels.insert(id, label);
-        self.entries.insert(id, row)
+        self.entries.insert(id, row);
+        Ok(())
     }
 
     pub fn contains_key(&self, id: &VariableID) -> bool {
@@ -314,10 +340,7 @@ impl DecisionVariableTable<Created> {
         Ok(())
     }
 
-    /// Insert or replace one row, its label, and optionally its fixed value.
-    ///
-    /// Passing `fixed_value: None` clears any existing fixed value for `id`;
-    /// it does not preserve the previous fixed-value column entry.
+    /// Insert one fresh row, its label, and optionally its fixed value.
     pub fn insert(
         &mut self,
         id: VariableID,
@@ -325,19 +348,15 @@ impl DecisionVariableTable<Created> {
         label: DecisionVariableLabel,
         fixed_value: Option<f64>,
         atol: ATol,
-    ) -> Result<Option<DecisionVariable>, DecisionVariableError> {
+    ) -> Result<(), DecisionVariableError> {
+        if self.entries.contains_key(&id) {
+            return Err(DecisionVariableError::DuplicateID { id });
+        }
         if let Some(value) = fixed_value {
             row.check_value_consistency(id, value, atol)?;
+            self.columns.fixed_values.insert(id, value);
         }
-        match fixed_value {
-            Some(value) => {
-                self.columns.fixed_values.insert(id, value);
-            }
-            None => {
-                self.columns.fixed_values.remove(&id);
-            }
-        }
-        Ok(self.insert_labeled_row(id, row, label))
+        self.insert_labeled_row(id, row, label)
     }
 
     /// Impose an additional bound on one row while preserving table invariants.
@@ -394,13 +413,13 @@ impl EvaluatedDecisionVariableTable {
         Self::with_columns(entries, labels, EvaluatedDecisionVariableColumns {}, ())
     }
 
-    /// Insert or replace one evaluated row and its modeling label.
+    /// Insert one fresh evaluated row and its modeling label.
     pub fn insert(
         &mut self,
         id: VariableID,
         row: EvaluatedDecisionVariable,
         label: DecisionVariableLabel,
-    ) -> Option<EvaluatedDecisionVariable> {
+    ) -> Result<(), DecisionVariableError> {
         self.insert_labeled_row(id, row, label)
     }
 }
@@ -414,13 +433,13 @@ impl SampledDecisionVariableTable {
         Self::with_columns(entries, labels, SampledDecisionVariableColumns {}, ())
     }
 
-    /// Insert or replace one sampled row and its modeling label.
+    /// Insert one fresh sampled row and its modeling label.
     pub fn insert(
         &mut self,
         id: VariableID,
         row: SampledDecisionVariable,
         label: DecisionVariableLabel,
-    ) -> Option<SampledDecisionVariable> {
+    ) -> Result<(), DecisionVariableError> {
         self.insert_labeled_row(id, row, label)
     }
 }
@@ -601,6 +620,37 @@ mod tests {
 
         assert_eq!(table.get(&id), Some(&row));
         assert_eq!(table.labels().name(id), Some("x"));
+        assert_eq!(table.fixed_value(id), Some(1.0));
+    }
+
+    #[test]
+    fn definition_table_insert_rejects_duplicate_without_replacing_sidecars() {
+        let id = VariableID::from(1);
+        let original = DecisionVariable::binary();
+        let mut table = DecisionVariableTable::with_fixed_values(
+            BTreeMap::from([(id, original.clone())]),
+            VariableLabelStore::default(),
+            BTreeMap::from([(id, 1.0)]),
+            ATol::default(),
+        )
+        .unwrap();
+
+        let err = table
+            .insert(
+                id,
+                DecisionVariable::integer(),
+                DecisionVariableLabel {
+                    name: Some("new".to_string()),
+                    ..Default::default()
+                },
+                Some(0.0),
+                ATol::default(),
+            )
+            .unwrap_err();
+
+        assert!(err.to_string().contains("Duplicate decision variable ID"));
+        assert_eq!(table.get(&id), Some(&original));
+        assert_eq!(table.labels().name(id), None);
         assert_eq!(table.fixed_value(id), Some(1.0));
     }
 

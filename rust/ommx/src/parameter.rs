@@ -21,6 +21,9 @@ pub type ParameterLabelStore = ModelingLabelStore<VariableID>;
 /// [`ParameterLabelStore`] sidecar. Parameter values are not stored here; they
 /// are supplied later to [`crate::ParametricInstance::with_parameters`].
 ///
+/// Mathematically, this table is only the parameter key set `P` plus modeling
+/// labels. It does not interpret expressions by itself.
+///
 /// # Table-level invariants
 ///
 /// - Every modeling-label ID is owned by this table; labels for unknown
@@ -33,6 +36,18 @@ pub type ParameterLabelStore = ModelingLabelStore<VariableID>;
 /// disjoint from decision-variable IDs, that function bodies reference IDs from
 /// the union of both tables, and that structural decision-variable positions
 /// such as indicator / one-hot / SOS1 members never use parameter IDs.
+///
+/// # Table-local operations
+///
+/// The table supports construction from IDs and labels, read access, fresh
+/// insertion of a parameter ID with its label, label updates for existing IDs,
+/// and consuming the ID/label pair at serialization or conversion boundaries.
+/// Duplicate insertion is rejected rather than interpreted as replacement.
+///
+/// Parameter-value substitution is not a table operation. It is the
+/// [`crate::ParametricInstance::with_parameters`] root operation because it
+/// rewrites every expression-bearing component into a concrete
+/// [`crate::Instance`].
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct ParameterTable {
     ids: BTreeSet<VariableID>,
@@ -107,18 +122,13 @@ impl ParameterTable {
         Ok(())
     }
 
-    /// Insert one parameter ID and its modeling label.
-    ///
-    /// Returns `false` and leaves the existing label unchanged if the ID is
-    /// already present. Use [`Self::set_label`] to update an existing
-    /// parameter's label.
-    pub fn insert(&mut self, id: VariableID, label: ParameterLabel) -> bool {
-        if self.ids.insert(id) {
-            self.labels.insert(id, label);
-            true
-        } else {
-            false
+    /// Insert one fresh parameter ID and its modeling label.
+    pub fn insert(&mut self, id: VariableID, label: ParameterLabel) -> crate::Result<()> {
+        if !self.ids.insert(id) {
+            crate::bail!({ ?id }, "Duplicate parameter ID: {id:?}");
         }
+        self.labels.insert(id, label);
+        Ok(())
     }
 
     pub fn contains_key(&self, id: &VariableID) -> bool {
@@ -231,25 +241,30 @@ mod tests {
     }
 
     #[test]
-    fn duplicate_insert_does_not_replace_label() {
+    fn duplicate_insert_is_rejected_without_replacing_label() {
         let id = VariableID::from(100);
         let mut table = ParameterTable::default();
 
-        assert!(table.insert(
-            id,
-            ParameterLabel {
-                name: Some("p".to_string()),
-                ..Default::default()
-            }
-        ));
-        assert!(!table.insert(
-            id,
-            ParameterLabel {
-                name: Some("q".to_string()),
-                ..Default::default()
-            }
-        ));
+        table
+            .insert(
+                id,
+                ParameterLabel {
+                    name: Some("p".to_string()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let err = table
+            .insert(
+                id,
+                ParameterLabel {
+                    name: Some("q".to_string()),
+                    ..Default::default()
+                },
+            )
+            .unwrap_err();
 
+        assert!(err.to_string().contains("Duplicate parameter ID"));
         assert_eq!(table.labels().name(id), Some("p"));
     }
 
