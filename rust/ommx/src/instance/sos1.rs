@@ -163,16 +163,17 @@ impl Instance {
         for (x_id, plan) in &plans {
             let y_id = match plan {
                 IndicatorPlan::Reuse => *x_id,
-                IndicatorPlan::Fresh { .. } => {
-                    let y_id = self.new_binary();
-                    let labels = self.variable_labels_mut();
-                    labels.set_name(y_id, "ommx.sos1_indicator");
-                    labels.set_subscripts(
-                        y_id,
-                        vec![id.into_inner() as i64, x_id.into_inner() as i64],
-                    );
-                    y_id
-                }
+                IndicatorPlan::Fresh { .. } => self.new_decision_variable_with_label(
+                    Kind::Binary,
+                    Bound::of_binary(),
+                    crate::ModelingLabel {
+                        name: Some("ommx.sos1_indicator".to_string()),
+                        subscripts: vec![id.into_inner() as i64, x_id.into_inner() as i64],
+                        ..Default::default()
+                    },
+                    None,
+                    crate::ATol::default(),
+                )?,
             };
             indicators.insert(*x_id, y_id);
         }

@@ -15,11 +15,11 @@ pub use arbitrary::*;
 use derive_more::{Deref, From};
 use fnv::FnvHashSet;
 pub use stage::{
-    Created, CreatedData, Evaluated, EvaluatedData, RemovedReason, SampledData, Stage,
+    Created, CreatedData, Evaluated, EvaluatedData, RemovedReason, Sampled as SampledStage,
+    SampledData, Stage,
 };
-// Note: stage::Sampled is NOT re-exported here to avoid name collision
-// with crate::Sampled<T> (the sampled values type). Use constraint::stage::Sampled
-// or the SampledConstraint type alias instead.
+// The sampled lifecycle marker is re-exported as `SampledStage` to avoid a
+// name collision with `crate::Sampled<T>` (the sampled-values container).
 
 /// Constraint equality.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -234,7 +234,7 @@ pub(crate) fn evaluated_constraint_to_v1(
 // ===== Sampled stage =====
 
 /// Type alias for a sampled constraint.
-pub type SampledConstraint = Constraint<stage::Sampled>;
+pub type SampledConstraint = Constraint<SampledStage>;
 
 impl SampledConstraint {
     /// Check feasibility for a specific sample.

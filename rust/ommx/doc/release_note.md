@@ -33,9 +33,13 @@ The 3.0.0 line is a major revision of the Rust SDK:
   reads and `*_df` for bulk analysis.
 - Decision variables, parameters, and named functions now follow the same table ownership rule:
   [`DecisionVariable`](crate::DecisionVariable) is row data containing
-  only `kind` and `bound`; the [`VariableID`](crate::VariableID) and
-  fixed values live on the enclosing `Instance` /
-  `ParametricInstance` / `Solution` / `SampleSet` tables.
+  only `kind` and `bound`; the [`VariableID`](crate::VariableID),
+  modeling labels, and fixed values live on
+  lifecycle-stage-parameterized [`DecisionVariableTable`](crate::DecisionVariableTable)
+  for `Instance` / `ParametricInstance`, while
+  [`EvaluatedDecisionVariableTable`](crate::EvaluatedDecisionVariableTable)
+  and [`SampledDecisionVariableTable`](crate::SampledDecisionVariableTable)
+  are aliases for the evaluated and sampled stages on `Solution` / `SampleSet`.
   [`ParametricInstance`](crate::ParametricInstance) stores parameter IDs
   and labels in [`ParameterTable`](crate::ParameterTable), while concrete
   parameter values remain inputs to
@@ -164,9 +168,13 @@ every constraint-kind collection (the same store rides through
 [`EvaluatedCollection<T>`](crate::EvaluatedCollection) and
 [`SampledCollection<T>`](crate::SampledCollection) so context is
 available at every stage),
-[`VariableLabelStore`](crate::VariableLabelStore) as a sibling
-field on `Instance` / `ParametricInstance` / `Solution` / `SampleSet`
-(no separate `DecisionVariableCollection` was introduced), and
+[`DecisionVariableTable`](crate::DecisionVariableTable), which owns
+decision-variable definition rows, fixed values, and the
+[`VariableLabelStore`](crate::VariableLabelStore) together on
+`Instance` / `ParametricInstance`,
+[`EvaluatedDecisionVariableTable`](crate::EvaluatedDecisionVariableTable) and
+[`SampledDecisionVariableTable`](crate::SampledDecisionVariableTable), which
+own decision-variable result rows and labels on `Solution` / `SampleSet`, and
 [`NamedFunctionLabelStore`](crate::NamedFunctionLabelStore) inside
 [`NamedFunctionTable`](crate::NamedFunctionTable), which owns named-function
 rows and labels together.
@@ -200,14 +208,19 @@ See [`PYTHON_SDK_MIGRATION_GUIDE.md`](https://github.com/Jij-Inc/ommx/blob/main/
 The migration guide's [Modeling labels and constraint context](crate::doc::migration_guide#modeling-labels-and-constraint-context)
 section has the per-host accessor list and the store API reference.
 
-## Decision-variable table ownership ([#958](https://github.com/Jij-Inc/ommx/issues/958))
+## Decision-variable table ownership ([#969](https://github.com/Jij-Inc/ommx/pull/969))
 
-The Rust SDK now treats `Instance::decision_variables` as the
-decision-variable table: the map key owns the `VariableID`, the row owns only
-`kind` and `bound`, `variable_labels` owns modeling labels, and
-`fixed_decision_variable_values` owns fixed values. The same key-owned ID model
-is used by `Solution` and `SampleSet` for evaluated and sampled decision
-variables.
+The Rust SDK now has explicit decision-variable table owners. The map key owns
+the [`VariableID`](crate::VariableID), the row owns only intrinsic data, and the
+table owns modeling labels. `Instance` and `ParametricInstance` use
+[`DecisionVariableTable`](crate::DecisionVariableTable), which also owns fixed
+values; `Solution` uses
+[`EvaluatedDecisionVariableTable`](crate::EvaluatedDecisionVariableTable), and
+`SampleSet` uses
+[`SampledDecisionVariableTable`](crate::SampledDecisionVariableTable).
+These are the same table owner parameterized by the shared lifecycle stages used
+by constraints, so row IDs and modeling labels are validated by one
+implementation while fixed values remain a created-stage column.
 
 This removes the remaining duplicate ID source from the Rust-side row structs.
 Construct `DecisionVariable` rows with `DecisionVariable::new(kind, bound, atol)`
@@ -218,6 +231,19 @@ caller-provided `ATol`. `EvaluatedDecisionVariable::new`
 and `SampledDecisionVariable::new` still take the ID as a separate argument so
 non-finite value errors can report the table key, but the resulting row data
 does not store that ID.
+For direct created-stage table construction, use
+`DecisionVariableTable::with_fixed_values(entries, labels, fixed_values, atol)`.
+An empty `fixed_values` map represents the same table schema with no fixed
+rows; there is no separate empty-sidecar constructor.
+
+The deprecated `Solution::new` constructor was removed. It was a safe API that
+skipped host-level validation by wrapping `SolutionBuilder::build_unchecked`.
+Use `Solution::builder().build()` for validated construction, or call the
+unsafe `build_unchecked` path only when the enclosing code has already
+guaranteed the `Solution` invariants.
+
+This is part of the normalization work tracked in
+[#958](https://github.com/Jij-Inc/ommx/issues/958).
 
 ## Named-function table ownership ([#964](https://github.com/Jij-Inc/ommx/pull/964))
 

@@ -2,10 +2,11 @@ mod parse;
 mod serialize;
 
 use crate::{
-    constraint_type::EvaluatedCollection, decision_variable::VariableLabelStore,
-    indicator_constraint::IndicatorConstraint, Constraint, ConstraintID, EvaluatedConstraint,
-    EvaluatedDecisionVariable, EvaluatedNamedFunction, NamedFunctionID, NamedFunctionTable, Sense,
-    VariableID,
+    constraint_type::EvaluatedCollection,
+    decision_variable::{EvaluatedDecisionVariableTable, VariableLabelStore},
+    indicator_constraint::IndicatorConstraint,
+    Constraint, ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable,
+    EvaluatedNamedFunction, NamedFunctionID, NamedFunctionTable, Sense, VariableID,
 };
 use getset::Getters;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -102,8 +103,11 @@ pub enum SolutionError {
 ///
 /// Invariants
 /// -----------
-/// - [`Self::decision_variables`] is keyed by the table-owned
-///   [`VariableID`]; evaluated decision-variable rows do not carry IDs.
+/// - [`Self::decision_variables`] owns a
+///   [`EvaluatedDecisionVariableTable`]; table keys own
+///   [`VariableID`] and evaluated decision-variable rows do not carry IDs.
+/// - The decision-variable table rejects modeling labels for unknown variable
+///   IDs.
 /// - The keys of the evaluated constraint collections are the table-owned
 ///   constraint IDs for each constraint family.
 /// - [`Self::evaluated_named_functions`] is keyed by the table-owned
@@ -130,11 +134,8 @@ pub struct Solution {
     evaluated_sos1_constraints: EvaluatedCollection<crate::Sos1Constraint>,
     /// Evaluated named-function rows plus their modeling labels.
     evaluated_named_functions: NamedFunctionTable<EvaluatedNamedFunction>,
-    #[getset(get = "pub")]
-    decision_variables: BTreeMap<VariableID, EvaluatedDecisionVariable>,
-    /// Per-variable modeling labels (sibling of [`Self::decision_variables`]).
-    #[getset(get = "pub")]
-    variable_labels: VariableLabelStore,
+    /// Evaluated decision-variable rows plus their modeling labels.
+    decision_variables: EvaluatedDecisionVariableTable,
     /// Optimality status - not guaranteed by Solution itself
     pub optimality: crate::v1::Optimality,
     /// Relaxation status - not guaranteed by Solution itself
@@ -148,7 +149,7 @@ pub struct Solution {
 }
 
 fn validate_evaluated_named_function_used_ids(
-    decision_variables: &BTreeMap<VariableID, EvaluatedDecisionVariable>,
+    decision_variables: &EvaluatedDecisionVariableTable,
     evaluated_named_functions: &NamedFunctionTable<EvaluatedNamedFunction>,
 ) -> Result<(), SolutionError> {
     for (named_function_id, named_function) in evaluated_named_functions.iter() {
@@ -165,35 +166,6 @@ fn validate_evaluated_named_function_used_ids(
 }
 
 impl Solution {
-    /// Create a new Solution without validation.
-    ///
-    /// # Deprecated
-    /// This constructor does not validate invariants.
-    /// Use [`SolutionBuilder::build`] for validated construction,
-    /// or [`SolutionBuilder::build_unchecked`] if invariants are guaranteed by construction.
-    #[deprecated(
-        since = "2.5.0",
-        note = "Use Solution::builder().build() for validated construction, or Solution::builder().build_unchecked() for unchecked construction"
-    )]
-    pub fn new(
-        objective: f64,
-        evaluated_constraints: BTreeMap<ConstraintID, EvaluatedConstraint>,
-        decision_variables: BTreeMap<VariableID, EvaluatedDecisionVariable>,
-        sense: Sense,
-    ) -> Self {
-        // SAFETY: This is a deprecated method that doesn't validate invariants.
-        // Callers are responsible for ensuring data integrity.
-        unsafe {
-            Solution::builder()
-                .objective(objective)
-                .evaluated_constraints(evaluated_constraints)
-                .decision_variables(decision_variables)
-                .sense(sense)
-                .build_unchecked()
-                .expect("All required fields are provided")
-        }
-    }
-
     /// Access evaluated named-function rows plus their modeling labels.
     pub fn evaluated_named_function_table(&self) -> &NamedFunctionTable<EvaluatedNamedFunction> {
         &self.evaluated_named_functions
@@ -207,6 +179,21 @@ impl Solution {
     /// Access the per-named-function modeling-label store.
     pub fn named_function_labels(&self) -> &crate::named_function::NamedFunctionLabelStore {
         self.evaluated_named_functions.labels()
+    }
+
+    /// Access evaluated decision-variable rows plus their modeling labels.
+    pub fn decision_variable_table(&self) -> &EvaluatedDecisionVariableTable {
+        &self.decision_variables
+    }
+
+    /// Access evaluated decision-variable rows keyed by table-owned IDs.
+    pub fn decision_variables(&self) -> &BTreeMap<VariableID, EvaluatedDecisionVariable> {
+        self.decision_variables.entries()
+    }
+
+    /// Access the per-variable modeling-label store.
+    pub fn variable_labels(&self) -> &VariableLabelStore {
+        self.decision_variables.labels()
     }
 
     /// Get decision variable IDs used in this solution
@@ -327,7 +314,7 @@ impl Solution {
     pub fn decision_variable_names(&self) -> BTreeSet<String> {
         self.decision_variables
             .keys()
-            .filter_map(|id| self.variable_labels.name(*id).map(|s| s.to_owned()))
+            .filter_map(|id| self.variable_labels().name(*id).map(|s| s.to_owned()))
             .collect()
     }
 
@@ -352,7 +339,7 @@ impl Solution {
         let variables_with_name: Vec<(VariableID, &EvaluatedDecisionVariable)> = self
             .decision_variables
             .iter()
-            .filter(|(id, _)| self.variable_labels.name(**id) == Some(name))
+            .filter(|(id, _)| self.variable_labels().name(**id) == Some(name))
             .map(|(id, v)| (*id, v))
             .collect();
         if variables_with_name.is_empty() {
@@ -363,7 +350,7 @@ impl Solution {
 
         let mut result = BTreeMap::new();
         for (id, dv) in &variables_with_name {
-            let key = self.variable_labels.subscripts(*id).to_vec();
+            let key = self.variable_labels().subscripts(*id).to_vec();
             if result.contains_key(&key) {
                 return Err(SolutionError::DuplicateSubscript { subscripts: key });
             }
@@ -391,12 +378,12 @@ impl Solution {
         let mut result: BTreeMap<String, BTreeMap<Vec<i64>, f64>> = BTreeMap::new();
 
         for (id, dv) in self.decision_variables.iter() {
-            let name = match self.variable_labels.name(*id) {
+            let name = match self.variable_labels().name(*id) {
                 Some(n) => n.to_owned(),
                 None => continue, // Skip variables without names
             };
 
-            let subscripts = self.variable_labels.subscripts(*id).to_vec();
+            let subscripts = self.variable_labels().subscripts(*id).to_vec();
             let value = *dv.value();
 
             let vars_map = result.entry(name).or_default();
@@ -765,12 +752,8 @@ impl SolutionBuilder {
             .sense
             .ok_or(SolutionError::MissingRequiredField { field: "sense" })?;
 
-        let decision_variable_ids = decision_variables.keys().copied().collect::<BTreeSet<_>>();
-        crate::modeling_label::validate_modeling_label_ids(
-            &self.variable_labels,
-            &decision_variable_ids,
-            "decision variable",
-        )?;
+        let decision_variables =
+            EvaluatedDecisionVariableTable::new(decision_variables, self.variable_labels)?;
         let evaluated_named_functions =
             NamedFunctionTable::new(self.evaluated_named_functions, self.named_function_labels)?;
         evaluated_constraints.validate_context_ids()?;
@@ -840,7 +823,6 @@ impl SolutionBuilder {
             evaluated_sos1_constraints: self.evaluated_sos1_constraints,
             evaluated_named_functions,
             decision_variables,
-            variable_labels: self.variable_labels.clone(),
             optimality: self.optimality,
             relaxation: self.relaxation,
             sense: Some(sense),
@@ -849,14 +831,14 @@ impl SolutionBuilder {
         })
     }
 
-    /// Builds the `Solution` without invariant validation.
+    /// Builds the `Solution` without host-level revalidation.
     ///
     /// # Safety
-    /// This method does not validate that the Solution invariants hold.
-    /// The caller must ensure:
+    /// This method still constructs table owners through their checked
+    /// constructors, so table-level invariants such as label IDs referring to
+    /// existing table rows are enforced. It does not revalidate host-level
+    /// cross references. The caller must ensure:
     /// - `decision_variables` is keyed by the intended [`VariableID`] for each row
-    /// - Evaluated constraint collection keys and sidecars are internally consistent
-    /// - Evaluated named-function table keys and labels are internally consistent
     /// - All `used_decision_variable_ids` in constraints and evaluated named
     ///   functions exist in `decision_variables`
     ///
@@ -865,7 +847,8 @@ impl SolutionBuilder {
     /// such as when creating a Solution from `Instance::evaluate`.
     ///
     /// # Errors
-    /// Returns an error only if required fields are not set.
+    /// Returns an error if required fields are not set or table-level sidecar
+    /// invariants fail.
     pub unsafe fn build_unchecked(self) -> crate::Result<Solution> {
         let objective = self
             .objective
@@ -880,9 +863,13 @@ impl SolutionBuilder {
                 .ok_or(SolutionError::MissingRequiredField {
                     field: "decision_variables",
                 })?;
+        let decision_variables =
+            EvaluatedDecisionVariableTable::new(decision_variables, self.variable_labels)?;
         let sense = self
             .sense
             .ok_or(SolutionError::MissingRequiredField { field: "sense" })?;
+        let evaluated_named_functions =
+            NamedFunctionTable::new(self.evaluated_named_functions, self.named_function_labels)?;
 
         Ok(Solution {
             objective,
@@ -890,12 +877,8 @@ impl SolutionBuilder {
             evaluated_indicator_constraints: self.evaluated_indicator_constraints,
             evaluated_one_hot_constraints: self.evaluated_one_hot_constraints,
             evaluated_sos1_constraints: self.evaluated_sos1_constraints,
-            evaluated_named_functions: NamedFunctionTable::from_parts_unchecked(
-                self.evaluated_named_functions,
-                self.named_function_labels,
-            ),
+            evaluated_named_functions,
             decision_variables,
-            variable_labels: self.variable_labels.clone(),
             optimality: self.optimality,
             relaxation: self.relaxation,
             sense: Some(sense),
@@ -1279,6 +1262,31 @@ mod tests {
     }
 
     #[test]
+    fn unchecked_builder_rejects_orphan_variable_label_id() {
+        let mut variable_labels = VariableLabelStore::default();
+        variable_labels.set_name(VariableID::from(99), "orphan");
+
+        // SAFETY: This test intentionally exercises the unchecked host-level
+        // constructor boundary. Table-level label ownership is still checked.
+        let err = unsafe {
+            Solution::builder()
+                .objective(0.0)
+                .evaluated_constraints(BTreeMap::new())
+                .decision_variables(BTreeMap::new())
+                .variable_labels(variable_labels)
+                .sense(Sense::Minimize)
+                .build_unchecked()
+                .unwrap_err()
+        };
+
+        assert!(
+            err.to_string().contains("unknown decision variable ID")
+                && err.to_string().contains("VariableID(99)"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
     fn builder_rejects_orphan_named_function_label_id() {
         let mut named_function_labels = crate::named_function::NamedFunctionLabelStore::default();
         named_function_labels.set_name(NamedFunctionID::from(99), "orphan");
@@ -1291,6 +1299,31 @@ mod tests {
             .sense(Sense::Minimize)
             .build()
             .unwrap_err();
+
+        assert!(
+            err.to_string().contains("unknown named function ID")
+                && err.to_string().contains("NamedFunctionID(99)"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn unchecked_builder_rejects_orphan_named_function_label_id() {
+        let mut named_function_labels = crate::named_function::NamedFunctionLabelStore::default();
+        named_function_labels.set_name(NamedFunctionID::from(99), "orphan");
+
+        // SAFETY: This test intentionally exercises the unchecked host-level
+        // constructor boundary. Table-level label ownership is still checked.
+        let err = unsafe {
+            Solution::builder()
+                .objective(0.0)
+                .evaluated_constraints(BTreeMap::new())
+                .decision_variables(BTreeMap::new())
+                .named_function_labels(named_function_labels)
+                .sense(Sense::Minimize)
+                .build_unchecked()
+                .unwrap_err()
+        };
 
         assert!(
             err.to_string().contains("unknown named function ID")

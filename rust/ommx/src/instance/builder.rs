@@ -79,7 +79,7 @@ impl InstanceBuilder {
         self
     }
 
-    /// Sets root-owned fixed decision-variable values.
+    /// Sets table-owned fixed decision-variable values.
     pub fn fixed_decision_variable_values(
         mut self,
         fixed_decision_variable_values: BTreeMap<VariableID, f64>,
@@ -243,24 +243,15 @@ impl InstanceBuilder {
             .constraints
             .ok_or_else(|| crate::error!("Required field is missing: constraints"))?;
 
-        // Collect all variable IDs for validation
-        let variable_ids: VariableIDSet = decision_variables.keys().cloned().collect();
-        crate::modeling_label::validate_modeling_label_ids(
-            &self.variable_labels,
-            &variable_ids,
-            "decision variable",
+        let decision_variables = DecisionVariableTable::with_fixed_values(
+            decision_variables,
+            self.variable_labels,
+            self.fixed_decision_variable_values,
+            crate::ATol::default(),
         )?;
 
-        let fixed_decision_variable_values = self.fixed_decision_variable_values;
-        for (id, value) in &fixed_decision_variable_values {
-            let Some(dv) = decision_variables.get(id) else {
-                crate::bail!(
-                    { ?id },
-                    "Fixed decision-variable value references unknown decision variable ID {id:?}",
-                );
-            };
-            dv.check_value_consistency(*id, *value, crate::ATol::default())?;
-        }
+        // Collect all variable IDs for host-level validation.
+        let variable_ids: VariableIDSet = decision_variables.keys().cloned().collect();
 
         // Validate that all variable IDs in objective and constraints are defined
         for id in objective.required_ids() {
@@ -412,7 +403,7 @@ impl InstanceBuilder {
 
         // Construction invariant: raw used, fixed, and dependent sets must be pairwise disjoint.
         // - used: IDs appearing in objective or constraints
-        // - fixed: IDs in the root-owned fixed_decision_variable_values table
+        // - fixed: IDs in the decision-variable table's fixed-value column
         // - dependent: keys of decision_variable_dependency
         let mut used: VariableIDSet = objective.required_ids().into_iter().collect();
         for constraint in constraints.values() {
@@ -427,7 +418,7 @@ impl InstanceBuilder {
         for sos1 in self.sos1_constraints.values() {
             used.extend(sos1.required_ids());
         }
-        let fixed: VariableIDSet = fixed_decision_variable_values.keys().copied().collect();
+        let fixed: VariableIDSet = decision_variables.fixed_values().keys().copied().collect();
         let dependent: VariableIDSet = self.decision_variable_dependency.keys().collect();
 
         // Check used ∩ dependent = ∅
@@ -458,8 +449,6 @@ impl InstanceBuilder {
             sense,
             objective,
             decision_variables,
-            variable_labels: self.variable_labels,
-            fixed_decision_variable_values,
             constraint_collection: ConstraintCollection::with_context(
                 constraints,
                 self.removed_constraints,

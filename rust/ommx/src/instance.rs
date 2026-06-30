@@ -34,7 +34,7 @@ pub use stats::*;
 use crate::{
     constraint::{ConstraintContextStore, RemovedReason},
     constraint_type::ConstraintCollection,
-    decision_variable::VariableLabelStore,
+    decision_variable::{DecisionVariableTable, VariableLabelStore},
     indicator_constraint::IndicatorConstraint,
     named_function::NamedFunctionID,
     one_hot_constraint::OneHotConstraint,
@@ -45,20 +45,6 @@ use crate::{
     VariableIDSet,
 };
 use std::collections::{BTreeMap, HashMap};
-
-fn ensure_modeling_label_target<ID: std::fmt::Debug>(
-    contains: bool,
-    owner_name: &str,
-    id: ID,
-) -> crate::Result<()> {
-    if !contains {
-        crate::bail!(
-            { ?id },
-            "Modeling label references unknown {owner_name} ID {id:?}",
-        );
-    }
-    Ok(())
-}
 
 /// A constraint type capability flag for non-standard constraint types.
 ///
@@ -115,7 +101,12 @@ pub enum Sense {
 ///
 /// Invariants
 /// -----------
-/// - [`Self::decision_variables`] contains all decision variables used in the problem.
+/// - [`Self::decision_variables`] owns the
+///   [`DecisionVariableTable`]: row IDs, decision-variable modeling
+///   labels, and fixed values share one table owner.
+/// - The decision-variable table rejects labels or fixed values for unknown
+///   variable IDs, and fixed values must satisfy the corresponding row's
+///   kind/bound.
 /// - The keys of [`Self::constraints`] and [`Self::removed_constraints`] are disjoint sets.
 /// - The keys of [`Self::decision_variable_dependency`] must be in [`Self::decision_variables`],
 ///   but must NOT be used in the objective function or constraints.
@@ -133,13 +124,13 @@ pub enum Sense {
 ///   Variable IDs referenced by named functions must be registered in [`Self::decision_variables`],
 ///   but are NOT included in the "used" set calculation.
 /// - Modeling-label and constraint-context sidecars are owned by their
-///   corresponding top-level collection; every label/context ID must refer to an
-///   existing decision variable, named function, or active/removed constraint
-///   in that collection.
-/// - Fixed decision-variable values are owned by [`Self`], not by individual
-///   [`DecisionVariable`] values. Fixed-value IDs must refer to existing
-///   decision variables and must be disjoint from solver-used and dependent
-///   variables.
+///   corresponding top-level table or collection; every label/context ID must
+///   refer to an existing decision variable, named function, or active/removed
+///   constraint in that owner.
+/// - Fixed decision-variable values are owned by
+///   [`DecisionVariableTable`], not by individual [`DecisionVariable`]
+///   values. The root [`Instance`] owns the host-level invariant that fixed
+///   IDs are disjoint from solver-used and dependent variables.
 ///
 /// ## Special-constraint invariants
 ///
@@ -184,20 +175,8 @@ pub struct Instance {
     sense: Sense,
     #[getset(get = "pub")]
     objective: Function,
-    #[getset(get = "pub")]
-    decision_variables: BTreeMap<VariableID, DecisionVariable>,
-
-    /// Per-variable modeling labels (`name`, `subscripts`, `parameters`,
-    /// `description`). Sibling field of [`Self::decision_variables`]; together
-    /// they form the canonical decision-variable storage.
-    variable_labels: VariableLabelStore,
-
-    /// Fixed decision-variable values keyed by variable ID.
-    ///
-    /// This is root-owned instance state. It is not intrinsic
-    /// decision-variable definition data, so it is kept outside
-    /// [`DecisionVariable`].
-    fixed_decision_variable_values: BTreeMap<VariableID, f64>,
+    /// Created decision-variable rows, modeling labels, and fixed values.
+    decision_variables: DecisionVariableTable,
 
     /// Regular constraints collection (active + removed).
     constraint_collection: ConstraintCollection<Constraint>,
@@ -228,18 +207,19 @@ pub struct Instance {
 }
 
 impl Instance {
-    /// Access the per-variable modeling-label store.
-    pub fn variable_labels(&self) -> &VariableLabelStore {
-        &self.variable_labels
+    /// Access the decision-variable definition table.
+    pub fn decision_variable_table(&self) -> &DecisionVariableTable {
+        &self.decision_variables
     }
 
-    /// Mutable access to the per-variable modeling-label store, limited to the
-    /// `instance` module tree.
-    ///
-    /// Public callers should use [`Self::set_variable_label`], which checks
-    /// that the label ID belongs to this instance.
-    fn variable_labels_mut(&mut self) -> &mut VariableLabelStore {
-        &mut self.variable_labels
+    /// Access decision-variable rows keyed by table-owned IDs.
+    pub fn decision_variables(&self) -> &BTreeMap<VariableID, DecisionVariable> {
+        self.decision_variables.entries()
+    }
+
+    /// Access the per-variable modeling-label store.
+    pub fn variable_labels(&self) -> &VariableLabelStore {
+        self.decision_variables.labels()
     }
 
     /// Replace the modeling label for a decision variable owned by this instance.
@@ -248,23 +228,17 @@ impl Instance {
         id: VariableID,
         label: ModelingLabel,
     ) -> crate::Result<()> {
-        ensure_modeling_label_target(
-            self.decision_variables.contains_key(&id),
-            "decision variable",
-            id,
-        )?;
-        self.variable_labels.insert(id, label);
-        Ok(())
+        self.decision_variables.set_label(id, label)
     }
 
-    /// Access root-owned fixed decision-variable values.
+    /// Access table-owned fixed decision-variable values.
     pub fn fixed_decision_variable_values(&self) -> &BTreeMap<VariableID, f64> {
-        &self.fixed_decision_variable_values
+        self.decision_variables.fixed_values()
     }
 
     /// Return the fixed value for one decision variable, if it is fixed.
     pub fn fixed_decision_variable_value(&self, id: VariableID) -> Option<f64> {
-        self.fixed_decision_variable_values.get(&id).copied()
+        self.decision_variables.fixed_value(id)
     }
 
     /// Access named-function rows plus their modeling labels.
@@ -516,7 +490,12 @@ impl Instance {
 ///
 /// Invariants
 /// -----------
-/// - [`Self::decision_variables`] owns the decision-variable table.
+/// - [`Self::decision_variables`] owns the
+///   [`DecisionVariableTable`]: row IDs, decision-variable modeling
+///   labels, and fixed values share one table owner.
+/// - The decision-variable table rejects labels or fixed values for unknown
+///   variable IDs, and fixed values must satisfy the corresponding row's
+///   kind/bound.
 /// - [`Self::parameters`] owns the parameter ID universe and parameter
 ///   modeling labels through [`ParameterTable`]. Parameter IDs intentionally
 ///   use [`VariableID`] rather than a separate `ParameterID`, because
@@ -550,10 +529,14 @@ impl Instance {
 ///   IDs appearing only in named functions are NOT included in the "used" set
 ///   calculation.
 /// - Modeling-label and constraint-context sidecars are owned by their
-///   corresponding top-level collection; every label/context ID must refer to an
-///   existing decision variable, parameter, named function, or active/removed
-///   constraint in that collection. Parameter labels are owned by
+///   corresponding top-level table or collection; every label/context ID must
+///   refer to an existing decision variable, parameter, named function, or
+///   active/removed constraint in that owner. Parameter labels are owned by
 ///   [`ParameterTable`]; parameter IDs are not valid variable-label IDs.
+/// - Fixed decision-variable values are owned by
+///   [`DecisionVariableTable`]. The root [`ParametricInstance`] owns
+///   the host-level invariant that fixed IDs are disjoint from solver-used and
+///   dependent variables, and from parameter IDs via the shared namespace rule.
 ///
 /// ## Special-constraint invariants
 ///
@@ -600,19 +583,10 @@ pub struct ParametricInstance {
     sense: Sense,
     #[getset(get = "pub")]
     objective: Function,
-    #[getset(get = "pub")]
-    decision_variables: BTreeMap<VariableID, DecisionVariable>,
+    /// Created decision-variable rows, modeling labels, and fixed values.
+    decision_variables: DecisionVariableTable,
     #[getset(get = "pub")]
     parameters: ParameterTable,
-
-    /// Per-variable modeling labels (sibling of [`Self::decision_variables`]).
-    variable_labels: VariableLabelStore,
-
-    /// Fixed decision-variable values keyed by variable ID.
-    ///
-    /// This is root-owned parametric-instance state, not intrinsic
-    /// decision-variable definition data.
-    fixed_decision_variable_values: BTreeMap<VariableID, f64>,
 
     /// Regular constraints collection (active + removed).
     constraint_collection: ConstraintCollection<Constraint>,
@@ -642,9 +616,19 @@ pub struct ParametricInstance {
 }
 
 impl ParametricInstance {
+    /// Access the decision-variable definition table.
+    pub fn decision_variable_table(&self) -> &DecisionVariableTable {
+        &self.decision_variables
+    }
+
+    /// Access decision-variable rows keyed by table-owned IDs.
+    pub fn decision_variables(&self) -> &BTreeMap<VariableID, DecisionVariable> {
+        self.decision_variables.entries()
+    }
+
     /// Access the per-variable modeling-label store.
     pub fn variable_labels(&self) -> &VariableLabelStore {
-        &self.variable_labels
+        self.decision_variables.labels()
     }
 
     /// Replace the modeling label for a decision variable owned by this
@@ -654,23 +638,17 @@ impl ParametricInstance {
         id: VariableID,
         label: ModelingLabel,
     ) -> crate::Result<()> {
-        ensure_modeling_label_target(
-            self.decision_variables.contains_key(&id),
-            "decision variable",
-            id,
-        )?;
-        self.variable_labels.insert(id, label);
-        Ok(())
+        self.decision_variables.set_label(id, label)
     }
 
-    /// Access root-owned fixed decision-variable values.
+    /// Access table-owned fixed decision-variable values.
     pub fn fixed_decision_variable_values(&self) -> &BTreeMap<VariableID, f64> {
-        &self.fixed_decision_variable_values
+        self.decision_variables.fixed_values()
     }
 
     /// Return the fixed value for one decision variable, if it is fixed.
     pub fn fixed_decision_variable_value(&self, id: VariableID) -> Option<f64> {
-        self.fixed_decision_variable_values.get(&id).copied()
+        self.decision_variables.fixed_value(id)
     }
 
     /// Access named-function rows plus their modeling labels.
