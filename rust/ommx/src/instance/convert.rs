@@ -1,5 +1,4 @@
 use super::*;
-use crate::constraint_type::ConstraintCollection;
 use std::ops::Neg;
 
 impl Instance {
@@ -109,26 +108,24 @@ impl ParametricInstance {
         // substitution applied — otherwise the resulting `Instance` would
         // carry dangling parameter IDs in `removed_constraints`, violating
         // its own invariants.
-        let (mut constraints, mut removed_constraints, constraint_context) =
-            self.constraint_collection.into_parts();
-        for (_, constraint) in constraints.iter_mut() {
-            constraint.stage.function.partial_evaluate(&state, atol)?;
-        }
-        for (_, (constraint, _reason)) in removed_constraints.iter_mut() {
-            constraint.stage.function.partial_evaluate(&state, atol)?;
-        }
+        let mut constraint_collection = self.constraint_collection;
+        constraint_collection.rewrite_all_preserving_lifecycle(
+            |_, mut constraint, _| -> crate::Result<crate::Constraint> {
+                constraint.stage.function.partial_evaluate(&state, atol)?;
+                Ok(constraint)
+            },
+        )?;
 
         // Indicator constraint function bodies may also reference parameter
         // IDs (the structural indicator variable does not, by construction).
         // Apply the same substitution to active and removed maps.
-        let (mut indicator_active, mut indicator_removed, indicator_context) =
-            self.indicator_constraint_collection.into_parts();
-        for (_, ic) in indicator_active.iter_mut() {
-            ic.stage.function.partial_evaluate(&state, atol)?;
-        }
-        for (_, (ic, _reason)) in indicator_removed.iter_mut() {
-            ic.stage.function.partial_evaluate(&state, atol)?;
-        }
+        let mut indicator_constraint_collection = self.indicator_constraint_collection;
+        indicator_constraint_collection.rewrite_all_preserving_lifecycle(
+            |_, mut ic, _| -> crate::Result<crate::IndicatorConstraint> {
+                ic.stage.function.partial_evaluate(&state, atol)?;
+                Ok(ic)
+            },
+        )?;
 
         let mut named_functions = self.named_functions;
         named_functions.partial_evaluate(&state, atol)?;
@@ -144,16 +141,8 @@ impl ParametricInstance {
             sense: self.sense,
             objective,
             decision_variables: self.decision_variables,
-            constraint_collection: ConstraintCollection::with_context(
-                constraints,
-                removed_constraints,
-                constraint_context,
-            )?,
-            indicator_constraint_collection: ConstraintCollection::with_context(
-                indicator_active,
-                indicator_removed,
-                indicator_context,
-            )?,
+            constraint_collection,
+            indicator_constraint_collection,
             // OneHot / SOS1 constraints are purely structural — their
             // variable sets are always real decision variables (the
             // parametric builder rejects parameter IDs there), so there is

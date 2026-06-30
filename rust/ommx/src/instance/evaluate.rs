@@ -334,8 +334,7 @@ impl Evaluate for Instance {
             decision_variables.insert(*id, evaluated_dv);
         }
 
-        let (evaluated_named_functions, evaluated_named_function_labels) =
-            self.named_functions.evaluate(&state, atol)?.into_parts();
+        let evaluated_named_functions = self.named_functions.evaluate(&state, atol)?;
 
         let sense = self.sense();
 
@@ -347,10 +346,9 @@ impl Evaluate for Instance {
                 .evaluated_indicator_constraints_collection(evaluated_indicator_constraints)
                 .evaluated_one_hot_constraints_collection(evaluated_one_hot_constraints)
                 .evaluated_sos1_constraints_collection(evaluated_sos1_constraints)
-                .evaluated_named_functions(evaluated_named_functions)
+                .evaluated_named_function_table(evaluated_named_functions)
                 .decision_variables(decision_variables)
                 .variable_labels(self.variable_labels().clone())
-                .named_function_labels(evaluated_named_function_labels)
                 .sense(sense)
                 .build_unchecked()?
         };
@@ -404,10 +402,7 @@ impl Evaluate for Instance {
             decision_variables.insert(*id, sampled_dv);
         }
 
-        let (named_functions, named_function_labels) = self
-            .named_functions
-            .evaluate_samples(&samples, atol)?
-            .into_parts();
+        let named_functions = self.named_functions.evaluate_samples(&samples, atol)?;
 
         Ok(crate::SampleSet::builder()
             .decision_variables(decision_variables)
@@ -417,8 +412,7 @@ impl Evaluate for Instance {
             .indicator_constraints_collection(sampled_indicator_constraints)
             .one_hot_constraints_collection(sampled_one_hot_constraints)
             .sos1_constraints_collection(sampled_sos1_constraints)
-            .named_functions(named_functions)
-            .named_function_labels(named_function_labels)
+            .named_function_table(named_functions)
             .sense(self.sense)
             .build()?)
     }

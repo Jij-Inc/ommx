@@ -1,5 +1,7 @@
 use super::*;
-use crate::{constraint_type::ConstraintCollection, linear, Function, ParameterLabel, VariableID};
+use crate::{
+    constraint_type::ActiveConstraintUpdate, linear, Function, ParameterLabel, VariableID,
+};
 use anyhow::Result;
 
 impl Instance {
@@ -71,53 +73,55 @@ impl Instance {
         let id_base = max_id + 1;
         let mut objective = self.objective.clone();
         let mut parameters = ParameterTable::default();
-        let mut removed_constraints = BTreeMap::new();
+        let mut constraint_collection = self.constraint_collection;
+        let mut parameter_offset = 0;
+        constraint_collection.rewrite_active(
+            |constraint_id,
+             constraint,
+             _context|
+             -> crate::Result<ActiveConstraintUpdate<crate::Constraint>> {
+                let parameter_id = VariableID::from(id_base + parameter_offset);
+                parameter_offset += 1;
+                let parameter_label = ParameterLabel {
+                    name: Some("penalty_weight".to_string()),
+                    subscripts: vec![constraint_id.into_inner() as i64],
+                    ..Default::default()
+                };
 
-        let (active_constraints, existing_removed, constraint_context) =
-            self.constraint_collection.into_parts();
-        removed_constraints.extend(existing_removed);
-        for (i, (constraint_id, constraint)) in active_constraints.into_iter().enumerate() {
-            let parameter_id = VariableID::from(id_base + i as u64);
-            let parameter_label = ParameterLabel {
-                name: Some("penalty_weight".to_string()),
-                subscripts: vec![constraint_id.into_inner() as i64],
-                ..Default::default()
-            };
+                let f = constraint.function().clone();
+                // Add penalty term: λ * f(x)^2
+                let mut penalty_term = Function::from(linear!(parameter_id));
+                penalty_term.try_mul_assign_in_place(&f)?;
+                penalty_term.try_mul_assign_in_place(&f)?;
+                objective.try_add_assign_in_place(penalty_term)?;
 
-            let f = constraint.function().clone();
-            // Add penalty term: λ * f(x)^2
-            let mut penalty_term = Function::from(linear!(parameter_id));
-            penalty_term.try_mul_assign_in_place(&f)?;
-            penalty_term.try_mul_assign_in_place(&f)?;
-            objective.try_add_assign_in_place(penalty_term)?;
+                // Create removed constraint
+                let removed_reason = crate::constraint::RemovedReason {
+                    reason: "ommx.Instance.penalty_method".to_string(),
+                    parameters: {
+                        let mut map = fnv::FnvHashMap::default();
+                        map.insert(
+                            "parameter_id".to_string(),
+                            parameter_id.into_inner().to_string(),
+                        );
+                        map
+                    },
+                };
 
-            // Create removed constraint
-            let removed_reason = crate::constraint::RemovedReason {
-                reason: "ommx.Instance.penalty_method".to_string(),
-                parameters: {
-                    let mut map = fnv::FnvHashMap::default();
-                    map.insert(
-                        "parameter_id".to_string(),
-                        parameter_id.into_inner().to_string(),
-                    );
-                    map
-                },
-            };
-
-            parameters.insert(parameter_id, parameter_label)?;
-            removed_constraints.insert(constraint_id, (constraint, removed_reason));
-        }
+                parameters.insert(parameter_id, parameter_label)?;
+                Ok(ActiveConstraintUpdate::Removed {
+                    constraint,
+                    reason: removed_reason,
+                })
+            },
+        )?;
 
         Ok(ParametricInstance {
             sense: self.sense,
             objective,
             decision_variables: self.decision_variables,
             parameters,
-            constraint_collection: ConstraintCollection::with_context(
-                BTreeMap::new(),
-                removed_constraints,
-                constraint_context,
-            )?,
+            constraint_collection,
             indicator_constraint_collection: self.indicator_constraint_collection,
             one_hot_constraint_collection: self.one_hot_constraint_collection,
             sos1_constraint_collection: self.sos1_constraint_collection,
@@ -181,18 +185,12 @@ impl Instance {
 
         // Early return if no active constraints (preserve any existing removed constraints)
         if self.constraints().is_empty() {
-            let (_active, existing_removed, constraint_context) =
-                self.constraint_collection.into_parts();
             return Ok(ParametricInstance {
                 sense: self.sense,
                 objective: self.objective,
                 decision_variables: self.decision_variables,
                 parameters: ParameterTable::default(),
-                constraint_collection: ConstraintCollection::with_context(
-                    BTreeMap::new(),
-                    existing_removed,
-                    constraint_context,
-                )?,
+                constraint_collection: self.constraint_collection,
                 indicator_constraint_collection: self.indicator_constraint_collection,
                 one_hot_constraint_collection: self.one_hot_constraint_collection,
                 sos1_constraint_collection: self.sos1_constraint_collection,
@@ -224,26 +222,30 @@ impl Instance {
             ..Default::default()
         };
 
-        let mut removed_constraints = BTreeMap::new();
         let mut quad_sum = Function::zero();
-        let (active_constraints, existing_removed, constraint_context) =
-            self.constraint_collection.into_parts();
-        removed_constraints.extend(existing_removed);
+        let mut constraint_collection = self.constraint_collection;
+        constraint_collection.rewrite_active(
+            |_constraint_id,
+             constraint,
+             _context|
+             -> crate::Result<ActiveConstraintUpdate<crate::Constraint>> {
+                let f = constraint.function().clone();
+                let mut squared = f.clone();
+                squared.try_mul_assign_in_place(&f)?;
+                quad_sum.try_add_assign_in_place(squared)?;
 
-        for (constraint_id, constraint) in active_constraints.into_iter() {
-            let f = constraint.function().clone();
-            let mut squared = f.clone();
-            squared.try_mul_assign_in_place(&f)?;
-            quad_sum.try_add_assign_in_place(squared)?;
+                // Create removed constraint
+                let removed_reason = crate::constraint::RemovedReason {
+                    reason: "ommx.Instance.uniform_penalty_method".to_string(),
+                    parameters: Default::default(),
+                };
 
-            // Create removed constraint
-            let removed_reason = crate::constraint::RemovedReason {
-                reason: "ommx.Instance.uniform_penalty_method".to_string(),
-                parameters: Default::default(),
-            };
-
-            removed_constraints.insert(constraint_id, (constraint, removed_reason));
-        }
+                Ok(ActiveConstraintUpdate::Removed {
+                    constraint,
+                    reason: removed_reason,
+                })
+            },
+        )?;
 
         let mut penalty_term = Function::from(linear!(parameter_id));
         penalty_term.try_mul_assign_in_place(&quad_sum)?;
@@ -257,11 +259,7 @@ impl Instance {
             objective,
             decision_variables: self.decision_variables,
             parameters,
-            constraint_collection: ConstraintCollection::with_context(
-                BTreeMap::new(),
-                removed_constraints,
-                constraint_context,
-            )?,
+            constraint_collection,
             indicator_constraint_collection: self.indicator_constraint_collection,
             one_hot_constraint_collection: self.one_hot_constraint_collection,
             sos1_constraint_collection: self.sos1_constraint_collection,
@@ -276,7 +274,10 @@ impl Instance {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{coeff, constraint::Equality, linear, DecisionVariable, Sense};
+    use crate::{
+        coeff, constraint::Equality, linear, ConstraintContext, DecisionVariable, ModelingLabel,
+        Sense,
+    };
     use std::collections::BTreeMap;
 
     /// Helper function to create a test instance with two decision variables and two constraints
@@ -433,6 +434,30 @@ mod tests {
     #[test]
     fn test_penalty_method_preserves_existing_removed_constraints() {
         let mut instance = create_test_instance_with_constraints();
+        instance
+            .set_constraint_context(
+                ConstraintID::from(1),
+                ConstraintContext {
+                    label: ModelingLabel {
+                        name: Some("already_removed".to_string()),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        instance
+            .set_constraint_context(
+                ConstraintID::from(2),
+                ConstraintContext {
+                    label: ModelingLabel {
+                        name: Some("moved_by_penalty".to_string()),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+            )
+            .unwrap();
 
         // Relax constraint 1 before applying penalty method
         instance
@@ -456,11 +481,59 @@ mod tests {
         assert!(parametric_instance
             .removed_constraints()
             .contains_key(&ConstraintID::from(2)));
+        assert_eq!(
+            parametric_instance
+                .constraint_context()
+                .name(ConstraintID::from(1)),
+            Some("already_removed")
+        );
+        assert_eq!(
+            parametric_instance
+                .constraint_context()
+                .name(ConstraintID::from(2)),
+            Some("moved_by_penalty")
+        );
+        assert_eq!(
+            parametric_instance.removed_constraints()[&ConstraintID::from(1)]
+                .1
+                .reason,
+            "pre_existing"
+        );
+        assert_eq!(
+            parametric_instance.removed_constraints()[&ConstraintID::from(2)]
+                .1
+                .reason,
+            "ommx.Instance.penalty_method"
+        );
     }
 
     #[test]
     fn test_uniform_penalty_method_preserves_existing_removed_constraints() {
         let mut instance = create_test_instance_with_constraints();
+        instance
+            .set_constraint_context(
+                ConstraintID::from(1),
+                ConstraintContext {
+                    label: ModelingLabel {
+                        name: Some("already_removed".to_string()),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        instance
+            .set_constraint_context(
+                ConstraintID::from(2),
+                ConstraintContext {
+                    label: ModelingLabel {
+                        name: Some("moved_by_uniform_penalty".to_string()),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+            )
+            .unwrap();
 
         // Relax constraint 1 before applying uniform penalty method
         instance
@@ -484,5 +557,29 @@ mod tests {
         assert!(parametric_instance
             .removed_constraints()
             .contains_key(&ConstraintID::from(2)));
+        assert_eq!(
+            parametric_instance
+                .constraint_context()
+                .name(ConstraintID::from(1)),
+            Some("already_removed")
+        );
+        assert_eq!(
+            parametric_instance
+                .constraint_context()
+                .name(ConstraintID::from(2)),
+            Some("moved_by_uniform_penalty")
+        );
+        assert_eq!(
+            parametric_instance.removed_constraints()[&ConstraintID::from(1)]
+                .1
+                .reason,
+            "pre_existing"
+        );
+        assert_eq!(
+            parametric_instance.removed_constraints()[&ConstraintID::from(2)]
+                .1
+                .reason,
+            "ommx.Instance.uniform_penalty_method"
+        );
     }
 }

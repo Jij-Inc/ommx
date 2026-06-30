@@ -170,13 +170,24 @@ impl<T> NamedFunctionTable<T> {
         }
     }
 
-    /// Split the table into its row map and label store.
+    /// Consume the table into rows paired with their modeling labels.
     ///
-    /// Use this at serialization or conversion boundaries that must join
-    /// labels back onto row payloads. Iterating by value is intentionally not
-    /// provided, so consuming code cannot silently drop labels.
-    pub fn into_parts(self) -> (BTreeMap<NamedFunctionID, T>, NamedFunctionLabelStore) {
-        (self.entries, self.labels)
+    /// This is crate-internal because splitting table rows from the label store
+    /// is only appropriate at host-owned serialization boundaries. Returning the
+    /// label with each row makes the legacy v1 conversion path preserve sidecars
+    /// by construction.
+    pub(crate) fn into_rows_with_labels(self) -> Vec<(NamedFunctionID, T, NamedFunctionLabel)> {
+        let NamedFunctionTable {
+            entries,
+            mut labels,
+        } = self;
+        entries
+            .into_iter()
+            .map(|(id, row)| {
+                let label = labels.remove(id);
+                (id, row, label)
+            })
+            .collect()
     }
 
     /// Intrinsic row map, keyed by table-owned [`NamedFunctionID`].

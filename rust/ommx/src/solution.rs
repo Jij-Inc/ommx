@@ -593,6 +593,7 @@ pub struct SolutionBuilder {
     evaluated_indicator_constraints: EvaluatedCollection<IndicatorConstraint>,
     evaluated_one_hot_constraints: EvaluatedCollection<crate::OneHotConstraint>,
     evaluated_sos1_constraints: EvaluatedCollection<crate::Sos1Constraint>,
+    evaluated_named_function_table: Option<NamedFunctionTable<EvaluatedNamedFunction>>,
     evaluated_named_functions: BTreeMap<NamedFunctionID, EvaluatedNamedFunction>,
     decision_variables: Option<BTreeMap<VariableID, EvaluatedDecisionVariable>>,
     variable_labels: VariableLabelStore,
@@ -685,7 +686,17 @@ impl SolutionBuilder {
         mut self,
         evaluated_named_functions: BTreeMap<NamedFunctionID, EvaluatedNamedFunction>,
     ) -> Self {
+        self.evaluated_named_function_table = None;
         self.evaluated_named_functions = evaluated_named_functions;
+        self
+    }
+
+    /// Sets the evaluated named-function table without splitting rows from labels.
+    pub(crate) fn evaluated_named_function_table(
+        mut self,
+        evaluated_named_functions: NamedFunctionTable<EvaluatedNamedFunction>,
+    ) -> Self {
+        self.evaluated_named_function_table = Some(evaluated_named_functions);
         self
     }
 
@@ -709,6 +720,7 @@ impl SolutionBuilder {
         mut self,
         named_function_labels: crate::named_function::NamedFunctionLabelStore,
     ) -> Self {
+        self.evaluated_named_function_table = None;
         self.named_function_labels = named_function_labels;
         self
     }
@@ -760,8 +772,12 @@ impl SolutionBuilder {
 
         let decision_variables =
             EvaluatedDecisionVariableTable::new(decision_variables, self.variable_labels)?;
-        let evaluated_named_functions =
-            NamedFunctionTable::new(self.evaluated_named_functions, self.named_function_labels)?;
+        let evaluated_named_functions = match self.evaluated_named_function_table {
+            Some(evaluated_named_functions) => evaluated_named_functions,
+            None => {
+                NamedFunctionTable::new(self.evaluated_named_functions, self.named_function_labels)?
+            }
+        };
         evaluated_constraints.validate_context_ids()?;
         self.evaluated_indicator_constraints
             .validate_context_ids()?;
@@ -874,8 +890,12 @@ impl SolutionBuilder {
         let sense = self
             .sense
             .ok_or(SolutionError::MissingRequiredField { field: "sense" })?;
-        let evaluated_named_functions =
-            NamedFunctionTable::new(self.evaluated_named_functions, self.named_function_labels)?;
+        let evaluated_named_functions = match self.evaluated_named_function_table {
+            Some(evaluated_named_functions) => evaluated_named_functions,
+            None => {
+                NamedFunctionTable::new(self.evaluated_named_functions, self.named_function_labels)?
+            }
+        };
 
         Ok(Solution {
             objective,

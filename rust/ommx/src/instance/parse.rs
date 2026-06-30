@@ -393,22 +393,22 @@ impl TryFrom<v1::Instance> for Instance {
 impl From<Instance> for v1::Instance {
     fn from(value: Instance) -> Self {
         let decision_variables: Vec<v1::DecisionVariable> = (&value.decision_variables).into();
-        let (active, removed, mut constraint_context) = value.constraint_collection.into_parts();
+        let (active, removed) = value.constraint_collection.into_rows_with_context();
         let constraints = active
             .into_iter()
-            .map(|(id, c)| constraint_to_v1(id, c, constraint_context.remove(id)))
+            .map(|(id, c, context)| constraint_to_v1(id, c, context))
             .collect();
-        let (named_functions, mut named_function_labels) = value.named_functions.into_parts();
-        let named_functions = named_functions
+        let named_functions = value
+            .named_functions
+            .into_rows_with_labels()
             .into_iter()
-            .map(|(id, nf)| {
-                let label = named_function_labels.remove(id);
+            .map(|(id, nf, label)| {
                 crate::named_function::parse::named_function_to_v1(id, nf, label)
             })
             .collect();
         let removed_constraints = removed
             .into_iter()
-            .map(|(id, (c, r))| removed_constraint_to_v1(id, c, constraint_context.remove(id), r))
+            .map(|(id, c, context, r)| removed_constraint_to_v1(id, c, context, r))
             .collect();
         let decision_variable_dependency = value
             .decision_variable_dependency
@@ -681,20 +681,19 @@ impl From<ParametricInstance> for v1::ParametricInstance {
             unimplemented!("Serialization of Sos1Constraint to v1 proto is not yet supported");
         }
         let v1_decision_variables: Vec<v1::DecisionVariable> = (&decision_variables).into();
-        let (active, removed, mut constraint_context) = constraint_collection.into_parts();
+        let (active, removed) = constraint_collection.into_rows_with_context();
         let v1_constraints = active
             .into_iter()
-            .map(|(id, c)| constraint_to_v1(id, c, constraint_context.remove(id)))
+            .map(|(id, c, context)| constraint_to_v1(id, c, context))
             .collect();
         let v1_removed_constraints = removed
             .into_iter()
-            .map(|(id, (c, r))| removed_constraint_to_v1(id, c, constraint_context.remove(id), r))
+            .map(|(id, c, context, r)| removed_constraint_to_v1(id, c, context, r))
             .collect();
-        let (named_functions, mut named_function_labels) = named_functions.into_parts();
         let v1_named_functions = named_functions
+            .into_rows_with_labels()
             .into_iter()
-            .map(|(id, nf)| {
-                let label = named_function_labels.remove(id);
+            .map(|(id, nf, label)| {
                 crate::named_function::parse::named_function_to_v1(id, nf, label)
             })
             .collect();

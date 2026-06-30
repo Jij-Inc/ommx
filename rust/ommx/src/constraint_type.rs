@@ -531,6 +531,59 @@ impl<T: ConstraintType> ConstraintCollection<T> {
         Ok(())
     }
 
+    /// Rewrite active and removed payloads without changing lifecycle or context.
+    ///
+    /// This is for host-owned transformations such as parameter materialization:
+    /// the host supplies the semantic row rewrite, while the collection preserves
+    /// active/removed membership, removal reasons, and context sidecars. On
+    /// error, the collection is restored to its original active and removed maps.
+    pub(crate) fn rewrite_all_preserving_lifecycle<E>(
+        &mut self,
+        mut f: impl FnMut(
+            T::ID,
+            T::Created,
+            &ConstraintContextStore<T::ID>,
+        ) -> std::result::Result<T::Created, E>,
+    ) -> std::result::Result<(), E> {
+        let original_active = self.active.clone();
+        let original_removed = self.removed.clone();
+        let active = std::mem::take(&mut self.active);
+        let removed = std::mem::take(&mut self.removed);
+        let mut next_active = BTreeMap::new();
+        let mut next_removed = BTreeMap::new();
+
+        for (id, constraint) in active {
+            match f(id, constraint, &self.context) {
+                Ok(constraint) => {
+                    next_active.insert(id, constraint);
+                }
+                Err(error) => {
+                    self.active = original_active;
+                    self.removed = original_removed;
+                    return Err(error);
+                }
+            }
+        }
+
+        for (id, (constraint, reason)) in removed {
+            match f(id, constraint, &self.context) {
+                Ok(constraint) => {
+                    next_removed.insert(id, (constraint, reason));
+                }
+                Err(error) => {
+                    self.active = original_active;
+                    self.removed = original_removed;
+                    return Err(error);
+                }
+            }
+        }
+
+        self.active = next_active;
+        self.removed = next_removed;
+        debug_assert!(self.validate_context_ids().is_ok());
+        Ok(())
+    }
+
     /// Insert an active constraint along with its context in one step.
     ///
     /// `id` must not already be present in either the active or removed map.
@@ -587,16 +640,39 @@ impl<T: ConstraintType> ConstraintCollection<T> {
         T::ID::from(next)
     }
 
-    /// Consume the collection and return active entries, removed entries, and sidecars.
+    /// Consume the collection into rows paired with their context sidecars.
+    ///
+    /// This is crate-internal because splitting collection internals is only
+    /// appropriate at host-owned serialization boundaries. Returning context with
+    /// each row makes legacy v1 conversion preserve labels and provenance by
+    /// construction.
     #[allow(clippy::type_complexity)]
-    pub fn into_parts(
+    pub(crate) fn into_rows_with_context(
         self,
     ) -> (
-        BTreeMap<T::ID, T::Created>,
-        BTreeMap<T::ID, (T::Created, RemovedReason)>,
-        ConstraintContextStore<T::ID>,
+        Vec<(T::ID, T::Created, ConstraintContext)>,
+        Vec<(T::ID, T::Created, ConstraintContext, RemovedReason)>,
     ) {
-        (self.active, self.removed, self.context)
+        let ConstraintCollection {
+            active,
+            removed,
+            mut context,
+        } = self;
+        let active = active
+            .into_iter()
+            .map(|(id, constraint)| {
+                let context = context.remove(id);
+                (id, constraint, context)
+            })
+            .collect();
+        let removed = removed
+            .into_iter()
+            .map(|(id, (constraint, reason))| {
+                let context = context.remove(id);
+                (id, constraint, context, reason)
+            })
+            .collect();
+        (active, removed)
     }
 
     /// Move an active constraint to the removed set with a reason.
@@ -824,18 +900,6 @@ impl<T: ConstraintType> EvaluatedCollection<T> {
         validate_context_reference_ids(&self.context, &owned_ids)
     }
 
-    /// Consume and return constraints, removed reasons, and sidecars.
-    #[allow(clippy::type_complexity)]
-    pub fn into_parts(
-        self,
-    ) -> (
-        BTreeMap<T::ID, T::Evaluated>,
-        BTreeMap<T::ID, RemovedReason>,
-        ConstraintContextStore<T::ID>,
-    ) {
-        (self.constraints, self.removed_reasons, self.context)
-    }
-
     /// Check if a constraint was removed.
     pub fn is_removed(&self, id: &T::ID) -> bool {
         self.removed_reasons.contains_key(id)
@@ -986,18 +1050,6 @@ impl<T: ConstraintType> SampledCollection<T> {
     pub fn validate_context_ids(&self) -> crate::Result<()> {
         let owned_ids = self.constraints.keys().copied().collect::<BTreeSet<_>>();
         validate_context_reference_ids(&self.context, &owned_ids)
-    }
-
-    /// Consume and return constraints, removed reasons, and sidecars.
-    #[allow(clippy::type_complexity)]
-    pub fn into_parts(
-        self,
-    ) -> (
-        BTreeMap<T::ID, T::Sampled>,
-        BTreeMap<T::ID, RemovedReason>,
-        ConstraintContextStore<T::ID>,
-    ) {
-        (self.constraints, self.removed_reasons, self.context)
     }
 
     /// Check if a constraint was removed.
