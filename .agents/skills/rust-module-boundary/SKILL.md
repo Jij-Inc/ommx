@@ -17,13 +17,30 @@ When designing access scope, do not start from the field, method, or visibility
 keyword that would make the current call site compile. First return to the
 underlying mathematical or domain operation system.
 
+Always keep this order explicit:
+
+1. Mathematical/domain operation.
+   - State which operation is being performed on the root domain object.
+   - Describe the action independently of the current Rust fields or helper
+     methods.
+2. Representation and invariants.
+   - State which data structures represent the operation's state.
+   - State which invariants each structure owns, and which invariants require
+     the root object because they cross table or collection boundaries.
+3. API shape and visibility.
+   - Derive the callable API and its visibility from the operation and
+     invariant analysis.
+   - Expose only the table-local or collection-local effects required by the
+     root operation.
+
 For each operation, state:
 
-- which operation is being performed on the root domain object;
 - which data the operation must read;
 - which data the operation must change;
 - which smaller storage components are only implementation targets of that
-  root operation.
+  root operation;
+- which API preserves the invariants without granting broader mutation
+  authority.
 
 Derive access scope from that analysis. Grant mutation authority only to the
 object that owns the mathematical/domain operation. Lower-level tables or
