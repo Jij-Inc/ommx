@@ -4,7 +4,7 @@ use crate::{
     constraint_type::ConstraintCollection,
     random::{arbitrary_samples, SamplesParameters},
     v1::State,
-    Bounds, ConstraintIDParameters, Evaluate, KindParameters, NamedFunctionIDParameters,
+    ATol, Bounds, ConstraintIDParameters, Evaluate, KindParameters, NamedFunctionIDParameters,
     PolynomialParameters, Sampled,
 };
 use fnv::FnvHashSet;
@@ -238,10 +238,13 @@ impl Arbitrary for Instance {
                                         named_functions,
                                     ),
                                     sense,
-                                    decision_variables:
-                                        crate::DecisionVariableTable::from_entries(
-                                            decision_variables,
-                                        ),
+                                    decision_variables: crate::DecisionVariableTable::with_fixed_values(
+                                        decision_variables,
+                                        Default::default(),
+                                        Default::default(),
+                                        ATol::default(),
+                                    )
+                                    .expect("empty fixed-value column is valid"),
                                     parameters: Default::default(),
                                     indicator_constraint_collection: Default::default(),
                                     one_hot_constraint_collection: Default::default(),

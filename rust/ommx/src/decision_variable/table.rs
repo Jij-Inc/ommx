@@ -26,9 +26,6 @@ pub trait DecisionVariableTableStage: sealed::Sealed {
     /// Additional context needed to validate stage-specific table invariants.
     type TableValidationContext: Copy;
 
-    /// Construct the table-valid empty sidecar set for this stage.
-    fn empty_columns() -> Self::Columns;
-
     /// Validate stage-specific table invariants.
     fn validate_stage_table_invariants(
         entries: &BTreeMap<VariableID, Self::Row>,
@@ -60,12 +57,6 @@ impl DecisionVariableTableStage for Created {
     type Columns = CreatedDecisionVariableColumns;
     type TableValidationContext = ATol;
 
-    fn empty_columns() -> Self::Columns {
-        CreatedDecisionVariableColumns {
-            fixed_values: BTreeMap::new(),
-        }
-    }
-
     fn validate_stage_table_invariants(
         entries: &BTreeMap<VariableID, Self::Row>,
         columns: &Self::Columns,
@@ -84,10 +75,6 @@ impl DecisionVariableTableStage for Evaluated {
     type Columns = EvaluatedDecisionVariableColumns;
     type TableValidationContext = ();
 
-    fn empty_columns() -> Self::Columns {
-        EvaluatedDecisionVariableColumns {}
-    }
-
     fn validate_stage_table_invariants(
         _entries: &BTreeMap<VariableID, Self::Row>,
         _columns: &Self::Columns,
@@ -101,10 +88,6 @@ impl DecisionVariableTableStage for SampledStage {
     type Row = SampledDecisionVariable;
     type Columns = SampledDecisionVariableColumns;
     type TableValidationContext = ();
-
-    fn empty_columns() -> Self::Columns {
-        SampledDecisionVariableColumns {}
-    }
 
     fn validate_stage_table_invariants(
         _entries: &BTreeMap<VariableID, Self::Row>,
@@ -155,28 +138,6 @@ pub type EvaluatedDecisionVariableTable = DecisionVariableTable<Evaluated>;
 pub type SampledDecisionVariableTable = DecisionVariableTable<SampledStage>;
 
 impl<S: DecisionVariableTableStage> DecisionVariableTable<S> {
-    /// Construct a decision-variable table with no stage-specific columns.
-    pub fn new(
-        entries: BTreeMap<VariableID, S::Row>,
-        labels: VariableLabelStore,
-    ) -> crate::Result<Self> {
-        Self::validate_labels(&entries, &labels)?;
-        Ok(Self {
-            entries,
-            labels,
-            columns: S::empty_columns(),
-        })
-    }
-
-    /// Construct a table with no labels or stage-specific columns.
-    pub fn from_entries(entries: BTreeMap<VariableID, S::Row>) -> Self {
-        Self {
-            entries,
-            labels: VariableLabelStore::default(),
-            columns: S::empty_columns(),
-        }
-    }
-
     fn with_columns(
         entries: BTreeMap<VariableID, S::Row>,
         labels: VariableLabelStore,
@@ -269,12 +230,14 @@ impl<S: DecisionVariableTableStage> DecisionVariableTable<S> {
     }
 }
 
-impl<S: DecisionVariableTableStage> Default for DecisionVariableTable<S> {
+impl Default for DecisionVariableTable<Created> {
     fn default() -> Self {
         Self {
             entries: BTreeMap::default(),
             labels: VariableLabelStore::default(),
-            columns: S::empty_columns(),
+            columns: CreatedDecisionVariableColumns {
+                fixed_values: BTreeMap::new(),
+            },
         }
     }
 }
@@ -418,6 +381,14 @@ impl DecisionVariableTable<Created> {
 }
 
 impl EvaluatedDecisionVariableTable {
+    /// Construct an evaluated decision-variable table.
+    pub fn new(
+        entries: BTreeMap<VariableID, EvaluatedDecisionVariable>,
+        labels: VariableLabelStore,
+    ) -> crate::Result<Self> {
+        Self::with_columns(entries, labels, EvaluatedDecisionVariableColumns {}, ())
+    }
+
     /// Split the table into its row map and label store.
     pub fn into_parts(
         self,
@@ -441,6 +412,14 @@ impl EvaluatedDecisionVariableTable {
 }
 
 impl SampledDecisionVariableTable {
+    /// Construct a sampled decision-variable table.
+    pub fn new(
+        entries: BTreeMap<VariableID, SampledDecisionVariable>,
+        labels: VariableLabelStore,
+    ) -> crate::Result<Self> {
+        Self::with_columns(entries, labels, SampledDecisionVariableColumns {}, ())
+    }
+
     /// Split the table into its row map and label store.
     pub fn into_parts(
         self,
@@ -477,13 +456,20 @@ mod tests {
     use super::*;
     use crate::Bound;
 
+    fn definition_table_without_fixed_values(
+        entries: BTreeMap<VariableID, DecisionVariable>,
+        labels: VariableLabelStore,
+    ) -> crate::Result<DecisionVariableTable> {
+        DecisionVariableTable::with_fixed_values(entries, labels, BTreeMap::new(), ATol::default())
+    }
+
     #[test]
     fn decision_variable_table_rejects_orphan_labels() {
         let id = VariableID::from(1);
         let mut labels = VariableLabelStore::default();
         labels.set_name(id, "x");
 
-        let err = DecisionVariableTable::<Created>::new(
+        let err = definition_table_without_fixed_values(
             BTreeMap::<VariableID, DecisionVariable>::new(),
             labels,
         )
@@ -580,10 +566,11 @@ mod tests {
     #[test]
     fn definition_table_rejects_inconsistent_fixed_overwrite() {
         let id = VariableID::from(1);
-        let mut table = DecisionVariableTable::from_entries(BTreeMap::from([(
-            id,
-            DecisionVariable::continuous(),
-        )]));
+        let mut table = definition_table_without_fixed_values(
+            BTreeMap::from([(id, DecisionVariable::continuous())]),
+            VariableLabelStore::default(),
+        )
+        .unwrap();
         table.ensure_fixed_value(id, 1.0, ATol::default()).unwrap();
 
         let err = table

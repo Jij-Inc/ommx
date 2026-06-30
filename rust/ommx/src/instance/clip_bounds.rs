@@ -24,6 +24,18 @@ mod tests {
     use crate::{Bound, DecisionVariable, DecisionVariableTable, VariableID};
     use maplit::btreemap;
 
+    fn decision_variable_table_without_fixed_values(
+        decision_variables: std::collections::BTreeMap<VariableID, DecisionVariable>,
+    ) -> DecisionVariableTable {
+        DecisionVariableTable::with_fixed_values(
+            decision_variables,
+            Default::default(),
+            Default::default(),
+            ATol::default(),
+        )
+        .unwrap()
+    }
+
     #[test]
     fn test_clip_bounds_normal() {
         // Create instance with 3 variables
@@ -40,7 +52,7 @@ mod tests {
         };
 
         let mut instance = Instance {
-            decision_variables: DecisionVariableTable::from_entries(decision_variables),
+            decision_variables: decision_variable_table_without_fixed_values(decision_variables),
             ..Default::default()
         };
 
@@ -74,7 +86,7 @@ mod tests {
         };
 
         let mut instance = Instance {
-            decision_variables: DecisionVariableTable::from_entries(decision_variables),
+            decision_variables: decision_variable_table_without_fixed_values(decision_variables),
             ..Default::default()
         };
 
@@ -101,7 +113,7 @@ mod tests {
         }
 
         let mut instance = Instance {
-            decision_variables: DecisionVariableTable::from_entries(decision_variables),
+            decision_variables: decision_variable_table_without_fixed_values(decision_variables),
             ..Default::default()
         };
 
@@ -176,7 +188,7 @@ mod tests {
         };
 
         let mut instance = Instance {
-            decision_variables: DecisionVariableTable::from_entries(decision_variables),
+            decision_variables: decision_variable_table_without_fixed_values(decision_variables),
             ..Default::default()
         };
 

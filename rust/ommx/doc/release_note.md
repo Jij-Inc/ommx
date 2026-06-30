@@ -231,10 +231,10 @@ caller-provided `ATol`. `EvaluatedDecisionVariable::new`
 and `SampledDecisionVariable::new` still take the ID as a separate argument so
 non-finite value errors can report the table key, but the resulting row data
 does not store that ID.
-For direct table construction, use `DecisionVariableTable::new(entries, labels)`
-when there are no fixed values and
-`DecisionVariableTable::with_fixed_values(entries, labels, fixed_values, atol)`
-when fixed values must be validated at construction.
+For direct created-stage table construction, use
+`DecisionVariableTable::with_fixed_values(entries, labels, fixed_values, atol)`.
+An empty `fixed_values` map represents the same table schema with no fixed
+rows; there is no separate empty-sidecar constructor.
 
 The deprecated `Solution::new` constructor was removed. It was a safe API that
 skipped host-level validation by wrapping `SolutionBuilder::build_unchecked`.

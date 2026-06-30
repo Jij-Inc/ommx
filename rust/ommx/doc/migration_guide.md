@@ -624,10 +624,10 @@ let evaluated = EvaluatedDecisionVariable::new(id, y, value)?;
 let sampled = SampledDecisionVariable::new(id, y, samples)?;
 ```
 
-When constructing a table directly, use
-`DecisionVariableTable::new(entries, labels)` if no fixed values are present,
-or `DecisionVariableTable::with_fixed_values(entries, labels, fixed_values,
-atol)` when fixed values need to be validated with the table rows.
+When constructing a created-stage table directly, use
+`DecisionVariableTable::with_fixed_values(entries, labels, fixed_values, atol)`.
+If no variables are fixed, pass an empty `fixed_values` map; this is the same
+table schema with an empty fixed-value column, not a separate construction mode.
 
 `Instance::partial_evaluate` writes new fixed values into the created
 decision-variable table.
