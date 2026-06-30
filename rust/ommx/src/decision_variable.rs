@@ -327,6 +327,9 @@ pub enum DecisionVariableError {
         source: Box<DecisionVariableError>,
     },
 
+    #[error("Duplicate decision variable ID={id}")]
+    DuplicateID { id: VariableID },
+
     #[error("Decision variable value for ID={id} must be finite: value={value}")]
     NonFiniteValue { id: VariableID, value: f64 },
 

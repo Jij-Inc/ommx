@@ -587,16 +587,6 @@ impl<T: ConstraintType> ConstraintCollection<T> {
         Ok(())
     }
 
-    /// Move a removed constraint back to the active set.
-    pub fn restore(&mut self, id: T::ID) -> crate::Result<()> {
-        let (constraint, _reason) = self
-            .removed
-            .remove(&id)
-            .ok_or_else(|| crate::error!("Removed constraint with ID {:?} not found", id))?;
-        self.active.insert(id, constraint);
-        Ok(())
-    }
-
     /// Restore a removed row after host-owned normalization.
     ///
     /// The closure receives an owned clone of the removed payload, its removal

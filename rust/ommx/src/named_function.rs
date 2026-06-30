@@ -193,10 +193,19 @@ impl<T> NamedFunctionTable<T> {
         Ok(())
     }
 
-    /// Insert or replace one row and its modeling label.
-    pub fn insert(&mut self, id: NamedFunctionID, row: T, label: NamedFunctionLabel) -> Option<T> {
+    /// Insert one fresh row and its modeling label.
+    pub fn insert(
+        &mut self,
+        id: NamedFunctionID,
+        row: T,
+        label: NamedFunctionLabel,
+    ) -> crate::Result<()> {
+        if self.entries.contains_key(&id) {
+            crate::bail!({ ?id }, "Duplicate named function ID: {id:?}");
+        }
         self.labels.insert(id, label);
-        self.entries.insert(id, row)
+        self.entries.insert(id, row);
+        Ok(())
     }
 
     pub fn contains_key(&self, id: &NamedFunctionID) -> bool {
@@ -328,6 +337,35 @@ mod table_tests {
 
         let table = NamedFunctionTable::new(BTreeMap::from([(id, row.clone())]), labels).unwrap();
 
+        assert_eq!(table.get(&id), Some(&row));
+        assert_eq!(table.labels().name(id), Some("cost"));
+    }
+
+    #[test]
+    fn insert_rejects_duplicate_without_replacing_label() {
+        let id = NamedFunctionID::from(0);
+        let row = NamedFunction {
+            function: Function::Zero,
+        };
+        let mut labels = NamedFunctionLabelStore::default();
+        labels.set_name(id, "cost");
+        let mut table =
+            NamedFunctionTable::new(BTreeMap::from([(id, row.clone())]), labels).unwrap();
+
+        let err = table
+            .insert(
+                id,
+                NamedFunction {
+                    function: Function::Zero,
+                },
+                NamedFunctionLabel {
+                    name: Some("new".to_string()),
+                    ..Default::default()
+                },
+            )
+            .unwrap_err();
+
+        assert!(err.to_string().contains("Duplicate named function ID"));
         assert_eq!(table.get(&id), Some(&row));
         assert_eq!(table.labels().name(id), Some("cost"));
     }

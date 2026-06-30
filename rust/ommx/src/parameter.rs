@@ -107,18 +107,13 @@ impl ParameterTable {
         Ok(())
     }
 
-    /// Insert one parameter ID and its modeling label.
-    ///
-    /// Returns `false` and leaves the existing label unchanged if the ID is
-    /// already present. Use [`Self::set_label`] to update an existing
-    /// parameter's label.
-    pub fn insert(&mut self, id: VariableID, label: ParameterLabel) -> bool {
-        if self.ids.insert(id) {
-            self.labels.insert(id, label);
-            true
-        } else {
-            false
+    /// Insert one fresh parameter ID and its modeling label.
+    pub fn insert(&mut self, id: VariableID, label: ParameterLabel) -> crate::Result<()> {
+        if !self.ids.insert(id) {
+            crate::bail!({ ?id }, "Duplicate parameter ID: {id:?}");
         }
+        self.labels.insert(id, label);
+        Ok(())
     }
 
     pub fn contains_key(&self, id: &VariableID) -> bool {
@@ -231,25 +226,30 @@ mod tests {
     }
 
     #[test]
-    fn duplicate_insert_does_not_replace_label() {
+    fn duplicate_insert_is_rejected_without_replacing_label() {
         let id = VariableID::from(100);
         let mut table = ParameterTable::default();
 
-        assert!(table.insert(
-            id,
-            ParameterLabel {
-                name: Some("p".to_string()),
-                ..Default::default()
-            }
-        ));
-        assert!(!table.insert(
-            id,
-            ParameterLabel {
-                name: Some("q".to_string()),
-                ..Default::default()
-            }
-        ));
+        table
+            .insert(
+                id,
+                ParameterLabel {
+                    name: Some("p".to_string()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let err = table
+            .insert(
+                id,
+                ParameterLabel {
+                    name: Some("q".to_string()),
+                    ..Default::default()
+                },
+            )
+            .unwrap_err();
 
+        assert!(err.to_string().contains("Duplicate parameter ID"));
         assert_eq!(table.labels().name(id), Some("p"));
     }
 

@@ -88,7 +88,7 @@ impl Instance {
             parameters,
             description,
         };
-        self.named_functions.insert(id, named_function, label);
+        self.named_functions.insert(id, named_function, label)?;
         Ok(id)
     }
 }

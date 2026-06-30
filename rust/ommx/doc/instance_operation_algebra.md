@@ -237,7 +237,8 @@ operation knows the source-to-target map.
 The relevant owner for these operations is `Instance`. `ConstraintCollection`
 is only a component that realizes family-local row effects:
 
-- insert or replace a row already validated by the `Instance`;
+- insert a fresh row or apply a lifecycle-preserving replacement already
+  validated by the `Instance`;
 - move a row between active and removed lifecycle components;
 - keep active/removed IDs disjoint inside one family;
 - keep context keys aligned with rows in that family.
