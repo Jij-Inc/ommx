@@ -160,16 +160,10 @@ impl Parse for crate::v1::SampleSet {
 /// `from_bytes` preserves variable labels and regular-constraint context.
 impl From<SampleSet> for crate::v1::SampleSet {
     fn from(sample_set: SampleSet) -> Self {
-        // Drain labels/context and overlay onto per-element messages.
-        let variable_labels = sample_set.variable_labels().clone();
-        let decision_variables: Vec<crate::v1::SampledDecisionVariable> = sample_set
-            .decision_variables()
-            .iter()
-            .map(|(id, dv)| {
-                let label = variable_labels.collect_for(*id);
-                crate::decision_variable::sampled_decision_variable_to_v1(*id, dv.clone(), label)
-            })
-            .collect();
+        // Ask the decision-variable table owner to join rows with its sidecars.
+        let decision_variables = sample_set
+            .decision_variables
+            .to_v1_sampled_decision_variables();
         let objectives = Some(sample_set.objectives().clone().into());
         let constraint_context = sample_set.constraints().context().clone();
         let removed_reasons = sample_set.constraints().removed_reasons().clone();

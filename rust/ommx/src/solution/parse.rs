@@ -257,15 +257,7 @@ impl From<Solution> for crate::v1::Solution {
                 )
             })
             .collect();
-        let variable_labels_store = solution.variable_labels().clone();
-        let decision_variables: Vec<crate::v1::DecisionVariable> = solution
-            .decision_variables()
-            .iter()
-            .map(|(id, dv)| {
-                let label = variable_labels_store.collect_for(*id);
-                crate::decision_variable::evaluated_decision_variable_to_v1(*id, dv.clone(), label)
-            })
-            .collect();
+        let decision_variables = solution.decision_variables.to_v1_decision_variables();
         let feasible = solution.feasible();
         let feasible_relaxed = Some(solution.feasible_relaxed());
         let optimality = solution.optimality.into();

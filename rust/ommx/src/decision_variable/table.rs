@@ -162,10 +162,6 @@ impl<S: DecisionVariableTableStage> DecisionVariableTable<S> {
         })
     }
 
-    fn into_common_parts(self) -> (BTreeMap<VariableID, S::Row>, VariableLabelStore, S::Columns) {
-        (self.entries, self.labels, self.columns)
-    }
-
     /// Intrinsic row map, keyed by table-owned [`VariableID`].
     pub fn entries(&self) -> &BTreeMap<VariableID, S::Row> {
         &self.entries
@@ -265,16 +261,24 @@ impl DecisionVariableTable<Created> {
         )
     }
 
-    /// Split the table into row map, label store, and fixed-value column.
-    pub fn into_parts(
-        self,
-    ) -> (
-        BTreeMap<VariableID, DecisionVariable>,
-        VariableLabelStore,
-        BTreeMap<VariableID, f64>,
-    ) {
-        let (entries, labels, columns) = self.into_common_parts();
-        (entries, labels, columns.fixed_values)
+    /// Build legacy v1 decision-variable messages.
+    ///
+    /// Crate-internal serialization uses this owner method so callers do not
+    /// split rows, labels, and fixed values into separate sources of truth.
+    pub(crate) fn to_v1_decision_variables(&self) -> Vec<crate::v1::DecisionVariable> {
+        self.entries
+            .iter()
+            .map(|(id, dv)| {
+                let label = self.labels.collect_for(*id);
+                let fixed_value = self.columns.fixed_values.get(id).copied();
+                crate::decision_variable::parse::decision_variable_to_v1_with_fixed_value(
+                    *id,
+                    dv.clone(),
+                    label,
+                    fixed_value,
+                )
+            })
+            .collect()
     }
 
     /// Fixed decision-variable values keyed by table-owned [`VariableID`].
@@ -379,15 +383,18 @@ impl EvaluatedDecisionVariableTable {
         Self::with_columns(entries, labels, EvaluatedDecisionVariableColumns {}, ())
     }
 
-    /// Split the table into its row map and label store.
-    pub fn into_parts(
-        self,
-    ) -> (
-        BTreeMap<VariableID, EvaluatedDecisionVariable>,
-        VariableLabelStore,
-    ) {
-        let (entries, labels, _) = self.into_common_parts();
-        (entries, labels)
+    /// Build legacy v1 decision-variable messages.
+    ///
+    /// Crate-internal serialization uses this owner method so callers do not
+    /// split rows and labels into separate sources of truth.
+    pub(crate) fn to_v1_decision_variables(&self) -> Vec<crate::v1::DecisionVariable> {
+        self.entries
+            .iter()
+            .map(|(id, dv)| {
+                let label = self.labels.collect_for(*id);
+                crate::decision_variable::evaluated_decision_variable_to_v1(*id, dv.clone(), label)
+            })
+            .collect()
     }
 
     /// Insert or replace one evaluated row and its modeling label.
@@ -410,15 +417,20 @@ impl SampledDecisionVariableTable {
         Self::with_columns(entries, labels, SampledDecisionVariableColumns {}, ())
     }
 
-    /// Split the table into its row map and label store.
-    pub fn into_parts(
-        self,
-    ) -> (
-        BTreeMap<VariableID, SampledDecisionVariable>,
-        VariableLabelStore,
-    ) {
-        let (entries, labels, _) = self.into_common_parts();
-        (entries, labels)
+    /// Build legacy v1 sampled decision-variable messages.
+    ///
+    /// Crate-internal serialization uses this owner method so callers do not
+    /// split rows and labels into separate sources of truth.
+    pub(crate) fn to_v1_sampled_decision_variables(
+        &self,
+    ) -> Vec<crate::v1::SampledDecisionVariable> {
+        self.entries
+            .iter()
+            .map(|(id, dv)| {
+                let label = self.labels.collect_for(*id);
+                crate::decision_variable::sampled_decision_variable_to_v1(*id, dv.clone(), label)
+            })
+            .collect()
     }
 
     /// Insert or replace one sampled row and its modeling label.

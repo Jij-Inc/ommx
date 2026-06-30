@@ -392,21 +392,8 @@ impl TryFrom<v1::Instance> for Instance {
 
 impl From<Instance> for v1::Instance {
     fn from(value: Instance) -> Self {
-        // Drain per-element data and join with labels/context from the SoA stores.
-        let (decision_variables, mut variable_labels, fixed_decision_variable_values) =
-            value.decision_variables.into_parts();
-        let decision_variables = decision_variables
-            .into_iter()
-            .map(|(id, dv)| {
-                let label = variable_labels.remove(id);
-                crate::decision_variable::parse::decision_variable_to_v1_with_fixed_value(
-                    id,
-                    dv,
-                    label,
-                    fixed_decision_variable_values.get(&id).copied(),
-                )
-            })
-            .collect();
+        // Ask the decision-variable table owner to join rows with its sidecars.
+        let decision_variables = value.decision_variables.to_v1_decision_variables();
         let (active, removed, mut constraint_context) = value.constraint_collection.into_parts();
         let constraints = active
             .into_iter()
@@ -694,23 +681,8 @@ impl From<ParametricInstance> for v1::ParametricInstance {
         {
             unimplemented!("Serialization of Sos1Constraint to v1 proto is not yet supported");
         }
-        // Drain per-element data and join with labels/context from the SoA stores.
-        // (Same shape as `From<Instance> for v1::Instance` above; a stale
-        // version of this conversion silently dropped both sidecar stores.)
-        let (decision_variables, mut variable_labels, fixed_decision_variable_values) =
-            decision_variables.into_parts();
-        let v1_decision_variables = decision_variables
-            .into_iter()
-            .map(|(id, dv)| {
-                let label = variable_labels.remove(id);
-                crate::decision_variable::parse::decision_variable_to_v1_with_fixed_value(
-                    id,
-                    dv,
-                    label,
-                    fixed_decision_variable_values.get(&id).copied(),
-                )
-            })
-            .collect();
+        // Ask the decision-variable table owner to join rows with its sidecars.
+        let v1_decision_variables = decision_variables.to_v1_decision_variables();
         let (active, removed, mut constraint_context) = constraint_collection.into_parts();
         let v1_constraints = active
             .into_iter()
