@@ -100,7 +100,7 @@ impl Instance {
                     constraint.equality = Equality::EqualToZero;
                     Ok(constraint)
                 })?;
-        debug_assert!(updated, "constraint presence was verified above");
+        assert!(updated, "constraint presence was verified above");
 
         Ok(())
     }
@@ -201,7 +201,7 @@ impl Instance {
                     *constraint.function_mut() = new_function;
                     Ok(constraint)
                 })?;
-        debug_assert!(updated, "constraint presence was verified above");
+        assert!(updated, "constraint presence was verified above");
 
         Ok(Some(b))
     }

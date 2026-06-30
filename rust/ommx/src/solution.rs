@@ -468,8 +468,12 @@ impl Solution {
     ) -> Result<(), SolutionError> {
         if let Some(mut constraint) = self.evaluated_constraints.get(&constraint_id).cloned() {
             constraint.stage.dual_variable = value;
-            self.evaluated_constraints
-                .replace_evaluated(constraint_id, constraint);
+            assert!(
+                self.evaluated_constraints
+                    .replace_evaluated(constraint_id, constraint)
+                    .is_some(),
+                "constraint presence was verified above"
+            );
             Ok(())
         } else {
             Err(SolutionError::UnknownConstraintID { id: constraint_id })
