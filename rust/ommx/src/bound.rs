@@ -68,7 +68,14 @@ pub type Bounds = BTreeMap<VariableID, Bound>;
 /// // Default is `(-inf, inf)`
 /// assert_eq!(Bound::default(), Bound::try_from([f64::NEG_INFINITY, f64::INFINITY]).unwrap());
 /// ```
-#[derive(Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Clone,
+    Copy,
+    PartialEq,
+    serde::Serialize,
+    serde::Deserialize,
+    crate::logical_memory::LogicalMemoryProfile,
+)]
 pub struct Bound {
     lower: f64,
     upper: f64,
@@ -526,8 +533,6 @@ impl Arbitrary for Bound {
             .boxed()
     }
 }
-
-mod logical_memory;
 
 #[cfg(test)]
 mod tests {
