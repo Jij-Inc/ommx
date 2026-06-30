@@ -35,11 +35,11 @@ The 3.0.0 line is a major revision of the Rust SDK:
   [`DecisionVariable`](crate::DecisionVariable) is row data containing
   only `kind` and `bound`; the [`VariableID`](crate::VariableID),
   modeling labels, and fixed values live on
-  [`DecisionVariableTable`](crate::DecisionVariableTable)
+  stage-parameterized [`DecisionVariableTable`](crate::DecisionVariableTable)
   for `Instance` / `ParametricInstance`, while
   [`EvaluatedDecisionVariableTable`](crate::EvaluatedDecisionVariableTable)
   and [`SampledDecisionVariableTable`](crate::SampledDecisionVariableTable)
-  own decision-variable result rows on `Solution` / `SampleSet`.
+  are aliases for the evaluated and sampled stages on `Solution` / `SampleSet`.
   [`ParametricInstance`](crate::ParametricInstance) stores parameter IDs
   and labels in [`ParameterTable`](crate::ParameterTable), while concrete
   parameter values remain inputs to
@@ -218,6 +218,9 @@ values; `Solution` uses
 [`EvaluatedDecisionVariableTable`](crate::EvaluatedDecisionVariableTable), and
 `SampleSet` uses
 [`SampledDecisionVariableTable`](crate::SampledDecisionVariableTable).
+Internally these are the same stage-parameterized table owner, so row IDs and
+modeling labels are validated by one implementation while fixed values remain a
+created-stage column.
 
 This removes the remaining duplicate ID source from the Rust-side row structs.
 Construct `DecisionVariable` rows with `DecisionVariable::new(kind, bound, atol)`
@@ -228,6 +231,10 @@ caller-provided `ATol`. `EvaluatedDecisionVariable::new`
 and `SampledDecisionVariable::new` still take the ID as a separate argument so
 non-finite value errors can report the table key, but the resulting row data
 does not store that ID.
+For direct table construction, use `DecisionVariableTable::new(entries, labels)`
+when there are no fixed values and
+`DecisionVariableTable::with_fixed_values(entries, labels, fixed_values, atol)`
+when fixed values must be validated at construction.
 
 The deprecated `Solution::new` constructor was removed. It was a safe API that
 skipped host-level validation by wrapping `SolutionBuilder::build_unchecked`.

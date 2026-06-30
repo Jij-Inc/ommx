@@ -142,7 +142,7 @@ mod tests {
         };
 
         let mut instance = Instance {
-            decision_variables: DecisionVariableTable::new(
+            decision_variables: DecisionVariableTable::with_fixed_values(
                 decision_variables,
                 Default::default(),
                 btreemap! { id => 5.0 },

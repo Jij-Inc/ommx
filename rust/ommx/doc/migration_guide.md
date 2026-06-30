@@ -583,6 +583,11 @@ and fixed values together in
 [`DecisionVariableTable`](crate::DecisionVariableTable). The table validates
 that labels and fixed values target existing
 decision-variable IDs and that fixed values satisfy the row kind/bound.
+`DecisionVariableTable` is stage-parameterized internally:
+[`EvaluatedDecisionVariableTable`](crate::EvaluatedDecisionVariableTable) and
+[`SampledDecisionVariableTable`](crate::SampledDecisionVariableTable) are the
+evaluated and sampled stage aliases, sharing the same row-ID and label-owner
+invariants while omitting the created-stage fixed-value column.
 
 The row still owns the `kind`/`bound` invariant: `DecisionVariable::new` and
 bound mutation normalize `bound` through `kind.consistent_bound(bound, atol)`.
@@ -617,6 +622,11 @@ let all_fixed = instance.fixed_decision_variable_values();
 let evaluated = EvaluatedDecisionVariable::new(id, y, value)?;
 let sampled = SampledDecisionVariable::new(id, y, samples)?;
 ```
+
+When constructing a table directly, use
+`DecisionVariableTable::new(entries, labels)` if no fixed values are present,
+or `DecisionVariableTable::with_fixed_values(entries, labels, fixed_values,
+atol)` when fixed values need to be validated with the table rows.
 
 `Instance::partial_evaluate` writes new fixed values into the created
 decision-variable table.

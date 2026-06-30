@@ -331,7 +331,7 @@ impl Parse for v1::Instance {
             &decision_variable_dependency,
             &fixed_decision_variable_values,
         )?;
-        let decision_variables = DecisionVariableTable::new(
+        let decision_variables = DecisionVariableTable::with_fixed_values(
             decision_variables,
             variable_labels,
             fixed_decision_variable_values,
@@ -609,7 +609,7 @@ impl Parse for v1::ParametricInstance {
             &decision_variable_dependency,
             &fixed_decision_variable_values,
         )?;
-        let decision_variables = DecisionVariableTable::new(
+        let decision_variables = DecisionVariableTable::with_fixed_values(
             decision_variables,
             variable_labels,
             fixed_decision_variable_values,

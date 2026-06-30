@@ -252,7 +252,7 @@ impl ParametricInstanceBuilder {
             .constraints
             .ok_or_else(|| crate::error!("Required field is missing: constraints"))?;
 
-        let decision_variables = DecisionVariableTable::new(
+        let decision_variables = DecisionVariableTable::with_fixed_values(
             decision_variables,
             self.variable_labels,
             self.fixed_decision_variable_values,
