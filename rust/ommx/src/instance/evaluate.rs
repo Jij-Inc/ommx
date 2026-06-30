@@ -30,6 +30,15 @@ fn values_are_consistent(left: f64, right: f64, atol: ATol) -> bool {
     left.is_finite() && right.is_finite() && (left - right).abs() <= *atol
 }
 
+fn fixed_values_state(fixed_values: &BTreeMap<VariableID, f64>) -> v1::State {
+    v1::State::from(
+        fixed_values
+            .iter()
+            .map(|(id, value)| (id.into_inner(), *value))
+            .collect::<std::collections::HashMap<_, _>>(),
+    )
+}
+
 fn evaluate_decision_variable(
     id: VariableID,
     decision_variable: &DecisionVariable,
@@ -247,6 +256,59 @@ impl Instance {
     pub fn populate_state(&self, state: v1::State, atol: ATol) -> Result<v1::State> {
         self.state_population_plan().populate(state, atol)
     }
+
+    fn normalize_constant_dependencies(
+        &mut self,
+        mut assertions: BTreeMap<VariableID, f64>,
+        atol: ATol,
+    ) -> Result<v1::State> {
+        let mut evaluation_state = fixed_values_state(self.fixed_decision_variable_values());
+        let mut remaining_assignments = Vec::new();
+
+        for (id, function) in self.decision_variable_dependency.evaluation_order_iter() {
+            let mut function = function.clone();
+            function.partial_evaluate(&evaluation_state, atol)?;
+
+            if function.required_ids().is_empty() {
+                let value = function.evaluate(&v1::State::default(), atol)?;
+                if !value.is_finite() {
+                    crate::bail!(
+                        { id = ?id, value },
+                        "dependent variable {id:?} evaluated to non-finite value: {value}",
+                    );
+                }
+                if let Some(asserted_value) = assertions.remove(&id) {
+                    if !values_are_consistent(asserted_value, value, atol) {
+                        crate::bail!(
+                            { id = ?id, asserted_value, instance_value = value },
+                            "state value for dependent variable {id:?} is inconsistent with dependency (state={asserted_value}, dependency={value})",
+                        );
+                    }
+                }
+                let dv = self.decision_variables.get(&id).ok_or_else(|| {
+                    crate::error!(
+                        "Variable ID {id:?} in decision_variable_dependency is not in decision_variables"
+                    )
+                })?;
+                dv.check_value_consistency(id, value, atol)?;
+                self.decision_variables
+                    .ensure_fixed_value(id, value, atol)?;
+                evaluation_state.entries.insert(id.into_inner(), value);
+            } else {
+                if let Some(asserted_value) = assertions.remove(&id) {
+                    crate::bail!(
+                        { id = ?id, asserted_value },
+                        "Dependent variable (ID={}) cannot be asserted by partial_evaluate before its dependency is fully evaluated",
+                        id.into_inner(),
+                    );
+                }
+                remaining_assignments.push((id, function));
+            }
+        }
+
+        self.decision_variable_dependency = AcyclicAssignments::new(remaining_assignments)?;
+        Ok(evaluation_state)
+    }
 }
 
 impl Evaluate for Instance {
@@ -371,31 +433,41 @@ impl Evaluate for Instance {
         // Phase 1: Propagate through special constraints (unit propagation).
         let expanded_state = working.propagate_special_constraints(state, atol)?;
 
-        // Phase 2: Store fixed values in the decision-variable table.
+        // Phase 2: Store fixed values in the decision-variable table. Values for
+        // dependent keys are consistency assertions checked during dependency
+        // normalization below; they are not direct writes to fixed values.
+        let mut dependent_assertions = BTreeMap::new();
         for (id, value) in expanded_state.entries.iter() {
             let var_id = VariableID::from(*id);
-            if working.decision_variable_dependency.get(&var_id).is_some() {
+            let Some(dv) = working.decision_variables.get(&var_id) else {
                 return Err(crate::error!(
-                    "Dependent variable (ID={id}) cannot be fixed by partial_evaluate"
+                    "Unknown decision variable (ID={id}) in state."
                 ));
+            };
+            dv.check_value_consistency(var_id, *value, atol)?;
+            if working.decision_variable_dependency.get(&var_id).is_some() {
+                dependent_assertions.insert(var_id, *value);
+            } else {
+                working
+                    .decision_variables
+                    .ensure_fixed_value(var_id, *value, atol)?;
             }
-            working
-                .decision_variables
-                .ensure_fixed_value(var_id, *value, atol)?;
         }
 
-        // Phase 3: Regular partial evaluation with expanded state.
+        let normalized_state =
+            working.normalize_constant_dependencies(dependent_assertions, atol)?;
+
+        // Phase 3: Regular partial evaluation with normalized fixed values.
         // Special constraint collections are already handled by propagation — not called again.
-        working.objective.partial_evaluate(&expanded_state, atol)?;
+        working
+            .objective
+            .partial_evaluate(&normalized_state, atol)?;
         working
             .constraint_collection
-            .partial_evaluate(&expanded_state, atol)?;
+            .partial_evaluate(&normalized_state, atol)?;
         working
             .named_functions
-            .partial_evaluate(&expanded_state, atol)?;
-        working
-            .decision_variable_dependency
-            .partial_evaluate(&expanded_state, atol)?;
+            .partial_evaluate(&normalized_state, atol)?;
 
         // All operations succeeded; commit changes atomically.
         *self = working;
@@ -644,13 +716,12 @@ mod tests {
         assert!(chunks[1].1.contains(&crate::SampleID::from(1)));
     }
 
-    #[test]
-    fn test_partial_evaluate_rejects_dependent_variable_fixing() {
+    fn dependent_instance_y_eq_2x() -> Instance {
         let decision_variables = BTreeMap::from([
             (VariableID::from(1), crate::DecisionVariable::continuous()),
             (VariableID::from(10), crate::DecisionVariable::continuous()),
         ]);
-        let mut instance = Instance::builder()
+        Instance::builder()
             .sense(Sense::Minimize)
             .objective(Function::from(linear!(1)))
             .decision_variables(decision_variables)
@@ -659,18 +730,80 @@ mod tests {
                 10 <- coeff!(2.0) * linear!(1)
             })
             .build()
-            .unwrap();
+            .unwrap()
+    }
+
+    #[test]
+    fn test_partial_evaluate_normalizes_constant_dependency_from_input() {
+        let mut instance = dependent_instance_y_eq_2x();
+
+        let state = v1::State::from(HashMap::from([(1, 2.0)]));
+        instance.partial_evaluate(&state, ATol::default()).unwrap();
+
+        assert_eq!(
+            instance.fixed_decision_variable_values(),
+            &BTreeMap::from([(VariableID::from(1), 2.0), (VariableID::from(10), 4.0)])
+        );
+        assert!(instance.decision_variable_dependency.is_empty());
+        assert_eq!(
+            instance
+                .populate_state(v1::State::default(), ATol::default())
+                .unwrap()
+                .entries,
+            HashMap::from([(1, 2.0), (10, 4.0)])
+        );
+    }
+
+    #[test]
+    fn test_partial_evaluate_accepts_consistent_dependent_assertion() {
+        let mut instance = dependent_instance_y_eq_2x();
 
         let state = v1::State::from(HashMap::from([(1, 2.0), (10, 4.0)]));
+        instance.partial_evaluate(&state, ATol::default()).unwrap();
+
+        assert_eq!(
+            instance.fixed_decision_variable_values(),
+            &BTreeMap::from([(VariableID::from(1), 2.0), (VariableID::from(10), 4.0)])
+        );
+        assert!(instance.decision_variable_dependency.is_empty());
+    }
+
+    #[test]
+    fn test_partial_evaluate_rejects_inconsistent_dependent_assertion_atomically() {
+        let mut instance = dependent_instance_y_eq_2x();
+
+        let state = v1::State::from(HashMap::from([(1, 2.0), (10, 5.0)]));
         let err = instance
             .partial_evaluate(&state, ATol::default())
             .unwrap_err();
 
         assert!(
             err.to_string()
-                .contains("Dependent variable (ID=10) cannot be fixed"),
+                .contains("state value for dependent variable VariableID(10) is inconsistent"),
             "unexpected error: {err}"
         );
+        assert!(instance.fixed_decision_variable_values().is_empty());
+        assert!(instance
+            .decision_variable_dependency
+            .get(&VariableID::from(10))
+            .is_some());
+    }
+
+    #[test]
+    fn test_partial_evaluate_rejects_unverifiable_dependent_assertion_atomically() {
+        let mut instance = dependent_instance_y_eq_2x();
+
+        let state = v1::State::from(HashMap::from([(10, 4.0)]));
+        let err = instance
+            .partial_evaluate(&state, ATol::default())
+            .unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("Dependent variable (ID=10) cannot be asserted"),
+            "unexpected error: {err}"
+        );
+        assert!(instance.fixed_decision_variable_values().is_empty());
         assert_eq!(
             instance.fixed_decision_variable_value(VariableID::from(10)),
             None
@@ -679,6 +812,39 @@ mod tests {
             .decision_variable_dependency
             .get(&VariableID::from(10))
             .is_some());
+    }
+
+    #[test]
+    fn test_partial_evaluate_normalizes_dependency_chain_in_order() {
+        let decision_variables = BTreeMap::from([
+            (VariableID::from(1), crate::DecisionVariable::continuous()),
+            (VariableID::from(10), crate::DecisionVariable::continuous()),
+            (VariableID::from(11), crate::DecisionVariable::continuous()),
+        ]);
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(linear!(1)))
+            .decision_variables(decision_variables)
+            .constraints(BTreeMap::new())
+            .decision_variable_dependency(crate::assign! {
+                10 <- coeff!(2.0) * linear!(1),
+                11 <- linear!(10) + coeff!(1.0)
+            })
+            .build()
+            .unwrap();
+
+        let state = v1::State::from(HashMap::from([(1, 2.0)]));
+        instance.partial_evaluate(&state, ATol::default()).unwrap();
+
+        assert_eq!(
+            instance.fixed_decision_variable_values(),
+            &BTreeMap::from([
+                (VariableID::from(1), 2.0),
+                (VariableID::from(10), 4.0),
+                (VariableID::from(11), 5.0),
+            ])
+        );
+        assert!(instance.decision_variable_dependency.is_empty());
     }
 
     #[test]
