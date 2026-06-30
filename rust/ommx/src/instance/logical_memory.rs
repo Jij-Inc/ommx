@@ -1,13 +1,6 @@
-use crate::instance::{Instance, Sense};
+use crate::instance::Instance;
 use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
 use crate::v1;
-use std::mem::size_of;
-
-impl LogicalMemoryProfile for Sense {
-    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
-        visitor.visit_leaf(path, size_of::<Sense>());
-    }
-}
 
 // Implementations for protobuf types
 
@@ -26,24 +19,6 @@ crate::impl_logical_memory_profile! {
     }
 }
 
-// Leaf impls for special constraint ID types
-macro_rules! impl_id_logical_memory {
-    ($id_type:ty) => {
-        impl LogicalMemoryProfile for $id_type {
-            fn visit_logical_memory<V: LogicalMemoryVisitor>(
-                &self,
-                path: &mut Path,
-                visitor: &mut V,
-            ) {
-                visitor.visit_leaf(path, std::mem::size_of::<$id_type>());
-            }
-        }
-    };
-}
-impl_id_logical_memory!(crate::IndicatorConstraintID);
-impl_id_logical_memory!(crate::OneHotConstraintID);
-impl_id_logical_memory!(crate::Sos1ConstraintID);
-
 // LogicalMemoryProfile for special constraint Created types
 // These are simpler than Constraint since they have no function.
 macro_rules! impl_special_constraint_profile {
@@ -56,21 +31,6 @@ macro_rules! impl_special_constraint_profile {
             ) {
                 // Count the whole constraint as a single leaf for simplicity
                 visitor.visit_leaf(path, std::mem::size_of_val(self));
-            }
-        }
-
-        impl LogicalMemoryProfile for ($constraint_type, crate::constraint::RemovedReason) {
-            fn visit_logical_memory<V: LogicalMemoryVisitor>(
-                &self,
-                path: &mut Path,
-                visitor: &mut V,
-            ) {
-                self.0
-                    .visit_logical_memory(path.with($name).as_mut(), visitor);
-                self.1.visit_logical_memory(
-                    path.with(concat!($name, ".removed_reason")).as_mut(),
-                    visitor,
-                );
             }
         }
     };

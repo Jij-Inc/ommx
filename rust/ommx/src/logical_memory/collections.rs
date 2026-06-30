@@ -32,6 +32,34 @@ where
     }
 }
 
+impl<T, const N: usize> LogicalMemoryProfile for [T; N]
+where
+    T: LogicalMemoryProfile,
+{
+    fn visit_logical_memory<Vis: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut Vis) {
+        for element in self {
+            element.visit_logical_memory(path.with("Array[element]").as_mut(), visitor);
+        }
+    }
+}
+
+impl<T> LogicalMemoryProfile for Box<T>
+where
+    T: LogicalMemoryProfile,
+{
+    fn visit_logical_memory<Vis: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut Vis) {
+        visitor.visit_leaf(&path.with("Box[stack]"), size_of::<Box<T>>());
+        self.as_ref()
+            .visit_logical_memory(path.with("Box[value]").as_mut(), visitor);
+    }
+}
+
+impl<T: ?Sized> LogicalMemoryProfile for std::marker::PhantomData<T> {
+    fn visit_logical_memory<Vis: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut Vis) {
+        visitor.visit_leaf(path, size_of::<std::marker::PhantomData<T>>());
+    }
+}
+
 impl<K, V> LogicalMemoryProfile for std::collections::BTreeMap<K, V>
 where
     K: LogicalMemoryProfile,
@@ -76,6 +104,20 @@ where
     }
 }
 
+impl<T> LogicalMemoryProfile for std::collections::HashSet<T>
+where
+    T: LogicalMemoryProfile,
+{
+    fn visit_logical_memory<Vis: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut Vis) {
+        let set_stack = size_of::<std::collections::HashSet<T>>();
+        visitor.visit_leaf(&path.with("HashSet[stack]"), set_stack);
+
+        for element in self {
+            element.visit_logical_memory(path, visitor);
+        }
+    }
+}
+
 impl<K, V> LogicalMemoryProfile for fnv::FnvHashMap<K, V>
 where
     K: LogicalMemoryProfile,
@@ -98,6 +140,20 @@ where
     }
 }
 
+impl<T> LogicalMemoryProfile for fnv::FnvHashSet<T>
+where
+    T: LogicalMemoryProfile,
+{
+    fn visit_logical_memory<Vis: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut Vis) {
+        let set_stack = size_of::<fnv::FnvHashSet<T>>();
+        visitor.visit_leaf(&path.with("FnvHashSet[stack]"), set_stack);
+
+        for element in self {
+            element.visit_logical_memory(path, visitor);
+        }
+    }
+}
+
 impl<T> LogicalMemoryProfile for Vec<T>
 where
     T: LogicalMemoryProfile,
@@ -108,6 +164,20 @@ where
         visitor.visit_leaf(&path.with("Vec[stack]"), vec_stack);
 
         // Delegate to each element
+        for element in self {
+            element.visit_logical_memory(path, visitor);
+        }
+    }
+}
+
+impl<T> LogicalMemoryProfile for std::collections::VecDeque<T>
+where
+    T: LogicalMemoryProfile,
+{
+    fn visit_logical_memory<Vis: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut Vis) {
+        let deque_stack = size_of::<std::collections::VecDeque<T>>();
+        visitor.visit_leaf(&path.with("VecDeque[stack]"), deque_stack);
+
         for element in self {
             element.visit_logical_memory(path, visitor);
         }
@@ -129,3 +199,101 @@ where
         }
     }
 }
+
+macro_rules! impl_tuple_logical_memory_profile {
+    ($(($index:tt, $name:ident)),+ $(,)?) => {
+        impl<$($name),+> LogicalMemoryProfile for ($($name,)+)
+        where
+            $($name: LogicalMemoryProfile),+
+        {
+            fn visit_logical_memory<Vis: LogicalMemoryVisitor>(
+                &self,
+                path: &mut Path,
+                visitor: &mut Vis,
+            ) {
+                $(
+                    self.$index.visit_logical_memory(
+                        path.with(concat!("Tuple.", stringify!($index))).as_mut(),
+                        visitor,
+                    );
+                )+
+            }
+        }
+    };
+}
+
+impl_tuple_logical_memory_profile!((0, T0));
+impl_tuple_logical_memory_profile!((0, T0), (1, T1));
+impl_tuple_logical_memory_profile!((0, T0), (1, T1), (2, T2));
+impl_tuple_logical_memory_profile!((0, T0), (1, T1), (2, T2), (3, T3));
+impl_tuple_logical_memory_profile!((0, T0), (1, T1), (2, T2), (3, T3), (4, T4));
+impl_tuple_logical_memory_profile!((0, T0), (1, T1), (2, T2), (3, T3), (4, T4), (5, T5));
+impl_tuple_logical_memory_profile!(
+    (0, T0),
+    (1, T1),
+    (2, T2),
+    (3, T3),
+    (4, T4),
+    (5, T5),
+    (6, T6)
+);
+impl_tuple_logical_memory_profile!(
+    (0, T0),
+    (1, T1),
+    (2, T2),
+    (3, T3),
+    (4, T4),
+    (5, T5),
+    (6, T6),
+    (7, T7)
+);
+impl_tuple_logical_memory_profile!(
+    (0, T0),
+    (1, T1),
+    (2, T2),
+    (3, T3),
+    (4, T4),
+    (5, T5),
+    (6, T6),
+    (7, T7),
+    (8, T8)
+);
+impl_tuple_logical_memory_profile!(
+    (0, T0),
+    (1, T1),
+    (2, T2),
+    (3, T3),
+    (4, T4),
+    (5, T5),
+    (6, T6),
+    (7, T7),
+    (8, T8),
+    (9, T9)
+);
+impl_tuple_logical_memory_profile!(
+    (0, T0),
+    (1, T1),
+    (2, T2),
+    (3, T3),
+    (4, T4),
+    (5, T5),
+    (6, T6),
+    (7, T7),
+    (8, T8),
+    (9, T9),
+    (10, T10)
+);
+impl_tuple_logical_memory_profile!(
+    (0, T0),
+    (1, T1),
+    (2, T2),
+    (3, T3),
+    (4, T4),
+    (5, T5),
+    (6, T6),
+    (7, T7),
+    (8, T8),
+    (9, T9),
+    (10, T10),
+    (11, T11)
+);

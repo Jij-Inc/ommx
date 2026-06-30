@@ -23,8 +23,10 @@ use std::collections::{BTreeMap, BTreeSet};
     Deref,
     serde::Serialize,
     serde::Deserialize,
+    crate::logical_memory::LogicalMemoryProfile,
 )]
 #[serde(transparent)]
+#[logical_memory(leaf)]
 pub struct Sos1ConstraintID(u64);
 
 impl std::fmt::Debug for Sos1ConstraintID {

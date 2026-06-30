@@ -1,19 +1,3 @@
-use crate::decision_variable::{Kind, VariableID};
-use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
-use std::mem::size_of;
-
-impl LogicalMemoryProfile for VariableID {
-    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
-        visitor.visit_leaf(path, size_of::<VariableID>());
-    }
-}
-
-impl LogicalMemoryProfile for Kind {
-    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
-        visitor.visit_leaf(path, size_of::<Kind>());
-    }
-}
-
 // DecisionVariable and DecisionVariableLabel use
 // `#[derive(LogicalMemoryProfile)]` on their definition sites.
 

@@ -85,7 +85,19 @@ pub enum AdditionalCapability {
 /// formatting, and comparison are deterministic and sorted by variant order.
 pub type Capabilities = std::collections::BTreeSet<AdditionalCapability>;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Default,
+    crate::logical_memory::LogicalMemoryProfile,
+)]
+#[logical_memory(leaf)]
 pub enum Sense {
     #[default]
     Minimize,

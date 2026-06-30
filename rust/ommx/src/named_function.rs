@@ -8,7 +8,7 @@ use derive_more::{Deref, From};
 use getset::*;
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
+use crate::logical_memory::LogicalMemoryProfile;
 use crate::{Function, SampleID, Sampled, VariableIDSet};
 pub use arbitrary::*;
 pub use label_store::NamedFunctionLabelStore;
@@ -26,8 +26,10 @@ pub use label_store::NamedFunctionLabelStore;
     Deref,
     serde::Serialize,
     serde::Deserialize,
+    LogicalMemoryProfile,
 )]
 #[serde(transparent)]
+#[logical_memory(leaf)]
 pub struct NamedFunctionID(u64);
 
 impl std::fmt::Debug for NamedFunctionID {
@@ -51,12 +53,6 @@ impl NamedFunctionID {
 impl From<NamedFunctionID> for u64 {
     fn from(id: NamedFunctionID) -> Self {
         id.0
-    }
-}
-
-impl LogicalMemoryProfile for NamedFunctionID {
-    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
-        visitor.visit_leaf(path, std::mem::size_of::<NamedFunctionID>());
     }
 }
 

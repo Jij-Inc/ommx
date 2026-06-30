@@ -32,8 +32,10 @@ use std::collections::BTreeSet;
     Deref,
     serde::Serialize,
     serde::Deserialize,
+    LogicalMemoryProfile,
 )]
 #[serde(transparent)]
+#[logical_memory(leaf)]
 pub struct VariableID(u64);
 pub type VariableIDSet = BTreeSet<VariableID>;
 
@@ -62,8 +64,19 @@ impl std::fmt::Display for VariableID {
 }
 
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    serde::Serialize,
+    serde::Deserialize,
+    LogicalMemoryProfile,
 )]
+#[logical_memory(leaf)]
 pub enum Kind {
     Continuous,
     Integer,

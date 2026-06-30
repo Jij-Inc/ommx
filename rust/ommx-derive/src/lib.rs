@@ -21,11 +21,16 @@
 //!
 //! # `#[derive(LogicalMemoryProfile)]`
 //!
-//! Generates a `LogicalMemoryProfile` impl that delegates to each field
-//! of a named-field struct. Each field is emitted under the path frame
-//! `"TypeName.field_name"`. The `ommx` crate uses this derive at every
-//! struct definition that participates in memory profiling, so that
-//! adding or removing a field automatically adjusts the profile.
+//! Generates a `LogicalMemoryProfile` impl. By default this delegates to
+//! each field of a named-field struct, with each field emitted under the
+//! path frame `"TypeName.field_name"`. The `ommx` crate uses this derive
+//! at every struct definition that participates in memory profiling, so
+//! that adding or removing a field automatically adjusts the profile.
+//!
+//! Leaf-like types can instead opt in to `#[logical_memory(leaf)]`, which
+//! emits a single leaf of `std::mem::size_of::<Self>()` at the current path.
+//! This is intended for POD structs, tuple newtypes, and small enums whose
+//! logical memory is their inline representation.
 //!
 //! ## Supported
 //!
@@ -37,13 +42,15 @@
 //! - Generic structs: when a field type depends on a type parameter, the
 //!   generated impl adds a `FieldType: LogicalMemoryProfile` where-clause.
 //!   This keeps composite structs derivable without hand-written impls.
+//! - `#[logical_memory(leaf)]` on structs, tuple structs, unit structs, and
+//!   enums. Leaf mode does not add field bounds because it does not inspect
+//!   fields.
 //!
 //! ## Not supported
 //!
-//! - Tuple structs and unit structs → emit a `compile_error!`. Use a
-//!   hand-written impl only for leaf-like wrappers; otherwise extend this
-//!   derive.
-//! - Enums → emit a `compile_error!`.
+//! - Tuple structs and unit structs without `#[logical_memory(leaf)]` → emit
+//!   a `compile_error!`.
+//! - Enums without `#[logical_memory(leaf)]` → emit a `compile_error!`.
 //! - Field skipping → there is no `#[logical_memory(skip)]` attribute.
 //!   Composite structs should not skip fields; extend this derive if a
 //!   composite profiling use case needs more macro support.
@@ -66,11 +73,12 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::{parse_quote, Data, DeriveInput, Fields, GenericArgument, PathArguments, Type};
 
-/// Derive `LogicalMemoryProfile` for a struct by delegating to each field.
+/// Derive `LogicalMemoryProfile` for a type.
 ///
-/// Only structs with named fields are supported. Each field's profile is
-/// emitted under the path frame `"TypeName.field_name"`.
-#[proc_macro_derive(LogicalMemoryProfile)]
+/// By default, only structs with named fields are supported, and each field's
+/// profile is emitted under the path frame `"TypeName.field_name"`. With
+/// `#[logical_memory(leaf)]`, the type emits one `size_of::<Self>()` leaf.
+#[proc_macro_derive(LogicalMemoryProfile, attributes(logical_memory))]
 pub fn derive_logical_memory_profile(input: TokenStream) -> TokenStream {
     derive_logical_memory_profile_impl(input.into()).into()
 }
@@ -86,6 +94,14 @@ fn derive_logical_memory_profile_impl(input: TokenStream2) -> TokenStream2 {
     };
     let name = &input.ident;
     let name_str = name.to_string();
+
+    let attrs = match parse_logical_memory_attrs(&input.attrs) {
+        Ok(attrs) => attrs,
+        Err(err) => return err.to_compile_error(),
+    };
+    if attrs.leaf {
+        return derive_leaf_impl(&input);
+    }
 
     let fields = match &input.data {
         Data::Struct(data) => match &data.fields {
@@ -143,6 +159,55 @@ fn derive_logical_memory_profile_impl(input: TokenStream2) -> TokenStream2 {
                 visitor: &mut __V,
             ) {
                 #( #field_visits )*
+            }
+        }
+    }
+}
+
+#[derive(Default)]
+struct LogicalMemoryAttrs {
+    leaf: bool,
+}
+
+fn parse_logical_memory_attrs(attrs: &[syn::Attribute]) -> syn::Result<LogicalMemoryAttrs> {
+    let mut parsed = LogicalMemoryAttrs::default();
+
+    for attr in attrs {
+        if !attr.path().is_ident("logical_memory") {
+            continue;
+        }
+
+        attr.parse_nested_meta(|meta| {
+            if meta.path.is_ident("leaf") {
+                if parsed.leaf {
+                    return Err(meta.error("duplicate `leaf` logical_memory attribute"));
+                }
+                parsed.leaf = true;
+                Ok(())
+            } else {
+                Err(meta.error("unsupported logical_memory attribute; expected `leaf`"))
+            }
+        })?;
+    }
+
+    Ok(parsed)
+}
+
+fn derive_leaf_impl(input: &DeriveInput) -> TokenStream2 {
+    let name = &input.ident;
+    let generics = input.generics.clone();
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+
+    quote! {
+        impl #impl_generics ::ommx::logical_memory::LogicalMemoryProfile
+            for #name #ty_generics #where_clause
+        {
+            fn visit_logical_memory<__V: ::ommx::logical_memory::LogicalMemoryVisitor>(
+                &self,
+                path: &mut ::ommx::logical_memory::Path,
+                visitor: &mut __V,
+            ) {
+                visitor.visit_leaf(path, ::std::mem::size_of::<Self>());
             }
         }
     }
@@ -393,6 +458,62 @@ mod tests {
         insta::assert_snapshot!(render(input), @r###"
         ::core::compile_error! {
             "LogicalMemoryProfile derive only supports structs with named fields"
+        }
+        "###);
+    }
+
+    #[test]
+    fn snapshot_leaf_tuple_struct() {
+        let input = quote! {
+            #[logical_memory(leaf)]
+            struct VariableID(u64);
+        };
+        insta::assert_snapshot!(render(input), @r###"
+        impl ::ommx::logical_memory::LogicalMemoryProfile for VariableID {
+            fn visit_logical_memory<__V: ::ommx::logical_memory::LogicalMemoryVisitor>(
+                &self,
+                path: &mut ::ommx::logical_memory::Path,
+                visitor: &mut __V,
+            ) {
+                visitor.visit_leaf(path, ::std::mem::size_of::<Self>());
+            }
+        }
+        "###);
+    }
+
+    #[test]
+    fn snapshot_leaf_enum() {
+        let input = quote! {
+            #[logical_memory(leaf)]
+            enum Equality {
+                EqualToZero,
+                LessThanOrEqualToZero,
+            }
+        };
+        insta::assert_snapshot!(render(input), @r###"
+        impl ::ommx::logical_memory::LogicalMemoryProfile for Equality {
+            fn visit_logical_memory<__V: ::ommx::logical_memory::LogicalMemoryVisitor>(
+                &self,
+                path: &mut ::ommx::logical_memory::Path,
+                visitor: &mut __V,
+            ) {
+                visitor.visit_leaf(path, ::std::mem::size_of::<Self>());
+            }
+        }
+        "###);
+    }
+
+    #[test]
+    fn snapshot_rejects_unknown_attribute() {
+        let input = quote! {
+            #[logical_memory(skip)]
+            struct Foo {
+                value: u64,
+            }
+        };
+        insta::assert_snapshot!(render(input), @r###"
+        ::core::compile_error! {
+            "unsupported logical_memory attribute; expected `leaf`"
         }
         "###);
     }
