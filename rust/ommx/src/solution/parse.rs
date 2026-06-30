@@ -257,7 +257,8 @@ impl From<Solution> for crate::v1::Solution {
                 )
             })
             .collect();
-        let decision_variables = solution.decision_variables.to_v1_decision_variables();
+        let decision_variables: Vec<crate::v1::DecisionVariable> =
+            (&solution.decision_variables).into();
         let feasible = solution.feasible();
         let feasible_relaxed = Some(solution.feasible_relaxed());
         let optimality = solution.optimality.into();

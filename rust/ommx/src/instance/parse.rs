@@ -392,8 +392,7 @@ impl TryFrom<v1::Instance> for Instance {
 
 impl From<Instance> for v1::Instance {
     fn from(value: Instance) -> Self {
-        // Ask the decision-variable table owner to join rows with its sidecars.
-        let decision_variables = value.decision_variables.to_v1_decision_variables();
+        let decision_variables: Vec<v1::DecisionVariable> = (&value.decision_variables).into();
         let (active, removed, mut constraint_context) = value.constraint_collection.into_parts();
         let constraints = active
             .into_iter()
@@ -681,8 +680,7 @@ impl From<ParametricInstance> for v1::ParametricInstance {
         {
             unimplemented!("Serialization of Sos1Constraint to v1 proto is not yet supported");
         }
-        // Ask the decision-variable table owner to join rows with its sidecars.
-        let v1_decision_variables = decision_variables.to_v1_decision_variables();
+        let v1_decision_variables: Vec<v1::DecisionVariable> = (&decision_variables).into();
         let (active, removed, mut constraint_context) = constraint_collection.into_parts();
         let v1_constraints = active
             .into_iter()

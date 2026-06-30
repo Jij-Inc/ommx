@@ -261,26 +261,6 @@ impl DecisionVariableTable<Created> {
         )
     }
 
-    /// Build legacy v1 decision-variable messages.
-    ///
-    /// Crate-internal serialization uses this owner method so callers do not
-    /// split rows, labels, and fixed values into separate sources of truth.
-    pub(crate) fn to_v1_decision_variables(&self) -> Vec<crate::v1::DecisionVariable> {
-        self.entries
-            .iter()
-            .map(|(id, dv)| {
-                let label = self.labels.collect_for(*id);
-                let fixed_value = self.columns.fixed_values.get(id).copied();
-                crate::decision_variable::parse::decision_variable_to_v1_with_fixed_value(
-                    *id,
-                    dv.clone(),
-                    label,
-                    fixed_value,
-                )
-            })
-            .collect()
-    }
-
     /// Fixed decision-variable values keyed by table-owned [`VariableID`].
     pub fn fixed_values(&self) -> &BTreeMap<VariableID, f64> {
         &self.columns.fixed_values
@@ -383,20 +363,6 @@ impl EvaluatedDecisionVariableTable {
         Self::with_columns(entries, labels, EvaluatedDecisionVariableColumns {}, ())
     }
 
-    /// Build legacy v1 decision-variable messages.
-    ///
-    /// Crate-internal serialization uses this owner method so callers do not
-    /// split rows and labels into separate sources of truth.
-    pub(crate) fn to_v1_decision_variables(&self) -> Vec<crate::v1::DecisionVariable> {
-        self.entries
-            .iter()
-            .map(|(id, dv)| {
-                let label = self.labels.collect_for(*id);
-                crate::decision_variable::evaluated_decision_variable_to_v1(*id, dv.clone(), label)
-            })
-            .collect()
-    }
-
     /// Insert or replace one evaluated row and its modeling label.
     pub fn insert(
         &mut self,
@@ -417,22 +383,6 @@ impl SampledDecisionVariableTable {
         Self::with_columns(entries, labels, SampledDecisionVariableColumns {}, ())
     }
 
-    /// Build legacy v1 sampled decision-variable messages.
-    ///
-    /// Crate-internal serialization uses this owner method so callers do not
-    /// split rows and labels into separate sources of truth.
-    pub(crate) fn to_v1_sampled_decision_variables(
-        &self,
-    ) -> Vec<crate::v1::SampledDecisionVariable> {
-        self.entries
-            .iter()
-            .map(|(id, dv)| {
-                let label = self.labels.collect_for(*id);
-                crate::decision_variable::sampled_decision_variable_to_v1(*id, dv.clone(), label)
-            })
-            .collect()
-    }
-
     /// Insert or replace one sampled row and its modeling label.
     pub fn insert(
         &mut self,
@@ -441,6 +391,51 @@ impl SampledDecisionVariableTable {
         label: DecisionVariableLabel,
     ) -> Option<SampledDecisionVariable> {
         self.insert_labeled_row(id, row, label)
+    }
+}
+
+impl From<&DecisionVariableTable<Created>> for Vec<crate::v1::DecisionVariable> {
+    fn from(table: &DecisionVariableTable<Created>) -> Self {
+        table
+            .entries
+            .iter()
+            .map(|(id, dv)| {
+                let label = table.labels.collect_for(*id);
+                let fixed_value = table.columns.fixed_values.get(id).copied();
+                crate::decision_variable::parse::decision_variable_to_v1_with_fixed_value(
+                    *id,
+                    dv.clone(),
+                    label,
+                    fixed_value,
+                )
+            })
+            .collect()
+    }
+}
+
+impl From<&EvaluatedDecisionVariableTable> for Vec<crate::v1::DecisionVariable> {
+    fn from(table: &EvaluatedDecisionVariableTable) -> Self {
+        table
+            .entries
+            .iter()
+            .map(|(id, dv)| {
+                let label = table.labels.collect_for(*id);
+                crate::decision_variable::evaluated_decision_variable_to_v1(*id, dv.clone(), label)
+            })
+            .collect()
+    }
+}
+
+impl From<&SampledDecisionVariableTable> for Vec<crate::v1::SampledDecisionVariable> {
+    fn from(table: &SampledDecisionVariableTable) -> Self {
+        table
+            .entries
+            .iter()
+            .map(|(id, dv)| {
+                let label = table.labels.collect_for(*id);
+                crate::decision_variable::sampled_decision_variable_to_v1(*id, dv.clone(), label)
+            })
+            .collect()
     }
 }
 
