@@ -265,7 +265,7 @@ impl Instance {
             ..Default::default()
         };
         self.constraint_collection
-            .insert_with(new_id, constraint, context)
+            .insert_active_with_context(new_id, constraint, context)
             .expect("new_id was allocated from this collection");
         new_id
     }

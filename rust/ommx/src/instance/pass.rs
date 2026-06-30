@@ -21,26 +21,21 @@ impl Instance {
     }
 
     pub fn restore_constraint(&mut self, id: ConstraintID) -> Result<()> {
-        self.constraint_collection.restore(id)?;
         let fixed_state = self.fixed_state();
-        let constraint = self
-            .constraint_collection
-            .get_active_mut(&id)
-            .expect("restore() just inserted this id into active");
-
-        // The following operations are infallible for regular constraints:
-        // - substitute_acyclic only fails on cyclic dependencies, which AcyclicAssignments prevents
-        // - Constraint::partial_evaluate delegates to Function::partial_evaluate, which is infallible
-        // No rollback is needed.
-        if !self.decision_variable_dependency.is_empty() {
-            crate::substitute_acyclic(
-                &mut constraint.stage.function,
-                &self.decision_variable_dependency,
-            )?;
-        }
-        if !fixed_state.entries.is_empty() {
-            constraint.partial_evaluate(&fixed_state, ATol::default())?;
-        }
+        let dependency = self.decision_variable_dependency.clone();
+        self.constraint_collection
+            .restore_with(id, |mut constraint, _reason, _context| {
+                // The following operations are infallible for regular constraints:
+                // - substitute_acyclic only fails on cyclic dependencies, which AcyclicAssignments prevents
+                // - Constraint::partial_evaluate delegates to Function::partial_evaluate, which is infallible
+                if !dependency.is_empty() {
+                    crate::substitute_acyclic(&mut constraint.stage.function, &dependency)?;
+                }
+                if !fixed_state.entries.is_empty() {
+                    constraint.partial_evaluate(&fixed_state, ATol::default())?;
+                }
+                Ok(constraint)
+            })?;
         Ok(())
     }
 
@@ -93,24 +88,22 @@ impl Instance {
             );
         }
 
-        self.indicator_constraint_collection.restore(id)?;
         let fixed_state = self.fixed_state();
-        let ic = self
-            .indicator_constraint_collection
-            .get_active_mut(&id)
-            .expect("restore() just inserted this id into active");
-
-        // The following operations are infallible because:
-        // - substitute_acyclic only fails on cyclic dependencies, which AcyclicAssignments prevents
-        // - IndicatorConstraint::partial_evaluate fails only if the indicator variable is in
-        //   fixed_state, but we already checked that above before restoring
-        // No rollback is needed.
-        if !self.decision_variable_dependency.is_empty() {
-            crate::substitute_acyclic(&mut ic.stage.function, &self.decision_variable_dependency)?;
-        }
-        if !fixed_state.entries.is_empty() {
-            ic.partial_evaluate(&fixed_state, ATol::default())?;
-        }
+        let dependency = self.decision_variable_dependency.clone();
+        self.indicator_constraint_collection
+            .restore_with(id, |mut ic, _reason, _context| {
+                // The following operations are infallible because:
+                // - substitute_acyclic only fails on cyclic dependencies, which AcyclicAssignments prevents
+                // - IndicatorConstraint::partial_evaluate fails only if the indicator variable is in
+                //   fixed_state, but we already checked that above before restoring
+                if !dependency.is_empty() {
+                    crate::substitute_acyclic(&mut ic.stage.function, &dependency)?;
+                }
+                if !fixed_state.entries.is_empty() {
+                    ic.partial_evaluate(&fixed_state, ATol::default())?;
+                }
+                Ok(ic)
+            })?;
         Ok(())
     }
 
@@ -294,7 +287,7 @@ mod tests {
         );
         instance
             .indicator_constraint_collection
-            .insert_with(
+            .insert_active_with_context(
                 IndicatorConstraintID::from(1),
                 ic,
                 crate::ConstraintContext::default(),
@@ -341,7 +334,7 @@ mod tests {
         );
         instance
             .indicator_constraint_collection
-            .insert_with(
+            .insert_active_with_context(
                 IndicatorConstraintID::from(1),
                 ic,
                 crate::ConstraintContext::default(),
@@ -396,7 +389,7 @@ mod tests {
         );
         instance
             .indicator_constraint_collection
-            .insert_with(
+            .insert_active_with_context(
                 IndicatorConstraintID::from(1),
                 ic,
                 crate::ConstraintContext::default(),
@@ -464,7 +457,7 @@ mod tests {
         );
         instance
             .indicator_constraint_collection
-            .insert_with(
+            .insert_active_with_context(
                 IndicatorConstraintID::from(1),
                 ic,
                 crate::ConstraintContext::default(),

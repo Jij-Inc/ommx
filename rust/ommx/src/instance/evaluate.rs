@@ -498,7 +498,7 @@ impl Instance {
             for (constraint, context) in promoted_constraints {
                 let id = self.constraint_collection.unused_id();
                 self.constraint_collection
-                    .insert_with(id, constraint, context)?;
+                    .insert_active_with_context(id, constraint, context)?;
             }
         }
 
@@ -858,7 +858,7 @@ mod tests {
             OneHotConstraint::new([1, 2, 3].into_iter().map(VariableID::from).collect()).unwrap();
         instance
             .one_hot_constraint_collection
-            .insert_with(
+            .insert_active_with_context(
                 OneHotConstraintID::from(1),
                 oh,
                 crate::ConstraintContext::default(),
@@ -912,7 +912,7 @@ mod tests {
             OneHotConstraint::new([1, 2, 3].into_iter().map(VariableID::from).collect()).unwrap();
         instance
             .one_hot_constraint_collection
-            .insert_with(
+            .insert_active_with_context(
                 OneHotConstraintID::from(1),
                 oh,
                 crate::ConstraintContext::default(),
@@ -957,7 +957,7 @@ mod tests {
         let oh = OneHotConstraint::new([1, 2].into_iter().map(VariableID::from).collect()).unwrap();
         instance
             .one_hot_constraint_collection
-            .insert_with(
+            .insert_active_with_context(
                 OneHotConstraintID::from(1),
                 oh,
                 crate::ConstraintContext::default(),
@@ -967,7 +967,7 @@ mod tests {
         let sos1 = Sos1Constraint::new([2, 3].into_iter().map(VariableID::from).collect()).unwrap();
         instance
             .sos1_constraint_collection
-            .insert_with(
+            .insert_active_with_context(
                 Sos1ConstraintID::from(1),
                 sos1,
                 crate::ConstraintContext::default(),

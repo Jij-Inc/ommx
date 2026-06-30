@@ -1,4 +1,5 @@
 use super::*;
+use crate::constraint_type::ActiveConstraintUpdate;
 
 impl Instance {
     /// Reduce binary powers in the instance.
@@ -17,9 +18,9 @@ impl Instance {
         changed |= updated.objective.reduce_binary_power(&binary_ids)?;
         updated
             .constraint_collection
-            .try_for_each_active_mut(|_, constraint| {
+            .rewrite_active(|_, mut constraint, _context| {
                 changed |= constraint.reduce_binary_power(&binary_ids)?;
-                Ok(())
+                Ok(ActiveConstraintUpdate::Active(constraint))
             })?;
         // Note: We don't need to reduce in removed_constraints since they are not active
         *self = updated;

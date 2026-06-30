@@ -209,7 +209,7 @@ mod tests {
         .unwrap();
         instance
             .one_hot_constraint_collection
-            .insert_with(
+            .insert_active_with_context(
                 OneHotConstraintID::from(0),
                 one_hot,
                 crate::ConstraintContext::default(),
