@@ -146,6 +146,14 @@ impl Parse for crate::v1::Solution {
                     })
                     .context(message, "evaluated_named_functions")
                 })?;
+        let decision_variables =
+            crate::EvaluatedDecisionVariableTable::new(decision_variables, variable_labels)
+                .map_err(|e| {
+                    crate::RawParseError::SolutionError(crate::SolutionError::InvalidSidecar {
+                        message: e.to_string(),
+                    })
+                    .context(message, "decision_variables")
+                })?;
         validate_evaluated_named_function_used_ids(&decision_variables, &evaluated_named_functions)
             .map_err(|e| {
                 crate::RawParseError::SolutionError(e).context(message, "evaluated_named_functions")
@@ -167,7 +175,6 @@ impl Parse for crate::v1::Solution {
             evaluated_sos1_constraints: Default::default(),
             evaluated_named_functions,
             decision_variables,
-            variable_labels,
             optimality,
             relaxation,
             sense,
@@ -250,15 +257,8 @@ impl From<Solution> for crate::v1::Solution {
                 )
             })
             .collect();
-        let variable_labels_store = solution.variable_labels().clone();
-        let decision_variables: Vec<crate::v1::DecisionVariable> = solution
-            .decision_variables()
-            .iter()
-            .map(|(id, dv)| {
-                let label = variable_labels_store.collect_for(*id);
-                crate::decision_variable::evaluated_decision_variable_to_v1(*id, dv.clone(), label)
-            })
-            .collect();
+        let decision_variables: Vec<crate::v1::DecisionVariable> =
+            (&solution.decision_variables).into();
         let feasible = solution.feasible();
         let feasible_relaxed = Some(solution.feasible_relaxed());
         let optimality = solution.optimality.into();

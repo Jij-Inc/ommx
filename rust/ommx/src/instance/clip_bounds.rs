@@ -9,46 +9,27 @@ impl Instance {
     ///
     /// If any operation fails, all changes are rolled back to maintain consistency.
     pub fn clip_bounds(&mut self, bounds: &Bounds, atol: ATol) -> crate::Result<()> {
-        // Track original bounds for potential rollback
-        let mut original_bounds = BTreeMap::new();
-
-        // Attempt to apply all bound changes
-        let result: crate::Result<()> = (|| {
-            for (id, new_bound) in bounds {
-                let decision_variable = self.decision_variables.get_mut(id).ok_or_else(
-                    || crate::error!({ ?id }, "Undefined variable ID is used: {id:?}"),
-                )?;
-
-                // Store original bound only if it actually changes
-                let original_bound = decision_variable.bound();
-                let changed = decision_variable.clip_bound(*id, *new_bound, atol)?;
-
-                if changed {
-                    original_bounds.insert(*id, original_bound);
-                }
-            }
-            Ok(())
-        })();
-
-        // If any error occurred, rollback only the modified entries
-        if result.is_err() {
-            for (id, original_bound) in original_bounds {
-                if let Some(dv) = self.decision_variables.get_mut(&id) {
-                    // Safe to unwrap because we're restoring a previously valid bound
-                    dv.set_bound(original_bound, atol).unwrap();
-                }
-            }
-        }
-
-        result
+        self.decision_variables.clip_bounds(bounds, atol)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Bound, DecisionVariable, VariableID};
+    use crate::{Bound, DecisionVariable, DecisionVariableTable, VariableID};
     use maplit::btreemap;
+
+    fn decision_variable_table_without_fixed_values(
+        decision_variables: std::collections::BTreeMap<VariableID, DecisionVariable>,
+    ) -> DecisionVariableTable {
+        DecisionVariableTable::with_fixed_values(
+            decision_variables,
+            Default::default(),
+            Default::default(),
+            ATol::default(),
+        )
+        .unwrap()
+    }
 
     #[test]
     fn test_clip_bounds_normal() {
@@ -66,7 +47,7 @@ mod tests {
         };
 
         let mut instance = Instance {
-            decision_variables,
+            decision_variables: decision_variable_table_without_fixed_values(decision_variables),
             ..Default::default()
         };
 
@@ -80,15 +61,15 @@ mod tests {
 
         // Check results
         assert_eq!(
-            instance.decision_variables[&VariableID::from(1)].bound(),
+            instance.decision_variables()[&VariableID::from(1)].bound(),
             Bound::new(2.0, 8.0).unwrap()
         );
         assert_eq!(
-            instance.decision_variables[&VariableID::from(2)].bound(),
+            instance.decision_variables()[&VariableID::from(2)].bound(),
             Bound::new(5.0, 10.0).unwrap() // Intersection of [0, 10] and [5, 15]
         );
         assert_eq!(
-            instance.decision_variables[&VariableID::from(3)].bound(),
+            instance.decision_variables()[&VariableID::from(3)].bound(),
             Bound::new(0.0, 10.0).unwrap() // Unchanged
         );
     }
@@ -100,7 +81,7 @@ mod tests {
         };
 
         let mut instance = Instance {
-            decision_variables,
+            decision_variables: decision_variable_table_without_fixed_values(decision_variables),
             ..Default::default()
         };
 
@@ -127,7 +108,7 @@ mod tests {
         }
 
         let mut instance = Instance {
-            decision_variables,
+            decision_variables: decision_variable_table_without_fixed_values(decision_variables),
             ..Default::default()
         };
 
@@ -158,6 +139,39 @@ mod tests {
     }
 
     #[test]
+    fn test_clip_bounds_rejects_bound_excluding_fixed_value() {
+        let id = VariableID::from(1);
+        let original_bound = Bound::new(0.0, 10.0).unwrap();
+        let decision_variables = btreemap! {
+            id => DecisionVariable::continuous()
+                .with_bound(original_bound, ATol::default())
+                .unwrap(),
+        };
+
+        let mut instance = Instance {
+            decision_variables: DecisionVariableTable::with_fixed_values(
+                decision_variables,
+                Default::default(),
+                btreemap! { id => 5.0 },
+                ATol::default(),
+            )
+            .unwrap(),
+            ..Default::default()
+        };
+
+        let result = instance.clip_bounds(
+            &btreemap! {
+                id => Bound::new(0.0, 4.0).unwrap(),
+            },
+            ATol::default(),
+        );
+
+        assert!(result.is_err());
+        assert_eq!(instance.decision_variables()[&id].bound(), original_bound);
+        assert_eq!(instance.fixed_decision_variable_value(id), Some(5.0));
+    }
+
+    #[test]
     fn test_clip_bounds_empty() {
         let dv = DecisionVariable::continuous()
             .with_bound(Bound::new(0.0, 10.0).unwrap(), ATol::default())
@@ -169,7 +183,7 @@ mod tests {
         };
 
         let mut instance = Instance {
-            decision_variables,
+            decision_variables: decision_variable_table_without_fixed_values(decision_variables),
             ..Default::default()
         };
 
@@ -179,7 +193,7 @@ mod tests {
 
         // Assert that the bound remains unchanged
         assert_eq!(
-            instance.decision_variables[&VariableID::from(1)].bound(),
+            instance.decision_variables()[&VariableID::from(1)].bound(),
             original_bound
         );
     }

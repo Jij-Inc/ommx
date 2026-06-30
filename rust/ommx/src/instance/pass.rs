@@ -85,7 +85,7 @@ impl Instance {
         }
 
         if self
-            .fixed_decision_variable_values
+            .fixed_decision_variable_values()
             .contains_key(&indicator_variable)
         {
             crate::bail!(
@@ -116,11 +116,11 @@ impl Instance {
         Ok(())
     }
 
-    /// Build a State containing all root-owned fixed variable values.
+    /// Build a State containing all table-owned fixed variable values.
     fn fixed_state(&self) -> v1::State {
         v1::State {
             entries: self
-                .fixed_decision_variable_values
+                .fixed_decision_variable_values()
                 .iter()
                 .map(|(id, value)| (id.into_inner(), *value))
                 .collect(),

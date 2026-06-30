@@ -13,7 +13,7 @@ impl Instance {
     /// Mirrors the `used / fixed / dependent` disjointness invariant the
     /// builder enforces (`builder.rs`): a constraint or objective cannot
     /// reference a variable whose value has been pinned via
-    /// a root-owned fixed value (`fixed`), nor a variable
+    /// a table-owned fixed value (`fixed`), nor a variable
     /// used as a substitution-dependency key (`dependent`).
     fn validate_required_ids_with_sets(
         required_ids: &VariableIDSet,
@@ -49,12 +49,12 @@ impl Instance {
     /// Validate that all required variable IDs are defined in the instance
     /// and are not dependent variables (i.e., not used as keys in
     /// decision_variable_dependency) and are not fixed variables
-    /// (root-owned fixed value set).
+    /// (table-owned fixed value set).
     fn validate_required_ids(&self, required_ids: VariableIDSet) -> crate::Result<()> {
         let variable_ids: VariableIDSet = self.decision_variables.keys().cloned().collect();
         let dependency_keys: VariableIDSet = self.decision_variable_dependency.keys().collect();
         let fixed_ids: VariableIDSet = self
-            .fixed_decision_variable_values
+            .fixed_decision_variable_values()
             .keys()
             .copied()
             .collect();
@@ -195,8 +195,8 @@ impl Instance {
                 "Variable id {id:?} is currently used as a substitution-dependency key",
             );
         }
-        self.decision_variables.insert(id, variable);
-        self.variable_labels.insert(id, label);
+        self.decision_variables
+            .insert(id, variable, label, None, crate::ATol::default())?;
         Ok(id)
     }
 
@@ -256,7 +256,7 @@ impl Instance {
         let variable_ids: VariableIDSet = self.decision_variables.keys().cloned().collect();
         let dependency_keys: VariableIDSet = self.decision_variable_dependency.keys().collect();
         let fixed_ids: VariableIDSet = self
-            .fixed_decision_variable_values
+            .fixed_decision_variable_values()
             .keys()
             .copied()
             .collect();
@@ -342,7 +342,7 @@ impl ParametricInstance {
         let known_ids: VariableIDSet = variable_ids.union(&parameter_ids).cloned().collect();
         let dependency_keys: VariableIDSet = self.decision_variable_dependency().keys().collect();
         let fixed_ids: VariableIDSet = self
-            .fixed_decision_variable_values
+            .fixed_decision_variable_values()
             .keys()
             .copied()
             .collect();
@@ -532,8 +532,8 @@ impl ParametricInstance {
                 "Variable id {id:?} is currently used as a substitution-dependency key",
             );
         }
-        self.decision_variables.insert(id, variable);
-        self.variable_labels.insert(id, label);
+        self.decision_variables
+            .insert(id, variable, label, None, crate::ATol::default())?;
         Ok(id)
     }
 }

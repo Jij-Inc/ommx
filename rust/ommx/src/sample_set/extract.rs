@@ -11,7 +11,7 @@ impl SampleSet {
     pub fn decision_variable_names(&self) -> std::collections::BTreeSet<String> {
         self.decision_variables
             .keys()
-            .filter_map(|id| self.variable_labels.name(*id).map(|s| s.to_owned()))
+            .filter_map(|id| self.variable_labels().name(*id).map(|s| s.to_owned()))
             .collect()
     }
 
@@ -46,7 +46,7 @@ impl SampleSet {
         let variables_with_name: Vec<(VariableID, &SampledDecisionVariable)> = self
             .decision_variables
             .iter()
-            .filter(|(id, _)| self.variable_labels.name(**id) == Some(name))
+            .filter(|(id, _)| self.variable_labels().name(**id) == Some(name))
             .map(|(id, v)| (*id, v))
             .collect();
         if variables_with_name.is_empty() {
@@ -56,7 +56,7 @@ impl SampleSet {
         }
         let mut result = BTreeMap::new();
         for (id, variable) in &variables_with_name {
-            let subscripts = self.variable_labels.subscripts(*id).to_vec();
+            let subscripts = self.variable_labels().subscripts(*id).to_vec();
             let value = *variable
                 .samples()
                 .get(sample_id)
@@ -92,12 +92,12 @@ impl SampleSet {
         let mut result: BTreeMap<String, BTreeMap<Vec<i64>, f64>> = BTreeMap::new();
 
         for (id, variable) in self.decision_variables.iter() {
-            let name = match self.variable_labels.name(*id) {
+            let name = match self.variable_labels().name(*id) {
                 Some(n) => n.to_owned(),
                 None => continue, // Skip variables without names
             };
 
-            let subscripts = self.variable_labels.subscripts(*id).to_vec();
+            let subscripts = self.variable_labels().subscripts(*id).to_vec();
             let value = *variable
                 .samples()
                 .get(sample_id)

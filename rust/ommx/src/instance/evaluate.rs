@@ -210,7 +210,7 @@ impl Instance {
         let used = self.used_decision_variable_ids();
 
         let fixed: Vec<_> = self
-            .fixed_decision_variable_values
+            .fixed_decision_variable_values()
             .iter()
             .map(|(id, value)| (*id, *value))
             .collect();
@@ -287,7 +287,7 @@ impl Evaluate for Instance {
                 .evaluated_sos1_constraints_collection(evaluated_sos1_constraints)
                 .evaluated_named_functions(evaluated_named_functions)
                 .decision_variables(decision_variables)
-                .variable_labels(self.variable_labels.clone())
+                .variable_labels(self.variable_labels().clone())
                 .named_function_labels(evaluated_named_function_labels)
                 .sense(sense)
                 .build_unchecked()?
@@ -349,7 +349,7 @@ impl Evaluate for Instance {
 
         Ok(crate::SampleSet::builder()
             .decision_variables(decision_variables)
-            .variable_labels(self.variable_labels.clone())
+            .variable_labels(self.variable_labels().clone())
             .objectives(objectives)
             .constraints_collection(sampled_constraints)
             .indicator_constraints_collection(sampled_indicator_constraints)
@@ -371,7 +371,7 @@ impl Evaluate for Instance {
         // Phase 1: Propagate through special constraints (unit propagation).
         let expanded_state = working.propagate_special_constraints(state, atol)?;
 
-        // Phase 2: Store fixed values in the root-owned table.
+        // Phase 2: Store fixed values in the decision-variable table.
         for (id, value) in expanded_state.entries.iter() {
             let var_id = VariableID::from(*id);
             if working.decision_variable_dependency.get(&var_id).is_some() {
@@ -379,27 +379,9 @@ impl Evaluate for Instance {
                     "Dependent variable (ID={id}) cannot be fixed by partial_evaluate"
                 ));
             }
-            let Some(dv) = working.decision_variables.get_mut(&var_id) else {
-                return Err(crate::error!(
-                    "Unknown decision variable (ID={id}) in state."
-                ));
-            };
-            dv.check_value_consistency(var_id, *value, atol)?;
-            if let Some(previous_value) = working.fixed_decision_variable_values.get(&var_id) {
-                if !values_are_consistent(*previous_value, *value, atol) {
-                    return Err(crate::DecisionVariableError::SubstitutedValueOverwrite {
-                        id: var_id,
-                        previous_value: *previous_value,
-                        new_value: *value,
-                        atol,
-                    }
-                    .into());
-                }
-            } else {
-                working
-                    .fixed_decision_variable_values
-                    .insert(var_id, *value);
-            }
+            working
+                .decision_variables
+                .ensure_fixed_value(var_id, *value, atol)?;
         }
 
         // Phase 3: Regular partial evaluation with expanded state.

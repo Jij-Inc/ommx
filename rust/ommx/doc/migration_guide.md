@@ -33,7 +33,7 @@ Three lifecycle stages are defined:
 |---|---|---|
 | `Constraint` | `Constraint<Created>` | `CreatedData { function }` |
 | `EvaluatedConstraint` | `Constraint<Evaluated>` | `EvaluatedData { evaluated_value, feasible, ... }` |
-| `SampledConstraint` | `Constraint<stage::Sampled>` | `SampledData { evaluated_values, feasible, ... }` |
+| `SampledConstraint` | `Constraint<SampledStage>` | `SampledData { evaluated_values, feasible, ... }` |
 
 Removed constraints are managed at the collection level —
 `ConstraintCollection` stores them as `(Constraint<Created>, RemovedReason)`
@@ -576,10 +576,19 @@ Decision-variable IDs and fixed values no longer live on
 [`DecisionVariable`](crate::DecisionVariable). The variable struct is now the
 row data of the host's decision-variable table and contains only its intrinsic
 definition (`kind`, `bound`). The [`VariableID`](crate::VariableID) is owned by
-the enclosing map key, and fixed values are owned by the enclosing
-[`Instance`](crate::Instance) /
-[`ParametricInstance`](crate::ParametricInstance), where they can be validated
-against the full model.
+the enclosing table key. Created-stage hosts
+([`Instance`](crate::Instance) and
+[`ParametricInstance`](crate::ParametricInstance)) store rows, modeling labels,
+and fixed values together in
+[`DecisionVariableTable`](crate::DecisionVariableTable). The table validates
+that labels and fixed values target existing
+decision-variable IDs and that fixed values satisfy the row kind/bound.
+`DecisionVariableTable` is parameterized by the same shared lifecycle stages as
+constraints:
+[`EvaluatedDecisionVariableTable`](crate::EvaluatedDecisionVariableTable) and
+[`SampledDecisionVariableTable`](crate::SampledDecisionVariableTable) are the
+evaluated and sampled stage aliases, sharing the same row-ID and label-owner
+invariants while omitting the created-stage fixed-value column.
 
 The row still owns the `kind`/`bound` invariant: `DecisionVariable::new` and
 bound mutation normalize `bound` through `kind.consistent_bound(bound, atol)`.
@@ -615,17 +624,27 @@ let evaluated = EvaluatedDecisionVariable::new(id, y, value)?;
 let sampled = SampledDecisionVariable::new(id, y, samples)?;
 ```
 
-`Instance::partial_evaluate` writes new fixed values into the host-owned table.
+When constructing a created-stage table directly, use
+`DecisionVariableTable::with_fixed_values(entries, labels, fixed_values, atol)`.
+If no variables are fixed, pass an empty `fixed_values` map; this is the same
+table schema with an empty fixed-value column, not a separate construction mode.
+
+`Instance::partial_evaluate` writes new fixed values into the created
+decision-variable table.
 Legacy v1 protobuf `substituted_value` fields are still accepted on parse, but
-the parser drains them into the same host-owned table before constructing the
-domain model. The host builder rejects states where a fixed variable is also
-solver-used or dependent; this invariant can no longer be checked by an
-individual `DecisionVariable`.
+the parser drains them into the same table before constructing the domain
+model. The host builder rejects states where a fixed variable is also
+solver-used or dependent, and `ParametricInstance` additionally rejects
+decision-variable / parameter ID collisions; these host-level invariants cannot
+be checked by an individual `DecisionVariable` or by the table alone.
 
 `EvaluatedDecisionVariable::new(id, ...)` and
 `SampledDecisionVariable::new(id, ...)` accept an ID so non-finite value errors
 can still report the table key. The evaluated/sampled row data itself does not
-store the ID; `Solution` and `SampleSet` own it as the map key.
+store the ID; `Solution` and `SampleSet` own it through
+[`EvaluatedDecisionVariableTable`](crate::EvaluatedDecisionVariableTable) and
+[`SampledDecisionVariableTable`](crate::SampledDecisionVariableTable),
+respectively.
 
 ### Named-function table ownership
 
@@ -677,6 +696,11 @@ let solution = Solution::builder()
     .evaluated_named_functions(BTreeMap::from([(id, evaluated)]))
     .build()?;
 ```
+
+The deprecated `Solution::new(...)` constructor was removed because it was a
+safe API that skipped host-level validation. Construct solutions through
+`Solution::builder().build()?`; reserve `build_unchecked` for code paths where
+the enclosing owner has already guaranteed all `Solution` invariants.
 
 Legacy `ommx.v1` protobuf messages still carry an inline `id` field. Rust parse
 drains that field into the owning map key, and Rust serialization fills it from

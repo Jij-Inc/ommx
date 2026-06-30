@@ -124,7 +124,7 @@ pub type NamedFunctionLabel = crate::ModelingLabel;
 /// evaluated/sampled decision-variable table, is validated by host builders such
 /// as [`crate::Instance::builder`], [`crate::Solution::builder`], and
 /// [`crate::SampleSet::builder`].
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, LogicalMemoryProfile)]
 pub struct NamedFunctionTable<T> {
     entries: BTreeMap<NamedFunctionID, T>,
     labels: NamedFunctionLabelStore,
@@ -156,17 +156,6 @@ impl<T> NamedFunctionTable<T> {
             entries,
             labels: NamedFunctionLabelStore::default(),
         }
-    }
-
-    /// Construct a table without validating that labels refer to existing rows.
-    ///
-    /// This is for host-level unchecked constructors whose caller already owns
-    /// the invariant. Prefer [`Self::new`] at external input boundaries.
-    pub(crate) fn from_parts_unchecked(
-        entries: BTreeMap<NamedFunctionID, T>,
-        labels: NamedFunctionLabelStore,
-    ) -> Self {
-        Self { entries, labels }
     }
 
     /// Split the table into its row map and label store.
@@ -240,15 +229,6 @@ impl<T> NamedFunctionTable<T> {
 
     pub fn last_key_value(&self) -> Option<(&NamedFunctionID, &T)> {
         self.entries.last_key_value()
-    }
-}
-
-impl<T: LogicalMemoryProfile> LogicalMemoryProfile for NamedFunctionTable<T> {
-    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
-        self.entries
-            .visit_logical_memory(path.with("entries").as_mut(), visitor);
-        self.labels
-            .visit_logical_memory(path.with("labels").as_mut(), visitor);
     }
 }
 

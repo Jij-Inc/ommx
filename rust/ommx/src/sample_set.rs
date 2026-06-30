@@ -108,8 +108,12 @@ pub enum SampleSetError {
 ///
 /// Invariants
 /// -----------
-/// - [`Self::decision_variables`] is keyed by the table-owned
-///   [`VariableID`]; sampled decision-variable rows do not carry IDs.
+/// - [`Self::decision_variables`] owns a
+///   [`SampledDecisionVariableTable`](crate::SampledDecisionVariableTable);
+///   table keys own [`VariableID`] and sampled decision-variable rows do not
+///   carry IDs.
+/// - The decision-variable table rejects modeling labels for unknown variable
+///   IDs.
 /// - [`Self::named_functions`] is keyed by the table-owned
 ///   [`NamedFunctionID`]; sampled named-function rows do not carry IDs.
 /// - All [`Self::decision_variables`], [`Self::objectives`], sampled constraint
@@ -123,11 +127,8 @@ pub enum SampleSetError {
 ///   - `feasible_relaxed`: true if all non-removed constraints are satisfied.
 #[derive(Debug, Clone, Getters)]
 pub struct SampleSet {
-    #[getset(get = "pub")]
-    decision_variables: BTreeMap<VariableID, SampledDecisionVariable>,
-    /// Per-variable modeling labels (sibling of [`Self::decision_variables`]).
-    #[getset(get = "pub")]
-    variable_labels: crate::decision_variable::VariableLabelStore,
+    /// Sampled decision-variable rows plus their modeling labels.
+    decision_variables: crate::SampledDecisionVariableTable,
     #[getset(get = "pub")]
     objectives: Sampled<f64>,
     #[getset(get = "pub")]
@@ -205,6 +206,21 @@ impl SampleSet {
     /// Access the per-named-function modeling-label store.
     pub fn named_function_labels(&self) -> &crate::named_function::NamedFunctionLabelStore {
         self.named_functions.labels()
+    }
+
+    /// Access sampled decision-variable rows plus their modeling labels.
+    pub fn decision_variable_table(&self) -> &crate::SampledDecisionVariableTable {
+        &self.decision_variables
+    }
+
+    /// Access sampled decision-variable rows keyed by table-owned IDs.
+    pub fn decision_variables(&self) -> &BTreeMap<VariableID, SampledDecisionVariable> {
+        self.decision_variables.entries()
+    }
+
+    /// Access the per-variable modeling-label store.
+    pub fn variable_labels(&self) -> &crate::decision_variable::VariableLabelStore {
+        self.decision_variables.labels()
     }
 
     /// Get sample IDs available in this sample set
@@ -342,7 +358,7 @@ impl SampleSet {
                 .objective(objective)
                 .evaluated_named_functions(evaluated_named_functions)
                 .decision_variables(decision_variables)
-                .variable_labels(self.variable_labels.clone())
+                .variable_labels(self.variable_labels().clone())
                 .named_function_labels(self.named_functions.labels().clone())
                 .sense(sense)
                 .build_unchecked()
@@ -595,15 +611,12 @@ impl SampleSetBuilder {
             .sense
             .ok_or(SampleSetError::MissingRequiredField { field: "sense" })?;
 
+        let decision_variables =
+            crate::SampledDecisionVariableTable::new(decision_variables, self.variable_labels)
+                .map_err(|e| SampleSetError::InvalidSidecar {
+                    message: e.to_string(),
+                })?;
         let decision_variable_ids = decision_variables.keys().copied().collect::<BTreeSet<_>>();
-        crate::modeling_label::validate_modeling_label_ids(
-            &self.variable_labels,
-            &decision_variable_ids,
-            "decision variable",
-        )
-        .map_err(|e| SampleSetError::InvalidSidecar {
-            message: e.to_string(),
-        })?;
         let named_functions =
             NamedFunctionTable::new(self.named_functions, self.named_function_labels).map_err(
                 |e| SampleSetError::InvalidSidecar {
@@ -716,7 +729,6 @@ impl SampleSetBuilder {
 
         Ok(SampleSet {
             decision_variables,
-            variable_labels: self.variable_labels.clone(),
             objectives,
             constraints,
             indicator_constraints: self.indicator_constraints,
@@ -731,14 +743,14 @@ impl SampleSetBuilder {
         })
     }
 
-    /// Builds the `SampleSet` without invariant validation.
+    /// Builds the `SampleSet` without host-level revalidation.
     ///
     /// # Safety
-    /// This method does not validate that the SampleSet invariants hold.
-    /// The caller must ensure:
+    /// This method still constructs table owners through their checked
+    /// constructors, so table-level invariants such as label IDs referring to
+    /// existing table rows are enforced. It does not revalidate host-level
+    /// cross references or sample-ID consistency. The caller must ensure:
     /// - `decision_variables` is keyed by the intended [`VariableID`] for each row
-    /// - Sampled constraint collection keys and sidecars are internally consistent
-    /// - Sampled named-function table keys and labels are internally consistent
     /// - All `used_decision_variable_ids` in sampled constraints and sampled
     ///   named functions exist in `decision_variables`
     /// - Sample IDs are consistent across all components
@@ -748,12 +760,18 @@ impl SampleSetBuilder {
     /// such as when creating a SampleSet from `Instance::evaluate_samples`.
     ///
     /// # Errors
-    /// Returns an error if required fields are not set.
+    /// Returns an error if required fields are not set or table-level sidecar
+    /// invariants fail.
     pub unsafe fn build_unchecked(self) -> Result<SampleSet, SampleSetError> {
         let decision_variables =
             self.decision_variables
                 .ok_or(SampleSetError::MissingRequiredField {
                     field: "decision_variables",
+                })?;
+        let decision_variables =
+            crate::SampledDecisionVariableTable::new(decision_variables, self.variable_labels)
+                .map_err(|e| SampleSetError::InvalidSidecar {
+                    message: e.to_string(),
                 })?;
         let objectives = self
             .objectives
@@ -778,18 +796,21 @@ impl SampleSetBuilder {
             &objective_sample_ids,
         );
 
+        let named_functions =
+            NamedFunctionTable::new(self.named_functions, self.named_function_labels).map_err(
+                |e| SampleSetError::InvalidSidecar {
+                    message: e.to_string(),
+                },
+            )?;
+
         Ok(SampleSet {
             decision_variables,
-            variable_labels: self.variable_labels.clone(),
             objectives,
             constraints,
             indicator_constraints: self.indicator_constraints,
             one_hot_constraints: self.one_hot_constraints,
             sos1_constraints: self.sos1_constraints,
-            named_functions: NamedFunctionTable::from_parts_unchecked(
-                self.named_functions,
-                self.named_function_labels,
-            ),
+            named_functions,
             sense,
             feasible,
             feasible_relaxed,
@@ -903,6 +924,31 @@ mod tests {
     }
 
     #[test]
+    fn unchecked_builder_rejects_orphan_variable_label_id() {
+        let mut variable_labels = crate::VariableLabelStore::default();
+        variable_labels.set_name(VariableID::from(99), "orphan");
+
+        // SAFETY: This test intentionally exercises the unchecked host-level
+        // constructor boundary. Table-level label ownership is still checked.
+        let err = unsafe {
+            SampleSet::builder()
+                .decision_variables(BTreeMap::new())
+                .variable_labels(variable_labels)
+                .objectives(crate::Sampled::default())
+                .constraints(BTreeMap::new())
+                .sense(Sense::Minimize)
+                .build_unchecked()
+                .unwrap_err()
+        };
+
+        assert!(
+            err.to_string().contains("unknown decision variable ID")
+                && err.to_string().contains("VariableID(99)"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
     fn builder_rejects_orphan_named_function_label_id() {
         let mut named_function_labels = crate::named_function::NamedFunctionLabelStore::default();
         named_function_labels.set_name(NamedFunctionID::from(99), "orphan");
@@ -915,6 +961,31 @@ mod tests {
             .sense(Sense::Minimize)
             .build()
             .unwrap_err();
+
+        assert!(
+            err.to_string().contains("unknown named function ID")
+                && err.to_string().contains("NamedFunctionID(99)"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn unchecked_builder_rejects_orphan_named_function_label_id() {
+        let mut named_function_labels = crate::named_function::NamedFunctionLabelStore::default();
+        named_function_labels.set_name(NamedFunctionID::from(99), "orphan");
+
+        // SAFETY: This test intentionally exercises the unchecked host-level
+        // constructor boundary. Table-level label ownership is still checked.
+        let err = unsafe {
+            SampleSet::builder()
+                .decision_variables(BTreeMap::new())
+                .objectives(crate::Sampled::default())
+                .constraints(BTreeMap::new())
+                .named_function_labels(named_function_labels)
+                .sense(Sense::Minimize)
+                .build_unchecked()
+                .unwrap_err()
+        };
 
         assert!(
             err.to_string().contains("unknown named function ID")
