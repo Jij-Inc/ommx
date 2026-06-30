@@ -74,7 +74,7 @@ pub struct OneHotConstraint<S: Stage<Self> = Created> {
 /// Data carried by a one-hot constraint in the Created stage.
 ///
 /// One-hot constraints are structural — no function is stored.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, crate::logical_memory::LogicalMemoryProfile)]
 pub struct OneHotCreatedData;
 
 /// Data carried by a one-hot constraint in the Evaluated stage.

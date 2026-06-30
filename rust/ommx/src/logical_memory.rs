@@ -44,9 +44,10 @@
 //!   structure if they are not. Delegate to each field instead. Padding
 //!   between fields is the only thing missed — an acceptable trade-off.
 //!
-//! - **Stack vs heap.** Primitives and POD structs (`Bound`, `Kind`, ...)
-//!   emit a single leaf of `size_of::<T>()`. Owning containers (`Vec`,
-//!   `VecDeque`, maps, sets, `Box`) emit a `Type[stack]` leaf for their
+//! - **Stack vs heap.** Primitive scalars and fieldless enums emit a single
+//!   leaf of `size_of::<T>()`. Local composite data types, including POD-like
+//!   wrappers such as `Bound`, delegate to their fields. Owning containers
+//!   (`Vec`, `VecDeque`, maps, sets, `Box`) emit a `Type[stack]` leaf for their
 //!   handle/header and then delegate to their live contents; unused capacity
 //!   is deliberately ignored. `String` emits `size_of::<String>() + len()`
 //!   (heap bytes actually present). Arrays and tuples delegate to their
@@ -241,7 +242,7 @@ pub(crate) fn logical_total_bytes<T: LogicalMemoryProfile>(value: &T) -> usize {
 /// Generates a LogicalMemoryProfile implementation that delegates to each field.
 ///
 /// Kept for foreign types where we need an explicit type-name override.
-/// Prefer `#[derive(LogicalMemoryProfile)]` for local composite types.
+/// Prefer `#[derive(LogicalMemoryProfile)]` for local Rust data types.
 ///
 /// # Example
 /// ```ignore

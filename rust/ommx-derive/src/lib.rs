@@ -31,9 +31,9 @@
 //!
 //! - Structs with named fields, tuple fields, or no fields.
 //!   - All fields must implement `LogicalMemoryProfile`. Primitives,
-//!     `String`, `Option<T>`, `Vec<T>`, `BTreeMap`, `HashMap`,
-//!     `FnvHashMap`, and `BTreeSet` all have blanket impls in
-//!     `ommx::logical_memory::collections`.
+//!     `String`, `Option<T>`, arrays, `Box<T>`, `Vec<T>`,
+//!     `VecDeque<T>`, maps, sets, `PhantomData<T>`, and tuples all have
+//!     reusable impls in `ommx::logical_memory::collections`.
 //! - Generic structs: when a field type depends on a type parameter, the
 //!   generated impl adds a `FieldType: LogicalMemoryProfile` where-clause.
 //!   This keeps composite structs derivable without hand-written impls.

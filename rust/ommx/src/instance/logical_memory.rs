@@ -19,25 +19,51 @@ crate::impl_logical_memory_profile! {
     }
 }
 
-// LogicalMemoryProfile for special constraint Created types
-// These are simpler than Constraint since they have no function.
+// LogicalMemoryProfile for special constraint Created types.
+//
+// These generic stage wrappers cannot currently use the derive macro cleanly,
+// but they still follow the same field-by-field accounting policy as derived
+// composite structs.
 macro_rules! impl_special_constraint_profile {
-    ($constraint_type:ty, $name:expr) => {
+    ($constraint_type:ty, $name:literal { $($field:ident),+ $(,)? }) => {
         impl LogicalMemoryProfile for $constraint_type {
             fn visit_logical_memory<V: LogicalMemoryVisitor>(
                 &self,
                 path: &mut Path,
                 visitor: &mut V,
             ) {
-                // Count the whole constraint as a single leaf for simplicity
-                visitor.visit_leaf(path, std::mem::size_of_val(self));
+                $(
+                    self.$field.visit_logical_memory(
+                        path.with(concat!($name, ".", stringify!($field))).as_mut(),
+                        visitor,
+                    );
+                )+
             }
         }
     };
 }
-impl_special_constraint_profile!(crate::IndicatorConstraint, "IndicatorConstraint");
-impl_special_constraint_profile!(crate::OneHotConstraint, "OneHotConstraint");
-impl_special_constraint_profile!(crate::Sos1Constraint, "Sos1Constraint");
+impl_special_constraint_profile!(
+    crate::IndicatorConstraint,
+    "IndicatorConstraint" {
+        indicator_variable,
+        equality,
+        stage,
+    }
+);
+impl_special_constraint_profile!(
+    crate::OneHotConstraint,
+    "OneHotConstraint" {
+        variables,
+        stage,
+    }
+);
+impl_special_constraint_profile!(
+    crate::Sos1Constraint,
+    "Sos1Constraint" {
+        variables,
+        stage,
+    }
+);
 
 macro_rules! impl_constraint_collection_profile {
     ($constraint_type:ty, $active_name:expr, $removed_name:expr) => {
@@ -109,7 +135,7 @@ mod tests {
     use crate::{
         coeff, linear, Constraint, ConstraintID, DecisionVariable, Equality, Function, VariableID,
     };
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, BTreeSet};
 
     #[test]
     fn test_instance_empty_snapshot() {
@@ -331,6 +357,122 @@ mod tests {
         Instance.sos1_constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
         Instance.sos1_constraint_collection;removed_sos1_constraints;BTreeMap[stack] 24
         Instance.sos1_constraint_collection;sos1_constraints;BTreeMap[stack] 24
+        "###);
+    }
+
+    #[test]
+    fn test_instance_with_special_constraints_snapshot() {
+        let mut decision_variables = BTreeMap::new();
+        decision_variables.insert(VariableID::from(1), DecisionVariable::binary());
+        decision_variables.insert(VariableID::from(2), DecisionVariable::binary());
+        decision_variables.insert(VariableID::from(3), DecisionVariable::continuous());
+
+        let mut instance = Instance::new(
+            crate::instance::Sense::Minimize,
+            Function::Zero,
+            decision_variables,
+            BTreeMap::new(),
+        )
+        .unwrap();
+
+        instance
+            .add_indicator_constraint(
+                crate::IndicatorConstraint::new(
+                    VariableID::from(1),
+                    Equality::LessThanOrEqualToZero,
+                    Function::Linear((linear!(2) + coeff!(-1.0)).unwrap()),
+                ),
+                crate::ConstraintContext::default(),
+            )
+            .unwrap();
+        instance
+            .add_one_hot_constraint(
+                crate::OneHotConstraint::new(
+                    [1, 2]
+                        .into_iter()
+                        .map(VariableID::from)
+                        .collect::<BTreeSet<_>>(),
+                )
+                .unwrap(),
+                crate::ConstraintContext::default(),
+            )
+            .unwrap();
+        instance
+            .add_sos1_constraint(
+                crate::Sos1Constraint::new(
+                    [2, 3]
+                        .into_iter()
+                        .map(VariableID::from)
+                        .collect::<BTreeSet<_>>(),
+                )
+                .unwrap(),
+                crate::ConstraintContext::default(),
+            )
+            .unwrap();
+
+        let folded = logical_memory_to_folded(&instance);
+        insta::assert_snapshot!(folded, @r###"
+        Instance.annotations;HashMap[stack] 48
+        Instance.constraint_collection;constraints;BTreeMap[stack] 24
+        Instance.constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.description;FnvHashMap[stack] 32
+        Instance.constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.name;FnvHashMap[stack] 32
+        Instance.constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.parameters;FnvHashMap[stack] 32
+        Instance.constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.subscripts;FnvHashMap[stack] 32
+        Instance.constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
+        Instance.constraint_collection;removed_constraints;BTreeMap[stack] 24
+        Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[stack] 32
+        Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
+        Instance.decision_variable_dependency;AcyclicAssignments.topological_order;Vec[stack] 24
+        Instance.decision_variables;DecisionVariableTable.columns;CreatedDecisionVariableColumns.fixed_values;BTreeMap[stack] 24
+        Instance.decision_variables;DecisionVariableTable.entries;BTreeMap[key];VariableID.0 24
+        Instance.decision_variables;DecisionVariableTable.entries;BTreeMap[stack] 24
+        Instance.decision_variables;DecisionVariableTable.entries;DecisionVariable.bound;Bound.lower 24
+        Instance.decision_variables;DecisionVariableTable.entries;DecisionVariable.bound;Bound.upper 24
+        Instance.decision_variables;DecisionVariableTable.entries;DecisionVariable.kind 3
+        Instance.decision_variables;DecisionVariableTable.labels;ModelingLabelStore.description;FnvHashMap[stack] 32
+        Instance.decision_variables;DecisionVariableTable.labels;ModelingLabelStore.name;FnvHashMap[stack] 32
+        Instance.decision_variables;DecisionVariableTable.labels;ModelingLabelStore.parameters;FnvHashMap[stack] 32
+        Instance.decision_variables;DecisionVariableTable.labels;ModelingLabelStore.subscripts;FnvHashMap[stack] 32
+        Instance.description;Option[stack] 168
+        Instance.indicator_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.description;FnvHashMap[stack] 32
+        Instance.indicator_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.name;FnvHashMap[stack] 32
+        Instance.indicator_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.parameters;FnvHashMap[stack] 32
+        Instance.indicator_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.subscripts;FnvHashMap[stack] 32
+        Instance.indicator_constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
+        Instance.indicator_constraint_collection;indicator_constraints;BTreeMap[key];IndicatorConstraintID.0 8
+        Instance.indicator_constraint_collection;indicator_constraints;BTreeMap[stack] 24
+        Instance.indicator_constraint_collection;indicator_constraints;IndicatorConstraint.equality 1
+        Instance.indicator_constraint_collection;indicator_constraints;IndicatorConstraint.indicator_variable;VariableID.0 8
+        Instance.indicator_constraint_collection;indicator_constraints;IndicatorConstraint.stage;CreatedData.function;Linear;PolynomialBase.terms 80
+        Instance.indicator_constraint_collection;removed_indicator_constraints;BTreeMap[stack] 24
+        Instance.named_functions;NamedFunctionTable.entries;BTreeMap[stack] 24
+        Instance.named_functions;NamedFunctionTable.labels;ModelingLabelStore.description;FnvHashMap[stack] 32
+        Instance.named_functions;NamedFunctionTable.labels;ModelingLabelStore.name;FnvHashMap[stack] 32
+        Instance.named_functions;NamedFunctionTable.labels;ModelingLabelStore.parameters;FnvHashMap[stack] 32
+        Instance.named_functions;NamedFunctionTable.labels;ModelingLabelStore.subscripts;FnvHashMap[stack] 32
+        Instance.objective;Zero 40
+        Instance.one_hot_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.description;FnvHashMap[stack] 32
+        Instance.one_hot_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.name;FnvHashMap[stack] 32
+        Instance.one_hot_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.parameters;FnvHashMap[stack] 32
+        Instance.one_hot_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.subscripts;FnvHashMap[stack] 32
+        Instance.one_hot_constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
+        Instance.one_hot_constraint_collection;one_hot_constraints;BTreeMap[key];OneHotConstraintID.0 8
+        Instance.one_hot_constraint_collection;one_hot_constraints;BTreeMap[stack] 24
+        Instance.one_hot_constraint_collection;one_hot_constraints;OneHotConstraint.variables;BTreeSet[stack] 24
+        Instance.one_hot_constraint_collection;one_hot_constraints;OneHotConstraint.variables;VariableID.0 16
+        Instance.one_hot_constraint_collection;removed_one_hot_constraints;BTreeMap[stack] 24
+        Instance.parameters;Option[stack] 48
+        Instance.sense 1
+        Instance.sos1_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.description;FnvHashMap[stack] 32
+        Instance.sos1_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.name;FnvHashMap[stack] 32
+        Instance.sos1_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.parameters;FnvHashMap[stack] 32
+        Instance.sos1_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.subscripts;FnvHashMap[stack] 32
+        Instance.sos1_constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
+        Instance.sos1_constraint_collection;removed_sos1_constraints;BTreeMap[stack] 24
+        Instance.sos1_constraint_collection;sos1_constraints;BTreeMap[key];Sos1ConstraintID.0 8
+        Instance.sos1_constraint_collection;sos1_constraints;BTreeMap[stack] 24
+        Instance.sos1_constraint_collection;sos1_constraints;Sos1Constraint.variables;BTreeSet[stack] 24
+        Instance.sos1_constraint_collection;sos1_constraints;Sos1Constraint.variables;VariableID.0 16
         "###);
     }
 
