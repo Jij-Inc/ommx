@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
+use crate::logical_memory::LogicalMemoryProfile;
 use crate::{ATol, Bound, ModelingLabel};
 
 use super::{
@@ -8,7 +8,7 @@ use super::{
     SampledDecisionVariable, VariableID, VariableLabelStore,
 };
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, LogicalMemoryProfile)]
 struct LabeledVariableRows<T> {
     entries: BTreeMap<VariableID, T>,
     labels: VariableLabelStore,
@@ -99,15 +99,6 @@ impl<T> LabeledVariableRows<T> {
 
     fn last_key_value(&self) -> Option<(&VariableID, &T)> {
         self.entries.last_key_value()
-    }
-}
-
-impl<T: LogicalMemoryProfile> LogicalMemoryProfile for LabeledVariableRows<T> {
-    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
-        self.entries
-            .visit_logical_memory(path.with("entries").as_mut(), visitor);
-        self.labels
-            .visit_logical_memory(path.with("labels").as_mut(), visitor);
     }
 }
 

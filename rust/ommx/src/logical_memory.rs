@@ -30,8 +30,9 @@
 //!
 //! These conventions are enforced by `#[derive(LogicalMemoryProfile)]`
 //! (from the `ommx-derive` crate) and by the declarative
-//! `impl_logical_memory_profile!` macro. Hand-written impls for
-//! generic / enum / foreign types should follow them too.
+//! `impl_logical_memory_profile!` macro. Composite structs should use the
+//! derive so field additions cannot be missed; if a composite struct cannot
+//! derive cleanly, extend the derive macro rather than hand-writing the impl.
 //!
 //! - **Naming: `Type.field`.** Each field's frame is
 //!   `"TypeName.field_name"`. Flamegraph frames then show both the
@@ -238,8 +239,9 @@ pub(crate) fn logical_total_bytes<T: LogicalMemoryProfile>(value: &T) -> usize {
 // Macro to implement LogicalMemoryProfile for structs with fields
 /// Generates a LogicalMemoryProfile implementation that delegates to each field.
 ///
-/// Kept for types that cannot use `#[derive(LogicalMemoryProfile)]`, e.g. types
-/// defined in external modules where we need an explicit type-name override.
+/// Kept for leaf-like wrappers and foreign types where we need an explicit
+/// type-name override. Prefer `#[derive(LogicalMemoryProfile)]` for composite
+/// structs.
 ///
 /// # Example
 /// ```ignore

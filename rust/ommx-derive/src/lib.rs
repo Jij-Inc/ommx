@@ -34,20 +34,19 @@
 //!     `String`, `Option<T>`, `Vec<T>`, `BTreeMap`, `HashMap`,
 //!     `FnvHashMap`, and `BTreeSet` all have blanket impls in
 //!     `ommx::logical_memory::collections`.
-//! - Generic structs: type parameters are propagated through, but
-//!   **no `LogicalMemoryProfile` bound is added automatically**. The
-//!   struct must declare its own `where T: LogicalMemoryProfile`
-//!   clause. This matches `serde`'s historical `#[serde(bound = ...)]`
-//!   philosophy — the derive does not guess.
+//! - Generic structs: when a field type depends on a type parameter, the
+//!   generated impl adds a `FieldType: LogicalMemoryProfile` where-clause.
+//!   This keeps composite structs derivable without hand-written impls.
 //!
 //! ## Not supported
 //!
-//! - Tuple structs and unit structs → emit a `compile_error!` directing
-//!   the caller to a hand-written impl.
-//! - Enums → emit a `compile_error!`. For enums, hand-write a `match`
-//!   (`Function` in the `ommx` crate is an example).
+//! - Tuple structs and unit structs → emit a `compile_error!`. Use a
+//!   hand-written impl only for leaf-like wrappers; otherwise extend this
+//!   derive.
+//! - Enums → emit a `compile_error!`.
 //! - Field skipping → there is no `#[logical_memory(skip)]` attribute.
-//!   If a field truly should not participate, hand-write the impl.
+//!   Composite structs should not skip fields; extend this derive if a
+//!   composite profiling use case needs more macro support.
 //! - Custom frame names → the frame is always `"TypeName.field_name"`
 //!   taken from the struct ident and field ident. For a renamed frame
 //!   (e.g. when wrapping an external type), use the declarative
@@ -65,7 +64,7 @@
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use syn::{Data, DeriveInput, Fields};
+use syn::{parse_quote, Data, DeriveInput, Fields, GenericArgument, PathArguments, Type};
 
 /// Derive `LogicalMemoryProfile` for a struct by delegating to each field.
 ///
@@ -120,7 +119,19 @@ fn derive_logical_memory_profile_impl(input: TokenStream2) -> TokenStream2 {
         }
     });
 
-    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+    let mut generics = input.generics.clone();
+    if has_type_params(&generics) {
+        for field in fields {
+            if type_uses_type_param(&field.ty, &generics) {
+                let ty = &field.ty;
+                generics
+                    .make_where_clause()
+                    .predicates
+                    .push(parse_quote!(#ty: ::ommx::logical_memory::LogicalMemoryProfile));
+            }
+        }
+    }
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
     quote! {
         impl #impl_generics ::ommx::logical_memory::LogicalMemoryProfile
@@ -133,6 +144,78 @@ fn derive_logical_memory_profile_impl(input: TokenStream2) -> TokenStream2 {
             ) {
                 #( #field_visits )*
             }
+        }
+    }
+}
+
+fn has_type_params(generics: &syn::Generics) -> bool {
+    generics.type_params().next().is_some()
+}
+
+fn type_uses_type_param(ty: &Type, generics: &syn::Generics) -> bool {
+    match ty {
+        Type::Array(ty) => type_uses_type_param(&ty.elem, generics),
+        Type::BareFn(ty) => {
+            ty.inputs
+                .iter()
+                .any(|arg| type_uses_type_param(&arg.ty, generics))
+                || matches!(
+                    &ty.output,
+                    syn::ReturnType::Type(_, output) if type_uses_type_param(output, generics)
+                )
+        }
+        Type::Group(ty) => type_uses_type_param(&ty.elem, generics),
+        Type::Paren(ty) => type_uses_type_param(&ty.elem, generics),
+        Type::Path(ty) => {
+            ty.qself
+                .as_ref()
+                .is_some_and(|qself| type_uses_type_param(&qself.ty, generics))
+                || ty.path.segments.iter().any(|segment| {
+                    generics
+                        .type_params()
+                        .any(|param| param.ident == segment.ident)
+                        || path_arguments_use_type_param(&segment.arguments, generics)
+                })
+        }
+        Type::Ptr(ty) => type_uses_type_param(&ty.elem, generics),
+        Type::Reference(ty) => type_uses_type_param(&ty.elem, generics),
+        Type::Slice(ty) => type_uses_type_param(&ty.elem, generics),
+        Type::Tuple(ty) => ty
+            .elems
+            .iter()
+            .any(|elem| type_uses_type_param(elem, generics)),
+        _ => false,
+    }
+}
+
+fn path_arguments_use_type_param(arguments: &PathArguments, generics: &syn::Generics) -> bool {
+    match arguments {
+        PathArguments::None => false,
+        PathArguments::AngleBracketed(arguments) => {
+            arguments.args.iter().any(|argument| match argument {
+                GenericArgument::Type(ty) => type_uses_type_param(ty, generics),
+                GenericArgument::AssocType(assoc) => type_uses_type_param(&assoc.ty, generics),
+                GenericArgument::Constraint(constraint) => constraint.bounds.iter().any(|bound| {
+                    matches!(
+                        bound,
+                        syn::TypeParamBound::Trait(bound)
+                            if bound.path.segments.iter().any(|segment| {
+                                path_arguments_use_type_param(&segment.arguments, generics)
+                            })
+                    )
+                }),
+                _ => false,
+            })
+        }
+        PathArguments::Parenthesized(arguments) => {
+            arguments
+                .inputs
+                .iter()
+                .any(|input| type_uses_type_param(input, generics))
+                || matches!(
+                    &arguments.output,
+                    syn::ReturnType::Type(_, output) if type_uses_type_param(output, generics)
+                )
         }
     }
 }
@@ -223,11 +306,8 @@ mod tests {
 
     #[test]
     fn snapshot_generic_struct() {
-        // Generic parameters are propagated without automatic trait-bound
-        // injection; callers must ensure `T: LogicalMemoryProfile` themselves
-        // (e.g. via a `where` clause on the struct definition).
         let input = quote! {
-            struct Generic<T> where T: ::ommx::logical_memory::LogicalMemoryProfile {
+            struct Generic<T> {
                 value: T,
                 count: u64,
             }
@@ -250,6 +330,39 @@ mod tests {
                 ::ommx::logical_memory::LogicalMemoryProfile::visit_logical_memory(
                     &self.count,
                     path.with("Generic.count").as_mut(),
+                    visitor,
+                );
+            }
+        }
+        "###);
+    }
+
+    #[test]
+    fn snapshot_generic_field_type_bound() {
+        let input = quote! {
+            struct GenericMap<K, V> {
+                entries: std::collections::BTreeMap<K, V>,
+                label: String,
+            }
+        };
+        insta::assert_snapshot!(render(input), @r###"
+        impl<K, V> ::ommx::logical_memory::LogicalMemoryProfile for GenericMap<K, V>
+        where
+            std::collections::BTreeMap<K, V>: ::ommx::logical_memory::LogicalMemoryProfile,
+        {
+            fn visit_logical_memory<__V: ::ommx::logical_memory::LogicalMemoryVisitor>(
+                &self,
+                path: &mut ::ommx::logical_memory::Path,
+                visitor: &mut __V,
+            ) {
+                ::ommx::logical_memory::LogicalMemoryProfile::visit_logical_memory(
+                    &self.entries,
+                    path.with("GenericMap.entries").as_mut(),
+                    visitor,
+                );
+                ::ommx::logical_memory::LogicalMemoryProfile::visit_logical_memory(
+                    &self.label,
+                    path.with("GenericMap.label").as_mut(),
                     visitor,
                 );
             }
