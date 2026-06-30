@@ -142,7 +142,7 @@ impl<'a, T> IntoIterator for &'a LabeledVariableRows<T> {
 /// parameter roles. The enclosing [`crate::Instance`] or
 /// [`crate::ParametricInstance`] validates role disjointness, expression
 /// references, and the shared decision-variable / parameter ID namespace.
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, LogicalMemoryProfile)]
 pub struct DecisionVariableTable {
     rows: LabeledVariableRows<DecisionVariable>,
     fixed_values: BTreeMap<VariableID, f64>,
@@ -335,19 +335,6 @@ impl DecisionVariableTable {
             row.check_value_consistency(*id, *value, atol)?;
         }
         Ok(())
-    }
-}
-
-impl LogicalMemoryProfile for DecisionVariableTable {
-    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
-        self.rows
-            .entries
-            .visit_logical_memory(path.with("entries").as_mut(), visitor);
-        self.rows
-            .labels
-            .visit_logical_memory(path.with("labels").as_mut(), visitor);
-        self.fixed_values
-            .visit_logical_memory(path.with("fixed_values").as_mut(), visitor);
     }
 }
 
