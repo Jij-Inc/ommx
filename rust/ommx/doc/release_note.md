@@ -179,15 +179,16 @@ own decision-variable result rows and labels on `Solution` / `SampleSet`, and
 [`NamedFunctionTable`](crate::NamedFunctionTable), which owns named-function
 rows and labels together.
 
-The split lets the type system enforce invariants more tightly. The
-raw active/removed map mutators on `ConstraintCollection<T>` are
-`pub(crate)` and `Instance` never hands out
-`&mut ConstraintCollection<T>`, so external callers must go through
-the validating `Instance::add_*` / `relax_*` / `restore_*` family —
-which keep variable-id validity (every `id` referenced by a constraint
-exists in `decision_variables`) and active/removed disjointness as
-crate-internal invariants. Label/context mutation rides on its own `_mut()`
-accessor and can't break either.
+The split lets the type system enforce invariants more tightly.
+`ConstraintCollection<T>` no longer exposes raw active/removed/context map
+mutation to `Instance` transformation code. Transformations go through
+operation-level collection effects such as fresh active insertion with context,
+active-row rewrites, lifecycle-preserving replacement, relax, and restore
+through a host-supplied normalizer. External callers still go through the
+validating `Instance::add_*` / `relax_*` / `restore_*` family, which keep
+variable-id validity (every `id` referenced by a constraint exists in
+`decision_variables`), active/removed disjointness, and label/provenance
+sidecar ownership together.
 
 The Python side wraps the same SoA store with two parallel
 user-facing changes:

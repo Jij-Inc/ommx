@@ -284,6 +284,29 @@ impl ConstraintType for Constraint {
 /// Host objects such as [`crate::Instance`] and [`crate::ParametricInstance`]
 /// still own cross-table semantic invariants, including referenced
 /// decision-variable IDs and special-constraint structural requirements.
+///
+/// # Family-local operations
+///
+/// Mathematically, this is one constraint-family component
+/// `C_tau = Active_tau + Removed_tau + Context_tau` of an enclosing instance.
+/// It supports only family-local row effects:
+///
+/// - construction from active rows, removed rows, and context;
+/// - read access to active rows, removed rows, and context;
+/// - fresh active-row insertion together with context;
+/// - lifecycle-preserving row replacement after host validation;
+/// - by-value active-row rewrites that either keep rows active or move them to
+///   removed with a host-supplied reason;
+/// - active-to-removed lifecycle movement;
+/// - restore through a host-supplied normalizer;
+/// - context updates for IDs owned by this collection;
+/// - consuming active rows, removed rows, and context at conversion boundaries.
+///
+/// It intentionally does not expose mutable row references, arbitrary
+/// active/removed map mutation, or semantic operations such as substitution,
+/// partial evaluation, propagation, slack conversion, or capability reduction.
+/// Those are root [`crate::Instance`] / [`crate::ParametricInstance`]
+/// operations that merely induce the row effects above.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConstraintCollection<T: ConstraintType> {
     active: BTreeMap<T::ID, T::Created>,
@@ -694,6 +717,14 @@ impl<T: ConstraintType> Evaluate for ConstraintCollection<T> {
 /// Carries the source [`ConstraintCollection`]'s label/provenance store so that
 /// the Solution layer reads the same canonical sidecars as the originating
 /// instance.
+///
+/// This result table owns only evaluated rows, removed reasons, and context
+/// sidecars for one constraint family. It validates that removed-reason and
+/// context IDs refer to existing evaluated rows, then remains effectively
+/// read-oriented: construction, row/sidecar reads, feasibility queries,
+/// removed-state queries, host-owned by-value replacement when required, and
+/// consumption at conversion boundaries. Global consistency with evaluated
+/// decision-variable rows and named functions belongs to [`crate::Solution`].
 #[derive(Debug, Clone, PartialEq)]
 pub struct EvaluatedCollection<T: ConstraintType> {
     constraints: BTreeMap<T::ID, T::Evaluated>,
@@ -838,6 +869,14 @@ impl<T: ConstraintType> EvaluatedCollection<T> {
 /// Carries the source [`ConstraintCollection`]'s label/provenance store so that
 /// the SampleSet layer reads the same canonical sidecars as the originating
 /// instance.
+///
+/// This result table owns only sampled rows, removed reasons, and context
+/// sidecars for one constraint family. It validates that removed-reason and
+/// context IDs refer to existing sampled rows, exposes read and feasibility
+/// queries, validates sampled-row sample IDs against a host-supplied sample set,
+/// validates used decision-variable IDs against a host-supplied variable set,
+/// and can be consumed at conversion boundaries. Global sample consistency
+/// across tables belongs to [`crate::SampleSet`].
 #[derive(Debug, Clone)]
 pub struct SampledCollection<T: ConstraintType> {
     constraints: BTreeMap<T::ID, T::Sampled>,

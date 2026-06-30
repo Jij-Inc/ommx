@@ -21,6 +21,9 @@ pub type ParameterLabelStore = ModelingLabelStore<VariableID>;
 /// [`ParameterLabelStore`] sidecar. Parameter values are not stored here; they
 /// are supplied later to [`crate::ParametricInstance::with_parameters`].
 ///
+/// Mathematically, this table is only the parameter key set `P` plus modeling
+/// labels. It does not interpret expressions by itself.
+///
 /// # Table-level invariants
 ///
 /// - Every modeling-label ID is owned by this table; labels for unknown
@@ -33,6 +36,18 @@ pub type ParameterLabelStore = ModelingLabelStore<VariableID>;
 /// disjoint from decision-variable IDs, that function bodies reference IDs from
 /// the union of both tables, and that structural decision-variable positions
 /// such as indicator / one-hot / SOS1 members never use parameter IDs.
+///
+/// # Table-local operations
+///
+/// The table supports construction from IDs and labels, read access, fresh
+/// insertion of a parameter ID with its label, label updates for existing IDs,
+/// and consuming the ID/label pair at serialization or conversion boundaries.
+/// Duplicate insertion is rejected rather than interpreted as replacement.
+///
+/// Parameter-value substitution is not a table operation. It is the
+/// [`crate::ParametricInstance::with_parameters`] root operation because it
+/// rewrites every expression-bearing component into a concrete
+/// [`crate::Instance`].
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct ParameterTable {
     ids: BTreeSet<VariableID>,

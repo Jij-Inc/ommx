@@ -117,6 +117,10 @@ impl DecisionVariableTableStage for SampledStage {
 /// owns modeling labels as sidecar columns, and the stage column store owns any
 /// additional sparse columns such as created-stage fixed values.
 ///
+/// Mathematically, this table is the variable-space component
+/// `X = {variable_id -> domain row}` of an enclosing root object. It may enforce
+/// only facts expressible from its own rows, labels, and stage columns.
+///
 /// # Table-level invariants
 ///
 /// - Every modeling-label ID is owned by this table.
@@ -133,6 +137,24 @@ impl DecisionVariableTableStage for SampledStage {
 /// [`crate::SampleSet`] validates role disjointness, expression references,
 /// sample-ID consistency, and the shared decision-variable / parameter ID
 /// namespace.
+///
+/// # Table-local operations
+///
+/// The table supports operations that are local to `X`:
+///
+/// - construction from rows, labels, and stage columns with key consistency
+///   checks;
+/// - read access to keys, rows, labels, and stage columns;
+/// - fresh insertion of a created, evaluated, or sampled row with its label;
+/// - created-stage fixed-value updates for existing rows;
+/// - label updates for existing rows;
+/// - created-stage domain intersection, preserving fixed-value consistency;
+/// - host-computed by-value row replacement plans.
+///
+/// It intentionally does not expose arbitrary deletion or raw mutable row
+/// access. Removing or semantically replacing a decision variable requires the
+/// enclosing root object to prove that objective, constraints, named functions,
+/// dependencies, fixed values, and parameter namespaces remain valid.
 #[derive(Debug, Clone, PartialEq, LogicalMemoryProfile)]
 pub struct DecisionVariableTable<S: DecisionVariableTableStage = Created> {
     entries: BTreeMap<VariableID, S::Row>,

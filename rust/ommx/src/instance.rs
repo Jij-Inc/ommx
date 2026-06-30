@@ -99,8 +99,36 @@ pub enum Sense {
 /// carries, and use [`Instance::reduce_capabilities`] to convert unsupported types
 /// into regular constraints.
 ///
-/// Invariants
-/// -----------
+/// # Mathematical operations
+///
+/// `Instance` is the root owner for operations whose meaning depends on more
+/// than one table. Algebraically, an instance is an optimization problem over
+/// one decision-variable space together with objective, constraint families,
+/// named functions, assignment state, modeling labels, and provenance.
+///
+/// The following operations are therefore `Instance` operations, even when
+/// their implementation eventually changes only one row in one internal table:
+///
+/// - expression-algebra actions such as substitution, partial evaluation, and
+///   binary-power reduction;
+/// - variable-space extensions such as slack-variable introduction;
+/// - constraint-family morphisms such as one-hot, indicator, and SOS1
+///   conversion into regular constraints;
+/// - lifecycle actions such as relax and restore;
+/// - unit propagation as a rewrite system over constraints plus assignment
+///   state;
+/// - modeling-context and provenance pushforward from source rows to generated
+///   rows.
+///
+/// Lower-level tables and collections only apply the table-local row effects
+/// requested by these root operations: fresh insertion, lifecycle-preserving
+/// replacement, active-to-removed movement, restore through a host-supplied
+/// normalizer, label/context updates for owned IDs, or by-value rewrites. They
+/// do not decide whether an expression rewrite, variable-space extension,
+/// family morphism, or restore is semantically valid.
+///
+/// # Invariants
+///
 /// - [`Self::decision_variables`] owns the
 ///   [`DecisionVariableTable`]: row IDs, decision-variable modeling
 ///   labels, and fixed values share one table owner.
@@ -159,7 +187,10 @@ pub enum Sense {
 /// [`Self::add_one_hot_constraint`] / [`Self::add_sos1_constraint`], and the
 /// internal `relax_constraint` / `relax_indicator_constraint` /
 /// `convert_all_one_hots_to_constraints` / `convert_all_sos1_to_constraints`
-/// paths that populate the removed maps.
+/// paths that populate the removed maps. Constraint-family storage is mutated
+/// through operation-level collection primitives so active/removed
+/// disjointness, removed reasons, and context sidecars remain attached to
+/// owned row IDs.
 ///
 #[derive(
     Debug,
@@ -488,8 +519,22 @@ impl Instance {
 
 /// Optimization problem instance with parameters
 ///
-/// Invariants
-/// -----------
+/// # Mathematical operations
+///
+/// `ParametricInstance` owns the same root operations as [`Instance`] and also
+/// owns the parameter-specialization operation. Parameter IDs share the
+/// [`VariableID`] namespace with decision variables, so only the enclosing
+/// parametric instance can interpret an expression reference as a decision
+/// variable or a parameter.
+///
+/// [`Self::with_parameters`] applies a parameter assignment to produce a
+/// concrete [`Instance`]. This is a root operation: it substitutes parameter
+/// values out of every expression-bearing component while preserving structural
+/// constraint families whose member IDs must already be real decision
+/// variables.
+///
+/// # Invariants
+///
 /// - [`Self::decision_variables`] owns the
 ///   [`DecisionVariableTable`]: row IDs, decision-variable modeling
 ///   labels, and fixed values share one table owner.
