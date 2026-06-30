@@ -37,7 +37,7 @@ use crate::{
     },
     v1, ATol, Constraint, Evaluate, SampleID, SampleIDSet, VariableIDSet,
 };
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
 
 fn validate_no_key_overlap<ID, L, R>(
     left: &BTreeMap<ID, L>,
@@ -443,10 +443,9 @@ impl<T: ConstraintType> ConstraintCollection<T> {
 
     /// Replace an active constraint payload while preserving row identity and context.
     fn replace_active(&mut self, id: T::ID, constraint: T::Created) -> Option<T::Created> {
-        if self.active.contains_key(&id) {
-            self.active.insert(id, constraint)
-        } else {
-            None
+        match self.active.entry(id) {
+            Entry::Occupied(mut entry) => Some(entry.insert(constraint)),
+            Entry::Vacant(_) => None,
         }
     }
 
@@ -803,10 +802,9 @@ impl<T: ConstraintType> EvaluatedCollection<T> {
         id: T::ID,
         constraint: T::Evaluated,
     ) -> Option<T::Evaluated> {
-        if self.constraints.contains_key(&id) {
-            self.constraints.insert(id, constraint)
-        } else {
-            None
+        match self.constraints.entry(id) {
+            Entry::Occupied(mut entry) => Some(entry.insert(constraint)),
+            Entry::Vacant(_) => None,
         }
     }
 
