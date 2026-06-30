@@ -1,7 +1,7 @@
 use super::Instance;
 use crate::{
     coeff,
-    constraint::{ConstraintID, Provenance, RemovedReason},
+    constraint::{ConstraintContext, ConstraintID, Provenance, RemovedReason},
     linear,
     sos1_constraint::Sos1ConstraintID,
     Bound, Coefficient, Constraint, Function, Kind, Linear, LinearMonomial, VariableID,
@@ -259,12 +259,13 @@ impl Instance {
         constraint: Constraint,
     ) -> ConstraintID {
         let new_id = self.constraint_collection.unused_id();
+        let context = ConstraintContext {
+            provenance: vec![Provenance::Sos1Constraint(sos1_id)],
+            ..Default::default()
+        };
         self.constraint_collection
-            .active_mut()
-            .insert(new_id, constraint);
-        self.constraint_collection
-            .context_mut()
-            .push_provenance(new_id, Provenance::Sos1Constraint(sos1_id));
+            .insert_with(new_id, constraint, context)
+            .expect("new_id was allocated from this collection");
         new_id
     }
 }

@@ -209,8 +209,12 @@ mod tests {
         .unwrap();
         instance
             .one_hot_constraint_collection
-            .active_mut()
-            .insert(OneHotConstraintID::from(0), one_hot);
+            .insert_with(
+                OneHotConstraintID::from(0),
+                one_hot,
+                crate::ConstraintContext::default(),
+            )
+            .unwrap();
 
         let err = instance.as_qubo_format().unwrap_err();
         let msg = err.to_string() + " " + &err.root_cause().to_string();

@@ -1,8 +1,8 @@
 use super::*;
 use crate::Result;
 use crate::{
-    constraint::RemovedReason, ATol, Bound, Evaluate, Kind, Propagate, PropagateOutcome,
-    VariableIDSet,
+    constraint::RemovedReason, constraint_type::ActiveConstraintUpdate, ATol, Bound, Evaluate,
+    Kind, Propagate, PropagateOutcome, VariableIDSet,
 };
 use std::collections::BTreeMap;
 
@@ -451,83 +451,72 @@ impl Instance {
             changed = false;
 
             // --- OneHot constraints ---
-            let one_hots = std::mem::take(self.one_hot_constraint_collection.active_mut());
-            for (id, oh) in one_hots {
-                let (outcome, additional) = oh.propagate(&expanded, atol)?;
-                merge_state(&mut expanded, additional, atol, &mut changed)?;
-                match outcome {
-                    PropagateOutcome::Active(oh) => {
-                        self.one_hot_constraint_collection
-                            .active_mut()
-                            .insert(id, oh);
+            self.one_hot_constraint_collection.rewrite_active(
+                |_, oh, _| -> crate::Result<ActiveConstraintUpdate<crate::OneHotConstraint>> {
+                    let (outcome, additional) = oh.propagate(&expanded, atol)?;
+                    merge_state(&mut expanded, additional, atol, &mut changed)?;
+                    match outcome {
+                        PropagateOutcome::Active(oh) => Ok(ActiveConstraintUpdate::Active(oh)),
+                        PropagateOutcome::Consumed(oh) => Ok(ActiveConstraintUpdate::Removed {
+                            constraint: oh,
+                            reason: propagation_reason.clone(),
+                        }),
+                        PropagateOutcome::Transformed { new, .. } => match new {},
                     }
-                    PropagateOutcome::Consumed(oh) => {
-                        self.one_hot_constraint_collection
-                            .removed_mut()
-                            .insert(id, (oh, propagation_reason.clone()));
-                    }
-                    PropagateOutcome::Transformed { new, .. } => match new {},
-                }
-            }
+                },
+            )?;
 
             // --- SOS1 constraints ---
-            let sos1s = std::mem::take(self.sos1_constraint_collection.active_mut());
-            for (id, sos1) in sos1s {
-                let (outcome, additional) = sos1.propagate(&expanded, atol)?;
-                merge_state(&mut expanded, additional, atol, &mut changed)?;
-                match outcome {
-                    PropagateOutcome::Active(sos1) => {
-                        self.sos1_constraint_collection
-                            .active_mut()
-                            .insert(id, sos1);
+            self.sos1_constraint_collection.rewrite_active(
+                |_, sos1, _| -> crate::Result<ActiveConstraintUpdate<crate::Sos1Constraint>> {
+                    let (outcome, additional) = sos1.propagate(&expanded, atol)?;
+                    merge_state(&mut expanded, additional, atol, &mut changed)?;
+                    match outcome {
+                        PropagateOutcome::Active(sos1) => Ok(ActiveConstraintUpdate::Active(sos1)),
+                        PropagateOutcome::Consumed(sos1) => Ok(ActiveConstraintUpdate::Removed {
+                            constraint: sos1,
+                            reason: propagation_reason.clone(),
+                        }),
+                        PropagateOutcome::Transformed { new, .. } => match new {},
                     }
-                    PropagateOutcome::Consumed(sos1) => {
-                        self.sos1_constraint_collection
-                            .removed_mut()
-                            .insert(id, (sos1, propagation_reason.clone()));
-                    }
-                    PropagateOutcome::Transformed { new, .. } => match new {},
-                }
-            }
+                },
+            )?;
 
             // --- Indicator constraints ---
-            let indicators = std::mem::take(self.indicator_constraint_collection.active_mut());
-            for (id, ic) in indicators {
-                let (outcome, additional) = ic.propagate(&expanded, atol)?;
-                merge_state(&mut expanded, additional, atol, &mut changed)?;
-                match outcome {
-                    PropagateOutcome::Active(ic) => {
-                        self.indicator_constraint_collection
-                            .active_mut()
-                            .insert(id, ic);
+            let mut promoted_constraints = Vec::new();
+            self.indicator_constraint_collection
+                .rewrite_active(|id, ic, context| -> crate::Result<ActiveConstraintUpdate<crate::IndicatorConstraint>> {
+                    let (outcome, additional) = ic.propagate(&expanded, atol)?;
+                    merge_state(&mut expanded, additional, atol, &mut changed)?;
+                    match outcome {
+                        PropagateOutcome::Active(ic) => Ok(ActiveConstraintUpdate::Active(ic)),
+                        PropagateOutcome::Consumed(ic) => Ok(ActiveConstraintUpdate::Removed {
+                            constraint: ic,
+                            reason: propagation_reason.clone(),
+                        }),
+                        PropagateOutcome::Transformed {
+                            original,
+                            new: constraint,
+                        } => {
+                            // Indicator=1 → promote inner constraint to regular constraint.
+                            // Carry over the indicator's context into the regular collection's
+                            // store and record the promotion in provenance.
+                            let mut new_context = context.collect_for(id);
+                            new_context
+                                .provenance
+                                .push(crate::constraint::Provenance::IndicatorConstraint(id));
+                            promoted_constraints.push((constraint, new_context));
+                            Ok(ActiveConstraintUpdate::Removed {
+                                constraint: original,
+                                reason: propagation_reason.clone(),
+                            })
+                        }
                     }
-                    PropagateOutcome::Consumed(ic) => {
-                        self.indicator_constraint_collection
-                            .removed_mut()
-                            .insert(id, (ic, propagation_reason.clone()));
-                    }
-                    PropagateOutcome::Transformed {
-                        original,
-                        new: constraint,
-                    } => {
-                        // Indicator=1 → promote inner constraint to regular constraint.
-                        // Carry over the indicator's context into the regular collection's
-                        // store and record the promotion in provenance.
-                        let cid = self.constraint_collection.unused_id();
-                        let mut new_context = self
-                            .indicator_constraint_collection
-                            .context()
-                            .collect_for(id);
-                        new_context
-                            .provenance
-                            .push(crate::constraint::Provenance::IndicatorConstraint(id));
-                        self.constraint_collection
-                            .insert_with(cid, constraint, new_context)?;
-                        self.indicator_constraint_collection
-                            .removed_mut()
-                            .insert(id, (original, propagation_reason.clone()));
-                    }
-                }
+                })?;
+            for (constraint, context) in promoted_constraints {
+                let id = self.constraint_collection.unused_id();
+                self.constraint_collection
+                    .insert_with(id, constraint, context)?;
             }
         }
 
@@ -887,8 +876,12 @@ mod tests {
             OneHotConstraint::new([1, 2, 3].into_iter().map(VariableID::from).collect()).unwrap();
         instance
             .one_hot_constraint_collection
-            .active_mut()
-            .insert(OneHotConstraintID::from(1), oh);
+            .insert_with(
+                OneHotConstraintID::from(1),
+                oh,
+                crate::ConstraintContext::default(),
+            )
+            .unwrap();
 
         // Fix x2 = 1 → OneHot propagation should fix x1=0, x3=0
         let state = v1::State::from(HashMap::from([(2, 1.0)]));
@@ -937,8 +930,12 @@ mod tests {
             OneHotConstraint::new([1, 2, 3].into_iter().map(VariableID::from).collect()).unwrap();
         instance
             .one_hot_constraint_collection
-            .active_mut()
-            .insert(OneHotConstraintID::from(1), oh);
+            .insert_with(
+                OneHotConstraintID::from(1),
+                oh,
+                crate::ConstraintContext::default(),
+            )
+            .unwrap();
 
         // Fix x1=0, x2=0 → unit propagation: x3 must be 1
         let state = v1::State::from(HashMap::from([(1, 0.0), (2, 0.0)]));
@@ -978,14 +975,22 @@ mod tests {
         let oh = OneHotConstraint::new([1, 2].into_iter().map(VariableID::from).collect()).unwrap();
         instance
             .one_hot_constraint_collection
-            .active_mut()
-            .insert(OneHotConstraintID::from(1), oh);
+            .insert_with(
+                OneHotConstraintID::from(1),
+                oh,
+                crate::ConstraintContext::default(),
+            )
+            .unwrap();
 
         let sos1 = Sos1Constraint::new([2, 3].into_iter().map(VariableID::from).collect()).unwrap();
         instance
             .sos1_constraint_collection
-            .active_mut()
-            .insert(Sos1ConstraintID::from(1), sos1);
+            .insert_with(
+                Sos1ConstraintID::from(1),
+                sos1,
+                crate::ConstraintContext::default(),
+            )
+            .unwrap();
 
         // Fix x1=1 → OneHot: x2=0 → SOS1{x2,x3} shrinks to SOS1{x3}
         let state = v1::State::from(HashMap::from([(1, 1.0)]));

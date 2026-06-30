@@ -15,9 +15,12 @@ impl Instance {
         let mut changed = false;
         let mut updated = self.clone();
         changed |= updated.objective.reduce_binary_power(&binary_ids)?;
-        for constraint in updated.constraint_collection.active_mut().values_mut() {
-            changed |= constraint.reduce_binary_power(&binary_ids)?;
-        }
+        updated
+            .constraint_collection
+            .try_for_each_active_mut(|_, constraint| {
+                changed |= constraint.reduce_binary_power(&binary_ids)?;
+                Ok(())
+            })?;
         // Note: We don't need to reduce in removed_constraints since they are not active
         *self = updated;
         Ok(changed)

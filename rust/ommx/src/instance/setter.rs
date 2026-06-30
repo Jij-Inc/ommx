@@ -213,23 +213,7 @@ impl Instance {
     ) -> crate::Result<Option<Constraint>> {
         // Validate that all variables in the constraints are defined
         self.validate_required_ids(constraint.required_ids())?;
-        use std::collections::btree_map::Entry;
-        if let Entry::Occupied(mut o) = self.constraint_collection.removed_mut().entry(id) {
-            let (rc, _reason) = o.get_mut();
-            let old_function = std::mem::replace(&mut rc.stage.function, constraint.stage.function);
-            let old_equality = std::mem::replace(&mut rc.equality, constraint.equality);
-            let removed = Constraint {
-                equality: old_equality,
-                stage: crate::constraint::CreatedData {
-                    function: old_function,
-                },
-            };
-            return Ok(Some(removed));
-        }
-        Ok(self
-            .constraint_collection
-            .active_mut()
-            .insert(id, constraint))
+        Ok(self.constraint_collection.replace_or_insert(id, constraint))
     }
 
     /// Insert multiple `(id, constraint)` pairs into the instance with a single validation pass.
@@ -275,25 +259,7 @@ impl Instance {
         // Insert all constraints (validation already done)
         let mut replaced = BTreeMap::new();
         for (id, constraint) in constraints {
-            use std::collections::btree_map::Entry;
-            let old = if let Entry::Occupied(mut o) =
-                self.constraint_collection.removed_mut().entry(id)
-            {
-                let (rc, _reason) = o.get_mut();
-                let old_function =
-                    std::mem::replace(&mut rc.stage.function, constraint.stage.function);
-                let old_equality = std::mem::replace(&mut rc.equality, constraint.equality);
-                Some(Constraint {
-                    equality: old_equality,
-                    stage: crate::constraint::CreatedData {
-                        function: old_function,
-                    },
-                })
-            } else {
-                self.constraint_collection
-                    .active_mut()
-                    .insert(id, constraint)
-            };
+            let old = self.constraint_collection.replace_or_insert(id, constraint);
             if let Some(old_constraint) = old {
                 replaced.insert(id, old_constraint);
             }

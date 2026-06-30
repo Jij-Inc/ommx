@@ -60,20 +60,6 @@ fn ensure_modeling_label_target<ID: std::fmt::Debug>(
     Ok(())
 }
 
-fn ensure_constraint_context_target<ID: std::fmt::Debug>(
-    contains: bool,
-    owner_name: &str,
-    id: ID,
-) -> crate::Result<()> {
-    if !contains {
-        crate::bail!(
-            { ?id },
-            "Constraint label/provenance references unknown {owner_name} ID {id:?}",
-        );
-    }
-    Ok(())
-}
-
 /// A constraint type capability flag for non-standard constraint types.
 ///
 /// Standard constraints (`f(x) = 0` or `f(x) <= 0`) are always supported by all adapters
@@ -331,14 +317,8 @@ impl Instance {
         id: ConstraintID,
         context: ConstraintContext,
     ) -> crate::Result<()> {
-        ensure_constraint_context_target(
-            self.constraint_collection.active().contains_key(&id)
-                || self.constraint_collection.removed().contains_key(&id),
-            "constraint",
-            id,
-        )?;
-        self.constraint_collection.context_mut().insert(id, context);
-        Ok(())
+        self.constraint_collection
+            .set_context_for_owner(id, context, "constraint")
     }
 
     /// Active indicator constraints.
@@ -373,21 +353,11 @@ impl Instance {
         id: crate::IndicatorConstraintID,
         context: ConstraintContext,
     ) -> crate::Result<()> {
-        ensure_constraint_context_target(
-            self.indicator_constraint_collection
-                .active()
-                .contains_key(&id)
-                || self
-                    .indicator_constraint_collection
-                    .removed()
-                    .contains_key(&id),
-            "indicator constraint",
+        self.indicator_constraint_collection.set_context_for_owner(
             id,
-        )?;
-        self.indicator_constraint_collection
-            .context_mut()
-            .insert(id, context);
-        Ok(())
+            context,
+            "indicator constraint",
+        )
     }
 
     /// Active one-hot constraints.
@@ -418,21 +388,8 @@ impl Instance {
         id: crate::OneHotConstraintID,
         context: ConstraintContext,
     ) -> crate::Result<()> {
-        ensure_constraint_context_target(
-            self.one_hot_constraint_collection
-                .active()
-                .contains_key(&id)
-                || self
-                    .one_hot_constraint_collection
-                    .removed()
-                    .contains_key(&id),
-            "one-hot constraint",
-            id,
-        )?;
         self.one_hot_constraint_collection
-            .context_mut()
-            .insert(id, context);
-        Ok(())
+            .set_context_for_owner(id, context, "one-hot constraint")
     }
 
     /// Active SOS1 constraints.
@@ -463,16 +420,8 @@ impl Instance {
         id: crate::Sos1ConstraintID,
         context: ConstraintContext,
     ) -> crate::Result<()> {
-        ensure_constraint_context_target(
-            self.sos1_constraint_collection.active().contains_key(&id)
-                || self.sos1_constraint_collection.removed().contains_key(&id),
-            "SOS1 constraint",
-            id,
-        )?;
         self.sos1_constraint_collection
-            .context_mut()
-            .insert(id, context);
-        Ok(())
+            .set_context_for_owner(id, context, "SOS1 constraint")
     }
 
     /// Returns the set of non-standard constraint capabilities required by this instance.
@@ -776,14 +725,8 @@ impl ParametricInstance {
         id: ConstraintID,
         context: ConstraintContext,
     ) -> crate::Result<()> {
-        ensure_constraint_context_target(
-            self.constraint_collection.active().contains_key(&id)
-                || self.constraint_collection.removed().contains_key(&id),
-            "constraint",
-            id,
-        )?;
-        self.constraint_collection.context_mut().insert(id, context);
-        Ok(())
+        self.constraint_collection
+            .set_context_for_owner(id, context, "constraint")
     }
 
     /// Active indicator constraints.
@@ -819,21 +762,11 @@ impl ParametricInstance {
         id: crate::IndicatorConstraintID,
         context: ConstraintContext,
     ) -> crate::Result<()> {
-        ensure_constraint_context_target(
-            self.indicator_constraint_collection
-                .active()
-                .contains_key(&id)
-                || self
-                    .indicator_constraint_collection
-                    .removed()
-                    .contains_key(&id),
-            "indicator constraint",
+        self.indicator_constraint_collection.set_context_for_owner(
             id,
-        )?;
-        self.indicator_constraint_collection
-            .context_mut()
-            .insert(id, context);
-        Ok(())
+            context,
+            "indicator constraint",
+        )
     }
 
     /// Active one-hot constraints.
@@ -865,21 +798,8 @@ impl ParametricInstance {
         id: crate::OneHotConstraintID,
         context: ConstraintContext,
     ) -> crate::Result<()> {
-        ensure_constraint_context_target(
-            self.one_hot_constraint_collection
-                .active()
-                .contains_key(&id)
-                || self
-                    .one_hot_constraint_collection
-                    .removed()
-                    .contains_key(&id),
-            "one-hot constraint",
-            id,
-        )?;
         self.one_hot_constraint_collection
-            .context_mut()
-            .insert(id, context);
-        Ok(())
+            .set_context_for_owner(id, context, "one-hot constraint")
     }
 
     /// Active SOS1 constraints.
@@ -911,16 +831,8 @@ impl ParametricInstance {
         id: crate::Sos1ConstraintID,
         context: ConstraintContext,
     ) -> crate::Result<()> {
-        ensure_constraint_context_target(
-            self.sos1_constraint_collection.active().contains_key(&id)
-                || self.sos1_constraint_collection.removed().contains_key(&id),
-            "SOS1 constraint",
-            id,
-        )?;
         self.sos1_constraint_collection
-            .context_mut()
-            .insert(id, context);
-        Ok(())
+            .set_context_for_owner(id, context, "SOS1 constraint")
     }
 }
 

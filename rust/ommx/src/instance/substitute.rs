@@ -40,11 +40,7 @@ impl Substitute for Instance {
         // Removed constraints are not substituted here; they will be substituted
         // when restored via `restore_constraint`.
         for constraint_id in &affected_constraint_ids {
-            if let Some(constraint) = self
-                .constraint_collection
-                .active_mut()
-                .get_mut(constraint_id)
-            {
+            if let Some(constraint) = self.constraint_collection.get_active_mut(constraint_id) {
                 substitute_acyclic(&mut constraint.stage.function, acyclic)?;
             }
         }
@@ -64,16 +60,14 @@ impl Substitute for Instance {
         }
 
         // Apply substitution to the function part of active indicator constraints
-        for ic in self
-            .indicator_constraint_collection
-            .active_mut()
-            .values_mut()
-        {
-            let required_ids = ic.stage.function.required_ids();
-            if !required_ids.is_disjoint(&substituted_variables) {
-                substitute_acyclic(&mut ic.stage.function, acyclic)?;
-            }
-        }
+        self.indicator_constraint_collection
+            .try_for_each_active_mut(|_, ic| -> Result<(), SubstitutionError> {
+                let required_ids = ic.stage.function.required_ids();
+                if !required_ids.is_disjoint(&substituted_variables) {
+                    substitute_acyclic(&mut ic.stage.function, acyclic)?;
+                }
+                Ok(())
+            })?;
 
         // Check that no one-hot or SOS1 variable is being substituted.
         for (&cid, oh) in self.one_hot_constraint_collection.active().iter() {
@@ -156,11 +150,7 @@ impl Substitute for ParametricInstance {
         substitute_acyclic(&mut self.objective, acyclic)?;
 
         for constraint_id in &affected_constraint_ids {
-            if let Some(constraint) = self
-                .constraint_collection
-                .active_mut()
-                .get_mut(constraint_id)
-            {
+            if let Some(constraint) = self.constraint_collection.get_active_mut(constraint_id) {
                 substitute_acyclic(&mut constraint.stage.function, acyclic)?;
             }
         }
@@ -173,16 +163,14 @@ impl Substitute for ParametricInstance {
                 });
             }
         }
-        for ic in self
-            .indicator_constraint_collection
-            .active_mut()
-            .values_mut()
-        {
-            let required_ids = ic.stage.function.required_ids();
-            if !required_ids.is_disjoint(&substituted_variables) {
-                substitute_acyclic(&mut ic.stage.function, acyclic)?;
-            }
-        }
+        self.indicator_constraint_collection
+            .try_for_each_active_mut(|_, ic| -> Result<(), SubstitutionError> {
+                let required_ids = ic.stage.function.required_ids();
+                if !required_ids.is_disjoint(&substituted_variables) {
+                    substitute_acyclic(&mut ic.stage.function, acyclic)?;
+                }
+                Ok(())
+            })?;
 
         for (&cid, oh) in self.one_hot_constraint_collection.active().iter() {
             for var_id in &oh.variables {

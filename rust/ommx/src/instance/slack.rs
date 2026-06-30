@@ -88,8 +88,7 @@ impl Instance {
 
         let constraint = self
             .constraint_collection
-            .active_mut()
-            .get_mut(&constraint_id)
+            .get_active_mut(&constraint_id)
             .expect("constraint presence was verified above");
         *constraint.function_mut() = new_function;
         constraint.equality = Equality::EqualToZero;
@@ -183,8 +182,7 @@ impl Instance {
 
         let constraint = self
             .constraint_collection
-            .active_mut()
-            .get_mut(&constraint_id)
+            .get_active_mut(&constraint_id)
             .expect("constraint presence was verified above");
         *constraint.function_mut() = new_function;
 

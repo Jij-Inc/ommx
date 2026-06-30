@@ -1,6 +1,6 @@
 use super::Instance;
 use crate::{
-    constraint::{ConstraintID, Equality, Provenance, RemovedReason},
+    constraint::{ConstraintContext, ConstraintID, Equality, Provenance, RemovedReason},
     indicator_constraint::IndicatorConstraintID,
     Bounds, Coefficient, Constraint, Evaluate, Kind, Linear, LinearMonomial,
 };
@@ -249,12 +249,13 @@ impl Instance {
         constraint: Constraint,
     ) -> ConstraintID {
         let new_id = self.constraint_collection.unused_id();
+        let context = ConstraintContext {
+            provenance: vec![Provenance::IndicatorConstraint(indicator_id)],
+            ..Default::default()
+        };
         self.constraint_collection
-            .active_mut()
-            .insert(new_id, constraint);
-        self.constraint_collection
-            .context_mut()
-            .push_provenance(new_id, Provenance::IndicatorConstraint(indicator_id));
+            .insert_with(new_id, constraint, context)
+            .expect("new_id was allocated from this collection");
         new_id
     }
 }

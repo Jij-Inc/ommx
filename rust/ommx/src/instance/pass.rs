@@ -25,8 +25,7 @@ impl Instance {
         let fixed_state = self.fixed_state();
         let constraint = self
             .constraint_collection
-            .active_mut()
-            .get_mut(&id)
+            .get_active_mut(&id)
             .expect("restore() just inserted this id into active");
 
         // The following operations are infallible for regular constraints:
@@ -98,8 +97,7 @@ impl Instance {
         let fixed_state = self.fixed_state();
         let ic = self
             .indicator_constraint_collection
-            .active_mut()
-            .get_mut(&id)
+            .get_active_mut(&id)
             .expect("restore() just inserted this id into active");
 
         // The following operations are infallible because:
@@ -296,8 +294,12 @@ mod tests {
         );
         instance
             .indicator_constraint_collection
-            .active_mut()
-            .insert(IndicatorConstraintID::from(1), ic);
+            .insert_with(
+                IndicatorConstraintID::from(1),
+                ic,
+                crate::ConstraintContext::default(),
+            )
+            .unwrap();
 
         assert_eq!(instance.indicator_constraints().len(), 1);
         assert!(instance.removed_indicator_constraints().is_empty());
@@ -339,8 +341,12 @@ mod tests {
         );
         instance
             .indicator_constraint_collection
-            .active_mut()
-            .insert(IndicatorConstraintID::from(1), ic);
+            .insert_with(
+                IndicatorConstraintID::from(1),
+                ic,
+                crate::ConstraintContext::default(),
+            )
+            .unwrap();
 
         instance
             .relax_indicator_constraint(IndicatorConstraintID::from(1), "test".to_string(), [])
@@ -390,8 +396,12 @@ mod tests {
         );
         instance
             .indicator_constraint_collection
-            .active_mut()
-            .insert(IndicatorConstraintID::from(1), ic);
+            .insert_with(
+                IndicatorConstraintID::from(1),
+                ic,
+                crate::ConstraintContext::default(),
+            )
+            .unwrap();
 
         instance
             .relax_indicator_constraint(IndicatorConstraintID::from(1), "test".to_string(), [])
@@ -454,8 +464,12 @@ mod tests {
         );
         instance
             .indicator_constraint_collection
-            .active_mut()
-            .insert(IndicatorConstraintID::from(1), ic);
+            .insert_with(
+                IndicatorConstraintID::from(1),
+                ic,
+                crate::ConstraintContext::default(),
+            )
+            .unwrap();
 
         // Relax, then substitute indicator variable x10 = x20
         instance
