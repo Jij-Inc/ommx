@@ -22,7 +22,11 @@ pub trait DecisionVariableTableStage: sealed::Sealed {
     /// Intrinsic row payload stored in the table.
     type Row;
     /// Sparse sidecar columns owned by this table stage.
-    type Columns;
+    ///
+    /// `Default` is the domain-empty column set for the stage. For example,
+    /// created-stage fixed values default to an empty map, while evaluated and
+    /// sampled stages currently default to their empty column schemas.
+    type Columns: Default;
     /// Additional context needed to validate stage-specific table invariants.
     type TableValidationContext: Copy;
 
@@ -39,17 +43,17 @@ impl sealed::Sealed for Evaluated {}
 impl sealed::Sealed for SampledStage {}
 
 /// Definition-stage sparse columns.
-#[derive(Debug, Clone, PartialEq, LogicalMemoryProfile)]
+#[derive(Debug, Clone, PartialEq, Default, LogicalMemoryProfile)]
 pub struct CreatedDecisionVariableColumns {
     fixed_values: BTreeMap<VariableID, f64>,
 }
 
 /// Empty column set for evaluated decision-variable tables.
-#[derive(Debug, Clone, PartialEq, LogicalMemoryProfile)]
+#[derive(Debug, Clone, PartialEq, Default, LogicalMemoryProfile)]
 pub struct EvaluatedDecisionVariableColumns {}
 
 /// Empty column set for sampled decision-variable tables.
-#[derive(Debug, Clone, PartialEq, LogicalMemoryProfile)]
+#[derive(Debug, Clone, PartialEq, Default, LogicalMemoryProfile)]
 pub struct SampledDecisionVariableColumns {}
 
 impl DecisionVariableTableStage for Created {
@@ -230,14 +234,12 @@ impl<S: DecisionVariableTableStage> DecisionVariableTable<S> {
     }
 }
 
-impl Default for DecisionVariableTable<Created> {
+impl<S: DecisionVariableTableStage> Default for DecisionVariableTable<S> {
     fn default() -> Self {
         Self {
             entries: BTreeMap::default(),
             labels: VariableLabelStore::default(),
-            columns: CreatedDecisionVariableColumns {
-                fixed_values: BTreeMap::new(),
-            },
+            columns: S::Columns::default(),
         }
     }
 }
@@ -461,6 +463,19 @@ mod tests {
         labels: VariableLabelStore,
     ) -> crate::Result<DecisionVariableTable> {
         DecisionVariableTable::with_fixed_values(entries, labels, BTreeMap::new(), ATol::default())
+    }
+
+    #[test]
+    fn default_tables_use_domain_empty_sidecars() {
+        let created = DecisionVariableTable::default();
+        assert!(created.is_empty());
+        assert!(created.fixed_values().is_empty());
+
+        let evaluated = EvaluatedDecisionVariableTable::default();
+        assert!(evaluated.is_empty());
+
+        let sampled = SampledDecisionVariableTable::default();
+        assert!(sampled.is_empty());
     }
 
     #[test]
