@@ -50,8 +50,7 @@ def test_decision_variable_role_partitions():
     assert instance.irrelevant_decision_variable_ids() == {3}
 
 
-def test_partial_evaluate_rejects_dependent_variable_value():
-    """A dependent variable is owned by decision_variable_dependency, not fixed values."""
+def _dependent_instance_y_eq_2x():
     x = {i: DecisionVariable.continuous(i) for i in [1, 10]}
     instance = Instance.from_components(
         decision_variables=list(x.values()),
@@ -60,34 +59,68 @@ def test_partial_evaluate_rejects_dependent_variable_value():
         sense=Instance.MINIMIZE,
     )
     instance.substitute({10: x[1] + x[1]})
+    return instance
 
-    with pytest.raises(ValueError, match=r"ID=10.*cannot be fixed"):
-        instance.partial_evaluate({10: 4.0})
 
-    with pytest.raises(ValueError, match=r"ID=10.*cannot be fixed"):
-        instance.partial_evaluate({1: 2.0, 10: 4.0})
+def test_partial_evaluate_normalizes_constant_dependency_from_input():
+    """Fixing dependency inputs moves constant dependent variables to fixed values."""
+    instance = _dependent_instance_y_eq_2x()
+
+    updated = instance.partial_evaluate({1: 2.0})
+
+    assert updated.fixed_decision_variables() == {1: 2.0, 10: 4.0}
+    assert updated.dependent_decision_variable_ids() == set()
+    assert updated.decision_variable_role(10) == DecisionVariableRole.Fixed
+    assert updated.populate_state({}).entries == {1: 2.0, 10: 4.0}
+
+
+def test_partial_evaluate_accepts_consistent_dependent_assertion():
+    """A dependent-key value is accepted when it only asserts a provable value."""
+    instance = _dependent_instance_y_eq_2x()
+
+    updated = instance.partial_evaluate({1: 2.0, 10: 4.0})
+
+    assert updated.fixed_decision_variables() == {1: 2.0, 10: 4.0}
+    assert updated.dependent_decision_variable_ids() == set()
+
+
+def test_partial_evaluate_rejects_inconsistent_dependent_assertion():
+    """An inconsistent dependent-key assertion fails without mutating the instance."""
+    instance = _dependent_instance_y_eq_2x()
+
+    with pytest.raises(ValueError, match=r"dependent variable .*inconsistent"):
+        instance.partial_evaluate({1: 2.0, 10: 5.0})
 
     assert instance.fixed_decision_variables() == {}
     assert instance.dependent_decision_variable_ids() == {10}
 
 
-def test_partial_evaluate_keeps_constant_dependency_dependent():
-    """Fixing dependency inputs can make the RHS constant without making the key fixed."""
-    x = {i: DecisionVariable.continuous(i) for i in [1, 10]}
+def test_partial_evaluate_rejects_unverifiable_dependent_assertion():
+    """A dependent-key assertion alone is rejected because it would need inversion."""
+    instance = _dependent_instance_y_eq_2x()
+
+    with pytest.raises(ValueError, match=r"ID=10.*cannot be asserted"):
+        instance.partial_evaluate({10: 4.0})
+
+    assert instance.fixed_decision_variables() == {}
+    assert instance.dependent_decision_variable_ids() == {10}
+
+
+def test_partial_evaluate_normalizes_dependency_chain():
+    """Dependency chains are normalized after earlier dependent variables become fixed."""
+    x = {i: DecisionVariable.continuous(i) for i in [1, 10, 11]}
     instance = Instance.from_components(
         decision_variables=list(x.values()),
         objective=x[1],
         constraints={},
         sense=Instance.MINIMIZE,
     )
-    instance.substitute({10: x[1] + x[1]})
+    instance.substitute({10: x[1] + x[1], 11: x[10] + 1})
 
     updated = instance.partial_evaluate({1: 2.0})
 
-    assert updated.fixed_decision_variables() == {1: 2.0}
-    assert updated.dependent_decision_variable_ids() == {10}
-    assert updated.decision_variable_role(10) == DecisionVariableRole.Dependent
-    assert updated.populate_state({}).entries == {1: 2.0, 10: 4.0}
+    assert updated.fixed_decision_variables() == {1: 2.0, 10: 4.0, 11: 5.0}
+    assert updated.dependent_decision_variable_ids() == set()
 
 
 def test_bound_wrapper_functionality():

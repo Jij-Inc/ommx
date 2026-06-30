@@ -631,6 +631,13 @@ table schema with an empty fixed-value column, not a separate construction mode.
 
 `Instance::partial_evaluate` writes new fixed values into the created
 decision-variable table.
+State entries for keys in `decision_variable_dependency` are treated as
+consistency assertions: they are accepted only when the dependency RHS is fully
+determined by other fixed/state values and matches within tolerance. For
+example, with `y <- 2 * x`, `partial_evaluate({x: 2, y: 4})` is accepted and
+normalizes `y` into `fixed_decision_variable_values`, while
+`partial_evaluate({y: 4})` is rejected because it would require solving the
+dependency backwards.
 Legacy v1 protobuf `substituted_value` fields are still accepted on parse, but
 the parser drains them into the same table before constructing the domain
 model. The host builder rejects states where a fixed variable is also
