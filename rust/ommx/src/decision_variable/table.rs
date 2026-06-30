@@ -64,13 +64,18 @@ impl DecisionVariableTableStage for Created {
     fn validate_stage_table_invariants(
         entries: &BTreeMap<VariableID, Self::Row>,
         columns: &Self::Columns,
-        context: Self::TableValidationContext,
+        atol: Self::TableValidationContext,
     ) -> crate::Result<()> {
-        DecisionVariableTable::<Created>::validate_fixed_values(
-            entries,
-            &columns.fixed_values,
-            context,
-        )
+        for (id, value) in &columns.fixed_values {
+            let Some(row) = entries.get(id) else {
+                crate::bail!(
+                    { ?id },
+                    "Fixed decision-variable value references unknown decision variable ID {id:?}",
+                );
+            };
+            row.check_value_consistency(*id, *value, atol)?;
+        }
+        Ok(())
     }
 }
 
@@ -362,23 +367,6 @@ impl DecisionVariableTable<Created> {
             self.entries.insert(id, updated);
         }
         Ok(changed)
-    }
-
-    fn validate_fixed_values(
-        entries: &BTreeMap<VariableID, DecisionVariable>,
-        fixed_values: &BTreeMap<VariableID, f64>,
-        atol: ATol,
-    ) -> crate::Result<()> {
-        for (id, value) in fixed_values {
-            let Some(row) = entries.get(id) else {
-                crate::bail!(
-                    { ?id },
-                    "Fixed decision-variable value references unknown decision variable ID {id:?}",
-                );
-            };
-            row.check_value_consistency(*id, *value, atol)?;
-        }
-        Ok(())
     }
 }
 
