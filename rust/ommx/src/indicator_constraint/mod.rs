@@ -23,6 +23,7 @@ use std::collections::BTreeMap;
     Deref,
     serde::Serialize,
     serde::Deserialize,
+    crate::logical_memory::LogicalMemoryProfile,
 )]
 #[serde(transparent)]
 pub struct IndicatorConstraintID(u64);

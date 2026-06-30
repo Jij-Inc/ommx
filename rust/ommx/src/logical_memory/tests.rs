@@ -155,7 +155,7 @@ fn test_btreemap_with_linear() {
 
     let folded = logical_memory_to_folded(&map);
     insta::assert_snapshot!(folded, @r###"
-    BTreeMap[key] 16
+    BTreeMap[key];VariableID.0 16
     BTreeMap[stack] 24
     PolynomialBase.terms 112
     "###);
@@ -173,7 +173,7 @@ fn test_hashmap_with_linear() {
     let folded = logical_memory_to_folded(&map);
     // Note: HashMap iteration order is non-deterministic, but snapshots should still be stable
     insta::assert_snapshot!(folded, @r###"
-    HashMap[key] 16
+    HashMap[key];VariableID.0 16
     HashMap[stack] 48
     PolynomialBase.terms 112
     "###);
@@ -191,6 +191,113 @@ fn test_vec_with_linear() {
     insta::assert_snapshot!(folded, @r###"
     PolynomialBase.terms 168
     Vec[stack] 24
+    "###);
+}
+
+#[test]
+fn test_array_snapshot() {
+    let array = [1_u64, 2, 3];
+    let folded = logical_memory_to_folded(&array);
+    insta::assert_snapshot!(folded, @"Array[element] 24");
+}
+
+#[test]
+fn test_box_snapshot() {
+    let value = Box::new("hi".to_string());
+    let folded = logical_memory_to_folded(&value);
+    insta::assert_snapshot!(folded, @r###"
+    Box[stack] 8
+    Box[value] 26
+    "###);
+}
+
+#[test]
+fn test_hashset_snapshot() {
+    use std::collections::HashSet;
+
+    #[derive(LogicalMemoryProfile)]
+    struct HashSetHolder {
+        set: HashSet<u64>,
+    }
+
+    let folded = logical_memory_to_folded(&HashSetHolder {
+        set: HashSet::from([1_u64, 2, 3]),
+    });
+    insta::assert_snapshot!(folded, @r###"
+    HashSetHolder.set 24
+    HashSetHolder.set;HashSet[stack] 48
+    "###);
+}
+
+#[test]
+fn test_fnv_hashset_snapshot() {
+    use fnv::FnvHashSet;
+
+    #[derive(LogicalMemoryProfile)]
+    struct FnvHashSetHolder {
+        set: FnvHashSet<u64>,
+    }
+
+    let folded = logical_memory_to_folded(&FnvHashSetHolder {
+        set: FnvHashSet::from_iter([1_u64, 2, 3]),
+    });
+    insta::assert_snapshot!(folded, @r###"
+    FnvHashSetHolder.set 24
+    FnvHashSetHolder.set;FnvHashSet[stack] 32
+    "###);
+}
+
+#[test]
+fn test_vecdeque_snapshot() {
+    use std::collections::VecDeque;
+
+    #[derive(LogicalMemoryProfile)]
+    struct VecDequeHolder {
+        deque: VecDeque<u64>,
+    }
+
+    let folded = logical_memory_to_folded(&VecDequeHolder {
+        deque: VecDeque::from([1_u64, 2, 3]),
+    });
+    insta::assert_snapshot!(folded, @r###"
+    VecDequeHolder.deque 24
+    VecDequeHolder.deque;VecDeque[stack] 32
+    "###);
+}
+
+#[test]
+fn test_bool_char_unit_and_phantom_data_snapshot() {
+    use std::marker::PhantomData;
+
+    #[derive(LogicalMemoryProfile)]
+    struct MiscStdTypes {
+        enabled: bool,
+        marker: char,
+        unit: (),
+        phantom: PhantomData<u64>,
+    }
+
+    let value = MiscStdTypes {
+        enabled: true,
+        marker: 'x',
+        unit: (),
+        phantom: PhantomData,
+    };
+    let folded = logical_memory_to_folded(&value);
+    insta::assert_snapshot!(folded, @r###"
+    MiscStdTypes.enabled 1
+    MiscStdTypes.marker 4
+    "###);
+}
+
+#[test]
+fn test_tuple_snapshot() {
+    let tuple = (1_u64, "hi".to_string(), 3_u32);
+    let folded = logical_memory_to_folded(&tuple);
+    insta::assert_snapshot!(folded, @r###"
+    Tuple.0 8
+    Tuple.1 26
+    Tuple.2 4
     "###);
 }
 
@@ -230,6 +337,15 @@ struct DeriveTargetNested {
     inner: DeriveTargetFlat,
 }
 
+#[derive(LogicalMemoryProfile)]
+#[allow(dead_code)]
+struct DeriveTargetLeaf(u64);
+
+#[derive(LogicalMemoryProfile)]
+struct DeriveLeafHolder {
+    leaf: DeriveTargetLeaf,
+}
+
 #[test]
 fn test_derive_flat_struct_snapshot() {
     // u64=8, f64=8, String: size_of<String>=24 + len("hi")=2 → 26
@@ -266,6 +382,15 @@ fn test_derive_nested_struct_snapshot() {
     DeriveTargetNested.inner;DeriveTargetFlat.gamma 24
     DeriveTargetNested.leaf 4
     "###);
+}
+
+#[test]
+fn test_derive_tuple_struct_snapshot() {
+    let value = DeriveLeafHolder {
+        leaf: DeriveTargetLeaf(0),
+    };
+    let folded = logical_memory_to_folded(&value);
+    insta::assert_snapshot!(folded, @"DeriveLeafHolder.leaf;DeriveTargetLeaf.0 8");
 }
 
 #[test]
