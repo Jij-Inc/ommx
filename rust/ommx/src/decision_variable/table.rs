@@ -12,7 +12,7 @@ mod sealed {
     pub trait Sealed {}
 }
 
-/// Maps a lifecycle stage to [`DecisionVariableTable`] rows and columns.
+/// Maps a lifecycle stage to [`DecisionVariableTable`] rows and sidecar columns.
 ///
 /// The stage marker itself is shared with constraints: [`Created`],
 /// [`Evaluated`], or [`SampledStage`]. This trait is the decision-variable
@@ -21,16 +21,19 @@ mod sealed {
 pub trait DecisionVariableTableStage: sealed::Sealed {
     /// Intrinsic row payload stored in the table.
     type Row;
-    /// Sparse or auxiliary columns owned by this table stage.
-    type Columns: Default;
-    /// Additional context needed to validate stage-specific columns.
-    type ColumnValidationContext: Copy;
+    /// Sparse sidecar columns owned by this table stage.
+    type Columns;
+    /// Additional context needed to validate stage-specific table invariants.
+    type TableValidationContext: Copy;
 
-    /// Validate stage-specific columns against the table-owned row IDs.
-    fn validate_columns(
+    /// Construct the table-valid empty sidecar set for this stage.
+    fn empty_columns() -> Self::Columns;
+
+    /// Validate stage-specific table invariants.
+    fn validate_stage_table_invariants(
         entries: &BTreeMap<VariableID, Self::Row>,
         columns: &Self::Columns,
-        context: Self::ColumnValidationContext,
+        context: Self::TableValidationContext,
     ) -> crate::Result<()>;
 }
 
@@ -39,28 +42,34 @@ impl sealed::Sealed for Evaluated {}
 impl sealed::Sealed for SampledStage {}
 
 /// Definition-stage sparse columns.
-#[derive(Debug, Clone, PartialEq, Default, LogicalMemoryProfile)]
+#[derive(Debug, Clone, PartialEq, LogicalMemoryProfile)]
 pub struct CreatedDecisionVariableColumns {
     fixed_values: BTreeMap<VariableID, f64>,
 }
 
 /// Empty column set for evaluated decision-variable tables.
-#[derive(Debug, Clone, PartialEq, Default, LogicalMemoryProfile)]
+#[derive(Debug, Clone, PartialEq, LogicalMemoryProfile)]
 pub struct EvaluatedDecisionVariableColumns {}
 
 /// Empty column set for sampled decision-variable tables.
-#[derive(Debug, Clone, PartialEq, Default, LogicalMemoryProfile)]
+#[derive(Debug, Clone, PartialEq, LogicalMemoryProfile)]
 pub struct SampledDecisionVariableColumns {}
 
 impl DecisionVariableTableStage for Created {
     type Row = DecisionVariable;
     type Columns = CreatedDecisionVariableColumns;
-    type ColumnValidationContext = ATol;
+    type TableValidationContext = ATol;
 
-    fn validate_columns(
+    fn empty_columns() -> Self::Columns {
+        CreatedDecisionVariableColumns {
+            fixed_values: BTreeMap::new(),
+        }
+    }
+
+    fn validate_stage_table_invariants(
         entries: &BTreeMap<VariableID, Self::Row>,
         columns: &Self::Columns,
-        context: Self::ColumnValidationContext,
+        context: Self::TableValidationContext,
     ) -> crate::Result<()> {
         DecisionVariableTable::<Created>::validate_fixed_values(
             entries,
@@ -73,12 +82,16 @@ impl DecisionVariableTableStage for Created {
 impl DecisionVariableTableStage for Evaluated {
     type Row = EvaluatedDecisionVariable;
     type Columns = EvaluatedDecisionVariableColumns;
-    type ColumnValidationContext = ();
+    type TableValidationContext = ();
 
-    fn validate_columns(
+    fn empty_columns() -> Self::Columns {
+        EvaluatedDecisionVariableColumns {}
+    }
+
+    fn validate_stage_table_invariants(
         _entries: &BTreeMap<VariableID, Self::Row>,
         _columns: &Self::Columns,
-        _context: Self::ColumnValidationContext,
+        _context: Self::TableValidationContext,
     ) -> crate::Result<()> {
         Ok(())
     }
@@ -87,12 +100,16 @@ impl DecisionVariableTableStage for Evaluated {
 impl DecisionVariableTableStage for SampledStage {
     type Row = SampledDecisionVariable;
     type Columns = SampledDecisionVariableColumns;
-    type ColumnValidationContext = ();
+    type TableValidationContext = ();
 
-    fn validate_columns(
+    fn empty_columns() -> Self::Columns {
+        SampledDecisionVariableColumns {}
+    }
+
+    fn validate_stage_table_invariants(
         _entries: &BTreeMap<VariableID, Self::Row>,
         _columns: &Self::Columns,
-        _context: Self::ColumnValidationContext,
+        _context: Self::TableValidationContext,
     ) -> crate::Result<()> {
         Ok(())
     }
@@ -147,7 +164,7 @@ impl<S: DecisionVariableTableStage> DecisionVariableTable<S> {
         Ok(Self {
             entries,
             labels,
-            columns: S::Columns::default(),
+            columns: S::empty_columns(),
         })
     }
 
@@ -156,7 +173,7 @@ impl<S: DecisionVariableTableStage> DecisionVariableTable<S> {
         Self {
             entries,
             labels: VariableLabelStore::default(),
-            columns: S::Columns::default(),
+            columns: S::empty_columns(),
         }
     }
 
@@ -164,10 +181,10 @@ impl<S: DecisionVariableTableStage> DecisionVariableTable<S> {
         entries: BTreeMap<VariableID, S::Row>,
         labels: VariableLabelStore,
         columns: S::Columns,
-        column_context: S::ColumnValidationContext,
+        table_context: S::TableValidationContext,
     ) -> crate::Result<Self> {
         Self::validate_labels(&entries, &labels)?;
-        S::validate_columns(&entries, &columns, column_context)?;
+        S::validate_stage_table_invariants(&entries, &columns, table_context)?;
         Ok(Self {
             entries,
             labels,
@@ -257,7 +274,7 @@ impl<S: DecisionVariableTableStage> Default for DecisionVariableTable<S> {
         Self {
             entries: BTreeMap::default(),
             labels: VariableLabelStore::default(),
-            columns: S::Columns::default(),
+            columns: S::empty_columns(),
         }
     }
 }
