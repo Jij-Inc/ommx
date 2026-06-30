@@ -23,6 +23,15 @@ pub trait DecisionVariableTableStage: sealed::Sealed {
     type Row;
     /// Sparse or auxiliary columns owned by this table stage.
     type Columns: Default;
+    /// Additional context needed to validate stage-specific columns.
+    type ColumnValidationContext: Copy;
+
+    /// Validate stage-specific columns against the table-owned row IDs.
+    fn validate_columns(
+        entries: &BTreeMap<VariableID, Self::Row>,
+        columns: &Self::Columns,
+        context: Self::ColumnValidationContext,
+    ) -> crate::Result<()>;
 }
 
 impl sealed::Sealed for Created {}
@@ -46,16 +55,47 @@ pub struct SampledDecisionVariableColumns {}
 impl DecisionVariableTableStage for Created {
     type Row = DecisionVariable;
     type Columns = CreatedDecisionVariableColumns;
+    type ColumnValidationContext = ATol;
+
+    fn validate_columns(
+        entries: &BTreeMap<VariableID, Self::Row>,
+        columns: &Self::Columns,
+        context: Self::ColumnValidationContext,
+    ) -> crate::Result<()> {
+        DecisionVariableTable::<Created>::validate_fixed_values(
+            entries,
+            &columns.fixed_values,
+            context,
+        )
+    }
 }
 
 impl DecisionVariableTableStage for Evaluated {
     type Row = EvaluatedDecisionVariable;
     type Columns = EvaluatedDecisionVariableColumns;
+    type ColumnValidationContext = ();
+
+    fn validate_columns(
+        _entries: &BTreeMap<VariableID, Self::Row>,
+        _columns: &Self::Columns,
+        _context: Self::ColumnValidationContext,
+    ) -> crate::Result<()> {
+        Ok(())
+    }
 }
 
 impl DecisionVariableTableStage for SampledStage {
     type Row = SampledDecisionVariable;
     type Columns = SampledDecisionVariableColumns;
+    type ColumnValidationContext = ();
+
+    fn validate_columns(
+        _entries: &BTreeMap<VariableID, Self::Row>,
+        _columns: &Self::Columns,
+        _context: Self::ColumnValidationContext,
+    ) -> crate::Result<()> {
+        Ok(())
+    }
 }
 
 /// Owner of decision-variable rows, modeling labels, and stage-specific columns.
@@ -103,36 +143,36 @@ impl<S: DecisionVariableTableStage> DecisionVariableTable<S> {
         entries: BTreeMap<VariableID, S::Row>,
         labels: VariableLabelStore,
     ) -> crate::Result<Self> {
-        Self::with_columns(entries, labels, S::Columns::default())
+        Self::validate_labels(&entries, &labels)?;
+        Ok(Self {
+            entries,
+            labels,
+            columns: S::Columns::default(),
+        })
     }
 
     /// Construct a table with no labels or stage-specific columns.
     pub fn from_entries(entries: BTreeMap<VariableID, S::Row>) -> Self {
-        Self::from_entries_and_columns(entries, S::Columns::default())
+        Self {
+            entries,
+            labels: VariableLabelStore::default(),
+            columns: S::Columns::default(),
+        }
     }
 
     fn with_columns(
         entries: BTreeMap<VariableID, S::Row>,
         labels: VariableLabelStore,
         columns: S::Columns,
+        column_context: S::ColumnValidationContext,
     ) -> crate::Result<Self> {
         Self::validate_labels(&entries, &labels)?;
+        S::validate_columns(&entries, &columns, column_context)?;
         Ok(Self {
             entries,
             labels,
             columns,
         })
-    }
-
-    fn from_entries_and_columns(
-        entries: BTreeMap<VariableID, S::Row>,
-        columns: S::Columns,
-    ) -> Self {
-        Self {
-            entries,
-            labels: VariableLabelStore::default(),
-            columns,
-        }
     }
 
     fn into_common_parts(self) -> (BTreeMap<VariableID, S::Row>, VariableLabelStore, S::Columns) {
@@ -230,11 +270,11 @@ impl DecisionVariableTable<Created> {
         fixed_values: BTreeMap<VariableID, f64>,
         atol: ATol,
     ) -> crate::Result<Self> {
-        Self::validate_fixed_values(&entries, &fixed_values, atol)?;
         Self::with_columns(
             entries,
             labels,
             CreatedDecisionVariableColumns { fixed_values },
+            atol,
         )
     }
 
@@ -446,6 +486,26 @@ mod tests {
             BTreeMap::new(),
             VariableLabelStore::default(),
             BTreeMap::from([(id, 0.0)]),
+            ATol::default(),
+        )
+        .unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("Fixed decision-variable value references unknown decision variable ID"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn definition_table_with_columns_rejects_orphan_fixed_values() {
+        let id = VariableID::from(1);
+        let err = DecisionVariableTable::<Created>::with_columns(
+            BTreeMap::new(),
+            VariableLabelStore::default(),
+            CreatedDecisionVariableColumns {
+                fixed_values: BTreeMap::from([(id, 0.0)]),
+            },
             ATol::default(),
         )
         .unwrap_err();
