@@ -574,6 +574,31 @@ mod tests {
     }
 
     #[test]
+    fn definition_table_to_v1_rows_preserves_labels_and_fixed_values() {
+        let id = VariableID::from(1);
+        let row = DecisionVariable::binary();
+        let mut labels = VariableLabelStore::default();
+        labels.set_name(id, "x");
+        labels.set_subscripts(id, vec![2, 3]);
+
+        let table = DecisionVariableTable::with_fixed_values(
+            BTreeMap::from([(id, row)]),
+            labels,
+            BTreeMap::from([(id, 1.0)]),
+            ATol::default(),
+        )
+        .unwrap();
+
+        let rows: Vec<crate::v1::DecisionVariable> = (&table).into();
+
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].id, 1);
+        assert_eq!(rows[0].name.as_deref(), Some("x"));
+        assert_eq!(rows[0].subscripts, vec![2, 3]);
+        assert_eq!(rows[0].substituted_value, Some(1.0));
+    }
+
+    #[test]
     fn definition_table_rejects_inconsistent_fixed_overwrite() {
         let id = VariableID::from(1);
         let mut table = definition_table_without_fixed_values(
@@ -610,6 +635,24 @@ mod tests {
     }
 
     #[test]
+    fn evaluated_table_to_v1_rows_preserves_labels_and_values() {
+        let id = VariableID::from(1);
+        let row = EvaluatedDecisionVariable::new(id, DecisionVariable::continuous(), 2.5).unwrap();
+        let mut labels = VariableLabelStore::default();
+        labels.set_name(id, "x");
+
+        let table =
+            EvaluatedDecisionVariableTable::new(BTreeMap::from([(id, row)]), labels).unwrap();
+
+        let rows: Vec<crate::v1::DecisionVariable> = (&table).into();
+
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].id, 1);
+        assert_eq!(rows[0].name.as_deref(), Some("x"));
+        assert_eq!(rows[0].substituted_value, Some(2.5));
+    }
+
+    #[test]
     fn sampled_table_rejects_orphan_labels() {
         let id = VariableID::from(1);
         let mut labels = VariableLabelStore::default();
@@ -622,5 +665,28 @@ mod tests {
                 && err.to_string().contains("VariableID(1)"),
             "unexpected error: {err}"
         );
+    }
+
+    #[test]
+    fn sampled_table_to_v1_rows_preserves_labels_and_samples() {
+        let id = VariableID::from(1);
+        let row = SampledDecisionVariable::new(
+            id,
+            DecisionVariable::continuous(),
+            crate::Sampled::from((crate::SampleID::from(7), 2.5)),
+        )
+        .unwrap();
+        let mut labels = VariableLabelStore::default();
+        labels.set_name(id, "x");
+
+        let table = SampledDecisionVariableTable::new(BTreeMap::from([(id, row)]), labels).unwrap();
+
+        let rows: Vec<crate::v1::SampledDecisionVariable> = (&table).into();
+
+        assert_eq!(rows.len(), 1);
+        let variable = rows[0].decision_variable.as_ref().unwrap();
+        assert_eq!(variable.id, 1);
+        assert_eq!(variable.name.as_deref(), Some("x"));
+        assert!(rows[0].samples.is_some());
     }
 }
