@@ -130,94 +130,6 @@ pub struct ProcessMetadata {
     #[prost(string, optional, tag = "5")]
     pub end: ::core::option::Option<::prost::alloc::string::String>,
 }
-/// Objective sense for an optimization problem or evaluated output.
-#[non_exhaustive]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
-#[repr(i32)]
-pub enum Sense {
-    Unspecified = 0,
-    Minimize = 1,
-    Maximize = 2,
-}
-impl Sense {
-    /// String value of the enum field names used in the ProtoBuf definition.
-    ///
-    /// The values are not transformed in any way and thus are considered stable
-    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
-    pub fn as_str_name(&self) -> &'static str {
-        match self {
-            Sense::Unspecified => "SENSE_UNSPECIFIED",
-            Sense::Minimize => "SENSE_MINIMIZE",
-            Sense::Maximize => "SENSE_MAXIMIZE",
-        }
-    }
-    /// Creates an enum from field names used in the ProtoBuf definition.
-    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
-        match value {
-            "SENSE_UNSPECIFIED" => Some(Self::Unspecified),
-            "SENSE_MINIMIZE" => Some(Self::Minimize),
-            "SENSE_MAXIMIZE" => Some(Self::Maximize),
-            _ => None,
-        }
-    }
-}
-#[non_exhaustive]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
-#[repr(i32)]
-pub enum Optimality {
-    Unspecified = 0,
-    Optimal = 1,
-    NotOptimal = 2,
-}
-impl Optimality {
-    /// String value of the enum field names used in the ProtoBuf definition.
-    ///
-    /// The values are not transformed in any way and thus are considered stable
-    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
-    pub fn as_str_name(&self) -> &'static str {
-        match self {
-            Optimality::Unspecified => "OPTIMALITY_UNSPECIFIED",
-            Optimality::Optimal => "OPTIMALITY_OPTIMAL",
-            Optimality::NotOptimal => "OPTIMALITY_NOT_OPTIMAL",
-        }
-    }
-    /// Creates an enum from field names used in the ProtoBuf definition.
-    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
-        match value {
-            "OPTIMALITY_UNSPECIFIED" => Some(Self::Unspecified),
-            "OPTIMALITY_OPTIMAL" => Some(Self::Optimal),
-            "OPTIMALITY_NOT_OPTIMAL" => Some(Self::NotOptimal),
-            _ => None,
-        }
-    }
-}
-#[non_exhaustive]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
-#[repr(i32)]
-pub enum Relaxation {
-    Unspecified = 0,
-    LpRelaxed = 1,
-}
-impl Relaxation {
-    /// String value of the enum field names used in the ProtoBuf definition.
-    ///
-    /// The values are not transformed in any way and thus are considered stable
-    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
-    pub fn as_str_name(&self) -> &'static str {
-        match self {
-            Relaxation::Unspecified => "RELAXATION_UNSPECIFIED",
-            Relaxation::LpRelaxed => "RELAXATION_LP_RELAXED",
-        }
-    }
-    /// Creates an enum from field names used in the ProtoBuf definition.
-    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
-        match value {
-            "RELAXATION_UNSPECIFIED" => Some(Self::Unspecified),
-            "RELAXATION_LP_RELAXED" => Some(Self::LpRelaxed),
-            _ => None,
-        }
-    }
-}
 /// Regular scalar constraint row.
 ///
 /// The enclosing collection owns ConstraintID, modeling context, active/removed
@@ -550,7 +462,7 @@ pub struct SampledSos1ConstraintCollection {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DecisionVariable {
-    #[prost(enumeration = "DecisionVariableKind", tag = "1")]
+    #[prost(enumeration = "super::v1::decision_variable::Kind", tag = "1")]
     pub kind: i32,
     #[prost(message, optional, tag = "2")]
     pub bound: ::core::option::Option<super::v1::Bound>,
@@ -560,7 +472,7 @@ pub struct DecisionVariable {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct EvaluatedDecisionVariable {
-    #[prost(enumeration = "DecisionVariableKind", tag = "1")]
+    #[prost(enumeration = "super::v1::decision_variable::Kind", tag = "1")]
     pub kind: i32,
     #[prost(message, optional, tag = "2")]
     pub bound: ::core::option::Option<super::v1::Bound>,
@@ -572,7 +484,7 @@ pub struct EvaluatedDecisionVariable {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SampledDecisionVariable {
-    #[prost(enumeration = "DecisionVariableKind", tag = "1")]
+    #[prost(enumeration = "super::v1::decision_variable::Kind", tag = "1")]
     pub kind: i32,
     #[prost(message, optional, tag = "2")]
     pub bound: ::core::option::Option<super::v1::Bound>,
@@ -613,46 +525,6 @@ pub struct SampledDecisionVariableTable {
     pub entries: ::std::collections::HashMap<u64, SampledDecisionVariable>,
     #[prost(map = "uint64, message", tag = "2")]
     pub labels: ::std::collections::HashMap<u64, ModelingLabel>,
-}
-/// Kind of a decision variable row.
-#[non_exhaustive]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
-#[repr(i32)]
-pub enum DecisionVariableKind {
-    Unspecified = 0,
-    Binary = 1,
-    Integer = 2,
-    Continuous = 3,
-    SemiInteger = 4,
-    SemiContinuous = 5,
-}
-impl DecisionVariableKind {
-    /// String value of the enum field names used in the ProtoBuf definition.
-    ///
-    /// The values are not transformed in any way and thus are considered stable
-    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
-    pub fn as_str_name(&self) -> &'static str {
-        match self {
-            DecisionVariableKind::Unspecified => "DECISION_VARIABLE_KIND_UNSPECIFIED",
-            DecisionVariableKind::Binary => "DECISION_VARIABLE_KIND_BINARY",
-            DecisionVariableKind::Integer => "DECISION_VARIABLE_KIND_INTEGER",
-            DecisionVariableKind::Continuous => "DECISION_VARIABLE_KIND_CONTINUOUS",
-            DecisionVariableKind::SemiInteger => "DECISION_VARIABLE_KIND_SEMI_INTEGER",
-            DecisionVariableKind::SemiContinuous => "DECISION_VARIABLE_KIND_SEMI_CONTINUOUS",
-        }
-    }
-    /// Creates an enum from field names used in the ProtoBuf definition.
-    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
-        match value {
-            "DECISION_VARIABLE_KIND_UNSPECIFIED" => Some(Self::Unspecified),
-            "DECISION_VARIABLE_KIND_BINARY" => Some(Self::Binary),
-            "DECISION_VARIABLE_KIND_INTEGER" => Some(Self::Integer),
-            "DECISION_VARIABLE_KIND_CONTINUOUS" => Some(Self::Continuous),
-            "DECISION_VARIABLE_KIND_SEMI_INTEGER" => Some(Self::SemiInteger),
-            "DECISION_VARIABLE_KIND_SEMI_CONTINUOUS" => Some(Self::SemiContinuous),
-            _ => None,
-        }
-    }
 }
 /// Named function row used by v2 top-level table owners.
 ///
@@ -752,7 +624,7 @@ pub struct Instance {
     pub objective: ::core::option::Option<super::v1::Function>,
     #[prost(message, optional, tag = "4")]
     pub regular_constraints: ::core::option::Option<RegularConstraintCollection>,
-    #[prost(enumeration = "Sense", tag = "5")]
+    #[prost(enumeration = "super::v1::instance::Sense", tag = "5")]
     pub sense: i32,
     #[prost(message, optional, tag = "6")]
     pub parameters: ::core::option::Option<ParameterValues>,
@@ -788,7 +660,7 @@ pub struct ParametricInstance {
     pub objective: ::core::option::Option<super::v1::Function>,
     #[prost(message, optional, tag = "5")]
     pub regular_constraints: ::core::option::Option<RegularConstraintCollection>,
-    #[prost(enumeration = "Sense", tag = "6")]
+    #[prost(enumeration = "super::v1::instance::Sense", tag = "6")]
     pub sense: i32,
     #[prost(message, optional, tag = "7")]
     pub indicator_constraints: ::core::option::Option<IndicatorConstraintCollection>,
@@ -820,7 +692,7 @@ pub struct SampleSet {
     pub sampled_regular_constraints: ::core::option::Option<SampledRegularConstraintCollection>,
     #[prost(map = "uint64, bool", tag = "4")]
     pub feasible: ::std::collections::HashMap<u64, bool>,
-    #[prost(enumeration = "Sense", tag = "5")]
+    #[prost(enumeration = "super::v1::instance::Sense", tag = "5")]
     pub sense: i32,
     #[prost(map = "uint64, bool", tag = "6")]
     pub feasible_relaxed: ::std::collections::HashMap<u64, bool>,
@@ -856,13 +728,13 @@ pub struct Solution {
     pub evaluated_regular_constraints: ::core::option::Option<EvaluatedRegularConstraintCollection>,
     #[prost(bool, tag = "5")]
     pub feasible: bool,
-    #[prost(enumeration = "Optimality", tag = "6")]
+    #[prost(enumeration = "super::v1::Optimality", tag = "6")]
     pub optimality: i32,
-    #[prost(enumeration = "Relaxation", tag = "7")]
+    #[prost(enumeration = "super::v1::Relaxation", tag = "7")]
     pub relaxation: i32,
     #[prost(bool, optional, tag = "8")]
     pub feasible_relaxed: ::core::option::Option<bool>,
-    #[prost(enumeration = "Sense", tag = "9")]
+    #[prost(enumeration = "super::v1::instance::Sense", tag = "9")]
     pub sense: i32,
     #[prost(message, optional, tag = "10")]
     pub evaluated_named_functions: ::core::option::Option<EvaluatedNamedFunctionTable>,

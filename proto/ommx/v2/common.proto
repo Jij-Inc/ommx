@@ -49,13 +49,6 @@ message ModelDescription {
   optional string dataset = 7;
 }
 
-// Objective sense for an optimization problem or evaluated output.
-enum Sense {
-  SENSE_UNSPECIFIED = 0;
-  SENSE_MINIMIZE = 1;
-  SENSE_MAXIMIZE = 2;
-}
-
 // Values keyed by decision-variable or parameter ID.
 message State {
   map<uint64, double> entries = 1;
@@ -79,15 +72,4 @@ message ProcessMetadata {
   optional string parameters = 3;
   optional string start = 4;
   optional string end = 5;
-}
-
-enum Optimality {
-  OPTIMALITY_UNSPECIFIED = 0;
-  OPTIMALITY_OPTIMAL = 1;
-  OPTIMALITY_NOT_OPTIMAL = 2;
-}
-
-enum Relaxation {
-  RELAXATION_UNSPECIFIED = 0;
-  RELAXATION_LP_RELAXED = 1;
 }

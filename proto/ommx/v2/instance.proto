@@ -3,6 +3,7 @@ syntax = "proto3";
 package ommx.v2;
 
 import "ommx/v1/function.proto";
+import "ommx/v1/instance.proto";
 import "ommx/v2/common.proto";
 import "ommx/v2/constraint.proto";
 import "ommx/v2/decision_variable.proto";
@@ -15,7 +16,7 @@ message Instance {
   DecisionVariableTable decision_variables = 2;
   ommx.v1.Function objective = 3;
   RegularConstraintCollection regular_constraints = 4;
-  Sense sense = 5;
+  ommx.v1.Instance.Sense sense = 5;
   ParameterValues parameters = 6;
   IndicatorConstraintCollection indicator_constraints = 7;
   OneHotConstraintCollection one_hot_constraints = 8;
