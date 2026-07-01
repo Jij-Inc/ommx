@@ -36,27 +36,3 @@ message ModelingLabel {
   map<string, string> parameters = 3;
   optional string description = 4;
 }
-
-// One transformation step in a constraint's lineage.
-//
-// Provenance records special-constraint origins when a special constraint is
-// converted or propagated into another constraint family.
-message Provenance {
-  oneof source {
-    uint64 indicator_constraint_id = 1;
-    uint64 one_hot_constraint_id = 2;
-    uint64 sos1_constraint_id = 3;
-  }
-}
-
-// Constraint sidecar owned by one constraint collection.
-message ConstraintContext {
-  ModelingLabel label = 1;
-  repeated Provenance provenance = 2;
-}
-
-// Why a constraint row was removed or relaxed by preprocessing.
-message RemovedReason {
-  string reason = 1;
-  map<string, string> parameters = 2;
-}

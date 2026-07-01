@@ -7,6 +7,30 @@ import "ommx/v1/function.proto";
 import "ommx/v1/sample_set.proto";
 import "ommx/v2/common.proto";
 
+// One transformation step in a constraint's lineage.
+//
+// Provenance records special-constraint origins when a special constraint is
+// converted or propagated into another constraint family.
+message Provenance {
+  oneof source {
+    uint64 indicator_constraint_id = 1;
+    uint64 one_hot_constraint_id = 2;
+    uint64 sos1_constraint_id = 3;
+  }
+}
+
+// Constraint sidecar owned by one constraint collection.
+message ConstraintContext {
+  ModelingLabel label = 1;
+  repeated Provenance provenance = 2;
+}
+
+// Why a constraint row was removed or relaxed by preprocessing.
+message RemovedReason {
+  string reason = 1;
+  map<string, string> parameters = 2;
+}
+
 // Regular scalar constraint row.
 //
 // The enclosing collection owns ConstraintID, modeling context, active/removed

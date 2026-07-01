@@ -18,52 +18,6 @@ pub struct ModelingLabel {
     #[prost(string, optional, tag = "4")]
     pub description: ::core::option::Option<::prost::alloc::string::String>,
 }
-/// One transformation step in a constraint's lineage.
-///
-/// Provenance records special-constraint origins when a special constraint is
-/// converted or propagated into another constraint family.
-#[non_exhaustive]
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct Provenance {
-    #[prost(oneof = "provenance::Source", tags = "1, 2, 3")]
-    pub source: ::core::option::Option<provenance::Source>,
-}
-/// Nested message and enum types in `Provenance`.
-pub mod provenance {
-    #[non_exhaustive]
-    #[allow(clippy::derive_partial_eq_without_eq)]
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
-    pub enum Source {
-        #[prost(uint64, tag = "1")]
-        IndicatorConstraintId(u64),
-        #[prost(uint64, tag = "2")]
-        OneHotConstraintId(u64),
-        #[prost(uint64, tag = "3")]
-        Sos1ConstraintId(u64),
-    }
-}
-/// Constraint sidecar owned by one constraint collection.
-#[non_exhaustive]
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ConstraintContext {
-    #[prost(message, optional, tag = "1")]
-    pub label: ::core::option::Option<ModelingLabel>,
-    #[prost(message, repeated, tag = "2")]
-    pub provenance: ::prost::alloc::vec::Vec<Provenance>,
-}
-/// Why a constraint row was removed or relaxed by preprocessing.
-#[non_exhaustive]
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct RemovedReason {
-    #[prost(string, tag = "1")]
-    pub reason: ::prost::alloc::string::String,
-    #[prost(map = "string, string", tag = "2")]
-    pub parameters:
-        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
-}
 /// Wire-level semantics required to interpret a top-level root exactly.
 ///
 /// This is OMMX's feature-based forward-compatibility gate. Protobuf itself
@@ -111,6 +65,52 @@ impl Feature {
             _ => None,
         }
     }
+}
+/// One transformation step in a constraint's lineage.
+///
+/// Provenance records special-constraint origins when a special constraint is
+/// converted or propagated into another constraint family.
+#[non_exhaustive]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Provenance {
+    #[prost(oneof = "provenance::Source", tags = "1, 2, 3")]
+    pub source: ::core::option::Option<provenance::Source>,
+}
+/// Nested message and enum types in `Provenance`.
+pub mod provenance {
+    #[non_exhaustive]
+    #[allow(clippy::derive_partial_eq_without_eq)]
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    pub enum Source {
+        #[prost(uint64, tag = "1")]
+        IndicatorConstraintId(u64),
+        #[prost(uint64, tag = "2")]
+        OneHotConstraintId(u64),
+        #[prost(uint64, tag = "3")]
+        Sos1ConstraintId(u64),
+    }
+}
+/// Constraint sidecar owned by one constraint collection.
+#[non_exhaustive]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ConstraintContext {
+    #[prost(message, optional, tag = "1")]
+    pub label: ::core::option::Option<ModelingLabel>,
+    #[prost(message, repeated, tag = "2")]
+    pub provenance: ::prost::alloc::vec::Vec<Provenance>,
+}
+/// Why a constraint row was removed or relaxed by preprocessing.
+#[non_exhaustive]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RemovedReason {
+    #[prost(string, tag = "1")]
+    pub reason: ::prost::alloc::string::String,
+    #[prost(map = "string, string", tag = "2")]
+    pub parameters:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
 }
 /// Regular scalar constraint row.
 ///
