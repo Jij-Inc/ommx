@@ -11,4 +11,3 @@ import "ommx/v1/function.proto";
 message NamedFunction {
   ommx.v1.Function function = 1;
 }
-
