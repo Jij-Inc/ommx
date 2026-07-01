@@ -1,5 +1,9 @@
 use super::*;
-use std::ops::Neg;
+use crate::{
+    constraint_type::{ConstraintCollection, ConstraintType},
+    ATol, Evaluate,
+};
+use std::{collections::BTreeMap, ops::Neg};
 
 impl Instance {
     /// Convert the instance to a minimization problem.
@@ -69,9 +73,34 @@ impl From<Instance> for ParametricInstance {
     }
 }
 
+fn materialize_constraint_collection_parameters<T: ConstraintType>(
+    collection: &mut ConstraintCollection<T>,
+    state: &crate::v1::State,
+    atol: ATol,
+) -> crate::Result<()> {
+    let mut active_replacements = BTreeMap::new();
+    for (&id, constraint) in collection.active() {
+        let mut constraint = constraint.clone();
+        constraint.partial_evaluate(state, atol).inspect_err(|e| {
+            tracing::error!(?id, error = %e, "failed to partial_evaluate active constraint");
+        })?;
+        active_replacements.insert(id, constraint);
+    }
+
+    let mut removed_replacements = BTreeMap::new();
+    for (&id, (constraint, _reason)) in collection.removed() {
+        let mut constraint = constraint.clone();
+        constraint.partial_evaluate(state, atol).inspect_err(|e| {
+            tracing::error!(?id, error = %e, "failed to partial_evaluate removed constraint");
+        })?;
+        removed_replacements.insert(id, constraint);
+    }
+
+    collection.replace_rows_preserving_lifecycle(active_replacements, removed_replacements)
+}
+
 impl ParametricInstance {
     pub fn with_parameters(self, parameters: crate::v1::Parameters) -> crate::Result<Instance> {
-        use crate::ATol;
         use std::collections::BTreeSet;
 
         // Convert v1::Parameters to BTreeMap for validation and processing
@@ -109,13 +138,17 @@ impl ParametricInstance {
         // carry dangling parameter IDs in `removed_constraints`, violating
         // its own invariants.
         let mut constraint_collection = self.constraint_collection;
-        constraint_collection.partial_evaluate_all_preserving_lifecycle(&state, atol)?;
+        materialize_constraint_collection_parameters(&mut constraint_collection, &state, atol)?;
 
         // Indicator constraint function bodies may also reference parameter
         // IDs (the structural indicator variable does not, by construction).
         // Apply the same substitution to active and removed maps.
         let mut indicator_constraint_collection = self.indicator_constraint_collection;
-        indicator_constraint_collection.partial_evaluate_all_preserving_lifecycle(&state, atol)?;
+        materialize_constraint_collection_parameters(
+            &mut indicator_constraint_collection,
+            &state,
+            atol,
+        )?;
 
         let mut named_functions = self.named_functions;
         named_functions.partial_evaluate(&state, atol)?;
