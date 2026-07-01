@@ -611,6 +611,9 @@ pub struct Instance {
 ///
 /// Parameter IDs intentionally share the VariableID namespace with decision
 /// variables. ParametricInstance validates disjointness.
+///
+/// `ids` is a set encoded as a repeated field. IDs must be unique, and `labels`
+/// must only reference IDs present in `ids`.
 #[non_exhaustive]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]

@@ -8,6 +8,9 @@ import "ommx/v2/common.proto";
 //
 // Parameter IDs intentionally share the VariableID namespace with decision
 // variables. ParametricInstance validates disjointness.
+//
+// `ids` is a set encoded as a repeated field. IDs must be unique, and `labels`
+// must only reference IDs present in `ids`.
 message ParameterTable {
   repeated uint64 ids = 1;
   map<uint64, ModelingLabel> labels = 2;
