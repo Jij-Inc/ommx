@@ -6853,7 +6853,7 @@
             },
             {
               "name": "add_parameters",
-              "doc": "",
+              "doc": "Add parameter entries. Writes through to the parent host's label store.\n\nExisting keys are overwritten, and keys not mentioned in `parameters`\nare preserved. Use `set_parameters` to replace the whole map.",
               "signatures": [
                 {
                   "parameters": [

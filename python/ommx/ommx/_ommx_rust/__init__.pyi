@@ -909,7 +909,13 @@ class AttachedDecisionVariable:
     ) -> None: ...
     def add_parameters(
         self, parameters: typing.Mapping[builtins.str, builtins.str]
-    ) -> None: ...
+    ) -> None:
+        r"""
+        Add parameter entries. Writes through to the parent host's label store.
+
+        Existing keys are overwritten, and keys not mentioned in `parameters`
+        are preserved. Use `set_parameters` to replace the whole map.
+        """
     def add_parameter(self, key: builtins.str, value: builtins.str) -> None: ...
 
 @typing.final

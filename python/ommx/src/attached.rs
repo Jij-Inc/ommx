@@ -503,6 +503,10 @@ macro_rules! attached_variable_labels_methods {
                 Ok(())
             }
 
+            /// Add parameter entries. Writes through to the parent host's label store.
+            ///
+            /// Existing keys are overwritten, and keys not mentioned in `parameters`
+            /// are preserved. Use `set_parameters` to replace the whole map.
             pub fn add_parameters(
                 &self,
                 py: pyo3::Python<'_>,
