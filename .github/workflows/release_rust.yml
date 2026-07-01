@@ -77,8 +77,11 @@ jobs:
           name: ommx-${{ matrix.target }}
           path: dist/*
 
+  # Manual dispatch stops after `cli_binaries`, leaving the archives as
+  # workflow artifacts. Tag pushes also attach them to the Rust SDK release.
   release_cli_binaries:
     runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref_type == 'tag'
     needs:
       - version
       - cli_binaries
@@ -98,6 +101,7 @@ jobs:
 
   publish:
     runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref_type == 'tag'
     needs: release_cli_binaries
     permissions:
       contents: read
