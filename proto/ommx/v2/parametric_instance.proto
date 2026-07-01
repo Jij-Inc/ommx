@@ -24,7 +24,4 @@ message ParametricInstance {
   map<uint64, ommx.v1.Function> decision_variable_dependency = 10;
   NamedFunctionTable named_functions = 11;
   map<string, string> annotations = 12;
-
-  // Format version within the ommx.v2 package. The first v2 schema is 0.
-  uint32 format_version = 100;
 }

@@ -22,7 +22,4 @@ message SampleSet {
   SampledIndicatorConstraintCollection sampled_indicator_constraints = 10;
   SampledOneHotConstraintCollection sampled_one_hot_constraints = 11;
   SampledSos1ConstraintCollection sampled_sos1_constraints = 12;
-
-  // Format version within the ommx.v2 package. The first v2 schema is 0.
-  uint32 format_version = 100;
 }

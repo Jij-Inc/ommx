@@ -641,9 +641,6 @@ pub struct Instance {
     #[prost(map = "string, string", tag = "12")]
     pub annotations:
         ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
-    /// Format version within the ommx.v2 package. The first v2 schema is 0.
-    #[prost(uint32, tag = "100")]
-    pub format_version: u32,
 }
 /// Validated parametric optimization problem serialization root.
 #[non_exhaustive]
@@ -675,9 +672,6 @@ pub struct ParametricInstance {
     #[prost(map = "string, string", tag = "12")]
     pub annotations:
         ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
-    /// Format version within the ommx.v2 package. The first v2 schema is 0.
-    #[prost(uint32, tag = "100")]
-    pub format_version: u32,
 }
 /// Validated multi-sample solver or sampler output serialization root.
 #[non_exhaustive]
@@ -709,9 +703,6 @@ pub struct SampleSet {
     pub sampled_one_hot_constraints: ::core::option::Option<SampledOneHotConstraintCollection>,
     #[prost(message, optional, tag = "12")]
     pub sampled_sos1_constraints: ::core::option::Option<SampledSos1ConstraintCollection>,
-    /// Format version within the ommx.v2 package. The first v2 schema is 0.
-    #[prost(uint32, tag = "100")]
-    pub format_version: u32,
 }
 /// Validated single-state solver output serialization root.
 #[non_exhaustive]
@@ -750,7 +741,4 @@ pub struct Solution {
     pub evaluated_one_hot_constraints: ::core::option::Option<EvaluatedOneHotConstraintCollection>,
     #[prost(message, optional, tag = "15")]
     pub evaluated_sos1_constraints: ::core::option::Option<EvaluatedSos1ConstraintCollection>,
-    /// Format version within the ommx.v2 package. The first v2 schema is 0.
-    #[prost(uint32, tag = "100")]
-    pub format_version: u32,
 }

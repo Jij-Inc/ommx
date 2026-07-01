@@ -26,7 +26,4 @@ message Solution {
   EvaluatedIndicatorConstraintCollection evaluated_indicator_constraints = 13;
   EvaluatedOneHotConstraintCollection evaluated_one_hot_constraints = 14;
   EvaluatedSos1ConstraintCollection evaluated_sos1_constraints = 15;
-
-  // Format version within the ommx.v2 package. The first v2 schema is 0.
-  uint32 format_version = 100;
 }
