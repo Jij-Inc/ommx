@@ -17,6 +17,7 @@ jobs:
       release_tag: rust-${{ steps.version.outputs.rust_version }}
     steps:
       - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
       - id: version
         run: |
           rust_version="$(cargo metadata --no-deps --format-version=1 | jq -r '.packages[] | select(.name == "ommx") | .version')"
@@ -68,20 +69,24 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force package, dist | Out-Null
           Copy-Item "target/${{ matrix.target }}/release/ommx.exe" "package/ommx.exe"
-          Compress-Archive -Path "package/ommx.exe" -DestinationPath "dist/ommx-${{ matrix.target }}.zip"
+          Push-Location package
+          Compress-Archive -Path "ommx.exe" -DestinationPath "../dist/ommx-${{ matrix.target }}.zip"
+          Pop-Location
       - uses: actions/upload-artifact@v7
         with:
           name: ommx-${{ matrix.target }}
           path: dist/*
 
   # Manual dispatch stops after `cli_binaries`, leaving the archives as
-  # workflow artifacts. Tag pushes also attach them to the Rust SDK release.
+  # workflow artifacts. Tag pushes publish the crates before attaching the
+  # archives to the Rust SDK release.
   release_cli_binaries:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref_type == 'tag'
     needs:
       - version
       - cli_binaries
+      - publish
     permissions:
       contents: write
     steps:
@@ -99,12 +104,13 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref_type == 'tag'
-    needs: release_cli_binaries
+    needs: cli_binaries
     permissions:
       contents: read
       id-token: write # Required for OIDC token exchange
     steps:
       - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
       - uses: rust-lang/crates-io-auth-action@v1
         id: auth
       # `ommx` depends on `ommx-derive` with a strict `=` version requirement,
@@ -118,13 +124,15 @@ jobs:
 
   next_version:
     runs-on: ubuntu-latest
-    needs: publish
+    needs: release_cli_binaries
     permissions:
       contents: write
       pull-requests: write
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
 
       - name: Install cargo-edit
         run: cargo install cargo-edit
