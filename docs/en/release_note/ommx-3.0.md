@@ -1,7 +1,7 @@
 # OMMX Python SDK 3.0.x
 
 ```{note}
-Python SDK 3.0.0 contains breaking API changes. A migration guide is available in the [Python SDK v2 to v3 Migration Guide](../migration/python_sdk.md).
+Python SDK 3.0.0 contains breaking API changes. A migration guide is available in the [Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md).
 ```
 
 ## Unreleased
@@ -244,7 +244,7 @@ Alongside this storage model and the new `Experiment` API, the old `ArtifactBuil
 - New CLI `ommx prune-anonymous [--delete]` reports accumulated anonymous-commit entries by default and removes them only when `--delete` is passed.
 - `ommx.get_image_dir(...)` and the CLI `ommx image-dir <name>` subcommand are removed. The return value was a v2 disk-cache path (`<root>/<image_name>/<tag>/`) that no longer corresponds to any v3 storage location — the SQLite Local Registry stores blobs content-addressed and refs in SQLite — so pointing users at it was actively misleading. Existing v2 caches still migrate via `ommx import-legacy`.
 
-See the [Python SDK v2→v3 Migration Guide §13](../migration/python_sdk.md#13-artifact-api-archive-becomes-an-exchange-format) for the full before/after code and migration checklist.
+See the {ref}`Python SDK v2 to v3 Migration Guide §13 <13-artifact-api-archive-becomes-an-exchange-format>` for the full before/after code and migration checklist.
 
 ### 🆕 Artifact-backed experiment management API: `ommx.experiment` ([#882](https://github.com/Jij-Inc/ommx/pull/882), [#885](https://github.com/Jij-Inc/ommx/pull/885), [#886](https://github.com/Jij-Inc/ommx/pull/886), [#903](https://github.com/Jij-Inc/ommx/pull/903))
 
@@ -470,7 +470,7 @@ c = Constraint(function=x + y, equality=Constraint.EQUAL_TO_ZERO)
 Instance.from_components(..., constraints={5: c}, ...)
 ```
 
-Global ID counters (`next_constraint_id` and friends) and per-constraint `to_bytes` / `from_bytes` are also removed. For full details and migration steps, see the [Python SDK v2 to v3 Migration Guide](../migration/python_sdk.md).
+Global ID counters (`next_constraint_id` and friends) and per-constraint `to_bytes` / `from_bytes` are also removed. For full details and migration steps, see the [Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md).
 
 ### 🆕 First-class special constraint types ([#789](https://github.com/Jij-Inc/ommx/pull/789), [#790](https://github.com/Jij-Inc/ommx/pull/790), [#795](https://github.com/Jij-Inc/ommx/pull/795), [#796](https://github.com/Jij-Inc/ommx/pull/796), [#798](https://github.com/Jij-Inc/ommx/pull/798))
 
