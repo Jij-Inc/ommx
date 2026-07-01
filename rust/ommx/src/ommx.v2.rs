@@ -130,6 +130,47 @@ pub struct ProcessMetadata {
     #[prost(string, optional, tag = "5")]
     pub end: ::core::option::Option<::prost::alloc::string::String>,
 }
+/// Wire-level semantics required to interpret a top-level root exactly.
+///
+/// Readers must reject payloads containing unknown or unsupported required
+/// features. This protects mathematical meaning when future schemas add fields
+/// that older readers would otherwise ignore as protobuf unknown fields.
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum Feature {
+    Unspecified = 0,
+    /// The payload contains first-class indicator constraints.
+    ConstraintIndicator = 1,
+    /// The payload contains first-class one-hot constraints.
+    ConstraintOneHot = 2,
+    /// The payload contains first-class SOS1 constraints.
+    ConstraintSos1 = 3,
+}
+impl Feature {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Feature::Unspecified => "FEATURE_UNSPECIFIED",
+            Feature::ConstraintIndicator => "FEATURE_CONSTRAINT_INDICATOR",
+            Feature::ConstraintOneHot => "FEATURE_CONSTRAINT_ONE_HOT",
+            Feature::ConstraintSos1 => "FEATURE_CONSTRAINT_SOS1",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "FEATURE_UNSPECIFIED" => Some(Self::Unspecified),
+            "FEATURE_CONSTRAINT_INDICATOR" => Some(Self::ConstraintIndicator),
+            "FEATURE_CONSTRAINT_ONE_HOT" => Some(Self::ConstraintOneHot),
+            "FEATURE_CONSTRAINT_SOS1" => Some(Self::ConstraintSos1),
+            _ => None,
+        }
+    }
+}
 /// Regular scalar constraint row.
 ///
 /// The enclosing collection owns ConstraintID, modeling context, active/removed
@@ -616,29 +657,31 @@ pub struct ParameterValues {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Instance {
-    #[prost(message, optional, tag = "1")]
-    pub description: ::core::option::Option<ModelDescription>,
+    #[prost(enumeration = "Feature", repeated, tag = "1")]
+    pub required_features: ::prost::alloc::vec::Vec<i32>,
     #[prost(message, optional, tag = "2")]
-    pub decision_variables: ::core::option::Option<DecisionVariableTable>,
+    pub description: ::core::option::Option<ModelDescription>,
     #[prost(message, optional, tag = "3")]
-    pub objective: ::core::option::Option<super::v1::Function>,
+    pub decision_variables: ::core::option::Option<DecisionVariableTable>,
     #[prost(message, optional, tag = "4")]
+    pub objective: ::core::option::Option<super::v1::Function>,
+    #[prost(message, optional, tag = "5")]
     pub regular_constraints: ::core::option::Option<RegularConstraintCollection>,
-    #[prost(enumeration = "super::v1::instance::Sense", tag = "5")]
+    #[prost(enumeration = "super::v1::instance::Sense", tag = "6")]
     pub sense: i32,
-    #[prost(message, optional, tag = "6")]
-    pub parameters: ::core::option::Option<ParameterValues>,
     #[prost(message, optional, tag = "7")]
-    pub indicator_constraints: ::core::option::Option<IndicatorConstraintCollection>,
+    pub parameters: ::core::option::Option<ParameterValues>,
     #[prost(message, optional, tag = "8")]
-    pub one_hot_constraints: ::core::option::Option<OneHotConstraintCollection>,
+    pub indicator_constraints: ::core::option::Option<IndicatorConstraintCollection>,
     #[prost(message, optional, tag = "9")]
+    pub one_hot_constraints: ::core::option::Option<OneHotConstraintCollection>,
+    #[prost(message, optional, tag = "10")]
     pub sos1_constraints: ::core::option::Option<Sos1ConstraintCollection>,
-    #[prost(map = "uint64, message", tag = "10")]
+    #[prost(map = "uint64, message", tag = "11")]
     pub decision_variable_dependency: ::std::collections::HashMap<u64, super::v1::Function>,
-    #[prost(message, optional, tag = "11")]
+    #[prost(message, optional, tag = "12")]
     pub named_functions: ::core::option::Option<NamedFunctionTable>,
-    #[prost(map = "string, string", tag = "12")]
+    #[prost(map = "string, string", tag = "13")]
     pub annotations:
         ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
 }
@@ -647,29 +690,31 @@ pub struct Instance {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ParametricInstance {
-    #[prost(message, optional, tag = "1")]
-    pub description: ::core::option::Option<ModelDescription>,
+    #[prost(enumeration = "Feature", repeated, tag = "1")]
+    pub required_features: ::prost::alloc::vec::Vec<i32>,
     #[prost(message, optional, tag = "2")]
-    pub decision_variables: ::core::option::Option<DecisionVariableTable>,
+    pub description: ::core::option::Option<ModelDescription>,
     #[prost(message, optional, tag = "3")]
-    pub parameters: ::core::option::Option<ParameterTable>,
+    pub decision_variables: ::core::option::Option<DecisionVariableTable>,
     #[prost(message, optional, tag = "4")]
-    pub objective: ::core::option::Option<super::v1::Function>,
+    pub parameters: ::core::option::Option<ParameterTable>,
     #[prost(message, optional, tag = "5")]
+    pub objective: ::core::option::Option<super::v1::Function>,
+    #[prost(message, optional, tag = "6")]
     pub regular_constraints: ::core::option::Option<RegularConstraintCollection>,
-    #[prost(enumeration = "super::v1::instance::Sense", tag = "6")]
+    #[prost(enumeration = "super::v1::instance::Sense", tag = "7")]
     pub sense: i32,
-    #[prost(message, optional, tag = "7")]
-    pub indicator_constraints: ::core::option::Option<IndicatorConstraintCollection>,
     #[prost(message, optional, tag = "8")]
-    pub one_hot_constraints: ::core::option::Option<OneHotConstraintCollection>,
+    pub indicator_constraints: ::core::option::Option<IndicatorConstraintCollection>,
     #[prost(message, optional, tag = "9")]
+    pub one_hot_constraints: ::core::option::Option<OneHotConstraintCollection>,
+    #[prost(message, optional, tag = "10")]
     pub sos1_constraints: ::core::option::Option<Sos1ConstraintCollection>,
-    #[prost(map = "uint64, message", tag = "10")]
+    #[prost(map = "uint64, message", tag = "11")]
     pub decision_variable_dependency: ::std::collections::HashMap<u64, super::v1::Function>,
-    #[prost(message, optional, tag = "11")]
+    #[prost(message, optional, tag = "12")]
     pub named_functions: ::core::option::Option<NamedFunctionTable>,
-    #[prost(map = "string, string", tag = "12")]
+    #[prost(map = "string, string", tag = "13")]
     pub annotations:
         ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
 }
@@ -678,30 +723,32 @@ pub struct ParametricInstance {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SampleSet {
-    #[prost(message, optional, tag = "1")]
-    pub objectives: ::core::option::Option<SampledValues>,
+    #[prost(enumeration = "Feature", repeated, tag = "1")]
+    pub required_features: ::prost::alloc::vec::Vec<i32>,
     #[prost(message, optional, tag = "2")]
-    pub decision_variables: ::core::option::Option<SampledDecisionVariableTable>,
+    pub objectives: ::core::option::Option<SampledValues>,
     #[prost(message, optional, tag = "3")]
+    pub decision_variables: ::core::option::Option<SampledDecisionVariableTable>,
+    #[prost(message, optional, tag = "4")]
     pub sampled_regular_constraints: ::core::option::Option<SampledRegularConstraintCollection>,
-    #[prost(map = "uint64, bool", tag = "4")]
+    #[prost(map = "uint64, bool", tag = "5")]
     pub feasible: ::std::collections::HashMap<u64, bool>,
-    #[prost(enumeration = "super::v1::instance::Sense", tag = "5")]
+    #[prost(enumeration = "super::v1::instance::Sense", tag = "6")]
     pub sense: i32,
-    #[prost(map = "uint64, bool", tag = "6")]
+    #[prost(map = "uint64, bool", tag = "7")]
     pub feasible_relaxed: ::std::collections::HashMap<u64, bool>,
-    #[prost(message, optional, tag = "7")]
-    pub sampled_named_functions: ::core::option::Option<SampledNamedFunctionTable>,
     #[prost(message, optional, tag = "8")]
+    pub sampled_named_functions: ::core::option::Option<SampledNamedFunctionTable>,
+    #[prost(message, optional, tag = "9")]
     pub metadata: ::core::option::Option<ProcessMetadata>,
-    #[prost(map = "string, string", tag = "9")]
+    #[prost(map = "string, string", tag = "10")]
     pub annotations:
         ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
-    #[prost(message, optional, tag = "10")]
-    pub sampled_indicator_constraints: ::core::option::Option<SampledIndicatorConstraintCollection>,
     #[prost(message, optional, tag = "11")]
-    pub sampled_one_hot_constraints: ::core::option::Option<SampledOneHotConstraintCollection>,
+    pub sampled_indicator_constraints: ::core::option::Option<SampledIndicatorConstraintCollection>,
     #[prost(message, optional, tag = "12")]
+    pub sampled_one_hot_constraints: ::core::option::Option<SampledOneHotConstraintCollection>,
+    #[prost(message, optional, tag = "13")]
     pub sampled_sos1_constraints: ::core::option::Option<SampledSos1ConstraintCollection>,
 }
 /// Validated single-state solver output serialization root.
@@ -709,36 +756,38 @@ pub struct SampleSet {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Solution {
-    #[prost(message, optional, tag = "1")]
+    #[prost(enumeration = "Feature", repeated, tag = "1")]
+    pub required_features: ::prost::alloc::vec::Vec<i32>,
+    #[prost(message, optional, tag = "2")]
     pub state: ::core::option::Option<State>,
-    #[prost(double, tag = "2")]
+    #[prost(double, tag = "3")]
     pub objective: f64,
-    #[prost(message, optional, tag = "3")]
-    pub decision_variables: ::core::option::Option<EvaluatedDecisionVariableTable>,
     #[prost(message, optional, tag = "4")]
+    pub decision_variables: ::core::option::Option<EvaluatedDecisionVariableTable>,
+    #[prost(message, optional, tag = "5")]
     pub evaluated_regular_constraints: ::core::option::Option<EvaluatedRegularConstraintCollection>,
-    #[prost(bool, tag = "5")]
+    #[prost(bool, tag = "6")]
     pub feasible: bool,
-    #[prost(enumeration = "super::v1::Optimality", tag = "6")]
+    #[prost(enumeration = "super::v1::Optimality", tag = "7")]
     pub optimality: i32,
-    #[prost(enumeration = "super::v1::Relaxation", tag = "7")]
+    #[prost(enumeration = "super::v1::Relaxation", tag = "8")]
     pub relaxation: i32,
-    #[prost(bool, optional, tag = "8")]
+    #[prost(bool, optional, tag = "9")]
     pub feasible_relaxed: ::core::option::Option<bool>,
-    #[prost(enumeration = "super::v1::instance::Sense", tag = "9")]
+    #[prost(enumeration = "super::v1::instance::Sense", tag = "10")]
     pub sense: i32,
-    #[prost(message, optional, tag = "10")]
-    pub evaluated_named_functions: ::core::option::Option<EvaluatedNamedFunctionTable>,
     #[prost(message, optional, tag = "11")]
+    pub evaluated_named_functions: ::core::option::Option<EvaluatedNamedFunctionTable>,
+    #[prost(message, optional, tag = "12")]
     pub metadata: ::core::option::Option<ProcessMetadata>,
-    #[prost(map = "string, string", tag = "12")]
+    #[prost(map = "string, string", tag = "13")]
     pub annotations:
         ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
-    #[prost(message, optional, tag = "13")]
+    #[prost(message, optional, tag = "14")]
     pub evaluated_indicator_constraints:
         ::core::option::Option<EvaluatedIndicatorConstraintCollection>,
-    #[prost(message, optional, tag = "14")]
-    pub evaluated_one_hot_constraints: ::core::option::Option<EvaluatedOneHotConstraintCollection>,
     #[prost(message, optional, tag = "15")]
+    pub evaluated_one_hot_constraints: ::core::option::Option<EvaluatedOneHotConstraintCollection>,
+    #[prost(message, optional, tag = "16")]
     pub evaluated_sos1_constraints: ::core::option::Option<EvaluatedSos1ConstraintCollection>,
 }

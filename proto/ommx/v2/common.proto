@@ -2,6 +2,22 @@ syntax = "proto3";
 
 package ommx.v2;
 
+// Wire-level semantics required to interpret a top-level root exactly.
+//
+// Readers must reject payloads containing unknown or unsupported required
+// features. This protects mathematical meaning when future schemas add fields
+// that older readers would otherwise ignore as protobuf unknown fields.
+enum Feature {
+  FEATURE_UNSPECIFIED = 0;
+
+  // The payload contains first-class indicator constraints.
+  FEATURE_CONSTRAINT_INDICATOR = 1;
+  // The payload contains first-class one-hot constraints.
+  FEATURE_CONSTRAINT_ONE_HOT = 2;
+  // The payload contains first-class SOS1 constraints.
+  FEATURE_CONSTRAINT_SOS1 = 3;
+}
+
 // Human-authored modeling notation for one table or collection row.
 //
 // This label preserves the mathematical model notation before the model was

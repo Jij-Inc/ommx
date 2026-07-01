@@ -10,16 +10,17 @@ import "ommx/v2/named_function.proto";
 
 // Validated multi-sample solver or sampler output serialization root.
 message SampleSet {
-  SampledValues objectives = 1;
-  SampledDecisionVariableTable decision_variables = 2;
-  SampledRegularConstraintCollection sampled_regular_constraints = 3;
-  map<uint64, bool> feasible = 4;
-  ommx.v1.Instance.Sense sense = 5;
-  map<uint64, bool> feasible_relaxed = 6;
-  SampledNamedFunctionTable sampled_named_functions = 7;
-  ProcessMetadata metadata = 8;
-  map<string, string> annotations = 9;
-  SampledIndicatorConstraintCollection sampled_indicator_constraints = 10;
-  SampledOneHotConstraintCollection sampled_one_hot_constraints = 11;
-  SampledSos1ConstraintCollection sampled_sos1_constraints = 12;
+  repeated Feature required_features = 1;
+  SampledValues objectives = 2;
+  SampledDecisionVariableTable decision_variables = 3;
+  SampledRegularConstraintCollection sampled_regular_constraints = 4;
+  map<uint64, bool> feasible = 5;
+  ommx.v1.Instance.Sense sense = 6;
+  map<uint64, bool> feasible_relaxed = 7;
+  SampledNamedFunctionTable sampled_named_functions = 8;
+  ProcessMetadata metadata = 9;
+  map<string, string> annotations = 10;
+  SampledIndicatorConstraintCollection sampled_indicator_constraints = 11;
+  SampledOneHotConstraintCollection sampled_one_hot_constraints = 12;
+  SampledSos1ConstraintCollection sampled_sos1_constraints = 13;
 }
