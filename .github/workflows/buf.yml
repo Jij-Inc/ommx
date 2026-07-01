@@ -24,6 +24,20 @@ jobs:
         with:
           input: proto
 
+  breaking:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Setup Buf
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ github.token }}
+      - name: Check breaking changes
+        run: buf breaking proto --against '.git#branch=origin/main,subdir=proto' --error-format=github-actions
+
   format:
     runs-on: ubuntu-latest
     steps:

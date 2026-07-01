@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use colored::Colorize;
 use glob::glob;
 use prost_build::Config;
@@ -12,6 +12,8 @@ fn main() -> Result<()> {
     let protos = glob(&format!("{}/**/*.proto", proto_root.display()))?
         .map(|entry| -> Result<PathBuf> { Ok(entry?) })
         .collect::<Result<Vec<_>>>()?;
+    let mut protos = protos;
+    protos.sort();
 
     eprintln!(
         "{:>12} in {}",
@@ -27,19 +29,32 @@ fn main() -> Result<()> {
     }
 
     let out = repo_root.join("rust/ommx/src");
-    // FIXME: Get from prost
-    let filename = "ommx.v1.rs";
-    let out_file = out.join(filename);
-    eprintln!("{:>12} {}", "Writing".bold().cyan(), out_file.display());
+    eprintln!(
+        "{:>12} generated protobuf Rust modules under {}",
+        "Writing".bold().cyan(),
+        out.display()
+    );
 
     let mut cfg = Config::new();
     cfg.type_attribute(".", "#[non_exhaustive]");
     cfg.field_attribute("SampleSet.feasible_unrelaxed", "#[deprecated]");
     cfg.out_dir(&out).compile_protos(&protos, &[proto_root])?;
 
-    std::process::Command::new("rustfmt")
-        .arg(out_file)
-        .status()?;
+    let mut generated = glob(&format!("{}/ommx.*.rs", out.display()))?
+        .map(|entry| -> Result<PathBuf> { Ok(entry?) })
+        .collect::<Result<Vec<_>>>()?;
+    generated.sort();
+    for file in generated {
+        eprintln!("{:>12} {}", "Formatting".bold().cyan(), file.display());
+        let status = std::process::Command::new("rustfmt").arg(&file).status()?;
+        if !status.success() {
+            bail!(
+                "rustfmt failed for {} with status {}",
+                file.display(),
+                status
+            );
+        }
+    }
 
     Ok(())
 }
