@@ -1,6 +1,10 @@
 (python-sdk-v2-to-v3-migration-guide)=
 # Python SDK v2 to v3 Migration Guide
 
+```{warning}
+This v2 to v3 migration guide is still a work in progress. Python SDK v3 API changes are still ongoing, and this page is not yet complete enough to serve as a definitive migration procedure. Treat it as a provisional reference for the changes that have already been documented.
+```
+
 Baseline for this guide: **v2.5.1** (tag `python-2.5.1`). Upgrades from earlier 2.x releases should consult this guide plus the [v1 to v2 migration guide](python_sdk_v1_to_v2.md).
 
 ## Overview
