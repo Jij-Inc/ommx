@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package ommx.v2;
+
+import "ommx/v2/common.proto";
+import "ommx/v2/constraint.proto";
+import "ommx/v2/decision_variable.proto";
+import "ommx/v2/named_function.proto";
+
+// Validated multi-sample solver or sampler output serialization root.
+message SampleSet {
+  SampledValues objectives = 1;
+  SampledDecisionVariableTable decision_variables = 2;
+  SampledRegularConstraintCollection sampled_regular_constraints = 3;
+  map<uint64, bool> feasible = 4;
+  Sense sense = 5;
+  map<uint64, bool> feasible_relaxed = 6;
+  SampledNamedFunctionTable sampled_named_functions = 7;
+  ProcessMetadata metadata = 8;
+  map<string, string> annotations = 9;
+  SampledIndicatorConstraintCollection sampled_indicator_constraints = 10;
+  SampledOneHotConstraintCollection sampled_one_hot_constraints = 11;
+  SampledSos1ConstraintCollection sampled_sos1_constraints = 12;
+
+  // Format version within the ommx.v2 package. The first v2 schema is 0.
+  uint32 format_version = 100;
+}

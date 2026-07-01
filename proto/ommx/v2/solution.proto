@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package ommx.v2;
+
+import "ommx/v2/common.proto";
+import "ommx/v2/constraint.proto";
+import "ommx/v2/decision_variable.proto";
+import "ommx/v2/named_function.proto";
+
+// Validated single-state solver output serialization root.
+message Solution {
+  State state = 1;
+  double objective = 2;
+  EvaluatedDecisionVariableTable decision_variables = 3;
+  EvaluatedRegularConstraintCollection evaluated_regular_constraints = 4;
+  bool feasible = 5;
+  Optimality optimality = 6;
+  Relaxation relaxation = 7;
+  optional bool feasible_relaxed = 8;
+  Sense sense = 9;
+  EvaluatedNamedFunctionTable evaluated_named_functions = 10;
+  ProcessMetadata metadata = 11;
+  map<string, string> annotations = 12;
+  EvaluatedIndicatorConstraintCollection evaluated_indicator_constraints = 13;
+  EvaluatedOneHotConstraintCollection evaluated_one_hot_constraints = 14;
+  EvaluatedSos1ConstraintCollection evaluated_sos1_constraints = 15;
+
+  // Format version within the ommx.v2 package. The first v2 schema is 0.
+  uint32 format_version = 100;
+}

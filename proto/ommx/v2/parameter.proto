@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package ommx.v2;
+
+import "ommx/v2/common.proto";
+
+// Parameter IDs and labels owned by ParametricInstance.
+//
+// Parameter IDs intentionally share the VariableID namespace with decision
+// variables. ParametricInstance validates disjointness.
+message ParameterTable {
+  repeated uint64 ids = 1;
+  map<uint64, ModelingLabel> labels = 2;
+}
+
+// Concrete parameter values keyed by the shared VariableID namespace.
+message ParameterValues {
+  map<uint64, double> entries = 1;
+}

@@ -1,0 +1,60 @@
+syntax = "proto3";
+
+package ommx.v2;
+
+import "ommx/v1/decision_variables.proto";
+import "ommx/v2/common.proto";
+
+// Kind of a decision variable row.
+enum DecisionVariableKind {
+  DECISION_VARIABLE_KIND_UNSPECIFIED = 0;
+  DECISION_VARIABLE_KIND_BINARY = 1;
+  DECISION_VARIABLE_KIND_INTEGER = 2;
+  DECISION_VARIABLE_KIND_CONTINUOUS = 3;
+  DECISION_VARIABLE_KIND_SEMI_INTEGER = 4;
+  DECISION_VARIABLE_KIND_SEMI_CONTINUOUS = 5;
+}
+
+// Definition-stage decision-variable row.
+//
+// The enclosing DecisionVariableTable owns VariableID and modeling labels.
+message DecisionVariable {
+  DecisionVariableKind kind = 1;
+  ommx.v1.Bound bound = 2;
+}
+
+// Evaluated-stage decision-variable row.
+message EvaluatedDecisionVariable {
+  DecisionVariableKind kind = 1;
+  ommx.v1.Bound bound = 2;
+  double value = 3;
+}
+
+// Sampled-stage decision-variable row.
+message SampledDecisionVariable {
+  DecisionVariableKind kind = 1;
+  ommx.v1.Bound bound = 2;
+  SampledValues samples = 3;
+}
+
+// Definition-stage decision-variable table.
+//
+// Map keys own VariableID. `labels` and `fixed_values` must only reference
+// IDs present in `entries`.
+message DecisionVariableTable {
+  map<uint64, DecisionVariable> entries = 1;
+  map<uint64, ModelingLabel> labels = 2;
+  map<uint64, double> fixed_values = 3;
+}
+
+// Evaluated-stage decision-variable table.
+message EvaluatedDecisionVariableTable {
+  map<uint64, EvaluatedDecisionVariable> entries = 1;
+  map<uint64, ModelingLabel> labels = 2;
+}
+
+// Sampled-stage decision-variable table.
+message SampledDecisionVariableTable {
+  map<uint64, SampledDecisionVariable> entries = 1;
+  map<uint64, ModelingLabel> labels = 2;
+}

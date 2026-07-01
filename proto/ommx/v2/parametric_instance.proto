@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package ommx.v2;
+
+import "ommx/v1/function.proto";
+import "ommx/v2/common.proto";
+import "ommx/v2/constraint.proto";
+import "ommx/v2/decision_variable.proto";
+import "ommx/v2/named_function.proto";
+import "ommx/v2/parameter.proto";
+
+// Validated parametric optimization problem serialization root.
+message ParametricInstance {
+  ModelDescription description = 1;
+  DecisionVariableTable decision_variables = 2;
+  ParameterTable parameters = 3;
+  ommx.v1.Function objective = 4;
+  RegularConstraintCollection regular_constraints = 5;
+  Sense sense = 6;
+  IndicatorConstraintCollection indicator_constraints = 7;
+  OneHotConstraintCollection one_hot_constraints = 8;
+  Sos1ConstraintCollection sos1_constraints = 9;
+  map<uint64, ommx.v1.Function> decision_variable_dependency = 10;
+  NamedFunctionTable named_functions = 11;
+  map<string, string> annotations = 12;
+
+  // Format version within the ommx.v2 package. The first v2 schema is 0.
+  uint32 format_version = 100;
+}

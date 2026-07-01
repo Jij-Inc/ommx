@@ -1,0 +1,93 @@
+syntax = "proto3";
+
+package ommx.v2;
+
+// Human-authored modeling notation for one table or collection row.
+//
+// This label preserves the mathematical model notation before the model was
+// lowered into OMMX. For example, a variable written as `x[i, j]` can be
+// represented as `name = "x"` and `subscripts = [i, j]`.
+message ModelingLabel {
+  optional string name = 1;
+  repeated int64 subscripts = 2;
+  map<string, string> parameters = 3;
+  optional string description = 4;
+}
+
+// One transformation step in a constraint's lineage.
+//
+// Provenance records special-constraint origins when a special constraint is
+// converted or propagated into another constraint family.
+message Provenance {
+  oneof source {
+    uint64 indicator_constraint_id = 1;
+    uint64 one_hot_constraint_id = 2;
+    uint64 sos1_constraint_id = 3;
+  }
+}
+
+// Constraint sidecar owned by one constraint collection.
+message ConstraintContext {
+  ModelingLabel label = 1;
+  repeated Provenance provenance = 2;
+}
+
+// Why a constraint row was removed or relaxed by preprocessing.
+message RemovedReason {
+  string reason = 1;
+  map<string, string> parameters = 2;
+}
+
+// Model description shared by v2 top-level roots.
+message ModelDescription {
+  optional string name = 1;
+  optional string description = 2;
+  repeated string authors = 3;
+  optional string created_by = 4;
+  optional string created = 5;
+  optional string license = 6;
+  optional string dataset = 7;
+}
+
+// Objective sense for an optimization problem or evaluated output.
+enum Sense {
+  SENSE_UNSPECIFIED = 0;
+  SENSE_MINIMIZE = 1;
+  SENSE_MAXIMIZE = 2;
+}
+
+// Values keyed by decision-variable or parameter ID.
+message State {
+  map<uint64, double> entries = 1;
+}
+
+// A compressed map from sample IDs to scalar values.
+//
+// Each entry stores one value and the sample IDs that share that value.
+message SampledValues {
+  message Entry {
+    double value = 1;
+    repeated uint64 ids = 2;
+  }
+  repeated Entry entries = 1;
+}
+
+// Metadata for an optimization or sampling process.
+message ProcessMetadata {
+  optional string instance = 1;
+  optional string solver = 2;
+  optional string parameters = 3;
+  optional string start = 4;
+  optional string end = 5;
+}
+
+enum Optimality {
+  OPTIMALITY_UNSPECIFIED = 0;
+  OPTIMALITY_OPTIMAL = 1;
+  OPTIMALITY_NOT_OPTIMAL = 2;
+}
+
+enum Relaxation {
+  RELAXATION_UNSPECIFIED = 0;
+  RELAXATION_LP_RELAXED = 1;
+}
