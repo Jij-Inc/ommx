@@ -47,6 +47,14 @@ See [DEVELOPMENT.md](./DEVELOPMENT.md) about developing this project.
 
 See [Supported Adapters](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/user_guide/supported_ommx_adapters.html) about a complete list of supported adapters for each solver/sampler.
 
+## CLI
+
+Prebuilt `ommx` CLI archives are attached to Rust SDK releases and can be installed with [`cargo-binstall`](https://github.com/cargo-bins/cargo-binstall):
+
+```bash
+cargo binstall ommx
+```
+
 # License
 © 2024 Jij Inc.
 
