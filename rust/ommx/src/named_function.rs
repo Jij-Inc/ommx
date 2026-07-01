@@ -170,26 +170,6 @@ impl<T> NamedFunctionTable<T> {
         }
     }
 
-    /// Consume the table into rows paired with their modeling labels.
-    ///
-    /// This is crate-internal because splitting table rows from the label store
-    /// is only appropriate at host-owned serialization boundaries. Returning the
-    /// label with each row makes the legacy v1 conversion path preserve sidecars
-    /// by construction.
-    pub(crate) fn into_rows_with_labels(self) -> Vec<(NamedFunctionID, T, NamedFunctionLabel)> {
-        let NamedFunctionTable {
-            entries,
-            mut labels,
-        } = self;
-        entries
-            .into_iter()
-            .map(|(id, row)| {
-                let label = labels.remove(id);
-                (id, row, label)
-            })
-            .collect()
-    }
-
     /// Intrinsic row map, keyed by table-owned [`NamedFunctionID`].
     pub fn entries(&self) -> &BTreeMap<NamedFunctionID, T> {
         &self.entries
@@ -328,6 +308,106 @@ impl SampledNamedFunction {
             evaluated_value,
             used_decision_variable_ids: self.used_decision_variable_ids.clone(),
         })
+    }
+}
+
+impl From<NamedFunctionTable<NamedFunction>> for Vec<crate::v1::NamedFunction> {
+    fn from(value: NamedFunctionTable<NamedFunction>) -> Self {
+        let NamedFunctionTable {
+            entries,
+            mut labels,
+        } = value;
+        entries
+            .into_iter()
+            .map(|(id, row)| named_function_to_v1(id, row, labels.remove(id)))
+            .collect()
+    }
+}
+
+fn named_function_to_v1(
+    id: NamedFunctionID,
+    named_function: NamedFunction,
+    label: NamedFunctionLabel,
+) -> crate::v1::NamedFunction {
+    crate::v1::NamedFunction {
+        id: id.into_inner(),
+        function: Some(named_function.function.into()),
+        name: label.name,
+        subscripts: label.subscripts,
+        parameters: label.parameters.into_iter().collect(),
+        description: label.description,
+    }
+}
+
+impl From<NamedFunctionTable<EvaluatedNamedFunction>> for Vec<crate::v1::EvaluatedNamedFunction> {
+    fn from(value: NamedFunctionTable<EvaluatedNamedFunction>) -> Self {
+        let NamedFunctionTable {
+            entries,
+            mut labels,
+        } = value;
+        entries
+            .into_iter()
+            .map(|(id, row)| evaluated_named_function_to_v1(id, row, labels.remove(id)))
+            .collect()
+    }
+}
+
+fn evaluated_named_function_to_v1(
+    id: NamedFunctionID,
+    named_function: EvaluatedNamedFunction,
+    label: NamedFunctionLabel,
+) -> crate::v1::EvaluatedNamedFunction {
+    let EvaluatedNamedFunction {
+        evaluated_value,
+        used_decision_variable_ids,
+    } = named_function;
+    crate::v1::EvaluatedNamedFunction {
+        id: id.into_inner(),
+        evaluated_value,
+        name: label.name,
+        subscripts: label.subscripts,
+        parameters: label.parameters.into_iter().collect(),
+        description: label.description,
+        used_decision_variable_ids: used_decision_variable_ids
+            .into_iter()
+            .map(|id| id.into_inner())
+            .collect(),
+    }
+}
+
+impl From<NamedFunctionTable<SampledNamedFunction>> for Vec<crate::v1::SampledNamedFunction> {
+    fn from(value: NamedFunctionTable<SampledNamedFunction>) -> Self {
+        let NamedFunctionTable {
+            entries,
+            mut labels,
+        } = value;
+        entries
+            .into_iter()
+            .map(|(id, row)| sampled_named_function_to_v1(id, row, labels.remove(id)))
+            .collect()
+    }
+}
+
+fn sampled_named_function_to_v1(
+    id: NamedFunctionID,
+    named_function: SampledNamedFunction,
+    label: NamedFunctionLabel,
+) -> crate::v1::SampledNamedFunction {
+    let SampledNamedFunction {
+        evaluated_values,
+        used_decision_variable_ids,
+    } = named_function;
+    crate::v1::SampledNamedFunction {
+        id: id.into_inner(),
+        evaluated_values: Some(evaluated_values.into()),
+        name: label.name,
+        subscripts: label.subscripts,
+        parameters: label.parameters.into_iter().collect(),
+        description: label.description,
+        used_decision_variable_ids: used_decision_variable_ids
+            .into_iter()
+            .map(|id| id.into_inner())
+            .collect(),
     }
 }
 

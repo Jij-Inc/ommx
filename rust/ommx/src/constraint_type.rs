@@ -640,41 +640,6 @@ impl<T: ConstraintType> ConstraintCollection<T> {
         T::ID::from(next)
     }
 
-    /// Consume the collection into rows paired with their context sidecars.
-    ///
-    /// This is crate-internal because splitting collection internals is only
-    /// appropriate at host-owned serialization boundaries. Returning context with
-    /// each row makes legacy v1 conversion preserve labels and provenance by
-    /// construction.
-    #[allow(clippy::type_complexity)]
-    pub(crate) fn into_rows_with_context(
-        self,
-    ) -> (
-        Vec<(T::ID, T::Created, ConstraintContext)>,
-        Vec<(T::ID, T::Created, ConstraintContext, RemovedReason)>,
-    ) {
-        let ConstraintCollection {
-            active,
-            removed,
-            mut context,
-        } = self;
-        let active = active
-            .into_iter()
-            .map(|(id, constraint)| {
-                let context = context.remove(id);
-                (id, constraint, context)
-            })
-            .collect();
-        let removed = removed
-            .into_iter()
-            .map(|(id, (constraint, reason))| {
-                let context = context.remove(id);
-                (id, constraint, context, reason)
-            })
-            .collect();
-        (active, removed)
-    }
-
     /// Move an active constraint to the removed set with a reason.
     pub fn relax(&mut self, id: T::ID, removed_reason: RemovedReason) -> crate::Result<()> {
         let c = self
@@ -721,6 +686,57 @@ impl<T: ConstraintType> ConstraintCollection<T> {
             ids.extend(constraint.required_ids());
         }
         ids
+    }
+}
+
+impl From<ConstraintCollection<Constraint>> for (Vec<v1::Constraint>, Vec<v1::RemovedConstraint>) {
+    fn from(value: ConstraintCollection<Constraint>) -> Self {
+        let ConstraintCollection {
+            active,
+            removed,
+            mut context,
+        } = value;
+        let active = active
+            .into_iter()
+            .map(|(id, constraint)| constraint_to_v1(id, constraint, context.remove(id)))
+            .collect();
+        let removed = removed
+            .into_iter()
+            .map(|(id, (constraint, reason))| {
+                removed_constraint_to_v1(id, constraint, context.remove(id), reason)
+            })
+            .collect();
+        (active, removed)
+    }
+}
+
+fn constraint_to_v1(
+    id: ConstraintID,
+    value: Constraint,
+    context: ConstraintContext,
+) -> v1::Constraint {
+    let label = context.label;
+    v1::Constraint {
+        id: id.into_inner(),
+        equality: value.equality.into(),
+        function: Some(value.stage.function.into()),
+        name: label.name,
+        subscripts: label.subscripts,
+        parameters: label.parameters.into_iter().collect(),
+        description: label.description,
+    }
+}
+
+fn removed_constraint_to_v1(
+    id: ConstraintID,
+    constraint: Constraint,
+    context: ConstraintContext,
+    removed_reason: RemovedReason,
+) -> v1::RemovedConstraint {
+    v1::RemovedConstraint {
+        constraint: Some(constraint_to_v1(id, constraint, context)),
+        removed_reason: removed_reason.reason,
+        removed_reason_parameters: removed_reason.parameters.into_iter().collect(),
     }
 }
 
@@ -923,6 +939,64 @@ impl<T: ConstraintType> EvaluatedCollection<T> {
     }
 }
 
+impl From<EvaluatedCollection<Constraint>> for Vec<v1::EvaluatedConstraint> {
+    fn from(value: EvaluatedCollection<Constraint>) -> Self {
+        let EvaluatedCollection {
+            constraints,
+            mut removed_reasons,
+            mut context,
+        } = value;
+        constraints
+            .into_iter()
+            .map(|(id, constraint)| {
+                let context = context.remove(id);
+                match removed_reasons.remove(&id) {
+                    Some(reason) => evaluated_constraint_to_v1(id, constraint, context, reason),
+                    None => evaluated_constraint_to_v1_unremoved(id, constraint, context),
+                }
+            })
+            .collect()
+    }
+}
+
+fn evaluated_constraint_to_v1_unremoved(
+    id: ConstraintID,
+    constraint: EvaluatedConstraint,
+    context: ConstraintContext,
+) -> v1::EvaluatedConstraint {
+    let label = context.label;
+    v1::EvaluatedConstraint {
+        id: id.into_inner(),
+        equality: constraint.equality.into(),
+        evaluated_value: constraint.stage.evaluated_value,
+        used_decision_variable_ids: constraint
+            .stage
+            .used_decision_variable_ids
+            .into_iter()
+            .map(|id| id.into_inner())
+            .collect(),
+        subscripts: label.subscripts,
+        parameters: label.parameters.into_iter().collect(),
+        name: label.name,
+        description: label.description,
+        dual_variable: constraint.stage.dual_variable,
+        removed_reason: None,
+        removed_reason_parameters: Default::default(),
+    }
+}
+
+fn evaluated_constraint_to_v1(
+    id: ConstraintID,
+    constraint: EvaluatedConstraint,
+    context: ConstraintContext,
+    removed_reason: RemovedReason,
+) -> v1::EvaluatedConstraint {
+    let mut value = evaluated_constraint_to_v1_unremoved(id, constraint, context);
+    value.removed_reason = Some(removed_reason.reason);
+    value.removed_reason_parameters = removed_reason.parameters.into_iter().collect();
+    value
+}
+
 /// A collection of sampled constraints of a single type.
 ///
 /// This is the SampleSet-side counterpart of [`ConstraintCollection`],
@@ -1075,6 +1149,72 @@ impl<T: ConstraintType> SampledCollection<T> {
             .filter(|(id, _)| !self.removed_reasons.contains_key(id))
             .all(|(_, c)| c.is_feasible_for(sample_id).unwrap_or(false))
     }
+}
+
+impl From<SampledCollection<Constraint>> for Vec<v1::SampledConstraint> {
+    fn from(value: SampledCollection<Constraint>) -> Self {
+        let SampledCollection {
+            constraints,
+            mut removed_reasons,
+            mut context,
+        } = value;
+        constraints
+            .into_iter()
+            .map(|(id, constraint)| {
+                let context = context.remove(id);
+                match removed_reasons.remove(&id) {
+                    Some(reason) => sampled_constraint_to_v1(id, constraint, context, reason),
+                    None => sampled_constraint_to_v1_unremoved(id, constraint, context),
+                }
+            })
+            .collect()
+    }
+}
+
+fn sampled_constraint_to_v1_unremoved(
+    id: ConstraintID,
+    constraint: SampledConstraint,
+    context: ConstraintContext,
+) -> v1::SampledConstraint {
+    let label = context.label;
+    let evaluated_values: v1::SampledValues = constraint.stage.evaluated_values.into();
+    let feasible = constraint
+        .stage
+        .feasible
+        .into_iter()
+        .map(|(id, value)| (id.into_inner(), value))
+        .collect();
+
+    v1::SampledConstraint {
+        id: id.into_inner(),
+        equality: constraint.equality.into(),
+        name: label.name,
+        subscripts: label.subscripts,
+        parameters: label.parameters.into_iter().collect(),
+        description: label.description,
+        removed_reason: None,
+        removed_reason_parameters: Default::default(),
+        evaluated_values: Some(evaluated_values),
+        used_decision_variable_ids: constraint
+            .stage
+            .used_decision_variable_ids
+            .into_iter()
+            .map(|id| id.into_inner())
+            .collect(),
+        feasible,
+    }
+}
+
+fn sampled_constraint_to_v1(
+    id: ConstraintID,
+    constraint: SampledConstraint,
+    context: ConstraintContext,
+    removed_reason: RemovedReason,
+) -> v1::SampledConstraint {
+    let mut value = sampled_constraint_to_v1_unremoved(id, constraint, context);
+    value.removed_reason = Some(removed_reason.reason);
+    value.removed_reason_parameters = removed_reason.parameters.into_iter().collect();
+    value
 }
 
 #[cfg(test)]

@@ -139,44 +139,6 @@ impl Parse for Vec<v1::DecisionVariable> {
     }
 }
 
-/// Build a v1 `DecisionVariable` from its intrinsic data plus drained modeling label.
-pub(crate) fn decision_variable_to_v1(
-    id: VariableID,
-    DecisionVariable { kind, bound }: DecisionVariable,
-    label: DecisionVariableLabel,
-) -> v1::DecisionVariable {
-    decision_variable_fields_to_v1(id, kind, bound, label, None)
-}
-
-/// Build a v1 `DecisionVariable` and overlay the table-owned fixed value.
-pub(crate) fn decision_variable_to_v1_with_fixed_value(
-    id: VariableID,
-    DecisionVariable { kind, bound }: DecisionVariable,
-    label: DecisionVariableLabel,
-    substituted_value: Option<f64>,
-) -> v1::DecisionVariable {
-    decision_variable_fields_to_v1(id, kind, bound, label, substituted_value)
-}
-
-fn decision_variable_fields_to_v1(
-    id: VariableID,
-    kind: Kind,
-    bound: Bound,
-    label: DecisionVariableLabel,
-    substituted_value: Option<f64>,
-) -> v1::DecisionVariable {
-    v1::DecisionVariable {
-        id: id.into_inner(),
-        kind: kind.into(),
-        bound: Some(bound.into()),
-        substituted_value,
-        name: label.name,
-        subscripts: label.subscripts,
-        parameters: label.parameters.into_iter().collect(),
-        description: label.description,
-    }
-}
-
 /// Parsed v1 `SampledDecisionVariable` together with its drained modeling label.
 #[derive(Debug)]
 pub struct ParsedSampledDecisionVariable {
@@ -255,23 +217,6 @@ impl TryFrom<v1::SampledDecisionVariable> for SampledDecisionVariable {
     }
 }
 
-/// Build a v1 `SampledDecisionVariable` from its intrinsic data plus drained modeling label.
-pub(crate) fn sampled_decision_variable_to_v1(
-    id: VariableID,
-    sampled_dv: SampledDecisionVariable,
-    label: DecisionVariableLabel,
-) -> v1::SampledDecisionVariable {
-    let dv = DecisionVariable {
-        kind: sampled_dv.kind,
-        bound: sampled_dv.bound,
-    };
-
-    v1::SampledDecisionVariable {
-        decision_variable: Some(decision_variable_to_v1(id, dv, label)),
-        samples: Some(sampled_dv.samples.into()),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -338,9 +283,16 @@ mod tests {
         assert_eq!(label.subscripts, vec![1, 2]);
         assert_eq!(label.description, Some("A test variable".to_string()));
 
-        // Test round-trip conversion: name is reattached at serialize time
-        // by `sampled_decision_variable_to_v1`.
-        let v1_converted = sampled_decision_variable_to_v1(sampled_id, sampled_dv, label);
+        // Test round-trip conversion at the table level, where labels live.
+        let mut labels = VariableLabelStore::default();
+        labels.insert(sampled_id, label);
+        let table = SampledDecisionVariableTable::new(
+            std::collections::BTreeMap::from([(sampled_id, sampled_dv)]),
+            labels,
+        )
+        .unwrap();
+        let mut rows: Vec<v1::SampledDecisionVariable> = (&table).into();
+        let v1_converted = rows.pop().unwrap();
         let decision_variable = v1_converted.decision_variable.unwrap();
         assert_eq!(decision_variable.id, 42);
         assert_eq!(decision_variable.name, Some("test_var".to_string()));

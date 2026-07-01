@@ -193,45 +193,6 @@ impl EvaluatedConstraint {
     }
 }
 
-// NOTE: There are intentionally no `impl From<(ConstraintID,
-// EvaluatedConstraint)> for v1::EvaluatedConstraint` (or the Sampled
-// variant). v3 keeps context at the collection layer, so a per-element
-// conversion would have to default every context field — silently
-// dropping any caller-supplied context. Callers must instead go through
-// [`evaluated_constraint_to_v1`] / [`sampled_constraint_to_v1`], which
-// take the context explicitly. Top-level container serialization
-// (`From<Solution> for v1::Solution`, etc.) drains the SoA store and
-// threads the context through these helpers.
-
-/// Build a v1 `EvaluatedConstraint` from a per-element constraint plus its
-/// context. The context comes from the enclosing collection's
-/// [`ConstraintContextStore`]; the per-element struct no longer carries it.
-pub(crate) fn evaluated_constraint_to_v1(
-    id: ConstraintID,
-    c: EvaluatedConstraint,
-    context: ConstraintContext,
-) -> crate::v1::EvaluatedConstraint {
-    let label = context.label;
-    crate::v1::EvaluatedConstraint {
-        id: id.into_inner(),
-        equality: c.equality.into(),
-        evaluated_value: c.stage.evaluated_value,
-        used_decision_variable_ids: c
-            .stage
-            .used_decision_variable_ids
-            .into_iter()
-            .map(|id| id.into_inner())
-            .collect(),
-        subscripts: label.subscripts,
-        parameters: label.parameters.into_iter().collect(),
-        name: label.name,
-        description: label.description,
-        dual_variable: c.stage.dual_variable,
-        removed_reason: None,
-        removed_reason_parameters: Default::default(),
-    }
-}
-
 // ===== Sampled stage =====
 
 /// Type alias for a sampled constraint.
@@ -286,43 +247,6 @@ impl SampledConstraint {
                 }
             })
             .collect()
-    }
-}
-
-/// Build a v1 `SampledConstraint` from a per-element sampled constraint plus
-/// its context. The context comes from the enclosing collection's
-/// [`ConstraintContextStore`]; the per-element struct no longer carries it.
-pub(crate) fn sampled_constraint_to_v1(
-    id: ConstraintID,
-    c: SampledConstraint,
-    context: ConstraintContext,
-) -> crate::v1::SampledConstraint {
-    let label = context.label;
-    let evaluated_values: crate::v1::SampledValues = c.stage.evaluated_values.into();
-    let feasible = c
-        .stage
-        .feasible
-        .into_iter()
-        .map(|(id, value)| (id.into_inner(), value))
-        .collect();
-
-    crate::v1::SampledConstraint {
-        id: id.into_inner(),
-        equality: c.equality.into(),
-        name: label.name,
-        subscripts: label.subscripts,
-        parameters: label.parameters.into_iter().collect(),
-        description: label.description,
-        removed_reason: None,
-        removed_reason_parameters: Default::default(),
-        evaluated_values: Some(evaluated_values),
-        used_decision_variable_ids: c
-            .stage
-            .used_decision_variable_ids
-            .into_iter()
-            .map(|id| id.into_inner())
-            .collect(),
-        feasible,
     }
 }
 
