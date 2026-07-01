@@ -116,6 +116,15 @@ api/index
 ```
 
 ```{toctree}
+:caption: Migration Guide
+:maxdepth: 1
+:hidden:
+
+migration/python_sdk_v2_to_v3
+migration/python_sdk_v1_to_v2
+```
+
+```{toctree}
 :caption: Release Note
 :maxdepth: 1
 :hidden:
