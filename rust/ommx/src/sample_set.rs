@@ -443,6 +443,7 @@ pub struct SampleSetBuilder {
     indicator_constraints: SampledCollection<IndicatorConstraint>,
     one_hot_constraints: SampledCollection<crate::OneHotConstraint>,
     sos1_constraints: SampledCollection<crate::Sos1Constraint>,
+    named_function_table: Option<NamedFunctionTable<SampledNamedFunction>>,
     named_functions: BTreeMap<NamedFunctionID, SampledNamedFunction>,
     named_function_labels: crate::named_function::NamedFunctionLabelStore,
     sense: Option<Sense>,
@@ -564,7 +565,17 @@ impl SampleSetBuilder {
         mut self,
         named_functions: BTreeMap<NamedFunctionID, SampledNamedFunction>,
     ) -> Self {
+        self.named_function_table = None;
         self.named_functions = named_functions;
+        self
+    }
+
+    /// Sets the sampled named-function table without splitting rows from labels.
+    pub(crate) fn named_function_table(
+        mut self,
+        named_functions: NamedFunctionTable<SampledNamedFunction>,
+    ) -> Self {
+        self.named_function_table = Some(named_functions);
         self
     }
 
@@ -573,6 +584,7 @@ impl SampleSetBuilder {
         mut self,
         named_function_labels: crate::named_function::NamedFunctionLabelStore,
     ) -> Self {
+        self.named_function_table = None;
         self.named_function_labels = named_function_labels;
         self
     }
@@ -617,12 +629,13 @@ impl SampleSetBuilder {
                     message: e.to_string(),
                 })?;
         let decision_variable_ids = decision_variables.keys().copied().collect::<BTreeSet<_>>();
-        let named_functions =
-            NamedFunctionTable::new(self.named_functions, self.named_function_labels).map_err(
-                |e| SampleSetError::InvalidSidecar {
+        let named_functions = match self.named_function_table {
+            Some(named_functions) => named_functions,
+            None => NamedFunctionTable::new(self.named_functions, self.named_function_labels)
+                .map_err(|e| SampleSetError::InvalidSidecar {
                     message: e.to_string(),
-                },
-            )?;
+                })?,
+        };
         constraints
             .validate_context_ids()
             .map_err(|e| SampleSetError::InvalidSidecar {
@@ -796,12 +809,13 @@ impl SampleSetBuilder {
             &objective_sample_ids,
         );
 
-        let named_functions =
-            NamedFunctionTable::new(self.named_functions, self.named_function_labels).map_err(
-                |e| SampleSetError::InvalidSidecar {
+        let named_functions = match self.named_function_table {
+            Some(named_functions) => named_functions,
+            None => NamedFunctionTable::new(self.named_functions, self.named_function_labels)
+                .map_err(|e| SampleSetError::InvalidSidecar {
                     message: e.to_string(),
-                },
-            )?;
+                })?,
+        };
 
         Ok(SampleSet {
             decision_variables,

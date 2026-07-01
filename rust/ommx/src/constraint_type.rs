@@ -314,17 +314,6 @@ pub struct ConstraintCollection<T: ConstraintType> {
     context: ConstraintContextStore<T::ID>,
 }
 
-/// Result of rewriting one active constraint through its owning collection.
-pub(crate) enum ActiveConstraintUpdate<C> {
-    /// Keep the constraint active under the same ID.
-    Active(C),
-    /// Move the constraint to the removed map under the same ID.
-    Removed {
-        constraint: C,
-        reason: RemovedReason,
-    },
-}
-
 impl<T: ConstraintType> Default for ConstraintCollection<T> {
     fn default() -> Self {
         Self {
@@ -416,7 +405,7 @@ impl<T: ConstraintType> ConstraintCollection<T> {
     }
 
     /// Return whether `id` belongs to either active or removed constraints.
-    pub(crate) fn contains_id(&self, id: T::ID) -> bool {
+    fn contains_id(&self, id: T::ID) -> bool {
         self.active.contains_key(&id) || self.removed.contains_key(&id)
     }
 
@@ -460,7 +449,7 @@ impl<T: ConstraintType> ConstraintCollection<T> {
     ///
     /// Returns [`None`] when `id` is unknown to this collection. Host-level
     /// callers must validate the payload before calling this method.
-    pub(crate) fn replace_preserving_lifecycle(
+    pub(crate) fn replace_row_preserving_lifecycle(
         &mut self,
         id: T::ID,
         constraint: T::Created,
@@ -472,63 +461,108 @@ impl<T: ConstraintType> ConstraintCollection<T> {
         }
     }
 
-    /// Rewrite one active row by value while preserving row identity and context.
+    /// Replace active and removed row payloads without changing lifecycle or context.
     ///
-    /// The closure receives an owned clone of the current row and returns the
-    /// replacement row. On error this collection is unchanged.
-    pub(crate) fn update_active(
+    /// The parent object owns semantic transformations such as parameter
+    /// substitution. This collection only validates and commits the storage
+    /// effect: active replacements must refer to active rows, removed
+    /// replacements must refer to removed rows, and removal reasons plus
+    /// context sidecars are preserved.
+    pub(crate) fn replace_rows_preserving_lifecycle(
         &mut self,
-        id: T::ID,
-        f: impl FnOnce(T::Created) -> crate::Result<T::Created>,
-    ) -> crate::Result<bool> {
-        let Some(constraint) = self.active.get(&id).cloned() else {
-            return Ok(false);
-        };
-        let updated = f(constraint)?;
-        self.active.insert(id, updated);
-        Ok(true)
-    }
-
-    /// Rewrite all active entries through collection-owned membership operations.
-    ///
-    /// The closure receives each active constraint by value and returns whether
-    /// it stays active or moves to the removed map under the same ID. The
-    /// collection preserves context sidecars and active/removed disjointness.
-    /// On error, the active map is restored to its original state and no removed
-    /// entries are added by this method.
-    pub(crate) fn rewrite_active<E>(
-        &mut self,
-        mut f: impl FnMut(
-            T::ID,
-            T::Created,
-            &ConstraintContextStore<T::ID>,
-        ) -> std::result::Result<ActiveConstraintUpdate<T::Created>, E>,
-    ) -> std::result::Result<(), E> {
-        let original_active = self.active.clone();
-        let active = std::mem::take(&mut self.active);
-        let mut next_active = BTreeMap::new();
-        let mut next_removed = BTreeMap::new();
-
-        for (id, constraint) in active {
-            match f(id, constraint, &self.context) {
-                Ok(ActiveConstraintUpdate::Active(constraint)) => {
-                    next_active.insert(id, constraint);
-                }
-                Ok(ActiveConstraintUpdate::Removed { constraint, reason }) => {
-                    debug_assert!(!self.removed.contains_key(&id));
-                    next_removed.insert(id, (constraint, reason));
-                }
-                Err(error) => {
-                    self.active = original_active;
-                    return Err(error);
-                }
+        active_replacements: BTreeMap<T::ID, T::Created>,
+        removed_replacements: BTreeMap<T::ID, T::Created>,
+    ) -> crate::Result<()> {
+        validate_no_key_overlap(
+            &active_replacements,
+            &removed_replacements,
+            "active row replacements",
+            "removed row replacements",
+        )?;
+        for id in active_replacements.keys() {
+            if !self.active.contains_key(id) {
+                crate::bail!({ ?id }, "Active constraint with ID {id:?} not found");
+            }
+        }
+        for id in removed_replacements.keys() {
+            if !self.removed.contains_key(id) {
+                crate::bail!({ ?id }, "Removed constraint with ID {id:?} not found");
             }
         }
 
-        self.active = next_active;
-        self.removed.extend(next_removed);
+        for (id, constraint) in active_replacements {
+            self.active.insert(id, constraint);
+        }
+        for (id, constraint) in removed_replacements {
+            let (removed_constraint, _reason) = self
+                .removed
+                .get_mut(&id)
+                .expect("removed row was validated before replacement");
+            *removed_constraint = constraint;
+        }
         debug_assert!(self.validate_context_ids().is_ok());
         Ok(())
+    }
+
+    /// Apply precomputed effects on active rows.
+    ///
+    /// The parent object owns semantic transformations such as substitution,
+    /// propagation, or penalty conversion. This collection only validates and
+    /// commits the row-storage effects those operations induce: replacing
+    /// active rows in place, and moving active rows to the removed map with a
+    /// reason. Row identity and context sidecars are preserved.
+    pub(crate) fn replace_and_remove_active_rows(
+        &mut self,
+        replacements: BTreeMap<T::ID, T::Created>,
+        removals: BTreeMap<T::ID, (T::Created, RemovedReason)>,
+    ) -> crate::Result<()> {
+        if let Some(id) = replacements.keys().find(|id| removals.contains_key(id)) {
+            crate::bail!(
+                { ?id },
+                "Constraint ID {id:?} appears in both active row replacements and removals",
+            );
+        }
+        for id in replacements.keys().chain(removals.keys()) {
+            if !self.active.contains_key(id) {
+                crate::bail!({ ?id }, "Active constraint with ID {id:?} not found");
+            }
+        }
+        for (id, constraint) in replacements {
+            self.active.insert(id, constraint);
+        }
+        for (id, (constraint, reason)) in removals {
+            self.active
+                .remove(&id)
+                .expect("active row was validated before removal");
+            self.removed.insert(id, (constraint, reason));
+        }
+        debug_assert!(self.validate_context_ids().is_ok());
+        Ok(())
+    }
+
+    /// Replace active rows in place while preserving row identity and context.
+    pub(crate) fn replace_active_rows(
+        &mut self,
+        replacements: BTreeMap<T::ID, T::Created>,
+    ) -> crate::Result<()> {
+        self.replace_and_remove_active_rows(replacements, BTreeMap::new())
+    }
+
+    /// Replace one active row in place while preserving row identity and context.
+    pub(crate) fn replace_active_row(
+        &mut self,
+        id: T::ID,
+        constraint: T::Created,
+    ) -> crate::Result<()> {
+        self.replace_active_rows(BTreeMap::from([(id, constraint)]))
+    }
+
+    /// Move active rows to the removed map with precomputed payloads and reasons.
+    pub(crate) fn move_active_rows_to_removed(
+        &mut self,
+        removals: BTreeMap<T::ID, (T::Created, RemovedReason)>,
+    ) -> crate::Result<()> {
+        self.replace_and_remove_active_rows(BTreeMap::new(), removals)
     }
 
     /// Insert an active constraint along with its context in one step.
@@ -587,18 +621,6 @@ impl<T: ConstraintType> ConstraintCollection<T> {
         T::ID::from(next)
     }
 
-    /// Consume the collection and return active entries, removed entries, and sidecars.
-    #[allow(clippy::type_complexity)]
-    pub fn into_parts(
-        self,
-    ) -> (
-        BTreeMap<T::ID, T::Created>,
-        BTreeMap<T::ID, (T::Created, RemovedReason)>,
-        ConstraintContextStore<T::ID>,
-    ) {
-        (self.active, self.removed, self.context)
-    }
-
     /// Move an active constraint to the removed set with a reason.
     pub fn relax(&mut self, id: T::ID, removed_reason: RemovedReason) -> crate::Result<()> {
         let c = self
@@ -609,33 +631,27 @@ impl<T: ConstraintType> ConstraintCollection<T> {
         Ok(())
     }
 
-    /// Restore a removed row after host-owned normalization.
+    /// Restore a removed row using a host-normalized payload.
     ///
-    /// The closure receives an owned clone of the removed payload, its removal
-    /// reason, and this collection's context. On error this collection is
-    /// unchanged. This keeps lifecycle movement in the collection while leaving
-    /// semantic normalization to the host object.
-    pub(crate) fn restore_with(
+    /// The parent object owns semantic normalization before restore because it
+    /// may depend on cross-table facts such as fixed variables or decision
+    /// variable dependencies. This collection only moves the row between
+    /// lifecycle maps while preserving context sidecars.
+    pub(crate) fn restore_removed_row(
         &mut self,
         id: T::ID,
-        f: impl FnOnce(
-            T::Created,
-            &RemovedReason,
-            &ConstraintContextStore<T::ID>,
-        ) -> crate::Result<T::Created>,
-    ) -> crate::Result<()> {
-        let Some((constraint, reason)) = self.removed.get(&id).cloned() else {
+        constraint: T::Created,
+    ) -> crate::Result<RemovedReason> {
+        let Some((_removed, reason)) = self.removed.remove(&id) else {
             return Err(crate::error!(
                 "Removed constraint with ID {:?} not found",
                 id
             ));
         };
-        let restored = f(constraint, &reason, &self.context)?;
-        self.removed.remove(&id);
         debug_assert!(!self.active.contains_key(&id));
-        self.active.insert(id, restored);
+        self.active.insert(id, constraint);
         debug_assert!(self.validate_context_ids().is_ok());
-        Ok(())
+        Ok(reason)
     }
 
     /// Collect required variable IDs from all active constraints.
@@ -645,6 +661,57 @@ impl<T: ConstraintType> ConstraintCollection<T> {
             ids.extend(constraint.required_ids());
         }
         ids
+    }
+}
+
+impl From<ConstraintCollection<Constraint>> for (Vec<v1::Constraint>, Vec<v1::RemovedConstraint>) {
+    fn from(value: ConstraintCollection<Constraint>) -> Self {
+        let ConstraintCollection {
+            active,
+            removed,
+            mut context,
+        } = value;
+        let active = active
+            .into_iter()
+            .map(|(id, constraint)| constraint_to_v1(id, constraint, context.remove(id)))
+            .collect();
+        let removed = removed
+            .into_iter()
+            .map(|(id, (constraint, reason))| {
+                removed_constraint_to_v1(id, constraint, context.remove(id), reason)
+            })
+            .collect();
+        (active, removed)
+    }
+}
+
+fn constraint_to_v1(
+    id: ConstraintID,
+    value: Constraint,
+    context: ConstraintContext,
+) -> v1::Constraint {
+    let label = context.label;
+    v1::Constraint {
+        id: id.into_inner(),
+        equality: value.equality.into(),
+        function: Some(value.stage.function.into()),
+        name: label.name,
+        subscripts: label.subscripts,
+        parameters: label.parameters.into_iter().collect(),
+        description: label.description,
+    }
+}
+
+fn removed_constraint_to_v1(
+    id: ConstraintID,
+    constraint: Constraint,
+    context: ConstraintContext,
+    removed_reason: RemovedReason,
+) -> v1::RemovedConstraint {
+    v1::RemovedConstraint {
+        constraint: Some(constraint_to_v1(id, constraint, context)),
+        removed_reason: removed_reason.reason,
+        removed_reason_parameters: removed_reason.parameters.into_iter().collect(),
     }
 }
 
@@ -797,7 +864,7 @@ impl<T: ConstraintType> EvaluatedCollection<T> {
     /// Replace an evaluated row while preserving removed-state and context sidecars.
     ///
     /// Returns [`None`] when `id` is unknown to this collection.
-    pub(crate) fn replace_evaluated(
+    pub(crate) fn replace_evaluated_row(
         &mut self,
         id: T::ID,
         constraint: T::Evaluated,
@@ -824,18 +891,6 @@ impl<T: ConstraintType> EvaluatedCollection<T> {
         validate_context_reference_ids(&self.context, &owned_ids)
     }
 
-    /// Consume and return constraints, removed reasons, and sidecars.
-    #[allow(clippy::type_complexity)]
-    pub fn into_parts(
-        self,
-    ) -> (
-        BTreeMap<T::ID, T::Evaluated>,
-        BTreeMap<T::ID, RemovedReason>,
-        ConstraintContextStore<T::ID>,
-    ) {
-        (self.constraints, self.removed_reasons, self.context)
-    }
-
     /// Check if a constraint was removed.
     pub fn is_removed(&self, id: &T::ID) -> bool {
         self.removed_reasons.contains_key(id)
@@ -857,6 +912,64 @@ impl<T: ConstraintType> EvaluatedCollection<T> {
             .filter(|(id, _)| !self.removed_reasons.contains_key(id))
             .all(|(_, c)| c.is_feasible())
     }
+}
+
+impl From<EvaluatedCollection<Constraint>> for Vec<v1::EvaluatedConstraint> {
+    fn from(value: EvaluatedCollection<Constraint>) -> Self {
+        let EvaluatedCollection {
+            constraints,
+            mut removed_reasons,
+            mut context,
+        } = value;
+        constraints
+            .into_iter()
+            .map(|(id, constraint)| {
+                let context = context.remove(id);
+                match removed_reasons.remove(&id) {
+                    Some(reason) => evaluated_constraint_to_v1(id, constraint, context, reason),
+                    None => evaluated_constraint_to_v1_unremoved(id, constraint, context),
+                }
+            })
+            .collect()
+    }
+}
+
+fn evaluated_constraint_to_v1_unremoved(
+    id: ConstraintID,
+    constraint: EvaluatedConstraint,
+    context: ConstraintContext,
+) -> v1::EvaluatedConstraint {
+    let label = context.label;
+    v1::EvaluatedConstraint {
+        id: id.into_inner(),
+        equality: constraint.equality.into(),
+        evaluated_value: constraint.stage.evaluated_value,
+        used_decision_variable_ids: constraint
+            .stage
+            .used_decision_variable_ids
+            .into_iter()
+            .map(|id| id.into_inner())
+            .collect(),
+        subscripts: label.subscripts,
+        parameters: label.parameters.into_iter().collect(),
+        name: label.name,
+        description: label.description,
+        dual_variable: constraint.stage.dual_variable,
+        removed_reason: None,
+        removed_reason_parameters: Default::default(),
+    }
+}
+
+fn evaluated_constraint_to_v1(
+    id: ConstraintID,
+    constraint: EvaluatedConstraint,
+    context: ConstraintContext,
+    removed_reason: RemovedReason,
+) -> v1::EvaluatedConstraint {
+    let mut value = evaluated_constraint_to_v1_unremoved(id, constraint, context);
+    value.removed_reason = Some(removed_reason.reason);
+    value.removed_reason_parameters = removed_reason.parameters.into_iter().collect();
+    value
 }
 
 /// A collection of sampled constraints of a single type.
@@ -988,18 +1101,6 @@ impl<T: ConstraintType> SampledCollection<T> {
         validate_context_reference_ids(&self.context, &owned_ids)
     }
 
-    /// Consume and return constraints, removed reasons, and sidecars.
-    #[allow(clippy::type_complexity)]
-    pub fn into_parts(
-        self,
-    ) -> (
-        BTreeMap<T::ID, T::Sampled>,
-        BTreeMap<T::ID, RemovedReason>,
-        ConstraintContextStore<T::ID>,
-    ) {
-        (self.constraints, self.removed_reasons, self.context)
-    }
-
     /// Check if a constraint was removed.
     pub fn is_removed(&self, id: &T::ID) -> bool {
         self.removed_reasons.contains_key(id)
@@ -1023,6 +1124,72 @@ impl<T: ConstraintType> SampledCollection<T> {
             .filter(|(id, _)| !self.removed_reasons.contains_key(id))
             .all(|(_, c)| c.is_feasible_for(sample_id).unwrap_or(false))
     }
+}
+
+impl From<SampledCollection<Constraint>> for Vec<v1::SampledConstraint> {
+    fn from(value: SampledCollection<Constraint>) -> Self {
+        let SampledCollection {
+            constraints,
+            mut removed_reasons,
+            mut context,
+        } = value;
+        constraints
+            .into_iter()
+            .map(|(id, constraint)| {
+                let context = context.remove(id);
+                match removed_reasons.remove(&id) {
+                    Some(reason) => sampled_constraint_to_v1(id, constraint, context, reason),
+                    None => sampled_constraint_to_v1_unremoved(id, constraint, context),
+                }
+            })
+            .collect()
+    }
+}
+
+fn sampled_constraint_to_v1_unremoved(
+    id: ConstraintID,
+    constraint: SampledConstraint,
+    context: ConstraintContext,
+) -> v1::SampledConstraint {
+    let label = context.label;
+    let evaluated_values: v1::SampledValues = constraint.stage.evaluated_values.into();
+    let feasible = constraint
+        .stage
+        .feasible
+        .into_iter()
+        .map(|(id, value)| (id.into_inner(), value))
+        .collect();
+
+    v1::SampledConstraint {
+        id: id.into_inner(),
+        equality: constraint.equality.into(),
+        name: label.name,
+        subscripts: label.subscripts,
+        parameters: label.parameters.into_iter().collect(),
+        description: label.description,
+        removed_reason: None,
+        removed_reason_parameters: Default::default(),
+        evaluated_values: Some(evaluated_values),
+        used_decision_variable_ids: constraint
+            .stage
+            .used_decision_variable_ids
+            .into_iter()
+            .map(|id| id.into_inner())
+            .collect(),
+        feasible,
+    }
+}
+
+fn sampled_constraint_to_v1(
+    id: ConstraintID,
+    constraint: SampledConstraint,
+    context: ConstraintContext,
+    removed_reason: RemovedReason,
+) -> v1::SampledConstraint {
+    let mut value = sampled_constraint_to_v1_unremoved(id, constraint, context);
+    value.removed_reason = Some(removed_reason.reason);
+    value.removed_reason_parameters = removed_reason.parameters.into_iter().collect();
+    value
 }
 
 #[cfg(test)]
@@ -1151,7 +1318,7 @@ mod tests {
     }
 
     #[test]
-    fn rewrite_active_moves_removed_entries_without_orphaning_context() {
+    fn replace_and_remove_active_rows_preserves_context() {
         let removed_id = ConstraintID::from(1);
         let active_id = ConstraintID::from(2);
         let active = BTreeMap::from([
@@ -1167,18 +1334,13 @@ mod tests {
             ConstraintCollection::<Constraint>::with_context(active, BTreeMap::new(), context)
                 .unwrap();
 
-        let result: std::result::Result<(), std::convert::Infallible> =
-            collection.rewrite_active(|id, constraint, _context| {
-                if id == removed_id {
-                    Ok(ActiveConstraintUpdate::Removed {
-                        constraint,
-                        reason: removed_reason(),
-                    })
-                } else {
-                    Ok(ActiveConstraintUpdate::Active(constraint))
-                }
-            });
-        result.unwrap();
+        let removed = collection.active().get(&removed_id).unwrap().clone();
+        collection
+            .move_active_rows_to_removed(BTreeMap::from([(
+                removed_id,
+                (removed, removed_reason()),
+            )]))
+            .unwrap();
 
         assert!(!collection.active().contains_key(&removed_id));
         assert!(collection.active().contains_key(&active_id));
@@ -1188,8 +1350,9 @@ mod tests {
     }
 
     #[test]
-    fn update_active_keeps_collection_unchanged_on_error() {
+    fn replace_active_rows_rejects_unknown_id_before_mutation() {
         let id = ConstraintID::from(1);
+        let orphan_id = ConstraintID::from(99);
         let original = Constraint::equal_to_zero(Function::Zero);
         let mut collection = ConstraintCollection::<Constraint>::new(
             BTreeMap::from([(id, original.clone())]),
@@ -1198,20 +1361,112 @@ mod tests {
         .unwrap();
 
         let err = collection
-            .update_active(id, |mut constraint| {
-                constraint.equality = Equality::LessThanOrEqualToZero;
-                Err(crate::error!("planned failure"))
-            })
+            .replace_active_rows(BTreeMap::from([
+                (id, Constraint::less_than_or_equal_to_zero(Function::Zero)),
+                (orphan_id, Constraint::equal_to_zero(Function::Zero)),
+            ]))
             .unwrap_err();
 
-        assert!(err.to_string().contains("planned failure"));
+        assert!(
+            err.to_string().contains("Active constraint with ID")
+                && err.to_string().contains("ConstraintID(99)"),
+            "unexpected error: {err}"
+        );
         assert_eq!(collection.active().get(&id), Some(&original));
         assert!(collection.removed().is_empty());
         collection.validate_context_ids().unwrap();
     }
 
     #[test]
-    fn restore_with_normalizes_removed_row_atomically() {
+    fn replace_rows_preserving_lifecycle_keeps_reasons_and_context() {
+        let active_id = ConstraintID::from(1);
+        let removed_id = ConstraintID::from(2);
+        let reason = removed_reason();
+        let mut context = ConstraintContextStore::default();
+        context.set_name(active_id, "active");
+        context.set_name(removed_id, "removed");
+        let mut collection = ConstraintCollection::<Constraint>::with_context(
+            BTreeMap::from([(active_id, Constraint::equal_to_zero(Function::Zero))]),
+            BTreeMap::from([(
+                removed_id,
+                (
+                    Constraint::less_than_or_equal_to_zero(Function::Zero),
+                    reason.clone(),
+                ),
+            )]),
+            context,
+        )
+        .unwrap();
+
+        collection
+            .replace_rows_preserving_lifecycle(
+                BTreeMap::from([(
+                    active_id,
+                    Constraint::less_than_or_equal_to_zero(Function::Zero),
+                )]),
+                BTreeMap::from([(removed_id, Constraint::equal_to_zero(Function::Zero))]),
+            )
+            .unwrap();
+
+        assert_eq!(
+            collection.active().get(&active_id).map(|c| c.equality),
+            Some(Equality::LessThanOrEqualToZero)
+        );
+        assert_eq!(
+            collection
+                .removed()
+                .get(&removed_id)
+                .map(|(c, _)| c.equality),
+            Some(Equality::EqualToZero)
+        );
+        assert_eq!(
+            collection.removed().get(&removed_id).map(|(_, r)| r),
+            Some(&reason)
+        );
+        assert_eq!(collection.context().name(active_id), Some("active"));
+        assert_eq!(collection.context().name(removed_id), Some("removed"));
+        collection.validate_context_ids().unwrap();
+    }
+
+    #[test]
+    fn replace_rows_preserving_lifecycle_rejects_unknown_removed_id_before_mutation() {
+        let active_id = ConstraintID::from(1);
+        let removed_id = ConstraintID::from(2);
+        let orphan_id = ConstraintID::from(99);
+        let original_active = Constraint::equal_to_zero(Function::Zero);
+        let original_removed = Constraint::less_than_or_equal_to_zero(Function::Zero);
+        let reason = removed_reason();
+        let mut collection = ConstraintCollection::<Constraint>::new(
+            BTreeMap::from([(active_id, original_active.clone())]),
+            BTreeMap::from([(removed_id, (original_removed.clone(), reason.clone()))]),
+        )
+        .unwrap();
+
+        let err = collection
+            .replace_rows_preserving_lifecycle(
+                BTreeMap::from([(
+                    active_id,
+                    Constraint::less_than_or_equal_to_zero(Function::Zero),
+                )]),
+                BTreeMap::from([(orphan_id, Constraint::equal_to_zero(Function::Zero))]),
+            )
+            .unwrap_err();
+
+        assert!(
+            err.to_string().contains("Removed constraint with ID")
+                && err.to_string().contains("ConstraintID(99)"),
+            "unexpected error: {err}"
+        );
+        assert_eq!(collection.active().get(&active_id), Some(&original_active));
+        assert_eq!(
+            collection.removed().get(&removed_id),
+            Some(&(original_removed, reason))
+        );
+        collection.validate_context_ids().unwrap();
+    }
+
+    #[test]
+    fn restore_removed_row_preserves_context() {
         let id = ConstraintID::from(1);
         let removed = Constraint::less_than_or_equal_to_zero(Function::Zero);
         let mut context = ConstraintContextStore::default();
@@ -1223,32 +1478,14 @@ mod tests {
         )
         .unwrap();
 
-        let err = collection
-            .restore_with(id, |_constraint, _reason, _context| {
-                Err(crate::error!("planned failure"))
-            })
-            .unwrap_err();
-        assert!(err.to_string().contains("planned failure"));
-        assert!(!collection.active().contains_key(&id));
-        assert_eq!(
-            collection.removed().get(&id).map(|(c, _)| c),
-            Some(&removed)
-        );
-        assert_eq!(collection.context().name(id), Some("restored"));
-
-        collection
-            .restore_with(id, |mut constraint, reason, context| {
-                assert_eq!(reason.reason, "test");
-                assert_eq!(context.name(id), Some("restored"));
-                constraint.equality = Equality::EqualToZero;
-                Ok(constraint)
-            })
-            .unwrap();
-
-        assert_eq!(
-            collection.active().get(&id).map(|c| c.equality),
-            Some(Equality::EqualToZero)
-        );
+        let mut restored = removed.clone();
+        restored.equality = Equality::EqualToZero;
+        let reason = collection.restore_removed_row(id, restored).unwrap();
+        assert_eq!(reason.reason, "test");
+        assert!(collection
+            .active()
+            .get(&id)
+            .is_some_and(|c| c.equality == Equality::EqualToZero));
         assert!(!collection.removed().contains_key(&id));
         assert_eq!(collection.context().name(id), Some("restored"));
         collection.validate_context_ids().unwrap();

@@ -1,8 +1,8 @@
 use super::*;
 use crate::Result;
 use crate::{
-    constraint::RemovedReason, constraint_type::ActiveConstraintUpdate, ATol, Bound, Evaluate,
-    Kind, Propagate, PropagateOutcome, VariableIDSet,
+    constraint::RemovedReason, ATol, Bound, Evaluate, Kind, Propagate, PropagateOutcome,
+    VariableIDSet,
 };
 use std::collections::BTreeMap;
 
@@ -334,8 +334,7 @@ impl Evaluate for Instance {
             decision_variables.insert(*id, evaluated_dv);
         }
 
-        let (evaluated_named_functions, evaluated_named_function_labels) =
-            self.named_functions.evaluate(&state, atol)?.into_parts();
+        let evaluated_named_functions = self.named_functions.evaluate(&state, atol)?;
 
         let sense = self.sense();
 
@@ -347,10 +346,9 @@ impl Evaluate for Instance {
                 .evaluated_indicator_constraints_collection(evaluated_indicator_constraints)
                 .evaluated_one_hot_constraints_collection(evaluated_one_hot_constraints)
                 .evaluated_sos1_constraints_collection(evaluated_sos1_constraints)
-                .evaluated_named_functions(evaluated_named_functions)
+                .evaluated_named_function_table(evaluated_named_functions)
                 .decision_variables(decision_variables)
                 .variable_labels(self.variable_labels().clone())
-                .named_function_labels(evaluated_named_function_labels)
                 .sense(sense)
                 .build_unchecked()?
         };
@@ -404,10 +402,7 @@ impl Evaluate for Instance {
             decision_variables.insert(*id, sampled_dv);
         }
 
-        let (named_functions, named_function_labels) = self
-            .named_functions
-            .evaluate_samples(&samples, atol)?
-            .into_parts();
+        let named_functions = self.named_functions.evaluate_samples(&samples, atol)?;
 
         Ok(crate::SampleSet::builder()
             .decision_variables(decision_variables)
@@ -417,8 +412,7 @@ impl Evaluate for Instance {
             .indicator_constraints_collection(sampled_indicator_constraints)
             .one_hot_constraints_collection(sampled_one_hot_constraints)
             .sos1_constraints_collection(sampled_sos1_constraints)
-            .named_functions(named_functions)
-            .named_function_labels(named_function_labels)
+            .named_function_table(named_functions)
             .sense(self.sense)
             .build()?)
     }
@@ -505,68 +499,76 @@ impl Instance {
             changed = false;
 
             // --- OneHot constraints ---
-            self.one_hot_constraint_collection.rewrite_active(
-                |_, oh, _| -> crate::Result<ActiveConstraintUpdate<crate::OneHotConstraint>> {
-                    let (outcome, additional) = oh.propagate(&expanded, atol)?;
-                    merge_state(&mut expanded, additional, atol, &mut changed)?;
-                    match outcome {
-                        PropagateOutcome::Active(oh) => Ok(ActiveConstraintUpdate::Active(oh)),
-                        PropagateOutcome::Consumed(oh) => Ok(ActiveConstraintUpdate::Removed {
-                            constraint: oh,
-                            reason: propagation_reason.clone(),
-                        }),
-                        PropagateOutcome::Transformed { new, .. } => match new {},
+            let mut one_hot_replacements = BTreeMap::new();
+            let mut one_hot_removals = BTreeMap::new();
+            for (&id, oh) in self.one_hot_constraint_collection.active() {
+                let (outcome, additional) = oh.clone().propagate(&expanded, atol)?;
+                merge_state(&mut expanded, additional, atol, &mut changed)?;
+                match outcome {
+                    PropagateOutcome::Active(oh) => {
+                        one_hot_replacements.insert(id, oh);
                     }
-                },
-            )?;
+                    PropagateOutcome::Consumed(oh) => {
+                        one_hot_removals.insert(id, (oh, propagation_reason.clone()));
+                    }
+                    PropagateOutcome::Transformed { new, .. } => match new {},
+                }
+            }
+            self.one_hot_constraint_collection
+                .replace_and_remove_active_rows(one_hot_replacements, one_hot_removals)?;
 
             // --- SOS1 constraints ---
-            self.sos1_constraint_collection.rewrite_active(
-                |_, sos1, _| -> crate::Result<ActiveConstraintUpdate<crate::Sos1Constraint>> {
-                    let (outcome, additional) = sos1.propagate(&expanded, atol)?;
-                    merge_state(&mut expanded, additional, atol, &mut changed)?;
-                    match outcome {
-                        PropagateOutcome::Active(sos1) => Ok(ActiveConstraintUpdate::Active(sos1)),
-                        PropagateOutcome::Consumed(sos1) => Ok(ActiveConstraintUpdate::Removed {
-                            constraint: sos1,
-                            reason: propagation_reason.clone(),
-                        }),
-                        PropagateOutcome::Transformed { new, .. } => match new {},
+            let mut sos1_replacements = BTreeMap::new();
+            let mut sos1_removals = BTreeMap::new();
+            for (&id, sos1) in self.sos1_constraint_collection.active() {
+                let (outcome, additional) = sos1.clone().propagate(&expanded, atol)?;
+                merge_state(&mut expanded, additional, atol, &mut changed)?;
+                match outcome {
+                    PropagateOutcome::Active(sos1) => {
+                        sos1_replacements.insert(id, sos1);
                     }
-                },
-            )?;
+                    PropagateOutcome::Consumed(sos1) => {
+                        sos1_removals.insert(id, (sos1, propagation_reason.clone()));
+                    }
+                    PropagateOutcome::Transformed { new, .. } => match new {},
+                }
+            }
+            self.sos1_constraint_collection
+                .replace_and_remove_active_rows(sos1_replacements, sos1_removals)?;
 
             // --- Indicator constraints ---
+            let indicator_context = self.indicator_constraint_collection.context();
+            let mut indicator_replacements = BTreeMap::new();
+            let mut indicator_removals = BTreeMap::new();
             let mut promoted_constraints = Vec::new();
-            self.indicator_constraint_collection
-                .rewrite_active(|id, ic, context| -> crate::Result<ActiveConstraintUpdate<crate::IndicatorConstraint>> {
-                    let (outcome, additional) = ic.propagate(&expanded, atol)?;
-                    merge_state(&mut expanded, additional, atol, &mut changed)?;
-                    match outcome {
-                        PropagateOutcome::Active(ic) => Ok(ActiveConstraintUpdate::Active(ic)),
-                        PropagateOutcome::Consumed(ic) => Ok(ActiveConstraintUpdate::Removed {
-                            constraint: ic,
-                            reason: propagation_reason.clone(),
-                        }),
-                        PropagateOutcome::Transformed {
-                            original,
-                            new: constraint,
-                        } => {
-                            // Indicator=1 → promote inner constraint to regular constraint.
-                            // Carry over the indicator's context into the regular collection's
-                            // store and record the promotion in provenance.
-                            let mut new_context = context.collect_for(id);
-                            new_context
-                                .provenance
-                                .push(crate::constraint::Provenance::IndicatorConstraint(id));
-                            promoted_constraints.push((constraint, new_context));
-                            Ok(ActiveConstraintUpdate::Removed {
-                                constraint: original,
-                                reason: propagation_reason.clone(),
-                            })
-                        }
+            for (&id, ic) in self.indicator_constraint_collection.active() {
+                let (outcome, additional) = ic.clone().propagate(&expanded, atol)?;
+                merge_state(&mut expanded, additional, atol, &mut changed)?;
+                match outcome {
+                    PropagateOutcome::Active(ic) => {
+                        indicator_replacements.insert(id, ic);
                     }
-                })?;
+                    PropagateOutcome::Consumed(ic) => {
+                        indicator_removals.insert(id, (ic, propagation_reason.clone()));
+                    }
+                    PropagateOutcome::Transformed {
+                        original,
+                        new: constraint,
+                    } => {
+                        // Indicator=1 → promote inner constraint to regular constraint.
+                        // Carry over the indicator's context into the regular collection's
+                        // store and record the promotion in provenance.
+                        let mut new_context = indicator_context.collect_for(id);
+                        new_context
+                            .provenance
+                            .push(crate::constraint::Provenance::IndicatorConstraint(id));
+                        promoted_constraints.push((constraint, new_context));
+                        indicator_removals.insert(id, (original, propagation_reason.clone()));
+                    }
+                }
+            }
+            self.indicator_constraint_collection
+                .replace_and_remove_active_rows(indicator_replacements, indicator_removals)?;
             for (constraint, context) in promoted_constraints {
                 let id = self.constraint_collection.unused_id();
                 self.constraint_collection

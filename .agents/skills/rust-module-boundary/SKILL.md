@@ -48,6 +48,13 @@ collections may expose storage primitives only for the specific row-level
 effects needed by that owner; they should not expose broad `&mut` access that
 lets sibling modules perform part of the root operation without the owner.
 
+`pub(crate)` is still an API across owner boundaries. Do not use crate-internal
+visibility as the method for preserving invariants. Use it only when a named
+owner in another top-level module must call a narrow operation whose effect can
+be described without exposing broader mutation authority. If the justification
+is only "SDK users cannot call it", make the item private or reshape the module
+boundary.
+
 ## Writing Flow
 
 1. Identify the owner before choosing visibility.
@@ -61,7 +68,7 @@ lets sibling modules perform part of the root operation without the owner.
    - Use plain private items for implementation details inside one module.
    - Use `pub` inside a private module when sibling code inside that private module boundary needs the item; the module privacy still protects it from the crate API.
    - Use public crate API only when the item is an intentional SDK commitment.
-   - Use `pub(crate)` only when the item must cross top-level module boundaries in this crate.
+   - Use `pub(crate)` only when the item must cross top-level module boundaries in this crate and the allowed effect is narrower than the caller's full semantic operation.
 
 3. Document public owner invariants.
    - For each public Rust struct, put the invariants it owns in the struct-level Rustdoc when possible.
@@ -76,6 +83,10 @@ lets sibling modules perform part of the root operation without the owner.
 5. Document crate-wide visibility.
    - If `pub(crate)` is necessary, add a short comment or documentation explaining why the item must cross top-level module boundaries.
    - The reason should name the owner boundary or cross-module contract, not just "used elsewhere".
+   - Prefer names that describe concrete storage effects, such as row
+     replacement, lifecycle movement, or table-level conversion. Avoid broad
+     names like `rewrite`, `update`, `with`, or `into_parts` unless the owning
+     abstraction genuinely exposes that whole operation.
 
 ## Review Flow
 
@@ -91,6 +102,10 @@ lets sibling modules perform part of the root operation without the owner.
 3. Check for invariant bypass.
    - A caller should not be able to mutate or construct state in a way that skips the owning abstraction's validation.
    - Load, restore, dynamic, sealed, and Python binding paths should route through the same owner boundary when they share invariants.
+   - For every `pub(crate)` item, ask what invariant the callee can enforce
+     locally and what invariant remains owned by the caller. If the callee
+     accepts a closure or raw parts that let the caller mix these layers, treat
+     it as a boundary leak unless the owner analysis proves otherwise.
 
 4. Write findings in boundary terms.
    - State which owner boundary is being crossed or which invariant can be bypassed.
@@ -104,5 +119,5 @@ lets sibling modules perform part of the root operation without the owner.
 - Is this an SDK commitment, crate-internal contract, private-module contract, or implementation detail?
 - Does each public struct document its owned invariants and intended construction/mutation paths?
 - Does the module tree express that boundary without `pub(super)` or `pub(in ...)`?
-- If `pub(crate)` is used, is the cross-module reason documented?
+- If `pub(crate)` is used, is the cross-module reason documented and is the exposed effect narrow enough?
 - Can any visible item let callers bypass validation, persistence, or source-of-truth invariants?

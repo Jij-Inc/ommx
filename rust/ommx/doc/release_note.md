@@ -190,6 +190,12 @@ variable-id validity (every `id` referenced by a constraint exists in
 `decision_variables`), active/removed disjointness, and label/provenance
 sidecar ownership together.
 
+The remaining raw split escape hatches are also closed: table and collection
+owners no longer expose public `into_parts` methods. Host-level protobuf
+serialization and root conversions use crate-internal helpers that join rows
+with their labels/context or preserve lifecycle membership directly, so callers
+cannot accidentally separate rows from sidecars.
+
 The Python side wraps the same SoA store with two parallel
 user-facing changes:
 

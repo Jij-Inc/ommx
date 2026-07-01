@@ -93,14 +93,16 @@ impl Instance {
         let slack_term = Linear::single_term(LinearMonomial::Variable(slack_id), a.inv()?);
         let new_function = (function + slack_term)?;
 
-        let updated =
-            self.constraint_collection
-                .update_active(constraint_id, |mut constraint| {
-                    *constraint.function_mut() = new_function;
-                    constraint.equality = Equality::EqualToZero;
-                    Ok(constraint)
-                })?;
-        assert!(updated, "constraint presence was verified above");
+        let mut constraint = self
+            .constraint_collection
+            .active()
+            .get(&constraint_id)
+            .cloned()
+            .expect("constraint presence was verified above");
+        *constraint.function_mut() = new_function;
+        constraint.equality = Equality::EqualToZero;
+        self.constraint_collection
+            .replace_active_row(constraint_id, constraint)?;
 
         Ok(())
     }
@@ -195,13 +197,15 @@ impl Instance {
             None => function,
         };
 
-        let updated =
-            self.constraint_collection
-                .update_active(constraint_id, |mut constraint| {
-                    *constraint.function_mut() = new_function;
-                    Ok(constraint)
-                })?;
-        assert!(updated, "constraint presence was verified above");
+        let mut constraint = self
+            .constraint_collection
+            .active()
+            .get(&constraint_id)
+            .cloned()
+            .expect("constraint presence was verified above");
+        *constraint.function_mut() = new_function;
+        self.constraint_collection
+            .replace_active_row(constraint_id, constraint)?;
 
         Ok(Some(b))
     }

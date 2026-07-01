@@ -73,22 +73,6 @@ impl Parse for Vec<v1::NamedFunction> {
     }
 }
 
-/// Build a v1 `NamedFunction` from its intrinsic data plus drained modeling label.
-pub(crate) fn named_function_to_v1(
-    id: NamedFunctionID,
-    NamedFunction { function }: NamedFunction,
-    label: NamedFunctionLabel,
-) -> v1::NamedFunction {
-    v1::NamedFunction {
-        id: id.into_inner(),
-        function: Some(function.into()),
-        name: label.name,
-        subscripts: label.subscripts,
-        parameters: label.parameters.into_iter().collect(),
-        description: label.description,
-    }
-}
-
 /// Parsed v1 `EvaluatedNamedFunction` together with its drained modeling label.
 #[derive(Debug)]
 pub struct ParsedEvaluatedNamedFunction {
@@ -122,29 +106,6 @@ impl Parse for v1::EvaluatedNamedFunction {
             evaluated_named_function,
             label,
         })
-    }
-}
-
-/// Build a v1 `EvaluatedNamedFunction` from its intrinsic data plus drained modeling label.
-pub(crate) fn evaluated_named_function_to_v1(
-    id: NamedFunctionID,
-    EvaluatedNamedFunction {
-        evaluated_value,
-        used_decision_variable_ids,
-    }: EvaluatedNamedFunction,
-    label: NamedFunctionLabel,
-) -> v1::EvaluatedNamedFunction {
-    v1::EvaluatedNamedFunction {
-        id: id.into_inner(),
-        evaluated_value,
-        name: label.name,
-        subscripts: label.subscripts,
-        parameters: label.parameters.into_iter().collect(),
-        description: label.description,
-        used_decision_variable_ids: used_decision_variable_ids
-            .into_iter()
-            .map(|id| id.into_inner())
-            .collect(),
     }
 }
 
@@ -189,30 +150,6 @@ impl Parse for v1::SampledNamedFunction {
             sampled_named_function,
             label,
         })
-    }
-}
-
-/// Build a v1 `SampledNamedFunction` from its intrinsic data plus drained modeling label.
-pub(crate) fn sampled_named_function_to_v1(
-    id: NamedFunctionID,
-    sampled: SampledNamedFunction,
-    label: NamedFunctionLabel,
-) -> v1::SampledNamedFunction {
-    let SampledNamedFunction {
-        evaluated_values,
-        used_decision_variable_ids,
-    } = sampled;
-    v1::SampledNamedFunction {
-        id: id.into_inner(),
-        evaluated_values: Some(evaluated_values.into()),
-        name: label.name,
-        subscripts: label.subscripts,
-        parameters: label.parameters.into_iter().collect(),
-        description: label.description,
-        used_decision_variable_ids: used_decision_variable_ids
-            .into_iter()
-            .map(|id| id.into_inner())
-            .collect(),
     }
 }
 
@@ -345,8 +282,13 @@ mod tests {
             btreeset! { VariableID::from(10), VariableID::from(20) }
         );
 
-        // Round-trip: SampledNamedFunction + label -> v1::SampledNamedFunction
-        let v1_converted = sampled_named_function_to_v1(id, snf, label);
+        // Round-trip through the table, where labels live.
+        let mut labels = NamedFunctionLabelStore::default();
+        labels.insert(id, label);
+        let table =
+            NamedFunctionTable::new(std::collections::BTreeMap::from([(id, snf)]), labels).unwrap();
+        let mut rows: Vec<v1::SampledNamedFunction> = table.into();
+        let v1_converted = rows.pop().unwrap();
         assert_eq!(v1_converted.id, 7);
         assert_eq!(v1_converted.name, Some("cost".to_string()));
         assert!(v1_converted.evaluated_values.is_some());

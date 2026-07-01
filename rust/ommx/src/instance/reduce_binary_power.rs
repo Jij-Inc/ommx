@@ -1,5 +1,5 @@
 use super::*;
-use crate::constraint_type::ActiveConstraintUpdate;
+use std::collections::BTreeMap;
 
 impl Instance {
     /// Reduce binary powers in the instance.
@@ -16,12 +16,18 @@ impl Instance {
         let mut changed = false;
         let mut updated = self.clone();
         changed |= updated.objective.reduce_binary_power(&binary_ids)?;
+        let mut replacements = BTreeMap::new();
+        for (&id, constraint) in updated.constraint_collection.active() {
+            let mut constraint = constraint.clone();
+            if constraint.reduce_binary_power(&binary_ids)? {
+                changed = true;
+                replacements.insert(id, constraint);
+            }
+        }
         updated
             .constraint_collection
-            .rewrite_active(|_, mut constraint, _context| {
-                changed |= constraint.reduce_binary_power(&binary_ids)?;
-                Ok(ActiveConstraintUpdate::Active(constraint))
-            })?;
+            .replace_active_rows(replacements)
+            .expect("replacement IDs were read from active constraints");
         // Note: We don't need to reduce in removed_constraints since they are not active
         *self = updated;
         Ok(changed)

@@ -10,8 +10,6 @@ use getset::CopyGetters;
 pub use label_store::VariableLabelStore;
 pub use table::*;
 
-pub(crate) use parse::sampled_decision_variable_to_v1;
-
 use crate::logical_memory::LogicalMemoryProfile;
 use crate::{ATol, Bound, Parse, RawParseError, SampleID, Sampled};
 use ::approx::AbsDiffEq;
@@ -481,36 +479,6 @@ impl SampledDecisionVariable {
     }
 }
 
-/// Build a v1 `DecisionVariable` from an evaluated variable plus its
-/// modeling label. The label comes from the enclosing collection's
-/// [`VariableLabelStore`]; the per-element struct no longer carries it.
-pub(crate) fn evaluated_decision_variable_to_v1(
-    id: VariableID,
-    eval_dv: EvaluatedDecisionVariable,
-    label: DecisionVariableLabel,
-) -> crate::v1::DecisionVariable {
-    crate::v1::DecisionVariable {
-        id: id.into_inner(),
-        kind: eval_dv.kind.into(),
-        bound: Some(eval_dv.bound.into()),
-        substituted_value: Some(eval_dv.value),
-        name: label.name,
-        subscripts: label.subscripts,
-        parameters: label.parameters.into_iter().collect(),
-        description: label.description,
-    }
-}
-
-// NOTE: There are intentionally no `impl From<DecisionVariable> for
-// v1::DecisionVariable` (or the Evaluated / Sampled variants). v3 keeps
-// modeling labels at the collection layer, so a per-element conversion would
-// have to default every label field — silently dropping any caller-supplied
-// label. Callers must instead go through
-// [`decision_variable::parse::decision_variable_to_v1`] (and the Evaluated
-// / Sampled siblings), which take the label explicitly. Top-level
-// container serialization (`From<Instance> for v1::Instance` etc.) drains
-// the SoA store and threads the label through these helpers.
-
 impl std::convert::TryFrom<crate::v1::DecisionVariable> for EvaluatedDecisionVariable {
     type Error = crate::ParseError;
 
@@ -746,13 +714,14 @@ mod tests {
         // Note: per-element labels are gone in v3; the standalone TryFrom
         // path drops labels. End-to-end name preservation flows through
         // Solution / SampleSet, which carry a VariableLabelStore.
-        // Test round-trip conversion at the intrinsic-data level via the
-        // explicit `evaluated_decision_variable_to_v1` helper.
-        let v1_converted = evaluated_decision_variable_to_v1(
-            VariableID::from(42),
-            evaluated_dv,
-            Default::default(),
-        );
+        // Test round-trip conversion at the table level, where labels live.
+        let table = EvaluatedDecisionVariableTable::new(
+            std::collections::BTreeMap::from([(VariableID::from(42), evaluated_dv)]),
+            VariableLabelStore::default(),
+        )
+        .unwrap();
+        let mut rows: Vec<v1::DecisionVariable> = (&table).into();
+        let v1_converted = rows.pop().unwrap();
         assert_eq!(v1_converted.id, 42);
         assert_eq!(v1_converted.substituted_value, Some(5.0));
     }
