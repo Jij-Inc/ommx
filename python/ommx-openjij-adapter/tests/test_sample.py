@@ -1,4 +1,4 @@
-from ommx.v1 import Instance, DecisionVariable
+from ommx import Instance, DecisionVariable
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 import pytest
 

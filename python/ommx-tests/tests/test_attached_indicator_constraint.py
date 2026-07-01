@@ -4,7 +4,7 @@ import copy
 
 import pytest
 
-from ommx.v1 import (
+from ommx import (
     AttachedIndicatorConstraint,
     DecisionVariable,
     Equality,

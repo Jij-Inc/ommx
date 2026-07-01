@@ -7,7 +7,7 @@ import pytest
 
 from ommx.adapter import DiagnosticCollector, UnboundedDetected
 from ommx.experiment import Experiment
-from ommx.v1 import Instance, Constraint, DecisionVariable, Solution
+from ommx import Instance, Constraint, DecisionVariable, Solution
 
 from ommx_pyscipopt_adapter import (
     SCIPDiagnosticsAnalyzer,

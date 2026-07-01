@@ -1,6 +1,6 @@
 """Tests for Constraint.provenance context (issue #819)."""
 
-from ommx.v1 import (
+from ommx import (
     Constraint,
     DecisionVariable,
     Instance,
@@ -138,7 +138,7 @@ def test_provenance_is_preserved_through_evaluate_samples():
 
 
 def test_provenance_equality_and_hash():
-    # sanity: Provenance is importable as a concrete type from ommx.v1
+    # sanity: Provenance is importable as a concrete type from ommx
     assert Provenance is not None
 
     x = [DecisionVariable.binary(i) for i in range(1, 4)]

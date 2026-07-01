@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from typing import Any, ClassVar, Protocol, runtime_checkable
 
 from ommx._ommx_rust import DiagnosticCollector as DiagnosticCollector
-from ommx.v1 import Instance, Solution, SampleSet, AdditionalCapability
+from ommx import Instance, Solution, SampleSet, AdditionalCapability
 
 
 SolverInput = Any

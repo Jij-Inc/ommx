@@ -285,7 +285,7 @@ impl SampleSet {
     /// # Examples
     ///
     /// ```python
-    /// >>> from ommx.v1 import Instance, DecisionVariable
+    /// >>> from ommx import Instance, DecisionVariable
     /// >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
     /// >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
     /// >>> instance = Instance.from_components(
@@ -339,7 +339,7 @@ impl SampleSet {
     /// # Examples
     ///
     /// ```python
-    /// >>> from ommx.v1 import Instance, DecisionVariable
+    /// >>> from ommx import Instance, DecisionVariable
     /// >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
     /// >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
     /// >>> instance = Instance.from_components(
@@ -635,7 +635,7 @@ impl SampleSet {
     }
 
     /// DataFrame of sampled constraints, dispatched on `kind=`. See
-    /// {meth}`ommx.v1.Instance.constraints_df` for column / `kind=` /
+    /// {meth}`ommx.Instance.constraints_df` for column / `kind=` /
     /// `include=` semantics. Adds dynamic per-sample columns
     /// (`value.{sample_id}`, `feasible.{sample_id}`, etc.) on top of
     /// the kind-specific core columns.
@@ -731,7 +731,7 @@ impl SampleSet {
     }
 
     /// Constraint context DataFrame (id-indexed). See
-    /// {meth}`ommx.v1.Instance.constraint_context_df` for column / `kind=`
+    /// {meth}`ommx.Instance.constraint_context_df` for column / `kind=`
     /// semantics. Reads from the sampled collection's context store.
     #[pyo3(signature = (kind = ConstraintKind::Regular))]
     pub fn constraint_context_df<'py>(

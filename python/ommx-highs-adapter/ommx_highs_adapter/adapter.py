@@ -9,7 +9,7 @@ import numpy as np
 from highspy.highs import highs_linear_expression
 from opentelemetry import trace
 
-from ommx.v1 import Instance, DecisionVariable, Solution, Constraint, State, Function
+from ommx import Instance, DecisionVariable, Solution, Constraint, State, Function
 from ommx.adapter import (
     DiagnosticsSink,
     SolverAdapter,
@@ -398,8 +398,8 @@ class OMMXHighsAdapter(SolverAdapter):
     """
     OMMX Adapter for HiGHS solver.
 
-    This adapter translates OMMX optimization problems (ommx.v1.Instance) into HiGHS-compatible
-    formats and converts HiGHS solutions back to OMMX format (ommx.v1.Solution).
+    This adapter translates OMMX optimization problems (ommx.Instance) into HiGHS-compatible
+    formats and converts HiGHS solutions back to OMMX format (ommx.Solution).
 
     Translation Specifications
     ==========================
@@ -445,8 +445,8 @@ class OMMXHighsAdapter(SolverAdapter):
     -----------
     **Supported Function Types**:
 
-    - Constant functions (ommx.v1.Function.constant)
-    - Linear functions (ommx.v1.Function.linear)
+    - Constant functions (ommx.Function.constant)
+    - Linear functions (ommx.Function.linear)
 
     **Constraint Types**:
 
@@ -534,7 +534,7 @@ class OMMXHighsAdapter(SolverAdapter):
     Examples
     --------
     >>> from ommx_highs_adapter import OMMXHighsAdapter
-    >>> from ommx.v1 import Instance, DecisionVariable
+    >>> from ommx import Instance, DecisionVariable
     >>>
     >>> # Define problem
     >>> x = DecisionVariable.binary(0)
@@ -634,7 +634,7 @@ class OMMXHighsAdapter(SolverAdapter):
         --------
         **Knapsack Problem**
 
-        >>> from ommx.v1 import Instance, DecisionVariable, Solution
+        >>> from ommx import Instance, DecisionVariable, Solution
         >>> from ommx_highs_adapter import OMMXHighsAdapter
         >>>
         >>> p = [10, 13, 18, 32, 7, 15]  # profits
@@ -677,7 +677,7 @@ class OMMXHighsAdapter(SolverAdapter):
         #
         # the example for reference:
         # ```
-        # >>> from ommx.v1 import Instance, DecisionVariable
+        # >>> from ommx import Instance, DecisionVariable
         # >>> from ommx_highs_adapter import OMMXHighsAdapter
 
         # >>> x = DecisionVariable.integer(0, lower=0)
@@ -774,7 +774,7 @@ class OMMXHighsAdapter(SolverAdapter):
         Examples
         --------
         >>> from ommx_highs_adapter import OMMXHighsAdapter
-        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> from ommx import Instance, DecisionVariable
         >>>
         >>> x = DecisionVariable.binary(0)
         >>> instance = Instance.from_components(
@@ -838,7 +838,7 @@ class OMMXHighsAdapter(SolverAdapter):
         Examples
         --------
         >>> from ommx_highs_adapter import OMMXHighsAdapter
-        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> from ommx import Instance, DecisionVariable
         >>>
         >>> x1 = DecisionVariable.integer(1, lower=0, upper=5)
         >>> instance = Instance.from_components(

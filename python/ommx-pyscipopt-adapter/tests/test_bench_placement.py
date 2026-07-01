@@ -1,6 +1,6 @@
 """Benchmark eight Plant Placement Problem formulations through SCIP only.
 
-Each ``placement_inputs`` parameterisation is converted to ``ommx.v1.Instance``,
+Each ``placement_inputs`` parameterisation is converted to ``ommx.Instance``,
 then to ``pyscipopt.Model``, in session-scoped fixtures — the OMMX construction
 and the OMMX → SCIP translation are *not* in the measurement. Each benchmark
 calls ``model.freeTransform()`` to discard SCIP's transformed problem from any
@@ -28,7 +28,7 @@ from ommx.testing.placement import (
     build_sos1_on_delta,
     build_sos1_on_delta_with_card,
 )
-from ommx.v1 import Instance
+from ommx import Instance
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
 _SIZES = [(6, 10), (12, 20), (24, 40), (48, 80)]

@@ -7,7 +7,7 @@ from ommx_pyscipopt_adapter import (
 )
 
 from ommx.adapter import InfeasibleDetected
-from ommx.v1 import Constraint, Instance, DecisionVariable, Polynomial
+from ommx import Constraint, Instance, DecisionVariable, Polynomial
 
 
 def test_error_polynomial_objective():

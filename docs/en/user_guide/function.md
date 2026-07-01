@@ -11,23 +11,23 @@ kernelspec:
   name: python3
 ---
 
-# ommx.v1.Function
+# ommx.Function
 
 In mathematical optimization, functions are used to express objective functions and constraints. Specifically, OMMX handles polynomials and provides the following data structures in OMMX Message to represent polynomials.
 
 | Data Structure | Description |
 | --- | --- |
-| [ommx.v1.Linear](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Linear) | Linear function. Holds pairs of variable IDs and their coefficients |
-| [ommx.v1.Quadratic](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Quadratic) | Quadratic function. Holds pairs of variable ID pairs and their coefficients |
-| [ommx.v1.Polynomial](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Polynomial) | Polynomial. Holds pairs of variable ID combinations and their coefficients |
-| [ommx.v1.Function](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Function) | One of the above or a constant |
+| [ommx.Linear](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.Linear) | Linear function. Holds pairs of variable IDs and their coefficients |
+| [ommx.Quadratic](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.Quadratic) | Quadratic function. Holds pairs of variable ID pairs and their coefficients |
+| [ommx.Polynomial](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.Polynomial) | Polynomial. Holds pairs of variable ID combinations and their coefficients |
+| [ommx.Function](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.Function) | One of the above or a constant |
 
 
-## Creating ommx.v1.Function
-In the Python SDK, there are two main approachs to create these data structures. The first approach is to directly call the constructors of each data structure. For example, you can create `ommx.v1.Linear` as follows.
+## Creating ommx.Function
+In the Python SDK, there are two main approachs to create these data structures. The first approach is to directly call the constructors of each data structure. For example, you can create `ommx.Linear` as follows.
 
 ```{code-cell} ipython3
-from ommx.v1 import Linear
+from ommx import Linear
 
 linear = Linear(terms={1: 1.0, 2: 2.0}, constant=3.0)
 print(linear)
@@ -41,10 +41,10 @@ print(f"{linear.linear_terms=}")
 print(f"{linear.constant_term=}")
 ```
 
-Another approach is to create from `ommx.v1.DecisionVariable`. `ommx.v1.DecisionVariable` is a data structure that only holds the ID of the decision variable. When creating polynomials such as `ommx.v1.Linear`, you can first create decision variables using `ommx.v1.DecisionVariable` and then use them to create polynomials.
+Another approach is to create from `ommx.DecisionVariable`. `ommx.DecisionVariable` is a data structure that only holds the ID of the decision variable. When creating polynomials such as `ommx.Linear`, you can first create decision variables using `ommx.DecisionVariable` and then use them to create polynomials.
 
 ```{code-cell} ipython3
-from ommx.v1 import DecisionVariable
+from ommx import DecisionVariable
 
 x = DecisionVariable.binary(1, name="x")
 y = DecisionVariable.binary(2, name="y")
@@ -68,7 +68,7 @@ print(p)
 `Linear`, `Quadratic`, and `Polynomial` each have their own unique data storage methods, so they are separate Messages. However, since any of them can be used as objective functions or constraints, a Message called `Function` is provided, which can be any of the above or a constant.
 
 ```{code-cell} ipython3
-from ommx.v1 import Function
+from ommx import Function
 
 # Constant
 print(Function(1.0))
@@ -89,7 +89,7 @@ value= linear.evaluate({1: 1, 2: 0})
 print(f"{value=}")
 ```
 
-The argument supports the format `dict[int, float]` and `ommx.v1.State`. `evaluate` returns an error if the necessary decision variable IDs are missing.
+The argument supports the format `dict[int, float]` and `ommx.State`. `evaluate` returns an error if the necessary decision variable IDs are missing.
 
 ```{code-cell} ipython3
 try:

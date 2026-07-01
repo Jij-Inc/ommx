@@ -2,7 +2,7 @@ r"""Plant Placement Problem — equivalent OMMX formulations.
 
 This module provides a small, solver-agnostic benchmark problem used to
 exercise an adapter's SOS1 handling. The builders in this module produce
-`ommx.v1.Instance` objects describing the same feasible region and optimum;
+`ommx.Instance` objects describing the same feasible region and optimum;
 they differ only in how "at most one plant per region" is communicated to
 the solver.
 
@@ -115,7 +115,7 @@ from math import ceil, sqrt
 import random
 from typing import Dict, List, Tuple
 
-from ommx.v1 import DecisionVariable, Instance, Sos1Constraint
+from ommx import DecisionVariable, Instance, Sos1Constraint
 
 
 @dataclass

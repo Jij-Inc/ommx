@@ -11,9 +11,9 @@ kernelspec:
   name: python3
 ---
 
-# ommx.v1.ParametricInstance
+# ommx.ParametricInstance
 
-[`ommx.v1.ParametricInstance`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.ParametricInstance) is a class that represents mathematical models similar to [`ommx.v1.Instance`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance). It also supports parameters (via [`ommx.v1.Parameter`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Parameter)) in addition to decision variables. By assigning values to these parameters, you can create an `ommx.v1.Instance`. Because the resulting `ommx.v1.Instance` keeps the IDs of decision variables and constraints from `ommx.v1.ParametricInstance`, it is helpful when you need to handle a series of models where only some coefficients of the objective function or constraints change.
+[`ommx.ParametricInstance`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.ParametricInstance) is a class that represents mathematical models similar to [`ommx.Instance`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.Instance). It also supports parameters (via [`ommx.Parameter`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.Parameter)) in addition to decision variables. By assigning values to these parameters, you can create an `ommx.Instance`. Because the resulting `ommx.Instance` keeps the IDs of decision variables and constraints from `ommx.ParametricInstance`, it is helpful when you need to handle a series of models where only some coefficients of the objective function or constraints change.
 
 Consider the following knapsack problem.
 
@@ -25,10 +25,10 @@ $$
 \end{aligned}
 $$
 
-Here, $N$ is the number of items, $p_i$ is the value of item i, $w_i$ is the weight of item i, and $W$ is the knapsack's capacity. The variable $x_i$ is binary and indicates whether item i is included in the knapsack. In `ommx.v1.Instance`, fixed values were used for $p_i$ and $w_i$, but here they are treated as parameters.
+Here, $N$ is the number of items, $p_i$ is the value of item i, $w_i$ is the weight of item i, and $W$ is the knapsack's capacity. The variable $x_i$ is binary and indicates whether item i is included in the knapsack. In `ommx.Instance`, fixed values were used for $p_i$ and $w_i$, but here they are treated as parameters.
 
 ```{code-cell} ipython3
-from ommx.v1 import ParametricInstance, DecisionVariable, Parameter, Instance
+from ommx import ParametricInstance, DecisionVariable, Parameter, Instance
 
 N = 6
 x = [DecisionVariable.binary(id=i, name="x", subscripts=[i]) for i in range(N)]
@@ -38,14 +38,14 @@ w = [Parameter(i + 2*N, name="Weight", subscripts=[i]) for i in range(N)]
 W =  Parameter(    3*N, name="Capacity")
 ```
 
-`ommx.v1.Parameter` also has an ID and uses the same numbering as `ommx.v1.DecisionVariable`, so please ensure there are no duplicates. Like decision variables, parameters can have names and subscripts. They can also be used with operators such as `+` and `<=` to create `ommx.v1.Function` or `ommx.v1.Constraint` objects.
+`ommx.Parameter` also has an ID and uses the same numbering as `ommx.DecisionVariable`, so please ensure there are no duplicates. Like decision variables, parameters can have names and subscripts. They can also be used with operators such as `+` and `<=` to create `ommx.Function` or `ommx.Constraint` objects.
 
 ```{code-cell} ipython3
 objective = sum(p[i] * x[i] for i in range(N))
 constraint = sum(w[i] * x[i] for i in range(N)) <= W
 ```
 
-Now let’s combine these elements into an `ommx.v1.ParametricInstance` that represents the knapsack problem.
+Now let’s combine these elements into an `ommx.ParametricInstance` that represents the knapsack problem.
 
 ```{code-cell} ipython3
 parametric_instance = ParametricInstance.from_components(
@@ -57,13 +57,13 @@ parametric_instance = ParametricInstance.from_components(
 )
 ```
 
-Like `ommx.v1.Instance`, you can view the decision variables and constraints as DataFrames through the `decision_variables_df()` and `constraints_df()` methods. In addition, `ommx.v1.ParametricInstance` has a `parameters_df()` method for viewing parameter information in a DataFrame.
+Like `ommx.Instance`, you can view the decision variables and constraints as DataFrames through the `decision_variables_df()` and `constraints_df()` methods. In addition, `ommx.ParametricInstance` has a `parameters_df()` method for viewing parameter information in a DataFrame.
 
 ```{code-cell} ipython3
 parametric_instance.parameters_df()
 ```
 
-Next, let’s assign specific values to the parameters. Use `ParametricInstance.with_parameters`, which takes a dictionary mapping each `ommx.v1.Parameter` ID to its corresponding value.
+Next, let’s assign specific values to the parameters. Use `ParametricInstance.with_parameters`, which takes a dictionary mapping each `ommx.Parameter` ID to its corresponding value.
 
 ```{code-cell} ipython3
 p_values = { x.id: value for x, value in zip(p, [10, 13, 18, 31, 7, 15]) }
@@ -74,5 +74,5 @@ instance = parametric_instance.with_parameters({**p_values, **w_values, **W_valu
 ```
 
 ````{note}
-`ommx.v1.ParametricInstance` cannot handle parameters that change the number of decision variables or parameters (for example, a variable $N$). If you need this functionality, please use a more advanced modeler such as [JijModeling](https://jij-inc.github.io/JijModeling-Tutorials/ja/introduction.html).
+`ommx.ParametricInstance` cannot handle parameters that change the number of decision variables or parameters (for example, a variable $N$). If you need this functionality, please use a more advanced modeler such as [JijModeling](https://jij-inc.github.io/JijModeling-Tutorials/ja/introduction.html).
 ````

@@ -104,8 +104,8 @@ def test_create_samples_from_iterable():
 
 
 def test_create_samples_with_state_objects():
-    """Test creating Samples with State objects from ommx.v1"""
-    from ommx.v1 import State
+    """Test creating Samples with State objects from ommx"""
+    from ommx import State
 
     # Single State object should become sample ID 0
     state = State({1: 0.5, 2: 1.0})
@@ -153,7 +153,7 @@ def test_create_samples_passthrough():
 
 def test_create_samples_mixed_types():
     """Test creating Samples with mixed dict/State objects"""
-    from ommx.v1 import State
+    from ommx import State
 
     # Dict with mixed State objects and dict[int, float]
     mixed_dict = {
@@ -180,7 +180,7 @@ def test_create_samples_mixed_types():
 
 def test_samples_append_with_state():
     """Test Samples.append with State object."""
-    from ommx.v1 import State
+    from ommx import State
 
     samples = _ommx_rust.Samples({})
     state = State({1: 1.0, 2: 2.0})

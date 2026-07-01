@@ -91,10 +91,10 @@ $$
 \end{aligned}
 $$
 
-これに対応する `ommx.v1.Instance` は次のように作成できます
+これに対応する `ommx.Instance` は次のように作成できます
 
 ```{code-cell} ipython3
-from ommx.v1 import DecisionVariable, Instance
+from ommx import DecisionVariable, Instance
 
 x = [[
         DecisionVariable.binary(
@@ -140,7 +140,7 @@ instance = Instance.from_components(
 
 ## OpenJijによるサンプリング
 
-`ommx.v1.Instance` で記述されたQUBOをOpenJijを使ってサンプリングするには `ommx-openjij-adapter` を使います。
+`ommx.Instance` で記述されたQUBOをOpenJijを使ってサンプリングするには `ommx-openjij-adapter` を使います。
 
 ```{code-cell} ipython3
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
@@ -149,7 +149,7 @@ sample_set = OMMXOpenJijSAAdapter.sample(instance, num_reads=16, uniform_penalty
 sample_set.summary
 ```
 
-[`OMMXOpenJijSAAdapter.solve`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx_openjij_adapter/index.html#ommx_openjij_adapter.OMMXOpenJijSAAdapter.sample) は [`ommx.v1.SampleSet`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.SampleSet) を返し、これはサンプルの値に加えて、目的関数の値や制約条件の破れを計算した値を保持しています。`SampleSet.summary` プロパティはこれらの要約情報を表示するためのものです。`feasible` はQUBOに変換する前の、**元の問題に対する実行可能性**を示しています。これは `qubo` インスタンスの `removed_constraints` に格納されている情報を使って計算されます。
+[`OMMXOpenJijSAAdapter.solve`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx_openjij_adapter/index.html#ommx_openjij_adapter.OMMXOpenJijSAAdapter.sample) は [`ommx.SampleSet`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.SampleSet) を返し、これはサンプルの値に加えて、目的関数の値や制約条件の破れを計算した値を保持しています。`SampleSet.summary` プロパティはこれらの要約情報を表示するためのものです。`feasible` はQUBOに変換する前の、**元の問題に対する実行可能性**を示しています。これは `qubo` インスタンスの `removed_constraints` に格納されている情報を使って計算されます。
 
 各制約条件毎のfeasibilityを見るには `summary_with_constraints` プロパティを使います。
 
@@ -167,7 +167,7 @@ sample_set.decision_variables_df().head(2)
 sample_set.constraints_df().head(2)
 ```
 
-得られたサンプルを取得するには `SampleSet.extract_decision_variables` メソッドを使います。これは `ommx.v1.DecisionVariables` を作る時に登録した `name` と `subscripts` を使ってサンプルを解釈します。例えば `sample_id=1` の `x` という名前の決定変数の値を取得するには次のようにすると `dict[subscripts, value]` の形で取得できます。
+得られたサンプルを取得するには `SampleSet.extract_decision_variables` メソッドを使います。これは `ommx.DecisionVariables` を作る時に登録した `name` と `subscripts` を使ってサンプルを解釈します。例えば `sample_id=1` の `x` という名前の決定変数の値を取得するには次のようにすると `dict[subscripts, value]` の形で取得できます。
 
 ```{code-cell} ipython3
 sample_id = 1

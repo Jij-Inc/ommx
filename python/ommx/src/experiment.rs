@@ -304,7 +304,7 @@ impl PyExperiment {
     ///
     /// The returned Python object is decoded from the attachment media type:
     /// JSON attachments become normal Python objects, OMMX instance-like
-    /// attachments become the corresponding `ommx.v1` objects, and unknown
+    /// attachments become the corresponding `ommx` objects, and unknown
     /// media types are returned as raw `bytes`.
     pub fn get_attachment<'py>(&self, py: Python<'py>, name: &str) -> Result<Bound<'py, PyAny>> {
         let _guard = crate::TRACING.attach_parent_context(py);
@@ -1776,9 +1776,7 @@ impl PyOpenSolve {
             .bind(py)
             .call_method1("decode", (data,))?
             .extract::<Py<crate::Solution>>()
-            .map_err(|_| {
-                PyTypeError::new_err("adapter.decode(...) must return ommx.v1.Solution")
-            })?;
+            .map_err(|_| PyTypeError::new_err("adapter.decode(...) must return ommx.Solution"))?;
         self.active_mut()?.output = PyOpenSolveOutputState::Decoded(solution.clone_ref(py));
         Ok(solution)
     }
@@ -2766,7 +2764,7 @@ impl<'py> SolverAdapter<'py> {
                 .call_method("solve", (adapter_instance,), Some(&call_kwargs))?;
         solution_object
             .extract::<crate::Solution>()
-            .map_err(|_| PyTypeError::new_err("adapter.solve(...) must return ommx.v1.Solution"))
+            .map_err(|_| PyTypeError::new_err("adapter.solve(...) must return ommx.Solution"))
     }
 
     fn name(&self) -> Result<String> {

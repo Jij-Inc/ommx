@@ -98,7 +98,7 @@ impl NamedFunction {
     /// - `state`: A State object, dict[int, float], or iterable of (int, float) tuples
     /// - `atol`: Optional absolute tolerance for evaluation
     ///
-    /// **Returns:** {class}`~ommx.v1.EvaluatedNamedFunction` containing the evaluated value
+    /// **Returns:** {class}`~ommx.EvaluatedNamedFunction` containing the evaluated value
     #[pyo3(signature = (state, *, atol=None))]
     pub fn evaluate(&self, state: State, atol: Option<f64>) -> PyResult<EvaluatedNamedFunction> {
         let atol = match atol {

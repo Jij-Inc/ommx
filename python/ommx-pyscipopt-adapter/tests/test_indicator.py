@@ -1,6 +1,6 @@
 """Tests for indicator constraint support in PySCIPOpt adapter."""
 
-from ommx.v1 import Instance, DecisionVariable
+from ommx import Instance, DecisionVariable
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
 

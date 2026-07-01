@@ -18,12 +18,12 @@ Here, we'll introduce this feature using OMMXPySCIPOptAdapter as an example. By 
 
 ## How to Provide an Initial Solution
 
-The initial solution (`initial_state`) that can be provided is of type `ToState`, which can accept both `ommx.v1.State` and `Mapping[int, float]`.
+The initial solution (`initial_state`) that can be provided is of type `ToState`, which can accept both `ommx.State` and `Mapping[int, float]`.
 
 We'll demonstrate how to provide an initial solution using the following instance:
 
 ```{code-cell} ipython3
-from ommx.v1 import Instance, DecisionVariable, State
+from ommx import Instance, DecisionVariable, State
 
 x = DecisionVariable.integer(1, lower=0, upper=5)
 y = DecisionVariable.integer(2, lower=0, upper=5)
@@ -36,7 +36,7 @@ ommx_instance = Instance.from_components(
 )
 ```
 
-Example of initial solution using `ommx.v1.State`
+Example of initial solution using `ommx.State`
 
 ```{code-cell} ipython3
 initial_state = State(

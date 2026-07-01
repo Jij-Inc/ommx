@@ -277,8 +277,8 @@ impl PyArtifact {
     /// Get the layer object corresponding to the descriptor.
     ///
     /// Dynamically dispatched based on {attr}`~ommx.artifact.Descriptor.media_type`:
-    /// - `application/org.ommx.v1.instance` returns {class}`~ommx.v1.Instance`
-    /// - `application/org.ommx.v1.solution` returns {class}`~ommx.v1.Solution`
+    /// - `application/org.ommx.v1.instance` returns {class}`~ommx.Instance`
+    /// - `application/org.ommx.v1.solution` returns {class}`~ommx.Solution`
     /// - `application/vnd.numpy` returns a numpy array
     pub fn get_layer<'py>(
         &mut self,
@@ -1369,10 +1369,10 @@ impl PyArtifactDraft {
         Ok(Self(DraftInner::new(builder)))
     }
 
-    /// Add an {class}`~ommx.v1.Instance` to the artifact with annotations.
+    /// Add an {class}`~ommx.Instance` to the artifact with annotations.
     ///
     /// ```python
-    /// >>> from ommx.v1 import Instance
+    /// >>> from ommx import Instance
     /// >>> instance = Instance.empty()
     /// >>> instance.title = "test instance"
     /// >>> draft = ArtifactDraft.temp()
@@ -1391,7 +1391,7 @@ impl PyArtifactDraft {
         Ok(PyDescriptor::from(desc))
     }
 
-    /// Add a {class}`~ommx.v1.ParametricInstance` to the artifact with annotations.
+    /// Add a {class}`~ommx.ParametricInstance` to the artifact with annotations.
     pub fn add_parametric_instance(
         &mut self,
         py: Python<'_>,
@@ -1405,7 +1405,7 @@ impl PyArtifactDraft {
         Ok(PyDescriptor::from(desc))
     }
 
-    /// Add a {class}`~ommx.v1.Solution` to the artifact with annotations.
+    /// Add a {class}`~ommx.Solution` to the artifact with annotations.
     pub fn add_solution(
         &mut self,
         py: Python<'_>,
@@ -1416,7 +1416,7 @@ impl PyArtifactDraft {
         Ok(PyDescriptor::from(desc))
     }
 
-    /// Add a {class}`~ommx.v1.SampleSet` to the artifact with annotations.
+    /// Add a {class}`~ommx.SampleSet` to the artifact with annotations.
     pub fn add_sample_set(
         &mut self,
         py: Python<'_>,

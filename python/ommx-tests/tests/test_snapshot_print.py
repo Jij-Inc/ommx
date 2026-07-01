@@ -1,6 +1,6 @@
 """Snapshot tests for print output of OMMX v1 classes."""
 
-from ommx.v1 import (
+from ommx import (
     DecisionVariable,
     Linear,
     Function,

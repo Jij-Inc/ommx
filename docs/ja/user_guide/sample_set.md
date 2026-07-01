@@ -11,15 +11,15 @@ kernelspec:
   name: python3
 ---
 
-ommx.v1.SampleSet
+ommx.SampleSet
 =================
 
-[`ommx.v1.Solution`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/solution_pb2/index.html#module-ommx.v1.solution_pb2)はソルバーが一つの解を返す場合の表現ですが、数理最適化ソルバーによっては複数の解を返す場合があり、主にサンプラーと呼ばれます。OMMXでは複数の解を表現するために次の二つのデータ構造を用意しています：
+[`ommx.Solution`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/solution_pb2/index.html#module-ommx.solution_pb2)はソルバーが一つの解を返す場合の表現ですが、数理最適化ソルバーによっては複数の解を返す場合があり、主にサンプラーと呼ばれます。OMMXでは複数の解を表現するために次の二つのデータ構造を用意しています：
 
 | データ構造  | 説明 |
 |:----------|:-----|
-| [`ommx.v1.Samples`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/sample_set_pb2/index.html#ommx.v1.sample_set_pb2.Samples) | 決定変数のIDに対して得られた複数の解の値を列挙したもの |
-| [`ommx.v1.SampleSet`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.SampleSet) | 決定変数の値に加えて、目的関数や制約条件の評価を行ったもの |
+| [`ommx.Samples`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/sample_set_pb2/index.html#ommx.sample_set_pb2.Samples) | 決定変数のIDに対して得られた複数の解の値を列挙したもの |
+| [`ommx.SampleSet`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.SampleSet) | 決定変数の値に加えて、目的関数や制約条件の評価を行ったもの |
 
 `Samples`が`State`に相当し、`SampleSet`が`Solution`に相当します。このノートブックでは、`SampleSet`の使い方を説明します。
 
@@ -37,7 +37,7 @@ $$
 $$
 
 ```{code-cell} ipython3
-from ommx.v1 import DecisionVariable, Instance
+from ommx import DecisionVariable, Instance
 
 x = [DecisionVariable.binary(i) for i in range(3)]
 
@@ -49,12 +49,12 @@ instance = Instance.from_components(
 )
 ```
 
-通常はサンプラーと呼ばれるソルバーによって解を求めることになりますが、ここでは簡単のために手動で用意します。`ommx.v1.Samples` はその名の通り複数のサンプルを持つことができ、一つのサンプルは `ommx.v1.State` と同じように決定変数のIDに対する値として表現されます。
+通常はサンプラーと呼ばれるソルバーによって解を求めることになりますが、ここでは簡単のために手動で用意します。`ommx.Samples` はその名の通り複数のサンプルを持つことができ、一つのサンプルは `ommx.State` と同じように決定変数のIDに対する値として表現されます。
 
 また個々のサンプルにはIDが振られています。サンプラーによっては内部でIDを発行し、そのIDによってログを識別する事があるので、サンプルのIDを指定できるようになっています。IDは省略することもでき、その場合 `0` から順に振られます。
 
 ```{code-cell} ipython3
-from ommx.v1 import Samples
+from ommx import Samples
 
 # Sample IDを指定する場合
 samples = Samples({
@@ -73,7 +73,7 @@ samples = Samples([
 assert isinstance(samples, Samples)
 ```
 
-`ommx.v1.Solution` は `Instance.evaluate` によって得られましたが、`ommx.v1.SampleSet` は `Instance.evaluate_samples` によって得られます。
+`ommx.Solution` は `Instance.evaluate` によって得られましたが、`ommx.SampleSet` は `Instance.evaluate_samples` によって得られます。
 
 ```{code-cell} ipython3
 sample_set = instance.evaluate_samples(samples)
@@ -83,15 +83,15 @@ sample_set.summary
 `summary`属性は各サンプルの目的値と実行可能性をデータフレーム形式で表示します。 `sample_id=2` のサンプルは制約条件を満たしていないので `feasible=False` となっています。このテーブルはFeasibleなものを上に、さらにその中で目的関数の値が良いもの（`Instance.sense`に応じて最大化か最小化かが変わります）を上に表示されます。
 
 ```{note}
-`evaluate_samples` の引数はここでは分かり易いように `to_samples` で変換した `ommx.v1.Samples` を渡していますが、`to_samples` は自動的に呼ばれるので省略することもできます。
+`evaluate_samples` の引数はここでは分かり易いように `to_samples` で変換した `ommx.Samples` を渡していますが、`to_samples` は自動的に呼ばれるので省略することもできます。
 ```
 
 個々のサンプルの取り出し
 ---------------------
-`SampleSet.get`を使用して各サンプルをサンプルIDによって `ommx.v1.Solution`形式で取得できます：
+`SampleSet.get`を使用して各サンプルをサンプルIDによって `ommx.Solution`形式で取得できます：
 
 ```{code-cell} ipython3
-from ommx.v1 import Solution
+from ommx import Solution
 
 solution = sample_set.get(sample_id=0)
 assert isinstance(solution, Solution)

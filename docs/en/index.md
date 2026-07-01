@@ -31,9 +31,9 @@ To address these data exchange challenges, OMMX was developed. It consists of fo
 
 ### OMMX Message
 
-OMMX Message is a data format defined with [Protocol Buffers](https://protobuf.dev/) to ensure language-agnostic and OS-independent data exchange. It encapsulates schemas for optimization problems ([`ommx.v1.Instance`](./user_guide/instance.md)) and solutions ([`ommx.v1.Solution`](./user_guide/solution.md)). Protocol Buffers allow automatic generation of libraries in many languages, which OMMX SDK provides, especially for Python and Rust.
+OMMX Message is a data format defined with [Protocol Buffers](https://protobuf.dev/) to ensure language-agnostic and OS-independent data exchange. It encapsulates schemas for optimization problems (`ommx.v1.Instance` on the protobuf wire format, [`ommx.Instance`](./user_guide/instance.md) in the Python SDK) and solutions (`ommx.v1.Solution` on the wire format, [`ommx.Solution`](./user_guide/solution.md) in the Python SDK). Protocol Buffers allow automatic generation of libraries in many languages, which OMMX SDK provides, especially for Python and Rust.
 
-Data structures such as `ommx.v1.Instance` are called Messages, and each Message has multiple fields. For example, `ommx.v1.Instance` has the following fields (some are omitted for simplicity):
+Data structures such as the protobuf `ommx.v1.Instance` schema are called Messages, and each Message has multiple fields. For example, `Instance` has the following fields (some are omitted for simplicity):
 
 ```protobuf
 message Instance {
@@ -48,9 +48,9 @@ message Instance {
 }
 ```
 
-Messages such as `ommx.v1.DecisionVariable` representing decision variables and `ommx.v1.Function` representing mathematical functions used as objective functions and constraints are defined under the namespace `ommx.v1`. A list of Messages defined in OMMX is summarized in [OMMX Message Schema](https://jij-inc.github.io/ommx/protobuf.html).
+Messages such as `ommx.v1.DecisionVariable` representing decision variables and `ommx.v1.Function` representing mathematical functions used as objective functions and constraints are defined under the protobuf namespace `ommx.v1`. In Python user code, import the corresponding SDK domain classes from top-level `ommx`, for example `from ommx import Instance, DecisionVariable, Function`. A list of Messages defined in OMMX is summarized in [OMMX Message Schema](https://jij-inc.github.io/ommx/protobuf.html).
 
-Some solvers can directly read `ommx.v1.Instance`. For those that cannot, OMMX Adapters can be used to convert OMMX Message data into formats the solvers can handle. This makes it simpler to integrate various tools that support OMMX.
+Some solvers can directly read OMMX `Instance` payloads. For those that cannot, OMMX Adapters can be used to convert OMMX Message data into formats the solvers can handle. This makes it simpler to integrate various tools that support OMMX.
 
 ```{figure} ./assets/introduction_02.png
 :alt: Diagram showing the relationship between OMMX Message and OMMX Adapter

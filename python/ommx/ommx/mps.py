@@ -1,4 +1,4 @@
-from .v1 import Instance
+from . import Instance
 
 
 def load_file(path: str) -> Instance:

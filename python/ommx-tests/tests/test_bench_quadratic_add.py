@@ -1,5 +1,5 @@
 import pytest
-from ommx.v1 import Quadratic, Rng
+from ommx import Quadratic, Rng
 
 
 @pytest.fixture(params=[100, 1000, 10_000])

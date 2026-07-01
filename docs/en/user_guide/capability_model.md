@@ -17,26 +17,26 @@ OMMX treats [special constraints](./special_constraints.md) — `IndicatorConstr
 
 This page covers:
 
-- {class}`~ommx.v1.AdditionalCapability` and {attr}`Instance.required_capabilities <ommx.v1.Instance.required_capabilities>` for describing what an instance requires
+- {class}`~ommx.AdditionalCapability` and {attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>` for describing what an instance requires
 - How an adapter declares its supported capabilities via `ADDITIONAL_CAPABILITIES`
-- {meth}`Instance.reduce_capabilities() <ommx.v1.Instance.reduce_capabilities>` for automatic conversion
+- {meth}`Instance.reduce_capabilities() <ommx.Instance.reduce_capabilities>` for automatic conversion
 - Manual conversion APIs per constraint type
 - Auditing conversion results
 
 ## AdditionalCapability and required_capabilities
 
-{class}`~ommx.v1.AdditionalCapability` is the enumeration of "extra constraint types" beyond regular constraints.
+{class}`~ommx.AdditionalCapability` is the enumeration of "extra constraint types" beyond regular constraints.
 
 | Capability | Constraint type |
 |---|---|
-| `AdditionalCapability.Indicator` | {class}`~ommx.v1.IndicatorConstraint` |
-| `AdditionalCapability.OneHot` | {class}`~ommx.v1.OneHotConstraint` |
-| `AdditionalCapability.Sos1` | {class}`~ommx.v1.Sos1Constraint` |
+| `AdditionalCapability.Indicator` | {class}`~ommx.IndicatorConstraint` |
+| `AdditionalCapability.OneHot` | {class}`~ommx.OneHotConstraint` |
+| `AdditionalCapability.Sos1` | {class}`~ommx.Sos1Constraint` |
 
-{attr}`Instance.required_capabilities <ommx.v1.Instance.required_capabilities>` returns the set of `AdditionalCapability` values corresponding to the **special constraints the instance currently holds**. When the instance uses only regular constraints the set is empty.
+{attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>` returns the set of `AdditionalCapability` values corresponding to the **special constraints the instance currently holds**. When the instance uses only regular constraints the set is empty.
 
 ```{code-cell} ipython3
-from ommx.v1 import Instance, DecisionVariable, OneHotConstraint, AdditionalCapability
+from ommx import Instance, DecisionVariable, OneHotConstraint, AdditionalCapability
 
 xs = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
 
@@ -55,7 +55,7 @@ assert instance.required_capabilities == {AdditionalCapability.OneHot}
 Each OMMX Adapter declares which capabilities it supports via the `ADDITIONAL_CAPABILITIES` class attribute.
 
 ```python
-from ommx.v1 import AdditionalCapability
+from ommx import AdditionalCapability
 from ommx.adapter import SolverAdapter
 
 class MySolverAdapter(SolverAdapter):
@@ -68,7 +68,7 @@ By default `ADDITIONAL_CAPABILITIES = frozenset()`, so every special constraint 
 
 ## Automatic conversion via reduce_capabilities
 
-Inside `super().__init__`, {meth}`Instance.reduce_capabilities() <ommx.v1.Instance.reduce_capabilities>` is called. For each capability in `required_capabilities` that is not in `supported`, the corresponding conversion API (see below) is invoked to turn that special constraint into regular constraints.
+Inside `super().__init__`, {meth}`Instance.reduce_capabilities() <ommx.Instance.reduce_capabilities>` is called. For each capability in `required_capabilities` that is not in `supported`, the corresponding conversion API (see below) is invoked to turn that special constraint into regular constraints.
 
 ```{code-cell} ipython3
 converted = instance.reduce_capabilities(supported=set())
@@ -89,7 +89,7 @@ The OneHot constraint has been removed and a regular equality $x_0 + x_1 + x_2 -
 
 ### One-hot → equality constraint
 
-{meth}`Instance.convert_one_hot_to_constraint(one_hot_id) <ommx.v1.Instance.convert_one_hot_to_constraint>` rewrites a OneHot constraint as the mathematically equivalent linear equality $x_1 + \ldots + x_n - 1 = 0$.
+{meth}`Instance.convert_one_hot_to_constraint(one_hot_id) <ommx.Instance.convert_one_hot_to_constraint>` rewrites a OneHot constraint as the mathematically equivalent linear equality $x_1 + \ldots + x_n - 1 = 0$.
 
 ```{code-cell} ipython3
 instance2 = Instance.from_components(
@@ -105,18 +105,18 @@ assert set(instance2.constraints.keys()) == {new_id}
 assert instance2.one_hot_constraints == {}
 ```
 
-Use {meth}`~ommx.v1.Instance.convert_all_one_hots_to_constraints` to convert every active OneHot constraint in one call.
+Use {meth}`~ommx.Instance.convert_all_one_hots_to_constraints` to convert every active OneHot constraint in one call.
 
 ### SOS1 → Big-M constraints
 
-{meth}`Instance.convert_sos1_to_constraints(sos1_id) <ommx.v1.Instance.convert_sos1_to_constraints>` rewrites an SOS1 constraint into regular constraints via the Big-M method. For each variable $x_i \in [l_i, u_i]$:
+{meth}`Instance.convert_sos1_to_constraints(sos1_id) <ommx.Instance.convert_sos1_to_constraints>` rewrites an SOS1 constraint into regular constraints via the Big-M method. For each variable $x_i \in [l_i, u_i]$:
 
 1. If $x_i$ is binary with bounds $[0, 1]$, it is reused directly as its own indicator.
 2. Otherwise a fresh binary indicator $y_i$ is introduced, and the pair $x_i - u_i y_i \leq 0$ and $l_i y_i - x_i \leq 0$ is emitted (trivial sides with $u_i = 0$ or $l_i = 0$ are skipped).
 3. Finally, the cardinality constraint $\sum_i y_i - 1 \leq 0$ is added.
 
 ```{code-cell} ipython3
-from ommx.v1 import Sos1Constraint
+from ommx import Sos1Constraint
 
 ys = [DecisionVariable.binary(i, name="y", subscripts=[i]) for i in range(3)]
 instance3 = Instance.from_components(
@@ -133,11 +133,11 @@ assert set(instance3.constraints.keys()) == set(new_ids)
 assert instance3.sos1_constraints == {}
 ```
 
-Use {meth}`~ommx.v1.Instance.convert_all_sos1_to_constraints` to convert every SOS1 constraint in one call. If a variable has a non-finite bound or a domain that excludes 0, conversion fails before any mutation occurs and the instance is left unchanged.
+Use {meth}`~ommx.Instance.convert_all_sos1_to_constraints` to convert every SOS1 constraint in one call. If a variable has a non-finite bound or a domain that excludes 0, conversion fails before any mutation occurs and the instance is left unchanged.
 
 ### Indicator → Big-M constraints
 
-{meth}`Instance.convert_indicator_to_constraint(indicator_id) <ommx.v1.Instance.convert_indicator_to_constraint>` rewrites an indicator constraint $y = 1 \Rightarrow f(x) \leq 0$ using the upper and lower bounds of $f(x)$ as the Big-M values. Unlike SOS1, no new indicator variable is introduced; the `IndicatorConstraint`'s existing indicator variable is used as $y$.
+{meth}`Instance.convert_indicator_to_constraint(indicator_id) <ommx.Instance.convert_indicator_to_constraint>` rewrites an indicator constraint $y = 1 \Rightarrow f(x) \leq 0$ using the upper and lower bounds of $f(x)$ as the Big-M values. Unlike SOS1, no new indicator variable is introduced; the `IndicatorConstraint`'s existing indicator variable is used as $y$.
 
 $$
 f(x) + u y - u \leq 0, \qquad -f(x) - l y + l \leq 0
@@ -148,7 +148,7 @@ where $u \geq \sup f(x)$ and $l \leq \inf f(x)$.
 - For inequality ($\leq$) indicators, only the upper side is considered and is emitted only when $u > 0$ (when $u \leq 0$, the constraint is already implied by the variable bounds, so nothing is emitted).
 - For equality ($= 0$) indicators, the upper and lower sides are considered independently: the upper is emitted if $u > 0$, and the lower is emitted if $l < 0$.
 
-Use {meth}`~ommx.v1.Instance.convert_all_indicators_to_constraints` to convert every indicator constraint in one call. If a required bound on $f(x)$ is non-finite, or if $f(x)$ references a semi-continuous / semi-integer variable, conversion fails before any mutation occurs.
+Use {meth}`~ommx.Instance.convert_all_indicators_to_constraints` to convert every indicator constraint in one call. If a required bound on $f(x)$ is non-finite, or if $f(x)$ references a semi-continuous / semi-integer variable, conversion fails before any mutation occurs.
 
 ## Auditing conversion results
 
@@ -156,13 +156,13 @@ The original special constraints are not discarded; they are kept as "removed" e
 
 | Original type | Removed dict | DataFrame |
 |---|---|---|
-| OneHotConstraint | {attr}`~ommx.v1.Instance.removed_one_hot_constraints` | `instance.constraints_df(kind="one_hot", removed=True)` |
-| Sos1Constraint | {attr}`~ommx.v1.Instance.removed_sos1_constraints` | `instance.constraints_df(kind="sos1", removed=True)` |
-| IndicatorConstraint | {attr}`~ommx.v1.Instance.removed_indicator_constraints` | `instance.constraints_df(kind="indicator", removed=True)` |
+| OneHotConstraint | {attr}`~ommx.Instance.removed_one_hot_constraints` | `instance.constraints_df(kind="one_hot", removed=True)` |
+| Sos1Constraint | {attr}`~ommx.Instance.removed_sos1_constraints` | `instance.constraints_df(kind="sos1", removed=True)` |
+| IndicatorConstraint | {attr}`~ommx.Instance.removed_indicator_constraints` | `instance.constraints_df(kind="indicator", removed=True)` |
 
 `removed=True` returns active + removed rows in the same DataFrame and auto-adds the `removed_reason` / `removed_reason.{key}` columns so removed rows are distinguishable from active ones.
 
-Each entry ({class}`~ommx.v1.RemovedOneHotConstraint` / {class}`~ommx.v1.RemovedSos1Constraint` / {class}`~ommx.v1.RemovedIndicatorConstraint`) records a `removed_reason` string (for example, `"ommx.Instance.convert_one_hot_to_constraint"`) and stores the generated regular-constraint IDs in `removed_reason_parameters`. The key name and shape differ by constraint type:
+Each entry ({class}`~ommx.RemovedOneHotConstraint` / {class}`~ommx.RemovedSos1Constraint` / {class}`~ommx.RemovedIndicatorConstraint`) records a `removed_reason` string (for example, `"ommx.Instance.convert_one_hot_to_constraint"`) and stores the generated regular-constraint IDs in `removed_reason_parameters`. The key name and shape differ by constraint type:
 
 - **OneHot**: a single ID under the `constraint_id` key
 - **SOS1**: a comma-separated list of IDs under the `constraint_ids` key
@@ -173,10 +173,10 @@ removed = instance2.removed_one_hot_constraints
 assert set(removed.keys()) == {1}
 ```
 
-In addition, each generated regular constraint retains a reference back to its origin via the {attr}`Constraint.provenance <ommx.v1.Constraint.provenance>` property. Each {class}`~ommx.v1.Provenance` entry records the origin kind ({attr}`~ommx.v1.Provenance.kind`, a {class}`~ommx.v1.ProvenanceKind`) and the original ID ({attr}`~ommx.v1.Provenance.original_id`), letting you trace which regular constraint was generated from which specific special constraint.
+In addition, each generated regular constraint retains a reference back to its origin via the {attr}`Constraint.provenance <ommx.Constraint.provenance>` property. Each {class}`~ommx.Provenance` entry records the origin kind ({attr}`~ommx.Provenance.kind`, a {class}`~ommx.ProvenanceKind`) and the original ID ({attr}`~ommx.Provenance.original_id`), letting you trace which regular constraint was generated from which specific special constraint.
 
 ```{code-cell} ipython3
-from ommx.v1 import ProvenanceKind
+from ommx import ProvenanceKind
 
 # Walk the regular constraints generated earlier by convert_one_hot_to_constraint(1)
 for cid, c in instance2.constraints.items():
@@ -189,8 +189,8 @@ for cid, c in instance2.constraints.items():
 
 | What you want to do | API |
 |---|---|
-| Inspect which capabilities an instance requires | {attr}`Instance.required_capabilities <ommx.v1.Instance.required_capabilities>` |
+| Inspect which capabilities an instance requires | {attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>` |
 | Declare supported capabilities on an adapter | The `ADDITIONAL_CAPABILITIES` class attribute |
-| Auto-convert every unsupported special constraint | {meth}`Instance.reduce_capabilities <ommx.v1.Instance.reduce_capabilities>` |
+| Auto-convert every unsupported special constraint | {meth}`Instance.reduce_capabilities <ommx.Instance.reduce_capabilities>` |
 | Convert individually to regular constraints | `convert_*_to_constraint(s)` / `convert_all_*_to_constraints` |
 | Audit conversion history | `instance.constraints_df(kind=..., removed=True)` / `solution.constraints_df(kind=..., include=("...","removed_reason"))` |

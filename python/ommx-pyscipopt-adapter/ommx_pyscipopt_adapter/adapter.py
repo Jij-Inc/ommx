@@ -15,7 +15,7 @@ from ommx.adapter import (
     UnboundedDetected,
     NoSolutionReturned,
 )
-from ommx.v1 import (
+from ommx import (
     Instance,
     Solution,
     DecisionVariable,
@@ -500,7 +500,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         initial_state: Optional[ToState] = None,
     ):
         """
-        :param ommx_instance: The ommx.v1.Instance to solve.
+        :param ommx_instance: The ommx.Instance to solve.
         :param initial_state: Optional initial solution state.
         """
         with _tracer.start_as_current_span("convert"):
@@ -526,9 +526,9 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         diagnostics: DiagnosticsSink | None = None,
     ) -> Solution:
         """
-        Solve the given ommx.v1.Instance using PySCIPopt, returning an ommx.v1.Solution.
+        Solve the given ommx.Instance using PySCIPopt, returning an ommx.Solution.
 
-        :param ommx_instance: The ommx.v1.Instance to solve.
+        :param ommx_instance: The ommx.Instance to solve.
         :param initial_state: Optional initial solution state.
 
         Examples
@@ -538,8 +538,8 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
         .. doctest::
 
-            >>> from ommx.v1 import Instance, DecisionVariable
-            >>> from ommx.v1 import Solution
+            >>> from ommx import Instance, DecisionVariable
+            >>> from ommx import Solution
             >>> from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
             >>> p = [10, 13, 18, 32, 7, 15]
@@ -576,7 +576,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
         .. doctest::
 
-                >>> from ommx.v1 import Instance, DecisionVariable
+                >>> from ommx import Instance, DecisionVariable
                 >>> from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
                 >>> x = DecisionVariable.integer(0, upper=3, lower=0)
@@ -596,7 +596,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
         .. doctest::
 
-                >>> from ommx.v1 import Instance, DecisionVariable
+                >>> from ommx import Instance, DecisionVariable
                 >>> from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
                 >>> x = DecisionVariable.integer(0, lower=0)
@@ -640,7 +640,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         return self.model
 
     def decode(self, data: pyscipopt.Model) -> Solution:
-        """Convert optimized pyscipopt.Model and ommx.v1.Instance to ommx.v1.Solution.
+        """Convert optimized pyscipopt.Model and ommx.Instance to ommx.Solution.
 
         This method is intended to be used if the model has been acquired with
         `solver_input` for further adjustment of the solver parameters, and
@@ -657,7 +657,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         .. doctest::
 
             >>> from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
-            >>> from ommx.v1 import Instance, DecisionVariable
+            >>> from ommx import Instance, DecisionVariable
 
             >>> p = [10, 13, 18, 32, 7, 15]
             >>> w = [11, 15, 20, 35, 10, 33]
@@ -695,7 +695,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
     def decode_to_state(self, data: pyscipopt.Model) -> State:
         """
-        Create an ommx.v1.State from an optimized PySCIPOpt Model.
+        Create an ommx.State from an optimized PySCIPOpt Model.
 
         Examples
         =========
@@ -705,7 +705,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             The following example shows how to solve an unconstrained linear optimization problem with `x1` as the objective function.
 
             >>> from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
-            >>> from ommx.v1 import Instance, DecisionVariable
+            >>> from ommx import Instance, DecisionVariable
 
             >>> x1 = DecisionVariable.integer(1, lower=0, upper=5)
             >>> ommx_instance = Instance.from_components(

@@ -1,8 +1,8 @@
 use pyo3::prelude::*;
 
-/// Kind of constraint from which a regular {class}`~ommx.v1.Constraint` was generated.
+/// Kind of constraint from which a regular {class}`~ommx.Constraint` was generated.
 ///
-/// See {class}`~ommx.v1.Provenance` for details.
+/// See {class}`~ommx.Provenance` for details.
 #[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
 #[pyclass(eq, eq_int, hash, frozen)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -30,7 +30,7 @@ impl ProvenanceKind {
 /// One step in a regular constraint's transformation history.
 ///
 /// When a special constraint (indicator / one-hot / SOS1) is converted into a
-/// regular {class}`~ommx.v1.Constraint` — for example via
+/// regular {class}`~ommx.Constraint` — for example via
 /// `Instance.convert_one_hot_to_constraint` or `Instance.reduce_capabilities` —
 /// the generated constraint records a {class}`Provenance` entry naming the
 /// original special constraint. This lets callers trace a regular constraint

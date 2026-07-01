@@ -1,5 +1,5 @@
 import pytest
-from ommx.v1 import Instance, DecisionVariable
+from ommx import Instance, DecisionVariable
 from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 from ommx_python_mip_adapter.exception import OMMXPythonMIPAdapterError
 

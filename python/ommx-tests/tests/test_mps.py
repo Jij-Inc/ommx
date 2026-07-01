@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import ommx.mps
-from ommx.v1 import Instance, DecisionVariable, Constraint, Function
+from ommx import Instance, DecisionVariable, Constraint, Function
 
 
 test_dir = Path(__file__).parent

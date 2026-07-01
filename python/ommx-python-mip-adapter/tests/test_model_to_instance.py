@@ -1,6 +1,6 @@
 import mip
 
-from ommx.v1 import DecisionVariable, Instance, Constraint
+from ommx import DecisionVariable, Instance, Constraint
 
 from ommx_python_mip_adapter import model_to_instance
 

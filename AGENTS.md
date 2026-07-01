@@ -79,7 +79,7 @@ task proto                   # Generate all protobuf code
 task rust:check             # Run cargo check
 task rust:clippy            # Run Rust linting
 task python:lint            # Run Python linting
-task python:stubgen         # Regenerate PyO3 stubs and ommx.v1 exports
+task python:stubgen         # Regenerate PyO3 stubs and top-level ommx exports
 
 # Documentation
 task book_en                # Build and open English documentation
@@ -130,7 +130,7 @@ When developing solver adapters:
 - `ommx._ommx_rust` is an internal module and may change without notice
 
 ```python
-from ommx.v1 import Instance, DecisionVariable, Function, Solution  # Good
+from ommx import Instance, DecisionVariable, Function, Solution  # Good
 from ommx._ommx_rust import Function  # Binding-internal only
 ```
 

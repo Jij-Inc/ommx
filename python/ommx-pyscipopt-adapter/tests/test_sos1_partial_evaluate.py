@@ -1,7 +1,7 @@
 """Test PySCIPOpt adapter behavior with partial_evaluate and SOS1 constraints."""
 
 import pytest
-from ommx.v1 import Instance, DecisionVariable, Sos1Constraint, State
+from ommx import Instance, DecisionVariable, Sos1Constraint, State
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
 

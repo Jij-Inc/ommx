@@ -6,7 +6,7 @@ import pytest
 
 from ommx.adapter import DiagnosticCollector, InfeasibleDetected
 from ommx.experiment import Experiment
-from ommx.v1 import Constraint, DecisionVariable, Instance, Solution
+from ommx import Constraint, DecisionVariable, Instance, Solution
 from ommx_highs_adapter import (
     HighsDiagnosticsAnalyzer,
     HighsProgressSnapshot,

@@ -1,7 +1,7 @@
 """Tests for constraint violation calculation methods."""
 
 import pytest
-from ommx.v1 import Instance, DecisionVariable
+from ommx import Instance, DecisionVariable
 
 
 def test_evaluated_constraint_violation_equality():

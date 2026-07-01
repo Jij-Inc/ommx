@@ -3,7 +3,7 @@ import pytest
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 from ommx_pyscipopt_adapter.exception import OMMXPySCIPOptAdapterError
 
-from ommx.v1 import Constraint, Instance, DecisionVariable, Quadratic, Linear
+from ommx import Constraint, Instance, DecisionVariable, Quadratic, Linear
 from ommx.adapter import InfeasibleDetected, UnboundedDetected, NoSolutionReturned
 from ommx.testing import SingleFeasibleLPGenerator, DataType
 

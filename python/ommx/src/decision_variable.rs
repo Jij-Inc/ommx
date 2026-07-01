@@ -538,7 +538,7 @@ impl DecisionVariable {
 }
 
 /// Attached decision variable — a write-through handle bound to a host
-/// ({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).
+/// ({class}`~ommx.Instance` or {class}`~ommx.ParametricInstance`).
 ///
 /// `AttachedDecisionVariable` is returned by `add_decision_variable(v)`
 /// (insertion), `attached_decision_variable(id)` (lookup), and the
@@ -548,7 +548,7 @@ impl DecisionVariable {
 /// `ToFunction` — only the id is consumed for that, no host borrow is
 /// taken, so arithmetic works even while the host is mutably borrowed
 /// elsewhere. Call {meth}`detach` for an independent
-/// {class}`~ommx.v1.DecisionVariable` snapshot.
+/// {class}`~ommx.DecisionVariable` snapshot.
 ///
 /// `DecisionVariableLabel` has no `provenance` field, so the
 /// write-through surface omits the corresponding getter.
@@ -691,7 +691,7 @@ impl AttachedDecisionVariable {
         }
     }
 
-    /// Return a {class}`~ommx.v1.DecisionVariable` snapshot of the current
+    /// Return a {class}`~ommx.DecisionVariable` snapshot of the current
     /// state. Mutations on the returned object do not propagate back.
     pub fn detach(&self, py: Python<'_>) -> PyResult<DecisionVariable> {
         match &self.host {

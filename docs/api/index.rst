@@ -7,7 +7,7 @@ Core
 .. toctree::
    :maxdepth: 3
 
-   ommx.v1
+   ommx
    ommx.artifact
    ommx.experiment
 

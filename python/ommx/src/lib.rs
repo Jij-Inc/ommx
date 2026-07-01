@@ -238,7 +238,7 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     Ok(())
 }
 
-pyo3_stub_gen::reexport_module_members!("ommx.v1" from "ommx._ommx_rust";
+pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
     // Enums
     "Sense",
     "Equality",
@@ -291,6 +291,8 @@ pyo3_stub_gen::reexport_module_members!("ommx.v1" from "ommx._ommx_rust";
     "SampleSet",
     // Utility
     "Rng",
+    "get_default_atol",
+    "set_default_atol",
     // Type aliases
     "ToState",
     "ToSamples"
@@ -325,8 +327,8 @@ solver settings, and you want the resulting Artifact to answer:
 
 - which shared dataset or baseline configuration was used,
 - which run-level parameters should be compared as a table,
-- which input `ommx.v1.Instance` was actually solved, and
-- which output `ommx.v1.Solution` and adapter options came from each solver call.
+- which input `ommx.Instance` was actually solved, and
+- which output `ommx.Solution` and adapter options came from each solver call.
 
 An `Experiment` is a mutable session until it is committed. Experiment-level
 attachments store shared context, while each `Run` stores scalar parameters,

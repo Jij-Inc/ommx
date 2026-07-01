@@ -1,5 +1,5 @@
 from ommx_python_mip_adapter import OMMXPythonMIPAdapter
-from ommx.v1 import Instance, DecisionVariable, Linear
+from ommx import Instance, DecisionVariable, Linear
 from ommx.adapter import InfeasibleDetected
 import pytest
 

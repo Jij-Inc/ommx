@@ -1,6 +1,6 @@
 import pytest
 
-from ommx.v1 import Instance, DecisionVariable, Solution
+from ommx import Instance, DecisionVariable, Solution
 from ommx.testing import SingleFeasibleLPGenerator, DataType
 
 from ommx_highs_adapter import OMMXHighsAdapter

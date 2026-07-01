@@ -27,9 +27,9 @@ kernelspec:
 * - {py:class}`~ommx.experiment.Run`
   - 実験の中で行った一つの試行、比較の単位。複雑な問題を解く際に複数回のソルバー呼び出しを伴うことがよくあるため、Runは複数回のソルバー呼び出し（Solve）を持つことができる。加えてRun毎に比較の軸となるスカラー値のパラメータを付与でき、Experiment全体でのRunの比較を容易にする。
 * - {py:class}`~ommx.experiment.Solve`
-  - Runの中で行った一回のソルバー呼び出し。入力の {py:class}`~ommx.v1.Instance`、使用した Adapter、ソルバー呼び出しに渡したオプションを常に記録する。finished Solve は出力の {py:class}`~ommx.v1.Solution` も保存し、failed または interrupted Solve は output を持たない。
+  - Runの中で行った一回のソルバー呼び出し。入力の {py:class}`~ommx.Instance`、使用した Adapter、ソルバー呼び出しに渡したオプションを常に記録する。finished Solve は出力の {py:class}`~ommx.Solution` も保存し、failed または interrupted Solve は output を持たない。
 * - Attachment
-  - ExperimentやRunに添付する任意のペイロード。JSON、`numpy.ndarray`、{py:class}`~ommx.v1.Instance`、{py:class}`~ommx.v1.Solution`などのデータ型に加えて、任意のbytesをMedia Typeを指定して保存できる。
+  - ExperimentやRunに添付する任意のペイロード。JSON、`numpy.ndarray`、{py:class}`~ommx.Instance`、{py:class}`~ommx.Solution`などのデータ型に加えて、任意のbytesをMedia Typeを指定して保存できる。
 ```
 
 このチュートリアルでは、簡単なナップサック問題を条件違いで2回解き、その実行記録を1つの {py:class}`~ommx.experiment.Experiment` として保存・読み出しします。
@@ -38,10 +38,10 @@ kernelspec:
 
 ## 数理モデルを用意する
 
-まず、ナップサック問題の元データと、容量をパラメータとして持つ {py:class}`~ommx.v1.ParametricInstance` を作ります。OMMXの {py:class}`~ommx.v1.ParametricInstance` は、{py:class}`~ommx.v1.Instance` と同様に、目的関数や制約条件を定義できますが、定数項の代わりにパラメータを置くことができます。定数だけ異なるモデルを複数用意する必要がある場合に便利です。
+まず、ナップサック問題の元データと、容量をパラメータとして持つ {py:class}`~ommx.ParametricInstance` を作ります。OMMXの {py:class}`~ommx.ParametricInstance` は、{py:class}`~ommx.Instance` と同様に、目的関数や制約条件を定義できますが、定数項の代わりにパラメータを置くことができます。定数だけ異なるモデルを複数用意する必要がある場合に便利です。
 
 ```{code-cell} ipython3
-from ommx.v1 import DecisionVariable, Parameter, Instance, ParametricInstance
+from ommx import DecisionVariable, Parameter, Instance, ParametricInstance
 
 v = [10, 13, 18, 31, 7, 15]  # 各アイテムの価値
 w = [11, 25, 20, 35, 10, 33]  # 各アイテムの重さ
@@ -72,7 +72,7 @@ pi = ParametricInstance.from_components(
 (experiment-management-attachable-data-formats)=
 ### 添付できるデータ形式
 
-上で作った {py:class}`~ommx.v1.ParametricInstance` がソルバーに渡すOMMX形式の数理モデルです。実験を後から見直すためには、このOMMXモデルに加えて、元のモデリング用オブジェクトや入力ファイルなどもExperimentに添付しておくと便利です。
+上で作った {py:class}`~ommx.ParametricInstance` がソルバーに渡すOMMX形式の数理モデルです。実験を後から見直すためには、このOMMXモデルに加えて、元のモデリング用オブジェクトや入力ファイルなどもExperimentに添付しておくと便利です。
 
 元のモデルをモデリング用パッケージで記述している場合は、そのソースモデルもAttachmentとして保存しておくと後から参照できます。外部パッケージが所有する型について、OMMXはAttachment CodecのProtocolと、それを呼び出す `log_with_codec` / `get_with_codec` メソッドだけを定義します。具体的なCodecはその型を所有するパッケージ側で提供します。このチュートリアルではJijModeling `Problem` 用の一時的な `ProblemCodec` を定義して使います。同等のCodecは将来的にJijModeling本体で提供される予定です。
 
@@ -188,7 +188,7 @@ with Experiment() as experiment:
 
 通常のRunでは {py:meth}`~ommx.experiment.Run.log_solve` を使います。これはadapterの `solve` メソッドを呼び出し、入力、出力、adapter名、adapter optionsをまとめて記録します。一方で、AdapterのAPIではサポートしきれていないソルバーの高度な機能を使う必要がある場合は、手動Solveスコープを開きます。
 
-手動Solveスコープでは、まず `solver_input` でバックエンドソルバーのModelを受け取り、ユーザーがそのModelを直接操作して最適化を行います。最後に `solve.decode(model)` を呼ぶと、adapterがバックエンドの結果を {py:class}`~ommx.v1.Solution` に変換し、そのSolutionがExperimentに記録されるSolveの出力になります。
+手動Solveスコープでは、まず `solver_input` でバックエンドソルバーのModelを受け取り、ユーザーがそのModelを直接操作して最適化を行います。最後に `solve.decode(model)` を呼ぶと、adapterがバックエンドの結果を {py:class}`~ommx.Solution` に変換し、そのSolutionがExperimentに記録されるSolveの出力になります。
 
 ```python
 with experiment.run() as run:
@@ -287,7 +287,7 @@ run_id
 
 ### Attachments
 
-Experiment単位で保存したAttachmentは名前で確認し、必要なものを名前で取り出します。{py:meth}`~ommx.experiment.Experiment.get_attachment` は保存時のMedia Typeを見て、JSONならPythonの値、{py:class}`~ommx.v1.ParametricInstance` ならそのオブジェクト、というように変換して返します。期待する型が分かっている場合は {py:meth}`~ommx.experiment.Experiment.get_json` や {py:meth}`~ommx.experiment.Experiment.get_parametric_instance` のような型ごとのメソッドを使うと、Media Typeが違っていた場合にエラーになります。
+Experiment単位で保存したAttachmentは名前で確認し、必要なものを名前で取り出します。{py:meth}`~ommx.experiment.Experiment.get_attachment` は保存時のMedia Typeを見て、JSONならPythonの値、{py:class}`~ommx.ParametricInstance` ならそのオブジェクト、というように変換して返します。期待する型が分かっている場合は {py:meth}`~ommx.experiment.Experiment.get_json` や {py:meth}`~ommx.experiment.Experiment.get_parametric_instance` のような型ごとのメソッドを使うと、Media Typeが違っていた場合にエラーになります。
 
 ```{code-cell} ipython3
 # 保存したAttachmentの名前を確認する
@@ -325,7 +325,7 @@ trace storageを有効にして記録したRunでは、{py:attr}`~ommx.experimen
 
 ```{code-cell} ipython3
 from typing import Any
-from ommx.v1 import Solution
+from ommx import Solution
 
 for run in loaded_experiment.runs:
     # Runには実行順にIDが振られる

@@ -2,7 +2,7 @@
 
 import pytest
 
-from ommx.v1 import DecisionVariable, DecisionVariableRole, Instance
+from ommx import DecisionVariable, DecisionVariableRole, Instance
 
 
 def test_decision_variable_roles_basic():

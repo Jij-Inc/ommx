@@ -4,7 +4,7 @@ from typing import final
 import mip
 
 from mip.exceptions import ParameterNotAvailable
-from ommx.v1 import Instance, DecisionVariable, Constraint, Function, Linear
+from ommx import Instance, DecisionVariable, Constraint, Function, Linear
 
 from .exception import OMMXPythonMIPAdapterError
 
@@ -12,14 +12,14 @@ from .exception import OMMXPythonMIPAdapterError
 @dataclass
 class OMMXInstanceBuilder:
     """
-    Build ommx.v1.Instance from Python-MIP Model.
+    Build ommx.Instance from Python-MIP Model.
     """
 
     model: mip.Model
 
     def decision_variables(self) -> list[DecisionVariable]:
         """
-        Gather decision variables from Python-MIP Model as ommx.v1.DecisionVariable.
+        Gather decision variables from Python-MIP Model as ommx.DecisionVariable.
         """
         decision_variables = []
         for var in self.model.vars:
@@ -93,7 +93,7 @@ class OMMXInstanceBuilder:
                     name=name,
                 )
             elif lin_expr.sense == ">":
-                # `ommx.v1.Constraint` does not support `GREATER_THAN_OR_EQUAL_TO_ZERO`.
+                # `ommx.Constraint` does not support `GREATER_THAN_OR_EQUAL_TO_ZERO`.
                 # So multiply the linear expression by -1.
                 constraint = Constraint(
                     function=self.as_ommx_function(-lin_expr),
@@ -129,7 +129,7 @@ class OMMXInstanceBuilder:
 
 def model_to_instance(model: mip.Model) -> Instance:
     """
-    The function to convert Python-MIP Model to ommx.v1.Instance.
+    The function to convert Python-MIP Model to ommx.Instance.
 
     Examples
     =========

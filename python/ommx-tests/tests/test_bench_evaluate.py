@@ -1,5 +1,5 @@
 import pytest
-from ommx.v1 import Rng
+from ommx import Rng
 from ommx.dataset import miplib2017
 
 

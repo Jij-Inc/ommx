@@ -17,22 +17,22 @@ async function test_wheel(wheelPath) {
 
     console.log("Testing OMMX...");
     await pyodide.runPythonAsync(`
-import ommx.v1 as v1
+import ommx
 import ommx._ommx_rust as rust
 
 # Test basic functionality
 print("✓ OMMX imported successfully!")
-print("✓ Available modules:", len(dir(v1)), "items")
+print("✓ Available modules:", len(dir(ommx)), "items")
 print("✓ Rust extension loaded:", hasattr(rust, 'DecisionVariable'))
 
 # Test creating decision variables
-dv1 = v1.DecisionVariable.integer(id=1, lower=0, upper=10)
+dv1 = ommx.DecisionVariable.integer(id=1, lower=0, upper=10)
 print("✓ Created integer decision variable")
 
-dv2 = v1.DecisionVariable.binary(id=2)
+dv2 = ommx.DecisionVariable.binary(id=2)
 print("✓ Created binary decision variable")
 
-dv3 = v1.DecisionVariable.continuous(id=3, lower=0.0, upper=1.0)
+dv3 = ommx.DecisionVariable.continuous(id=3, lower=0.0, upper=1.0)
 print("✓ Created continuous decision variable")
 
 print("\\n🎉 OMMX on pyodide works! 🎉")

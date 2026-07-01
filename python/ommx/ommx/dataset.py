@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from .artifact import Artifact
-from . import v1, _ommx_rust
+from . import Instance, _ommx_rust
 
 
-def miplib2017(name: str) -> v1.Instance:
+def miplib2017(name: str) -> Instance:
     """
     Load a MIPLIB 2017 instance as OMMX Artifact.
 
@@ -64,7 +64,7 @@ def miplib2017_instance_annotations() -> dict[str, dict[str, str]]:
     return _ommx_rust.miplib2017_instance_annotations()
 
 
-def qplib(tag: str) -> v1.Instance:
+def qplib(tag: str) -> Instance:
     """
     Load a QPLIB instance as OMMX Artifact.
 

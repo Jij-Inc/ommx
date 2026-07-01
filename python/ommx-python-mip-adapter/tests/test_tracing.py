@@ -1,5 +1,5 @@
 from ommx.tracing import capture_trace
-from ommx.v1 import DecisionVariable, Instance
+from ommx import DecisionVariable, Instance
 
 from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 

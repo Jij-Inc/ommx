@@ -1,5 +1,5 @@
 import pytest
-from ommx.v1 import Linear, Rng
+from ommx import Linear, Rng
 
 
 @pytest.fixture(params=[100, 1000, 10_000])
