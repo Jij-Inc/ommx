@@ -11,10 +11,12 @@ package ommx.v2;
 // different problem. Top-level roots therefore declare the semantic features
 // required by the concrete payload.
 //
-// Readers must reject payloads containing unknown or unsupported
+// Readers must reject payloads containing unknown, unsupported, or unspecified
 // `required_features`. Writers must include every feature whose omission would
 // let an older reader silently interpret a weaker or otherwise different model.
+// Writers must not emit `FEATURE_UNSPECIFIED` as a required feature.
 enum Feature {
+  // Placeholder for the protobuf default value. This is not a semantic feature.
   FEATURE_UNSPECIFIED = 0;
 
   // The payload contains first-class indicator constraints.
