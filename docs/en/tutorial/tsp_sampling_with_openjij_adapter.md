@@ -114,13 +114,13 @@ objective = sum(
 )
 place_constraint = {
     t: (sum(x[t][i] for i in range(N)) == 1)
-        .add_name("place")
+        .set_name("place")
         .add_subscripts([t])
     for t in range(N)
 }
 time_constraint = {
     i + N: (sum(x[t][i] for t in range(N)) == 1)
-        .add_name("time")
+        .set_name("time")
         .add_subscripts([i])
     for i in range(N)
 }

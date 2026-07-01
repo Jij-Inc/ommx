@@ -174,7 +174,8 @@ def test_add_subscripts_extends_instead_of_replacing():
 
 def test_add_parameter_adds_single_key_without_clearing_others():
     """add_parameter writes a single (key, value) entry while leaving other
-    parameters intact. add_parameters / set_parameters wholesale-replace."""
+    parameters intact. add_parameters follows the same merge semantics for
+    multiple entries."""
     instance = _empty_instance()
     attached = instance.add_constraint(_make_constraint(name="balance"))
     # _make_constraint stages {"k": "v"} initially.
@@ -185,16 +186,40 @@ def test_add_parameter_adds_single_key_without_clearing_others():
     assert attached.parameters == {"k": "v", "k2": "v2"}
 
 
-def test_add_parameters_replaces_existing_parameter_dict():
-    """add_parameters is an alias for set_parameters; it replaces the whole
-    parameter map rather than merging entries."""
+def test_add_parameters_merges_existing_parameter_dict():
+    """add_parameters merges entries without clearing omitted keys."""
     instance = _empty_instance()
     attached = instance.add_constraint(_make_constraint(name="balance"))
     assert attached.parameters == {"k": "v"}
 
-    attached.add_parameters({"a": "1", "b": "2"})
+    attached.add_parameters({"a": "1", "b": "2", "k": "updated"})
+
+    assert attached.parameters == {"k": "updated", "a": "1", "b": "2"}
+    assert instance.constraints[attached.constraint_id].parameters == {
+        "k": "updated",
+        "a": "1",
+        "b": "2",
+    }
+
+
+def test_set_parameters_replaces_existing_parameter_dict():
+    """set_parameters replaces the whole parameter map."""
+    instance = _empty_instance()
+    attached = instance.add_constraint(_make_constraint(name="balance"))
+    assert attached.parameters == {"k": "v"}
+
+    attached.set_parameters({"a": "1", "b": "2"})
 
     assert attached.parameters == {"a": "1", "b": "2"}
+
+
+def test_replacing_metadata_does_not_have_add_aliases():
+    """Only append/merge metadata operations use the add_* prefix."""
+    instance = _empty_instance()
+    attached = instance.add_constraint(_make_constraint(name="balance"))
+
+    assert not hasattr(attached, "add_name")
+    assert not hasattr(attached, "add_description")
 
 
 def test_attached_after_relax_constraint_still_reads_through():
