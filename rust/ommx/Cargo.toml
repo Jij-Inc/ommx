@@ -15,6 +15,15 @@ repository = "https://github.com/Jij-Inc/ommx"
 keywords = ["optimization", "ommx"]
 categories = ["data-structures", "mathematics", "science"]
 
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/rust-{ version }/{ name }-{ target }{ archive-suffix }"
+bin-dir = "{ bin }{ binary-ext }"
+pkg-fmt = "tgz"
+disabled-strategies = ["quick-install"]
+
+[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
+pkg-fmt = "zip"
+
 [lints]
 workspace = true
 
