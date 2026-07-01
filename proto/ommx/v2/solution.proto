@@ -12,19 +12,18 @@ import "ommx/v2/named_function.proto";
 // Validated single-state solver output serialization root.
 message Solution {
   repeated Feature required_features = 1;
-  ommx.v1.State state = 2;
-  double objective = 3;
-  EvaluatedDecisionVariableTable decision_variables = 4;
-  EvaluatedRegularConstraintCollection evaluated_regular_constraints = 5;
-  bool feasible = 6;
-  ommx.v1.Optimality optimality = 7;
-  ommx.v1.Relaxation relaxation = 8;
-  optional bool feasible_relaxed = 9;
-  ommx.v1.Instance.Sense sense = 10;
-  EvaluatedNamedFunctionTable evaluated_named_functions = 11;
-  ommx.v1.ProcessMetadata metadata = 12;
-  map<string, string> annotations = 13;
-  EvaluatedIndicatorConstraintCollection evaluated_indicator_constraints = 14;
-  EvaluatedOneHotConstraintCollection evaluated_one_hot_constraints = 15;
-  EvaluatedSos1ConstraintCollection evaluated_sos1_constraints = 16;
+  double objective = 2;
+  EvaluatedDecisionVariableTable decision_variables = 3;
+  EvaluatedRegularConstraintCollection evaluated_regular_constraints = 4;
+  bool feasible = 5;
+  ommx.v1.Optimality optimality = 6;
+  ommx.v1.Relaxation relaxation = 7;
+  optional bool feasible_relaxed = 8;
+  ommx.v1.Instance.Sense sense = 9;
+  EvaluatedNamedFunctionTable evaluated_named_functions = 10;
+  ommx.v1.ProcessMetadata metadata = 11;
+  map<string, string> annotations = 12;
+  EvaluatedIndicatorConstraintCollection evaluated_indicator_constraints = 13;
+  EvaluatedOneHotConstraintCollection evaluated_one_hot_constraints = 14;
+  EvaluatedSos1ConstraintCollection evaluated_sos1_constraints = 15;
 }

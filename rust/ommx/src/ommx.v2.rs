@@ -696,36 +696,34 @@ pub struct SampleSet {
 pub struct Solution {
     #[prost(enumeration = "Feature", repeated, tag = "1")]
     pub required_features: ::prost::alloc::vec::Vec<i32>,
-    #[prost(message, optional, tag = "2")]
-    pub state: ::core::option::Option<super::v1::State>,
-    #[prost(double, tag = "3")]
+    #[prost(double, tag = "2")]
     pub objective: f64,
-    #[prost(message, optional, tag = "4")]
+    #[prost(message, optional, tag = "3")]
     pub decision_variables: ::core::option::Option<EvaluatedDecisionVariableTable>,
-    #[prost(message, optional, tag = "5")]
+    #[prost(message, optional, tag = "4")]
     pub evaluated_regular_constraints: ::core::option::Option<EvaluatedRegularConstraintCollection>,
-    #[prost(bool, tag = "6")]
+    #[prost(bool, tag = "5")]
     pub feasible: bool,
-    #[prost(enumeration = "super::v1::Optimality", tag = "7")]
+    #[prost(enumeration = "super::v1::Optimality", tag = "6")]
     pub optimality: i32,
-    #[prost(enumeration = "super::v1::Relaxation", tag = "8")]
+    #[prost(enumeration = "super::v1::Relaxation", tag = "7")]
     pub relaxation: i32,
-    #[prost(bool, optional, tag = "9")]
+    #[prost(bool, optional, tag = "8")]
     pub feasible_relaxed: ::core::option::Option<bool>,
-    #[prost(enumeration = "super::v1::instance::Sense", tag = "10")]
+    #[prost(enumeration = "super::v1::instance::Sense", tag = "9")]
     pub sense: i32,
-    #[prost(message, optional, tag = "11")]
+    #[prost(message, optional, tag = "10")]
     pub evaluated_named_functions: ::core::option::Option<EvaluatedNamedFunctionTable>,
-    #[prost(message, optional, tag = "12")]
+    #[prost(message, optional, tag = "11")]
     pub metadata: ::core::option::Option<super::v1::ProcessMetadata>,
-    #[prost(map = "string, string", tag = "13")]
+    #[prost(map = "string, string", tag = "12")]
     pub annotations:
         ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
-    #[prost(message, optional, tag = "14")]
+    #[prost(message, optional, tag = "13")]
     pub evaluated_indicator_constraints:
         ::core::option::Option<EvaluatedIndicatorConstraintCollection>,
-    #[prost(message, optional, tag = "15")]
+    #[prost(message, optional, tag = "14")]
     pub evaluated_one_hot_constraints: ::core::option::Option<EvaluatedOneHotConstraintCollection>,
-    #[prost(message, optional, tag = "16")]
+    #[prost(message, optional, tag = "15")]
     pub evaluated_sos1_constraints: ::core::option::Option<EvaluatedSos1ConstraintCollection>,
 }
