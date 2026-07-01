@@ -98,6 +98,15 @@ pub mod v1 {
     include!("ommx.v1.rs");
 }
 
+/// Module created from `ommx.v2` proto files.
+#[allow(
+    clippy::doc_overindented_list_items, // prost breaks markdown indents
+    clippy::large_enum_variant,          // generated enums mirror protobuf oneofs
+)]
+pub mod v2 {
+    include!("ommx.v2.rs");
+}
+
 mod v1_io;
 
 /// Supplementary documentation bundled with the crate.
