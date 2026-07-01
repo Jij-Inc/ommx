@@ -1,8 +1,7 @@
 use super::*;
-use crate::{
-    constraint_type::ActiveConstraintUpdate, linear, Function, ParameterLabel, VariableID,
-};
+use crate::{linear, Function, ParameterLabel, VariableID};
 use anyhow::Result;
+use std::collections::BTreeMap;
 
 impl Instance {
     #[cfg_attr(doc, katexit::katexit)]
@@ -75,46 +74,39 @@ impl Instance {
         let mut parameters = ParameterTable::default();
         let mut constraint_collection = self.constraint_collection;
         let mut parameter_offset = 0;
-        constraint_collection.rewrite_active(
-            |constraint_id,
-             constraint,
-             _context|
-             -> crate::Result<ActiveConstraintUpdate<crate::Constraint>> {
-                let parameter_id = VariableID::from(id_base + parameter_offset);
-                parameter_offset += 1;
-                let parameter_label = ParameterLabel {
-                    name: Some("penalty_weight".to_string()),
-                    subscripts: vec![constraint_id.into_inner() as i64],
-                    ..Default::default()
-                };
+        let mut removals = BTreeMap::new();
+        for (&constraint_id, constraint) in constraint_collection.active() {
+            let parameter_id = VariableID::from(id_base + parameter_offset);
+            parameter_offset += 1;
+            let parameter_label = ParameterLabel {
+                name: Some("penalty_weight".to_string()),
+                subscripts: vec![constraint_id.into_inner() as i64],
+                ..Default::default()
+            };
 
-                let f = constraint.function().clone();
-                // Add penalty term: λ * f(x)^2
-                let mut penalty_term = Function::from(linear!(parameter_id));
-                penalty_term.try_mul_assign_in_place(&f)?;
-                penalty_term.try_mul_assign_in_place(&f)?;
-                objective.try_add_assign_in_place(penalty_term)?;
+            let f = constraint.function().clone();
+            // Add penalty term: λ * f(x)^2
+            let mut penalty_term = Function::from(linear!(parameter_id));
+            penalty_term.try_mul_assign_in_place(&f)?;
+            penalty_term.try_mul_assign_in_place(&f)?;
+            objective.try_add_assign_in_place(penalty_term)?;
 
-                // Create removed constraint
-                let removed_reason = crate::constraint::RemovedReason {
-                    reason: "ommx.Instance.penalty_method".to_string(),
-                    parameters: {
-                        let mut map = fnv::FnvHashMap::default();
-                        map.insert(
-                            "parameter_id".to_string(),
-                            parameter_id.into_inner().to_string(),
-                        );
-                        map
-                    },
-                };
+            let removed_reason = crate::constraint::RemovedReason {
+                reason: "ommx.Instance.penalty_method".to_string(),
+                parameters: {
+                    let mut map = fnv::FnvHashMap::default();
+                    map.insert(
+                        "parameter_id".to_string(),
+                        parameter_id.into_inner().to_string(),
+                    );
+                    map
+                },
+            };
 
-                parameters.insert(parameter_id, parameter_label)?;
-                Ok(ActiveConstraintUpdate::Removed {
-                    constraint,
-                    reason: removed_reason,
-                })
-            },
-        )?;
+            parameters.insert(parameter_id, parameter_label)?;
+            removals.insert(constraint_id, (constraint.clone(), removed_reason));
+        }
+        constraint_collection.move_active_rows_to_removed(removals)?;
 
         Ok(ParametricInstance {
             sense: self.sense,
@@ -224,28 +216,20 @@ impl Instance {
 
         let mut quad_sum = Function::zero();
         let mut constraint_collection = self.constraint_collection;
-        constraint_collection.rewrite_active(
-            |_constraint_id,
-             constraint,
-             _context|
-             -> crate::Result<ActiveConstraintUpdate<crate::Constraint>> {
-                let f = constraint.function().clone();
-                let mut squared = f.clone();
-                squared.try_mul_assign_in_place(&f)?;
-                quad_sum.try_add_assign_in_place(squared)?;
+        let mut removals = BTreeMap::new();
+        for (&constraint_id, constraint) in constraint_collection.active() {
+            let f = constraint.function().clone();
+            let mut squared = f.clone();
+            squared.try_mul_assign_in_place(&f)?;
+            quad_sum.try_add_assign_in_place(squared)?;
 
-                // Create removed constraint
-                let removed_reason = crate::constraint::RemovedReason {
-                    reason: "ommx.Instance.uniform_penalty_method".to_string(),
-                    parameters: Default::default(),
-                };
-
-                Ok(ActiveConstraintUpdate::Removed {
-                    constraint,
-                    reason: removed_reason,
-                })
-            },
-        )?;
+            let removed_reason = crate::constraint::RemovedReason {
+                reason: "ommx.Instance.uniform_penalty_method".to_string(),
+                parameters: Default::default(),
+            };
+            removals.insert(constraint_id, (constraint.clone(), removed_reason));
+        }
+        constraint_collection.move_active_rows_to_removed(removals)?;
 
         let mut penalty_term = Function::from(linear!(parameter_id));
         penalty_term.try_mul_assign_in_place(&quad_sum)?;

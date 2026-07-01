@@ -109,23 +109,13 @@ impl ParametricInstance {
         // carry dangling parameter IDs in `removed_constraints`, violating
         // its own invariants.
         let mut constraint_collection = self.constraint_collection;
-        constraint_collection.rewrite_all_preserving_lifecycle(
-            |_, mut constraint, _| -> crate::Result<crate::Constraint> {
-                constraint.stage.function.partial_evaluate(&state, atol)?;
-                Ok(constraint)
-            },
-        )?;
+        constraint_collection.partial_evaluate_all_preserving_lifecycle(&state, atol)?;
 
         // Indicator constraint function bodies may also reference parameter
         // IDs (the structural indicator variable does not, by construction).
         // Apply the same substitution to active and removed maps.
         let mut indicator_constraint_collection = self.indicator_constraint_collection;
-        indicator_constraint_collection.rewrite_all_preserving_lifecycle(
-            |_, mut ic, _| -> crate::Result<crate::IndicatorConstraint> {
-                ic.stage.function.partial_evaluate(&state, atol)?;
-                Ok(ic)
-            },
-        )?;
+        indicator_constraint_collection.partial_evaluate_all_preserving_lifecycle(&state, atol)?;
 
         let mut named_functions = self.named_functions;
         named_functions.partial_evaluate(&state, atol)?;

@@ -1,8 +1,9 @@
 use super::*;
 use crate::{
-    constraint_type::ActiveConstraintUpdate, substitute_acyclic, substitute_one_via_acyclic,
-    Function, Substitute, SubstitutionError, VariableID,
+    substitute_acyclic, substitute_one_via_acyclic, Function, Substitute, SubstitutionError,
+    VariableID,
 };
+use std::collections::BTreeMap;
 
 impl Substitute for Instance {
     type Output = Self;
@@ -39,14 +40,17 @@ impl Substitute for Instance {
         // Apply substitution only to affected active constraints.
         // Removed constraints are not substituted here; they will be substituted
         // when restored via `restore_constraint`.
-        self.constraint_collection.rewrite_active(
-            |constraint_id, mut constraint, _context| -> Result<_, SubstitutionError> {
-                if affected_constraint_ids.contains(&constraint_id) {
-                    substitute_acyclic(&mut constraint.stage.function, acyclic)?;
-                }
-                Ok(ActiveConstraintUpdate::Active(constraint))
-            },
-        )?;
+        let mut constraint_replacements = BTreeMap::new();
+        for (&constraint_id, constraint) in self.constraint_collection.active() {
+            if affected_constraint_ids.contains(&constraint_id) {
+                let mut constraint = constraint.clone();
+                substitute_acyclic(&mut constraint.stage.function, acyclic)?;
+                constraint_replacements.insert(constraint_id, constraint);
+            }
+        }
+        self.constraint_collection
+            .replace_active_rows(constraint_replacements)
+            .expect("replacement IDs were read from active constraints");
 
         // Check that no indicator constraint's indicator_variable is being substituted.
         // Substituting an indicator variable would change the constraint type
@@ -63,15 +67,18 @@ impl Substitute for Instance {
         }
 
         // Apply substitution to the function part of active indicator constraints
-        self.indicator_constraint_collection.rewrite_active(
-            |_, mut ic, _context| -> Result<_, SubstitutionError> {
-                let required_ids = ic.stage.function.required_ids();
-                if !required_ids.is_disjoint(&substituted_variables) {
-                    substitute_acyclic(&mut ic.stage.function, acyclic)?;
-                }
-                Ok(ActiveConstraintUpdate::Active(ic))
-            },
-        )?;
+        let mut indicator_replacements = BTreeMap::new();
+        for (&constraint_id, ic) in self.indicator_constraint_collection.active() {
+            let required_ids = ic.stage.function.required_ids();
+            if !required_ids.is_disjoint(&substituted_variables) {
+                let mut ic = ic.clone();
+                substitute_acyclic(&mut ic.stage.function, acyclic)?;
+                indicator_replacements.insert(constraint_id, ic);
+            }
+        }
+        self.indicator_constraint_collection
+            .replace_active_rows(indicator_replacements)
+            .expect("replacement IDs were read from active indicator constraints");
 
         // Check that no one-hot or SOS1 variable is being substituted.
         for (&cid, oh) in self.one_hot_constraint_collection.active().iter() {
@@ -153,14 +160,17 @@ impl Substitute for ParametricInstance {
 
         substitute_acyclic(&mut self.objective, acyclic)?;
 
-        self.constraint_collection.rewrite_active(
-            |constraint_id, mut constraint, _context| -> Result<_, SubstitutionError> {
-                if affected_constraint_ids.contains(&constraint_id) {
-                    substitute_acyclic(&mut constraint.stage.function, acyclic)?;
-                }
-                Ok(ActiveConstraintUpdate::Active(constraint))
-            },
-        )?;
+        let mut constraint_replacements = BTreeMap::new();
+        for (&constraint_id, constraint) in self.constraint_collection.active() {
+            if affected_constraint_ids.contains(&constraint_id) {
+                let mut constraint = constraint.clone();
+                substitute_acyclic(&mut constraint.stage.function, acyclic)?;
+                constraint_replacements.insert(constraint_id, constraint);
+            }
+        }
+        self.constraint_collection
+            .replace_active_rows(constraint_replacements)
+            .expect("replacement IDs were read from active constraints");
 
         for (&cid, ic) in self.indicator_constraint_collection.active().iter() {
             if substituted_variables.contains(&ic.indicator_variable) {
@@ -170,15 +180,18 @@ impl Substitute for ParametricInstance {
                 });
             }
         }
-        self.indicator_constraint_collection.rewrite_active(
-            |_, mut ic, _context| -> Result<_, SubstitutionError> {
-                let required_ids = ic.stage.function.required_ids();
-                if !required_ids.is_disjoint(&substituted_variables) {
-                    substitute_acyclic(&mut ic.stage.function, acyclic)?;
-                }
-                Ok(ActiveConstraintUpdate::Active(ic))
-            },
-        )?;
+        let mut indicator_replacements = BTreeMap::new();
+        for (&constraint_id, ic) in self.indicator_constraint_collection.active() {
+            let required_ids = ic.stage.function.required_ids();
+            if !required_ids.is_disjoint(&substituted_variables) {
+                let mut ic = ic.clone();
+                substitute_acyclic(&mut ic.stage.function, acyclic)?;
+                indicator_replacements.insert(constraint_id, ic);
+            }
+        }
+        self.indicator_constraint_collection
+            .replace_active_rows(indicator_replacements)
+            .expect("replacement IDs were read from active indicator constraints");
 
         for (&cid, oh) in self.one_hot_constraint_collection.active().iter() {
             for var_id in &oh.variables {

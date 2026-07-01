@@ -23,19 +23,25 @@ impl Instance {
     pub fn restore_constraint(&mut self, id: ConstraintID) -> Result<()> {
         let fixed_state = self.fixed_state();
         let dependency = self.decision_variable_dependency.clone();
+        let mut constraint = self
+            .constraint_collection
+            .removed()
+            .get(&id)
+            .ok_or_else(|| crate::error!("Removed constraint with ID {:?} not found", id))?
+            .0
+            .clone();
+
+        // The following operations are infallible for regular constraints:
+        // - substitute_acyclic only fails on cyclic dependencies, which AcyclicAssignments prevents
+        // - Constraint::partial_evaluate delegates to Function::partial_evaluate, which is infallible
+        if !dependency.is_empty() {
+            crate::substitute_acyclic(&mut constraint.stage.function, &dependency)?;
+        }
+        if !fixed_state.entries.is_empty() {
+            constraint.partial_evaluate(&fixed_state, ATol::default())?;
+        }
         self.constraint_collection
-            .restore_with(id, |mut constraint, _reason, _context| {
-                // The following operations are infallible for regular constraints:
-                // - substitute_acyclic only fails on cyclic dependencies, which AcyclicAssignments prevents
-                // - Constraint::partial_evaluate delegates to Function::partial_evaluate, which is infallible
-                if !dependency.is_empty() {
-                    crate::substitute_acyclic(&mut constraint.stage.function, &dependency)?;
-                }
-                if !fixed_state.entries.is_empty() {
-                    constraint.partial_evaluate(&fixed_state, ATol::default())?;
-                }
-                Ok(constraint)
-            })?;
+            .restore_removed_row(id, constraint)?;
         Ok(())
     }
 
@@ -57,7 +63,7 @@ impl Instance {
 
     pub fn restore_indicator_constraint(&mut self, id: crate::IndicatorConstraintID) -> Result<()> {
         // Check before restoring: if dependency contains the indicator variable, reject
-        let indicator_variable = self
+        let mut ic = self
             .indicator_constraint_collection
             .removed()
             .get(&id)
@@ -65,7 +71,8 @@ impl Instance {
                 || crate::error!({ ?id }, "Removed indicator constraint with ID {id:?} not found"),
             )?
             .0
-            .indicator_variable;
+            .clone();
+        let indicator_variable = ic.indicator_variable;
 
         if self
             .decision_variable_dependency
@@ -90,20 +97,18 @@ impl Instance {
 
         let fixed_state = self.fixed_state();
         let dependency = self.decision_variable_dependency.clone();
+        // The following operations are infallible because:
+        // - substitute_acyclic only fails on cyclic dependencies, which AcyclicAssignments prevents
+        // - IndicatorConstraint::partial_evaluate fails only if the indicator variable is in
+        //   fixed_state, but we already checked that above before restoring
+        if !dependency.is_empty() {
+            crate::substitute_acyclic(&mut ic.stage.function, &dependency)?;
+        }
+        if !fixed_state.entries.is_empty() {
+            ic.partial_evaluate(&fixed_state, ATol::default())?;
+        }
         self.indicator_constraint_collection
-            .restore_with(id, |mut ic, _reason, _context| {
-                // The following operations are infallible because:
-                // - substitute_acyclic only fails on cyclic dependencies, which AcyclicAssignments prevents
-                // - IndicatorConstraint::partial_evaluate fails only if the indicator variable is in
-                //   fixed_state, but we already checked that above before restoring
-                if !dependency.is_empty() {
-                    crate::substitute_acyclic(&mut ic.stage.function, &dependency)?;
-                }
-                if !fixed_state.entries.is_empty() {
-                    ic.partial_evaluate(&fixed_state, ATol::default())?;
-                }
-                Ok(ic)
-            })?;
+            .restore_removed_row(id, ic)?;
         Ok(())
     }
 
