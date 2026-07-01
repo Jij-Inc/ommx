@@ -11,14 +11,14 @@ kernelspec:
   name: python3
 ---
 
-# ommx.v1.Instance
+# ommx.Instance
 
-[`ommx.v1.Instance`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance) is a data structure for describing the optimization problem itself (mathematical model). It consists of the following components:
+{class}`~ommx.Instance` is a data structure for describing the optimization problem itself (mathematical model). It consists of the following components:
 
-- Decision variables ([`decision_variables`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.decision_variables))
-- Objective function ([`objective`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.objective))
-- Constraints ([`constraints`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.constraints))
-- Maximization/Minimization ([`sense`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.sense))
+- Decision variables ({attr}`~ommx.Instance.decision_variables`)
+- Objective function ({attr}`~ommx.Instance.objective`)
+- Constraints ({attr}`~ommx.Instance.constraints`)
+- Maximization/Minimization ({attr}`~ommx.Instance.sense`)
 
 For example, let's consider a simple optimization problem:
 
@@ -30,10 +30,10 @@ $$
 \end{aligned}
 $$
 
-The corresponding `ommx.v1.Instance` is as follows.
+The corresponding `ommx.Instance` is as follows.
 
 ```{code-cell} ipython3
-from ommx.v1 import Instance, DecisionVariable
+from ommx import Instance, DecisionVariable
 
 x = DecisionVariable.binary(1, name='x')
 y = DecisionVariable.binary(2, name='y')
@@ -46,7 +46,7 @@ instance = Instance.from_components(
 )
 ```
 
-Each of these components has a corresponding property. The objective function is converted into the form of [`ommx.v1.Function`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Function), as explained in the previous section.
+Each of these components has a corresponding property. The objective function is converted into the form of {class}`~ommx.Function`, as explained in the previous section.
 
 ```{code-cell} ipython3
 instance.objective
@@ -77,14 +77,14 @@ Additionally, OMMX is designed to handle metadata that may be needed when integr
 - `description` is a more detailed explanation of the decision variable.
 - When dealing with many mathematical optimization problems, decision variables are often handled as multidimensional arrays. For example, it is common to consider constraints with subscripts like $x_i + y_i \leq 1, \forall i \in [1, N]$. In this case, `x` and `y` are the names of the decision variables, so they are stored in `name`, and the part corresponding to $i$ is stored in `subscripts`. `subscripts` is a list of integers, but if the subscript cannot be represented as an integer, there is a `parameters` property that allows storage in the form of `dict[str, str]`.
 
-If you need a list of [`ommx.v1.DecisionVariable`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.DecisionVariable) directly, you can use the [`decision_variables`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.decision_variables) property.
+If you need a list of {class}`~ommx.DecisionVariable` directly, you can use the {attr}`~ommx.Instance.decision_variables` property.
 
 ```{code-cell} ipython3
 for v in instance.decision_variables:
     print(f"{v.id=}, {v.name=}")
 ```
 
-To obtain `ommx.v1.DecisionVariable` from the ID of the decision variable, you can use the [`get_decision_variable_by_id`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.get_decision_variable_by_id) method.
+To obtain `ommx.DecisionVariable` from the ID of the decision variable, you can use the {meth}`~ommx.Instance.get_decision_variable_by_id` method.
 
 ```{code-cell} ipython3
 x1 = instance.get_decision_variable_by_id(1)
@@ -98,9 +98,9 @@ Next, let's look at the constraints.
 instance.constraints_df()
 ```
 
-In OMMX, constraints are also managed by ID, and this ID is independent of the decision variable ID. The ID is assigned when a constraint is attached to an `Instance`: the key you use in the `constraints` dictionary passed to [`Instance.from_components`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.from_components) becomes the constraint ID.
+In OMMX, constraints are also managed by ID, and this ID is independent of the decision variable ID. The ID is assigned when a constraint is attached to an `Instance`: the key you use in the `constraints` dictionary passed to {meth}`~ommx.Instance.from_components` becomes the constraint ID.
 
-The essential information for constraints is `equality`. `equality` indicates whether the constraint is an equality constraint ([`Constraint.EQUAL_TO_ZERO`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Constraint.EQUAL_TO_ZERO)) or an inequality constraint ([`Constraint.LESS_THAN_OR_EQUAL_TO_ZERO`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Constraint.LESS_THAN_OR_EQUAL_TO_ZERO)). Note that constraints of the type $f(x) \geq 0$ are treated as $-f(x) \leq 0$.
+The essential information for constraints is `equality`. `equality` indicates whether the constraint is an equality constraint ({attr}`~ommx.Constraint.EQUAL_TO_ZERO`) or an inequality constraint ({attr}`~ommx.Constraint.LESS_THAN_OR_EQUAL_TO_ZERO`). Note that constraints of the type $f(x) \geq 0$ are treated as $-f(x) \leq 0$.
 
 Constraints can also store metadata similar to decision variables. You can use `name`, `description`, `subscripts`, and `parameters`. Use `set_name`, `set_description`, `set_subscripts`, and `set_parameters` to replace those metadata fields. Use `add_subscripts`, `add_parameter`, and `add_parameters` when you want to append or merge entries instead.
 
@@ -109,7 +109,7 @@ c = (x * y == 0).set_name("prod-zero")
 print(f"{c.name=}")
 ```
 
-You can also use the [`constraints`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.constraints) property to directly obtain a `dict[int, ommx.v1.Constraint]` keyed by constraint ID. To obtain an `ommx.v1.Constraint` by its ID, use the [`get_constraint_by_id`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.get_constraint_by_id) method.
+You can also use the {attr}`~ommx.Instance.constraints` property to directly obtain a `dict[int, ommx.Constraint]` keyed by constraint ID. To obtain an `ommx.Constraint` by its ID, use the {meth}`~ommx.Instance.get_constraint_by_id` method.
 
 ```{code-cell} ipython3
 for cid, c in instance.constraints.items():

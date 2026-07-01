@@ -1,6 +1,6 @@
 import pytest
 
-from ommx.v1 import Instance, DecisionVariable, Constraint
+from ommx import Instance, DecisionVariable, Constraint
 from ommx.adapter import InfeasibleDetected
 
 from ommx_highs_adapter import OMMXHighsAdapter, OMMXHighsAdapterError

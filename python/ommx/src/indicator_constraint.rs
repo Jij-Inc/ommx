@@ -210,7 +210,7 @@ impl RemovedIndicatorConstraint {
 }
 
 /// Attached indicator constraint — a write-through handle bound to a host
-/// ({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).
+/// ({class}`~ommx.Instance` or {class}`~ommx.ParametricInstance`).
 ///
 /// `AttachedIndicatorConstraint` is returned by
 /// `Instance.add_indicator_constraint` /
@@ -297,7 +297,7 @@ impl AttachedIndicatorConstraint {
         }
     }
 
-    /// Return an {class}`~ommx.v1.IndicatorConstraint` snapshot of the
+    /// Return an {class}`~ommx.IndicatorConstraint` snapshot of the
     /// current state. Mutations on the returned object do not propagate back.
     pub fn detach(&self, py: Python<'_>) -> PyResult<IndicatorConstraint> {
         match &self.host {

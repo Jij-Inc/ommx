@@ -27,9 +27,9 @@ In practical mathematical optimization, a workflow rarely ends by simply buildin
 * - {py:class}`~ommx.experiment.Run`
   - One trial within an experiment and the comparison unit. Since complex workflows often call solvers more than once, a Run can contain multiple solver calls (Solves). A Run can also have scalar parameters used as comparison axes, making it easy to compare Runs across the Experiment.
 * - {py:class}`~ommx.experiment.Solve`
-  - One solver call within a Run. It always stores the input {py:class}`~ommx.v1.Instance`, the Adapter used, and the options passed to the solver call. A finished Solve also stores the output {py:class}`~ommx.v1.Solution`; a failed or interrupted Solve has no output.
+  - One solver call within a Run. It always stores the input {py:class}`~ommx.Instance`, the Adapter used, and the options passed to the solver call. A finished Solve also stores the output {py:class}`~ommx.Solution`; a failed or interrupted Solve has no output.
 * - Attachment
-  - An arbitrary payload attached to an Experiment or Run. It can store data types such as JSON, `numpy.ndarray`, {py:class}`~ommx.v1.Instance`, and {py:class}`~ommx.v1.Solution`, as well as arbitrary bytes with an explicit Media Type.
+  - An arbitrary payload attached to an Experiment or Run. It can store data types such as JSON, `numpy.ndarray`, {py:class}`~ommx.Instance`, and {py:class}`~ommx.Solution`, as well as arbitrary bytes with an explicit Media Type.
 ```
 
 In this tutorial, we solve a simple knapsack problem twice under different conditions, then save and read the execution history as one {py:class}`~ommx.experiment.Experiment`.
@@ -38,10 +38,10 @@ In this tutorial, we solve a simple knapsack problem twice under different condi
 
 ## Prepare the Mathematical Model
 
-First, create the source data for a knapsack problem and a {py:class}`~ommx.v1.ParametricInstance` whose capacity is a parameter. Like {py:class}`~ommx.v1.Instance`, an OMMX {py:class}`~ommx.v1.ParametricInstance` can define an objective function and constraints, but it can place parameters where constants would otherwise appear. This is useful when you need to prepare multiple models that differ only in constants.
+First, create the source data for a knapsack problem and a {py:class}`~ommx.ParametricInstance` whose capacity is a parameter. Like {py:class}`~ommx.Instance`, an OMMX {py:class}`~ommx.ParametricInstance` can define an objective function and constraints, but it can place parameters where constants would otherwise appear. This is useful when you need to prepare multiple models that differ only in constants.
 
 ```{code-cell} ipython3
-from ommx.v1 import DecisionVariable, Parameter, Instance, ParametricInstance
+from ommx import DecisionVariable, Parameter, Instance, ParametricInstance
 
 v = [10, 13, 18, 31, 7, 15]  # value of each item
 w = [11, 25, 20, 35, 10, 33]  # weight of each item
@@ -72,7 +72,7 @@ pi = ParametricInstance.from_components(
 (experiment-management-attachable-data-formats)=
 ### Attachable Data Formats
 
-The {py:class}`~ommx.v1.ParametricInstance` above is the OMMX-form mathematical model passed to solvers. To make the experiment easier to inspect later, you can also attach surrounding data such as the original modeling object or input files to the Experiment.
+The {py:class}`~ommx.ParametricInstance` above is the OMMX-form mathematical model passed to solvers. To make the experiment easier to inspect later, you can also attach surrounding data such as the original modeling object or input files to the Experiment.
 
 If the original model was written in a modeling package, keep that source model as an Attachment as well. For external payload types, OMMX defines only the attachment codec protocol and the `log_with_codec` / `get_with_codec` methods that invoke it. The concrete codec should live in the package that owns the object type. This tutorial defines a temporary `ProblemCodec` for JijModeling `Problem`; JijModeling is expected to provide an equivalent codec in the future.
 
@@ -188,7 +188,7 @@ All data stored during the experiment is saved in OMMX's *Local Registry*.
 
 Most runs should use {py:meth}`~ommx.experiment.Run.log_solve`, which calls the adapter's `solve` method and records the input, output, adapter name, and adapter options in one step. When you need advanced solver features that the Adapter API does not cover, open a manual Solve scope.
 
-In a manual Solve scope, first get the backend solver model through `solver_input`, then operate on that model and run the optimization yourself. Finally, call `solve.decode(model)`: the adapter converts the backend result into an {py:class}`~ommx.v1.Solution`, and that Solution becomes the output of the Solve recorded in the Experiment.
+In a manual Solve scope, first get the backend solver model through `solver_input`, then operate on that model and run the optimization yourself. Finally, call `solve.decode(model)`: the adapter converts the backend result into an {py:class}`~ommx.Solution`, and that Solution becomes the output of the Solve recorded in the Experiment.
 
 ```python
 with experiment.run() as run:
@@ -287,7 +287,7 @@ run_id
 
 ### Attachments
 
-Experiment-level Attachments can be checked by name and retrieved by name. {py:meth}`~ommx.experiment.Experiment.get_attachment` checks the saved Media Type and returns JSON as a Python value, {py:class}`~ommx.v1.ParametricInstance` as that object, and so on. If you know the expected type, use type-specific methods such as {py:meth}`~ommx.experiment.Experiment.get_json` or {py:meth}`~ommx.experiment.Experiment.get_parametric_instance`; they raise an error if the Media Type does not match.
+Experiment-level Attachments can be checked by name and retrieved by name. {py:meth}`~ommx.experiment.Experiment.get_attachment` checks the saved Media Type and returns JSON as a Python value, {py:class}`~ommx.ParametricInstance` as that object, and so on. If you know the expected type, use type-specific methods such as {py:meth}`~ommx.experiment.Experiment.get_json` or {py:meth}`~ommx.experiment.Experiment.get_parametric_instance`; they raise an error if the Media Type does not match.
 
 ```{code-cell} ipython3
 # Check the names of saved Attachments.
@@ -325,7 +325,7 @@ If a Run was recorded with trace storage enabled, {py:attr}`~ommx.experiment.Sea
 
 ```{code-cell} ipython3
 from typing import Any
-from ommx.v1 import Solution
+from ommx import Solution
 
 for run in loaded_experiment.runs:
     # Run IDs are assigned in execution order.

@@ -25,7 +25,7 @@ $$
 $$
 
 ```{code-cell} ipython3
-from ommx.v1 import Instance, DecisionVariable
+from ommx import Instance, DecisionVariable
 
 v = [10, 13, 18, 31, 7, 15]
 w = [11, 25, 20, 35, 10, 33]

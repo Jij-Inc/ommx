@@ -1,6 +1,6 @@
 """Test SOS1 functionality with valid constraints."""
 
-from ommx.v1 import Instance, DecisionVariable, Sos1Constraint
+from ommx import Instance, DecisionVariable, Sos1Constraint
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
 

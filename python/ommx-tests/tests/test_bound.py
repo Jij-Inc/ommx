@@ -1,4 +1,4 @@
-from ommx.v1 import Bound
+from ommx import Bound
 
 
 def test_bound_eq():

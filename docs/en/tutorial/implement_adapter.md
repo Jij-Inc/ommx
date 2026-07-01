@@ -27,15 +27,15 @@ For clear explanation in this chapter, the software that the adapter wraps (such
 
 The adapter process can be roughly divided into these 3 steps:
 
-1. Convert `ommx.v1.Instance` into a format the backend solver can understand
+1. Convert `ommx.Instance` into a format the backend solver can understand
 2. Run the backend solver to obtain a solution
-3. Convert the backend solver's output into `ommx.v1.Solution` or `ommx.v1.SampleSet`
+3. Convert the backend solver's output into `ommx.Solution` or `ommx.SampleSet`
 
 Because step 2 is nothing but the usage of the backend solver, we assume you are familiar with it. This tutorial explains steps 1 and 3.
 
-Many backend solvers are designed to receive only the minimum necessary information to represent an optimization problem in a form suitable for their algorithms, whereas `ommx.v1.Instance` contains more information, assuming optimization as part of data analysis. Therefore, step 1 involves discarding much of this information. Additionally, OMMX manages decision variables and constraints with IDs that are not necessarily sequential, while some backend solvers manage them by names or sequential numbers. This correspondence is needed in step 3, so the adapter must manage it.
+Many backend solvers are designed to receive only the minimum necessary information to represent an optimization problem in a form suitable for their algorithms, whereas `ommx.Instance` contains more information, assuming optimization as part of data analysis. Therefore, step 1 involves discarding much of this information. Additionally, OMMX manages decision variables and constraints with IDs that are not necessarily sequential, while some backend solvers manage them by names or sequential numbers. This correspondence is needed in step 3, so the adapter must manage it.
 
-Conversely, in step 3, `ommx.v1.Solution` or `ommx.v1.SampleSet` cannot be constructed solely from the backend solver's output. Instead, the adapter will construct `ommx.v1.State` or `ommx.v1.Samples` from the backend solver's output and the information from step 1, then convert it to `ommx.v1.Solution` or `ommx.v1.SampleSet` using `ommx.v1.Instance`.
+Conversely, in step 3, `ommx.Solution` or `ommx.SampleSet` cannot be constructed solely from the backend solver's output. Instead, the adapter will construct `ommx.State` or `ommx.Samples` from the backend solver's output and the information from step 1, then convert it to `ommx.Solution` or `ommx.SampleSet` using `ommx.Instance`.
 
 ## Implementing a Solver Adapter
 
@@ -43,7 +43,7 @@ Here, we will implement a Solver Adapter using PySCIPOpt as an example. For a co
 
 For this tutorial, we will proceed in the following order to make it easier to execute step by step:
 
-- Implement functions to construct a PySCIPOpt model from `ommx.v1.Instance` one by one.
+- Implement functions to construct a PySCIPOpt model from `ommx.Instance` one by one.
 - Finally, combine these functions into the `OMMXPySCIPOptAdapter` class.
 
 ### Custom Exception
@@ -59,11 +59,11 @@ OMMX can store a wide range of optimization problems, so there may be cases wher
 
 ### Setting Decision Variables
 
-PySCIPOpt manages decision variables by name, so register the OMMX decision variable IDs as strings. This allows you to reconstruct `ommx.v1.State` from PySCIPOpt decision variables in the `decode_to_state` function mentioned later. Note that the appropriate method depends on the backend solver's implementation. The important thing is to retain the information needed to convert to `ommx.v1.State` after obtaining the solution.
+PySCIPOpt manages decision variables by name, so register the OMMX decision variable IDs as strings. This allows you to reconstruct `ommx.State` from PySCIPOpt decision variables in the `decode_to_state` function mentioned later. Note that the appropriate method depends on the backend solver's implementation. The important thing is to retain the information needed to convert to `ommx.State` after obtaining the solution.
 
 ```{code-cell} ipython3
 import pyscipopt
-from ommx.v1 import Instance, Solution, DecisionVariable, Constraint, State, Function
+from ommx import Instance, Solution, DecisionVariable, Constraint, State, Function
 
 def set_decision_variables(
     model: pyscipopt.Model,  # For tutorial purposes, we pass state as arguments, but managing with class is common
@@ -101,9 +101,9 @@ def set_decision_variables(
     return {var.name: var for var in model.getVars()}
 ```
 
-### Converting `ommx.v1.Function` to `pyscipopt.Expr`
+### Converting `ommx.Function` to `pyscipopt.Expr`
 
-Implement a function to convert `ommx.v1.Function` to `pyscipopt.Expr`. Since `ommx.v1.Function` only has the OMMX decision variable IDs, you need to obtain the PySCIPOpt variables from the IDs using the variable name and variable mapping created in `set_decision_variables`.
+Implement a function to convert `ommx.Function` to `pyscipopt.Expr`. Since `ommx.Function` only has the OMMX decision variable IDs, you need to obtain the PySCIPOpt variables from the IDs using the variable name and variable mapping created in `set_decision_variables`.
 
 ```{code-cell} ipython3
 def make_linear_expr(function: Function, varname_map: dict) -> pyscipopt.Expr:
@@ -232,11 +232,11 @@ def set_constraints(model: pyscipopt.Model, instance: Instance, varname_map: dic
 
 Also, if the backend solver supports special constraints (e.g., [SOS constraints](https://en.wikipedia.org/wiki/Special_ordered_set)), you need to add functions to handle them.
 
-Now, we can construct a `pycscipopt.Model` from `ommx.v1.Instance`.
+Now, we can construct a `pycscipopt.Model` from `ommx.Instance`.
 
-### Converting Obtained Solutions to `ommx.v1.State`
+### Converting Obtained Solutions to `ommx.State`
 
-Next, implement a function to convert the solution obtained by solving the PySCIPOpt model to `ommx.v1.State`. First, check if it is solved. SCIP has functions to guarantee optimality and detect unbounded solutions, so throw corresponding exceptions if detected. This also depends on the backend solver.
+Next, implement a function to convert the solution obtained by solving the PySCIPOpt model to `ommx.State`. First, check if it is solved. SCIP has functions to guarantee optimality and detect unbounded solutions, so throw corresponding exceptions if detected. This also depends on the backend solver.
 
 ```{warning}
 Note that `ommx.adapter.InfeasibleDetected` means that the optimization problem itself is infeasible, i.e., **it is guaranteed to have no solutions**. Do not use this when a heuristic solver fails to find any feasible solutions.
@@ -246,7 +246,7 @@ Note that `ommx.adapter.InfeasibleDetected` means that the optimization problem 
 from ommx.adapter import InfeasibleDetected, UnboundedDetected
 
 def decode_to_state(model: pyscipopt.Model, instance: Instance) -> State:
-    """Create an ommx.v1.State from an optimized PySCIPOpt Model"""
+    """Create an ommx.State from an optimized PySCIPOpt Model"""
     if model.getStatus() == "unknown":
         raise OMMXPySCIPOptAdapterError(
             "The model may not be optimized. [status: unknown]"
@@ -323,7 +323,7 @@ Each adapter must declare which constraint types it supports via the `ADDITIONAL
 - `AdditionalCapability.OneHot`: Exactly one of a set of binary variables is 1
 - `AdditionalCapability.Sos1`: At most one of a set of variables is non-zero
 
-If the adapter does not override `ADDITIONAL_CAPABILITIES`, only regular constraints are kept and every special constraint type is converted automatically. Use {attr}`Instance.required_capabilities <ommx.v1.Instance.required_capabilities>` to inspect which special constraints an instance currently holds.
+If the adapter does not override `ADDITIONAL_CAPABILITIES`, only regular constraints are kept and every special constraint type is converted automatically. Use {attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>` to inspect which special constraints an instance currently holds.
 
 ```{important}
 Subclasses **must** call `super().__init__(ommx_instance)` in their `__init__` method to enable the automatic constraint conversion. The instance is mutated in place.
@@ -333,7 +333,7 @@ Using the functions prepared so far, you can implement it as follows:
 
 ```{code-cell} ipython3
 from ommx.adapter import DiagnosticsSink, SolverAdapter
-from ommx.v1 import AdditionalCapability
+from ommx import AdditionalCapability
 
 class OMMXPySCIPOptAdapter(SolverAdapter):
     # PySCIPOpt supports both standard and indicator constraints
@@ -361,7 +361,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         diagnostics: DiagnosticsSink | None = None,
     ) -> Solution:
         """
-        Solve an ommx.v1.Instance using PySCIPopt and return an ommx.v1.Solution
+        Solve an ommx.Instance using PySCIPopt and return an ommx.Solution
         """
         _ = diagnostics
         adapter = cls(ommx_instance)
@@ -376,7 +376,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
     def decode(self, data: pyscipopt.Model) -> Solution:
         """
-        Generate an ommx.v1.Solution from an optimized pyscipopt.Model and the OMMX Instance
+        Generate an ommx.Solution from an optimized pyscipopt.Model and the OMMX Instance
         """
         # Check solution status
         if data.getStatus() == "infeasible":
@@ -447,15 +447,15 @@ Next, let's create a Sampler Adapter using OpenJij. OpenJij includes [`openjij.S
 
 For simplicity, this tutorial omits the parameters passed to OpenJij. For more details, refer to the implementation of [`ommx-openjij-adapter`](https://github.com/Jij-Inc/ommx/tree/main/python/ommx-openjij-adapter). For how to use the OpenJij Adapter, refer to [Sampling from QUBO with OMMX Adapter](../tutorial/tsp_sampling_with_openjij_adapter).
 
-### Converting `openjij.Response` to `ommx.v1.Samples`
+### Converting `openjij.Response` to `ommx.Samples`
 
 OpenJij manages decision variables with IDs that are not necessarily sequential, similar to OMMX, so there is no need to create an ID correspondence table as in the case of PySCIPOpt.
 
-The sample results from OpenJij are obtained as `openjij.Response`, so implement a function to convert this to `ommx.v1.Samples`. OpenJij returns the number of occurrences of the same sample as `num_occurrence`. On the other hand, `ommx.v1.Samples` has unique sample IDs for each sample, and the same value samples are compressed as `SamplesEntry`. Note that a conversion is needed to bridge this difference.
+The sample results from OpenJij are obtained as `openjij.Response`, so implement a function to convert this to `ommx.Samples`. OpenJij returns the number of occurrences of the same sample as `num_occurrence`. On the other hand, `ommx.Samples` has unique sample IDs for each sample, and the same value samples are compressed as `SamplesEntry`. Note that a conversion is needed to bridge this difference.
 
 ```{code-cell} ipython3
 import openjij as oj
-from ommx.v1 import Instance, SampleSet, Solution, Samples, State
+from ommx import Instance, SampleSet, Solution, Samples, State
 
 def decode_to_samples(response: oj.Response) -> Samples:
     # Generate sample IDs
@@ -477,7 +477,7 @@ def decode_to_samples(response: oj.Response) -> Samples:
     return samples
 ```
 
-Note that at this stage, `ommx.v1.Instance` or its extracted correspondence table is not needed because there is no need to consider ID correspondence.
+Note that at this stage, `ommx.Instance` or its extracted correspondence table is not needed because there is no need to consider ID correspondence.
 
 ### Implementing a Class that Inherits `ommx.adapter.SamplerAdapter`
 
@@ -541,7 +541,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     # Convert OpenJij Response to a SampleSet
     def decode_to_sampleset(self, data: oj.Response) -> SampleSet:
         samples = decode_to_samples(data)
-        # The information stored in `ommx.v1.Instance` is required here
+        # The information stored in `ommx.Instance` is required here
         return self.ommx_instance.evaluate_samples(samples)
 
     # We also add API for `SolverAdapter`
@@ -598,9 +598,9 @@ In this tutorial, we learned how to implement an OMMX Adapter by connecting to P
 1. Implement an OMMX Adapter by inheriting the abstract base class `SolverAdapter` or `SamplerAdapter`.
 2. Declare supported constraint types via `ADDITIONAL_CAPABILITIES` and call `super().__init__()` to enable automatic capability checking.
 3. The main steps of the implementation are as follows:
-   - Convert `ommx.v1.Instance` into a format that the backend solver can understand.
+   - Convert `ommx.Instance` into a format that the backend solver can understand.
    - Run the backend solver to obtain a solution.
-   - Convert the backend solver's output into `ommx.v1.Solution` or `ommx.v1.SampleSet`.
+   - Convert the backend solver's output into `ommx.Solution` or `ommx.SampleSet`.
 4. Understand the characteristics and limitations of each backend solver and handle them appropriately.
 5. Pay attention to managing IDs and mapping variables to bridge the backend solver and OMMX.
 

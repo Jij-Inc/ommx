@@ -1,4 +1,4 @@
-from ommx.v1 import Instance
+from ommx import Instance
 
 
 def test_solution_sense_minimize():

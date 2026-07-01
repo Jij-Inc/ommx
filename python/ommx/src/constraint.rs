@@ -128,7 +128,7 @@ impl Constraint {
     ///
     /// Empty for directly-authored constraints. When a special constraint
     /// (one-hot / SOS1 / indicator) is converted into a regular constraint,
-    /// a {class}`~ommx.v1.Provenance` entry recording the original constraint
+    /// a {class}`~ommx.Provenance` entry recording the original constraint
     /// is appended. Older entries come first, newer last; the immediate
     /// parent is therefore the last element.
     #[getter]
@@ -143,7 +143,7 @@ impl Constraint {
     /// - `state`: A State object, dict[int, float], or iterable of (int, float) tuples
     /// - `atol`: Optional absolute tolerance for evaluation
     ///
-    /// **Returns:** {class}`~ommx.v1.EvaluatedConstraint` containing the evaluated value and feasibility
+    /// **Returns:** {class}`~ommx.EvaluatedConstraint` containing the evaluated value and feasibility
     #[pyo3(signature = (state, *, atol=None))]
     pub fn evaluate(&self, state: State, atol: Option<f64>) -> PyResult<EvaluatedConstraint> {
         let atol = match atol {
@@ -375,7 +375,7 @@ impl RemovedConstraint {
 
     /// Get the provenance chain from the underlying constraint.
     ///
-    /// See {attr}`~ommx.v1.Constraint.provenance` for semantics.
+    /// See {attr}`~ommx.Constraint.provenance` for semantics.
     #[getter]
     pub fn provenance(&self) -> Vec<crate::Provenance> {
         crate::provenance_list(&self.context)
@@ -414,11 +414,11 @@ impl RemovedConstraint {
 }
 
 /// Attached constraint — a write-through handle bound to a host
-/// ({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).
+/// ({class}`~ommx.Instance` or {class}`~ommx.ParametricInstance`).
 ///
 /// `AttachedConstraint` is returned by `Instance.add_constraint` /
 /// `ParametricInstance.add_constraint` and by their `constraints[id]`
-/// getters. Unlike {class}`~ommx.v1.Constraint`, which is a snapshot, reads
+/// getters. Unlike {class}`~ommx.Constraint`, which is a snapshot, reads
 /// pull live data from the parent host and context setters write through
 /// to its SoA context store. Two `AttachedConstraint` instances pointing
 /// at the same id on the same host observe the same state.
@@ -488,7 +488,7 @@ impl AttachedConstraint {
     }
 
     /// The parent host this constraint lives in
-    /// ({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).
+    /// ({class}`~ommx.Instance` or {class}`~ommx.ParametricInstance`).
     #[getter]
     pub fn instance(&self, py: Python<'_>) -> Py<PyAny> {
         match &self.host {
@@ -497,7 +497,7 @@ impl AttachedConstraint {
         }
     }
 
-    /// Return a {class}`~ommx.v1.Constraint` snapshot of the current
+    /// Return a {class}`~ommx.Constraint` snapshot of the current
     /// state. Mutations on the returned object do not propagate back.
     pub fn detach(&self, py: Python<'_>) -> PyResult<Constraint> {
         match &self.host {
@@ -557,8 +557,8 @@ impl AttachedConstraint {
     }
 
     /// Evaluate the constraint with the given state. Only valid on
-    /// {class}`~ommx.v1.Instance`-hosted handles, since
-    /// {class}`~ommx.v1.ParametricInstance` constraints may still reference
+    /// {class}`~ommx.Instance`-hosted handles, since
+    /// {class}`~ommx.ParametricInstance` constraints may still reference
     /// unsubstituted parameters.
     #[pyo3(signature = (state, *, atol=None))]
     pub fn evaluate(

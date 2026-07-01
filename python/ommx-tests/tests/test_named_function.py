@@ -1,6 +1,6 @@
 """Tests for NamedFunction wrapper and its integration with Instance, Solution, and SampleSet."""
 
-from ommx.v1 import (
+from ommx import (
     DecisionVariable,
     Function,
     Instance,

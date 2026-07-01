@@ -241,8 +241,8 @@ impl ParametricInstance {
     /// List of all decision variables in the parametric instance sorted by
     /// their IDs.
     ///
-    /// Returns a list of {class}`~ommx.v1.AttachedDecisionVariable` write-through
-    /// handles. See {attr}`~ommx.v1.Instance.decision_variables` for the same
+    /// Returns a list of {class}`~ommx.AttachedDecisionVariable` write-through
+    /// handles. See {attr}`~ommx.Instance.decision_variables` for the same
     /// shape on `Instance`.
     #[getter]
     pub fn decision_variables(slf: Bound<'_, Self>) -> Vec<crate::AttachedDecisionVariable> {
@@ -263,7 +263,7 @@ impl ParametricInstance {
     }
 
     /// Add a decision variable to this parametric instance. Returns an
-    /// {class}`~ommx.v1.AttachedDecisionVariable` bound to the variable's
+    /// {class}`~ommx.AttachedDecisionVariable` bound to the variable's
     /// id — a write-through handle for further label updates.
     pub fn add_decision_variable(
         slf: Bound<'_, Self>,
@@ -280,7 +280,7 @@ impl ParametricInstance {
         ))
     }
 
-    /// Look up the {class}`~ommx.v1.AttachedDecisionVariable` for the given
+    /// Look up the {class}`~ommx.AttachedDecisionVariable` for the given
     /// id — a write-through handle.
     pub fn attached_decision_variable(
         slf: Bound<'_, Self>,
@@ -300,11 +300,11 @@ impl ParametricInstance {
 
     /// Dict of all active constraints in the instance keyed by their IDs.
     ///
-    /// Each value is an {class}`~ommx.v1.AttachedConstraint`: a write-through
+    /// Each value is an {class}`~ommx.AttachedConstraint`: a write-through
     /// handle whose getters read from this parametric instance's SoA store
     /// and whose context setters write back through to it. Use
-    /// {meth}`~ommx.v1.AttachedConstraint.detach` to materialize a
-    /// {class}`~ommx.v1.Constraint` snapshot if you need an independent copy.
+    /// {meth}`~ommx.AttachedConstraint.detach` to materialize a
+    /// {class}`~ommx.Constraint` snapshot if you need an independent copy.
     #[getter]
     pub fn constraints(slf: Bound<'_, Self>) -> BTreeMap<u64, crate::AttachedConstraint> {
         let py = slf.py();
@@ -322,10 +322,10 @@ impl ParametricInstance {
 
     /// Add a regular constraint to this parametric instance.
     ///
-    /// Picks an unused {class}`~ommx.v1.ConstraintID`, drains the wrapper's
+    /// Picks an unused {class}`~ommx.ConstraintID`, drains the wrapper's
     /// context snapshot into this parametric instance's SoA store, and
-    /// returns an {class}`~ommx.v1.AttachedConstraint` bound to the new id.
-    /// The input {class}`~ommx.v1.Constraint` is not mutated; subsequent
+    /// returns an {class}`~ommx.AttachedConstraint` bound to the new id.
+    /// The input {class}`~ommx.Constraint` is not mutated; subsequent
     /// writes that should land on this parametric instance must go through
     /// the returned handle.
     ///
@@ -361,7 +361,7 @@ impl ParametricInstance {
     /// Dict of all active indicator constraints in the parametric instance
     /// keyed by their IDs.
     ///
-    /// Each value is an {class}`~ommx.v1.AttachedIndicatorConstraint`: a
+    /// Each value is an {class}`~ommx.AttachedIndicatorConstraint`: a
     /// write-through handle whose getters read from this parametric
     /// instance's SoA store and whose context setters write back through
     /// to it.
@@ -393,10 +393,10 @@ impl ParametricInstance {
 
     /// Add an indicator constraint to this parametric instance.
     ///
-    /// Picks an unused {class}`~ommx.v1.IndicatorConstraintID`, drains the
+    /// Picks an unused {class}`~ommx.IndicatorConstraintID`, drains the
     /// wrapper's context snapshot into this parametric instance's SoA
     /// store, and returns an
-    /// {class}`~ommx.v1.AttachedIndicatorConstraint` bound to the new id.
+    /// {class}`~ommx.AttachedIndicatorConstraint` bound to the new id.
     ///
     /// Raises {class}`ValueError` if the constraint references an id that
     /// is neither a defined decision variable nor a defined parameter, or
@@ -442,7 +442,7 @@ impl ParametricInstance {
 
     /// Dict of all active one-hot constraints in the parametric instance
     /// keyed by their IDs. Each value is an
-    /// {class}`~ommx.v1.AttachedOneHotConstraint`.
+    /// {class}`~ommx.AttachedOneHotConstraint`.
     #[getter]
     pub fn one_hot_constraints(
         slf: Bound<'_, Self>,
@@ -510,7 +510,7 @@ impl ParametricInstance {
     }
 
     /// Dict of all active SOS1 constraints in the parametric instance keyed
-    /// by their IDs. Each value is an {class}`~ommx.v1.AttachedSos1Constraint`.
+    /// by their IDs. Each value is an {class}`~ommx.AttachedSos1Constraint`.
     #[getter]
     pub fn sos1_constraints(slf: Bound<'_, Self>) -> BTreeMap<u64, crate::AttachedSos1Constraint> {
         let py = slf.py();
@@ -729,7 +729,7 @@ impl ParametricInstance {
     }
 
     /// DataFrame of constraints, dispatched on `kind=`. See
-    /// {meth}`ommx.v1.Instance.constraints_df` for column / `kind=` /
+    /// {meth}`ommx.Instance.constraints_df` for column / `kind=` /
     /// `include=` / `removed=` semantics.
     #[pyo3(signature = (kind = ConstraintKind::Regular, include = None, removed = false))]
     pub fn constraints_df<'py>(
@@ -847,7 +847,7 @@ impl ParametricInstance {
     }
 
     /// Constraint context DataFrame (id-indexed). See
-    /// {meth}`ommx.v1.Instance.constraint_context_df` for column / `kind=`
+    /// {meth}`ommx.Instance.constraint_context_df` for column / `kind=`
     /// semantics.
     #[pyo3(signature = (kind = ConstraintKind::Regular))]
     pub fn constraint_context_df<'py>(

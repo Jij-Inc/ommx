@@ -9,7 +9,7 @@ import copy
 
 import pytest
 
-from ommx.v1 import (
+from ommx import (
     AttachedOneHotConstraint,
     AttachedSos1Constraint,
     DecisionVariable,

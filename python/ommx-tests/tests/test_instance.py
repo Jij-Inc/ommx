@@ -1,4 +1,4 @@
-from ommx.v1 import Instance, DecisionVariable, Function, Parameter, ParametricInstance
+from ommx import Instance, DecisionVariable, Function, Parameter, ParametricInstance
 import math
 import pytest
 

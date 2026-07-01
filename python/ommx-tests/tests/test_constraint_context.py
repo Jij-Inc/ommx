@@ -2,7 +2,7 @@
 Test context-field modification functionality for Constraint
 """
 
-from ommx.v1 import DecisionVariable, Constraint
+from ommx import DecisionVariable, Constraint
 
 
 def test_constraint_set_name():

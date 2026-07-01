@@ -11,7 +11,7 @@ from opentelemetry.proto.trace.v1.trace_pb2 import Status as ProtoStatus
 from ommx.adapter import SolverAdapter
 from ommx.experiment import Experiment
 from ommx.tracing import TraceResult, render_text_tree
-from ommx.v1 import Instance, Solution
+from ommx import Instance, Solution
 
 from conftest import get_test_exporter
 

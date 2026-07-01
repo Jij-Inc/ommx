@@ -21,12 +21,12 @@ OMMX provides a straightforward and efficient way to manage different data types
 
 ## Preparation: Data to Share
 
-First, let's prepare the data we want to share. We will create an `ommx.v1.Instance` representing the 0-1 knapsack problem and solve it using SCIP. We will also share the results of our optimization analysis. Details are omitted for brevity.
+First, let's prepare the data we want to share. We will create an `ommx.Instance` representing the 0-1 knapsack problem and solve it using SCIP. We will also share the results of our optimization analysis. Details are omitted for brevity.
 
 ```{code-cell} ipython3
 :tags: [hide-input]
 
-from ommx.v1 import Instance, DecisionVariable, Constraint
+from ommx import Instance, DecisionVariable, Constraint
 from ommx_pyscipopt_adapter.adapter import OMMXPySCIPOptAdapter
 import pandas as pd
 
@@ -101,9 +101,9 @@ df = pd.DataFrame.from_dict(
 * - Variable Name
   - Description
 * - `instance`
-  - `ommx.v1.Instance` object representing the 0-1 knapsack problem
+  - `ommx.Instance` object representing the 0-1 knapsack problem
 * - `solution`
-  - `ommx.v1.Solution` object containing the results of solving the 0-1 knapsack problem with SCIP
+  - `ommx.Solution` object containing the results of solving the 0-1 knapsack problem with SCIP
 * - `data`
   - Input data for the 0-1 knapsack problem
 * - `df`
@@ -147,13 +147,13 @@ draft = ArtifactDraft.new_anonymous()
 
 **Caveat on the timestamp**: the synthesized tag is the **draft's local time** without a timezone marker. If an anonymous archive is shared with someone in a different timezone, the recipient will read the same digits as their own local time, so the time component is not absolute across machines. Pick an explicit name via `ArtifactDraft.new(...)` if you need a stable, timezone-unambiguous tag.
 
-Regardless of the initialization method, you can save `ommx.v1.Instance` and other data in the same way. Let's add the data prepared above.
+Regardless of the initialization method, you can save `ommx.Instance` and other data in the same way. Let's add the data prepared above.
 
 ```{code-cell} ipython3
-# Add ommx.v1.Instance object
+# Add ommx.Instance object
 desc_instance = draft.add_instance(instance)
 
-# Add ommx.v1.Solution object
+# Add ommx.Solution object
 desc_solution = draft.add_solution(solution)
 
 # Add pandas.DataFrame object

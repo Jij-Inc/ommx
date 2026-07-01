@@ -16,12 +16,12 @@ Constraint metadata replacement now consistently uses the `set_*` prefix. `Const
 
 ### ⚠ Protobuf-backed annotations and read-only annotation views ([#939](https://github.com/Jij-Inc/ommx/pull/939))
 
-Annotations on {class}`~ommx.v1.Instance`, {class}`~ommx.v1.ParametricInstance`, {class}`~ommx.v1.Solution`, and {class}`~ommx.v1.SampleSet` are now stored in the protobuf payload instead of living only in Python-side wrapper state or Artifact descriptors. `to_bytes()` / `from_bytes()` therefore preserve titles, licenses, solver metadata, and user extension annotations. When reading older Artifacts, descriptor-only annotations are still merged in, with protobuf metadata taking precedence if both locations define the same OMMX key.
+Annotations on {class}`~ommx.Instance`, {class}`~ommx.ParametricInstance`, {class}`~ommx.Solution`, and {class}`~ommx.SampleSet` are now stored in the protobuf payload instead of living only in Python-side wrapper state or Artifact descriptors. `to_bytes()` / `from_bytes()` therefore preserve titles, licenses, solver metadata, and user extension annotations. When reading older Artifacts, descriptor-only annotations are still merged in, with protobuf metadata taking precedence if both locations define the same OMMX key.
 
 The `annotations` property is now a read-only `types.MappingProxyType[str, str]` projection. Mutating `obj.annotations[...]` or assigning `obj.annotations = {...}` now raises an error; update OMMX metadata through dedicated properties and update user annotations with `add_user_annotation`, `add_user_annotations`, or `replace_annotations`.
 
 ```python
-from ommx.v1 import Instance
+from ommx import Instance
 
 instance = Instance.empty()
 instance.title = "portfolio"
@@ -32,14 +32,14 @@ assert restored.title == "portfolio"
 assert restored.get_user_annotation("owner") == "analytics"
 ```
 
-{class}`~ommx.v1.Solution` and {class}`~ommx.v1.SampleSet` also expose process metadata through `instance`, `solver`, `parameters`, `start`, and `end`; those fields round-trip through both protobuf bytes and Artifacts.
+{class}`~ommx.Solution` and {class}`~ommx.SampleSet` also expose process metadata through `instance`, `solver`, `parameters`, `start`, and `end`; those fields round-trip through both protobuf bytes and Artifacts.
 
 ### 🆕 `Instance.populate_state` for complete solver states ([#944](https://github.com/Jij-Inc/ommx/pull/944))
 
-{meth}`~ommx.v1.Instance.populate_state` is now exposed in the Python SDK. It validates a partial solver state against an Instance and returns a {class}`~ommx.v1.State` containing every decision variable by filling fixed variables, irrelevant variables, and dependent variables owned by the Instance.
+{meth}`~ommx.Instance.populate_state` is now exposed in the Python SDK. It validates a partial solver state against an Instance and returns a {class}`~ommx.State` containing every decision variable by filling fixed variables, irrelevant variables, and dependent variables owned by the Instance.
 
 ```python
-from ommx.v1 import DecisionVariable, Instance
+from ommx import DecisionVariable, Instance
 
 x = {i: DecisionVariable.continuous(i) for i in [1, 2, 5, 10, 99]}
 instance = Instance.from_components(
@@ -57,15 +57,15 @@ assert state.entries == {1: 2.0, 2: 3.0, 5: 6.0, 10: 5.0, 99: 4.0}
 
 ### ⚠ Decision variable role queries on `Instance` ([#946](https://github.com/Jij-Inc/ommx/pull/946))
 
-The Python SDK no longer exposes `DecisionVariableUsage` or `DecisionVariableUsageEntry` objects. Use {attr}`~ommx.v1.Instance.used_decision_variables` when adapters need the solver input variables, and use {meth}`~ommx.v1.Instance.decision_variable_role`, {meth}`~ommx.v1.Instance.decision_variable_roles`, {meth}`~ommx.v1.Instance.fixed_decision_variables`, {meth}`~ommx.v1.Instance.dependent_decision_variable_ids`, and {meth}`~ommx.v1.Instance.irrelevant_decision_variable_ids` to query state roles directly from the owning Instance.
+The Python SDK no longer exposes `DecisionVariableUsage` or `DecisionVariableUsageEntry` objects. Use {attr}`~ommx.Instance.used_decision_variables` when adapters need the solver input variables, and use {meth}`~ommx.Instance.decision_variable_role`, {meth}`~ommx.Instance.decision_variable_roles`, {meth}`~ommx.Instance.fixed_decision_variables`, {meth}`~ommx.Instance.dependent_decision_variable_ids`, and {meth}`~ommx.Instance.irrelevant_decision_variable_ids` to query state roles directly from the owning Instance.
 
-{meth}`~ommx.v1.Instance.decision_variables_df` continues to include the `state_role` column, so DataFrame-based workflows can inspect `used`, `fixed`, `dependent`, and `irrelevant` roles without constructing a separate usage object.
+{meth}`~ommx.Instance.decision_variables_df` continues to include the `state_role` column, so DataFrame-based workflows can inspect `used`, `fixed`, `dependent`, and `irrelevant` roles without constructing a separate usage object.
 
 ### ⚠ Fixed decision-variable values are owned by instances ([#959](https://github.com/Jij-Inc/ommx/pull/959))
 
-Fixed decision-variable values are now owned by {class}`~ommx.v1.Instance` / {class}`~ommx.v1.ParametricInstance` instead of detached {class}`~ommx.v1.DecisionVariable` objects. A detached {class}`~ommx.v1.DecisionVariable` remains a modeling snapshot for the variable definition and label, but it no longer carries owner-side fixed-value state, so `DecisionVariable.substituted_value` is no longer available.
+Fixed decision-variable values are now owned by {class}`~ommx.Instance` / {class}`~ommx.ParametricInstance` instead of detached {class}`~ommx.DecisionVariable` objects. A detached {class}`~ommx.DecisionVariable` remains a modeling snapshot for the variable definition and label, but it no longer carries owner-side fixed-value state, so `DecisionVariable.substituted_value` is no longer available.
 
-Use {meth}`~ommx.v1.Instance.fixed_decision_variables` to inspect all fixed values, or `instance.attached_decision_variable(id).substituted_value` when you need the value through a variable handle. {meth}`~ommx.v1.Instance.decision_variables_df` continues to include the `substituted_value` column, populated from the owning instance.
+Use {meth}`~ommx.Instance.fixed_decision_variables` to inspect all fixed values, or `instance.attached_decision_variable(id).substituted_value` when you need the value through a variable handle. {meth}`~ommx.Instance.decision_variables_df` continues to include the `substituted_value` column, populated from the owning instance.
 
 ## 3.0.0 Alpha 7
 
@@ -73,7 +73,7 @@ Use {meth}`~ommx.v1.Instance.fixed_decision_variables` to inspect all fixed valu
 
 ### 🆕 Manual `solver_input` workflows in Experiment records ([#934](https://github.com/Jij-Inc/ommx/pull/934))
 
-{meth}`~ommx.experiment.Run.open_solve` now opens a manual Solve scope for advanced solver features that are not covered by the Adapter API. Inside the scope, use `solve.solver_input` to operate the backend solver model directly, run the backend optimizer, then call `solve.decode(...)` so the decoded {class}`~ommx.v1.Solution` becomes the Experiment Solve output. Manual adapter options can be recorded with `solve.log_adapter_option(...)`, and `store_diagnostics=True` stores diagnostics recorded through `solve.diagnostics` until the scope exits. After the scope closes, {attr}`~ommx.experiment.OpenSolve.terminal_state` exposes the final outcome plus trace and diagnostics finalization state for advanced debugging.
+{meth}`~ommx.experiment.Run.open_solve` now opens a manual Solve scope for advanced solver features that are not covered by the Adapter API. Inside the scope, use `solve.solver_input` to operate the backend solver model directly, run the backend optimizer, then call `solve.decode(...)` so the decoded {class}`~ommx.Solution` becomes the Experiment Solve output. Manual adapter options can be recorded with `solve.log_adapter_option(...)`, and `store_diagnostics=True` stores diagnostics recorded through `solve.diagnostics` until the scope exits. After the scope closes, {attr}`~ommx.experiment.OpenSolve.terminal_state` exposes the final outcome plus trace and diagnostics finalization state for advanced debugging.
 
 See the [Experiment management tutorial](../tutorial/experiment_management.md) for the workflow example.
 
@@ -83,7 +83,7 @@ See the [Experiment management tutorial](../tutorial/experiment_management.md) f
 
 ### 🆕 Adapter-specific solve diagnostics ([#913](https://github.com/Jij-Inc/ommx/pull/913))
 
-Solver adapters now have an adapter-specific diagnostics channel for preserving backend solver information that does not belong in the common {class}`~ommx.v1.Solution` result. Direct adapter calls can pass {class}`~ommx.adapter.DiagnosticCollector` to {meth}`~ommx.adapter.SolverAdapter.solve` through the reserved `diagnostics` keyword, while {meth}`~ommx.experiment.Run.log_solve` owns that keyword and stores recorded diagnostics with each Experiment {class}`~ommx.experiment.Solve` when called with `store_diagnostics=True`. Experiment diagnostics are disabled by default so adapter-side collection overhead is opt-in.
+Solver adapters now have an adapter-specific diagnostics channel for preserving backend solver information that does not belong in the common {class}`~ommx.Solution` result. Direct adapter calls can pass {class}`~ommx.adapter.DiagnosticCollector` to {meth}`~ommx.adapter.SolverAdapter.solve` through the reserved `diagnostics` keyword, while {meth}`~ommx.experiment.Run.log_solve` owns that keyword and stores recorded diagnostics with each Experiment {class}`~ommx.experiment.Solve` when called with `store_diagnostics=True`. Experiment diagnostics are disabled by default so adapter-side collection overhead is opt-in.
 
 The PySCIPOpt Adapter now emits {class}`~ommx_pyscipopt_adapter.SCIPProgressSnapshot` diagnostics from SCIP `BESTSOLFOUND` and `DUALBOUNDIMPROVED` callbacks, appends a final `TERMINATION` progress snapshot, and emits {class}`~ommx_pyscipopt_adapter.SCIPTerminationReport` after `model.optimize()`. The termination report includes SCIP status, primal/dual bounds, gap, incumbent objective value, node counts, LP/cut/solution counters, primal-dual integral, timing, and SCIP/PySCIPOpt version metadata. {class}`~ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer` can post-process the typed collector contents or dictionaries loaded from an Experiment into records or pandas DataFrames. With direct collection, the termination report is recorded before decoding back to an OMMX Solution, so it remains available to the caller even when decoding raises an adapter exception such as infeasible or unbounded detection.
 
@@ -260,12 +260,12 @@ See the [Experiment management tutorial](../tutorial/experiment_management.md) f
 
 ### 🆕 `Run.log_solve` records solve input/output and adapter options ([#902](https://github.com/Jij-Inc/ommx/pull/902))
 
-{meth}`~ommx.experiment.Run.log_solve` is now available. Pass a subclass of `ommx.adapter.SolverAdapter` and an {class}`~ommx.v1.Instance`; OMMX calls the adapter's `solve`, then stores the input Instance, output Solution, adapter class name, and JSON-serializable keyword arguments as a {class}`~ommx.experiment.Solve`.
+{meth}`~ommx.experiment.Run.log_solve` is now available. Pass a subclass of `ommx.adapter.SolverAdapter` and an {class}`~ommx.Instance`; OMMX calls the adapter's `solve`, then stores the input Instance, output Solution, adapter class name, and JSON-serializable keyword arguments as a {class}`~ommx.experiment.Solve`.
 
 ```python
 from ommx.experiment import Experiment
 from ommx_highs_adapter import OMMXHighsAdapter
-from ommx.v1 import Instance, Solution
+from ommx import Instance, Solution
 
 with Experiment() as experiment:
     with experiment.run() as run:
@@ -303,10 +303,10 @@ Forking creates a new Artifact Manifest, but Instance / Solution / attachment pa
 
 ### 🆕 `Instance.substitute` / `ParametricInstance.substitute` ([#891](https://github.com/Jij-Inc/ommx/pull/891), [#897](https://github.com/Jij-Inc/ommx/pull/897))
 
-{meth}`~ommx.v1.Instance.substitute` and {meth}`~ommx.v1.ParametricInstance.substitute` are now available from Python. Pass a dictionary from decision-variable IDs to replacement {class}`~ommx.v1.Function` expressions; OMMX rewrites those variables in the objective and active constraints in-place. This exposes the general substitution mechanism behind `log_encode`, so users can implement custom variable transformations such as unary or one-hot encodings.
+{meth}`~ommx.Instance.substitute` and {meth}`~ommx.ParametricInstance.substitute` are now available from Python. Pass a dictionary from decision-variable IDs to replacement {class}`~ommx.Function` expressions; OMMX rewrites those variables in the objective and active constraints in-place. This exposes the general substitution mechanism behind `log_encode`, so users can implement custom variable transformations such as unary or one-hot encodings.
 
 ```python
-from ommx.v1 import DecisionVariable, Instance
+from ommx import DecisionVariable, Instance
 
 x = DecisionVariable.integer(0, lower=0, upper=3)
 b = [DecisionVariable.binary(i) for i in (1, 2)]
@@ -363,7 +363,7 @@ Sidecar index names are kind-qualified (`regular_constraint_id` / `indicator_con
 
 ### ⚠ `removed_reason` column gated by `include=` ([#796](https://github.com/Jij-Inc/ommx/pull/796), [#847](https://github.com/Jij-Inc/ommx/pull/847))
 
-In v2.5.1 {meth}`Solution.constraints_df <ommx.v1.Solution.constraints_df>` carried a `removed_reason` column unconditionally. The initial `include=` gate of that column landed in 3.0.0a2 (#796), and 3.0.0a3 finalizes it into the `kind=` / `include=` / `removed=` dispatch shape documented above (#847): the column is opted in by `"removed_reason"` in `include=` (a unit flag that controls both the reason name and `removed_reason.{key}` parameter columns). Rows whose constraint was not removed before evaluation get NA in those columns.
+In v2.5.1 {meth}`Solution.constraints_df <ommx.Solution.constraints_df>` carried a `removed_reason` column unconditionally. The initial `include=` gate of that column landed in 3.0.0a2 (#796), and 3.0.0a3 finalizes it into the `kind=` / `include=` / `removed=` dispatch shape documented above (#847): the column is opted in by `"removed_reason"` in `include=` (a unit flag that controls both the reason name and `removed_reason.{key}` parameter columns). Rows whose constraint was not removed before evaluation get NA in those columns.
 
 ```python
 # Before (2.5.1)
@@ -375,18 +375,18 @@ df = solution.constraints_df(include=("label", "parameters", "removed_reason"))
 # ↳ adds removed_reason / removed_reason.{key} (NA for active rows)
 ```
 
-The same `kind=` / `include=` shape applies on {class}`~ommx.v1.SampleSet`. On {class}`~ommx.v1.Instance` and {class}`~ommx.v1.ParametricInstance`, `removed=True` returns active + removed rows in one DataFrame and auto-sets `"removed_reason"` so removed rows are distinguishable.
+The same `kind=` / `include=` shape applies on {class}`~ommx.SampleSet`. On {class}`~ommx.Instance` and {class}`~ommx.ParametricInstance`, `removed=True` returns active + removed rows in one DataFrame and auto-sets `"removed_reason"` so removed rows are distinguishable.
 
 ### ⚠ `to_bytes` / `from_bytes` removed from non-top-level types ([#845](https://github.com/Jij-Inc/ommx/pull/845))
 
 Bytes serialization is removed from the following component-level types:
 
-- {class}`~ommx.v1.Function`, {class}`~ommx.v1.Linear`, {class}`~ommx.v1.Quadratic`, {class}`~ommx.v1.Polynomial`
-- {class}`~ommx.v1.Parameter`
-- {class}`~ommx.v1.NamedFunction`, {class}`~ommx.v1.EvaluatedNamedFunction`, {class}`~ommx.v1.SampledNamedFunction`
-- {class}`~ommx.v1.DecisionVariable`, {class}`~ommx.v1.EvaluatedDecisionVariable`, {class}`~ommx.v1.SampledDecisionVariable`
+- {class}`~ommx.Function`, {class}`~ommx.Linear`, {class}`~ommx.Quadratic`, {class}`~ommx.Polynomial`
+- {class}`~ommx.Parameter`
+- {class}`~ommx.NamedFunction`, {class}`~ommx.EvaluatedNamedFunction`, {class}`~ommx.SampledNamedFunction`
+- {class}`~ommx.DecisionVariable`, {class}`~ommx.EvaluatedDecisionVariable`, {class}`~ommx.SampledDecisionVariable`
 
-These methods originally existed to ferry values across the Python ↔ Rust boundary back when the Python SDK had its own protobuf-based wrapper layer and had to serialize on every hop. With the v3 transition to direct PyO3 re-exports the boundary disappears, so element-level bytes round-trips no longer serve a purpose, and keeping them aligned with the label/context storage redesign would only add maintenance cost. `to_bytes` / `from_bytes` remain available on the container types ({class}`~ommx.v1.Instance`, {class}`~ommx.v1.ParametricInstance`, {class}`~ommx.v1.Solution`, {class}`~ommx.v1.SampleSet`) and on the cross-evaluate DTOs ({class}`~ommx.v1.State`, {class}`~ommx.v1.Samples`, {class}`~ommx.v1.Parameters`) — use those when you need to persist or exchange data on disk or over the wire.
+These methods originally existed to ferry values across the Python ↔ Rust boundary back when the Python SDK had its own protobuf-based wrapper layer and had to serialize on every hop. With the v3 transition to direct PyO3 re-exports the boundary disappears, so element-level bytes round-trips no longer serve a purpose, and keeping them aligned with the label/context storage redesign would only add maintenance cost. `to_bytes` / `from_bytes` remain available on the container types ({class}`~ommx.Instance`, {class}`~ommx.ParametricInstance`, {class}`~ommx.Solution`, {class}`~ommx.SampleSet`) and on the cross-evaluate DTOs ({class}`~ommx.State`, {class}`~ommx.Samples`, {class}`~ommx.Parameters`) — use those when you need to persist or exchange data on disk or over the wire.
 
 ### 🆕 Write-through label/context wrappers: `AttachedConstraint` / `AttachedDecisionVariable` ([#849](https://github.com/Jij-Inc/ommx/pull/849), [#850](https://github.com/Jij-Inc/ommx/pull/850), [#852](https://github.com/Jij-Inc/ommx/pull/852))
 
@@ -398,7 +398,7 @@ c.set_name("budget")                             # writes through to instance
 assert instance.constraints[c.constraint_id].name == "budget"
 ```
 
-Five write-through types ship: {class}`~ommx.v1.AttachedConstraint`, {class}`~ommx.v1.AttachedIndicatorConstraint`, {class}`~ommx.v1.AttachedOneHotConstraint`, {class}`~ommx.v1.AttachedSos1Constraint`, and {class}`~ommx.v1.AttachedDecisionVariable`. {class}`~ommx.v1.Constraint` and {class}`~ommx.v1.DecisionVariable` are unchanged in shape — they remain the snapshot wrappers used for modeling input (operator overloading, `Instance.from_components`). Each `AttachedX` exposes `.detach()` to obtain an equivalent snapshot when you need to break the back-reference to the host.
+Five write-through types ship: {class}`~ommx.AttachedConstraint`, {class}`~ommx.AttachedIndicatorConstraint`, {class}`~ommx.AttachedOneHotConstraint`, {class}`~ommx.AttachedSos1Constraint`, and {class}`~ommx.AttachedDecisionVariable`. {class}`~ommx.Constraint` and {class}`~ommx.DecisionVariable` are unchanged in shape — they remain the snapshot wrappers used for modeling input (operator overloading, `Instance.from_components`). Each `AttachedX` exposes `.detach()` to obtain an equivalent snapshot when you need to break the back-reference to the host.
 
 As part of the same change, `instance.decision_variables` now returns `list[AttachedDecisionVariable]` (previously `list[DecisionVariable]` snapshots), aligning with `instance.constraints` and the special-constraint accessors.
 
@@ -444,10 +444,10 @@ Spans are emitted through the standard OpenTelemetry API, so they are a no-op wh
 
 ### 🆕 `Function.evaluate_bound` is now available from Python ([#831](https://github.com/Jij-Inc/ommx/pull/831))
 
-{meth}`Function.evaluate_bound <ommx.v1.Function.evaluate_bound>` is now exposed on {class}`~ommx.v1.Function`. Given per-variable bounds, it returns a {class}`~ommx.v1.Bound` that contains the range of the function value — useful when deriving feasibility bounds or doing simple presolve on the Python side.
+{meth}`Function.evaluate_bound <ommx.Function.evaluate_bound>` is now exposed on {class}`~ommx.Function`. Given per-variable bounds, it returns a {class}`~ommx.Bound` that contains the range of the function value — useful when deriving feasibility bounds or doing simple presolve on the Python side.
 
 ```python
-from ommx.v1 import Function, Linear, Bound
+from ommx import Function, Linear, Bound
 
 f = Function(Linear(terms={1: 2}, constant=3))  # 2*x1 + 3
 b = f.evaluate_bound({1: Bound(0.0, 2.0)})
@@ -464,7 +464,7 @@ See the GitHub Release above for full details. The following summarizes the main
 
 ### ⚠ Removal of the `Constraint.id` field ([#806](https://github.com/Jij-Inc/ommx/pull/806))
 
-The `id` field (along with the `.id` getter, `set_id()`, and `id=` constructor argument) is removed from {class}`~ommx.v1.Constraint` and its variants ({class}`~ommx.v1.IndicatorConstraint` / {class}`~ommx.v1.OneHotConstraint` / {class}`~ommx.v1.Sos1Constraint` / {class}`~ommx.v1.EvaluatedConstraint` / {class}`~ommx.v1.SampledConstraint` / {class}`~ommx.v1.RemovedConstraint`). A constraint's ID now exists only as the key of the `dict[int, Constraint]` passed to {meth}`Instance.from_components <ommx.v1.Instance.from_components>`.
+The `id` field (along with the `.id` getter, `set_id()`, and `id=` constructor argument) is removed from {class}`~ommx.Constraint` and its variants ({class}`~ommx.IndicatorConstraint` / {class}`~ommx.OneHotConstraint` / {class}`~ommx.Sos1Constraint` / {class}`~ommx.EvaluatedConstraint` / {class}`~ommx.SampledConstraint` / {class}`~ommx.RemovedConstraint`). A constraint's ID now exists only as the key of the `dict[int, Constraint]` passed to {meth}`Instance.from_components <ommx.Instance.from_components>`.
 
 ```python
 # Before (2.5.1)
@@ -480,11 +480,11 @@ Global ID counters (`next_constraint_id` and friends) and per-constraint `to_byt
 
 ### 🆕 First-class special constraint types ([#789](https://github.com/Jij-Inc/ommx/pull/789), [#790](https://github.com/Jij-Inc/ommx/pull/790), [#795](https://github.com/Jij-Inc/ommx/pull/795), [#796](https://github.com/Jij-Inc/ommx/pull/796), [#798](https://github.com/Jij-Inc/ommx/pull/798))
 
-In addition to regular constraints, the following three special constraint types are now first-class citizens — they can be passed to `Instance.from_components` via `indicator_constraints=` / `one_hot_constraints=` / `sos1_constraints=`, and read back through {meth}`~ommx.v1.Solution.constraints_df` / {meth}`~ommx.v1.SampleSet.constraints_df` with `kind=` selecting the family.
+In addition to regular constraints, the following three special constraint types are now first-class citizens — they can be passed to `Instance.from_components` via `indicator_constraints=` / `one_hot_constraints=` / `sos1_constraints=`, and read back through {meth}`~ommx.Solution.constraints_df` / {meth}`~ommx.SampleSet.constraints_df` with `kind=` selecting the family.
 
-- {class}`~ommx.v1.IndicatorConstraint` — conditional constraint on a binary variable (new)
-- {class}`~ommx.v1.OneHotConstraint` — replaces the previous `ConstraintHints.OneHot` metadata
-- {class}`~ommx.v1.Sos1Constraint` — replaces the previous `ConstraintHints.Sos1` metadata
+- {class}`~ommx.IndicatorConstraint` — conditional constraint on a binary variable (new)
+- {class}`~ommx.OneHotConstraint` — replaces the previous `ConstraintHints.OneHot` metadata
+- {class}`~ommx.Sos1Constraint` — replaces the previous `ConstraintHints.Sos1` metadata
 
 For concrete usage, evaluation-result access, and the Indicator relax / restore workflow, see [Special Constraints](../user_guide/special_constraints.md).
 
@@ -500,7 +500,7 @@ For details and the manual conversion APIs, see [Adapter Capability Model and Co
 
 ### 🔄 numpy scalar support ([#794](https://github.com/Jij-Inc/ommx/pull/794))
 
-The {class}`~ommx.v1.Function` constructor now accepts `numpy.integer` and `numpy.floating` values. In v2.5.1, `Function(numpy.int64(3))` raised `TypeError`.
+The {class}`~ommx.Function` constructor now accepts `numpy.integer` and `numpy.floating` values. In v2.5.1, `Function(numpy.int64(3))` raised `TypeError`.
 
 ## 3.0.0 Alpha 1
 
@@ -508,10 +508,10 @@ The {class}`~ommx.v1.Function` constructor now accepts `numpy.integer` and `nump
 
 See the GitHub Release above for full details. The following summarizes the main changes. This is a pre-release version. APIs may change before the final release.
 
-### Complete Rust re-export of `ommx.v1` and `ommx.artifact` types ([#770](https://github.com/Jij-Inc/ommx/pull/770), [#771](https://github.com/Jij-Inc/ommx/pull/771), [#774](https://github.com/Jij-Inc/ommx/pull/774), [#775](https://github.com/Jij-Inc/ommx/pull/775), [#782](https://github.com/Jij-Inc/ommx/pull/782))
+### Complete Rust re-export of `ommx` and `ommx.artifact` types ([#770](https://github.com/Jij-Inc/ommx/pull/770), [#771](https://github.com/Jij-Inc/ommx/pull/771), [#774](https://github.com/Jij-Inc/ommx/pull/774), [#775](https://github.com/Jij-Inc/ommx/pull/775), [#782](https://github.com/Jij-Inc/ommx/pull/782))
 
 Python SDK 3.0.0 is fully based on Rust/PyO3.
-In 2.0.0, the core implementation was rewritten in Rust while Python wrapper classes remained for compatibility. In 3.0.0, those Python wrappers are removed entirely — all types in `ommx.v1` and `ommx.artifact` are now direct re-exports from Rust, and the `protobuf` Python runtime dependency is eliminated. The `.raw` attribute that previously provided access to the underlying PyO3 implementation has also been removed.
+In 2.0.0, the core implementation was rewritten in Rust while Python wrapper classes remained for compatibility. In 3.0.0, those Python wrappers are removed entirely — all types in `ommx` and `ommx.artifact` are now direct re-exports from Rust, and the `protobuf` Python runtime dependency is eliminated. The `.raw` attribute that previously provided access to the underlying PyO3 implementation has also been removed.
 
 ### Migration to Sphinx and ReadTheDocs hosting ([#780](https://github.com/Jij-Inc/ommx/pull/780), [#785](https://github.com/Jij-Inc/ommx/pull/785))
 

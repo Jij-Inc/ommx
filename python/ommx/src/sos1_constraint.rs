@@ -223,7 +223,7 @@ impl RemovedSos1Constraint {
 }
 
 /// Attached SOS1 constraint — a write-through handle bound to a host
-/// ({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).
+/// ({class}`~ommx.Instance` or {class}`~ommx.ParametricInstance`).
 ///
 /// Returned by `Instance.add_sos1_constraint` /
 /// `ParametricInstance.add_sos1_constraint` and by their
@@ -298,7 +298,7 @@ impl AttachedSos1Constraint {
         }
     }
 
-    /// Return a {class}`~ommx.v1.Sos1Constraint` snapshot of the current
+    /// Return a {class}`~ommx.Sos1Constraint` snapshot of the current
     /// state. Mutations on the returned object do not propagate back.
     pub fn detach(&self, py: Python<'_>) -> PyResult<Sos1Constraint> {
         match &self.host {

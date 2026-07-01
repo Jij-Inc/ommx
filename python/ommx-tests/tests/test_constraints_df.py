@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pandas as pd
 import pytest
-from ommx.v1 import (
+from ommx import (
     Constraint,
     DecisionVariable,
     Equality,

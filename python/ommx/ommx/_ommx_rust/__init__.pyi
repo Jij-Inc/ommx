@@ -410,8 +410,8 @@ class Artifact:
         Get the layer object corresponding to the descriptor.
 
         Dynamically dispatched based on {attr}`~ommx.artifact.Descriptor.media_type`:
-        - `application/org.ommx.v1.instance` returns {class}`~ommx.v1.Instance`
-        - `application/org.ommx.v1.solution` returns {class}`~ommx.v1.Solution`
+        - `application/org.ommx.v1.instance` returns {class}`~ommx.Instance`
+        - `application/org.ommx.v1.solution` returns {class}`~ommx.Solution`
         - `application/vnd.numpy` returns a numpy array
         """
     def get_instance(self, descriptor: typing.Optional[Descriptor] = None) -> Instance:
@@ -576,10 +576,10 @@ class ArtifactDraft:
         """
     def add_instance(self, instance: Instance) -> Descriptor:
         r"""
-        Add an {class}`~ommx.v1.Instance` to the artifact with annotations.
+        Add an {class}`~ommx.Instance` to the artifact with annotations.
 
         ```python
-        >>> from ommx.v1 import Instance
+        >>> from ommx import Instance
         >>> instance = Instance.empty()
         >>> instance.title = "test instance"
         >>> draft = ArtifactDraft.temp()
@@ -591,15 +591,15 @@ class ArtifactDraft:
         """
     def add_parametric_instance(self, instance: ParametricInstance) -> Descriptor:
         r"""
-        Add a {class}`~ommx.v1.ParametricInstance` to the artifact with annotations.
+        Add a {class}`~ommx.ParametricInstance` to the artifact with annotations.
         """
     def add_solution(self, solution: Solution) -> Descriptor:
         r"""
-        Add a {class}`~ommx.v1.Solution` to the artifact with annotations.
+        Add a {class}`~ommx.Solution` to the artifact with annotations.
         """
     def add_sample_set(self, sample_set: SampleSet) -> Descriptor:
         r"""
-        Add a {class}`~ommx.v1.SampleSet` to the artifact with annotations.
+        Add a {class}`~ommx.SampleSet` to the artifact with annotations.
         """
     def add_ndarray(
         self,
@@ -692,11 +692,11 @@ class ArtifactDraft:
 class AttachedConstraint:
     r"""
     Attached constraint — a write-through handle bound to a host
-    ({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).
+    ({class}`~ommx.Instance` or {class}`~ommx.ParametricInstance`).
 
     `AttachedConstraint` is returned by `Instance.add_constraint` /
     `ParametricInstance.add_constraint` and by their `constraints[id]`
-    getters. Unlike {class}`~ommx.v1.Constraint`, which is a snapshot, reads
+    getters. Unlike {class}`~ommx.Constraint`, which is a snapshot, reads
     pull live data from the parent host and context setters write through
     to its SoA context store. Two `AttachedConstraint` instances pointing
     at the same id on the same host observe the same state.
@@ -713,7 +713,7 @@ class AttachedConstraint:
     def instance(self) -> typing.Any:
         r"""
         The parent host this constraint lives in
-        ({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).
+        ({class}`~ommx.Instance` or {class}`~ommx.ParametricInstance`).
         """
     @property
     def function(self) -> Function: ...
@@ -731,7 +731,7 @@ class AttachedConstraint:
     def provenance(self) -> builtins.list[Provenance]: ...
     def detach(self) -> Constraint:
         r"""
-        Return a {class}`~ommx.v1.Constraint` snapshot of the current
+        Return a {class}`~ommx.Constraint` snapshot of the current
         state. Mutations on the returned object do not propagate back.
         """
     def evaluate(
@@ -739,8 +739,8 @@ class AttachedConstraint:
     ) -> EvaluatedConstraint:
         r"""
         Evaluate the constraint with the given state. Only valid on
-        {class}`~ommx.v1.Instance`-hosted handles, since
-        {class}`~ommx.v1.ParametricInstance` constraints may still reference
+        {class}`~ommx.Instance`-hosted handles, since
+        {class}`~ommx.ParametricInstance` constraints may still reference
         unsubstituted parameters.
         """
     def __repr__(self) -> builtins.str: ...
@@ -786,7 +786,7 @@ class AttachedConstraint:
 class AttachedDecisionVariable:
     r"""
     Attached decision variable — a write-through handle bound to a host
-    ({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).
+    ({class}`~ommx.Instance` or {class}`~ommx.ParametricInstance`).
 
     `AttachedDecisionVariable` is returned by `add_decision_variable(v)`
     (insertion), `attached_decision_variable(id)` (lookup), and the
@@ -796,7 +796,7 @@ class AttachedDecisionVariable:
     `ToFunction` — only the id is consumed for that, no host borrow is
     taken, so arithmetic works even while the host is mutably borrowed
     elsewhere. Call {meth}`detach` for an independent
-    {class}`~ommx.v1.DecisionVariable` snapshot.
+    {class}`~ommx.DecisionVariable` snapshot.
 
     `DecisionVariableLabel` has no `provenance` field, so the
     write-through surface omits the corresponding getter.
@@ -875,7 +875,7 @@ class AttachedDecisionVariable:
     def __rmul__(self, lhs: Function) -> Function: ...
     def detach(self) -> DecisionVariable:
         r"""
-        Return a {class}`~ommx.v1.DecisionVariable` snapshot of the current
+        Return a {class}`~ommx.DecisionVariable` snapshot of the current
         state. Mutations on the returned object do not propagate back.
         """
     def __repr__(self) -> builtins.str: ...
@@ -922,7 +922,7 @@ class AttachedDecisionVariable:
 class AttachedIndicatorConstraint:
     r"""
     Attached indicator constraint — a write-through handle bound to a host
-    ({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).
+    ({class}`~ommx.Instance` or {class}`~ommx.ParametricInstance`).
 
     `AttachedIndicatorConstraint` is returned by
     `Instance.add_indicator_constraint` /
@@ -958,7 +958,7 @@ class AttachedIndicatorConstraint:
     def provenance(self) -> builtins.list[Provenance]: ...
     def detach(self) -> IndicatorConstraint:
         r"""
-        Return an {class}`~ommx.v1.IndicatorConstraint` snapshot of the
+        Return an {class}`~ommx.IndicatorConstraint` snapshot of the
         current state. Mutations on the returned object do not propagate back.
         """
     def __repr__(self) -> builtins.str: ...
@@ -1004,7 +1004,7 @@ class AttachedIndicatorConstraint:
 class AttachedOneHotConstraint:
     r"""
     Attached one-hot constraint — a write-through handle bound to a host
-    ({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).
+    ({class}`~ommx.Instance` or {class}`~ommx.ParametricInstance`).
 
     Returned by `Instance.add_one_hot_constraint` /
     `ParametricInstance.add_one_hot_constraint` and by their
@@ -1035,7 +1035,7 @@ class AttachedOneHotConstraint:
     def provenance(self) -> builtins.list[Provenance]: ...
     def detach(self) -> OneHotConstraint:
         r"""
-        Return a {class}`~ommx.v1.OneHotConstraint` snapshot of the current
+        Return a {class}`~ommx.OneHotConstraint` snapshot of the current
         state. Mutations on the returned object do not propagate back.
         """
     def __repr__(self) -> builtins.str: ...
@@ -1081,7 +1081,7 @@ class AttachedOneHotConstraint:
 class AttachedSos1Constraint:
     r"""
     Attached SOS1 constraint — a write-through handle bound to a host
-    ({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).
+    ({class}`~ommx.Instance` or {class}`~ommx.ParametricInstance`).
 
     Returned by `Instance.add_sos1_constraint` /
     `ParametricInstance.add_sos1_constraint` and by their
@@ -1105,7 +1105,7 @@ class AttachedSos1Constraint:
     def provenance(self) -> builtins.list[Provenance]: ...
     def detach(self) -> Sos1Constraint:
         r"""
-        Return a {class}`~ommx.v1.Sos1Constraint` snapshot of the current
+        Return a {class}`~ommx.Sos1Constraint` snapshot of the current
         state. Mutations on the returned object do not propagate back.
         """
     def __repr__(self) -> builtins.str: ...
@@ -1221,7 +1221,7 @@ class Constraint:
 
         Empty for directly-authored constraints. When a special constraint
         (one-hot / SOS1 / indicator) is converted into a regular constraint,
-        a {class}`~ommx.v1.Provenance` entry recording the original constraint
+        a {class}`~ommx.Provenance` entry recording the original constraint
         is appended. Older entries come first, newer last; the immediate
         parent is therefore the last element.
         """
@@ -1258,7 +1258,7 @@ class Constraint:
         - `state`: A State object, dict[int, float], or iterable of (int, float) tuples
         - `atol`: Optional absolute tolerance for evaluation
 
-        **Returns:** {class}`~ommx.v1.EvaluatedConstraint` containing the evaluated value and feasibility
+        **Returns:** {class}`~ommx.EvaluatedConstraint` containing the evaluated value and feasibility
         """
     def partial_evaluate(
         self, state: ToState, *, atol: typing.Optional[builtins.float] = None
@@ -1599,7 +1599,7 @@ class EvaluatedConstraint:
         r"""
         Get the provenance chain.
 
-        See {attr}`~ommx.v1.Constraint.provenance` for semantics.
+        See {attr}`~ommx.Constraint.provenance` for semantics.
         """
     @property
     def used_decision_variable_ids(self) -> builtins.set[builtins.int]:
@@ -1929,7 +1929,7 @@ class Experiment:
 
         The returned Python object is decoded from the attachment media type:
         JSON attachments become normal Python objects, OMMX instance-like
-        attachments become the corresponding `ommx.v1` objects, and unknown
+        attachments become the corresponding `ommx` objects, and unknown
         media types are returned as raw `bytes`.
         """
     def get_json(self, name: builtins.str) -> typing.Any:
@@ -2244,9 +2244,9 @@ class Function:
 
         **Args:**
 
-        - `bounds`: Mapping from variable ID to its {class}`~ommx.v1.Bound`.
+        - `bounds`: Mapping from variable ID to its {class}`~ommx.Bound`.
 
-        **Returns:** A {class}`~ommx.v1.Bound` that contains $[\inf f, \sup f]$ over the given variable bounds.
+        **Returns:** A {class}`~ommx.Bound` that contains $[\inf f, \sup f]$ over the given variable bounds.
 
         **Tightness:** This evaluates the bound **term by term** (monomial-wise)
         and sums the per-term intervals. The result is a **sound
@@ -2259,7 +2259,7 @@ class Function:
         # Examples
 
         ```python
-        >>> from ommx.v1 import Function, Linear, Bound
+        >>> from ommx import Function, Linear, Bound
         >>> f = Function(Linear(terms={1: 2}, constant=3))  # 2*x1 + 3
         >>> b = f.evaluate_bound({1: Bound(0.0, 2.0)})
         >>> (b.lower, b.upper)
@@ -2508,7 +2508,7 @@ class Instance:
     r"""
     Optimization problem instance.
 
-    This class also contains annotations like {attr}`~ommx.v1.Instance.title`.
+    This class also contains annotations like {attr}`~ommx.Instance.title`.
     OMMX-defined annotations are stored in explicit protobuf fields, while
     user-defined annotations are stored in the protobuf annotation map and
     mirrored to OMMX Artifact descriptors.
@@ -2518,7 +2518,7 @@ class Instance:
     Create an instance for KnapSack Problem
 
     ```python
-    >>> from ommx.v1 import Instance, DecisionVariable
+    >>> from ommx import Instance, DecisionVariable
     ```
 
     Profit and weight of items
@@ -2609,25 +2609,25 @@ class Instance:
         r"""
         List of all decision variables in the instance sorted by their IDs.
 
-        Returns a list of {class}`~ommx.v1.AttachedDecisionVariable` write-through
+        Returns a list of {class}`~ommx.AttachedDecisionVariable` write-through
         handles. Each handle reads its kind / bound / label live from this
         instance's SoA store and writes label updates back through to it.
         Handles also participate in arithmetic to build expressions
         (`x + y`, `2 * x` etc.) — only their id is consumed for that, no host
         borrow is taken. Call
-        {meth}`~ommx.v1.AttachedDecisionVariable.detach` if you need an
-        independent {class}`~ommx.v1.DecisionVariable` snapshot.
+        {meth}`~ommx.AttachedDecisionVariable.detach` if you need an
+        independent {class}`~ommx.DecisionVariable` snapshot.
         """
     @property
     def constraints(self) -> builtins.dict[builtins.int, AttachedConstraint]:
         r"""
         Dict of all active constraints in the instance keyed by their IDs.
 
-        Each value is an {class}`~ommx.v1.AttachedConstraint`: a write-through
+        Each value is an {class}`~ommx.AttachedConstraint`: a write-through
         handle whose getters read from this instance's SoA store and whose
         context setters write back through to it. Use
-        {meth}`~ommx.v1.AttachedConstraint.detach` to materialize a
-        {class}`~ommx.v1.Constraint` snapshot if you need an independent copy.
+        {meth}`~ommx.AttachedConstraint.detach` to materialize a
+        {class}`~ommx.Constraint` snapshot if you need an independent copy.
         """
     @property
     def indicator_constraints(
@@ -2637,7 +2637,7 @@ class Instance:
         Dict of all active indicator constraints in the instance keyed by
         their IDs.
 
-        Each value is an {class}`~ommx.v1.AttachedIndicatorConstraint`: a
+        Each value is an {class}`~ommx.AttachedIndicatorConstraint`: a
         write-through handle whose getters read from this instance's SoA
         store and whose context setters write back through to it.
         """
@@ -2655,7 +2655,7 @@ class Instance:
         r"""
         Dict of all active one-hot constraints in the instance keyed by their IDs.
 
-        Each value is an {class}`~ommx.v1.AttachedOneHotConstraint`: a
+        Each value is an {class}`~ommx.AttachedOneHotConstraint`: a
         write-through handle whose getters read from this instance's SoA
         store and whose context setters write back through to it.
         """
@@ -2671,7 +2671,7 @@ class Instance:
         r"""
         Dict of all active SOS1 constraints in the instance keyed by their IDs.
 
-        Each value is an {class}`~ommx.v1.AttachedSos1Constraint`: a
+        Each value is an {class}`~ommx.AttachedSos1Constraint`: a
         write-through handle whose getters read from this instance's SoA
         store and whose context setters write back through to it.
         """
@@ -2777,7 +2777,7 @@ class Instance:
         # Examples
 
         ```python
-        >>> from ommx.v1 import Instance
+        >>> from ommx import Instance
         >>> instance = Instance.empty()
         >>> instance.sense == Instance.MINIMIZE
         True
@@ -2790,7 +2790,7 @@ class Instance:
         Add a decision variable to this instance.
 
         Drains the wrapper's modeling-label snapshot into this instance's SoA
-        store and returns an {class}`~ommx.v1.AttachedDecisionVariable`
+        store and returns an {class}`~ommx.AttachedDecisionVariable`
         bound to the variable's id — a write-through handle for further
         label updates. The original wrapper is not modified.
 
@@ -2801,12 +2801,12 @@ class Instance:
         self, variable_id: builtins.int
     ) -> AttachedDecisionVariable:
         r"""
-        Return an {class}`~ommx.v1.AttachedDecisionVariable` bound to the
+        Return an {class}`~ommx.AttachedDecisionVariable` bound to the
         given id — a write-through handle whose label setters update
         this instance's SoA store. The handle also participates in
         arithmetic via `ToFunction` (only its id is consumed). Call
-        {meth}`~ommx.v1.AttachedDecisionVariable.detach` to obtain an
-        independent {class}`~ommx.v1.DecisionVariable` snapshot.
+        {meth}`~ommx.AttachedDecisionVariable.detach` to obtain an
+        independent {class}`~ommx.DecisionVariable` snapshot.
 
         Raises {class}`KeyError` if no variable with `variable_id` exists.
         """
@@ -2814,10 +2814,10 @@ class Instance:
         r"""
         Add a regular constraint to this instance.
 
-        Picks an unused {class}`~ommx.v1.ConstraintID`, drains the wrapper's
+        Picks an unused {class}`~ommx.ConstraintID`, drains the wrapper's
         context snapshot into this instance's SoA store, and returns an
-        {class}`~ommx.v1.AttachedConstraint` bound to the new id. The input
-        {class}`~ommx.v1.Constraint` is not mutated; subsequent writes that
+        {class}`~ommx.AttachedConstraint` bound to the new id. The input
+        {class}`~ommx.Constraint` is not mutated; subsequent writes that
         should land in the instance must go through the returned handle.
 
         Raises {class}`ValueError` if the constraint references an undefined
@@ -2831,9 +2831,9 @@ class Instance:
         r"""
         Add an indicator constraint to this instance.
 
-        Picks an unused {class}`~ommx.v1.IndicatorConstraintID`, drains the
+        Picks an unused {class}`~ommx.IndicatorConstraintID`, drains the
         wrapper's context snapshot into this instance's SoA store, and
-        returns an {class}`~ommx.v1.AttachedIndicatorConstraint` bound to the
+        returns an {class}`~ommx.AttachedIndicatorConstraint` bound to the
         new id.
 
         Raises {class}`ValueError` if the constraint references an undefined
@@ -2878,7 +2878,7 @@ class Instance:
         # Examples
 
         ```python
-        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> from ommx import Instance, DecisionVariable
         >>> x = [DecisionVariable.binary(i) for i in range(3)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
@@ -2906,21 +2906,21 @@ class Instance:
 
         This is a **Driver API** for QUBO conversion calling single-purpose methods in order:
 
-        1. Convert the instance to a minimization problem by {meth}`~ommx.v1.Instance.as_minimization_problem`.
+        1. Convert the instance to a minimization problem by {meth}`~ommx.Instance.as_minimization_problem`.
         2. Check continuous variables and raise error if exists.
         3. Convert inequality constraints
 
-          * Try {meth}`~ommx.v1.Instance.convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.
-          * If failed, {meth}`~ommx.v1.Instance.add_integer_slack_to_inequality`
+          * Try {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.
+          * If failed, {meth}`~ommx.Instance.add_integer_slack_to_inequality`
 
         4. Convert to QUBO with (uniform) penalty method
 
-          * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use {meth}`~ommx.v1.Instance.penalty_method` with the given weights.
-          * If ``uniform_penalty_weight`` is given, use {meth}`~ommx.v1.Instance.uniform_penalty_method` with the given weight.
+          * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use {meth}`~ommx.Instance.penalty_method` with the given weights.
+          * If ``uniform_penalty_weight`` is given, use {meth}`~ommx.Instance.uniform_penalty_method` with the given weight.
           * If both are None, defaults to ``uniform_penalty_weight = 1.0``.
 
-        5. Log-encode integer variables by {meth}`~ommx.v1.Instance.log_encode`.
-        6. Finally convert to QUBO format by {meth}`~ommx.v1.Instance.as_qubo_format`.
+        5. Log-encode integer variables by {meth}`~ommx.Instance.log_encode`.
+        6. Finally convert to QUBO format by {meth}`~ommx.Instance.as_qubo_format`.
 
         Please see the document of each method for details.
         If you want to customize the conversion, use the methods above manually.
@@ -2932,7 +2932,7 @@ class Instance:
         $$\max \; x_0 + x_1 \quad \text{s.t.} \quad x_0 + 2 x_1 \leq 3$$
 
         ```python
-        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> from ommx import Instance, DecisionVariable
         >>> x = [DecisionVariable.integer(i, lower=0, upper=2, name="x", subscripts=[i]) for i in range(2)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
@@ -2973,25 +2973,25 @@ class Instance:
 
         This is a **Driver API** for HUBO conversion calling single-purpose methods in order:
 
-        1. Convert the instance to a minimization problem by {meth}`~ommx.v1.Instance.as_minimization_problem`.
+        1. Convert the instance to a minimization problem by {meth}`~ommx.Instance.as_minimization_problem`.
         2. Check continuous variables and raise error if exists.
         3. Convert inequality constraints
 
-          * Try {meth}`~ommx.v1.Instance.convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.
-          * If failed, {meth}`~ommx.v1.Instance.add_integer_slack_to_inequality`
+          * Try {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.
+          * If failed, {meth}`~ommx.Instance.add_integer_slack_to_inequality`
 
         4. Convert to HUBO with (uniform) penalty method
 
-          * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use {meth}`~ommx.v1.Instance.penalty_method` with the given weights.
-          * If ``uniform_penalty_weight`` is given, use {meth}`~ommx.v1.Instance.uniform_penalty_method` with the given weight.
+          * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use {meth}`~ommx.Instance.penalty_method` with the given weights.
+          * If ``uniform_penalty_weight`` is given, use {meth}`~ommx.Instance.uniform_penalty_method` with the given weight.
           * If both are None, defaults to ``uniform_penalty_weight = 1.0``.
 
-        5. Log-encode integer variables by {meth}`~ommx.v1.Instance.log_encode`.
-        6. Finally convert to HUBO format by {meth}`~ommx.v1.Instance.as_hubo_format`.
+        5. Log-encode integer variables by {meth}`~ommx.Instance.log_encode`.
+        6. Finally convert to HUBO format by {meth}`~ommx.Instance.as_hubo_format`.
 
-        Please see the documentation for {meth}`~ommx.v1.Instance.to_qubo` for more information, or the
+        Please see the documentation for {meth}`~ommx.Instance.to_qubo` for more information, or the
         documentation for each individual method for additional details. The
-        difference between this and {meth}`~ommx.v1.Instance.to_qubo` is that this method isn't
+        difference between this and {meth}`~ommx.Instance.to_qubo` is that this method isn't
         restricted to quadratic or linear problems. If you want to customize the
         conversion, use the individual methods above manually.
         """
@@ -3009,18 +3009,18 @@ class Instance:
         $$\min_x f(x) + \sum_i \lambda_i g_i(x)^2 + \sum_j \rho_j h_j(x)^2$$
 
         where $\lambda_i$ and $\rho_j$ are the penalty weight parameters for each constraint.
-        If you want to use single weight parameter, use {meth}`~ommx.v1.Instance.uniform_penalty_method` instead.
+        If you want to use single weight parameter, use {meth}`~ommx.Instance.uniform_penalty_method` instead.
 
-        The removed constraints are stored in {attr}`~ommx.v1.ParametricInstance.removed_constraints`.
+        The removed constraints are stored in {attr}`~ommx.ParametricInstance.removed_constraints`.
 
         > Note: This method converts inequality constraints $h(x) \leq 0$ to $|h(x)|^2$ not to $\max(0, h(x))^2$.
         > This means the penalty is enforced even for $h(x) < 0$ cases, and $h(x) = 0$ is unfairly favored.
-        > This feature is intended to use with {meth}`~ommx.v1.Instance.add_integer_slack_to_inequality`.
+        > This feature is intended to use with {meth}`~ommx.Instance.add_integer_slack_to_inequality`.
 
         # Examples
 
         ```python
-        >>> from ommx.v1 import Instance, DecisionVariable, Constraint
+        >>> from ommx import Instance, DecisionVariable, Constraint
         >>> x = [DecisionVariable.binary(i) for i in range(3)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
@@ -3060,16 +3060,16 @@ class Instance:
 
         where $\lambda$ is the uniform penalty weight parameter for all constraints.
 
-        The removed constraints are stored in {attr}`~ommx.v1.ParametricInstance.removed_constraints`.
+        The removed constraints are stored in {attr}`~ommx.ParametricInstance.removed_constraints`.
 
         > Note: This method converts inequality constraints $h(x) \leq 0$ to $|h(x)|^2$ not to $\max(0, h(x))^2$.
         > This means the penalty is enforced even for $h(x) < 0$ cases, and $h(x) = 0$ is unfairly favored.
-        > This feature is intended to use with {meth}`~ommx.v1.Instance.add_integer_slack_to_inequality`.
+        > This feature is intended to use with {meth}`~ommx.Instance.add_integer_slack_to_inequality`.
 
         # Examples
 
         ```python
-        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> from ommx import Instance, DecisionVariable
         >>> x = [DecisionVariable.binary(i) for i in range(3)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
@@ -3109,17 +3109,17 @@ class Instance:
         self, state: ToState, *, atol: typing.Optional[builtins.float] = None
     ) -> Solution:
         r"""
-        Evaluate the given {class}`~ommx.v1.State` into a {class}`~ommx.v1.Solution`.
+        Evaluate the given {class}`~ommx.State` into a {class}`~ommx.Solution`.
 
         This method evaluates the problem instance using the provided state (a map from decision variable IDs to their values),
-        and returns a {class}`~ommx.v1.Solution` object containing objective value, evaluated constraint values, and feasibility information.
+        and returns a {class}`~ommx.Solution` object containing objective value, evaluated constraint values, and feasibility information.
 
         # Examples
 
         Create a simple instance with three binary variables and evaluate a solution:
 
         ```python
-        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> from ommx import Instance, DecisionVariable
         >>> x = [DecisionVariable.binary(i) for i in range(3)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
@@ -3162,7 +3162,7 @@ class Instance:
 
         The input state must contain all decision variables that are actually used
         by this instance's objective and active constraints. The returned
-        {class}`~ommx.v1.State` contains every decision variable in the instance.
+        {class}`~ommx.State` contains every decision variable in the instance.
         """
     def partial_evaluate(
         self, state: ToState, *, atol: typing.Optional[builtins.float] = None
@@ -3180,7 +3180,7 @@ class Instance:
 
         **Args:**
         - `state`: Maps decision variable IDs to their fixed values.
-          Can be a {class}`~ommx.v1.State` object or a dictionary mapping variable IDs to values.
+          Can be a {class}`~ommx.State` object or a dictionary mapping variable IDs to values.
         - `atol`: Absolute tolerance for floating point comparisons. If None, uses the default tolerance.
 
         **Returns:**
@@ -3189,7 +3189,7 @@ class Instance:
         # Examples
 
         ```python
-        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> from ommx import Instance, DecisionVariable
         >>> x = DecisionVariable.binary(1)
         >>> y = DecisionVariable.binary(2)
         >>> instance = Instance.from_components(
@@ -3235,7 +3235,7 @@ class Instance:
         Generate random state only for used variables
 
         ```python
-        >>> from ommx.v1 import Instance, DecisionVariable, Rng
+        >>> from ommx import Instance, DecisionVariable, Rng
         >>> x = [DecisionVariable.binary(i) for i in range(5)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
@@ -3291,7 +3291,7 @@ class Instance:
         Generate samples for a simple instance:
 
         ```python
-        >>> from ommx.v1 import Instance, DecisionVariable, Rng
+        >>> from ommx import Instance, DecisionVariable, Rng
         >>> x = [DecisionVariable.binary(i) for i in range(3)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
@@ -3312,7 +3312,7 @@ class Instance:
         r"""
         Remove a constraint from the instance.
 
-        The removed constraint is stored in {attr}`~ommx.v1.Instance.removed_constraints`, and can be restored by {meth}`~ommx.v1.Instance.restore_constraint`.
+        The removed constraint is stored in {attr}`~ommx.Instance.removed_constraints`, and can be restored by {meth}`~ommx.Instance.restore_constraint`.
 
         **Args:**
         - `constraint_id`: The ID of the constraint to remove.
@@ -3324,7 +3324,7 @@ class Instance:
         Relax constraint, and restore it.
 
         ```python
-        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> from ommx import Instance, DecisionVariable
         >>> x = [DecisionVariable.binary(i) for i in range(3)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
@@ -3370,7 +3370,7 @@ class Instance:
         A one-hot constraint over ``{x_1, ..., x_n}`` is mathematically equivalent to the
         linear equality ``x_1 + ... + x_n - 1 == 0``. This method inserts that equality
         as a new regular constraint and moves the one-hot constraint into
-        {attr}`~ommx.v1.Instance.removed_one_hot_constraints` with
+        {attr}`~ommx.Instance.removed_one_hot_constraints` with
         ``reason="ommx.Instance.convert_one_hot_to_constraint"`` and a
         ``constraint_id`` parameter pointing to the new regular constraint.
 
@@ -3379,7 +3379,7 @@ class Instance:
         # Examples
 
         ```python
-        >>> from ommx.v1 import Instance, DecisionVariable, OneHotConstraint
+        >>> from ommx import Instance, DecisionVariable, OneHotConstraint
         >>> x = [DecisionVariable.binary(i) for i in range(3)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
@@ -3401,13 +3401,13 @@ class Instance:
         r"""
         Convert every active one-hot constraint to a regular equality constraint.
 
-        See {meth}`~ommx.v1.Instance.convert_one_hot_to_constraint` for the conversion rule.
+        See {meth}`~ommx.Instance.convert_one_hot_to_constraint` for the conversion rule.
         Returns the IDs of the newly created regular constraints.
 
         # Examples
 
         ```python
-        >>> from ommx.v1 import Instance, DecisionVariable, OneHotConstraint
+        >>> from ommx import Instance, DecisionVariable, OneHotConstraint
         >>> x = [DecisionVariable.binary(i) for i in range(4)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
@@ -3466,7 +3466,7 @@ class Instance:
         All-binary SOS1 reduces to ``sum(x_i) - 1 <= 0`` without extra variables:
 
         ```python
-        >>> from ommx.v1 import Instance, DecisionVariable, Sos1Constraint
+        >>> from ommx import Instance, DecisionVariable, Sos1Constraint
         >>> x = [DecisionVariable.binary(i) for i in range(3)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
@@ -3491,7 +3491,7 @@ class Instance:
         r"""
         Convert every active SOS1 constraint to regular constraints using Big-M.
 
-        See {meth}`~ommx.v1.Instance.convert_sos1_to_constraints` for the conversion
+        See {meth}`~ommx.Instance.convert_sos1_to_constraints` for the conversion
         rule. Returns a dict mapping each original SOS1 ID to the list of regular
         constraint IDs it produced.
 
@@ -3503,7 +3503,7 @@ class Instance:
         # Examples
 
         ```python
-        >>> from ommx.v1 import Instance, DecisionVariable, Sos1Constraint
+        >>> from ommx import Instance, DecisionVariable, Sos1Constraint
         >>> x = [DecisionVariable.binary(i) for i in range(4)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
@@ -3569,7 +3569,7 @@ class Instance:
         Convert an inequality indicator where the upper side is active:
 
         ```python
-        >>> from ommx.v1 import (
+        >>> from ommx import (
         ...     Instance, DecisionVariable, IndicatorConstraint, Equality,
         ... )
         >>> x = DecisionVariable.continuous(0, lower=0.0, upper=5.0)
@@ -3600,7 +3600,7 @@ class Instance:
         r"""
         Convert every active indicator constraint to regular constraints using Big-M.
 
-        See {meth}`~ommx.v1.Instance.convert_indicator_to_constraint` for the
+        See {meth}`~ommx.Instance.convert_indicator_to_constraint` for the
         conversion rule. Returns a dict mapping each original indicator ID to the
         list of regular constraint IDs it produced.
 
@@ -3630,7 +3630,7 @@ class Instance:
         Let's consider a simple integer programming problem with three integer variables x0, x1, and x2.
 
         ```python
-        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> from ommx import Instance, DecisionVariable
         >>> x = [
         ...     DecisionVariable.integer(i, lower=0, upper=3, name="x", subscripts=[i])
         ...     for i in range(3)
@@ -3668,7 +3668,7 @@ class Instance:
 
         Replaces each given decision variable with the provided function in the
         objective and all active constraints. This is the general substitution
-        mechanism behind {meth}`~ommx.v1.Instance.log_encode`, exposed so that
+        mechanism behind {meth}`~ommx.Instance.log_encode`, exposed so that
         users can implement their own integer encodings (e.g. unary, one-hot).
 
         **Args:**
@@ -3692,10 +3692,10 @@ class Instance:
         # Examples
 
         Encode an integer variable x0 in range $[0, 3]$ into two binary
-        variables by hand, instead of using {meth}`~ommx.v1.Instance.log_encode`:
+        variables by hand, instead of using {meth}`~ommx.Instance.log_encode`:
 
         ```python
-        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> from ommx import Instance, DecisionVariable
         >>> x = DecisionVariable.integer(0, lower=0, upper=3, name="x")
         >>> b = [DecisionVariable.binary(i, name="b", subscripts=[i]) for i in (1, 2)]
         >>> instance = Instance.from_components(
@@ -3727,7 +3727,7 @@ class Instance:
 
           - The bound $[l, u]$ is always negative, i.e. $u \leq 0$:
             this means this constraint is trivially satisfied,
-            the constraint is moved to {attr}`~ommx.v1.Instance.removed_constraints`,
+            the constraint is moved to {attr}`~ommx.Instance.removed_constraints`,
             and this method returns without introducing slack variable or raising an error.
 
         # Examples
@@ -3735,7 +3735,7 @@ class Instance:
         Let's consider a simple inequality constraint x0 + 2*x1 <= 5.
 
         ```python
-        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> from ommx import Instance, DecisionVariable
         >>> x = [
         ...     DecisionVariable.integer(i, lower=0, upper=3, name="x", subscripts=[i])
         ...     for i in range(3)
@@ -3769,7 +3769,7 @@ class Instance:
         r"""
         Convert inequality $f(x) \leq 0$ to **inequality** $f(x) + b s \leq 0$ with an integer slack variable $s$.
 
-        - This should be used when {meth}`~ommx.v1.Instance.convert_inequality_to_equality_with_integer_slack` is not applicable.
+        - This should be used when {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` is not applicable.
 
         - The bound of $s$ will be $[0, \text{slack\_upper\_bound}]$, and the coefficient $b$ is determined from the lower bound of $f(x)$.
 
@@ -3787,7 +3787,7 @@ class Instance:
         Let's consider a simple inequality constraint x0 + 2*x1 <= 4.
 
         ```python
-        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> from ommx import Instance, DecisionVariable
         >>> x = [
         ...     DecisionVariable.integer(i, lower=0, upper=3, name="x", subscripts=[i])
         ...     for i in range(3)
@@ -3883,7 +3883,7 @@ class Instance:
         # Examples
 
         ```python
-        >>> from ommx.v1 import Instance
+        >>> from ommx import Instance
         >>> instance = Instance.empty()
         >>> stats = instance.stats()
         >>> stats["decision_variables"]["total"]
@@ -4000,7 +4000,7 @@ class Instance:
         # Examples
 
         ```python
-        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> from ommx import Instance, DecisionVariable
         >>> x = [DecisionVariable.binary(i) for i in range(3)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
@@ -4044,7 +4044,7 @@ class Instance:
         # Examples
 
         ```python
-        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> from ommx import Instance, DecisionVariable
         >>> x = [DecisionVariable.binary(i) for i in range(3)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
@@ -4113,7 +4113,7 @@ class Instance:
         Consider an instance with binary variables and quadratic terms:
 
         ```python
-        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> from ommx import Instance, DecisionVariable
         >>> x = [DecisionVariable.binary(i) for i in range(2)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
@@ -4171,7 +4171,7 @@ class Instance:
         # Examples
 
         ```python
-        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> from ommx import Instance, DecisionVariable
         >>> x = [DecisionVariable.binary(i) for i in range(3)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
@@ -4410,7 +4410,7 @@ class NamedFunction:
         - `state`: A State object, dict[int, float], or iterable of (int, float) tuples
         - `atol`: Optional absolute tolerance for evaluation
 
-        **Returns:** {class}`~ommx.v1.EvaluatedNamedFunction` containing the evaluated value
+        **Returns:** {class}`~ommx.EvaluatedNamedFunction` containing the evaluated value
         """
     def partial_evaluate(
         self, state: ToState, *, atol: typing.Optional[builtins.float] = None
@@ -4767,8 +4767,8 @@ class ParametricInstance:
         List of all decision variables in the parametric instance sorted by
         their IDs.
 
-        Returns a list of {class}`~ommx.v1.AttachedDecisionVariable` write-through
-        handles. See {attr}`~ommx.v1.Instance.decision_variables` for the same
+        Returns a list of {class}`~ommx.AttachedDecisionVariable` write-through
+        handles. See {attr}`~ommx.Instance.decision_variables` for the same
         shape on `Instance`.
         """
     @property
@@ -4776,11 +4776,11 @@ class ParametricInstance:
         r"""
         Dict of all active constraints in the instance keyed by their IDs.
 
-        Each value is an {class}`~ommx.v1.AttachedConstraint`: a write-through
+        Each value is an {class}`~ommx.AttachedConstraint`: a write-through
         handle whose getters read from this parametric instance's SoA store
         and whose context setters write back through to it. Use
-        {meth}`~ommx.v1.AttachedConstraint.detach` to materialize a
-        {class}`~ommx.v1.Constraint` snapshot if you need an independent copy.
+        {meth}`~ommx.AttachedConstraint.detach` to materialize a
+        {class}`~ommx.Constraint` snapshot if you need an independent copy.
         """
     @property
     def removed_constraints(self) -> builtins.dict[builtins.int, RemovedConstraint]: ...
@@ -4792,7 +4792,7 @@ class ParametricInstance:
         Dict of all active indicator constraints in the parametric instance
         keyed by their IDs.
 
-        Each value is an {class}`~ommx.v1.AttachedIndicatorConstraint`: a
+        Each value is an {class}`~ommx.AttachedIndicatorConstraint`: a
         write-through handle whose getters read from this parametric
         instance's SoA store and whose context setters write back through
         to it.
@@ -4812,7 +4812,7 @@ class ParametricInstance:
         r"""
         Dict of all active one-hot constraints in the parametric instance
         keyed by their IDs. Each value is an
-        {class}`~ommx.v1.AttachedOneHotConstraint`.
+        {class}`~ommx.AttachedOneHotConstraint`.
         """
     @property
     def removed_one_hot_constraints(
@@ -4829,7 +4829,7 @@ class ParametricInstance:
     def sos1_constraints(self) -> builtins.dict[builtins.int, AttachedSos1Constraint]:
         r"""
         Dict of all active SOS1 constraints in the parametric instance keyed
-        by their IDs. Each value is an {class}`~ommx.v1.AttachedSos1Constraint`.
+        by their IDs. Each value is an {class}`~ommx.AttachedSos1Constraint`.
         """
     @property
     def removed_sos1_constraints(
@@ -4944,24 +4944,24 @@ class ParametricInstance:
     ) -> AttachedDecisionVariable:
         r"""
         Add a decision variable to this parametric instance. Returns an
-        {class}`~ommx.v1.AttachedDecisionVariable` bound to the variable's
+        {class}`~ommx.AttachedDecisionVariable` bound to the variable's
         id — a write-through handle for further label updates.
         """
     def attached_decision_variable(
         self, variable_id: builtins.int
     ) -> AttachedDecisionVariable:
         r"""
-        Look up the {class}`~ommx.v1.AttachedDecisionVariable` for the given
+        Look up the {class}`~ommx.AttachedDecisionVariable` for the given
         id — a write-through handle.
         """
     def add_constraint(self, constraint: Constraint) -> AttachedConstraint:
         r"""
         Add a regular constraint to this parametric instance.
 
-        Picks an unused {class}`~ommx.v1.ConstraintID`, drains the wrapper's
+        Picks an unused {class}`~ommx.ConstraintID`, drains the wrapper's
         context snapshot into this parametric instance's SoA store, and
-        returns an {class}`~ommx.v1.AttachedConstraint` bound to the new id.
-        The input {class}`~ommx.v1.Constraint` is not mutated; subsequent
+        returns an {class}`~ommx.AttachedConstraint` bound to the new id.
+        The input {class}`~ommx.Constraint` is not mutated; subsequent
         writes that should land on this parametric instance must go through
         the returned handle.
 
@@ -4975,10 +4975,10 @@ class ParametricInstance:
         r"""
         Add an indicator constraint to this parametric instance.
 
-        Picks an unused {class}`~ommx.v1.IndicatorConstraintID`, drains the
+        Picks an unused {class}`~ommx.IndicatorConstraintID`, drains the
         wrapper's context snapshot into this parametric instance's SoA
         store, and returns an
-        {class}`~ommx.v1.AttachedIndicatorConstraint` bound to the new id.
+        {class}`~ommx.AttachedIndicatorConstraint` bound to the new id.
 
         Raises {class}`ValueError` if the constraint references an id that
         is neither a defined decision variable nor a defined parameter, or
@@ -5035,7 +5035,7 @@ class ParametricInstance:
     ) -> pandas.DataFrame:
         r"""
         DataFrame of constraints, dispatched on `kind=`. See
-        {meth}`ommx.v1.Instance.constraints_df` for column / `kind=` /
+        {meth}`ommx.Instance.constraints_df` for column / `kind=` /
         `include=` / `removed=` semantics.
         """
     def named_functions_df(
@@ -5056,7 +5056,7 @@ class ParametricInstance:
     ) -> pandas.DataFrame:
         r"""
         Constraint context DataFrame (id-indexed). See
-        {meth}`ommx.v1.Instance.constraint_context_df` for column / `kind=`
+        {meth}`ommx.Instance.constraint_context_df` for column / `kind=`
         semantics.
         """
     def constraint_parameters_df(
@@ -5205,7 +5205,7 @@ class Provenance:
     One step in a regular constraint's transformation history.
 
     When a special constraint (indicator / one-hot / SOS1) is converted into a
-    regular {class}`~ommx.v1.Constraint` — for example via
+    regular {class}`~ommx.Constraint` — for example via
     `Instance.convert_one_hot_to_constraint` or `Instance.reduce_capabilities` —
     the generated constraint records a {class}`Provenance` entry naming the
     original special constraint. This lets callers trace a regular constraint
@@ -5425,7 +5425,7 @@ class RemovedConstraint:
         r"""
         Get the provenance chain from the underlying constraint.
 
-        See {attr}`~ommx.v1.Constraint.provenance` for semantics.
+        See {attr}`~ommx.Constraint.provenance` for semantics.
         """
     def __new__(
         cls,
@@ -5871,7 +5871,7 @@ class SampleSet:
         # Examples
 
         ```python
-        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> from ommx import Instance, DecisionVariable
         >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
         >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
         >>> instance = Instance.from_components(
@@ -5960,7 +5960,7 @@ class SampleSet:
         # Examples
 
         ```python
-        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> from ommx import Instance, DecisionVariable
         >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
         >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
         >>> instance = Instance.from_components(
@@ -6024,7 +6024,7 @@ class SampleSet:
     ) -> pandas.DataFrame:
         r"""
         DataFrame of sampled constraints, dispatched on `kind=`. See
-        {meth}`ommx.v1.Instance.constraints_df` for column / `kind=` /
+        {meth}`ommx.Instance.constraints_df` for column / `kind=` /
         `include=` semantics. Adds dynamic per-sample columns
         (`value.{sample_id}`, `feasible.{sample_id}`, etc.) on top of
         the kind-specific core columns.
@@ -6047,7 +6047,7 @@ class SampleSet:
     ) -> pandas.DataFrame:
         r"""
         Constraint context DataFrame (id-indexed). See
-        {meth}`ommx.v1.Instance.constraint_context_df` for column / `kind=`
+        {meth}`ommx.Instance.constraint_context_df` for column / `kind=`
         semantics. Reads from the sampled collection's context store.
         """
     def constraint_parameters_df(
@@ -6107,7 +6107,7 @@ class SampledConstraint:
         r"""
         Get the provenance chain.
 
-        See {attr}`~ommx.v1.Constraint.provenance` for semantics.
+        See {attr}`~ommx.Constraint.provenance` for semantics.
         """
     @property
     def used_decision_variable_ids(self) -> builtins.set[builtins.int]:
@@ -6343,7 +6343,7 @@ class SealedRun:
 @typing.final
 class Solution:
     r"""
-    Idiomatic wrapper of `ommx.v1.Solution` protobuf message.
+    Python SDK domain type for solutions serialized with the `ommx.v1.Solution` wire format.
 
     This also contains annotations persisted in the protobuf payload and mirrored
     to OMMX Artifact descriptors.
@@ -6488,7 +6488,7 @@ class Solution:
         # Examples
 
         ```python
-        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> from ommx import Instance, DecisionVariable
         >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
         >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
         >>> instance = Instance.from_components(
@@ -6546,7 +6546,7 @@ class Solution:
         # Examples
 
         ```python
-        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> from ommx import Instance, DecisionVariable
         >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
@@ -6573,7 +6573,7 @@ class Solution:
         # Examples
 
         ```python
-        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> from ommx import Instance, DecisionVariable
         >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
         >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
         >>> instance = Instance.from_components(
@@ -6599,7 +6599,7 @@ class Solution:
         # Examples
 
         ```python
-        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> from ommx import Instance, DecisionVariable
         >>> x = [DecisionVariable.binary(i) for i in range(3)]
         >>> c0 = (x[0] + x[1] == 1).set_name("c").add_subscripts([0])
         >>> c1 = (x[1] + x[2] == 1).set_name("c").add_subscripts([1])
@@ -6669,7 +6669,7 @@ class Solution:
     ) -> pandas.DataFrame:
         r"""
         DataFrame of evaluated constraints, dispatched on `kind=`. See
-        {meth}`ommx.v1.Instance.constraints_df` for column / `kind=` /
+        {meth}`ommx.Instance.constraints_df` for column / `kind=` /
         `include=` semantics.
 
         `Solution` has no `removed=` parameter (no active/removed
@@ -6692,7 +6692,7 @@ class Solution:
     ) -> pandas.DataFrame:
         r"""
         Constraint context DataFrame (id-indexed). See
-        {meth}`ommx.v1.Instance.constraint_context_df` for column / `kind=`
+        {meth}`ommx.Instance.constraint_context_df` for column / `kind=`
         semantics. Reads from the evaluated collection's context store.
         """
     def constraint_parameters_df(
@@ -7028,9 +7028,9 @@ class Optimality(enum.Enum):
 @typing.final
 class ProvenanceKind(enum.Enum):
     r"""
-    Kind of constraint from which a regular {class}`~ommx.v1.Constraint` was generated.
+    Kind of constraint from which a regular {class}`~ommx.Constraint` was generated.
 
-    See {class}`~ommx.v1.Provenance` for details.
+    See {class}`~ommx.Provenance` for details.
     """
 
     IndicatorConstraint = ...

@@ -13,11 +13,11 @@ kernelspec:
 
 # Special Constraints
 
-In addition to regular constraints ({class}`~ommx.v1.Constraint` — an equality or inequality over a {class}`~ommx.v1.Function`), OMMX provides several constraint types frequently used in mathematical optimization as first-class citizens. This page introduces the following three special constraint types, their usage, and how to solve them with the PySCIPOpt Adapter.
+In addition to regular constraints ({class}`~ommx.Constraint` — an equality or inequality over a {class}`~ommx.Function`), OMMX provides several constraint types frequently used in mathematical optimization as first-class citizens. This page introduces the following three special constraint types, their usage, and how to solve them with the PySCIPOpt Adapter.
 
-- {class}`~ommx.v1.IndicatorConstraint`: a conditional constraint driven by a binary variable
-- {class}`~ommx.v1.OneHotConstraint`: exactly one of a set of binary variables equals 1
-- {class}`~ommx.v1.Sos1Constraint`: at most one of a set of variables is non-zero
+- {class}`~ommx.IndicatorConstraint`: a conditional constraint driven by a binary variable
+- {class}`~ommx.OneHotConstraint`: exactly one of a set of binary variables equals 1
+- {class}`~ommx.Sos1Constraint`: at most one of a set of variables is non-zero
 
 The examples below use the PySCIPOpt Adapter, as in [Solving optimization problems with OMMX Adapter](../tutorial/solve_with_ommx_adapter.md). Install it first:
 
@@ -31,10 +31,10 @@ The PySCIPOpt Adapter declares support for Indicator and SOS1 constraints and pa
 
 An **indicator constraint** enforces a constraint $f(x) \leq 0$ (or $f(x) = 0$) only when a binary variable $z = 1$. When $z = 0$, the constraint is unconditionally satisfied.
 
-Create an {class}`~ommx.v1.IndicatorConstraint` from an existing {class}`~ommx.v1.Constraint` by calling {meth}`Constraint.with_indicator() <ommx.v1.Constraint.with_indicator>`.
+Create an {class}`~ommx.IndicatorConstraint` from an existing {class}`~ommx.Constraint` by calling {meth}`Constraint.with_indicator() <ommx.Constraint.with_indicator>`.
 
 ```{code-cell} ipython3
-from ommx.v1 import Instance, DecisionVariable, Equality
+from ommx import Instance, DecisionVariable, Equality
 
 z = DecisionVariable.binary(0, name="z")
 x = DecisionVariable.continuous(1, lower=0, upper=10, name="x")
@@ -45,7 +45,7 @@ assert ic.indicator_variable_id == 0
 assert ic.equality == Equality.LessThanOrEqualToZero
 ```
 
-Add it to an instance by passing a `dict[int, IndicatorConstraint]` to the `indicator_constraints=` argument of {meth}`Instance.from_components <ommx.v1.Instance.from_components>`.
+Add it to an instance by passing a `dict[int, IndicatorConstraint]` to the `indicator_constraints=` argument of {meth}`Instance.from_components <ommx.Instance.from_components>`.
 
 ```{code-cell} ipython3
 instance = Instance.from_components(
@@ -73,7 +73,7 @@ assert abs(solution.objective - 5.0) < 1e-6
 A **one-hot constraint** over a set of binary variables $\{x_1, \ldots, x_n\}$ requires $\sum_i x_i = 1$ — i.e. exactly one of them is 1.
 
 ```{code-cell} ipython3
-from ommx.v1 import OneHotConstraint
+from ommx import OneHotConstraint
 
 xs = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
 oh = OneHotConstraint(variables=[0, 1, 2])
@@ -119,7 +119,7 @@ An **SOS1 (Special Ordered Set type 1)** constraint over a set of variables $\{x
 - SOS1 variables are not necessarily binary — continuous variables work too.
 
 ```{code-cell} ipython3
-from ommx.v1 import Sos1Constraint
+from ommx import Sos1Constraint
 
 ys = [DecisionVariable.continuous(i, lower=0, upper=10, name="y", subscripts=[i]) for i in range(3, 6)]
 s1 = Sos1Constraint(variables=[3, 4, 5])
@@ -147,7 +147,7 @@ assert abs(solution.objective - 10.0) < 1e-6
 
 ## Independent ID spaces per constraint type
 
-In OMMX, each of the four constraint collections — regular / Indicator / OneHot / SOS1 — has an **independent ID space**. The four dicts passed to {meth}`Instance.from_components <ommx.v1.Instance.from_components>` are keyed independently, so using the same integer ID across different constraint types does not cause a collision.
+In OMMX, each of the four constraint collections — regular / Indicator / OneHot / SOS1 — has an **independent ID space**. The four dicts passed to {meth}`Instance.from_components <ommx.Instance.from_components>` are keyed independently, so using the same integer ID across different constraint types does not cause a collision.
 
 For example, "regular constraint ID=1" and "Indicator constraint ID=1" coexist as distinct constraints.
 
@@ -176,7 +176,7 @@ When a special constraint is converted to a regular constraint (see [Capability 
 
 ## Accessing evaluation results
 
-The {class}`~ommx.v1.Solution` or {class}`~ommx.v1.SampleSet` obtained after solving exposes a single {meth}`~ommx.v1.Solution.constraints_df` method that dispatches on `kind=`:
+The {class}`~ommx.Solution` or {class}`~ommx.SampleSet` obtained after solving exposes a single {meth}`~ommx.Solution.constraints_df` method that dispatches on `kind=`:
 
 | Constraint type | `kind=` value |
 |---|---|
@@ -197,7 +197,7 @@ The Indicator DataFrame includes an `indicator_active` column that disambiguates
 
 ### Removed reason columns via `include=`
 
-`removed_reason` is no longer a default column of {meth}`~ommx.v1.Solution.constraints_df`. Pass `"removed_reason"` in `include=` to fold the reason name and the `removed_reason.{key}` parameter columns back in (rows whose constraint was not removed before evaluation get NA in those columns):
+`removed_reason` is no longer a default column of {meth}`~ommx.Solution.constraints_df`. Pass `"removed_reason"` in `include=` to fold the reason name and the `removed_reason.{key}` parameter columns back in (rows whose constraint was not removed before evaluation get NA in those columns):
 
 ```python
 df = solution.constraints_df(
@@ -205,13 +205,13 @@ df = solution.constraints_df(
 )
 ```
 
-The same applies to Indicator, OneHot, and SOS1: pass the corresponding `kind=` together with `"removed_reason"` in `include=`. The long-format {meth}`~ommx.v1.Solution.constraint_removed_reasons_df` sidecar (also `kind=`-dispatched) remains the right surface when you want one row per (constraint id, parameter key) pair for joins or aggregation.
+The same applies to Indicator, OneHot, and SOS1: pass the corresponding `kind=` together with `"removed_reason"` in `include=`. The long-format {meth}`~ommx.Solution.constraint_removed_reasons_df` sidecar (also `kind=`-dispatched) remains the right surface when you want one row per (constraint id, parameter key) pair for joins or aggregation.
 
 ## Relax / Restore
 
-{class}`~ommx.v1.IndicatorConstraint` supports the same relax / restore workflow as regular constraints.
+{class}`~ommx.IndicatorConstraint` supports the same relax / restore workflow as regular constraints.
 
-- {meth}`Instance.relax_indicator_constraint() <ommx.v1.Instance.relax_indicator_constraint>`: relax (deactivate) an indicator constraint and record a reason string. The relaxed constraint is moved into `removed_indicator_constraints`.
-- {meth}`Instance.restore_indicator_constraint() <ommx.v1.Instance.restore_indicator_constraint>`: restore a previously relaxed indicator constraint. Fails if the indicator variable has already been substituted or fixed.
+- {meth}`Instance.relax_indicator_constraint() <ommx.Instance.relax_indicator_constraint>`: relax (deactivate) an indicator constraint and record a reason string. The relaxed constraint is moved into `removed_indicator_constraints`.
+- {meth}`Instance.restore_indicator_constraint() <ommx.Instance.restore_indicator_constraint>`: restore a previously relaxed indicator constraint. Fails if the indicator variable has already been substituted or fixed.
 
 For OneHot and SOS1, movement into `removed_one_hot_constraints` / `removed_sos1_constraints` happens via the conversion APIs covered in [Capability Model and Conversions](./capability_model.md).

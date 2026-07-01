@@ -91,10 +91,10 @@ $$
 \end{aligned}
 $$
 
-The corresponding `ommx.v1.Instance` can be created as follows:
+The corresponding `ommx.Instance` can be created as follows:
 
 ```{code-cell} ipython3
-from ommx.v1 import DecisionVariable, Instance
+from ommx import DecisionVariable, Instance
 
 x = [[
         DecisionVariable.binary(
@@ -140,7 +140,7 @@ The variable names and subscripts added to `DecisionVariable.binary` during crea
 
 ## Sampling with OpenJij
 
-To sample the QUBO described by `ommx.v1.Instance` using OpenJij, use the `ommx-openjij-adapter`.
+To sample the QUBO described by `ommx.Instance` using OpenJij, use the `ommx-openjij-adapter`.
 
 ```{code-cell} ipython3
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
@@ -149,7 +149,7 @@ sample_set = OMMXOpenJijSAAdapter.sample(instance, num_reads=16, uniform_penalty
 sample_set.summary
 ```
 
-[`OMMXOpenJijSAAdapter.sample`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx_openjij_adapter/index.html#ommx_openjij_adapter.OMMXOpenJijSAAdapter.sample) returns [`ommx.v1.SampleSet`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.SampleSet), which stores the evaluated objective function values and constraint violations in addition to the decision variable values of samples. The `SampleSet.summary` property is used to display summary information. `feasible` indicates the feasibility to **the original problem** before conversion to QUBO. This is calculated using the information stored in `removed_constraints` of the `qubo` instance.
+[`OMMXOpenJijSAAdapter.sample`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx_openjij_adapter/index.html#ommx_openjij_adapter.OMMXOpenJijSAAdapter.sample) returns [`ommx.SampleSet`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.SampleSet), which stores the evaluated objective function values and constraint violations in addition to the decision variable values of samples. The `SampleSet.summary` property is used to display summary information. `feasible` indicates the feasibility to **the original problem** before conversion to QUBO. This is calculated using the information stored in `removed_constraints` of the `qubo` instance.
 
 To view the feasibility for each constraint, use the `summary_with_constraints` property.
 
@@ -167,7 +167,7 @@ sample_set.decision_variables_df().head(2)
 sample_set.constraints_df().head(2)
 ```
 
-To obtain the samples, use the `SampleSet.extract_decision_variables` method. This interprets the samples using the `name` and `subscripts` registered when creating `ommx.v1.DecisionVariables`. For example, to get the value of the decision variable named `x` with `sample_id=1`, use the following to obtain it in the form of `dict[subscripts, value]`.
+To obtain the samples, use the `SampleSet.extract_decision_variables` method. This interprets the samples using the `name` and `subscripts` registered when creating `ommx.DecisionVariables`. For example, to get the value of the decision variable named `x` with `sample_id=1`, use the following to obtain it in the form of `dict[subscripts, value]`.
 
 ```{code-cell} ipython3
 sample_id = 1

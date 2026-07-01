@@ -14,7 +14,7 @@ An example usage of HiGHS through this adapter:
 
 ```python markdown-code-runner
 from ommx_highs_adapter import OMMXHighsAdapter
-from ommx.v1 import Instance, DecisionVariable
+from ommx import Instance, DecisionVariable
 
 x1 = DecisionVariable.integer(1, lower=0, upper=5)
 ommx_instance = Instance.from_components(
@@ -24,7 +24,7 @@ ommx_instance = Instance.from_components(
     sense=Instance.MINIMIZE,
 )
 
-# Create `ommx.v1.Solution` through `highspy.Highs`
+# Create `ommx.Solution` through `highspy.Highs`
 ommx_solution = OMMXHighsAdapter.solve(ommx_instance)
 
 print(ommx_solution)

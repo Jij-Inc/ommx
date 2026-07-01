@@ -11,15 +11,15 @@ kernelspec:
   name: python3
 ---
 
-ommx.v1.SampleSet
+ommx.SampleSet
 =================
 
-[`ommx.v1.Solution`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Solution) represents a single solution returned by a solver. However, some solvers, often called samplers, can return multiple solutions. To accommodate this, OMMX provides two data structures for representing multiple solutions:
+{class}`~ommx.Solution` represents a single solution returned by a solver. However, some solvers, often called samplers, can return multiple solutions. To accommodate this, OMMX provides two data structures for representing multiple solutions:
 
 | Data Structure  | Description |
 |:---------------|:------------|
-| [`ommx.v1.Samples`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/sample_set_pb2/index.html#ommx.v1.sample_set_pb2.Samples) | A list of multiple solutions for decision variable IDs |
-| [`ommx.v1.SampleSet`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.SampleSet) | Evaluations of objective and constraints with decision variables |
+| {class}`~ommx.Samples` | A list of multiple solutions for decision variable IDs |
+| {class}`~ommx.SampleSet` | Evaluations of objective and constraints with decision variables |
 
 `Samples` corresponds to `State` and `SampleSet` corresponds to `Solution`. This notebook explains how to use `SampleSet`.
 
@@ -37,7 +37,7 @@ $$
 $$
 
 ```{code-cell} ipython3
-from ommx.v1 import DecisionVariable, Instance
+from ommx import DecisionVariable, Instance
 
 x = [DecisionVariable.binary(i) for i in range(3)]
 
@@ -49,12 +49,12 @@ instance = Instance.from_components(
 )
 ```
 
-Normally, solutions are provided by a solver, commonly referred to as a sampler, but for simplicity, we prepare them manually here. `ommx.v1.Samples` can hold multiple samples, each expressed as a set of values associated with decision variable IDs, similar to `ommx.v1.State`.
+Normally, solutions are provided by a solver, commonly referred to as a sampler, but for simplicity, we prepare them manually here. `ommx.Samples` can hold multiple samples, each expressed as a set of values associated with decision variable IDs, similar to `ommx.State`.
 
 Each sample is assigned an ID. Some samplers issue their own IDs for logging, so OMMX allows specifying sample IDs. If omitted, IDs are assigned sequentially starting from `0`.
 
 ```{code-cell} ipython3
-from ommx.v1 import Samples
+from ommx import Samples
 
 # When specifying Sample ID
 samples = Samples({
@@ -73,7 +73,7 @@ samples = Samples([
 assert isinstance(samples, Samples)
 ```
 
-While `ommx.v1.Solution` is obtained via `Instance.evaluate`, `ommx.v1.SampleSet` can be obtained via `Instance.evaluate_samples`.
+While `ommx.Solution` is obtained via `Instance.evaluate`, `ommx.SampleSet` can be obtained via `Instance.evaluate_samples`.
 
 ```{code-cell} ipython3
 sample_set = instance.evaluate_samples(samples)
@@ -83,15 +83,15 @@ sample_set.summary
 The `summary` attribute displays each sample's objective value and feasibility in a DataFrame format. For example, the sample with `sample_id=2` is infeasible and shows `feasible=False`. The table is sorted with feasible samples appearing first, and within them, those with better bjective values (depending on whether `Instance.sense` is maximization or minimization) appear at the top.
 
 ```{note}
-For clarity, we explicitly pass `ommx.v1.Samples` created by `to_samples` to `evaluate_samples`, but you can omit it because `to_samples` would be called automatically.
+For clarity, we explicitly pass `ommx.Samples` created by `to_samples` to `evaluate_samples`, but you can omit it because `to_samples` would be called automatically.
 ```
 
 Extracting individual samples
 ----------------------------
-You can use `SampleSet.get` to retrieve each sample as an `ommx.v1.Solution` by specifying the sample ID:
+You can use `SampleSet.get` to retrieve each sample as an `ommx.Solution` by specifying the sample ID:
 
 ```{code-cell} ipython3
-from ommx.v1 import Solution
+from ommx import Solution
 
 solution = sample_set.get(sample_id=0)
 assert isinstance(solution, Solution)

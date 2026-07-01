@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ommx.v1 import (
+from ommx import (
     Instance,
     State,
     Samples,
@@ -26,7 +26,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
 
     ommx_instance: Instance
     """
-    ommx.v1.Instance representing a QUBO or HUBO problem
+    ommx.Instance representing a QUBO or HUBO problem
 
     The input `instance` must be a QUBO (Quadratic Unconstrained Binary Optimization) or HUBO (Higher-order Unconstrained Binary Optimization) problem, i.e.
 
@@ -35,7 +35,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     - Objective function is quadratic (QUBO) or higher (HUBO).
     - Minimization problem
 
-    You can convert an instance to QUBO or HUBO via :meth:`ommx.v1.Instance.penalty_method` or other corresponding method.
+    You can convert an instance to QUBO or HUBO via :meth:`ommx.Instance.penalty_method` or other corresponding method.
     """
 
     beta_min: float | None = None

@@ -2,7 +2,7 @@
 
 import pandas as pd
 import pytest
-from ommx.v1 import Instance, DecisionVariable, OneHotConstraint, Sos1Constraint
+from ommx import Instance, DecisionVariable, OneHotConstraint, Sos1Constraint
 
 
 def _df_snap(df: pd.DataFrame) -> str:
@@ -144,7 +144,7 @@ def test_both_one_hot_and_sos1():
 
 def test_evaluate_with_one_hot_feasible():
     """Test that evaluation with OneHot constraints checks feasibility."""
-    from ommx.v1 import State
+    from ommx import State
 
     x = [DecisionVariable.binary(i) for i in range(1, 4)]
     objective = sum(x)
@@ -167,7 +167,7 @@ def test_evaluate_with_one_hot_feasible():
 
 def test_evaluate_with_one_hot_infeasible():
     """Test that evaluation with OneHot constraints detects infeasibility."""
-    from ommx.v1 import State
+    from ommx import State
 
     x = [DecisionVariable.binary(i) for i in range(1, 4)]
     objective = sum(x)
@@ -190,7 +190,7 @@ def test_evaluate_with_one_hot_infeasible():
 
 def test_evaluate_with_sos1_feasible():
     """Test that evaluation with SOS1 constraints checks feasibility."""
-    from ommx.v1 import State
+    from ommx import State
 
     x = [DecisionVariable.continuous(i, lower=0, upper=10) for i in range(1, 4)]
     objective = sum(x)
@@ -286,7 +286,7 @@ def test_sos1_constraints_df_roundtrips_removed_context(snapshot):
 
 def test_evaluate_with_sos1_infeasible():
     """Test that evaluation with SOS1 constraints detects infeasibility."""
-    from ommx.v1 import State
+    from ommx import State
 
     x = [DecisionVariable.continuous(i, lower=0, upper=10) for i in range(1, 4)]
     objective = sum(x)

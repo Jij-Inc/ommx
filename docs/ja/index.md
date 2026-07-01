@@ -39,10 +39,10 @@ OMMX（Open Mathematical prograMming eXchange; オミキス）とは、数理最
 
 ### OMMX Message
 
-OMMX Messageはソフトウェア間でデータ交換を行うために設計されたデータ形式です。これは[Protocol Buffers](https://protobuf.dev/)を用いて定義されており、これにより特定のプログラミング言語やOSに依存しないデータ形式を実現しています。OMMX Messageは、数理最適化の問題 ([`ommx.v1.Instance`](./user_guide/instance.md)) や解 ([`ommx.v1.Solution`](./user_guide/solution.md)) のデータなどを表現するためのスキーマを定義します。
+OMMX Messageはソフトウェア間でデータ交換を行うために設計されたデータ形式です。これは[Protocol Buffers](https://protobuf.dev/)を用いて定義されており、これにより特定のプログラミング言語やOSに依存しないデータ形式を実現しています。OMMX Messageは、数理最適化の問題（protobuf wire format では `ommx.v1.Instance`、Python SDK では [`ommx.Instance`](./user_guide/instance.md)）や解（wire format では `ommx.v1.Solution`、Python SDK では [`ommx.Solution`](./user_guide/solution.md)）のデータなどを表現するためのスキーマを定義します。
 さらに、Protocol Buffersの機能により、ほとんどの実用的なプログラミング言語に対してOMMX Messageを利用するためのライブラリを自動生成することができ、特にPythonとRust向けのライブラリはOMMX SDKの一部として提供されています。
 
-`ommx.v1.Instance` などのデータ構造はMessageと呼ばれ、それぞれのMessageは複数のフィールドを持ちます。例えば、 `ommx.v1.Instance` は次のようなフィールドを持ちます（簡単のために、一部省略しています）:
+protobuf schema としての `ommx.v1.Instance` などのデータ構造はMessageと呼ばれ、それぞれのMessageは複数のフィールドを持ちます。例えば、 `Instance` は次のようなフィールドを持ちます（簡単のために、一部省略しています）:
 
 ```protobuf
 message Instance {
@@ -57,9 +57,9 @@ message Instance {
 }
 ```
 
-`Instance`をはじめ、決定変数を表すMessage `ommx.v1.DecisionVariable` や目的関数や制約条件として使うための数学的な関数を表すための `ommx.v1.Function` などのMessageが `ommx.v1` という名前空間の元で定義されています。OMMXで定義されているMessageの一覧は、 [OMMX Message Schema](https://jij-inc.github.io/ommx/protobuf.html) にまとめられています。
+`Instance`をはじめ、決定変数を表すMessage `ommx.v1.DecisionVariable` や目的関数や制約条件として使うための数学的な関数を表すための `ommx.v1.Function` などのMessageが protobuf namespace `ommx.v1` の元で定義されています。Python のユーザーコードでは、対応する SDK domain class を top-level `ommx` から、例えば `from ommx import Instance, DecisionVariable, Function` のように import します。OMMXで定義されているMessageの一覧は、 [OMMX Message Schema](https://jij-inc.github.io/ommx/protobuf.html) にまとめられています。
 
-一部のソルバーは直接 `ommx.v1.Instance` で定義されたデータを読み込むことができますが、そうでないソルバーに対しては、OMMX Adapterを使ってOMMX Messageをソルバーが扱える形式に変換します。必要になったソフトウェアに対してOMMX Adapterを作成することで、OMMXと連携可能な他のソフトウェアと容易にデータ連携を実現できます。
+一部のソルバーは直接 OMMX `Instance` payload を読み込むことができますが、そうでないソルバーに対しては、OMMX Adapterを使ってOMMX Messageをソルバーが扱える形式に変換します。必要になったソフトウェアに対してOMMX Adapterを作成することで、OMMXと連携可能な他のソフトウェアと容易にデータ連携を実現できます。
 
 ```{figure} ./assets/introduction_02.png
 :alt: OMMX MessageとOMMX Adapterの関係を表す図

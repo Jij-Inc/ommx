@@ -299,8 +299,9 @@ positions such as indicator / one-hot / SOS1 members cannot use parameter IDs.
 Rust callers should pass `ParameterTable` to
 [`ParametricInstance::new`](crate::ParametricInstance::new) and
 [`ParametricInstanceBuilder::parameters`](crate::ParametricInstanceBuilder::parameters).
-Legacy `ommx.v1.Parameter` rows are still used at protobuf and Python API
-boundaries; Rust parsing drains their inline IDs and labels into
+Legacy `ommx.v1.Parameter` rows are still used at protobuf serialization
+boundaries, while Python exposes the corresponding SDK class as
+`ommx.Parameter`; Rust parsing drains their inline IDs and labels into
 `ParameterTable`, and Rust serialization materializes them back from the table.
 
 ## Capability model ([#790](https://github.com/Jij-Inc/ommx/pull/790), [#805](https://github.com/Jij-Inc/ommx/pull/805), [#810](https://github.com/Jij-Inc/ommx/pull/810), [#811](https://github.com/Jij-Inc/ommx/pull/811), [#814](https://github.com/Jij-Inc/ommx/pull/814))

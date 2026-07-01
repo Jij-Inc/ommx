@@ -65,7 +65,7 @@ impl<'py> FromPyObject<'_, 'py> for State {
         }
         let err = || {
             PyTypeError::new_err(
-                "ommx.v1.State can only be initialized with a `State`, `Mapping[int, float]`, or `Iterable[tuple[int, float]]`",
+                "ommx.State can only be initialized with a `State`, `Mapping[int, float]`, or `Iterable[tuple[int, float]]`",
             )
         };
         // Accept Iterable[tuple[int, float]]

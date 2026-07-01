@@ -12,7 +12,7 @@ from ommx.adapter import (
     UnboundedDetected,
     NoSolutionReturned,
 )
-from ommx.v1 import Instance, Constraint, DecisionVariable, Solution, State, Function
+from ommx import Instance, Constraint, DecisionVariable, Solution, State, Function
 
 from .exception import OMMXPythonMIPAdapterError
 
@@ -30,7 +30,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         verbose: bool = False,
     ):
         """
-        :param ommx_instance: The ommx.v1.Instance to solve.
+        :param ommx_instance: The ommx.Instance to solve.
         :param relax: Applies integer relaxation globally to this model using Python-MIP's `Model.relax() <https://docs.python-mip.com/en/latest/classes.html#mip.Model.relax>`.
         :param solver_name: Passes a specific solver name to the Python-MIP model. Defaults to `CBC`.
         :param solver: Passes a specific solver to the Python-MIP model.
@@ -77,9 +77,9 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         diagnostics: DiagnosticsSink | None = None,
     ) -> Solution:
         """
-        Solve the given ommx.v1.Instance using Python-MIP, returning an ommx.v1.Solution.
+        Solve the given ommx.Instance using Python-MIP, returning an ommx.Solution.
 
-        :param ommx_instance: The ommx.v1.Instance to solve.
+        :param ommx_instance: The ommx.Instance to solve.
         :param relax: If True, relax all integer variables to continuous variables by using the `relax` parameter in Python-MIP's `Model.optimize() <https://docs.python-mip.com/en/latest/classes.html#mip.Model.optimize>`.
         :param verbose: If True, enable Python-MIP's verbose mode
 
@@ -90,7 +90,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
 
         .. doctest::
 
-            >>> from ommx.v1 import Instance, DecisionVariable
+            >>> from ommx import Instance, DecisionVariable
             >>> from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 
             >>> p = [10, 13, 18, 32, 7, 15]
@@ -127,7 +127,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
 
         .. doctest::
 
-                >>> from ommx.v1 import Instance, DecisionVariable
+                >>> from ommx import Instance, DecisionVariable
                 >>> from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 
                 >>> x = DecisionVariable.integer(0, upper=3, lower=0)
@@ -147,7 +147,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
 
         .. doctest::
 
-                >>> from ommx.v1 import Instance, DecisionVariable
+                >>> from ommx import Instance, DecisionVariable
                 >>> from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 
                 >>> x = DecisionVariable.integer(0, lower=0)
@@ -167,7 +167,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
 
         .. doctest::
 
-                >>> from ommx.v1 import Instance, DecisionVariable
+                >>> from ommx import Instance, DecisionVariable
                 >>> from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 
                 >>> x = DecisionVariable.continuous(0, lower=0, upper=1)
@@ -199,7 +199,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         return self.model
 
     def decode(self, data: mip.Model) -> Solution:
-        """Convert optimized Python-MIP model and ommx.v1.Instance to ommx.v1.Solution.
+        """Convert optimized Python-MIP model and ommx.Instance to ommx.Solution.
 
         This method is intended to be used if the model has been acquired with
         `solver_input` for futher adjustment of the solver parameters, and
@@ -223,7 +223,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
 
         .. doctest::
 
-            >>> from ommx.v1 import Instance, DecisionVariable
+            >>> from ommx import Instance, DecisionVariable
             >>> from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 
             >>> p = [10, 13, 18, 32, 7, 15]
@@ -269,7 +269,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
 
     def decode_to_state(self, data: mip.Model) -> State:
         """
-        Create an ommx.v1.State from an optimized Python-MIP Model.
+        Create an ommx.State from an optimized Python-MIP Model.
 
         Examples
         =========
@@ -279,7 +279,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             The following example of solving an unconstrained linear optimization problem with x1 as the objective function.
 
             >>> from ommx_python_mip_adapter import OMMXPythonMIPAdapter
-            >>> from ommx.v1 import Instance, DecisionVariable
+            >>> from ommx import Instance, DecisionVariable
 
             >>> x1 = DecisionVariable.integer(1, lower=0, upper=5)
             >>> ommx_instance = Instance.from_components(
@@ -359,7 +359,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         f: Function,
     ) -> mip.LinExpr:
         """
-        Translate ommx.v1.Function to `mip.LinExpr` or `float`.
+        Translate ommx.Function to `mip.LinExpr` or `float`.
         """
         degree = f.degree()
         constant = f.constant_term

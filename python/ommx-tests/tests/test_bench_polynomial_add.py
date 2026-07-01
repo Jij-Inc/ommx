@@ -1,5 +1,5 @@
 import pytest
-from ommx.v1 import Polynomial, Rng
+from ommx import Polynomial, Rng
 
 
 @pytest.fixture(params=[100, 1000, 10_000])

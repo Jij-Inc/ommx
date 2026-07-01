@@ -44,7 +44,7 @@ impl SampledConstraint {
 
     /// Get the provenance chain.
     ///
-    /// See {attr}`~ommx.v1.Constraint.provenance` for semantics.
+    /// See {attr}`~ommx.Constraint.provenance` for semantics.
     #[getter]
     pub fn provenance(&self) -> Vec<crate::Provenance> {
         crate::provenance_list(&self.1)

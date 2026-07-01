@@ -1,7 +1,7 @@
 # Adapter-specific Diagnostics
 
 Adapter diagnostics preserve solver-side information that does not fit in the
-portable {class}`~ommx.v1.Solution`. Use {class}`~ommx.v1.Solution` for the
+portable {class}`~ommx.Solution`. Use {class}`~ommx.Solution` for the
 decoded OMMX result. Use diagnostics when you need to inspect what the backend
 solver observed, reported, or proved.
 

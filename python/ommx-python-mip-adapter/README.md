@@ -11,13 +11,13 @@ sequenceDiagram
     participant U as User
     participant A as Adapter
     participant P as Python-MIP
-    U->>A: ommx.v1.Instance
+    U->>A: ommx.Instance
     A->>U: Python-MIP model
     U->>P: Python-MIP model and Parameters for Python-MIP;
     P->>P: Solve with CBC, Gurobi, or other solvers
     P->>U: Optimized model
-    U->>A: Optimized model and ommx.v1.Instance
-    A->>U: ommx.v1.Solution
+    U->>A: Optimized model and ommx.Instance
+    A->>U: ommx.Solution
 ```
 
 Python-MIP as a user interface to create OMMX instance
@@ -28,10 +28,10 @@ sequenceDiagram
     participant A as Adapter
     participant O as Other OMMX toolchain
     U->>A: Python-MIP model
-    A->>U: ommx.v1.Instance
-    U->>O: ommx.v1.Instance and Parameters for other solver
+    A->>U: ommx.Instance
+    U->>O: ommx.Instance and Parameters for other solver
     O->>O: Solve the instance with other solver using other adapter
-    O->>U: ommx.v1.Solution
+    O->>U: ommx.Solution
 ```
 
 Usage
@@ -46,7 +46,7 @@ Python-MIP can be used through `ommx-python-mip-adapter` by using the following:
 
 ```python markdown-code-runner
 from ommx_python_mip_adapter import OMMXPythonMIPAdapter
-from ommx.v1 import Instance, DecisionVariable
+from ommx import Instance, DecisionVariable
 
 x1 = DecisionVariable.integer(1, lower=0, upper=5)
 ommx_instance = Instance.from_components(
@@ -56,13 +56,13 @@ ommx_instance = Instance.from_components(
     sense=Instance.MINIMIZE,
 )
 
-# Create `ommx.v1.Solution` from the `mip.Model`
+# Create `ommx.Solution` from the `mip.Model`
 ommx_solution = OMMXPythonMIPAdapter.solve(ommx_instance)
 
 print(ommx_solution)
 ```
 
-You can get `ommx.v1.Instance` from a Python-MIP model as the following:
+You can get `ommx.Instance` from a Python-MIP model as the following:
 
 ```python markdown-code-runner
 import mip

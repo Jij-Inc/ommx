@@ -17,7 +17,7 @@ from __future__ import annotations
 from opentelemetry import trace
 from opentelemetry.sdk.trace import ReadableSpan
 
-from ommx.v1 import (
+from ommx import (
     DecisionVariable,
     Equality,
     IndicatorConstraint,

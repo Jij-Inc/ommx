@@ -2,7 +2,7 @@
 
 import pandas as pd
 import pytest
-from ommx.v1 import (
+from ommx import (
     Instance,
     DecisionVariable,
     IndicatorConstraint,

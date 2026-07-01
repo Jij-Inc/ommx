@@ -1,4 +1,4 @@
-from ommx.v1 import Instance, DecisionVariable, Rng
+from ommx import Instance, DecisionVariable, Rng
 
 
 def test_random_samples_basic():

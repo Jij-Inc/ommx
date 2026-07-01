@@ -11,23 +11,23 @@ kernelspec:
   name: python3
 ---
 
-# ommx.v1.Function
+# ommx.Function
 
 数理最適化では目的関数や制約条件を表現するために（数学的な意味での）関数を扱う必要があります。OMMXでは特に多項式を中心に扱い、OMMX Messageには多項式を表すためのデータ構造として以下のものが存在します。
 
 | データ構造 | 説明 |
 | --- | --- |
-| [ommx.v1.Linear](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Linear) | 線形の関数。決定変数のIDとその係数のペアを持つ |
-| [ommx.v1.Quadratic](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Quadratic) | 二次の関数。決定変数のIDのペアとその係数のペアを持つ |
-| [ommx.v1.Polynomial](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Polynomial) | 多項式。決定変数のIDの組とその係数のペアを持つ |
-| [ommx.v1.Function](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Function) | 上記のいずれかあるいは定数 |
+| {class}`~ommx.Linear` | 線形の関数。決定変数のIDとその係数のペアを持つ |
+| {class}`~ommx.Quadratic` | 二次の関数。決定変数のIDのペアとその係数のペアを持つ |
+| {class}`~ommx.Polynomial` | 多項式。決定変数のIDの組とその係数のペアを持つ |
+| {class}`~ommx.Function` | 上記のいずれかあるいは定数 |
 
 
-## ommx.v1.Function の作成
-Python SDKでこれらのデータ構造を作る場合、大きく分けて二つの方法があります。まずひとつ目は、各データ構造のコンストラクタを直接呼び出す方法です。たとえば、次のようにして`ommx.v1.Linear`を作ることができます。
+## ommx.Function の作成
+Python SDKでこれらのデータ構造を作る場合、大きく分けて二つの方法があります。まずひとつ目は、各データ構造のコンストラクタを直接呼び出す方法です。たとえば、次のようにして`ommx.Linear`を作ることができます。
 
 ```{code-cell} ipython3
-from ommx.v1 import Linear
+from ommx import Linear
 
 linear = Linear(terms={1: 1.0, 2: 2.0}, constant=3.0)
 print(linear)
@@ -41,10 +41,10 @@ print(f"{linear.linear_terms=}")
 print(f"{linear.constant_term=}")
 ```
 
-もう一つの方法は `ommx.v1.DecisionVariable` から作る方法です。`ommx.v1.DecisionVariable` は決定変数のIDを持つだけのデータ構造です。`ommx.v1.Linear` などの多項式を作る際には、`ommx.v1.DecisionVariable` を使って決定変数を作り、それを使って多項式を作ることができます。
+もう一つの方法は `ommx.DecisionVariable` から作る方法です。`ommx.DecisionVariable` は決定変数のIDを持つだけのデータ構造です。`ommx.Linear` などの多項式を作る際には、`ommx.DecisionVariable` を使って決定変数を作り、それを使って多項式を作ることができます。
 
 ```{code-cell} ipython3
-from ommx.v1 import DecisionVariable
+from ommx import DecisionVariable
 
 x = DecisionVariable.binary(1, name="x")
 y = DecisionVariable.binary(2, name="y")
@@ -68,7 +68,7 @@ print(p)
 `Linear`, `Quadratic`, `Polynomial` はそれぞれ固有のデータの保持方法を持っているため別のMessageになっていますが、目的関数や制約条件としてはどれを使ってもいいので、それらのいずれかあるいは定数である `Function` というMessageが用意されています。
 
 ```{code-cell} ipython3
-from ommx.v1 import Function
+from ommx import Function
 
 # Constant
 print(Function(1.0))
@@ -89,7 +89,7 @@ value = linear.evaluate({1: 1, 2: 0})
 print(f"{value=}")
 ```
 
-引数は `dict[int, float]` の形式と `ommx.v1.State` をサポートしています。`evaluate` は評価に必要な決定変数のIDが足りない場合はエラーを返します。
+引数は `dict[int, float]` の形式と `ommx.State` をサポートしています。`evaluate` は評価に必要な決定変数のIDが足りない場合はエラーを返します。
 
 ```{code-cell} ipython3
 try:

@@ -40,18 +40,18 @@ To solve the 0-1 Knapsack Problem through the OMMX PySCIPOpt Adapter, follow the
 1. Prepare the 0-1 Knapsack problem instance.
 2. Run the optimization via OMMX Adapter.
 
-In Step 1, we create an `ommx.v1.Instance` object defined in the OMMX Message Instance schema. There are several ways to generate this object, but in this guide, we'll illustrate how to write it directly using the OMMX Python SDK.
+In Step 1, we create an `ommx.Instance` object defined in the OMMX Message Instance schema. There are several ways to generate this object, but in this guide, we'll illustrate how to write it directly using the OMMX Python SDK.
 
 ```{tip}
-There are four ways to prepare an `ommx.v1.Instance` object:
+There are four ways to prepare an `ommx.Instance` object:
 
-1. Write `ommx.v1.Instance` directly with the OMMX Python SDK.
-2. Convert an MPS file to `ommx.v1.Instance` using the OMMX Python SDK.
-3. Convert a problem instance from a different optimization tool into `ommx.v1.Instance` using an OMMX Adapter.
-4. Export `ommx.v1.Instance` from JijModeling.
+1. Write `ommx.Instance` directly with the OMMX Python SDK.
+2. Convert an MPS file to `ommx.Instance` using the OMMX Python SDK.
+3. Convert a problem instance from a different optimization tool into `ommx.Instance` using an OMMX Adapter.
+4. Export `ommx.Instance` from JijModeling.
 ```
 
-In Step 2, we convert `ommx.v1.Instance` into a PySCIPOpt `Model` object and run optimization with SCIP. The result is obtained as an `ommx.v1.Solution` object defined by the OMMX Message Solution schema.
+In Step 2, we convert `ommx.Instance` into a PySCIPOpt `Model` object and run optimization with SCIP. The result is obtained as an `ommx.Solution` object defined by the OMMX Message Solution schema.
 
 ### Step 1: Preparing a 0-1 Knapsack Problem Instance
 
@@ -80,7 +80,7 @@ N = len(v)  # Total number of items
 Based on this mathematical model and data, the code for describing the problem instance using the OMMX Python SDK is as follows:
 
 ```{code-cell} ipython3
-from ommx.v1 import Instance, DecisionVariable
+from ommx import Instance, DecisionVariable
 
 # Define decision variables
 x = [
@@ -123,11 +123,11 @@ To optimize the instance prepared in Step 1, we run the optimization calculation
 ```{code-cell} ipython3
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
-# Obtain an ommx.v1.Solution object through a PySCIPOpt model.
+# Obtain an ommx.Solution object through a PySCIPOpt model.
 solution = OMMXPySCIPOptAdapter.solve(instance)
 ```
 
-The variable `solution` here is an `ommx.v1.Solution` object that contains the results of the optimization calculation by SCIP.
+The variable `solution` here is an `ommx.Solution` object that contains the results of the optimization calculation by SCIP.
 
 +++
 
@@ -139,7 +139,7 @@ From the calculation results obtained in Step 2, we can check and analyze:
 - The optimal value (the highest total value of items)
 - The constraints (the margin of the total weight of items against the weight limit)
 
-To do this, we use the properties implemented in the `ommx.v1.Solution` class.
+To do this, we use the properties implemented in the `ommx.Solution` class.
 
 ### Analyzing the Optimal Solution
 

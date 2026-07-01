@@ -9,6 +9,8 @@ def test_doctest():
     assert result.failed == 0
     # type: ignore
     for mod in pkgutil.iter_modules(ommx.__path__):
+        if mod.name == "v1":
+            continue
         mod = importlib.import_module(f"ommx.{mod.name}")
         result = doctest.testmod(mod, optionflags=doctest.ELLIPSIS)
         assert result.failed == 0

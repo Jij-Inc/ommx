@@ -577,9 +577,9 @@ impl Function {
     ///
     /// **Args:**
     ///
-    /// - `bounds`: Mapping from variable ID to its {class}`~ommx.v1.Bound`.
+    /// - `bounds`: Mapping from variable ID to its {class}`~ommx.Bound`.
     ///
-    /// **Returns:** A {class}`~ommx.v1.Bound` that contains $[\inf f, \sup f]$ over the given variable bounds.
+    /// **Returns:** A {class}`~ommx.Bound` that contains $[\inf f, \sup f]$ over the given variable bounds.
     ///
     /// **Tightness:** This evaluates the bound **term by term** (monomial-wise)
     /// and sums the per-term intervals. The result is a **sound
@@ -592,7 +592,7 @@ impl Function {
     /// # Examples
     ///
     /// ```python
-    /// >>> from ommx.v1 import Function, Linear, Bound
+    /// >>> from ommx import Function, Linear, Bound
     /// >>> f = Function(Linear(terms={1: 2}, constant=3))  # 2*x1 + 3
     /// >>> b = f.evaluate_bound({1: Bound(0.0, 2.0)})
     /// >>> (b.lower, b.upper)

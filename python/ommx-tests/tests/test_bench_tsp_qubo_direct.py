@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-import ommx.v1
+import ommx
 
 
 def generate_distance_matrix(num_city: int) -> np.ndarray:
@@ -42,7 +42,7 @@ def make_tsp_qubo_by_ommx(
     # Create binary decision variables x[i][j]
     x = [
         [
-            ommx.v1.DecisionVariable.binary(i * num_city + j, name=f"x_({i},{j})")
+            ommx.DecisionVariable.binary(i * num_city + j, name=f"x_({i},{j})")
             for j in range(num_city)
         ]
         for i in range(num_city)

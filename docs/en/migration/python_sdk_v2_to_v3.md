@@ -9,11 +9,11 @@ Baseline for this guide: **v2.5.1** (tag `python-2.5.1`). Upgrades from earlier 
 
 ## Overview
 
-v3 completes the PyO3 migration that started in v2: every class in `ommx.v1` is now a direct Rust type re-exported from `ommx._ommx_rust`, not a Python wrapper around a protobuf message. As a side effect, a number of v2-era shims (`.raw`, `.from_raw()`, `.from_protobuf()`, `.to_protobuf()`, counter helpers, `Parameters`, …) were removed, and several APIs adopted cleaner signatures.
+v3 completes the PyO3 migration that started in v2: SDK domain classes are now imported from top-level `ommx` and are direct Rust types re-exported from the internal `ommx._ommx_rust` extension, not Python wrappers around protobuf messages. The versioned `ommx.v1` name is no longer the Python SDK object namespace; reserve it for protobuf wire-format concepts such as schema/package names and media types. As a side effect, a number of v2-era shims (`.raw`, `.from_raw()`, `.from_protobuf()`, `.to_protobuf()`, counter helpers, `Parameters`, …) were removed, and several APIs adopted cleaner signatures.
 
 Themes you will encounter:
 
-1. Every trace of the protobuf layer is gone — imports from `ommx.v1.*_pb2` must switch to `ommx.v1`, and bridge methods like `.raw`/`from_protobuf`/`to_protobuf` are removed.
+1. Every trace of the protobuf Python layer is gone — imports from `ommx.v1.*_pb2` or `ommx.v1` must switch to top-level `ommx` for SDK domain classes, and bridge methods like `.raw`/`from_protobuf`/`to_protobuf` are removed.
 2. `Constraint` no longer has an `id` — constraint IDs live only as the keys of the `dict[int, Constraint]` you pass to `Instance.from_components`. All `.id` getters, `set_id()` / `id=` kwargs, and global ID-counter helpers are gone.
 3. Container types flipped: every constraint-valued argument and getter on `Instance` / `ParametricInstance` / `Solution` is now `dict[int, T]`, not `list[T]`. `decision_variables` stays a `list`.
 4. A handful of renames and small signature changes (`write_mps` → `save_mps`, `Parameters(entries=...)` → plain `dict`, …).
@@ -24,7 +24,7 @@ Themes you will encounter:
 
 ### 1.1 Protobuf submodules are gone (`3.0.0a1`, [#776](https://github.com/Jij-Inc/ommx/pull/776))
 
-Every `ommx.v1.*_pb2` module and `ommx.v1.annotation` is removed. Import classes from `ommx.v1` directly.
+Every `ommx.v1.*_pb2` module and `ommx.v1.annotation` is removed. Import SDK classes from top-level `ommx`.
 
 **Before (v2.5.1)**:
 ```python
@@ -36,14 +36,14 @@ from ommx.v1.solution_pb2 import State
 
 **After (v3)**:
 ```python
-from ommx.v1 import Constraint, Equality, Function, Linear, State
+from ommx import Constraint, Equality, Function, Linear, State
 ```
 
 The `.from_protobuf()` / `.to_protobuf()` bridge methods on `Constraint`, `RemovedConstraint`, `DecisionVariable`, etc. are removed along with the protobuf objects they produced. Use `from_bytes` / `to_bytes` for serialisation instead.
 
 ### 1.2 Constraint-hint helper types removed (`3.0.0a1`, [#776](https://github.com/Jij-Inc/ommx/pull/776); `3.0.0a2`, [#790](https://github.com/Jij-Inc/ommx/pull/790), [#798](https://github.com/Jij-Inc/ommx/pull/798))
 
-`ConstraintHints`, `OneHot`, `Sos1`, and the `Parameters` wrapper are no longer exported from `ommx.v1`. They are superseded by the first-class constraint types (`OneHotConstraint`, `Sos1Constraint`, `IndicatorConstraint`) and plain `dict[int, float]` for parameter substitution.
+`ConstraintHints`, `OneHot`, `Sos1`, and the `Parameters` wrapper are no longer exported. They are superseded by the first-class constraint types (`OneHotConstraint`, `Sos1Constraint`, `IndicatorConstraint`) and plain `dict[int, float]` for parameter substitution.
 
 **Before (v2.5.1)**:
 ```python
@@ -52,7 +52,7 @@ from ommx.v1 import OneHot, Sos1, ConstraintHints, Parameters
 
 **After (v3)**:
 ```python
-from ommx.v1 import OneHotConstraint, Sos1Constraint, IndicatorConstraint
+from ommx import OneHotConstraint, Sos1Constraint, IndicatorConstraint
 # Parameters is gone — pass a plain dict[int, float] to ParametricInstance.with_parameters
 ```
 
@@ -290,7 +290,7 @@ Linear(
 )
 
 # v3
-from ommx.v1 import Linear
+from ommx import Linear
 Linear(terms={int(j): float(c) for j, c in enumerate(row)}, constant=float(-b))
 ```
 
@@ -769,7 +769,7 @@ x.id == y.id        # True
 ### 14.3 `Parameter` supports the same operators as `DecisionVariable`
 
 ```python
-from ommx.v1 import Parameter, DecisionVariable
+from ommx import Parameter, DecisionVariable
 
 p = Parameter(1, name="param1")
 x = DecisionVariable.integer(2, lower=0, upper=10)
@@ -781,7 +781,7 @@ expr = 2 * p + 3  # Linear
 
 ## Migration checklist
 
-- [ ] Replace every `from ommx.v1.*_pb2 import ...` with `from ommx.v1 import ...`.
+- [ ] Replace every `from ommx.v1.*_pb2 import ...` and `from ommx.v1 import ...` SDK-domain import with `from ommx import ...`.
 - [ ] Remove all `.raw`, `from_raw(...)`, `from_protobuf(...)`, `to_protobuf(...)` usage; use `from_bytes` / `to_bytes` or direct properties.
 - [ ] Replace `Constraint(id=N, ...)` / `.set_id(N)` / `(expr <= 0).set_id(N)` with `{N: (expr <= 0)}` in the `constraints=` dict.
 - [ ] Remove reads of `constraint.id`; iterate with `.items()` on constraint dicts instead.

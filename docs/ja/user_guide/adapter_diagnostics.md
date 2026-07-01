@@ -1,8 +1,8 @@
 # Adapter 固有 diagnostics
 
-Adapter diagnostics は、portable な {class}`~ommx.v1.Solution` には入らない
+Adapter diagnostics は、portable な {class}`~ommx.Solution` には入らない
 solver 側の情報を残すための仕組みです。decode 済みの OMMX 結果を見るときは
-{class}`~ommx.v1.Solution` を使います。backend solver が何を観測し、何を報告し、
+{class}`~ommx.Solution` を使います。backend solver が何を観測し、何を報告し、
 どこまで証明したかを確認したい場合に diagnostics を使います。
 
 ## PySCIPOpt で diagnostics を記録する

@@ -223,7 +223,7 @@ impl RemovedOneHotConstraint {
 }
 
 /// Attached one-hot constraint — a write-through handle bound to a host
-/// ({class}`~ommx.v1.Instance` or {class}`~ommx.v1.ParametricInstance`).
+/// ({class}`~ommx.Instance` or {class}`~ommx.ParametricInstance`).
 ///
 /// Returned by `Instance.add_one_hot_constraint` /
 /// `ParametricInstance.add_one_hot_constraint` and by their
@@ -301,7 +301,7 @@ impl AttachedOneHotConstraint {
         }
     }
 
-    /// Return a {class}`~ommx.v1.OneHotConstraint` snapshot of the current
+    /// Return a {class}`~ommx.OneHotConstraint` snapshot of the current
     /// state. Mutations on the returned object do not propagate back.
     pub fn detach(&self, py: Python<'_>) -> PyResult<OneHotConstraint> {
         match &self.host {

@@ -6,7 +6,7 @@ import sys
 import numpy as np
 import pytest
 
-from ommx.v1 import Bound, Linear, DecisionVariable, Quadratic, Polynomial, Function
+from ommx import Bound, Linear, DecisionVariable, Quadratic, Polynomial, Function
 
 
 def assert_eq(lhs, rhs):

@@ -2,7 +2,7 @@ import enum
 
 import numpy as np
 
-from ommx.v1 import Instance, DecisionVariable, Function, Constraint, Linear, State
+from ommx import Instance, DecisionVariable, Function, Constraint, Linear, State
 
 
 class DataType(enum.Enum):

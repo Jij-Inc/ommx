@@ -1,7 +1,7 @@
 import pytest
 import random
 from copy import deepcopy
-from ommx.v1 import DecisionVariable, Instance
+from ommx import DecisionVariable, Instance
 
 
 @pytest.fixture
