@@ -52,7 +52,7 @@ instance = Instance.from_components(
 solution = instance.evaluate({1: 1, 2: 0})  # x=1, y=0
 ```
 
-生成された `ommx.Soluiton` は `ommx.Instance` からほとんどの情報を引き継ぎます。まず決定変数を見てみましょう。
+生成された `ommx.Solution` は `ommx.Instance` からほとんどの情報を引き継ぎます。まず決定変数を見てみましょう。
 
 ```{code-cell} ipython3
 solution.decision_variables_df()

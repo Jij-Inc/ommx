@@ -12,7 +12,7 @@ use pyo3::{
 };
 use std::collections::BTreeSet;
 
-/// Idiomatic wrapper of `ommx.Solution` protobuf message.
+/// Python SDK domain type for solutions serialized with the `ommx.v1.Solution` wire format.
 ///
 /// This also contains annotations persisted in the protobuf payload and mirrored
 /// to OMMX Artifact descriptors.

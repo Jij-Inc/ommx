@@ -24,7 +24,7 @@ In mathematical optimization, functions are used to express objective functions 
 
 
 ## Creating ommx.Function
-In the Python SDK, there are two main approachs to create these data structures. The first approach is to directly call the constructors of each data structure. For example, you can create `ommx.Linear` as follows.
+In the Python SDK, there are two main approaches to create these data structures. The first approach is to directly call the constructors of each data structure. For example, you can create `ommx.Linear` as follows.
 
 ```{code-cell} ipython3
 from ommx import Linear
