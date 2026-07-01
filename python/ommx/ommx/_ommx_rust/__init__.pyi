@@ -750,10 +750,6 @@ class AttachedConstraint:
         r"""
         Set the name. Writes through to the parent host's context store.
         """
-    def add_name(self, name: builtins.str) -> None:
-        r"""
-        Alias for {meth}`set_name` (backward compatibility).
-        """
     def set_subscripts(self, subscripts: typing.Sequence[builtins.int]) -> None:
         r"""
         Set the subscripts. Writes through to the parent host's context store.
@@ -766,10 +762,6 @@ class AttachedConstraint:
         r"""
         Set the description. Writes through to the parent host's context store.
         """
-    def add_description(self, description: builtins.str) -> None:
-        r"""
-        Alias for {meth}`set_description` (backward compatibility).
-        """
     def set_parameters(
         self, parameters: typing.Mapping[builtins.str, builtins.str]
     ) -> None:
@@ -780,7 +772,10 @@ class AttachedConstraint:
         self, parameters: typing.Mapping[builtins.str, builtins.str]
     ) -> None:
         r"""
-        Alias for {meth}`set_parameters` (backward compatibility).
+        Add parameter entries. Writes through to the parent host's context store.
+
+        Existing keys are overwritten, and keys not mentioned in `parameters`
+        are preserved. Use `set_parameters` to replace the whole map.
         """
     def add_parameter(self, key: builtins.str, value: builtins.str) -> None:
         r"""
@@ -906,17 +901,21 @@ class AttachedDecisionVariable:
         r"""
         Set the name. Writes through to the parent host's label store.
         """
-    def add_name(self, name: builtins.str) -> None: ...
     def set_subscripts(self, subscripts: typing.Sequence[builtins.int]) -> None: ...
     def add_subscripts(self, subscripts: typing.Sequence[builtins.int]) -> None: ...
     def set_description(self, description: builtins.str) -> None: ...
-    def add_description(self, description: builtins.str) -> None: ...
     def set_parameters(
         self, parameters: typing.Mapping[builtins.str, builtins.str]
     ) -> None: ...
     def add_parameters(
         self, parameters: typing.Mapping[builtins.str, builtins.str]
-    ) -> None: ...
+    ) -> None:
+        r"""
+        Add parameter entries. Writes through to the parent host's label store.
+
+        Existing keys are overwritten, and keys not mentioned in `parameters`
+        are preserved. Use `set_parameters` to replace the whole map.
+        """
     def add_parameter(self, key: builtins.str, value: builtins.str) -> None: ...
 
 @typing.final
@@ -969,10 +968,6 @@ class AttachedIndicatorConstraint:
         r"""
         Set the name. Writes through to the parent host's context store.
         """
-    def add_name(self, name: builtins.str) -> None:
-        r"""
-        Alias for {meth}`set_name` (backward compatibility).
-        """
     def set_subscripts(self, subscripts: typing.Sequence[builtins.int]) -> None:
         r"""
         Set the subscripts. Writes through to the parent host's context store.
@@ -985,10 +980,6 @@ class AttachedIndicatorConstraint:
         r"""
         Set the description. Writes through to the parent host's context store.
         """
-    def add_description(self, description: builtins.str) -> None:
-        r"""
-        Alias for {meth}`set_description` (backward compatibility).
-        """
     def set_parameters(
         self, parameters: typing.Mapping[builtins.str, builtins.str]
     ) -> None:
@@ -999,7 +990,10 @@ class AttachedIndicatorConstraint:
         self, parameters: typing.Mapping[builtins.str, builtins.str]
     ) -> None:
         r"""
-        Alias for {meth}`set_parameters` (backward compatibility).
+        Add parameter entries. Writes through to the parent host's context store.
+
+        Existing keys are overwritten, and keys not mentioned in `parameters`
+        are preserved. Use `set_parameters` to replace the whole map.
         """
     def add_parameter(self, key: builtins.str, value: builtins.str) -> None:
         r"""
@@ -1051,10 +1045,6 @@ class AttachedOneHotConstraint:
         r"""
         Set the name. Writes through to the parent host's context store.
         """
-    def add_name(self, name: builtins.str) -> None:
-        r"""
-        Alias for {meth}`set_name` (backward compatibility).
-        """
     def set_subscripts(self, subscripts: typing.Sequence[builtins.int]) -> None:
         r"""
         Set the subscripts. Writes through to the parent host's context store.
@@ -1067,10 +1057,6 @@ class AttachedOneHotConstraint:
         r"""
         Set the description. Writes through to the parent host's context store.
         """
-    def add_description(self, description: builtins.str) -> None:
-        r"""
-        Alias for {meth}`set_description` (backward compatibility).
-        """
     def set_parameters(
         self, parameters: typing.Mapping[builtins.str, builtins.str]
     ) -> None:
@@ -1081,7 +1067,10 @@ class AttachedOneHotConstraint:
         self, parameters: typing.Mapping[builtins.str, builtins.str]
     ) -> None:
         r"""
-        Alias for {meth}`set_parameters` (backward compatibility).
+        Add parameter entries. Writes through to the parent host's context store.
+
+        Existing keys are overwritten, and keys not mentioned in `parameters`
+        are preserved. Use `set_parameters` to replace the whole map.
         """
     def add_parameter(self, key: builtins.str, value: builtins.str) -> None:
         r"""
@@ -1126,10 +1115,6 @@ class AttachedSos1Constraint:
         r"""
         Set the name. Writes through to the parent host's context store.
         """
-    def add_name(self, name: builtins.str) -> None:
-        r"""
-        Alias for {meth}`set_name` (backward compatibility).
-        """
     def set_subscripts(self, subscripts: typing.Sequence[builtins.int]) -> None:
         r"""
         Set the subscripts. Writes through to the parent host's context store.
@@ -1142,10 +1127,6 @@ class AttachedSos1Constraint:
         r"""
         Set the description. Writes through to the parent host's context store.
         """
-    def add_description(self, description: builtins.str) -> None:
-        r"""
-        Alias for {meth}`set_description` (backward compatibility).
-        """
     def set_parameters(
         self, parameters: typing.Mapping[builtins.str, builtins.str]
     ) -> None:
@@ -1156,7 +1137,10 @@ class AttachedSos1Constraint:
         self, parameters: typing.Mapping[builtins.str, builtins.str]
     ) -> None:
         r"""
-        Alias for {meth}`set_parameters` (backward compatibility).
+        Add parameter entries. Writes through to the parent host's context store.
+
+        Existing keys are overwritten, and keys not mentioned in `parameters`
+        are preserved. Use `set_parameters` to replace the whole map.
         """
     def add_parameter(self, key: builtins.str, value: builtins.str) -> None:
         r"""
@@ -1296,11 +1280,6 @@ class Constraint:
         Set the name of the constraint
         Returns self for method chaining
         """
-    def add_name(self, name: builtins.str) -> Constraint:
-        r"""
-        Alias for set_name (backward compatibility)
-        Returns self for method chaining
-        """
     def set_subscripts(self, subscripts: typing.Sequence[builtins.int]) -> Constraint:
         r"""
         Set the subscripts of the constraint
@@ -1316,11 +1295,6 @@ class Constraint:
         Set the description of the constraint
         Returns self for method chaining
         """
-    def add_description(self, description: builtins.str) -> Constraint:
-        r"""
-        Alias for set_description (backward compatibility)
-        Returns self for method chaining
-        """
     def set_parameters(
         self, parameters: typing.Mapping[builtins.str, builtins.str]
     ) -> Constraint:
@@ -1332,7 +1306,10 @@ class Constraint:
         self, parameters: typing.Mapping[builtins.str, builtins.str]
     ) -> Constraint:
         r"""
-        Alias for set_parameters (backward compatibility)
+        Add parameters to the constraint.
+
+        Existing keys are overwritten, and keys not mentioned in `parameters`
+        are preserved. Use `set_parameters` to replace the whole map.
         Returns self for method chaining
         """
     def add_parameter(self, key: builtins.str, value: builtins.str) -> Constraint:
@@ -6624,8 +6601,8 @@ class Solution:
         ```python
         >>> from ommx.v1 import Instance, DecisionVariable
         >>> x = [DecisionVariable.binary(i) for i in range(3)]
-        >>> c0 = (x[0] + x[1] == 1).add_name("c").add_subscripts([0])
-        >>> c1 = (x[1] + x[2] == 1).add_name("c").add_subscripts([1])
+        >>> c0 = (x[0] + x[1] == 1).set_name("c").add_subscripts([0])
+        >>> c1 = (x[1] + x[2] == 1).set_name("c").add_subscripts([1])
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=sum(x),

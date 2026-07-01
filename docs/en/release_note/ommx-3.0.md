@@ -8,6 +8,12 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### ⚠ Constraint metadata setter names ([#851](https://github.com/Jij-Inc/ommx/issues/851))
+
+Constraint metadata replacement now consistently uses the `set_*` prefix. `Constraint.add_name`, `Constraint.add_description`, and the same scalar replacing aliases on `AttachedX` handles are removed. Use `set_name` and `set_description` instead.
+
+`add_parameters` now merges the provided entries into the existing parameter map, matching `add_parameter` and `add_subscripts`. Use `set_parameters` when replacing the whole map.
+
 ### ⚠ Protobuf-backed annotations and read-only annotation views ([#939](https://github.com/Jij-Inc/ommx/pull/939))
 
 Annotations on {class}`~ommx.v1.Instance`, {class}`~ommx.v1.ParametricInstance`, {class}`~ommx.v1.Solution`, and {class}`~ommx.v1.SampleSet` are now stored in the protobuf payload instead of living only in Python-side wrapper state or Artifact descriptors. `to_bytes()` / `from_bytes()` therefore preserve titles, licenses, solver metadata, and user extension annotations. When reading older Artifacts, descriptor-only annotations are still merged in, with protobuf metadata taking precedence if both locations define the same OMMX key.

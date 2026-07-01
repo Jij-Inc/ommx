@@ -5,22 +5,22 @@ Test context-field modification functionality for Constraint
 from ommx.v1 import DecisionVariable, Constraint
 
 
-def test_constraint_add_name():
-    """Test add_name method uses efficient Rust implementation"""
+def test_constraint_set_name():
+    """Test set_name method uses efficient Rust implementation"""
     x = DecisionVariable.binary(0)
     constraint = x == 1
 
     # Initially no name
     assert constraint.name is None
 
-    # Add name - returns a Constraint object for chaining
-    result = constraint.add_name("test_constraint")
+    # Set name - returns a Constraint object for chaining
+    result = constraint.set_name("test_constraint")
 
     # Name should be set on the returned object
     assert result.name == "test_constraint"
 
     # Can update name via chaining
-    result = result.add_name("updated_name")
+    result = result.set_name("updated_name")
     assert result.name == "updated_name"
 
 
@@ -46,7 +46,7 @@ def test_constraint_add_subscripts():
 def test_constraint_chaining():
     """Test that methods can be chained together"""
     x = DecisionVariable.binary(0)
-    constraint = (x == 1).add_name("chained").add_subscripts([1, 2])
+    constraint = (x == 1).set_name("chained").add_subscripts([1, 2])
 
     assert constraint.name == "chained"
     assert constraint.subscripts == [1, 2]
@@ -58,7 +58,7 @@ def test_constraint_method_efficiency():
     constraint = x == 1
 
     # Chain multiple modifications
-    result = constraint.add_name("test").add_subscripts([1, 2])
+    result = constraint.set_name("test").add_subscripts([1, 2])
 
     # Values should be set on the chained result
     assert result.name == "test"
@@ -73,14 +73,14 @@ def test_constraint_description():
     # Initially no description
     assert constraint.description is None
 
-    # Add description - returns a Constraint object for chaining
-    result = constraint.add_description("This is a test constraint")
+    # Set description - returns a Constraint object for chaining
+    result = constraint.set_description("This is a test constraint")
 
     # Description should be set on the returned object
     assert result.description == "This is a test constraint"
 
     # Can update description via chaining
-    result = result.add_description("Updated description")
+    result = result.set_description("Updated description")
     assert result.description == "Updated description"
 
 
@@ -92,15 +92,29 @@ def test_constraint_parameters():
     # Initially no parameters
     assert constraint.parameters == {}
 
-    # Add parameters - returns a Constraint object for chaining
-    result = constraint.add_parameters({"solver": "highs", "timeout": "60"})
+    # Set parameters - returns a Constraint object for chaining
+    result = constraint.set_parameters({"solver": "highs", "timeout": "60"})
 
     # Parameters should be set on the returned object
     assert result.parameters == {"solver": "highs", "timeout": "60"}
 
-    # Note: add_parameters replaces all parameters (via set_parameters alias)
-    result = result.add_parameters({"precision": "1e-6"})
+    # set_parameters replaces all parameters.
+    result = result.set_parameters({"precision": "1e-6"})
     assert result.parameters == {"precision": "1e-6"}
+
+
+def test_constraint_add_parameters_merges_existing_parameter_dict():
+    """add_parameters merges entries; set_parameters replaces the whole map."""
+    x = DecisionVariable.binary(0)
+    constraint = (x == 1).set_parameters({"solver": "highs", "timeout": "60"})
+
+    result = constraint.add_parameters({"timeout": "120", "precision": "1e-6"})
+
+    assert result.parameters == {
+        "solver": "highs",
+        "timeout": "120",
+        "precision": "1e-6",
+    }
 
 
 def test_constraint_complete_context():
@@ -108,8 +122,8 @@ def test_constraint_complete_context():
     x = DecisionVariable.binary(0)
     constraint = (
         (x == 1)
-        .add_name("comprehensive_test")
-        .add_description("A comprehensive test constraint")
+        .set_name("comprehensive_test")
+        .set_description("A comprehensive test constraint")
         .add_subscripts([10, 20, 30])
         .add_parameters({"method": "branch_and_bound", "threads": "4"})
     )
@@ -128,8 +142,8 @@ def test_constraint_context_efficiency():
 
     # Chain all context-field modifications
     result = (
-        constraint.add_name("efficient")
-        .add_description("Efficient test")
+        constraint.set_name("efficient")
+        .set_description("Efficient test")
         .add_subscripts([1])
         .add_parameters({"key": "value"})
     )
@@ -139,6 +153,14 @@ def test_constraint_context_efficiency():
     assert result.description == "Efficient test"
     assert result.subscripts == [1]
     assert result.parameters == {"key": "value"}
+
+
+def test_replacing_metadata_does_not_have_add_aliases():
+    """Only append/merge metadata operations use the add_* prefix."""
+    constraint = DecisionVariable.binary(0) == 1
+
+    assert not hasattr(constraint, "add_name")
+    assert not hasattr(constraint, "add_description")
 
 
 def test_constraint_constructor_with_context():
