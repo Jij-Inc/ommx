@@ -205,11 +205,10 @@ impl Instance {
         id: ConstraintID,
         constraint: Constraint,
     ) -> crate::Result<Option<Constraint>> {
-        if self.constraint_collection.contains_id(id) {
-            let old = self
-                .constraint_collection
-                .replace_preserving_lifecycle(id, constraint)
-                .expect("contains_id returned true for this constraint");
+        if let Some(old) = self
+            .constraint_collection
+            .replace_row_preserving_lifecycle(id, constraint.clone())
+        {
             Ok(Some(old))
         } else {
             self.constraint_collection.insert_active_with_context(

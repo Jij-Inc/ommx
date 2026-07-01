@@ -405,7 +405,7 @@ impl<T: ConstraintType> ConstraintCollection<T> {
     }
 
     /// Return whether `id` belongs to either active or removed constraints.
-    pub(crate) fn contains_id(&self, id: T::ID) -> bool {
+    fn contains_id(&self, id: T::ID) -> bool {
         self.active.contains_key(&id) || self.removed.contains_key(&id)
     }
 
@@ -449,7 +449,7 @@ impl<T: ConstraintType> ConstraintCollection<T> {
     ///
     /// Returns [`None`] when `id` is unknown to this collection. Host-level
     /// callers must validate the payload before calling this method.
-    pub(crate) fn replace_preserving_lifecycle(
+    pub(crate) fn replace_row_preserving_lifecycle(
         &mut self,
         id: T::ID,
         constraint: T::Created,
@@ -864,7 +864,7 @@ impl<T: ConstraintType> EvaluatedCollection<T> {
     /// Replace an evaluated row while preserving removed-state and context sidecars.
     ///
     /// Returns [`None`] when `id` is unknown to this collection.
-    pub(crate) fn replace_evaluated(
+    pub(crate) fn replace_evaluated_row(
         &mut self,
         id: T::ID,
         constraint: T::Evaluated,

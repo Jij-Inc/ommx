@@ -470,7 +470,7 @@ impl Solution {
             constraint.stage.dual_variable = value;
             assert!(
                 self.evaluated_constraints
-                    .replace_evaluated(constraint_id, constraint)
+                    .replace_evaluated_row(constraint_id, constraint)
                     .is_some(),
                 "constraint presence was verified above"
             );
