@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package ommx.v2;
+
+import "ommx/v1/function.proto";
+
+// Named function row used by v2 top-level table owners.
+//
+// The enclosing named-function table owns the NamedFunctionID and modeling
+// label sidecars. This row stores only the intrinsic expression payload.
+message NamedFunction {
+  ommx.v1.Function function = 1;
+}
+
