@@ -64,72 +64,6 @@ pub struct RemovedReason {
     pub parameters:
         ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
 }
-/// Model description shared by v2 top-level roots.
-#[non_exhaustive]
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ModelDescription {
-    #[prost(string, optional, tag = "1")]
-    pub name: ::core::option::Option<::prost::alloc::string::String>,
-    #[prost(string, optional, tag = "2")]
-    pub description: ::core::option::Option<::prost::alloc::string::String>,
-    #[prost(string, repeated, tag = "3")]
-    pub authors: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
-    #[prost(string, optional, tag = "4")]
-    pub created_by: ::core::option::Option<::prost::alloc::string::String>,
-    #[prost(string, optional, tag = "5")]
-    pub created: ::core::option::Option<::prost::alloc::string::String>,
-    #[prost(string, optional, tag = "6")]
-    pub license: ::core::option::Option<::prost::alloc::string::String>,
-    #[prost(string, optional, tag = "7")]
-    pub dataset: ::core::option::Option<::prost::alloc::string::String>,
-}
-/// Values keyed by decision-variable or parameter ID.
-#[non_exhaustive]
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct State {
-    #[prost(map = "uint64, double", tag = "1")]
-    pub entries: ::std::collections::HashMap<u64, f64>,
-}
-/// A compressed map from sample IDs to scalar values.
-///
-/// Each entry stores one value and the sample IDs that share that value.
-#[non_exhaustive]
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct SampledValues {
-    #[prost(message, repeated, tag = "1")]
-    pub entries: ::prost::alloc::vec::Vec<sampled_values::Entry>,
-}
-/// Nested message and enum types in `SampledValues`.
-pub mod sampled_values {
-    #[non_exhaustive]
-    #[allow(clippy::derive_partial_eq_without_eq)]
-    #[derive(Clone, PartialEq, ::prost::Message)]
-    pub struct Entry {
-        #[prost(double, tag = "1")]
-        pub value: f64,
-        #[prost(uint64, repeated, tag = "2")]
-        pub ids: ::prost::alloc::vec::Vec<u64>,
-    }
-}
-/// Metadata for an optimization or sampling process.
-#[non_exhaustive]
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ProcessMetadata {
-    #[prost(string, optional, tag = "1")]
-    pub instance: ::core::option::Option<::prost::alloc::string::String>,
-    #[prost(string, optional, tag = "2")]
-    pub solver: ::core::option::Option<::prost::alloc::string::String>,
-    #[prost(string, optional, tag = "3")]
-    pub parameters: ::core::option::Option<::prost::alloc::string::String>,
-    #[prost(string, optional, tag = "4")]
-    pub start: ::core::option::Option<::prost::alloc::string::String>,
-    #[prost(string, optional, tag = "5")]
-    pub end: ::core::option::Option<::prost::alloc::string::String>,
-}
 /// Wire-level semantics required to interpret a top-level root exactly.
 ///
 /// This is OMMX's feature-based forward-compatibility gate. Protobuf itself
@@ -401,13 +335,13 @@ pub struct SampledRegularConstraint {
     #[prost(enumeration = "super::v1::Equality", tag = "1")]
     pub equality: i32,
     #[prost(message, optional, tag = "2")]
-    pub evaluated_values: ::core::option::Option<SampledValues>,
+    pub evaluated_values: ::core::option::Option<super::v1::SampledValues>,
     #[prost(map = "uint64, bool", tag = "3")]
     pub feasible: ::std::collections::HashMap<u64, bool>,
     #[prost(uint64, repeated, tag = "4")]
     pub used_decision_variable_ids: ::prost::alloc::vec::Vec<u64>,
     #[prost(message, optional, tag = "5")]
-    pub dual_variables: ::core::option::Option<SampledValues>,
+    pub dual_variables: ::core::option::Option<super::v1::SampledValues>,
 }
 /// Sampled indicator constraint row.
 #[non_exhaustive]
@@ -419,7 +353,7 @@ pub struct SampledIndicatorConstraint {
     #[prost(enumeration = "super::v1::Equality", tag = "2")]
     pub equality: i32,
     #[prost(message, optional, tag = "3")]
-    pub evaluated_values: ::core::option::Option<SampledValues>,
+    pub evaluated_values: ::core::option::Option<super::v1::SampledValues>,
     #[prost(map = "uint64, bool", tag = "4")]
     pub feasible: ::std::collections::HashMap<u64, bool>,
     #[prost(map = "uint64, bool", tag = "5")]
@@ -537,7 +471,7 @@ pub struct SampledDecisionVariable {
     #[prost(message, optional, tag = "2")]
     pub bound: ::core::option::Option<super::v1::Bound>,
     #[prost(message, optional, tag = "3")]
-    pub samples: ::core::option::Option<SampledValues>,
+    pub samples: ::core::option::Option<super::v1::SampledValues>,
 }
 /// Definition-stage decision-variable table.
 ///
@@ -601,7 +535,7 @@ pub struct EvaluatedNamedFunction {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SampledNamedFunction {
     #[prost(message, optional, tag = "1")]
-    pub evaluated_values: ::core::option::Option<SampledValues>,
+    pub evaluated_values: ::core::option::Option<super::v1::SampledValues>,
     #[prost(uint64, repeated, tag = "2")]
     pub used_decision_variable_ids: ::prost::alloc::vec::Vec<u64>,
 }
@@ -638,27 +572,6 @@ pub struct SampledNamedFunctionTable {
     #[prost(map = "uint64, message", tag = "2")]
     pub labels: ::std::collections::HashMap<u64, ModelingLabel>,
 }
-/// Parameter IDs and labels owned by ParametricInstance.
-///
-/// Parameter IDs intentionally share the VariableID namespace with decision
-/// variables. ParametricInstance validates disjointness.
-#[non_exhaustive]
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ParameterTable {
-    #[prost(uint64, repeated, tag = "1")]
-    pub ids: ::prost::alloc::vec::Vec<u64>,
-    #[prost(map = "uint64, message", tag = "2")]
-    pub labels: ::std::collections::HashMap<u64, ModelingLabel>,
-}
-/// Concrete parameter values keyed by the shared VariableID namespace.
-#[non_exhaustive]
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ParameterValues {
-    #[prost(map = "uint64, double", tag = "1")]
-    pub entries: ::std::collections::HashMap<u64, f64>,
-}
 /// Validated optimization problem serialization root.
 #[non_exhaustive]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -667,7 +580,7 @@ pub struct Instance {
     #[prost(enumeration = "Feature", repeated, tag = "1")]
     pub required_features: ::prost::alloc::vec::Vec<i32>,
     #[prost(message, optional, tag = "2")]
-    pub description: ::core::option::Option<ModelDescription>,
+    pub description: ::core::option::Option<super::v1::instance::Description>,
     #[prost(message, optional, tag = "3")]
     pub decision_variables: ::core::option::Option<DecisionVariableTable>,
     #[prost(message, optional, tag = "4")]
@@ -677,7 +590,7 @@ pub struct Instance {
     #[prost(enumeration = "super::v1::instance::Sense", tag = "6")]
     pub sense: i32,
     #[prost(message, optional, tag = "7")]
-    pub parameters: ::core::option::Option<ParameterValues>,
+    pub parameters: ::core::option::Option<super::v1::Parameters>,
     #[prost(message, optional, tag = "8")]
     pub indicator_constraints: ::core::option::Option<IndicatorConstraintCollection>,
     #[prost(message, optional, tag = "9")]
@@ -692,6 +605,19 @@ pub struct Instance {
     pub annotations:
         ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
 }
+/// Parameter IDs and labels owned by ParametricInstance.
+///
+/// Parameter IDs intentionally share the VariableID namespace with decision
+/// variables. ParametricInstance validates disjointness.
+#[non_exhaustive]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ParameterTable {
+    #[prost(uint64, repeated, tag = "1")]
+    pub ids: ::prost::alloc::vec::Vec<u64>,
+    #[prost(map = "uint64, message", tag = "2")]
+    pub labels: ::std::collections::HashMap<u64, ModelingLabel>,
+}
 /// Validated parametric optimization problem serialization root.
 #[non_exhaustive]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -700,7 +626,7 @@ pub struct ParametricInstance {
     #[prost(enumeration = "Feature", repeated, tag = "1")]
     pub required_features: ::prost::alloc::vec::Vec<i32>,
     #[prost(message, optional, tag = "2")]
-    pub description: ::core::option::Option<ModelDescription>,
+    pub description: ::core::option::Option<super::v1::instance::Description>,
     #[prost(message, optional, tag = "3")]
     pub decision_variables: ::core::option::Option<DecisionVariableTable>,
     #[prost(message, optional, tag = "4")]
@@ -733,7 +659,7 @@ pub struct SampleSet {
     #[prost(enumeration = "Feature", repeated, tag = "1")]
     pub required_features: ::prost::alloc::vec::Vec<i32>,
     #[prost(message, optional, tag = "2")]
-    pub objectives: ::core::option::Option<SampledValues>,
+    pub objectives: ::core::option::Option<super::v1::SampledValues>,
     #[prost(message, optional, tag = "3")]
     pub decision_variables: ::core::option::Option<SampledDecisionVariableTable>,
     #[prost(message, optional, tag = "4")]
@@ -747,7 +673,7 @@ pub struct SampleSet {
     #[prost(message, optional, tag = "8")]
     pub sampled_named_functions: ::core::option::Option<SampledNamedFunctionTable>,
     #[prost(message, optional, tag = "9")]
-    pub metadata: ::core::option::Option<ProcessMetadata>,
+    pub metadata: ::core::option::Option<super::v1::ProcessMetadata>,
     #[prost(map = "string, string", tag = "10")]
     pub annotations:
         ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
@@ -766,7 +692,7 @@ pub struct Solution {
     #[prost(enumeration = "Feature", repeated, tag = "1")]
     pub required_features: ::prost::alloc::vec::Vec<i32>,
     #[prost(message, optional, tag = "2")]
-    pub state: ::core::option::Option<State>,
+    pub state: ::core::option::Option<super::v1::State>,
     #[prost(double, tag = "3")]
     pub objective: f64,
     #[prost(message, optional, tag = "4")]
@@ -786,7 +712,7 @@ pub struct Solution {
     #[prost(message, optional, tag = "11")]
     pub evaluated_named_functions: ::core::option::Option<EvaluatedNamedFunctionTable>,
     #[prost(message, optional, tag = "12")]
-    pub metadata: ::core::option::Option<ProcessMetadata>,
+    pub metadata: ::core::option::Option<super::v1::ProcessMetadata>,
     #[prost(map = "string, string", tag = "13")]
     pub annotations:
         ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,

@@ -60,39 +60,3 @@ message RemovedReason {
   string reason = 1;
   map<string, string> parameters = 2;
 }
-
-// Model description shared by v2 top-level roots.
-message ModelDescription {
-  optional string name = 1;
-  optional string description = 2;
-  repeated string authors = 3;
-  optional string created_by = 4;
-  optional string created = 5;
-  optional string license = 6;
-  optional string dataset = 7;
-}
-
-// Values keyed by decision-variable or parameter ID.
-message State {
-  map<uint64, double> entries = 1;
-}
-
-// A compressed map from sample IDs to scalar values.
-//
-// Each entry stores one value and the sample IDs that share that value.
-message SampledValues {
-  message Entry {
-    double value = 1;
-    repeated uint64 ids = 2;
-  }
-  repeated Entry entries = 1;
-}
-
-// Metadata for an optimization or sampling process.
-message ProcessMetadata {
-  optional string instance = 1;
-  optional string solver = 2;
-  optional string parameters = 3;
-  optional string start = 4;
-  optional string end = 5;
-}

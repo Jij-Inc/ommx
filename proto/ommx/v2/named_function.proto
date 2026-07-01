@@ -3,6 +3,7 @@ syntax = "proto3";
 package ommx.v2;
 
 import "ommx/v1/function.proto";
+import "ommx/v1/sample_set.proto";
 import "ommx/v2/common.proto";
 
 // Named function row used by v2 top-level table owners.
@@ -21,7 +22,7 @@ message EvaluatedNamedFunction {
 
 // Sampled named-function row used by v2 top-level table owners.
 message SampledNamedFunction {
-  SampledValues evaluated_values = 1;
+  ommx.v1.SampledValues evaluated_values = 1;
   repeated uint64 used_decision_variable_ids = 2;
 }
 

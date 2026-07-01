@@ -13,7 +13,7 @@ import "ommx/v2/parameter.proto";
 // Validated parametric optimization problem serialization root.
 message ParametricInstance {
   repeated Feature required_features = 1;
-  ModelDescription description = 2;
+  ommx.v1.Instance.Description description = 2;
   DecisionVariableTable decision_variables = 3;
   ParameterTable parameters = 4;
   ommx.v1.Function objective = 5;

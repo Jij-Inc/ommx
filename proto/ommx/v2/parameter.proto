@@ -12,8 +12,3 @@ message ParameterTable {
   repeated uint64 ids = 1;
   map<uint64, ModelingLabel> labels = 2;
 }
-
-// Concrete parameter values keyed by the shared VariableID namespace.
-message ParameterValues {
-  map<uint64, double> entries = 1;
-}

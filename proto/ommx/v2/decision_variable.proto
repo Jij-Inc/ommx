@@ -3,6 +3,7 @@ syntax = "proto3";
 package ommx.v2;
 
 import "ommx/v1/decision_variables.proto";
+import "ommx/v1/sample_set.proto";
 import "ommx/v2/common.proto";
 
 // Definition-stage decision-variable row.
@@ -24,7 +25,7 @@ message EvaluatedDecisionVariable {
 message SampledDecisionVariable {
   ommx.v1.DecisionVariable.Kind kind = 1;
   ommx.v1.Bound bound = 2;
-  SampledValues samples = 3;
+  ommx.v1.SampledValues samples = 3;
 }
 
 // Definition-stage decision-variable table.

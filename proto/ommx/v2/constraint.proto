@@ -4,6 +4,7 @@ package ommx.v2;
 
 import "ommx/v1/constraint.proto";
 import "ommx/v1/function.proto";
+import "ommx/v1/sample_set.proto";
 import "ommx/v2/common.proto";
 
 // Regular scalar constraint row.
@@ -135,17 +136,17 @@ message SampledActiveVariable {
 // Sampled regular constraint row.
 message SampledRegularConstraint {
   ommx.v1.Equality equality = 1;
-  SampledValues evaluated_values = 2;
+  ommx.v1.SampledValues evaluated_values = 2;
   map<uint64, bool> feasible = 3;
   repeated uint64 used_decision_variable_ids = 4;
-  SampledValues dual_variables = 5;
+  ommx.v1.SampledValues dual_variables = 5;
 }
 
 // Sampled indicator constraint row.
 message SampledIndicatorConstraint {
   uint64 indicator_variable = 1;
   ommx.v1.Equality equality = 2;
-  SampledValues evaluated_values = 3;
+  ommx.v1.SampledValues evaluated_values = 3;
   map<uint64, bool> feasible = 4;
   map<uint64, bool> indicator_active = 5;
   repeated uint64 used_decision_variable_ids = 6;
