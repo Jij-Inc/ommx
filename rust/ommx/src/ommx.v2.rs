@@ -132,9 +132,16 @@ pub struct ProcessMetadata {
 }
 /// Wire-level semantics required to interpret a top-level root exactly.
 ///
-/// Readers must reject payloads containing unknown or unsupported required
-/// features. This protects mathematical meaning when future schemas add fields
-/// that older readers would otherwise ignore as protobuf unknown fields.
+/// This is OMMX's feature-based forward-compatibility gate. Protobuf itself
+/// preserves wire compatibility by letting older readers ignore unknown fields,
+/// but that is not sufficient for mathematical optimization data: ignoring an
+/// unknown constraint family or other semantic field can turn the payload into a
+/// different problem. Top-level roots therefore declare the semantic features
+/// required by the concrete payload.
+///
+/// Readers must reject payloads containing unknown or unsupported
+/// `required_features`. Writers must include every feature whose omission would
+/// let an older reader silently interpret a weaker or otherwise different model.
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
