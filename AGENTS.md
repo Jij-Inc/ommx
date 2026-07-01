@@ -140,6 +140,7 @@ from ommx._ommx_rust import Function  # Binding-internal only
 ### 🧪 Testing & Quality
 - Python tests: `python/ommx-tests/tests` for core SDK, each adapter has its own `tests/` directory
 - Always run `task format` before committing
+- After pushing a PR update, do not wait for remote CI checks by default, and do not report pending checks or merely-started check runs. Report once the requested work, focused local validation, commit, and push are done. Check or wait for CI only when the user explicitly asks, when debugging a failing check, or when the next action depends on the final CI result.
 
 ### 📊 Performance Claims Policy
 - **NEVER claim performance improvements without benchmarks**
