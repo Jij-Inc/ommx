@@ -22,7 +22,7 @@ This version significantly improves the performance of the OMMX API. Since many 
 
 As mentioned above, in addition to replacing the API that was auto-generated from the Protocol Buffers definition, we have improved the API to be more natural and easier for AI assistants like [GitHub Copilot] and [Claude Code] to generate, in line with their widespread adoption. This time, we are making API improvements that include breaking changes for the major version upgrade.
 
-We have prepared a migration guide specifically for use with [Claude Code] in the [Python SDK v1 to v2 Migration Guide](https://github.com/Jij-Inc/ommx/blob/main/PYTHON_SDK_MIGRATION_GUIDE.md). You can migrate more smoothly by loading this into [Claude Code] before performing the migration. Using type checking with `pyright` or `mypy` will make the migration even smoother.
+We have prepared a migration guide specifically for use with [Claude Code] in the [Python SDK v1 to v2 Migration Guide](../migration/python_sdk.md). You can migrate more smoothly by loading this into [Claude Code] before performing the migration. Using type checking with `pyright` or `mypy` will make the migration even smoother.
 
 [GitHub Copilot]: https://github.com/features/copilot
 [Claude Code]: https://www.anthropic.com/claude-code

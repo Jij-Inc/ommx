@@ -203,7 +203,7 @@ user-facing changes:
   off the SoA store ([#846](https://github.com/Jij-Inc/ommx/pull/846),
   [#847](https://github.com/Jij-Inc/ommx/pull/847)).
 
-See [`PYTHON_SDK_MIGRATION_GUIDE.md`](https://github.com/Jij-Inc/ommx/blob/main/PYTHON_SDK_MIGRATION_GUIDE.md)
+See the [Python SDK Migration Guide](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/migration/python_sdk.html)
 §9–11 for the user-facing version.
 
 The migration guide's [Modeling labels and constraint context](crate::doc::migration_guide#modeling-labels-and-constraint-context)

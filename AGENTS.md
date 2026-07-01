@@ -54,7 +54,8 @@ OMMX (Open Mathematical prograMming eXchange) is an open ecosystem for mathemati
 - Use `task python:set-version -- <version>` for Python SDK version changes; it updates the main Python `ommx` package and adapter package versions together.
 
 Migration guides:
-- `PYTHON_SDK_MIGRATION_GUIDE.md` — v1→v2 and v2→v3
+- `docs/en/migration/python_sdk.md` / `docs/ja/migration/python_sdk.md` — Python SDK v1→v2 and v2→v3
+- `PYTHON_SDK_MIGRATION_GUIDE.md` — short redirect stub to the Sphinx-hosted Python SDK migration guide
 - `rust/ommx/doc/migration_guide.md` — v3 Stage Pattern (rendered as `ommx::doc::migration_guide` on docs.rs)
 
 ## Development Commands

@@ -127,6 +127,14 @@ api/index
 ```
 
 ```{toctree}
+:caption: Migration Guide
+:maxdepth: 1
+:hidden:
+
+migration/python_sdk
+```
+
+```{toctree}
 :caption: Release Note
 :maxdepth: 1
 :hidden:
