@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use colored::Colorize;
 use glob::glob;
 use prost_build::Config;
@@ -46,7 +46,14 @@ fn main() -> Result<()> {
     generated.sort();
     for file in generated {
         eprintln!("{:>12} {}", "Formatting".bold().cyan(), file.display());
-        std::process::Command::new("rustfmt").arg(file).status()?;
+        let status = std::process::Command::new("rustfmt").arg(&file).status()?;
+        if !status.success() {
+            bail!(
+                "rustfmt failed for {} with status {}",
+                file.display(),
+                status
+            );
+        }
     }
 
     Ok(())
