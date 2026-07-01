@@ -102,7 +102,7 @@ x = [
 objective = sum(v[i] * x[i] for i in range(N))
 
 # 制約条件を定義する
-constraint = (sum(w[i] * x[i] for i in range(N)) <= W).add_name("重量制限")
+constraint = (sum(w[i] * x[i] for i in range(N)) <= W).set_name("重量制限")
 
 # インスタンスを作成する
 instance = Instance.from_components(

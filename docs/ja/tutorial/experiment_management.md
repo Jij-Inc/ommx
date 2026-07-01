@@ -63,7 +63,7 @@ pi = ParametricInstance.from_components(
     parameters=[capacity],
     objective=sum(v[i] * x[i] for i in range(N)),
     constraints={
-        0: (sum(w[i] * x[i] for i in range(N)) <= capacity).add_name("重量制限")
+        0: (sum(w[i] * x[i] for i in range(N)) <= capacity).set_name("重量制限")
     },
     sense=Instance.MAXIMIZE,
 )

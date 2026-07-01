@@ -412,25 +412,25 @@ artifact = Artifact.load("ghcr.io/jij-inc/ommx/...")    # remote registry
 
 ## 8. Snapshot `Constraint` setters return a clone, not `self` (`3.0.0a1`, [#770](https://github.com/Jij-Inc/ommx/pull/770), [#771](https://github.com/Jij-Inc/ommx/pull/771))
 
-v2's `Constraint.add_name(...)` / `add_subscripts(...)` / `add_description(...)` mutated the Python wrapper in place and returned `self` (the same object), so chained calls on a held reference accumulated correctly. v3's setters still mutate in place but return `self.clone()` — a fresh wrapper. Single calls behave the same; **chained calls without reassignment lose every mutation past the first** because the chain operates on clones from that point on.
+v2's metadata helpers such as `Constraint.add_name(...)`, `add_subscripts(...)`, and `add_description(...)` mutated the Python wrapper in place and returned `self` (the same object), so chained calls on a held reference accumulated correctly. v3 uses the `set_*` prefix for metadata replacement (`set_name`, `set_description`, `set_subscripts`, `set_parameters`) and keeps `add_*` only for append / merge operations (`add_subscripts`, `add_parameter`, `add_parameters`). The scalar replacing aliases `add_name` and `add_description` are removed, and `add_parameters` now merges entries instead of replacing the whole map.
+
+Snapshot setters still mutate in place but return `self.clone()` — a fresh wrapper. Single calls behave as expected; **chained calls without reassignment lose every mutation past the first** because the chain operates on clones from that point on.
 
 ```python
-# Single call — identical behavior in v2 and v3
+# Single call
 constraint = x == 1
-constraint.add_name("test")
-print(constraint.name)                # "test" in both versions
+constraint.set_name("test")
+print(constraint.name)                # "test"
 
 # Chained calls without reassignment — diverges
 constraint = x == 1
-constraint.add_name("a").add_subscripts([0])
+constraint.set_name("a").add_subscripts([0])
 
-# v2: constraint.name == "a" AND constraint.subscripts == [0]
-#     (chain mutated `constraint` itself end-to-end)
 # v3: constraint.name == "a" but constraint.subscripts == []
-#     (only add_name landed in `constraint`; add_subscripts mutated the clone)
+#     (only set_name landed in `constraint`; add_subscripts mutated the clone)
 
-# Robust pattern that works in both: assign or chain into a fresh binding
-constraint = (x == 1).add_name("test").add_description("A test constraint")
+# Robust pattern: assign or chain into a fresh binding
+constraint = (x == 1).set_name("test").set_description("A test constraint")
 ```
 
 For constraints retrieved from an instance (`instance.constraints[id]`), use the [`AttachedConstraint`](https://github.com/Jij-Inc/ommx/pull/849) write-through API in §11 — its `set_*` / `add_*` methods write back to the instance's SoA store regardless of how you call them.
@@ -537,7 +537,7 @@ Affected return types (the column for `3.0.0a2` reflects the post-§4.2 state wi
 
 The list → dict shape change happened in 3.0.0a2 ([§4.2](#42-constraint-accessors-on-instance--parametricinstance--solution-return-dicts)); the 3.0.0a3 wave wraps each value in an `AttachedX` write-through handle. The same change applies on `ParametricInstance`. Solution / SampleSet evaluated / sampled wrappers stay as snapshots — those collections have no edit lifecycle.
 
-The snapshot wrapper types (`Constraint`, `IndicatorConstraint`, `OneHotConstraint`, `Sos1Constraint`, `DecisionVariable`) are unchanged in shape and remain the modeling-input type — operator overloading (`x + y == 1`), expression building, and `Instance.from_components(constraints={...})` all keep accepting / returning them. New `add_*` entry points consume snapshots and return the matching attached handle:
+The snapshot wrapper types (`Constraint`, `IndicatorConstraint`, `OneHotConstraint`, `Sos1Constraint`, `DecisionVariable`) remain the modeling-input type — operator overloading (`x + y == 1`), expression building, and `Instance.from_components(constraints={...})` all keep accepting / returning them. Metadata replacement uses `set_*`; append / merge operations use `add_*`. New host-level `add_*` entry points consume snapshots and return the matching attached handle:
 
 ```python
 c = (x[0] + x[1] == 1).set_name("balance")     # Constraint snapshot
@@ -799,13 +799,14 @@ expr = 2 * p + 3  # Linear
 - [ ] `SampleSet.sample_ids` is a method returning `set[int]`; use `sample_set.sample_ids_list` if you need a `list`.
 - [ ] Change `except RuntimeError` around `.evaluate(...)` / `.partial_evaluate(...)` calls to `except ValueError`.
 - [ ] Switch `parametric_instance.parameters` DataFrame reads to `parametric_instance.parameters_df()` (now a method; `.parameters` returns `list[Parameter]`).
-- [ ] Audit chained `Constraint.add_name(...).add_subscripts(...)` calls — the chain operates on a clone after the first method, so only the first mutation lands in the original wrapper. Assign the chain to a fresh binding (`c = (...).add_name(...).add_subscripts(...)`), or use the live `AttachedConstraint` from `instance.constraints[id]` for write-through mutation.
+- [ ] Replace metadata replacement aliases `Constraint.add_name(...)` and `Constraint.add_description(...)` with `set_name(...)` and `set_description(...)`. Use `set_parameters(...)` when replacing the whole parameter map; `add_parameters(...)` now merges entries.
+- [ ] Audit chained `Constraint.set_name(...).add_subscripts(...)` calls — the chain operates on a clone after the first method, so only the first mutation lands in the original wrapper. Assign the chain to a fresh binding (`c = (...).set_name(...).add_subscripts(...)`), or use the live `AttachedConstraint` from `instance.constraints[id]` for write-through mutation.
 - [ ] Replace `ArtifactArchive` / `ArtifactDir` usage with `Artifact.load_archive(...)` or `Artifact.load(...)`.
 - [ ] Remove any `Linear.from_object(...)` / `Linear.equals_to(...)` calls.
 - [ ] Add parentheses to every `*_df` access — `instance.constraints_df` → `instance.constraints_df()` etc. (every `*_df` accessor is a method now).
 - [ ] Replace per-kind `instance.indicator_constraints_df` / `one_hot_constraints_df` / `sos1_constraints_df` and `removed_*_constraints_df` / `*_removed_reasons_df` calls with `constraints_df(kind=..., removed=...)` on the same host.
 - [ ] If you depended on the unqualified `id` index column on a wide constraint `*_df`, switch to the kind-qualified `{kind}_constraint_id` name. `decision_variables_df()` keeps `id` (only one variable ID space); long-format variable sidecars use `variable_id`.
-- [ ] Drop the in-place `c.add_name(...)` mutation pattern on snapshot wrappers retrieved from an instance — those calls return a new object and don't write through to the host. Use the live handle returned by `instance.constraints[id]` (an `AttachedConstraint`) and call its `set_*` / `add_*` methods, or re-add via `from_components`.
+- [ ] Drop the in-place `c.set_name(...)` mutation pattern on snapshot wrappers retrieved from an instance — those calls return a new object and don't write through to the host. Use the live handle returned by `instance.constraints[id]` (an `AttachedConstraint`) and call its `set_*` / `add_*` methods, or re-add via `from_components`.
 - [ ] Update return-type annotations / static analysis for `instance.constraints` etc. to expect `AttachedX` (`dict[int, AttachedConstraint]`, `list[AttachedDecisionVariable]`, …). Call `.detach()` if you need an independent snapshot.
 - [ ] Replace detached `DecisionVariable.substituted_value` reads with owner-side queries: `Instance.fixed_decision_variables()`, `instance.attached_decision_variable(id).substituted_value`, or `instance.decision_variables_df()["substituted_value"]`.
 - [ ] Replace element-level `to_bytes()` / `from_bytes()` calls on `Function` / `Linear` / `Quadratic` / `Polynomial` / `Parameter` / the `NamedFunction` family / the `DecisionVariable` family with whole-`Instance` / `Solution` / `SampleSet` round-trips (or the `State` / `Samples` / `Parameters` DTOs for evaluate plumbing). See §12.

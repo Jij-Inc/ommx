@@ -324,8 +324,8 @@ impl Solution {
     /// ```python
     /// >>> from ommx.v1 import Instance, DecisionVariable
     /// >>> x = [DecisionVariable.binary(i) for i in range(3)]
-    /// >>> c0 = (x[0] + x[1] == 1).add_name("c").add_subscripts([0])
-    /// >>> c1 = (x[1] + x[2] == 1).add_name("c").add_subscripts([1])
+    /// >>> c0 = (x[0] + x[1] == 1).set_name("c").add_subscripts([0])
+    /// >>> c1 = (x[1] + x[2] == 1).set_name("c").add_subscripts([1])
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x,
     /// ...     objective=sum(x),

@@ -81,6 +81,25 @@ def test_setter_writes_through_to_instance_soa_store():
     assert fresh.parameters == {"a": "1"}
 
 
+def test_add_parameters_merges_label_entries():
+    instance = _empty_instance()
+    attached = instance.add_decision_variable(_make_variable())
+    assert attached.parameters == {"k": "v"}
+
+    attached.add_parameters({"k": "updated", "tier": "gold"})
+
+    fresh = instance.attached_decision_variable(attached.id)
+    assert fresh.parameters == {"k": "updated", "tier": "gold"}
+
+
+def test_replacing_metadata_does_not_have_add_aliases():
+    instance = _empty_instance()
+    attached = instance.add_decision_variable(_make_variable())
+
+    assert not hasattr(attached, "add_name")
+    assert not hasattr(attached, "add_description")
+
+
 def test_attached_decision_variable_lookup_returns_handle():
     """attached_decision_variable(id) returns a write-through handle for an
     existing variable; missing id raises KeyError."""

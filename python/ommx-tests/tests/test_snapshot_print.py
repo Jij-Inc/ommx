@@ -63,7 +63,7 @@ def test_constraint_print_equality(snapshot):
     """Test Constraint print output with equality constraint."""
     x1 = DecisionVariable.binary(1)
     x2 = DecisionVariable.binary(2)
-    constraint = (x1 + 2 * x2 == 5).add_name("equality_constraint")
+    constraint = (x1 + 2 * x2 == 5).set_name("equality_constraint")
     assert str(constraint) == snapshot
 
 
@@ -71,7 +71,7 @@ def test_constraint_print_less_equal(snapshot):
     """Test Constraint print output with less-than-or-equal constraint."""
     x1 = DecisionVariable.binary(1)
     x2 = DecisionVariable.binary(2)
-    constraint = (x1 + 2 * x2 <= 10).add_name("leq_constraint")
+    constraint = (x1 + 2 * x2 <= 10).set_name("leq_constraint")
     assert str(constraint) == snapshot
 
 
@@ -80,7 +80,7 @@ def test_constraint_print_greater_equal(snapshot):
     x1 = DecisionVariable.binary(1)
     x2 = DecisionVariable.binary(2)
     x3 = DecisionVariable.binary(3)
-    constraint = (x1 + x2 + x3 >= 1).add_name("geq_constraint")
+    constraint = (x1 + x2 + x3 >= 1).set_name("geq_constraint")
     assert str(constraint) == snapshot
 
 
