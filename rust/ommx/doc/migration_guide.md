@@ -432,11 +432,11 @@ pub struct ConstraintCollection<T: ConstraintType> {
 collection.active()                    // &BTreeMap<T::ID, T::Created>
 collection.removed()                   // &BTreeMap<T::ID, (T::Created, RemovedReason)>
 collection.context()                   // &ConstraintContextStore<T::ID>
-collection.into_parts()                // (active, removed, context)
-// Mutation goes through Instance / ParametricInstance methods so
-// invariants (active/removed disjointness, variable-id validity,
-// and context ownership) are enforced. Crate-internal transformations
-// use operation-level row effects rather than raw map mutation.
+// There is no public split-into-maps operation. Mutation and conversion go
+// through Instance / ParametricInstance methods so invariants
+// (active/removed disjointness, variable-id validity, and context ownership)
+// are enforced. Crate-internal transformations use operation-level row
+// effects rather than raw map mutation.
 
 // Evaluate trait impl
 collection.evaluate(state, atol)           // EvaluatedCollection<T>

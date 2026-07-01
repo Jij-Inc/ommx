@@ -98,11 +98,6 @@ impl ParameterTable {
         Self::new(ids, labels)
     }
 
-    /// Split the table into its ID set and label store.
-    pub fn into_parts(self) -> (BTreeSet<VariableID>, ParameterLabelStore) {
-        (self.ids, self.labels)
-    }
-
     /// Parameter ID universe owned by this table.
     pub fn ids(&self) -> &BTreeSet<VariableID> {
         &self.ids
@@ -171,7 +166,7 @@ impl ParameterTable {
 
     /// Consume this table and materialize all legacy v1 parameter rows.
     pub fn into_v1_parameters(self) -> Vec<crate::v1::Parameter> {
-        let (ids, mut labels) = self.into_parts();
+        let ParameterTable { ids, mut labels } = self;
         ids.into_iter()
             .map(|id| {
                 let label = labels.remove(id);

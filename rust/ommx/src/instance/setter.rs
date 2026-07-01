@@ -205,11 +205,13 @@ impl Instance {
         id: ConstraintID,
         constraint: Constraint,
     ) -> crate::Result<Option<Constraint>> {
-        if self.constraint_collection.contains_id(id) {
+        if self.constraint_collection.active().contains_key(&id)
+            || self.constraint_collection.removed().contains_key(&id)
+        {
             let old = self
                 .constraint_collection
-                .replace_preserving_lifecycle(id, constraint)
-                .expect("contains_id returned true for this constraint");
+                .replace_row_preserving_lifecycle(id, constraint)
+                .expect("read-only membership check found this constraint");
             Ok(Some(old))
         } else {
             self.constraint_collection.insert_active_with_context(

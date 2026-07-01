@@ -220,52 +220,39 @@ impl Parse for crate::v1::Solution {
 /// `from_bytes` preserves variable labels and regular-constraint context.
 impl From<Solution> for crate::v1::Solution {
     fn from(solution: Solution) -> Self {
-        let state = solution.state();
-        let objective = *solution.objective();
-        // Drain labels/context from the SoA stores and overlay them on per-element
-        // proto messages.
-        let constraint_context_store = solution.evaluated_constraints().context().clone();
-        let removed_reasons = solution.evaluated_constraints().removed_reasons().clone();
-        let evaluated_constraints: Vec<crate::v1::EvaluatedConstraint> = solution
-            .evaluated_constraints()
-            .iter()
-            .map(|(id, ec)| {
-                let context = constraint_context_store.collect_for(*id);
-                let mut v1_ec =
-                    crate::constraint::evaluated_constraint_to_v1(*id, ec.clone(), context);
-                if let Some(reason) = removed_reasons.get(id) {
-                    v1_ec.removed_reason = Some(reason.reason.clone());
-                    v1_ec.removed_reason_parameters = reason
-                        .parameters
-                        .iter()
-                        .map(|(k, v)| (k.clone(), v.clone()))
-                        .collect();
-                }
-                v1_ec
-            })
-            .collect();
-        let named_function_labels_store = solution.named_function_labels().clone();
-        let evaluated_named_functions: Vec<crate::v1::EvaluatedNamedFunction> = solution
-            .evaluated_named_functions()
-            .iter()
-            .map(|(id, enf)| {
-                let label = named_function_labels_store.collect_for(*id);
-                crate::named_function::parse::evaluated_named_function_to_v1(
-                    *id,
-                    enf.clone(),
-                    label,
-                )
-            })
-            .collect();
-        let decision_variables: Vec<crate::v1::DecisionVariable> =
-            (&solution.decision_variables).into();
         let feasible = solution.feasible();
         let feasible_relaxed = Some(solution.feasible_relaxed());
-        let optimality = solution.optimality.into();
-        let relaxation = solution.relaxation.into();
+        let Solution {
+            objective,
+            evaluated_constraints,
+            evaluated_indicator_constraints: _,
+            evaluated_one_hot_constraints: _,
+            evaluated_sos1_constraints: _,
+            evaluated_named_functions,
+            decision_variables,
+            optimality,
+            relaxation,
+            sense,
+            metadata,
+            annotations,
+        } = solution;
+        let state = {
+            let entries = decision_variables
+                .iter()
+                .map(|(id, dv)| (id.into_inner(), *dv.value()))
+                .collect();
+            crate::v1::State { entries }
+        };
+        let evaluated_constraints: Vec<crate::v1::EvaluatedConstraint> =
+            evaluated_constraints.into();
+        let evaluated_named_functions: Vec<crate::v1::EvaluatedNamedFunction> =
+            evaluated_named_functions.into();
+        let decision_variables: Vec<crate::v1::DecisionVariable> = (&decision_variables).into();
+        let optimality = optimality.into();
+        let relaxation = relaxation.into();
         // For backward compatibility, set feasible_unrelaxed to the same value as feasible
         let feasible_unrelaxed = feasible;
-        let sense = match solution.sense {
+        let sense = match sense {
             None => crate::v1::instance::Sense::Unspecified as i32,
             Some(crate::Sense::Minimize) => crate::v1::instance::Sense::Minimize as i32,
             Some(crate::Sense::Maximize) => crate::v1::instance::Sense::Maximize as i32,
@@ -285,8 +272,8 @@ impl From<Solution> for crate::v1::Solution {
             feasible_unrelaxed,
             sense,
             format_version: crate::CURRENT_FORMAT_VERSION,
-            metadata: solution.metadata,
-            annotations: crate::protobuf_extension_annotations(solution.annotations),
+            metadata,
+            annotations: crate::protobuf_extension_annotations(annotations),
         }
     }
 }

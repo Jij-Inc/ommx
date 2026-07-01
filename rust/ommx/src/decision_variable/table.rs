@@ -452,12 +452,7 @@ impl From<&DecisionVariableTable<Created>> for Vec<crate::v1::DecisionVariable> 
             .map(|(id, dv)| {
                 let label = table.labels.collect_for(*id);
                 let fixed_value = table.columns.fixed_values.get(id).copied();
-                crate::decision_variable::parse::decision_variable_to_v1_with_fixed_value(
-                    *id,
-                    dv.clone(),
-                    label,
-                    fixed_value,
-                )
+                decision_variable_to_v1(*id, dv.clone(), label, fixed_value)
             })
             .collect()
     }
@@ -470,7 +465,7 @@ impl From<&EvaluatedDecisionVariableTable> for Vec<crate::v1::DecisionVariable> 
             .iter()
             .map(|(id, dv)| {
                 let label = table.labels.collect_for(*id);
-                crate::decision_variable::evaluated_decision_variable_to_v1(*id, dv.clone(), label)
+                evaluated_decision_variable_to_v1(*id, dv.clone(), label)
             })
             .collect()
     }
@@ -483,9 +478,67 @@ impl From<&SampledDecisionVariableTable> for Vec<crate::v1::SampledDecisionVaria
             .iter()
             .map(|(id, dv)| {
                 let label = table.labels.collect_for(*id);
-                crate::decision_variable::sampled_decision_variable_to_v1(*id, dv.clone(), label)
+                sampled_decision_variable_to_v1(*id, dv.clone(), label)
             })
             .collect()
+    }
+}
+
+fn decision_variable_to_v1(
+    id: VariableID,
+    decision_variable: DecisionVariable,
+    label: DecisionVariableLabel,
+    substituted_value: Option<f64>,
+) -> crate::v1::DecisionVariable {
+    let DecisionVariable { kind, bound } = decision_variable;
+    crate::v1::DecisionVariable {
+        id: id.into_inner(),
+        kind: kind.into(),
+        bound: Some(bound.into()),
+        substituted_value,
+        name: label.name,
+        subscripts: label.subscripts,
+        parameters: label.parameters.into_iter().collect(),
+        description: label.description,
+    }
+}
+
+fn evaluated_decision_variable_to_v1(
+    id: VariableID,
+    evaluated: EvaluatedDecisionVariable,
+    label: DecisionVariableLabel,
+) -> crate::v1::DecisionVariable {
+    let EvaluatedDecisionVariable { kind, bound, value } = evaluated;
+    crate::v1::DecisionVariable {
+        id: id.into_inner(),
+        kind: kind.into(),
+        bound: Some(bound.into()),
+        substituted_value: Some(value),
+        name: label.name,
+        subscripts: label.subscripts,
+        parameters: label.parameters.into_iter().collect(),
+        description: label.description,
+    }
+}
+
+fn sampled_decision_variable_to_v1(
+    id: VariableID,
+    sampled: SampledDecisionVariable,
+    label: DecisionVariableLabel,
+) -> crate::v1::SampledDecisionVariable {
+    let SampledDecisionVariable {
+        kind,
+        bound,
+        samples,
+    } = sampled;
+    crate::v1::SampledDecisionVariable {
+        decision_variable: Some(decision_variable_to_v1(
+            id,
+            DecisionVariable { kind, bound },
+            label,
+            None,
+        )),
+        samples: Some(samples.into()),
     }
 }
 

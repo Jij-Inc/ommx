@@ -160,57 +160,34 @@ impl Parse for crate::v1::SampleSet {
 /// `from_bytes` preserves variable labels and regular-constraint context.
 impl From<SampleSet> for crate::v1::SampleSet {
     fn from(sample_set: SampleSet) -> Self {
+        let SampleSet {
+            decision_variables,
+            objectives,
+            constraints,
+            indicator_constraints: _,
+            one_hot_constraints: _,
+            sos1_constraints: _,
+            named_functions,
+            sense,
+            feasible,
+            feasible_relaxed,
+            metadata,
+            annotations,
+        } = sample_set;
         let decision_variables: Vec<crate::v1::SampledDecisionVariable> =
-            (&sample_set.decision_variables).into();
-        let objectives = Some(sample_set.objectives().clone().into());
-        let constraint_context = sample_set.constraints().context().clone();
-        let removed_reasons = sample_set.constraints().removed_reasons().clone();
-        let constraints: Vec<crate::v1::SampledConstraint> = sample_set
-            .constraints()
-            .iter()
-            .map(|(id, sc)| {
-                let context = constraint_context.collect_for(*id);
-                let mut v1_sc =
-                    crate::constraint::sampled_constraint_to_v1(*id, sc.clone(), context);
-                if let Some(reason) = removed_reasons.get(id) {
-                    v1_sc.removed_reason = Some(reason.reason.clone());
-                    v1_sc.removed_reason_parameters = reason
-                        .parameters
-                        .iter()
-                        .map(|(k, v)| (k.clone(), v.clone()))
-                        .collect();
-                }
-                v1_sc
-            })
+            (&decision_variables).into();
+        let objectives = Some(objectives.into());
+        let constraints: Vec<crate::v1::SampledConstraint> = constraints.into();
+        let named_functions: Vec<crate::v1::SampledNamedFunction> = named_functions.into();
+        let sense = sense.into();
+        let feasible = feasible
+            .into_iter()
+            .map(|(sample_id, value)| (sample_id.into_inner(), value))
             .collect();
-        let named_function_labels_store = sample_set.named_function_labels().clone();
-        let named_functions: Vec<crate::v1::SampledNamedFunction> = sample_set
-            .named_functions()
-            .iter()
-            .map(|(id, nf)| {
-                let label = named_function_labels_store.collect_for(*id);
-                crate::named_function::parse::sampled_named_function_to_v1(*id, nf.clone(), label)
-            })
+        let feasible_relaxed = feasible_relaxed
+            .into_iter()
+            .map(|(sample_id, value)| (sample_id.into_inner(), value))
             .collect();
-        let sense = (*sample_set.sense()).into();
-
-        // Compute feasible maps from constraint evaluations
-        let mut feasible_relaxed = std::collections::HashMap::new();
-        let mut feasible = std::collections::HashMap::new();
-
-        // Get all sample IDs from objectives
-        for (sample_id, _) in sample_set.objectives().iter() {
-            let sample_id_u64 = sample_id.into_inner();
-            // These should always succeed since we're iterating over known sample IDs
-            let is_feasible = sample_set
-                .is_sample_feasible(*sample_id)
-                .expect("Sample ID should exist");
-            let is_feasible_relaxed = sample_set
-                .is_sample_feasible_relaxed(*sample_id)
-                .expect("Sample ID should exist");
-            feasible.insert(sample_id_u64, is_feasible);
-            feasible_relaxed.insert(sample_id_u64, is_feasible_relaxed);
-        }
 
         crate::v1::SampleSet {
             decision_variables,
@@ -221,8 +198,8 @@ impl From<SampleSet> for crate::v1::SampleSet {
             feasible,
             sense,
             format_version: crate::CURRENT_FORMAT_VERSION,
-            metadata: sample_set.metadata,
-            annotations: crate::protobuf_extension_annotations(sample_set.annotations),
+            metadata,
+            annotations: crate::protobuf_extension_annotations(annotations),
             ..Default::default()
         }
     }

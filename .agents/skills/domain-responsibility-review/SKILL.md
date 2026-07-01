@@ -70,6 +70,34 @@ scope, or invariant ownership, keep this order explicit throughout the work:
    - Proposed fixes should name the owning abstraction and route the operation through it.
    - If the task is addressing review feedback rather than writing a review, keep the workflow self-contained: read the exact comment and surrounding diff, reconstruct the reviewer concern, search for sibling defects, and fix the responsibility boundary rather than only the commented line.
 
+## Table And Collection Ownership Checks
+
+- Classify each changed operation as either a root-level semantic operation or
+  a lower-level storage effect. Semantic operations such as parameter
+  materialization, substitution, propagation, restore normalization, penalty
+  conversion, slack conversion, binary-power reduction, feasibility derivation,
+  and solution/sample projection belong to `Instance`, `ParametricInstance`,
+  `Solution`, or `SampleSet`, not to the row collection.
+- Let tables and collections expose only storage effects they can validate
+  locally: preserving row identity, keeping active/removed membership
+  disjoint, replacing known rows, moving active rows to removed with a reason,
+  restoring a host-normalized row, inserting a row with its sidecar, or
+  materializing rows together with owned labels/context. A callback that lets a
+  caller compute semantic changes inside the collection is a review risk.
+- For v1/protobuf conversion, define `From`/`Into` at the smallest owner that
+  has complete information. Use table/collection conversions when rows and
+  labels/context/removed reasons are owned together; use the root object when
+  conversion needs cross-table facts. Do not add row-level conversions that
+  default labels, contexts, removed reasons, fixed values, or sample facts for a
+  later layer to overwrite.
+- Treat default-fill-then-overlay conversion as a sign that the conversion
+  boundary is wrong. Move the conversion to the layer that already has the
+  missing information.
+- Check every stage and family touched by the change: created, removed,
+  evaluated, sampled, regular constraints, indicator constraints, one-hot, and
+  SOS1. A boundary fix that preserves sidecars for only one family or lifecycle
+  can still leave a parallel escape hatch.
+
 ## Recurring OMMX Review Checks
 
 - Check every root object and constraint family affected by a change: `Instance`, `ParametricInstance`, `Solution`, `SampleSet`, regular constraints, indicator, one-hot, and SOS1. A fix for only the regular path is suspect when sidecars, annotations, parsing, serialization, or statistics are involved.
