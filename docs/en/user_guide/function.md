@@ -17,10 +17,10 @@ In mathematical optimization, functions are used to express objective functions 
 
 | Data Structure | Description |
 | --- | --- |
-| [ommx.Linear](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.Linear) | Linear function. Holds pairs of variable IDs and their coefficients |
-| [ommx.Quadratic](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.Quadratic) | Quadratic function. Holds pairs of variable ID pairs and their coefficients |
-| [ommx.Polynomial](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.Polynomial) | Polynomial. Holds pairs of variable ID combinations and their coefficients |
-| [ommx.Function](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.Function) | One of the above or a constant |
+| {class}`~ommx.Linear` | Linear function. Holds pairs of variable IDs and their coefficients |
+| {class}`~ommx.Quadratic` | Quadratic function. Holds pairs of variable ID pairs and their coefficients |
+| {class}`~ommx.Polynomial` | Polynomial. Holds pairs of variable ID combinations and their coefficients |
+| {class}`~ommx.Function` | One of the above or a constant |
 
 
 ## Creating ommx.Function

@@ -13,7 +13,7 @@ kernelspec:
 
 # ommx.ParametricInstance
 
-[`ommx.ParametricInstance`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.ParametricInstance) は [`ommx.Instance`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.Instance) と同じように数理モデルを表現するクラスですが、決定変数に加えてパラメータ（[`ommx.Parameter`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.Parameter)）を持つことができます。パラメータの値を決めるたびに `ommx.Instance` を生成することができるため、例えば目的関数や制約条件の一部の係数が異なる一連の数理モデル群を扱いたい場合などに便利です。同じ`ommx.ParametricInstance`から生成された `ommx.Instance` は決定変数や制約条件のIDを共有しているため、解の比較などが行いやすくなっています。
+{class}`~ommx.ParametricInstance` は {class}`~ommx.Instance` と同じように数理モデルを表現するクラスですが、決定変数に加えてパラメータ（{class}`~ommx.Parameter`）を持つことができます。パラメータの値を決めるたびに `ommx.Instance` を生成することができるため、例えば目的関数や制約条件の一部の係数が異なる一連の数理モデル群を扱いたい場合などに便利です。同じ `ommx.ParametricInstance` から生成された `ommx.Instance` は決定変数や制約条件のIDを共有しているため、解の比較などが行いやすくなっています。
 
 次のナップザック問題を考えましょう。
 

@@ -17,8 +17,8 @@ OMMX has several structures that represent the solution of mathematical models.
 
 | Data Structure | Description |
 | --- | --- |
-| [`ommx.State`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/solution_pb2/index.html#ommx.solution_pb2.State) | Holds the solution value for the decision variable ID. The simplest representation of a solution. |
-| [`ommx.Solution`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.Solution) | A representation of the solution intended to be human-readable. In addition to the values of the decision variables and the evaluation values of the constraints, it also holds metadata for the decision variables and constraints added to the [`ommx.Instance`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.Instance). |
+| {class}`~ommx.State` | Holds the solution value for the decision variable ID. The simplest representation of a solution. |
+| {class}`~ommx.Solution` | A representation of the solution intended to be human-readable. In addition to the values of the decision variables and the evaluation values of the constraints, it also holds metadata for the decision variables and constraints added to the {class}`~ommx.Instance`. |
 
 Most solvers are software designed to solve mathematical models, so they return minimal information equivalent to `ommx.State`, but OMMX mainly handles `ommx.Solution`, which allows users to easily check the optimization results.
 

@@ -17,10 +17,10 @@ kernelspec:
 
 | データ構造 | 説明 |
 | --- | --- |
-| [ommx.Linear](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.Linear) | 線形の関数。決定変数のIDとその係数のペアを持つ |
-| [ommx.Quadratic](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.Quadratic) | 二次の関数。決定変数のIDのペアとその係数のペアを持つ |
-| [ommx.Polynomial](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.Polynomial) | 多項式。決定変数のIDの組とその係数のペアを持つ |
-| [ommx.Function](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.Function) | 上記のいずれかあるいは定数 |
+| {class}`~ommx.Linear` | 線形の関数。決定変数のIDとその係数のペアを持つ |
+| {class}`~ommx.Quadratic` | 二次の関数。決定変数のIDのペアとその係数のペアを持つ |
+| {class}`~ommx.Polynomial` | 多項式。決定変数のIDの組とその係数のペアを持つ |
+| {class}`~ommx.Function` | 上記のいずれかあるいは定数 |
 
 
 ## ommx.Function の作成

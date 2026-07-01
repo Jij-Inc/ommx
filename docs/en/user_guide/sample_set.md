@@ -14,12 +14,12 @@ kernelspec:
 ommx.SampleSet
 =================
 
-[`ommx.Solution`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.Solution) represents a single solution returned by a solver. However, some solvers, often called samplers, can return multiple solutions. To accommodate this, OMMX provides two data structures for representing multiple solutions:
+{class}`~ommx.Solution` represents a single solution returned by a solver. However, some solvers, often called samplers, can return multiple solutions. To accommodate this, OMMX provides two data structures for representing multiple solutions:
 
 | Data Structure  | Description |
 |:---------------|:------------|
-| [`ommx.Samples`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/sample_set_pb2/index.html#ommx.sample_set_pb2.Samples) | A list of multiple solutions for decision variable IDs |
-| [`ommx.SampleSet`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.SampleSet) | Evaluations of objective and constraints with decision variables |
+| {class}`~ommx.Samples` | A list of multiple solutions for decision variable IDs |
+| {class}`~ommx.SampleSet` | Evaluations of objective and constraints with decision variables |
 
 `Samples` corresponds to `State` and `SampleSet` corresponds to `Solution`. This notebook explains how to use `SampleSet`.
 

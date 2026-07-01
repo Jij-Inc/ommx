@@ -17,8 +17,8 @@ OMMXには数理モデルの解を表す構造体がいくつか存在します
 
 | データ構造 | 説明 |
 | --- | --- |
-| [`ommx.State`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/solution_pb2/index.html#ommx.solution_pb2.State) | 決定変数のIDに対して解の値を保持したもの。最も単純な解の表現。 |
-| [`ommx.Solution`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.Solution) | 人間が読む事を想定した解の表現。決定変数の値やそれによる制約条件の評価値に加えて、[`ommx.Instance`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.Instance)に追加された決定変数や制約条件のメタデータも保持している。 |
+| {class}`~ommx.State` | 決定変数のIDに対して解の値を保持したもの。最も単純な解の表現。 |
+| {class}`~ommx.Solution` | 人間が読む事を想定した解の表現。決定変数の値やそれによる制約条件の評価値に加えて、{class}`~ommx.Instance` に追加された決定変数や制約条件のメタデータも保持している。 |
 
 多くのソルバーは数理モデルを解く事を目的としたソフトウェアなので `ommx.State` に相当する最小限の情報を返しますが、OMMXではユーザーが最適化の結果を容易に確認できる形である `ommx.Solution` を中心として扱います。
 

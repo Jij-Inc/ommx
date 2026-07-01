@@ -14,12 +14,12 @@ kernelspec:
 ommx.SampleSet
 =================
 
-[`ommx.Solution`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/solution_pb2/index.html#module-ommx.solution_pb2)はソルバーが一つの解を返す場合の表現ですが、数理最適化ソルバーによっては複数の解を返す場合があり、主にサンプラーと呼ばれます。OMMXでは複数の解を表現するために次の二つのデータ構造を用意しています：
+{class}`~ommx.Solution` はソルバーが一つの解を返す場合の表現ですが、数理最適化ソルバーによっては複数の解を返す場合があり、主にサンプラーと呼ばれます。OMMXでは複数の解を表現するために次の二つのデータ構造を用意しています：
 
 | データ構造  | 説明 |
 |:----------|:-----|
-| [`ommx.Samples`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/sample_set_pb2/index.html#ommx.sample_set_pb2.Samples) | 決定変数のIDに対して得られた複数の解の値を列挙したもの |
-| [`ommx.SampleSet`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.SampleSet) | 決定変数の値に加えて、目的関数や制約条件の評価を行ったもの |
+| {class}`~ommx.Samples` | 決定変数のIDに対して得られた複数の解の値を列挙したもの |
+| {class}`~ommx.SampleSet` | 決定変数の値に加えて、目的関数や制約条件の評価を行ったもの |
 
 `Samples`が`State`に相当し、`SampleSet`が`Solution`に相当します。このノートブックでは、`SampleSet`の使い方を説明します。
 

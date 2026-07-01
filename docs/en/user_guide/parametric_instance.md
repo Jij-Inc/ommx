@@ -13,7 +13,7 @@ kernelspec:
 
 # ommx.ParametricInstance
 
-[`ommx.ParametricInstance`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.ParametricInstance) is a class that represents mathematical models similar to [`ommx.Instance`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.Instance). It also supports parameters (via [`ommx.Parameter`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.Parameter)) in addition to decision variables. By assigning values to these parameters, you can create an `ommx.Instance`. Because the resulting `ommx.Instance` keeps the IDs of decision variables and constraints from `ommx.ParametricInstance`, it is helpful when you need to handle a series of models where only some coefficients of the objective function or constraints change.
+{class}`~ommx.ParametricInstance` is a class that represents mathematical models similar to {class}`~ommx.Instance`. It also supports parameters (via {class}`~ommx.Parameter`) in addition to decision variables. By assigning values to these parameters, you can create an `ommx.Instance`. Because the resulting `ommx.Instance` keeps the IDs of decision variables and constraints from `ommx.ParametricInstance`, it is helpful when you need to handle a series of models where only some coefficients of the objective function or constraints change.
 
 Consider the following knapsack problem.
 
