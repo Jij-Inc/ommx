@@ -43,6 +43,7 @@ impl From<SampleSet> for v2::SampleSet {
             sense,
             feasible,
             feasible_relaxed,
+            feasibility_atol,
             metadata,
             annotations,
         } = value;
@@ -61,6 +62,7 @@ impl From<SampleSet> for v2::SampleSet {
             sampled_indicator_constraints: Some(indicator_constraints.into()),
             sampled_one_hot_constraints: Some(one_hot_constraints.into()),
             sampled_sos1_constraints: Some(sos1_constraints.into()),
+            feasibility_atol: Some(feasibility_atol.into_inner()),
         }
     }
 }

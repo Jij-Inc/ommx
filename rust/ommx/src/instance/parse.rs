@@ -690,6 +690,14 @@ impl Parse for v2::Instance {
                 .context(message, "decision_variable_dependency"));
             }
         }
+        for id in decision_variable_dependency.required_ids() {
+            if !decision_variable_ids.contains(&id) {
+                return Err(RawParseError::InvalidInstance(format!(
+                    "Undefined variable ID is used in decision_variable_dependency: {id:?}"
+                ))
+                .context(message, "decision_variable_dependency"));
+            }
+        }
 
         let mut used = objective.required_ids();
         used.extend(active_used_ids_from_created_collection(
@@ -1236,6 +1244,7 @@ impl From<ParametricInstance> for v1::ParametricInstance {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::coeff;
     use crate::instance::Instance;
     use proptest::prelude::*;
     use std::collections::HashMap;
@@ -1791,7 +1800,7 @@ mod tests {
 
     #[test]
     fn test_parametric_instance_parse_with_invalid_sense_uses_default() {
-        use crate::{coeff, linear, DecisionVariable, Function, Sense, VariableID};
+        use crate::{linear, DecisionVariable, Function, Sense, VariableID};
         use std::collections::HashMap;
 
         // Create a v1::ParametricInstance with invalid sense value
@@ -1826,7 +1835,7 @@ mod tests {
 
     #[test]
     fn test_instance_parse_with_invalid_sense_uses_default() {
-        use crate::{coeff, linear, DecisionVariable, Function, Sense, VariableID};
+        use crate::{linear, DecisionVariable, Function, Sense, VariableID};
         use std::collections::HashMap;
 
         // Create a v1::Instance with invalid sense value
@@ -2106,6 +2115,33 @@ mod tests {
         └─ommx.v1.Instance[format_version]
         Unsupported ommx format version: data has format_version=1, but this SDK supports up to 0. Please upgrade the OMMX SDK.
         "###);
+    }
+
+    #[test]
+    fn test_v2_instance_parse_rejects_undefined_dependency_rhs() {
+        use crate::{linear, DecisionVariable, Function, Sense, VariableID};
+
+        let instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(linear!(1)))
+            .decision_variables(maplit::btreemap! {
+                VariableID::from(1) => DecisionVariable::binary(),
+            })
+            .constraints(Default::default())
+            .build()
+            .unwrap();
+        let mut proto = crate::v2::Instance::from(instance);
+        proto
+            .decision_variable_dependency
+            .insert(1, Function::from(linear!(999)).into());
+
+        let err = Instance::try_from(proto).unwrap_err();
+        assert!(
+            err.to_string().contains(
+                "Undefined variable ID is used in decision_variable_dependency: VariableID(999)"
+            ),
+            "unexpected error: {err}"
+        );
     }
 
     #[test]

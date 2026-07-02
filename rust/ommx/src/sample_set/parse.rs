@@ -262,6 +262,8 @@ impl Parse for v2::SampleSet {
         let message = "ommx.v2.SampleSet";
         let required_features =
             crate::v2_io::parse_required_features(self.required_features, message)?;
+        let feasibility_atol =
+            crate::v2_io::parse_feasibility_atol(self.feasibility_atol, message)?;
         let annotations =
             crate::v2_io::extension_annotations_from_v2_map(self.annotations, message)?;
         let decision_variables = self
@@ -280,22 +282,24 @@ impl Parse for v2::SampleSet {
             .parse_as(&(), message, "objectives")?;
         let constraints = self
             .sampled_regular_constraints
-            .map(|value| value.parse_as(&(), message, "sampled_regular_constraints"))
+            .map(|value| value.parse_as(&feasibility_atol, message, "sampled_regular_constraints"))
             .transpose()?
             .unwrap_or_default();
         let indicator_constraints = self
             .sampled_indicator_constraints
-            .map(|value| value.parse_as(&(), message, "sampled_indicator_constraints"))
+            .map(|value| {
+                value.parse_as(&feasibility_atol, message, "sampled_indicator_constraints")
+            })
             .transpose()?
             .unwrap_or_default();
         let one_hot_constraints = self
             .sampled_one_hot_constraints
-            .map(|value| value.parse_as(&(), message, "sampled_one_hot_constraints"))
+            .map(|value| value.parse_as(&feasibility_atol, message, "sampled_one_hot_constraints"))
             .transpose()?
             .unwrap_or_default();
         let sos1_constraints = self
             .sampled_sos1_constraints
-            .map(|value| value.parse_as(&(), message, "sampled_sos1_constraints"))
+            .map(|value| value.parse_as(&feasibility_atol, message, "sampled_sos1_constraints"))
             .transpose()?
             .unwrap_or_default();
 
@@ -498,6 +502,7 @@ impl Parse for v2::SampleSet {
             sense,
             feasible,
             feasible_relaxed,
+            feasibility_atol,
             metadata: self.metadata,
             annotations,
         })
@@ -533,6 +538,7 @@ impl From<SampleSet> for crate::v1::SampleSet {
             sense,
             feasible,
             feasible_relaxed,
+            feasibility_atol: _,
             metadata,
             annotations,
         } = sample_set;
@@ -980,5 +986,60 @@ mod tests {
         assert_eq!(nf_meta.name(nf_id), Some("offset_x"));
         assert_eq!(nf_meta.subscripts(nf_id), &[0]);
         assert_eq!(nf_meta.description(nf_id), Some("x plus a constant"));
+    }
+
+    #[test]
+    fn test_v2_sample_set_parse_rejects_inconsistent_regular_feasibility() {
+        use crate::{
+            constraint::SampledData, Constraint, ConstraintID, Equality, SampleID, Sampled, Sense,
+        };
+        use std::collections::BTreeMap;
+
+        let sample_id = SampleID::from(0);
+        let mut objectives = Sampled::default();
+        objectives.append([sample_id], 0.0).unwrap();
+
+        let mut evaluated_values = Sampled::default();
+        evaluated_values.append([sample_id], 0.0).unwrap();
+        let constraint = Constraint {
+            equality: Equality::EqualToZero,
+            stage: SampledData {
+                evaluated_values,
+                feasible: BTreeMap::from([(sample_id, true)]),
+                used_decision_variable_ids: Default::default(),
+                dual_variables: None,
+            },
+        };
+        let sample_set = SampleSet::builder()
+            .decision_variables(BTreeMap::new())
+            .objectives(objectives)
+            .constraints(BTreeMap::from([(ConstraintID::from(1), constraint)]))
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
+
+        let mut proto = crate::v2::SampleSet::from(sample_set);
+        let row = proto
+            .sampled_regular_constraints
+            .as_mut()
+            .unwrap()
+            .entries
+            .get_mut(&1)
+            .unwrap();
+        row.evaluated_values
+            .as_mut()
+            .unwrap()
+            .entries
+            .first_mut()
+            .unwrap()
+            .value = 1.0;
+        row.feasible.insert(sample_id.into_inner(), true);
+
+        let err = SampleSet::try_from(proto).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("Inconsistent constraint feasibility"),
+            "unexpected error: {err}"
+        );
     }
 }

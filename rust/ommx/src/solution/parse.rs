@@ -283,6 +283,7 @@ impl Parse for crate::v1::Solution {
             optimality,
             relaxation,
             sense,
+            feasibility_atol: ATol::default(),
             metadata: self.metadata,
             annotations: self.annotations,
         };
@@ -323,6 +324,8 @@ impl Parse for v2::Solution {
         let message = "ommx.v2.Solution";
         let required_features =
             crate::v2_io::parse_required_features(self.required_features, message)?;
+        let feasibility_atol =
+            crate::v2_io::parse_feasibility_atol(self.feasibility_atol, message)?;
         let annotations =
             crate::v2_io::extension_annotations_from_v2_map(self.annotations, message)?;
         let decision_variables = self
@@ -334,22 +337,32 @@ impl Parse for v2::Solution {
             .parse_as(&(), message, "decision_variables")?;
         let evaluated_constraints = self
             .evaluated_regular_constraints
-            .map(|value| value.parse_as(&(), message, "evaluated_regular_constraints"))
+            .map(|value| {
+                value.parse_as(&feasibility_atol, message, "evaluated_regular_constraints")
+            })
             .transpose()?
             .unwrap_or_default();
         let evaluated_indicator_constraints = self
             .evaluated_indicator_constraints
-            .map(|value| value.parse_as(&(), message, "evaluated_indicator_constraints"))
+            .map(|value| {
+                value.parse_as(
+                    &feasibility_atol,
+                    message,
+                    "evaluated_indicator_constraints",
+                )
+            })
             .transpose()?
             .unwrap_or_default();
         let evaluated_one_hot_constraints = self
             .evaluated_one_hot_constraints
-            .map(|value| value.parse_as(&(), message, "evaluated_one_hot_constraints"))
+            .map(|value| {
+                value.parse_as(&feasibility_atol, message, "evaluated_one_hot_constraints")
+            })
             .transpose()?
             .unwrap_or_default();
         let evaluated_sos1_constraints = self
             .evaluated_sos1_constraints
-            .map(|value| value.parse_as(&(), message, "evaluated_sos1_constraints"))
+            .map(|value| value.parse_as(&feasibility_atol, message, "evaluated_sos1_constraints"))
             .transpose()?
             .unwrap_or_default();
 
@@ -449,6 +462,7 @@ impl Parse for v2::Solution {
             optimality,
             relaxation,
             sense,
+            feasibility_atol,
             metadata: self.metadata,
             annotations,
         };
@@ -510,6 +524,7 @@ impl From<Solution> for crate::v1::Solution {
             optimality,
             relaxation,
             sense,
+            feasibility_atol: _,
             metadata,
             annotations,
         } = solution;
@@ -1094,5 +1109,153 @@ mod tests {
         assert_eq!(nf_meta.name(nf_id), Some("offset_x"));
         assert_eq!(nf_meta.subscripts(nf_id), &[0]);
         assert_eq!(nf_meta.description(nf_id), Some("x plus a constant"));
+    }
+
+    #[test]
+    fn test_v2_solution_parse_rejects_inconsistent_regular_feasibility() {
+        use crate::{
+            constraint::EvaluatedData, ConstraintID, Equality, EvaluatedConstraint, Sense,
+        };
+        use std::collections::BTreeMap;
+
+        let constraint = EvaluatedConstraint {
+            equality: Equality::EqualToZero,
+            stage: EvaluatedData {
+                evaluated_value: 0.0,
+                feasible: true,
+                used_decision_variable_ids: Default::default(),
+                dual_variable: None,
+            },
+        };
+        let solution = Solution::builder()
+            .objective(0.0)
+            .evaluated_constraints(BTreeMap::from([(ConstraintID::from(1), constraint)]))
+            .decision_variables(BTreeMap::new())
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
+
+        let mut proto = crate::v2::Solution::from(solution);
+        let row = proto
+            .evaluated_regular_constraints
+            .as_mut()
+            .unwrap()
+            .entries
+            .get_mut(&1)
+            .unwrap();
+        row.evaluated_value = 1.0;
+        row.feasible = true;
+
+        let err = Solution::try_from(proto).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("Inconsistent constraint feasibility"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_v2_solution_parse_rejects_inactive_infeasible_indicator() {
+        use crate::{
+            indicator_constraint::{EvaluatedIndicatorConstraint, IndicatorEvaluatedData},
+            DecisionVariable, EvaluatedDecisionVariable, IndicatorConstraintID, Sense, VariableID,
+        };
+        use std::collections::BTreeMap;
+
+        let var_id = VariableID::from(1);
+        let decision_variable =
+            EvaluatedDecisionVariable::new(var_id, DecisionVariable::binary(), 0.0).unwrap();
+        let indicator = EvaluatedIndicatorConstraint {
+            indicator_variable: var_id,
+            equality: crate::Equality::EqualToZero,
+            stage: IndicatorEvaluatedData {
+                evaluated_value: 1.0,
+                feasible: true,
+                indicator_active: false,
+                used_decision_variable_ids: [var_id].into_iter().collect(),
+            },
+        };
+        let solution = Solution::builder()
+            .objective(0.0)
+            .evaluated_constraints(BTreeMap::new())
+            .evaluated_indicator_constraints(BTreeMap::from([(
+                IndicatorConstraintID::from(1),
+                indicator,
+            )]))
+            .decision_variables(BTreeMap::from([(var_id, decision_variable)]))
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
+
+        let mut proto = crate::v2::Solution::from(solution);
+        let row = proto
+            .evaluated_indicator_constraints
+            .as_mut()
+            .unwrap()
+            .entries
+            .get_mut(&1)
+            .unwrap();
+        row.indicator_active = false;
+        row.feasible = false;
+
+        let err = Solution::try_from(proto).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("Inconsistent indicator constraint feasibility"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_v2_solution_parse_rejects_feasible_one_hot_without_active_variable() {
+        use crate::{
+            one_hot_constraint::{EvaluatedOneHotConstraint, OneHotEvaluatedData},
+            DecisionVariable, EvaluatedDecisionVariable, OneHotConstraintID, Sense, VariableID,
+        };
+        use std::collections::{BTreeMap, BTreeSet};
+
+        let var_id = VariableID::from(1);
+        let decision_variable =
+            EvaluatedDecisionVariable::new(var_id, DecisionVariable::binary(), 1.0).unwrap();
+        let one_hot = EvaluatedOneHotConstraint {
+            variables: BTreeSet::from([var_id]),
+            stage: OneHotEvaluatedData {
+                feasible: true,
+                active_variable: Some(var_id),
+                used_decision_variable_ids: [var_id].into_iter().collect(),
+            },
+        };
+        let solution = Solution::builder()
+            .objective(0.0)
+            .evaluated_constraints(BTreeMap::new())
+            .evaluated_one_hot_constraints_collection(
+                crate::constraint_type::EvaluatedCollection::new(
+                    BTreeMap::from([(OneHotConstraintID::from(1), one_hot)]),
+                    BTreeMap::new(),
+                )
+                .unwrap(),
+            )
+            .decision_variables(BTreeMap::from([(var_id, decision_variable)]))
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
+
+        let mut proto = crate::v2::Solution::from(solution);
+        let row = proto
+            .evaluated_one_hot_constraints
+            .as_mut()
+            .unwrap()
+            .entries
+            .get_mut(&1)
+            .unwrap();
+        row.feasible = true;
+        row.active_variable = None;
+
+        let err = Solution::try_from(proto).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("feasible must be true exactly when active_variable is set"),
+            "unexpected error: {err}"
+        );
     }
 }

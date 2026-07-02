@@ -850,11 +850,16 @@ macro_rules! impl_parse_v2_evaluated_collection {
     ($source:ty => $target:ty) => {
         impl Parse for $target {
             type Output = EvaluatedCollection<$source>;
-            type Context = ();
+            type Context = crate::ATol;
 
-            fn parse(self, _: &Self::Context) -> std::result::Result<Self::Output, ParseError> {
+            fn parse(self, atol: &Self::Context) -> std::result::Result<Self::Output, ParseError> {
                 let message = stringify!($target);
-                let entries = parse_v2_constraint_entries(self.entries, message, "entries")?;
+                let entries = parse_v2_constraint_entries_with_context(
+                    self.entries,
+                    message,
+                    "entries",
+                    atol,
+                )?;
                 let removed_reasons =
                     parse_v2_removed_reasons(self.removed_reasons, message, "removed_reasons")?;
                 let context =
@@ -876,11 +881,16 @@ macro_rules! impl_parse_v2_sampled_collection {
     ($source:ty => $target:ty) => {
         impl Parse for $target {
             type Output = SampledCollection<$source>;
-            type Context = ();
+            type Context = crate::ATol;
 
-            fn parse(self, _: &Self::Context) -> std::result::Result<Self::Output, ParseError> {
+            fn parse(self, atol: &Self::Context) -> std::result::Result<Self::Output, ParseError> {
                 let message = stringify!($target);
-                let entries = parse_v2_constraint_entries(self.entries, message, "entries")?;
+                let entries = parse_v2_constraint_entries_with_context(
+                    self.entries,
+                    message,
+                    "entries",
+                    atol,
+                )?;
                 let removed_reasons =
                     parse_v2_removed_reasons(self.removed_reasons, message, "removed_reasons")?;
                 let context =
@@ -921,6 +931,22 @@ where
     entries
         .into_iter()
         .map(|(id, row)| Ok((ID::from(id), row.parse_as(&(), message, field)?)))
+        .collect()
+}
+
+fn parse_v2_constraint_entries_with_context<ID, V2Row, Row, C>(
+    entries: BTreeMap<u64, V2Row>,
+    message: &'static str,
+    field: &'static str,
+    context: &C,
+) -> std::result::Result<BTreeMap<ID, Row>, ParseError>
+where
+    ID: IDType,
+    V2Row: Parse<Output = Row, Context = C>,
+{
+    entries
+        .into_iter()
+        .map(|(id, row)| Ok((ID::from(id), row.parse_as(context, message, field)?)))
         .collect()
 }
 

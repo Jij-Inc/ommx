@@ -10,7 +10,7 @@ pub(crate) mod stage;
 pub use context_store::ConstraintContextStore;
 
 use crate::logical_memory::LogicalMemoryProfile;
-use crate::{Function, Parse, ParseError, RawParseError, SampleID, VariableID};
+use crate::{ATol, Function, Parse, ParseError, RawParseError, SampleID, VariableID};
 pub use arbitrary::*;
 use derive_more::{Deref, From};
 use fnv::FnvHashSet;
@@ -278,6 +278,30 @@ impl std::fmt::Display for Constraint<Created> {
 /// Type alias for an evaluated constraint.
 pub type EvaluatedConstraint = Constraint<Evaluated>;
 
+fn feasible_from_evaluated_value(equality: Equality, evaluated_value: f64, atol: ATol) -> bool {
+    match equality {
+        Equality::EqualToZero => evaluated_value.abs() < *atol,
+        Equality::LessThanOrEqualToZero => evaluated_value < *atol,
+    }
+}
+
+fn validate_feasible_from_evaluated_value(
+    equality: Equality,
+    evaluated_value: f64,
+    provided_feasible: bool,
+    atol: ATol,
+    message: &'static str,
+) -> Result<(), ParseError> {
+    let computed_feasible = feasible_from_evaluated_value(equality, evaluated_value, atol);
+    if provided_feasible != computed_feasible {
+        return Err(RawParseError::InvalidInstance(format!(
+            "Inconsistent constraint feasibility: provided={provided_feasible}, computed={computed_feasible}",
+        ))
+        .context(message, "feasible"));
+    }
+    Ok(())
+}
+
 impl From<EvaluatedConstraint> for crate::v2::EvaluatedRegularConstraint {
     fn from(constraint: EvaluatedConstraint) -> Self {
         Self {
@@ -297,9 +321,9 @@ impl From<EvaluatedConstraint> for crate::v2::EvaluatedRegularConstraint {
 
 impl Parse for crate::v2::EvaluatedRegularConstraint {
     type Output = EvaluatedConstraint;
-    type Context = ();
+    type Context = ATol;
 
-    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+    fn parse(self, atol: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v2.EvaluatedRegularConstraint";
         let equality = crate::v1::Equality::try_from(self.equality)
             .map_err(|_| RawParseError::UnknownEnumValue {
@@ -308,6 +332,13 @@ impl Parse for crate::v2::EvaluatedRegularConstraint {
             })
             .map_err(|e| ParseError::from(e).context(message, "equality"))?
             .parse_as(&(), message, "equality")?;
+        validate_feasible_from_evaluated_value(
+            equality,
+            self.evaluated_value,
+            self.feasible,
+            *atol,
+            message,
+        )?;
         Ok(Constraint {
             equality,
             stage: EvaluatedData {
@@ -377,9 +408,9 @@ impl From<SampledConstraint> for crate::v2::SampledRegularConstraint {
 
 impl Parse for crate::v2::SampledRegularConstraint {
     type Output = SampledConstraint;
-    type Context = ();
+    type Context = ATol;
 
-    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+    fn parse(self, atol: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v2.SampledRegularConstraint";
         let equality = crate::v1::Equality::try_from(self.equality)
             .map_err(|_| RawParseError::UnknownEnumValue {
@@ -395,6 +426,18 @@ impl Parse for crate::v2::SampledRegularConstraint {
                 field: "evaluated_values",
             })?
             .parse_as(&(), message, "evaluated_values")?;
+        let feasible = crate::v2_io::sample_bool_map_from_v2(self.feasible);
+        for (sample_id, evaluated_value) in evaluated_values.iter() {
+            if let Some(provided_feasible) = feasible.get(sample_id).copied() {
+                validate_feasible_from_evaluated_value(
+                    equality,
+                    *evaluated_value,
+                    provided_feasible,
+                    *atol,
+                    message,
+                )?;
+            }
+        }
         let dual_variables = self
             .dual_variables
             .map(|values| values.parse_as(&(), message, "dual_variables"))
@@ -403,7 +446,7 @@ impl Parse for crate::v2::SampledRegularConstraint {
             equality,
             stage: SampledData {
                 evaluated_values,
-                feasible: crate::v2_io::sample_bool_map_from_v2(self.feasible),
+                feasible,
                 used_decision_variable_ids: crate::v2_io::variable_id_set_from_v2(
                     self.used_decision_variable_ids,
                     message,

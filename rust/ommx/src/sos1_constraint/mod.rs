@@ -5,7 +5,7 @@ use crate::{
     constraint_type::{
         sample_ids_from_map, ConstraintType, EvaluatedConstraintBehavior, SampledConstraintBehavior,
     },
-    Parse, ParseError, SampleID, SampleIDSet, VariableID, VariableIDSet,
+    ATol, Parse, ParseError, SampleID, SampleIDSet, VariableID, VariableIDSet,
 };
 use derive_more::{Deref, From};
 use std::collections::{BTreeMap, BTreeSet};
@@ -245,7 +245,7 @@ impl From<EvaluatedSos1Constraint> for crate::v2::EvaluatedSos1Constraint {
 
 impl Parse for crate::v2::EvaluatedSos1Constraint {
     type Output = EvaluatedSos1Constraint;
-    type Context = ();
+    type Context = ATol;
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v2.EvaluatedSos1Constraint";
@@ -318,7 +318,7 @@ impl From<SampledSos1Constraint> for crate::v2::SampledSos1Constraint {
 
 impl Parse for crate::v2::SampledSos1Constraint {
     type Output = SampledSos1Constraint;
-    type Context = ();
+    type Context = ATol;
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v2.SampledSos1Constraint";

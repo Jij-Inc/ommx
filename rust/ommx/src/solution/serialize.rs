@@ -45,6 +45,7 @@ impl From<Solution> for v2::Solution {
             optimality,
             relaxation,
             sense,
+            feasibility_atol,
             metadata,
             annotations,
         } = value;
@@ -65,6 +66,7 @@ impl From<Solution> for v2::Solution {
             evaluated_indicator_constraints: Some(evaluated_indicator_constraints.into()),
             evaluated_one_hot_constraints: Some(evaluated_one_hot_constraints.into()),
             evaluated_sos1_constraints: Some(evaluated_sos1_constraints.into()),
+            feasibility_atol: Some(feasibility_atol.into_inner()),
         }
     }
 }

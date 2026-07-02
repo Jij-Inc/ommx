@@ -7,7 +7,7 @@ use crate::{
         ConstraintType, EvaluatedCollection, SampledCollection, SampledConstraintBehavior,
     },
     indicator_constraint::IndicatorConstraint,
-    Constraint, ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable,
+    ATol, Constraint, ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable,
     EvaluatedNamedFunction, NamedFunctionID, NamedFunctionTable, SampleID, SampleIDSet, Sampled,
     SampledConstraint, SampledDecisionVariable, SampledNamedFunction, Sense, Solution, VariableID,
 };
@@ -125,6 +125,9 @@ pub enum SampleSetError {
 ///   sampled constraint collections:
 ///   - `feasible`: true if all constraints are satisfied for that sample.
 ///   - `feasible_relaxed`: true if all non-removed constraints are satisfied.
+/// - [`Self::feasibility_atol`] is the absolute tolerance used to validate
+///   serialized per-constraint feasibility columns and to interpret per-sample
+///   [`Solution`] values extracted from this sample set.
 #[derive(Debug, Clone, Getters)]
 pub struct SampleSet {
     /// Sampled decision-variable rows plus their modeling labels.
@@ -147,6 +150,9 @@ pub struct SampleSet {
     feasible: BTreeMap<SampleID, bool>,
     #[getset(get = "pub")]
     feasible_relaxed: BTreeMap<SampleID, bool>,
+    /// Absolute tolerance used to compute and validate feasibility fields.
+    #[getset(get_copy = "pub")]
+    feasibility_atol: ATol,
     /// OMMX-defined provenance metadata.
     pub metadata: Option<crate::v1::ProcessMetadata>,
     /// User-defined or third-party extension annotations.
@@ -361,6 +367,7 @@ impl SampleSet {
                 .variable_labels(self.variable_labels().clone())
                 .named_function_labels(self.named_functions.labels().clone())
                 .sense(sense)
+                .feasibility_atol(self.feasibility_atol)
                 .build_unchecked()
                 .expect("SampleSet invariants guarantee Solution invariants")
         })
@@ -447,6 +454,7 @@ pub struct SampleSetBuilder {
     named_functions: BTreeMap<NamedFunctionID, SampledNamedFunction>,
     named_function_labels: crate::named_function::NamedFunctionLabelStore,
     sense: Option<Sense>,
+    feasibility_atol: ATol,
 }
 
 impl SampleSetBuilder {
@@ -592,6 +600,12 @@ impl SampleSetBuilder {
     /// Sets the optimization sense.
     pub fn sense(mut self, sense: Sense) -> Self {
         self.sense = Some(sense);
+        self
+    }
+
+    /// Sets the absolute tolerance used to compute and validate feasibility fields.
+    pub fn feasibility_atol(mut self, feasibility_atol: ATol) -> Self {
+        self.feasibility_atol = feasibility_atol;
         self
     }
 
@@ -751,6 +765,7 @@ impl SampleSetBuilder {
             sense,
             feasible,
             feasible_relaxed,
+            feasibility_atol: self.feasibility_atol,
             metadata: Default::default(),
             annotations: Default::default(),
         })
@@ -828,6 +843,7 @@ impl SampleSetBuilder {
             sense,
             feasible,
             feasible_relaxed,
+            feasibility_atol: self.feasibility_atol,
             metadata: Default::default(),
             annotations: Default::default(),
         })

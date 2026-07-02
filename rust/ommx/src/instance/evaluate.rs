@@ -350,6 +350,7 @@ impl Evaluate for Instance {
                 .decision_variables(decision_variables)
                 .variable_labels(self.variable_labels().clone())
                 .sense(sense)
+                .feasibility_atol(atol)
                 .build_unchecked()?
         };
 
@@ -414,6 +415,7 @@ impl Evaluate for Instance {
             .sos1_constraints_collection(sampled_sos1_constraints)
             .named_function_table(named_functions)
             .sense(self.sense)
+            .feasibility_atol(atol)
             .build()?)
     }
 

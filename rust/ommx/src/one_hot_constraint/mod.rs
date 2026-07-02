@@ -5,7 +5,7 @@ use crate::{
     constraint_type::{
         sample_ids_from_map, ConstraintType, EvaluatedConstraintBehavior, SampledConstraintBehavior,
     },
-    Parse, ParseError, SampleID, SampleIDSet, VariableID, VariableIDSet,
+    ATol, Parse, ParseError, SampleID, SampleIDSet, VariableID, VariableIDSet,
 };
 use derive_more::{Deref, From};
 use std::collections::{BTreeMap, BTreeSet};
@@ -245,7 +245,7 @@ impl From<EvaluatedOneHotConstraint> for crate::v2::EvaluatedOneHotConstraint {
 
 impl Parse for crate::v2::EvaluatedOneHotConstraint {
     type Output = EvaluatedOneHotConstraint;
-    type Context = ();
+    type Context = ATol;
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v2.EvaluatedOneHotConstraint";
@@ -261,6 +261,12 @@ impl Parse for crate::v2::EvaluatedOneHotConstraint {
         if active_variable.is_some_and(|id| !variables.contains(&id)) {
             return Err(crate::RawParseError::InvalidInstance(
                 "One-hot active_variable must be a member of variables".to_string(),
+            )
+            .context(message, "active_variable"));
+        }
+        if self.feasible != active_variable.is_some() {
+            return Err(crate::RawParseError::InvalidInstance(
+                "One-hot feasible must be true exactly when active_variable is set".to_string(),
             )
             .context(message, "active_variable"));
         }
@@ -318,7 +324,7 @@ impl From<SampledOneHotConstraint> for crate::v2::SampledOneHotConstraint {
 
 impl Parse for crate::v2::SampledOneHotConstraint {
     type Output = SampledOneHotConstraint;
-    type Context = ();
+    type Context = ATol;
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v2.SampledOneHotConstraint";
@@ -342,10 +348,22 @@ impl Parse for crate::v2::SampledOneHotConstraint {
             )
             .context(message, "active_variable"));
         }
+        let feasible = crate::v2_io::sample_bool_map_from_v2(self.feasible);
+        for (sample_id, feasible) in &feasible {
+            if let Some(active_variable) = active_variable.get(sample_id) {
+                if *feasible != active_variable.is_some() {
+                    return Err(crate::RawParseError::InvalidInstance(
+                        "One-hot feasible must be true exactly when active_variable is set"
+                            .to_string(),
+                    )
+                    .context(message, "active_variable"));
+                }
+            }
+        }
         Ok(OneHotConstraint {
             variables,
             stage: OneHotSampledData {
-                feasible: crate::v2_io::sample_bool_map_from_v2(self.feasible),
+                feasible,
                 active_variable,
                 used_decision_variable_ids: crate::v2_io::variable_id_set_from_v2(
                     self.used_decision_variable_ids,

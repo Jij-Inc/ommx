@@ -5,7 +5,7 @@ use crate::{
     constraint_type::EvaluatedCollection,
     decision_variable::{EvaluatedDecisionVariableTable, VariableLabelStore},
     indicator_constraint::IndicatorConstraint,
-    Constraint, ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable,
+    ATol, Constraint, ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable,
     EvaluatedNamedFunction, NamedFunctionID, NamedFunctionTable, Sense, VariableID,
 };
 use getset::Getters;
@@ -115,6 +115,9 @@ pub enum SolutionError {
 /// - [`Self::decision_variables`] contains all variable IDs referenced in
 ///   `used_decision_variable_ids` of each evaluated constraint and evaluated
 ///   named function.
+/// - [`Self::feasibility_atol`] is the absolute tolerance used to interpret
+///   decision-variable feasibility and to validate serialized per-constraint
+///   feasibility columns.
 ///
 /// Note
 /// -----
@@ -142,6 +145,9 @@ pub struct Solution {
     pub relaxation: crate::v1::Relaxation,
     #[getset(get = "pub")]
     sense: Option<Sense>,
+    /// Absolute tolerance used to compute and validate feasibility fields.
+    #[getset(get_copy = "pub")]
+    feasibility_atol: ATol,
     /// OMMX-defined provenance metadata.
     pub metadata: Option<crate::v1::ProcessMetadata>,
     /// User-defined or third-party extension annotations.
@@ -215,7 +221,7 @@ impl Solution {
     pub fn feasible_decision_variables(&self) -> bool {
         self.decision_variables
             .values()
-            .all(|dv| dv.is_valid(crate::ATol::default()))
+            .all(|dv| dv.is_valid(self.feasibility_atol))
     }
 
     /// Check if all constraints are feasible
@@ -599,6 +605,7 @@ pub struct SolutionBuilder {
     variable_labels: VariableLabelStore,
     named_function_labels: crate::named_function::NamedFunctionLabelStore,
     sense: Option<Sense>,
+    feasibility_atol: ATol,
     optimality: crate::v1::Optimality,
     relaxation: crate::v1::Relaxation,
 }
@@ -731,6 +738,12 @@ impl SolutionBuilder {
         self
     }
 
+    /// Sets the absolute tolerance used to compute and validate feasibility fields.
+    pub fn feasibility_atol(mut self, feasibility_atol: ATol) -> Self {
+        self.feasibility_atol = feasibility_atol;
+        self
+    }
+
     /// Sets the optimality status.
     pub fn optimality(mut self, optimality: crate::v1::Optimality) -> Self {
         self.optimality = optimality;
@@ -848,6 +861,7 @@ impl SolutionBuilder {
             optimality: self.optimality,
             relaxation: self.relaxation,
             sense: Some(sense),
+            feasibility_atol: self.feasibility_atol,
             metadata: Default::default(),
             annotations: Default::default(),
         })
@@ -908,6 +922,7 @@ impl SolutionBuilder {
             optimality: self.optimality,
             relaxation: self.relaxation,
             sense: Some(sense),
+            feasibility_atol: self.feasibility_atol,
             metadata: Default::default(),
             annotations: Default::default(),
         })

@@ -700,6 +700,10 @@ pub struct SampleSet {
     pub sampled_one_hot_constraints: ::core::option::Option<SampledOneHotConstraintCollection>,
     #[prost(message, optional, tag = "13")]
     pub sampled_sos1_constraints: ::core::option::Option<SampledSos1ConstraintCollection>,
+    /// Absolute tolerance used to compute and validate `feasible`,
+    /// `feasible_relaxed`, and per-constraint feasibility columns.
+    #[prost(double, optional, tag = "14")]
+    pub feasibility_atol: ::core::option::Option<f64>,
 }
 /// Validated single-state solver output serialization root.
 #[non_exhaustive]
@@ -740,4 +744,8 @@ pub struct Solution {
     pub evaluated_one_hot_constraints: ::core::option::Option<EvaluatedOneHotConstraintCollection>,
     #[prost(message, optional, tag = "15")]
     pub evaluated_sos1_constraints: ::core::option::Option<EvaluatedSos1ConstraintCollection>,
+    /// Absolute tolerance used to compute and validate `feasible`,
+    /// `feasible_relaxed`, and per-constraint feasibility columns.
+    #[prost(double, optional, tag = "16")]
+    pub feasibility_atol: ::core::option::Option<f64>,
 }

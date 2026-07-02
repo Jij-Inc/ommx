@@ -5,7 +5,8 @@ use crate::{
     constraint_type::{
         sample_ids_from_map, ConstraintType, EvaluatedConstraintBehavior, SampledConstraintBehavior,
     },
-    Function, Parse, ParseError, RawParseError, SampleID, SampleIDSet, VariableID, VariableIDSet,
+    ATol, Function, Parse, ParseError, RawParseError, SampleID, SampleIDSet, VariableID,
+    VariableIDSet,
 };
 use derive_more::{Deref, From};
 use std::collections::BTreeMap;
@@ -263,11 +264,45 @@ impl From<EvaluatedIndicatorConstraint> for crate::v2::EvaluatedIndicatorConstra
     }
 }
 
+fn indicator_feasible_from_evaluated_value(
+    equality: Equality,
+    evaluated_value: f64,
+    indicator_active: bool,
+    atol: ATol,
+) -> bool {
+    if !indicator_active {
+        return true;
+    }
+    match equality {
+        Equality::EqualToZero => evaluated_value.abs() < *atol,
+        Equality::LessThanOrEqualToZero => evaluated_value < *atol,
+    }
+}
+
+fn validate_indicator_feasible_from_evaluated_value(
+    equality: Equality,
+    evaluated_value: f64,
+    indicator_active: bool,
+    provided_feasible: bool,
+    atol: ATol,
+    message: &'static str,
+) -> Result<(), ParseError> {
+    let computed_feasible =
+        indicator_feasible_from_evaluated_value(equality, evaluated_value, indicator_active, atol);
+    if provided_feasible != computed_feasible {
+        return Err(RawParseError::InvalidInstance(format!(
+            "Inconsistent indicator constraint feasibility: provided={provided_feasible}, computed={computed_feasible}",
+        ))
+        .context(message, "feasible"));
+    }
+    Ok(())
+}
+
 impl Parse for crate::v2::EvaluatedIndicatorConstraint {
     type Output = EvaluatedIndicatorConstraint;
-    type Context = ();
+    type Context = ATol;
 
-    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+    fn parse(self, atol: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v2.EvaluatedIndicatorConstraint";
         let equality = crate::v1::Equality::try_from(self.equality)
             .map_err(|_| RawParseError::UnknownEnumValue {
@@ -276,6 +311,14 @@ impl Parse for crate::v2::EvaluatedIndicatorConstraint {
             })
             .map_err(|e| ParseError::from(e).context(message, "equality"))?
             .parse_as(&(), message, "equality")?;
+        validate_indicator_feasible_from_evaluated_value(
+            equality,
+            self.evaluated_value,
+            self.indicator_active,
+            self.feasible,
+            *atol,
+            message,
+        )?;
         Ok(IndicatorConstraint {
             indicator_variable: VariableID::from(self.indicator_variable),
             equality,
@@ -323,9 +366,9 @@ impl From<SampledIndicatorConstraint> for crate::v2::SampledIndicatorConstraint 
 
 impl Parse for crate::v2::SampledIndicatorConstraint {
     type Output = SampledIndicatorConstraint;
-    type Context = ();
+    type Context = ATol;
 
-    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+    fn parse(self, atol: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v2.SampledIndicatorConstraint";
         let equality = crate::v1::Equality::try_from(self.equality)
             .map_err(|_| RawParseError::UnknownEnumValue {
@@ -341,13 +384,30 @@ impl Parse for crate::v2::SampledIndicatorConstraint {
                 field: "evaluated_values",
             })?
             .parse_as(&(), message, "evaluated_values")?;
+        let feasible = crate::v2_io::sample_bool_map_from_v2(self.feasible);
+        let indicator_active = crate::v2_io::sample_bool_map_from_v2(self.indicator_active);
+        for (sample_id, evaluated_value) in evaluated_values.iter() {
+            if let (Some(provided_feasible), Some(indicator_active)) = (
+                feasible.get(sample_id).copied(),
+                indicator_active.get(sample_id).copied(),
+            ) {
+                validate_indicator_feasible_from_evaluated_value(
+                    equality,
+                    *evaluated_value,
+                    indicator_active,
+                    provided_feasible,
+                    *atol,
+                    message,
+                )?;
+            }
+        }
         Ok(IndicatorConstraint {
             indicator_variable: VariableID::from(self.indicator_variable),
             equality,
             stage: IndicatorSampledData {
                 evaluated_values,
-                feasible: crate::v2_io::sample_bool_map_from_v2(self.feasible),
-                indicator_active: crate::v2_io::sample_bool_map_from_v2(self.indicator_active),
+                feasible,
+                indicator_active,
                 used_decision_variable_ids: crate::v2_io::variable_id_set_from_v2(
                     self.used_decision_variable_ids,
                     message,

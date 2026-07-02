@@ -8,7 +8,9 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::constraint_type::IDType;
 use crate::v2::Feature;
-use crate::{ModelingLabelStore, ParseError, RawParseError, SampleID, VariableID, VariableIDSet};
+use crate::{
+    ATol, ModelingLabelStore, ParseError, RawParseError, SampleID, VariableID, VariableIDSet,
+};
 
 pub fn required_features(
     has_indicator_constraints: bool,
@@ -93,6 +95,19 @@ pub fn validate_feature_payload(
         ))
         .context(message, "required_features")),
     }
+}
+
+pub fn parse_feasibility_atol(
+    value: Option<f64>,
+    message: &'static str,
+) -> Result<ATol, ParseError> {
+    value
+        .map(ATol::new)
+        .transpose()
+        .map_err(|e| {
+            RawParseError::InvalidInstance(e.to_string()).context(message, "feasibility_atol")
+        })?
+        .map_or_else(|| Ok(ATol::default()), Ok)
 }
 
 pub fn variable_id_set_from_v2(
