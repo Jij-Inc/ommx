@@ -115,7 +115,7 @@ pub enum SolutionError {
 /// - [`Self::decision_variables`] contains all variable IDs referenced in
 ///   `used_decision_variable_ids` of each evaluated constraint and evaluated
 ///   named function.
-/// - [`Self::feasibility_atol`] is the absolute tolerance used to interpret
+/// - `feasibility_atol` is the absolute tolerance used to interpret
 ///   decision-variable feasibility and to validate serialized per-constraint
 ///   feasibility columns.
 ///

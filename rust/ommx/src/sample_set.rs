@@ -125,7 +125,7 @@ pub enum SampleSetError {
 ///   sampled constraint collections:
 ///   - `feasible`: true if all constraints are satisfied for that sample.
 ///   - `feasible_relaxed`: true if all non-removed constraints are satisfied.
-/// - [`Self::feasibility_atol`] is the absolute tolerance used to validate
+/// - `feasibility_atol` is the absolute tolerance used to validate
 ///   serialized per-constraint feasibility columns and to interpret per-sample
 ///   [`Solution`] values extracted from this sample set.
 #[derive(Debug, Clone, Getters)]
