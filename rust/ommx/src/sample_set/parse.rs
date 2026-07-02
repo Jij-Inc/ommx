@@ -331,13 +331,7 @@ impl Parse for v2::SampleSet {
             .map(|value| value.parse_as(&(), message, "sampled_named_functions"))
             .transpose()?
             .unwrap_or_default();
-        let sense = self.sense.try_into().map_err(|_| {
-            RawParseError::UnknownEnumValue {
-                enum_name: "ommx.v1.Sense",
-                value: self.sense,
-            }
-            .context(message, "sense")
-        })?;
+        let sense = crate::v2_io::parse_v2_required_sense(self.sense, message)?;
 
         let objective_sample_ids = objectives.ids();
         for sampled_dv in decision_variables.values() {
@@ -1072,7 +1066,37 @@ mod tests {
 
         let err = SampleSet::try_from(proto).unwrap_err();
         assert!(
-            err.to_string().contains("objectives must be finite"),
+            err.to_string().contains("objectives must be finite")
+                && err.to_string().contains("SampleID(0)"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_v2_sample_set_parse_rejects_unspecified_sense() {
+        use crate::{SampleID, Sampled, Sense};
+        use std::collections::BTreeMap;
+
+        let sample_id = SampleID::from(0);
+        let mut objectives = Sampled::default();
+        objectives.append([sample_id], 0.0).unwrap();
+        let sample_set = SampleSet::builder()
+            .decision_variables(BTreeMap::new())
+            .objectives(objectives)
+            .constraints(BTreeMap::new())
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
+
+        let mut proto = crate::v2::SampleSet::from(sample_set);
+        proto.sense = crate::v1::instance::Sense::Unspecified as i32;
+
+        let err = SampleSet::try_from(proto).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("Unknown or unsupported enum value")
+                && err.to_string().contains("ommx.v2.SampleSet")
+                && err.to_string().contains("sense"),
             "unexpected error: {err}"
         );
     }

@@ -113,24 +113,6 @@ fn validate_fixed_decision_variable_partition(
     Ok(())
 }
 
-fn parse_v2_required_sense(value: i32, message: &'static str) -> Result<Sense, ParseError> {
-    let sense = v1::instance::Sense::try_from(value)
-        .map_err(|_| RawParseError::UnknownEnumValue {
-            enum_name: "ommx.v1.Sense",
-            value,
-        })
-        .map_err(|e| ParseError::from(e).context(message, "sense"))?;
-    match sense {
-        v1::instance::Sense::Minimize => Ok(Sense::Minimize),
-        v1::instance::Sense::Maximize => Ok(Sense::Maximize),
-        v1::instance::Sense::Unspecified => Err(RawParseError::UnknownEnumValue {
-            enum_name: "ommx.v1.Sense",
-            value,
-        }
-        .context(message, "sense")),
-    }
-}
-
 fn parse_v2_decision_variable_dependency(
     dependency: BTreeMap<u64, v1::Function>,
     message: &'static str,
@@ -577,7 +559,7 @@ impl Parse for v2::Instance {
             crate::v2_io::parse_required_features(self.required_features, message)?;
         let annotations =
             crate::v2_io::extension_annotations_from_v2_map(self.annotations, message)?;
-        let sense = parse_v2_required_sense(self.sense, message)?;
+        let sense = crate::v2_io::parse_v2_required_sense(self.sense, message)?;
         let decision_variables = self
             .decision_variables
             .ok_or(RawParseError::MissingField {
@@ -997,7 +979,7 @@ impl Parse for v2::ParametricInstance {
             crate::v2_io::parse_required_features(self.required_features, message)?;
         let annotations =
             crate::v2_io::extension_annotations_from_v2_map(self.annotations, message)?;
-        let sense = parse_v2_required_sense(self.sense, message)?;
+        let sense = crate::v2_io::parse_v2_required_sense(self.sense, message)?;
         let decision_variables = self
             .decision_variables
             .ok_or(RawParseError::MissingField {

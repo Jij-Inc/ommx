@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use crate::constraint_type::IDType;
 use crate::v2::Feature;
 use crate::{
-    ATol, ModelingLabelStore, ParseError, RawParseError, SampleID, Sampled, VariableID,
+    ATol, ModelingLabelStore, ParseError, RawParseError, SampleID, Sampled, Sense, VariableID,
     VariableIDSet,
 };
 
@@ -126,20 +126,33 @@ pub fn validate_finite_f64(
     }
 }
 
+pub fn parse_v2_required_sense(value: i32, message: &'static str) -> Result<Sense, ParseError> {
+    let sense = crate::v1::instance::Sense::try_from(value)
+        .map_err(|_| RawParseError::UnknownEnumValue {
+            enum_name: "ommx.v1.Sense",
+            value,
+        })
+        .map_err(|e| ParseError::from(e).context(message, "sense"))?;
+    match sense {
+        crate::v1::instance::Sense::Minimize => Ok(Sense::Minimize),
+        crate::v1::instance::Sense::Maximize => Ok(Sense::Maximize),
+        crate::v1::instance::Sense::Unspecified => Err(RawParseError::UnknownEnumValue {
+            enum_name: "ommx.v1.Sense",
+            value,
+        }
+        .context(message, "sense")),
+    }
+}
+
 pub fn validate_sampled_f64_values(
     values: &Sampled<f64>,
     message: &'static str,
     field: &'static str,
 ) -> Result<(), ParseError> {
-    for (value, sample_ids) in values.clone().chunk() {
+    for (sample_id, value) in values.iter() {
         if !value.is_finite() {
-            let sample_context = sample_ids
-                .iter()
-                .next()
-                .map(|sample_id| format!(" for sample {sample_id:?}"))
-                .unwrap_or_else(|| " for an empty sample group".to_string());
             return Err(RawParseError::InvalidInstance(format!(
-                "{field} must be finite{sample_context}: value={value}",
+                "{field} must be finite for sample {sample_id:?}: value={value}",
             ))
             .context(message, field));
         }

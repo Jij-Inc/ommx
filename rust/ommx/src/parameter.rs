@@ -197,7 +197,16 @@ impl Parse for crate::v2::ParameterTable {
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v2.ParameterTable";
-        let ids = self.ids.into_iter().map(VariableID::from).collect();
+        let mut ids = BTreeSet::new();
+        for id in self.ids {
+            let id = VariableID::from(id);
+            if !ids.insert(id) {
+                return Err(RawParseError::InvalidInstance(format!(
+                    "Duplicated parameter ID is found in ommx.v2.ParameterTable: {id:?}",
+                ))
+                .context(message, "ids"));
+            }
+        }
         let labels = crate::v2_io::modeling_label_store_from_v2_map(self.labels);
         ParameterTable::new(ids, labels)
             .map_err(|e| RawParseError::InvalidInstance(e.to_string()).context(message, "ids"))
@@ -297,6 +306,22 @@ mod tests {
                 ..Default::default()
             },
         ])
+        .unwrap_err();
+
+        assert!(
+            err.to_string().contains("Duplicated parameter ID")
+                && err.to_string().contains("VariableID(100)"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn rejects_duplicate_v2_parameter_ids() {
+        let err = crate::v2::ParameterTable {
+            ids: vec![100, 100],
+            labels: Default::default(),
+        }
+        .parse(&())
         .unwrap_err();
 
         assert!(
