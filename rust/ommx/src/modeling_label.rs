@@ -229,6 +229,9 @@ pub(crate) fn modeling_label_store_to_v2_map<ID: IDType>(
         .collect()
 }
 
+// Shared by decision-variable, parameter, and named-function table v2
+// converters. The table owner validates orphan IDs after reconstructing the
+// store from the protobuf map.
 pub(crate) fn modeling_label_store_from_v2_map<ID: IDType>(
     labels: BTreeMap<u64, crate::v2::ModelingLabel>,
 ) -> ModelingLabelStore<ID> {

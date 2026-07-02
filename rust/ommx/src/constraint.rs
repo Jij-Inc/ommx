@@ -8,9 +8,6 @@ mod reduce_binary_power;
 pub(crate) mod stage;
 
 pub use context_store::ConstraintContextStore;
-pub(crate) use context_store::{
-    constraint_context_store_from_v2_map, constraint_context_store_to_v2_map,
-};
 
 use crate::logical_memory::LogicalMemoryProfile;
 use crate::{Function, Parse, ParseError, RawParseError, SampleID, VariableID};

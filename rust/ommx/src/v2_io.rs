@@ -1,4 +1,9 @@
 //! IO-adjacent helpers for protobuf-generated `v2::*` roots.
+//!
+//! These are crate-internal because v2 protobuf conversion is implemented at
+//! the domain owner that has complete information for each table or collection,
+//! while feature-gate, annotation, ID-list, and sample-axis policies must be
+//! identical across `Instance`, `Solution`, `SampleSet`, and row-family modules.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 

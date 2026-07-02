@@ -32,7 +32,6 @@
 use crate::Result;
 use crate::{
     constraint::{
-        constraint_context_store_from_v2_map, constraint_context_store_to_v2_map,
         ConstraintContext, ConstraintContextStore, ConstraintID, EvaluatedConstraint,
         RemovedReason, SampledConstraint,
     },
@@ -795,6 +794,28 @@ impl_v2_sampled_collection!(Constraint => crate::v2::SampledRegularConstraintCol
 impl_v2_sampled_collection!(crate::IndicatorConstraint => crate::v2::SampledIndicatorConstraintCollection);
 impl_v2_sampled_collection!(crate::OneHotConstraint => crate::v2::SampledOneHotConstraintCollection);
 impl_v2_sampled_collection!(crate::Sos1Constraint => crate::v2::SampledSos1ConstraintCollection);
+
+fn constraint_context_store_to_v2_map<ID: IDType>(
+    store: &ConstraintContextStore<ID>,
+) -> BTreeMap<u64, crate::v2::ConstraintContext> {
+    store
+        .ids()
+        .into_iter()
+        .map(|id| (id.into(), store.collect_for(id).into()))
+        .collect()
+}
+
+fn constraint_context_store_from_v2_map<ID: IDType>(
+    contexts: BTreeMap<u64, crate::v2::ConstraintContext>,
+    message: &'static str,
+    field: &'static str,
+) -> std::result::Result<ConstraintContextStore<ID>, ParseError> {
+    let mut store = ConstraintContextStore::default();
+    for (id, context) in contexts {
+        store.insert(ID::from(id), context.parse_as(&(), message, field)?);
+    }
+    Ok(store)
+}
 
 macro_rules! impl_parse_v2_created_collection {
     ($source:ty => $target:ty) => {
