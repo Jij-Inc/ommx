@@ -1,0 +1,221 @@
+syntax = "proto3";
+
+package ommx.v2;
+
+import "ommx/v1/constraint.proto";
+import "ommx/v1/function.proto";
+import "ommx/v1/sample_set.proto";
+import "ommx/v2/common.proto";
+
+// One transformation step in a constraint's lineage.
+//
+// Provenance records special-constraint origins when a special constraint is
+// converted or propagated into another constraint family.
+message Provenance {
+  oneof source {
+    uint64 indicator_constraint_id = 1;
+    uint64 one_hot_constraint_id = 2;
+    uint64 sos1_constraint_id = 3;
+  }
+}
+
+// Constraint sidecar owned by one constraint collection.
+message ConstraintContext {
+  ModelingLabel label = 1;
+  repeated Provenance provenance = 2;
+}
+
+// Why a constraint row was removed or relaxed by preprocessing.
+message RemovedReason {
+  string reason = 1;
+  map<string, string> parameters = 2;
+}
+
+// Regular scalar constraint row.
+//
+// The enclosing collection owns ConstraintID, modeling context, active/removed
+// placement, and removed reasons.
+message RegularConstraint {
+  ommx.v1.Equality equality = 1;
+  ommx.v1.Function function = 2;
+}
+
+// Indicator constraint row.
+message IndicatorConstraint {
+  uint64 indicator_variable = 1;
+  ommx.v1.Equality equality = 2;
+  ommx.v1.Function function = 3;
+}
+
+// One-hot constraint row.
+message OneHotConstraint {
+  repeated uint64 variables = 1;
+}
+
+// SOS1 constraint row.
+message Sos1Constraint {
+  repeated uint64 variables = 1;
+}
+
+// Regular constraint collection at the definition stage.
+message RegularConstraintCollection {
+  map<uint64, RegularConstraint> active = 1;
+  map<uint64, RegularConstraint> removed = 2;
+  map<uint64, RemovedReason> removed_reasons = 3;
+  map<uint64, ConstraintContext> contexts = 4;
+}
+
+// Indicator constraint collection at the definition stage.
+message IndicatorConstraintCollection {
+  map<uint64, IndicatorConstraint> active = 1;
+  map<uint64, IndicatorConstraint> removed = 2;
+  map<uint64, RemovedReason> removed_reasons = 3;
+  map<uint64, ConstraintContext> contexts = 4;
+}
+
+// One-hot constraint collection at the definition stage.
+message OneHotConstraintCollection {
+  map<uint64, OneHotConstraint> active = 1;
+  map<uint64, OneHotConstraint> removed = 2;
+  map<uint64, RemovedReason> removed_reasons = 3;
+  map<uint64, ConstraintContext> contexts = 4;
+}
+
+// SOS1 constraint collection at the definition stage.
+message Sos1ConstraintCollection {
+  map<uint64, Sos1Constraint> active = 1;
+  map<uint64, Sos1Constraint> removed = 2;
+  map<uint64, RemovedReason> removed_reasons = 3;
+  map<uint64, ConstraintContext> contexts = 4;
+}
+
+// Evaluated regular constraint row.
+message EvaluatedRegularConstraint {
+  ommx.v1.Equality equality = 1;
+  double evaluated_value = 2;
+  bool feasible = 3;
+  repeated uint64 used_decision_variable_ids = 4;
+  optional double dual_variable = 5;
+}
+
+// Evaluated indicator constraint row.
+message EvaluatedIndicatorConstraint {
+  uint64 indicator_variable = 1;
+  ommx.v1.Equality equality = 2;
+  double evaluated_value = 3;
+  bool feasible = 4;
+  bool indicator_active = 5;
+  repeated uint64 used_decision_variable_ids = 6;
+}
+
+// Evaluated one-hot constraint row.
+message EvaluatedOneHotConstraint {
+  repeated uint64 variables = 1;
+  bool feasible = 2;
+  optional uint64 active_variable = 3;
+  repeated uint64 used_decision_variable_ids = 4;
+}
+
+// Evaluated SOS1 constraint row.
+message EvaluatedSos1Constraint {
+  repeated uint64 variables = 1;
+  bool feasible = 2;
+  optional uint64 active_variable = 3;
+  repeated uint64 used_decision_variable_ids = 4;
+}
+
+// Evaluated regular constraint collection.
+message EvaluatedRegularConstraintCollection {
+  map<uint64, EvaluatedRegularConstraint> entries = 1;
+  map<uint64, RemovedReason> removed_reasons = 2;
+  map<uint64, ConstraintContext> contexts = 3;
+}
+
+// Evaluated indicator constraint collection.
+message EvaluatedIndicatorConstraintCollection {
+  map<uint64, EvaluatedIndicatorConstraint> entries = 1;
+  map<uint64, RemovedReason> removed_reasons = 2;
+  map<uint64, ConstraintContext> contexts = 3;
+}
+
+// Evaluated one-hot constraint collection.
+message EvaluatedOneHotConstraintCollection {
+  map<uint64, EvaluatedOneHotConstraint> entries = 1;
+  map<uint64, RemovedReason> removed_reasons = 2;
+  map<uint64, ConstraintContext> contexts = 3;
+}
+
+// Evaluated SOS1 constraint collection.
+message EvaluatedSos1ConstraintCollection {
+  map<uint64, EvaluatedSos1Constraint> entries = 1;
+  map<uint64, RemovedReason> removed_reasons = 2;
+  map<uint64, ConstraintContext> contexts = 3;
+}
+
+// Map value used when a present sample can have no active variable.
+message SampledActiveVariable {
+  optional uint64 variable_id = 1;
+}
+
+// Sampled regular constraint row.
+message SampledRegularConstraint {
+  ommx.v1.Equality equality = 1;
+  ommx.v1.SampledValues evaluated_values = 2;
+  map<uint64, bool> feasible = 3;
+  repeated uint64 used_decision_variable_ids = 4;
+  ommx.v1.SampledValues dual_variables = 5;
+}
+
+// Sampled indicator constraint row.
+message SampledIndicatorConstraint {
+  uint64 indicator_variable = 1;
+  ommx.v1.Equality equality = 2;
+  ommx.v1.SampledValues evaluated_values = 3;
+  map<uint64, bool> feasible = 4;
+  map<uint64, bool> indicator_active = 5;
+  repeated uint64 used_decision_variable_ids = 6;
+}
+
+// Sampled one-hot constraint row.
+message SampledOneHotConstraint {
+  repeated uint64 variables = 1;
+  map<uint64, bool> feasible = 2;
+  map<uint64, SampledActiveVariable> active_variable = 3;
+  repeated uint64 used_decision_variable_ids = 4;
+}
+
+// Sampled SOS1 constraint row.
+message SampledSos1Constraint {
+  repeated uint64 variables = 1;
+  map<uint64, bool> feasible = 2;
+  map<uint64, SampledActiveVariable> active_variable = 3;
+  repeated uint64 used_decision_variable_ids = 4;
+}
+
+// Sampled regular constraint collection.
+message SampledRegularConstraintCollection {
+  map<uint64, SampledRegularConstraint> entries = 1;
+  map<uint64, RemovedReason> removed_reasons = 2;
+  map<uint64, ConstraintContext> contexts = 3;
+}
+
+// Sampled indicator constraint collection.
+message SampledIndicatorConstraintCollection {
+  map<uint64, SampledIndicatorConstraint> entries = 1;
+  map<uint64, RemovedReason> removed_reasons = 2;
+  map<uint64, ConstraintContext> contexts = 3;
+}
+
+// Sampled one-hot constraint collection.
+message SampledOneHotConstraintCollection {
+  map<uint64, SampledOneHotConstraint> entries = 1;
+  map<uint64, RemovedReason> removed_reasons = 2;
+  map<uint64, ConstraintContext> contexts = 3;
+}
+
+// Sampled SOS1 constraint collection.
+message SampledSos1ConstraintCollection {
+  map<uint64, SampledSos1Constraint> entries = 1;
+  map<uint64, RemovedReason> removed_reasons = 2;
+  map<uint64, ConstraintContext> contexts = 3;
+}

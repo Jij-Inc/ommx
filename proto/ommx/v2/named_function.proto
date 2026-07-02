@@ -3,6 +3,8 @@ syntax = "proto3";
 package ommx.v2;
 
 import "ommx/v1/function.proto";
+import "ommx/v1/sample_set.proto";
+import "ommx/v2/common.proto";
 
 // Named function row used by v2 top-level table owners.
 //
@@ -10,4 +12,37 @@ import "ommx/v1/function.proto";
 // label sidecars. This row stores only the intrinsic expression payload.
 message NamedFunction {
   ommx.v1.Function function = 1;
+}
+
+// Evaluated named-function row used by v2 top-level table owners.
+message EvaluatedNamedFunction {
+  double evaluated_value = 1;
+  repeated uint64 used_decision_variable_ids = 2;
+}
+
+// Sampled named-function row used by v2 top-level table owners.
+message SampledNamedFunction {
+  ommx.v1.SampledValues evaluated_values = 1;
+  repeated uint64 used_decision_variable_ids = 2;
+}
+
+// Definition-stage named-function table.
+//
+// Map keys own NamedFunctionID. `labels` must only reference IDs present in
+// `entries`.
+message NamedFunctionTable {
+  map<uint64, NamedFunction> entries = 1;
+  map<uint64, ModelingLabel> labels = 2;
+}
+
+// Evaluated-stage named-function table.
+message EvaluatedNamedFunctionTable {
+  map<uint64, EvaluatedNamedFunction> entries = 1;
+  map<uint64, ModelingLabel> labels = 2;
+}
+
+// Sampled-stage named-function table.
+message SampledNamedFunctionTable {
+  map<uint64, SampledNamedFunction> entries = 1;
+  map<uint64, ModelingLabel> labels = 2;
 }
