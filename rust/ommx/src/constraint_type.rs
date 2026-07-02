@@ -37,7 +37,7 @@ use crate::{
     },
     v1, ATol, Constraint, Evaluate, SampleID, SampleIDSet, VariableIDSet,
 };
-use std::collections::{btree_map::Entry, BTreeMap, BTreeSet, HashMap};
+use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
 
 fn validate_no_key_overlap<ID, L, R>(
     left: &BTreeMap<ID, L>,
@@ -789,7 +789,7 @@ impl_v2_sampled_collection!(crate::IndicatorConstraint => crate::v2::SampledIndi
 impl_v2_sampled_collection!(crate::OneHotConstraint => crate::v2::SampledOneHotConstraintCollection);
 impl_v2_sampled_collection!(crate::Sos1Constraint => crate::v2::SampledSos1ConstraintCollection);
 
-fn entries_to_v2_map<ID, Row, V2Row>(entries: BTreeMap<ID, Row>) -> HashMap<u64, V2Row>
+fn entries_to_v2_map<ID, Row, V2Row>(entries: BTreeMap<ID, Row>) -> BTreeMap<u64, V2Row>
 where
     ID: IDType,
     Row: Into<V2Row>,
@@ -802,13 +802,16 @@ where
 
 fn removed_entries_to_v2_maps<ID, Row, V2Row>(
     removed: BTreeMap<ID, (Row, RemovedReason)>,
-) -> (HashMap<u64, V2Row>, HashMap<u64, crate::v2::RemovedReason>)
+) -> (
+    BTreeMap<u64, V2Row>,
+    BTreeMap<u64, crate::v2::RemovedReason>,
+)
 where
     ID: IDType,
     Row: Into<V2Row>,
 {
-    let mut rows = HashMap::new();
-    let mut reasons = HashMap::new();
+    let mut rows = BTreeMap::new();
+    let mut reasons = BTreeMap::new();
     for (id, (row, reason)) in removed {
         let id = id.into();
         rows.insert(id, row.into());
@@ -819,7 +822,7 @@ where
 
 fn removed_reasons_to_v2_map<ID: IDType>(
     removed_reasons: BTreeMap<ID, RemovedReason>,
-) -> HashMap<u64, crate::v2::RemovedReason> {
+) -> BTreeMap<u64, crate::v2::RemovedReason> {
     removed_reasons
         .into_iter()
         .map(|(id, reason)| (id.into(), reason.into()))

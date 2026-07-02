@@ -56,7 +56,7 @@ impl From<Solution> for v2::Solution {
             sense: sense.map(Into::into).unwrap_or_default(),
             evaluated_named_functions: Some(evaluated_named_functions.into()),
             metadata,
-            annotations: crate::protobuf_extension_annotations(annotations),
+            annotations: crate::v2_io::extension_annotations_to_v2_map(annotations),
             evaluated_indicator_constraints: Some(evaluated_indicator_constraints.into()),
             evaluated_one_hot_constraints: Some(evaluated_one_hot_constraints.into()),
             evaluated_sos1_constraints: Some(evaluated_sos1_constraints.into()),

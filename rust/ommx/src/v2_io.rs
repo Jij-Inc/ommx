@@ -1,5 +1,7 @@
 //! IO-adjacent helpers for protobuf-generated `v2::*` roots.
 
+use std::collections::{BTreeMap, HashMap};
+
 use crate::v2::Feature;
 
 pub(crate) fn required_features(
@@ -18,4 +20,12 @@ pub(crate) fn required_features(
         features.push(Feature::ConstraintSos1 as i32);
     }
     features
+}
+
+pub(crate) fn extension_annotations_to_v2_map(
+    annotations: HashMap<String, String>,
+) -> BTreeMap<String, String> {
+    crate::protobuf_extension_annotations(annotations)
+        .into_iter()
+        .collect()
 }

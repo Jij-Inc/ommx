@@ -3,7 +3,7 @@ use crate::constraint_type::IDType;
 use crate::logical_memory::LogicalMemoryProfile;
 use crate::ModelingLabelStore;
 use fnv::FnvHashMap;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 
 /// ID-keyed storage for constraint labels and transformation provenance.
 ///
@@ -145,7 +145,7 @@ impl<ID: IDType> ConstraintContextStore<ID> {
 
 pub(crate) fn constraint_context_store_to_v2_map<ID: IDType>(
     store: &ConstraintContextStore<ID>,
-) -> HashMap<u64, crate::v2::ConstraintContext> {
+) -> BTreeMap<u64, crate::v2::ConstraintContext> {
     store
         .ids()
         .into_iter()

@@ -52,7 +52,7 @@ impl From<SampleSet> for v2::SampleSet {
             feasible_relaxed: sample_bool_map_to_v2(feasible_relaxed),
             sampled_named_functions: Some(named_functions.into()),
             metadata,
-            annotations: crate::protobuf_extension_annotations(annotations),
+            annotations: crate::v2_io::extension_annotations_to_v2_map(annotations),
             sampled_indicator_constraints: Some(indicator_constraints.into()),
             sampled_one_hot_constraints: Some(one_hot_constraints.into()),
             sampled_sos1_constraints: Some(sos1_constraints.into()),
@@ -62,7 +62,7 @@ impl From<SampleSet> for v2::SampleSet {
 
 fn sample_bool_map_to_v2(
     map: std::collections::BTreeMap<SampleID, bool>,
-) -> std::collections::HashMap<u64, bool> {
+) -> std::collections::BTreeMap<u64, bool> {
     map.into_iter()
         .map(|(sample_id, value)| (sample_id.into_inner(), value))
         .collect()

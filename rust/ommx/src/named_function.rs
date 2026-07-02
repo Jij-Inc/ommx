@@ -6,7 +6,7 @@ mod substitute;
 
 use derive_more::{Deref, From};
 use getset::*;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::logical_memory::LogicalMemoryProfile;
 use crate::{Function, SampleID, Sampled, VariableIDSet};
@@ -474,7 +474,7 @@ impl From<NamedFunctionTable<SampledNamedFunction>> for crate::v2::SampledNamedF
 
 fn named_function_entries_to_v2_map<T, V2>(
     entries: BTreeMap<NamedFunctionID, T>,
-) -> HashMap<u64, V2>
+) -> BTreeMap<u64, V2>
 where
     T: Into<V2>,
 {

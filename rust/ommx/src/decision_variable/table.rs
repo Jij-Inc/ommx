@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::logical_memory::LogicalMemoryProfile;
 use crate::{ATol, Bound, Created, Evaluated, ModelingLabel, SampledStage};
@@ -611,7 +611,7 @@ impl From<SampledDecisionVariableTable> for crate::v2::SampledDecisionVariableTa
     }
 }
 
-fn table_entries_to_v2_map<T, V2>(entries: BTreeMap<VariableID, T>) -> HashMap<u64, V2>
+fn table_entries_to_v2_map<T, V2>(entries: BTreeMap<VariableID, T>) -> BTreeMap<u64, V2>
 where
     T: Into<V2>,
 {

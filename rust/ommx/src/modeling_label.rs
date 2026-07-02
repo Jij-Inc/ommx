@@ -1,7 +1,7 @@
 use crate::constraint_type::IDType;
 use crate::logical_memory::LogicalMemoryProfile;
 use fnv::FnvHashMap;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::OnceLock;
 
 fn empty_parameters() -> &'static FnvHashMap<String, String> {
@@ -210,7 +210,7 @@ impl From<ModelingLabel> for crate::v2::ModelingLabel {
 
 pub(crate) fn modeling_label_store_to_v2_map<ID: IDType>(
     store: &ModelingLabelStore<ID>,
-) -> HashMap<u64, crate::v2::ModelingLabel> {
+) -> BTreeMap<u64, crate::v2::ModelingLabel> {
     store
         .ids()
         .into_iter()

@@ -74,7 +74,7 @@ impl From<Instance> for v2::Instance {
                 &decision_variable_dependency,
             ),
             named_functions: Some(named_functions.into()),
-            annotations: crate::protobuf_extension_annotations(annotations),
+            annotations: crate::v2_io::extension_annotations_to_v2_map(annotations),
         }
     }
 }
@@ -117,7 +117,7 @@ impl From<ParametricInstance> for v2::ParametricInstance {
                 &decision_variable_dependency,
             ),
             named_functions: Some(named_functions.into()),
-            annotations: crate::protobuf_extension_annotations(annotations),
+            annotations: crate::v2_io::extension_annotations_to_v2_map(annotations),
         }
     }
 }
@@ -128,7 +128,7 @@ fn created_collection_has_payload<T: ConstraintType>(collection: &ConstraintColl
 
 fn decision_variable_dependency_to_v2_map(
     dependency: &AcyclicAssignments,
-) -> std::collections::HashMap<u64, v1::Function> {
+) -> std::collections::BTreeMap<u64, v1::Function> {
     dependency
         .iter()
         .map(|(id, function)| (id.into_inner(), function.clone().into()))
@@ -198,6 +198,8 @@ mod tests {
             v2::Feature::ConstraintSos1 as i32,
         ]
     }
+
+    fn assert_btree_map<K: Ord, V>(_: &BTreeMap<K, V>) {}
 
     #[test]
     fn v2_instance_serializes_special_constraint_collections() {
@@ -296,6 +298,19 @@ mod tests {
         let proto = v2::Instance::decode(bytes.as_slice()).unwrap();
 
         assert_eq!(proto.required_features, expected_special_features());
+    }
+
+    #[test]
+    fn v2_generated_maps_are_ordered_for_deterministic_encoding() {
+        let proto = v2::Instance::from(instance_with_special_constraints());
+
+        assert_btree_map(&proto.annotations);
+        let decision_variables = proto.decision_variables.as_ref().unwrap();
+        assert_btree_map(&decision_variables.entries);
+        assert_btree_map(&decision_variables.labels);
+        let indicator_constraints = proto.indicator_constraints.as_ref().unwrap();
+        assert_btree_map(&indicator_constraints.active);
+        assert_btree_map(&indicator_constraints.contexts);
     }
 
     #[test]
