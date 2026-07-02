@@ -27,6 +27,14 @@ pub enum SolutionError {
         computed_feasible_relaxed: bool,
     },
 
+    #[error("Inconsistent feasibility for {constraint_family} constraint {constraint_id}: provided={provided_feasible}, computed={computed_feasible}")]
+    InconsistentConstraintFeasibility {
+        constraint_family: &'static str,
+        constraint_id: String,
+        provided_feasible: bool,
+        computed_feasible: bool,
+    },
+
     #[error("Inconsistent value for variable {id}: state={state_value}, substituted_value={substituted_value}")]
     InconsistentVariableValue {
         id: u64,
@@ -610,6 +618,95 @@ pub struct SolutionBuilder {
     relaxation: crate::v1::Relaxation,
 }
 
+fn expected_regular_constraint_feasible(
+    equality: crate::Equality,
+    evaluated_value: f64,
+    atol: ATol,
+) -> bool {
+    match equality {
+        crate::Equality::EqualToZero => evaluated_value.abs() < *atol,
+        crate::Equality::LessThanOrEqualToZero => evaluated_value < *atol,
+    }
+}
+
+fn expected_indicator_constraint_feasible(
+    equality: crate::Equality,
+    evaluated_value: f64,
+    indicator_active: bool,
+    atol: ATol,
+) -> bool {
+    if !indicator_active {
+        return true;
+    }
+    expected_regular_constraint_feasible(equality, evaluated_value, atol)
+}
+
+fn validate_solution_constraint_feasibility(
+    regular_constraints: &EvaluatedCollection<Constraint>,
+    indicator_constraints: &EvaluatedCollection<IndicatorConstraint>,
+    one_hot_constraints: &EvaluatedCollection<crate::OneHotConstraint>,
+    sos1_constraints: &EvaluatedCollection<crate::Sos1Constraint>,
+    atol: ATol,
+) -> Result<(), SolutionError> {
+    for (id, constraint) in regular_constraints.inner() {
+        let computed_feasible = expected_regular_constraint_feasible(
+            constraint.equality,
+            constraint.stage.evaluated_value,
+            atol,
+        );
+        if constraint.stage.feasible != computed_feasible {
+            return Err(SolutionError::InconsistentConstraintFeasibility {
+                constraint_family: "regular",
+                constraint_id: format!("{id:?}"),
+                provided_feasible: constraint.stage.feasible,
+                computed_feasible,
+            });
+        }
+    }
+
+    for (id, constraint) in indicator_constraints.inner() {
+        let computed_feasible = expected_indicator_constraint_feasible(
+            constraint.equality,
+            constraint.stage.evaluated_value,
+            constraint.stage.indicator_active,
+            atol,
+        );
+        if constraint.stage.feasible != computed_feasible {
+            return Err(SolutionError::InconsistentConstraintFeasibility {
+                constraint_family: "indicator",
+                constraint_id: format!("{id:?}"),
+                provided_feasible: constraint.stage.feasible,
+                computed_feasible,
+            });
+        }
+    }
+
+    for (id, constraint) in one_hot_constraints.inner() {
+        let computed_feasible = constraint.stage.active_variable.is_some();
+        if constraint.stage.feasible != computed_feasible {
+            return Err(SolutionError::InconsistentConstraintFeasibility {
+                constraint_family: "one-hot",
+                constraint_id: format!("{id:?}"),
+                provided_feasible: constraint.stage.feasible,
+                computed_feasible,
+            });
+        }
+    }
+
+    for (id, constraint) in sos1_constraints.inner() {
+        if constraint.stage.active_variable.is_some() && !constraint.stage.feasible {
+            return Err(SolutionError::InconsistentConstraintFeasibility {
+                constraint_family: "SOS1",
+                constraint_id: format!("{id:?}"),
+                provided_feasible: constraint.stage.feasible,
+                computed_feasible: true,
+            });
+        }
+    }
+
+    Ok(())
+}
+
 impl SolutionBuilder {
     /// Creates a new `SolutionBuilder` with all fields unset.
     pub fn new() -> Self {
@@ -796,6 +893,13 @@ impl SolutionBuilder {
             .validate_context_ids()?;
         self.evaluated_one_hot_constraints.validate_context_ids()?;
         self.evaluated_sos1_constraints.validate_context_ids()?;
+        validate_solution_constraint_feasibility(
+            &evaluated_constraints,
+            &self.evaluated_indicator_constraints,
+            &self.evaluated_one_hot_constraints,
+            &self.evaluated_sos1_constraints,
+            self.feasibility_atol,
+        )?;
 
         // Validate all used_decision_variable_ids in indicator constraints
         for (ic_id, ic) in self.evaluated_indicator_constraints.iter() {
@@ -1298,6 +1402,34 @@ mod tests {
         assert!(
             err.to_string().contains("unknown decision variable ID")
                 && err.to_string().contains("VariableID(99)"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn builder_rejects_inconsistent_regular_constraint_feasibility() {
+        let constraint = EvaluatedConstraint {
+            equality: crate::Equality::EqualToZero,
+            stage: crate::constraint::EvaluatedData {
+                evaluated_value: 1.0,
+                feasible: true,
+                used_decision_variable_ids: BTreeSet::new(),
+                dual_variable: None,
+            },
+        };
+
+        let err = Solution::builder()
+            .objective(0.0)
+            .evaluated_constraints(BTreeMap::from([(ConstraintID::from(1), constraint)]))
+            .decision_variables(BTreeMap::new())
+            .sense(Sense::Minimize)
+            .feasibility_atol(ATol::new(0.1).unwrap())
+            .build()
+            .unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("Inconsistent feasibility for regular constraint"),
             "unexpected error: {err}"
         );
     }

@@ -32,6 +32,15 @@ pub enum SampleSetError {
         computed_feasible_relaxed: bool,
     },
 
+    #[error("Inconsistent feasibility for {constraint_family} constraint {constraint_id} at sample {sample_id:?}: provided={provided_feasible}, computed={computed_feasible}")]
+    InconsistentConstraintFeasibility {
+        constraint_family: &'static str,
+        constraint_id: String,
+        sample_id: SampleID,
+        provided_feasible: bool,
+        computed_feasible: bool,
+    },
+
     #[error("Inconsistent sample IDs: expected {expected:?}, found {found:?}")]
     InconsistentSampleIDs {
         expected: SampleIDSet,
@@ -457,6 +466,126 @@ pub struct SampleSetBuilder {
     feasibility_atol: ATol,
 }
 
+fn expected_sampled_regular_constraint_feasible(
+    equality: crate::Equality,
+    evaluated_value: f64,
+    atol: ATol,
+) -> bool {
+    match equality {
+        crate::Equality::EqualToZero => evaluated_value.abs() < *atol,
+        crate::Equality::LessThanOrEqualToZero => evaluated_value < *atol,
+    }
+}
+
+fn expected_sampled_indicator_constraint_feasible(
+    equality: crate::Equality,
+    evaluated_value: f64,
+    indicator_active: bool,
+    atol: ATol,
+) -> bool {
+    if !indicator_active {
+        return true;
+    }
+    expected_sampled_regular_constraint_feasible(equality, evaluated_value, atol)
+}
+
+fn validate_sampled_constraint_feasibility(
+    regular_constraints: &SampledCollection<Constraint>,
+    indicator_constraints: &SampledCollection<IndicatorConstraint>,
+    one_hot_constraints: &SampledCollection<crate::OneHotConstraint>,
+    sos1_constraints: &SampledCollection<crate::Sos1Constraint>,
+    atol: ATol,
+) -> Result<(), SampleSetError> {
+    for (id, constraint) in regular_constraints.inner() {
+        for (sample_id, provided_feasible) in &constraint.stage.feasible {
+            let Some(evaluated_value) = constraint.stage.evaluated_values.get(*sample_id) else {
+                continue;
+            };
+            let computed_feasible = expected_sampled_regular_constraint_feasible(
+                constraint.equality,
+                *evaluated_value,
+                atol,
+            );
+            if *provided_feasible != computed_feasible {
+                return Err(SampleSetError::InconsistentConstraintFeasibility {
+                    constraint_family: "regular",
+                    constraint_id: format!("{id:?}"),
+                    sample_id: *sample_id,
+                    provided_feasible: *provided_feasible,
+                    computed_feasible,
+                });
+            }
+        }
+    }
+
+    for (id, constraint) in indicator_constraints.inner() {
+        for (sample_id, provided_feasible) in &constraint.stage.feasible {
+            let (Some(evaluated_value), Some(indicator_active)) = (
+                constraint.stage.evaluated_values.get(*sample_id),
+                constraint.stage.indicator_active.get(sample_id),
+            ) else {
+                continue;
+            };
+            let computed_feasible = expected_sampled_indicator_constraint_feasible(
+                constraint.equality,
+                *evaluated_value,
+                *indicator_active,
+                atol,
+            );
+            if *provided_feasible != computed_feasible {
+                return Err(SampleSetError::InconsistentConstraintFeasibility {
+                    constraint_family: "indicator",
+                    constraint_id: format!("{id:?}"),
+                    sample_id: *sample_id,
+                    provided_feasible: *provided_feasible,
+                    computed_feasible,
+                });
+            }
+        }
+    }
+
+    for (id, constraint) in one_hot_constraints.inner() {
+        for (sample_id, provided_feasible) in &constraint.stage.feasible {
+            let computed_feasible = constraint
+                .stage
+                .active_variable
+                .get(sample_id)
+                .is_some_and(Option::is_some);
+            if *provided_feasible != computed_feasible {
+                return Err(SampleSetError::InconsistentConstraintFeasibility {
+                    constraint_family: "one-hot",
+                    constraint_id: format!("{id:?}"),
+                    sample_id: *sample_id,
+                    provided_feasible: *provided_feasible,
+                    computed_feasible,
+                });
+            }
+        }
+    }
+
+    for (id, constraint) in sos1_constraints.inner() {
+        for (sample_id, active_variable) in &constraint.stage.active_variable {
+            if active_variable.is_some()
+                && constraint
+                    .stage
+                    .feasible
+                    .get(sample_id)
+                    .is_some_and(|feasible| !feasible)
+            {
+                return Err(SampleSetError::InconsistentConstraintFeasibility {
+                    constraint_family: "SOS1",
+                    constraint_id: format!("{id:?}"),
+                    sample_id: *sample_id,
+                    provided_feasible: false,
+                    computed_feasible: true,
+                });
+            }
+        }
+    }
+
+    Ok(())
+}
+
 impl SampleSetBuilder {
     /// Creates a new `SampleSetBuilder` with all fields unset.
     pub fn new() -> Self {
@@ -707,6 +836,13 @@ impl SampleSetBuilder {
                 expected: objective_sample_ids.clone(),
                 found,
             })?;
+        validate_sampled_constraint_feasibility(
+            &constraints,
+            &self.indicator_constraints,
+            &self.one_hot_constraints,
+            &self.sos1_constraints,
+            self.feasibility_atol,
+        )?;
 
         validate_sampled_constraint_used_ids("regular", &constraints, &decision_variable_ids)?;
         validate_sampled_constraint_used_ids(
@@ -949,6 +1085,35 @@ mod tests {
         assert!(
             err.to_string().contains("unknown decision variable ID")
                 && err.to_string().contains("VariableID(99)"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn builder_rejects_inconsistent_regular_constraint_feasibility() {
+        let sample_id = SampleID::from(0);
+        let constraint = SampledConstraint {
+            equality: crate::Equality::EqualToZero,
+            stage: crate::constraint::SampledData {
+                evaluated_values: crate::Sampled::from((sample_id, 1.0)),
+                feasible: BTreeMap::from([(sample_id, true)]),
+                used_decision_variable_ids: BTreeSet::new(),
+                dual_variables: None,
+            },
+        };
+
+        let err = SampleSet::builder()
+            .decision_variables(BTreeMap::new())
+            .objectives(crate::Sampled::from((sample_id, 0.0)))
+            .constraints(BTreeMap::from([(ConstraintID::from(1), constraint)]))
+            .sense(Sense::Minimize)
+            .feasibility_atol(ATol::new(0.1).unwrap())
+            .build()
+            .unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("Inconsistent feasibility for regular constraint"),
             "unexpected error: {err}"
         );
     }
