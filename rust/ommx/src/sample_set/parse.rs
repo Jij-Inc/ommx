@@ -280,6 +280,7 @@ impl Parse for v2::SampleSet {
                 field: "objectives",
             })?
             .parse_as(&(), message, "objectives")?;
+        crate::v2_io::validate_sampled_f64_values(&objectives, message, "objectives")?;
         let constraints = self
             .sampled_regular_constraints
             .map(|value| value.parse_as(&feasibility_atol, message, "sampled_regular_constraints"))
@@ -1039,6 +1040,39 @@ mod tests {
         assert!(
             err.to_string()
                 .contains("Inconsistent constraint feasibility"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_v2_sample_set_parse_rejects_non_finite_objective() {
+        use crate::{SampleID, Sampled, Sense};
+        use std::collections::BTreeMap;
+
+        let sample_id = SampleID::from(0);
+        let mut objectives = Sampled::default();
+        objectives.append([sample_id], 0.0).unwrap();
+        let sample_set = SampleSet::builder()
+            .decision_variables(BTreeMap::new())
+            .objectives(objectives)
+            .constraints(BTreeMap::new())
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
+
+        let mut proto = crate::v2::SampleSet::from(sample_set);
+        proto
+            .objectives
+            .as_mut()
+            .unwrap()
+            .entries
+            .first_mut()
+            .unwrap()
+            .value = f64::INFINITY;
+
+        let err = SampleSet::try_from(proto).unwrap_err();
+        assert!(
+            err.to_string().contains("objectives must be finite"),
             "unexpected error: {err}"
         );
     }

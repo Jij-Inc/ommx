@@ -311,6 +311,7 @@ impl Parse for crate::v2::EvaluatedIndicatorConstraint {
             })
             .map_err(|e| ParseError::from(e).context(message, "equality"))?
             .parse_as(&(), message, "equality")?;
+        crate::v2_io::validate_finite_f64(self.evaluated_value, message, "evaluated_value")?;
         validate_indicator_feasible_from_evaluated_value(
             equality,
             self.evaluated_value,
@@ -384,6 +385,7 @@ impl Parse for crate::v2::SampledIndicatorConstraint {
                 field: "evaluated_values",
             })?
             .parse_as(&(), message, "evaluated_values")?;
+        crate::v2_io::validate_sampled_f64_values(&evaluated_values, message, "evaluated_values")?;
         let feasible = crate::v2_io::sample_bool_map_from_v2(self.feasible);
         let indicator_active = crate::v2_io::sample_bool_map_from_v2(self.indicator_active);
         for (sample_id, evaluated_value) in evaluated_values.iter() {
@@ -468,5 +470,48 @@ mod tests {
         let ic =
             IndicatorConstraint::new(VariableID::from(10), Equality::EqualToZero, Function::Zero);
         let _: <IndicatorConstraint as ConstraintType>::Created = ic;
+    }
+
+    #[test]
+    fn parse_v2_evaluated_rejects_non_finite_value_even_when_inactive() {
+        let proto = crate::v2::EvaluatedIndicatorConstraint {
+            indicator_variable: 1,
+            equality: crate::v1::Equality::EqualToZero.into(),
+            evaluated_value: f64::INFINITY,
+            feasible: true,
+            indicator_active: false,
+            used_decision_variable_ids: vec![],
+        };
+
+        let err = proto.parse(&ATol::default()).unwrap_err();
+
+        assert!(
+            err.to_string().contains("evaluated_value must be finite"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn parse_v2_sampled_rejects_non_finite_values_even_when_inactive() {
+        let proto = crate::v2::SampledIndicatorConstraint {
+            indicator_variable: 1,
+            equality: crate::v1::Equality::EqualToZero.into(),
+            evaluated_values: Some(crate::v1::SampledValues {
+                entries: vec![crate::v1::sampled_values::SampledValuesEntry {
+                    ids: vec![0],
+                    value: f64::INFINITY,
+                }],
+            }),
+            feasible: std::collections::BTreeMap::from([(0, true)]),
+            indicator_active: std::collections::BTreeMap::from([(0, false)]),
+            used_decision_variable_ids: vec![],
+        };
+
+        let err = proto.parse(&ATol::default()).unwrap_err();
+
+        assert!(
+            err.to_string().contains("evaluated_values must be finite"),
+            "unexpected error: {err}"
+        );
     }
 }

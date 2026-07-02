@@ -456,6 +456,7 @@ impl Parse for crate::v2::EvaluatedNamedFunction {
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v2.EvaluatedNamedFunction";
+        crate::v2_io::validate_finite_f64(self.evaluated_value, message, "evaluated_value")?;
         Ok(EvaluatedNamedFunction {
             evaluated_value: self.evaluated_value,
             used_decision_variable_ids: crate::v2_io::variable_id_set_from_v2(
@@ -486,14 +487,16 @@ impl Parse for crate::v2::SampledNamedFunction {
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v2.SampledNamedFunction";
+        let evaluated_values = self
+            .evaluated_values
+            .ok_or(RawParseError::MissingField {
+                message,
+                field: "evaluated_values",
+            })?
+            .parse_as(&(), message, "evaluated_values")?;
+        crate::v2_io::validate_sampled_f64_values(&evaluated_values, message, "evaluated_values")?;
         Ok(SampledNamedFunction {
-            evaluated_values: self
-                .evaluated_values
-                .ok_or(RawParseError::MissingField {
-                    message,
-                    field: "evaluated_values",
-                })?
-                .parse_as(&(), message, "evaluated_values")?,
+            evaluated_values,
             used_decision_variable_ids: crate::v2_io::variable_id_set_from_v2(
                 self.used_decision_variable_ids,
                 message,
@@ -659,5 +662,40 @@ mod table_tests {
         assert!(err.to_string().contains("Duplicate named function ID"));
         assert_eq!(table.get(&id), Some(&row));
         assert_eq!(table.labels().name(id), Some("cost"));
+    }
+
+    #[test]
+    fn parse_v2_evaluated_rejects_non_finite_value() {
+        let proto = crate::v2::EvaluatedNamedFunction {
+            evaluated_value: f64::INFINITY,
+            used_decision_variable_ids: vec![],
+        };
+
+        let err = proto.parse(&()).unwrap_err();
+
+        assert!(
+            err.to_string().contains("evaluated_value must be finite"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn parse_v2_sampled_rejects_non_finite_values() {
+        let proto = crate::v2::SampledNamedFunction {
+            evaluated_values: Some(crate::v1::SampledValues {
+                entries: vec![crate::v1::sampled_values::SampledValuesEntry {
+                    ids: vec![0],
+                    value: f64::INFINITY,
+                }],
+            }),
+            used_decision_variable_ids: vec![],
+        };
+
+        let err = proto.parse(&()).unwrap_err();
+
+        assert!(
+            err.to_string().contains("evaluated_values must be finite"),
+            "unexpected error: {err}"
+        );
     }
 }

@@ -332,6 +332,10 @@ impl Parse for crate::v2::EvaluatedRegularConstraint {
             })
             .map_err(|e| ParseError::from(e).context(message, "equality"))?
             .parse_as(&(), message, "equality")?;
+        crate::v2_io::validate_finite_f64(self.evaluated_value, message, "evaluated_value")?;
+        if let Some(dual_variable) = self.dual_variable {
+            crate::v2_io::validate_finite_f64(dual_variable, message, "dual_variable")?;
+        }
         validate_feasible_from_evaluated_value(
             equality,
             self.evaluated_value,
@@ -426,6 +430,7 @@ impl Parse for crate::v2::SampledRegularConstraint {
                 field: "evaluated_values",
             })?
             .parse_as(&(), message, "evaluated_values")?;
+        crate::v2_io::validate_sampled_f64_values(&evaluated_values, message, "evaluated_values")?;
         let feasible = crate::v2_io::sample_bool_map_from_v2(self.feasible);
         for (sample_id, evaluated_value) in evaluated_values.iter() {
             if let Some(provided_feasible) = feasible.get(sample_id).copied() {
@@ -442,6 +447,9 @@ impl Parse for crate::v2::SampledRegularConstraint {
             .dual_variables
             .map(|values| values.parse_as(&(), message, "dual_variables"))
             .transpose()?;
+        if let Some(dual_variables) = &dual_variables {
+            crate::v2_io::validate_sampled_f64_values(dual_variables, message, "dual_variables")?;
+        }
         Ok(Constraint {
             equality,
             stage: SampledData {
@@ -570,5 +578,92 @@ mod tests {
         let state = crate::v1::State::default();
         let evaluated = constraint.evaluate(&state, crate::ATol::default()).unwrap();
         assert_eq!(evaluated.violation(), 0.0001);
+    }
+
+    #[test]
+    fn parse_v2_evaluated_rejects_non_finite_value_even_if_marked_infeasible() {
+        let proto = crate::v2::EvaluatedRegularConstraint {
+            equality: crate::v1::Equality::EqualToZero.into(),
+            evaluated_value: f64::INFINITY,
+            feasible: false,
+            used_decision_variable_ids: vec![],
+            dual_variable: None,
+        };
+
+        let err = proto.parse(&ATol::default()).unwrap_err();
+
+        assert!(
+            err.to_string().contains("evaluated_value must be finite"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn parse_v2_evaluated_rejects_non_finite_dual_variable() {
+        let proto = crate::v2::EvaluatedRegularConstraint {
+            equality: crate::v1::Equality::EqualToZero.into(),
+            evaluated_value: 0.0,
+            feasible: true,
+            used_decision_variable_ids: vec![],
+            dual_variable: Some(f64::INFINITY),
+        };
+
+        let err = proto.parse(&ATol::default()).unwrap_err();
+
+        assert!(
+            err.to_string().contains("dual_variable must be finite"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn parse_v2_sampled_rejects_non_finite_evaluated_values() {
+        let proto = crate::v2::SampledRegularConstraint {
+            equality: crate::v1::Equality::EqualToZero.into(),
+            evaluated_values: Some(crate::v1::SampledValues {
+                entries: vec![crate::v1::sampled_values::SampledValuesEntry {
+                    ids: vec![0],
+                    value: f64::INFINITY,
+                }],
+            }),
+            feasible: std::collections::BTreeMap::from([(0, false)]),
+            used_decision_variable_ids: vec![],
+            dual_variables: None,
+        };
+
+        let err = proto.parse(&ATol::default()).unwrap_err();
+
+        assert!(
+            err.to_string().contains("evaluated_values must be finite"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn parse_v2_sampled_rejects_non_finite_dual_variables() {
+        let proto = crate::v2::SampledRegularConstraint {
+            equality: crate::v1::Equality::EqualToZero.into(),
+            evaluated_values: Some(crate::v1::SampledValues {
+                entries: vec![crate::v1::sampled_values::SampledValuesEntry {
+                    ids: vec![0],
+                    value: 0.0,
+                }],
+            }),
+            feasible: std::collections::BTreeMap::from([(0, true)]),
+            used_decision_variable_ids: vec![],
+            dual_variables: Some(crate::v1::SampledValues {
+                entries: vec![crate::v1::sampled_values::SampledValuesEntry {
+                    ids: vec![0],
+                    value: f64::INFINITY,
+                }],
+            }),
+        };
+
+        let err = proto.parse(&ATol::default()).unwrap_err();
+
+        assert!(
+            err.to_string().contains("dual_variables must be finite"),
+            "unexpected error: {err}"
+        );
     }
 }

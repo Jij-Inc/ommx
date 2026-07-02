@@ -328,6 +328,7 @@ impl Parse for v2::Solution {
             crate::v2_io::parse_feasibility_atol(self.feasibility_atol, message)?;
         let annotations =
             crate::v2_io::extension_annotations_from_v2_map(self.annotations, message)?;
+        crate::v2_io::validate_finite_f64(self.objective, message, "objective")?;
         let decision_variables = self
             .decision_variables
             .ok_or(RawParseError::MissingField {
@@ -1150,6 +1151,29 @@ mod tests {
         assert!(
             err.to_string()
                 .contains("Inconsistent constraint feasibility"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_v2_solution_parse_rejects_non_finite_objective() {
+        use crate::Sense;
+        use std::collections::BTreeMap;
+
+        let solution = Solution::builder()
+            .objective(0.0)
+            .evaluated_constraints(BTreeMap::new())
+            .decision_variables(BTreeMap::new())
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
+
+        let mut proto = crate::v2::Solution::from(solution);
+        proto.objective = f64::INFINITY;
+
+        let err = Solution::try_from(proto).unwrap_err();
+        assert!(
+            err.to_string().contains("objective must be finite"),
             "unexpected error: {err}"
         );
     }

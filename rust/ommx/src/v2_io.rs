@@ -9,7 +9,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use crate::constraint_type::IDType;
 use crate::v2::Feature;
 use crate::{
-    ATol, ModelingLabelStore, ParseError, RawParseError, SampleID, VariableID, VariableIDSet,
+    ATol, ModelingLabelStore, ParseError, RawParseError, SampleID, Sampled, VariableID,
+    VariableIDSet,
 };
 
 pub fn required_features(
@@ -108,6 +109,42 @@ pub fn parse_feasibility_atol(
             RawParseError::InvalidInstance(e.to_string()).context(message, "feasibility_atol")
         })?
         .map_or_else(|| Ok(ATol::default()), Ok)
+}
+
+pub fn validate_finite_f64(
+    value: f64,
+    message: &'static str,
+    field: &'static str,
+) -> Result<(), ParseError> {
+    if value.is_finite() {
+        Ok(())
+    } else {
+        Err(
+            RawParseError::InvalidInstance(format!("{field} must be finite: value={value}",))
+                .context(message, field),
+        )
+    }
+}
+
+pub fn validate_sampled_f64_values(
+    values: &Sampled<f64>,
+    message: &'static str,
+    field: &'static str,
+) -> Result<(), ParseError> {
+    for (value, sample_ids) in values.clone().chunk() {
+        if !value.is_finite() {
+            let sample_context = sample_ids
+                .iter()
+                .next()
+                .map(|sample_id| format!(" for sample {sample_id:?}"))
+                .unwrap_or_else(|| " for an empty sample group".to_string());
+            return Err(RawParseError::InvalidInstance(format!(
+                "{field} must be finite{sample_context}: value={value}",
+            ))
+            .context(message, field));
+        }
+    }
+    Ok(())
 }
 
 pub fn variable_id_set_from_v2(
