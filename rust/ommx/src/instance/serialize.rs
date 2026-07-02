@@ -365,7 +365,7 @@ mod tests {
             .get_mut(&20)
             .unwrap();
         one_hot.variables = vec![999];
-        one_hot.active_variable = None;
+        one_hot.active_variable = Some(999);
         one_hot.used_decision_variable_ids.clear();
 
         let err = crate::Solution::try_from(proto).unwrap_err();
