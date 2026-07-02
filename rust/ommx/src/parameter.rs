@@ -182,6 +182,15 @@ impl ParameterTable {
     }
 }
 
+impl From<ParameterTable> for crate::v2::ParameterTable {
+    fn from(table: ParameterTable) -> Self {
+        Self {
+            ids: table.ids.into_iter().map(|id| id.into_inner()).collect(),
+            labels: crate::modeling_label::modeling_label_store_to_v2_map(&table.labels),
+        }
+    }
+}
+
 impl LogicalMemoryProfile for ParameterTable {
     fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
         self.ids

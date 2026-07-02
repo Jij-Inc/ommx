@@ -40,6 +40,15 @@ pub struct RemovedReason {
     pub parameters: FnvHashMap<String, String>,
 }
 
+impl From<RemovedReason> for crate::v2::RemovedReason {
+    fn from(reason: RemovedReason) -> Self {
+        Self {
+            reason: reason.reason,
+            parameters: reason.parameters.into_iter().collect(),
+        }
+    }
+}
+
 // ===== Stage data types for regular Constraint =====
 
 /// Data carried by a regular constraint in the Created stage.

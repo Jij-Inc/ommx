@@ -203,6 +203,62 @@ impl IndicatorConstraint<Created> {
     }
 }
 
+impl From<IndicatorConstraint<Created>> for crate::v2::IndicatorConstraint {
+    fn from(constraint: IndicatorConstraint<Created>) -> Self {
+        Self {
+            indicator_variable: constraint.indicator_variable.into_inner(),
+            equality: constraint.equality.into(),
+            function: Some(constraint.stage.function.into()),
+        }
+    }
+}
+
+impl From<EvaluatedIndicatorConstraint> for crate::v2::EvaluatedIndicatorConstraint {
+    fn from(constraint: EvaluatedIndicatorConstraint) -> Self {
+        Self {
+            indicator_variable: constraint.indicator_variable.into_inner(),
+            equality: constraint.equality.into(),
+            evaluated_value: constraint.stage.evaluated_value,
+            feasible: constraint.stage.feasible,
+            indicator_active: constraint.stage.indicator_active,
+            used_decision_variable_ids: constraint
+                .stage
+                .used_decision_variable_ids
+                .into_iter()
+                .map(|id| id.into_inner())
+                .collect(),
+        }
+    }
+}
+
+impl From<SampledIndicatorConstraint> for crate::v2::SampledIndicatorConstraint {
+    fn from(constraint: SampledIndicatorConstraint) -> Self {
+        Self {
+            indicator_variable: constraint.indicator_variable.into_inner(),
+            equality: constraint.equality.into(),
+            evaluated_values: Some(constraint.stage.evaluated_values.into()),
+            feasible: constraint
+                .stage
+                .feasible
+                .into_iter()
+                .map(|(id, value)| (id.into_inner(), value))
+                .collect(),
+            indicator_active: constraint
+                .stage
+                .indicator_active
+                .into_iter()
+                .map(|(id, value)| (id.into_inner(), value))
+                .collect(),
+            used_decision_variable_ids: constraint
+                .stage
+                .used_decision_variable_ids
+                .into_iter()
+                .map(|id| id.into_inner())
+                .collect(),
+        }
+    }
+}
+
 impl std::fmt::Display for IndicatorConstraint<Created> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let equality_symbol = match self.equality {

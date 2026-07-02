@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::logical_memory::LogicalMemoryProfile;
 use crate::{ATol, Bound, Created, Evaluated, ModelingLabel, SampledStage};
@@ -540,6 +540,85 @@ fn sampled_decision_variable_to_v1(
         )),
         samples: Some(samples.into()),
     }
+}
+
+impl From<DecisionVariable> for crate::v2::DecisionVariable {
+    fn from(value: DecisionVariable) -> Self {
+        let DecisionVariable { kind, bound } = value;
+        Self {
+            kind: kind.into(),
+            bound: Some(bound.into()),
+        }
+    }
+}
+
+impl From<EvaluatedDecisionVariable> for crate::v2::EvaluatedDecisionVariable {
+    fn from(value: EvaluatedDecisionVariable) -> Self {
+        let EvaluatedDecisionVariable { kind, bound, value } = value;
+        Self {
+            kind: kind.into(),
+            bound: Some(bound.into()),
+            value,
+        }
+    }
+}
+
+impl From<SampledDecisionVariable> for crate::v2::SampledDecisionVariable {
+    fn from(value: SampledDecisionVariable) -> Self {
+        let SampledDecisionVariable {
+            kind,
+            bound,
+            samples,
+        } = value;
+        Self {
+            kind: kind.into(),
+            bound: Some(bound.into()),
+            samples: Some(samples.into()),
+        }
+    }
+}
+
+impl From<DecisionVariableTable<Created>> for crate::v2::DecisionVariableTable {
+    fn from(table: DecisionVariableTable<Created>) -> Self {
+        Self {
+            entries: table_entries_to_v2_map(table.entries),
+            labels: crate::modeling_label::modeling_label_store_to_v2_map(&table.labels),
+            fixed_values: table
+                .columns
+                .fixed_values
+                .into_iter()
+                .map(|(id, value)| (id.into_inner(), value))
+                .collect(),
+        }
+    }
+}
+
+impl From<EvaluatedDecisionVariableTable> for crate::v2::EvaluatedDecisionVariableTable {
+    fn from(table: EvaluatedDecisionVariableTable) -> Self {
+        Self {
+            entries: table_entries_to_v2_map(table.entries),
+            labels: crate::modeling_label::modeling_label_store_to_v2_map(&table.labels),
+        }
+    }
+}
+
+impl From<SampledDecisionVariableTable> for crate::v2::SampledDecisionVariableTable {
+    fn from(table: SampledDecisionVariableTable) -> Self {
+        Self {
+            entries: table_entries_to_v2_map(table.entries),
+            labels: crate::modeling_label::modeling_label_store_to_v2_map(&table.labels),
+        }
+    }
+}
+
+fn table_entries_to_v2_map<T, V2>(entries: BTreeMap<VariableID, T>) -> HashMap<u64, V2>
+where
+    T: Into<V2>,
+{
+    entries
+        .into_iter()
+        .map(|(id, row)| (id.into_inner(), row.into()))
+        .collect()
 }
 
 impl<'a, S: DecisionVariableTableStage> IntoIterator for &'a DecisionVariableTable<S> {

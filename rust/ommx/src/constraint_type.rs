@@ -32,12 +32,12 @@
 use crate::Result;
 use crate::{
     constraint::{
-        ConstraintContext, ConstraintContextStore, ConstraintID, EvaluatedConstraint,
-        RemovedReason, SampledConstraint,
+        constraint_context_store_to_v2_map, ConstraintContext, ConstraintContextStore,
+        ConstraintID, EvaluatedConstraint, RemovedReason, SampledConstraint,
     },
     v1, ATol, Constraint, Evaluate, SampleID, SampleIDSet, VariableIDSet,
 };
-use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
+use std::collections::{btree_map::Entry, BTreeMap, BTreeSet, HashMap};
 
 fn validate_no_key_overlap<ID, L, R>(
     left: &BTreeMap<ID, L>,
@@ -713,6 +713,117 @@ fn removed_constraint_to_v1(
         removed_reason: removed_reason.reason,
         removed_reason_parameters: removed_reason.parameters.into_iter().collect(),
     }
+}
+
+macro_rules! impl_v2_created_collection {
+    ($source:ty => $target:ty) => {
+        impl From<ConstraintCollection<$source>> for $target {
+            fn from(value: ConstraintCollection<$source>) -> Self {
+                let ConstraintCollection {
+                    active,
+                    removed,
+                    context,
+                } = value;
+                let (removed, removed_reasons) = removed_entries_to_v2_maps(removed);
+                Self {
+                    active: entries_to_v2_map(active),
+                    removed,
+                    removed_reasons,
+                    contexts: constraint_context_store_to_v2_map(&context),
+                }
+            }
+        }
+    };
+}
+
+impl_v2_created_collection!(Constraint => crate::v2::RegularConstraintCollection);
+impl_v2_created_collection!(crate::IndicatorConstraint => crate::v2::IndicatorConstraintCollection);
+impl_v2_created_collection!(crate::OneHotConstraint => crate::v2::OneHotConstraintCollection);
+impl_v2_created_collection!(crate::Sos1Constraint => crate::v2::Sos1ConstraintCollection);
+
+macro_rules! impl_v2_evaluated_collection {
+    ($source:ty => $target:ty) => {
+        impl From<EvaluatedCollection<$source>> for $target {
+            fn from(value: EvaluatedCollection<$source>) -> Self {
+                let EvaluatedCollection {
+                    constraints,
+                    removed_reasons,
+                    context,
+                } = value;
+                Self {
+                    entries: entries_to_v2_map(constraints),
+                    removed_reasons: removed_reasons_to_v2_map(removed_reasons),
+                    contexts: constraint_context_store_to_v2_map(&context),
+                }
+            }
+        }
+    };
+}
+
+impl_v2_evaluated_collection!(Constraint => crate::v2::EvaluatedRegularConstraintCollection);
+impl_v2_evaluated_collection!(crate::IndicatorConstraint => crate::v2::EvaluatedIndicatorConstraintCollection);
+impl_v2_evaluated_collection!(crate::OneHotConstraint => crate::v2::EvaluatedOneHotConstraintCollection);
+impl_v2_evaluated_collection!(crate::Sos1Constraint => crate::v2::EvaluatedSos1ConstraintCollection);
+
+macro_rules! impl_v2_sampled_collection {
+    ($source:ty => $target:ty) => {
+        impl From<SampledCollection<$source>> for $target {
+            fn from(value: SampledCollection<$source>) -> Self {
+                let SampledCollection {
+                    constraints,
+                    removed_reasons,
+                    context,
+                } = value;
+                Self {
+                    entries: entries_to_v2_map(constraints),
+                    removed_reasons: removed_reasons_to_v2_map(removed_reasons),
+                    contexts: constraint_context_store_to_v2_map(&context),
+                }
+            }
+        }
+    };
+}
+
+impl_v2_sampled_collection!(Constraint => crate::v2::SampledRegularConstraintCollection);
+impl_v2_sampled_collection!(crate::IndicatorConstraint => crate::v2::SampledIndicatorConstraintCollection);
+impl_v2_sampled_collection!(crate::OneHotConstraint => crate::v2::SampledOneHotConstraintCollection);
+impl_v2_sampled_collection!(crate::Sos1Constraint => crate::v2::SampledSos1ConstraintCollection);
+
+fn entries_to_v2_map<ID, Row, V2Row>(entries: BTreeMap<ID, Row>) -> HashMap<u64, V2Row>
+where
+    ID: IDType,
+    Row: Into<V2Row>,
+{
+    entries
+        .into_iter()
+        .map(|(id, row)| (id.into(), row.into()))
+        .collect()
+}
+
+fn removed_entries_to_v2_maps<ID, Row, V2Row>(
+    removed: BTreeMap<ID, (Row, RemovedReason)>,
+) -> (HashMap<u64, V2Row>, HashMap<u64, crate::v2::RemovedReason>)
+where
+    ID: IDType,
+    Row: Into<V2Row>,
+{
+    let mut rows = HashMap::new();
+    let mut reasons = HashMap::new();
+    for (id, (row, reason)) in removed {
+        let id = id.into();
+        rows.insert(id, row.into());
+        reasons.insert(id, reason.into());
+    }
+    (rows, reasons)
+}
+
+fn removed_reasons_to_v2_map<ID: IDType>(
+    removed_reasons: BTreeMap<ID, RemovedReason>,
+) -> HashMap<u64, crate::v2::RemovedReason> {
+    removed_reasons
+        .into_iter()
+        .map(|(id, reason)| (id.into(), reason.into()))
+        .collect()
 }
 
 impl<T: ConstraintType> Evaluate for ConstraintCollection<T> {
