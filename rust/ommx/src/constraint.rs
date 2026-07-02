@@ -7,6 +7,7 @@ mod parse;
 mod reduce_binary_power;
 pub(crate) mod stage;
 
+pub(crate) use context_store::constraint_context_store_to_v2_map;
 pub use context_store::ConstraintContextStore;
 
 use crate::logical_memory::LogicalMemoryProfile;
@@ -102,6 +103,30 @@ pub struct ConstraintContext {
     pub provenance: Vec<Provenance>,
 }
 
+impl From<Provenance> for crate::v2::Provenance {
+    fn from(provenance: Provenance) -> Self {
+        use crate::v2::provenance::Source;
+
+        let source = match provenance {
+            Provenance::IndicatorConstraint(id) => Source::IndicatorConstraintId(id.into_inner()),
+            Provenance::OneHotConstraint(id) => Source::OneHotConstraintId(id.into_inner()),
+            Provenance::Sos1Constraint(id) => Source::Sos1ConstraintId(id.into_inner()),
+        };
+        Self {
+            source: Some(source),
+        }
+    }
+}
+
+impl From<ConstraintContext> for crate::v2::ConstraintContext {
+    fn from(context: ConstraintContext) -> Self {
+        Self {
+            label: Some(context.label.into()),
+            provenance: context.provenance.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
 /// A constraint parameterized by its lifecycle stage.
 ///
 /// Holds only the constraint's intrinsic data (`equality` plus stage-specific
@@ -150,6 +175,15 @@ impl Constraint<Created> {
     }
 }
 
+impl From<Constraint<Created>> for crate::v2::RegularConstraint {
+    fn from(constraint: Constraint<Created>) -> Self {
+        Self {
+            equality: constraint.equality.into(),
+            function: Some(constraint.stage.function.into()),
+        }
+    }
+}
+
 impl std::fmt::Display for Constraint<Created> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let equality_symbol = match self.equality {
@@ -168,6 +202,23 @@ impl std::fmt::Display for Constraint<Created> {
 
 /// Type alias for an evaluated constraint.
 pub type EvaluatedConstraint = Constraint<Evaluated>;
+
+impl From<EvaluatedConstraint> for crate::v2::EvaluatedRegularConstraint {
+    fn from(constraint: EvaluatedConstraint) -> Self {
+        Self {
+            equality: constraint.equality.into(),
+            evaluated_value: constraint.stage.evaluated_value,
+            feasible: constraint.stage.feasible,
+            used_decision_variable_ids: constraint
+                .stage
+                .used_decision_variable_ids
+                .into_iter()
+                .map(|id| id.into_inner())
+                .collect(),
+            dual_variable: constraint.stage.dual_variable,
+        }
+    }
+}
 
 impl EvaluatedConstraint {
     /// Check if this constraint is feasible given a specific tolerance
@@ -197,6 +248,28 @@ impl EvaluatedConstraint {
 
 /// Type alias for a sampled constraint.
 pub type SampledConstraint = Constraint<SampledStage>;
+
+impl From<SampledConstraint> for crate::v2::SampledRegularConstraint {
+    fn from(constraint: SampledConstraint) -> Self {
+        Self {
+            equality: constraint.equality.into(),
+            evaluated_values: Some(constraint.stage.evaluated_values.into()),
+            feasible: constraint
+                .stage
+                .feasible
+                .into_iter()
+                .map(|(id, value)| (id.into_inner(), value))
+                .collect(),
+            used_decision_variable_ids: constraint
+                .stage
+                .used_decision_variable_ids
+                .into_iter()
+                .map(|id| id.into_inner())
+                .collect(),
+            dual_variables: constraint.stage.dual_variables.map(Into::into),
+        }
+    }
+}
 
 impl SampledConstraint {
     /// Check feasibility for a specific sample.

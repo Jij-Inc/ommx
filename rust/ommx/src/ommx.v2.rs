@@ -12,9 +12,11 @@ pub struct ModelingLabel {
     pub name: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(int64, repeated, tag = "2")]
     pub subscripts: ::prost::alloc::vec::Vec<i64>,
-    #[prost(map = "string, string", tag = "3")]
-    pub parameters:
-        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
+    #[prost(btree_map = "string, string", tag = "3")]
+    pub parameters: ::prost::alloc::collections::BTreeMap<
+        ::prost::alloc::string::String,
+        ::prost::alloc::string::String,
+    >,
     #[prost(string, optional, tag = "4")]
     pub description: ::core::option::Option<::prost::alloc::string::String>,
 }
@@ -110,9 +112,11 @@ pub struct ConstraintContext {
 pub struct RemovedReason {
     #[prost(string, tag = "1")]
     pub reason: ::prost::alloc::string::String,
-    #[prost(map = "string, string", tag = "2")]
-    pub parameters:
-        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
+    #[prost(btree_map = "string, string", tag = "2")]
+    pub parameters: ::prost::alloc::collections::BTreeMap<
+        ::prost::alloc::string::String,
+        ::prost::alloc::string::String,
+    >,
 }
 /// Regular scalar constraint row.
 ///
@@ -160,56 +164,56 @@ pub struct Sos1Constraint {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct RegularConstraintCollection {
-    #[prost(map = "uint64, message", tag = "1")]
-    pub active: ::std::collections::HashMap<u64, RegularConstraint>,
-    #[prost(map = "uint64, message", tag = "2")]
-    pub removed: ::std::collections::HashMap<u64, RegularConstraint>,
-    #[prost(map = "uint64, message", tag = "3")]
-    pub removed_reasons: ::std::collections::HashMap<u64, RemovedReason>,
-    #[prost(map = "uint64, message", tag = "4")]
-    pub contexts: ::std::collections::HashMap<u64, ConstraintContext>,
+    #[prost(btree_map = "uint64, message", tag = "1")]
+    pub active: ::prost::alloc::collections::BTreeMap<u64, RegularConstraint>,
+    #[prost(btree_map = "uint64, message", tag = "2")]
+    pub removed: ::prost::alloc::collections::BTreeMap<u64, RegularConstraint>,
+    #[prost(btree_map = "uint64, message", tag = "3")]
+    pub removed_reasons: ::prost::alloc::collections::BTreeMap<u64, RemovedReason>,
+    #[prost(btree_map = "uint64, message", tag = "4")]
+    pub contexts: ::prost::alloc::collections::BTreeMap<u64, ConstraintContext>,
 }
 /// Indicator constraint collection at the definition stage.
 #[non_exhaustive]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct IndicatorConstraintCollection {
-    #[prost(map = "uint64, message", tag = "1")]
-    pub active: ::std::collections::HashMap<u64, IndicatorConstraint>,
-    #[prost(map = "uint64, message", tag = "2")]
-    pub removed: ::std::collections::HashMap<u64, IndicatorConstraint>,
-    #[prost(map = "uint64, message", tag = "3")]
-    pub removed_reasons: ::std::collections::HashMap<u64, RemovedReason>,
-    #[prost(map = "uint64, message", tag = "4")]
-    pub contexts: ::std::collections::HashMap<u64, ConstraintContext>,
+    #[prost(btree_map = "uint64, message", tag = "1")]
+    pub active: ::prost::alloc::collections::BTreeMap<u64, IndicatorConstraint>,
+    #[prost(btree_map = "uint64, message", tag = "2")]
+    pub removed: ::prost::alloc::collections::BTreeMap<u64, IndicatorConstraint>,
+    #[prost(btree_map = "uint64, message", tag = "3")]
+    pub removed_reasons: ::prost::alloc::collections::BTreeMap<u64, RemovedReason>,
+    #[prost(btree_map = "uint64, message", tag = "4")]
+    pub contexts: ::prost::alloc::collections::BTreeMap<u64, ConstraintContext>,
 }
 /// One-hot constraint collection at the definition stage.
 #[non_exhaustive]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct OneHotConstraintCollection {
-    #[prost(map = "uint64, message", tag = "1")]
-    pub active: ::std::collections::HashMap<u64, OneHotConstraint>,
-    #[prost(map = "uint64, message", tag = "2")]
-    pub removed: ::std::collections::HashMap<u64, OneHotConstraint>,
-    #[prost(map = "uint64, message", tag = "3")]
-    pub removed_reasons: ::std::collections::HashMap<u64, RemovedReason>,
-    #[prost(map = "uint64, message", tag = "4")]
-    pub contexts: ::std::collections::HashMap<u64, ConstraintContext>,
+    #[prost(btree_map = "uint64, message", tag = "1")]
+    pub active: ::prost::alloc::collections::BTreeMap<u64, OneHotConstraint>,
+    #[prost(btree_map = "uint64, message", tag = "2")]
+    pub removed: ::prost::alloc::collections::BTreeMap<u64, OneHotConstraint>,
+    #[prost(btree_map = "uint64, message", tag = "3")]
+    pub removed_reasons: ::prost::alloc::collections::BTreeMap<u64, RemovedReason>,
+    #[prost(btree_map = "uint64, message", tag = "4")]
+    pub contexts: ::prost::alloc::collections::BTreeMap<u64, ConstraintContext>,
 }
 /// SOS1 constraint collection at the definition stage.
 #[non_exhaustive]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Sos1ConstraintCollection {
-    #[prost(map = "uint64, message", tag = "1")]
-    pub active: ::std::collections::HashMap<u64, Sos1Constraint>,
-    #[prost(map = "uint64, message", tag = "2")]
-    pub removed: ::std::collections::HashMap<u64, Sos1Constraint>,
-    #[prost(map = "uint64, message", tag = "3")]
-    pub removed_reasons: ::std::collections::HashMap<u64, RemovedReason>,
-    #[prost(map = "uint64, message", tag = "4")]
-    pub contexts: ::std::collections::HashMap<u64, ConstraintContext>,
+    #[prost(btree_map = "uint64, message", tag = "1")]
+    pub active: ::prost::alloc::collections::BTreeMap<u64, Sos1Constraint>,
+    #[prost(btree_map = "uint64, message", tag = "2")]
+    pub removed: ::prost::alloc::collections::BTreeMap<u64, Sos1Constraint>,
+    #[prost(btree_map = "uint64, message", tag = "3")]
+    pub removed_reasons: ::prost::alloc::collections::BTreeMap<u64, RemovedReason>,
+    #[prost(btree_map = "uint64, message", tag = "4")]
+    pub contexts: ::prost::alloc::collections::BTreeMap<u64, ConstraintContext>,
 }
 /// Evaluated regular constraint row.
 #[non_exhaustive]
@@ -278,48 +282,48 @@ pub struct EvaluatedSos1Constraint {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct EvaluatedRegularConstraintCollection {
-    #[prost(map = "uint64, message", tag = "1")]
-    pub entries: ::std::collections::HashMap<u64, EvaluatedRegularConstraint>,
-    #[prost(map = "uint64, message", tag = "2")]
-    pub removed_reasons: ::std::collections::HashMap<u64, RemovedReason>,
-    #[prost(map = "uint64, message", tag = "3")]
-    pub contexts: ::std::collections::HashMap<u64, ConstraintContext>,
+    #[prost(btree_map = "uint64, message", tag = "1")]
+    pub entries: ::prost::alloc::collections::BTreeMap<u64, EvaluatedRegularConstraint>,
+    #[prost(btree_map = "uint64, message", tag = "2")]
+    pub removed_reasons: ::prost::alloc::collections::BTreeMap<u64, RemovedReason>,
+    #[prost(btree_map = "uint64, message", tag = "3")]
+    pub contexts: ::prost::alloc::collections::BTreeMap<u64, ConstraintContext>,
 }
 /// Evaluated indicator constraint collection.
 #[non_exhaustive]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct EvaluatedIndicatorConstraintCollection {
-    #[prost(map = "uint64, message", tag = "1")]
-    pub entries: ::std::collections::HashMap<u64, EvaluatedIndicatorConstraint>,
-    #[prost(map = "uint64, message", tag = "2")]
-    pub removed_reasons: ::std::collections::HashMap<u64, RemovedReason>,
-    #[prost(map = "uint64, message", tag = "3")]
-    pub contexts: ::std::collections::HashMap<u64, ConstraintContext>,
+    #[prost(btree_map = "uint64, message", tag = "1")]
+    pub entries: ::prost::alloc::collections::BTreeMap<u64, EvaluatedIndicatorConstraint>,
+    #[prost(btree_map = "uint64, message", tag = "2")]
+    pub removed_reasons: ::prost::alloc::collections::BTreeMap<u64, RemovedReason>,
+    #[prost(btree_map = "uint64, message", tag = "3")]
+    pub contexts: ::prost::alloc::collections::BTreeMap<u64, ConstraintContext>,
 }
 /// Evaluated one-hot constraint collection.
 #[non_exhaustive]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct EvaluatedOneHotConstraintCollection {
-    #[prost(map = "uint64, message", tag = "1")]
-    pub entries: ::std::collections::HashMap<u64, EvaluatedOneHotConstraint>,
-    #[prost(map = "uint64, message", tag = "2")]
-    pub removed_reasons: ::std::collections::HashMap<u64, RemovedReason>,
-    #[prost(map = "uint64, message", tag = "3")]
-    pub contexts: ::std::collections::HashMap<u64, ConstraintContext>,
+    #[prost(btree_map = "uint64, message", tag = "1")]
+    pub entries: ::prost::alloc::collections::BTreeMap<u64, EvaluatedOneHotConstraint>,
+    #[prost(btree_map = "uint64, message", tag = "2")]
+    pub removed_reasons: ::prost::alloc::collections::BTreeMap<u64, RemovedReason>,
+    #[prost(btree_map = "uint64, message", tag = "3")]
+    pub contexts: ::prost::alloc::collections::BTreeMap<u64, ConstraintContext>,
 }
 /// Evaluated SOS1 constraint collection.
 #[non_exhaustive]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct EvaluatedSos1ConstraintCollection {
-    #[prost(map = "uint64, message", tag = "1")]
-    pub entries: ::std::collections::HashMap<u64, EvaluatedSos1Constraint>,
-    #[prost(map = "uint64, message", tag = "2")]
-    pub removed_reasons: ::std::collections::HashMap<u64, RemovedReason>,
-    #[prost(map = "uint64, message", tag = "3")]
-    pub contexts: ::std::collections::HashMap<u64, ConstraintContext>,
+    #[prost(btree_map = "uint64, message", tag = "1")]
+    pub entries: ::prost::alloc::collections::BTreeMap<u64, EvaluatedSos1Constraint>,
+    #[prost(btree_map = "uint64, message", tag = "2")]
+    pub removed_reasons: ::prost::alloc::collections::BTreeMap<u64, RemovedReason>,
+    #[prost(btree_map = "uint64, message", tag = "3")]
+    pub contexts: ::prost::alloc::collections::BTreeMap<u64, ConstraintContext>,
 }
 /// Map value used when a present sample can have no active variable.
 #[non_exhaustive]
@@ -338,8 +342,8 @@ pub struct SampledRegularConstraint {
     pub equality: i32,
     #[prost(message, optional, tag = "2")]
     pub evaluated_values: ::core::option::Option<super::v1::SampledValues>,
-    #[prost(map = "uint64, bool", tag = "3")]
-    pub feasible: ::std::collections::HashMap<u64, bool>,
+    #[prost(btree_map = "uint64, bool", tag = "3")]
+    pub feasible: ::prost::alloc::collections::BTreeMap<u64, bool>,
     #[prost(uint64, repeated, tag = "4")]
     pub used_decision_variable_ids: ::prost::alloc::vec::Vec<u64>,
     #[prost(message, optional, tag = "5")]
@@ -356,10 +360,10 @@ pub struct SampledIndicatorConstraint {
     pub equality: i32,
     #[prost(message, optional, tag = "3")]
     pub evaluated_values: ::core::option::Option<super::v1::SampledValues>,
-    #[prost(map = "uint64, bool", tag = "4")]
-    pub feasible: ::std::collections::HashMap<u64, bool>,
-    #[prost(map = "uint64, bool", tag = "5")]
-    pub indicator_active: ::std::collections::HashMap<u64, bool>,
+    #[prost(btree_map = "uint64, bool", tag = "4")]
+    pub feasible: ::prost::alloc::collections::BTreeMap<u64, bool>,
+    #[prost(btree_map = "uint64, bool", tag = "5")]
+    pub indicator_active: ::prost::alloc::collections::BTreeMap<u64, bool>,
     #[prost(uint64, repeated, tag = "6")]
     pub used_decision_variable_ids: ::prost::alloc::vec::Vec<u64>,
 }
@@ -370,10 +374,10 @@ pub struct SampledIndicatorConstraint {
 pub struct SampledOneHotConstraint {
     #[prost(uint64, repeated, tag = "1")]
     pub variables: ::prost::alloc::vec::Vec<u64>,
-    #[prost(map = "uint64, bool", tag = "2")]
-    pub feasible: ::std::collections::HashMap<u64, bool>,
-    #[prost(map = "uint64, message", tag = "3")]
-    pub active_variable: ::std::collections::HashMap<u64, SampledActiveVariable>,
+    #[prost(btree_map = "uint64, bool", tag = "2")]
+    pub feasible: ::prost::alloc::collections::BTreeMap<u64, bool>,
+    #[prost(btree_map = "uint64, message", tag = "3")]
+    pub active_variable: ::prost::alloc::collections::BTreeMap<u64, SampledActiveVariable>,
     #[prost(uint64, repeated, tag = "4")]
     pub used_decision_variable_ids: ::prost::alloc::vec::Vec<u64>,
 }
@@ -384,10 +388,10 @@ pub struct SampledOneHotConstraint {
 pub struct SampledSos1Constraint {
     #[prost(uint64, repeated, tag = "1")]
     pub variables: ::prost::alloc::vec::Vec<u64>,
-    #[prost(map = "uint64, bool", tag = "2")]
-    pub feasible: ::std::collections::HashMap<u64, bool>,
-    #[prost(map = "uint64, message", tag = "3")]
-    pub active_variable: ::std::collections::HashMap<u64, SampledActiveVariable>,
+    #[prost(btree_map = "uint64, bool", tag = "2")]
+    pub feasible: ::prost::alloc::collections::BTreeMap<u64, bool>,
+    #[prost(btree_map = "uint64, message", tag = "3")]
+    pub active_variable: ::prost::alloc::collections::BTreeMap<u64, SampledActiveVariable>,
     #[prost(uint64, repeated, tag = "4")]
     pub used_decision_variable_ids: ::prost::alloc::vec::Vec<u64>,
 }
@@ -396,48 +400,48 @@ pub struct SampledSos1Constraint {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SampledRegularConstraintCollection {
-    #[prost(map = "uint64, message", tag = "1")]
-    pub entries: ::std::collections::HashMap<u64, SampledRegularConstraint>,
-    #[prost(map = "uint64, message", tag = "2")]
-    pub removed_reasons: ::std::collections::HashMap<u64, RemovedReason>,
-    #[prost(map = "uint64, message", tag = "3")]
-    pub contexts: ::std::collections::HashMap<u64, ConstraintContext>,
+    #[prost(btree_map = "uint64, message", tag = "1")]
+    pub entries: ::prost::alloc::collections::BTreeMap<u64, SampledRegularConstraint>,
+    #[prost(btree_map = "uint64, message", tag = "2")]
+    pub removed_reasons: ::prost::alloc::collections::BTreeMap<u64, RemovedReason>,
+    #[prost(btree_map = "uint64, message", tag = "3")]
+    pub contexts: ::prost::alloc::collections::BTreeMap<u64, ConstraintContext>,
 }
 /// Sampled indicator constraint collection.
 #[non_exhaustive]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SampledIndicatorConstraintCollection {
-    #[prost(map = "uint64, message", tag = "1")]
-    pub entries: ::std::collections::HashMap<u64, SampledIndicatorConstraint>,
-    #[prost(map = "uint64, message", tag = "2")]
-    pub removed_reasons: ::std::collections::HashMap<u64, RemovedReason>,
-    #[prost(map = "uint64, message", tag = "3")]
-    pub contexts: ::std::collections::HashMap<u64, ConstraintContext>,
+    #[prost(btree_map = "uint64, message", tag = "1")]
+    pub entries: ::prost::alloc::collections::BTreeMap<u64, SampledIndicatorConstraint>,
+    #[prost(btree_map = "uint64, message", tag = "2")]
+    pub removed_reasons: ::prost::alloc::collections::BTreeMap<u64, RemovedReason>,
+    #[prost(btree_map = "uint64, message", tag = "3")]
+    pub contexts: ::prost::alloc::collections::BTreeMap<u64, ConstraintContext>,
 }
 /// Sampled one-hot constraint collection.
 #[non_exhaustive]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SampledOneHotConstraintCollection {
-    #[prost(map = "uint64, message", tag = "1")]
-    pub entries: ::std::collections::HashMap<u64, SampledOneHotConstraint>,
-    #[prost(map = "uint64, message", tag = "2")]
-    pub removed_reasons: ::std::collections::HashMap<u64, RemovedReason>,
-    #[prost(map = "uint64, message", tag = "3")]
-    pub contexts: ::std::collections::HashMap<u64, ConstraintContext>,
+    #[prost(btree_map = "uint64, message", tag = "1")]
+    pub entries: ::prost::alloc::collections::BTreeMap<u64, SampledOneHotConstraint>,
+    #[prost(btree_map = "uint64, message", tag = "2")]
+    pub removed_reasons: ::prost::alloc::collections::BTreeMap<u64, RemovedReason>,
+    #[prost(btree_map = "uint64, message", tag = "3")]
+    pub contexts: ::prost::alloc::collections::BTreeMap<u64, ConstraintContext>,
 }
 /// Sampled SOS1 constraint collection.
 #[non_exhaustive]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SampledSos1ConstraintCollection {
-    #[prost(map = "uint64, message", tag = "1")]
-    pub entries: ::std::collections::HashMap<u64, SampledSos1Constraint>,
-    #[prost(map = "uint64, message", tag = "2")]
-    pub removed_reasons: ::std::collections::HashMap<u64, RemovedReason>,
-    #[prost(map = "uint64, message", tag = "3")]
-    pub contexts: ::std::collections::HashMap<u64, ConstraintContext>,
+    #[prost(btree_map = "uint64, message", tag = "1")]
+    pub entries: ::prost::alloc::collections::BTreeMap<u64, SampledSos1Constraint>,
+    #[prost(btree_map = "uint64, message", tag = "2")]
+    pub removed_reasons: ::prost::alloc::collections::BTreeMap<u64, RemovedReason>,
+    #[prost(btree_map = "uint64, message", tag = "3")]
+    pub contexts: ::prost::alloc::collections::BTreeMap<u64, ConstraintContext>,
 }
 /// Definition-stage decision-variable row.
 ///
@@ -483,32 +487,32 @@ pub struct SampledDecisionVariable {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DecisionVariableTable {
-    #[prost(map = "uint64, message", tag = "1")]
-    pub entries: ::std::collections::HashMap<u64, DecisionVariable>,
-    #[prost(map = "uint64, message", tag = "2")]
-    pub labels: ::std::collections::HashMap<u64, ModelingLabel>,
-    #[prost(map = "uint64, double", tag = "3")]
-    pub fixed_values: ::std::collections::HashMap<u64, f64>,
+    #[prost(btree_map = "uint64, message", tag = "1")]
+    pub entries: ::prost::alloc::collections::BTreeMap<u64, DecisionVariable>,
+    #[prost(btree_map = "uint64, message", tag = "2")]
+    pub labels: ::prost::alloc::collections::BTreeMap<u64, ModelingLabel>,
+    #[prost(btree_map = "uint64, double", tag = "3")]
+    pub fixed_values: ::prost::alloc::collections::BTreeMap<u64, f64>,
 }
 /// Evaluated-stage decision-variable table.
 #[non_exhaustive]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct EvaluatedDecisionVariableTable {
-    #[prost(map = "uint64, message", tag = "1")]
-    pub entries: ::std::collections::HashMap<u64, EvaluatedDecisionVariable>,
-    #[prost(map = "uint64, message", tag = "2")]
-    pub labels: ::std::collections::HashMap<u64, ModelingLabel>,
+    #[prost(btree_map = "uint64, message", tag = "1")]
+    pub entries: ::prost::alloc::collections::BTreeMap<u64, EvaluatedDecisionVariable>,
+    #[prost(btree_map = "uint64, message", tag = "2")]
+    pub labels: ::prost::alloc::collections::BTreeMap<u64, ModelingLabel>,
 }
 /// Sampled-stage decision-variable table.
 #[non_exhaustive]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SampledDecisionVariableTable {
-    #[prost(map = "uint64, message", tag = "1")]
-    pub entries: ::std::collections::HashMap<u64, SampledDecisionVariable>,
-    #[prost(map = "uint64, message", tag = "2")]
-    pub labels: ::std::collections::HashMap<u64, ModelingLabel>,
+    #[prost(btree_map = "uint64, message", tag = "1")]
+    pub entries: ::prost::alloc::collections::BTreeMap<u64, SampledDecisionVariable>,
+    #[prost(btree_map = "uint64, message", tag = "2")]
+    pub labels: ::prost::alloc::collections::BTreeMap<u64, ModelingLabel>,
 }
 /// Named function row used by v2 top-level table owners.
 ///
@@ -549,30 +553,30 @@ pub struct SampledNamedFunction {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct NamedFunctionTable {
-    #[prost(map = "uint64, message", tag = "1")]
-    pub entries: ::std::collections::HashMap<u64, NamedFunction>,
-    #[prost(map = "uint64, message", tag = "2")]
-    pub labels: ::std::collections::HashMap<u64, ModelingLabel>,
+    #[prost(btree_map = "uint64, message", tag = "1")]
+    pub entries: ::prost::alloc::collections::BTreeMap<u64, NamedFunction>,
+    #[prost(btree_map = "uint64, message", tag = "2")]
+    pub labels: ::prost::alloc::collections::BTreeMap<u64, ModelingLabel>,
 }
 /// Evaluated-stage named-function table.
 #[non_exhaustive]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct EvaluatedNamedFunctionTable {
-    #[prost(map = "uint64, message", tag = "1")]
-    pub entries: ::std::collections::HashMap<u64, EvaluatedNamedFunction>,
-    #[prost(map = "uint64, message", tag = "2")]
-    pub labels: ::std::collections::HashMap<u64, ModelingLabel>,
+    #[prost(btree_map = "uint64, message", tag = "1")]
+    pub entries: ::prost::alloc::collections::BTreeMap<u64, EvaluatedNamedFunction>,
+    #[prost(btree_map = "uint64, message", tag = "2")]
+    pub labels: ::prost::alloc::collections::BTreeMap<u64, ModelingLabel>,
 }
 /// Sampled-stage named-function table.
 #[non_exhaustive]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SampledNamedFunctionTable {
-    #[prost(map = "uint64, message", tag = "1")]
-    pub entries: ::std::collections::HashMap<u64, SampledNamedFunction>,
-    #[prost(map = "uint64, message", tag = "2")]
-    pub labels: ::std::collections::HashMap<u64, ModelingLabel>,
+    #[prost(btree_map = "uint64, message", tag = "1")]
+    pub entries: ::prost::alloc::collections::BTreeMap<u64, SampledNamedFunction>,
+    #[prost(btree_map = "uint64, message", tag = "2")]
+    pub labels: ::prost::alloc::collections::BTreeMap<u64, ModelingLabel>,
 }
 /// Validated optimization problem serialization root.
 #[non_exhaustive]
@@ -599,13 +603,16 @@ pub struct Instance {
     pub one_hot_constraints: ::core::option::Option<OneHotConstraintCollection>,
     #[prost(message, optional, tag = "10")]
     pub sos1_constraints: ::core::option::Option<Sos1ConstraintCollection>,
-    #[prost(map = "uint64, message", tag = "11")]
-    pub decision_variable_dependency: ::std::collections::HashMap<u64, super::v1::Function>,
+    #[prost(btree_map = "uint64, message", tag = "11")]
+    pub decision_variable_dependency:
+        ::prost::alloc::collections::BTreeMap<u64, super::v1::Function>,
     #[prost(message, optional, tag = "12")]
     pub named_functions: ::core::option::Option<NamedFunctionTable>,
-    #[prost(map = "string, string", tag = "13")]
-    pub annotations:
-        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
+    #[prost(btree_map = "string, string", tag = "13")]
+    pub annotations: ::prost::alloc::collections::BTreeMap<
+        ::prost::alloc::string::String,
+        ::prost::alloc::string::String,
+    >,
 }
 /// Parameter IDs and labels owned by ParametricInstance.
 ///
@@ -620,8 +627,8 @@ pub struct Instance {
 pub struct ParameterTable {
     #[prost(uint64, repeated, tag = "1")]
     pub ids: ::prost::alloc::vec::Vec<u64>,
-    #[prost(map = "uint64, message", tag = "2")]
-    pub labels: ::std::collections::HashMap<u64, ModelingLabel>,
+    #[prost(btree_map = "uint64, message", tag = "2")]
+    pub labels: ::prost::alloc::collections::BTreeMap<u64, ModelingLabel>,
 }
 /// Validated parametric optimization problem serialization root.
 #[non_exhaustive]
@@ -648,13 +655,16 @@ pub struct ParametricInstance {
     pub one_hot_constraints: ::core::option::Option<OneHotConstraintCollection>,
     #[prost(message, optional, tag = "10")]
     pub sos1_constraints: ::core::option::Option<Sos1ConstraintCollection>,
-    #[prost(map = "uint64, message", tag = "11")]
-    pub decision_variable_dependency: ::std::collections::HashMap<u64, super::v1::Function>,
+    #[prost(btree_map = "uint64, message", tag = "11")]
+    pub decision_variable_dependency:
+        ::prost::alloc::collections::BTreeMap<u64, super::v1::Function>,
     #[prost(message, optional, tag = "12")]
     pub named_functions: ::core::option::Option<NamedFunctionTable>,
-    #[prost(map = "string, string", tag = "13")]
-    pub annotations:
-        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
+    #[prost(btree_map = "string, string", tag = "13")]
+    pub annotations: ::prost::alloc::collections::BTreeMap<
+        ::prost::alloc::string::String,
+        ::prost::alloc::string::String,
+    >,
 }
 /// Validated multi-sample solver or sampler output serialization root.
 #[non_exhaustive]
@@ -669,19 +679,21 @@ pub struct SampleSet {
     pub decision_variables: ::core::option::Option<SampledDecisionVariableTable>,
     #[prost(message, optional, tag = "4")]
     pub sampled_regular_constraints: ::core::option::Option<SampledRegularConstraintCollection>,
-    #[prost(map = "uint64, bool", tag = "5")]
-    pub feasible: ::std::collections::HashMap<u64, bool>,
+    #[prost(btree_map = "uint64, bool", tag = "5")]
+    pub feasible: ::prost::alloc::collections::BTreeMap<u64, bool>,
     #[prost(enumeration = "super::v1::instance::Sense", tag = "6")]
     pub sense: i32,
-    #[prost(map = "uint64, bool", tag = "7")]
-    pub feasible_relaxed: ::std::collections::HashMap<u64, bool>,
+    #[prost(btree_map = "uint64, bool", tag = "7")]
+    pub feasible_relaxed: ::prost::alloc::collections::BTreeMap<u64, bool>,
     #[prost(message, optional, tag = "8")]
     pub sampled_named_functions: ::core::option::Option<SampledNamedFunctionTable>,
     #[prost(message, optional, tag = "9")]
     pub metadata: ::core::option::Option<super::v1::ProcessMetadata>,
-    #[prost(map = "string, string", tag = "10")]
-    pub annotations:
-        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
+    #[prost(btree_map = "string, string", tag = "10")]
+    pub annotations: ::prost::alloc::collections::BTreeMap<
+        ::prost::alloc::string::String,
+        ::prost::alloc::string::String,
+    >,
     #[prost(message, optional, tag = "11")]
     pub sampled_indicator_constraints: ::core::option::Option<SampledIndicatorConstraintCollection>,
     #[prost(message, optional, tag = "12")]
@@ -716,9 +728,11 @@ pub struct Solution {
     pub evaluated_named_functions: ::core::option::Option<EvaluatedNamedFunctionTable>,
     #[prost(message, optional, tag = "11")]
     pub metadata: ::core::option::Option<super::v1::ProcessMetadata>,
-    #[prost(map = "string, string", tag = "12")]
-    pub annotations:
-        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
+    #[prost(btree_map = "string, string", tag = "12")]
+    pub annotations: ::prost::alloc::collections::BTreeMap<
+        ::prost::alloc::string::String,
+        ::prost::alloc::string::String,
+    >,
     #[prost(message, optional, tag = "13")]
     pub evaluated_indicator_constraints:
         ::core::option::Option<EvaluatedIndicatorConstraintCollection>,

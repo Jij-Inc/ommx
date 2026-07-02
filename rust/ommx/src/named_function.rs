@@ -411,6 +411,79 @@ fn sampled_named_function_to_v1(
     }
 }
 
+impl From<NamedFunction> for crate::v2::NamedFunction {
+    fn from(value: NamedFunction) -> Self {
+        Self {
+            function: Some(value.function.into()),
+        }
+    }
+}
+
+impl From<EvaluatedNamedFunction> for crate::v2::EvaluatedNamedFunction {
+    fn from(value: EvaluatedNamedFunction) -> Self {
+        Self {
+            evaluated_value: value.evaluated_value,
+            used_decision_variable_ids: value
+                .used_decision_variable_ids
+                .into_iter()
+                .map(|id| id.into_inner())
+                .collect(),
+        }
+    }
+}
+
+impl From<SampledNamedFunction> for crate::v2::SampledNamedFunction {
+    fn from(value: SampledNamedFunction) -> Self {
+        Self {
+            evaluated_values: Some(value.evaluated_values.into()),
+            used_decision_variable_ids: value
+                .used_decision_variable_ids
+                .into_iter()
+                .map(|id| id.into_inner())
+                .collect(),
+        }
+    }
+}
+
+impl From<NamedFunctionTable<NamedFunction>> for crate::v2::NamedFunctionTable {
+    fn from(table: NamedFunctionTable<NamedFunction>) -> Self {
+        Self {
+            entries: named_function_entries_to_v2_map(table.entries),
+            labels: crate::modeling_label::modeling_label_store_to_v2_map(&table.labels),
+        }
+    }
+}
+
+impl From<NamedFunctionTable<EvaluatedNamedFunction>> for crate::v2::EvaluatedNamedFunctionTable {
+    fn from(table: NamedFunctionTable<EvaluatedNamedFunction>) -> Self {
+        Self {
+            entries: named_function_entries_to_v2_map(table.entries),
+            labels: crate::modeling_label::modeling_label_store_to_v2_map(&table.labels),
+        }
+    }
+}
+
+impl From<NamedFunctionTable<SampledNamedFunction>> for crate::v2::SampledNamedFunctionTable {
+    fn from(table: NamedFunctionTable<SampledNamedFunction>) -> Self {
+        Self {
+            entries: named_function_entries_to_v2_map(table.entries),
+            labels: crate::modeling_label::modeling_label_store_to_v2_map(&table.labels),
+        }
+    }
+}
+
+fn named_function_entries_to_v2_map<T, V2>(
+    entries: BTreeMap<NamedFunctionID, T>,
+) -> BTreeMap<u64, V2>
+where
+    T: Into<V2>,
+{
+    entries
+        .into_iter()
+        .map(|(id, row)| (id.into_inner(), row.into()))
+        .collect()
+}
+
 #[cfg(test)]
 mod table_tests {
     use super::*;

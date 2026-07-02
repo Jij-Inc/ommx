@@ -190,6 +190,75 @@ impl OneHotConstraint<Created> {
     }
 }
 
+impl From<OneHotConstraint<Created>> for crate::v2::OneHotConstraint {
+    fn from(constraint: OneHotConstraint<Created>) -> Self {
+        Self {
+            variables: constraint
+                .variables
+                .into_iter()
+                .map(|id| id.into_inner())
+                .collect(),
+        }
+    }
+}
+
+impl From<EvaluatedOneHotConstraint> for crate::v2::EvaluatedOneHotConstraint {
+    fn from(constraint: EvaluatedOneHotConstraint) -> Self {
+        Self {
+            variables: constraint
+                .variables
+                .into_iter()
+                .map(|id| id.into_inner())
+                .collect(),
+            feasible: constraint.stage.feasible,
+            active_variable: constraint.stage.active_variable.map(|id| id.into_inner()),
+            used_decision_variable_ids: constraint
+                .stage
+                .used_decision_variable_ids
+                .into_iter()
+                .map(|id| id.into_inner())
+                .collect(),
+        }
+    }
+}
+
+impl From<SampledOneHotConstraint> for crate::v2::SampledOneHotConstraint {
+    fn from(constraint: SampledOneHotConstraint) -> Self {
+        Self {
+            variables: constraint
+                .variables
+                .into_iter()
+                .map(|id| id.into_inner())
+                .collect(),
+            feasible: constraint
+                .stage
+                .feasible
+                .into_iter()
+                .map(|(id, value)| (id.into_inner(), value))
+                .collect(),
+            active_variable: constraint
+                .stage
+                .active_variable
+                .into_iter()
+                .map(|(id, variable_id)| {
+                    (
+                        id.into_inner(),
+                        crate::v2::SampledActiveVariable {
+                            variable_id: variable_id.map(|id| id.into_inner()),
+                        },
+                    )
+                })
+                .collect(),
+            used_decision_variable_ids: constraint
+                .stage
+                .used_decision_variable_ids
+                .into_iter()
+                .map(|id| id.into_inner())
+                .collect(),
+        }
+    }
+}
+
 impl std::fmt::Display for OneHotConstraint<Created> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let vars: Vec<String> = self

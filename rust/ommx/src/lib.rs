@@ -108,6 +108,7 @@ pub mod v2 {
 }
 
 mod v1_io;
+mod v2_io;
 
 /// Supplementary documentation bundled with the crate.
 ///

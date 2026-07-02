@@ -190,6 +190,75 @@ impl Sos1Constraint<Created> {
     }
 }
 
+impl From<Sos1Constraint<Created>> for crate::v2::Sos1Constraint {
+    fn from(constraint: Sos1Constraint<Created>) -> Self {
+        Self {
+            variables: constraint
+                .variables
+                .into_iter()
+                .map(|id| id.into_inner())
+                .collect(),
+        }
+    }
+}
+
+impl From<EvaluatedSos1Constraint> for crate::v2::EvaluatedSos1Constraint {
+    fn from(constraint: EvaluatedSos1Constraint) -> Self {
+        Self {
+            variables: constraint
+                .variables
+                .into_iter()
+                .map(|id| id.into_inner())
+                .collect(),
+            feasible: constraint.stage.feasible,
+            active_variable: constraint.stage.active_variable.map(|id| id.into_inner()),
+            used_decision_variable_ids: constraint
+                .stage
+                .used_decision_variable_ids
+                .into_iter()
+                .map(|id| id.into_inner())
+                .collect(),
+        }
+    }
+}
+
+impl From<SampledSos1Constraint> for crate::v2::SampledSos1Constraint {
+    fn from(constraint: SampledSos1Constraint) -> Self {
+        Self {
+            variables: constraint
+                .variables
+                .into_iter()
+                .map(|id| id.into_inner())
+                .collect(),
+            feasible: constraint
+                .stage
+                .feasible
+                .into_iter()
+                .map(|(id, value)| (id.into_inner(), value))
+                .collect(),
+            active_variable: constraint
+                .stage
+                .active_variable
+                .into_iter()
+                .map(|(id, variable_id)| {
+                    (
+                        id.into_inner(),
+                        crate::v2::SampledActiveVariable {
+                            variable_id: variable_id.map(|id| id.into_inner()),
+                        },
+                    )
+                })
+                .collect(),
+            used_decision_variable_ids: constraint
+                .stage
+                .used_decision_variable_ids
+                .into_iter()
+                .map(|id| id.into_inner())
+                .collect(),
+        }
+    }
+}
+
 impl std::fmt::Display for Sos1Constraint<Created> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let vars: Vec<String> = self
