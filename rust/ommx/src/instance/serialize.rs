@@ -71,7 +71,7 @@ impl From<Instance> for v2::Instance {
             one_hot_constraints: Some(one_hot_constraint_collection.into()),
             sos1_constraints: Some(sos1_constraint_collection.into()),
             decision_variable_dependency: decision_variable_dependency_to_v2_map(
-                &decision_variable_dependency,
+                decision_variable_dependency,
             ),
             named_functions: Some(named_functions.into()),
             annotations: crate::v2_io::extension_annotations_to_v2_map(annotations),
@@ -114,7 +114,7 @@ impl From<ParametricInstance> for v2::ParametricInstance {
             one_hot_constraints: Some(one_hot_constraint_collection.into()),
             sos1_constraints: Some(sos1_constraint_collection.into()),
             decision_variable_dependency: decision_variable_dependency_to_v2_map(
-                &decision_variable_dependency,
+                decision_variable_dependency,
             ),
             named_functions: Some(named_functions.into()),
             annotations: crate::v2_io::extension_annotations_to_v2_map(annotations),
@@ -127,11 +127,11 @@ fn created_collection_has_payload<T: ConstraintType>(collection: &ConstraintColl
 }
 
 fn decision_variable_dependency_to_v2_map(
-    dependency: &AcyclicAssignments,
+    dependency: AcyclicAssignments,
 ) -> std::collections::BTreeMap<u64, v1::Function> {
     dependency
-        .iter()
-        .map(|(id, function)| (id.into_inner(), function.clone().into()))
+        .into_iter()
+        .map(|(id, function)| (id.into_inner(), function.into()))
         .collect()
 }
 
