@@ -1,16 +1,16 @@
 //! IO-adjacent helpers for protobuf-generated `v2::*` roots.
 //!
-//! These are crate-internal because v2 protobuf conversion is implemented at
-//! the domain owner that has complete information for each table or collection,
-//! while feature-gate, annotation, ID-list, and sample-axis policies must be
-//! identical across `Instance`, `Solution`, `SampleSet`, and row-family modules.
+//! `v2_io` itself is a private crate-root module. Its items are `pub` only so
+//! sibling domain owner modules can share the same protobuf-boundary policies
+//! without exporting those helpers as Rust SDK API.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
+use crate::constraint_type::IDType;
 use crate::v2::Feature;
-use crate::{ParseError, RawParseError, SampleID, VariableID, VariableIDSet};
+use crate::{ModelingLabelStore, ParseError, RawParseError, SampleID, VariableID, VariableIDSet};
 
-pub(crate) fn required_features(
+pub fn required_features(
     has_indicator_constraints: bool,
     has_one_hot_constraints: bool,
     has_sos1_constraints: bool,
@@ -28,7 +28,7 @@ pub(crate) fn required_features(
     features
 }
 
-pub(crate) fn extension_annotations_to_v2_map(
+pub fn extension_annotations_to_v2_map(
     annotations: HashMap<String, String>,
 ) -> BTreeMap<String, String> {
     crate::protobuf_extension_annotations(annotations)
@@ -36,7 +36,7 @@ pub(crate) fn extension_annotations_to_v2_map(
         .collect()
 }
 
-pub(crate) fn extension_annotations_from_v2_map(
+pub fn extension_annotations_from_v2_map(
     annotations: BTreeMap<String, String>,
     message: &'static str,
 ) -> Result<HashMap<String, String>, ParseError> {
@@ -49,7 +49,7 @@ pub(crate) fn extension_annotations_from_v2_map(
     Ok(annotations.into_iter().collect())
 }
 
-pub(crate) fn parse_required_features(
+pub fn parse_required_features(
     features: Vec<i32>,
     message: &'static str,
 ) -> Result<BTreeSet<Feature>, ParseError> {
@@ -74,7 +74,7 @@ pub(crate) fn parse_required_features(
     Ok(parsed)
 }
 
-pub(crate) fn validate_feature_payload(
+pub fn validate_feature_payload(
     required_features: &BTreeSet<Feature>,
     feature: Feature,
     has_payload: bool,
@@ -95,7 +95,7 @@ pub(crate) fn validate_feature_payload(
     }
 }
 
-pub(crate) fn variable_id_set_from_v2(
+pub fn variable_id_set_from_v2(
     ids: Vec<u64>,
     message: &'static str,
     field: &'static str,
@@ -113,13 +113,13 @@ pub(crate) fn variable_id_set_from_v2(
     Ok(out)
 }
 
-pub(crate) fn sample_bool_map_from_v2(map: BTreeMap<u64, bool>) -> BTreeMap<SampleID, bool> {
+pub fn sample_bool_map_from_v2(map: BTreeMap<u64, bool>) -> BTreeMap<SampleID, bool> {
     map.into_iter()
         .map(|(id, value)| (SampleID::from(id), value))
         .collect()
 }
 
-pub(crate) fn sampled_active_variable_map_from_v2(
+pub fn sampled_active_variable_map_from_v2(
     map: BTreeMap<u64, crate::v2::SampledActiveVariable>,
 ) -> BTreeMap<SampleID, Option<VariableID>> {
     map.into_iter()
@@ -130,4 +130,24 @@ pub(crate) fn sampled_active_variable_map_from_v2(
             )
         })
         .collect()
+}
+
+pub fn modeling_label_store_to_v2_map<ID: IDType>(
+    store: &ModelingLabelStore<ID>,
+) -> BTreeMap<u64, crate::v2::ModelingLabel> {
+    store
+        .ids()
+        .into_iter()
+        .map(|id| (id.into(), store.collect_for(id).into()))
+        .collect()
+}
+
+pub fn modeling_label_store_from_v2_map<ID: IDType>(
+    labels: BTreeMap<u64, crate::v2::ModelingLabel>,
+) -> ModelingLabelStore<ID> {
+    let mut store = ModelingLabelStore::default();
+    for (id, label) in labels {
+        store.insert(ID::from(id), label.into());
+    }
+    store
 }

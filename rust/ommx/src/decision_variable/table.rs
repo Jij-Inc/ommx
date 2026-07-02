@@ -654,7 +654,7 @@ impl From<DecisionVariableTable<Created>> for crate::v2::DecisionVariableTable {
     fn from(table: DecisionVariableTable<Created>) -> Self {
         Self {
             entries: table_entries_to_v2_map(table.entries),
-            labels: crate::modeling_label::modeling_label_store_to_v2_map(&table.labels),
+            labels: crate::v2_io::modeling_label_store_to_v2_map(&table.labels),
             fixed_values: table
                 .columns
                 .fixed_values
@@ -676,7 +676,7 @@ impl Parse for crate::v2::DecisionVariableTable {
             let id = VariableID::from(id);
             entries.insert(id, row.parse_as(&id, message, "entries")?);
         }
-        let labels = crate::modeling_label::modeling_label_store_from_v2_map(self.labels);
+        let labels = crate::v2_io::modeling_label_store_from_v2_map(self.labels);
         let fixed_values = self
             .fixed_values
             .into_iter()
@@ -691,7 +691,7 @@ impl From<EvaluatedDecisionVariableTable> for crate::v2::EvaluatedDecisionVariab
     fn from(table: EvaluatedDecisionVariableTable) -> Self {
         Self {
             entries: table_entries_to_v2_map(table.entries),
-            labels: crate::modeling_label::modeling_label_store_to_v2_map(&table.labels),
+            labels: crate::v2_io::modeling_label_store_to_v2_map(&table.labels),
         }
     }
 }
@@ -707,7 +707,7 @@ impl Parse for crate::v2::EvaluatedDecisionVariableTable {
             let id = VariableID::from(id);
             entries.insert(id, row.parse_as(&id, message, "entries")?);
         }
-        let labels = crate::modeling_label::modeling_label_store_from_v2_map(self.labels);
+        let labels = crate::v2_io::modeling_label_store_from_v2_map(self.labels);
         EvaluatedDecisionVariableTable::new(entries, labels)
             .map_err(|e| RawParseError::InvalidInstance(e.to_string()).context(message, "entries"))
     }
@@ -717,7 +717,7 @@ impl From<SampledDecisionVariableTable> for crate::v2::SampledDecisionVariableTa
     fn from(table: SampledDecisionVariableTable) -> Self {
         Self {
             entries: table_entries_to_v2_map(table.entries),
-            labels: crate::modeling_label::modeling_label_store_to_v2_map(&table.labels),
+            labels: crate::v2_io::modeling_label_store_to_v2_map(&table.labels),
         }
     }
 }
@@ -733,7 +733,7 @@ impl Parse for crate::v2::SampledDecisionVariableTable {
             let id = VariableID::from(id);
             entries.insert(id, row.parse_as(&id, message, "entries")?);
         }
-        let labels = crate::modeling_label::modeling_label_store_from_v2_map(self.labels);
+        let labels = crate::v2_io::modeling_label_store_from_v2_map(self.labels);
         SampledDecisionVariableTable::new(entries, labels)
             .map_err(|e| RawParseError::InvalidInstance(e.to_string()).context(message, "entries"))
     }

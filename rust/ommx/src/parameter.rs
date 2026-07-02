@@ -186,7 +186,7 @@ impl From<ParameterTable> for crate::v2::ParameterTable {
     fn from(table: ParameterTable) -> Self {
         Self {
             ids: table.ids.into_iter().map(|id| id.into_inner()).collect(),
-            labels: crate::modeling_label::modeling_label_store_to_v2_map(&table.labels),
+            labels: crate::v2_io::modeling_label_store_to_v2_map(&table.labels),
         }
     }
 }
@@ -198,7 +198,7 @@ impl Parse for crate::v2::ParameterTable {
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v2.ParameterTable";
         let ids = self.ids.into_iter().map(VariableID::from).collect();
-        let labels = crate::modeling_label::modeling_label_store_from_v2_map(self.labels);
+        let labels = crate::v2_io::modeling_label_store_from_v2_map(self.labels);
         ParameterTable::new(ids, labels)
             .map_err(|e| RawParseError::InvalidInstance(e.to_string()).context(message, "ids"))
     }

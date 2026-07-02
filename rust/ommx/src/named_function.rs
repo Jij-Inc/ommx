@@ -507,7 +507,7 @@ impl From<NamedFunctionTable<NamedFunction>> for crate::v2::NamedFunctionTable {
     fn from(table: NamedFunctionTable<NamedFunction>) -> Self {
         Self {
             entries: named_function_entries_to_v2_map(table.entries),
-            labels: crate::modeling_label::modeling_label_store_to_v2_map(&table.labels),
+            labels: crate::v2_io::modeling_label_store_to_v2_map(&table.labels),
         }
     }
 }
@@ -525,7 +525,7 @@ impl From<NamedFunctionTable<EvaluatedNamedFunction>> for crate::v2::EvaluatedNa
     fn from(table: NamedFunctionTable<EvaluatedNamedFunction>) -> Self {
         Self {
             entries: named_function_entries_to_v2_map(table.entries),
-            labels: crate::modeling_label::modeling_label_store_to_v2_map(&table.labels),
+            labels: crate::v2_io::modeling_label_store_to_v2_map(&table.labels),
         }
     }
 }
@@ -547,7 +547,7 @@ impl From<NamedFunctionTable<SampledNamedFunction>> for crate::v2::SampledNamedF
     fn from(table: NamedFunctionTable<SampledNamedFunction>) -> Self {
         Self {
             entries: named_function_entries_to_v2_map(table.entries),
-            labels: crate::modeling_label::modeling_label_store_to_v2_map(&table.labels),
+            labels: crate::v2_io::modeling_label_store_to_v2_map(&table.labels),
         }
     }
 }
@@ -594,7 +594,7 @@ where
             ))
         })
         .collect::<Result<BTreeMap<_, _>, ParseError>>()?;
-    let labels = crate::modeling_label::modeling_label_store_from_v2_map(labels);
+    let labels = crate::v2_io::modeling_label_store_from_v2_map(labels);
     NamedFunctionTable::new(entries, labels)
         .map_err(|e| RawParseError::InvalidInstance(e.to_string()).context(message, "labels"))
 }

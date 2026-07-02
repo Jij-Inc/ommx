@@ -1,7 +1,7 @@
 use crate::constraint_type::IDType;
 use crate::logical_memory::LogicalMemoryProfile;
 use fnv::FnvHashMap;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::sync::OnceLock;
 
 fn empty_parameters() -> &'static FnvHashMap<String, String> {
@@ -217,29 +217,6 @@ impl From<crate::v2::ModelingLabel> for ModelingLabel {
             description: label.description,
         }
     }
-}
-
-pub(crate) fn modeling_label_store_to_v2_map<ID: IDType>(
-    store: &ModelingLabelStore<ID>,
-) -> BTreeMap<u64, crate::v2::ModelingLabel> {
-    store
-        .ids()
-        .into_iter()
-        .map(|id| (id.into(), store.collect_for(id).into()))
-        .collect()
-}
-
-// Shared by decision-variable, parameter, and named-function table v2
-// converters. The table owner validates orphan IDs after reconstructing the
-// store from the protobuf map.
-pub(crate) fn modeling_label_store_from_v2_map<ID: IDType>(
-    labels: BTreeMap<u64, crate::v2::ModelingLabel>,
-) -> ModelingLabelStore<ID> {
-    let mut store = ModelingLabelStore::default();
-    for (id, label) in labels {
-        store.insert(ID::from(id), label.into());
-    }
-    store
 }
 
 #[cfg(test)]
