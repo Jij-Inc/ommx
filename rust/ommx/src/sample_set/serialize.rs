@@ -17,6 +17,11 @@ impl SampleSet {
         let inner = v1::SampleSet::decode(bytes)?;
         Ok(Parse::parse(inner, &())?)
     }
+
+    pub fn from_v2_bytes(bytes: &[u8]) -> Result<Self> {
+        let inner = v2::SampleSet::decode(bytes)?;
+        Ok(Parse::parse(inner, &())?)
+    }
 }
 
 impl From<SampleSet> for v2::SampleSet {
@@ -38,6 +43,7 @@ impl From<SampleSet> for v2::SampleSet {
             sense,
             feasible,
             feasible_relaxed,
+            feasibility_atol,
             metadata,
             annotations,
         } = value;
@@ -56,6 +62,7 @@ impl From<SampleSet> for v2::SampleSet {
             sampled_indicator_constraints: Some(indicator_constraints.into()),
             sampled_one_hot_constraints: Some(one_hot_constraints.into()),
             sampled_sos1_constraints: Some(sos1_constraints.into()),
+            feasibility_atol: Some(feasibility_atol.into_inner()),
         }
     }
 }

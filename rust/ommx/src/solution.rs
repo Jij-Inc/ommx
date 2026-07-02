@@ -5,7 +5,7 @@ use crate::{
     constraint_type::EvaluatedCollection,
     decision_variable::{EvaluatedDecisionVariableTable, VariableLabelStore},
     indicator_constraint::IndicatorConstraint,
-    Constraint, ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable,
+    ATol, Constraint, ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable,
     EvaluatedNamedFunction, NamedFunctionID, NamedFunctionTable, Sense, VariableID,
 };
 use getset::Getters;
@@ -25,6 +25,21 @@ pub enum SolutionError {
     InconsistentFeasibilityRelaxed {
         provided_feasible_relaxed: bool,
         computed_feasible_relaxed: bool,
+    },
+
+    #[error("Inconsistent feasibility for {constraint_family} constraint {constraint_id}: provided={provided_feasible}, computed={computed_feasible}")]
+    InconsistentConstraintFeasibility {
+        constraint_family: &'static str,
+        constraint_id: String,
+        provided_feasible: bool,
+        computed_feasible: bool,
+    },
+
+    #[error("Invalid structure for {constraint_family} constraint {constraint_id}: {message}")]
+    InvalidConstraintStructure {
+        constraint_family: &'static str,
+        constraint_id: String,
+        message: String,
     },
 
     #[error("Inconsistent value for variable {id}: state={state_value}, substituted_value={substituted_value}")]
@@ -115,6 +130,13 @@ pub enum SolutionError {
 /// - [`Self::decision_variables`] contains all variable IDs referenced in
 ///   `used_decision_variable_ids` of each evaluated constraint and evaluated
 ///   named function.
+/// - Evaluated special-constraint structural variables are defined in
+///   [`Self::decision_variables`]. Indicator variables and one-hot variables
+///   must be binary; one-hot and SOS1 variable sets must be non-empty, and
+///   `active_variable` values must belong to their structural variable set.
+/// - `feasibility_atol` is the absolute tolerance used to interpret
+///   decision-variable feasibility and to validate serialized per-constraint
+///   feasibility columns.
 ///
 /// Note
 /// -----
@@ -142,6 +164,9 @@ pub struct Solution {
     pub relaxation: crate::v1::Relaxation,
     #[getset(get = "pub")]
     sense: Option<Sense>,
+    /// Absolute tolerance used to compute and validate feasibility fields.
+    #[getset(get_copy = "pub")]
+    feasibility_atol: ATol,
     /// OMMX-defined provenance metadata.
     pub metadata: Option<crate::v1::ProcessMetadata>,
     /// User-defined or third-party extension annotations.
@@ -215,7 +240,7 @@ impl Solution {
     pub fn feasible_decision_variables(&self) -> bool {
         self.decision_variables
             .values()
-            .all(|dv| dv.is_valid(crate::ATol::default()))
+            .all(|dv| dv.is_valid(self.feasibility_atol))
     }
 
     /// Check if all constraints are feasible
@@ -599,8 +624,192 @@ pub struct SolutionBuilder {
     variable_labels: VariableLabelStore,
     named_function_labels: crate::named_function::NamedFunctionLabelStore,
     sense: Option<Sense>,
+    feasibility_atol: ATol,
     optimality: crate::v1::Optimality,
     relaxation: crate::v1::Relaxation,
+}
+
+fn expected_regular_constraint_feasible(
+    equality: crate::Equality,
+    evaluated_value: f64,
+    atol: ATol,
+) -> bool {
+    match equality {
+        crate::Equality::EqualToZero => evaluated_value.abs() < *atol,
+        crate::Equality::LessThanOrEqualToZero => evaluated_value < *atol,
+    }
+}
+
+fn expected_indicator_constraint_feasible(
+    equality: crate::Equality,
+    evaluated_value: f64,
+    indicator_active: bool,
+    atol: ATol,
+) -> bool {
+    if !indicator_active {
+        return true;
+    }
+    expected_regular_constraint_feasible(equality, evaluated_value, atol)
+}
+
+fn validate_solution_constraint_feasibility(
+    regular_constraints: &EvaluatedCollection<Constraint>,
+    indicator_constraints: &EvaluatedCollection<IndicatorConstraint>,
+    one_hot_constraints: &EvaluatedCollection<crate::OneHotConstraint>,
+    sos1_constraints: &EvaluatedCollection<crate::Sos1Constraint>,
+    atol: ATol,
+) -> Result<(), SolutionError> {
+    for (id, constraint) in regular_constraints.inner() {
+        let computed_feasible = expected_regular_constraint_feasible(
+            constraint.equality,
+            constraint.stage.evaluated_value,
+            atol,
+        );
+        if constraint.stage.feasible != computed_feasible {
+            return Err(SolutionError::InconsistentConstraintFeasibility {
+                constraint_family: "regular",
+                constraint_id: format!("{id:?}"),
+                provided_feasible: constraint.stage.feasible,
+                computed_feasible,
+            });
+        }
+    }
+
+    for (id, constraint) in indicator_constraints.inner() {
+        let computed_feasible = expected_indicator_constraint_feasible(
+            constraint.equality,
+            constraint.stage.evaluated_value,
+            constraint.stage.indicator_active,
+            atol,
+        );
+        if constraint.stage.feasible != computed_feasible {
+            return Err(SolutionError::InconsistentConstraintFeasibility {
+                constraint_family: "indicator",
+                constraint_id: format!("{id:?}"),
+                provided_feasible: constraint.stage.feasible,
+                computed_feasible,
+            });
+        }
+    }
+
+    for (id, constraint) in one_hot_constraints.inner() {
+        let computed_feasible = constraint.stage.active_variable.is_some();
+        if constraint.stage.feasible != computed_feasible {
+            return Err(SolutionError::InconsistentConstraintFeasibility {
+                constraint_family: "one-hot",
+                constraint_id: format!("{id:?}"),
+                provided_feasible: constraint.stage.feasible,
+                computed_feasible,
+            });
+        }
+    }
+
+    for (id, constraint) in sos1_constraints.inner() {
+        if constraint.stage.active_variable.is_some() && !constraint.stage.feasible {
+            return Err(SolutionError::InconsistentConstraintFeasibility {
+                constraint_family: "SOS1",
+                constraint_id: format!("{id:?}"),
+                provided_feasible: constraint.stage.feasible,
+                computed_feasible: true,
+            });
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_solution_special_constraint_structure(
+    decision_variables: &EvaluatedDecisionVariableTable,
+    indicator_constraints: &EvaluatedCollection<IndicatorConstraint>,
+    one_hot_constraints: &EvaluatedCollection<crate::OneHotConstraint>,
+    sos1_constraints: &EvaluatedCollection<crate::Sos1Constraint>,
+) -> Result<(), SolutionError> {
+    for (id, constraint) in indicator_constraints.inner() {
+        let variable_id = constraint.indicator_variable;
+        let Some(variable) = decision_variables.get(&variable_id) else {
+            return Err(SolutionError::InvalidConstraintStructure {
+                constraint_family: "indicator",
+                constraint_id: format!("{id:?}"),
+                message: format!("indicator variable {variable_id:?} is not in decision_variables"),
+            });
+        };
+        if *variable.kind() != crate::decision_variable::Kind::Binary {
+            return Err(SolutionError::InvalidConstraintStructure {
+                constraint_family: "indicator",
+                constraint_id: format!("{id:?}"),
+                message: format!("indicator variable {variable_id:?} must be binary"),
+            });
+        }
+    }
+
+    for (id, constraint) in one_hot_constraints.inner() {
+        if constraint.variables.is_empty() {
+            return Err(SolutionError::InvalidConstraintStructure {
+                constraint_family: "one-hot",
+                constraint_id: format!("{id:?}"),
+                message: "one-hot constraints must contain at least one variable".to_string(),
+            });
+        }
+        for variable_id in &constraint.variables {
+            let Some(variable) = decision_variables.get(variable_id) else {
+                return Err(SolutionError::InvalidConstraintStructure {
+                    constraint_family: "one-hot",
+                    constraint_id: format!("{id:?}"),
+                    message: format!("variable {variable_id:?} is not in decision_variables"),
+                });
+            };
+            if *variable.kind() != crate::decision_variable::Kind::Binary {
+                return Err(SolutionError::InvalidConstraintStructure {
+                    constraint_family: "one-hot",
+                    constraint_id: format!("{id:?}"),
+                    message: format!("variable {variable_id:?} must be binary"),
+                });
+            }
+        }
+        if constraint
+            .stage
+            .active_variable
+            .is_some_and(|variable_id| !constraint.variables.contains(&variable_id))
+        {
+            return Err(SolutionError::InvalidConstraintStructure {
+                constraint_family: "one-hot",
+                constraint_id: format!("{id:?}"),
+                message: "active_variable must be a member of variables".to_string(),
+            });
+        }
+    }
+
+    for (id, constraint) in sos1_constraints.inner() {
+        if constraint.variables.is_empty() {
+            return Err(SolutionError::InvalidConstraintStructure {
+                constraint_family: "SOS1",
+                constraint_id: format!("{id:?}"),
+                message: "SOS1 constraints must contain at least one variable".to_string(),
+            });
+        }
+        for variable_id in &constraint.variables {
+            if !decision_variables.contains_key(variable_id) {
+                return Err(SolutionError::InvalidConstraintStructure {
+                    constraint_family: "SOS1",
+                    constraint_id: format!("{id:?}"),
+                    message: format!("variable {variable_id:?} is not in decision_variables"),
+                });
+            }
+        }
+        if constraint
+            .stage
+            .active_variable
+            .is_some_and(|variable_id| !constraint.variables.contains(&variable_id))
+        {
+            return Err(SolutionError::InvalidConstraintStructure {
+                constraint_family: "SOS1",
+                constraint_id: format!("{id:?}"),
+                message: "active_variable must be a member of variables".to_string(),
+            });
+        }
+    }
+
+    Ok(())
 }
 
 impl SolutionBuilder {
@@ -731,6 +940,12 @@ impl SolutionBuilder {
         self
     }
 
+    /// Sets the absolute tolerance used to compute and validate feasibility fields.
+    pub fn feasibility_atol(mut self, feasibility_atol: ATol) -> Self {
+        self.feasibility_atol = feasibility_atol;
+        self
+    }
+
     /// Sets the optimality status.
     pub fn optimality(mut self, optimality: crate::v1::Optimality) -> Self {
         self.optimality = optimality;
@@ -783,6 +998,19 @@ impl SolutionBuilder {
             .validate_context_ids()?;
         self.evaluated_one_hot_constraints.validate_context_ids()?;
         self.evaluated_sos1_constraints.validate_context_ids()?;
+        validate_solution_constraint_feasibility(
+            &evaluated_constraints,
+            &self.evaluated_indicator_constraints,
+            &self.evaluated_one_hot_constraints,
+            &self.evaluated_sos1_constraints,
+            self.feasibility_atol,
+        )?;
+        validate_solution_special_constraint_structure(
+            &decision_variables,
+            &self.evaluated_indicator_constraints,
+            &self.evaluated_one_hot_constraints,
+            &self.evaluated_sos1_constraints,
+        )?;
 
         // Validate all used_decision_variable_ids in indicator constraints
         for (ic_id, ic) in self.evaluated_indicator_constraints.iter() {
@@ -848,6 +1076,7 @@ impl SolutionBuilder {
             optimality: self.optimality,
             relaxation: self.relaxation,
             sense: Some(sense),
+            feasibility_atol: self.feasibility_atol,
             metadata: Default::default(),
             annotations: Default::default(),
         })
@@ -908,6 +1137,7 @@ impl SolutionBuilder {
             optimality: self.optimality,
             relaxation: self.relaxation,
             sense: Some(sense),
+            feasibility_atol: self.feasibility_atol,
             metadata: Default::default(),
             annotations: Default::default(),
         })
@@ -1283,6 +1513,68 @@ mod tests {
         assert!(
             err.to_string().contains("unknown decision variable ID")
                 && err.to_string().contains("VariableID(99)"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn builder_rejects_inconsistent_regular_constraint_feasibility() {
+        let constraint = EvaluatedConstraint {
+            equality: crate::Equality::EqualToZero,
+            stage: crate::constraint::EvaluatedData {
+                evaluated_value: 1.0,
+                feasible: true,
+                used_decision_variable_ids: BTreeSet::new(),
+                dual_variable: None,
+            },
+        };
+
+        let err = Solution::builder()
+            .objective(0.0)
+            .evaluated_constraints(BTreeMap::from([(ConstraintID::from(1), constraint)]))
+            .decision_variables(BTreeMap::new())
+            .sense(Sense::Minimize)
+            .feasibility_atol(ATol::new(0.1).unwrap())
+            .build()
+            .unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("Inconsistent feasibility for regular constraint"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn builder_rejects_unknown_one_hot_structural_variable() {
+        let variable_id = VariableID::from(1);
+        let one_hot = crate::one_hot_constraint::EvaluatedOneHotConstraint {
+            variables: BTreeSet::from([variable_id]),
+            stage: crate::one_hot_constraint::OneHotEvaluatedData {
+                feasible: false,
+                active_variable: None,
+                used_decision_variable_ids: BTreeSet::new(),
+            },
+        };
+
+        let err = Solution::builder()
+            .objective(0.0)
+            .evaluated_constraints(BTreeMap::new())
+            .evaluated_one_hot_constraints_collection(
+                EvaluatedCollection::new(
+                    BTreeMap::from([(crate::OneHotConstraintID::from(1), one_hot)]),
+                    BTreeMap::new(),
+                )
+                .unwrap(),
+            )
+            .decision_variables(BTreeMap::new())
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("Invalid structure for one-hot constraint"),
             "unexpected error: {err}"
         );
     }

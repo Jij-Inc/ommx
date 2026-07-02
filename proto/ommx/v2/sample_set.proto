@@ -25,4 +25,7 @@ message SampleSet {
   SampledIndicatorConstraintCollection sampled_indicator_constraints = 11;
   SampledOneHotConstraintCollection sampled_one_hot_constraints = 12;
   SampledSos1ConstraintCollection sampled_sos1_constraints = 13;
+  // Absolute tolerance used to compute and validate `feasible`,
+  // `feasible_relaxed`, and per-constraint feasibility columns.
+  optional double feasibility_atol = 14;
 }

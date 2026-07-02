@@ -1,5 +1,110 @@
 use super::*;
-use crate::{ATol, Parse, ParseError, SolutionError};
+use crate::constraint_type::EvaluatedConstraintBehavior;
+use crate::{v2, ATol, Parse, ParseError, RawParseError, SolutionError};
+
+fn parse_v2_solution_sense(value: i32, message: &'static str) -> Result<Option<Sense>, ParseError> {
+    let sense = crate::v1::instance::Sense::try_from(value)
+        .map_err(|_| RawParseError::UnknownEnumValue {
+            enum_name: "ommx.v1.Sense",
+            value,
+        })
+        .map_err(|e| ParseError::from(e).context(message, "sense"))?;
+    Ok(match sense {
+        crate::v1::instance::Sense::Unspecified => None,
+        crate::v1::instance::Sense::Minimize => Some(crate::Sense::Minimize),
+        crate::v1::instance::Sense::Maximize => Some(crate::Sense::Maximize),
+    })
+}
+
+fn validate_evaluated_constraint_used_ids<T: crate::ConstraintType>(
+    constraints: &crate::constraint_type::EvaluatedCollection<T>,
+    decision_variables: &crate::EvaluatedDecisionVariableTable,
+    message: &'static str,
+    field: &'static str,
+) -> Result<(), ParseError> {
+    for (constraint_id, constraint) in constraints.inner() {
+        for var_id in constraint.used_decision_variable_ids() {
+            if !decision_variables.contains_key(var_id) {
+                return Err(RawParseError::InvalidInstance(format!(
+                    "Variable {var_id:?} used in constraint {constraint_id:?} is not defined in decision_variables",
+                ))
+                .context(message, field));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn evaluated_collection_has_payload<T: crate::ConstraintType>(
+    collection: &crate::constraint_type::EvaluatedCollection<T>,
+) -> bool {
+    !collection.is_empty()
+}
+
+fn validate_solution_indicator_structural_ids(
+    constraints: &crate::constraint_type::EvaluatedCollection<crate::IndicatorConstraint>,
+    decision_variables: &crate::EvaluatedDecisionVariableTable,
+    message: &'static str,
+) -> Result<(), ParseError> {
+    for (constraint_id, constraint) in constraints.inner() {
+        let id = constraint.indicator_variable;
+        let Some(variable) = decision_variables.get(&id) else {
+            return Err(RawParseError::InvalidInstance(format!(
+                "Indicator variable {id:?} in constraint {constraint_id:?} is not defined in decision_variables",
+            ))
+            .context(message, "evaluated_indicator_constraints"));
+        };
+        if *variable.kind() != crate::decision_variable::Kind::Binary {
+            return Err(RawParseError::InvalidInstance(format!(
+                "Indicator variable {id:?} in constraint {constraint_id:?} must be binary",
+            ))
+            .context(message, "evaluated_indicator_constraints"));
+        }
+    }
+    Ok(())
+}
+
+fn validate_solution_one_hot_structural_ids(
+    constraints: &crate::constraint_type::EvaluatedCollection<crate::OneHotConstraint>,
+    decision_variables: &crate::EvaluatedDecisionVariableTable,
+    message: &'static str,
+) -> Result<(), ParseError> {
+    for (constraint_id, constraint) in constraints.inner() {
+        for id in &constraint.variables {
+            let Some(variable) = decision_variables.get(id) else {
+                return Err(RawParseError::InvalidInstance(format!(
+                    "One-hot variable {id:?} in constraint {constraint_id:?} is not defined in decision_variables",
+                ))
+                .context(message, "evaluated_one_hot_constraints"));
+            };
+            if *variable.kind() != crate::decision_variable::Kind::Binary {
+                return Err(RawParseError::InvalidInstance(format!(
+                    "One-hot variable {id:?} in constraint {constraint_id:?} must be binary",
+                ))
+                .context(message, "evaluated_one_hot_constraints"));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_solution_sos1_structural_ids(
+    constraints: &crate::constraint_type::EvaluatedCollection<crate::Sos1Constraint>,
+    decision_variables: &crate::EvaluatedDecisionVariableTable,
+    message: &'static str,
+) -> Result<(), ParseError> {
+    for (constraint_id, constraint) in constraints.inner() {
+        for id in &constraint.variables {
+            if !decision_variables.contains_key(id) {
+                return Err(RawParseError::InvalidInstance(format!(
+                    "SOS1 variable {id:?} in constraint {constraint_id:?} is not defined in decision_variables",
+                ))
+                .context(message, "evaluated_sos1_constraints"));
+            }
+        }
+    }
+    Ok(())
+}
 
 impl Parse for crate::v1::Solution {
     type Output = Solution;
@@ -178,6 +283,7 @@ impl Parse for crate::v1::Solution {
             optimality,
             relaxation,
             sense,
+            feasibility_atol: ATol::default(),
             metadata: self.metadata,
             annotations: self.annotations,
         };
@@ -210,6 +316,192 @@ impl Parse for crate::v1::Solution {
     }
 }
 
+impl Parse for v2::Solution {
+    type Output = Solution;
+    type Context = ();
+
+    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+        let message = "ommx.v2.Solution";
+        let required_features =
+            crate::v2_io::parse_required_features(self.required_features, message)?;
+        let feasibility_atol =
+            crate::v2_io::parse_feasibility_atol(self.feasibility_atol, message)?;
+        let annotations =
+            crate::v2_io::extension_annotations_from_v2_map(self.annotations, message)?;
+        crate::v2_io::validate_finite_f64(self.objective, message, "objective")?;
+        let decision_variables = self
+            .decision_variables
+            .ok_or(RawParseError::MissingField {
+                message,
+                field: "decision_variables",
+            })?
+            .parse_as(&(), message, "decision_variables")?;
+        let evaluated_constraints = self
+            .evaluated_regular_constraints
+            .map(|value| {
+                value.parse_as(&feasibility_atol, message, "evaluated_regular_constraints")
+            })
+            .transpose()?
+            .unwrap_or_default();
+        let evaluated_indicator_constraints = self
+            .evaluated_indicator_constraints
+            .map(|value| {
+                value.parse_as(
+                    &feasibility_atol,
+                    message,
+                    "evaluated_indicator_constraints",
+                )
+            })
+            .transpose()?
+            .unwrap_or_default();
+        let evaluated_one_hot_constraints = self
+            .evaluated_one_hot_constraints
+            .map(|value| {
+                value.parse_as(&feasibility_atol, message, "evaluated_one_hot_constraints")
+            })
+            .transpose()?
+            .unwrap_or_default();
+        let evaluated_sos1_constraints = self
+            .evaluated_sos1_constraints
+            .map(|value| value.parse_as(&feasibility_atol, message, "evaluated_sos1_constraints"))
+            .transpose()?
+            .unwrap_or_default();
+
+        crate::v2_io::validate_feature_payload(
+            &required_features,
+            v2::Feature::ConstraintIndicator,
+            evaluated_collection_has_payload(&evaluated_indicator_constraints),
+            message,
+            "evaluated_indicator_constraints",
+        )?;
+        crate::v2_io::validate_feature_payload(
+            &required_features,
+            v2::Feature::ConstraintOneHot,
+            evaluated_collection_has_payload(&evaluated_one_hot_constraints),
+            message,
+            "evaluated_one_hot_constraints",
+        )?;
+        crate::v2_io::validate_feature_payload(
+            &required_features,
+            v2::Feature::ConstraintSos1,
+            evaluated_collection_has_payload(&evaluated_sos1_constraints),
+            message,
+            "evaluated_sos1_constraints",
+        )?;
+
+        let evaluated_named_functions = self
+            .evaluated_named_functions
+            .map(|value| value.parse_as(&(), message, "evaluated_named_functions"))
+            .transpose()?
+            .unwrap_or_default();
+        validate_evaluated_constraint_used_ids(
+            &evaluated_constraints,
+            &decision_variables,
+            message,
+            "evaluated_regular_constraints",
+        )?;
+        validate_evaluated_constraint_used_ids(
+            &evaluated_indicator_constraints,
+            &decision_variables,
+            message,
+            "evaluated_indicator_constraints",
+        )?;
+        validate_evaluated_constraint_used_ids(
+            &evaluated_one_hot_constraints,
+            &decision_variables,
+            message,
+            "evaluated_one_hot_constraints",
+        )?;
+        validate_evaluated_constraint_used_ids(
+            &evaluated_sos1_constraints,
+            &decision_variables,
+            message,
+            "evaluated_sos1_constraints",
+        )?;
+        validate_solution_indicator_structural_ids(
+            &evaluated_indicator_constraints,
+            &decision_variables,
+            message,
+        )?;
+        validate_solution_one_hot_structural_ids(
+            &evaluated_one_hot_constraints,
+            &decision_variables,
+            message,
+        )?;
+        validate_solution_sos1_structural_ids(
+            &evaluated_sos1_constraints,
+            &decision_variables,
+            message,
+        )?;
+        validate_evaluated_named_function_used_ids(&decision_variables, &evaluated_named_functions)
+            .map_err(|e| {
+                RawParseError::SolutionError(e).context(message, "evaluated_named_functions")
+            })?;
+
+        let optimality = crate::v1::Optimality::try_from(self.optimality)
+            .map_err(|_| RawParseError::UnknownEnumValue {
+                enum_name: "ommx.v1.Optimality",
+                value: self.optimality,
+            })
+            .map_err(|e| ParseError::from(e).context(message, "optimality"))?;
+        let relaxation = crate::v1::Relaxation::try_from(self.relaxation)
+            .map_err(|_| RawParseError::UnknownEnumValue {
+                enum_name: "ommx.v1.Relaxation",
+                value: self.relaxation,
+            })
+            .map_err(|e| ParseError::from(e).context(message, "relaxation"))?;
+        let sense = parse_v2_solution_sense(self.sense, message)?;
+
+        let solution = Solution {
+            objective: self.objective,
+            evaluated_constraints,
+            evaluated_indicator_constraints,
+            evaluated_one_hot_constraints,
+            evaluated_sos1_constraints,
+            evaluated_named_functions,
+            decision_variables,
+            optimality,
+            relaxation,
+            sense,
+            feasibility_atol,
+            metadata: self.metadata,
+            annotations,
+        };
+
+        let computed_feasible = solution.feasible();
+        if computed_feasible != self.feasible {
+            return Err(
+                RawParseError::SolutionError(SolutionError::InconsistentFeasibility {
+                    provided_feasible: self.feasible,
+                    computed_feasible,
+                })
+                .context(message, "feasible"),
+            );
+        }
+        let provided_feasible_relaxed = self.feasible_relaxed.unwrap_or(self.feasible);
+        let computed_feasible_relaxed = solution.feasible_relaxed();
+        if computed_feasible_relaxed != provided_feasible_relaxed {
+            return Err(RawParseError::SolutionError(
+                SolutionError::InconsistentFeasibilityRelaxed {
+                    provided_feasible_relaxed,
+                    computed_feasible_relaxed,
+                },
+            )
+            .context(message, "feasible_relaxed"));
+        }
+
+        Ok(solution)
+    }
+}
+
+impl TryFrom<v2::Solution> for Solution {
+    type Error = ParseError;
+
+    fn try_from(value: v2::Solution) -> Result<Self, Self::Error> {
+        value.parse(&())
+    }
+}
+
 /// Lossy: `v1::Solution` only has a `evaluated_constraints` field for
 /// regular constraints — it has no fields for indicator / one-hot / sos1
 /// evaluated constraints, so any data the in-memory [`Solution`] holds
@@ -233,6 +525,7 @@ impl From<Solution> for crate::v1::Solution {
             optimality,
             relaxation,
             sense,
+            feasibility_atol: _,
             metadata,
             annotations,
         } = solution;
@@ -817,5 +1110,176 @@ mod tests {
         assert_eq!(nf_meta.name(nf_id), Some("offset_x"));
         assert_eq!(nf_meta.subscripts(nf_id), &[0]);
         assert_eq!(nf_meta.description(nf_id), Some("x plus a constant"));
+    }
+
+    #[test]
+    fn test_v2_solution_parse_rejects_inconsistent_regular_feasibility() {
+        use crate::{
+            constraint::EvaluatedData, ConstraintID, Equality, EvaluatedConstraint, Sense,
+        };
+        use std::collections::BTreeMap;
+
+        let constraint = EvaluatedConstraint {
+            equality: Equality::EqualToZero,
+            stage: EvaluatedData {
+                evaluated_value: 0.0,
+                feasible: true,
+                used_decision_variable_ids: Default::default(),
+                dual_variable: None,
+            },
+        };
+        let solution = Solution::builder()
+            .objective(0.0)
+            .evaluated_constraints(BTreeMap::from([(ConstraintID::from(1), constraint)]))
+            .decision_variables(BTreeMap::new())
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
+
+        let mut proto = crate::v2::Solution::from(solution);
+        let row = proto
+            .evaluated_regular_constraints
+            .as_mut()
+            .unwrap()
+            .entries
+            .get_mut(&1)
+            .unwrap();
+        row.evaluated_value = 1.0;
+        row.feasible = true;
+
+        let err = Solution::try_from(proto).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("Inconsistent constraint feasibility"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_v2_solution_parse_rejects_non_finite_objective() {
+        use crate::Sense;
+        use std::collections::BTreeMap;
+
+        let solution = Solution::builder()
+            .objective(0.0)
+            .evaluated_constraints(BTreeMap::new())
+            .decision_variables(BTreeMap::new())
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
+
+        let mut proto = crate::v2::Solution::from(solution);
+        proto.objective = f64::INFINITY;
+
+        let err = Solution::try_from(proto).unwrap_err();
+        assert!(
+            err.to_string().contains("objective must be finite"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_v2_solution_parse_rejects_inactive_infeasible_indicator() {
+        use crate::{
+            indicator_constraint::{EvaluatedIndicatorConstraint, IndicatorEvaluatedData},
+            DecisionVariable, EvaluatedDecisionVariable, IndicatorConstraintID, Sense, VariableID,
+        };
+        use std::collections::BTreeMap;
+
+        let var_id = VariableID::from(1);
+        let decision_variable =
+            EvaluatedDecisionVariable::new(var_id, DecisionVariable::binary(), 0.0).unwrap();
+        let indicator = EvaluatedIndicatorConstraint {
+            indicator_variable: var_id,
+            equality: crate::Equality::EqualToZero,
+            stage: IndicatorEvaluatedData {
+                evaluated_value: 1.0,
+                feasible: true,
+                indicator_active: false,
+                used_decision_variable_ids: [var_id].into_iter().collect(),
+            },
+        };
+        let solution = Solution::builder()
+            .objective(0.0)
+            .evaluated_constraints(BTreeMap::new())
+            .evaluated_indicator_constraints(BTreeMap::from([(
+                IndicatorConstraintID::from(1),
+                indicator,
+            )]))
+            .decision_variables(BTreeMap::from([(var_id, decision_variable)]))
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
+
+        let mut proto = crate::v2::Solution::from(solution);
+        let row = proto
+            .evaluated_indicator_constraints
+            .as_mut()
+            .unwrap()
+            .entries
+            .get_mut(&1)
+            .unwrap();
+        row.indicator_active = false;
+        row.feasible = false;
+
+        let err = Solution::try_from(proto).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("Inconsistent indicator constraint feasibility"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_v2_solution_parse_rejects_feasible_one_hot_without_active_variable() {
+        use crate::{
+            one_hot_constraint::{EvaluatedOneHotConstraint, OneHotEvaluatedData},
+            DecisionVariable, EvaluatedDecisionVariable, OneHotConstraintID, Sense, VariableID,
+        };
+        use std::collections::{BTreeMap, BTreeSet};
+
+        let var_id = VariableID::from(1);
+        let decision_variable =
+            EvaluatedDecisionVariable::new(var_id, DecisionVariable::binary(), 1.0).unwrap();
+        let one_hot = EvaluatedOneHotConstraint {
+            variables: BTreeSet::from([var_id]),
+            stage: OneHotEvaluatedData {
+                feasible: true,
+                active_variable: Some(var_id),
+                used_decision_variable_ids: [var_id].into_iter().collect(),
+            },
+        };
+        let solution = Solution::builder()
+            .objective(0.0)
+            .evaluated_constraints(BTreeMap::new())
+            .evaluated_one_hot_constraints_collection(
+                crate::constraint_type::EvaluatedCollection::new(
+                    BTreeMap::from([(OneHotConstraintID::from(1), one_hot)]),
+                    BTreeMap::new(),
+                )
+                .unwrap(),
+            )
+            .decision_variables(BTreeMap::from([(var_id, decision_variable)]))
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
+
+        let mut proto = crate::v2::Solution::from(solution);
+        let row = proto
+            .evaluated_one_hot_constraints
+            .as_mut()
+            .unwrap()
+            .entries
+            .get_mut(&1)
+            .unwrap();
+        row.feasible = true;
+        row.active_variable = None;
+
+        let err = Solution::try_from(proto).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("feasible must be true exactly when active_variable is set"),
+            "unexpected error: {err}"
+        );
     }
 }
