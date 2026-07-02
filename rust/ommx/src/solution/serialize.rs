@@ -17,6 +17,11 @@ impl Solution {
         let inner = v1::Solution::decode(bytes)?;
         Ok(Parse::parse(inner, &())?)
     }
+
+    pub fn from_v2_bytes(bytes: &[u8]) -> Result<Self> {
+        let inner = v2::Solution::decode(bytes)?;
+        Ok(Parse::parse(inner, &())?)
+    }
 }
 
 impl From<Solution> for v2::Solution {

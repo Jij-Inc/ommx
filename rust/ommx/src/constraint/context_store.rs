@@ -1,7 +1,7 @@
 use crate::constraint::{ConstraintContext, Provenance};
 use crate::constraint_type::IDType;
 use crate::logical_memory::LogicalMemoryProfile;
-use crate::ModelingLabelStore;
+use crate::{ModelingLabelStore, Parse, ParseError};
 use fnv::FnvHashMap;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -151,6 +151,18 @@ pub(crate) fn constraint_context_store_to_v2_map<ID: IDType>(
         .into_iter()
         .map(|id| (id.into(), store.collect_for(id).into()))
         .collect()
+}
+
+pub(crate) fn constraint_context_store_from_v2_map<ID: IDType>(
+    contexts: BTreeMap<u64, crate::v2::ConstraintContext>,
+    message: &'static str,
+    field: &'static str,
+) -> Result<ConstraintContextStore<ID>, ParseError> {
+    let mut store = ConstraintContextStore::default();
+    for (id, context) in contexts {
+        store.insert(ID::from(id), context.parse_as(&(), message, field)?);
+    }
+    Ok(store)
 }
 
 #[cfg(test)]

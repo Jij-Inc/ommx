@@ -1,7 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::logical_memory::LogicalMemoryProfile;
-use crate::{ATol, Bound, Created, Evaluated, ModelingLabel, SampledStage};
+use crate::{
+    ATol, Bound, Created, Evaluated, ModelingLabel, Parse, ParseError, RawParseError, SampledStage,
+};
 
 use super::{
     DecisionVariable, DecisionVariableError, DecisionVariableLabel, EvaluatedDecisionVariable,
@@ -552,6 +554,36 @@ impl From<DecisionVariable> for crate::v2::DecisionVariable {
     }
 }
 
+impl Parse for crate::v2::DecisionVariable {
+    type Output = DecisionVariable;
+    type Context = VariableID;
+
+    fn parse(self, id: &Self::Context) -> Result<Self::Output, ParseError> {
+        let message = "ommx.v2.DecisionVariable";
+        let kind = crate::v1::decision_variable::Kind::try_from(self.kind)
+            .map_err(|_| RawParseError::UnknownEnumValue {
+                enum_name: "ommx.v1.decision_variable.Kind",
+                value: self.kind,
+            })
+            .map_err(|e| ParseError::from(e).context(message, "kind"))?
+            .parse_as(&(), message, "kind")?;
+        let bound = self
+            .bound
+            .ok_or(RawParseError::MissingField {
+                message,
+                field: "bound",
+            })?
+            .parse_as(&(), message, "bound")?;
+        DecisionVariable::new(kind, bound, ATol::default()).map_err(|source| {
+            RawParseError::InvalidDecisionVariable(DecisionVariableError::InvalidDefinition {
+                id: *id,
+                source: Box::new(source),
+            })
+            .context(message, "bound")
+        })
+    }
+}
+
 impl From<EvaluatedDecisionVariable> for crate::v2::EvaluatedDecisionVariable {
     fn from(value: EvaluatedDecisionVariable) -> Self {
         let EvaluatedDecisionVariable { kind, bound, value } = value;
@@ -560,6 +592,22 @@ impl From<EvaluatedDecisionVariable> for crate::v2::EvaluatedDecisionVariable {
             bound: Some(bound.into()),
             value,
         }
+    }
+}
+
+impl Parse for crate::v2::EvaluatedDecisionVariable {
+    type Output = EvaluatedDecisionVariable;
+    type Context = VariableID;
+
+    fn parse(self, id: &Self::Context) -> Result<Self::Output, ParseError> {
+        let decision_variable = crate::v2::DecisionVariable {
+            kind: self.kind,
+            bound: self.bound,
+        }
+        .parse(id)?;
+        EvaluatedDecisionVariable::new(*id, decision_variable, self.value)
+            .map_err(RawParseError::InvalidDecisionVariable)
+            .map_err(|e| ParseError::from(e).context("ommx.v2.EvaluatedDecisionVariable", "value"))
     }
 }
 
@@ -578,6 +626,30 @@ impl From<SampledDecisionVariable> for crate::v2::SampledDecisionVariable {
     }
 }
 
+impl Parse for crate::v2::SampledDecisionVariable {
+    type Output = SampledDecisionVariable;
+    type Context = VariableID;
+
+    fn parse(self, id: &Self::Context) -> Result<Self::Output, ParseError> {
+        let message = "ommx.v2.SampledDecisionVariable";
+        let decision_variable = crate::v2::DecisionVariable {
+            kind: self.kind,
+            bound: self.bound,
+        }
+        .parse_as(id, message, "decision_variable")?;
+        let samples = self
+            .samples
+            .ok_or(RawParseError::MissingField {
+                message,
+                field: "samples",
+            })?
+            .parse_as(&(), message, "samples")?;
+        SampledDecisionVariable::new(*id, decision_variable, samples)
+            .map_err(RawParseError::InvalidDecisionVariable)
+            .map_err(|e| ParseError::from(e).context(message, "samples"))
+    }
+}
+
 impl From<DecisionVariableTable<Created>> for crate::v2::DecisionVariableTable {
     fn from(table: DecisionVariableTable<Created>) -> Self {
         Self {
@@ -593,6 +665,28 @@ impl From<DecisionVariableTable<Created>> for crate::v2::DecisionVariableTable {
     }
 }
 
+impl Parse for crate::v2::DecisionVariableTable {
+    type Output = DecisionVariableTable<Created>;
+    type Context = ();
+
+    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+        let message = "ommx.v2.DecisionVariableTable";
+        let mut entries = BTreeMap::new();
+        for (id, row) in self.entries {
+            let id = VariableID::from(id);
+            entries.insert(id, row.parse_as(&id, message, "entries")?);
+        }
+        let labels = crate::modeling_label::modeling_label_store_from_v2_map(self.labels);
+        let fixed_values = self
+            .fixed_values
+            .into_iter()
+            .map(|(id, value)| (VariableID::from(id), value))
+            .collect();
+        DecisionVariableTable::with_fixed_values(entries, labels, fixed_values, ATol::default())
+            .map_err(|e| RawParseError::InvalidInstance(e.to_string()).context(message, "entries"))
+    }
+}
+
 impl From<EvaluatedDecisionVariableTable> for crate::v2::EvaluatedDecisionVariableTable {
     fn from(table: EvaluatedDecisionVariableTable) -> Self {
         Self {
@@ -602,12 +696,46 @@ impl From<EvaluatedDecisionVariableTable> for crate::v2::EvaluatedDecisionVariab
     }
 }
 
+impl Parse for crate::v2::EvaluatedDecisionVariableTable {
+    type Output = EvaluatedDecisionVariableTable;
+    type Context = ();
+
+    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+        let message = "ommx.v2.EvaluatedDecisionVariableTable";
+        let mut entries = BTreeMap::new();
+        for (id, row) in self.entries {
+            let id = VariableID::from(id);
+            entries.insert(id, row.parse_as(&id, message, "entries")?);
+        }
+        let labels = crate::modeling_label::modeling_label_store_from_v2_map(self.labels);
+        EvaluatedDecisionVariableTable::new(entries, labels)
+            .map_err(|e| RawParseError::InvalidInstance(e.to_string()).context(message, "entries"))
+    }
+}
+
 impl From<SampledDecisionVariableTable> for crate::v2::SampledDecisionVariableTable {
     fn from(table: SampledDecisionVariableTable) -> Self {
         Self {
             entries: table_entries_to_v2_map(table.entries),
             labels: crate::modeling_label::modeling_label_store_to_v2_map(&table.labels),
         }
+    }
+}
+
+impl Parse for crate::v2::SampledDecisionVariableTable {
+    type Output = SampledDecisionVariableTable;
+    type Context = ();
+
+    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+        let message = "ommx.v2.SampledDecisionVariableTable";
+        let mut entries = BTreeMap::new();
+        for (id, row) in self.entries {
+            let id = VariableID::from(id);
+            entries.insert(id, row.parse_as(&id, message, "entries")?);
+        }
+        let labels = crate::modeling_label::modeling_label_store_from_v2_map(self.labels);
+        SampledDecisionVariableTable::new(entries, labels)
+            .map_err(|e| RawParseError::InvalidInstance(e.to_string()).context(message, "entries"))
     }
 }
 

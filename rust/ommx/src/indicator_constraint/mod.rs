@@ -5,7 +5,7 @@ use crate::{
     constraint_type::{
         sample_ids_from_map, ConstraintType, EvaluatedConstraintBehavior, SampledConstraintBehavior,
     },
-    Function, SampleID, SampleIDSet, VariableID, VariableIDSet,
+    Function, Parse, ParseError, RawParseError, SampleID, SampleIDSet, VariableID, VariableIDSet,
 };
 use derive_more::{Deref, From};
 use std::collections::BTreeMap;
@@ -124,6 +124,10 @@ impl EvaluatedConstraintBehavior for EvaluatedIndicatorConstraint {
     fn is_feasible(&self) -> bool {
         self.stage.feasible
     }
+
+    fn used_decision_variable_ids(&self) -> &VariableIDSet {
+        &self.stage.used_decision_variable_ids
+    }
 }
 
 impl SampledConstraintBehavior for SampledIndicatorConstraint {
@@ -213,6 +217,34 @@ impl From<IndicatorConstraint<Created>> for crate::v2::IndicatorConstraint {
     }
 }
 
+impl Parse for crate::v2::IndicatorConstraint {
+    type Output = IndicatorConstraint<Created>;
+    type Context = ();
+
+    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+        let message = "ommx.v2.IndicatorConstraint";
+        let equality = crate::v1::Equality::try_from(self.equality)
+            .map_err(|_| RawParseError::UnknownEnumValue {
+                enum_name: "ommx.v1.Equality",
+                value: self.equality,
+            })
+            .map_err(|e| ParseError::from(e).context(message, "equality"))?
+            .parse_as(&(), message, "equality")?;
+        let function = self
+            .function
+            .ok_or(RawParseError::MissingField {
+                message,
+                field: "function",
+            })?
+            .parse_as(&(), message, "function")?;
+        Ok(IndicatorConstraint {
+            indicator_variable: VariableID::from(self.indicator_variable),
+            equality,
+            stage: CreatedData { function },
+        })
+    }
+}
+
 impl From<EvaluatedIndicatorConstraint> for crate::v2::EvaluatedIndicatorConstraint {
     fn from(constraint: EvaluatedIndicatorConstraint) -> Self {
         Self {
@@ -228,6 +260,36 @@ impl From<EvaluatedIndicatorConstraint> for crate::v2::EvaluatedIndicatorConstra
                 .map(|id| id.into_inner())
                 .collect(),
         }
+    }
+}
+
+impl Parse for crate::v2::EvaluatedIndicatorConstraint {
+    type Output = EvaluatedIndicatorConstraint;
+    type Context = ();
+
+    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+        let message = "ommx.v2.EvaluatedIndicatorConstraint";
+        let equality = crate::v1::Equality::try_from(self.equality)
+            .map_err(|_| RawParseError::UnknownEnumValue {
+                enum_name: "ommx.v1.Equality",
+                value: self.equality,
+            })
+            .map_err(|e| ParseError::from(e).context(message, "equality"))?
+            .parse_as(&(), message, "equality")?;
+        Ok(IndicatorConstraint {
+            indicator_variable: VariableID::from(self.indicator_variable),
+            equality,
+            stage: IndicatorEvaluatedData {
+                evaluated_value: self.evaluated_value,
+                feasible: self.feasible,
+                indicator_active: self.indicator_active,
+                used_decision_variable_ids: crate::v2_io::variable_id_set_from_v2(
+                    self.used_decision_variable_ids,
+                    message,
+                    "used_decision_variable_ids",
+                )?,
+            },
+        })
     }
 }
 
@@ -256,6 +318,43 @@ impl From<SampledIndicatorConstraint> for crate::v2::SampledIndicatorConstraint 
                 .map(|id| id.into_inner())
                 .collect(),
         }
+    }
+}
+
+impl Parse for crate::v2::SampledIndicatorConstraint {
+    type Output = SampledIndicatorConstraint;
+    type Context = ();
+
+    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+        let message = "ommx.v2.SampledIndicatorConstraint";
+        let equality = crate::v1::Equality::try_from(self.equality)
+            .map_err(|_| RawParseError::UnknownEnumValue {
+                enum_name: "ommx.v1.Equality",
+                value: self.equality,
+            })
+            .map_err(|e| ParseError::from(e).context(message, "equality"))?
+            .parse_as(&(), message, "equality")?;
+        let evaluated_values = self
+            .evaluated_values
+            .ok_or(RawParseError::MissingField {
+                message,
+                field: "evaluated_values",
+            })?
+            .parse_as(&(), message, "evaluated_values")?;
+        Ok(IndicatorConstraint {
+            indicator_variable: VariableID::from(self.indicator_variable),
+            equality,
+            stage: IndicatorSampledData {
+                evaluated_values,
+                feasible: crate::v2_io::sample_bool_map_from_v2(self.feasible),
+                indicator_active: crate::v2_io::sample_bool_map_from_v2(self.indicator_active),
+                used_decision_variable_ids: crate::v2_io::variable_id_set_from_v2(
+                    self.used_decision_variable_ids,
+                    message,
+                    "used_decision_variable_ids",
+                )?,
+            },
+        })
     }
 }
 

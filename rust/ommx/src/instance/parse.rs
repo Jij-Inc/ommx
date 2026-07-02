@@ -5,7 +5,7 @@ use crate::{
     constraint_type::ConstraintCollection,
     parse::{as_variable_id, Parse, ParseError, RawParseError},
     v1::{self},
-    Constraint, ConstraintID, VariableID,
+    v2, Constraint, ConstraintID, VariableID,
 };
 
 type ConvertedConstraintHints = (
@@ -108,6 +108,228 @@ fn validate_fixed_decision_variable_partition(
             "Variable {id:?} cannot be both fixed and dependent"
         ))
         .context(message, "decision_variables"));
+    }
+
+    Ok(())
+}
+
+fn parse_v2_required_sense(value: i32, message: &'static str) -> Result<Sense, ParseError> {
+    let sense = v1::instance::Sense::try_from(value)
+        .map_err(|_| RawParseError::UnknownEnumValue {
+            enum_name: "ommx.v1.Sense",
+            value,
+        })
+        .map_err(|e| ParseError::from(e).context(message, "sense"))?;
+    match sense {
+        v1::instance::Sense::Minimize => Ok(Sense::Minimize),
+        v1::instance::Sense::Maximize => Ok(Sense::Maximize),
+        v1::instance::Sense::Unspecified => Err(RawParseError::UnknownEnumValue {
+            enum_name: "ommx.v1.Sense",
+            value,
+        }
+        .context(message, "sense")),
+    }
+}
+
+fn parse_v2_decision_variable_dependency(
+    dependency: BTreeMap<u64, v1::Function>,
+    message: &'static str,
+) -> Result<AcyclicAssignments, ParseError> {
+    let dependency = dependency
+        .into_iter()
+        .map(|(id, function)| {
+            Ok((
+                VariableID::from(id),
+                function.parse_as(&(), message, "decision_variable_dependency")?,
+            ))
+        })
+        .collect::<Result<BTreeMap<_, _>, ParseError>>()?;
+    AcyclicAssignments::new(dependency)
+        .map_err(|e| RawParseError::from(e).context(message, "decision_variable_dependency"))
+}
+
+fn created_collection_has_payload<T: crate::ConstraintType>(
+    collection: &ConstraintCollection<T>,
+) -> bool {
+    !collection.active().is_empty() || !collection.removed().is_empty()
+}
+
+fn validate_instance_special_features(
+    required_features: &std::collections::BTreeSet<v2::Feature>,
+    indicator_constraints: &ConstraintCollection<crate::IndicatorConstraint>,
+    one_hot_constraints: &ConstraintCollection<crate::OneHotConstraint>,
+    sos1_constraints: &ConstraintCollection<crate::Sos1Constraint>,
+    message: &'static str,
+) -> Result<(), ParseError> {
+    crate::v2_io::validate_feature_payload(
+        required_features,
+        v2::Feature::ConstraintIndicator,
+        created_collection_has_payload(indicator_constraints),
+        message,
+        "indicator_constraints",
+    )?;
+    crate::v2_io::validate_feature_payload(
+        required_features,
+        v2::Feature::ConstraintOneHot,
+        created_collection_has_payload(one_hot_constraints),
+        message,
+        "one_hot_constraints",
+    )?;
+    crate::v2_io::validate_feature_payload(
+        required_features,
+        v2::Feature::ConstraintSos1,
+        created_collection_has_payload(sos1_constraints),
+        message,
+        "sos1_constraints",
+    )?;
+    Ok(())
+}
+
+fn validate_created_constraint_references<T: crate::ConstraintType>(
+    collection: &ConstraintCollection<T>,
+    valid_ids: &VariableIDSet,
+    message: &'static str,
+    field: &'static str,
+) -> Result<(), ParseError> {
+    for constraint in collection.active().values().chain(
+        collection
+            .removed()
+            .values()
+            .map(|(constraint, _)| constraint),
+    ) {
+        for id in constraint.required_ids() {
+            if !valid_ids.contains(&id) {
+                return Err(RawParseError::InvalidInstance(format!(
+                    "Undefined variable ID is used: {id:?}"
+                ))
+                .context(message, field));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn active_used_ids_from_created_collection<T: crate::ConstraintType>(
+    collection: &ConstraintCollection<T>,
+) -> VariableIDSet {
+    collection
+        .active()
+        .values()
+        .flat_map(|constraint| constraint.required_ids())
+        .collect()
+}
+
+fn validate_fixed_dependent_partition_from_sets(
+    used: &VariableIDSet,
+    fixed_values: &BTreeMap<VariableID, f64>,
+    decision_variable_dependency: &AcyclicAssignments,
+    message: &'static str,
+) -> Result<(), ParseError> {
+    let fixed: VariableIDSet = fixed_values.keys().copied().collect();
+    let dependent: VariableIDSet = decision_variable_dependency.keys().collect();
+
+    if let Some(id) = used.intersection(&dependent).next() {
+        return Err(RawParseError::InvalidInstance(format!(
+            "Dependent variable cannot be used in objectives or constraints: {id:?}"
+        ))
+        .context(message, "decision_variables"));
+    }
+    if let Some(id) = used.intersection(&fixed).next() {
+        return Err(RawParseError::InvalidInstance(format!(
+            "Fixed variable {id:?} cannot be used in objectives or constraints"
+        ))
+        .context(message, "decision_variables"));
+    }
+    if let Some(id) = fixed.intersection(&dependent).next() {
+        return Err(RawParseError::InvalidInstance(format!(
+            "Variable {id:?} cannot be both fixed and dependent"
+        ))
+        .context(message, "decision_variables"));
+    }
+
+    Ok(())
+}
+
+fn validate_structural_special_constraints(
+    decision_variables: &DecisionVariableTable,
+    parameter_ids: Option<&VariableIDSet>,
+    indicator_constraints: &ConstraintCollection<crate::IndicatorConstraint>,
+    one_hot_constraints: &ConstraintCollection<crate::OneHotConstraint>,
+    sos1_constraints: &ConstraintCollection<crate::Sos1Constraint>,
+    message: &'static str,
+) -> Result<(), ParseError> {
+    for indicator in indicator_constraints
+        .active()
+        .values()
+        .chain(indicator_constraints.removed().values().map(|(row, _)| row))
+    {
+        let id = indicator.indicator_variable;
+        let Some(variable) = decision_variables.get(&id) else {
+            let detail = if parameter_ids.is_some_and(|ids| ids.contains(&id)) {
+                format!(
+                    "Parameter id {id:?} cannot occupy the structural indicator-variable position; it must be a binary decision variable"
+                )
+            } else {
+                format!("Indicator variable {id:?} is not defined in decision_variables")
+            };
+            return Err(
+                RawParseError::InvalidInstance(detail).context(message, "indicator_constraints")
+            );
+        };
+        if variable.kind() != crate::decision_variable::Kind::Binary {
+            return Err(RawParseError::InvalidInstance(format!(
+                "Indicator variable {id:?} must be binary"
+            ))
+            .context(message, "indicator_constraints"));
+        }
+    }
+
+    for one_hot in one_hot_constraints
+        .active()
+        .values()
+        .chain(one_hot_constraints.removed().values().map(|(row, _)| row))
+    {
+        for id in &one_hot.variables {
+            let Some(variable) = decision_variables.get(id) else {
+                let detail = if parameter_ids.is_some_and(|ids| ids.contains(id)) {
+                    format!(
+                        "Parameter id {id:?} cannot occupy a structural one-hot variable position; it must be a binary decision variable"
+                    )
+                } else {
+                    format!("One-hot variable {id:?} is not defined in decision_variables")
+                };
+                return Err(
+                    RawParseError::InvalidInstance(detail).context(message, "one_hot_constraints")
+                );
+            };
+            if variable.kind() != crate::decision_variable::Kind::Binary {
+                return Err(RawParseError::InvalidInstance(format!(
+                    "One-hot variable {id:?} must be binary"
+                ))
+                .context(message, "one_hot_constraints"));
+            }
+        }
+    }
+
+    for sos1 in sos1_constraints
+        .active()
+        .values()
+        .chain(sos1_constraints.removed().values().map(|(row, _)| row))
+    {
+        for id in &sos1.variables {
+            if !decision_variables.contains_key(id) {
+                let detail = if parameter_ids.is_some_and(|ids| ids.contains(id)) {
+                    format!(
+                        "Parameter id {id:?} cannot occupy a structural SOS1 variable position; it must be a decision variable"
+                    )
+                } else {
+                    format!("SOS1 variable {id:?} is not defined in decision_variables")
+                };
+                return Err(
+                    RawParseError::InvalidInstance(detail).context(message, "sos1_constraints")
+                );
+            }
+        }
     }
 
     Ok(())
@@ -341,6 +563,175 @@ impl Parse for v1::Instance {
 impl TryFrom<v1::Instance> for Instance {
     type Error = ParseError;
     fn try_from(value: v1::Instance) -> Result<Self, Self::Error> {
+        value.parse(&())
+    }
+}
+
+impl Parse for v2::Instance {
+    type Output = Instance;
+    type Context = ();
+
+    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+        let message = "ommx.v2.Instance";
+        let required_features =
+            crate::v2_io::parse_required_features(self.required_features, message)?;
+        let annotations =
+            crate::v2_io::extension_annotations_from_v2_map(self.annotations, message)?;
+        let sense = parse_v2_required_sense(self.sense, message)?;
+        let decision_variables = self
+            .decision_variables
+            .ok_or(RawParseError::MissingField {
+                message,
+                field: "decision_variables",
+            })?
+            .parse_as(&(), message, "decision_variables")?;
+        let decision_variable_ids: VariableIDSet = decision_variables.keys().copied().collect();
+        let objective = self
+            .objective
+            .ok_or(RawParseError::MissingField {
+                message,
+                field: "objective",
+            })?
+            .parse_as(&(), message, "objective")?;
+        for id in objective.required_ids() {
+            if !decision_variable_ids.contains(&id) {
+                return Err(RawParseError::InvalidInstance(format!(
+                    "Undefined variable ID is used: {id:?}"
+                ))
+                .context(message, "objective"));
+            }
+        }
+
+        let constraint_collection = self
+            .regular_constraints
+            .map(|value| value.parse_as(&(), message, "regular_constraints"))
+            .transpose()?
+            .unwrap_or_default();
+        let indicator_constraint_collection = self
+            .indicator_constraints
+            .map(|value| value.parse_as(&(), message, "indicator_constraints"))
+            .transpose()?
+            .unwrap_or_default();
+        let one_hot_constraint_collection = self
+            .one_hot_constraints
+            .map(|value| value.parse_as(&(), message, "one_hot_constraints"))
+            .transpose()?
+            .unwrap_or_default();
+        let sos1_constraint_collection = self
+            .sos1_constraints
+            .map(|value| value.parse_as(&(), message, "sos1_constraints"))
+            .transpose()?
+            .unwrap_or_default();
+        validate_instance_special_features(
+            &required_features,
+            &indicator_constraint_collection,
+            &one_hot_constraint_collection,
+            &sos1_constraint_collection,
+            message,
+        )?;
+
+        validate_created_constraint_references(
+            &constraint_collection,
+            &decision_variable_ids,
+            message,
+            "regular_constraints",
+        )?;
+        validate_created_constraint_references(
+            &indicator_constraint_collection,
+            &decision_variable_ids,
+            message,
+            "indicator_constraints",
+        )?;
+        validate_created_constraint_references(
+            &one_hot_constraint_collection,
+            &decision_variable_ids,
+            message,
+            "one_hot_constraints",
+        )?;
+        validate_created_constraint_references(
+            &sos1_constraint_collection,
+            &decision_variable_ids,
+            message,
+            "sos1_constraints",
+        )?;
+
+        validate_structural_special_constraints(
+            &decision_variables,
+            None,
+            &indicator_constraint_collection,
+            &one_hot_constraint_collection,
+            &sos1_constraint_collection,
+            message,
+        )?;
+
+        let named_functions = self
+            .named_functions
+            .map(|value| value.parse_as(&(), message, "named_functions"))
+            .transpose()?
+            .unwrap_or_default();
+        for named_function in named_functions.values() {
+            for id in named_function.function.required_ids() {
+                if !decision_variable_ids.contains(&id) {
+                    return Err(RawParseError::InvalidInstance(format!(
+                        "Undefined variable ID is used: {id:?}"
+                    ))
+                    .context(message, "named_functions"));
+                }
+            }
+        }
+
+        let decision_variable_dependency =
+            parse_v2_decision_variable_dependency(self.decision_variable_dependency, message)?;
+        for id in decision_variable_dependency.keys() {
+            if !decision_variable_ids.contains(&id) {
+                return Err(RawParseError::InvalidInstance(format!(
+                    "Variable ID {id:?} in decision_variable_dependency is not in decision_variables"
+                ))
+                .context(message, "decision_variable_dependency"));
+            }
+        }
+
+        let mut used = objective.required_ids();
+        used.extend(active_used_ids_from_created_collection(
+            &constraint_collection,
+        ));
+        used.extend(active_used_ids_from_created_collection(
+            &indicator_constraint_collection,
+        ));
+        used.extend(active_used_ids_from_created_collection(
+            &one_hot_constraint_collection,
+        ));
+        used.extend(active_used_ids_from_created_collection(
+            &sos1_constraint_collection,
+        ));
+        validate_fixed_dependent_partition_from_sets(
+            &used,
+            decision_variables.fixed_values(),
+            &decision_variable_dependency,
+            message,
+        )?;
+
+        Ok(Instance {
+            sense,
+            objective,
+            decision_variables,
+            constraint_collection,
+            indicator_constraint_collection,
+            one_hot_constraint_collection,
+            sos1_constraint_collection,
+            decision_variable_dependency,
+            parameters: self.parameters,
+            description: self.description,
+            annotations,
+            named_functions,
+        })
+    }
+}
+
+impl TryFrom<v2::Instance> for Instance {
+    type Error = ParseError;
+
+    fn try_from(value: v2::Instance) -> Result<Self, Self::Error> {
         value.parse(&())
     }
 }
@@ -585,6 +976,201 @@ impl Parse for v1::ParametricInstance {
             description: self.description,
             annotations: self.annotations,
         })
+    }
+}
+
+impl Parse for v2::ParametricInstance {
+    type Output = ParametricInstance;
+    type Context = ();
+
+    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+        let message = "ommx.v2.ParametricInstance";
+        let required_features =
+            crate::v2_io::parse_required_features(self.required_features, message)?;
+        let annotations =
+            crate::v2_io::extension_annotations_from_v2_map(self.annotations, message)?;
+        let sense = parse_v2_required_sense(self.sense, message)?;
+        let decision_variables = self
+            .decision_variables
+            .ok_or(RawParseError::MissingField {
+                message,
+                field: "decision_variables",
+            })?
+            .parse_as(&(), message, "decision_variables")?;
+        let parameters = self
+            .parameters
+            .map(|value| value.parse_as(&(), message, "parameters"))
+            .transpose()?
+            .unwrap_or_default();
+
+        let decision_variable_ids: VariableIDSet = decision_variables.keys().copied().collect();
+        let parameter_ids: VariableIDSet = parameters.keys().copied().collect();
+        if let Some(id) = decision_variable_ids.intersection(&parameter_ids).next() {
+            return Err(RawParseError::InvalidInstance(format!(
+                "Duplicated variable ID is found in definition: {id:?}"
+            ))
+            .context(message, "parameters"));
+        }
+        let all_variable_ids: VariableIDSet = decision_variable_ids
+            .union(&parameter_ids)
+            .copied()
+            .collect();
+
+        let objective = self
+            .objective
+            .ok_or(RawParseError::MissingField {
+                message,
+                field: "objective",
+            })?
+            .parse_as(&(), message, "objective")?;
+        for id in objective.required_ids() {
+            if !all_variable_ids.contains(&id) {
+                return Err(RawParseError::InvalidInstance(format!(
+                    "Undefined variable ID is used: {id:?}"
+                ))
+                .context(message, "objective"));
+            }
+        }
+
+        let constraint_collection = self
+            .regular_constraints
+            .map(|value| value.parse_as(&(), message, "regular_constraints"))
+            .transpose()?
+            .unwrap_or_default();
+        let indicator_constraint_collection = self
+            .indicator_constraints
+            .map(|value| value.parse_as(&(), message, "indicator_constraints"))
+            .transpose()?
+            .unwrap_or_default();
+        let one_hot_constraint_collection = self
+            .one_hot_constraints
+            .map(|value| value.parse_as(&(), message, "one_hot_constraints"))
+            .transpose()?
+            .unwrap_or_default();
+        let sos1_constraint_collection = self
+            .sos1_constraints
+            .map(|value| value.parse_as(&(), message, "sos1_constraints"))
+            .transpose()?
+            .unwrap_or_default();
+        validate_instance_special_features(
+            &required_features,
+            &indicator_constraint_collection,
+            &one_hot_constraint_collection,
+            &sos1_constraint_collection,
+            message,
+        )?;
+
+        validate_created_constraint_references(
+            &constraint_collection,
+            &all_variable_ids,
+            message,
+            "regular_constraints",
+        )?;
+        validate_created_constraint_references(
+            &indicator_constraint_collection,
+            &all_variable_ids,
+            message,
+            "indicator_constraints",
+        )?;
+        validate_created_constraint_references(
+            &one_hot_constraint_collection,
+            &all_variable_ids,
+            message,
+            "one_hot_constraints",
+        )?;
+        validate_created_constraint_references(
+            &sos1_constraint_collection,
+            &all_variable_ids,
+            message,
+            "sos1_constraints",
+        )?;
+
+        validate_structural_special_constraints(
+            &decision_variables,
+            Some(&parameter_ids),
+            &indicator_constraint_collection,
+            &one_hot_constraint_collection,
+            &sos1_constraint_collection,
+            message,
+        )?;
+
+        let named_functions = self
+            .named_functions
+            .map(|value| value.parse_as(&(), message, "named_functions"))
+            .transpose()?
+            .unwrap_or_default();
+        for named_function in named_functions.values() {
+            for id in named_function.function.required_ids() {
+                if !all_variable_ids.contains(&id) {
+                    return Err(RawParseError::InvalidInstance(format!(
+                        "Undefined variable ID is used: {id:?}"
+                    ))
+                    .context(message, "named_functions"));
+                }
+            }
+        }
+
+        let decision_variable_dependency =
+            parse_v2_decision_variable_dependency(self.decision_variable_dependency, message)?;
+        for id in decision_variable_dependency.keys() {
+            if !decision_variable_ids.contains(&id) {
+                return Err(RawParseError::InvalidInstance(format!(
+                    "Variable ID {id:?} in decision_variable_dependency is not in decision_variables"
+                ))
+                .context(message, "decision_variable_dependency"));
+            }
+        }
+        for id in decision_variable_dependency.required_ids() {
+            if !all_variable_ids.contains(&id) {
+                return Err(RawParseError::InvalidInstance(format!(
+                    "Undefined variable ID is used in decision_variable_dependency: {id:?}"
+                ))
+                .context(message, "decision_variable_dependency"));
+            }
+        }
+
+        let mut used = objective.required_ids();
+        used.extend(active_used_ids_from_created_collection(
+            &constraint_collection,
+        ));
+        used.extend(active_used_ids_from_created_collection(
+            &indicator_constraint_collection,
+        ));
+        used.extend(active_used_ids_from_created_collection(
+            &one_hot_constraint_collection,
+        ));
+        used.extend(active_used_ids_from_created_collection(
+            &sos1_constraint_collection,
+        ));
+        validate_fixed_dependent_partition_from_sets(
+            &used,
+            decision_variables.fixed_values(),
+            &decision_variable_dependency,
+            message,
+        )?;
+
+        Ok(ParametricInstance {
+            sense,
+            objective,
+            decision_variables,
+            parameters,
+            constraint_collection,
+            indicator_constraint_collection,
+            one_hot_constraint_collection,
+            sos1_constraint_collection,
+            named_functions,
+            decision_variable_dependency,
+            description: self.description,
+            annotations,
+        })
+    }
+}
+
+impl TryFrom<v2::ParametricInstance> for ParametricInstance {
+    type Error = ParseError;
+
+    fn try_from(value: v2::ParametricInstance) -> Result<Self, Self::Error> {
+        value.parse(&())
     }
 }
 

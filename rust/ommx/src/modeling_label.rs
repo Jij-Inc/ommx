@@ -208,6 +208,17 @@ impl From<ModelingLabel> for crate::v2::ModelingLabel {
     }
 }
 
+impl From<crate::v2::ModelingLabel> for ModelingLabel {
+    fn from(label: crate::v2::ModelingLabel) -> Self {
+        Self {
+            name: label.name,
+            subscripts: label.subscripts,
+            parameters: label.parameters.into_iter().collect(),
+            description: label.description,
+        }
+    }
+}
+
 pub(crate) fn modeling_label_store_to_v2_map<ID: IDType>(
     store: &ModelingLabelStore<ID>,
 ) -> BTreeMap<u64, crate::v2::ModelingLabel> {
@@ -216,6 +227,16 @@ pub(crate) fn modeling_label_store_to_v2_map<ID: IDType>(
         .into_iter()
         .map(|id| (id.into(), store.collect_for(id).into()))
         .collect()
+}
+
+pub(crate) fn modeling_label_store_from_v2_map<ID: IDType>(
+    labels: BTreeMap<u64, crate::v2::ModelingLabel>,
+) -> ModelingLabelStore<ID> {
+    let mut store = ModelingLabelStore::default();
+    for (id, label) in labels {
+        store.insert(ID::from(id), label.into());
+    }
+    store
 }
 
 #[cfg(test)]

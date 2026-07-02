@@ -1,7 +1,7 @@
 use std::collections::{BTreeSet, HashMap};
 
 use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
-use crate::{ModelingLabel, ModelingLabelStore, VariableID};
+use crate::{ModelingLabel, ModelingLabelStore, Parse, ParseError, RawParseError, VariableID};
 
 /// Modeling label for parametric-instance parameters.
 pub type ParameterLabel = ModelingLabel;
@@ -188,6 +188,19 @@ impl From<ParameterTable> for crate::v2::ParameterTable {
             ids: table.ids.into_iter().map(|id| id.into_inner()).collect(),
             labels: crate::modeling_label::modeling_label_store_to_v2_map(&table.labels),
         }
+    }
+}
+
+impl Parse for crate::v2::ParameterTable {
+    type Output = ParameterTable;
+    type Context = ();
+
+    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+        let message = "ommx.v2.ParameterTable";
+        let ids = self.ids.into_iter().map(VariableID::from).collect();
+        let labels = crate::modeling_label::modeling_label_store_from_v2_map(self.labels);
+        ParameterTable::new(ids, labels)
+            .map_err(|e| RawParseError::InvalidInstance(e.to_string()).context(message, "ids"))
     }
 }
 

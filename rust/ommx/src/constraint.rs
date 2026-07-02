@@ -7,11 +7,13 @@ mod parse;
 mod reduce_binary_power;
 pub(crate) mod stage;
 
-pub(crate) use context_store::constraint_context_store_to_v2_map;
 pub use context_store::ConstraintContextStore;
+pub(crate) use context_store::{
+    constraint_context_store_from_v2_map, constraint_context_store_to_v2_map,
+};
 
 use crate::logical_memory::LogicalMemoryProfile;
-use crate::{Function, SampleID, VariableID};
+use crate::{Function, Parse, ParseError, RawParseError, SampleID, VariableID};
 pub use arbitrary::*;
 use derive_more::{Deref, From};
 use fnv::FnvHashSet;
@@ -118,11 +120,60 @@ impl From<Provenance> for crate::v2::Provenance {
     }
 }
 
+impl Parse for crate::v2::Provenance {
+    type Output = Provenance;
+    type Context = ();
+
+    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+        use crate::v2::provenance::Source;
+
+        match self.source.ok_or(RawParseError::MissingField {
+            message: "ommx.v2.Provenance",
+            field: "source",
+        })? {
+            Source::IndicatorConstraintId(id) => Ok(Provenance::IndicatorConstraint(
+                crate::IndicatorConstraintID::from(id),
+            )),
+            Source::OneHotConstraintId(id) => Ok(Provenance::OneHotConstraint(
+                crate::OneHotConstraintID::from(id),
+            )),
+            Source::Sos1ConstraintId(id) => Ok(Provenance::Sos1Constraint(
+                crate::Sos1ConstraintID::from(id),
+            )),
+        }
+    }
+}
+
 impl From<ConstraintContext> for crate::v2::ConstraintContext {
     fn from(context: ConstraintContext) -> Self {
         Self {
             label: Some(context.label.into()),
             provenance: context.provenance.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+impl Parse for crate::v2::ConstraintContext {
+    type Output = ConstraintContext;
+    type Context = ();
+
+    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+        let mut provenance = Vec::with_capacity(self.provenance.len());
+        for value in self.provenance {
+            provenance.push(value.parse_as(&(), "ommx.v2.ConstraintContext", "provenance")?);
+        }
+        Ok(ConstraintContext {
+            label: self.label.map(Into::into).unwrap_or_default(),
+            provenance,
+        })
+    }
+}
+
+impl From<crate::v2::RemovedReason> for RemovedReason {
+    fn from(reason: crate::v2::RemovedReason) -> Self {
+        Self {
+            reason: reason.reason,
+            parameters: reason.parameters.into_iter().collect(),
         }
     }
 }
@@ -184,6 +235,33 @@ impl From<Constraint<Created>> for crate::v2::RegularConstraint {
     }
 }
 
+impl Parse for crate::v2::RegularConstraint {
+    type Output = Constraint<Created>;
+    type Context = ();
+
+    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+        let message = "ommx.v2.RegularConstraint";
+        let equality = crate::v1::Equality::try_from(self.equality)
+            .map_err(|_| RawParseError::UnknownEnumValue {
+                enum_name: "ommx.v1.Equality",
+                value: self.equality,
+            })
+            .map_err(|e| ParseError::from(e).context(message, "equality"))?
+            .parse_as(&(), message, "equality")?;
+        let function = self
+            .function
+            .ok_or(RawParseError::MissingField {
+                message,
+                field: "function",
+            })?
+            .parse_as(&(), message, "function")?;
+        Ok(Constraint {
+            equality,
+            stage: CreatedData { function },
+        })
+    }
+}
+
 impl std::fmt::Display for Constraint<Created> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let equality_symbol = match self.equality {
@@ -217,6 +295,35 @@ impl From<EvaluatedConstraint> for crate::v2::EvaluatedRegularConstraint {
                 .collect(),
             dual_variable: constraint.stage.dual_variable,
         }
+    }
+}
+
+impl Parse for crate::v2::EvaluatedRegularConstraint {
+    type Output = EvaluatedConstraint;
+    type Context = ();
+
+    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+        let message = "ommx.v2.EvaluatedRegularConstraint";
+        let equality = crate::v1::Equality::try_from(self.equality)
+            .map_err(|_| RawParseError::UnknownEnumValue {
+                enum_name: "ommx.v1.Equality",
+                value: self.equality,
+            })
+            .map_err(|e| ParseError::from(e).context(message, "equality"))?
+            .parse_as(&(), message, "equality")?;
+        Ok(Constraint {
+            equality,
+            stage: EvaluatedData {
+                evaluated_value: self.evaluated_value,
+                feasible: self.feasible,
+                used_decision_variable_ids: crate::v2_io::variable_id_set_from_v2(
+                    self.used_decision_variable_ids,
+                    message,
+                    "used_decision_variable_ids",
+                )?,
+                dual_variable: self.dual_variable,
+            },
+        })
     }
 }
 
@@ -268,6 +375,46 @@ impl From<SampledConstraint> for crate::v2::SampledRegularConstraint {
                 .collect(),
             dual_variables: constraint.stage.dual_variables.map(Into::into),
         }
+    }
+}
+
+impl Parse for crate::v2::SampledRegularConstraint {
+    type Output = SampledConstraint;
+    type Context = ();
+
+    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+        let message = "ommx.v2.SampledRegularConstraint";
+        let equality = crate::v1::Equality::try_from(self.equality)
+            .map_err(|_| RawParseError::UnknownEnumValue {
+                enum_name: "ommx.v1.Equality",
+                value: self.equality,
+            })
+            .map_err(|e| ParseError::from(e).context(message, "equality"))?
+            .parse_as(&(), message, "equality")?;
+        let evaluated_values = self
+            .evaluated_values
+            .ok_or(RawParseError::MissingField {
+                message,
+                field: "evaluated_values",
+            })?
+            .parse_as(&(), message, "evaluated_values")?;
+        let dual_variables = self
+            .dual_variables
+            .map(|values| values.parse_as(&(), message, "dual_variables"))
+            .transpose()?;
+        Ok(Constraint {
+            equality,
+            stage: SampledData {
+                evaluated_values,
+                feasible: crate::v2_io::sample_bool_map_from_v2(self.feasible),
+                used_decision_variable_ids: crate::v2_io::variable_id_set_from_v2(
+                    self.used_decision_variable_ids,
+                    message,
+                    "used_decision_variable_ids",
+                )?,
+                dual_variables,
+            },
+        })
     }
 }
 

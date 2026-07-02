@@ -17,6 +17,11 @@ impl SampleSet {
         let inner = v1::SampleSet::decode(bytes)?;
         Ok(Parse::parse(inner, &())?)
     }
+
+    pub fn from_v2_bytes(bytes: &[u8]) -> Result<Self> {
+        let inner = v2::SampleSet::decode(bytes)?;
+        Ok(Parse::parse(inner, &())?)
+    }
 }
 
 impl From<SampleSet> for v2::SampleSet {

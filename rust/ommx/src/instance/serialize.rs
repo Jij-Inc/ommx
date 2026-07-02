@@ -17,6 +17,11 @@ impl Instance {
         let inner = v1::Instance::decode(bytes)?;
         Ok(Parse::parse(inner, &())?)
     }
+
+    pub fn from_v2_bytes(bytes: &[u8]) -> Result<Self> {
+        let inner = v2::Instance::decode(bytes)?;
+        Ok(Parse::parse(inner, &())?)
+    }
 }
 
 impl ParametricInstance {
@@ -32,6 +37,11 @@ impl ParametricInstance {
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
         let inner = v1::ParametricInstance::decode(bytes)?;
+        Ok(Parse::parse(inner, &())?)
+    }
+
+    pub fn from_v2_bytes(bytes: &[u8]) -> Result<Self> {
+        let inner = v2::ParametricInstance::decode(bytes)?;
         Ok(Parse::parse(inner, &())?)
     }
 }
@@ -231,6 +241,49 @@ mod tests {
     }
 
     #[test]
+    fn v2_instance_deserializes_special_constraint_collections() {
+        let instance = instance_with_special_constraints();
+        let restored = Instance::from_v2_bytes(&instance.to_v2_bytes()).unwrap();
+
+        assert_eq!(restored, instance);
+        assert_eq!(
+            restored
+                .indicator_constraint_context()
+                .name(IndicatorConstraintID::from(10)),
+            Some("indicator")
+        );
+        assert_eq!(
+            restored
+                .one_hot_constraint_context()
+                .name(OneHotConstraintID::from(20)),
+            Some("one_hot")
+        );
+        assert_eq!(
+            restored
+                .sos1_constraint_context()
+                .name(Sos1ConstraintID::from(30)),
+            Some("sos1")
+        );
+    }
+
+    #[test]
+    fn v2_instance_deserialization_rejects_missing_required_feature() {
+        let mut proto = v2::Instance::from(instance_with_special_constraints());
+        proto.required_features = vec![
+            v2::Feature::ConstraintOneHot as i32,
+            v2::Feature::ConstraintSos1 as i32,
+        ];
+
+        let err = Instance::try_from(proto).unwrap_err();
+
+        assert!(
+            err.to_string().contains("required_features")
+                && err.to_string().contains("ConstraintIndicator"),
+            "unexpected error: {err}",
+        );
+    }
+
+    #[test]
     fn v2_solution_serializes_evaluated_special_constraint_collections() {
         let instance = instance_with_special_constraints();
         let solution = instance
@@ -263,6 +316,68 @@ mod tests {
     }
 
     #[test]
+    fn v2_solution_deserializes_evaluated_special_constraint_collections() {
+        let instance = instance_with_special_constraints();
+        let solution = instance
+            .evaluate(
+                &v1::State {
+                    entries: HashMap::from([(1, 1.0), (2, 0.0)]),
+                },
+                ATol::default(),
+            )
+            .unwrap();
+
+        let restored = crate::Solution::from_v2_bytes(&solution.to_v2_bytes()).unwrap();
+
+        assert_eq!(restored, solution);
+        assert_eq!(
+            restored
+                .evaluated_indicator_constraints()
+                .context()
+                .name(IndicatorConstraintID::from(10)),
+            Some("indicator")
+        );
+        assert!(restored
+            .evaluated_one_hot_constraints()
+            .contains_key(&OneHotConstraintID::from(20)));
+        assert!(restored
+            .evaluated_sos1_constraints()
+            .contains_key(&Sos1ConstraintID::from(30)));
+    }
+
+    #[test]
+    fn v2_solution_deserialization_rejects_unknown_structural_special_variable() {
+        let instance = instance_with_special_constraints();
+        let solution = instance
+            .evaluate(
+                &v1::State {
+                    entries: HashMap::from([(1, 1.0), (2, 0.0)]),
+                },
+                ATol::default(),
+            )
+            .unwrap();
+        let mut proto = v2::Solution::from(solution);
+        let one_hot = proto
+            .evaluated_one_hot_constraints
+            .as_mut()
+            .unwrap()
+            .entries
+            .get_mut(&20)
+            .unwrap();
+        one_hot.variables = vec![999];
+        one_hot.active_variable = None;
+        one_hot.used_decision_variable_ids.clear();
+
+        let err = crate::Solution::try_from(proto).unwrap_err();
+
+        assert!(
+            err.to_string().contains("One-hot variable")
+                && err.to_string().contains("decision_variables"),
+            "unexpected error: {err}",
+        );
+    }
+
+    #[test]
     fn v2_sample_set_serializes_sampled_special_constraint_collections() {
         let instance = instance_with_special_constraints();
         let samples = Sampled::from(v1::State {
@@ -290,6 +405,54 @@ mod tests {
             .unwrap()
             .entries
             .contains_key(&30));
+    }
+
+    #[test]
+    fn v2_sample_set_deserializes_sampled_special_constraint_collections() {
+        let instance = instance_with_special_constraints();
+        let samples = Sampled::from(v1::State {
+            entries: HashMap::from([(1, 1.0), (2, 0.0)]),
+        });
+        let sample_set = instance
+            .evaluate_samples(&samples, ATol::default())
+            .unwrap();
+
+        let restored = crate::SampleSet::from_v2_bytes(&sample_set.to_v2_bytes()).unwrap();
+
+        assert_eq!(restored.feasible(), sample_set.feasible());
+        assert_eq!(restored.feasible_relaxed(), sample_set.feasible_relaxed());
+        assert_eq!(restored.indicator_constraints().len(), 1);
+        assert_eq!(restored.one_hot_constraints().len(), 1);
+        assert_eq!(restored.sos1_constraints().len(), 1);
+        assert_eq!(
+            restored
+                .indicator_constraints()
+                .context()
+                .name(IndicatorConstraintID::from(10)),
+            Some("indicator")
+        );
+    }
+
+    #[test]
+    fn v2_sample_set_deserialization_rejects_missing_feasible_sample_id() {
+        let instance = instance_with_special_constraints();
+        let samples = Sampled::from(v1::State {
+            entries: HashMap::from([(1, 1.0), (2, 0.0)]),
+        });
+        let sample_set = instance
+            .evaluate_samples(&samples, ATol::default())
+            .unwrap();
+        let mut proto = v2::SampleSet::from(sample_set);
+        let sample_id = *proto.feasible.keys().next().unwrap();
+        proto.feasible.remove(&sample_id);
+
+        let err = crate::SampleSet::try_from(proto).unwrap_err();
+
+        assert!(
+            err.to_string().contains("feasible")
+                && err.to_string().contains("Inconsistent sample IDs"),
+            "unexpected error: {err}",
+        );
     }
 
     #[test]
@@ -345,5 +508,32 @@ mod tests {
                 .and_then(|label| label.name.as_deref()),
             Some("p")
         );
+    }
+
+    #[test]
+    fn v2_parametric_instance_deserializes_parameter_table() {
+        let decision_variable_id = VariableID::from(1);
+        let parameter_id = VariableID::from(100);
+        let mut parameter_labels = ParameterLabelStore::default();
+        parameter_labels.set_name(parameter_id, "p");
+
+        let instance = ParametricInstance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::from([(
+                decision_variable_id,
+                DecisionVariable::binary(),
+            )]))
+            .parameters(
+                ParameterTable::new(BTreeSet::from([parameter_id]), parameter_labels).unwrap(),
+            )
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap();
+
+        let restored = ParametricInstance::from_v2_bytes(&instance.to_v2_bytes()).unwrap();
+
+        assert_eq!(restored, instance);
+        assert_eq!(restored.parameters().labels().name(parameter_id), Some("p"));
     }
 }
