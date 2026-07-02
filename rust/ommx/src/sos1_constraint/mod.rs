@@ -264,6 +264,12 @@ impl Parse for crate::v2::EvaluatedSos1Constraint {
             )
             .context(message, "active_variable"));
         }
+        if active_variable.is_some() && !self.feasible {
+            return Err(crate::RawParseError::InvalidInstance(
+                "SOS1 active_variable must be unset when feasible is false".to_string(),
+            )
+            .context(message, "active_variable"));
+        }
         Ok(Sos1Constraint {
             variables,
             stage: Sos1EvaluatedData {
@@ -342,10 +348,21 @@ impl Parse for crate::v2::SampledSos1Constraint {
             )
             .context(message, "active_variable"));
         }
+        let feasible = crate::v2_io::sample_bool_map_from_v2(self.feasible);
+        for (sample_id, active_variable) in &active_variable {
+            if active_variable.is_some()
+                && feasible.get(sample_id).is_some_and(|feasible| !feasible)
+            {
+                return Err(crate::RawParseError::InvalidInstance(
+                    "SOS1 active_variable must be unset when feasible is false".to_string(),
+                )
+                .context(message, "active_variable"));
+            }
+        }
         Ok(Sos1Constraint {
             variables,
             stage: Sos1SampledData {
-                feasible: crate::v2_io::sample_bool_map_from_v2(self.feasible),
+                feasible,
                 active_variable,
                 used_decision_variable_ids: crate::v2_io::variable_id_set_from_v2(
                     self.used_decision_variable_ids,
@@ -387,6 +404,47 @@ mod tests {
     fn sos1_constraint_rejects_empty_variable_set() {
         let err = Sos1Constraint::new(BTreeSet::new()).unwrap_err();
         assert!(err.to_string().contains("at least one variable"));
+    }
+
+    #[test]
+    fn parse_v2_evaluated_rejects_infeasible_active_variable() {
+        let proto = crate::v2::EvaluatedSos1Constraint {
+            variables: vec![1],
+            feasible: false,
+            active_variable: Some(1),
+            used_decision_variable_ids: vec![],
+        };
+
+        let err = proto.parse(&ATol::default()).unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("active_variable must be unset when feasible is false"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn parse_v2_sampled_rejects_infeasible_active_variable() {
+        let proto = crate::v2::SampledSos1Constraint {
+            variables: vec![1],
+            feasible: BTreeMap::from([(0, false)]),
+            active_variable: BTreeMap::from([(
+                0,
+                crate::v2::SampledActiveVariable {
+                    variable_id: Some(1),
+                },
+            )]),
+            used_decision_variable_ids: vec![],
+        };
+
+        let err = proto.parse(&ATol::default()).unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("active_variable must be unset when feasible is false"),
+            "unexpected error: {err}"
+        );
     }
 
     #[test]
