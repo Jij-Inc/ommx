@@ -1,7 +1,7 @@
 use std::collections::{BTreeSet, HashMap};
 
 use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
-use crate::{ModelingLabel, ModelingLabelStore, VariableID};
+use crate::{ModelingLabel, ModelingLabelStore, Parse, ParseError, RawParseError, VariableID};
 
 /// Modeling label for parametric-instance parameters.
 pub type ParameterLabel = ModelingLabel;
@@ -186,8 +186,30 @@ impl From<ParameterTable> for crate::v2::ParameterTable {
     fn from(table: ParameterTable) -> Self {
         Self {
             ids: table.ids.into_iter().map(|id| id.into_inner()).collect(),
-            labels: crate::modeling_label::modeling_label_store_to_v2_map(&table.labels),
+            labels: crate::v2_io::modeling_label_store_to_v2_map(&table.labels),
         }
+    }
+}
+
+impl Parse for crate::v2::ParameterTable {
+    type Output = ParameterTable;
+    type Context = ();
+
+    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+        let message = "ommx.v2.ParameterTable";
+        let mut ids = BTreeSet::new();
+        for id in self.ids {
+            let id = VariableID::from(id);
+            if !ids.insert(id) {
+                return Err(RawParseError::InvalidInstance(format!(
+                    "Duplicated parameter ID is found in ommx.v2.ParameterTable: {id:?}",
+                ))
+                .context(message, "ids"));
+            }
+        }
+        let labels = crate::v2_io::modeling_label_store_from_v2_map(self.labels);
+        ParameterTable::new(ids, labels)
+            .map_err(|e| RawParseError::InvalidInstance(e.to_string()).context(message, "labels"))
     }
 }
 
@@ -289,6 +311,45 @@ mod tests {
         assert!(
             err.to_string().contains("Duplicated parameter ID")
                 && err.to_string().contains("VariableID(100)"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn rejects_duplicate_v2_parameter_ids() {
+        let err = crate::v2::ParameterTable {
+            ids: vec![100, 100],
+            labels: Default::default(),
+        }
+        .parse(&())
+        .unwrap_err();
+
+        assert!(
+            err.to_string().contains("Duplicated parameter ID")
+                && err.to_string().contains("VariableID(100)"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn parse_v2_orphan_label_reports_labels_field() {
+        let err = crate::v2::ParameterTable {
+            ids: vec![],
+            labels: [(
+                100,
+                crate::v2::ModelingLabel {
+                    name: Some("orphan".to_string()),
+                    ..Default::default()
+                },
+            )]
+            .into_iter()
+            .collect(),
+        }
+        .parse(&())
+        .unwrap_err();
+
+        assert!(
+            err.to_string().contains("ommx.v2.ParameterTable[labels]"),
             "unexpected error: {err}"
         );
     }

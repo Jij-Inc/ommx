@@ -9,7 +9,7 @@ use getset::*;
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::logical_memory::LogicalMemoryProfile;
-use crate::{Function, SampleID, Sampled, VariableIDSet};
+use crate::{Function, Parse, ParseError, RawParseError, SampleID, Sampled, VariableIDSet};
 pub use arbitrary::*;
 pub use label_store::NamedFunctionLabelStore;
 
@@ -419,6 +419,24 @@ impl From<NamedFunction> for crate::v2::NamedFunction {
     }
 }
 
+impl Parse for crate::v2::NamedFunction {
+    type Output = NamedFunction;
+    type Context = ();
+
+    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+        let message = "ommx.v2.NamedFunction";
+        Ok(NamedFunction {
+            function: self
+                .function
+                .ok_or(RawParseError::MissingField {
+                    message,
+                    field: "function",
+                })?
+                .parse_as(&(), message, "function")?,
+        })
+    }
+}
+
 impl From<EvaluatedNamedFunction> for crate::v2::EvaluatedNamedFunction {
     fn from(value: EvaluatedNamedFunction) -> Self {
         Self {
@@ -429,6 +447,24 @@ impl From<EvaluatedNamedFunction> for crate::v2::EvaluatedNamedFunction {
                 .map(|id| id.into_inner())
                 .collect(),
         }
+    }
+}
+
+impl Parse for crate::v2::EvaluatedNamedFunction {
+    type Output = EvaluatedNamedFunction;
+    type Context = ();
+
+    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+        let message = "ommx.v2.EvaluatedNamedFunction";
+        crate::v2_io::validate_finite_f64(self.evaluated_value, message, "evaluated_value")?;
+        Ok(EvaluatedNamedFunction {
+            evaluated_value: self.evaluated_value,
+            used_decision_variable_ids: crate::v2_io::variable_id_set_from_v2(
+                self.used_decision_variable_ids,
+                message,
+                "used_decision_variable_ids",
+            )?,
+        })
     }
 }
 
@@ -445,12 +481,46 @@ impl From<SampledNamedFunction> for crate::v2::SampledNamedFunction {
     }
 }
 
+impl Parse for crate::v2::SampledNamedFunction {
+    type Output = SampledNamedFunction;
+    type Context = ();
+
+    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+        let message = "ommx.v2.SampledNamedFunction";
+        let evaluated_values = self
+            .evaluated_values
+            .ok_or(RawParseError::MissingField {
+                message,
+                field: "evaluated_values",
+            })?
+            .parse_as(&(), message, "evaluated_values")?;
+        crate::v2_io::validate_sampled_f64_values(&evaluated_values, message, "evaluated_values")?;
+        Ok(SampledNamedFunction {
+            evaluated_values,
+            used_decision_variable_ids: crate::v2_io::variable_id_set_from_v2(
+                self.used_decision_variable_ids,
+                message,
+                "used_decision_variable_ids",
+            )?,
+        })
+    }
+}
+
 impl From<NamedFunctionTable<NamedFunction>> for crate::v2::NamedFunctionTable {
     fn from(table: NamedFunctionTable<NamedFunction>) -> Self {
         Self {
             entries: named_function_entries_to_v2_map(table.entries),
-            labels: crate::modeling_label::modeling_label_store_to_v2_map(&table.labels),
+            labels: crate::v2_io::modeling_label_store_to_v2_map(&table.labels),
         }
+    }
+}
+
+impl Parse for crate::v2::NamedFunctionTable {
+    type Output = NamedFunctionTable<NamedFunction>;
+    type Context = ();
+
+    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+        parse_v2_named_function_table(self.entries, self.labels, "ommx.v2.NamedFunctionTable")
     }
 }
 
@@ -458,8 +528,21 @@ impl From<NamedFunctionTable<EvaluatedNamedFunction>> for crate::v2::EvaluatedNa
     fn from(table: NamedFunctionTable<EvaluatedNamedFunction>) -> Self {
         Self {
             entries: named_function_entries_to_v2_map(table.entries),
-            labels: crate::modeling_label::modeling_label_store_to_v2_map(&table.labels),
+            labels: crate::v2_io::modeling_label_store_to_v2_map(&table.labels),
         }
+    }
+}
+
+impl Parse for crate::v2::EvaluatedNamedFunctionTable {
+    type Output = NamedFunctionTable<EvaluatedNamedFunction>;
+    type Context = ();
+
+    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+        parse_v2_named_function_table(
+            self.entries,
+            self.labels,
+            "ommx.v2.EvaluatedNamedFunctionTable",
+        )
     }
 }
 
@@ -467,8 +550,21 @@ impl From<NamedFunctionTable<SampledNamedFunction>> for crate::v2::SampledNamedF
     fn from(table: NamedFunctionTable<SampledNamedFunction>) -> Self {
         Self {
             entries: named_function_entries_to_v2_map(table.entries),
-            labels: crate::modeling_label::modeling_label_store_to_v2_map(&table.labels),
+            labels: crate::v2_io::modeling_label_store_to_v2_map(&table.labels),
         }
+    }
+}
+
+impl Parse for crate::v2::SampledNamedFunctionTable {
+    type Output = NamedFunctionTable<SampledNamedFunction>;
+    type Context = ();
+
+    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+        parse_v2_named_function_table(
+            self.entries,
+            self.labels,
+            "ommx.v2.SampledNamedFunctionTable",
+        )
     }
 }
 
@@ -482,6 +578,28 @@ where
         .into_iter()
         .map(|(id, row)| (id.into_inner(), row.into()))
         .collect()
+}
+
+fn parse_v2_named_function_table<T, V2>(
+    entries: BTreeMap<u64, V2>,
+    labels: BTreeMap<u64, crate::v2::ModelingLabel>,
+    message: &'static str,
+) -> Result<NamedFunctionTable<T>, ParseError>
+where
+    V2: Parse<Output = T, Context = ()>,
+{
+    let entries = entries
+        .into_iter()
+        .map(|(id, row)| {
+            Ok((
+                NamedFunctionID::from(id),
+                row.parse_as(&(), message, "entries")?,
+            ))
+        })
+        .collect::<Result<BTreeMap<_, _>, ParseError>>()?;
+    let labels = crate::v2_io::modeling_label_store_from_v2_map(labels);
+    NamedFunctionTable::new(entries, labels)
+        .map_err(|e| RawParseError::InvalidInstance(e.to_string()).context(message, "labels"))
 }
 
 #[cfg(test)]
@@ -544,5 +662,40 @@ mod table_tests {
         assert!(err.to_string().contains("Duplicate named function ID"));
         assert_eq!(table.get(&id), Some(&row));
         assert_eq!(table.labels().name(id), Some("cost"));
+    }
+
+    #[test]
+    fn parse_v2_evaluated_rejects_non_finite_value() {
+        let proto = crate::v2::EvaluatedNamedFunction {
+            evaluated_value: f64::INFINITY,
+            used_decision_variable_ids: vec![],
+        };
+
+        let err = proto.parse(&()).unwrap_err();
+
+        assert!(
+            err.to_string().contains("evaluated_value must be finite"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn parse_v2_sampled_rejects_non_finite_values() {
+        let proto = crate::v2::SampledNamedFunction {
+            evaluated_values: Some(crate::v1::SampledValues {
+                entries: vec![crate::v1::sampled_values::SampledValuesEntry {
+                    ids: vec![0],
+                    value: f64::INFINITY,
+                }],
+            }),
+            used_decision_variable_ids: vec![],
+        };
+
+        let err = proto.parse(&()).unwrap_err();
+
+        assert!(
+            err.to_string().contains("evaluated_values must be finite"),
+            "unexpected error: {err}"
+        );
     }
 }

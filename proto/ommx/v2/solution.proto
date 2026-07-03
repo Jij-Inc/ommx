@@ -26,4 +26,7 @@ message Solution {
   EvaluatedIndicatorConstraintCollection evaluated_indicator_constraints = 13;
   EvaluatedOneHotConstraintCollection evaluated_one_hot_constraints = 14;
   EvaluatedSos1ConstraintCollection evaluated_sos1_constraints = 15;
+  // Absolute tolerance used to compute and validate `feasible`,
+  // `feasible_relaxed`, and per-constraint feasibility columns.
+  optional double feasibility_atol = 16;
 }
