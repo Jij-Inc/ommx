@@ -833,6 +833,14 @@ macro_rules! impl_parse_v2_created_collection {
                 )?;
                 let context =
                     constraint_context_store_from_v2_map(self.contexts, message, "contexts")?;
+                let owned_ids = active
+                    .keys()
+                    .chain(removed.keys())
+                    .copied()
+                    .collect::<BTreeSet<_>>();
+                validate_context_reference_ids(&context, &owned_ids).map_err(|e| {
+                    RawParseError::InvalidInstance(e.to_string()).context(message, "contexts")
+                })?;
                 ConstraintCollection::with_context(active, removed, context).map_err(|e| {
                     RawParseError::InvalidInstance(e.to_string()).context(message, "active")
                 })
@@ -864,8 +872,13 @@ macro_rules! impl_parse_v2_evaluated_collection {
                     parse_v2_removed_reasons(self.removed_reasons, message, "removed_reasons")?;
                 let context =
                     constraint_context_store_from_v2_map(self.contexts, message, "contexts")?;
+                let owned_ids = entries.keys().copied().collect::<BTreeSet<_>>();
+                validate_context_reference_ids(&context, &owned_ids).map_err(|e| {
+                    RawParseError::InvalidInstance(e.to_string()).context(message, "contexts")
+                })?;
                 EvaluatedCollection::with_context(entries, removed_reasons, context).map_err(|e| {
-                    RawParseError::InvalidInstance(e.to_string()).context(message, "entries")
+                    RawParseError::InvalidInstance(e.to_string())
+                        .context(message, "removed_reasons")
                 })
             }
         }
@@ -895,8 +908,13 @@ macro_rules! impl_parse_v2_sampled_collection {
                     parse_v2_removed_reasons(self.removed_reasons, message, "removed_reasons")?;
                 let context =
                     constraint_context_store_from_v2_map(self.contexts, message, "contexts")?;
+                let owned_ids = entries.keys().copied().collect::<BTreeSet<_>>();
+                validate_context_reference_ids(&context, &owned_ids).map_err(|e| {
+                    RawParseError::InvalidInstance(e.to_string()).context(message, "contexts")
+                })?;
                 SampledCollection::with_context(entries, removed_reasons, context).map_err(|e| {
-                    RawParseError::InvalidInstance(e.to_string()).context(message, "entries")
+                    RawParseError::InvalidInstance(e.to_string())
+                        .context(message, "removed_reasons")
                 })
             }
         }
@@ -1857,5 +1875,85 @@ mod tests {
         assert!(err
             .to_string()
             .contains("Removed reason references unknown constraint ID"));
+    }
+
+    #[test]
+    fn parse_v2_created_collection_orphan_context_reports_contexts_field() {
+        let err = crate::v2::RegularConstraintCollection {
+            contexts: [(
+                1,
+                crate::v2::ConstraintContext {
+                    label: Some(crate::v2::ModelingLabel {
+                        name: Some("orphan".to_string()),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+            )]
+            .into_iter()
+            .collect(),
+            ..Default::default()
+        }
+        .parse(&())
+        .unwrap_err();
+
+        assert!(
+            err.to_string().contains("[contexts]"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn parse_v2_evaluated_collection_orphan_context_reports_contexts_field() {
+        let atol = ATol::default();
+        let err = crate::v2::EvaluatedRegularConstraintCollection {
+            contexts: [(
+                1,
+                crate::v2::ConstraintContext {
+                    label: Some(crate::v2::ModelingLabel {
+                        name: Some("orphan".to_string()),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+            )]
+            .into_iter()
+            .collect(),
+            ..Default::default()
+        }
+        .parse(&atol)
+        .unwrap_err();
+
+        assert!(
+            err.to_string().contains("[contexts]"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn parse_v2_sampled_collection_orphan_context_reports_contexts_field() {
+        let atol = ATol::default();
+        let err = crate::v2::SampledRegularConstraintCollection {
+            contexts: [(
+                1,
+                crate::v2::ConstraintContext {
+                    label: Some(crate::v2::ModelingLabel {
+                        name: Some("orphan".to_string()),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+            )]
+            .into_iter()
+            .collect(),
+            ..Default::default()
+        }
+        .parse(&atol)
+        .unwrap_err();
+
+        assert!(
+            err.to_string().contains("[contexts]"),
+            "unexpected error: {err}"
+        );
     }
 }

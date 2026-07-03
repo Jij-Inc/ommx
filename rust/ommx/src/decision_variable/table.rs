@@ -68,17 +68,25 @@ impl DecisionVariableTableStage for Created {
         columns: &Self::Columns,
         atol: Self::TableValidationContext,
     ) -> crate::Result<()> {
-        for (id, value) in &columns.fixed_values {
-            let Some(row) = entries.get(id) else {
-                crate::bail!(
-                    { ?id },
-                    "Fixed decision-variable value references unknown decision variable ID {id:?}",
-                );
-            };
-            row.check_value_consistency(*id, *value, atol)?;
-        }
-        Ok(())
+        validate_created_fixed_values(entries, &columns.fixed_values, atol)
     }
+}
+
+fn validate_created_fixed_values(
+    entries: &BTreeMap<VariableID, DecisionVariable>,
+    fixed_values: &BTreeMap<VariableID, f64>,
+    atol: ATol,
+) -> crate::Result<()> {
+    for (id, value) in fixed_values {
+        let Some(row) = entries.get(id) else {
+            crate::bail!(
+                { ?id },
+                "Fixed decision-variable value references unknown decision variable ID {id:?}",
+            );
+        };
+        row.check_value_consistency(*id, *value, atol)?;
+    }
+    Ok(())
 }
 
 impl DecisionVariableTableStage for Evaluated {
@@ -682,8 +690,17 @@ impl Parse for crate::v2::DecisionVariableTable {
             .into_iter()
             .map(|(id, value)| (VariableID::from(id), value))
             .collect();
-        DecisionVariableTable::with_fixed_values(entries, labels, fixed_values, ATol::default())
-            .map_err(|e| RawParseError::InvalidInstance(e.to_string()).context(message, "entries"))
+        DecisionVariableTable::<Created>::validate_labels(&entries, &labels).map_err(|e| {
+            RawParseError::InvalidInstance(e.to_string()).context(message, "labels")
+        })?;
+        validate_created_fixed_values(&entries, &fixed_values, ATol::default()).map_err(|e| {
+            RawParseError::InvalidInstance(e.to_string()).context(message, "fixed_values")
+        })?;
+        Ok(DecisionVariableTable {
+            entries,
+            labels,
+            columns: CreatedDecisionVariableColumns { fixed_values },
+        })
     }
 }
 
@@ -709,7 +726,7 @@ impl Parse for crate::v2::EvaluatedDecisionVariableTable {
         }
         let labels = crate::v2_io::modeling_label_store_from_v2_map(self.labels);
         EvaluatedDecisionVariableTable::new(entries, labels)
-            .map_err(|e| RawParseError::InvalidInstance(e.to_string()).context(message, "entries"))
+            .map_err(|e| RawParseError::InvalidInstance(e.to_string()).context(message, "labels"))
     }
 }
 
@@ -735,7 +752,7 @@ impl Parse for crate::v2::SampledDecisionVariableTable {
         }
         let labels = crate::v2_io::modeling_label_store_from_v2_map(self.labels);
         SampledDecisionVariableTable::new(entries, labels)
-            .map_err(|e| RawParseError::InvalidInstance(e.to_string()).context(message, "entries"))
+            .map_err(|e| RawParseError::InvalidInstance(e.to_string()).context(message, "labels"))
     }
 }
 
@@ -1029,5 +1046,95 @@ mod tests {
         assert_eq!(variable.id, 1);
         assert_eq!(variable.name.as_deref(), Some("x"));
         assert!(rows[0].samples.is_some());
+    }
+
+    #[test]
+    fn parse_v2_definition_table_orphan_label_reports_labels_field() {
+        let err = crate::v2::DecisionVariableTable {
+            entries: BTreeMap::new(),
+            labels: [(
+                1,
+                crate::v2::ModelingLabel {
+                    name: Some("orphan".to_string()),
+                    ..Default::default()
+                },
+            )]
+            .into_iter()
+            .collect(),
+            fixed_values: BTreeMap::new(),
+        }
+        .parse(&())
+        .unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("ommx.v2.DecisionVariableTable[labels]"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn parse_v2_definition_table_orphan_fixed_value_reports_fixed_values_field() {
+        let err = crate::v2::DecisionVariableTable {
+            entries: BTreeMap::new(),
+            labels: BTreeMap::new(),
+            fixed_values: [(1, 0.0)].into_iter().collect(),
+        }
+        .parse(&())
+        .unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("ommx.v2.DecisionVariableTable[fixed_values]"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn parse_v2_evaluated_table_orphan_label_reports_labels_field() {
+        let err = crate::v2::EvaluatedDecisionVariableTable {
+            entries: BTreeMap::new(),
+            labels: [(
+                1,
+                crate::v2::ModelingLabel {
+                    name: Some("orphan".to_string()),
+                    ..Default::default()
+                },
+            )]
+            .into_iter()
+            .collect(),
+        }
+        .parse(&())
+        .unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("ommx.v2.EvaluatedDecisionVariableTable[labels]"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn parse_v2_sampled_table_orphan_label_reports_labels_field() {
+        let err = crate::v2::SampledDecisionVariableTable {
+            entries: BTreeMap::new(),
+            labels: [(
+                1,
+                crate::v2::ModelingLabel {
+                    name: Some("orphan".to_string()),
+                    ..Default::default()
+                },
+            )]
+            .into_iter()
+            .collect(),
+        }
+        .parse(&())
+        .unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("ommx.v2.SampledDecisionVariableTable[labels]"),
+            "unexpected error: {err}"
+        );
     }
 }

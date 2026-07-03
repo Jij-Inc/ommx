@@ -209,7 +209,7 @@ impl Parse for crate::v2::ParameterTable {
         }
         let labels = crate::v2_io::modeling_label_store_from_v2_map(self.labels);
         ParameterTable::new(ids, labels)
-            .map_err(|e| RawParseError::InvalidInstance(e.to_string()).context(message, "ids"))
+            .map_err(|e| RawParseError::InvalidInstance(e.to_string()).context(message, "labels"))
     }
 }
 
@@ -327,6 +327,29 @@ mod tests {
         assert!(
             err.to_string().contains("Duplicated parameter ID")
                 && err.to_string().contains("VariableID(100)"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn parse_v2_orphan_label_reports_labels_field() {
+        let err = crate::v2::ParameterTable {
+            ids: vec![],
+            labels: [(
+                100,
+                crate::v2::ModelingLabel {
+                    name: Some("orphan".to_string()),
+                    ..Default::default()
+                },
+            )]
+            .into_iter()
+            .collect(),
+        }
+        .parse(&())
+        .unwrap_err();
+
+        assert!(
+            err.to_string().contains("ommx.v2.ParameterTable[labels]"),
             "unexpected error: {err}"
         );
     }
