@@ -16,7 +16,7 @@ Constraint metadata replacement now consistently uses the `set_*` prefix. `Const
 
 ### ⚠ Protobuf-backed annotations and read-only annotation views ([#939](https://github.com/Jij-Inc/ommx/pull/939))
 
-Annotations on {class}`~ommx.Instance`, {class}`~ommx.ParametricInstance`, {class}`~ommx.Solution`, and {class}`~ommx.SampleSet` are now stored in the protobuf payload instead of living only in Python-side wrapper state or Artifact descriptors. `to_bytes()` / `from_bytes()` therefore preserve titles, licenses, solver metadata, and user extension annotations. When reading older Artifacts, descriptor-only annotations are still merged in, with protobuf metadata taking precedence if both locations define the same OMMX key.
+Annotations on {class}`~ommx.Instance`, {class}`~ommx.ParametricInstance`, {class}`~ommx.Solution`, and {class}`~ommx.SampleSet` are now stored in the protobuf payload instead of living only in Python-side wrapper state or Artifact descriptors. `to_v1_bytes()` / `from_v1_bytes()` and `to_v2_bytes()` / `from_v2_bytes()` therefore preserve titles, licenses, solver metadata, and user extension annotations. When reading older Artifacts, descriptor-only annotations are still merged in, with protobuf metadata taking precedence if both locations define the same OMMX key.
 
 The `annotations` property is now a read-only `types.MappingProxyType[str, str]` projection. Mutating `obj.annotations[...]` or assigning `obj.annotations = {...}` now raises an error; update OMMX metadata through dedicated properties and update user annotations with `add_user_annotation`, `add_user_annotations`, or `replace_annotations`.
 
@@ -27,7 +27,7 @@ instance = Instance.empty()
 instance.title = "portfolio"
 instance.add_user_annotation("owner", "analytics")
 
-restored = Instance.from_bytes(instance.to_bytes())
+restored = Instance.from_v1_bytes(instance.to_v1_bytes())
 assert restored.title == "portfolio"
 assert restored.get_user_annotation("owner") == "analytics"
 ```
@@ -67,9 +67,11 @@ Fixed decision-variable values are now owned by {class}`~ommx.Instance` / {class
 
 Use {meth}`~ommx.Instance.fixed_decision_variables` to inspect all fixed values, or `instance.attached_decision_variable(id).substituted_value` when you need the value through a variable handle. {meth}`~ommx.Instance.decision_variables_df` continues to include the `substituted_value` column, populated from the owning instance.
 
-### 🆕 `ommx.v2` bytes APIs for top-level roots ([#989](https://github.com/Jij-Inc/ommx/pull/989))
+### 🆕 Versioned protobuf bytes APIs for top-level roots ([#989](https://github.com/Jij-Inc/ommx/pull/989))
 
-{class}`~ommx.Instance`, {class}`~ommx.ParametricInstance`, {class}`~ommx.Solution`, and {class}`~ommx.SampleSet` now expose explicit `to_v2_bytes()` / `from_v2_bytes(...)` methods for the new `ommx.v2` protobuf roots. Use these methods when exchanging data that contains first-class indicator, one-hot, or SOS1 constraints. The existing `to_bytes()` / `from_bytes(...)` methods remain on the legacy `ommx.v1` protobuf path.
+{class}`~ommx.Instance`, {class}`~ommx.ParametricInstance`, {class}`~ommx.Solution`, and {class}`~ommx.SampleSet` now expose explicit versioned protobuf bytes APIs. Use `to_v1_bytes()` / `from_v1_bytes(...)` for the legacy `ommx.v1` protobuf roots, and `to_v2_bytes()` / `from_v2_bytes(...)` for the new `ommx.v2` protobuf roots. Use the v2 methods when exchanging data that contains first-class indicator, one-hot, or SOS1 constraints.
+
+The v1-only DTOs {class}`~ommx.State`, {class}`~ommx.Samples`, and {class}`~ommx.Parameters` also use `to_v1_bytes()` / `from_v1_bytes(...)` so Python byte APIs always name the protobuf version they target.
 
 Artifact and Experiment solve payloads now store these top-level roots as `ommx.v2` payloads, while still reading existing `ommx.v1` payload layers for older Artifacts.
 
@@ -392,7 +394,7 @@ Bytes serialization is removed from the following component-level types:
 - {class}`~ommx.NamedFunction`, {class}`~ommx.EvaluatedNamedFunction`, {class}`~ommx.SampledNamedFunction`
 - {class}`~ommx.DecisionVariable`, {class}`~ommx.EvaluatedDecisionVariable`, {class}`~ommx.SampledDecisionVariable`
 
-These methods originally existed to ferry values across the Python ↔ Rust boundary back when the Python SDK had its own protobuf-based wrapper layer and had to serialize on every hop. With the v3 transition to direct PyO3 re-exports the boundary disappears, so element-level bytes round-trips no longer serve a purpose, and keeping them aligned with the label/context storage redesign would only add maintenance cost. `to_bytes` / `from_bytes` remain available on the container types ({class}`~ommx.Instance`, {class}`~ommx.ParametricInstance`, {class}`~ommx.Solution`, {class}`~ommx.SampleSet`) and on the cross-evaluate DTOs ({class}`~ommx.State`, {class}`~ommx.Samples`, {class}`~ommx.Parameters`) — use those when you need to persist or exchange data on disk or over the wire.
+These methods originally existed to ferry values across the Python ↔ Rust boundary back when the Python SDK had its own protobuf-based wrapper layer and had to serialize on every hop. With the v3 transition to direct PyO3 re-exports the boundary disappears, so element-level bytes round-trips no longer serve a purpose, and keeping them aligned with the label/context storage redesign would only add maintenance cost. Versioned bytes APIs remain available on the container types ({class}`~ommx.Instance`, {class}`~ommx.ParametricInstance`, {class}`~ommx.Solution`, {class}`~ommx.SampleSet`) and on the cross-evaluate DTOs ({class}`~ommx.State`, {class}`~ommx.Samples`, {class}`~ommx.Parameters`) — use `to_v1_bytes` / `from_v1_bytes` or `to_v2_bytes` / `from_v2_bytes` where available when you need to persist or exchange data on disk or over the wire.
 
 ### 🆕 Write-through label/context wrappers: `AttachedConstraint` / `AttachedDecisionVariable` ([#849](https://github.com/Jij-Inc/ommx/pull/849), [#850](https://github.com/Jij-Inc/ommx/pull/850), [#852](https://github.com/Jij-Inc/ommx/pull/852))
 

@@ -9202,32 +9202,6 @@
               "deprecated": null
             },
             {
-              "name": "from_bytes",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "bytes",
-                      "type_": {
-                        "display": "bytes",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "Instance",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
               "name": "from_components",
               "doc": "Create an instance from its components.\n\n**Args:**\n- `sense`: Optimization sense (minimize or maximize)\n- `objective`: Objective function\n- `decision_variables`: List of decision variables\n- `constraints`: List of constraints\n- `named_functions`: Optional list of named functions\n- `description`: Optional instance description\n\n**Returns:**\nA new Instance",
               "signatures": [
@@ -9419,6 +9393,32 @@
                         "kind": "Simple",
                         "value": "None"
                       }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Instance",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "from_v1_bytes",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "bytes",
+                      "type_": {
+                        "display": "bytes",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
                     }
                   ],
                   "return_type": {
@@ -10378,22 +10378,6 @@
               "deprecated": null
             },
             {
-              "name": "to_bytes",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "bytes",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
               "name": "to_hubo",
               "doc": "Convert the instance to a HUBO format.\n\nThis is a **Driver API** for HUBO conversion calling single-purpose methods in order:\n\n1. Convert the instance to a minimization problem by {meth}`~ommx.Instance.as_minimization_problem`.\n2. Check continuous variables and raise error if exists.\n3. Convert inequality constraints\n\n  * Try {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.\n  * If failed, {meth}`~ommx.Instance.add_integer_slack_to_inequality`\n\n4. Convert to HUBO with (uniform) penalty method\n\n  * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use {meth}`~ommx.Instance.penalty_method` with the given weights.\n  * If ``uniform_penalty_weight`` is given, use {meth}`~ommx.Instance.uniform_penalty_method` with the given weight.\n  * If both are None, defaults to ``uniform_penalty_weight = 1.0``.\n\n5. Log-encode integer variables by {meth}`~ommx.Instance.log_encode`.\n6. Finally convert to HUBO format by {meth}`~ommx.Instance.as_hubo_format`.\n\nPlease see the documentation for {meth}`~ommx.Instance.to_qubo` for more information, or the\ndocumentation for each individual method for additional details. The\ndifference between this and {meth}`~ommx.Instance.to_qubo` is that this method isn't\nrestricted to quadratic or linear problems. If you want to customize the\nconversion, use the individual methods above manually.",
               "signatures": [
@@ -10561,6 +10545,22 @@
                         "children": []
                       }
                     ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "to_v1_bytes",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "bytes",
+                    "link_target": null,
+                    "children": []
                   }
                 }
               ],
@@ -15089,32 +15089,6 @@
               "deprecated": null
             },
             {
-              "name": "from_bytes",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "bytes",
-                      "type_": {
-                        "display": "bytes",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "ParametricInstance",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
               "name": "from_components",
               "doc": "",
               "signatures": [
@@ -15321,6 +15295,32 @@
                         "kind": "Simple",
                         "value": "None"
                       }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ParametricInstance",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "from_v1_bytes",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "bytes",
+                      "type_": {
+                        "display": "bytes",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
                     }
                   ],
                   "return_type": {
@@ -15729,7 +15729,7 @@
               "deprecated": null
             },
             {
-              "name": "to_bytes",
+              "name": "to_v1_bytes",
               "doc": "",
               "signatures": [
                 {
@@ -20087,7 +20087,7 @@
               "deprecated": null
             },
             {
-              "name": "from_bytes",
+              "name": "from_v1_bytes",
               "doc": "",
               "signatures": [
                 {
@@ -20463,7 +20463,7 @@
               "deprecated": null
             },
             {
-              "name": "to_bytes",
+              "name": "to_v1_bytes",
               "doc": "",
               "signatures": [
                 {
@@ -21528,7 +21528,7 @@
               "deprecated": null
             },
             {
-              "name": "from_bytes",
+              "name": "from_v1_bytes",
               "doc": "",
               "signatures": [
                 {
@@ -21628,7 +21628,7 @@
               "deprecated": null
             },
             {
-              "name": "to_bytes",
+              "name": "to_v1_bytes",
               "doc": "",
               "signatures": [
                 {
@@ -22237,7 +22237,7 @@
               "deprecated": null
             },
             {
-              "name": "from_bytes",
+              "name": "from_v1_bytes",
               "doc": "",
               "signatures": [
                 {
@@ -22622,7 +22622,7 @@
               "deprecated": null
             },
             {
-              "name": "to_bytes",
+              "name": "to_v1_bytes",
               "doc": "",
               "signatures": [
                 {
@@ -23673,7 +23673,7 @@
               "deprecated": null
             },
             {
-              "name": "from_bytes",
+              "name": "from_v1_bytes",
               "doc": "",
               "signatures": [
                 {
@@ -23826,7 +23826,7 @@
               "deprecated": null
             },
             {
-              "name": "to_bytes",
+              "name": "to_v1_bytes",
               "doc": "",
               "signatures": [
                 {

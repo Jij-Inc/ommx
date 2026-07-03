@@ -27,10 +27,10 @@ def test_create_state_from_list():
     assert len(state.entries) == 5
 
 
-def test_create_state_from_bytes_roundtrip():
-    """Test that State can be serialized and deserialized via from_bytes."""
+def test_create_state_from_v1_bytes_roundtrip():
+    """Test that State can be serialized and deserialized via from_v1_bytes."""
     state = State({1: 0.0, 2: 1.0, 3: 2.5})
-    restored = State.from_bytes(state.to_bytes())
+    restored = State.from_v1_bytes(state.to_v1_bytes())
     assert dict(state.entries) == dict(restored.entries)
 
 

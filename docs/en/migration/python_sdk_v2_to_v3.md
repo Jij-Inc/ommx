@@ -39,7 +39,7 @@ from ommx.v1.solution_pb2 import State
 from ommx import Constraint, Equality, Function, Linear, State
 ```
 
-The `.from_protobuf()` / `.to_protobuf()` bridge methods on `Constraint`, `RemovedConstraint`, `DecisionVariable`, etc. are removed along with the protobuf objects they produced. Use `from_bytes` / `to_bytes` for serialisation instead.
+The `.from_protobuf()` / `.to_protobuf()` bridge methods on `Constraint`, `RemovedConstraint`, `DecisionVariable`, etc. are removed along with the protobuf objects they produced. Use the explicit `from_v1_bytes` / `to_v1_bytes` or `from_v2_bytes` / `to_v2_bytes` APIs on whole serialization roots instead.
 
 ### 1.2 Constraint-hint helper types removed (`3.0.0a1`, [#776](https://github.com/Jij-Inc/ommx/pull/776); `3.0.0a2`, [#790](https://github.com/Jij-Inc/ommx/pull/790), [#798](https://github.com/Jij-Inc/ommx/pull/798))
 
@@ -80,7 +80,7 @@ instance.sense
 solution.optimality = Optimality.Optimal
 # constraint.id is gone — see §3
 Linear(...)                     # just call the constructor
-instance.to_bytes()             # (de)serialise whole Instance / Solution / SampleSet
+instance.to_v1_bytes()          # (de)serialise whole Instance / Solution / SampleSet as ommx.v1
 ```
 
 The dataclass-style constructors (`Instance(raw=..., annotations=...)`) are also gone — `Instance`, `Solution`, `SampleSet` are no longer Python `@dataclass`es. Construct through `Instance.from_components(...)` etc., set OMMX metadata through dedicated properties such as `instance.title`, and store user annotations with `instance.add_user_annotation(...)` or `instance.replace_annotations(...)`. The `annotations` property is a read-only projection in v3.
@@ -550,7 +550,7 @@ av = instance.attached_decision_variable(0)
 av.set_name("x_0")
 ```
 
-`AttachedX` exposes `.detach()` to materialize an independent snapshot when you need one (e.g. to send through `from_components`, ship via `to_bytes`, or hand off to code that expects the modeling type). `AttachedDecisionVariable` participates in arithmetic via `ToFunction` (only its id is consumed, no host borrow is taken), so existing expression-building code keeps working without `.detach()`.
+`AttachedX` exposes `.detach()` to materialize an independent snapshot when you need one (e.g. to send through `from_components`, ship as part of a whole root via `to_v1_bytes` / `to_v2_bytes`, or hand off to code that expects the modeling type). `AttachedDecisionVariable` participates in arithmetic via `ToFunction` (only its id is consumed, no host borrow is taken), so existing expression-building code keeps working without `.detach()`.
 
 Two `AttachedX` instances pointing at the same id observe the same state — a write through one is visible through any other and through the next `*_df` call. The host stays alive as long as any `AttachedX` references it (the handle holds a refcounted `Py<Instance>` / `Py<ParametricInstance>`); drop the handles to release the host.
 
@@ -585,8 +585,8 @@ Element-level bytes serialisation is removed from these types:
 
 These methods originally existed to ferry values across the Python ↔ Rust boundary back when the Python SDK had its own protobuf-based wrapper layer. With the v3 transition to direct PyO3 re-exports the boundary is gone, so element-level bytes round-trips no longer serve a purpose. Persist or exchange data through the **container types** instead:
 
-- `Instance.to_bytes()` / `Instance.from_bytes(...)` (and the same on `ParametricInstance`, `Solution`, `SampleSet`)
-- `State.to_bytes()` / `Samples.to_bytes()` / `Parameters.to_bytes()` for the cross-`evaluate` DTOs
+- `Instance.to_v1_bytes()` / `Instance.from_v1_bytes(...)` or `Instance.to_v2_bytes()` / `Instance.from_v2_bytes(...)` (and the same on `ParametricInstance`, `Solution`, `SampleSet`)
+- `State.to_v1_bytes()` / `Samples.to_v1_bytes()` / `Parameters.to_v1_bytes()` for the cross-`evaluate` DTOs
 
 ```python
 # Before (2.5.1 / 3.0.0a2)
@@ -603,8 +603,8 @@ instance      = Instance.from_components(
     decision_variables=[decision_variable],
     constraints={},
 )
-instance_blob = instance.to_bytes()
-restored      = Instance.from_bytes(instance_blob)
+instance_blob = instance.to_v1_bytes()
+restored      = Instance.from_v1_bytes(instance_blob)
 my_function   = restored.objective
 decision_variable = restored.decision_variables[0].detach()
 ```
@@ -782,7 +782,7 @@ expr = 2 * p + 3  # Linear
 ## Migration checklist
 
 - [ ] Replace every `from ommx.v1.*_pb2 import ...` and `from ommx.v1 import ...` SDK-domain import with `from ommx import ...`.
-- [ ] Remove all `.raw`, `from_raw(...)`, `from_protobuf(...)`, `to_protobuf(...)` usage; use `from_bytes` / `to_bytes` or direct properties.
+- [ ] Remove all `.raw`, `from_raw(...)`, `from_protobuf(...)`, `to_protobuf(...)` usage; use `from_v1_bytes` / `to_v1_bytes`, `from_v2_bytes` / `to_v2_bytes`, or direct properties.
 - [ ] Replace `Constraint(id=N, ...)` / `.set_id(N)` / `(expr <= 0).set_id(N)` with `{N: (expr <= 0)}` in the `constraints=` dict.
 - [ ] Remove reads of `constraint.id`; iterate with `.items()` on constraint dicts instead.
 - [ ] Remove any use of `next_constraint_id()` / `set_constraint_id_counter(...)` / related counter helpers.

@@ -25,7 +25,7 @@ def test_instance_v2_bytes_roundtrip_special_constraints():
     instance = _special_instance()
 
     with pytest.raises(BaseException):
-        instance.to_bytes()
+        instance.to_v1_bytes()
 
     restored = Instance.from_v2_bytes(instance.to_v2_bytes())
 

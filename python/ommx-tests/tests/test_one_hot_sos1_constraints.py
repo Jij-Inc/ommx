@@ -118,7 +118,7 @@ def test_serialize_not_yet_supported():
     )
 
     with pytest.raises(BaseException):
-        instance.to_bytes()
+        instance.to_v1_bytes()
 
 
 def test_both_one_hot_and_sos1():

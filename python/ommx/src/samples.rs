@@ -219,13 +219,13 @@ impl Samples {
     }
 
     #[staticmethod]
-    pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
+    pub fn from_v1_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
         let v1_inner = ommx::v1::Samples::decode(bytes.as_bytes())?;
         let inner = v1_inner.parse(&())?;
         Ok(Self(inner))
     }
 
-    pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
+    pub fn to_v1_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
         let v1_samples: ommx::v1::Samples = self.0.clone().into();
         Ok(PyBytes::new(py, &v1_samples.encode_to_vec()))
     }

@@ -39,11 +39,11 @@ def test_samples_serialization():
     original = _ommx_rust.Samples({0: {1: 0.0, 2: 1.0}, 1: {1: 1.0, 2: 0.0}})
 
     # Serialize to bytes
-    data = original.to_bytes()
+    data = original.to_v1_bytes()
     assert isinstance(data, bytes)
 
     # Deserialize from bytes
-    restored = _ommx_rust.Samples.from_bytes(data)
+    restored = _ommx_rust.Samples.from_v1_bytes(data)
     assert restored.num_samples() == original.num_samples()
     assert restored.sample_ids() == original.sample_ids()
 
