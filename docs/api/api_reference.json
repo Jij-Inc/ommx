@@ -24600,7 +24600,7 @@
             },
             {
               "name": "get_layer",
-              "doc": "Get the layer object corresponding to the descriptor.\n\nDynamically dispatched based on {attr}`~ommx.artifact.Descriptor.media_type`:\n- `application/org.ommx.v1.instance` returns {class}`~ommx.Instance`\n- `application/org.ommx.v1.solution` returns {class}`~ommx.Solution`\n- `application/vnd.numpy` returns a numpy array",
+              "doc": "Get the layer object corresponding to the descriptor.\n\nDynamically dispatched based on {attr}`~ommx.artifact.Descriptor.media_type`:\n- OMMX instance payloads return {class}`~ommx.Instance`\n- OMMX parametric instance payloads return {class}`~ommx.ParametricInstance`\n- OMMX solution payloads return {class}`~ommx.Solution`\n- OMMX sample-set payloads return {class}`~ommx.SampleSet`\n- `application/vnd.numpy` returns a numpy array",
               "signatures": [
                 {
                   "parameters": [

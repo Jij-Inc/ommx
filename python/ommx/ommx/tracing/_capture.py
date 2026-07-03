@@ -10,7 +10,7 @@ Usage::
     from ommx.tracing import capture_trace, render_text_tree, save_chrome_trace
 
     with capture_trace() as trace:
-        instance = Instance.from_bytes(blob)
+        instance = Instance.from_v2_bytes(blob)
         solution = instance.evaluate(state)
 
     print(render_text_tree(trace))

@@ -1,4 +1,5 @@
 use anyhow::{bail, Result};
+use ommx::artifact::media_types;
 use pyo3::{prelude::*, types::PyBytes};
 use std::{
     collections::HashMap,
@@ -277,8 +278,10 @@ impl PyArtifact {
     /// Get the layer object corresponding to the descriptor.
     ///
     /// Dynamically dispatched based on {attr}`~ommx.artifact.Descriptor.media_type`:
-    /// - `application/org.ommx.v1.instance` returns {class}`~ommx.Instance`
-    /// - `application/org.ommx.v1.solution` returns {class}`~ommx.Solution`
+    /// - OMMX instance payloads return {class}`~ommx.Instance`
+    /// - OMMX parametric instance payloads return {class}`~ommx.ParametricInstance`
+    /// - OMMX solution payloads return {class}`~ommx.Solution`
+    /// - OMMX sample-set payloads return {class}`~ommx.SampleSet`
     /// - `application/vnd.numpy` returns a numpy array
     pub fn get_layer<'py>(
         &mut self,
@@ -286,33 +289,50 @@ impl PyArtifact {
         descriptor: &PyDescriptor,
     ) -> PyResult<Bound<'py, PyAny>> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let media_type = descriptor.media_type();
-        match media_type.as_str() {
-            "application/org.ommx.v1.instance" => {
-                let instance = self
-                    .get_instance_inner(descriptor)
-                    .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-                Ok(instance
-                    .into_pyobject(py)?
-                    .into_any()
-                    .unbind()
-                    .into_bound(py))
-            }
-            "application/org.ommx.v1.solution" => {
-                let solution = self
-                    .get_solution_inner(descriptor)
-                    .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-                Ok(solution
-                    .into_pyobject(py)?
-                    .into_any()
-                    .unbind()
-                    .into_bound(py))
-            }
-            "application/vnd.numpy" => self.get_ndarray_inner(py, descriptor),
-            _ => Err(pyo3::exceptions::PyValueError::new_err(format!(
+        let media_type = descriptor.as_descriptor().media_type();
+        if media_types::is_instance_payload_media_type(media_type) {
+            let instance = self
+                .get_instance_inner(descriptor)
+                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+            Ok(instance
+                .into_pyobject(py)?
+                .into_any()
+                .unbind()
+                .into_bound(py))
+        } else if media_types::is_parametric_instance_payload_media_type(media_type) {
+            let instance = self
+                .get_parametric_instance_inner(descriptor)
+                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+            Ok(instance
+                .into_pyobject(py)?
+                .into_any()
+                .unbind()
+                .into_bound(py))
+        } else if media_types::is_solution_payload_media_type(media_type) {
+            let solution = self
+                .get_solution_inner(descriptor)
+                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+            Ok(solution
+                .into_pyobject(py)?
+                .into_any()
+                .unbind()
+                .into_bound(py))
+        } else if media_types::is_sample_set_payload_media_type(media_type) {
+            let sample_set = self
+                .get_sample_set_inner(descriptor)
+                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+            Ok(sample_set
+                .into_pyobject(py)?
+                .into_any()
+                .unbind()
+                .into_bound(py))
+        } else if descriptor.media_type() == "application/vnd.numpy" {
+            self.get_ndarray_inner(py, descriptor)
+        } else {
+            Err(pyo3::exceptions::PyValueError::new_err(format!(
                 "Unsupported media type {}",
                 media_type
-            ))),
+            )))
         }
     }
 
@@ -340,7 +360,9 @@ impl PyArtifact {
                     .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
                 for desc in layers {
                     let py_desc = PyDescriptor::from(desc);
-                    if py_desc.media_type() == "application/org.ommx.v1.instance" {
+                    if media_types::is_instance_payload_media_type(
+                        py_desc.as_descriptor().media_type(),
+                    ) {
                         return self
                             .get_instance_inner(&py_desc)
                             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()));
@@ -377,7 +399,9 @@ impl PyArtifact {
                     .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
                 for desc in layers {
                     let py_desc = PyDescriptor::from(desc);
-                    if py_desc.media_type() == "application/org.ommx.v1.solution" {
+                    if media_types::is_solution_payload_media_type(
+                        py_desc.as_descriptor().media_type(),
+                    ) {
                         return self
                             .get_solution_inner(&py_desc)
                             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()));
@@ -414,7 +438,9 @@ impl PyArtifact {
                     .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
                 for desc in layers {
                     let py_desc = PyDescriptor::from(desc);
-                    if py_desc.media_type() == "application/org.ommx.v1.parametric-instance" {
+                    if media_types::is_parametric_instance_payload_media_type(
+                        py_desc.as_descriptor().media_type(),
+                    ) {
                         return self
                             .get_parametric_instance_inner(&py_desc)
                             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()));
@@ -451,7 +477,9 @@ impl PyArtifact {
                     .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
                 for desc in layers {
                     let py_desc = PyDescriptor::from(desc);
-                    if py_desc.media_type() == "application/org.ommx.v1.sample-set" {
+                    if media_types::is_sample_set_payload_media_type(
+                        py_desc.as_descriptor().media_type(),
+                    ) {
                         return self
                             .get_sample_set_inner(&py_desc)
                             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()));
@@ -1138,14 +1166,12 @@ impl PyPruneAnonymousReport {
 
 impl PyArtifact {
     fn get_instance_inner(&mut self, descriptor: &PyDescriptor) -> Result<crate::Instance> {
-        assert_media_type(descriptor, "application/org.ommx.v1.instance")?;
         Ok(crate::Instance {
             inner: self.inner.get_instance_layer(descriptor.as_descriptor())?,
         })
     }
 
     fn get_solution_inner(&mut self, descriptor: &PyDescriptor) -> Result<crate::Solution> {
-        assert_media_type(descriptor, "application/org.ommx.v1.solution")?;
         Ok(crate::Solution {
             inner: self.inner.get_solution_layer(descriptor.as_descriptor())?,
         })
@@ -1155,7 +1181,6 @@ impl PyArtifact {
         &mut self,
         descriptor: &PyDescriptor,
     ) -> Result<crate::ParametricInstance> {
-        assert_media_type(descriptor, "application/org.ommx.v1.parametric-instance")?;
         Ok(crate::ParametricInstance {
             inner: self
                 .inner
@@ -1164,7 +1189,6 @@ impl PyArtifact {
     }
 
     fn get_sample_set_inner(&mut self, descriptor: &PyDescriptor) -> Result<crate::SampleSet> {
-        assert_media_type(descriptor, "application/org.ommx.v1.sample-set")?;
         Ok(crate::SampleSet {
             inner: self
                 .inner

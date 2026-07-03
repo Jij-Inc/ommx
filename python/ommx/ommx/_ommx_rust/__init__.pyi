@@ -410,8 +410,10 @@ class Artifact:
         Get the layer object corresponding to the descriptor.
 
         Dynamically dispatched based on {attr}`~ommx.artifact.Descriptor.media_type`:
-        - `application/org.ommx.v1.instance` returns {class}`~ommx.Instance`
-        - `application/org.ommx.v1.solution` returns {class}`~ommx.Solution`
+        - OMMX instance payloads return {class}`~ommx.Instance`
+        - OMMX parametric instance payloads return {class}`~ommx.ParametricInstance`
+        - OMMX solution payloads return {class}`~ommx.Solution`
+        - OMMX sample-set payloads return {class}`~ommx.SampleSet`
         - `application/vnd.numpy` returns a numpy array
         """
     def get_instance(self, descriptor: typing.Optional[Descriptor] = None) -> Instance:

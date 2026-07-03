@@ -73,6 +73,26 @@ pub(crate) fn sample_set_payload_version(media_type: &MediaType) -> Result<RootP
     )
 }
 
+/// Whether the media type stores an [`crate::Instance`] root payload.
+pub fn is_instance_payload_media_type(media_type: &MediaType) -> bool {
+    instance_payload_version(media_type).is_ok()
+}
+
+/// Whether the media type stores a [`crate::ParametricInstance`] root payload.
+pub fn is_parametric_instance_payload_media_type(media_type: &MediaType) -> bool {
+    parametric_instance_payload_version(media_type).is_ok()
+}
+
+/// Whether the media type stores a [`crate::Solution`] root payload.
+pub fn is_solution_payload_media_type(media_type: &MediaType) -> bool {
+    solution_payload_version(media_type).is_ok()
+}
+
+/// Whether the media type stores a [`crate::SampleSet`] root payload.
+pub fn is_sample_set_payload_media_type(media_type: &MediaType) -> bool {
+    sample_set_payload_version(media_type).is_ok()
+}
+
 /// Media type of [crate::artifact::LocalArtifact], `application/org.ommx.v1.artifact`
 pub fn v1_artifact() -> MediaType {
     MediaType::Other(V1_ARTIFACT_MEDIA_TYPE.to_string())
