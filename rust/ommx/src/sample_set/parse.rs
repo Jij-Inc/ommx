@@ -542,8 +542,8 @@ impl TryFrom<v2::SampleSet> for SampleSet {
 /// those collections is dropped on serialization. This is a wire-format
 /// limitation that pre-dates the label/context SoA refactor; the matching
 /// `Parse` impl above initializes those collections to
-/// `Default::default()` for symmetry. Round-trip through `to_bytes` /
-/// `from_bytes` preserves variable labels and regular-constraint context.
+/// `Default::default()` for symmetry. Round-trip through `to_v1_bytes` /
+/// `from_v1_bytes` preserves variable labels and regular-constraint context.
 impl From<SampleSet> for crate::v1::SampleSet {
     fn from(sample_set: SampleSet) -> Self {
         let SampleSet {
@@ -615,7 +615,7 @@ mod tests {
     }
 
     #[test]
-    fn test_sample_set_to_bytes_filters_reserved_annotation_key() {
+    fn test_sample_set_to_v1_bytes_filters_reserved_annotation_key() {
         let mut sample_set: SampleSet = v1::SampleSet {
             objectives: Some(v1::SampledValues {
                 entries: vec![v1::sampled_values::SampledValuesEntry {
@@ -634,7 +634,7 @@ mod tests {
             ("org.example.owner".to_string(), "domain".to_string()),
         ]);
 
-        let restored = SampleSet::from_bytes(&sample_set.to_bytes()).unwrap();
+        let restored = SampleSet::from_v1_bytes(&sample_set.to_v1_bytes()).unwrap();
 
         assert!(!restored.annotations.contains_key(&reserved_key));
         assert_eq!(
@@ -894,7 +894,7 @@ mod tests {
         "###);
     }
 
-    /// Regression: `SampleSet::to_bytes` / `from_bytes` must preserve the
+    /// Regression: `SampleSet::to_v1_bytes` / `from_v1_bytes` must preserve the
     /// variable-label and regular-constraint-context stores. Indicator /
     /// one-hot / sos1 sampled context is dropped because `v1::SampleSet`
     /// has no fields for those collections — that's a wire-format
@@ -993,8 +993,8 @@ mod tests {
             .build()
             .unwrap();
 
-        let bytes = sample_set.to_bytes();
-        let recovered = SampleSet::from_bytes(&bytes).unwrap();
+        let bytes = sample_set.to_v1_bytes();
+        let recovered = SampleSet::from_v1_bytes(&bytes).unwrap();
 
         assert_eq!(recovered.variable_labels().name(var_id), Some("x"));
         assert_eq!(recovered.variable_labels().subscripts(var_id), &[0]);

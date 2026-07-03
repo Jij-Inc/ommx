@@ -20,8 +20,10 @@ The 3.0.0 line is a major revision of the Rust SDK:
   `Instance`, `ParametricInstance`, `Solution`, and `SampleSet`;
   because the `id` field is gone from individual constraints, the
   **host is the natural unit of serialization**
-  (`Instance::to_bytes`, `ParametricInstance::to_bytes`,
-  `Solution::to_bytes`, `SampleSet::to_bytes`).
+  (`Instance::to_v1_bytes` / `to_v2_bytes`,
+  `ParametricInstance::to_v1_bytes` / `to_v2_bytes`,
+  `Solution::to_v1_bytes` / `to_v2_bytes`, and
+  `SampleSet::to_v1_bytes` / `to_v2_bytes`).
 - Modeling labels (`name`, `subscripts`, `parameters`, `description`) move
   off each constraint, decision variable, and named function into
   per-collection **Struct-of-Arrays label/context stores**. Constraint
@@ -140,12 +142,11 @@ from individual constraints and labels/context living in a per-collection
 SoA store (next section), a single element can no longer round-trip
 on its own. Per-element `to_bytes` / `from_bytes` are not provided on
 any constraint kind or its evaluated / sampled counterpart; use
-`Instance::to_bytes` / `from_bytes`,
-`ParametricInstance::to_bytes` / `from_bytes`,
-`Solution::to_bytes` / `from_bytes`, or
-`SampleSet::to_bytes` / `from_bytes` as the entry points — each
-encodes every constraint kind together with IDs and labels/context in one
-`v1::*` protobuf message.
+`Instance::to_v1_bytes` / `from_v1_bytes` or `to_v2_bytes` /
+`from_v2_bytes`, and the corresponding methods on
+`ParametricInstance`, `Solution`, and `SampleSet`, as the entry points.
+Each host-level root encodes every constraint kind together with IDs and
+labels/context in one protobuf root.
 
 The migration guide's [ConstraintCollection](crate::doc::migration_guide#constraintcollection)
 and [EvaluatedCollection / SampledCollection](crate::doc::migration_guide#evaluatedcollection--sampledcollection)
@@ -169,10 +170,15 @@ and SOS1 collections are serialized directly and top-level roots populate
 `required_features` so older readers can reject unsupported semantic features
 instead of silently interpreting a weaker model.
 
-`to_bytes` / `from_bytes` remain on the existing v1 path. Artifact and
-Experiment typed storage now writes v2 payloads for `Instance`,
-`ParametricInstance`, `Solution`, and `SampleSet`, while typed readers still
-accept existing v1 payload layers for backward compatibility.
+The legacy `ommx.v1` path remains available through explicit
+`to_v1_bytes` / `from_v1_bytes` names. Because v1 has no first-class
+representation for indicator, one-hot, or SOS1 constraints,
+`Instance::to_v1_bytes` and `ParametricInstance::to_v1_bytes` return
+`Err` instead of panicking when those collections are non-empty; use v2 for
+normalized special-constraint payloads. Artifact and Experiment typed
+storage now writes v2 payloads for `Instance`, `ParametricInstance`,
+`Solution`, and `SampleSet`, while typed readers still accept existing v1
+payload layers for backward compatibility.
 
 ## Modeling labels and constraint context on the enclosing collection ([#843](https://github.com/Jij-Inc/ommx/pull/843), [#848](https://github.com/Jij-Inc/ommx/pull/848), [#850](https://github.com/Jij-Inc/ommx/pull/850), [#853](https://github.com/Jij-Inc/ommx/pull/853))
 

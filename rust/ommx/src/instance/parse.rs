@@ -726,8 +726,10 @@ impl TryFrom<v2::Instance> for Instance {
     }
 }
 
-impl From<Instance> for v1::Instance {
-    fn from(value: Instance) -> Self {
+impl TryFrom<Instance> for v1::Instance {
+    type Error = crate::Error;
+
+    fn try_from(value: Instance) -> crate::Result<Self> {
         let decision_variables: Vec<v1::DecisionVariable> = (&value.decision_variables).into();
         let (constraints, removed_constraints): (Vec<v1::Constraint>, Vec<v1::RemovedConstraint>) =
             value.constraint_collection.into();
@@ -742,19 +744,25 @@ impl From<Instance> for v1::Instance {
         if !value.indicator_constraint_collection.active().is_empty()
             || !value.indicator_constraint_collection.removed().is_empty()
         {
-            unimplemented!("Serialization of IndicatorConstraint to v1 proto is not yet supported");
+            crate::bail!(
+                "Indicator constraints cannot be serialized to ommx.v1 protobuf; use to_v2_bytes()"
+            );
         }
         if !value.one_hot_constraint_collection.active().is_empty()
             || !value.one_hot_constraint_collection.removed().is_empty()
         {
-            unimplemented!("Serialization of OneHotConstraint to v1 proto is not yet supported");
+            crate::bail!(
+                "One-hot constraints cannot be serialized to ommx.v1 protobuf; use to_v2_bytes()"
+            );
         }
         if !value.sos1_constraint_collection.active().is_empty()
             || !value.sos1_constraint_collection.removed().is_empty()
         {
-            unimplemented!("Serialization of Sos1Constraint to v1 proto is not yet supported");
+            crate::bail!(
+                "SOS1 constraints cannot be serialized to ommx.v1 protobuf; use to_v2_bytes()"
+            );
         }
-        Self {
+        Ok(Self {
             sense: v1::instance::Sense::from(value.sense).into(),
             decision_variables,
             objective: Some(value.objective.into()),
@@ -767,7 +775,7 @@ impl From<Instance> for v1::Instance {
             constraint_hints: None,
             format_version: crate::CURRENT_FORMAT_VERSION,
             annotations: crate::protobuf_extension_annotations(value.annotations),
-        }
+        })
     }
 }
 
@@ -1164,8 +1172,10 @@ impl TryFrom<v2::ParametricInstance> for ParametricInstance {
     }
 }
 
-impl From<ParametricInstance> for v1::ParametricInstance {
-    fn from(
+impl TryFrom<ParametricInstance> for v1::ParametricInstance {
+    type Error = crate::Error;
+
+    fn try_from(
         ParametricInstance {
             sense,
             objective,
@@ -1180,22 +1190,28 @@ impl From<ParametricInstance> for v1::ParametricInstance {
             named_functions,
             annotations,
         }: ParametricInstance,
-    ) -> Self {
+    ) -> crate::Result<Self> {
         // Special constraint types do not have a v1 proto representation yet.
         if !indicator_constraint_collection.active().is_empty()
             || !indicator_constraint_collection.removed().is_empty()
         {
-            unimplemented!("Serialization of IndicatorConstraint to v1 proto is not yet supported");
+            crate::bail!(
+                "Indicator constraints cannot be serialized to ommx.v1 protobuf; use to_v2_bytes()"
+            );
         }
         if !one_hot_constraint_collection.active().is_empty()
             || !one_hot_constraint_collection.removed().is_empty()
         {
-            unimplemented!("Serialization of OneHotConstraint to v1 proto is not yet supported");
+            crate::bail!(
+                "One-hot constraints cannot be serialized to ommx.v1 protobuf; use to_v2_bytes()"
+            );
         }
         if !sos1_constraint_collection.active().is_empty()
             || !sos1_constraint_collection.removed().is_empty()
         {
-            unimplemented!("Serialization of Sos1Constraint to v1 proto is not yet supported");
+            crate::bail!(
+                "SOS1 constraints cannot be serialized to ommx.v1 protobuf; use to_v2_bytes()"
+            );
         }
         let v1_decision_variables: Vec<v1::DecisionVariable> = (&decision_variables).into();
         let (v1_constraints, v1_removed_constraints): (
@@ -1203,7 +1219,7 @@ impl From<ParametricInstance> for v1::ParametricInstance {
             Vec<v1::RemovedConstraint>,
         ) = constraint_collection.into();
         let v1_named_functions: Vec<v1::NamedFunction> = named_functions.into();
-        Self {
+        Ok(Self {
             description,
             sense: v1::instance::Sense::from(sense) as i32,
             objective: Some(objective.into()),
@@ -1219,7 +1235,7 @@ impl From<ParametricInstance> for v1::ParametricInstance {
             constraint_hints: None,
             format_version: crate::CURRENT_FORMAT_VERSION,
             annotations: crate::protobuf_extension_annotations(annotations),
-        }
+        })
     }
 }
 
@@ -1309,7 +1325,7 @@ mod tests {
     proptest! {
         #[test]
         fn instance_roundtrip(original_instance in Instance::arbitrary()) {
-            let v1_instance: v1::Instance = original_instance.clone().into();
+            let v1_instance = v1::Instance::try_from(original_instance.clone()).unwrap();
             let roundtripped_instance = Instance::try_from(v1_instance).unwrap();
             assert_eq!(original_instance, roundtripped_instance);
         }
@@ -1459,7 +1475,7 @@ mod tests {
     }
 
     #[test]
-    fn test_instance_to_bytes_filters_reserved_annotation_key() {
+    fn test_instance_to_v1_bytes_filters_reserved_annotation_key() {
         let instance = Instance {
             annotations: HashMap::from([
                 (
@@ -1471,7 +1487,7 @@ mod tests {
             ..Default::default()
         };
 
-        let restored = Instance::from_bytes(&instance.to_bytes()).unwrap();
+        let restored = Instance::from_v1_bytes(&instance.to_v1_bytes().unwrap()).unwrap();
 
         assert!(!restored
             .annotations
@@ -1483,7 +1499,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parametric_instance_to_bytes_filters_reserved_annotation_key() {
+    fn test_parametric_instance_to_v1_bytes_filters_reserved_annotation_key() {
         let mut instance: crate::ParametricInstance = Instance::default().into();
         let reserved_key = format!(
             "{}.title",
@@ -1494,7 +1510,8 @@ mod tests {
             ("org.example.owner".to_string(), "domain".to_string()),
         ]);
 
-        let restored = crate::ParametricInstance::from_bytes(&instance.to_bytes()).unwrap();
+        let restored =
+            crate::ParametricInstance::from_v1_bytes(&instance.to_v1_bytes().unwrap()).unwrap();
 
         assert!(!restored.annotations.contains_key(&reserved_key));
         assert_eq!(
@@ -2196,8 +2213,8 @@ mod tests {
             )
             .unwrap();
 
-        let bytes = instance.to_bytes();
-        let recovered = ParametricInstance::from_bytes(&bytes).unwrap();
+        let bytes = instance.to_v1_bytes().unwrap();
+        let recovered = ParametricInstance::from_v1_bytes(&bytes).unwrap();
 
         assert_eq!(recovered.variable_labels().name(var_id), Some("x"));
         assert_eq!(recovered.variable_labels().subscripts(var_id), &[0]);
@@ -2244,8 +2261,8 @@ mod tests {
             )
             .unwrap();
 
-        let bytes = instance.to_bytes();
-        let recovered = Instance::from_bytes(&bytes).unwrap();
+        let bytes = instance.to_v1_bytes().unwrap();
+        let recovered = Instance::from_v1_bytes(&bytes).unwrap();
 
         assert_eq!(
             recovered.named_function_labels().name(nf_id),

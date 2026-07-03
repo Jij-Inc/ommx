@@ -3,9 +3,9 @@ use crate::{v1, v2, ConstraintType, Message, Parse};
 use anyhow::Result;
 
 impl Instance {
-    pub fn to_bytes(&self) -> Vec<u8> {
-        let v1_instance = v1::Instance::from(self.clone());
-        v1_instance.encode_to_vec()
+    pub fn to_v1_bytes(&self) -> Result<Vec<u8>> {
+        let v1_instance = v1::Instance::try_from(self.clone())?;
+        Ok(v1_instance.encode_to_vec())
     }
 
     pub fn to_v2_bytes(&self) -> Vec<u8> {
@@ -13,7 +13,7 @@ impl Instance {
         v2_instance.encode_to_vec()
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
+    pub fn from_v1_bytes(bytes: &[u8]) -> Result<Self> {
         let inner = v1::Instance::decode(bytes)?;
         Ok(Parse::parse(inner, &())?)
     }
@@ -25,9 +25,9 @@ impl Instance {
 }
 
 impl ParametricInstance {
-    pub fn to_bytes(&self) -> Vec<u8> {
-        let v1_instance = v1::ParametricInstance::from(self.clone());
-        v1_instance.encode_to_vec()
+    pub fn to_v1_bytes(&self) -> Result<Vec<u8>> {
+        let v1_instance = v1::ParametricInstance::try_from(self.clone())?;
+        Ok(v1_instance.encode_to_vec())
     }
 
     pub fn to_v2_bytes(&self) -> Vec<u8> {
@@ -35,7 +35,7 @@ impl ParametricInstance {
         v2_instance.encode_to_vec()
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
+    pub fn from_v1_bytes(bytes: &[u8]) -> Result<Self> {
         let inner = v1::ParametricInstance::decode(bytes)?;
         Ok(Parse::parse(inner, &())?)
     }
@@ -210,6 +210,29 @@ mod tests {
     }
 
     fn assert_btree_map<K: Ord, V>(_: &BTreeMap<K, V>) {}
+
+    #[test]
+    fn v1_instance_serialization_rejects_special_constraints() {
+        let err = instance_with_special_constraints()
+            .to_v1_bytes()
+            .unwrap_err();
+
+        assert!(
+            err.to_string().contains("to_v2_bytes"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn v1_parametric_instance_serialization_rejects_special_constraints() {
+        let instance: ParametricInstance = instance_with_special_constraints().into();
+        let err = instance.to_v1_bytes().unwrap_err();
+
+        assert!(
+            err.to_string().contains("to_v2_bytes"),
+            "unexpected error: {err}"
+        );
+    }
 
     #[test]
     fn v2_instance_serializes_special_constraint_collections() {

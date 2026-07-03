@@ -291,7 +291,7 @@ impl LocalRegistry {
             .cloned()
             .unwrap_or_default();
         let mut instance = match payload_version {
-            RootPayloadVersion::V1 => crate::Instance::from_bytes(&bytes)?,
+            RootPayloadVersion::V1 => crate::Instance::from_v1_bytes(&bytes)?,
             RootPayloadVersion::V2 => crate::Instance::from_v2_bytes(&bytes)?,
         };
         crate::FlatAnnotations::merge_annotations(&mut instance, &annotations);
@@ -311,7 +311,7 @@ impl LocalRegistry {
             .cloned()
             .unwrap_or_default();
         let mut instance = match payload_version {
-            RootPayloadVersion::V1 => crate::ParametricInstance::from_bytes(&bytes)?,
+            RootPayloadVersion::V1 => crate::ParametricInstance::from_v1_bytes(&bytes)?,
             RootPayloadVersion::V2 => crate::ParametricInstance::from_v2_bytes(&bytes)?,
         };
         crate::FlatAnnotations::merge_annotations(&mut instance, &annotations);
@@ -327,7 +327,7 @@ impl LocalRegistry {
             .cloned()
             .unwrap_or_default();
         let mut solution = match payload_version {
-            RootPayloadVersion::V1 => crate::Solution::from_bytes(&bytes)?,
+            RootPayloadVersion::V1 => crate::Solution::from_v1_bytes(&bytes)?,
             RootPayloadVersion::V2 => crate::Solution::from_v2_bytes(&bytes)?,
         };
         crate::FlatAnnotations::merge_annotations(&mut solution, &annotations);
@@ -346,7 +346,7 @@ impl LocalRegistry {
             .cloned()
             .unwrap_or_default();
         let mut sample_set = match payload_version {
-            RootPayloadVersion::V1 => crate::SampleSet::from_bytes(&bytes)?,
+            RootPayloadVersion::V1 => crate::SampleSet::from_v1_bytes(&bytes)?,
             RootPayloadVersion::V2 => crate::SampleSet::from_v2_bytes(&bytes)?,
         };
         crate::FlatAnnotations::merge_annotations(&mut sample_set, &annotations);

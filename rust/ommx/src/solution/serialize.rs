@@ -3,7 +3,7 @@ use crate::{v1, v2, Message, Parse};
 use anyhow::Result;
 
 impl Solution {
-    pub fn to_bytes(&self) -> Vec<u8> {
+    pub fn to_v1_bytes(&self) -> Vec<u8> {
         let v1_solution = v1::Solution::from(self.clone());
         v1_solution.encode_to_vec()
     }
@@ -13,7 +13,7 @@ impl Solution {
         v2_solution.encode_to_vec()
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
+    pub fn from_v1_bytes(bytes: &[u8]) -> Result<Self> {
         let inner = v1::Solution::decode(bytes)?;
         Ok(Parse::parse(inner, &())?)
     }
