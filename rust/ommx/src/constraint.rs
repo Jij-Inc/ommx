@@ -7,11 +7,10 @@ mod parse;
 mod reduce_binary_power;
 pub(crate) mod stage;
 
-pub(crate) use context_store::constraint_context_store_to_v2_map;
 pub use context_store::ConstraintContextStore;
 
 use crate::logical_memory::LogicalMemoryProfile;
-use crate::{Function, SampleID, VariableID};
+use crate::{ATol, Function, Parse, ParseError, RawParseError, SampleID, VariableID};
 pub use arbitrary::*;
 use derive_more::{Deref, From};
 use fnv::FnvHashSet;
@@ -118,11 +117,60 @@ impl From<Provenance> for crate::v2::Provenance {
     }
 }
 
+impl Parse for crate::v2::Provenance {
+    type Output = Provenance;
+    type Context = ();
+
+    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+        use crate::v2::provenance::Source;
+
+        match self.source.ok_or(RawParseError::MissingField {
+            message: "ommx.v2.Provenance",
+            field: "source",
+        })? {
+            Source::IndicatorConstraintId(id) => Ok(Provenance::IndicatorConstraint(
+                crate::IndicatorConstraintID::from(id),
+            )),
+            Source::OneHotConstraintId(id) => Ok(Provenance::OneHotConstraint(
+                crate::OneHotConstraintID::from(id),
+            )),
+            Source::Sos1ConstraintId(id) => Ok(Provenance::Sos1Constraint(
+                crate::Sos1ConstraintID::from(id),
+            )),
+        }
+    }
+}
+
 impl From<ConstraintContext> for crate::v2::ConstraintContext {
     fn from(context: ConstraintContext) -> Self {
         Self {
             label: Some(context.label.into()),
             provenance: context.provenance.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+impl Parse for crate::v2::ConstraintContext {
+    type Output = ConstraintContext;
+    type Context = ();
+
+    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+        let mut provenance = Vec::with_capacity(self.provenance.len());
+        for value in self.provenance {
+            provenance.push(value.parse_as(&(), "ommx.v2.ConstraintContext", "provenance")?);
+        }
+        Ok(ConstraintContext {
+            label: self.label.map(Into::into).unwrap_or_default(),
+            provenance,
+        })
+    }
+}
+
+impl From<crate::v2::RemovedReason> for RemovedReason {
+    fn from(reason: crate::v2::RemovedReason) -> Self {
+        Self {
+            reason: reason.reason,
+            parameters: reason.parameters.into_iter().collect(),
         }
     }
 }
@@ -184,6 +232,33 @@ impl From<Constraint<Created>> for crate::v2::RegularConstraint {
     }
 }
 
+impl Parse for crate::v2::RegularConstraint {
+    type Output = Constraint<Created>;
+    type Context = ();
+
+    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+        let message = "ommx.v2.RegularConstraint";
+        let equality = crate::v1::Equality::try_from(self.equality)
+            .map_err(|_| RawParseError::UnknownEnumValue {
+                enum_name: "ommx.v1.Equality",
+                value: self.equality,
+            })
+            .map_err(|e| ParseError::from(e).context(message, "equality"))?
+            .parse_as(&(), message, "equality")?;
+        let function = self
+            .function
+            .ok_or(RawParseError::MissingField {
+                message,
+                field: "function",
+            })?
+            .parse_as(&(), message, "function")?;
+        Ok(Constraint {
+            equality,
+            stage: CreatedData { function },
+        })
+    }
+}
+
 impl std::fmt::Display for Constraint<Created> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let equality_symbol = match self.equality {
@@ -203,6 +278,30 @@ impl std::fmt::Display for Constraint<Created> {
 /// Type alias for an evaluated constraint.
 pub type EvaluatedConstraint = Constraint<Evaluated>;
 
+fn feasible_from_evaluated_value(equality: Equality, evaluated_value: f64, atol: ATol) -> bool {
+    match equality {
+        Equality::EqualToZero => evaluated_value.abs() < *atol,
+        Equality::LessThanOrEqualToZero => evaluated_value < *atol,
+    }
+}
+
+fn validate_feasible_from_evaluated_value(
+    equality: Equality,
+    evaluated_value: f64,
+    provided_feasible: bool,
+    atol: ATol,
+    message: &'static str,
+) -> Result<(), ParseError> {
+    let computed_feasible = feasible_from_evaluated_value(equality, evaluated_value, atol);
+    if provided_feasible != computed_feasible {
+        return Err(RawParseError::InvalidInstance(format!(
+            "Inconsistent constraint feasibility: provided={provided_feasible}, computed={computed_feasible}",
+        ))
+        .context(message, "feasible"));
+    }
+    Ok(())
+}
+
 impl From<EvaluatedConstraint> for crate::v2::EvaluatedRegularConstraint {
     fn from(constraint: EvaluatedConstraint) -> Self {
         Self {
@@ -217,6 +316,46 @@ impl From<EvaluatedConstraint> for crate::v2::EvaluatedRegularConstraint {
                 .collect(),
             dual_variable: constraint.stage.dual_variable,
         }
+    }
+}
+
+impl Parse for crate::v2::EvaluatedRegularConstraint {
+    type Output = EvaluatedConstraint;
+    type Context = ATol;
+
+    fn parse(self, atol: &Self::Context) -> Result<Self::Output, ParseError> {
+        let message = "ommx.v2.EvaluatedRegularConstraint";
+        let equality = crate::v1::Equality::try_from(self.equality)
+            .map_err(|_| RawParseError::UnknownEnumValue {
+                enum_name: "ommx.v1.Equality",
+                value: self.equality,
+            })
+            .map_err(|e| ParseError::from(e).context(message, "equality"))?
+            .parse_as(&(), message, "equality")?;
+        crate::v2_io::validate_finite_f64(self.evaluated_value, message, "evaluated_value")?;
+        if let Some(dual_variable) = self.dual_variable {
+            crate::v2_io::validate_finite_f64(dual_variable, message, "dual_variable")?;
+        }
+        validate_feasible_from_evaluated_value(
+            equality,
+            self.evaluated_value,
+            self.feasible,
+            *atol,
+            message,
+        )?;
+        Ok(Constraint {
+            equality,
+            stage: EvaluatedData {
+                evaluated_value: self.evaluated_value,
+                feasible: self.feasible,
+                used_decision_variable_ids: crate::v2_io::variable_id_set_from_v2(
+                    self.used_decision_variable_ids,
+                    message,
+                    "used_decision_variable_ids",
+                )?,
+                dual_variable: self.dual_variable,
+            },
+        })
     }
 }
 
@@ -268,6 +407,62 @@ impl From<SampledConstraint> for crate::v2::SampledRegularConstraint {
                 .collect(),
             dual_variables: constraint.stage.dual_variables.map(Into::into),
         }
+    }
+}
+
+impl Parse for crate::v2::SampledRegularConstraint {
+    type Output = SampledConstraint;
+    type Context = ATol;
+
+    fn parse(self, atol: &Self::Context) -> Result<Self::Output, ParseError> {
+        let message = "ommx.v2.SampledRegularConstraint";
+        let equality = crate::v1::Equality::try_from(self.equality)
+            .map_err(|_| RawParseError::UnknownEnumValue {
+                enum_name: "ommx.v1.Equality",
+                value: self.equality,
+            })
+            .map_err(|e| ParseError::from(e).context(message, "equality"))?
+            .parse_as(&(), message, "equality")?;
+        let evaluated_values = self
+            .evaluated_values
+            .ok_or(RawParseError::MissingField {
+                message,
+                field: "evaluated_values",
+            })?
+            .parse_as(&(), message, "evaluated_values")?;
+        crate::v2_io::validate_sampled_f64_values(&evaluated_values, message, "evaluated_values")?;
+        let feasible = crate::v2_io::sample_bool_map_from_v2(self.feasible);
+        for (sample_id, evaluated_value) in evaluated_values.iter() {
+            if let Some(provided_feasible) = feasible.get(sample_id).copied() {
+                validate_feasible_from_evaluated_value(
+                    equality,
+                    *evaluated_value,
+                    provided_feasible,
+                    *atol,
+                    message,
+                )?;
+            }
+        }
+        let dual_variables = self
+            .dual_variables
+            .map(|values| values.parse_as(&(), message, "dual_variables"))
+            .transpose()?;
+        if let Some(dual_variables) = &dual_variables {
+            crate::v2_io::validate_sampled_f64_values(dual_variables, message, "dual_variables")?;
+        }
+        Ok(Constraint {
+            equality,
+            stage: SampledData {
+                evaluated_values,
+                feasible,
+                used_decision_variable_ids: crate::v2_io::variable_id_set_from_v2(
+                    self.used_decision_variable_ids,
+                    message,
+                    "used_decision_variable_ids",
+                )?,
+                dual_variables,
+            },
+        })
     }
 }
 
@@ -383,5 +578,92 @@ mod tests {
         let state = crate::v1::State::default();
         let evaluated = constraint.evaluate(&state, crate::ATol::default()).unwrap();
         assert_eq!(evaluated.violation(), 0.0001);
+    }
+
+    #[test]
+    fn parse_v2_evaluated_rejects_non_finite_value_even_if_marked_infeasible() {
+        let proto = crate::v2::EvaluatedRegularConstraint {
+            equality: crate::v1::Equality::EqualToZero.into(),
+            evaluated_value: f64::INFINITY,
+            feasible: false,
+            used_decision_variable_ids: vec![],
+            dual_variable: None,
+        };
+
+        let err = proto.parse(&ATol::default()).unwrap_err();
+
+        assert!(
+            err.to_string().contains("evaluated_value must be finite"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn parse_v2_evaluated_rejects_non_finite_dual_variable() {
+        let proto = crate::v2::EvaluatedRegularConstraint {
+            equality: crate::v1::Equality::EqualToZero.into(),
+            evaluated_value: 0.0,
+            feasible: true,
+            used_decision_variable_ids: vec![],
+            dual_variable: Some(f64::INFINITY),
+        };
+
+        let err = proto.parse(&ATol::default()).unwrap_err();
+
+        assert!(
+            err.to_string().contains("dual_variable must be finite"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn parse_v2_sampled_rejects_non_finite_evaluated_values() {
+        let proto = crate::v2::SampledRegularConstraint {
+            equality: crate::v1::Equality::EqualToZero.into(),
+            evaluated_values: Some(crate::v1::SampledValues {
+                entries: vec![crate::v1::sampled_values::SampledValuesEntry {
+                    ids: vec![0],
+                    value: f64::INFINITY,
+                }],
+            }),
+            feasible: std::collections::BTreeMap::from([(0, false)]),
+            used_decision_variable_ids: vec![],
+            dual_variables: None,
+        };
+
+        let err = proto.parse(&ATol::default()).unwrap_err();
+
+        assert!(
+            err.to_string().contains("evaluated_values must be finite"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn parse_v2_sampled_rejects_non_finite_dual_variables() {
+        let proto = crate::v2::SampledRegularConstraint {
+            equality: crate::v1::Equality::EqualToZero.into(),
+            evaluated_values: Some(crate::v1::SampledValues {
+                entries: vec![crate::v1::sampled_values::SampledValuesEntry {
+                    ids: vec![0],
+                    value: 0.0,
+                }],
+            }),
+            feasible: std::collections::BTreeMap::from([(0, true)]),
+            used_decision_variable_ids: vec![],
+            dual_variables: Some(crate::v1::SampledValues {
+                entries: vec![crate::v1::sampled_values::SampledValuesEntry {
+                    ids: vec![0],
+                    value: f64::INFINITY,
+                }],
+            }),
+        };
+
+        let err = proto.parse(&ATol::default()).unwrap_err();
+
+        assert!(
+            err.to_string().contains("dual_variables must be finite"),
+            "unexpected error: {err}"
+        );
     }
 }

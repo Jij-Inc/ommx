@@ -17,6 +17,11 @@ impl Solution {
         let inner = v1::Solution::decode(bytes)?;
         Ok(Parse::parse(inner, &())?)
     }
+
+    pub fn from_v2_bytes(bytes: &[u8]) -> Result<Self> {
+        let inner = v2::Solution::decode(bytes)?;
+        Ok(Parse::parse(inner, &())?)
+    }
 }
 
 impl From<Solution> for v2::Solution {
@@ -40,6 +45,7 @@ impl From<Solution> for v2::Solution {
             optimality,
             relaxation,
             sense,
+            feasibility_atol,
             metadata,
             annotations,
         } = value;
@@ -60,6 +66,7 @@ impl From<Solution> for v2::Solution {
             evaluated_indicator_constraints: Some(evaluated_indicator_constraints.into()),
             evaluated_one_hot_constraints: Some(evaluated_one_hot_constraints.into()),
             evaluated_sos1_constraints: Some(evaluated_sos1_constraints.into()),
+            feasibility_atol: Some(feasibility_atol.into_inner()),
         }
     }
 }

@@ -32,11 +32,15 @@
 use crate::Result;
 use crate::{
     constraint::{
-        constraint_context_store_to_v2_map, ConstraintContext, ConstraintContextStore,
-        ConstraintID, EvaluatedConstraint, RemovedReason, SampledConstraint,
+        ConstraintContext, ConstraintContextStore, ConstraintID, EvaluatedConstraint,
+        RemovedReason, SampledConstraint,
     },
-    v1, ATol, Constraint, Evaluate, SampleID, SampleIDSet, VariableIDSet,
+    v1, ATol, Constraint, Evaluate, Parse, ParseError, RawParseError, SampleID, SampleIDSet,
+    VariableIDSet,
 };
+use std::sync::LazyLock;
+
+static EMPTY_VARIABLE_ID_SET: LazyLock<VariableIDSet> = LazyLock::new(VariableIDSet::default);
 use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
 
 fn validate_no_key_overlap<ID, L, R>(
@@ -168,6 +172,9 @@ pub trait ConstraintType {
 pub trait EvaluatedConstraintBehavior {
     type ID;
     fn is_feasible(&self) -> bool;
+    fn used_decision_variable_ids(&self) -> &VariableIDSet {
+        &EMPTY_VARIABLE_ID_SET
+    }
 }
 
 /// Common behavior for a sampled constraint (multi-sample evaluation result).
@@ -185,7 +192,9 @@ pub trait SampledConstraintBehavior {
     fn validate_sample_ids(&self, expected: &SampleIDSet) -> std::result::Result<(), SampleIDSet>;
 
     /// Decision variable IDs recorded as used by this sampled constraint.
-    fn used_decision_variable_ids(&self) -> &VariableIDSet;
+    fn used_decision_variable_ids(&self) -> &VariableIDSet {
+        &EMPTY_VARIABLE_ID_SET
+    }
 
     /// Extract an evaluated constraint for a specific sample.
     ///
@@ -201,6 +210,10 @@ impl EvaluatedConstraintBehavior for EvaluatedConstraint {
     type ID = ConstraintID;
     fn is_feasible(&self) -> bool {
         self.stage.feasible
+    }
+
+    fn used_decision_variable_ids(&self) -> &VariableIDSet {
+        &self.stage.used_decision_variable_ids
     }
 }
 
@@ -789,6 +802,137 @@ impl_v2_sampled_collection!(crate::IndicatorConstraint => crate::v2::SampledIndi
 impl_v2_sampled_collection!(crate::OneHotConstraint => crate::v2::SampledOneHotConstraintCollection);
 impl_v2_sampled_collection!(crate::Sos1Constraint => crate::v2::SampledSos1ConstraintCollection);
 
+fn constraint_context_store_to_v2_map<ID: IDType>(
+    store: &ConstraintContextStore<ID>,
+) -> BTreeMap<u64, crate::v2::ConstraintContext> {
+    store
+        .ids()
+        .into_iter()
+        .map(|id| (id.into(), store.collect_for(id).into()))
+        .collect()
+}
+
+fn constraint_context_store_from_v2_map<ID: IDType>(
+    contexts: BTreeMap<u64, crate::v2::ConstraintContext>,
+    message: &'static str,
+    field: &'static str,
+) -> std::result::Result<ConstraintContextStore<ID>, ParseError> {
+    let mut store = ConstraintContextStore::default();
+    for (id, context) in contexts {
+        store.insert(ID::from(id), context.parse_as(&(), message, field)?);
+    }
+    Ok(store)
+}
+
+macro_rules! impl_parse_v2_created_collection {
+    ($source:ty => $target:ty) => {
+        impl Parse for $target {
+            type Output = ConstraintCollection<$source>;
+            type Context = ();
+
+            fn parse(self, _: &Self::Context) -> std::result::Result<Self::Output, ParseError> {
+                let message = stringify!($target);
+                let active = parse_v2_constraint_entries(self.active, message, "active")?;
+                let removed = parse_v2_removed_constraint_entries(
+                    self.removed,
+                    self.removed_reasons,
+                    message,
+                )?;
+                let context =
+                    constraint_context_store_from_v2_map(self.contexts, message, "contexts")?;
+                let owned_ids = active
+                    .keys()
+                    .chain(removed.keys())
+                    .copied()
+                    .collect::<BTreeSet<_>>();
+                validate_context_reference_ids(&context, &owned_ids).map_err(|e| {
+                    RawParseError::InvalidInstance(e.to_string()).context(message, "contexts")
+                })?;
+                ConstraintCollection::with_context(active, removed, context).map_err(|e| {
+                    RawParseError::InvalidInstance(e.to_string()).context(message, "active")
+                })
+            }
+        }
+    };
+}
+
+impl_parse_v2_created_collection!(Constraint => crate::v2::RegularConstraintCollection);
+impl_parse_v2_created_collection!(crate::IndicatorConstraint => crate::v2::IndicatorConstraintCollection);
+impl_parse_v2_created_collection!(crate::OneHotConstraint => crate::v2::OneHotConstraintCollection);
+impl_parse_v2_created_collection!(crate::Sos1Constraint => crate::v2::Sos1ConstraintCollection);
+
+macro_rules! impl_parse_v2_evaluated_collection {
+    ($source:ty => $target:ty) => {
+        impl Parse for $target {
+            type Output = EvaluatedCollection<$source>;
+            type Context = crate::ATol;
+
+            fn parse(self, atol: &Self::Context) -> std::result::Result<Self::Output, ParseError> {
+                let message = stringify!($target);
+                let entries = parse_v2_constraint_entries_with_context(
+                    self.entries,
+                    message,
+                    "entries",
+                    atol,
+                )?;
+                let removed_reasons =
+                    parse_v2_removed_reasons(self.removed_reasons, message, "removed_reasons")?;
+                let context =
+                    constraint_context_store_from_v2_map(self.contexts, message, "contexts")?;
+                let owned_ids = entries.keys().copied().collect::<BTreeSet<_>>();
+                validate_context_reference_ids(&context, &owned_ids).map_err(|e| {
+                    RawParseError::InvalidInstance(e.to_string()).context(message, "contexts")
+                })?;
+                EvaluatedCollection::with_context(entries, removed_reasons, context).map_err(|e| {
+                    RawParseError::InvalidInstance(e.to_string())
+                        .context(message, "removed_reasons")
+                })
+            }
+        }
+    };
+}
+
+impl_parse_v2_evaluated_collection!(Constraint => crate::v2::EvaluatedRegularConstraintCollection);
+impl_parse_v2_evaluated_collection!(crate::IndicatorConstraint => crate::v2::EvaluatedIndicatorConstraintCollection);
+impl_parse_v2_evaluated_collection!(crate::OneHotConstraint => crate::v2::EvaluatedOneHotConstraintCollection);
+impl_parse_v2_evaluated_collection!(crate::Sos1Constraint => crate::v2::EvaluatedSos1ConstraintCollection);
+
+macro_rules! impl_parse_v2_sampled_collection {
+    ($source:ty => $target:ty) => {
+        impl Parse for $target {
+            type Output = SampledCollection<$source>;
+            type Context = crate::ATol;
+
+            fn parse(self, atol: &Self::Context) -> std::result::Result<Self::Output, ParseError> {
+                let message = stringify!($target);
+                let entries = parse_v2_constraint_entries_with_context(
+                    self.entries,
+                    message,
+                    "entries",
+                    atol,
+                )?;
+                let removed_reasons =
+                    parse_v2_removed_reasons(self.removed_reasons, message, "removed_reasons")?;
+                let context =
+                    constraint_context_store_from_v2_map(self.contexts, message, "contexts")?;
+                let owned_ids = entries.keys().copied().collect::<BTreeSet<_>>();
+                validate_context_reference_ids(&context, &owned_ids).map_err(|e| {
+                    RawParseError::InvalidInstance(e.to_string()).context(message, "contexts")
+                })?;
+                SampledCollection::with_context(entries, removed_reasons, context).map_err(|e| {
+                    RawParseError::InvalidInstance(e.to_string())
+                        .context(message, "removed_reasons")
+                })
+            }
+        }
+    };
+}
+
+impl_parse_v2_sampled_collection!(Constraint => crate::v2::SampledRegularConstraintCollection);
+impl_parse_v2_sampled_collection!(crate::IndicatorConstraint => crate::v2::SampledIndicatorConstraintCollection);
+impl_parse_v2_sampled_collection!(crate::OneHotConstraint => crate::v2::SampledOneHotConstraintCollection);
+impl_parse_v2_sampled_collection!(crate::Sos1Constraint => crate::v2::SampledSos1ConstraintCollection);
+
 fn entries_to_v2_map<ID, Row, V2Row>(entries: BTreeMap<ID, Row>) -> BTreeMap<u64, V2Row>
 where
     ID: IDType,
@@ -797,6 +941,37 @@ where
     entries
         .into_iter()
         .map(|(id, row)| (id.into(), row.into()))
+        .collect()
+}
+
+fn parse_v2_constraint_entries<ID, V2Row, Row>(
+    entries: BTreeMap<u64, V2Row>,
+    message: &'static str,
+    field: &'static str,
+) -> std::result::Result<BTreeMap<ID, Row>, ParseError>
+where
+    ID: IDType,
+    V2Row: Parse<Output = Row, Context = ()>,
+{
+    entries
+        .into_iter()
+        .map(|(id, row)| Ok((ID::from(id), row.parse_as(&(), message, field)?)))
+        .collect()
+}
+
+fn parse_v2_constraint_entries_with_context<ID, V2Row, Row, C>(
+    entries: BTreeMap<u64, V2Row>,
+    message: &'static str,
+    field: &'static str,
+    context: &C,
+) -> std::result::Result<BTreeMap<ID, Row>, ParseError>
+where
+    ID: IDType,
+    V2Row: Parse<Output = Row, Context = C>,
+{
+    entries
+        .into_iter()
+        .map(|(id, row)| Ok((ID::from(id), row.parse_as(context, message, field)?)))
         .collect()
 }
 
@@ -820,6 +995,39 @@ where
     (rows, reasons)
 }
 
+fn parse_v2_removed_constraint_entries<ID, V2Row, Row>(
+    removed: BTreeMap<u64, V2Row>,
+    mut removed_reasons: BTreeMap<u64, crate::v2::RemovedReason>,
+    message: &'static str,
+) -> std::result::Result<BTreeMap<ID, (Row, RemovedReason)>, ParseError>
+where
+    ID: IDType,
+    V2Row: Parse<Output = Row, Context = ()>,
+{
+    let mut out = BTreeMap::new();
+    for (id, row) in removed {
+        let reason = removed_reasons.remove(&id).ok_or_else(|| {
+            RawParseError::InvalidInstance(format!(
+                "Removed constraint ID {:?} has no removed reason",
+                ID::from(id)
+            ))
+            .context(message, "removed_reasons")
+        })?;
+        out.insert(
+            ID::from(id),
+            (row.parse_as(&(), message, "removed")?, reason.into()),
+        );
+    }
+    if let Some(id) = removed_reasons.keys().next().copied() {
+        return Err(RawParseError::InvalidInstance(format!(
+            "Removed reason references unknown constraint ID {:?}",
+            ID::from(id)
+        ))
+        .context(message, "removed_reasons"));
+    }
+    Ok(out)
+}
+
 fn removed_reasons_to_v2_map<ID: IDType>(
     removed_reasons: BTreeMap<ID, RemovedReason>,
 ) -> BTreeMap<u64, crate::v2::RemovedReason> {
@@ -827,6 +1035,17 @@ fn removed_reasons_to_v2_map<ID: IDType>(
         .into_iter()
         .map(|(id, reason)| (id.into(), reason.into()))
         .collect()
+}
+
+fn parse_v2_removed_reasons<ID: IDType>(
+    removed_reasons: BTreeMap<u64, crate::v2::RemovedReason>,
+    _message: &'static str,
+    _field: &'static str,
+) -> std::result::Result<BTreeMap<ID, RemovedReason>, ParseError> {
+    Ok(removed_reasons
+        .into_iter()
+        .map(|(id, reason)| (ID::from(id), reason.into()))
+        .collect())
 }
 
 impl<T: ConstraintType> Evaluate for ConstraintCollection<T> {
@@ -1663,5 +1882,85 @@ mod tests {
         assert!(err
             .to_string()
             .contains("Removed reason references unknown constraint ID"));
+    }
+
+    #[test]
+    fn parse_v2_created_collection_orphan_context_reports_contexts_field() {
+        let err = crate::v2::RegularConstraintCollection {
+            contexts: [(
+                1,
+                crate::v2::ConstraintContext {
+                    label: Some(crate::v2::ModelingLabel {
+                        name: Some("orphan".to_string()),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+            )]
+            .into_iter()
+            .collect(),
+            ..Default::default()
+        }
+        .parse(&())
+        .unwrap_err();
+
+        assert!(
+            err.to_string().contains("[contexts]"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn parse_v2_evaluated_collection_orphan_context_reports_contexts_field() {
+        let atol = ATol::default();
+        let err = crate::v2::EvaluatedRegularConstraintCollection {
+            contexts: [(
+                1,
+                crate::v2::ConstraintContext {
+                    label: Some(crate::v2::ModelingLabel {
+                        name: Some("orphan".to_string()),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+            )]
+            .into_iter()
+            .collect(),
+            ..Default::default()
+        }
+        .parse(&atol)
+        .unwrap_err();
+
+        assert!(
+            err.to_string().contains("[contexts]"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn parse_v2_sampled_collection_orphan_context_reports_contexts_field() {
+        let atol = ATol::default();
+        let err = crate::v2::SampledRegularConstraintCollection {
+            contexts: [(
+                1,
+                crate::v2::ConstraintContext {
+                    label: Some(crate::v2::ModelingLabel {
+                        name: Some("orphan".to_string()),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+            )]
+            .into_iter()
+            .collect(),
+            ..Default::default()
+        }
+        .parse(&atol)
+        .unwrap_err();
+
+        assert!(
+            err.to_string().contains("[contexts]"),
+            "unexpected error: {err}"
+        );
     }
 }
