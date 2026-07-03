@@ -38,6 +38,9 @@ use crate::{
     v1, ATol, Constraint, Evaluate, Parse, ParseError, RawParseError, SampleID, SampleIDSet,
     VariableIDSet,
 };
+use std::sync::LazyLock;
+
+static EMPTY_VARIABLE_ID_SET: LazyLock<VariableIDSet> = LazyLock::new(VariableIDSet::default);
 use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
 
 fn validate_no_key_overlap<ID, L, R>(
@@ -169,7 +172,9 @@ pub trait ConstraintType {
 pub trait EvaluatedConstraintBehavior {
     type ID;
     fn is_feasible(&self) -> bool;
-    fn used_decision_variable_ids(&self) -> &VariableIDSet;
+    fn used_decision_variable_ids(&self) -> &VariableIDSet {
+        &EMPTY_VARIABLE_ID_SET
+    }
 }
 
 /// Common behavior for a sampled constraint (multi-sample evaluation result).
@@ -187,7 +192,9 @@ pub trait SampledConstraintBehavior {
     fn validate_sample_ids(&self, expected: &SampleIDSet) -> std::result::Result<(), SampleIDSet>;
 
     /// Decision variable IDs recorded as used by this sampled constraint.
-    fn used_decision_variable_ids(&self) -> &VariableIDSet;
+    fn used_decision_variable_ids(&self) -> &VariableIDSet {
+        &EMPTY_VARIABLE_ID_SET
+    }
 
     /// Extract an evaluated constraint for a specific sample.
     ///

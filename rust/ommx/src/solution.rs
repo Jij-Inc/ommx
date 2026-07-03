@@ -134,6 +134,10 @@ pub enum SolutionError {
 ///   [`Self::decision_variables`]. Indicator variables and one-hot variables
 ///   must be binary; one-hot and SOS1 variable sets must be non-empty, and
 ///   `active_variable` values must belong to their structural variable set.
+/// - Evaluated special-constraint stage fields are consistent with
+///   [`Self::decision_variables`]: `indicator_active` reflects the indicator
+///   variable value, and one-hot/SOS1 `active_variable` plus `feasible` reflect
+///   the structural variable values under `feasibility_atol`.
 /// - `feasibility_atol` is the absolute tolerance used to interpret
 ///   decision-variable feasibility and to validate serialized per-constraint
 ///   feasibility columns.
@@ -812,6 +816,192 @@ fn validate_solution_special_constraint_structure(
     Ok(())
 }
 
+fn expected_binary_activity(
+    variable_id: VariableID,
+    value: f64,
+    atol: ATol,
+    role: &'static str,
+) -> Result<bool, String> {
+    if (value - 1.0).abs() < *atol {
+        Ok(true)
+    } else if value.abs() < *atol {
+        Ok(false)
+    } else {
+        Err(format!(
+            "{role} variable {variable_id:?} has value {value}, but must be 0 or 1",
+        ))
+    }
+}
+
+fn expected_one_hot_active_variable(
+    variables: &BTreeSet<VariableID>,
+    decision_variables: &EvaluatedDecisionVariableTable,
+    atol: ATol,
+) -> (bool, Option<VariableID>) {
+    let mut active = None;
+    for variable_id in variables {
+        let value = *decision_variables
+            .get(variable_id)
+            .expect("one-hot structural variables must be validated first")
+            .value();
+        if (value - 1.0).abs() < *atol {
+            if active.is_some() {
+                return (false, None);
+            }
+            active = Some(*variable_id);
+        } else if value.abs() >= *atol {
+            return (false, None);
+        }
+    }
+    match active {
+        Some(variable_id) => (true, Some(variable_id)),
+        None => (false, None),
+    }
+}
+
+fn expected_sos1_active_variable(
+    variables: &BTreeSet<VariableID>,
+    decision_variables: &EvaluatedDecisionVariableTable,
+    atol: ATol,
+) -> (bool, Option<VariableID>) {
+    let mut active = None;
+    for variable_id in variables {
+        let value = *decision_variables
+            .get(variable_id)
+            .expect("SOS1 structural variables must be validated first")
+            .value();
+        if value.abs() >= *atol {
+            if active.is_some() {
+                return (false, None);
+            }
+            active = Some(*variable_id);
+        }
+    }
+    (true, active)
+}
+
+fn validate_solution_indicator_stage_values(
+    decision_variables: &EvaluatedDecisionVariableTable,
+    indicator_constraints: &EvaluatedCollection<IndicatorConstraint>,
+    atol: ATol,
+) -> Result<(), SolutionError> {
+    for (id, constraint) in indicator_constraints.inner() {
+        let variable = decision_variables
+            .get(&constraint.indicator_variable)
+            .expect("indicator structural variables must be validated first");
+        let computed_indicator_active = expected_binary_activity(
+            constraint.indicator_variable,
+            *variable.value(),
+            atol,
+            "indicator",
+        )
+        .map_err(|message| SolutionError::InvalidConstraintStructure {
+            constraint_family: "indicator",
+            constraint_id: format!("{id:?}"),
+            message,
+        })?;
+        if constraint.stage.indicator_active != computed_indicator_active {
+            return Err(SolutionError::InvalidConstraintStructure {
+                constraint_family: "indicator",
+                constraint_id: format!("{id:?}"),
+                message: format!(
+                    "indicator_active={} does not match indicator variable {:?} value {}",
+                    constraint.stage.indicator_active,
+                    constraint.indicator_variable,
+                    variable.value(),
+                ),
+            });
+        }
+        let computed_feasible = expected_indicator_constraint_feasible(
+            constraint.equality,
+            constraint.stage.evaluated_value,
+            computed_indicator_active,
+            atol,
+        );
+        if constraint.stage.feasible != computed_feasible {
+            return Err(SolutionError::InconsistentConstraintFeasibility {
+                constraint_family: "indicator",
+                constraint_id: format!("{id:?}"),
+                provided_feasible: constraint.stage.feasible,
+                computed_feasible,
+            });
+        }
+    }
+    Ok(())
+}
+
+fn validate_solution_one_hot_stage_values(
+    decision_variables: &EvaluatedDecisionVariableTable,
+    one_hot_constraints: &EvaluatedCollection<crate::OneHotConstraint>,
+    atol: ATol,
+) -> Result<(), SolutionError> {
+    for (id, constraint) in one_hot_constraints.inner() {
+        let (computed_feasible, computed_active_variable) =
+            expected_one_hot_active_variable(&constraint.variables, decision_variables, atol);
+        if constraint.stage.active_variable != computed_active_variable {
+            return Err(SolutionError::InvalidConstraintStructure {
+                constraint_family: "one-hot",
+                constraint_id: format!("{id:?}"),
+                message: format!(
+                    "active_variable={:?} does not match decision-variable values; computed={computed_active_variable:?}",
+                    constraint.stage.active_variable,
+                ),
+            });
+        }
+        if constraint.stage.feasible != computed_feasible {
+            return Err(SolutionError::InconsistentConstraintFeasibility {
+                constraint_family: "one-hot",
+                constraint_id: format!("{id:?}"),
+                provided_feasible: constraint.stage.feasible,
+                computed_feasible,
+            });
+        }
+    }
+    Ok(())
+}
+
+fn validate_solution_sos1_stage_values(
+    decision_variables: &EvaluatedDecisionVariableTable,
+    sos1_constraints: &EvaluatedCollection<crate::Sos1Constraint>,
+    atol: ATol,
+) -> Result<(), SolutionError> {
+    for (id, constraint) in sos1_constraints.inner() {
+        let (computed_feasible, computed_active_variable) =
+            expected_sos1_active_variable(&constraint.variables, decision_variables, atol);
+        if constraint.stage.active_variable != computed_active_variable {
+            return Err(SolutionError::InvalidConstraintStructure {
+                constraint_family: "SOS1",
+                constraint_id: format!("{id:?}"),
+                message: format!(
+                    "active_variable={:?} does not match decision-variable values; computed={computed_active_variable:?}",
+                    constraint.stage.active_variable,
+                ),
+            });
+        }
+        if constraint.stage.feasible != computed_feasible {
+            return Err(SolutionError::InconsistentConstraintFeasibility {
+                constraint_family: "SOS1",
+                constraint_id: format!("{id:?}"),
+                provided_feasible: constraint.stage.feasible,
+                computed_feasible,
+            });
+        }
+    }
+    Ok(())
+}
+
+fn validate_solution_special_constraint_stage_values(
+    decision_variables: &EvaluatedDecisionVariableTable,
+    indicator_constraints: &EvaluatedCollection<IndicatorConstraint>,
+    one_hot_constraints: &EvaluatedCollection<crate::OneHotConstraint>,
+    sos1_constraints: &EvaluatedCollection<crate::Sos1Constraint>,
+    atol: ATol,
+) -> Result<(), SolutionError> {
+    validate_solution_indicator_stage_values(decision_variables, indicator_constraints, atol)?;
+    validate_solution_one_hot_stage_values(decision_variables, one_hot_constraints, atol)?;
+    validate_solution_sos1_stage_values(decision_variables, sos1_constraints, atol)
+}
+
 impl SolutionBuilder {
     /// Creates a new `SolutionBuilder` with all fields unset.
     pub fn new() -> Self {
@@ -1011,6 +1201,13 @@ impl SolutionBuilder {
             &self.evaluated_one_hot_constraints,
             &self.evaluated_sos1_constraints,
         )?;
+        validate_solution_special_constraint_stage_values(
+            &decision_variables,
+            &self.evaluated_indicator_constraints,
+            &self.evaluated_one_hot_constraints,
+            &self.evaluated_sos1_constraints,
+            self.feasibility_atol,
+        )?;
 
         // Validate all used_decision_variable_ids in indicator constraints
         for (ic_id, ic) in self.evaluated_indicator_constraints.iter() {
@@ -1092,6 +1289,9 @@ impl SolutionBuilder {
     /// - `decision_variables` is keyed by the intended [`VariableID`] for each row
     /// - All `used_decision_variable_ids` in constraints and evaluated named
     ///   functions exist in `decision_variables`
+    /// - Special-constraint `indicator_active`, `active_variable`, and
+    ///   per-constraint `feasible` fields are consistent with
+    ///   `decision_variables` under `feasibility_atol`
     ///
     /// Use [`Self::build`] for validated construction.
     /// This method is useful when invariants are guaranteed by construction,

@@ -102,13 +102,18 @@ pub fn parse_feasibility_atol(
     value: Option<f64>,
     message: &'static str,
 ) -> Result<ATol, ParseError> {
-    value
-        .map(ATol::new)
-        .transpose()
-        .map_err(|e| {
-            RawParseError::InvalidInstance(e.to_string()).context(message, "feasibility_atol")
-        })?
-        .map_or_else(|| Ok(ATol::default()), Ok)
+    let Some(value) = value else {
+        return Ok(ATol::default());
+    };
+    if !value.is_finite() {
+        return Err(RawParseError::InvalidInstance(format!(
+            "feasibility_atol must be finite: value={value}",
+        ))
+        .context(message, "feasibility_atol"));
+    }
+    ATol::new(value).map_err(|e| {
+        RawParseError::InvalidInstance(e.to_string()).context(message, "feasibility_atol")
+    })
 }
 
 pub fn validate_finite_f64(

@@ -418,6 +418,30 @@ impl Parse for v2::SampleSet {
             message,
         )?;
         validate_sampled_sos1_structural_ids(&sos1_constraints, &decision_variables, message)?;
+        validate_sampled_indicator_stage_values(
+            &decision_variables,
+            &indicator_constraints,
+            feasibility_atol,
+        )
+        .map_err(|e| {
+            RawParseError::SampleSetError(e).context(message, "sampled_indicator_constraints")
+        })?;
+        validate_sampled_one_hot_stage_values(
+            &decision_variables,
+            &one_hot_constraints,
+            feasibility_atol,
+        )
+        .map_err(|e| {
+            RawParseError::SampleSetError(e).context(message, "sampled_one_hot_constraints")
+        })?;
+        validate_sampled_sos1_stage_values(
+            &decision_variables,
+            &sos1_constraints,
+            feasibility_atol,
+        )
+        .map_err(|e| {
+            RawParseError::SampleSetError(e).context(message, "sampled_sos1_constraints")
+        })?;
 
         for (named_function_id, sampled_named_function) in named_functions.iter() {
             if !sampled_named_function
@@ -1068,6 +1092,132 @@ mod tests {
         assert!(
             err.to_string().contains("objectives must be finite")
                 && err.to_string().contains("SampleID(0)"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_v2_sample_set_parse_rejects_indicator_active_mismatching_variable_value() {
+        use crate::{
+            indicator_constraint::{IndicatorSampledData, SampledIndicatorConstraint},
+            DecisionVariable, IndicatorConstraintID, SampleID, Sampled, SampledDecisionVariable,
+            Sense, VariableID,
+        };
+        use std::collections::BTreeMap;
+
+        let var_id = VariableID::from(1);
+        let sample_id = SampleID::from(0);
+        let decision_variable = DecisionVariable::binary();
+        let sampled_variable = SampledDecisionVariable::new(
+            var_id,
+            decision_variable,
+            Sampled::from((sample_id, 1.0)),
+        )
+        .unwrap();
+        let indicator = SampledIndicatorConstraint {
+            indicator_variable: var_id,
+            equality: crate::Equality::EqualToZero,
+            stage: IndicatorSampledData {
+                evaluated_values: Sampled::from((sample_id, 0.0)),
+                feasible: BTreeMap::from([(sample_id, true)]),
+                indicator_active: BTreeMap::from([(sample_id, true)]),
+                used_decision_variable_ids: [var_id].into_iter().collect(),
+            },
+        };
+        let sample_set = SampleSet::builder()
+            .decision_variables(BTreeMap::from([(var_id, sampled_variable)]))
+            .objectives(Sampled::from((sample_id, 0.0)))
+            .constraints(BTreeMap::new())
+            .indicator_constraints(BTreeMap::from([(
+                IndicatorConstraintID::from(1),
+                indicator,
+            )]))
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
+
+        let mut proto = crate::v2::SampleSet::from(sample_set);
+        let row = proto
+            .sampled_indicator_constraints
+            .as_mut()
+            .unwrap()
+            .entries
+            .get_mut(&1)
+            .unwrap();
+        row.indicator_active.insert(sample_id.into_inner(), false);
+        row.feasible.insert(sample_id.into_inner(), true);
+
+        let err = SampleSet::try_from(proto).unwrap_err();
+        assert!(
+            err.to_string().contains("indicator_active=false")
+                && err
+                    .to_string()
+                    .contains("does not match indicator variable"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_v2_sample_set_parse_rejects_one_hot_active_variable_mismatching_values() {
+        use crate::{
+            one_hot_constraint::{OneHotSampledData, SampledOneHotConstraint},
+            DecisionVariable, OneHotConstraintID, SampleID, Sampled, SampledDecisionVariable,
+            Sense, VariableID,
+        };
+        use std::collections::{BTreeMap, BTreeSet};
+
+        let var_id = VariableID::from(1);
+        let sample_id = SampleID::from(0);
+        let decision_variable = DecisionVariable::binary();
+        let sampled_variable = SampledDecisionVariable::new(
+            var_id,
+            decision_variable,
+            Sampled::from((sample_id, 1.0)),
+        )
+        .unwrap();
+        let one_hot = SampledOneHotConstraint {
+            variables: BTreeSet::from([var_id]),
+            stage: OneHotSampledData {
+                feasible: BTreeMap::from([(sample_id, true)]),
+                active_variable: BTreeMap::from([(sample_id, Some(var_id))]),
+                used_decision_variable_ids: [var_id].into_iter().collect(),
+            },
+        };
+        let sample_set = SampleSet::builder()
+            .decision_variables(BTreeMap::from([(var_id, sampled_variable)]))
+            .objectives(Sampled::from((sample_id, 0.0)))
+            .constraints(BTreeMap::new())
+            .one_hot_constraints_collection(
+                crate::SampledCollection::new(
+                    BTreeMap::from([(OneHotConstraintID::from(1), one_hot)]),
+                    BTreeMap::new(),
+                )
+                .unwrap(),
+            )
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
+
+        let mut proto = crate::v2::SampleSet::from(sample_set);
+        let row = proto
+            .sampled_one_hot_constraints
+            .as_mut()
+            .unwrap()
+            .entries
+            .get_mut(&1)
+            .unwrap();
+        row.feasible.insert(sample_id.into_inner(), false);
+        row.active_variable.insert(
+            sample_id.into_inner(),
+            crate::v2::SampledActiveVariable { variable_id: None },
+        );
+
+        let err = SampleSet::try_from(proto).unwrap_err();
+        assert!(
+            err.to_string().contains("active_variable=None")
+                && err
+                    .to_string()
+                    .contains("does not match decision-variable values"),
             "unexpected error: {err}"
         );
     }

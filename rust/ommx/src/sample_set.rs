@@ -141,6 +141,10 @@ pub enum SampleSetError {
 ///   [`Self::decision_variables`]. Indicator variables and one-hot variables
 ///   must be binary; one-hot and SOS1 variable sets must be non-empty, and
 ///   `active_variable` values must belong to their structural variable set.
+/// - Sampled special-constraint stage fields are consistent with
+///   [`Self::decision_variables`]: `indicator_active` reflects the indicator
+///   variable values, and one-hot/SOS1 `active_variable` plus `feasible`
+///   reflect the structural variable values under `feasibility_atol`.
 /// - [`Self::feasible`] and [`Self::feasible_relaxed`] are computed from all
 ///   sampled constraint collections:
 ///   - `feasible`: true if all constraints are satisfied for that sample.
@@ -687,6 +691,236 @@ fn validate_sampled_special_constraint_structure(
     Ok(())
 }
 
+fn expected_binary_activity(
+    variable_id: VariableID,
+    value: f64,
+    atol: ATol,
+    role: &'static str,
+) -> Result<bool, String> {
+    if (value - 1.0).abs() < *atol {
+        Ok(true)
+    } else if value.abs() < *atol {
+        Ok(false)
+    } else {
+        Err(format!(
+            "{role} variable {variable_id:?} has value {value}, but must be 0 or 1",
+        ))
+    }
+}
+
+fn expected_sampled_one_hot_active_variable(
+    variables: &BTreeSet<VariableID>,
+    decision_variables: &crate::SampledDecisionVariableTable,
+    sample_id: SampleID,
+    atol: ATol,
+) -> (bool, Option<VariableID>) {
+    let mut active = None;
+    for variable_id in variables {
+        let value = *decision_variables
+            .get(variable_id)
+            .expect("one-hot structural variables must be validated first")
+            .samples()
+            .get(sample_id)
+            .expect("sample IDs must be validated first");
+        if (value - 1.0).abs() < *atol {
+            if active.is_some() {
+                return (false, None);
+            }
+            active = Some(*variable_id);
+        } else if value.abs() >= *atol {
+            return (false, None);
+        }
+    }
+    match active {
+        Some(variable_id) => (true, Some(variable_id)),
+        None => (false, None),
+    }
+}
+
+fn expected_sampled_sos1_active_variable(
+    variables: &BTreeSet<VariableID>,
+    decision_variables: &crate::SampledDecisionVariableTable,
+    sample_id: SampleID,
+    atol: ATol,
+) -> (bool, Option<VariableID>) {
+    let mut active = None;
+    for variable_id in variables {
+        let value = *decision_variables
+            .get(variable_id)
+            .expect("SOS1 structural variables must be validated first")
+            .samples()
+            .get(sample_id)
+            .expect("sample IDs must be validated first");
+        if value.abs() >= *atol {
+            if active.is_some() {
+                return (false, None);
+            }
+            active = Some(*variable_id);
+        }
+    }
+    (true, active)
+}
+
+fn validate_sampled_indicator_stage_values(
+    decision_variables: &crate::SampledDecisionVariableTable,
+    indicator_constraints: &SampledCollection<IndicatorConstraint>,
+    atol: ATol,
+) -> Result<(), SampleSetError> {
+    for (id, constraint) in indicator_constraints.inner() {
+        let variable = decision_variables
+            .get(&constraint.indicator_variable)
+            .expect("indicator structural variables must be validated first");
+        for (sample_id, provided_indicator_active) in &constraint.stage.indicator_active {
+            let value = *variable
+                .samples()
+                .get(*sample_id)
+                .expect("sample IDs must be validated first");
+            let computed_indicator_active =
+                expected_binary_activity(constraint.indicator_variable, value, atol, "indicator")
+                    .map_err(|message| SampleSetError::InvalidConstraintStructure {
+                    constraint_family: "indicator",
+                    constraint_id: format!("{id:?}"),
+                    message: format!("{message} at sample {sample_id:?}"),
+                })?;
+            if *provided_indicator_active != computed_indicator_active {
+                return Err(SampleSetError::InvalidConstraintStructure {
+                    constraint_family: "indicator",
+                    constraint_id: format!("{id:?}"),
+                    message: format!(
+                        "indicator_active={} at sample {sample_id:?} does not match indicator variable {:?} value {value}",
+                        provided_indicator_active,
+                        constraint.indicator_variable,
+                    ),
+                });
+            }
+            let evaluated_value = *constraint
+                .stage
+                .evaluated_values
+                .get(*sample_id)
+                .expect("sample IDs must be validated first");
+            let computed_feasible = expected_sampled_indicator_constraint_feasible(
+                constraint.equality,
+                evaluated_value,
+                computed_indicator_active,
+                atol,
+            );
+            let provided_feasible = *constraint
+                .stage
+                .feasible
+                .get(sample_id)
+                .expect("sample IDs must be validated first");
+            if provided_feasible != computed_feasible {
+                return Err(SampleSetError::InconsistentConstraintFeasibility {
+                    constraint_family: "indicator",
+                    constraint_id: format!("{id:?}"),
+                    sample_id: *sample_id,
+                    provided_feasible,
+                    computed_feasible,
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_sampled_one_hot_stage_values(
+    decision_variables: &crate::SampledDecisionVariableTable,
+    one_hot_constraints: &SampledCollection<crate::OneHotConstraint>,
+    atol: ATol,
+) -> Result<(), SampleSetError> {
+    for (id, constraint) in one_hot_constraints.inner() {
+        for (sample_id, provided_feasible) in &constraint.stage.feasible {
+            let (computed_feasible, computed_active_variable) =
+                expected_sampled_one_hot_active_variable(
+                    &constraint.variables,
+                    decision_variables,
+                    *sample_id,
+                    atol,
+                );
+            let provided_active_variable = constraint
+                .stage
+                .active_variable
+                .get(sample_id)
+                .copied()
+                .flatten();
+            if provided_active_variable != computed_active_variable {
+                return Err(SampleSetError::InvalidConstraintStructure {
+                    constraint_family: "one-hot",
+                    constraint_id: format!("{id:?}"),
+                    message: format!(
+                        "active_variable={provided_active_variable:?} at sample {sample_id:?} does not match decision-variable values; computed={computed_active_variable:?}",
+                    ),
+                });
+            }
+            if *provided_feasible != computed_feasible {
+                return Err(SampleSetError::InconsistentConstraintFeasibility {
+                    constraint_family: "one-hot",
+                    constraint_id: format!("{id:?}"),
+                    sample_id: *sample_id,
+                    provided_feasible: *provided_feasible,
+                    computed_feasible,
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_sampled_sos1_stage_values(
+    decision_variables: &crate::SampledDecisionVariableTable,
+    sos1_constraints: &SampledCollection<crate::Sos1Constraint>,
+    atol: ATol,
+) -> Result<(), SampleSetError> {
+    for (id, constraint) in sos1_constraints.inner() {
+        for (sample_id, provided_feasible) in &constraint.stage.feasible {
+            let (computed_feasible, computed_active_variable) =
+                expected_sampled_sos1_active_variable(
+                    &constraint.variables,
+                    decision_variables,
+                    *sample_id,
+                    atol,
+                );
+            let provided_active_variable = constraint
+                .stage
+                .active_variable
+                .get(sample_id)
+                .copied()
+                .flatten();
+            if provided_active_variable != computed_active_variable {
+                return Err(SampleSetError::InvalidConstraintStructure {
+                    constraint_family: "SOS1",
+                    constraint_id: format!("{id:?}"),
+                    message: format!(
+                        "active_variable={provided_active_variable:?} at sample {sample_id:?} does not match decision-variable values; computed={computed_active_variable:?}",
+                    ),
+                });
+            }
+            if *provided_feasible != computed_feasible {
+                return Err(SampleSetError::InconsistentConstraintFeasibility {
+                    constraint_family: "SOS1",
+                    constraint_id: format!("{id:?}"),
+                    sample_id: *sample_id,
+                    provided_feasible: *provided_feasible,
+                    computed_feasible,
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_sampled_special_constraint_stage_values(
+    decision_variables: &crate::SampledDecisionVariableTable,
+    indicator_constraints: &SampledCollection<IndicatorConstraint>,
+    one_hot_constraints: &SampledCollection<crate::OneHotConstraint>,
+    sos1_constraints: &SampledCollection<crate::Sos1Constraint>,
+    atol: ATol,
+) -> Result<(), SampleSetError> {
+    validate_sampled_indicator_stage_values(decision_variables, indicator_constraints, atol)?;
+    validate_sampled_one_hot_stage_values(decision_variables, one_hot_constraints, atol)?;
+    validate_sampled_sos1_stage_values(decision_variables, sos1_constraints, atol)
+}
+
 impl SampleSetBuilder {
     /// Creates a new `SampleSetBuilder` with all fields unset.
     pub fn new() -> Self {
@@ -950,6 +1184,13 @@ impl SampleSetBuilder {
             &self.one_hot_constraints,
             &self.sos1_constraints,
         )?;
+        validate_sampled_special_constraint_stage_values(
+            &decision_variables,
+            &self.indicator_constraints,
+            &self.one_hot_constraints,
+            &self.sos1_constraints,
+            self.feasibility_atol,
+        )?;
 
         validate_sampled_constraint_used_ids("regular", &constraints, &decision_variable_ids)?;
         validate_sampled_constraint_used_ids(
@@ -1025,6 +1266,9 @@ impl SampleSetBuilder {
     /// - All `used_decision_variable_ids` in sampled constraints and sampled
     ///   named functions exist in `decision_variables`
     /// - Sample IDs are consistent across all components
+    /// - Special-constraint `indicator_active`, `active_variable`, and
+    ///   per-constraint `feasible` fields are consistent with
+    ///   `decision_variables` under `feasibility_atol`
     ///
     /// Use [`Self::build`] for validated construction.
     /// This method is useful when invariants are guaranteed by construction,
