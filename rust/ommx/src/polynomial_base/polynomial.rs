@@ -438,8 +438,8 @@ impl Monomial for MonomialDyn {
         changed
     }
 
-    fn ids(&self) -> Box<dyn Iterator<Item = VariableID> + '_> {
-        Box::new(self.0.iter().copied())
+    fn ids(&self) -> impl Iterator<Item = VariableID> + '_ {
+        self.0.iter().copied()
     }
 
     fn from_ids(ids: impl Iterator<Item = VariableID>) -> Option<Self> {

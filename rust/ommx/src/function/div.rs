@@ -3,27 +3,26 @@ use std::ops::Div;
 use super::*;
 use crate::CoefficientError;
 
-fn divide_polynomial(
-    polynomial: Polynomial,
-    rhs: Coefficient,
-) -> Result<Polynomial, CoefficientError> {
-    let mut out = Polynomial::zero();
-    for (monomial, coefficient) in polynomial.iter() {
-        if let Some(coefficient) = (*coefficient / rhs)? {
-            out.add_term(monomial.clone(), coefficient)?;
-        }
-    }
-    Ok(out)
-}
-
 impl Div<Coefficient> for Function {
     type Output = Result<Self, CoefficientError>;
 
-    fn div(self, rhs: Coefficient) -> Self::Output {
-        Ok(Function::from_polynomial(divide_polynomial(
-            self.into_polynomial(),
-            rhs,
-        )?))
+    fn div(mut self, rhs: Coefficient) -> Self::Output {
+        match &mut self {
+            Function::Zero => {}
+            Function::Constant(c) => {
+                if let Some(divided) = (*c / rhs)? {
+                    *c = divided;
+                } else {
+                    self = Function::Zero;
+                }
+            }
+            Function::Linear(l) => l.try_div_assign_in_place(rhs)?,
+            Function::Quadratic(q) => q.try_div_assign_in_place(rhs)?,
+            Function::Polynomial(p) => p.try_div_assign_in_place(rhs)?,
+        }
+        // Division can underflow coefficients to zero and remove terms, so
+        // the variant may need to be downgraded.
+        Ok(self.normalize())
     }
 }
 

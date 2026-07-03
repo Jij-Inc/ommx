@@ -3,8 +3,8 @@ use criterion::{
 };
 
 use ommx::{
-    random::random_deterministic, Linear, LinearParameters, Polynomial, PolynomialParameters,
-    Quadratic, QuadraticParameters,
+    random::random_deterministic, Function, Linear, LinearParameters, Polynomial,
+    PolynomialParameters, Quadratic, QuadraticParameters,
 };
 
 /// Benchmark for squaring a linear function with varying number of terms
@@ -79,5 +79,40 @@ fn square_polynomial(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, square_linear, square_quadratic, square_polynomial);
+/// Benchmark for squaring a linear `Function`.
+///
+/// Unlike the `PolynomialBase`-level squares above, this exercises the
+/// `Function`-level `Mul` including the per-operation variant
+/// re-canonicalization (`normalize`).
+fn square_function_linear(c: &mut Criterion) {
+    let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
+    let mut group = c.benchmark_group("square-function-linear");
+    group.plot_config(plot_config.clone());
+
+    for &num_terms in &[10, 100] {
+        let f: Function = random_deterministic::<Linear>(
+            LinearParameters::new(num_terms, (3 * num_terms as u64).into()).unwrap(),
+        )
+        .into();
+        group.bench_with_input(
+            BenchmarkId::new("square-function-linear", num_terms.to_string()),
+            &f,
+            |b, f| {
+                b.iter(|| {
+                    let _ = f * f;
+                })
+            },
+        );
+    }
+
+    group.finish();
+}
+
+criterion_group!(
+    benches,
+    square_linear,
+    square_quadratic,
+    square_polynomial,
+    square_function_linear
+);
 criterion_main!(benches);
