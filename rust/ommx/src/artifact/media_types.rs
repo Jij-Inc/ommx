@@ -39,8 +39,8 @@ fn root_payload_version(
     v1: &'static str,
     v2: &'static str,
 ) -> Result<RootPayloadVersion> {
-    let actual = media_type.to_string();
-    match actual.as_str() {
+    let actual = media_type.as_ref();
+    match actual {
         value if value == v1 => Ok(RootPayloadVersion::V1),
         value if value == v2 => Ok(RootPayloadVersion::V2),
         _ => bail!("Expected media type '{v1}' or '{v2}', got '{actual}'"),

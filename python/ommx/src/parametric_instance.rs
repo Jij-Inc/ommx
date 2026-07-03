@@ -8,7 +8,12 @@ use crate::{
 };
 use anyhow::Result;
 use ommx::{ConstraintID, NamedFunctionID, VariableID};
-use pyo3::{exceptions::PyKeyError, prelude::*, types::PyBytes, Bound, PyAny};
+use pyo3::{
+    exceptions::{PyKeyError, PyValueError},
+    prelude::*,
+    types::PyBytes,
+    Bound, PyAny,
+};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
@@ -39,9 +44,17 @@ impl ParametricInstance {
         })
     }
 
-    pub fn to_v1_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+    pub fn to_v1_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        PyBytes::new(py, &self.inner.to_bytes())
+        ensure_no_special_constraints_for_v1(
+            !self.inner.indicator_constraints().is_empty()
+                || !self.inner.removed_indicator_constraints().is_empty(),
+            !self.inner.one_hot_constraints().is_empty()
+                || !self.inner.removed_one_hot_constraints().is_empty(),
+            !self.inner.sos1_constraints().is_empty()
+                || !self.inner.removed_sos1_constraints().is_empty(),
+        )?;
+        Ok(PyBytes::new(py, &self.inner.to_bytes()))
     }
 
     pub fn to_v2_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
@@ -1002,4 +1015,27 @@ impl ParametricInstance {
     fn __deepcopy__(&self, _memo: Bound<'_, PyAny>) -> Self {
         self.clone()
     }
+}
+
+fn ensure_no_special_constraints_for_v1(
+    has_indicator: bool,
+    has_one_hot: bool,
+    has_sos1: bool,
+) -> PyResult<()> {
+    if has_indicator {
+        return Err(PyValueError::new_err(
+            "Indicator constraints cannot be serialized to ommx.v1 protobuf; use to_v2_bytes()",
+        ));
+    }
+    if has_one_hot {
+        return Err(PyValueError::new_err(
+            "One-hot constraints cannot be serialized to ommx.v1 protobuf; use to_v2_bytes()",
+        ));
+    }
+    if has_sos1 {
+        return Err(PyValueError::new_err(
+            "SOS1 constraints cannot be serialized to ommx.v1 protobuf; use to_v2_bytes()",
+        ));
+    }
+    Ok(())
 }
