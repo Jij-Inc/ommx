@@ -81,6 +81,14 @@ impl Instance {
         })
     }
 
+    #[staticmethod]
+    pub fn from_v2_bytes(py: Python<'_>, bytes: &Bound<PyBytes>) -> Result<Self> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        Ok(Self {
+            inner: ommx::Instance::from_v2_bytes(bytes.as_bytes())?,
+        })
+    }
+
     /// Create an instance from its components.
     ///
     /// **Args:**
@@ -701,6 +709,11 @@ impl Instance {
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
         let _guard = crate::TRACING.attach_parent_context(py);
         PyBytes::new(py, &self.inner.to_bytes())
+    }
+
+    pub fn to_v2_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        PyBytes::new(py, &self.inner.to_v2_bytes())
     }
 
     /// Get the set of decision variable IDs used in the objective and remaining constraints.

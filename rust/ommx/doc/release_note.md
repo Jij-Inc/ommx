@@ -151,15 +151,15 @@ The migration guide's [ConstraintCollection](crate::doc::migration_guide#constra
 and [EvaluatedCollection / SampledCollection](crate::doc::migration_guide#evaluatedcollection--sampledcollection)
 reference cards list the public methods on each.
 
-## Write-only `ommx.v2` serialization ([#983](https://github.com/Jij-Inc/ommx/pull/983))
+## `ommx.v2` serialization ([#983](https://github.com/Jij-Inc/ommx/pull/983), [#984](https://github.com/Jij-Inc/ommx/pull/984), [#987](https://github.com/Jij-Inc/ommx/issues/987))
 
-The Rust SDK can now serialize normalized top-level root objects to the new
-`ommx.v2` protobuf roots. Use
+The Rust SDK can now serialize and deserialize normalized top-level root objects
+through the new `ommx.v2` protobuf roots. Use
 [`Instance::to_v2_bytes`](crate::Instance::to_v2_bytes),
 [`ParametricInstance::to_v2_bytes`](crate::ParametricInstance::to_v2_bytes),
 [`Solution::to_v2_bytes`](crate::Solution::to_v2_bytes), or
-[`SampleSet::to_v2_bytes`](crate::SampleSet::to_v2_bytes) for write-only v2
-serialization.
+[`SampleSet::to_v2_bytes`](crate::SampleSet::to_v2_bytes) to write v2 bytes,
+and the corresponding `from_v2_bytes` methods to read them.
 
 The v2 writer preserves the normalized ownership model: table keys own IDs,
 modeling labels and fixed values serialize as sidecar columns, constraint
@@ -169,8 +169,10 @@ and SOS1 collections are serialized directly and top-level roots populate
 `required_features` so older readers can reject unsupported semantic features
 instead of silently interpreting a weaker model.
 
-`to_bytes` / `from_bytes` remain on the existing v1 path until v2
-deserialization lands in a follow-up PR.
+`to_bytes` / `from_bytes` remain on the existing v1 path. Artifact and
+Experiment typed storage now writes v2 payloads for `Instance`,
+`ParametricInstance`, `Solution`, and `SampleSet`, while typed readers still
+accept existing v1 payload layers for backward compatibility.
 
 ## Modeling labels and constraint context on the enclosing collection ([#843](https://github.com/Jij-Inc/ommx/pull/843), [#848](https://github.com/Jij-Inc/ommx/pull/848), [#850](https://github.com/Jij-Inc/ommx/pull/850), [#853](https://github.com/Jij-Inc/ommx/pull/853))
 

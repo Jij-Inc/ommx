@@ -9432,6 +9432,32 @@
               "deprecated": null
             },
             {
+              "name": "from_v2_bytes",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "bytes",
+                      "type_": {
+                        "display": "bytes",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Instance",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "get_constraint_by_id",
               "doc": "Get a specific constraint by ID",
               "signatures": [
@@ -10535,6 +10561,22 @@
                         "children": []
                       }
                     ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "to_v2_bytes",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "bytes",
+                    "link_target": null,
+                    "children": []
                   }
                 }
               ],
@@ -15292,6 +15334,32 @@
               "deprecated": null
             },
             {
+              "name": "from_v2_bytes",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "bytes",
+                      "type_": {
+                        "display": "bytes",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ParametricInstance",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "get_constraint_by_id",
               "doc": "Get a specific constraint by ID",
               "signatures": [
@@ -15662,6 +15730,22 @@
             },
             {
               "name": "to_bytes",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "bytes",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "to_v2_bytes",
               "doc": "",
               "signatures": [
                 {
@@ -20029,6 +20113,32 @@
               "deprecated": null
             },
             {
+              "name": "from_v2_bytes",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "bytes",
+                      "type_": {
+                        "display": "bytes",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "SampleSet",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "get",
               "doc": "",
               "signatures": [
@@ -20354,6 +20464,22 @@
             },
             {
               "name": "to_bytes",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "bytes",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "to_v2_bytes",
               "doc": "",
               "signatures": [
                 {
@@ -22137,6 +22263,32 @@
               "deprecated": null
             },
             {
+              "name": "from_v2_bytes",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "bytes",
+                      "type_": {
+                        "display": "bytes",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Solution",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "get_constraint_by_id",
               "doc": "Get a specific evaluated constraint by ID",
               "signatures": [
@@ -22471,6 +22623,22 @@
             },
             {
               "name": "to_bytes",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "bytes",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "to_v2_bytes",
               "doc": "",
               "signatures": [
                 {

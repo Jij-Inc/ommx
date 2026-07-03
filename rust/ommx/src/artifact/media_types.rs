@@ -1,5 +1,7 @@
 use oci_spec::image::MediaType;
 
+use anyhow::{bail, Result};
+
 pub const OCI_IMAGE_MANIFEST_MEDIA_TYPE: &str = "application/vnd.oci.image.manifest.v1+json";
 
 /// Media type of the OCI 1.1 "empty descriptor" used as the `config`
@@ -19,8 +21,57 @@ pub const V1_INSTANCE_MEDIA_TYPE: &str = "application/org.ommx.v1.instance";
 pub const V1_PARAMETRIC_INSTANCE_MEDIA_TYPE: &str = "application/org.ommx.v1.parametric-instance";
 pub const V1_SOLUTION_MEDIA_TYPE: &str = "application/org.ommx.v1.solution";
 pub const V1_SAMPLE_SET_MEDIA_TYPE: &str = "application/org.ommx.v1.sample-set";
+pub const V2_INSTANCE_MEDIA_TYPE: &str = "application/org.ommx.v2.instance";
+pub const V2_PARAMETRIC_INSTANCE_MEDIA_TYPE: &str = "application/org.ommx.v2.parametric-instance";
+pub const V2_SOLUTION_MEDIA_TYPE: &str = "application/org.ommx.v2.solution";
+pub const V2_SAMPLE_SET_MEDIA_TYPE: &str = "application/org.ommx.v2.sample-set";
 pub const TRACE_OTLP_PROTOBUF_MEDIA_TYPE: &str = "application/org.ommx.trace.otlp+protobuf";
 pub const DIAGNOSTIC_MSGPACK_MEDIA_TYPE: &str = "application/org.ommx.diagnostic+msgpack";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RootPayloadVersion {
+    V1,
+    V2,
+}
+
+fn root_payload_version(
+    media_type: &MediaType,
+    v1: &'static str,
+    v2: &'static str,
+) -> Result<RootPayloadVersion> {
+    let actual = media_type.to_string();
+    match actual.as_str() {
+        value if value == v1 => Ok(RootPayloadVersion::V1),
+        value if value == v2 => Ok(RootPayloadVersion::V2),
+        _ => bail!("Expected media type '{v1}' or '{v2}', got '{actual}'"),
+    }
+}
+
+pub(crate) fn instance_payload_version(media_type: &MediaType) -> Result<RootPayloadVersion> {
+    root_payload_version(media_type, V1_INSTANCE_MEDIA_TYPE, V2_INSTANCE_MEDIA_TYPE)
+}
+
+pub(crate) fn parametric_instance_payload_version(
+    media_type: &MediaType,
+) -> Result<RootPayloadVersion> {
+    root_payload_version(
+        media_type,
+        V1_PARAMETRIC_INSTANCE_MEDIA_TYPE,
+        V2_PARAMETRIC_INSTANCE_MEDIA_TYPE,
+    )
+}
+
+pub(crate) fn solution_payload_version(media_type: &MediaType) -> Result<RootPayloadVersion> {
+    root_payload_version(media_type, V1_SOLUTION_MEDIA_TYPE, V2_SOLUTION_MEDIA_TYPE)
+}
+
+pub(crate) fn sample_set_payload_version(media_type: &MediaType) -> Result<RootPayloadVersion> {
+    root_payload_version(
+        media_type,
+        V1_SAMPLE_SET_MEDIA_TYPE,
+        V2_SAMPLE_SET_MEDIA_TYPE,
+    )
+}
 
 /// Media type of [crate::artifact::LocalArtifact], `application/org.ommx.v1.artifact`
 pub fn v1_artifact() -> MediaType {
@@ -58,6 +109,30 @@ pub fn v1_solution() -> MediaType {
 /// `application/org.ommx.v1.sample-set`
 pub fn v1_sample_set() -> MediaType {
     MediaType::Other(V1_SAMPLE_SET_MEDIA_TYPE.to_string())
+}
+
+/// Media type of the layer storing [crate::Instance] as v2 protobuf,
+/// `application/org.ommx.v2.instance`
+pub fn v2_instance() -> MediaType {
+    MediaType::Other(V2_INSTANCE_MEDIA_TYPE.to_string())
+}
+
+/// Media type of the layer storing [crate::ParametricInstance] as v2 protobuf,
+/// `application/org.ommx.v2.parametric-instance`
+pub fn v2_parametric_instance() -> MediaType {
+    MediaType::Other(V2_PARAMETRIC_INSTANCE_MEDIA_TYPE.to_string())
+}
+
+/// Media type of the layer storing [crate::Solution] as v2 protobuf,
+/// `application/org.ommx.v2.solution`
+pub fn v2_solution() -> MediaType {
+    MediaType::Other(V2_SOLUTION_MEDIA_TYPE.to_string())
+}
+
+/// Media type of the layer storing [crate::SampleSet] as v2 protobuf,
+/// `application/org.ommx.v2.sample-set`
+pub fn v2_sample_set() -> MediaType {
+    MediaType::Other(V2_SAMPLE_SET_MEDIA_TYPE.to_string())
 }
 
 /// Media type of an Experiment Run trace encoded as OTLP protobuf.

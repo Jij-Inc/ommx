@@ -36,9 +36,22 @@ impl Solution {
         })
     }
 
+    #[staticmethod]
+    pub fn from_v2_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
+        let _guard = crate::TRACING.attach_parent_context(bytes.py());
+        Ok(Self {
+            inner: ommx::Solution::from_v2_bytes(bytes.as_bytes())?,
+        })
+    }
+
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
         let _guard = crate::TRACING.attach_parent_context(py);
         PyBytes::new(py, &self.inner.to_bytes())
+    }
+
+    pub fn to_v2_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        PyBytes::new(py, &self.inner.to_v2_bytes())
     }
 
     /// Class constant for optimal solutions
