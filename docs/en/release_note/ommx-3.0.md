@@ -67,7 +67,7 @@ Fixed decision-variable values are now owned by {class}`~ommx.Instance` / {class
 
 Use {meth}`~ommx.Instance.fixed_decision_variables` to inspect all fixed values, or `instance.attached_decision_variable(id).substituted_value` when you need the value through a variable handle. {meth}`~ommx.Instance.decision_variables_df` continues to include the `substituted_value` column, populated from the owning instance.
 
-### 🆕 `ommx.v2` bytes APIs for top-level roots ([#988](https://github.com/Jij-Inc/ommx/issues/988))
+### 🆕 `ommx.v2` bytes APIs for top-level roots ([#989](https://github.com/Jij-Inc/ommx/pull/989))
 
 {class}`~ommx.Instance`, {class}`~ommx.ParametricInstance`, {class}`~ommx.Solution`, and {class}`~ommx.SampleSet` now expose explicit `to_v2_bytes()` / `from_v2_bytes(...)` methods for the new `ommx.v2` protobuf roots. Use these methods when exchanging data that contains first-class indicator, one-hot, or SOS1 constraints. The existing `to_bytes()` / `from_bytes(...)` methods remain on the legacy `ommx.v1` protobuf path.
 

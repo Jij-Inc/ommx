@@ -151,7 +151,7 @@ The migration guide's [ConstraintCollection](crate::doc::migration_guide#constra
 and [EvaluatedCollection / SampledCollection](crate::doc::migration_guide#evaluatedcollection--sampledcollection)
 reference cards list the public methods on each.
 
-## `ommx.v2` serialization ([#983](https://github.com/Jij-Inc/ommx/pull/983), [#984](https://github.com/Jij-Inc/ommx/pull/984), [#987](https://github.com/Jij-Inc/ommx/issues/987))
+## `ommx.v2` serialization ([#983](https://github.com/Jij-Inc/ommx/pull/983), [#984](https://github.com/Jij-Inc/ommx/pull/984), [#989](https://github.com/Jij-Inc/ommx/pull/989))
 
 The Rust SDK can now serialize and deserialize normalized top-level root objects
 through the new `ommx.v2` protobuf roots. Use
