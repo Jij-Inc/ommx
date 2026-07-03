@@ -191,7 +191,7 @@ and return structured report objects for notebook and script use.
 
 The new {class}`ommx.experiment.attachments.AttachmentCodec` protocol lets packages that own Python payload types define how those values are stored as Experiment attachments. A codec class provides a media type plus `encode` / `decode` methods, and OMMX calls it through `log_with_codec` and `get_with_codec` on both Experiment-level and Run-level attachments.
 
-See the {ref}`Attachable Data Formats <experiment-management-attachable-data-formats>` section of the Experiment management tutorial for a JijModeling `Problem` codec example.
+See the {ref}`Attachable Data Formats <experiment-management-attachable-data-formats>` section of the Experiment management tutorial for a source-model codec example.
 
 ```python
 from ommx.experiment import Experiment

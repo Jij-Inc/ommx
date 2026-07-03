@@ -191,7 +191,7 @@ registry を変更し、notebook や script で扱いやすい structured report
 
 新しい {class}`ommx.experiment.attachments.AttachmentCodec` protocol により、Python payload 型を所有するパッケージ側で、その値を Experiment attachment として保存・復元する方法を定義できるようになりました。Codec class は media type と `encode` / `decode` を提供し、OMMX は Experiment-level / Run-level の `log_with_codec` と `get_with_codec` からそれを呼び出します。
 
-JijModeling `Problem` 用の codec 例は、Experiment management tutorial の {ref}`添付できるデータ形式 <experiment-management-attachable-data-formats>` を参照してください。
+ソースモデル用 codec の例は、Experiment management tutorial の {ref}`添付できるデータ形式 <experiment-management-attachable-data-formats>` を参照してください。
 
 ```python
 from ommx.experiment import Experiment

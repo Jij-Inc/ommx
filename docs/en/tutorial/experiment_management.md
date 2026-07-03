@@ -74,40 +74,39 @@ pi = ParametricInstance.from_components(
 
 The {py:class}`~ommx.ParametricInstance` above is the OMMX-form mathematical model passed to solvers. To make the experiment easier to inspect later, you can also attach surrounding data such as the original modeling object or input files to the Experiment.
 
-If the original model was written in a modeling package, keep that source model as an Attachment as well. For external payload types, OMMX defines only the attachment codec protocol and the `log_with_codec` / `get_with_codec` methods that invoke it. The concrete codec should live in the package that owns the object type. This tutorial defines a temporary `ProblemCodec` for JijModeling `Problem`; JijModeling is expected to provide an equivalent codec in the future.
+If the original model was written in another package, keep that source model as an Attachment as well. For external payload types, OMMX defines only the attachment codec protocol and the `log_with_codec` / `get_with_codec` methods that invoke it. The concrete codec should live in the package that owns the object type. This tutorial uses a small source-model object to show the protocol without requiring an external modeler.
 
 ```{code-cell} ipython3
-import jijmodeling as jm
+import json
+from dataclasses import asdict, dataclass
 
 
-class ProblemCodec:
-    media_type = "application/vnd.jijmodeling.problem+protobuf"
+@dataclass(frozen=True)
+class KnapsackSourceModel:
+    name: str
+    values: list[int]
+    weights: list[int]
+    capacity_parameter: str
+
+
+class SourceModelCodec:
+    media_type = "application/vnd.example.knapsack-source+json"
 
     @staticmethod
-    def encode(problem: jm.Problem) -> bytes:
-        return problem.to_protobuf()
+    def encode(model: KnapsackSourceModel) -> bytes:
+        return json.dumps(asdict(model), sort_keys=True).encode()
 
     @staticmethod
-    def decode(data: bytes) -> jm.Problem:
-        return jm.Problem.from_protobuf(data)
+    def decode(data: bytes) -> KnapsackSourceModel:
+        return KnapsackSourceModel(**json.loads(data.decode()))
 
 
-@jm.Problem.define("Knapsack Problem", sense=jm.ProblemSense.MAXIMIZE)
-def jij_problem(problem: jm.DecoratedProblem):
-    N = problem.Length(description="Number of items")
-    W = problem.Float(description="Capacity")
-    w = problem.Float(shape=N, description="Weight of each item")
-    v = problem.Float(shape=N, description="Value of each item")
-    x = problem.BinaryVar(
-        shape=N,
-        description="Set x_i=1 iff item i is in the knapsack",
-    )
-
-    problem += jm.sum(v[i] * x[i] for i in N)
-    problem += problem.Constraint(
-        "weight limit",
-        jm.sum(w[i] * x[i] for i in N) <= W,
-    )
+source_model = KnapsackSourceModel(
+    name="Knapsack Problem",
+    values=v,
+    weights=w,
+    capacity_parameter="capacity",
+)
 ```
 
 If the payload already exists as a file, attach that file directly instead. `log_file` copies the file bytes into the Experiment, and later readers can use `get_blob` to read the bytes or `write_attachment` to restore the file to disk. This is the usual path for Excel workbooks, solver logs, generated plots, and other files produced outside OMMX.
@@ -137,11 +136,11 @@ with Experiment() as experiment:
     # Store the model as experiment-level information.
     experiment.log_parametric_instance("instance", pi)
 
-    # Store the original JijModeling Problem through the temporary codec defined above.
+    # Store the source model through the temporary codec defined above.
     experiment.log_with_codec(
-        ProblemCodec,
-        "jijmodeling-problem",
-        jij_problem,
+        SourceModelCodec,
+        "source-model",
+        source_model,
     )
 
     # This example does not need it, but model metadata can also be stored as JSON.
@@ -293,8 +292,8 @@ Experiment-level Attachments can be checked by name and retrieved by name. {py:m
 # Check the names of saved Attachments.
 assert loaded_experiment.attachment_names == [
     "instance",
-    "jijmodeling-problem",
     "source-data",
+    "source-model",
 ]
 
 # Retrieve data saved as JSON.
@@ -310,11 +309,11 @@ pi = loaded_experiment.get_attachment("instance")
 assert isinstance(pi, ParametricInstance)
 
 # The codec validates the Media Type and decodes the original payload.
-restored_jij_problem = loaded_experiment.get_with_codec(
-    ProblemCodec,
-    "jijmodeling-problem",
+restored_source_model = loaded_experiment.get_with_codec(
+    SourceModelCodec,
+    "source-model",
 )
-assert restored_jij_problem.name == jij_problem.name
+assert restored_source_model == source_model
 ```
 
 ### Runs and Solves

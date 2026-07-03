@@ -843,7 +843,8 @@ fn decode_experiment_attachment<'py>(
 ) -> Result<Bound<'py, PyAny>> {
     match experiment.attachment_media_type(name)?.as_ref() {
         "application/json" => decode_json_blob(py, &experiment.attachment_blob(name)?),
-        ommx::artifact::media_types::V1_INSTANCE_MEDIA_TYPE => {
+        ommx::artifact::media_types::V1_INSTANCE_MEDIA_TYPE
+        | ommx::artifact::media_types::V2_INSTANCE_MEDIA_TYPE => {
             let inner = experiment.attachment_instance(name)?;
             Ok(crate::Instance { inner }
                 .into_pyobject(py)?
@@ -851,7 +852,8 @@ fn decode_experiment_attachment<'py>(
                 .unbind()
                 .into_bound(py))
         }
-        ommx::artifact::media_types::V1_PARAMETRIC_INSTANCE_MEDIA_TYPE => {
+        ommx::artifact::media_types::V1_PARAMETRIC_INSTANCE_MEDIA_TYPE
+        | ommx::artifact::media_types::V2_PARAMETRIC_INSTANCE_MEDIA_TYPE => {
             let inner = experiment.attachment_parametric_instance(name)?;
             Ok(crate::ParametricInstance { inner }
                 .into_pyobject(py)?
@@ -859,7 +861,8 @@ fn decode_experiment_attachment<'py>(
                 .unbind()
                 .into_bound(py))
         }
-        ommx::artifact::media_types::V1_SOLUTION_MEDIA_TYPE => {
+        ommx::artifact::media_types::V1_SOLUTION_MEDIA_TYPE
+        | ommx::artifact::media_types::V2_SOLUTION_MEDIA_TYPE => {
             let inner = experiment.attachment_solution(name)?;
             Ok(crate::Solution { inner }
                 .into_pyobject(py)?
@@ -867,7 +870,8 @@ fn decode_experiment_attachment<'py>(
                 .unbind()
                 .into_bound(py))
         }
-        ommx::artifact::media_types::V1_SAMPLE_SET_MEDIA_TYPE => {
+        ommx::artifact::media_types::V1_SAMPLE_SET_MEDIA_TYPE
+        | ommx::artifact::media_types::V2_SAMPLE_SET_MEDIA_TYPE => {
             let inner = experiment.attachment_sample_set(name)?;
             Ok(crate::SampleSet { inner }
                 .into_pyobject(py)?
@@ -886,7 +890,8 @@ fn decode_run_attachment<'py>(
 ) -> Result<Bound<'py, PyAny>> {
     match run.attachment_media_type(name)?.as_ref() {
         "application/json" => decode_json_blob(py, &run.attachment_blob(name)?),
-        ommx::artifact::media_types::V1_INSTANCE_MEDIA_TYPE => {
+        ommx::artifact::media_types::V1_INSTANCE_MEDIA_TYPE
+        | ommx::artifact::media_types::V2_INSTANCE_MEDIA_TYPE => {
             let inner = run.attachment_instance(name)?;
             Ok(crate::Instance { inner }
                 .into_pyobject(py)?
@@ -894,7 +899,8 @@ fn decode_run_attachment<'py>(
                 .unbind()
                 .into_bound(py))
         }
-        ommx::artifact::media_types::V1_PARAMETRIC_INSTANCE_MEDIA_TYPE => {
+        ommx::artifact::media_types::V1_PARAMETRIC_INSTANCE_MEDIA_TYPE
+        | ommx::artifact::media_types::V2_PARAMETRIC_INSTANCE_MEDIA_TYPE => {
             let inner = run.attachment_parametric_instance(name)?;
             Ok(crate::ParametricInstance { inner }
                 .into_pyobject(py)?
@@ -902,7 +908,8 @@ fn decode_run_attachment<'py>(
                 .unbind()
                 .into_bound(py))
         }
-        ommx::artifact::media_types::V1_SOLUTION_MEDIA_TYPE => {
+        ommx::artifact::media_types::V1_SOLUTION_MEDIA_TYPE
+        | ommx::artifact::media_types::V2_SOLUTION_MEDIA_TYPE => {
             let inner = run.attachment_solution(name)?;
             Ok(crate::Solution { inner }
                 .into_pyobject(py)?
@@ -910,7 +917,8 @@ fn decode_run_attachment<'py>(
                 .unbind()
                 .into_bound(py))
         }
-        ommx::artifact::media_types::V1_SAMPLE_SET_MEDIA_TYPE => {
+        ommx::artifact::media_types::V1_SAMPLE_SET_MEDIA_TYPE
+        | ommx::artifact::media_types::V2_SAMPLE_SET_MEDIA_TYPE => {
             let inner = run.attachment_sample_set(name)?;
             Ok(crate::SampleSet { inner }
                 .into_pyobject(py)?
