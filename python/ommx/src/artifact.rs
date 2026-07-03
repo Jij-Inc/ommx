@@ -326,7 +326,7 @@ impl PyArtifact {
                 .into_any()
                 .unbind()
                 .into_bound(py))
-        } else if descriptor.media_type() == "application/vnd.numpy" {
+        } else if media_type.as_ref() == "application/vnd.numpy" {
             self.get_ndarray_inner(py, descriptor)
         } else {
             Err(pyo3::exceptions::PyValueError::new_err(format!(

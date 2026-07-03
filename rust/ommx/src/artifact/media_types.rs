@@ -47,6 +47,11 @@ fn root_payload_version(
     }
 }
 
+fn is_root_payload_media_type(media_type: &MediaType, v1: &'static str, v2: &'static str) -> bool {
+    let actual = media_type.as_ref();
+    actual == v1 || actual == v2
+}
+
 pub(crate) fn instance_payload_version(media_type: &MediaType) -> Result<RootPayloadVersion> {
     root_payload_version(media_type, V1_INSTANCE_MEDIA_TYPE, V2_INSTANCE_MEDIA_TYPE)
 }
@@ -75,22 +80,30 @@ pub(crate) fn sample_set_payload_version(media_type: &MediaType) -> Result<RootP
 
 /// Whether the media type stores an [`crate::Instance`] root payload.
 pub fn is_instance_payload_media_type(media_type: &MediaType) -> bool {
-    instance_payload_version(media_type).is_ok()
+    is_root_payload_media_type(media_type, V1_INSTANCE_MEDIA_TYPE, V2_INSTANCE_MEDIA_TYPE)
 }
 
 /// Whether the media type stores a [`crate::ParametricInstance`] root payload.
 pub fn is_parametric_instance_payload_media_type(media_type: &MediaType) -> bool {
-    parametric_instance_payload_version(media_type).is_ok()
+    is_root_payload_media_type(
+        media_type,
+        V1_PARAMETRIC_INSTANCE_MEDIA_TYPE,
+        V2_PARAMETRIC_INSTANCE_MEDIA_TYPE,
+    )
 }
 
 /// Whether the media type stores a [`crate::Solution`] root payload.
 pub fn is_solution_payload_media_type(media_type: &MediaType) -> bool {
-    solution_payload_version(media_type).is_ok()
+    is_root_payload_media_type(media_type, V1_SOLUTION_MEDIA_TYPE, V2_SOLUTION_MEDIA_TYPE)
 }
 
 /// Whether the media type stores a [`crate::SampleSet`] root payload.
 pub fn is_sample_set_payload_media_type(media_type: &MediaType) -> bool {
-    sample_set_payload_version(media_type).is_ok()
+    is_root_payload_media_type(
+        media_type,
+        V1_SAMPLE_SET_MEDIA_TYPE,
+        V2_SAMPLE_SET_MEDIA_TYPE,
+    )
 }
 
 /// Media type of [crate::artifact::LocalArtifact], `application/org.ommx.v1.artifact`

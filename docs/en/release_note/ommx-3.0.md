@@ -71,6 +71,8 @@ Use {meth}`~ommx.Instance.fixed_decision_variables` to inspect all fixed values,
 
 {class}`~ommx.Instance`, {class}`~ommx.ParametricInstance`, {class}`~ommx.Solution`, and {class}`~ommx.SampleSet` now expose explicit versioned protobuf bytes APIs. Use `to_v1_bytes()` / `from_v1_bytes(...)` for the legacy `ommx.v1` protobuf roots, and `to_v2_bytes()` / `from_v2_bytes(...)` for the new `ommx.v2` protobuf roots. Use the v2 methods when exchanging data that contains first-class indicator, one-hot, or SOS1 constraints.
 
+The old unversioned `to_bytes()` / `from_bytes(...)` methods on these top-level roots are removed. Replace them with `to_v1_bytes()` / `from_v1_bytes(...)` when you need the legacy v1 wire format, or with the v2 methods for normalized v2 payloads.
+
 The v1-only DTOs {class}`~ommx.State`, {class}`~ommx.Samples`, and {class}`~ommx.Parameters` also use `to_v1_bytes()` / `from_v1_bytes(...)` so Python byte APIs always name the protobuf version they target.
 
 Artifact and Experiment solve payloads now store these top-level roots as `ommx.v2` payloads, while still reading existing `ommx.v1` payload layers for older Artifacts.

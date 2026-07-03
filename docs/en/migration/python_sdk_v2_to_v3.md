@@ -588,6 +588,11 @@ These methods originally existed to ferry values across the Python ↔ Rust boun
 - `Instance.to_v1_bytes()` / `Instance.from_v1_bytes(...)` or `Instance.to_v2_bytes()` / `Instance.from_v2_bytes(...)` (and the same on `ParametricInstance`, `Solution`, `SampleSet`)
 - `State.to_v1_bytes()` / `Samples.to_v1_bytes()` / `Parameters.to_v1_bytes()` for the cross-`evaluate` DTOs
 
+Top-level root aliases that did not name the protobuf version are also removed:
+replace `Instance.to_bytes()` / `Instance.from_bytes(...)` (and the same on
+`ParametricInstance`, `Solution`, and `SampleSet`) with the explicit v1 or v2
+methods above.
+
 ```python
 # Before (2.5.1 / 3.0.0a2)
 blob = my_function.to_bytes()
