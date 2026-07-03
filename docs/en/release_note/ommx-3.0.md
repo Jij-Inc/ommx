@@ -8,7 +8,21 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
-### ⚠ Constraint metadata setter names ([#851](https://github.com/Jij-Inc/ommx/issues/851))
+## 3.0.0 Alpha 8
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0a8-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0a8)
+
+### ⚠ Top-level `ommx` is the public Python SDK namespace ([#979](https://github.com/Jij-Inc/ommx/pull/979))
+
+SDK domain classes are now imported from top-level `ommx`, not from `ommx.v1`. The internal PyO3 extension remains `ommx._ommx_rust`, but users and adapters should treat top-level `ommx` as the public API surface.
+
+```python
+from ommx import Instance, DecisionVariable, Function, Solution
+```
+
+`ommx.v1` is no longer the Python SDK object namespace. It is reserved for protobuf wire-format concepts such as schema/package names and media types, and importing SDK domain classes from `ommx.v1` now raises a migration error. See the [Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md) for the broader import migration.
+
+### ⚠ Constraint metadata setter names ([#975](https://github.com/Jij-Inc/ommx/pull/975))
 
 Constraint metadata replacement now consistently uses the `set_*` prefix. `Constraint.add_name`, `Constraint.add_description`, and the same scalar replacing aliases on `AttachedX` handles are removed. Use `set_name` and `set_description` instead.
 
@@ -67,6 +81,18 @@ Fixed decision-variable values are now owned by {class}`~ommx.Instance` / {class
 
 Use {meth}`~ommx.Instance.fixed_decision_variables` to inspect all fixed values, or `instance.attached_decision_variable(id).substituted_value` when you need the value through a variable handle. {meth}`~ommx.Instance.decision_variables_df` continues to include the `substituted_value` column, populated from the owning instance.
 
+### 🛠 Coefficient arithmetic errors are reported through Python `ValueError` ([#953](https://github.com/Jij-Inc/ommx/pull/953))
+
+Python expression construction and comparisons now propagate coefficient arithmetic errors as `ValueError` instead of relying on infallible Rust operators. Operations that would create non-finite coefficients, such as overflow during addition or multiplication, now fail with messages like `Coefficient must be finite`. Arithmetic cancellation and underflow-to-zero remove the affected term instead of storing an invalid zero coefficient.
+
+### 🆕 Adapter diagnostics progress histories for HiGHS and PySCIPOpt ([#945](https://github.com/Jij-Inc/ommx/pull/945), [#948](https://github.com/Jij-Inc/ommx/pull/948))
+
+The HiGHS Adapter now records MIP progress snapshots from the HiGHS logging callback and records a termination report before decoding, so final status, MIP bounds, gap, feasibility summaries, runtime, and version metadata remain available even when decoding raises. The new {class}`~ommx_highs_adapter.HighsDiagnosticsAnalyzer` can analyze either typed diagnostics collected during a direct solve or dictionaries loaded from an Experiment.
+
+PySCIPOpt progress histories now include a synthetic `TERMINATION` row when diagnostics include a termination report, so `progress_history_records` and `progress_history_df` include the final solver state without duplicating the separate termination report.
+
+See [Adapter-specific Diagnostics](../user_guide/adapter_diagnostics.md) for the direct and Experiment-based workflows.
+
 ### 🆕 Versioned protobuf bytes APIs for top-level roots ([#989](https://github.com/Jij-Inc/ommx/pull/989))
 
 {class}`~ommx.Instance`, {class}`~ommx.ParametricInstance`, {class}`~ommx.Solution`, and {class}`~ommx.SampleSet` now expose explicit versioned protobuf bytes APIs. Use `to_v1_bytes()` / `from_v1_bytes(...)` for the legacy `ommx.v1` protobuf roots, and `to_v2_bytes()` / `from_v2_bytes(...)` for the new `ommx.v2` protobuf roots. Use the v2 methods when exchanging data that contains first-class indicator, one-hot, or SOS1 constraints.
@@ -95,7 +121,7 @@ See the [Experiment management tutorial](../tutorial/experiment_management.md) f
 
 Solver adapters now have an adapter-specific diagnostics channel for preserving backend solver information that does not belong in the common {class}`~ommx.Solution` result. Direct adapter calls can pass {class}`~ommx.adapter.DiagnosticCollector` to {meth}`~ommx.adapter.SolverAdapter.solve` through the reserved `diagnostics` keyword, while {meth}`~ommx.experiment.Run.log_solve` owns that keyword and stores recorded diagnostics with each Experiment {class}`~ommx.experiment.Solve` when called with `store_diagnostics=True`. Experiment diagnostics are disabled by default so adapter-side collection overhead is opt-in.
 
-The PySCIPOpt Adapter now emits {class}`~ommx_pyscipopt_adapter.SCIPProgressSnapshot` diagnostics from SCIP `BESTSOLFOUND` and `DUALBOUNDIMPROVED` callbacks, appends a final `TERMINATION` progress snapshot, and emits {class}`~ommx_pyscipopt_adapter.SCIPTerminationReport` after `model.optimize()`. The termination report includes SCIP status, primal/dual bounds, gap, incumbent objective value, node counts, LP/cut/solution counters, primal-dual integral, timing, and SCIP/PySCIPOpt version metadata. {class}`~ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer` can post-process the typed collector contents or dictionaries loaded from an Experiment into records or pandas DataFrames. With direct collection, the termination report is recorded before decoding back to an OMMX Solution, so it remains available to the caller even when decoding raises an adapter exception such as infeasible or unbounded detection.
+The PySCIPOpt Adapter now emits {class}`~ommx_pyscipopt_adapter.SCIPProgressSnapshot` diagnostics from SCIP `BESTSOLFOUND` and `DUALBOUNDIMPROVED` callbacks, plus {class}`~ommx_pyscipopt_adapter.SCIPTerminationReport` after `model.optimize()`. The termination report includes SCIP status, primal/dual bounds, gap, incumbent objective value, node counts, LP/cut/solution counters, primal-dual integral, timing, and SCIP/PySCIPOpt version metadata. {class}`~ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer` can post-process the typed collector contents or dictionaries loaded from an Experiment into records or pandas DataFrames. With direct collection, the termination report is recorded before decoding back to an OMMX Solution, so it remains available to the caller even when decoding raises an adapter exception such as infeasible or unbounded detection.
 
 See [Adapter-specific Diagnostics](../user_guide/adapter_diagnostics.md) for the full API workflow and the PySCIPOpt report field references.
 
