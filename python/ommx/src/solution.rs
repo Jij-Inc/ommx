@@ -12,9 +12,9 @@ use pyo3::{
 };
 use std::collections::BTreeSet;
 
-/// Python SDK domain type for solutions serialized with the `ommx.v1.Solution` wire format.
+/// Python SDK domain type for evaluated optimization results.
 ///
-/// This also contains annotations persisted in the protobuf payload and mirrored
+/// This class contains annotations persisted in protobuf payloads and mirrored
 /// to OMMX Artifact descriptors.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
@@ -29,16 +29,29 @@ impl_solution_annotations!(Solution);
 #[pymethods]
 impl Solution {
     #[staticmethod]
-    pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
+    pub fn from_v1_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
         let _guard = crate::TRACING.attach_parent_context(bytes.py());
         Ok(Self {
-            inner: ommx::Solution::from_bytes(bytes.as_bytes())?,
+            inner: ommx::Solution::from_v1_bytes(bytes.as_bytes())?,
         })
     }
 
-    pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+    #[staticmethod]
+    pub fn from_v2_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
+        let _guard = crate::TRACING.attach_parent_context(bytes.py());
+        Ok(Self {
+            inner: ommx::Solution::from_v2_bytes(bytes.as_bytes())?,
+        })
+    }
+
+    pub fn to_v1_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        PyBytes::new(py, &self.inner.to_bytes())
+        PyBytes::new(py, &self.inner.to_v1_bytes())
+    }
+
+    pub fn to_v2_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        PyBytes::new(py, &self.inner.to_v2_bytes())
     }
 
     /// Class constant for optimal solutions

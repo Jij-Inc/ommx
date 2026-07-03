@@ -1,7 +1,9 @@
 use super::index::SqliteIndexStore;
 use super::RefUpdate;
-use crate::artifact::{media_types, sha256_digest, stable_json_bytes, ImageRef};
-use crate::{Message, Parse};
+use crate::artifact::{
+    media_types::{self, RootPayloadVersion},
+    sha256_digest, stable_json_bytes, ImageRef,
+};
 use anyhow::{ensure, Context, Result};
 use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, ImageManifest, MediaType};
 use std::collections::{BTreeSet, HashMap};
@@ -281,15 +283,17 @@ impl LocalRegistry {
     }
 
     pub fn get_instance_layer(&self, descriptor: &StoredDescriptor<'_>) -> Result<crate::Instance> {
-        descriptor.ensure_media_type(&media_types::v1_instance())?;
+        let payload_version = media_types::instance_payload_version(descriptor.media_type())?;
         let bytes = self.get_blob(descriptor)?;
-        let proto = crate::v1::Instance::decode(bytes.as_slice())?;
         let annotations = descriptor
             .annotations()
             .as_ref()
             .cloned()
             .unwrap_or_default();
-        let mut instance = proto.try_into()?;
+        let mut instance = match payload_version {
+            RootPayloadVersion::V1 => crate::Instance::from_v1_bytes(&bytes)?,
+            RootPayloadVersion::V2 => crate::Instance::from_v2_bytes(&bytes)?,
+        };
         crate::FlatAnnotations::merge_annotations(&mut instance, &annotations);
         Ok(instance)
     }
@@ -298,29 +302,34 @@ impl LocalRegistry {
         &self,
         descriptor: &StoredDescriptor<'_>,
     ) -> Result<crate::ParametricInstance> {
-        descriptor.ensure_media_type(&media_types::v1_parametric_instance())?;
+        let payload_version =
+            media_types::parametric_instance_payload_version(descriptor.media_type())?;
         let bytes = self.get_blob(descriptor)?;
-        let proto = crate::v1::ParametricInstance::decode(bytes.as_slice())?;
         let annotations = descriptor
             .annotations()
             .as_ref()
             .cloned()
             .unwrap_or_default();
-        let mut instance = proto.parse(&())?;
+        let mut instance = match payload_version {
+            RootPayloadVersion::V1 => crate::ParametricInstance::from_v1_bytes(&bytes)?,
+            RootPayloadVersion::V2 => crate::ParametricInstance::from_v2_bytes(&bytes)?,
+        };
         crate::FlatAnnotations::merge_annotations(&mut instance, &annotations);
         Ok(instance)
     }
 
     pub fn get_solution_layer(&self, descriptor: &StoredDescriptor<'_>) -> Result<crate::Solution> {
-        descriptor.ensure_media_type(&media_types::v1_solution())?;
+        let payload_version = media_types::solution_payload_version(descriptor.media_type())?;
         let bytes = self.get_blob(descriptor)?;
-        let proto = crate::v1::Solution::decode(bytes.as_slice())?;
         let annotations = descriptor
             .annotations()
             .as_ref()
             .cloned()
             .unwrap_or_default();
-        let mut solution = proto.parse(&())?;
+        let mut solution = match payload_version {
+            RootPayloadVersion::V1 => crate::Solution::from_v1_bytes(&bytes)?,
+            RootPayloadVersion::V2 => crate::Solution::from_v2_bytes(&bytes)?,
+        };
         crate::FlatAnnotations::merge_annotations(&mut solution, &annotations);
         Ok(solution)
     }
@@ -329,23 +338,25 @@ impl LocalRegistry {
         &self,
         descriptor: &StoredDescriptor<'_>,
     ) -> Result<crate::SampleSet> {
-        descriptor.ensure_media_type(&media_types::v1_sample_set())?;
+        let payload_version = media_types::sample_set_payload_version(descriptor.media_type())?;
         let bytes = self.get_blob(descriptor)?;
-        let proto = crate::v1::SampleSet::decode(bytes.as_slice())?;
         let annotations = descriptor
             .annotations()
             .as_ref()
             .cloned()
             .unwrap_or_default();
-        let mut sample_set = proto.parse(&())?;
+        let mut sample_set = match payload_version {
+            RootPayloadVersion::V1 => crate::SampleSet::from_v1_bytes(&bytes)?,
+            RootPayloadVersion::V2 => crate::SampleSet::from_v2_bytes(&bytes)?,
+        };
         crate::FlatAnnotations::merge_annotations(&mut sample_set, &annotations);
         Ok(sample_set)
     }
 
     pub fn store_instance_layer(&self, instance: &crate::Instance) -> Result<StoredDescriptor<'_>> {
         self.store_layer_blob(
-            media_types::v1_instance(),
-            &instance.to_bytes(),
+            media_types::v2_instance(),
+            &instance.to_v2_bytes(),
             crate::FlatAnnotations::flat_annotations(instance),
         )
     }
@@ -355,16 +366,16 @@ impl LocalRegistry {
         instance: &crate::ParametricInstance,
     ) -> Result<StoredDescriptor<'_>> {
         self.store_layer_blob(
-            media_types::v1_parametric_instance(),
-            &instance.to_bytes(),
+            media_types::v2_parametric_instance(),
+            &instance.to_v2_bytes(),
             crate::FlatAnnotations::flat_annotations(instance),
         )
     }
 
     pub fn store_solution_layer(&self, solution: &crate::Solution) -> Result<StoredDescriptor<'_>> {
         self.store_layer_blob(
-            media_types::v1_solution(),
-            &solution.to_bytes(),
+            media_types::v2_solution(),
+            &solution.to_v2_bytes(),
             crate::FlatAnnotations::flat_annotations(solution),
         )
     }
@@ -374,8 +385,8 @@ impl LocalRegistry {
         sample_set: &crate::SampleSet,
     ) -> Result<StoredDescriptor<'_>> {
         self.store_layer_blob(
-            media_types::v1_sample_set(),
-            &sample_set.to_bytes(),
+            media_types::v2_sample_set(),
+            &sample_set.to_v2_bytes(),
             crate::FlatAnnotations::flat_annotations(sample_set),
         )
     }

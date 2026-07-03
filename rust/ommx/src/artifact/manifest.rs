@@ -937,10 +937,32 @@ pub fn is_anonymous_artifact_tag(tag: &str) -> bool {
 mod tests {
     use super::*;
     use crate::{v1, Parse};
-    use prost::Message;
-
     fn test_image_name(tag: &str) -> Result<ImageRef> {
         ImageRef::parse(&format!("ghcr.io/jij-inc/ommx/demo:{tag}"))
+    }
+
+    fn instance_with_one_hot_constraint() -> crate::Instance {
+        let variable_1 = crate::VariableID::from(1);
+        let variable_2 = crate::VariableID::from(2);
+        let one_hot_id = crate::OneHotConstraintID::from(10);
+
+        crate::Instance::builder()
+            .sense(crate::Sense::Minimize)
+            .objective(crate::Function::Zero)
+            .decision_variables(std::collections::BTreeMap::from([
+                (variable_1, crate::DecisionVariable::binary()),
+                (variable_2, crate::DecisionVariable::binary()),
+            ]))
+            .constraints(std::collections::BTreeMap::new())
+            .one_hot_constraints(std::collections::BTreeMap::from([(
+                one_hot_id,
+                crate::OneHotConstraint::new(std::collections::BTreeSet::from([
+                    variable_1, variable_2,
+                ]))
+                .unwrap(),
+            )]))
+            .build()
+            .unwrap()
     }
 
     /// `<registry-id8>.ommx.local/anonymous:<YYYYMMDDTHHMMSS>-<nonce>`
@@ -1095,11 +1117,11 @@ mod tests {
         let solution = solution_proto.parse(&())?;
 
         let descriptor = builder.add_solution(solution.clone())?;
-        assert_eq!(descriptor.media_type(), &media_types::v1_solution());
+        assert_eq!(descriptor.media_type(), &media_types::v2_solution());
 
         let blob = registry.get_blob(&descriptor)?;
-        let decoded = v1::Solution::decode(blob.as_slice())?;
-        assert_eq!(decoded, v1::Solution::from(solution));
+        let decoded = crate::Solution::from_v2_bytes(&blob)?;
+        assert_eq!(decoded, solution);
         Ok(())
     }
 
@@ -1134,7 +1156,7 @@ mod tests {
         );
 
         let bytes = registry.get_blob(&descriptor)?;
-        let decoded = v1::Instance::decode(bytes.as_slice())?;
+        let decoded = crate::Instance::from_v2_bytes(&bytes)?;
         assert_eq!(
             decoded.description.and_then(|description| description.name),
             Some("domain title".to_string())
@@ -1143,6 +1165,23 @@ mod tests {
             decoded.annotations.get("org.example.annotation"),
             Some(&"domain value".to_string())
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn add_instance_stores_v2_special_constraint_blob() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let registry = LocalRegistry::open(dir.path())?;
+        let mut builder =
+            ArtifactDraft::with_registry(&registry, test_image_name("special-instance")?);
+        let instance = instance_with_one_hot_constraint();
+
+        let descriptor = builder.add_instance(instance.clone())?;
+
+        assert_eq!(descriptor.media_type(), &media_types::v2_instance());
+        let restored = registry.get_instance_layer(&descriptor)?;
+        assert_eq!(restored, instance);
 
         Ok(())
     }
@@ -1163,7 +1202,7 @@ mod tests {
 
         let descriptor = registry.store_layer_blob(
             media_types::v1_instance(),
-            &instance.to_bytes(),
+            &instance.to_v1_bytes()?,
             HashMap::from([
                 (
                     crate::annotation_keys::INSTANCE_TITLE.to_string(),
@@ -1232,7 +1271,7 @@ mod tests {
 
         let descriptor = registry.store_layer_blob(
             media_types::v1_solution(),
-            &solution.to_bytes(),
+            &solution.to_v1_bytes(),
             HashMap::from([
                 (
                     format!("{}.solver", crate::annotation_keys::SOLUTION_NAMESPACE),

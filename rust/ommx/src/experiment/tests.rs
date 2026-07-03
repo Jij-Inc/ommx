@@ -425,7 +425,7 @@ fn commit_produces_experiment_artifact() {
 
         let run = &config.runs[0];
         let candidate = layer_from_ref(&layers, *run.attachments.get("candidate").unwrap());
-        assert_eq!(candidate.media_type(), &media_types::v1_instance());
+        assert_eq!(candidate.media_type(), &media_types::v2_instance());
         let candidate_annotations = candidate
             .annotations()
             .as_ref()
@@ -438,7 +438,7 @@ fn commit_produces_experiment_artifact() {
             candidate_annotations.get(crate::annotation_keys::INSTANCE_CONSTRAINTS),
             Some(&instance.constraints().len().to_string())
         );
-        assert_eq!(blob_bytes(&artifact, candidate), instance.to_bytes());
+        assert_eq!(blob_bytes(&artifact, candidate), instance.to_v2_bytes());
 
         // Aggregate layers are not tagged as attachments.
         let run_params = layer_from_ref(&layers, config.run_parameters);
@@ -757,12 +757,12 @@ fn log_finished_solve_materializes_solve_entry_with_layer_refs() {
         let solve = &run.solves()[0];
         assert_eq!(solve.solve_id(), 0);
         assert_eq!(
-            solve.input_instance().unwrap().to_bytes(),
-            instance.to_bytes()
+            solve.input_instance().unwrap().to_v2_bytes(),
+            instance.to_v2_bytes()
         );
         assert_eq!(
-            solve.output_solution().unwrap().unwrap().to_bytes(),
-            solution.to_bytes()
+            solve.output_solution().unwrap().unwrap().to_v2_bytes(),
+            solution.to_v2_bytes()
         );
         assert_eq!(solve.adapter(), "dummy.Adapter");
         assert_eq!(solve.adapter_options(), r#"{"time_limit":1.5}"#);
@@ -785,8 +785,8 @@ fn log_finished_solve_with_id_validates_id_before_storing_payloads() {
         let unreserved_instance = constant_instance(Sense::Minimize, 10.0);
         let unreserved_solution = empty_solution(&unreserved_instance);
         let unreserved_diagnostics = SolveDiagnosticPayload::new(vec![0x91, 0x01])?;
-        let unreserved_input_bytes = unreserved_instance.to_bytes();
-        let unreserved_output_bytes = unreserved_solution.to_bytes();
+        let unreserved_input_bytes = unreserved_instance.to_v2_bytes();
+        let unreserved_output_bytes = unreserved_solution.to_v2_bytes();
         let unreserved_diagnostic_bytes = unreserved_diagnostics.to_msgpack_bytes()?;
 
         {
@@ -815,8 +815,8 @@ fn log_finished_solve_with_id_validates_id_before_storing_payloads() {
         let duplicate_instance = constant_instance(Sense::Maximize, 30.0);
         let duplicate_solution = empty_solution(&duplicate_instance);
         let duplicate_diagnostics = SolveDiagnosticPayload::new(vec![0x91, 0x02])?;
-        let duplicate_input_bytes = duplicate_instance.to_bytes();
-        let duplicate_output_bytes = duplicate_solution.to_bytes();
+        let duplicate_input_bytes = duplicate_instance.to_v2_bytes();
+        let duplicate_output_bytes = duplicate_solution.to_v2_bytes();
         let duplicate_diagnostic_bytes = duplicate_diagnostics.to_msgpack_bytes()?;
 
         {
@@ -863,7 +863,7 @@ fn log_failed_solve_with_id_validates_id_before_storing_payloads() {
     with_temp_experiment(|experiment| {
         let unreserved_instance = constant_instance(Sense::Minimize, 40.0);
         let unreserved_diagnostics = SolveDiagnosticPayload::new(vec![0x91, 0x03])?;
-        let unreserved_input_bytes = unreserved_instance.to_bytes();
+        let unreserved_input_bytes = unreserved_instance.to_v2_bytes();
         let unreserved_diagnostic_bytes = unreserved_diagnostics.to_msgpack_bytes()?;
 
         {
@@ -889,7 +889,7 @@ fn log_failed_solve_with_id_validates_id_before_storing_payloads() {
         let first_instance = constant_instance(Sense::Minimize, 50.0);
         let duplicate_instance = constant_instance(Sense::Maximize, 60.0);
         let duplicate_diagnostics = SolveDiagnosticPayload::new(vec![0x91, 0x04])?;
-        let duplicate_input_bytes = duplicate_instance.to_bytes();
+        let duplicate_input_bytes = duplicate_instance.to_v2_bytes();
         let duplicate_diagnostic_bytes = duplicate_diagnostics.to_msgpack_bytes()?;
 
         {

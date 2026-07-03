@@ -66,7 +66,7 @@ def test_instance_annotations_round_trip_through_bytes():
     instance.dataset = "unit-test"
     instance.add_user_annotation("source", "bytes")
 
-    restored = Instance.from_bytes(instance.to_bytes())
+    restored = Instance.from_v1_bytes(instance.to_v1_bytes())
 
     assert restored.title == "Proto Title"
     assert restored.license == "MIT"
@@ -169,7 +169,7 @@ def test_solution_annotations_round_trip_through_bytes():
     solution.parameters = {"time_limit": 1}
     solution.add_user_annotation("source", "bytes")
 
-    restored = type(solution).from_bytes(solution.to_bytes())
+    restored = type(solution).from_v1_bytes(solution.to_v1_bytes())
 
     assert restored.solver == {"name": "unit-solver"}
     assert restored.parameters == {"time_limit": 1}
@@ -258,7 +258,7 @@ def test_parametric_instance_annotations_round_trip_through_bytes():
     instance.title = "Parametric Proto Title"
     instance.add_user_annotation("source", "bytes")
 
-    restored = ParametricInstance.from_bytes(instance.to_bytes())
+    restored = ParametricInstance.from_v1_bytes(instance.to_v1_bytes())
 
     assert restored.title == "Parametric Proto Title"
     assert restored.get_user_annotation("source") == "bytes"
@@ -295,7 +295,7 @@ def test_sample_set_annotations_round_trip_through_bytes():
     sample_set.parameters = {"num_reads": 10}
     sample_set.add_user_annotation("source", "bytes")
 
-    restored = type(sample_set).from_bytes(sample_set.to_bytes())
+    restored = type(sample_set).from_v1_bytes(sample_set.to_v1_bytes())
 
     assert restored.solver == {"name": "unit-sampler"}
     assert restored.parameters == {"num_reads": 10}

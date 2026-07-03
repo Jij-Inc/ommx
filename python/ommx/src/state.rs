@@ -140,12 +140,12 @@ impl State {
     }
 
     #[staticmethod]
-    pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
+    pub fn from_v1_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
         let inner = ommx::v1::State::decode(bytes.as_bytes())?;
         Ok(Self(inner))
     }
 
-    pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
+    pub fn to_v1_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
         Ok(PyBytes::new(py, &self.0.encode_to_vec()))
     }
 

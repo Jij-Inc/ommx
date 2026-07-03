@@ -532,8 +532,8 @@ impl TryFrom<v2::Solution> for Solution {
 /// in those collections is dropped on serialization. This is a wire-format
 /// limitation that pre-dates the label/context SoA refactor; the matching
 /// `Parse` impl above initializes those collections to
-/// `Default::default()` for symmetry. Round-trip through `to_bytes` /
-/// `from_bytes` preserves variable labels and regular-constraint context.
+/// `Default::default()` for symmetry. Round-trip through `to_v1_bytes` /
+/// `from_v1_bytes` preserves variable labels and regular-constraint context.
 impl From<Solution> for crate::v1::Solution {
     fn from(solution: Solution) -> Self {
         let feasible = solution.feasible();
@@ -619,7 +619,7 @@ mod tests {
 
     #[test]
     #[allow(deprecated)]
-    fn test_solution_to_bytes_filters_reserved_annotation_key() {
+    fn test_solution_to_v1_bytes_filters_reserved_annotation_key() {
         let mut solution: Solution = v1::Solution {
             state: Some(v1::State::default()),
             feasible: true,
@@ -637,7 +637,7 @@ mod tests {
             ("org.example.owner".to_string(), "domain".to_string()),
         ]);
 
-        let restored = Solution::from_bytes(&solution.to_bytes()).unwrap();
+        let restored = Solution::from_v1_bytes(&solution.to_v1_bytes()).unwrap();
 
         assert!(!restored.annotations.contains_key(&reserved_key));
         assert_eq!(
@@ -1037,7 +1037,7 @@ mod tests {
         "###);
     }
 
-    /// Regression: `Solution::to_bytes` / `from_bytes` must preserve the
+    /// Regression: `Solution::to_v1_bytes` / `from_v1_bytes` must preserve the
     /// variable-label and regular-constraint-context stores. Indicator /
     /// one-hot / sos1 evaluated context is dropped because `v1::Solution`
     /// has no fields for those collections — that's a wire-format
@@ -1122,8 +1122,8 @@ mod tests {
                 .unwrap()
         };
 
-        let bytes = solution.to_bytes();
-        let recovered = Solution::from_bytes(&bytes).unwrap();
+        let bytes = solution.to_v1_bytes();
+        let recovered = Solution::from_v1_bytes(&bytes).unwrap();
 
         assert_eq!(recovered.variable_labels().name(var_id), Some("x"));
         assert_eq!(recovered.variable_labels().subscripts(var_id), &[0]);

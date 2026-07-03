@@ -372,7 +372,7 @@ fn decode_solves<'reg>(
                 )
             })?
             .clone();
-        validate_layer_media_type(&input, &crate::artifact::media_types::v1_instance())
+        crate::artifact::media_types::instance_payload_version(input.media_type())
             .with_context(|| format!("Invalid Run {run_id} Solve {} input", solve.solve_id))?;
         let status = SolveStatus::from_config(&solve.status)
             .with_context(|| format!("Invalid Run {run_id} Solve {} status", solve.solve_id))?;
@@ -399,11 +399,10 @@ fn decode_solves<'reg>(
                         )
                     })?
                     .clone();
-                validate_layer_media_type(
-                    &descriptor,
-                    &crate::artifact::media_types::v1_solution(),
-                )
-                .with_context(|| format!("Invalid Run {run_id} Solve {} output", solve.solve_id))?;
+                crate::artifact::media_types::solution_payload_version(descriptor.media_type())
+                    .with_context(|| {
+                        format!("Invalid Run {run_id} Solve {} output", solve.solve_id)
+                    })?;
                 Ok::<_, anyhow::Error>(descriptor)
             })
             .transpose()?;

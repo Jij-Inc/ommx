@@ -117,8 +117,8 @@ def test_serialize_not_yet_supported():
         sense=Instance.MINIMIZE,
     )
 
-    with pytest.raises(BaseException):
-        instance.to_bytes()
+    with pytest.raises(Exception, match="to_v2_bytes"):
+        instance.to_v1_bytes()
 
 
 def test_both_one_hot_and_sos1():

@@ -841,41 +841,39 @@ fn decode_experiment_attachment<'py>(
     experiment: &ommx::experiment::ExperimentDyn,
     name: &str,
 ) -> Result<Bound<'py, PyAny>> {
-    match experiment.attachment_media_type(name)?.as_ref() {
-        "application/json" => decode_json_blob(py, &experiment.attachment_blob(name)?),
-        ommx::artifact::media_types::V1_INSTANCE_MEDIA_TYPE => {
-            let inner = experiment.attachment_instance(name)?;
-            Ok(crate::Instance { inner }
-                .into_pyobject(py)?
-                .into_any()
-                .unbind()
-                .into_bound(py))
-        }
-        ommx::artifact::media_types::V1_PARAMETRIC_INSTANCE_MEDIA_TYPE => {
-            let inner = experiment.attachment_parametric_instance(name)?;
-            Ok(crate::ParametricInstance { inner }
-                .into_pyobject(py)?
-                .into_any()
-                .unbind()
-                .into_bound(py))
-        }
-        ommx::artifact::media_types::V1_SOLUTION_MEDIA_TYPE => {
-            let inner = experiment.attachment_solution(name)?;
-            Ok(crate::Solution { inner }
-                .into_pyobject(py)?
-                .into_any()
-                .unbind()
-                .into_bound(py))
-        }
-        ommx::artifact::media_types::V1_SAMPLE_SET_MEDIA_TYPE => {
-            let inner = experiment.attachment_sample_set(name)?;
-            Ok(crate::SampleSet { inner }
-                .into_pyobject(py)?
-                .into_any()
-                .unbind()
-                .into_bound(py))
-        }
-        _ => Ok(PyBytes::new(py, &experiment.attachment_blob(name)?).into_any()),
+    let media_type = experiment.attachment_media_type(name)?;
+    if media_type.as_ref() == "application/json" {
+        decode_json_blob(py, &experiment.attachment_blob(name)?)
+    } else if ommx::artifact::media_types::is_instance_payload_media_type(&media_type) {
+        let inner = experiment.attachment_instance(name)?;
+        Ok(crate::Instance { inner }
+            .into_pyobject(py)?
+            .into_any()
+            .unbind()
+            .into_bound(py))
+    } else if ommx::artifact::media_types::is_parametric_instance_payload_media_type(&media_type) {
+        let inner = experiment.attachment_parametric_instance(name)?;
+        Ok(crate::ParametricInstance { inner }
+            .into_pyobject(py)?
+            .into_any()
+            .unbind()
+            .into_bound(py))
+    } else if ommx::artifact::media_types::is_solution_payload_media_type(&media_type) {
+        let inner = experiment.attachment_solution(name)?;
+        Ok(crate::Solution { inner }
+            .into_pyobject(py)?
+            .into_any()
+            .unbind()
+            .into_bound(py))
+    } else if ommx::artifact::media_types::is_sample_set_payload_media_type(&media_type) {
+        let inner = experiment.attachment_sample_set(name)?;
+        Ok(crate::SampleSet { inner }
+            .into_pyobject(py)?
+            .into_any()
+            .unbind()
+            .into_bound(py))
+    } else {
+        Ok(PyBytes::new(py, &experiment.attachment_blob(name)?).into_any())
     }
 }
 
@@ -884,41 +882,39 @@ fn decode_run_attachment<'py>(
     run: &ommx::experiment::SealedRunDyn,
     name: &str,
 ) -> Result<Bound<'py, PyAny>> {
-    match run.attachment_media_type(name)?.as_ref() {
-        "application/json" => decode_json_blob(py, &run.attachment_blob(name)?),
-        ommx::artifact::media_types::V1_INSTANCE_MEDIA_TYPE => {
-            let inner = run.attachment_instance(name)?;
-            Ok(crate::Instance { inner }
-                .into_pyobject(py)?
-                .into_any()
-                .unbind()
-                .into_bound(py))
-        }
-        ommx::artifact::media_types::V1_PARAMETRIC_INSTANCE_MEDIA_TYPE => {
-            let inner = run.attachment_parametric_instance(name)?;
-            Ok(crate::ParametricInstance { inner }
-                .into_pyobject(py)?
-                .into_any()
-                .unbind()
-                .into_bound(py))
-        }
-        ommx::artifact::media_types::V1_SOLUTION_MEDIA_TYPE => {
-            let inner = run.attachment_solution(name)?;
-            Ok(crate::Solution { inner }
-                .into_pyobject(py)?
-                .into_any()
-                .unbind()
-                .into_bound(py))
-        }
-        ommx::artifact::media_types::V1_SAMPLE_SET_MEDIA_TYPE => {
-            let inner = run.attachment_sample_set(name)?;
-            Ok(crate::SampleSet { inner }
-                .into_pyobject(py)?
-                .into_any()
-                .unbind()
-                .into_bound(py))
-        }
-        _ => Ok(PyBytes::new(py, &run.attachment_blob(name)?).into_any()),
+    let media_type = run.attachment_media_type(name)?;
+    if media_type.as_ref() == "application/json" {
+        decode_json_blob(py, &run.attachment_blob(name)?)
+    } else if ommx::artifact::media_types::is_instance_payload_media_type(&media_type) {
+        let inner = run.attachment_instance(name)?;
+        Ok(crate::Instance { inner }
+            .into_pyobject(py)?
+            .into_any()
+            .unbind()
+            .into_bound(py))
+    } else if ommx::artifact::media_types::is_parametric_instance_payload_media_type(&media_type) {
+        let inner = run.attachment_parametric_instance(name)?;
+        Ok(crate::ParametricInstance { inner }
+            .into_pyobject(py)?
+            .into_any()
+            .unbind()
+            .into_bound(py))
+    } else if ommx::artifact::media_types::is_solution_payload_media_type(&media_type) {
+        let inner = run.attachment_solution(name)?;
+        Ok(crate::Solution { inner }
+            .into_pyobject(py)?
+            .into_any()
+            .unbind()
+            .into_bound(py))
+    } else if ommx::artifact::media_types::is_sample_set_payload_media_type(&media_type) {
+        let inner = run.attachment_sample_set(name)?;
+        Ok(crate::SampleSet { inner }
+            .into_pyobject(py)?
+            .into_any()
+            .unbind()
+            .into_bound(py))
+    } else {
+        Ok(PyBytes::new(py, &run.attachment_blob(name)?).into_any())
     }
 }
 

@@ -74,10 +74,18 @@ impl_instance_annotations!(Instance);
 #[pymethods]
 impl Instance {
     #[staticmethod]
-    pub fn from_bytes(py: Python<'_>, bytes: &Bound<PyBytes>) -> Result<Self> {
+    pub fn from_v1_bytes(py: Python<'_>, bytes: &Bound<PyBytes>) -> Result<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
         Ok(Self {
-            inner: ommx::Instance::from_bytes(bytes.as_bytes())?,
+            inner: ommx::Instance::from_v1_bytes(bytes.as_bytes())?,
+        })
+    }
+
+    #[staticmethod]
+    pub fn from_v2_bytes(py: Python<'_>, bytes: &Bound<PyBytes>) -> Result<Self> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        Ok(Self {
+            inner: ommx::Instance::from_v2_bytes(bytes.as_bytes())?,
         })
     }
 
@@ -698,9 +706,14 @@ impl Instance {
             .collect()
     }
 
-    pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+    pub fn to_v1_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        PyBytes::new(py, &self.inner.to_bytes())
+        Ok(PyBytes::new(py, &self.inner.to_v1_bytes()?))
+    }
+
+    pub fn to_v2_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        PyBytes::new(py, &self.inner.to_v2_bytes())
     }
 
     /// Get the set of decision variable IDs used in the objective and remaining constraints.

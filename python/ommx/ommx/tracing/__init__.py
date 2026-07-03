@@ -7,7 +7,7 @@ Two user-facing APIs, sharing the same OTel collector + renderers:
     %load_ext ommx.tracing
 
     %%ommx_trace
-    instance = Instance.from_bytes(blob)
+    instance = Instance.from_v2_bytes(blob)
     solution = instance.evaluate(state)
 
 Cell output shows a nested text tree of every span produced during the

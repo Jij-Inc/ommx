@@ -292,7 +292,7 @@ pub fn load(name: &str) -> Result<Instance> {
     let annotations = layer.annotations().as_ref().cloned().unwrap_or_default();
     let mut instance: crate::Instance = proto.try_into()?;
     crate::FlatAnnotations::merge_annotations(&mut instance, &annotations);
-    Ok(instance.into())
+    Ok(instance.try_into()?)
 }
 
 #[cfg(test)]

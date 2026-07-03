@@ -323,13 +323,8 @@ impl SolveDyn {
 
     pub fn input_instance(&self) -> Result<Instance> {
         let descriptor = self.input_descriptor()?;
-        ensure!(
-            descriptor.media_type().to_string() == media_types::V1_INSTANCE_MEDIA_TYPE,
-            "Solve {} input has media type '{}', expected '{}'",
-            self.solve_id,
-            descriptor.media_type(),
-            media_types::V1_INSTANCE_MEDIA_TYPE
-        );
+        media_types::instance_payload_version(descriptor.media_type())
+            .with_context(|| format!("Invalid Solve {} input", self.solve_id))?;
         self.registry_handle
             .registry()
             .get_instance_layer(&descriptor)
@@ -350,13 +345,8 @@ impl SolveDyn {
         let Some(descriptor) = self.output_descriptor()? else {
             return Ok(None);
         };
-        ensure!(
-            descriptor.media_type().to_string() == media_types::V1_SOLUTION_MEDIA_TYPE,
-            "Solve {} output has media type '{}', expected '{}'",
-            self.solve_id,
-            descriptor.media_type(),
-            media_types::V1_SOLUTION_MEDIA_TYPE
-        );
+        media_types::solution_payload_version(descriptor.media_type())
+            .with_context(|| format!("Invalid Solve {} output", self.solve_id))?;
         Ok(Some(
             self.registry_handle
                 .registry()

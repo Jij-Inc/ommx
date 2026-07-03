@@ -196,9 +196,15 @@ def test_typed_attachment_user_annotations_round_trip():
 
     loaded_instance = loaded.get_instance("instance")
     assert loaded_instance.get_user_annotation("source") == "experiment"
+    loaded_instance_attachment = loaded.get_attachment("instance")
+    assert isinstance(loaded_instance_attachment, Instance)
+    assert loaded_instance_attachment.get_user_annotation("source") == "experiment"
 
     loaded_solution = loaded.runs[0].get_solution("solution")
     assert loaded_solution.get_user_annotation("source") == "run"
+    loaded_solution_attachment = loaded.runs[0].get_attachment("solution")
+    assert isinstance(loaded_solution_attachment, Solution)
+    assert loaded_solution_attachment.get_user_annotation("source") == "run"
 
 
 def test_commit_rejects_open_run():
