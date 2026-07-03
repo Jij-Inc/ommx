@@ -28,12 +28,13 @@ impl QuadraticMonomial {
         Self::Pair(VariableIDPair::new(a, b))
     }
 
-    pub fn iter(&self) -> Box<dyn Iterator<Item = VariableID>> {
-        match self {
-            Self::Pair(pair) => Box::new(pair.iter()),
-            Self::Linear(id) => Box::new(std::iter::once(*id)),
-            Self::Constant => Box::new(std::iter::empty()),
-        }
+    pub fn iter(&self) -> impl Iterator<Item = VariableID> {
+        let ids = match self {
+            Self::Pair(pair) => [Some(pair.lower()), Some(pair.upper())],
+            Self::Linear(id) => [Some(*id), None],
+            Self::Constant => [None, None],
+        };
+        ids.into_iter().flatten()
     }
 }
 
@@ -298,12 +299,8 @@ impl Monomial for QuadraticMonomial {
         false
     }
 
-    fn ids(&self) -> Box<dyn Iterator<Item = VariableID> + '_> {
-        match self {
-            Self::Pair(pair) => Box::new(pair.iter()),
-            Self::Linear(id) => Box::new(std::iter::once(*id)),
-            Self::Constant => Box::new(std::iter::empty()),
-        }
+    fn ids(&self) -> impl Iterator<Item = VariableID> + '_ {
+        self.iter()
     }
 
     fn from_ids(mut ids: impl Iterator<Item = VariableID>) -> Option<Self> {

@@ -4,7 +4,8 @@ use criterion::{
 
 use ommx::{
     random::{random, random_deterministic, Rng},
-    Linear, LinearParameters, Polynomial, PolynomialParameters, Quadratic, QuadraticParameters,
+    Function, Linear, LinearParameters, Polynomial, PolynomialParameters, Quadratic,
+    QuadraticParameters,
 };
 
 /// Benchmark for summation of many linear functions with three terms
@@ -257,6 +258,78 @@ fn add_small_many_linear_to_polynomial(c: &mut Criterion) {
     group.finish();
 }
 
+/// Summation of many small `Function`s.
+///
+/// Unlike the `PolynomialBase`-level sums above, this exercises the
+/// `Function`-level `Add` including the per-operation variant
+/// re-canonicalization (`normalize`).
+fn sum_function_linear_small_many(c: &mut Criterion) {
+    let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
+    let mut group = c.benchmark_group("sum-function-linear-small-many");
+    group.plot_config(plot_config.clone());
+    for num_functions in [100, 1000, 10_000] {
+        let mut rng = Rng::deterministic();
+        let functions = (0..num_functions)
+            .map(|_| -> Function {
+                random::<Linear>(
+                    &mut rng,
+                    LinearParameters::new(3, num_functions.into()).unwrap(),
+                )
+                .into()
+            })
+            .collect::<Vec<_>>();
+        group.bench_with_input(
+            BenchmarkId::new("sum-function-linear-small-many", num_functions.to_string()),
+            &functions,
+            |b, functions| {
+                b.iter(|| {
+                    functions
+                        .iter()
+                        .try_fold(Function::zero(), |acc, f| acc + f)
+                        .unwrap()
+                })
+            },
+        );
+    }
+    group.finish();
+}
+
+/// Summation of many small quadratic `Function`s (see
+/// [`sum_function_linear_small_many`]).
+fn sum_function_quadratic_small_many(c: &mut Criterion) {
+    let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
+    let mut group = c.benchmark_group("sum-function-quadratic-small-many");
+    group.plot_config(plot_config.clone());
+    for num_functions in [100, 1000, 10_000] {
+        let mut rng = Rng::deterministic();
+        let functions = (0..num_functions)
+            .map(|_| -> Function {
+                random::<Quadratic>(
+                    &mut rng,
+                    QuadraticParameters::new(3, (num_functions as u64).into()).unwrap(),
+                )
+                .into()
+            })
+            .collect::<Vec<_>>();
+        group.bench_with_input(
+            BenchmarkId::new(
+                "sum-function-quadratic-small-many",
+                num_functions.to_string(),
+            ),
+            &functions,
+            |b, functions| {
+                b.iter(|| {
+                    functions
+                        .iter()
+                        .try_fold(Function::zero(), |acc, f| acc + f)
+                        .unwrap()
+                })
+            },
+        );
+    }
+    group.finish();
+}
+
 criterion_group!(
     benches,
     sum_linear_small_many,
@@ -267,5 +340,7 @@ criterion_group!(
     sum_polynomial_large_little,
     add_small_many_linear_to_quadratic,
     add_small_many_linear_to_polynomial,
+    sum_function_linear_small_many,
+    sum_function_quadratic_small_many,
 );
 criterion_main!(benches);

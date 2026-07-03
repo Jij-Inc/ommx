@@ -1,5 +1,5 @@
 use super::*;
-use crate::{CoefficientError, LinearMonomial, MonomialDyn, QuadraticMonomial};
+use crate::{CoefficientError, LinearMonomial, Monomial, MonomialDyn, QuadraticMonomial};
 use std::ops::{Add, Neg};
 
 impl Function {
@@ -11,44 +11,68 @@ impl Function {
         matches!(self, Function::Zero)
     }
 
-    pub(crate) fn from_polynomial(polynomial: Polynomial) -> Self {
-        if polynomial.is_zero() {
-            Function::Zero
-        } else if polynomial.degree() == 0 {
-            Function::Constant(
-                polynomial
-                    .get(&MonomialDyn::default())
-                    .expect("non-zero degree-0 polynomial has a constant term"),
-            )
-        } else if let Ok(linear) = Linear::try_from(&polynomial) {
-            Function::Linear(linear)
-        } else if let Ok(quadratic) = Quadratic::try_from(&polynomial) {
-            Function::Quadratic(quadratic)
-        } else {
-            Function::Polynomial(polynomial)
-        }
-    }
-
-    pub(crate) fn into_polynomial(self) -> Polynomial {
-        match self {
-            Function::Zero => Polynomial::zero(),
-            Function::Constant(c) => Polynomial::from(c),
-            Function::Linear(l) => Polynomial::new(
-                l.into_iter()
-                    .map(|(m, c)| (MonomialDyn::from(m), c))
-                    .collect(),
-            ),
-            Function::Quadratic(q) => Polynomial::new(
-                q.into_iter()
-                    .map(|(m, c)| (MonomialDyn::from(m), c))
-                    .collect(),
-            ),
-            Function::Polynomial(p) => p,
-        }
-    }
-
+    /// Re-canonicalize the variant after an arithmetic operation.
+    ///
+    /// Arithmetic can lower the actual degree (e.g. all quadratic terms
+    /// cancel), so the result may need to be downgraded to a lower-degree
+    /// variant. This only inspects the monomials already stored in the term
+    /// map and rebuilds it exclusively when a downgrade actually happens; the
+    /// common case (variant already canonical) is a key scan that stops at
+    /// the first monomial of maximal degree.
     pub(crate) fn normalize(self) -> Self {
-        Function::from_polynomial(self.into_polynomial())
+        fn constant_term<M: crate::Monomial>(p: &crate::PolynomialBase<M>) -> Coefficient {
+            p.get(&M::default())
+                .expect("non-zero degree-0 polynomial has a constant term")
+        }
+        match self {
+            Function::Zero | Function::Constant(_) => self,
+            Function::Linear(l) => {
+                if l.is_zero() {
+                    Function::Zero
+                } else if l.degree() == 0 {
+                    Function::Constant(constant_term(&l))
+                } else {
+                    Function::Linear(l)
+                }
+            }
+            Function::Quadratic(q) => {
+                if q.is_zero() {
+                    return Function::Zero;
+                }
+                match q.degree().into_inner() {
+                    2 => Function::Quadratic(q),
+                    1 => Function::Linear(
+                        Linear::try_from(&q).expect("degree-1 polynomial is linear"),
+                    ),
+                    _ => Function::Constant(constant_term(&q)),
+                }
+            }
+            Function::Polynomial(p) => {
+                if p.is_zero() {
+                    return Function::Zero;
+                }
+                let mut degree = Degree::from(0);
+                for monomial in p.keys() {
+                    degree = degree.max(monomial.degree());
+                    if degree > 2 {
+                        // The variant cannot be downgraded; stop scanning.
+                        break;
+                    }
+                }
+                if degree > 2 {
+                    return Function::Polynomial(p);
+                }
+                match degree.into_inner() {
+                    2 => Function::Quadratic(
+                        Quadratic::try_from(&p).expect("degree-2 polynomial is quadratic"),
+                    ),
+                    1 => Function::Linear(
+                        Linear::try_from(&p).expect("degree-1 polynomial is linear"),
+                    ),
+                    _ => Function::Constant(constant_term(&p)),
+                }
+            }
+        }
     }
 
     /// Add `rhs` to this function in place.
@@ -139,8 +163,9 @@ impl Add<&Function> for Function {
 impl Add<Coefficient> for Function {
     type Output = Result<Self, CoefficientError>;
 
-    fn add(self, rhs: Coefficient) -> Self::Output {
-        Ok(Function::from_polynomial((self.into_polynomial() + rhs)?))
+    fn add(mut self, rhs: Coefficient) -> Self::Output {
+        self.try_add_assign_in_place(Function::Constant(rhs))?;
+        Ok(self.normalize())
     }
 }
 
@@ -185,14 +210,31 @@ impl Add<&Function> for Coefficient {
 }
 
 macro_rules! impl_add_polynomial_rhs {
+    (& $rhs:ty) => {
+        impl Add<&$rhs> for Function {
+            type Output = Result<Function, CoefficientError>;
+
+            fn add(mut self, rhs: &$rhs) -> Self::Output {
+                self.try_add_assign_in_place(Function::from(rhs.clone()))?;
+                Ok(self.normalize())
+            }
+        }
+
+        impl Add<&$rhs> for &Function {
+            type Output = Result<Function, CoefficientError>;
+
+            fn add(self, rhs: &$rhs) -> Self::Output {
+                self.clone() + rhs
+            }
+        }
+    };
     ($rhs:ty) => {
         impl Add<$rhs> for Function {
             type Output = Result<Function, CoefficientError>;
 
-            fn add(self, rhs: $rhs) -> Self::Output {
-                Ok(Function::from_polynomial(
-                    (self.into_polynomial() + Function::from(rhs.clone()).into_polynomial())?,
-                ))
+            fn add(mut self, rhs: $rhs) -> Self::Output {
+                self.try_add_assign_in_place(Function::from(rhs))?;
+                Ok(self.normalize())
             }
         }
 

@@ -5,10 +5,11 @@ use std::ops::Sub;
 impl Sub for Function {
     type Output = Result<Self, CoefficientError>;
 
-    fn sub(self, rhs: Self) -> Self::Output {
-        Ok(Function::from_polynomial(
-            (self.into_polynomial() - rhs.into_polynomial())?,
-        ))
+    fn sub(mut self, rhs: Self) -> Self::Output {
+        // `x - y = x + (-y)` term by term, so this matches a term-level
+        // subtraction exactly (`Sub` on the term maps also adds `-c`).
+        self.try_add_assign_in_place(-rhs)?;
+        Ok(self.normalize())
     }
 }
 
@@ -39,8 +40,9 @@ impl Sub<&Function> for Function {
 impl Sub<Coefficient> for Function {
     type Output = Result<Self, CoefficientError>;
 
-    fn sub(self, rhs: Coefficient) -> Self::Output {
-        Ok(Function::from_polynomial((self.into_polynomial() - rhs)?))
+    fn sub(mut self, rhs: Coefficient) -> Self::Output {
+        self.try_add_assign_in_place(Function::Constant(-rhs))?;
+        Ok(self.normalize())
     }
 }
 
@@ -72,7 +74,7 @@ impl Sub<Function> for Coefficient {
     type Output = Result<Function, CoefficientError>;
 
     fn sub(self, rhs: Function) -> Self::Output {
-        Ok(Function::from_polynomial((self - rhs.into_polynomial())?))
+        (-rhs) + self
     }
 }
 
@@ -85,14 +87,31 @@ impl Sub<&Function> for Coefficient {
 }
 
 macro_rules! impl_sub_polynomial_rhs {
+    (& $rhs:ty) => {
+        impl Sub<&$rhs> for Function {
+            type Output = Result<Function, CoefficientError>;
+
+            fn sub(mut self, rhs: &$rhs) -> Self::Output {
+                self.try_add_assign_in_place(-Function::from(rhs.clone()))?;
+                Ok(self.normalize())
+            }
+        }
+
+        impl Sub<&$rhs> for &Function {
+            type Output = Result<Function, CoefficientError>;
+
+            fn sub(self, rhs: &$rhs) -> Self::Output {
+                self.clone() - rhs
+            }
+        }
+    };
     ($rhs:ty) => {
         impl Sub<$rhs> for Function {
             type Output = Result<Function, CoefficientError>;
 
-            fn sub(self, rhs: $rhs) -> Self::Output {
-                Ok(Function::from_polynomial(
-                    (self.into_polynomial() - Function::from(rhs.clone()).into_polynomial())?,
-                ))
+            fn sub(mut self, rhs: $rhs) -> Self::Output {
+                self.try_add_assign_in_place(-Function::from(rhs))?;
+                Ok(self.normalize())
             }
         }
 

@@ -3,14 +3,16 @@ use crate::{CoefficientError, LinearMonomial, MonomialDyn, QuadraticMonomial};
 use std::ops::Mul;
 
 impl<M: Monomial> PolynomialBase<M> {
-    pub(crate) fn try_scale_assign_in_place(
+    /// Apply `f` to every coefficient in place, removing terms for which `f`
+    /// returns `None` (i.e. the coefficient became zero).
+    fn try_map_coefficients_in_place(
         &mut self,
-        rhs: Coefficient,
+        f: impl Fn(Coefficient) -> Result<Option<Coefficient>, CoefficientError>,
     ) -> Result<(), CoefficientError> {
         let mut removed = Vec::new();
         for (monomial, coefficient) in self.terms.iter_mut() {
-            if let Some(scaled) = (*coefficient * rhs)? {
-                *coefficient = scaled;
+            if let Some(mapped) = f(*coefficient)? {
+                *coefficient = mapped;
             } else {
                 removed.push(monomial.clone());
             }
@@ -20,19 +22,28 @@ impl<M: Monomial> PolynomialBase<M> {
         }
         Ok(())
     }
+
+    pub(crate) fn try_scale_assign_in_place(
+        &mut self,
+        rhs: Coefficient,
+    ) -> Result<(), CoefficientError> {
+        self.try_map_coefficients_in_place(|coefficient| coefficient * rhs)
+    }
+
+    pub(crate) fn try_div_assign_in_place(
+        &mut self,
+        rhs: Coefficient,
+    ) -> Result<(), CoefficientError> {
+        self.try_map_coefficients_in_place(|coefficient| coefficient / rhs)
+    }
 }
 
 impl<M: Monomial> Mul<Coefficient> for PolynomialBase<M> {
     type Output = Result<Self, CoefficientError>;
 
-    fn mul(self, rhs: Coefficient) -> Self::Output {
-        let mut out = Self::default();
-        for (monomial, coefficient) in self.terms {
-            if let Some(coefficient) = (coefficient * rhs)? {
-                out.terms.insert(monomial, coefficient);
-            }
-        }
-        Ok(out)
+    fn mul(mut self, rhs: Coefficient) -> Self::Output {
+        self.try_scale_assign_in_place(rhs)?;
+        Ok(self)
     }
 }
 
@@ -163,7 +174,10 @@ where
     type Output = Result<PolynomialBase<N>, CoefficientError>;
 
     fn mul(self, rhs: &PolynomialBase<M2>) -> Self::Output {
-        let mut out = PolynomialBase::<N>::default();
+        // The product has at most n·m terms; reserving up front avoids the
+        // repeated rehash-and-grow cycles of an incrementally filled map.
+        let mut out =
+            PolynomialBase::<N>::with_capacity(self.num_terms().saturating_mul(rhs.num_terms()));
         for (lhs_m, lhs_c) in self {
             for (rhs_m, rhs_c) in rhs {
                 if let Some(coefficient) = (*lhs_c * *rhs_c)? {

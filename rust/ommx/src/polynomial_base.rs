@@ -45,7 +45,7 @@ pub trait Monomial: Into<MonomialDyn> + Debug + Clone + Hash + Eq + Default + 's
     /// This returns `true` if the monomial is reduced.
     fn reduce_binary_power(&mut self, binary_ids: &VariableIDSet) -> bool;
 
-    fn ids(&self) -> Box<dyn Iterator<Item = VariableID> + '_>;
+    fn ids(&self) -> impl Iterator<Item = VariableID> + '_;
     /// Create a new monomial from a set of ids. If the size of IDs are too large, it will return `None`.
     fn from_ids(ids: impl Iterator<Item = VariableID>) -> Option<Self>;
 
@@ -106,6 +106,19 @@ impl<M: Monomial> PolynomialBase<M> {
         let mut terms = FnvHashMap::default();
         terms.insert(M::default(), coeff!(1.0));
         Self { terms }
+    }
+
+    /// Create an empty polynomial whose term map can hold at least
+    /// `capacity` terms without reallocating.
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            terms: FnvHashMap::with_capacity_and_hasher(capacity, Default::default()),
+        }
+    }
+
+    /// Reserve capacity for at least `additional` more terms.
+    pub fn reserve(&mut self, additional: usize) {
+        self.terms.reserve(additional);
     }
 
     pub fn add_term(&mut self, term: M, coefficient: Coefficient) -> Result<(), CoefficientError> {
