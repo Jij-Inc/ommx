@@ -21670,7 +21670,7 @@
         {
           "kind": "Class",
           "name": "Solution",
-          "doc": "Python SDK domain type for solutions serialized with the `ommx.v1.Solution` wire format.\n\nThis also contains annotations persisted in the protobuf payload and mirrored\nto OMMX Artifact descriptors.",
+          "doc": "Python SDK domain type for evaluated optimization results.\n\nThis class contains annotations persisted in protobuf payloads and mirrored\nto OMMX Artifact descriptors.",
           "bases": [],
           "methods": [
             {

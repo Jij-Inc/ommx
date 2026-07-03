@@ -6354,9 +6354,9 @@ class SealedRun:
 @typing.final
 class Solution:
     r"""
-    Python SDK domain type for solutions serialized with the `ommx.v1.Solution` wire format.
+    Python SDK domain type for evaluated optimization results.
 
-    This also contains annotations persisted in the protobuf payload and mirrored
+    This class contains annotations persisted in protobuf payloads and mirrored
     to OMMX Artifact descriptors.
     """
 

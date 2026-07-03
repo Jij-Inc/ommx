@@ -12,9 +12,9 @@ use pyo3::{
 };
 use std::collections::BTreeSet;
 
-/// Python SDK domain type for solutions serialized with the `ommx.v1.Solution` wire format.
+/// Python SDK domain type for evaluated optimization results.
 ///
-/// This also contains annotations persisted in the protobuf payload and mirrored
+/// This class contains annotations persisted in protobuf payloads and mirrored
 /// to OMMX Artifact descriptors.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
