@@ -79,11 +79,12 @@ pub enum LinearMonomial {
 }
 
 impl LinearMonomial {
-    pub fn iter(&self) -> Box<dyn Iterator<Item = VariableID>> {
-        match self {
-            LinearMonomial::Variable(id) => Box::new(std::iter::once(*id)),
-            LinearMonomial::Constant => Box::new(std::iter::empty()),
-        }
+    pub fn iter(&self) -> impl Iterator<Item = VariableID> {
+        let id = match self {
+            LinearMonomial::Variable(id) => Some(*id),
+            LinearMonomial::Constant => None,
+        };
+        id.into_iter()
     }
 }
 
@@ -201,11 +202,8 @@ impl Monomial for LinearMonomial {
         false
     }
 
-    fn ids(&self) -> Box<dyn Iterator<Item = VariableID>> {
-        match self {
-            LinearMonomial::Variable(id) => Box::new(std::iter::once(*id)),
-            LinearMonomial::Constant => Box::new(std::iter::empty()),
-        }
+    fn ids(&self) -> impl Iterator<Item = VariableID> + '_ {
+        self.iter()
     }
 
     fn from_ids(mut ids: impl Iterator<Item = VariableID>) -> Option<Self> {
