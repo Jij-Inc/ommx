@@ -70,6 +70,35 @@ scope, or invariant ownership, keep this order explicit throughout the work:
    - Proposed fixes should name the owning abstraction and route the operation through it.
    - If the task is addressing review feedback rather than writing a review, keep the workflow self-contained: read the exact comment and surrounding diff, reconstruct the reviewer concern, search for sibling defects, and fix the responsibility boundary rather than only the commented line.
 
+## Evidence Requirements
+
+Do not accept prose reasoning — yours or the author's — as proof that an
+invariant holds. For every invariant the change relies on, weakens, or moves,
+require two pointers:
+
+1. Enforcing code: the constructor, parser, setter, or validation function
+   that makes the invariant hold on every construction and mutation path.
+2. A test that fails if the invariant breaks: a unit test, a proptest
+   property, or a round-trip test.
+
+If either pointer cannot be named, that gap is itself a finding, usually more
+important than the local code shape.
+
+Prefer evidence that scales past reviewer enumeration:
+
+- Cross-table semantic invariants (referenced IDs exist, active/removed
+  disjointness, sidecar key coverage) belong in owner-level validation helpers
+  that `Arbitrary`-based proptests assert as postconditions. Then new builders,
+  parsers, unchecked constructors, and restore paths are covered automatically
+  instead of by listing them during review.
+- Parse/serialize/projection changes must come with a round-trip property test
+  built on the existing `Arbitrary` implementations. A diff that "looks
+  symmetric" is not evidence; if the round-trip proptest is missing, that is
+  the finding.
+- When a confirmed finding could have been prevented by a narrower type, a
+  private module, or a typestate (as the Stage pattern already does for
+  lifecycle), propose that enforcement as the fix, not a prose warning.
+
 ## Table And Collection Ownership Checks
 
 - Classify each changed operation as either a root-level semantic operation or
@@ -100,18 +129,19 @@ scope, or invariant ownership, keep this order explicit throughout the work:
 
 ## Recurring OMMX Review Checks
 
+This list is a mechanization backlog, not a permanent checklist. Each entry
+exists because reviews caught the same defect class more than once. When you
+confirm a recurring finding, propose the enforcement that retires the entry — a
+type that makes the state unrepresentable, a lint that rejects the pattern, or
+a property test that fails on regression — instead of adding more prose here.
+A new entry must name its intended graduation target.
+
 - Check every root object and constraint family affected by a change: `Instance`, `ParametricInstance`, `Solution`, `SampleSet`, regular constraints, indicator, one-hot, and SOS1. A fix for only the regular path is suspect when sidecars, annotations, parsing, serialization, or statistics are involved.
 - For parse/serialize/projection changes, verify round-trips preserve one source of truth: prune or transfer sidecars when absorbing constraints, reject or filter reserved annotation keys at protobuf boundaries, and make projected counts include special constraint families.
 - For fallible mutation paths, check atomicity before side effects. Build fallible derived values before inserting constraints, clear stale cached outputs before retryable operations, and validate reserved IDs before registry or storage writes.
-- For numeric consistency checks, handle boundary and invalid values explicitly. Absolute tolerances are inclusive unless the API documents otherwise, and NaN/Inf must not pass through `(a - b).abs() > atol` style comparisons silently.
+- For numeric consistency checks, handle boundary and invalid values explicitly. Absolute tolerances are inclusive unless the API documents otherwise, and NaN/Inf must not pass through `(a - b).abs() > atol` style comparisons silently. Graduation target: a shared tolerance-comparison helper plus a clippy `disallowed-methods` rule against raw tolerance comparisons.
 - For public API changes, check all user-facing surfaces together: Rust docs, Python docs, migration guides, stubs, examples, DataFrame flags, docstrings, and Python magic-method return contracts.
-- For public Rust structs, check whether the struct-level Rustdoc states the invariants that the type owns: valid IDs, active/removed disjointness, sidecar key coverage, non-empty sets, finite/non-zero numeric values, reserved annotation namespaces, or host-level serialization requirements. If callers can construct or mutate the struct, the docs should name the intended constructors or owner APIs that preserve those invariants.
-- For table/collection refactors, distinguish table-level invariants from
-  host-level invariants. A table may own row IDs and label/context sidecars,
-  but only the enclosing `Instance`, `Solution`, or `SampleSet` can prove that
-  row payloads reference known decision variables, parameters, samples, or
-  constraints. Review both the lower-level table API and every top-level
-  builder/parser/unchecked path.
+- For public Rust structs, check whether the struct-level Rustdoc states the invariants that the type owns: valid IDs, active/removed disjointness, sidecar key coverage, non-empty sets, finite/non-zero numeric values, reserved annotation namespaces, or host-level serialization requirements. If callers can construct or mutate the struct, the docs should name the intended constructors or owner APIs that preserve those invariants. Graduation target: enable `#![warn(missing_docs)]` on the crate so presence is machine-checked; invariant content remains a review concern.
 - For `LogicalMemoryProfile`, prefer `#[derive(LogicalMemoryProfile)]` for
   local Rust data types, including newtypes, tuple structs, and fieldless enums.
   Hand-written impls on ordinary data shapes are a review risk because new
@@ -120,6 +150,8 @@ scope, or invariant ownership, keep this order explicit throughout the work:
   treating the type as an exception. Reserve manual impls for semantically
   special profiling shapes such as foreign/generated types, data-carrying enums,
   stage-specific owner wrappers, or shared ownership types like `Rc`/`Arc`.
+  Graduation target: a lint or test that rejects hand-written impls on
+  ordinary data shapes.
 - For new builder/setter/attachment APIs, add focused tests for both preservation and rejection paths, such as sidecar round-trips and orphan-ID validation.
 - For derived analysis or table-building code, avoid recomputing whole-instance partitions inside per-variable or per-row loops; compute the owner-side role/set partition once when the operation needs it repeatedly.
 
@@ -135,3 +167,7 @@ scope, or invariant ownership, keep this order explicit throughout the work:
 - Which operations can bypass the owner or invalidate the invariant?
 - Are mutex or lock scopes limited to the protected domain state, with slow I/O or persistence kept outside when possible?
 - Do sealed, dynamic, persisted, and Python-facing paths preserve the same model?
+- For each invariant, which code enforces it and which test fails when it
+  breaks? If neither can be named, is that reported as a finding?
+- If a finding recurs across reviews, which type, lint, or property test would
+  retire it?

@@ -14,26 +14,13 @@ Use `.agents/skills/domain-responsibility-review/SKILL.md` first when a change h
 ## Access Scope Design Principle
 
 When designing access scope, do not start from the field, method, or visibility
-keyword that would make the current call site compile. First return to the
-underlying mathematical or domain operation system.
+keyword that would make the current call site compile. Start from the
+operation → representation → API derivation defined as the Mandatory Design
+Order in `.agents/skills/domain-responsibility-review/SKILL.md`. That order is
+owned by the domain skill; do not restate or fork it here. This skill
+translates its outcome into Rust module structure and visibility.
 
-Always keep this order explicit:
-
-1. Mathematical/domain operation.
-   - State which operation is being performed on the root domain object.
-   - Describe the action independently of the current Rust fields or helper
-     methods.
-2. Representation and invariants.
-   - State which data structures represent the operation's state.
-   - State which invariants each structure owns, and which invariants require
-     the root object because they cross table or collection boundaries.
-3. API shape and visibility.
-   - Derive the callable API and its visibility from the operation and
-     invariant analysis.
-   - Expose only the table-local or collection-local effects required by the
-     root operation.
-
-For each operation, state:
+For each operation identified there, state:
 
 - which data the operation must read;
 - which data the operation must change;
@@ -88,6 +75,31 @@ boundary.
      names like `rewrite`, `update`, `with`, or `into_parts` unless the owning
      abstraction genuinely exposes that whole operation.
 
+## Mechanical First Pass
+
+Before reading the diff by hand, generate the visibility delta and review that
+listing. Eye-scanning a large diff misses added `pub` items; a generated
+listing does not.
+
+- Enumerate every new visible item and every new mutable access path in the
+  diff:
+  ```
+  git diff main...HEAD -- rust/ | rg '^\+.*\bpub\b'
+  git diff main...HEAD -- rust/ | rg '^\+.*(-> *&mut|&mut self)'
+  ```
+- When `cargo-public-api` and a nightly toolchain are available, produce the
+  public API delta of the SDK crate instead of reconstructing it from the
+  diff:
+  ```
+  cargo public-api -p ommx diff main..HEAD
+  ```
+  CI already runs cargo-semver-checks, but that only answers "is this a semver
+  break". The API delta answers "which public items appeared, changed, or
+  disappeared" — every added line is an SDK commitment that needs an owner
+  justification.
+- Feed each listed item into the Review Flow below: which owner, which
+  callers, which invariant.
+
 ## Review Flow
 
 1. Check that visibility follows the domain owner.
@@ -106,11 +118,17 @@ boundary.
      locally and what invariant remains owned by the caller. If the callee
      accepts a closure or raw parts that let the caller mix these layers, treat
      it as a boundary leak unless the owner analysis proves otherwise.
+   - Ask for evidence, not reassurance: name the validator or constructor that
+     enforces the invariant on this path, and the test that fails if it is
+     bypassed. If neither exists, the missing enforcement is the finding.
 
 4. Write findings in boundary terms.
    - State which owner boundary is being crossed or which invariant can be bypassed.
    - Then point to the concrete visibility or module structure causing it.
    - Recommend a module restructuring or delegation through the owning abstraction, not only a keyword change.
+   - Prefer proposing enforcement — a narrower type, a private module, a
+     validator asserted by property tests — over a prose warning; see the
+     graduation policy in `.agents/skills/domain-responsibility-review/SKILL.md`.
 
 ## Checklist
 
@@ -121,3 +139,7 @@ boundary.
 - Does the module tree express that boundary without `pub(super)` or `pub(in ...)`?
 - If `pub(crate)` is used, is the cross-module reason documented and is the exposed effect narrow enough?
 - Can any visible item let callers bypass validation, persistence, or source-of-truth invariants?
+- Did you generate the visibility delta (`pub` grep or `cargo public-api diff`)
+  instead of relying on eye-scanning the diff?
+- For each new visible item, can you point to the validator or constructor that
+  protects its invariants and the test that fails on bypass?
