@@ -81,11 +81,13 @@ Before reading the diff by hand, generate the visibility delta and review that
 listing. Eye-scanning a large diff misses added `pub` items; a generated
 listing does not.
 
-- Enumerate every new visible item and every new mutable access path in the
-  diff:
+- Enumerate every new visible item and every new mutable access path across
+  all changed Rust sources. OMMX Rust code is not confined to `rust/`; the
+  PyO3 binding crate lives under `python/ommx/src`, so match by file type
+  rather than hard-coding a directory:
   ```
-  git diff main...HEAD -- rust/ | rg '^\+.*\bpub\b'
-  git diff main...HEAD -- rust/ | rg '^\+.*(-> *&mut|&mut self)'
+  git diff main...HEAD -- '*.rs' | rg '^\+.*\bpub\b'
+  git diff main...HEAD -- '*.rs' | rg '^\+.*(-> *&mut|&mut self)'
   ```
 - When `cargo-public-api` and a nightly toolchain are available, produce the
   public API delta of the SDK crate instead of reconstructing it from the
@@ -120,7 +122,8 @@ listing does not.
      it as a boundary leak unless the owner analysis proves otherwise.
    - Ask for evidence, not reassurance: name the validator or constructor that
      enforces the invariant on this path, and the test that fails if it is
-     bypassed. If neither exists, the missing enforcement is the finding.
+     bypassed. If either is missing, that missing enforcement or missing test
+     is the finding.
 
 4. Write findings in boundary terms.
    - State which owner boundary is being crossed or which invariant can be bypassed.
@@ -142,4 +145,5 @@ listing does not.
 - Did you generate the visibility delta (`pub` grep or `cargo public-api diff`)
   instead of relying on eye-scanning the diff?
 - For each new visible item, can you point to the validator or constructor that
-  protects its invariants and the test that fails on bypass?
+  protects its invariants and the test that fails on bypass? Either gap is a
+  finding on its own.

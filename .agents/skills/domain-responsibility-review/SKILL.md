@@ -168,6 +168,6 @@ A new entry must name its intended graduation target.
 - Are mutex or lock scopes limited to the protected domain state, with slow I/O or persistence kept outside when possible?
 - Do sealed, dynamic, persisted, and Python-facing paths preserve the same model?
 - For each invariant, which code enforces it and which test fails when it
-  breaks? If neither can be named, is that reported as a finding?
+  breaks? If either cannot be named, is that reported as a finding?
 - If a finding recurs across reviews, which type, lint, or property test would
   retire it?
