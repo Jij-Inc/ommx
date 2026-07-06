@@ -13,7 +13,8 @@ Changes merged after the most recent release will be appended here as they land,
 {class}`~ommx.Instance` and {class}`~ommx.ParametricInstance` now provide
 {meth}`~ommx.Instance.format_function` / {meth}`~ommx.ParametricInstance.format_function`
 for rendering a function with decision-variable and parameter modeling labels.
-The context-free {class}`~ommx.Function` text representation is unchanged.
+The context-free {class}`~ommx.Function` text representation remains raw-ID
+based.
 
 For notebook previews, use {meth}`~ommx.Instance.display_function` or
 {meth}`~ommx.ParametricInstance.display_function`. They return

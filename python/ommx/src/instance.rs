@@ -719,8 +719,8 @@ impl Instance {
     /// Format a function using this instance's decision-variable labels.
     ///
     /// The plain {func}`repr` / {func}`str` representation of {class}`Function`
-    /// is unchanged and remains context-free. Use this method when labels from
-    /// this instance should be used instead of raw ``x<id>`` symbols such as ``x1``.
+    /// remains context-free and renders raw ``x<id>`` symbols such as ``x1``.
+    /// Use this method when labels from this instance should be used instead.
     #[pyo3(signature = (function, max_terms=None, max_chars=None))]
     pub fn format_function(
         &self,

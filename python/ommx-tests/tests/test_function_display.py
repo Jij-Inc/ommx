@@ -7,8 +7,7 @@ from ommx.display import FunctionDisplay
 def _display_snapshot(display: FunctionDisplay) -> str:
     return "\n".join(
         [
-            str(display),
-            "",
+            f"text={display}",
             f"repr={display!r}",
             f"total_terms={display.total_terms}",
             f"written_terms={display.written_terms}",
@@ -91,7 +90,7 @@ def test_display_function_boundary_budgets(snapshot):
     partial_first_term = instance.display_function(x[0] + x[1], max_chars=3)
 
     assert (
-        "\n\n".join(
+        "\n---\n".join(
             [
                 "zero_terms\n" + _display_snapshot(zero_terms),
                 "zero_chars\n" + _display_snapshot(zero_chars),

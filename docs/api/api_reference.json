@@ -9270,7 +9270,7 @@
             },
             {
               "name": "format_function",
-              "doc": "Format a function using this instance's decision-variable labels.\n\nThe plain {func}`repr` / {func}`str` representation of {class}`Function`\nis unchanged and remains context-free. Use this method when labels from\nthis instance should be used instead of raw ``x<id>`` symbols such as ``x1``.",
+              "doc": "Format a function using this instance's decision-variable labels.\n\nThe plain {func}`repr` / {func}`str` representation of {class}`Function`\nremains context-free and renders raw ``x<id>`` symbols such as ``x1``.\nUse this method when labels from this instance should be used instead.",
               "signatures": [
                 {
                   "parameters": [
@@ -15291,7 +15291,7 @@
             },
             {
               "name": "format_function",
-              "doc": "Format a function using this parametric instance's decision-variable and parameter labels.\n\nThe plain {func}`repr` / {func}`str` representation of {class}`Function`\nis unchanged and remains context-free. Use this method when labels from\nthis parametric instance should be used instead of raw ``x<id>`` symbols such as ``x1``.",
+              "doc": "Format a function using this parametric instance's decision-variable and parameter labels.\n\nThe plain {func}`repr` / {func}`str` representation of {class}`Function`\nremains context-free and renders raw ``x<id>`` symbols such as ``x1``.\nUse this method when labels from this parametric instance should be used instead.",
               "signatures": [
                 {
                   "parameters": [

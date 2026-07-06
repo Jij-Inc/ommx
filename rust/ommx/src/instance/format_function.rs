@@ -17,8 +17,8 @@ impl Instance {
     /// and explicit output limits.
     ///
     /// The context-free [`std::fmt::Display`] implementation for [`Function`]
-    /// is unchanged; use this method when the enclosing instance should resolve
-    /// variable IDs into modeling labels.
+    /// still renders raw variable IDs; use this method when the enclosing
+    /// instance should resolve IDs into modeling labels.
     pub fn format_function_with(
         &self,
         function: &Function,
@@ -171,7 +171,9 @@ fn label_to_symbol(id: VariableID, label: ModelingLabel) -> String {
         parameters,
         description: _,
     } = label;
-    let mut symbol = name.unwrap_or_else(|| format!("x{}", id.into_inner()));
+    let mut symbol = name
+        .filter(|name| !name.is_empty())
+        .unwrap_or_else(|| format!("x{}", id.into_inner()));
 
     let mut parts: Vec<String> = subscripts.into_iter().map(|i| i.to_string()).collect();
     let mut parameters: Vec<_> = parameters.into_iter().collect();
@@ -235,7 +237,7 @@ mod tests {
     }
 
     #[test]
-    fn context_free_display_is_unchanged() {
+    fn context_free_display_remains_raw_id_based() {
         let function: Function =
             (((coeff!(2.0) * linear!(1)).unwrap() - (coeff!(3.0) * linear!(2)).unwrap()).unwrap()
                 + coeff!(1.0))
@@ -265,6 +267,20 @@ mod tests {
         insta::assert_snapshot!(
             instance.format_function(&function).unwrap(),
             @"x[2, 1, scenario=base] + x2[3, a=b, k=v] + 5"
+        );
+    }
+
+    #[test]
+    fn empty_names_fall_back_to_id_symbols() {
+        let instance = instance_with_labels(vec![(
+            1,
+            label(Some(""), vec![2], vec![("scenario", "base")]),
+        )]);
+        let function: Function = linear!(1).into();
+
+        insta::assert_snapshot!(
+            instance.format_function(&function).unwrap(),
+            @"x1[2, scenario=base]"
         );
     }
 
@@ -422,6 +438,32 @@ mod tests {
         insta::assert_snapshot!(
             instance.format_function(&function).unwrap(),
             @"x[1] + p[scenario=base]"
+        );
+    }
+
+    #[test]
+    fn parametric_instance_empty_parameter_names_fall_back_to_id_symbols() {
+        let mut parameter_labels = crate::ParameterLabelStore::default();
+        parameter_labels.insert(
+            VariableID::from(100),
+            label(Some(""), vec![], vec![("scenario", "base")]),
+        );
+        let parameters =
+            ParameterTable::new(BTreeSet::from([VariableID::from(100)]), parameter_labels).unwrap();
+
+        let instance = ParametricInstance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::new())
+            .parameters(parameters)
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap();
+        let function: Function = linear!(100).into();
+
+        insta::assert_snapshot!(
+            instance.format_function(&function).unwrap(),
+            @"x100[scenario=base]"
         );
     }
 

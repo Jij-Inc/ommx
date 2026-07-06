@@ -2887,8 +2887,8 @@ class Instance:
         Format a function using this instance's decision-variable labels.
 
         The plain {func}`repr` / {func}`str` representation of {class}`Function`
-        is unchanged and remains context-free. Use this method when labels from
-        this instance should be used instead of raw ``x<id>`` symbols such as ``x1``.
+        remains context-free and renders raw ``x<id>`` symbols such as ``x1``.
+        Use this method when labels from this instance should be used instead.
         """
     def display_function(
         self,
@@ -4956,8 +4956,8 @@ class ParametricInstance:
         Format a function using this parametric instance's decision-variable and parameter labels.
 
         The plain {func}`repr` / {func}`str` representation of {class}`Function`
-        is unchanged and remains context-free. Use this method when labels from
-        this parametric instance should be used instead of raw ``x<id>`` symbols such as ``x1``.
+        remains context-free and renders raw ``x<id>`` symbols such as ``x1``.
+        Use this method when labels from this parametric instance should be used instead.
         """
     def display_function(
         self,
