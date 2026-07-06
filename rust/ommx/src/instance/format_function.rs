@@ -220,7 +220,7 @@ mod tests {
             .unwrap()
             .into();
 
-        assert_eq!(function.to_string(), "2*x1 - 3*x2 + 1");
+        insta::assert_snapshot!(function.to_string(), @"2*x1 - 3*x2 + 1");
     }
 
     #[test]
@@ -233,9 +233,9 @@ mod tests {
             .unwrap()
             .into();
 
-        assert_eq!(
+        insta::assert_snapshot!(
             instance.format_function(&function).unwrap(),
-            "x[2, 1, scenario=base] + x2[3, a=b, k=v] + 5"
+            @"x[2, 1, scenario=base] + x2[3, a=b, k=v] + 5"
         );
     }
 
@@ -250,9 +250,9 @@ mod tests {
             .unwrap()
             .into();
 
-        assert_eq!(
+        insta::assert_snapshot!(
             instance.format_function(&function).unwrap(),
-            "x[0]{id=1} + x[0]{id=2} + x[1]"
+            @"x[0]{id=1} + x[0]{id=2} + x[1]"
         );
     }
 
@@ -272,9 +272,10 @@ mod tests {
                 },
             )
             .unwrap_err();
-        assert!(err
-            .to_string()
-            .contains("unknown decision variable ID VariableID(999)"));
+        insta::assert_snapshot!(
+            err.to_string(),
+            @"Function references unknown decision variable ID VariableID(999)"
+        );
     }
 
     #[test]
@@ -297,11 +298,15 @@ mod tests {
                 },
             )
             .unwrap();
-        assert_eq!(formatted.text, "x*y + z");
-        assert_eq!(formatted.total_terms, 3);
-        assert_eq!(formatted.written_terms, 2);
-        assert_eq!(formatted.omitted_terms, 1);
-        assert!(!formatted.truncated_by_chars);
+        insta::assert_debug_snapshot!(formatted, @r###"
+        FormattedFunction {
+            text: "x*y + z",
+            total_terms: 3,
+            written_terms: 2,
+            omitted_terms: 1,
+            truncated_by_chars: false,
+        }
+        "###);
 
         let formatted = instance
             .format_function_with(
@@ -312,11 +317,15 @@ mod tests {
                 },
             )
             .unwrap();
-        assert_eq!(formatted.text, "x*y");
-        assert_eq!(formatted.total_terms, 3);
-        assert_eq!(formatted.written_terms, 1);
-        assert_eq!(formatted.omitted_terms, 2);
-        assert!(formatted.truncated_by_chars);
+        insta::assert_debug_snapshot!(formatted, @r###"
+        FormattedFunction {
+            text: "x*y",
+            total_terms: 3,
+            written_terms: 1,
+            omitted_terms: 2,
+            truncated_by_chars: true,
+        }
+        "###);
     }
 
     #[test]
@@ -345,9 +354,9 @@ mod tests {
             .unwrap();
         let function: Function = (linear!(1) + linear!(100)).unwrap().into();
 
-        assert_eq!(
+        insta::assert_snapshot!(
             instance.format_function(&function).unwrap(),
-            "x[1] + p[scenario=base]"
+            @"x[1] + p[scenario=base]"
         );
     }
 
@@ -370,9 +379,10 @@ mod tests {
 
         let function: Function = linear!(1).into();
         let err = instance.format_function(&function).unwrap_err();
-        assert!(err
-            .to_string()
-            .contains("both a decision variable and a parameter"));
+        insta::assert_snapshot!(
+            err.to_string(),
+            @"Function ID VariableID(1) is both a decision variable and a parameter"
+        );
     }
 
     #[test]
@@ -388,8 +398,9 @@ mod tests {
 
         let function: Function = linear!(999).into();
         let err = instance.format_function(&function).unwrap_err();
-        assert!(err
-            .to_string()
-            .contains("unknown decision variable or parameter ID VariableID(999)"));
+        insta::assert_snapshot!(
+            err.to_string(),
+            @"Function references unknown decision variable or parameter ID VariableID(999)"
+        );
     }
 }

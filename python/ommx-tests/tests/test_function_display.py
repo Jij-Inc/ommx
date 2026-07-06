@@ -4,7 +4,22 @@ from ommx import DecisionVariable, Instance, Linear, Parameter, ParametricInstan
 from ommx.display import FunctionDisplay
 
 
-def test_format_function_accepts_to_function_and_returns_full_text():
+def _display_snapshot(display: FunctionDisplay) -> str:
+    return "\n".join(
+        [
+            str(display),
+            "",
+            f"repr={display!r}",
+            f"total_terms={display.total_terms}",
+            f"written_terms={display.written_terms}",
+            f"omitted_terms={display.omitted_terms}",
+            f"truncated_by_chars={display.truncated_by_chars}",
+            f"truncated={display.truncated}",
+        ]
+    )
+
+
+def test_format_function_accepts_to_function_and_returns_full_text(snapshot):
     x = [
         DecisionVariable.binary(0, name="x", subscripts=[0]),
         DecisionVariable.binary(1, name="x", subscripts=[1]),
@@ -16,10 +31,10 @@ def test_format_function_accepts_to_function_and_returns_full_text():
         constraints={},
     )
 
-    assert instance.format_function(x[0] + 2 * x[1]) == "x[0] + 2*x[1]"
+    assert instance.format_function(x[0] + 2 * x[1]) == snapshot
 
 
-def test_display_function_returns_bounded_function_display_by_default():
+def test_display_function_returns_bounded_function_display_by_default(snapshot):
     x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(101)]
     instance = Instance.from_components(
         sense=Instance.MINIMIZE,
@@ -35,10 +50,10 @@ def test_display_function_returns_bounded_function_display_by_default():
     assert display.written_terms == 100
     assert display.omitted_terms == 1
     assert display.truncated
-    assert str(display).startswith("x[0] + x[1]")
+    assert _display_snapshot(display) == snapshot
 
 
-def test_function_display_html_escapes_labels_and_reports_truncation():
+def test_function_display_html_escapes_labels_and_reports_truncation(snapshot):
     x = [
         DecisionVariable.binary(0, name="<x&>"),
         DecisionVariable.binary(1, name="y"),
@@ -56,9 +71,38 @@ def test_function_display_html_escapes_labels_and_reports_truncation():
     assert "<pre><code>&lt;x&amp;&gt;</code></pre>" in html
     assert "<x&>" not in html
     assert "showing 1 of 2 terms; 1 omitted" in html
+    assert html == snapshot
 
 
-def test_parametric_instance_format_function_uses_parameter_labels():
+def test_display_function_boundary_budgets(snapshot):
+    x = [
+        DecisionVariable.binary(0, name="alpha"),
+        DecisionVariable.binary(1, name="beta"),
+    ]
+    instance = Instance.from_components(
+        sense=Instance.MINIMIZE,
+        objective=0,
+        decision_variables=x,
+        constraints={},
+    )
+
+    zero_terms = instance.display_function(x[0] + x[1], max_terms=0)
+    zero_chars = instance.display_function(x[0] + x[1], max_chars=0)
+    partial_first_term = instance.display_function(x[0] + x[1], max_chars=3)
+
+    assert (
+        "\n\n".join(
+            [
+                "zero_terms\n" + _display_snapshot(zero_terms),
+                "zero_chars\n" + _display_snapshot(zero_chars),
+                "partial_first_term\n" + _display_snapshot(partial_first_term),
+            ]
+        )
+        == snapshot
+    )
+
+
+def test_parametric_instance_format_function_uses_parameter_labels(snapshot):
     x = DecisionVariable.binary(0, name="x")
     p = Parameter(100, name="p", parameters={"scenario": "base"})
     instance = ParametricInstance.from_components(
@@ -69,7 +113,7 @@ def test_parametric_instance_format_function_uses_parameter_labels():
         parameters=[p],
     )
 
-    assert instance.format_function(x + p) == "x + p[scenario=base]"
+    assert instance.format_function(x + p) == snapshot
 
 
 def test_unknown_ids_error_even_beyond_preview_budget():
