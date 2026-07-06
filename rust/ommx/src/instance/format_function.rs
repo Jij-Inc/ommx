@@ -1,6 +1,6 @@
 use super::*;
 use crate::{FormattedFunction, FunctionFormatOptions};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 impl Instance {
     /// Format a function using this instance's decision-variable modeling labels.
@@ -115,31 +115,53 @@ fn validate_parametric_instance_ids(
 }
 
 fn sorted_required_ids(function: &Function) -> Vec<VariableID> {
-    function.required_ids().into_iter().collect()
+    let mut ids: Vec<_> = function.required_ids().into_iter().collect();
+    ids.sort_unstable();
+    ids
 }
 
 fn symbols_for_ids(
     ids: &[VariableID],
     mut label_for: impl FnMut(VariableID) -> ModelingLabel,
 ) -> BTreeMap<VariableID, String> {
-    let mut symbols = BTreeMap::new();
-    let mut collisions: BTreeMap<String, Vec<VariableID>> = BTreeMap::new();
+    let mut base_symbols = BTreeMap::new();
+    let mut base_collisions: BTreeMap<String, Vec<VariableID>> = BTreeMap::new();
 
     for &id in ids {
         let symbol = label_to_symbol(id, label_for(id));
-        collisions.entry(symbol.clone()).or_default().push(id);
+        base_collisions.entry(symbol.clone()).or_default().push(id);
+        base_symbols.insert(id, symbol);
+    }
+
+    let disambiguated_ids: BTreeSet<_> = base_collisions
+        .values()
+        .filter(|ids| ids.len() > 1)
+        .flatten()
+        .copied()
+        .collect();
+    let mut reserved_symbols: BTreeSet<_> = base_symbols
+        .iter()
+        .filter(|(id, _)| !disambiguated_ids.contains(id))
+        .map(|(_, symbol)| symbol.clone())
+        .collect();
+
+    let mut symbols = BTreeMap::new();
+    for (id, mut symbol) in base_symbols {
+        if disambiguated_ids.contains(&id) {
+            append_id_suffix(&mut symbol, id);
+            while reserved_symbols.contains(&symbol) {
+                append_id_suffix(&mut symbol, id);
+            }
+        }
+        reserved_symbols.insert(symbol.clone());
         symbols.insert(id, symbol);
     }
 
-    for (_, ids) in collisions.into_iter().filter(|(_, ids)| ids.len() > 1) {
-        for id in ids {
-            if let Some(symbol) = symbols.get_mut(&id) {
-                symbol.push_str(&format!("{{id={}}}", id.into_inner()));
-            }
-        }
-    }
-
     symbols
+}
+
+fn append_id_suffix(symbol: &mut String, id: VariableID) {
+    symbol.push_str(&format!("{{id={}}}", id.into_inner()));
 }
 
 fn label_to_symbol(id: VariableID, label: ModelingLabel) -> String {
@@ -253,6 +275,23 @@ mod tests {
         insta::assert_snapshot!(
             instance.format_function(&function).unwrap(),
             @"x[0]{id=1} + x[0]{id=2} + x[1]"
+        );
+    }
+
+    #[test]
+    fn avoids_generated_suffix_collisions_with_user_labels() {
+        let instance = instance_with_labels(vec![
+            (1, label(Some("x"), vec![], vec![])),
+            (2, label(Some("x"), vec![], vec![])),
+            (3, label(Some("x{id=1}"), vec![], vec![])),
+        ]);
+        let function: Function = ((linear!(1) + linear!(2)).unwrap() + linear!(3))
+            .unwrap()
+            .into();
+
+        insta::assert_snapshot!(
+            instance.format_function(&function).unwrap(),
+            @"x{id=1}{id=1} + x{id=2} + x{id=1}"
         );
     }
 

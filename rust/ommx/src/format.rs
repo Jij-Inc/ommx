@@ -96,31 +96,22 @@ fn write_term_to_string(
     Ok(out)
 }
 
-fn append_piece_with_char_limit(text: &mut String, piece: &str, max_chars: usize) -> bool {
-    let current = text.chars().count();
-    if current >= max_chars {
-        return false;
+fn char_prefix_byte_len(text: &str, max_chars: usize) -> usize {
+    if max_chars == 0 {
+        return 0;
     }
-
-    let piece_chars = piece.chars().count();
-    let remaining = max_chars - current;
-    if piece_chars <= remaining {
-        text.push_str(piece);
-        true
-    } else {
-        text.extend(piece.chars().take(remaining));
-        false
-    }
+    text.char_indices()
+        .nth(max_chars)
+        .map_or(text.len(), |(index, _)| index)
 }
 
 fn format_zero(opts: FunctionFormatOptions) -> FormattedFunction {
-    let mut text = String::new();
-    let truncated_by_chars = opts
-        .max_chars
-        .is_some_and(|max_chars| !append_piece_with_char_limit(&mut text, "0", max_chars));
-    if opts.max_chars.is_none() {
-        text.push('0');
-    }
+    let truncated_by_chars = opts.max_chars == Some(0);
+    let text = if truncated_by_chars {
+        String::new()
+    } else {
+        "0".to_string()
+    };
     FormattedFunction {
         text,
         total_terms: 0,
@@ -153,6 +144,7 @@ pub(crate) fn format_function_with_symbols(
 
     let total_terms = terms.len();
     let mut text = String::new();
+    let mut written_chars = 0;
     let mut written_terms = 0;
     let mut truncated_by_chars = false;
     for (index, (ids, coefficient)) in terms.into_iter().enumerate() {
@@ -172,15 +164,16 @@ pub(crate) fn format_function_with_symbols(
         };
 
         if let Some(max_chars) = opts.max_chars {
-            let current_chars = text.chars().count();
             let term_chars = term.chars().count();
-            if current_chars + term_chars <= max_chars {
+            if term_chars <= max_chars.saturating_sub(written_chars) {
                 text.push_str(&term);
+                written_chars += term_chars;
                 written_terms += 1;
             } else {
                 truncated_by_chars = true;
                 if text.is_empty() && max_chars > 0 {
-                    append_piece_with_char_limit(&mut text, &term, max_chars);
+                    let prefix_len = char_prefix_byte_len(&term, max_chars);
+                    text.push_str(&term[..prefix_len]);
                 }
                 break;
             }
