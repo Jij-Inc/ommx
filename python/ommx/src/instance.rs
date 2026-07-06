@@ -744,18 +744,13 @@ impl Instance {
     /// By default this returns a preview capped at 100 complete terms and
     /// 20,000 characters. Use {meth}`format_function` for an unbounded plain
     /// text string.
-    #[gen_stub(override_return_type(
-        type_repr = "display.FunctionDisplay",
-        imports = ("ommx.display")
-    ))]
     #[pyo3(signature = (function, max_terms=Some(100), max_chars=Some(20000)))]
-    pub fn display_function<'py>(
+    pub fn display_function(
         &self,
-        py: Python<'py>,
         function: Function,
         max_terms: Option<usize>,
         max_chars: Option<usize>,
-    ) -> Result<Bound<'py, PyAny>> {
+    ) -> Result<crate::display::FunctionDisplay> {
         let formatted = self.inner.format_function_with(
             &function.0,
             ommx::FunctionFormatOptions {
@@ -763,7 +758,7 @@ impl Instance {
                 max_chars,
             },
         )?;
-        crate::display::function_display(py, formatted)
+        Ok(crate::display::FunctionDisplay::new(formatted))
     }
 
     /// Get the set of decision variable IDs used in the objective and remaining constraints.
