@@ -50,6 +50,10 @@ jobs:
 
       # FIXME: `codspeed` command used in `CodSpeedHQ/action` cannot work with `uv run`
       - name: Build wheel
+        env:
+          # Keep Rust/PyO3 frames useful in CodSpeed's Python FFI flame graphs
+          # without forcing debuginfo into every release build.
+          CARGO_PROFILE_RELEASE_DEBUG: "true"
         run: |
           pip install python/ommx
           pip install pytest-codspeed
