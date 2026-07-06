@@ -6,6 +6,7 @@ mod clip_bounds;
 mod convert;
 mod decision_variable;
 mod evaluate;
+mod format_function;
 mod indicator;
 mod log_encode;
 mod logical_memory;

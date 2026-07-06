@@ -8,6 +8,33 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🆕 Context-aware function formatting ([#408](https://github.com/Jij-Inc/ommx/issues/408))
+
+{class}`~ommx.Instance` and {class}`~ommx.ParametricInstance` now provide
+{meth}`~ommx.Instance.format_function` / {meth}`~ommx.ParametricInstance.format_function`
+for rendering a function with decision-variable and parameter modeling labels.
+The context-free {class}`~ommx.Function` text representation is unchanged.
+
+For notebook previews, use {meth}`~ommx.Instance.display_function` or
+{meth}`~ommx.ParametricInstance.display_function`. They return
+{class}`ommx.display.FunctionDisplay`, which keeps truncation metadata and
+renders escaped HTML in Jupyter.
+
+```python
+from ommx import DecisionVariable, Instance
+
+x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(2)]
+instance = Instance.from_components(
+    sense=Instance.MINIMIZE,
+    objective=x[0] + 2 * x[1],
+    decision_variables=x,
+    constraints={},
+)
+
+assert instance.format_function(instance.objective) == "x[0] + 2*x[1]"
+preview = instance.display_function(instance.objective)
+```
+
 ## 3.0.0 Alpha 8
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0a8-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0a8)

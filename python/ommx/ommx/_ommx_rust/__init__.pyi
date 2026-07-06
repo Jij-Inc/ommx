@@ -7,6 +7,7 @@ import datetime
 import enum
 import numpy
 from ommx import adapter
+from ommx import display
 from ommx.experiment import attachments
 from ommx import tracing
 import os
@@ -2876,6 +2877,32 @@ class Instance:
         """
     def to_v1_bytes(self) -> bytes: ...
     def to_v2_bytes(self) -> bytes: ...
+    def format_function(
+        self,
+        function: ToFunction,
+        max_terms: typing.Optional[builtins.int] = None,
+        max_chars: typing.Optional[builtins.int] = None,
+    ) -> builtins.str:
+        r"""
+        Format a function using this instance's decision-variable labels.
+
+        The plain {func}`repr` / {func}`str` representation of {class}`Function`
+        is unchanged and remains context-free. Use this method when labels from
+        this instance should be used instead of raw ``x{id}`` symbols.
+        """
+    def display_function(
+        self,
+        function: ToFunction,
+        max_terms: typing.Optional[builtins.int] = 100,
+        max_chars: typing.Optional[builtins.int] = 20000,
+    ) -> display.FunctionDisplay:
+        r"""
+        Build a bounded notebook display object for a function in this instance's context.
+
+        By default this returns a preview capped at 100 complete terms and
+        20,000 characters. Use {meth}`format_function` for an unbounded plain
+        text string.
+        """
     def required_ids(self) -> builtins.set[builtins.int]:
         r"""
         Get the set of decision variable IDs used in the objective and remaining constraints.
@@ -4918,6 +4945,32 @@ class ParametricInstance:
         Substitute parameters to yield an instance.
 
         Parameters can be provided as a dict mapping parameter IDs to their values.
+        """
+    def format_function(
+        self,
+        function: ToFunction,
+        max_terms: typing.Optional[builtins.int] = None,
+        max_chars: typing.Optional[builtins.int] = None,
+    ) -> builtins.str:
+        r"""
+        Format a function using this parametric instance's decision-variable and parameter labels.
+
+        The plain {func}`repr` / {func}`str` representation of {class}`Function`
+        is unchanged and remains context-free. Use this method when labels from
+        this parametric instance should be used instead of raw ``x{id}`` symbols.
+        """
+    def display_function(
+        self,
+        function: ToFunction,
+        max_terms: typing.Optional[builtins.int] = 100,
+        max_chars: typing.Optional[builtins.int] = 20000,
+    ) -> display.FunctionDisplay:
+        r"""
+        Build a bounded notebook display object for a function in this parametric instance's context.
+
+        By default this returns a preview capped at 100 complete terms and
+        20,000 characters. Use {meth}`format_function` for an unbounded plain
+        text string.
         """
     def substitute(self, assignments: typing.Mapping[builtins.int, ToFunction]) -> None:
         r"""
