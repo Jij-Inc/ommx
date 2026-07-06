@@ -9061,6 +9061,73 @@
               "deprecated": null
             },
             {
+              "name": "display_function",
+              "doc": "Build a bounded notebook display object for a function in this instance's context.\n\nBy default this returns a preview capped at 100 complete terms and\n20,000 characters. Use {meth}`format_function` for an unbounded plain\ntext string.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "function",
+                      "type_": {
+                        "display": "ToFunction",
+                        "link_target": {
+                          "fqn": "ommx._ommx_rust.ToFunction",
+                          "doc_module": "ommx._ommx_rust",
+                          "kind": "Class",
+                          "attribute": null
+                        },
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "max_terms",
+                      "type_": {
+                        "display": "Optional[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "100"
+                      }
+                    },
+                    {
+                      "name": "max_chars",
+                      "type_": {
+                        "display": "Optional[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "20000"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "FunctionDisplay",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "empty",
               "doc": "Create trivial empty instance of minimization with zero objective, no constraints, and no decision variables.\n\n# Examples\n\n```python\n>>> from ommx import Instance\n>>> instance = Instance.empty()\n>>> instance.sense == Instance.MINIMIZE\nTrue\n```",
               "signatures": [
@@ -9195,6 +9262,73 @@
                         "children": []
                       }
                     ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "format_function",
+              "doc": "Format a function using this instance's decision-variable labels.\n\nThe plain {func}`repr` / {func}`str` representation of {class}`Function`\nremains context-free and renders raw ``x<id>`` symbols such as ``x1``.\nUse this method when labels from this instance should be used instead.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "function",
+                      "type_": {
+                        "display": "ToFunction",
+                        "link_target": {
+                          "fqn": "ommx._ommx_rust.ToFunction",
+                          "doc_module": "ommx._ommx_rust",
+                          "kind": "Class",
+                          "attribute": null
+                        },
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "max_terms",
+                      "type_": {
+                        "display": "Optional[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "max_chars",
+                      "type_": {
+                        "display": "Optional[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
                   }
                 }
               ],
@@ -15073,6 +15207,73 @@
               "deprecated": null
             },
             {
+              "name": "display_function",
+              "doc": "Build a bounded notebook display object for a function in this parametric instance's context.\n\nBy default this returns a preview capped at 100 complete terms and\n20,000 characters. Use {meth}`format_function` for an unbounded plain\ntext string.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "function",
+                      "type_": {
+                        "display": "ToFunction",
+                        "link_target": {
+                          "fqn": "ommx._ommx_rust.ToFunction",
+                          "doc_module": "ommx._ommx_rust",
+                          "kind": "Class",
+                          "attribute": null
+                        },
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "max_terms",
+                      "type_": {
+                        "display": "Optional[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "100"
+                      }
+                    },
+                    {
+                      "name": "max_chars",
+                      "type_": {
+                        "display": "Optional[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "20000"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "FunctionDisplay",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "empty",
               "doc": "Create trivial empty instance of minimization with zero objective, no constraints, and no decision variables and parameters.",
               "signatures": [
@@ -15080,6 +15281,73 @@
                   "parameters": [],
                   "return_type": {
                     "display": "ParametricInstance",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "format_function",
+              "doc": "Format a function using this parametric instance's decision-variable and parameter labels.\n\nThe plain {func}`repr` / {func}`str` representation of {class}`Function`\nremains context-free and renders raw ``x<id>`` symbols such as ``x1``.\nUse this method when labels from this parametric instance should be used instead.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "function",
+                      "type_": {
+                        "display": "ToFunction",
+                        "link_target": {
+                          "fqn": "ommx._ommx_rust.ToFunction",
+                          "doc_module": "ommx._ommx_rust",
+                          "kind": "Class",
+                          "attribute": null
+                        },
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "max_terms",
+                      "type_": {
+                        "display": "Optional[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "max_chars",
+                      "type_": {
+                        "display": "Optional[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "str",
                     "link_target": null,
                     "children": []
                   }

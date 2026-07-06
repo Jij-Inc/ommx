@@ -1,5 +1,32 @@
-use crate::{Monomial, MonomialDyn};
-use std::fmt;
+use crate::{Function, Monomial, MonomialDyn, VariableID};
+use std::{collections::BTreeMap, fmt};
+
+/// Options for formatting a [`Function`] with an instance-provided modeling context.
+///
+/// `max_terms` bounds the number of complete stored terms written. `max_chars`
+/// bounds the returned text by Unicode scalar values, so truncation never
+/// slices through the middle of a UTF-8 code point.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Default, crate::logical_memory::LogicalMemoryProfile,
+)]
+pub struct FunctionFormatOptions {
+    pub max_terms: Option<usize>,
+    pub max_chars: Option<usize>,
+}
+
+/// Result of context-aware function formatting.
+///
+/// `total_terms` is counted from the terms stored in the [`Function`] before
+/// output truncation. `written_terms` counts complete terms written to `text`;
+/// if the first term is clipped by `max_chars`, it is not counted as written.
+#[derive(Debug, Clone, PartialEq, Eq, crate::logical_memory::LogicalMemoryProfile)]
+pub struct FormattedFunction {
+    pub text: String,
+    pub total_terms: usize,
+    pub written_terms: usize,
+    pub omitted_terms: usize,
+    pub truncated_by_chars: bool,
+}
 
 fn write_f64_with_precision(f: &mut fmt::Formatter, coefficient: f64) -> fmt::Result {
     if let Some(precision) = f.precision() {
@@ -33,13 +60,142 @@ fn write_term(f: &mut fmt::Formatter, ids: MonomialDyn, coefficient: f64) -> fmt
     Ok(())
 }
 
+fn write_term_to_string(
+    ids: &MonomialDyn,
+    coefficient: f64,
+    symbols: &BTreeMap<VariableID, String>,
+) -> crate::Result<String> {
+    if ids.is_empty() {
+        return Ok(coefficient.to_string());
+    }
+
+    let mut out = String::new();
+    if coefficient == -1.0 {
+        out.push('-');
+    } else if coefficient != 1.0 {
+        out.push_str(&coefficient.to_string());
+    }
+    if coefficient.abs() != 1.0 {
+        out.push('*');
+    }
+
+    let mut ids = ids.iter().peekable();
+    if let Some(id) = ids.next() {
+        let symbol = symbols
+            .get(id)
+            .ok_or_else(|| crate::error!("Missing symbol for variable ID {id:?}"))?;
+        out.push_str(symbol);
+    }
+    for id in ids {
+        let symbol = symbols
+            .get(id)
+            .ok_or_else(|| crate::error!("Missing symbol for variable ID {id:?}"))?;
+        out.push('*');
+        out.push_str(symbol);
+    }
+    Ok(out)
+}
+
+fn char_prefix_byte_len(text: &str, max_chars: usize) -> usize {
+    if max_chars == 0 {
+        return 0;
+    }
+    text.char_indices()
+        .nth(max_chars)
+        .map_or(text.len(), |(index, _)| index)
+}
+
+fn format_zero(opts: FunctionFormatOptions) -> FormattedFunction {
+    let truncated_by_chars = opts.max_chars == Some(0);
+    let text = if truncated_by_chars {
+        String::new()
+    } else {
+        "0".to_string()
+    };
+    FormattedFunction {
+        text,
+        total_terms: 0,
+        written_terms: 0,
+        omitted_terms: 0,
+        truncated_by_chars,
+    }
+}
+
+pub(crate) fn format_function_with_symbols(
+    function: &Function,
+    symbols: &BTreeMap<VariableID, String>,
+    opts: FunctionFormatOptions,
+) -> crate::Result<FormattedFunction> {
+    let mut terms: Vec<_> = function
+        .iter()
+        .map(|(monomial, coefficient)| (monomial, coefficient.into_inner()))
+        .collect();
+    if terms.is_empty() {
+        return Ok(format_zero(opts));
+    }
+    terms.sort_unstable_by(|(a, _), (b, _)| {
+        if a.len() != b.len() {
+            b.len().cmp(&a.len())
+        } else {
+            a.cmp(b)
+        }
+    });
+
+    let total_terms = terms.len();
+    let mut text = String::new();
+    let mut written_chars = 0;
+    let mut written_terms = 0;
+    let mut truncated_by_chars = false;
+    for (index, (ids, coefficient)) in terms.into_iter().enumerate() {
+        if opts
+            .max_terms
+            .is_some_and(|max_terms| written_terms >= max_terms)
+        {
+            break;
+        }
+
+        let term = if coefficient < 0.0 && index > 0 {
+            format!(" - {}", write_term_to_string(&ids, -coefficient, symbols)?)
+        } else if index > 0 {
+            format!(" + {}", write_term_to_string(&ids, coefficient, symbols)?)
+        } else {
+            write_term_to_string(&ids, coefficient, symbols)?
+        };
+
+        if let Some(max_chars) = opts.max_chars {
+            let term_chars = term.chars().count();
+            if term_chars <= max_chars.saturating_sub(written_chars) {
+                text.push_str(&term);
+                written_chars += term_chars;
+                written_terms += 1;
+            } else {
+                truncated_by_chars = true;
+                if text.is_empty() && max_chars > 0 {
+                    let prefix_len = char_prefix_byte_len(&term, max_chars);
+                    text.push_str(&term[..prefix_len]);
+                }
+                break;
+            }
+        } else {
+            text.push_str(&term);
+            written_terms += 1;
+        }
+    }
+
+    Ok(FormattedFunction {
+        text,
+        total_terms,
+        written_terms,
+        omitted_terms: total_terms.saturating_sub(written_terms),
+        truncated_by_chars,
+    })
+}
+
 pub fn format_polynomial(
     f: &mut fmt::Formatter,
     iter: impl Iterator<Item = (MonomialDyn, f64)>,
 ) -> fmt::Result {
-    let mut terms: Vec<_> = iter
-        .filter(|(_, coefficient)| coefficient.abs() > f64::EPSILON)
-        .collect();
+    let mut terms: Vec<_> = iter.collect();
     if terms.is_empty() {
         write!(f, "0")?;
         return Ok(());

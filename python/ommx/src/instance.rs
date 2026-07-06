@@ -716,6 +716,51 @@ impl Instance {
         PyBytes::new(py, &self.inner.to_v2_bytes())
     }
 
+    /// Format a function using this instance's decision-variable labels.
+    ///
+    /// The plain {func}`repr` / {func}`str` representation of {class}`Function`
+    /// remains context-free and renders raw ``x<id>`` symbols such as ``x1``.
+    /// Use this method when labels from this instance should be used instead.
+    #[pyo3(signature = (function, max_terms=None, max_chars=None))]
+    pub fn format_function(
+        &self,
+        function: Function,
+        max_terms: Option<usize>,
+        max_chars: Option<usize>,
+    ) -> Result<String> {
+        let opts = ommx::FunctionFormatOptions {
+            max_terms,
+            max_chars,
+        };
+        if opts == ommx::FunctionFormatOptions::default() {
+            self.inner.format_function(&function.0)
+        } else {
+            Ok(self.inner.format_function_with(&function.0, opts)?.text)
+        }
+    }
+
+    /// Build a bounded notebook display object for a function in this instance's context.
+    ///
+    /// By default this returns a preview capped at 100 complete terms and
+    /// 20,000 characters. Use {meth}`format_function` for an unbounded plain
+    /// text string.
+    #[pyo3(signature = (function, max_terms=Some(100), max_chars=Some(20000)))]
+    pub fn display_function(
+        &self,
+        function: Function,
+        max_terms: Option<usize>,
+        max_chars: Option<usize>,
+    ) -> Result<crate::display::FunctionDisplay> {
+        let formatted = self.inner.format_function_with(
+            &function.0,
+            ommx::FunctionFormatOptions {
+                max_terms,
+                max_chars,
+            },
+        )?;
+        Ok(crate::display::FunctionDisplay::new(formatted))
+    }
+
     /// Get the set of decision variable IDs used in the objective and remaining constraints.
     ///
     /// # Examples

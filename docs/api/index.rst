@@ -19,6 +19,7 @@ Utilities
 
    ../autoapi/ommx/adapter/index
    ../autoapi/ommx/dataset/index
+   ../autoapi/ommx/display/index
    ../autoapi/ommx/testing/index
    ../autoapi/ommx/mps/index
    ../autoapi/ommx/qplib/index

@@ -39,6 +39,13 @@ def test_function_print_linear(snapshot):
     assert str(function) == snapshot
 
 
+def test_function_print_tiny_nonzero_coefficient(snapshot):
+    """Test Function print output preserves representable nonzero coefficients."""
+    x1 = DecisionVariable.binary(1)
+    function = Function(1e-20 * x1)
+    assert str(function) == snapshot
+
+
 def test_function_print_quadratic(snapshot):
     """Test Function print output with quadratic function."""
     x1 = DecisionVariable.binary(1)

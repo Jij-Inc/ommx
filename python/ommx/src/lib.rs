@@ -10,6 +10,7 @@ mod constraint;
 mod dataset;
 mod decision_variable;
 mod descriptor;
+mod display;
 mod enums;
 mod evaluated_constraint;
 mod evaluated_decision_variable;
