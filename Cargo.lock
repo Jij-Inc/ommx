@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "_ommx_rust"
-version = "3.0.0-alpha.2"
+version = "3.0.0-beta.1"
 dependencies = [
  "anyhow",
  "approx",
@@ -934,7 +934,7 @@ dependencies = [
 
 [[package]]
 name = "dataset"
-version = "3.0.0-alpha.2"
+version = "3.0.0-beta.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2450,7 +2450,7 @@ dependencies = [
 
 [[package]]
 name = "ommx"
-version = "3.0.0-alpha.2"
+version = "3.0.0-beta.1"
 dependencies = [
  "anyhow",
  "approx",
@@ -2507,7 +2507,7 @@ dependencies = [
 
 [[package]]
 name = "ommx-derive"
-version = "3.0.0-alpha.2"
+version = "3.0.0-beta.1"
 dependencies = [
  "insta",
  "prettyplease",
@@ -2943,7 +2943,7 @@ dependencies = [
 
 [[package]]
 name = "protogen"
-version = "3.0.0-alpha.2"
+version = "3.0.0-beta.1"
 dependencies = [
  "anyhow",
  "colored 3.1.1",
