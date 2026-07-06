@@ -716,6 +716,14 @@ impl Instance {
         PyBytes::new(py, &self.inner.to_v2_bytes())
     }
 
+    pub fn __str__(&self) -> String {
+        self.inner.format_summary()
+    }
+
+    pub fn __repr__(&self) -> String {
+        self.inner.format_summary()
+    }
+
     /// Format a function using this instance's decision-variable labels.
     ///
     /// The plain {func}`repr` / {func}`str` representation of {class}`Function`
