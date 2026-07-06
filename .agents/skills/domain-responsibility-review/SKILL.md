@@ -60,6 +60,11 @@ scope, or invariant ownership, keep this order explicit throughout the work:
      extraction, and Python wrappers. If a lower-level collection cannot
      validate a semantic invariant alone, verify that every host-level entry
      point validates it before exposing the object.
+   - When rust-analyzer is available, answer this by semantic query instead of
+     enumeration by reading: run `incomingCalls` on the owner-level validator
+     and compare its caller set against the construction and mutation paths
+     the change adds or touches. A construction path missing from the
+     validator's callers is a bypass finding.
    - Check load/restore paths as carefully as write paths; persisted config and runtime state must preserve the same invariants.
    - Check dynamic and sealed views against the same domain model.
    - Check lock scopes against domain ownership: keep mutexes only around the shared state protected by that owner, and move slow I/O, registry writes, or storage writes outside the lock when the final owner mutation can still enforce the invariant.
@@ -136,7 +141,7 @@ type that makes the state unrepresentable, a lint that rejects the pattern, or
 a property test that fails on regression — instead of adding more prose here.
 A new entry must name its intended graduation target.
 
-- Check every root object and constraint family affected by a change: `Instance`, `ParametricInstance`, `Solution`, `SampleSet`, regular constraints, indicator, one-hot, and SOS1. A fix for only the regular path is suspect when sidecars, annotations, parsing, serialization, or statistics are involved.
+- Check every root object and constraint family affected by a change: `Instance`, `ParametricInstance`, `Solution`, `SampleSet`, regular constraints, indicator, one-hot, and SOS1. A fix for only the regular path is suspect when sidecars, annotations, parsing, serialization, or statistics are involved. When rust-analyzer is available, enumerate the families by running `goToImplementation` on the `ConstraintType` trait instead of recalling them, so the list stays correct when families are added.
 - For parse/serialize/projection changes, verify round-trips preserve one source of truth: prune or transfer sidecars when absorbing constraints, reject or filter reserved annotation keys at protobuf boundaries, and make projected counts include special constraint families.
 - For fallible mutation paths, check atomicity before side effects. Build fallible derived values before inserting constraints, clear stale cached outputs before retryable operations, and validate reserved IDs before registry or storage writes.
 - For numeric consistency checks, handle boundary and invalid values explicitly. Absolute tolerances are inclusive unless the API documents otherwise, and NaN/Inf must not pass through `(a - b).abs() > atol` style comparisons silently. Graduation target: a shared tolerance-comparison helper plus a clippy `disallowed-methods` rule against raw tolerance comparisons.
