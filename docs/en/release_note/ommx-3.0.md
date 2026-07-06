@@ -8,6 +8,32 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🆕 Unary integer encoding ([#1010](https://github.com/Jij-Inc/ommx/pull/1010))
+
+{meth}`~ommx.Instance.unary_encode` is now available as a sampler-friendly
+alternative to {meth}`~ommx.Instance.log_encode` for finite integer variables.
+For an integer variable `x` in `[lower, upper]`, unary encoding introduces
+`upper - lower` binary variables and substitutes `x = lower + sum(b)`.
+
+Every binary assignment decodes to a value in the original integer range, so
+no encoding-validity constraint or penalty is added. Since the number of
+auxiliary variables grows linearly with the range width, prefer this encoding
+for narrow ranges and keep using log encoding for wider variables.
+
+```python
+from ommx import DecisionVariable, Instance
+
+x = DecisionVariable.integer(0, lower=2, upper=5)
+instance = Instance.from_components(
+    sense=Instance.MAXIMIZE,
+    objective=x,
+    decision_variables=[x],
+    constraints={},
+)
+
+instance.unary_encode({0})
+```
+
 ### 🆕 Context-aware function formatting ([#408](https://github.com/Jij-Inc/ommx/issues/408))
 
 {class}`~ommx.Instance` and {class}`~ommx.ParametricInstance` now provide
