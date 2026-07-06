@@ -3,9 +3,9 @@ use std::{collections::BTreeMap, fmt};
 
 /// Options for formatting a [`Function`] with an instance-provided modeling context.
 ///
-/// `max_terms` bounds the number of complete nonzero terms written. `max_chars`
-/// bounds the returned text by Unicode scalar values, so truncation never slices
-/// through the middle of a UTF-8 code point.
+/// `max_terms` bounds the number of complete stored terms written. `max_chars`
+/// bounds the returned text by Unicode scalar values, so truncation never
+/// slices through the middle of a UTF-8 code point.
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Default, crate::logical_memory::LogicalMemoryProfile,
 )]
@@ -16,9 +16,9 @@ pub struct FunctionFormatOptions {
 
 /// Result of context-aware function formatting.
 ///
-/// `total_terms` is counted after dropping zero coefficients and before output
-/// truncation. `written_terms` counts complete terms written to `text`; if the
-/// first term is clipped by `max_chars`, it is not counted as written.
+/// `total_terms` is counted from the terms stored in the [`Function`] before
+/// output truncation. `written_terms` counts complete terms written to `text`;
+/// if the first term is clipped by `max_chars`, it is not counted as written.
 #[derive(Debug, Clone, PartialEq, Eq, crate::logical_memory::LogicalMemoryProfile)]
 pub struct FormattedFunction {
     pub text: String,
@@ -129,7 +129,6 @@ pub(crate) fn format_function_with_symbols(
     let mut terms: Vec<_> = function
         .iter()
         .map(|(monomial, coefficient)| (monomial, coefficient.into_inner()))
-        .filter(|(_, coefficient)| coefficient.abs() > f64::EPSILON)
         .collect();
     if terms.is_empty() {
         return Ok(format_zero(opts));
@@ -196,9 +195,7 @@ pub fn format_polynomial(
     f: &mut fmt::Formatter,
     iter: impl Iterator<Item = (MonomialDyn, f64)>,
 ) -> fmt::Result {
-    let mut terms: Vec<_> = iter
-        .filter(|(_, coefficient)| coefficient.abs() > f64::EPSILON)
-        .collect();
+    let mut terms: Vec<_> = iter.collect();
     if terms.is_empty() {
         write!(f, "0")?;
         return Ok(());

@@ -720,7 +720,7 @@ impl Instance {
     ///
     /// The plain {func}`repr` / {func}`str` representation of {class}`Function`
     /// is unchanged and remains context-free. Use this method when labels from
-    /// this instance should be used instead of raw ``x{id}`` symbols.
+    /// this instance should be used instead of raw ``x<id>`` symbols such as ``x1``.
     #[pyo3(signature = (function, max_terms=None, max_chars=None))]
     pub fn format_function(
         &self,

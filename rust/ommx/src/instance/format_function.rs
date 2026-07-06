@@ -246,6 +246,13 @@ mod tests {
     }
 
     #[test]
+    fn context_free_display_preserves_tiny_nonzero_coefficients() {
+        let function: Function = (coeff!(1e-20) * linear!(1)).unwrap().into();
+
+        insta::assert_snapshot!(function.to_string(), @"0.00000000000000000001*x1");
+    }
+
+    #[test]
     fn formats_named_unlabeled_subscripted_and_parameterized_variables() {
         let instance = instance_with_labels(vec![
             (1, label(Some("x"), vec![2, 1], vec![("scenario", "base")])),
@@ -276,6 +283,25 @@ mod tests {
             instance.format_function(&function).unwrap(),
             @"x[0]{id=1} + x[0]{id=2} + x[1]"
         );
+    }
+
+    #[test]
+    fn context_aware_display_preserves_tiny_nonzero_coefficients() {
+        let instance = instance_with_labels(vec![(1, label(Some("x"), vec![], vec![]))]);
+        let function: Function = (coeff!(1e-20) * linear!(1)).unwrap().into();
+
+        let formatted = instance
+            .format_function_with(&function, FunctionFormatOptions::default())
+            .unwrap();
+        insta::assert_debug_snapshot!(formatted, @r###"
+        FormattedFunction {
+            text: "0.00000000000000000001*x",
+            total_terms: 1,
+            written_terms: 1,
+            omitted_terms: 0,
+            truncated_by_chars: false,
+        }
+        "###);
     }
 
     #[test]

@@ -2888,7 +2888,7 @@ class Instance:
 
         The plain {func}`repr` / {func}`str` representation of {class}`Function`
         is unchanged and remains context-free. Use this method when labels from
-        this instance should be used instead of raw ``x{id}`` symbols.
+        this instance should be used instead of raw ``x<id>`` symbols such as ``x1``.
         """
     def display_function(
         self,
@@ -4957,7 +4957,7 @@ class ParametricInstance:
 
         The plain {func}`repr` / {func}`str` representation of {class}`Function`
         is unchanged and remains context-free. Use this method when labels from
-        this parametric instance should be used instead of raw ``x{id}`` symbols.
+        this parametric instance should be used instead of raw ``x<id>`` symbols such as ``x1``.
         """
     def display_function(
         self,
