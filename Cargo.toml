@@ -79,6 +79,3 @@ zip = "8.6.0"
 
 [workspace.lints.clippy]
 approx_constant = "allow"
-
-[profile.release]
-debug = true
