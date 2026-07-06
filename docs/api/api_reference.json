@@ -10718,6 +10718,41 @@
               "deprecated": null
             },
             {
+              "name": "unary_encode",
+              "doc": "Unary-encode the integer decision variables.\n\nUnary encoding of an integer variable $x \\in [l, u]$ is to represent it\nby $u - l$ bits $b_j \\in \\{0, 1\\}$:\n\n$$x = l + \\sum_j b_j$$\n\nEvery bit configuration maps to a valid integer in the original range,\nso no encoding-validity penalty or linking constraint is added. This\ncosts linearly many auxiliary variables, so use it for narrow integer\nranges.\n\n**Args:**\n- `decision_variable_ids`: The IDs of the integer decision variables to unary-encode.\n  If not specified (or empty), all used integer variables are unary-encoded.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = DecisionVariable.integer(0, lower=2, upper=5, name=\"x\")\n>>> instance = Instance.from_components(\n...     decision_variables=[x],\n...     objective=x,\n...     constraints=[],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.unary_encode({0})\n>>> instance.objective\nFunction(x1 + x2 + x3 + 2)\n```",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "decision_variable_ids",
+                      "type_": {
+                        "display": "set[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "set()"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "uniform_penalty_method",
               "doc": "Convert to a parametric unconstrained instance by penalty method with uniform weight.\n\nRoughly, this converts a constrained problem:\n\n$$\\min_x f(x) \\quad \\text{s.t.} \\quad g_i(x) = 0 \\; (\\forall i), \\quad h_j(x) \\leq 0 \\; (\\forall j)$$\n\nto an unconstrained problem with a parameter:\n\n$$\\min_x f(x) + \\lambda \\left( \\sum_i g_i(x)^2 + \\sum_j h_j(x)^2 \\right)$$\n\nwhere $\\lambda$ is the uniform penalty weight parameter for all constraints.\n\nThe removed constraints are stored in {attr}`~ommx.ParametricInstance.removed_constraints`.\n\n> Note: This method converts inequality constraints $h(x) \\leq 0$ to $|h(x)|^2$ not to $\\max(0, h(x))^2$.\n> This means the penalty is enforced even for $h(x) < 0$ cases, and $h(x) = 0$ is unfairly favored.\n> This feature is intended to use with {meth}`~ommx.Instance.add_integer_slack_to_inequality`.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[sum(x) == 3],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.objective\nFunction(x0 + x1 + x2)\n>>> pi = instance.uniform_penalty_method()\n```\n\nThe constraint is put in removed_constraints\n\n```python\n>>> pi.constraints\n[]\n>>> len(pi.removed_constraints)\n1\n>>> pi.removed_constraints[0]\nRemovedConstraint(x0 + x1 + x2 - 3 == 0, reason=ommx.Instance.uniform_penalty_method)\n```\n\nThere is only one parameter in the instance\n\n```python\n>>> len(pi.parameters)\n1\n>>> p = pi.parameters[0]\n>>> p.id\n3\n>>> p.name\n'uniform_penalty_weight'\n```",
               "signatures": [

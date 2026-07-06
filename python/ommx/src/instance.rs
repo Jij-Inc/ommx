@@ -1771,6 +1771,64 @@ impl Instance {
         Ok(())
     }
 
+    /// Unary-encode the integer decision variables.
+    ///
+    /// Unary encoding of an integer variable $x \in [l, u]$ is to represent it
+    /// by $u - l$ bits $b_j \in \{0, 1\}$:
+    ///
+    /// $$x = l + \sum_j b_j$$
+    ///
+    /// Every bit configuration maps to a valid integer in the original range,
+    /// so no encoding-validity penalty or linking constraint is added. This
+    /// costs linearly many auxiliary variables, so use it for narrow integer
+    /// ranges.
+    ///
+    /// **Args:**
+    /// - `decision_variable_ids`: The IDs of the integer decision variables to unary-encode.
+    ///   If not specified (or empty), all used integer variables are unary-encoded.
+    ///
+    /// # Examples
+    ///
+    /// ```python
+    /// >>> from ommx import Instance, DecisionVariable
+    /// >>> x = DecisionVariable.integer(0, lower=2, upper=5, name="x")
+    /// >>> instance = Instance.from_components(
+    /// ...     decision_variables=[x],
+    /// ...     objective=x,
+    /// ...     constraints=[],
+    /// ...     sense=Instance.MAXIMIZE,
+    /// ... )
+    /// >>> instance.unary_encode({0})
+    /// >>> instance.objective
+    /// Function(x1 + x2 + x3 + 2)
+    /// ```
+    #[pyo3(signature = (decision_variable_ids=BTreeSet::new()))]
+    pub fn unary_encode(
+        &mut self,
+        py: Python<'_>,
+        decision_variable_ids: BTreeSet<u64>,
+    ) -> Result<()> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let ids: BTreeSet<u64> = if decision_variable_ids.is_empty() {
+            let usage = self.inner.decision_variable_usage();
+            let integer_ids: BTreeSet<u64> = usage
+                .used_integer()
+                .into_keys()
+                .map(|id| id.into_inner())
+                .collect();
+            if integer_ids.is_empty() {
+                return Ok(());
+            }
+            integer_ids
+        } else {
+            decision_variable_ids
+        };
+        for id in ids.iter() {
+            self.inner.unary_encode((*id).into())?;
+        }
+        Ok(())
+    }
+
     /// Substitute decision variables with function expressions (in-place).
     ///
     /// Replaces each given decision variable with the provided function in the

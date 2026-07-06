@@ -1,4 +1,4 @@
-from ommx import Instance, DecisionVariable, Function, Parameter, ParametricInstance
+from ommx import Instance, DecisionVariable, Function, Linear, Parameter, ParametricInstance
 import math
 import pytest
 
@@ -392,6 +392,58 @@ def test_multiple_log_encodes():
     instance.log_encode()
     first_encode = instance.decision_variables
     instance.log_encode()
+    second_encode = instance.decision_variables
+    assert first_encode == second_encode
+
+
+def test_unary_encode():
+    x = DecisionVariable.integer(0, lower=2, upper=5, name="x")
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        constraints={},
+        sense=Instance.MAXIMIZE,
+    )
+
+    instance.unary_encode({0})
+
+    encoded = sorted(
+        [
+            variable
+            for variable in instance.decision_variables
+            if variable.name == "ommx.unary_encode"
+        ],
+        key=lambda variable: variable.id,
+    )
+    assert len(encoded) == 3
+    assert [variable.subscripts for variable in encoded] == [[0, 0], [0, 1], [0, 2]]
+    assert instance.objective.almost_equal(
+        Function(Linear(terms={variable.id: 1.0 for variable in encoded}, constant=2.0))
+    )
+
+    for bit_sum in range(4):
+        state = {variable.id: (1 if i < bit_sum else 0) for i, variable in enumerate(encoded)}
+        solution = instance.evaluate(state)
+        assert solution.feasible
+        assert solution.objective == pytest.approx(2 + bit_sum)
+
+
+def test_multiple_unary_encodes():
+    x = [
+        DecisionVariable.integer(0, lower=0, upper=10, name="x", subscripts=[0]),
+        DecisionVariable.integer(1, lower=0, upper=10, name="x", subscripts=[1]),
+        DecisionVariable.integer(2, lower=0, upper=10, name="x", subscripts=[2]),
+    ]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=x[0],
+        constraints={0: x[0] + x[1] <= 5, 1: x[1] + x[2] <= 5},
+        sense=Instance.MAXIMIZE,
+    )
+
+    instance.unary_encode()
+    first_encode = instance.decision_variables
+    instance.unary_encode()
     second_encode = instance.decision_variables
     assert first_encode == second_encode
 

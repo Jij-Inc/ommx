@@ -25,6 +25,7 @@ mod slack;
 mod sos1;
 mod stats;
 mod substitute;
+mod unary_encode;
 
 pub use analysis::*;
 pub use arbitrary::InstanceParameters;
