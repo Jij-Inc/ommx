@@ -122,6 +122,7 @@ fn format_instance_summary(instance: &Instance) -> crate::Result<String> {
     write_regular_constraints(
         &mut out,
         "Constraints",
+        instance.constraints().len(),
         instance.constraints().iter().map(|(id, c)| (*id, c, None)),
         instance.constraint_context(),
         |function| format_function_preview_with_symbols(&symbols.function_symbols, function),
@@ -129,6 +130,7 @@ fn format_instance_summary(instance: &Instance) -> crate::Result<String> {
     write_regular_constraints(
         &mut out,
         "Removed constraints",
+        instance.removed_constraints().len(),
         instance
             .removed_constraints()
             .iter()
@@ -139,6 +141,7 @@ fn format_instance_summary(instance: &Instance) -> crate::Result<String> {
     write_indicator_constraints(
         &mut out,
         "Indicator constraints",
+        instance.indicator_constraints().len(),
         instance
             .indicator_constraints()
             .iter()
@@ -150,6 +153,7 @@ fn format_instance_summary(instance: &Instance) -> crate::Result<String> {
     write_indicator_constraints(
         &mut out,
         "Removed indicator constraints",
+        instance.removed_indicator_constraints().len(),
         instance
             .removed_indicator_constraints()
             .iter()
@@ -161,6 +165,7 @@ fn format_instance_summary(instance: &Instance) -> crate::Result<String> {
     write_one_hot_constraints(
         &mut out,
         "One-hot constraints",
+        instance.one_hot_constraints().len(),
         instance
             .one_hot_constraints()
             .iter()
@@ -171,6 +176,7 @@ fn format_instance_summary(instance: &Instance) -> crate::Result<String> {
     write_one_hot_constraints(
         &mut out,
         "Removed one-hot constraints",
+        instance.removed_one_hot_constraints().len(),
         instance
             .removed_one_hot_constraints()
             .iter()
@@ -181,6 +187,7 @@ fn format_instance_summary(instance: &Instance) -> crate::Result<String> {
     write_sos1_constraints(
         &mut out,
         "SOS1 constraints",
+        instance.sos1_constraints().len(),
         instance
             .sos1_constraints()
             .iter()
@@ -191,6 +198,7 @@ fn format_instance_summary(instance: &Instance) -> crate::Result<String> {
     write_sos1_constraints(
         &mut out,
         "Removed SOS1 constraints",
+        instance.removed_sos1_constraints().len(),
         instance
             .removed_sos1_constraints()
             .iter()
@@ -201,6 +209,7 @@ fn format_instance_summary(instance: &Instance) -> crate::Result<String> {
     write_named_functions(
         &mut out,
         "Named functions",
+        instance.named_functions().len(),
         instance.named_functions(),
         instance.named_function_labels(),
         |function| format_function_preview_with_symbols(&symbols.function_symbols, function),
@@ -227,6 +236,7 @@ fn format_parametric_instance_summary(instance: &ParametricInstance) -> crate::R
     write_regular_constraints(
         &mut out,
         "Constraints",
+        instance.constraints().len(),
         instance.constraints().iter().map(|(id, c)| (*id, c, None)),
         instance.constraint_context(),
         |function| format_function_preview_with_symbols(&symbols.function_symbols, function),
@@ -234,6 +244,7 @@ fn format_parametric_instance_summary(instance: &ParametricInstance) -> crate::R
     write_regular_constraints(
         &mut out,
         "Removed constraints",
+        instance.removed_constraints().len(),
         instance
             .removed_constraints()
             .iter()
@@ -244,6 +255,7 @@ fn format_parametric_instance_summary(instance: &ParametricInstance) -> crate::R
     write_indicator_constraints(
         &mut out,
         "Indicator constraints",
+        instance.indicator_constraints().len(),
         instance
             .indicator_constraints()
             .iter()
@@ -255,6 +267,7 @@ fn format_parametric_instance_summary(instance: &ParametricInstance) -> crate::R
     write_indicator_constraints(
         &mut out,
         "Removed indicator constraints",
+        instance.removed_indicator_constraints().len(),
         instance
             .removed_indicator_constraints()
             .iter()
@@ -266,6 +279,7 @@ fn format_parametric_instance_summary(instance: &ParametricInstance) -> crate::R
     write_one_hot_constraints(
         &mut out,
         "One-hot constraints",
+        instance.one_hot_constraints().len(),
         instance
             .one_hot_constraints()
             .iter()
@@ -276,6 +290,7 @@ fn format_parametric_instance_summary(instance: &ParametricInstance) -> crate::R
     write_one_hot_constraints(
         &mut out,
         "Removed one-hot constraints",
+        instance.removed_one_hot_constraints().len(),
         instance
             .removed_one_hot_constraints()
             .iter()
@@ -286,6 +301,7 @@ fn format_parametric_instance_summary(instance: &ParametricInstance) -> crate::R
     write_sos1_constraints(
         &mut out,
         "SOS1 constraints",
+        instance.sos1_constraints().len(),
         instance
             .sos1_constraints()
             .iter()
@@ -296,6 +312,7 @@ fn format_parametric_instance_summary(instance: &ParametricInstance) -> crate::R
     write_sos1_constraints(
         &mut out,
         "Removed SOS1 constraints",
+        instance.removed_sos1_constraints().len(),
         instance
             .removed_sos1_constraints()
             .iter()
@@ -306,6 +323,7 @@ fn format_parametric_instance_summary(instance: &ParametricInstance) -> crate::R
     write_named_functions(
         &mut out,
         "Named functions",
+        instance.named_functions().len(),
         instance.named_functions(),
         instance.named_function_labels(),
         |function| format_function_preview_with_symbols(&symbols.function_symbols, function),
@@ -485,6 +503,7 @@ fn removed_constraint_count(instance: &impl ConstraintFamilyCounts) -> usize {
 fn write_regular_constraints<'a, I>(
     out: &mut String,
     title: &str,
+    row_count: usize,
     constraints: I,
     context: &ConstraintContextStore<ConstraintID>,
     mut format_function: impl FnMut(&Function) -> crate::Result<String>,
@@ -492,19 +511,14 @@ fn write_regular_constraints<'a, I>(
 where
     I: IntoIterator<Item = (ConstraintID, &'a Constraint, Option<&'a RemovedReason>)>,
 {
-    let mut iter = constraints.into_iter().peekable();
-    if iter.peek().is_none() {
+    if row_count == 0 {
         return Ok(());
     }
 
     writeln!(out, "{title}:").unwrap();
-    let mut written_rows = 0;
-    let mut omitted_rows = 0;
-    for (id, constraint, removed_reason) in iter {
-        if written_rows >= SUMMARY_MAX_ROWS_PER_SECTION {
-            omitted_rows += 1;
-            continue;
-        }
+    for (id, constraint, removed_reason) in
+        constraints.into_iter().take(SUMMARY_MAX_ROWS_PER_SECTION)
+    {
         write!(out, "  [{id}] ").unwrap();
         write_optional_row_label(
             out,
@@ -518,19 +532,19 @@ where
             removed_suffix(removed_reason),
         )
         .unwrap();
-        written_rows += 1;
     }
-    write_omitted_rows(out, omitted_rows);
+    write_omitted_rows(out, row_count.saturating_sub(SUMMARY_MAX_ROWS_PER_SECTION));
     Ok(())
 }
 
 fn write_indicator_constraints<'a, I>(
     out: &mut String,
     title: &str,
+    row_count: usize,
     constraints: I,
     context: &ConstraintContextStore<crate::IndicatorConstraintID>,
     mut format_function: impl FnMut(&Function) -> crate::Result<String>,
-    mut format_variables: impl FnMut(Vec<VariableID>) -> crate::Result<String>,
+    mut format_variables: impl FnMut(VariableSetPreview) -> crate::Result<String>,
 ) -> crate::Result<()>
 where
     I: IntoIterator<
@@ -541,20 +555,16 @@ where
         ),
     >,
 {
-    let mut iter = constraints.into_iter().peekable();
-    if iter.peek().is_none() {
+    if row_count == 0 {
         return Ok(());
     }
 
     writeln!(out, "{title}:").unwrap();
-    let mut written_rows = 0;
-    let mut omitted_rows = 0;
-    for (id, constraint, removed_reason) in iter {
-        if written_rows >= SUMMARY_MAX_ROWS_PER_SECTION {
-            omitted_rows += 1;
-            continue;
-        }
-        let indicator = format_variables(vec![constraint.indicator_variable])?;
+    for (id, constraint, removed_reason) in
+        constraints.into_iter().take(SUMMARY_MAX_ROWS_PER_SECTION)
+    {
+        let indicator =
+            format_variables(VariableSetPreview::single(constraint.indicator_variable))?;
         write!(out, "  [{id}] ").unwrap();
         write_optional_row_label(
             out,
@@ -568,18 +578,18 @@ where
             removed_suffix(removed_reason),
         )
         .unwrap();
-        written_rows += 1;
     }
-    write_omitted_rows(out, omitted_rows);
+    write_omitted_rows(out, row_count.saturating_sub(SUMMARY_MAX_ROWS_PER_SECTION));
     Ok(())
 }
 
 fn write_one_hot_constraints<'a, I>(
     out: &mut String,
     title: &str,
+    row_count: usize,
     constraints: I,
     context: &ConstraintContextStore<crate::OneHotConstraintID>,
-    mut format_variables: impl FnMut(Vec<VariableID>) -> crate::Result<String>,
+    mut format_variables: impl FnMut(VariableSetPreview) -> crate::Result<String>,
 ) -> crate::Result<()>
 where
     I: IntoIterator<
@@ -590,19 +600,14 @@ where
         ),
     >,
 {
-    let mut iter = constraints.into_iter().peekable();
-    if iter.peek().is_none() {
+    if row_count == 0 {
         return Ok(());
     }
 
     writeln!(out, "{title}:").unwrap();
-    let mut written_rows = 0;
-    let mut omitted_rows = 0;
-    for (id, constraint, removed_reason) in iter {
-        if written_rows >= SUMMARY_MAX_ROWS_PER_SECTION {
-            omitted_rows += 1;
-            continue;
-        }
+    for (id, constraint, removed_reason) in
+        constraints.into_iter().take(SUMMARY_MAX_ROWS_PER_SECTION)
+    {
         write!(out, "  [{id}] ").unwrap();
         write_optional_row_label(
             out,
@@ -611,22 +616,25 @@ where
         writeln!(
             out,
             "exactly one of {{{}}} = 1{}",
-            format_variables(constraint.variables.iter().copied().collect())?,
+            format_variables(VariableSetPreview::from_iter_len(
+                constraint.variables.iter().copied(),
+                constraint.variables.len(),
+            ))?,
             removed_suffix(removed_reason),
         )
         .unwrap();
-        written_rows += 1;
     }
-    write_omitted_rows(out, omitted_rows);
+    write_omitted_rows(out, row_count.saturating_sub(SUMMARY_MAX_ROWS_PER_SECTION));
     Ok(())
 }
 
 fn write_sos1_constraints<'a, I>(
     out: &mut String,
     title: &str,
+    row_count: usize,
     constraints: I,
     context: &ConstraintContextStore<crate::Sos1ConstraintID>,
-    mut format_variables: impl FnMut(Vec<VariableID>) -> crate::Result<String>,
+    mut format_variables: impl FnMut(VariableSetPreview) -> crate::Result<String>,
 ) -> crate::Result<()>
 where
     I: IntoIterator<
@@ -637,19 +645,14 @@ where
         ),
     >,
 {
-    let mut iter = constraints.into_iter().peekable();
-    if iter.peek().is_none() {
+    if row_count == 0 {
         return Ok(());
     }
 
     writeln!(out, "{title}:").unwrap();
-    let mut written_rows = 0;
-    let mut omitted_rows = 0;
-    for (id, constraint, removed_reason) in iter {
-        if written_rows >= SUMMARY_MAX_ROWS_PER_SECTION {
-            omitted_rows += 1;
-            continue;
-        }
+    for (id, constraint, removed_reason) in
+        constraints.into_iter().take(SUMMARY_MAX_ROWS_PER_SECTION)
+    {
         write!(out, "  [{id}] ").unwrap();
         write_optional_row_label(
             out,
@@ -658,44 +661,40 @@ where
         writeln!(
             out,
             "at most one of {{{}}} != 0{}",
-            format_variables(constraint.variables.iter().copied().collect())?,
+            format_variables(VariableSetPreview::from_iter_len(
+                constraint.variables.iter().copied(),
+                constraint.variables.len(),
+            ))?,
             removed_suffix(removed_reason),
         )
         .unwrap();
-        written_rows += 1;
     }
-    write_omitted_rows(out, omitted_rows);
+    write_omitted_rows(out, row_count.saturating_sub(SUMMARY_MAX_ROWS_PER_SECTION));
     Ok(())
 }
 
 fn write_named_functions(
     out: &mut String,
     title: &str,
+    row_count: usize,
     named_functions: &BTreeMap<NamedFunctionID, NamedFunction>,
     labels: &crate::named_function::NamedFunctionLabelStore,
     mut format_function: impl FnMut(&Function) -> crate::Result<String>,
 ) -> crate::Result<()> {
-    if named_functions.is_empty() {
+    if row_count == 0 {
         return Ok(());
     }
 
     writeln!(out, "{title}:").unwrap();
-    let mut written_rows = 0;
-    let mut omitted_rows = 0;
-    for (id, named_function) in named_functions {
-        if written_rows >= SUMMARY_MAX_ROWS_PER_SECTION {
-            omitted_rows += 1;
-            continue;
-        }
+    for (id, named_function) in named_functions.iter().take(SUMMARY_MAX_ROWS_PER_SECTION) {
         write!(out, "  [{id}] ").unwrap();
         write_optional_row_label(
             out,
             row_label("f", id.into_inner(), labels.collect_for(*id)),
         );
         writeln!(out, "{}", format_function(&named_function.function)?).unwrap();
-        written_rows += 1;
     }
-    write_omitted_rows(out, omitted_rows);
+    write_omitted_rows(out, row_count.saturating_sub(SUMMARY_MAX_ROWS_PER_SECTION));
     Ok(())
 }
 
@@ -787,14 +786,38 @@ fn format_function_preview(formatted: FormattedFunction) -> String {
     text
 }
 
+struct VariableSetPreview {
+    visible_ids: Vec<VariableID>,
+    omitted_variables: usize,
+}
+
+impl VariableSetPreview {
+    fn single(id: VariableID) -> Self {
+        Self {
+            visible_ids: vec![id],
+            omitted_variables: 0,
+        }
+    }
+
+    fn from_iter_len(ids: impl IntoIterator<Item = VariableID>, total_len: usize) -> Self {
+        let visible_ids: Vec<_> = ids
+            .into_iter()
+            .take(SUMMARY_MAX_VARIABLES_PER_SET)
+            .collect();
+        Self {
+            omitted_variables: total_len.saturating_sub(visible_ids.len()),
+            visible_ids,
+        }
+    }
+}
+
 fn format_variable_set(
     symbols: &BTreeMap<VariableID, String>,
-    ids: Vec<VariableID>,
+    preview: VariableSetPreview,
 ) -> crate::Result<String> {
-    let omitted_variables = ids.len().saturating_sub(SUMMARY_MAX_VARIABLES_PER_SET);
-    let mut parts = ids
+    let mut parts = preview
+        .visible_ids
         .into_iter()
-        .take(SUMMARY_MAX_VARIABLES_PER_SET)
         .map(|id| {
             symbols
                 .get(&id)
@@ -802,11 +825,15 @@ fn format_variable_set(
                 .ok_or_else(|| crate::error!("Missing symbol for variable ID {id:?}"))
         })
         .collect::<crate::Result<Vec<_>>>()?;
-    if omitted_variables > 0 {
+    if preview.omitted_variables > 0 {
         parts.push(format!(
             "... ({} more variable{})",
-            omitted_variables,
-            if omitted_variables == 1 { "" } else { "s" },
+            preview.omitted_variables,
+            if preview.omitted_variables == 1 {
+                ""
+            } else {
+                "s"
+            },
         ));
     }
     Ok(parts.join(", "))
@@ -1285,6 +1312,35 @@ mod tests {
         }
     }
 
+    struct PanicAfterLimit<I> {
+        inner: I,
+        remaining: usize,
+    }
+
+    impl<I> PanicAfterLimit<I> {
+        fn new(inner: I, limit: usize) -> Self {
+            Self {
+                inner,
+                remaining: limit,
+            }
+        }
+    }
+
+    impl<I> Iterator for PanicAfterLimit<I>
+    where
+        I: Iterator,
+    {
+        type Item = I::Item;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            if self.remaining == 0 {
+                panic!("summary formatting read past the visible budget");
+            }
+            self.remaining -= 1;
+            self.inner.next()
+        }
+    }
+
     #[test]
     fn context_free_display_remains_raw_id_based() {
         let function: Function =
@@ -1558,6 +1614,80 @@ mod tests {
             err.to_string(),
             @"Function references unknown decision variable or parameter ID VariableID(999)"
         );
+    }
+
+    #[test]
+    fn summary_row_writer_does_not_read_omitted_rows() {
+        let constraints: Vec<_> = (0..(SUMMARY_MAX_ROWS_PER_SECTION + 5))
+            .map(|_| Constraint::less_than_or_equal_to_zero(Function::Zero))
+            .collect();
+        let rows = constraints.iter().enumerate().map(|(id, constraint)| {
+            (
+                ConstraintID::from(id as u64),
+                constraint,
+                None::<&RemovedReason>,
+            )
+        });
+        let mut out = String::new();
+        let context = ConstraintContextStore::default();
+
+        write_regular_constraints(
+            &mut out,
+            "Constraints",
+            constraints.len(),
+            PanicAfterLimit::new(rows, SUMMARY_MAX_ROWS_PER_SECTION),
+            &context,
+            |_| Ok("0".to_string()),
+        )
+        .unwrap();
+
+        insta::assert_snapshot!(out, @r###"
+        Constraints:
+          [0] 0 <= 0
+          [1] 0 <= 0
+          [2] 0 <= 0
+          [3] 0 <= 0
+          [4] 0 <= 0
+          [5] 0 <= 0
+          [6] 0 <= 0
+          [7] 0 <= 0
+          [8] 0 <= 0
+          [9] 0 <= 0
+          [10] 0 <= 0
+          [11] 0 <= 0
+          [12] 0 <= 0
+          [13] 0 <= 0
+          [14] 0 <= 0
+          [15] 0 <= 0
+          [16] 0 <= 0
+          [17] 0 <= 0
+          [18] 0 <= 0
+          [19] 0 <= 0
+          ... (5 more rows)
+        "###);
+    }
+
+    #[test]
+    fn variable_set_preview_does_not_read_omitted_variables() {
+        let symbols: BTreeMap<_, _> = (0..SUMMARY_MAX_VARIABLES_PER_SET)
+            .map(|id| {
+                let id = VariableID::from(id as u64);
+                (id, format!("x{}", id.into_inner()))
+            })
+            .collect();
+        let ids = (0..(SUMMARY_MAX_VARIABLES_PER_SET + 5)).map(|id| VariableID::from(id as u64));
+        let preview = VariableSetPreview::from_iter_len(
+            PanicAfterLimit::new(ids, SUMMARY_MAX_VARIABLES_PER_SET),
+            SUMMARY_MAX_VARIABLES_PER_SET + 5,
+        );
+
+        let text = format_variable_set(&symbols, preview).unwrap();
+
+        let mut expected: Vec<_> = (0..SUMMARY_MAX_VARIABLES_PER_SET)
+            .map(|id| format!("x{id}"))
+            .collect();
+        expected.push("... (5 more variables)".to_string());
+        assert_eq!(text, expected.join(", "));
     }
 
     #[test]
