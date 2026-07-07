@@ -820,69 +820,69 @@ struct SummarySymbols {
 
 fn collect_instance_summary_symbols(instance: &Instance) -> crate::Result<SummarySymbols> {
     let mut ids = BTreeSet::new();
-    collect_instance_function_ids(instance, instance.objective(), &mut ids, true)?;
-    for (index, (_, constraint)) in instance.constraints().iter().enumerate() {
-        collect_instance_function_ids(
-            instance,
-            constraint.function(),
-            &mut ids,
-            include_summary_row(index),
-        )?;
-    }
-    for (index, (_, (constraint, _))) in instance.removed_constraints().iter().enumerate() {
-        collect_instance_function_ids(
-            instance,
-            constraint.function(),
-            &mut ids,
-            include_summary_row(index),
-        )?;
-    }
-    for (index, (_, constraint)) in instance.indicator_constraints().iter().enumerate() {
-        collect_instance_indicator_ids(instance, constraint, &mut ids, include_summary_row(index))?;
-    }
-    for (index, (_, (constraint, _))) in instance.removed_indicator_constraints().iter().enumerate()
+    collect_instance_function_ids(instance, instance.objective(), &mut ids)?;
+    for (_, constraint) in instance
+        .constraints()
+        .iter()
+        .take(SUMMARY_MAX_ROWS_PER_SECTION)
     {
-        collect_instance_indicator_ids(instance, constraint, &mut ids, include_summary_row(index))?;
+        collect_instance_function_ids(instance, constraint.function(), &mut ids)?;
     }
-    for (index, (_, constraint)) in instance.one_hot_constraints().iter().enumerate() {
-        collect_instance_variable_ids(
-            instance,
-            constraint.variables.iter().copied(),
-            &mut ids,
-            include_summary_row(index),
-        )?;
+    for (_, (constraint, _)) in instance
+        .removed_constraints()
+        .iter()
+        .take(SUMMARY_MAX_ROWS_PER_SECTION)
+    {
+        collect_instance_function_ids(instance, constraint.function(), &mut ids)?;
     }
-    for (index, (_, (constraint, _))) in instance.removed_one_hot_constraints().iter().enumerate() {
-        collect_instance_variable_ids(
-            instance,
-            constraint.variables.iter().copied(),
-            &mut ids,
-            include_summary_row(index),
-        )?;
+    for (_, constraint) in instance
+        .indicator_constraints()
+        .iter()
+        .take(SUMMARY_MAX_ROWS_PER_SECTION)
+    {
+        collect_instance_indicator_ids(instance, constraint, &mut ids)?;
     }
-    for (index, (_, constraint)) in instance.sos1_constraints().iter().enumerate() {
-        collect_instance_variable_ids(
-            instance,
-            constraint.variables.iter().copied(),
-            &mut ids,
-            include_summary_row(index),
-        )?;
+    for (_, (constraint, _)) in instance
+        .removed_indicator_constraints()
+        .iter()
+        .take(SUMMARY_MAX_ROWS_PER_SECTION)
+    {
+        collect_instance_indicator_ids(instance, constraint, &mut ids)?;
     }
-    for (index, (_, (constraint, _))) in instance.removed_sos1_constraints().iter().enumerate() {
-        collect_instance_variable_ids(
-            instance,
-            constraint.variables.iter().copied(),
-            &mut ids,
-            include_summary_row(index),
-        )?;
+    for (_, constraint) in instance
+        .one_hot_constraints()
+        .iter()
+        .take(SUMMARY_MAX_ROWS_PER_SECTION)
+    {
+        collect_instance_variable_ids(instance, constraint.variables.iter().copied(), &mut ids)?;
     }
-    for (index, (_, named_function)) in instance.named_functions().iter().enumerate() {
-        collect_instance_function_ids(
-            instance,
-            &named_function.function,
-            &mut ids,
-            include_summary_row(index),
-        )?;
+    for (_, (constraint, _)) in instance
+        .removed_one_hot_constraints()
+        .iter()
+        .take(SUMMARY_MAX_ROWS_PER_SECTION)
+    {
+        collect_instance_variable_ids(instance, constraint.variables.iter().copied(), &mut ids)?;
+    }
+    for (_, constraint) in instance
+        .sos1_constraints()
+        .iter()
+        .take(SUMMARY_MAX_ROWS_PER_SECTION)
+    {
+        collect_instance_variable_ids(instance, constraint.variables.iter().copied(), &mut ids)?;
+    }
+    for (_, (constraint, _)) in instance
+        .removed_sos1_constraints()
+        .iter()
+        .take(SUMMARY_MAX_ROWS_PER_SECTION)
+    {
+        collect_instance_variable_ids(instance, constraint.variables.iter().copied(), &mut ids)?;
+    }
+    for (_, named_function) in instance
+        .named_functions()
+        .iter()
+        .take(SUMMARY_MAX_ROWS_PER_SECTION)
+    {
+        collect_instance_function_ids(instance, &named_function.function, &mut ids)?;
     }
 
     let ids: Vec<_> = ids.into_iter().collect();
@@ -898,81 +898,95 @@ fn collect_parametric_instance_summary_symbols(
 ) -> crate::Result<SummarySymbols> {
     let mut function_ids = BTreeSet::new();
     let mut variable_ids = BTreeSet::new();
-    collect_parametric_function_ids(instance, instance.objective(), &mut function_ids, true)?;
-    for (index, (_, constraint)) in instance.constraints().iter().enumerate() {
-        collect_parametric_function_ids(
-            instance,
-            constraint.function(),
-            &mut function_ids,
-            include_summary_row(index),
-        )?;
+    collect_parametric_function_ids(instance, instance.objective(), &mut function_ids)?;
+    for (_, constraint) in instance
+        .constraints()
+        .iter()
+        .take(SUMMARY_MAX_ROWS_PER_SECTION)
+    {
+        collect_parametric_function_ids(instance, constraint.function(), &mut function_ids)?;
     }
-    for (index, (_, (constraint, _))) in instance.removed_constraints().iter().enumerate() {
-        collect_parametric_function_ids(
-            instance,
-            constraint.function(),
-            &mut function_ids,
-            include_summary_row(index),
-        )?;
+    for (_, (constraint, _)) in instance
+        .removed_constraints()
+        .iter()
+        .take(SUMMARY_MAX_ROWS_PER_SECTION)
+    {
+        collect_parametric_function_ids(instance, constraint.function(), &mut function_ids)?;
     }
-    for (index, (_, constraint)) in instance.indicator_constraints().iter().enumerate() {
-        collect_parametric_indicator_ids(
-            instance,
-            constraint,
-            &mut function_ids,
-            &mut variable_ids,
-            include_summary_row(index),
-        )?;
-    }
-    for (index, (_, (constraint, _))) in instance.removed_indicator_constraints().iter().enumerate()
+    for (_, constraint) in instance
+        .indicator_constraints()
+        .iter()
+        .take(SUMMARY_MAX_ROWS_PER_SECTION)
     {
         collect_parametric_indicator_ids(
             instance,
             constraint,
             &mut function_ids,
             &mut variable_ids,
-            include_summary_row(index),
         )?;
     }
-    for (index, (_, constraint)) in instance.one_hot_constraints().iter().enumerate() {
-        collect_parametric_variable_ids(
+    for (_, (constraint, _)) in instance
+        .removed_indicator_constraints()
+        .iter()
+        .take(SUMMARY_MAX_ROWS_PER_SECTION)
+    {
+        collect_parametric_indicator_ids(
             instance,
-            constraint.variables.iter().copied(),
-            &mut variable_ids,
-            include_summary_row(index),
-        )?;
-    }
-    for (index, (_, (constraint, _))) in instance.removed_one_hot_constraints().iter().enumerate() {
-        collect_parametric_variable_ids(
-            instance,
-            constraint.variables.iter().copied(),
-            &mut variable_ids,
-            include_summary_row(index),
-        )?;
-    }
-    for (index, (_, constraint)) in instance.sos1_constraints().iter().enumerate() {
-        collect_parametric_variable_ids(
-            instance,
-            constraint.variables.iter().copied(),
-            &mut variable_ids,
-            include_summary_row(index),
-        )?;
-    }
-    for (index, (_, (constraint, _))) in instance.removed_sos1_constraints().iter().enumerate() {
-        collect_parametric_variable_ids(
-            instance,
-            constraint.variables.iter().copied(),
-            &mut variable_ids,
-            include_summary_row(index),
-        )?;
-    }
-    for (index, (_, named_function)) in instance.named_functions().iter().enumerate() {
-        collect_parametric_function_ids(
-            instance,
-            &named_function.function,
+            constraint,
             &mut function_ids,
-            include_summary_row(index),
+            &mut variable_ids,
         )?;
+    }
+    for (_, constraint) in instance
+        .one_hot_constraints()
+        .iter()
+        .take(SUMMARY_MAX_ROWS_PER_SECTION)
+    {
+        collect_parametric_variable_ids(
+            instance,
+            constraint.variables.iter().copied(),
+            &mut variable_ids,
+        )?;
+    }
+    for (_, (constraint, _)) in instance
+        .removed_one_hot_constraints()
+        .iter()
+        .take(SUMMARY_MAX_ROWS_PER_SECTION)
+    {
+        collect_parametric_variable_ids(
+            instance,
+            constraint.variables.iter().copied(),
+            &mut variable_ids,
+        )?;
+    }
+    for (_, constraint) in instance
+        .sos1_constraints()
+        .iter()
+        .take(SUMMARY_MAX_ROWS_PER_SECTION)
+    {
+        collect_parametric_variable_ids(
+            instance,
+            constraint.variables.iter().copied(),
+            &mut variable_ids,
+        )?;
+    }
+    for (_, (constraint, _)) in instance
+        .removed_sos1_constraints()
+        .iter()
+        .take(SUMMARY_MAX_ROWS_PER_SECTION)
+    {
+        collect_parametric_variable_ids(
+            instance,
+            constraint.variables.iter().copied(),
+            &mut variable_ids,
+        )?;
+    }
+    for (_, named_function) in instance
+        .named_functions()
+        .iter()
+        .take(SUMMARY_MAX_ROWS_PER_SECTION)
+    {
+        collect_parametric_function_ids(instance, &named_function.function, &mut function_ids)?;
     }
 
     function_ids.extend(variable_ids.iter().copied());
@@ -1003,12 +1017,11 @@ fn collect_instance_function_ids(
     instance: &Instance,
     function: &Function,
     ids: &mut BTreeSet<VariableID>,
-    include_symbols: bool,
 ) -> crate::Result<()> {
-    let required_ids = validate_instance_ids(function, instance.decision_variables())?;
-    if include_symbols {
-        ids.extend(required_ids);
-    }
+    ids.extend(validate_instance_ids(
+        function,
+        instance.decision_variables(),
+    )?);
     Ok(())
 }
 
@@ -1016,16 +1029,12 @@ fn collect_parametric_function_ids(
     instance: &ParametricInstance,
     function: &Function,
     ids: &mut BTreeSet<VariableID>,
-    include_symbols: bool,
 ) -> crate::Result<()> {
-    let required_ids = validate_parametric_instance_ids(
+    ids.extend(validate_parametric_instance_ids(
         function,
         instance.decision_variables(),
         instance.parameters(),
-    )?;
-    if include_symbols {
-        ids.extend(required_ids);
-    }
+    )?);
     Ok(())
 }
 
@@ -1033,15 +1042,9 @@ fn collect_instance_indicator_ids(
     instance: &Instance,
     constraint: &IndicatorConstraint,
     ids: &mut BTreeSet<VariableID>,
-    include_symbols: bool,
 ) -> crate::Result<()> {
-    collect_instance_variable_ids(
-        instance,
-        [constraint.indicator_variable],
-        ids,
-        include_symbols,
-    )?;
-    collect_instance_function_ids(instance, constraint.function(), ids, include_symbols)
+    collect_instance_variable_ids(instance, [constraint.indicator_variable], ids)?;
+    collect_instance_function_ids(instance, constraint.function(), ids)
 }
 
 fn collect_parametric_indicator_ids(
@@ -1049,38 +1052,24 @@ fn collect_parametric_indicator_ids(
     constraint: &IndicatorConstraint,
     function_ids: &mut BTreeSet<VariableID>,
     variable_ids: &mut BTreeSet<VariableID>,
-    include_symbols: bool,
 ) -> crate::Result<()> {
-    collect_parametric_variable_ids(
-        instance,
-        [constraint.indicator_variable],
-        variable_ids,
-        include_symbols,
-    )?;
-    collect_parametric_function_ids(
-        instance,
-        constraint.function(),
-        function_ids,
-        include_symbols,
-    )
+    collect_parametric_variable_ids(instance, [constraint.indicator_variable], variable_ids)?;
+    collect_parametric_function_ids(instance, constraint.function(), function_ids)
 }
 
 fn collect_instance_variable_ids(
     instance: &Instance,
     variables: impl IntoIterator<Item = VariableID>,
     ids: &mut BTreeSet<VariableID>,
-    include_symbols: bool,
 ) -> crate::Result<()> {
-    for (index, id) in variables.into_iter().enumerate() {
+    for id in variables.into_iter().take(SUMMARY_MAX_VARIABLES_PER_SET) {
         if !instance.decision_variables().contains_key(&id) {
             crate::bail!(
                 { ?id },
                 "Summary references unknown decision variable ID {id:?}",
             );
         }
-        if include_symbols && index < SUMMARY_MAX_VARIABLES_PER_SET {
-            ids.insert(id);
-        }
+        ids.insert(id);
     }
     Ok(())
 }
@@ -1089,9 +1078,8 @@ fn collect_parametric_variable_ids(
     instance: &ParametricInstance,
     variables: impl IntoIterator<Item = VariableID>,
     ids: &mut BTreeSet<VariableID>,
-    include_symbols: bool,
 ) -> crate::Result<()> {
-    for (index, id) in variables.into_iter().enumerate() {
+    for id in variables.into_iter().take(SUMMARY_MAX_VARIABLES_PER_SET) {
         match (
             instance.decision_variables().contains_key(&id),
             instance.parameters().contains_key(&id),
@@ -1116,15 +1104,9 @@ fn collect_parametric_variable_ids(
                 );
             }
         }
-        if include_symbols && index < SUMMARY_MAX_VARIABLES_PER_SET {
-            ids.insert(id);
-        }
+        ids.insert(id);
     }
     Ok(())
-}
-
-fn include_summary_row(index: usize) -> bool {
-    index < SUMMARY_MAX_ROWS_PER_SECTION
 }
 
 fn trim_trailing_newline(mut text: String) -> String {
@@ -1662,5 +1644,155 @@ mod tests {
             @"ParametricInstance(<invalid>: Structural variable ID VariableID(0) is both a decision variable and a parameter)"
         );
         assert_eq!(instance.to_string(), instance.format_summary());
+    }
+
+    #[test]
+    fn instance_summary_skips_omitted_row_validation() {
+        let constraints: BTreeMap<_, _> = (0..SUMMARY_MAX_ROWS_PER_SECTION)
+            .map(|id| {
+                (
+                    ConstraintID::from(id as u64),
+                    Constraint::less_than_or_equal_to_zero(linear!(0).into()),
+                )
+            })
+            .collect();
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(btreemap! {
+                VariableID::from(0) => DecisionVariable::binary(),
+            })
+            .constraints(constraints)
+            .build()
+            .unwrap();
+        instance
+            .constraint_collection
+            .insert_active_with_context(
+                ConstraintID::from(SUMMARY_MAX_ROWS_PER_SECTION as u64),
+                Constraint::less_than_or_equal_to_zero(linear!(999).into()),
+                ConstraintContext::default(),
+            )
+            .unwrap();
+
+        insta::assert_snapshot!(instance.format_summary(), @r###"
+        Instance(sense=minimize, decision_variables=1, active_constraints=21, removed_constraints=0, named_functions=0)
+        Objective:
+          0
+        Constraints:
+          [0] x0 <= 0
+          [1] x0 <= 0
+          [2] x0 <= 0
+          [3] x0 <= 0
+          [4] x0 <= 0
+          [5] x0 <= 0
+          [6] x0 <= 0
+          [7] x0 <= 0
+          [8] x0 <= 0
+          [9] x0 <= 0
+          [10] x0 <= 0
+          [11] x0 <= 0
+          [12] x0 <= 0
+          [13] x0 <= 0
+          [14] x0 <= 0
+          [15] x0 <= 0
+          [16] x0 <= 0
+          [17] x0 <= 0
+          [18] x0 <= 0
+          [19] x0 <= 0
+          ... (1 more row)
+        "###);
+    }
+
+    #[test]
+    fn parametric_summary_skips_omitted_row_validation() {
+        let constraints: BTreeMap<_, _> = (0..SUMMARY_MAX_ROWS_PER_SECTION)
+            .map(|id| {
+                (
+                    ConstraintID::from(id as u64),
+                    Constraint::less_than_or_equal_to_zero(linear!(0).into()),
+                )
+            })
+            .collect();
+        let mut instance = ParametricInstance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(btreemap! {
+                VariableID::from(0) => DecisionVariable::binary(),
+            })
+            .parameters(ParameterTable::default())
+            .constraints(constraints)
+            .build()
+            .unwrap();
+        instance
+            .constraint_collection
+            .insert_active_with_context(
+                ConstraintID::from(SUMMARY_MAX_ROWS_PER_SECTION as u64),
+                Constraint::less_than_or_equal_to_zero(linear!(999).into()),
+                ConstraintContext::default(),
+            )
+            .unwrap();
+
+        insta::assert_snapshot!(instance.format_summary(), @r###"
+        ParametricInstance(sense=minimize, decision_variables=1, parameters=0, active_constraints=21, removed_constraints=0, named_functions=0)
+        Objective:
+          0
+        Constraints:
+          [0] x0 <= 0
+          [1] x0 <= 0
+          [2] x0 <= 0
+          [3] x0 <= 0
+          [4] x0 <= 0
+          [5] x0 <= 0
+          [6] x0 <= 0
+          [7] x0 <= 0
+          [8] x0 <= 0
+          [9] x0 <= 0
+          [10] x0 <= 0
+          [11] x0 <= 0
+          [12] x0 <= 0
+          [13] x0 <= 0
+          [14] x0 <= 0
+          [15] x0 <= 0
+          [16] x0 <= 0
+          [17] x0 <= 0
+          [18] x0 <= 0
+          [19] x0 <= 0
+          ... (1 more row)
+        "###);
+    }
+
+    #[test]
+    fn instance_summary_skips_omitted_variable_set_validation() {
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(
+                (0..SUMMARY_MAX_VARIABLES_PER_SET)
+                    .map(|id| (VariableID::from(id as u64), DecisionVariable::binary()))
+                    .collect(),
+            )
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap();
+        let mut variables: BTreeSet<_> = (0..SUMMARY_MAX_VARIABLES_PER_SET)
+            .map(|id| VariableID::from(id as u64))
+            .collect();
+        variables.insert(VariableID::from(999));
+        instance
+            .one_hot_constraint_collection
+            .insert_active_with_context(
+                crate::OneHotConstraintID::from(7),
+                OneHotConstraint::new(variables).unwrap(),
+                ConstraintContext::default(),
+            )
+            .unwrap();
+
+        insta::assert_snapshot!(instance.format_summary(), @r###"
+        Instance(sense=minimize, decision_variables=20, active_constraints=1, removed_constraints=0, named_functions=0)
+        Objective:
+          0
+        One-hot constraints:
+          [7] exactly one of {x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16, x17, x18, x19, ... (1 more variable)} = 1
+        "###);
     }
 }
