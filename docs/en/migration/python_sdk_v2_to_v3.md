@@ -403,8 +403,9 @@ dir_art = ArtifactDir.from_oci_dir(path)
 
 # v3
 from ommx.artifact import Artifact
-artifact = Artifact.load_archive("path/to/file.ommx")   # file or directory
-artifact = Artifact.load("ghcr.io/jij-inc/ommx/...")    # remote registry
+artifact = Artifact.import_archive("path/to/file.ommx")   # imports a .ommx archive into the Local Registry
+manifest = Artifact.inspect_archive("path/to/file.ommx")  # read-only manifest / layer descriptor view
+artifact = Artifact.load("ghcr.io/jij-inc/ommx/...")      # remote registry
 ```
 
 ## 8. Snapshot `Constraint` setters return a clone, not `self` (`3.0.0a1`, [#770](https://github.com/Jij-Inc/ommx/pull/770), [#771](https://github.com/Jij-Inc/ommx/pull/771))
@@ -571,6 +572,24 @@ print(df["substituted_value"])
 ```
 
 `decision_variables_df()` on `Instance` and `ParametricInstance` continues to include the `substituted_value` column, but that value is populated from the owner-side fixed-value table. If you call `.detach()` on an `AttachedDecisionVariable`, the result is a modeling snapshot and no longer carries the owner-side fixed value.
+
+### 11.2 Direct replacements for `decision_variable_analysis()`
+
+The Python SDK no longer exposes the old analysis object shape. Query the owning `Instance` directly for the role or role-derived sets you need:
+
+```python
+roles = instance.decision_variable_roles()
+role = instance.decision_variable_role(1)
+
+fixed = instance.fixed_decision_variables()
+dependent = instance.dependent_decision_variable_ids()
+irrelevant = instance.irrelevant_decision_variable_ids()
+
+df = instance.decision_variables_df()
+print(df["state_role"])
+```
+
+For adapter code that only needs solver input variables, use `instance.used_decision_variables`. Use the role helpers above when migrating code that previously inspected `decision_variable_analysis()` for fixed, dependent, or irrelevant variables.
 
 ## 12. `to_bytes` / `from_bytes` removed from non-top-level types (`3.0.0a3`, [#845](https://github.com/Jij-Inc/ommx/pull/845))
 
@@ -803,7 +822,7 @@ expr = 2 * p + 3  # Linear
 - [ ] Change `except RuntimeError` around `.evaluate(...)` / `.partial_evaluate(...)` calls to `except ValueError`.
 - [ ] Switch `parametric_instance.parameters` DataFrame reads to `parametric_instance.parameters_df()` (now a method; `.parameters` returns `list[Parameter]`).
 - [ ] Audit chained `Constraint.add_name(...).add_subscripts(...)` calls — the chain operates on a clone after the first method, so only the first mutation lands in the original wrapper. Assign the chain to a fresh binding (`c = (...).add_name(...).add_subscripts(...)`), or use the live `AttachedConstraint` from `instance.constraints[id]` for write-through mutation.
-- [ ] Replace `ArtifactArchive` / `ArtifactDir` usage with `Artifact.load_archive(...)` or `Artifact.load(...)`.
+- [ ] Replace `ArtifactArchive` / `ArtifactDir` usage with `Artifact.import_archive(...)` for code that needs archive contents, `Artifact.inspect_archive(...)` for read-only archive inspection, or `Artifact.load(...)` for remote / registry refs.
 - [ ] Remove any `Linear.from_object(...)` / `Linear.equals_to(...)` calls.
 - [ ] Add parentheses to every `*_df` access — `instance.constraints_df` → `instance.constraints_df()` etc. (every `*_df` accessor is a method now).
 - [ ] Replace per-kind `instance.indicator_constraints_df` / `one_hot_constraints_df` / `sos1_constraints_df` and `removed_*_constraints_df` / `*_removed_reasons_df` calls with `constraints_df(kind=..., removed=...)` on the same host.
@@ -811,6 +830,7 @@ expr = 2 * p + 3  # Linear
 - [ ] Drop the in-place `c.add_name(...)` mutation pattern on snapshot wrappers retrieved from an instance — those calls return a new object and don't write through to the host. Use the live handle returned by `instance.constraints[id]` (an `AttachedConstraint`) and call its `set_*` / `add_*` methods, or re-add via `from_components`.
 - [ ] Update return-type annotations / static analysis for `instance.constraints` etc. to expect `AttachedX` (`dict[int, AttachedConstraint]`, `list[AttachedDecisionVariable]`, …). Call `.detach()` if you need an independent snapshot.
 - [ ] Replace detached `DecisionVariable.substituted_value` reads with owner-side queries: `Instance.fixed_decision_variables()`, `instance.attached_decision_variable(id).substituted_value`, or `instance.decision_variables_df()["substituted_value"]`.
+- [ ] Replace `decision_variable_analysis()` reads with `decision_variable_roles()`, `decision_variable_role(id)`, `fixed_decision_variables()`, `dependent_decision_variable_ids()`, `irrelevant_decision_variable_ids()`, or `decision_variables_df()["state_role"]`.
 - [ ] Replace element-level `to_bytes()` / `from_bytes()` calls on `Function` / `Linear` / `Quadratic` / `Polynomial` / `Parameter` / the `NamedFunction` family / the `DecisionVariable` family with whole-`Instance` / `Solution` / `SampleSet` round-trips (or the `State` / `Samples` / `Parameters` DTOs for evaluate plumbing). See §12.
 - [ ] Replace `ArtifactBuilder.new_archive(path, image_name).build()` with `ArtifactDraft.new(image_name).commit()` + `artifact.save(path)`. See §13.1.
 - [ ] Replace `ArtifactBuilder.new_archive_unnamed(path).build()` with `ArtifactDraft.new_anonymous().commit()` + `artifact.save(path)`. Audit code that branched on `artifact.image_name is None` — anonymous artifacts now have a synthesized `<...>.ommx.local/anonymous:...` name. See §13.2.

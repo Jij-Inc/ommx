@@ -275,6 +275,38 @@ detached snapshot が必要な場合は `detach()` を使います。
 snapshot = instance.constraints[5].detach()
 ```
 
+### 10.1 fixed decision-variable values
+
+detached な `DecisionVariable` は変数定義と label の snapshot であり、固定値は持ちません。`partial_evaluate(...)` や legacy protobuf の `substituted_value` 由来の固定値は、所有者である `Instance` / `ParametricInstance` に保存されます。
+
+```python
+fixed = instance.fixed_decision_variables()
+
+attached = instance.attached_decision_variable(1)
+assert attached.substituted_value == fixed.get(1)
+
+df = instance.decision_variables_df()
+print(df["substituted_value"])
+```
+
+### 10.2 `decision_variable_analysis()` の置き換え
+
+古い analysis object shape は公開されません。必要な role / role 由来の集合を、所有者である `Instance` から直接取得してください。
+
+```python
+roles = instance.decision_variable_roles()
+role = instance.decision_variable_role(1)
+
+fixed = instance.fixed_decision_variables()
+dependent = instance.dependent_decision_variable_ids()
+irrelevant = instance.irrelevant_decision_variable_ids()
+
+df = instance.decision_variables_df()
+print(df["state_role"])
+```
+
+Adapter が solver input の変数だけを必要とする場合は `instance.used_decision_variables` を使います。fixed / dependent / irrelevant の分類を見ていた移行コードは、上の role helper に置き換えてください。
+
 ## 11. named function ID
 
 Named function 系も table-owned ID model に移行しています。`NamedFunction`、`EvaluatedNamedFunction`、`SampledNamedFunction` の row object 自身ではなく、host 側の table key が ID の source of truth です。
@@ -370,5 +402,6 @@ ommx push ghcr.io/jij-inc/ommx/demo:v1
 - [ ] `constraint_hints` を `one_hot_constraints` / `sos1_constraints` / `indicator_constraints` に置き換える。
 - [ ] `*_df` accessor に `()` を付ける。
 - [ ] `RuntimeError` を捕捉していた `evaluate` / `partial_evaluate` 周辺を `ValueError` に変える。
+- [ ] `decision_variable_analysis()` を `decision_variable_roles()` / `decision_variable_role(id)` / `fixed_decision_variables()` / `dependent_decision_variable_ids()` / `irrelevant_decision_variable_ids()` / `decision_variables_df()["state_role"]` に置き換える。
 - [ ] element-level `to_bytes()` / `from_bytes()` を、所有者全体の round-trip に置き換える。
 - [ ] Artifact archive API を `ArtifactDraft` / `Artifact.save` / `Artifact.import_archive` / `Artifact.inspect_archive` に移行する。
