@@ -1008,7 +1008,7 @@ let layers = artifact.layers()?;
 
 let instance_layer = layers
     .iter()
-    .find(|layer| layer.media_type() == &media_types::v1_instance())
+    .find(|layer| media_types::is_instance_payload_media_type(layer.media_type()))
     .expect("archive should contain an instance layer");
 let instance = artifact.get_instance_layer(instance_layer)?;
 ```
