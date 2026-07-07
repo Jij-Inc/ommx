@@ -1,15 +1,15 @@
 use super::*;
 use crate::{
     arbitrary_constraints, arbitrary_decision_variables, arbitrary_named_functions,
-    constraint_type::ConstraintCollection,
     random::{arbitrary_samples, SamplesParameters},
     v1::State,
-    ATol, Bounds, ConstraintIDParameters, Evaluate, KindParameters, NamedFunctionIDParameters,
-    PolynomialParameters, Sampled,
+    Bounds, ConstraintIDParameters, Equality, Evaluate, IndicatorConstraintID, Kind,
+    KindParameters, NamedFunctionIDParameters, OneHotConstraintID, PolynomialParameters, Sampled,
+    Sos1ConstraintID,
 };
 use fnv::FnvHashSet;
 use proptest::prelude::*;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 fn arbitrary_integer_state(bounds: &Bounds, max_abs: u64) -> BoxedStrategy<State> {
     let mut strategy = Just(HashMap::new()).boxed();
@@ -111,8 +111,18 @@ impl Arbitrary for Sense {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InstanceSpace {
+    /// Generate the V3 `Instance` domain, including feature families and roles.
+    FullV3,
+    /// Generate only regular constraints with no fixed/dependent variables or
+    /// non-standard constraint families.
+    RegularOnly,
+}
+
 #[derive(Debug, Clone)]
 pub struct InstanceParameters {
+    pub space: InstanceSpace,
     pub constraint_ids: ConstraintIDParameters,
     pub objective: PolynomialParameters,
     pub constraint: PolynomialParameters,
@@ -123,9 +133,54 @@ pub struct InstanceParameters {
 }
 
 impl InstanceParameters {
+    pub fn full_v3() -> Self {
+        Self {
+            space: InstanceSpace::FullV3,
+            constraint_ids: ConstraintIDParameters::default(),
+            named_function_ids: NamedFunctionIDParameters::default(),
+            objective: PolynomialParameters::default(),
+            constraint: PolynomialParameters::default(),
+            named_function: PolynomialParameters::default(),
+            kinds: KindParameters::new(&[
+                Kind::Binary,
+                Kind::Integer,
+                Kind::Continuous,
+                Kind::SemiInteger,
+                Kind::SemiContinuous,
+            ])
+            .unwrap(),
+            max_irrelevant_ids: 5,
+        }
+    }
+
+    pub fn regular_only() -> Self {
+        Self {
+            space: InstanceSpace::RegularOnly,
+            constraint_ids: ConstraintIDParameters::default(),
+            named_function_ids: NamedFunctionIDParameters::default(),
+            objective: PolynomialParameters::default(),
+            constraint: PolynomialParameters::default(),
+            named_function: PolynomialParameters::default(),
+            kinds: KindParameters::default(),
+            max_irrelevant_ids: 5,
+        }
+    }
+
+    pub fn v1_compatible() -> Self {
+        Self::regular_only()
+    }
+
+    pub fn mps_compatible_qcqp() -> Self {
+        Self {
+            named_function_ids: NamedFunctionIDParameters::new(0, 0.into()).unwrap(),
+            ..Self::default_qcqp()
+        }
+    }
+
     /// Default parameter for Linear Programming (LP), i.e. linear objective and linear constraints.
     pub fn default_lp() -> Self {
         Self {
+            space: InstanceSpace::RegularOnly,
             constraint_ids: ConstraintIDParameters::default(),
             named_function_ids: NamedFunctionIDParameters::default(),
             named_function: PolynomialParameters::default_linear(),
@@ -139,6 +194,7 @@ impl InstanceParameters {
     /// Default parameter for Quadratic Programming (QP), i.e. quadratic objective and linear constraints.
     pub fn default_qp() -> Self {
         Self {
+            space: InstanceSpace::RegularOnly,
             constraint_ids: ConstraintIDParameters::default(),
             named_function_ids: NamedFunctionIDParameters::default(),
             objective: PolynomialParameters::default_quadratic(),
@@ -152,6 +208,7 @@ impl InstanceParameters {
     /// Default parameter for Quadratically Constrained Quadratic Programming (QCQP), i.e. quadratic objective and quadratic constraints.
     pub fn default_qcqp() -> Self {
         Self {
+            space: InstanceSpace::RegularOnly,
             constraint_ids: ConstraintIDParameters::default(),
             named_function_ids: NamedFunctionIDParameters::default(),
             objective: PolynomialParameters::default_quadratic(),
@@ -165,15 +222,37 @@ impl InstanceParameters {
 
 impl Default for InstanceParameters {
     fn default() -> Self {
-        Self {
-            constraint_ids: ConstraintIDParameters::default(),
-            named_function_ids: NamedFunctionIDParameters::default(),
-            objective: PolynomialParameters::default(),
-            constraint: PolynomialParameters::default(),
-            named_function: PolynomialParameters::default(),
-            kinds: KindParameters::default(),
-            max_irrelevant_ids: 5,
+        Self::full_v3()
+    }
+}
+
+fn fresh_variable_ids(existing: &mut FnvHashSet<VariableID>, size: usize) -> Vec<VariableID> {
+    let mut ids = Vec::with_capacity(size);
+    let mut raw_id = 0_u64;
+    while ids.len() < size {
+        let id = VariableID::from(raw_id);
+        if existing.insert(id) {
+            ids.push(id);
         }
+        raw_id = raw_id
+            .checked_add(1)
+            .expect("exhausted variable ID space while generating fresh IDs");
+    }
+    ids
+}
+
+fn next_constraint_id(constraints: &BTreeMap<ConstraintID, Constraint>) -> ConstraintID {
+    constraints
+        .keys()
+        .next_back()
+        .map(|id| ConstraintID::from(id.into_inner() + 1))
+        .unwrap_or_else(|| ConstraintID::from(0))
+}
+
+fn arbitrary_removed_reason() -> crate::constraint::RemovedReason {
+    crate::constraint::RemovedReason {
+        reason: "arbitrary".to_string(),
+        parameters: Default::default(),
     }
 }
 
@@ -185,6 +264,8 @@ impl Arbitrary for Instance {
         let objective = Function::arbitrary_with(p.objective);
         let constraints = arbitrary_constraints(p.constraint_ids, p.constraint);
         let named_functions = arbitrary_named_functions(p.named_function_ids, p.named_function);
+        let space = p.space;
+        let kinds = p.kinds.clone();
         // Generate candidates for irrelevant IDs.
         // Since these IDs are generated without checking against the objective or constraints, some of these may be relevant.
         let max_id = p
@@ -212,47 +293,176 @@ impl Arbitrary for Instance {
                         unique_ids.extend(nf.function.required_ids());
                     }
                     unique_ids.extend(irrelevant_candidates.into_iter().map(VariableID::from));
+                    let full_v3_ids = (space == InstanceSpace::FullV3)
+                        .then(|| fresh_variable_ids(&mut unique_ids, 7));
                     (
                         Just(objective),
                         Just(constraints),
                         Just(named_functions),
-                        arbitrary_decision_variables(unique_ids, p.kinds.clone()),
+                        Just(full_v3_ids),
+                        arbitrary_decision_variables(unique_ids, kinds.clone()),
                         Sense::arbitrary(),
                     )
                         .prop_map(
-                            |(
+                            move |(
                                 objective,
                                 constraints,
                                 named_functions,
+                                full_v3_ids,
                                 decision_variables,
                                 sense,
                             )| {
-                                Instance {
-                                    objective,
-                                    constraint_collection: ConstraintCollection::new(
-                                        constraints,
-                                        Default::default(),
-                                    )
-                                    .expect("empty removed constraints cannot overlap active constraints"),
-                                    named_functions: crate::NamedFunctionTable::from_entries(
-                                        named_functions,
-                                    ),
-                                    sense,
-                                    decision_variables: crate::DecisionVariableTable::with_fixed_values(
-                                        decision_variables,
-                                        Default::default(),
-                                        Default::default(),
-                                        ATol::default(),
-                                    )
-                                    .expect("empty fixed-value column is valid"),
-                                    parameters: Default::default(),
-                                    indicator_constraint_collection: Default::default(),
-                                    one_hot_constraint_collection: Default::default(),
-                                    sos1_constraint_collection: Default::default(),
-                                    decision_variable_dependency: Default::default(),
-                                    description: None,
-                                    annotations: Default::default(),
+                                let mut decision_variables = decision_variables;
+                                let mut variable_labels = VariableLabelStore::default();
+                                let mut named_function_labels =
+                                    crate::named_function::NamedFunctionLabelStore::default();
+                                let mut constraint_context =
+                                    ConstraintContextStore::<ConstraintID>::default();
+                                let mut removed_constraints = BTreeMap::new();
+                                let mut fixed_decision_variable_values = BTreeMap::new();
+                                let mut decision_variable_dependency =
+                                    AcyclicAssignments::default();
+                                let mut indicator_constraints = BTreeMap::new();
+                                let mut removed_indicator_constraints = BTreeMap::new();
+                                let mut indicator_constraint_context =
+                                    ConstraintContextStore::<IndicatorConstraintID>::default();
+                                let mut one_hot_constraints = BTreeMap::new();
+                                let mut one_hot_constraint_context =
+                                    ConstraintContextStore::<OneHotConstraintID>::default();
+                                let mut sos1_constraints = BTreeMap::new();
+                                let mut sos1_constraint_context =
+                                    ConstraintContextStore::<Sos1ConstraintID>::default();
+
+                                if let Some((id, _)) = decision_variables.iter().next() {
+                                    variable_labels.set_name(*id, "arbitrary_variable");
                                 }
+                                if let Some(id) = named_functions.keys().next().copied() {
+                                    named_function_labels.set_name(id, "arbitrary_named_function");
+                                }
+                                if let Some(id) = constraints.keys().next().copied() {
+                                    constraint_context.set_name(id, "arbitrary_constraint");
+                                }
+
+                                if let Some(ids) = full_v3_ids {
+                                    let fixed_id = ids[0];
+                                    let dependent_id = ids[1];
+                                    let indicator_var = ids[2];
+                                    let indicator_removed_var = ids[3];
+                                    let one_hot_a = ids[4];
+                                    let one_hot_b = ids[5];
+                                    let sos1_var = ids[6];
+
+                                    decision_variables.insert(fixed_id, DecisionVariable::binary());
+                                    fixed_decision_variable_values.insert(fixed_id, 0.0);
+                                    variable_labels.set_name(fixed_id, "arbitrary_fixed");
+
+                                    decision_variables
+                                        .insert(dependent_id, DecisionVariable::continuous());
+                                    decision_variable_dependency =
+                                        AcyclicAssignments::new([(dependent_id, Function::Zero)])
+                                            .expect("constant assignment is acyclic");
+                                    variable_labels.set_name(dependent_id, "arbitrary_dependent");
+
+                                    for id in [
+                                        indicator_var,
+                                        indicator_removed_var,
+                                        one_hot_a,
+                                        one_hot_b,
+                                        sos1_var,
+                                    ] {
+                                        decision_variables.insert(id, DecisionVariable::binary());
+                                    }
+
+                                    let removed_id = next_constraint_id(&constraints);
+                                    removed_constraints.insert(
+                                        removed_id,
+                                        (
+                                            Constraint::equal_to_zero(Function::Zero),
+                                            arbitrary_removed_reason(),
+                                        ),
+                                    );
+                                    constraint_context
+                                        .set_name(removed_id, "arbitrary_removed_constraint");
+
+                                    let indicator_id = IndicatorConstraintID::from(0);
+                                    indicator_constraints.insert(
+                                        indicator_id,
+                                        IndicatorConstraint::new(
+                                            indicator_var,
+                                            Equality::LessThanOrEqualToZero,
+                                            Function::Zero,
+                                        ),
+                                    );
+                                    indicator_constraint_context
+                                        .set_name(indicator_id, "arbitrary_indicator");
+
+                                    let removed_indicator_id = IndicatorConstraintID::from(1);
+                                    removed_indicator_constraints.insert(
+                                        removed_indicator_id,
+                                        (
+                                            IndicatorConstraint::new(
+                                                indicator_removed_var,
+                                                Equality::EqualToZero,
+                                                Function::Zero,
+                                            ),
+                                            arbitrary_removed_reason(),
+                                        ),
+                                    );
+                                    indicator_constraint_context.set_name(
+                                        removed_indicator_id,
+                                        "arbitrary_removed_indicator",
+                                    );
+
+                                    let one_hot_id = OneHotConstraintID::from(0);
+                                    one_hot_constraints.insert(
+                                        one_hot_id,
+                                        OneHotConstraint::new(BTreeSet::from([
+                                            one_hot_a, one_hot_b,
+                                        ]))
+                                        .expect("one-hot set is non-empty"),
+                                    );
+                                    one_hot_constraint_context
+                                        .set_name(one_hot_id, "arbitrary_one_hot");
+
+                                    let sos1_id = Sos1ConstraintID::from(0);
+                                    sos1_constraints.insert(
+                                        sos1_id,
+                                        Sos1Constraint::new(BTreeSet::from([sos1_var, one_hot_b]))
+                                            .expect("SOS1 set is non-empty"),
+                                    );
+                                    sos1_constraint_context.set_name(sos1_id, "arbitrary_sos1");
+                                }
+
+                                let mut instance = Instance::builder()
+                                    .sense(sense)
+                                    .objective(objective)
+                                    .decision_variables(decision_variables)
+                                    .variable_labels(variable_labels)
+                                    .fixed_decision_variable_values(fixed_decision_variable_values)
+                                    .constraints(constraints)
+                                    .constraint_context(constraint_context)
+                                    .removed_constraints(removed_constraints)
+                                    .indicator_constraints(indicator_constraints)
+                                    .indicator_constraint_context(indicator_constraint_context)
+                                    .removed_indicator_constraints(removed_indicator_constraints)
+                                    .one_hot_constraints(one_hot_constraints)
+                                    .one_hot_constraint_context(one_hot_constraint_context)
+                                    .sos1_constraints(sos1_constraints)
+                                    .sos1_constraint_context(sos1_constraint_context)
+                                    .named_functions(named_functions)
+                                    .named_function_labels(named_function_labels)
+                                    .decision_variable_dependency(decision_variable_dependency)
+                                    .build()
+                                    .expect("arbitrary Instance must satisfy builder invariants");
+
+                                if space == InstanceSpace::FullV3 {
+                                    instance.annotations.insert(
+                                        "org.ommx.user.arbitrary".to_string(),
+                                        "true".to_string(),
+                                    );
+                                }
+
+                                instance
                             },
                         )
                 },
@@ -279,6 +489,42 @@ mod tests {
                         prop_assert!(instance.decision_variables.contains_key(&id));
                     }
                 }
+            }
+            for (c, _) in instance.removed_constraints().values() {
+                for id in c.required_ids() {
+                    prop_assert!(instance.decision_variables.contains_key(&id));
+                }
+            }
+            for c in instance.indicator_constraints().values() {
+                for id in c.required_ids() {
+                    prop_assert!(instance.decision_variables.contains_key(&id));
+                }
+            }
+            for (c, _) in instance.removed_indicator_constraints().values() {
+                for id in c.required_ids() {
+                    prop_assert!(instance.decision_variables.contains_key(&id));
+                }
+            }
+            for c in instance.one_hot_constraints().values() {
+                for id in c.required_ids() {
+                    prop_assert!(instance.decision_variables.contains_key(&id));
+                }
+            }
+            for c in instance.sos1_constraints().values() {
+                for id in c.required_ids() {
+                    prop_assert!(instance.decision_variables.contains_key(&id));
+                }
+            }
+            for nf in instance.named_functions().values() {
+                for id in nf.required_ids() {
+                    prop_assert!(instance.decision_variables.contains_key(&id));
+                }
+            }
+            for id in instance.decision_variable_dependency().keys() {
+                prop_assert!(instance.decision_variables.contains_key(&id));
+            }
+            for id in instance.decision_variable_dependency().required_ids() {
+                prop_assert!(instance.decision_variables.contains_key(&id));
             }
         }
     }
