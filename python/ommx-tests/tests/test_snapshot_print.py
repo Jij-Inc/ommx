@@ -1,10 +1,16 @@
 """Snapshot tests for print output of OMMX v1 classes."""
 
 from ommx import (
+    Constraint,
     DecisionVariable,
+    IndicatorConstraint,
     Linear,
     Function,
     Instance,
+    NamedFunction,
+    OneHotConstraint,
+    Parameter,
+    ParametricInstance,
 )
 
 
@@ -113,3 +119,137 @@ def test_instance_stats_print(snapshot):
     )
     stats = instance.stats()
     assert str(stats) == snapshot
+
+
+def test_instance_print_uses_modeling_labels(snapshot):
+    """Test Instance print output with context-aware function formatting."""
+    x = [
+        DecisionVariable.binary(0, name="x", subscripts=[0]),
+        DecisionVariable.binary(1, name="x", subscripts=[1]),
+        DecisionVariable.integer(2, lower=0, upper=10, name="y"),
+    ]
+    capacity = Constraint(
+        function=x[0] + x[1] - 1,
+        equality=Constraint.LESS_THAN_OR_EQUAL_TO_ZERO,
+        name="capacity",
+        subscripts=[0],
+    )
+    indicator = IndicatorConstraint(
+        indicator_variable=x[0],
+        function=x[1] - 1,
+        equality=Constraint.LESS_THAN_OR_EQUAL_TO_ZERO,
+        name="active",
+    )
+    one_hot = OneHotConstraint(variables=[0, 1], name="choose")
+    score = NamedFunction(id=5, function=2 * x[2] + 3, name="score")
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=x[0] + x[1],
+        constraints={10: capacity},
+        indicator_constraints={20: indicator},
+        one_hot_constraints={30: one_hot},
+        named_functions=[score],
+        sense=Instance.MAXIMIZE,
+    )
+
+    assert str(instance) == snapshot
+    assert repr(instance) == str(instance)
+
+
+def test_parametric_instance_print_uses_parameter_labels(snapshot):
+    """Test ParametricInstance print output with parameter labels."""
+    x = DecisionVariable.binary(0, name="x")
+    p = Parameter(100, name="p", parameters={"scenario": "base"})
+    instance = ParametricInstance.from_components(
+        decision_variables=[x],
+        objective=x + p,
+        constraints={},
+        parameters=[p],
+        sense=Instance.MINIMIZE,
+    )
+
+    assert str(instance) == snapshot
+    assert repr(instance) == str(instance)
+
+
+def test_instance_print_disambiguates_duplicate_labels_across_sections(snapshot):
+    """Test duplicate labels stay unambiguous across summary sections."""
+    x0 = DecisionVariable.binary(0, name="x")
+    x1 = DecisionVariable.binary(1, name="x")
+    constraint = Constraint(
+        function=x1 - 1,
+        equality=Constraint.LESS_THAN_OR_EQUAL_TO_ZERO,
+        name="limit",
+    )
+    instance = Instance.from_components(
+        decision_variables=[x0, x1],
+        objective=x0,
+        constraints={1: constraint},
+        sense=Instance.MINIMIZE,
+    )
+
+    assert str(instance) == snapshot
+    assert repr(instance) == str(instance)
+
+
+def test_parametric_instance_print_disambiguates_parameter_and_structural_variable(
+    snapshot,
+):
+    """Test parameter labels share the summary namespace with structural variables."""
+    x = DecisionVariable.binary(0, name="shared")
+    p = Parameter(100, name="shared")
+    one_hot = OneHotConstraint(variables=[0], name="choose")
+    instance = ParametricInstance.from_components(
+        decision_variables=[x],
+        objective=p,
+        constraints={},
+        parameters=[p],
+        one_hot_constraints={7: one_hot},
+        sense=Instance.MINIMIZE,
+    )
+
+    assert str(instance) == snapshot
+    assert repr(instance) == str(instance)
+
+
+def test_instance_print_limits_section_rows(snapshot):
+    """Test large sections stay bounded for repr/notebook display."""
+    variables = [
+        DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(25)
+    ]
+    constraints = {
+        i: Constraint(
+            function=variables[i] - 1,
+            equality=Constraint.LESS_THAN_OR_EQUAL_TO_ZERO,
+            name="row",
+            subscripts=[i],
+        )
+        for i in range(22)
+    }
+    instance = Instance.from_components(
+        decision_variables=variables,
+        objective=variables[0],
+        constraints=constraints,
+        sense=Instance.MINIMIZE,
+    )
+
+    assert str(instance) == snapshot
+    assert repr(instance) == str(instance)
+
+
+def test_instance_print_limits_structural_variable_sets(snapshot):
+    """Test large one-hot/SOS1-style variable sets stay bounded."""
+    variables = [
+        DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(25)
+    ]
+    one_hot = OneHotConstraint(variables=list(range(25)), name="choose")
+    instance = Instance.from_components(
+        decision_variables=variables,
+        objective=variables[0],
+        constraints={},
+        one_hot_constraints={3: one_hot},
+        sense=Instance.MINIMIZE,
+    )
+
+    assert str(instance) == snapshot
+    assert repr(instance) == str(instance)

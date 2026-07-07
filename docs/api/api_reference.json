@@ -8045,6 +8045,38 @@
               "deprecated": null
             },
             {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__str__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "add_constraint",
               "doc": "Add a regular constraint to this instance.\n\nPicks an unused {class}`~ommx.ConstraintID`, drains the wrapper's\ncontext snapshot into this instance's SoA store, and returns an\n{class}`~ommx.AttachedConstraint` bound to the new id. The input\n{class}`~ommx.Constraint` is not mutated; subsequent writes that\nshould land in the instance must go through the returned handle.\n\nRaises {class}`ValueError` if the constraint references an undefined\ndecision variable or one currently used as a substitution-dependency\nkey, matching the validation performed by other constraint-insertion\npaths.",
               "signatures": [
@@ -14619,6 +14651,38 @@
                   ],
                   "return_type": {
                     "display": "ParametricInstance",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__str__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
                     "link_target": null,
                     "children": []
                   }
