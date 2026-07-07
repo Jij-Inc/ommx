@@ -112,7 +112,7 @@ impl fmt::Display for ParametricInstance {
 fn format_instance_summary(instance: &Instance) -> crate::Result<String> {
     let symbols = collect_instance_summary_symbols(instance)?;
     let mut out = String::new();
-    write_instance_header(&mut out, "Instance", &instance.sense(), None, instance);
+    write_instance_header(&mut out, "Instance", instance.sense(), None, instance);
     writeln!(
         out,
         "Objective:\n  {}",
@@ -223,7 +223,7 @@ fn format_parametric_instance_summary(instance: &ParametricInstance) -> crate::R
     write_instance_header(
         &mut out,
         "ParametricInstance",
-        instance.sense(),
+        *instance.sense(),
         Some(instance.parameters().len()),
         instance,
     );
@@ -338,7 +338,7 @@ fn invalid_summary(type_name: &str, message: String) -> String {
 fn write_instance_header<T>(
     out: &mut String,
     type_name: &str,
-    sense: &Sense,
+    sense: Sense,
     parameters: Option<usize>,
     instance: &T,
 ) where
@@ -347,7 +347,7 @@ fn write_instance_header<T>(
     write!(
         out,
         "{type_name}(sense={}, decision_variables={}",
-        sense_label(*sense),
+        sense_label(sense),
         instance.decision_variable_count(),
     )
     .unwrap();
