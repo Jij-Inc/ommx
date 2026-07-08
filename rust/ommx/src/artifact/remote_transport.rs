@@ -105,6 +105,25 @@ impl RemoteTransport {
         self.auth_for(image_name, RegistryOperation::Push)
     }
 
+    /// Check whether a blob already exists in the destination repository.
+    ///
+    /// Crate-visible because `LocalArtifact::push` decides whether to read a
+    /// local blob before uploading it, while this transport remains the owner
+    /// of raw OCI Distribution requests and auth behavior. The underlying
+    /// `oci-client` call performs the registry blob `HEAD` check: `404`
+    /// returns `Ok(false)`, and any other registry / transport error is
+    /// propagated.
+    pub(crate) fn blob_exists(
+        &self,
+        image_name: &crate::artifact::ImageRef,
+        digest: &str,
+    ) -> crate::Result<bool> {
+        let reference = to_reference(image_name);
+        self.runtime
+            .block_on(self.client.blob_exists(reference, digest))
+            .with_context(|| format!("Failed to check blob {digest} in {reference}"))
+    }
+
     /// Push a single blob to the registry. The caller passes the
     /// pre-computed digest (which the SQLite Local Registry already
     /// stores as the Local Registry key), so the registry-side digest can be
