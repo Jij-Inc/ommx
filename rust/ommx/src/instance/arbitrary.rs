@@ -112,6 +112,7 @@ impl Arbitrary for Sense {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum InstanceSpace {
     /// Generate the V3 [`Instance`] domain, including special constraint
     /// families, lifecycle states, and decision-variable roles.
@@ -140,6 +141,17 @@ pub struct InstanceParameters {
 }
 
 impl InstanceParameters {
+    /// Parameters for the full V3 [`Instance`] space. This is the default.
+    ///
+    /// The objective, regular constraints, named functions, and decision
+    /// variables are sampled from strategies. The V3-specific structure —
+    /// fixed and dependent variables, removed constraints, indicator,
+    /// one-hot, and SOS1 families, parameters, description, and annotations
+    /// — is injected deterministically, so each of those dimensions is
+    /// exercised at a single representative point (smoke coverage) rather
+    /// than sampled. Every generated instance contains all V3 features;
+    /// feature-absent combinations are covered by the narrower spaces such
+    /// as [`Self::regular_only`].
     pub fn full_v3() -> Self {
         Self {
             space: InstanceSpace::FullV3,
@@ -160,6 +172,8 @@ impl InstanceParameters {
         }
     }
 
+    /// Parameters for the regular-constraint subspace: no special constraint
+    /// families, no removed constraints, and no fixed or dependent variables.
     pub fn regular_only() -> Self {
         Self {
             space: InstanceSpace::RegularOnly,
@@ -173,10 +187,18 @@ impl InstanceParameters {
         }
     }
 
+    /// Parameters for instances that round-trip through the v1 protobuf
+    /// format losslessly.
+    ///
+    /// Currently identical to [`Self::regular_only`]; the claim is pinned by
+    /// the `instance_roundtrip` property test, which fails if the two spaces
+    /// drift apart.
     pub fn v1_compatible() -> Self {
         Self::regular_only()
     }
 
+    /// Parameters for QCQP instances that the MPS writer supports: regular
+    /// constraints only and no named functions.
     pub fn mps_compatible_qcqp() -> Self {
         Self {
             named_function_ids: NamedFunctionIDParameters::new(0, 0.into()).unwrap(),
@@ -300,6 +322,10 @@ impl Arbitrary for Instance {
                         unique_ids.extend(nf.function.required_ids());
                     }
                     unique_ids.extend(irrelevant_candidates.into_iter().map(VariableID::from));
+                    // Reserving the fresh IDs in `unique_ids` means
+                    // `arbitrary_decision_variables` also generates variables
+                    // for them; those are overwritten below with the kinds the
+                    // V3 structure requires (binary/continuous).
                     let full_v3_ids = (space == InstanceSpace::FullV3)
                         .then(|| fresh_variable_ids(&mut unique_ids, 12));
                     (
@@ -458,6 +484,11 @@ impl Arbitrary for Instance {
                                     one_hot_constraint_context
                                         .set_name(removed_one_hot_id, "arbitrary_removed_one_hot");
 
+                                    // The SOS1 sets deliberately share one
+                                    // variable with the one-hot sets so the
+                                    // generated instances cover variables that
+                                    // belong to more than one special
+                                    // constraint family.
                                     let sos1_id = Sos1ConstraintID::from(0);
                                     sos1_constraints.insert(
                                         sos1_id,
@@ -607,6 +638,9 @@ mod tests {
             }
         }
 
+        // Generator-regression test: the asserted structure is injected
+        // deterministically by the FullV3 space, so this pins the generator's
+        // coverage of V3 features rather than a domain property.
         #[test]
         fn full_v3_space_exercises_v3_instance_state(instance in Instance::arbitrary()) {
             prop_assert!(!instance.fixed_decision_variable_values().is_empty());
