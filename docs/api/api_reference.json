@@ -9881,7 +9881,7 @@
             },
             {
               "name": "log_encode",
-              "doc": "Log-encode the integer decision variables.\n\nLog encoding of an integer variable $x \\in [l, u]$ is to represent by $m$ bits $b_i \\in \\{0, 1\\}$ by:\n\n$$x = \\sum_{i=0}^{m-2} 2^i b_i + (u - l - 2^{m-1} + 1) b_{m-1} + l$$\n\nwhere $m = \\lceil \\log_2(u - l + 1) \\rceil$.\n\n**Args:**\n- `decision_variable_ids`: The IDs of the integer decision variables to log-encode.\n  If not specified (or empty), all integer variables are log-encoded.\n\n# Examples\n\nLet's consider a simple integer programming problem with three integer variables x0, x1, and x2.\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [\n...     DecisionVariable.integer(i, lower=0, upper=3, name=\"x\", subscripts=[i])\n...     for i in range(3)\n... ]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.objective\nFunction(x0 + x1 + x2)\n```\n\nTo log-encode the integer variables x0 and x2 (except x1), call log_encode:\n\n```python\n>>> instance.log_encode({0, 2})\n```\n\nInteger variable in range $[0, 3]$ can be represented by two binary variables:\n\n$$x_0 = b_{0,0} + 2 b_{0,1}, \\quad x_2 = b_{2,0} + 2 b_{2,1}$$\n\nAnd these are substituted into the objective and constraint functions.\n\n```python\n>>> instance.objective\nFunction(x1 + x3 + 2*x4 + x5 + 2*x6)\n```",
+              "doc": "Log-encode the integer decision variables.\n\nLog encoding of an integer variable $x \\in [l, u]$ is to represent by $m$ bits $b_i \\in \\{0, 1\\}$ by:\n\n$$x = \\sum_{i=0}^{m-2} 2^i b_i + (u - l - 2^{m-1} + 1) b_{m-1} + l$$\n\nwhere $m = \\lceil \\log_2(u - l + 1) \\rceil$.\n\n**Args:**\n- `decision_variable_ids`: The IDs of the integer decision variables to log-encode.\n  If not specified (or empty), all integer variables are log-encoded.\n- `atol`: Optional absolute tolerance used when normalizing integer\n  bounds before encoding. If None, uses the default tolerance.\n\n# Examples\n\nLet's consider a simple integer programming problem with three integer variables x0, x1, and x2.\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [\n...     DecisionVariable.integer(i, lower=0, upper=3, name=\"x\", subscripts=[i])\n...     for i in range(3)\n... ]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.objective\nFunction(x0 + x1 + x2)\n```\n\nTo log-encode the integer variables x0 and x2 (except x1), call log_encode:\n\n```python\n>>> instance.log_encode({0, 2})\n```\n\nInteger variable in range $[0, 3]$ can be represented by two binary variables:\n\n$$x_0 = b_{0,0} + 2 b_{0,1}, \\quad x_2 = b_{2,0} + 2 b_{2,1}$$\n\nAnd these are substituted into the objective and constraint functions.\n\n```python\n>>> instance.objective\nFunction(x1 + x3 + 2*x4 + x5 + 2*x6)\n```",
               "signatures": [
                 {
                   "parameters": [
@@ -9901,6 +9901,24 @@
                       "default": {
                         "kind": "Simple",
                         "value": "set()"
+                      }
+                    },
+                    {
+                      "name": "atol",
+                      "type_": {
+                        "display": "Optional[float]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "float",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
                       }
                     }
                   ],
@@ -10751,7 +10769,7 @@
             },
             {
               "name": "unary_encode",
-              "doc": "Unary-encode the integer decision variables.\n\nUnary encoding of an integer variable $x \\in [l, u]$ is to represent it\nby $u - l$ bits $b_j \\in \\{0, 1\\}$:\n\n$$x = l + \\sum_j b_j$$\n\nEvery bit configuration maps to a valid integer in the original range,\nso no encoding-validity penalty or linking constraint is added. This\ncosts linearly many auxiliary variables, so use it for narrow integer\nranges.\n\n**Args:**\n- `decision_variable_ids`: The IDs of the integer decision variables to unary-encode.\n  If not specified (or empty), all used integer variables are unary-encoded.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = DecisionVariable.integer(0, lower=2, upper=5, name=\"x\")\n>>> instance = Instance.from_components(\n...     decision_variables=[x],\n...     objective=x,\n...     constraints=[],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.unary_encode({0})\n>>> instance.objective\nFunction(x1 + x2 + x3 + 2)\n```",
+              "doc": "Unary-encode the integer decision variables.\n\nUnary encoding of an integer variable $x \\in [l, u]$ is to represent it\nby $u - l$ bits $b_j \\in \\{0, 1\\}$:\n\n$$x = l + \\sum_j b_j$$\n\nEvery bit configuration maps to a valid integer in the original range,\nso no encoding-validity penalty or linking constraint is added. This\ncosts linearly many auxiliary variables, so use it for narrow integer\nranges.\n\n**Args:**\n- `decision_variable_ids`: The IDs of the integer decision variables to unary-encode.\n  If not specified (or empty), all used integer variables are unary-encoded.\n- `max_range`: Maximum allowed `upper - lower` range for each encoded\n  variable. This also bounds the number of auxiliary binary variables\n  introduced per integer variable.\n- `atol`: Optional absolute tolerance used when normalizing integer\n  bounds before encoding. If None, uses the default tolerance.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = DecisionVariable.integer(0, lower=2, upper=5, name=\"x\")\n>>> instance = Instance.from_components(\n...     decision_variables=[x],\n...     objective=x,\n...     constraints=[],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.unary_encode({0})\n>>> instance.objective\nFunction(x1 + x2 + x3 + 2)\n```",
               "signatures": [
                 {
                   "parameters": [
@@ -10771,6 +10789,36 @@
                       "default": {
                         "kind": "Simple",
                         "value": "set()"
+                      }
+                    },
+                    {
+                      "name": "max_range",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "1024"
+                      }
+                    },
+                    {
+                      "name": "atol",
+                      "type_": {
+                        "display": "Optional[float]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "float",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
                       }
                     }
                   ],

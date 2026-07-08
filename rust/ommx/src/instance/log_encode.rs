@@ -15,16 +15,15 @@ use crate::{substitute_one, ATol, Bound, Coefficient, Kind, Linear, VariableID};
 ///
 /// Returns an error if the bound is not finite, or if no feasible integer
 /// values exist within the bound.
-fn log_encoding_coefficients(bound: Bound) -> crate::Result<(Vec<Coefficient>, f64)> {
-    // Check bounds are finite
-    if !bound.lower().is_finite() || !bound.upper().is_finite() {
+fn log_encoding_coefficients(bound: Bound, atol: ATol) -> crate::Result<(Vec<Coefficient>, f64)> {
+    let integer_bound = bound.as_integer_bound(atol).ok_or_else(|| {
+        crate::error!({ ?bound }, "no feasible integer values in bound for log-encoding: {bound}")
+    })?;
+    if !integer_bound.is_finite() {
         crate::bail!({ ?bound }, "bound must be finite for log-encoding: {bound}");
     }
 
-    // Bound of integer may be non-integer value, so floor/ceil to get valid integer range
-    let upper = bound.upper().floor();
-    let lower = bound.lower().ceil();
-    let u_l = upper - lower;
+    let u_l = integer_bound.width();
     if u_l < 0.0 {
         // No feasible integer values in the range
         crate::bail!({ ?bound }, "no feasible integer values in bound for log-encoding: {bound}");
@@ -32,7 +31,7 @@ fn log_encoding_coefficients(bound: Bound) -> crate::Result<(Vec<Coefficient>, f
 
     // There is only one feasible integer, and no need to encode
     if u_l == 0.0 {
-        return Ok((vec![], lower));
+        return Ok((vec![], integer_bound.lower()));
     }
 
     // Log-encoding: calculate number of binary variables needed
@@ -51,18 +50,24 @@ fn log_encoding_coefficients(bound: Bound) -> crate::Result<(Vec<Coefficient>, f
         })
         .collect::<Vec<_>>();
 
-    Ok((coefficients, lower))
+    Ok((coefficients, integer_bound.lower()))
 }
 
 impl Instance {
     /// Encode an integer decision variable into binary decision variables.
     #[tracing::instrument(skip(self))]
     pub fn log_encode(&mut self, id: VariableID) -> crate::Result<Linear> {
+        self.log_encode_with_atol(id, ATol::default())
+    }
+
+    /// Encode an integer decision variable using the given bound-normalization tolerance.
+    #[tracing::instrument(skip(self))]
+    pub fn log_encode_with_atol(&mut self, id: VariableID, atol: ATol) -> crate::Result<Linear> {
         let v = self
             .decision_variables
             .get(&id)
             .ok_or_else(|| crate::error!({ ?id }, "unknown variable for log-encoding: {id:?}"))?;
-        let (coefficients, offset) = log_encoding_coefficients(v.bound())?;
+        let (coefficients, offset) = log_encoding_coefficients(v.bound(), atol)?;
         // Safe unwrap: offset is always finite from log_encoding_coefficients
         let mut linear = Linear::try_from(offset).unwrap();
         for (i, coefficient) in coefficients.iter().enumerate() {
@@ -75,7 +80,7 @@ impl Instance {
                     ..Default::default()
                 },
                 None,
-                ATol::default(),
+                atol,
             )?;
             linear.add_term(binary_id.into(), *coefficient)?;
         }
@@ -141,14 +146,14 @@ mod tests {
     fn test_log_encoding_coefficients() {
         // 2^3 case
         let bound = Bound::new(0.0, 7.0).unwrap();
-        let (coefficients, offset) = log_encoding_coefficients(bound).unwrap();
+        let (coefficients, offset) = log_encoding_coefficients(bound, ATol::default()).unwrap();
         assert_eq!(coefficients, vec![coeff!(1.0), coeff!(2.0), coeff!(4.0)]);
         assert_eq!(offset, 0.0);
 
         // [1, 6] should be x = 1 + b1 + 2*b2 + 2*b3, the last coefficient is shifted
         // Then, 1 + 1 + 2 + 2 = 6
         let bound = Bound::new(1.0, 6.0).unwrap();
-        let (coefficients, offset) = log_encoding_coefficients(bound).unwrap();
+        let (coefficients, offset) = log_encoding_coefficients(bound, ATol::default()).unwrap();
         assert_eq!(coefficients, vec![coeff!(1.0), coeff!(2.0), coeff!(2.0)]);
         assert_eq!(offset, 1.0);
         assert_eq!(
@@ -156,14 +161,19 @@ mod tests {
             6.0
         );
 
+        let bound = Bound::new(1.000000000001, 6.000000000001).unwrap();
+        let (coefficients, offset) = log_encoding_coefficients(bound, ATol::default()).unwrap();
+        assert_eq!(coefficients, vec![coeff!(1.0), coeff!(2.0), coeff!(2.0)]);
+        assert_eq!(offset, 1.0);
+
         // [2, 2] should be x = 2, no binary variables needed
         let bound = Bound::new(2.0, 2.0).unwrap();
-        let (coefficients, offset) = log_encoding_coefficients(bound).unwrap();
+        let (coefficients, offset) = log_encoding_coefficients(bound, ATol::default()).unwrap();
         assert!(coefficients.is_empty());
         assert_eq!(offset, 2.0);
 
         // No feasible integer values
         let bound = Bound::new(1.3, 1.6).unwrap();
-        assert!(log_encoding_coefficients(bound).is_err());
+        assert!(log_encoding_coefficients(bound, ATol::default()).is_err());
     }
 }

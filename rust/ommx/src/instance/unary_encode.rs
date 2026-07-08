@@ -9,17 +9,24 @@ use crate::{substitute_one, ATol, Bound, Coefficient, Kind, Linear, VariableID};
 ///
 /// Returns an error if the bound is not finite, or if no feasible integer
 /// values exist within the bound.
-fn unary_encoding_size(bound: Bound) -> crate::Result<(usize, f64)> {
-    if !bound.lower().is_finite() || !bound.upper().is_finite() {
+fn unary_encoding_size(bound: Bound, max_range: usize, atol: ATol) -> crate::Result<(usize, f64)> {
+    let integer_bound = bound.as_integer_bound(atol).ok_or_else(|| {
+        crate::error!({ ?bound }, "no feasible integer values in bound for unary-encoding: {bound}")
+    })?;
+    if !integer_bound.is_finite() {
         crate::bail!({ ?bound }, "bound must be finite for unary-encoding: {bound}");
     }
 
-    // Bound of integer may be non-integer value, so floor/ceil to get valid integer range.
-    let upper = bound.upper().floor();
-    let lower = bound.lower().ceil();
-    let width = upper - lower;
+    let width = integer_bound.width();
     if width < 0.0 {
         crate::bail!({ ?bound }, "no feasible integer values in bound for unary-encoding: {bound}");
+    }
+
+    if width > max_range as f64 {
+        crate::bail!(
+            { ?bound, width, max_range },
+            "range is too large for unary-encoding: {width} > max_range({max_range})"
+        );
     }
 
     if width > usize::MAX as f64 {
@@ -29,10 +36,18 @@ fn unary_encoding_size(bound: Bound) -> crate::Result<(usize, f64)> {
         );
     }
 
-    Ok((width as usize, lower))
+    Ok((width as usize, integer_bound.lower()))
 }
 
 impl Instance {
+    /// Default maximum integer range accepted by [`Self::unary_encode`].
+    ///
+    /// Unary encoding creates `upper - lower` auxiliary binary variables for
+    /// one integer variable. This guard keeps accidental calls on very wide
+    /// integer ranges from allocating impractical numbers of variables. Use
+    /// [`Self::unary_encode_with_max_range`] to choose an explicit limit.
+    pub const DEFAULT_UNARY_ENCODING_MAX_RANGE: usize = 1024;
+
     /// Encode an integer decision variable into unary binary decision variables.
     ///
     /// For an integer variable `x` with feasible integer range `[lower, upper]`,
@@ -46,11 +61,33 @@ impl Instance {
     /// range width, so this is intended for narrow integer ranges.
     #[tracing::instrument(skip(self))]
     pub fn unary_encode(&mut self, id: VariableID) -> crate::Result<Linear> {
+        self.unary_encode_with_atol(id, ATol::default())
+    }
+
+    /// Encode an integer decision variable using the given bound-normalization tolerance.
+    #[tracing::instrument(skip(self))]
+    pub fn unary_encode_with_atol(&mut self, id: VariableID, atol: ATol) -> crate::Result<Linear> {
+        self.unary_encode_with_max_range(id, Self::DEFAULT_UNARY_ENCODING_MAX_RANGE, atol)
+    }
+
+    /// Encode an integer decision variable with explicit range and tolerance settings.
+    ///
+    /// `max_range` is an upper bound on `upper - lower`, which is also the
+    /// number of auxiliary binary variables introduced for this decision
+    /// variable. `atol` is used when normalizing the decision variable bound to
+    /// an integer bound.
+    #[tracing::instrument(skip(self))]
+    pub fn unary_encode_with_max_range(
+        &mut self,
+        id: VariableID,
+        max_range: usize,
+        atol: ATol,
+    ) -> crate::Result<Linear> {
         let v = self
             .decision_variables
             .get(&id)
             .ok_or_else(|| crate::error!({ ?id }, "unknown variable for unary-encoding: {id:?}"))?;
-        let (num_binary_variables, offset) = unary_encoding_size(v.bound())?;
+        let (num_binary_variables, offset) = unary_encoding_size(v.bound(), max_range, atol)?;
 
         // Safe unwrap: offset is always finite from unary_encoding_size.
         let mut linear = Linear::try_from(offset).unwrap();
@@ -65,7 +102,7 @@ impl Instance {
                     ..Default::default()
                 },
                 None,
-                ATol::default(),
+                atol,
             )?;
             linear.add_term(binary_id.into(), coefficient)?;
         }
@@ -99,16 +136,15 @@ mod tests {
     }
 
     fn unary_range(bound: Bound, max_width: usize) -> Option<(i64, usize)> {
-        if !bound.lower().is_finite() || !bound.upper().is_finite() {
+        let integer_bound = bound.as_integer_bound(ATol::default())?;
+        if !integer_bound.is_finite() {
             return None;
         }
-        let lower = bound.lower().ceil();
-        let upper = bound.upper().floor();
-        let width = upper - lower;
+        let width = integer_bound.width();
         if width < 0.0 || width > max_width as f64 {
             return None;
         }
-        Some((lower as i64, width as usize))
+        Some((integer_bound.lower() as i64, width as usize))
     }
 
     fn active_special_constraint_variables(instance: &Instance) -> BTreeSet<VariableID> {
@@ -462,21 +498,37 @@ mod tests {
     #[test]
     fn test_unary_encoding_size() {
         let bound = Bound::new(0.0, 3.0).unwrap();
-        let (num_binary_variables, offset) = unary_encoding_size(bound).unwrap();
+        let (num_binary_variables, offset) =
+            unary_encoding_size(bound, 3, ATol::default()).unwrap();
         assert_eq!(num_binary_variables, 3);
         assert_eq!(offset, 0.0);
 
         let bound = Bound::new(1.0, 6.0).unwrap();
-        let (num_binary_variables, offset) = unary_encoding_size(bound).unwrap();
+        let (num_binary_variables, offset) =
+            unary_encoding_size(bound, 5, ATol::default()).unwrap();
         assert_eq!(num_binary_variables, 5);
         assert_eq!(offset, 1.0);
 
+        let bound = Bound::new(1.000000000001, 2.999999999999).unwrap();
+        let (num_binary_variables, offset) =
+            unary_encoding_size(bound, 2, ATol::default()).unwrap();
+        assert_eq!(num_binary_variables, 2);
+        assert_eq!(offset, 1.0);
+
         let bound = Bound::new(2.0, 2.0).unwrap();
-        let (num_binary_variables, offset) = unary_encoding_size(bound).unwrap();
+        let (num_binary_variables, offset) =
+            unary_encoding_size(bound, 0, ATol::default()).unwrap();
         assert_eq!(num_binary_variables, 0);
         assert_eq!(offset, 2.0);
 
         let bound = Bound::new(1.3, 1.6).unwrap();
-        assert!(unary_encoding_size(bound).is_err());
+        assert!(unary_encoding_size(bound, 1, ATol::default()).is_err());
+    }
+
+    #[test]
+    fn test_unary_encoding_size_respects_max_range() {
+        let bound = Bound::new(0.0, 6.0).unwrap();
+        let err = unary_encoding_size(bound, 5, ATol::default()).unwrap_err();
+        assert!(err.to_string().contains("max_range(5)"));
     }
 }

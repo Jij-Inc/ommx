@@ -18,7 +18,13 @@ For an integer variable `x` in `[lower, upper]`, unary encoding introduces
 Every binary assignment decodes to a value in the original integer range, so
 no encoding-validity constraint or penalty is added. Since the number of
 auxiliary variables grows linearly with the range width, prefer this encoding
-for narrow ranges and keep using log encoding for wider variables.
+for narrow ranges and keep using log encoding for wider variables. To avoid
+accidental large allocations, `Instance.unary_encode()` rejects variables with
+range width above `max_range` (default: `1024`); pass a larger `max_range`
+explicitly when the auxiliary-variable cost is intentional.
+
+Both `Instance.unary_encode(..., atol=...)` and `Instance.log_encode(..., atol=...)`
+use the same ATol-aware integer-bound normalization as the rest of the SDK.
 
 ```python
 from ommx import DecisionVariable, Instance

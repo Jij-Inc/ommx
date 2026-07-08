@@ -3644,7 +3644,10 @@ class Instance:
         the instance is left untouched.
         """
     def log_encode(
-        self, decision_variable_ids: builtins.set[builtins.int] = set()
+        self,
+        decision_variable_ids: builtins.set[builtins.int] = set(),
+        *,
+        atol: typing.Optional[builtins.float] = None,
     ) -> None:
         r"""
         Log-encode the integer decision variables.
@@ -3658,6 +3661,8 @@ class Instance:
         **Args:**
         - `decision_variable_ids`: The IDs of the integer decision variables to log-encode.
           If not specified (or empty), all integer variables are log-encoded.
+        - `atol`: Optional absolute tolerance used when normalizing integer
+          bounds before encoding. If None, uses the default tolerance.
 
         # Examples
 
@@ -3697,7 +3702,11 @@ class Instance:
         ```
         """
     def unary_encode(
-        self, decision_variable_ids: builtins.set[builtins.int] = set()
+        self,
+        decision_variable_ids: builtins.set[builtins.int] = set(),
+        *,
+        max_range: builtins.int = 1024,
+        atol: typing.Optional[builtins.float] = None,
     ) -> None:
         r"""
         Unary-encode the integer decision variables.
@@ -3715,6 +3724,11 @@ class Instance:
         **Args:**
         - `decision_variable_ids`: The IDs of the integer decision variables to unary-encode.
           If not specified (or empty), all used integer variables are unary-encoded.
+        - `max_range`: Maximum allowed `upper - lower` range for each encoded
+          variable. This also bounds the number of auxiliary binary variables
+          introduced per integer variable.
+        - `atol`: Optional absolute tolerance used when normalizing integer
+          bounds before encoding. If None, uses the default tolerance.
 
         # Examples
 

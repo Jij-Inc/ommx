@@ -887,7 +887,7 @@ impl Instance {
             penalty_weights,
             inequality_integer_slack_max_range,
         )?;
-        self.log_encode(py, BTreeSet::new())?;
+        self.log_encode(py, BTreeSet::new(), None)?;
         let result = self.as_qubo_format(py)?;
         if is_converted {
             self.as_maximization_problem();
@@ -936,7 +936,7 @@ impl Instance {
             penalty_weights,
             inequality_integer_slack_max_range,
         )?;
-        self.log_encode(py, BTreeSet::new())?;
+        self.log_encode(py, BTreeSet::new(), None)?;
         let result = self.as_hubo_format(py)?;
         if is_converted {
             self.as_maximization_problem();
@@ -1714,6 +1714,8 @@ impl Instance {
     /// **Args:**
     /// - `decision_variable_ids`: The IDs of the integer decision variables to log-encode.
     ///   If not specified (or empty), all integer variables are log-encoded.
+    /// - `atol`: Optional absolute tolerance used when normalizing integer
+    ///   bounds before encoding. If None, uses the default tolerance.
     ///
     /// # Examples
     ///
@@ -1751,13 +1753,18 @@ impl Instance {
     /// >>> instance.objective
     /// Function(x1 + x3 + 2*x4 + x5 + 2*x6)
     /// ```
-    #[pyo3(signature = (decision_variable_ids=BTreeSet::new()))]
+    #[pyo3(signature = (decision_variable_ids=BTreeSet::new(), *, atol=None))]
     pub fn log_encode(
         &mut self,
         py: Python<'_>,
         decision_variable_ids: BTreeSet<u64>,
+        atol: Option<f64>,
     ) -> Result<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
+        let atol = match atol {
+            Some(value) => ommx::ATol::new(value)?,
+            None => ommx::ATol::default(),
+        };
         let ids: BTreeSet<u64> = if decision_variable_ids.is_empty() {
             // Auto-detect: find all used integer decision variables
             let usage = self.inner.decision_variable_usage();
@@ -1774,7 +1781,7 @@ impl Instance {
             decision_variable_ids
         };
         for id in ids.iter() {
-            self.inner.log_encode((*id).into())?;
+            self.inner.log_encode_with_atol((*id).into(), atol)?;
         }
         Ok(())
     }
@@ -1794,6 +1801,11 @@ impl Instance {
     /// **Args:**
     /// - `decision_variable_ids`: The IDs of the integer decision variables to unary-encode.
     ///   If not specified (or empty), all used integer variables are unary-encoded.
+    /// - `max_range`: Maximum allowed `upper - lower` range for each encoded
+    ///   variable. This also bounds the number of auxiliary binary variables
+    ///   introduced per integer variable.
+    /// - `atol`: Optional absolute tolerance used when normalizing integer
+    ///   bounds before encoding. If None, uses the default tolerance.
     ///
     /// # Examples
     ///
@@ -1810,13 +1822,19 @@ impl Instance {
     /// >>> instance.objective
     /// Function(x1 + x2 + x3 + 2)
     /// ```
-    #[pyo3(signature = (decision_variable_ids=BTreeSet::new()))]
+    #[pyo3(signature = (decision_variable_ids=BTreeSet::new(), *, max_range=1024, atol=None))]
     pub fn unary_encode(
         &mut self,
         py: Python<'_>,
         decision_variable_ids: BTreeSet<u64>,
+        max_range: usize,
+        atol: Option<f64>,
     ) -> Result<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
+        let atol = match atol {
+            Some(value) => ommx::ATol::new(value)?,
+            None => ommx::ATol::default(),
+        };
         let ids: BTreeSet<u64> = if decision_variable_ids.is_empty() {
             let usage = self.inner.decision_variable_usage();
             let integer_ids: BTreeSet<u64> = usage
@@ -1832,7 +1850,8 @@ impl Instance {
             decision_variable_ids
         };
         for id in ids.iter() {
-            self.inner.unary_encode((*id).into())?;
+            self.inner
+                .unary_encode_with_max_range((*id).into(), max_range, atol)?;
         }
         Ok(())
     }

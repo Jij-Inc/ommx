@@ -437,6 +437,55 @@ def test_unary_encode():
         assert solution.objective == pytest.approx(2 + bit_sum)
 
 
+def test_unary_encode_respects_max_range_on_auto_detect():
+    x = DecisionVariable.integer(0, lower=0, upper=6, name="x")
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        constraints={},
+        sense=Instance.MAXIMIZE,
+    )
+
+    with pytest.raises(RuntimeError, match=r"max_range\(5\)"):
+        instance.unary_encode(max_range=5)
+
+    assert [
+        variable
+        for variable in instance.decision_variables
+        if variable.name == "ommx.unary_encode"
+    ] == []
+
+    instance.unary_encode(max_range=6)
+    assert len(
+        [
+            variable
+            for variable in instance.decision_variables
+            if variable.name == "ommx.unary_encode"
+        ]
+    ) == 6
+
+
+def test_encoding_methods_validate_atol():
+    x = DecisionVariable.integer(0, lower=0, upper=3, name="x")
+    log_instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        constraints={},
+        sense=Instance.MAXIMIZE,
+    )
+    unary_instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        constraints={},
+        sense=Instance.MAXIMIZE,
+    )
+
+    with pytest.raises(RuntimeError, match="ATol must be positive"):
+        log_instance.log_encode(atol=0.0)
+    with pytest.raises(RuntimeError, match="ATol must be positive"):
+        unary_instance.unary_encode(atol=0.0)
+
+
 def test_multiple_unary_encodes():
     x = [
         DecisionVariable.integer(0, lower=0, upper=10, name="x", subscripts=[0]),
