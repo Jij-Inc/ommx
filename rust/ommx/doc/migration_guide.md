@@ -601,6 +601,9 @@ Construction signatures changed accordingly:
 let x = DecisionVariable::new(id, kind, bound, Some(value), atol)?;
 let y = DecisionVariable::new(id, kind, bound, None, atol)?;
 let z = DecisionVariable::binary(id);
+let continuous = DecisionVariable::continuous(id);
+let semi_integer = DecisionVariable::semi_integer(id);
+let semi_continuous = DecisionVariable::semi_continuous(id);
 dv.substitute(value, atol)?;
 let fixed = dv.substituted_value();
 
@@ -610,6 +613,9 @@ let sampled = SampledDecisionVariable::new(dv, samples, atol)?;
 // ✅ After
 let y = DecisionVariable::new(kind, bound, atol)?;
 let z = DecisionVariable::binary();
+let continuous = DecisionVariable::continuous();
+let semi_integer = DecisionVariable::semi_integer();
+let semi_continuous = DecisionVariable::semi_continuous();
 
 let instance = Instance::builder()
     .decision_variables(BTreeMap::from([(id, y.clone())]))
@@ -651,6 +657,28 @@ store the ID; `Solution` and `SampleSet` own it through
 [`EvaluatedDecisionVariableTable`](crate::EvaluatedDecisionVariableTable) and
 [`SampledDecisionVariableTable`](crate::SampledDecisionVariableTable),
 respectively.
+
+### Decision-variable analysis helpers
+
+The old all-in-one analysis helper has been split into owner-side queries on
+[`Instance`](crate::Instance). If downstream code previously called
+`analyze_decision_variables()` only to find a variable's state role, query the
+roles directly:
+
+```rust,ignore
+let roles = instance.decision_variable_roles();
+let role = instance.decision_variable_role(id);
+
+let fixed_values = instance.fixed_decision_variables();
+let dependent = instance.dependent_decision_variable_ids();
+let irrelevant = instance.irrelevant_decision_variable_ids();
+```
+
+Use [`Instance::decision_variable_usage`](crate::Instance::decision_variable_usage)
+when you still need the reverse usage index for variables that appear in
+objective / constraint / named-function bodies. The direct role helpers are the
+preferred replacement for migration code that only needs fixed / dependent /
+irrelevant classification.
 
 ### Named-function table ownership
 
@@ -781,6 +809,58 @@ pub struct ConstraintContext {
 }
 ```
 
+### Fallible coefficient and function arithmetic
+
+[`Coefficient`](crate::Coefficient) now rejects zero, infinity, and NaN at the
+type boundary. Arithmetic on coefficients and functions can therefore return
+[`CoefficientError`](crate::CoefficientError), and cancellation can produce the
+absence of a coefficient. The `coeff!` macro is still convenient for known
+non-zero literals, but it panics for `0.0`; use `Coefficient::try_from(...)` for
+runtime values.
+
+In tests and examples, build expressions by propagating the arithmetic result
+and use the explicit zero constructors when the intended value is zero:
+
+```rust,ignore
+use ommx::{coeff, linear, Coefficient, Function, Linear};
+
+let term = (coeff!(2.0) * linear!(1))?;
+let shifted = (term + coeff!(3.0))?;
+let function = Function::from(shifted);
+
+let zero_function = Function::default();
+let zero_linear = Linear::default();
+
+let runtime = Coefficient::try_from(weight)?;
+let weighted = (runtime * linear!(2))?;
+
+let maybe_zero_constant = Function::try_from(0.0)?;
+```
+
+Avoid `coeff!(0.0)` and avoid assuming that `a + b`, `a - b`, or scalar
+multiplication is infallible. Put `?` (or an explicit `match`) at the test
+helper boundary that already returns `ommx::Result` /
+`Result<_, CoefficientError>`.
+
+### Dataset loader return shapes
+
+Dataset loaders such as [`ommx::dataset::miplib2017::load`](crate::dataset::miplib2017::load)
+and [`ommx::dataset::qplib::load`](crate::dataset::qplib::load) now return the
+loaded [`Instance`](crate::Instance) directly:
+
+```rust,ignore
+let instance = ommx::dataset::miplib2017::load("air05")?;
+```
+
+If v2 code destructured a tuple to get dataset annotations, keep the instance
+load separate from the metadata lookup:
+
+```rust,ignore
+let instance = ommx::dataset::miplib2017::load("air05")?;
+let annotations = ommx::dataset::miplib2017::instance_annotations();
+let air05_annotations = annotations.get("air05");
+```
+
 ## Migration Checklist
 
 - [ ] Remove `constraint.id` reads — look up the ID via the enclosing `BTreeMap<ConstraintID, _>` key instead
@@ -798,14 +878,17 @@ pub struct ConstraintContext {
 - [ ] Update any `InstanceError` / `MpsParseError` / `QplibParseError` / `StateValidationError` / `LogEncodingError` / `UnknownSampleIDError` matches → inspect `err.to_string()` or use `err.downcast_ref::<T>()` for signal types
 - [ ] Replace `Result<T, UnknownSampleIDError>` key-lookup methods with `Option<T>` on the call site
 - [ ] Replace `DecisionVariable::new(id, kind, bound, ..., atol)` with `DecisionVariable::new(kind, bound, atol)`, and insert it under the desired `VariableID` key in the host table
-- [ ] Replace `DecisionVariable::binary(id)` / `integer(id)` / `continuous(id)` / etc. with the no-argument row factories, and keep the ID on the enclosing map key
+- [ ] Replace `DecisionVariable::binary(id)` / `integer(id)` / `continuous(id)` / `semi_integer(id)` / `semi_continuous(id)` / etc. with the no-argument row factories, and keep the ID on the enclosing map key
 - [ ] Replace `DecisionVariable::substituted_value()` and `DecisionVariable::substitute(...)` with host-owned fixed values: `InstanceBuilder::fixed_decision_variable_values(...)`, `Instance::fixed_decision_variable_value(id)`, or `Instance::fixed_decision_variable_values()`
+- [ ] Replace `analyze_decision_variables()` role queries with `Instance::decision_variable_roles()`, `Instance::decision_variable_role(id)`, `Instance::fixed_decision_variables()`, `Instance::dependent_decision_variable_ids()`, or `Instance::irrelevant_decision_variable_ids()`; keep `Instance::decision_variable_usage()` only when you need reverse expression usage
 - [ ] Update `EvaluatedDecisionVariable::new(...)` and `SampledDecisionVariable::new(...)`: drop the `atol` argument, pass the `VariableID` separately for diagnostics, and keep using the enclosing `Solution` / `SampleSet` map key as the source of truth
 - [ ] Remove `NamedFunction.id`, `EvaluatedNamedFunction::id()`, and `SampledNamedFunction::id()` reads in Rust. Use the enclosing `NamedFunctionTable<_>` key instead
 - [ ] Construct `NamedFunction { function }` rows and insert them under the desired `NamedFunctionID` key; keep row maps and labels together with `NamedFunctionTable`
 - [ ] Update `Instance::new_named_function(...)` callers to use the returned `NamedFunctionID`; it no longer returns `&mut NamedFunction`
 - [ ] Replace `BTreeMap<VariableID, v1::Parameter>` on Rust `ParametricInstance` builders / constructors with `ParameterTable`; keep parameter IDs as `VariableID` keys, not a separate `ParameterID`
 - [ ] Move parameter `name` / `subscripts` / `parameters` / `description` access to `parametric.parameters().labels()`, and keep concrete parameter values in `ParametricInstance::with_parameters(...)`
+- [ ] Add `?` or explicit error handling around coefficient / function arithmetic, and use `Function::default()` / `Linear::default()` / `Function::try_from(0.0)?` instead of `coeff!(0.0)` for zero values
+- [ ] Update `ommx::dataset::miplib2017::load(...)` / `qplib::load(...)` callers to expect an `Instance` return value directly; call `instance_annotations()` separately if the migration still needs dataset metadata
 
 ---
 
@@ -903,6 +986,40 @@ exports a `.ommx` file. Constructors:
 `add_layer_bytes` / `add_instance` / `add_solution` /
 `add_parametric_instance` / `add_sample_set`.
 
+### 3. Archive input imports into the Local Registry
+
+The old read path opened an OCI archive directly and exposed its layers:
+
+```rust,ignore
+// ❌ Before
+let artifact = Artifact::from_oci_archive(path)?;
+let layers = artifact.get_layers()?;
+```
+
+In v3, import the `.ommx` exchange-format archive into the SQLite Local
+Registry first, then read its descriptors and blobs through the returned
+artifact handle:
+
+```rust,ignore
+use ommx::artifact::{media_types, LocalArtifactDyn};
+
+let artifact = LocalArtifactDyn::import_archive(path)?;
+let layers = artifact.layers()?;
+
+let instance_layer = layers
+    .iter()
+    .find(|layer| media_types::is_instance_payload_media_type(layer.media_type()))
+    .expect("archive should contain an instance layer");
+let instance = artifact.get_instance_layer(instance_layer)?;
+```
+
+`layers()` returns registry-backed descriptors. Use the typed helpers such as
+`get_instance_layer(...)`, `get_solution_layer(...)`, and `get_blob(...)`
+instead of treating the archive as an in-place filesystem object. If you only
+need to inspect a `.ommx` archive without importing its blobs, use the CLI
+`ommx inspect <archive>` flow; the Rust SDK path above is for code that wants
+to read layer payloads.
+
 ## Migration Checklist
 
 - [ ] Replace `ommx::artifact::Builder` (both `OciDirBuilder` and
@@ -911,6 +1028,9 @@ exports a `.ommx` file. Constructors:
       `ArtifactDraft::new(name)?.commit()?.save(&path)?`.
 - [ ] Replace `Builder::new_archive_unnamed(path)` with
       `ArtifactDraft::new_anonymous()?.commit()?.save(&path)?`.
+- [ ] Replace `Artifact::from_oci_archive(path)?.get_layers()?` with
+      `LocalArtifactDyn::import_archive(path)?`, then call `layers()` and typed
+      layer readers such as `get_instance_layer(...)`.
 
 - [ ] Replace `Builder::for_github` with `ArtifactDraft::for_github`.
 - [ ] Replace `temp_archive()` with `ArtifactDraft::temp()?.commit()?.save(&path)?`.
