@@ -119,6 +119,10 @@ Run `task -l` to see all available commands.
 - At the start of every review, use `.agents/skills/domain-responsibility-review/SKILL.md`.
 - First restate the global OMMX domain semantics, then identify each domain invariant, confirm where it is explicitly represented, and verify that no operation can break it.
 
+### Property-Test Generator Review
+- When a diff touches an `Arbitrary` implementation, a `*Parameters` strategy type, or what a default strategy generates, use `.agents/skills/proptest-arbitrary-review/SKILL.md`.
+- Enumerate every call site whose quantification domain changes, distinguish sampled dimensions from constant injected structure, and verify by running the affected proptest suites.
+
 ### Rust SDK Artifact API Boundaries
 - Treat new public Rust artifact APIs as SDK commitments, not just convenient access to registry or manifest internals.
 - Keep raw OCI `Descriptor` exposure limited to low-level manifest or registry escape hatches that genuinely need OCI identity.
