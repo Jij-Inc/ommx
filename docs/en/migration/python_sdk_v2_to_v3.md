@@ -39,7 +39,7 @@ from ommx.v1.solution_pb2 import State
 from ommx import Constraint, Equality, Function, Linear, State
 ```
 
-The `.from_protobuf()` / `.to_protobuf()` bridge methods on `Constraint`, `RemovedConstraint`, `DecisionVariable`, etc. are removed along with the protobuf objects they produced. Use the explicit `from_v1_bytes` / `to_v1_bytes` or `from_v2_bytes` / `to_v2_bytes` APIs on whole serialization roots instead.
+The `.from_protobuf()` / `.to_protobuf()` bridge methods on `Constraint`, `RemovedConstraint`, `DecisionVariable`, etc. are removed along with the protobuf objects they produced. Use explicit versioned bytes APIs on whole serialization roots instead. Prefer `to_v2_bytes` / `from_v2_bytes` when producing new serialized bytes; use `to_v1_bytes` / `from_v1_bytes` only when you need to interoperate with legacy v1 payloads.
 
 ### 1.2 Constraint-hint helper types removed (`3.0.0a1`, [#776](https://github.com/Jij-Inc/ommx/pull/776); `3.0.0a2`, [#790](https://github.com/Jij-Inc/ommx/pull/790), [#798](https://github.com/Jij-Inc/ommx/pull/798))
 
@@ -80,7 +80,7 @@ instance.sense
 solution.optimality = Optimality.Optimal
 # constraint.id is gone — see §3
 Linear(...)                     # just call the constructor
-instance.to_v1_bytes()          # (de)serialise whole Instance / Solution / SampleSet as ommx.v1
+instance.to_v2_bytes()          # serialize whole Instance / Solution / SampleSet as ommx.v2
 ```
 
 The dataclass-style constructors (`Instance(raw=..., annotations=...)`) are also gone — `Instance`, `Solution`, `SampleSet` are no longer Python `@dataclass`es. Construct through `Instance.from_components(...)` etc., set OMMX metadata through dedicated properties such as `instance.title`, and store user annotations with `instance.add_user_annotation(...)` or `instance.replace_annotations(...)`. The `annotations` property is a read-only projection in v3.
@@ -403,8 +403,9 @@ dir_art = ArtifactDir.from_oci_dir(path)
 
 # v3
 from ommx.artifact import Artifact
-artifact = Artifact.load_archive("path/to/file.ommx")   # file or directory
-artifact = Artifact.load("ghcr.io/jij-inc/ommx/...")    # remote registry
+artifact = Artifact.import_archive("path/to/file.ommx")   # imports a .ommx archive into the Local Registry
+manifest = Artifact.inspect_archive("path/to/file.ommx")  # read-only manifest / layer descriptor view
+artifact = Artifact.load("ghcr.io/jij-inc/ommx/...")      # remote registry
 ```
 
 ## 8. Snapshot `Constraint` setters return a clone, not `self` (`3.0.0a1`, [#770](https://github.com/Jij-Inc/ommx/pull/770), [#771](https://github.com/Jij-Inc/ommx/pull/771))
@@ -572,6 +573,24 @@ print(df["substituted_value"])
 
 `decision_variables_df()` on `Instance` and `ParametricInstance` continues to include the `substituted_value` column, but that value is populated from the owner-side fixed-value table. If you call `.detach()` on an `AttachedDecisionVariable`, the result is a modeling snapshot and no longer carries the owner-side fixed value.
 
+### 11.2 Direct replacements for `decision_variable_analysis()`
+
+The Python SDK no longer exposes the old analysis object shape. Query the owning `Instance` directly for the role or role-derived sets you need:
+
+```python
+roles = instance.decision_variable_roles()
+role = instance.decision_variable_role(1)
+
+fixed = instance.fixed_decision_variables()
+dependent = instance.dependent_decision_variable_ids()
+irrelevant = instance.irrelevant_decision_variable_ids()
+
+df = instance.decision_variables_df()
+print(df["state_role"])
+```
+
+For adapter code that only needs solver input variables, use `instance.used_decision_variables`. Use the role helpers above when migrating code that previously inspected `decision_variable_analysis()` for fixed, dependent, or irrelevant variables.
+
 ## 12. `to_bytes` / `from_bytes` removed from non-top-level types (`3.0.0a3`, [#845](https://github.com/Jij-Inc/ommx/pull/845))
 
 Element-level bytes serialisation is removed from these types:
@@ -583,15 +602,16 @@ Element-level bytes serialisation is removed from these types:
 
 (The `Constraint` family — `Constraint`, `EvaluatedConstraint`, `SampledConstraint`, `RemovedConstraint` — already lost `to_bytes` / `from_bytes` in 3.0.0a2 along with the `Constraint.id` field; see §2.)
 
-These methods originally existed to ferry values across the Python ↔ Rust boundary back when the Python SDK had its own protobuf-based wrapper layer. With the v3 transition to direct PyO3 re-exports the boundary is gone, so element-level bytes round-trips no longer serve a purpose. Persist or exchange data through the **container types** instead:
+These methods originally existed to ferry values across the Python ↔ Rust boundary back when the Python SDK had its own protobuf-based wrapper layer. With the v3 transition to direct PyO3 re-exports the boundary is gone, so element-level bytes round-trips no longer serve a purpose. Persist or exchange data through the **container types** instead. When you are creating a new serialized byte payload, use the v2 bytes API by default; reserve v1 for compatibility with existing v1 consumers or files:
 
-- `Instance.to_v1_bytes()` / `Instance.from_v1_bytes(...)` or `Instance.to_v2_bytes()` / `Instance.from_v2_bytes(...)` (and the same on `ParametricInstance`, `Solution`, `SampleSet`)
+- `Instance.to_v2_bytes()` / `Instance.from_v2_bytes(...)` (and the same on `ParametricInstance`, `Solution`, `SampleSet`) for new payloads
+- `Instance.to_v1_bytes()` / `Instance.from_v1_bytes(...)` only when you must keep the legacy v1 wire format
 - `State.to_v1_bytes()` / `Samples.to_v1_bytes()` / `Parameters.to_v1_bytes()` for the cross-`evaluate` DTOs
 
 Top-level root aliases that did not name the protobuf version are also removed:
 replace `Instance.to_bytes()` / `Instance.from_bytes(...)` (and the same on
-`ParametricInstance`, `Solution`, and `SampleSet`) with the explicit v1 or v2
-methods above.
+`ParametricInstance`, `Solution`, and `SampleSet`) with `to_v2_bytes()` /
+`from_v2_bytes(...)` unless the surrounding protocol explicitly requires v1.
 
 ```python
 # Before (2.5.1 / 3.0.0a2)
@@ -601,15 +621,16 @@ f    = Function.from_bytes(blob)
 dv_blob = decision_variable.to_bytes()
 dv      = DecisionVariable.from_bytes(dv_blob)
 
-# After (3.0.0a3) — wrap in the enclosing container and round-trip that
+# After (3.0.0a3) — wrap in the enclosing container and round-trip that.
+# Use v2 bytes for newly serialized payloads.
 instance      = Instance.from_components(
     sense=Instance.MINIMIZE,
     objective=my_function,
     decision_variables=[decision_variable],
     constraints={},
 )
-instance_blob = instance.to_v1_bytes()
-restored      = Instance.from_v1_bytes(instance_blob)
+instance_blob = instance.to_v2_bytes()
+restored      = Instance.from_v2_bytes(instance_blob)
 my_function   = restored.objective
 decision_variable = restored.decision_variables[0].detach()
 ```
@@ -787,7 +808,7 @@ expr = 2 * p + 3  # Linear
 ## Migration checklist
 
 - [ ] Replace every `from ommx.v1.*_pb2 import ...` and `from ommx.v1 import ...` SDK-domain import with `from ommx import ...`.
-- [ ] Remove all `.raw`, `from_raw(...)`, `from_protobuf(...)`, `to_protobuf(...)` usage; use `from_v1_bytes` / `to_v1_bytes`, `from_v2_bytes` / `to_v2_bytes`, or direct properties.
+- [ ] Remove all `.raw`, `from_raw(...)`, `from_protobuf(...)`, `to_protobuf(...)` usage; use `from_v2_bytes` / `to_v2_bytes` for newly serialized top-level payloads, `from_v1_bytes` / `to_v1_bytes` for legacy v1 interop, or direct properties.
 - [ ] Replace `Constraint(id=N, ...)` / `.set_id(N)` / `(expr <= 0).set_id(N)` with `{N: (expr <= 0)}` in the `constraints=` dict.
 - [ ] Remove reads of `constraint.id`; iterate with `.items()` on constraint dicts instead.
 - [ ] Remove any use of `next_constraint_id()` / `set_constraint_id_counter(...)` / related counter helpers.
@@ -803,7 +824,7 @@ expr = 2 * p + 3  # Linear
 - [ ] Change `except RuntimeError` around `.evaluate(...)` / `.partial_evaluate(...)` calls to `except ValueError`.
 - [ ] Switch `parametric_instance.parameters` DataFrame reads to `parametric_instance.parameters_df()` (now a method; `.parameters` returns `list[Parameter]`).
 - [ ] Audit chained `Constraint.add_name(...).add_subscripts(...)` calls — the chain operates on a clone after the first method, so only the first mutation lands in the original wrapper. Assign the chain to a fresh binding (`c = (...).add_name(...).add_subscripts(...)`), or use the live `AttachedConstraint` from `instance.constraints[id]` for write-through mutation.
-- [ ] Replace `ArtifactArchive` / `ArtifactDir` usage with `Artifact.load_archive(...)` or `Artifact.load(...)`.
+- [ ] Replace `ArtifactArchive` / `ArtifactDir` usage with `Artifact.import_archive(...)` for code that needs archive contents, `Artifact.inspect_archive(...)` for read-only archive inspection, or `Artifact.load(...)` for remote / registry refs.
 - [ ] Remove any `Linear.from_object(...)` / `Linear.equals_to(...)` calls.
 - [ ] Add parentheses to every `*_df` access — `instance.constraints_df` → `instance.constraints_df()` etc. (every `*_df` accessor is a method now).
 - [ ] Replace per-kind `instance.indicator_constraints_df` / `one_hot_constraints_df` / `sos1_constraints_df` and `removed_*_constraints_df` / `*_removed_reasons_df` calls with `constraints_df(kind=..., removed=...)` on the same host.
@@ -811,7 +832,8 @@ expr = 2 * p + 3  # Linear
 - [ ] Drop the in-place `c.add_name(...)` mutation pattern on snapshot wrappers retrieved from an instance — those calls return a new object and don't write through to the host. Use the live handle returned by `instance.constraints[id]` (an `AttachedConstraint`) and call its `set_*` / `add_*` methods, or re-add via `from_components`.
 - [ ] Update return-type annotations / static analysis for `instance.constraints` etc. to expect `AttachedX` (`dict[int, AttachedConstraint]`, `list[AttachedDecisionVariable]`, …). Call `.detach()` if you need an independent snapshot.
 - [ ] Replace detached `DecisionVariable.substituted_value` reads with owner-side queries: `Instance.fixed_decision_variables()`, `instance.attached_decision_variable(id).substituted_value`, or `instance.decision_variables_df()["substituted_value"]`.
-- [ ] Replace element-level `to_bytes()` / `from_bytes()` calls on `Function` / `Linear` / `Quadratic` / `Polynomial` / `Parameter` / the `NamedFunction` family / the `DecisionVariable` family with whole-`Instance` / `Solution` / `SampleSet` round-trips (or the `State` / `Samples` / `Parameters` DTOs for evaluate plumbing). See §12.
+- [ ] Replace `decision_variable_analysis()` reads with `decision_variable_roles()`, `decision_variable_role(id)`, `fixed_decision_variables()`, `dependent_decision_variable_ids()`, `irrelevant_decision_variable_ids()`, or `decision_variables_df()["state_role"]`.
+- [ ] Replace element-level `to_bytes()` / `from_bytes()` calls on `Function` / `Linear` / `Quadratic` / `Polynomial` / `Parameter` / the `NamedFunction` family / the `DecisionVariable` family with whole-`Instance` / `Solution` / `SampleSet` round-trips. Use `to_v2_bytes()` for newly serialized top-level payloads; keep `to_v1_bytes()` only for legacy v1 interop or the `State` / `Samples` / `Parameters` DTOs used by evaluate plumbing. See §12.
 - [ ] Replace `ArtifactBuilder.new_archive(path, image_name).build()` with `ArtifactDraft.new(image_name).commit()` + `artifact.save(path)`. See §13.1.
 - [ ] Replace `ArtifactBuilder.new_archive_unnamed(path).build()` with `ArtifactDraft.new_anonymous().commit()` + `artifact.save(path)`. Audit code that branched on `artifact.image_name is None` — anonymous artifacts now have a synthesized `<...>.ommx.local/anonymous:...` name. See §13.2.
 - [ ] Replace `Artifact.load_archive(file)` with `Artifact.import_archive(file)` (registry-write semantics, returns a full handle) for code that wants to use the archive's contents. Use `Artifact.inspect_archive(file)` for the side-effect-free read of the manifest / layer descriptors (returns an `ArchiveManifest`). The v3 `load_archive` raises a migration error pointing at both. See §13.3.
