@@ -1324,7 +1324,9 @@ mod tests {
 
     proptest! {
         #[test]
-        fn instance_roundtrip(original_instance in Instance::arbitrary()) {
+        fn instance_roundtrip(
+            original_instance in Instance::arbitrary_with(crate::InstanceParameters::v1_compatible())
+        ) {
             let v1_instance = v1::Instance::try_from(original_instance.clone()).unwrap();
             let roundtripped_instance = Instance::try_from(v1_instance).unwrap();
             assert_eq!(original_instance, roundtripped_instance);

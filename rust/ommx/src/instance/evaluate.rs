@@ -609,7 +609,7 @@ mod tests {
 
         #[test]
         fn partial_evaluate(
-            (mut instance, state, (u, v)) in Instance::arbitrary()
+            (mut instance, state, (u, v)) in Instance::arbitrary_with(crate::InstanceParameters::regular_only())
                 .prop_flat_map(|instance| {
                     let state = instance.arbitrary_state();
                     (Just(instance), state).prop_flat_map(|(instance, state)| {

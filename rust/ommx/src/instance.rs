@@ -27,7 +27,7 @@ mod stats;
 mod substitute;
 
 pub use analysis::*;
-pub use arbitrary::InstanceParameters;
+pub use arbitrary::{InstanceParameters, InstanceSpace};
 pub use builder::*;
 pub use parametric_builder::*;
 pub use stats::*;
