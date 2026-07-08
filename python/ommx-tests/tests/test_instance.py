@@ -1,4 +1,11 @@
-from ommx import Instance, DecisionVariable, Function, Linear, Parameter, ParametricInstance
+from ommx import (
+    Instance,
+    DecisionVariable,
+    Function,
+    Linear,
+    Parameter,
+    ParametricInstance,
+)
 import math
 import pytest
 
@@ -422,7 +429,9 @@ def test_unary_encode():
     )
 
     for bit_sum in range(4):
-        state = {variable.id: (1 if i < bit_sum else 0) for i, variable in enumerate(encoded)}
+        state = {
+            variable.id: (1 if i < bit_sum else 0) for i, variable in enumerate(encoded)
+        }
         solution = instance.evaluate(state)
         assert solution.feasible
         assert solution.objective == pytest.approx(2 + bit_sum)
