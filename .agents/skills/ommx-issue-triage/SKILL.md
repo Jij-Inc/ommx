@@ -99,6 +99,62 @@ without overloading release-note semantics.
 Prefer GitHub Projects or milestones over labels for priority, owner, status,
 and due date. Labels should remain stable filters, not a second project board.
 
+## Issue Relationships
+
+Use GitHub issue Relationships for strict issue-to-issue blocking
+dependencies. Treat them as the machine-readable dependency graph, not as a
+general "related issue" list.
+
+Add a Relationship when:
+
+- issue B cannot be implemented safely until issue A is decided or completed;
+- doing B before A would likely cause rework or produce an invalid API shape;
+- maintainers need the dependency graph to decide whether B is ready to start.
+
+Do not add a Relationship for loose topical links, follow-up reading,
+alternative proposals, same-area work, or "nice to do together" coordination.
+Use issue links in the body or comments for those cases.
+
+Keep the rationale outside the Relationship itself:
+
+- use the issue body for workstream status, child issue lists, accepted
+  decisions, and remaining work;
+- use comments for the audit trail explaining why a dependency was added,
+  removed, or reclassified;
+- use `workstream` for the parent issue that tracks progress across multiple
+  PRs or child issues, even when some children also have Relationships.
+
+The `blocked` label is broader than Relationships: use it when accepted work is
+waiting on an external dependency, upstream decision, permission, credential, or
+prerequisite PR. Use Relationships only for GitHub issue-to-issue dependencies.
+
+`gh issue view --json` does not expose Relationships. Read them through GraphQL:
+
+```bash
+gh api graphql -f query='
+query($owner:String!, $repo:String!, $number:Int!) {
+  repository(owner:$owner, name:$repo) {
+    issue(number:$number) {
+      number
+      title
+      issueDependenciesSummary { totalBlockedBy totalBlocking }
+      blockedBy(first:50) {
+        totalCount
+        nodes { number title url repository { nameWithOwner } }
+      }
+      blocking(first:50) {
+        totalCount
+        nodes { number title url repository { nameWithOwner } }
+      }
+    }
+  }
+}' -f owner=Jij-Inc -f repo=ommx -F number=123
+```
+
+When mutating Relationships, prefer GraphQL `addBlockedBy` and
+`removeBlockedBy`; first resolve both issue node IDs, then restate the exact
+edge being added or removed before writing.
+
 ## Recommended GitHub Descriptions
 
 When brushing up labels on GitHub, prefer description-only updates unless the
@@ -134,6 +190,8 @@ user explicitly wants renames or color changes:
      `gh issue list --repo Jij-Inc/ommx --state open --limit 100 --json number,title,labels,assignees,milestone,updatedAt,createdAt,url`.
    - For unlabeled, stale, or ambiguous issues, fetch the issue body before
      classifying. Titles alone are not enough.
+   - For dependency audits, read `blockedBy` and `blocking` through GraphQL;
+     `gh issue view --json` does not include Relationships.
 
 2. Classify by audience and decision.
    - Reporter-facing: is this a missing capability (`feature request`), an
@@ -187,6 +245,10 @@ user explicitly wants renames or color changes:
    - Before a write, restate the exact issue number and label changes.
    - Prefer additive label changes when the existing label is still correct.
    - Remove a label only when it conflicts with the model above.
+   - Before mutating Relationships, restate the exact dependency edge, for
+     example "`#1007` blocks `#1030`".
+   - Do not encode loose related links as Relationships; use body links or
+     comments instead.
    - Do not close, reopen, assign, or edit issue bodies as part of label cleanup
      unless the user asks for that action.
 
