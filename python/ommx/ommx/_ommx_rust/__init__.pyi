@@ -3660,7 +3660,7 @@ class Instance:
 
         **Args:**
         - `decision_variable_ids`: The IDs of the integer decision variables to log-encode.
-          If not specified (or empty), all integer variables are log-encoded.
+          If not specified (or empty), all used integer variables are log-encoded.
         - `atol`: Optional absolute tolerance used when normalizing integer
           bounds before encoding. If None, uses the default tolerance.
 

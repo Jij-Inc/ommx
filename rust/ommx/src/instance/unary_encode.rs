@@ -70,10 +70,29 @@ impl Instance {
         max_range: usize,
         atol: ATol,
     ) -> crate::Result<Linear> {
+        let mut encoded = self.clone();
+        let linear = encoded.unary_encode_in_place(id, max_range, atol)?;
+        *self = encoded;
+        Ok(linear)
+    }
+
+    fn unary_encode_in_place(
+        &mut self,
+        id: VariableID,
+        max_range: usize,
+        atol: ATol,
+    ) -> crate::Result<Linear> {
         let v = self
             .decision_variables
             .get(&id)
             .ok_or_else(|| crate::error!({ ?id }, "unknown variable for unary-encoding: {id:?}"))?;
+        if v.kind() != Kind::Integer {
+            let kind = v.kind();
+            crate::bail!(
+                { ?id, ?kind },
+                "variable must be integer for unary-encoding: id={id:?}, kind={kind:?}",
+            );
+        }
         let (num_binary_variables, offset) = unary_encoding_size(v.bound(), max_range, atol)?;
 
         // Safe unwrap: offset is always finite from unary_encoding_size.
@@ -94,8 +113,7 @@ impl Instance {
             linear.add_term(binary_id.into(), coefficient)?;
         }
         let f = linear.clone().into();
-        // Safe unwrap: there is no recursive assignment and self-assignment.
-        substitute_one(self, id, &f).unwrap();
+        substitute_one(self, id, &f)?;
         Ok(linear)
     }
 }
@@ -104,16 +122,25 @@ impl Instance {
 mod tests {
     use super::*;
     use crate::{
-        coeff, v1::State, Bound, DecisionVariable, Evaluate, Instance, Kind, LinearMonomial,
-        Solution,
+        coeff, v1::State, Bound, DecisionVariable, Evaluate, Function, Instance, Kind,
+        LinearMonomial, Sense, Solution, Sos1Constraint, Sos1ConstraintID,
     };
     use approx::relative_eq;
     use proptest::prelude::*;
-    use std::collections::BTreeSet;
+    use std::collections::{BTreeMap, BTreeSet};
 
     const MAX_PROPTEST_UNARY_WIDTH: usize = 8;
     const EVALUATION_EQ_ABS_TOL: f64 = 1e-8;
     const EVALUATION_EQ_REL_TOL: f64 = 1e-12;
+
+    fn aux_variable_count(instance: &Instance, label: &str) -> usize {
+        let store = instance.variable_labels();
+        instance
+            .decision_variables
+            .iter()
+            .filter(|(id, _)| store.name(**id) == Some(label))
+            .count()
+    }
 
     #[derive(Clone, Debug)]
     struct UnaryEncodeTarget {
@@ -535,5 +562,66 @@ mod tests {
         let bound = Bound::new(0.0, 6.0).unwrap();
         let err = unary_encoding_size(bound, 5, ATol::default()).unwrap_err();
         assert!(err.to_string().contains("max_range(5)"));
+    }
+
+    #[test]
+    fn test_unary_encode_rejects_non_integer_variables() {
+        let cases = [
+            (Kind::Binary, Bound::of_binary()),
+            (Kind::Continuous, Bound::new(0.0, 3.0).unwrap()),
+            (Kind::SemiInteger, Bound::new(0.0, 3.0).unwrap()),
+            (Kind::SemiContinuous, Bound::new(0.0, 3.0).unwrap()),
+        ];
+
+        for (kind, bound) in cases {
+            let mut instance = Instance::default();
+            let id = VariableID::from(0);
+            let var = DecisionVariable::new(kind, bound, ATol::default()).unwrap();
+            instance
+                .add_decision_variable(id, var, Default::default())
+                .unwrap();
+
+            let err = instance
+                .unary_encode(
+                    id,
+                    Instance::DEFAULT_UNARY_ENCODING_MAX_RANGE,
+                    ATol::default(),
+                )
+                .unwrap_err();
+            assert!(err.to_string().contains("must be integer"));
+            assert_eq!(aux_variable_count(&instance, "ommx.unary_encode"), 0);
+        }
+    }
+
+    #[test]
+    fn test_unary_encode_is_atomic_when_substitution_fails() {
+        let id = VariableID::from(0);
+        let var = DecisionVariable::new(
+            Kind::Integer,
+            Bound::new(0.0, 3.0).unwrap(),
+            ATol::default(),
+        )
+        .unwrap();
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(crate::linear!(0)))
+            .decision_variables(BTreeMap::from([(id, var)]))
+            .constraints(BTreeMap::new())
+            .sos1_constraints(BTreeMap::from([(
+                Sos1ConstraintID::from(0),
+                Sos1Constraint::new(BTreeSet::from([id])).unwrap(),
+            )]))
+            .build()
+            .unwrap();
+
+        let err = instance
+            .unary_encode(
+                id,
+                Instance::DEFAULT_UNARY_ENCODING_MAX_RANGE,
+                ATol::default(),
+            )
+            .unwrap_err();
+        assert!(err.to_string().contains("SOS1"));
+        assert_eq!(aux_variable_count(&instance, "ommx.unary_encode"), 0);
     }
 }

@@ -1713,7 +1713,7 @@ impl Instance {
     ///
     /// **Args:**
     /// - `decision_variable_ids`: The IDs of the integer decision variables to log-encode.
-    ///   If not specified (or empty), all integer variables are log-encoded.
+    ///   If not specified (or empty), all used integer variables are log-encoded.
     /// - `atol`: Optional absolute tolerance used when normalizing integer
     ///   bounds before encoding. If None, uses the default tolerance.
     ///
@@ -1780,9 +1780,11 @@ impl Instance {
         } else {
             decision_variable_ids
         };
+        let mut inner = self.inner.clone();
         for id in ids.iter() {
-            self.inner.log_encode((*id).into(), atol)?;
+            inner.log_encode((*id).into(), atol)?;
         }
+        self.inner = inner;
         Ok(())
     }
 
@@ -1849,9 +1851,11 @@ impl Instance {
         } else {
             decision_variable_ids
         };
+        let mut inner = self.inner.clone();
         for id in ids.iter() {
-            self.inner.unary_encode((*id).into(), max_range, atol)?;
+            inner.unary_encode((*id).into(), max_range, atol)?;
         }
+        self.inner = inner;
         Ok(())
     }
 

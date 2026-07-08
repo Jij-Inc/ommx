@@ -403,6 +403,62 @@ def test_multiple_log_encodes():
     assert first_encode == second_encode
 
 
+def _variables_named(instance, name):
+    return [
+        variable for variable in instance.decision_variables if variable.name == name
+    ]
+
+
+def test_encode_methods_reject_explicit_non_integer_variables():
+    variables = [
+        DecisionVariable.binary(0, name="x"),
+        DecisionVariable.continuous(0, lower=0, upper=3, name="x"),
+        DecisionVariable.semi_integer(0, lower=0, upper=3, name="x"),
+        DecisionVariable.semi_continuous(0, lower=0, upper=3, name="x"),
+    ]
+
+    for x in variables:
+        log_instance = Instance.from_components(
+            decision_variables=[x],
+            objective=x,
+            constraints={},
+            sense=Instance.MAXIMIZE,
+        )
+        with pytest.raises(RuntimeError, match="must be integer"):
+            log_instance.log_encode({0})
+        assert _variables_named(log_instance, "ommx.log_encode") == []
+
+        unary_instance = Instance.from_components(
+            decision_variables=[x],
+            objective=x,
+            constraints={},
+            sense=Instance.MAXIMIZE,
+        )
+        with pytest.raises(RuntimeError, match="must be integer"):
+            unary_instance.unary_encode({0})
+        assert _variables_named(unary_instance, "ommx.unary_encode") == []
+
+
+def test_log_encode_auto_detect_is_transactional_on_failure():
+    x = [
+        DecisionVariable.integer(0, lower=0, upper=3, name="x", subscripts=[0]),
+        DecisionVariable.integer(1, name="x", subscripts=[1]),
+    ]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=sum(x),
+        constraints={},
+        sense=Instance.MAXIMIZE,
+    )
+    before = instance.decision_variables
+
+    with pytest.raises(RuntimeError, match="bound must be finite"):
+        instance.log_encode()
+
+    assert instance.decision_variables == before
+    assert _variables_named(instance, "ommx.log_encode") == []
+
+
 def test_unary_encode():
     x = DecisionVariable.integer(0, lower=2, upper=5, name="x")
     instance = Instance.from_components(
@@ -463,6 +519,26 @@ def test_unary_encode_respects_max_range_on_auto_detect():
             if variable.name == "ommx.unary_encode"
         ]
     ) == 6
+
+
+def test_unary_encode_auto_detect_is_transactional_on_failure():
+    x = [
+        DecisionVariable.integer(0, lower=0, upper=3, name="x", subscripts=[0]),
+        DecisionVariable.integer(1, lower=0, upper=20, name="x", subscripts=[1]),
+    ]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=sum(x),
+        constraints={},
+        sense=Instance.MAXIMIZE,
+    )
+    before = instance.decision_variables
+
+    with pytest.raises(RuntimeError, match=r"max_range\(16\)"):
+        instance.unary_encode()
+
+    assert instance.decision_variables == before
+    assert _variables_named(instance, "ommx.unary_encode") == []
 
 
 def test_encoding_methods_validate_atol():

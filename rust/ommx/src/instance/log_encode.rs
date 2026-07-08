@@ -60,10 +60,24 @@ impl Instance {
     /// integer bound.
     #[tracing::instrument(skip(self))]
     pub fn log_encode(&mut self, id: VariableID, atol: ATol) -> crate::Result<Linear> {
+        let mut encoded = self.clone();
+        let linear = encoded.log_encode_in_place(id, atol)?;
+        *self = encoded;
+        Ok(linear)
+    }
+
+    fn log_encode_in_place(&mut self, id: VariableID, atol: ATol) -> crate::Result<Linear> {
         let v = self
             .decision_variables
             .get(&id)
             .ok_or_else(|| crate::error!({ ?id }, "unknown variable for log-encoding: {id:?}"))?;
+        if v.kind() != Kind::Integer {
+            let kind = v.kind();
+            crate::bail!(
+                { ?id, ?kind },
+                "variable must be integer for log-encoding: id={id:?}, kind={kind:?}",
+            );
+        }
         let (coefficients, offset) = log_encoding_coefficients(v.bound(), atol)?;
         // Safe unwrap: offset is always finite from log_encoding_coefficients
         let mut linear = Linear::try_from(offset).unwrap();
@@ -82,8 +96,7 @@ impl Instance {
             linear.add_term(binary_id.into(), *coefficient)?;
         }
         let f = linear.clone().into();
-        // Safe unwrap: there is no recursive assignment and self-assignment
-        substitute_one(self, id, &f).unwrap();
+        substitute_one(self, id, &f)?;
         Ok(linear)
     }
 }
@@ -91,7 +104,20 @@ impl Instance {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{coeff, Bound, DecisionVariable, Instance, Kind};
+    use crate::{
+        coeff, Bound, DecisionVariable, Function, Instance, Kind, Sense, Sos1Constraint,
+        Sos1ConstraintID,
+    };
+    use std::collections::{BTreeMap, BTreeSet};
+
+    fn aux_variable_count(instance: &Instance, label: &str) -> usize {
+        let store = instance.variable_labels();
+        instance
+            .decision_variables
+            .iter()
+            .filter(|(id, _)| store.name(**id) == Some(label))
+            .count()
+    }
 
     #[test]
     fn test_log_encode_instance() {
@@ -172,5 +198,54 @@ mod tests {
         // No feasible integer values
         let bound = Bound::new(1.3, 1.6).unwrap();
         assert!(log_encoding_coefficients(bound, ATol::default()).is_err());
+    }
+
+    #[test]
+    fn test_log_encode_rejects_non_integer_variables() {
+        let cases = [
+            (Kind::Binary, Bound::of_binary()),
+            (Kind::Continuous, Bound::new(0.0, 3.0).unwrap()),
+            (Kind::SemiInteger, Bound::new(0.0, 3.0).unwrap()),
+            (Kind::SemiContinuous, Bound::new(0.0, 3.0).unwrap()),
+        ];
+
+        for (kind, bound) in cases {
+            let mut instance = Instance::default();
+            let id = VariableID::from(0);
+            let var = DecisionVariable::new(kind, bound, ATol::default()).unwrap();
+            instance
+                .add_decision_variable(id, var, Default::default())
+                .unwrap();
+
+            let err = instance.log_encode(id, ATol::default()).unwrap_err();
+            assert!(err.to_string().contains("must be integer"));
+            assert_eq!(aux_variable_count(&instance, "ommx.log_encode"), 0);
+        }
+    }
+
+    #[test]
+    fn test_log_encode_is_atomic_when_substitution_fails() {
+        let id = VariableID::from(0);
+        let var = DecisionVariable::new(
+            Kind::Integer,
+            Bound::new(0.0, 3.0).unwrap(),
+            ATol::default(),
+        )
+        .unwrap();
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(crate::linear!(0)))
+            .decision_variables(BTreeMap::from([(id, var)]))
+            .constraints(BTreeMap::new())
+            .sos1_constraints(BTreeMap::from([(
+                Sos1ConstraintID::from(0),
+                Sos1Constraint::new(BTreeSet::from([id])).unwrap(),
+            )]))
+            .build()
+            .unwrap();
+
+        let err = instance.log_encode(id, ATol::default()).unwrap_err();
+        assert!(err.to_string().contains("SOS1"));
+        assert_eq!(aux_variable_count(&instance, "ommx.log_encode"), 0);
     }
 }
