@@ -512,13 +512,16 @@ def test_unary_encode_respects_max_range_on_auto_detect():
     ] == []
 
     instance.unary_encode(max_range=6)
-    assert len(
-        [
-            variable
-            for variable in instance.decision_variables
-            if variable.name == "ommx.unary_encode"
-        ]
-    ) == 6
+    assert (
+        len(
+            [
+                variable
+                for variable in instance.decision_variables
+                if variable.name == "ommx.unary_encode"
+            ]
+        )
+        == 6
+    )
 
 
 def test_unary_encode_auto_detect_is_transactional_on_failure():
