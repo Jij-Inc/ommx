@@ -10800,7 +10800,7 @@
                       },
                       "default": {
                         "kind": "Simple",
-                        "value": "1024"
+                        "value": "16"
                       }
                     },
                     {

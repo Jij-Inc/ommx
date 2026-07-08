@@ -40,13 +40,12 @@ fn unary_encoding_size(bound: Bound, max_range: usize, atol: ATol) -> crate::Res
 }
 
 impl Instance {
-    /// Default maximum integer range accepted by [`Self::unary_encode`].
+    /// Default maximum integer range recommended for unary encoding.
     ///
     /// Unary encoding creates `upper - lower` auxiliary binary variables for
-    /// one integer variable. This guard keeps accidental calls on very wide
-    /// integer ranges from allocating impractical numbers of variables. Use
-    /// [`Self::unary_encode_with_max_range`] to choose an explicit limit.
-    pub const DEFAULT_UNARY_ENCODING_MAX_RANGE: usize = 1024;
+    /// one integer variable. This default is intentionally narrow so accidental
+    /// auto-encoding cannot allocate many auxiliary variables.
+    pub const DEFAULT_UNARY_ENCODING_MAX_RANGE: usize = 16;
 
     /// Encode an integer decision variable into unary binary decision variables.
     ///
@@ -59,25 +58,13 @@ impl Instance {
     /// this encoding does not require an additional encoding-validity
     /// constraint. The number of auxiliary variables grows linearly with the
     /// range width, so this is intended for narrow integer ranges.
-    #[tracing::instrument(skip(self))]
-    pub fn unary_encode(&mut self, id: VariableID) -> crate::Result<Linear> {
-        self.unary_encode_with_atol(id, ATol::default())
-    }
-
-    /// Encode an integer decision variable using the given bound-normalization tolerance.
-    #[tracing::instrument(skip(self))]
-    pub fn unary_encode_with_atol(&mut self, id: VariableID, atol: ATol) -> crate::Result<Linear> {
-        self.unary_encode_with_max_range(id, Self::DEFAULT_UNARY_ENCODING_MAX_RANGE, atol)
-    }
-
-    /// Encode an integer decision variable with explicit range and tolerance settings.
     ///
     /// `max_range` is an upper bound on `upper - lower`, which is also the
     /// number of auxiliary binary variables introduced for this decision
     /// variable. `atol` is used when normalizing the decision variable bound to
     /// an integer bound.
     #[tracing::instrument(skip(self))]
-    pub fn unary_encode_with_max_range(
+    pub fn unary_encode(
         &mut self,
         id: VariableID,
         max_range: usize,
@@ -406,7 +393,13 @@ mod tests {
             let expected = instance.evaluate(&expected_state, ATol::default()).unwrap();
 
             let mut encoded_instance = instance.clone();
-            let encoding = encoded_instance.unary_encode(target.id).unwrap();
+            let encoding = encoded_instance
+                .unary_encode(
+                    target.id,
+                    Instance::DEFAULT_UNARY_ENCODING_MAX_RANGE,
+                    ATol::default(),
+                )
+                .unwrap();
             let binary_ids = sorted_unary_binary_ids(&encoding);
             prop_assert_eq!(binary_ids.len(), target.width);
 
@@ -425,7 +418,13 @@ mod tests {
                 })
         ) {
             let mut encoded_instance = instance;
-            let encoding = encoded_instance.unary_encode(target.id).unwrap();
+            let encoding = encoded_instance
+                .unary_encode(
+                    target.id,
+                    Instance::DEFAULT_UNARY_ENCODING_MAX_RANGE,
+                    ATol::default(),
+                )
+                .unwrap();
             let binary_ids = sorted_unary_binary_ids(&encoding);
             prop_assert_eq!(binary_ids.len(), target.width);
 
@@ -463,7 +462,13 @@ mod tests {
             .add_decision_variable(id, var, Default::default())
             .unwrap();
 
-        let encoded = instance.unary_encode(id).unwrap();
+        let encoded = instance
+            .unary_encode(
+                id,
+                Instance::DEFAULT_UNARY_ENCODING_MAX_RANGE,
+                ATol::default(),
+            )
+            .unwrap();
 
         // The original variable is still present but substituted.
         assert!(instance.decision_variables.contains_key(&id));

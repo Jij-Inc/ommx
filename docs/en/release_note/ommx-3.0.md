@@ -20,7 +20,7 @@ no encoding-validity constraint or penalty is added. Since the number of
 auxiliary variables grows linearly with the range width, prefer this encoding
 for narrow ranges and keep using log encoding for wider variables. To avoid
 accidental large allocations, `Instance.unary_encode()` rejects variables with
-range width above `max_range` (default: `1024`); pass a larger `max_range`
+range width above `max_range` (default: `16`); pass a larger `max_range`
 explicitly when the auxiliary-variable cost is intentional.
 
 Both `Instance.unary_encode(..., atol=...)` and `Instance.log_encode(..., atol=...)`

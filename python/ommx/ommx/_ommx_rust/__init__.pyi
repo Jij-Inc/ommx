@@ -3705,7 +3705,7 @@ class Instance:
         self,
         decision_variable_ids: builtins.set[builtins.int] = set(),
         *,
-        max_range: builtins.int = 1024,
+        max_range: builtins.int = 16,
         atol: typing.Optional[builtins.float] = None,
     ) -> None:
         r"""

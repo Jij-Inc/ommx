@@ -1781,7 +1781,7 @@ impl Instance {
             decision_variable_ids
         };
         for id in ids.iter() {
-            self.inner.log_encode_with_atol((*id).into(), atol)?;
+            self.inner.log_encode((*id).into(), atol)?;
         }
         Ok(())
     }
@@ -1822,7 +1822,7 @@ impl Instance {
     /// >>> instance.objective
     /// Function(x1 + x2 + x3 + 2)
     /// ```
-    #[pyo3(signature = (decision_variable_ids=BTreeSet::new(), *, max_range=1024, atol=None))]
+    #[pyo3(signature = (decision_variable_ids=BTreeSet::new(), *, max_range=16, atol=None))]
     pub fn unary_encode(
         &mut self,
         py: Python<'_>,
@@ -1850,8 +1850,7 @@ impl Instance {
             decision_variable_ids
         };
         for id in ids.iter() {
-            self.inner
-                .unary_encode_with_max_range((*id).into(), max_range, atol)?;
+            self.inner.unary_encode((*id).into(), max_range, atol)?;
         }
         Ok(())
     }

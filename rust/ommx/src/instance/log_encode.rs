@@ -55,14 +55,11 @@ fn log_encoding_coefficients(bound: Bound, atol: ATol) -> crate::Result<(Vec<Coe
 
 impl Instance {
     /// Encode an integer decision variable into binary decision variables.
+    ///
+    /// `atol` is used when normalizing the decision variable bound to an
+    /// integer bound.
     #[tracing::instrument(skip(self))]
-    pub fn log_encode(&mut self, id: VariableID) -> crate::Result<Linear> {
-        self.log_encode_with_atol(id, ATol::default())
-    }
-
-    /// Encode an integer decision variable using the given bound-normalization tolerance.
-    #[tracing::instrument(skip(self))]
-    pub fn log_encode_with_atol(&mut self, id: VariableID, atol: ATol) -> crate::Result<Linear> {
+    pub fn log_encode(&mut self, id: VariableID, atol: ATol) -> crate::Result<Linear> {
         let v = self
             .decision_variables
             .get(&id)
@@ -112,7 +109,7 @@ mod tests {
             .unwrap();
 
         // Perform log encoding
-        let encoded = instance.log_encode(id).unwrap();
+        let encoded = instance.log_encode(id, ATol::default()).unwrap();
 
         // The original variable is still present but substituted
         assert!(instance.decision_variables.contains_key(&id));

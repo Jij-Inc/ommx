@@ -19,7 +19,7 @@ integer 変数 `x` の範囲が `[lower, upper]` のとき、unary encoding は
 encoding の妥当性を保つ制約や penalty は追加されません。補助変数の数は range
 幅に対して線形に増えるため、狭い range では unary encoding を、広い range では
 引き続き log encoding を使ってください。意図しない大量の補助変数作成を避けるため、
-`Instance.unary_encode()` は `max_range`（既定値: `1024`）を超える range 幅の変数を
+`Instance.unary_encode()` は `max_range`（既定値: `16`）を超える range 幅の変数を
 拒否します。補助変数数を把握したうえで広い range を unary encoding する場合は、
 `max_range` を明示してください。
 
