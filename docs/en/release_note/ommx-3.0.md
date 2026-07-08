@@ -42,6 +42,12 @@ for rendering a function with decision-variable and parameter modeling labels.
 The context-free {class}`~ommx.Function` text representation remains raw-ID
 based.
 
+Calling {func}`str` / {func}`repr` on {class}`~ommx.Instance` or
+{class}`~ommx.ParametricInstance` now prints a compact summary with
+context-aware objective, constraint, and named-function expressions. This makes
+`print(instance)` useful for checking that encoded IDs still correspond to the
+modeling labels imported from upstream modeling tools.
+
 For notebook previews, use {meth}`~ommx.Instance.display_function` or
 {meth}`~ommx.ParametricInstance.display_function`. They return
 {class}`ommx.display.FunctionDisplay`, which keeps truncation metadata and

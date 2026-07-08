@@ -42,6 +42,12 @@ instance.unary_encode({0})
 {meth}`~ommx.ParametricInstance.format_function` を追加しました。文脈を持たない
 {class}`~ommx.Function` の text 表現は raw ID ベースのままです。
 
+{class}`~ommx.Instance` と {class}`~ommx.ParametricInstance` に対する
+{func}`str` / {func}`repr` は、objective・constraint・named function の式を
+文脈付きで表示する compact summary を返すようになりました。これにより
+`print(instance)` で、upstream の modeling tool から来た modeling label と
+encoding 後の ID の対応を確認しやすくなります。
+
 Notebook 上の preview には {meth}`~ommx.Instance.display_function` または
 {meth}`~ommx.ParametricInstance.display_function` を使えます。これらは
 truncation metadata を持ち、Jupyter では escape 済み HTML を表示する
