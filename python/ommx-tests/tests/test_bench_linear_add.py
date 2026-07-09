@@ -1,8 +1,11 @@
-"""Python API benchmarks for linear-function addition.
+"""Persistent Python scaling guardrails for ``Linear.__iadd__``.
 
-These benchmarks measure the public Python operator path for two shapes:
-many small objects, and a few large objects. They intentionally include
-Python object dispatch plus the Rust-backed addition work reached through it.
+Originating from PR #498, ``small_many`` detects a fallback that clones the
+growing accumulator and changes fixed-size accumulation from O(N) to O(N^2).
+``large_little`` holds the addition count at three and detects superlinear
+merge or rehash cost as operand term count grows. Because that work is
+Rust-internal and covered by the Rust ``sum`` suite, ``large_little`` is kept
+as a manual Python diagnostic rather than a persistent boundary guardrail.
 """
 
 import pytest
@@ -43,12 +46,14 @@ def sum_linear_functions(functions: list[Linear]):
     return result
 
 
+@pytest.mark.benchmark_guardrail
 @pytest.mark.benchmark
 def test_sum_linear_small_many(benchmark, linear_small_many):
     """Measure repeated accumulation of many small Linear objects."""
     benchmark(sum_linear_functions, linear_small_many)
 
 
+@pytest.mark.benchmark_diagnostic
 @pytest.mark.benchmark
 def test_sum_linear_large_little(benchmark, linear_large_little):
     """Measure accumulation of a few high-term-count Linear objects."""

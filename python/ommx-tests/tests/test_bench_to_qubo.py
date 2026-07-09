@@ -1,14 +1,19 @@
-"""Python API benchmarks for `Instance.to_qubo`.
+"""Persistent Python scaling guardrails for ``Instance.to_qubo``.
 
-These benchmarks measure end-to-end conversion through the public Python API,
-including the defensive copy needed because `to_qubo` consumes mutable instance
-state. Large pseudo-Boolean scaling should be covered by Rust SDK benchmarks.
+``to_qubo`` is a Python driver API that sequences several Rust transformations,
+so the public boundary is part of the measured operation. The pseudo-Boolean
+family originates from issue #404 and PR #495 and varies the number of terms to
+detect renewed superlinear conversion. The defensive copy is included because
+the driver consumes mutable instance state.
 """
 
 import pytest
 import random
 from copy import deepcopy
 from ommx import DecisionVariable, Instance
+
+
+pytestmark = pytest.mark.benchmark_guardrail
 
 
 @pytest.fixture
@@ -26,7 +31,7 @@ def small():
     return instance
 
 
-@pytest.fixture(params=[10, 100])
+@pytest.fixture(params=[10, 32, 100])
 def pseudo_boolean_inequality(request):
     num_terms: int = request.param
     x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(num_terms)]
@@ -61,11 +66,11 @@ def to_qubo(instance: Instance):
 
 @pytest.mark.benchmark
 def test_to_qubo_small(small: Instance):
-    """Measure a tiny integer-constrained model through Python `to_qubo`."""
+    """Track fixed boundary cost for a tiny integer-constrained model."""
     to_qubo(small)
 
 
 @pytest.mark.benchmark
 def test_to_qubo_pbi(pseudo_boolean_inequality: Instance):
-    """Measure moderate pseudo-Boolean inequality conversion via Python."""
+    """Track scaling with the pseudo-Boolean inequality term count."""
     to_qubo(pseudo_boolean_inequality)

@@ -1,4 +1,10 @@
-// Create partial evaluation benchmarks for Linear
+//! Persistent scaling guardrails for partial evaluation.
+//!
+//! Expression families vary total term count while assignment density is one,
+//! half, or all required IDs; each should traverse terms linearly. Instance
+//! families originate from issue #1027 and compare removed-only transaction
+//! overhead with active-constraint atomic and consuming paths.
+
 use criterion::{
     criterion_group, criterion_main, AxisScale, BenchmarkId, Criterion, PlotConfiguration,
 };

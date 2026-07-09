@@ -57,9 +57,15 @@ tasks:
     dir: ../..
 
   bench:
-    desc: Run benchmarks for OMMX Python SDK
+    desc: Run the full benchmark suite for OMMX Python SDK
     cmds:
-      - uv run pytest python/ommx-tests --codspeed
+      - uv run pytest python/ommx-tests/tests/test_bench_*.py --codspeed
+    dir: ../..
+
+  bench-guardrail:
+    desc: Run persistent benchmark guardrails for OMMX Python SDK
+    cmds:
+      - uv run pytest python/ommx-tests/tests/test_bench_*.py --codspeed -m benchmark_guardrail
     dir: ../..
 
   build:pyodide:

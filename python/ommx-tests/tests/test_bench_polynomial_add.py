@@ -1,8 +1,11 @@
-"""Python API benchmarks for polynomial-function addition.
+"""Persistent Python scaling guardrails for ``Polynomial.__iadd__``.
 
-These benchmarks measure the public Python operator path for two shapes:
-many small objects, and a few large objects. They intentionally include
-Python object dispatch plus the Rust-backed addition work reached through it.
+Originating from PR #498, ``small_many`` detects a fallback that clones the
+growing accumulator and changes fixed-size accumulation from O(N) to O(N^2).
+``large_little`` holds the addition count at three and detects superlinear
+merge or rehash cost as operand term count grows. Because that work is
+Rust-internal and covered by the Rust ``sum`` suite, ``large_little`` is kept
+as a manual Python diagnostic rather than a persistent boundary guardrail.
 """
 
 import pytest
@@ -45,12 +48,14 @@ def sum_polynomial_functions(functions: list[Polynomial]):
     return result
 
 
+@pytest.mark.benchmark_guardrail
 @pytest.mark.benchmark
 def test_sum_polynomial_small_many(benchmark, polynomial_small_many):
     """Measure repeated accumulation of many small Polynomial objects."""
     benchmark(sum_polynomial_functions, polynomial_small_many)
 
 
+@pytest.mark.benchmark_diagnostic
 @pytest.mark.benchmark
 def test_sum_polynomial_large_little(benchmark, polynomial_large_little):
     """Measure accumulation of a few high-term-count Polynomial objects."""

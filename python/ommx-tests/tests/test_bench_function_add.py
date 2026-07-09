@@ -1,8 +1,11 @@
-"""Python API benchmarks for generic Function addition.
+"""Persistent Python scaling guardrails for ``Function.__iadd__``.
 
-These benchmarks measure the public Python operator path after degree-specific
-expressions have been wrapped as Function values. They cover many small
-objects and a few large objects to make wrapper dispatch costs visible.
+PR #498 introduced the Python in-place path and PR #990 removed per-operation
+Function normalization round-trips. ``small_many`` detects a return to
+quadratic accumulator rebuilding; ``large_little`` holds the operation count
+fixed and varies operand size to expose merge and wrapper-normalization cost.
+The latter is Rust-internal characterization and remains in the manual Python
+diagnostic suite; the Python ``small_many`` operator path is the guardrail.
 """
 
 import pytest
@@ -45,12 +48,14 @@ def sum_function_functions(functions: list[Function]):
     return result
 
 
+@pytest.mark.benchmark_guardrail
 @pytest.mark.benchmark
 def test_sum_function_small_many(benchmark, function_small_many):
     """Measure repeated accumulation of many small Function wrappers."""
     benchmark(sum_function_functions, function_small_many)
 
 
+@pytest.mark.benchmark_diagnostic
 @pytest.mark.benchmark
 def test_sum_function_large_little(benchmark, function_large_little):
     """Measure accumulation of a few high-term-count Function wrappers."""

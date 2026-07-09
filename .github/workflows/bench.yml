@@ -1,5 +1,6 @@
-# Since most of PR does not affect benchmark, we do not run benchmarks on PR by default.
-# Run manually if needed via `task codspeed:trigger`.
+# Since most PRs do not affect performance, benchmarks do not run on PRs by default.
+# `main` and release tags run persistent guardrails. Performance PRs can run the
+# full suite, including diagnostic profiles, via `task codspeed:trigger`.
 # Release tags (rust-*, python-*) also trigger benchmarks so each release has a
 # comparison baseline against the previous release.
 
@@ -12,6 +13,15 @@ on:
       - rust-*
       - python-*
   workflow_dispatch:
+    inputs:
+      suite:
+        description: Benchmark suite to run
+        required: true
+        default: full
+        type: choice
+        options:
+          - guardrail
+          - full
 
 permissions:
   contents: read
@@ -69,6 +79,11 @@ jobs:
       - name: Run benchmarks
         uses: CodSpeedHQ/action@v4
         with:
-          run: pytest python/ommx-tests/tests/test_bench_*.py --codspeed
+          run: |
+            if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.suite }}" = "full" ]; then
+              pytest python/ommx-tests/tests/test_bench_*.py --codspeed
+            else
+              pytest python/ommx-tests/tests/test_bench_*.py --codspeed -m benchmark_guardrail
+            fi
           token: ${{ secrets.CODSPEED_TOKEN }}
           mode: simulation

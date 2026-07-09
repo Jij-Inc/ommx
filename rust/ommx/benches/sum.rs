@@ -1,3 +1,11 @@
+//! Persistent scaling guardrails for Rust expression accumulation.
+//!
+//! `small-many` varies the number of fixed-size operands and detects rebuilding
+//! a growing accumulator. `large-little` fixes the operation count and varies
+//! operand size, including the harmful over-reservation explored in PR #990.
+//! Cross-degree additions guard promotion paths, while Function-level families
+//! guard against the per-operation normalization round-trip fixed by PR #990.
+
 use criterion::{
     criterion_group, criterion_main, AxisScale, BenchmarkId, Criterion, PlotConfiguration,
 };

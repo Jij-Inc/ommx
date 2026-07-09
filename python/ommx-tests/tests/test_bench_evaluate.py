@@ -1,55 +1,95 @@
-"""Python API benchmarks for Instance evaluation.
+"""Python API benchmarks for ``Instance`` evaluation.
 
-These benchmarks measure end-to-end evaluation through the public Python
-bindings on a real MIPLIB instance. Large-scale evaluation throughput belongs
-in Rust SDK benchmarks; this file keeps representative Python-call coverage.
+The persistent fixed-input guardrails use a small synthetic instance to detect
+Python/PyO3 boundary regressions without repeatedly profiling heavy Rust
+evaluation work. The ``supportcase10`` workloads reproduce issue #336 and stay
+in the manual diagnostic suite for end-to-end profiling. Instance-level
+algorithmic scaling is measured in ``rust/ommx/benches/evaluate.rs``.
 """
 
 import pytest
-from ommx import Rng
+from ommx import DecisionVariable, Instance, Rng
 from ommx.dataset import miplib2017
 
 
 @pytest.fixture
+def boundary_instance():
+    """Create a deterministic, small instance for Python boundary guardrails."""
+    size = 32
+    x = [DecisionVariable.binary(i) for i in range(size)]
+    return Instance.from_components(
+        decision_variables=x,
+        objective=sum(x),
+        constraints={i: x[i] <= 1 for i in range(size)},
+        sense=Instance.MINIMIZE,
+    )
+
+
+@pytest.fixture
+def boundary_state(boundary_instance):
+    rng = Rng()
+    return boundary_instance.random_state(rng)
+
+
+@pytest.fixture
+def boundary_samples(boundary_instance):
+    rng = Rng()
+    return boundary_instance.random_samples(rng, num_different_samples=1, num_samples=1)
+
+
+@pytest.fixture
 def miplib_supportcase10():
-    """Load MIPLIB supportcase10 instance for benchmarking"""
+    """Load the issue #336 reproduction instance for manual profiling."""
     return miplib2017("supportcase10")
 
 
 @pytest.fixture
-def random_state(miplib_supportcase10):
-    """Generate a random state for evaluation"""
+def miplib_state(miplib_supportcase10):
     rng = Rng()
     return miplib_supportcase10.random_state(rng)
 
 
-@pytest.fixture(params=[(1, 1)], ids=["single-sample"])
-def samples(request, miplib_supportcase10):
-    """Generate a representative sample set for Python E2E benchmarking."""
-    num_different_samples, num_samples = request.param
+@pytest.fixture
+def miplib_samples(miplib_supportcase10):
     rng = Rng()
     return miplib_supportcase10.random_samples(
-        rng, num_different_samples=num_different_samples, num_samples=num_samples
+        rng, num_different_samples=1, num_samples=1
     )
 
 
 def evaluate_state(instance, state):
-    """Evaluate a single state"""
     return instance.evaluate(state)
 
 
 def evaluate_samples_batch(instance, samples):
-    """Evaluate samples using evaluate_samples method"""
     return instance.evaluate_samples(samples)
 
 
+@pytest.mark.benchmark_guardrail
 @pytest.mark.benchmark
-def test_evaluate(benchmark, miplib_supportcase10, random_state):
-    """Measure one public `Instance.evaluate` call on a real instance."""
-    benchmark(evaluate_state, miplib_supportcase10, random_state)
+def test_evaluate_python_boundary(benchmark, boundary_instance, boundary_state):
+    """Detect fixed-cost regressions in one public ``Instance.evaluate`` call."""
+    benchmark(evaluate_state, boundary_instance, boundary_state)
 
 
+@pytest.mark.benchmark_guardrail
 @pytest.mark.benchmark
-def test_evaluate_samples(benchmark, miplib_supportcase10, samples):
-    """Measure one representative public `Instance.evaluate_samples` call."""
-    benchmark(evaluate_samples_batch, miplib_supportcase10, samples)
+def test_evaluate_samples_python_boundary(
+    benchmark, boundary_instance, boundary_samples
+):
+    """Detect fixed-cost regressions in the public single-sample boundary."""
+    benchmark(evaluate_samples_batch, boundary_instance, boundary_samples)
+
+
+@pytest.mark.benchmark_diagnostic
+@pytest.mark.benchmark
+def test_evaluate_miplib(benchmark, miplib_supportcase10, miplib_state):
+    """Profile end-to-end evaluation on the issue #336 MIPLIB input."""
+    benchmark(evaluate_state, miplib_supportcase10, miplib_state)
+
+
+@pytest.mark.benchmark_diagnostic
+@pytest.mark.benchmark
+def test_evaluate_samples_miplib(benchmark, miplib_supportcase10, miplib_samples):
+    """Profile single-sample evaluation on the issue #336 MIPLIB input."""
+    benchmark(evaluate_samples_batch, miplib_supportcase10, miplib_samples)

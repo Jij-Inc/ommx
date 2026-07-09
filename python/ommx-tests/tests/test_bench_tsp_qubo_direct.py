@@ -1,14 +1,18 @@
-"""Python expression-construction benchmarks for direct TSP QUBO generation.
+"""Manual profiling diagnostic for direct TSP QUBO generation.
 
-This benchmark measures Python-driven OMMX expression construction, including
-PyO3 overloaded arithmetic and the Rust-backed expression clone/add work it
-triggers. It does not measure solver runtime or `Instance.to_qubo`; larger
-algorithmic scaling should live in Rust benchmarks.
+This end-to-end workload profiles Python-driven expression construction,
+including PyO3 overloaded arithmetic and Rust-backed clone/add work. It is
+useful for locating expression-construction hotspots, but its city count mixes
+the number of generated terms with accumulator growth and therefore is not a
+persistent complexity guardrail. Run it through the full manual suite.
 """
 
 import pytest
 import numpy as np
 import ommx
+
+
+pytestmark = pytest.mark.benchmark_diagnostic
 
 
 def generate_distance_matrix(num_city: int) -> np.ndarray:
@@ -85,6 +89,6 @@ def make_tsp_qubo_by_ommx(
 
 @pytest.mark.benchmark
 def test_tsp_qubo_direct_generation(tsp_distance_matrix: np.ndarray):
-    """Measure Python-driven construction of a TSP QUBO expression."""
+    """Profile Python-driven construction of a TSP QUBO expression."""
     # Generate QUBO with custom penalty weights
     make_tsp_qubo_by_ommx(tsp_distance_matrix, lambda1=10.0, lambda2=10.0)
