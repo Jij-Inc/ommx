@@ -339,6 +339,9 @@ pub enum DecisionVariableError {
     #[error("Duplicate decision variable ID={id}")]
     DuplicateID { id: VariableID },
 
+    #[error("No available decision variable ID remains")]
+    NoAvailableID,
+
     #[error("Decision variable value for ID={id} must be finite: value={value}")]
     NonFiniteValue { id: VariableID, value: f64 },
 
