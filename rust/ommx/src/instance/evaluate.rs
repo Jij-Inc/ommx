@@ -287,6 +287,26 @@ impl Instance {
         self.state_population_plan().populate(state, atol)
     }
 
+    /// Partially evaluate this instance by consuming it.
+    ///
+    /// This applies the same mathematical operation as
+    /// [`Evaluate::partial_evaluate`], but returns the rewritten instance instead
+    /// of mutating a borrowed one. Because the original instance is consumed, an
+    /// error does not need to preserve an observable rollback state.
+    pub fn into_partial_evaluated(mut self, state: &v1::State, atol: ATol) -> Result<Self> {
+        self.partial_evaluate_in_place(state, atol)?;
+        Ok(self)
+    }
+
+    fn partial_evaluate_in_place(&mut self, state: &v1::State, atol: ATol) -> Result<()> {
+        if let Some(plan) = PartialEvaluatePlan::prepare_removed_only(self, state)? {
+            self.commit_partial_evaluate_plan(plan, atol)?;
+            return Ok(());
+        }
+
+        self.partial_evaluate_fallback_in_place(state, atol)
+    }
+
     fn commit_partial_evaluate_plan(
         &mut self,
         plan: PartialEvaluatePlan,
@@ -325,6 +345,43 @@ impl Instance {
             self.decision_variables
                 .ensure_fixed_value(id, value, atol)?;
         }
+
+        Ok(())
+    }
+
+    fn partial_evaluate_fallback_in_place(&mut self, state: &v1::State, atol: ATol) -> Result<()> {
+        // Phase 1: Propagate through special constraints (unit propagation).
+        let expanded_state = self.propagate_special_constraints(state, atol)?;
+
+        // Phase 2: Store fixed values in the decision-variable table. Values for
+        // dependent keys are consistency assertions checked during dependency
+        // normalization below; they are not direct writes to fixed values.
+        let mut dependent_assertions = BTreeMap::new();
+        for (id, value) in expanded_state.entries.iter() {
+            let var_id = VariableID::from(*id);
+            let Some(dv) = self.decision_variables.get(&var_id) else {
+                return Err(crate::error!(
+                    "Unknown decision variable (ID={id}) in state."
+                ));
+            };
+            dv.check_value_consistency(var_id, *value, atol)?;
+            if self.decision_variable_dependency.get(&var_id).is_some() {
+                dependent_assertions.insert(var_id, *value);
+            } else {
+                self.decision_variables
+                    .ensure_fixed_value(var_id, *value, atol)?;
+            }
+        }
+
+        let normalized_state = self.normalize_constant_dependencies(dependent_assertions, atol)?;
+
+        // Phase 3: Regular partial evaluation with normalized fixed values.
+        // Special constraint collections are already handled by propagation — not called again.
+        self.objective.partial_evaluate(&normalized_state, atol)?;
+        self.constraint_collection
+            .partial_evaluate(&normalized_state, atol)?;
+        self.named_functions
+            .partial_evaluate(&normalized_state, atol)?;
 
         Ok(())
     }
@@ -502,46 +559,7 @@ impl Evaluate for Instance {
         // Propagation consumes constraints via `self` in `Propagate`, so even a
         // partial failure would otherwise leave the Instance in an inconsistent state.
         let mut working = self.clone();
-
-        // Phase 1: Propagate through special constraints (unit propagation).
-        let expanded_state = working.propagate_special_constraints(state, atol)?;
-
-        // Phase 2: Store fixed values in the decision-variable table. Values for
-        // dependent keys are consistency assertions checked during dependency
-        // normalization below; they are not direct writes to fixed values.
-        let mut dependent_assertions = BTreeMap::new();
-        for (id, value) in expanded_state.entries.iter() {
-            let var_id = VariableID::from(*id);
-            let Some(dv) = working.decision_variables.get(&var_id) else {
-                return Err(crate::error!(
-                    "Unknown decision variable (ID={id}) in state."
-                ));
-            };
-            dv.check_value_consistency(var_id, *value, atol)?;
-            if working.decision_variable_dependency.get(&var_id).is_some() {
-                dependent_assertions.insert(var_id, *value);
-            } else {
-                working
-                    .decision_variables
-                    .ensure_fixed_value(var_id, *value, atol)?;
-            }
-        }
-
-        let normalized_state =
-            working.normalize_constant_dependencies(dependent_assertions, atol)?;
-
-        // Phase 3: Regular partial evaluation with normalized fixed values.
-        // Special constraint collections are already handled by propagation — not called again.
-        working
-            .objective
-            .partial_evaluate(&normalized_state, atol)?;
-        working
-            .constraint_collection
-            .partial_evaluate(&normalized_state, atol)?;
-        working
-            .named_functions
-            .partial_evaluate(&normalized_state, atol)?;
-
+        working.partial_evaluate_fallback_in_place(state, atol)?;
         // All operations succeeded; commit changes atomically.
         *self = working;
         Ok(())
@@ -686,7 +704,7 @@ mod tests {
 
         #[test]
         fn partial_evaluate(
-            (mut instance, state, (u, v)) in Instance::arbitrary_with(crate::InstanceParameters::regular_only())
+            (instance, state, (u, v)) in Instance::arbitrary_with(crate::InstanceParameters::regular_only())
                 .prop_flat_map(|instance| {
                     let state = instance.arbitrary_state();
                     (Just(instance), state).prop_flat_map(|(instance, state)| {
@@ -696,8 +714,14 @@ mod tests {
                 })
         ) {
             let s1 = instance.evaluate(&state, ATol::default()).unwrap();
-            instance.partial_evaluate(&u, ATol::default()).unwrap();
-            let s2 = instance.evaluate(&v, ATol::default()).unwrap();
+            let mut borrowed = instance.clone();
+            borrowed.partial_evaluate(&u, ATol::default()).unwrap();
+            let consumed = instance
+                .into_partial_evaluated(&u, ATol::default())
+                .unwrap();
+            prop_assert_eq!(&borrowed, &consumed);
+
+            let s2 = consumed.evaluate(&v, ATol::default()).unwrap();
             prop_assert!(s1.state().abs_diff_eq(&s2.state(), ATol::default()));
         }
     }
@@ -807,6 +831,28 @@ mod tests {
 
         let state = v1::State::from(HashMap::from([(1, 3.0), (2, 4.0)]));
         instance.partial_evaluate(&state, ATol::default()).unwrap();
+
+        assert!(instance.constraints().is_empty());
+        assert_eq!(instance.removed_constraints(), &removed_before);
+        assert_eq!(
+            instance.fixed_decision_variable_values(),
+            &BTreeMap::from([(VariableID::from(1), 3.0), (VariableID::from(2), 4.0)])
+        );
+
+        instance.restore_constraint(constraint_id).unwrap();
+        let restored = instance.constraints().get(&constraint_id).unwrap();
+        assert!(restored.required_ids().is_empty());
+    }
+
+    #[test]
+    fn test_into_partial_evaluated_removed_only_fast_path_preserves_restore_semantics() {
+        let (instance, constraint_id) = removed_only_instance(BTreeMap::new());
+        let removed_before = instance.removed_constraints().clone();
+
+        let state = v1::State::from(HashMap::from([(1, 3.0), (2, 4.0)]));
+        let mut instance = instance
+            .into_partial_evaluated(&state, ATol::default())
+            .unwrap();
 
         assert!(instance.constraints().is_empty());
         assert_eq!(instance.removed_constraints(), &removed_before);
