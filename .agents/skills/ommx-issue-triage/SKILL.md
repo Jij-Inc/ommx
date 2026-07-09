@@ -16,9 +16,10 @@ Apply this skill to issues, not PR release preparation. When the task is to
 label a PR for release notes, hand off to the PR review or publish workflow and
 judge labels from the actual diff.
 
-Use labels rather than GitHub Issue type for normal issue management. Issue
-type may exist on GitHub, but it is not available through the usual `gh issue`
-workflow in this repo, so labels are the practical management surface.
+Use labels rather than GitHub Issue type for normal issue management in this
+repo. Current GitHub CLI versions may expose issue type, but OMMX's triage and
+release workflows are label-based, and CLI availability varies across agent
+environments.
 
 ## Label Model
 
@@ -128,7 +129,22 @@ The `blocked` label is broader than Relationships: use it when accepted work is
 waiting on an external dependency, upstream decision, permission, credential, or
 prerequisite PR. Use Relationships only for GitHub issue-to-issue dependencies.
 
-`gh issue view --json` does not expose Relationships. Read them through GraphQL:
+Prefer the supported `gh issue` fields and flags when the local GitHub CLI
+exposes them:
+
+```bash
+gh issue view 123 --repo Jij-Inc/ommx --json number,title,blockedBy,blocking
+gh issue edit 456 --repo Jij-Inc/ommx --add-blocked-by 123
+gh issue edit 123 --repo Jij-Inc/ommx --add-blocking 456
+```
+
+Before mutating Relationships, restate the exact dependency edge, for example
+"`#123` blocks `#456`". Use `--remove-blocked-by` or `--remove-blocking` to
+remove the same edge.
+
+Some agent environments have older `gh` versions whose `issue view --json` and
+`issue edit` commands do not expose Relationship fields or flags. In that case,
+fall back to GraphQL for reads:
 
 ```bash
 gh api graphql -f query='
@@ -151,9 +167,8 @@ query($owner:String!, $repo:String!, $number:Int!) {
 }' -f owner=Jij-Inc -f repo=ommx -F number=123
 ```
 
-When mutating Relationships, prefer GraphQL `addBlockedBy` and
-`removeBlockedBy`; first resolve both issue node IDs, then restate the exact
-edge being added or removed before writing.
+Use raw GraphQL mutations only when the supported `gh issue edit` flags are not
+available in the local CLI.
 
 ## Recommended GitHub Descriptions
 
@@ -190,8 +205,9 @@ user explicitly wants renames or color changes:
      `gh issue list --repo Jij-Inc/ommx --state open --limit 100 --json number,title,labels,assignees,milestone,updatedAt,createdAt,url`.
    - For unlabeled, stale, or ambiguous issues, fetch the issue body before
      classifying. Titles alone are not enough.
-   - For dependency audits, read `blockedBy` and `blocking` through GraphQL;
-     `gh issue view --json` does not include Relationships.
+   - For dependency audits, read `blockedBy` and `blocking` through
+     `gh issue view --json number,title,blockedBy,blocking` when available.
+     If the local CLI reports unknown fields, fall back to GraphQL.
 
 2. Classify by audience and decision.
    - Reporter-facing: is this a missing capability (`feature request`), an
