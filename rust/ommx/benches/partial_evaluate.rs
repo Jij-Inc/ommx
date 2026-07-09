@@ -233,24 +233,6 @@ fn partial_evaluate_instance_regular_plan_mixed(c: &mut Criterion) {
                 )
             },
         );
-        group.bench_with_input(
-            BenchmarkId::new(
-                "into-partial-evaluated-instance-regular-plan-mixed",
-                num_removed_constraints.to_string(),
-            ),
-            &(instance, state),
-            |b, (instance, state)| {
-                b.iter_batched(
-                    || instance.clone(),
-                    |instance| {
-                        instance
-                            .into_partial_evaluated(state, ommx::ATol::default())
-                            .unwrap()
-                    },
-                    criterion::BatchSize::LargeInput,
-                )
-            },
-        );
     }
 
     group.finish();
