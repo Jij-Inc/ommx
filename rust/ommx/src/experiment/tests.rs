@@ -5,9 +5,9 @@ use super::UnsealedExperimentState;
 use super::{
     AttachmentLogger, AttachmentTable, Experiment, ExperimentDyn, ExperimentStatus, Name,
     ParameterValue, SealedExperiment, SolveDiagnosticPayload, SolveStatus, Trace,
-    EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_STATUS_DRAFT, EXPERIMENT_STATUS_FAILED,
-    EXPERIMENT_STATUS_FINISHED, EXPERIMENT_STATUS_INTERRUPTED, RUN_PARAMETERS_MEDIA_TYPE,
-    RUN_STATUS_FAILED, RUN_STATUS_FINISHED, RUN_STATUS_INTERRUPTED,
+    EXPERIMENT_ARTIFACT_MEDIA_TYPE, EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_STATUS_DRAFT,
+    EXPERIMENT_STATUS_FAILED, EXPERIMENT_STATUS_FINISHED, EXPERIMENT_STATUS_INTERRUPTED,
+    RUN_PARAMETERS_MEDIA_TYPE, RUN_STATUS_FAILED, RUN_STATUS_FINISHED, RUN_STATUS_INTERRUPTED,
 };
 use crate::artifact::local_registry::{StoredDescriptor, UnsealedArtifact};
 use crate::artifact::{
@@ -401,6 +401,10 @@ fn commit_produces_experiment_artifact() {
 
         let config = artifact.stored_config().unwrap();
         assert_eq!(
+            artifact.get_manifest().unwrap().artifact_type(),
+            &MediaType::Other(EXPERIMENT_ARTIFACT_MEDIA_TYPE.to_string())
+        );
+        assert_eq!(
             config.media_type(),
             &MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string())
         );
@@ -458,6 +462,49 @@ fn commit_produces_experiment_artifact() {
         );
         Ok(())
     });
+}
+
+#[test]
+fn generic_artifact_with_experiment_config_is_not_an_experiment() {
+    let temp = crate::artifact::local_registry::TempLocalRegistry::new().unwrap();
+    let registry = temp.registry();
+    let run_parameters = registry
+        .store_json_layer_blob(
+            MediaType::Other(RUN_PARAMETERS_MEDIA_TYPE.to_string()),
+            &json!({ "columns": {} }),
+            HashMap::new(),
+        )
+        .unwrap();
+    let config = ExperimentConfig {
+        status: EXPERIMENT_STATUS_FINISHED.to_string(),
+        requested_image_name: None,
+        attachments: AttachmentTable::new(),
+        runs: Vec::new(),
+        run_parameters: LayerRef(0),
+    };
+    let config_descriptor = registry
+        .store_json_blob(
+            MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()),
+            &config,
+        )
+        .unwrap();
+    let unsealed = UnsealedArtifact::new(
+        media_types::v1_artifact(),
+        config_descriptor,
+        vec![run_parameters],
+        None,
+        HashMap::new(),
+    );
+    let sealed_artifact = registry.seal_artifact(unsealed).unwrap();
+    let image_name =
+        ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:generic-artifact-type").unwrap();
+    let artifact =
+        LocalArtifact::from_parts(registry, image_name, sealed_artifact.digest().clone());
+
+    let err = SealedExperiment::from_artifact(artifact)
+        .expect_err("generic artifactType must not be interpreted as an Experiment");
+    assert!(err.to_string().contains("Experiment artifact type"));
+    assert!(err.to_string().contains(EXPERIMENT_ARTIFACT_MEDIA_TYPE));
 }
 
 /// Run parameters are stored as table data, not as Attachments. Re-logging
@@ -1002,7 +1049,7 @@ fn loaded_experiment_rejects_invalid_diagnostic_payload() {
         )
         .unwrap();
     let unsealed = UnsealedArtifact::new(
-        MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
+        MediaType::Other(EXPERIMENT_ARTIFACT_MEDIA_TYPE.to_string()),
         config_descriptor,
         vec![input, output, diagnostics, run_parameters],
         None,
@@ -1070,7 +1117,7 @@ fn loaded_experiment_rejects_failed_solve_with_output() {
         )
         .unwrap();
     let unsealed = UnsealedArtifact::new(
-        MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
+        MediaType::Other(EXPERIMENT_ARTIFACT_MEDIA_TYPE.to_string()),
         config_descriptor,
         vec![input, output, run_parameters],
         None,
@@ -1114,7 +1161,7 @@ fn loaded_experiment_rejects_non_finished_status() {
         )
         .unwrap();
     let unsealed = UnsealedArtifact::new(
-        MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
+        MediaType::Other(EXPERIMENT_ARTIFACT_MEDIA_TYPE.to_string()),
         config_descriptor,
         vec![run_parameters],
         None,
@@ -1163,7 +1210,7 @@ fn loaded_experiment_rejects_config_attachment_not_listed_in_layers() {
         )
         .unwrap();
     let unsealed = UnsealedArtifact::new(
-        MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
+        MediaType::Other(EXPERIMENT_ARTIFACT_MEDIA_TYPE.to_string()),
         config_descriptor,
         vec![run_parameters],
         None,
@@ -1220,7 +1267,7 @@ fn loaded_experiment_uses_config_table_for_attachment_names() {
         )
         .unwrap();
     let unsealed = UnsealedArtifact::new(
-        MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
+        MediaType::Other(EXPERIMENT_ARTIFACT_MEDIA_TYPE.to_string()),
         config_descriptor,
         vec![listed_attachment, run_parameters],
         None,
@@ -1275,7 +1322,7 @@ fn loaded_experiment_rejects_filename_without_attachment_entry() {
         )
         .unwrap();
     let unsealed = UnsealedArtifact::new(
-        MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
+        MediaType::Other(EXPERIMENT_ARTIFACT_MEDIA_TYPE.to_string()),
         config_descriptor,
         vec![run_parameters],
         None,
@@ -1335,7 +1382,7 @@ fn loaded_experiment_rejects_config_run_attachment_not_listed_in_layers() {
         )
         .unwrap();
     let unsealed = UnsealedArtifact::new(
-        MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
+        MediaType::Other(EXPERIMENT_ARTIFACT_MEDIA_TYPE.to_string()),
         config_descriptor,
         vec![run_parameters],
         None,
@@ -1379,7 +1426,7 @@ fn loaded_experiment_rejects_run_parameters_not_listed_in_layers() {
         )
         .unwrap();
     let unsealed = UnsealedArtifact::new(
-        MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
+        MediaType::Other(EXPERIMENT_ARTIFACT_MEDIA_TYPE.to_string()),
         config_descriptor,
         Vec::new(),
         None,
