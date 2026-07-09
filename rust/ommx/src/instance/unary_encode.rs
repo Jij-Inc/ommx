@@ -1,5 +1,5 @@
 use super::Instance;
-use crate::{substitute_one, ATol, Bound, Coefficient, Kind, Linear, VariableID};
+use crate::{ATol, Bound, Coefficient, Function, Kind, Linear, Substitute, VariableID};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Calculate the number of binary variables for unary encoding.
@@ -48,7 +48,7 @@ impl Instance {
     /// auto-encoding cannot allocate many auxiliary variables.
     pub const DEFAULT_UNARY_ENCODING_MAX_RANGE: usize = 16;
 
-    /// Encode an integer decision variable into unary binary decision variables.
+    /// Unary-encode integer decision variables into binary decision variables.
     ///
     /// For an integer variable `x` with feasible integer range `[lower, upper]`,
     /// this creates `upper - lower` binary variables `b_j` and substitutes:
@@ -64,26 +64,13 @@ impl Instance {
     /// number of auxiliary binary variables introduced for this decision
     /// variable. `atol` is used when normalizing the decision variable bound to
     /// an integer bound.
-    #[tracing::instrument(skip(self))]
-    pub fn unary_encode(
-        &mut self,
-        id: VariableID,
-        max_range: usize,
-        atol: ATol,
-    ) -> crate::Result<Linear> {
-        let mut encoded = self.clone();
-        let linear = encoded.unary_encode_in_place(id, max_range, atol)?;
-        *self = encoded;
-        Ok(linear)
-    }
-
-    /// Unary-encode multiple integer decision variables transactionally.
     ///
-    /// The instance is cloned once, every requested variable is encoded on the
+    /// The instance is cloned once, every requested variable is encoded on a
     /// clone, and the result is committed back only if all encodings succeed.
-    /// Duplicate IDs are encoded once.
+    /// Duplicate IDs are encoded once. Pass a single-element iterator such as
+    /// `[id]` to encode exactly one variable.
     #[tracing::instrument(skip(self, ids))]
-    pub fn unary_encode_many(
+    pub fn unary_encode(
         &mut self,
         ids: impl IntoIterator<Item = VariableID>,
         max_range: usize,
@@ -95,21 +82,31 @@ impl Instance {
         }
 
         let mut encoded = self.clone();
-        let mut encodings = BTreeMap::new();
+        let mut encoding_specs = Vec::new();
         for id in ids {
-            let linear = encoded.unary_encode_in_place(id, max_range, atol)?;
+            let (num_binary_variables, offset) =
+                encoded.unary_encoding_spec(id, max_range, atol)?;
+            encoding_specs.push((id, num_binary_variables, offset));
+        }
+
+        let mut encodings = BTreeMap::new();
+        let mut assignments = Vec::new();
+        for (id, num_binary_variables, offset) in encoding_specs {
+            let linear = encoded.create_unary_encoding(id, num_binary_variables, offset, atol)?;
+            assignments.push((id, Function::from(linear.clone())));
             encodings.insert(id, linear);
         }
+        encoded = encoded.substitute(assignments)?;
         *self = encoded;
         Ok(encodings)
     }
 
-    fn unary_encode_in_place(
-        &mut self,
+    fn unary_encoding_spec(
+        &self,
         id: VariableID,
         max_range: usize,
         atol: ATol,
-    ) -> crate::Result<Linear> {
+    ) -> crate::Result<(usize, f64)> {
         let v = self
             .decision_variables
             .get(&id)
@@ -127,8 +124,16 @@ impl Instance {
                 "variable must be integer for unary-encoding: id={id:?}, kind={kind:?}",
             );
         }
-        let (num_binary_variables, offset) = unary_encoding_size(v.bound(), max_range, atol)?;
+        unary_encoding_size(v.bound(), max_range, atol)
+    }
 
+    fn create_unary_encoding(
+        &mut self,
+        id: VariableID,
+        num_binary_variables: usize,
+        offset: f64,
+        atol: ATol,
+    ) -> crate::Result<Linear> {
         // Safe unwrap: offset is always finite from unary_encoding_size.
         let mut linear = Linear::try_from(offset).unwrap();
         let coefficient = Coefficient::try_from(1.0).unwrap();
@@ -146,8 +151,6 @@ impl Instance {
             )?;
             linear.add_term(binary_id.into(), coefficient)?;
         }
-        let f = linear.clone().into();
-        substitute_one(self, id, &f)?;
         Ok(linear)
     }
 }
@@ -473,12 +476,13 @@ mod tests {
             let mut encoded_instance = instance.clone();
             let encoding = encoded_instance
                 .unary_encode(
-                    target.id,
+                    [target.id],
                     Instance::DEFAULT_UNARY_ENCODING_MAX_RANGE,
                     ATol::default(),
                 )
                 .unwrap();
-            let binary_ids = sorted_unary_binary_ids(&encoding);
+            let encoding = encoding.get(&target.id).unwrap();
+            let binary_ids = sorted_unary_binary_ids(encoding);
             prop_assert_eq!(binary_ids.len(), target.width);
 
             let encoded_state = state_with_unary_bits(state, &target, &binary_ids, &bits);
@@ -498,12 +502,13 @@ mod tests {
             let mut encoded_instance = instance;
             let encoding = encoded_instance
                 .unary_encode(
-                    target.id,
+                    [target.id],
                     Instance::DEFAULT_UNARY_ENCODING_MAX_RANGE,
                     ATol::default(),
                 )
                 .unwrap();
-            let binary_ids = sorted_unary_binary_ids(&encoding);
+            let encoding = encoding.get(&target.id).unwrap();
+            let binary_ids = sorted_unary_binary_ids(encoding);
             prop_assert_eq!(binary_ids.len(), target.width);
 
             let mut prefix_bits = vec![false; target.width];
@@ -542,11 +547,12 @@ mod tests {
 
         let encoded = instance
             .unary_encode(
-                id,
+                [id],
                 Instance::DEFAULT_UNARY_ENCODING_MAX_RANGE,
                 ATol::default(),
             )
             .unwrap();
+        let encoded = encoded.get(&id).unwrap();
 
         // The original variable is still present but substituted.
         assert!(instance.decision_variables.contains_key(&id));
@@ -634,7 +640,7 @@ mod tests {
 
             let err = instance
                 .unary_encode(
-                    id,
+                    [id],
                     Instance::DEFAULT_UNARY_ENCODING_MAX_RANGE,
                     ATol::default(),
                 )
@@ -651,7 +657,7 @@ mod tests {
 
         let err = instance
             .unary_encode(
-                id,
+                [id],
                 Instance::DEFAULT_UNARY_ENCODING_MAX_RANGE,
                 ATol::default(),
             )
@@ -685,7 +691,7 @@ mod tests {
 
         let err = instance
             .unary_encode(
-                id,
+                [id],
                 Instance::DEFAULT_UNARY_ENCODING_MAX_RANGE,
                 ATol::default(),
             )
@@ -695,7 +701,7 @@ mod tests {
     }
 
     #[test]
-    fn test_unary_encode_many_is_atomic_when_later_id_fails() {
+    fn test_unary_encode_is_atomic_when_later_id_fails() {
         let id0 = VariableID::from(0);
         let id1 = VariableID::from(1);
         let var0 = DecisionVariable::new(
@@ -721,7 +727,7 @@ mod tests {
             .unwrap();
 
         let err = instance
-            .unary_encode_many(
+            .unary_encode(
                 [id0, id1],
                 Instance::DEFAULT_UNARY_ENCODING_MAX_RANGE,
                 ATol::default(),
@@ -730,6 +736,36 @@ mod tests {
         assert!(err.to_string().contains("max_range"));
         assert!(instance.decision_variable_dependency.get(&id0).is_none());
         assert!(instance.decision_variable_dependency.get(&id1).is_none());
+        assert_eq!(aux_variable_count(&instance, "ommx.unary_encode"), 0);
+    }
+
+    #[test]
+    fn test_unary_encode_validates_all_ids_before_creating_aux_variables() {
+        let id0 = VariableID::from(0);
+        let id1 = VariableID::from(1);
+        let var0 = DecisionVariable::new(
+            Kind::Integer,
+            Bound::new(0.0, 3.0).unwrap(),
+            ATol::default(),
+        )
+        .unwrap();
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(crate::linear!(0)))
+            .decision_variables(BTreeMap::from([(id0, var0)]))
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap();
+
+        let err = instance
+            .unary_encode(
+                [id0, id1],
+                Instance::DEFAULT_UNARY_ENCODING_MAX_RANGE,
+                ATol::default(),
+            )
+            .unwrap_err();
+        assert!(err.to_string().contains("unknown variable"));
+        assert!(instance.decision_variable_dependency.get(&id0).is_none());
         assert_eq!(aux_variable_count(&instance, "ommx.unary_encode"), 0);
     }
 }

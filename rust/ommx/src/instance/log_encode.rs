@@ -1,5 +1,5 @@
 use super::Instance;
-use crate::{substitute_one, ATol, Bound, Coefficient, Kind, Linear, VariableID};
+use crate::{ATol, Bound, Coefficient, Function, Kind, Linear, Substitute, VariableID};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Calculate log-encoding coefficients for a given bound.
@@ -55,25 +55,17 @@ fn log_encoding_coefficients(bound: Bound, atol: ATol) -> crate::Result<(Vec<Coe
 }
 
 impl Instance {
-    /// Encode an integer decision variable into binary decision variables.
+    /// Log-encode integer decision variables into binary decision variables.
     ///
-    /// `atol` is used when normalizing the decision variable bound to an
-    /// integer bound.
-    #[tracing::instrument(skip(self))]
-    pub fn log_encode(&mut self, id: VariableID, atol: ATol) -> crate::Result<Linear> {
-        let mut encoded = self.clone();
-        let linear = encoded.log_encode_in_place(id, atol)?;
-        *self = encoded;
-        Ok(linear)
-    }
-
-    /// Log-encode multiple integer decision variables transactionally.
-    ///
-    /// The instance is cloned once, every requested variable is encoded on the
+    /// The instance is cloned once, every requested variable is encoded on a
     /// clone, and the result is committed back only if all encodings succeed.
-    /// Duplicate IDs are encoded once.
+    /// Duplicate IDs are encoded once. Pass a single-element iterator such as
+    /// `[id]` to encode exactly one variable.
+    ///
+    /// `atol` is used when normalizing each decision variable bound to an
+    /// integer bound.
     #[tracing::instrument(skip(self, ids))]
-    pub fn log_encode_many(
+    pub fn log_encode(
         &mut self,
         ids: impl IntoIterator<Item = VariableID>,
         atol: ATol,
@@ -84,16 +76,29 @@ impl Instance {
         }
 
         let mut encoded = self.clone();
-        let mut encodings = BTreeMap::new();
+        let mut encoding_specs = Vec::new();
         for id in ids {
-            let linear = encoded.log_encode_in_place(id, atol)?;
+            let (coefficients, offset) = encoded.log_encoding_spec(id, atol)?;
+            encoding_specs.push((id, coefficients, offset));
+        }
+
+        let mut encodings = BTreeMap::new();
+        let mut assignments = Vec::new();
+        for (id, coefficients, offset) in encoding_specs {
+            let linear = encoded.create_log_encoding(id, coefficients, offset, atol)?;
+            assignments.push((id, Function::from(linear.clone())));
             encodings.insert(id, linear);
         }
+        encoded = encoded.substitute(assignments)?;
         *self = encoded;
         Ok(encodings)
     }
 
-    fn log_encode_in_place(&mut self, id: VariableID, atol: ATol) -> crate::Result<Linear> {
+    fn log_encoding_spec(
+        &self,
+        id: VariableID,
+        atol: ATol,
+    ) -> crate::Result<(Vec<Coefficient>, f64)> {
         let v = self
             .decision_variables
             .get(&id)
@@ -111,7 +116,16 @@ impl Instance {
                 "variable must be integer for log-encoding: id={id:?}, kind={kind:?}",
             );
         }
-        let (coefficients, offset) = log_encoding_coefficients(v.bound(), atol)?;
+        log_encoding_coefficients(v.bound(), atol)
+    }
+
+    fn create_log_encoding(
+        &mut self,
+        id: VariableID,
+        coefficients: Vec<Coefficient>,
+        offset: f64,
+        atol: ATol,
+    ) -> crate::Result<Linear> {
         // Safe unwrap: offset is always finite from log_encoding_coefficients
         let mut linear = Linear::try_from(offset).unwrap();
         for (i, coefficient) in coefficients.iter().enumerate() {
@@ -128,8 +142,6 @@ impl Instance {
             )?;
             linear.add_term(binary_id.into(), *coefficient)?;
         }
-        let f = linear.clone().into();
-        substitute_one(self, id, &f)?;
         Ok(linear)
     }
 }
@@ -185,7 +197,8 @@ mod tests {
             .unwrap();
 
         // Perform log encoding
-        let encoded = instance.log_encode(id, ATol::default()).unwrap();
+        let encoded = instance.log_encode([id], ATol::default()).unwrap();
+        let encoded = encoded.get(&id).unwrap();
 
         // The original variable is still present but substituted
         assert!(instance.decision_variables.contains_key(&id));
@@ -267,7 +280,7 @@ mod tests {
                 .add_decision_variable(id, var, Default::default())
                 .unwrap();
 
-            let err = instance.log_encode(id, ATol::default()).unwrap_err();
+            let err = instance.log_encode([id], ATol::default()).unwrap_err();
             assert!(err.to_string().contains("must be integer"));
             assert_eq!(aux_variable_count(&instance, "ommx.log_encode"), 0);
         }
@@ -278,7 +291,7 @@ mod tests {
         let id = VariableID::from(0);
         let mut instance = fixed_integer_instance(id);
 
-        let err = instance.log_encode(id, ATol::default()).unwrap_err();
+        let err = instance.log_encode([id], ATol::default()).unwrap_err();
         assert!(err.to_string().contains("fixed decision variable"));
         assert_eq!(instance.fixed_decision_variable_value(id), Some(1.0));
         assert!(instance.decision_variable_dependency.get(&id).is_none());
@@ -306,13 +319,13 @@ mod tests {
             .build()
             .unwrap();
 
-        let err = instance.log_encode(id, ATol::default()).unwrap_err();
+        let err = instance.log_encode([id], ATol::default()).unwrap_err();
         assert!(err.to_string().contains("SOS1"));
         assert_eq!(aux_variable_count(&instance, "ommx.log_encode"), 0);
     }
 
     #[test]
-    fn test_log_encode_many_is_atomic_when_later_id_fails() {
+    fn test_log_encode_is_atomic_when_later_id_fails() {
         let id0 = VariableID::from(0);
         let id1 = VariableID::from(1);
         let var0 = DecisionVariable::new(
@@ -333,11 +346,37 @@ mod tests {
             .unwrap();
 
         let err = instance
-            .log_encode_many([id0, id1], ATol::default())
+            .log_encode([id0, id1], ATol::default())
             .unwrap_err();
         assert!(err.to_string().contains("bound must be finite"));
         assert!(instance.decision_variable_dependency.get(&id0).is_none());
         assert!(instance.decision_variable_dependency.get(&id1).is_none());
+        assert_eq!(aux_variable_count(&instance, "ommx.log_encode"), 0);
+    }
+
+    #[test]
+    fn test_log_encode_validates_all_ids_before_creating_aux_variables() {
+        let id0 = VariableID::from(0);
+        let id1 = VariableID::from(1);
+        let var0 = DecisionVariable::new(
+            Kind::Integer,
+            Bound::new(0.0, 3.0).unwrap(),
+            ATol::default(),
+        )
+        .unwrap();
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(crate::linear!(0)))
+            .decision_variables(BTreeMap::from([(id0, var0)]))
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap();
+
+        let err = instance
+            .log_encode([id0, id1], ATol::default())
+            .unwrap_err();
+        assert!(err.to_string().contains("unknown variable"));
+        assert!(instance.decision_variable_dependency.get(&id0).is_none());
         assert_eq!(aux_variable_count(&instance, "ommx.log_encode"), 0);
     }
 }

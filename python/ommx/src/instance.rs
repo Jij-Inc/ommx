@@ -1781,7 +1781,7 @@ impl Instance {
             decision_variable_ids
         };
         self.inner
-            .log_encode_many(ids.iter().map(|id| (*id).into()), atol)?;
+            .log_encode(ids.iter().map(|id| (*id).into()), atol)?;
         Ok(())
     }
 
@@ -1849,7 +1849,7 @@ impl Instance {
             decision_variable_ids
         };
         self.inner
-            .unary_encode_many(ids.iter().map(|id| (*id).into()), max_range, atol)?;
+            .unary_encode(ids.iter().map(|id| (*id).into()), max_range, atol)?;
         Ok(())
     }
 
