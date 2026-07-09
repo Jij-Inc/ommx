@@ -1,8 +1,115 @@
-# Experiment の復帰と cleanup
+# Experiment の検索・復帰・cleanup
 
 {mod}`ommx.experiment` は、最適化の試行錯誤を 1 つの OMMX Artifact として記録するための API です。Experiment のデータモデル、実行できる logging 例、共有、確認、fork については [実験を記録して共有する](../tutorial/experiment_management.md) を参照してください。
 
-このページでは、失敗時の挙動に絞って説明します。Experiment が commit される前に何が書かれるのか、checkpoint からどう復帰するのか、Local Registry cleanup がどの blob を削除可能と判断するのかを扱います。
+このページでは、commit 済みまたは中断された Experiment を Local Registry で扱う workflow を説明します。プロジェクト固有 metadata から目的の Experiment を検索する方法、checkpoint からの復帰、Local Registry cleanup が削除できる blob の判断を扱います。
+
+## Annotation で Experiment を一覧・filter する
+
+継続的に QAP の solver comparison を行うチームを考えます。1 つの commit 済み
+Experiment は、特定の問題 instance、solver、formulation、source revision に対する
+1 batch を表します。image name はすべての batch を同じ registry namespace にまとめ、
+manifest annotation はプロジェクトが後から検索したい軸を表します。
+
+プロジェクト固有の field は reverse-DNS 形式の annotation key で定義し、Experiment
+を commit する前に設定します。`org.ommx.*` 以下の key は OMMX が予約しており、
+annotation value は文字列です。
+
+```python
+from ommx.experiment import Experiment
+
+image_name = "example.com/optimization/qap-experiments:tai20a-highs-20260710"
+
+with Experiment(image_name) as experiment:
+    experiment.set_annotation("com.example.study", "qap-solver-comparison")
+    experiment.set_annotation("com.example.instance", "tai20a")
+    experiment.set_annotation("com.example.solver", "highs")
+    experiment.set_annotation("com.example.formulation", "assignment")
+    experiment.set_annotation("com.example.git-revision", "a1b2c3d")
+
+    with experiment.run() as run:
+        run.log_parameter("seed", 42)
+        run.log_parameter("time_limit_seconds", 300)
+```
+
+annotation は Artifact 全体で共有される Experiment-level の catalog field に使います。
+この例の seed や time limit のように Run ごとに変わる値は、代わりに
+{py:meth}`~ommx.experiment.Run.log_parameter` へ記録します。
+
+後から registry namespace を一覧し、プロジェクトが定義した annotation schema を
+通常の DataFrame column へ投影します。
+{py:func}`~ommx.experiment.list_experiments` は一致する各 Experiment ref について、
+image name、immutable な manifest digest、更新時刻、status、run/solve 数、manifest
+annotation を返します。
+
+```python
+import pandas as pd
+
+from ommx.experiment import Experiment, list_experiments
+
+annotation_columns = {
+    "study": "com.example.study",
+    "instance": "com.example.instance",
+    "solver": "com.example.solver",
+    "formulation": "com.example.formulation",
+    "git_revision": "com.example.git-revision",
+}
+
+rows = []
+for ref in list_experiments("example.com/optimization/qap-experiments"):
+    row = {
+        "image_name": ref.image_name,
+        "manifest_digest": ref.manifest_digest,
+        "updated_at": ref.updated_at,
+        "status": ref.status,
+        "run_count": ref.run_count,
+        "solve_count": ref.solve_count,
+    }
+    row.update(
+        {
+            column: ref.annotations.get(annotation_key)
+            for column, annotation_key in annotation_columns.items()
+        }
+    )
+    rows.append(row)
+
+catalog = pd.DataFrame.from_records(
+    rows,
+    columns=[
+        "image_name",
+        "manifest_digest",
+        "updated_at",
+        "status",
+        "run_count",
+        "solve_count",
+        *annotation_columns,
+    ],
+)
+catalog["updated_at"] = pd.to_datetime(catalog["updated_at"], utc=True)
+
+candidates = catalog.loc[
+    (catalog["status"] == "finished")
+    & (catalog["study"] == "qap-solver-comparison")
+    & (catalog["instance"] == "tai20a")
+    & (catalog["formulation"] == "assignment")
+    & catalog["solver"].isin(["highs", "scip"])
+].sort_values("updated_at", ascending=False)
+
+selected_experiments = [
+    Experiment.load(image_name) for image_name in candidates["image_name"]
+]
+```
+
+`prefix` argument は Local Registry で行う粗い filter で、full image-reference 文字列に
+対して一致します。annotation ごとの filter は、一覧取得後に行う設計です。各
+プロジェクトが annotation の語彙、column type、欠損値 policy を所有するため、registry
+schema を変更せず DataFrame への投影を調整できます。この例では、存在しない
+annotation は `None` になります。
+
+image name は mutable な ref であり、後から別の commit を指す可能性があります。
+row の重複排除、解析した正確な Experiment の記録、異なる時点で取得した catalog の
+比較には、immutable な identity である `manifest_digest` を使ってください。複数の
+ref が同じ manifest を指している場合、同じ manifest が複数行に現れることがあります。
 
 ## 保存の境界
 

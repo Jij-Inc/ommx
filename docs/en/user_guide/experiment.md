@@ -1,8 +1,116 @@
-# Experiment Recovery and Cleanup
+# Experiment Discovery, Recovery, and Cleanup
 
 {mod}`ommx.experiment` records optimization work as one OMMX Artifact. For the Experiment data model, a runnable logging example, sharing, inspection, and forked Experiments, see [Record and Share Experiments](../tutorial/experiment_management.md).
 
-This guide focuses on the failure-time behavior: what OMMX writes before an Experiment is committed, how checkpoints are restored, and how Local Registry cleanup decides which blobs can be removed.
+This guide covers Local Registry workflows around committed and interrupted Experiments: finding a relevant Experiment by project-defined metadata, restoring checkpoints, and deciding which blobs cleanup can remove.
+
+## Catalog and Filter Experiments with Annotations
+
+Suppose a team runs a continuing QAP solver comparison. Each committed
+Experiment represents one batch for a particular problem instance, solver,
+formulation, and source revision. The image name places all batches under one
+registry namespace, while manifest annotations describe the dimensions that
+the project expects to search later.
+
+Define these project-specific fields with reverse-DNS annotation keys and set
+them before committing the Experiment. Keys under `org.ommx.*` are reserved by
+OMMX, and annotation values are strings.
+
+```python
+from ommx.experiment import Experiment
+
+image_name = "example.com/optimization/qap-experiments:tai20a-highs-20260710"
+
+with Experiment(image_name) as experiment:
+    experiment.set_annotation("com.example.study", "qap-solver-comparison")
+    experiment.set_annotation("com.example.instance", "tai20a")
+    experiment.set_annotation("com.example.solver", "highs")
+    experiment.set_annotation("com.example.formulation", "assignment")
+    experiment.set_annotation("com.example.git-revision", "a1b2c3d")
+
+    with experiment.run() as run:
+        run.log_parameter("seed", 42)
+        run.log_parameter("time_limit_seconds", 300)
+```
+
+Use annotations for Experiment-level catalog fields shared by the whole
+artifact. Values that vary between Runs, such as a seed or time limit in this
+example, belong in {py:meth}`~ommx.experiment.Run.log_parameter` instead.
+
+Later, list the registry namespace and project each project's annotation
+schema into ordinary DataFrame columns. {py:func}`~ommx.experiment.list_experiments`
+returns the image name, immutable manifest digest, update time, status,
+run/solve counts, and manifest annotations for each matching Experiment ref.
+
+```python
+import pandas as pd
+
+from ommx.experiment import Experiment, list_experiments
+
+annotation_columns = {
+    "study": "com.example.study",
+    "instance": "com.example.instance",
+    "solver": "com.example.solver",
+    "formulation": "com.example.formulation",
+    "git_revision": "com.example.git-revision",
+}
+
+rows = []
+for ref in list_experiments("example.com/optimization/qap-experiments"):
+    row = {
+        "image_name": ref.image_name,
+        "manifest_digest": ref.manifest_digest,
+        "updated_at": ref.updated_at,
+        "status": ref.status,
+        "run_count": ref.run_count,
+        "solve_count": ref.solve_count,
+    }
+    row.update(
+        {
+            column: ref.annotations.get(annotation_key)
+            for column, annotation_key in annotation_columns.items()
+        }
+    )
+    rows.append(row)
+
+catalog = pd.DataFrame.from_records(
+    rows,
+    columns=[
+        "image_name",
+        "manifest_digest",
+        "updated_at",
+        "status",
+        "run_count",
+        "solve_count",
+        *annotation_columns,
+    ],
+)
+catalog["updated_at"] = pd.to_datetime(catalog["updated_at"], utc=True)
+
+candidates = catalog.loc[
+    (catalog["status"] == "finished")
+    & (catalog["study"] == "qap-solver-comparison")
+    & (catalog["instance"] == "tai20a")
+    & (catalog["formulation"] == "assignment")
+    & catalog["solver"].isin(["highs", "scip"])
+].sort_values("updated_at", ascending=False)
+
+selected_experiments = [
+    Experiment.load(image_name) for image_name in candidates["image_name"]
+]
+```
+
+The `prefix` argument is the coarse Local Registry filter and matches the full
+image-reference string. Annotation-aware filtering is intentionally performed
+after listing: each project owns its annotation vocabulary, column types, and
+missing-value policy, so it can adapt the DataFrame projection without changing
+the registry schema. Missing annotations appear as `None` in the example.
+
+An image name is a mutable ref and may later point to another commit. Use
+`manifest_digest` as the immutable identity when deduplicating rows, recording
+which exact Experiment was analyzed, or comparing catalogs captured at
+different times. The same manifest can appear more than once when several refs
+point to it.
 
 ## Storage Boundaries
 

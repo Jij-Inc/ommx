@@ -295,7 +295,7 @@ Descriptor-oriented attachment views from earlier 3.0 alphas, including `Experim
 
 {class}`~ommx.experiment.Experiment` now publishes local checkpoints for partial experiment state. Closing a {class}`~ommx.experiment.Run` writes a best-effort draft checkpoint, and exiting an Experiment with an exception writes a failed or interrupted checkpoint instead of advancing the successful Experiment image reference. Closed Runs keep their attachments, solves, traces, and run parameters, including Runs closed as `"failed"` or `"interrupted"` after exceptions such as `KeyboardInterrupt`.
 
-See [Experiment Recovery and Cleanup](../user_guide/experiment.md) for Run close boundaries, checkpoint restoration, and Local Registry cleanup behavior.
+See [Experiment Discovery, Recovery, and Cleanup](../user_guide/experiment.md) for Experiment catalog filtering, Run close boundaries, checkpoint restoration, and Local Registry cleanup behavior.
 
 Use {meth}`~ommx.experiment.Experiment.restore_from_checkpoint` with the original Experiment image name to resume from the latest checkpoint:
 

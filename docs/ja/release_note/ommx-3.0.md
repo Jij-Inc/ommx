@@ -292,7 +292,7 @@ for name in loaded.attachment_names:
 
 {class}`~ommx.experiment.Experiment` が途中状態を Local Registry の checkpoint として保存するようになりました。{class}`~ommx.experiment.Run` を close すると best-effort に draft checkpoint を書き、Experiment が例外で終了した場合は成功用の Experiment image reference を進めず、failed または interrupted checkpoint を書きます。close 済みの Run は attachment、solve、trace、run parameter を保持し、`KeyboardInterrupt` などで中断された Run も `"failed"` または `"interrupted"` の status として残ります。
 
-Run close の境界、checkpoint からの復帰、Local Registry cleanup の挙動については [Experiment の復帰と cleanup](../user_guide/experiment.md) を参照してください。
+Experiment catalog の filter、Run close の境界、checkpoint からの復帰、Local Registry cleanup の挙動については [Experiment の検索・復帰・cleanup](../user_guide/experiment.md) を参照してください。
 
 最新の checkpoint から再開するには、元の Experiment image name を {meth}`~ommx.experiment.Experiment.restore_from_checkpoint` に渡します:
 
