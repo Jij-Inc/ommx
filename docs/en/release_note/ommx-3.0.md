@@ -27,11 +27,10 @@ recreated with a build that writes the dedicated Experiment artifact type.
 {meth}`~ommx.experiment.Run.log_parameter` now accepts `float("inf")`,
 `-float("inf")`, and `float("nan")`. These values round-trip through committed
 Experiment artifacts and are restored by
-{meth}`~ommx.experiment.Experiment.run_parameters_df` as ordinary pandas
-`float64` values. This keeps `+inf` and `-inf` observations, such as unbounded
-ratios or infeasibility summaries, distinct from missing cells. `NaN` values
-remain `NaN`; in the wide pandas `float64` DataFrame, missing float cells are
-also represented as `NaN`.
+{meth}`~ommx.experiment.Experiment.run_parameters_df` with pandas nullable
+dtypes. This keeps legitimate experiment observations such as unbounded ratios
+or infeasibility summaries distinct from missing cells: logged `NaN` remains a
+float `NaN`, while missing float cells are represented as pandas `NA`.
 
 The run-parameter table layer is stored as MessagePack instead of JSON so it
 can preserve IEEE 754 non-finite values. Individual NaN payload bits are not
