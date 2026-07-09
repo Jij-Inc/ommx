@@ -1,7 +1,7 @@
 pub const SQLITE_INDEX_FILE_NAME: &str = "index.sqlite3";
 pub const OCI_IMAGE_REF_NAME_ANNOTATION: &str = "org.opencontainers.image.ref.name";
 
-use oci_spec::image::{Descriptor, Digest, MediaType};
+use oci_spec::image::{Digest, MediaType};
 use std::collections::BTreeMap;
 
 #[non_exhaustive]
@@ -9,15 +9,13 @@ use std::collections::BTreeMap;
 pub struct RefRecord {
     pub name: String,
     pub reference: String,
-    pub descriptor: Descriptor,
+    pub manifest_digest: Digest,
     pub updated_at: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ArtifactManifestRecord {
     pub(crate) manifest_digest: Digest,
-    pub(crate) manifest_media_type: MediaType,
-    pub(crate) manifest_size: u64,
     pub(crate) manifest_json: Vec<u8>,
     pub(crate) artifact_type: MediaType,
     pub(crate) config_digest: Digest,

@@ -239,7 +239,7 @@ impl<'reg> GcTraversal<'reg> {
         self.roots.push(GcRoot::Ref {
             name: ref_record.name.clone(),
             reference: ref_record.reference.clone(),
-            digest: ref_record.descriptor.digest().clone(),
+            digest: ref_record.manifest_digest.clone(),
         });
         self.to_visit
             .push_back(ManifestToVisit::ref_manifest(&ref_record));
@@ -378,7 +378,7 @@ impl<'reg> GcTraversal<'reg> {
 impl ManifestToVisit {
     fn ref_manifest(ref_record: &RefRecord) -> Self {
         Self {
-            digest: ref_record.descriptor.digest().clone(),
+            digest: ref_record.manifest_digest.clone(),
             referenced_by: None,
             kind: GcReferenceKind::RefManifest,
             strict: true,

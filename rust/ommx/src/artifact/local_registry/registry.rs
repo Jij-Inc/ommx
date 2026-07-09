@@ -523,10 +523,10 @@ impl LocalRegistry {
             if r.name == checkpoint_repository_key {
                 continue;
             }
-            if cached_manifest_digests.contains(r.descriptor.digest().as_ref()) {
+            if cached_manifest_digests.contains(r.manifest_digest.as_ref()) {
                 continue;
             }
-            self.backfill_artifact_manifest(r.descriptor.digest())?;
+            self.backfill_artifact_manifest(&r.manifest_digest)?;
         }
         for (image_name, manifest_digest) in self
             .index
@@ -598,8 +598,6 @@ impl LocalRegistry {
         );
         Ok(ArtifactManifestRecord {
             manifest_digest: manifest_descriptor.digest().clone(),
-            manifest_media_type: manifest_descriptor.media_type().clone(),
-            manifest_size: manifest_descriptor.size(),
             manifest_json,
             artifact_type: manifest
                 .artifact_type()

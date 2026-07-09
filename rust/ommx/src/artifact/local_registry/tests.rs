@@ -171,7 +171,7 @@ fn gc_deletes_only_orphan_candidates() -> Result<()> {
 fn sqlite_index_store_round_trip() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let store = SqliteIndexStore::open(dir.path().join(SQLITE_INDEX_FILE_NAME))?;
-    assert_eq!(store.schema_version()?, 4);
+    assert_eq!(store.schema_version()?, 5);
 
     let manifest_descriptor = test_manifest_descriptor(b"manifest")?;
     store.replace_ref(
@@ -179,14 +179,18 @@ fn sqlite_index_store_round_trip() -> Result<()> {
         "latest",
         &manifest_descriptor,
     )?;
+    let image_name = ImageRef::parse("example.com/ommx/experiment:latest")?;
     assert_eq!(
-        store.resolve_ref("example.com/ommx/experiment", "latest")?,
-        Some(manifest_descriptor.clone())
+        store.resolve_image_name(&image_name)?,
+        Some(manifest_descriptor.digest().clone())
     );
     let refs = store.list_refs(Some("example.com/ommx"))?;
     assert_eq!(refs.len(), 1);
     assert_eq!(refs[0].reference, "latest");
-    assert_eq!(refs[0].descriptor, manifest_descriptor);
+    assert_eq!(
+        refs[0].manifest_digest,
+        manifest_descriptor.digest().clone()
+    );
 
     let manifest_descriptor = test_manifest_descriptor(b"other-manifest")?;
     store.replace_ref(
@@ -218,8 +222,6 @@ fn sqlite_experiment_ref_rejects_mismatched_projection_descriptor() -> Result<()
     let experiment = ExperimentManifestRecord {
         artifact: ArtifactManifestRecord {
             manifest_digest: projection_manifest_descriptor.digest().clone(),
-            manifest_media_type: projection_manifest_descriptor.media_type().clone(),
-            manifest_size: projection_manifest_descriptor.size(),
             manifest_json: projection_manifest_bytes,
             artifact_type: media_types::v1_experiment(),
             config_digest: config_descriptor.digest().clone(),

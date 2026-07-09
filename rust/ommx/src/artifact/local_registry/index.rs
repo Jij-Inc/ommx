@@ -20,17 +20,17 @@ use std::{
 /// SQLite Local Registry schema version stored in `PRAGMA user_version`.
 /// The SQLite Local Registry has not been released yet, so incompatible
 /// development schemas fail fast instead of carrying in-place migrations.
-const SCHEMA_VERSION: i64 = 4;
+const SCHEMA_VERSION: i64 = 5;
 const SQLITE_BUSY_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// SQLite-backed index store for the v3 Local Registry.
 ///
 /// This store is the concurrency-safe equivalent of an OCI `index.json`:
-/// it stores refs and their target manifest descriptors. Content bytes
-/// live in the Local Registry content-addressed storage. The index also
-/// keeps digest-addressed manifest/config projections used for blob-free
-/// catalog listings; those rows are caches of CAS-addressed bytes, not a
-/// second editable source of truth.
+/// it stores refs and their target manifest digest. Content bytes live in
+/// the Local Registry content-addressed storage. The index also keeps
+/// digest-addressed manifest/config projections used for blob-free catalog
+/// listings; those rows are caches of CAS-addressed bytes, not a second
+/// editable source of truth.
 ///
 /// `rusqlite::Connection` is `Send` but `!Sync`, so it lives behind a
 /// [`Mutex`] here. That makes [`SqliteIndexStore`] (and the enclosing
@@ -227,13 +227,6 @@ impl SqliteIndexStore {
         validate_digest(artifact.manifest_digest.as_ref())?;
         validate_digest(artifact.config_digest.as_ref())?;
         ensure!(
-            artifact.manifest_size == artifact.manifest_json.len() as u64,
-            "Artifact manifest cache size mismatch for {}: descriptor={}, bytes={}",
-            artifact.manifest_digest,
-            artifact.manifest_size,
-            artifact.manifest_json.len()
-        );
-        ensure!(
             artifact.manifest_digest.as_ref() == sha256_digest(&artifact.manifest_json),
             "Artifact manifest cache digest mismatch for {}",
             artifact.manifest_digest
@@ -242,25 +235,18 @@ impl SqliteIndexStore {
             r#"
             INSERT INTO artifact_manifests (
                 manifest_digest,
-                manifest_media_type,
-                manifest_size,
                 manifest_json,
                 artifact_type,
                 config_digest
             )
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+            VALUES (?1, ?2, ?3, ?4)
             ON CONFLICT(manifest_digest) DO UPDATE SET
-                manifest_media_type = excluded.manifest_media_type,
-                manifest_size = excluded.manifest_size,
                 manifest_json = excluded.manifest_json,
                 artifact_type = excluded.artifact_type,
                 config_digest = excluded.config_digest
             "#,
             params![
                 artifact.manifest_digest.to_string(),
-                artifact.manifest_media_type.to_string(),
-                i64::try_from(artifact.manifest_size)
-                    .context("Manifest size does not fit in i64")?,
                 &artifact.manifest_json,
                 artifact.artifact_type.to_string(),
                 artifact.config_digest.to_string(),
@@ -318,15 +304,14 @@ impl SqliteIndexStore {
             descriptor.digest()
         );
         ensure!(
-            descriptor.media_type() == &artifact.manifest_media_type,
-            "Manifest cache media type {} does not match ref descriptor media type {}",
-            artifact.manifest_media_type,
+            descriptor.media_type() == &MediaType::ImageManifest,
+            "Ref descriptor media type {} is not an OCI Image Manifest",
             descriptor.media_type()
         );
         ensure!(
-            descriptor.size() == artifact.manifest_size,
+            descriptor.size() == artifact.manifest_json.len() as u64,
             "Manifest cache size {} does not match ref descriptor size {}",
-            artifact.manifest_size,
+            artifact.manifest_json.len(),
             descriptor.size()
         );
         Ok(())
@@ -344,24 +329,18 @@ impl SqliteIndexStore {
             INSERT INTO refs (
                 name,
                 reference,
-                manifest_media_type,
                 manifest_digest,
-                manifest_size,
                 updated_at
             )
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+            VALUES (?1, ?2, ?3, ?4)
             ON CONFLICT(name, reference) DO UPDATE SET
-                manifest_media_type = excluded.manifest_media_type,
                 manifest_digest = excluded.manifest_digest,
-                manifest_size = excluded.manifest_size,
                 updated_at = excluded.updated_at
             "#,
             params![
                 name,
                 reference,
-                descriptor.media_type().to_string(),
                 descriptor.digest().to_string(),
-                i64::try_from(descriptor.size()).context("Manifest size does not fit in i64")?,
                 now_rfc3339(),
             ],
         )?;
@@ -394,20 +373,16 @@ impl SqliteIndexStore {
             INSERT INTO refs (
                 name,
                 reference,
-                manifest_media_type,
                 manifest_digest,
-                manifest_size,
                 updated_at
             )
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+            VALUES (?1, ?2, ?3, ?4)
             ON CONFLICT(name, reference) DO NOTHING
             "#,
             params![
                 name,
                 reference,
-                descriptor.media_type().to_string(),
                 descriptor.digest().to_string(),
-                i64::try_from(descriptor.size()).context("Manifest size does not fit in i64")?,
                 now_rfc3339(),
             ],
         )?;
@@ -415,11 +390,10 @@ impl SqliteIndexStore {
             return Ok(RefUpdate::Inserted);
         }
 
-        let existing_descriptor =
-            Self::resolve_ref_in(conn, name, reference)?.with_context(|| {
+        let existing_manifest_digest = Self::resolve_ref_digest_in(conn, name, reference)?
+            .with_context(|| {
                 format!("Ref disappeared while resolving conflict: {name}:{reference}")
             })?;
-        let existing_manifest_digest = existing_descriptor.digest().clone();
         let incoming_manifest_digest = descriptor.digest().clone();
         if existing_manifest_digest == incoming_manifest_digest {
             Ok(RefUpdate::Unchanged)
@@ -437,18 +411,36 @@ impl SqliteIndexStore {
         reference: &str,
         descriptor: &Descriptor,
     ) -> Result<RefUpdate> {
-        let previous_descriptor = Self::resolve_ref_in(conn, name, reference)?;
-        if previous_descriptor.as_ref().map(|d| d.digest()) == Some(descriptor.digest()) {
+        let previous_manifest_digest = Self::resolve_ref_digest_in(conn, name, reference)?;
+        if previous_manifest_digest.as_ref() == Some(descriptor.digest()) {
             return Ok(RefUpdate::Unchanged);
         }
 
         Self::upsert_ref_in(conn, name, reference, descriptor)?;
-        Ok(match previous_descriptor {
-            Some(previous_descriptor) => RefUpdate::Replaced {
-                previous_manifest_digest: previous_descriptor.digest().clone(),
+        Ok(match previous_manifest_digest {
+            Some(previous_manifest_digest) => RefUpdate::Replaced {
+                previous_manifest_digest,
             },
             None => RefUpdate::Inserted,
         })
+    }
+
+    fn resolve_ref_digest_in(
+        conn: &Connection,
+        name: &str,
+        reference: &str,
+    ) -> Result<Option<Digest>> {
+        conn.query_row(
+            r#"
+            SELECT manifest_digest
+            FROM refs
+            WHERE name = ?1 AND reference = ?2
+            "#,
+            params![name, reference],
+            digest_from_row,
+        )
+        .optional()
+        .context("Failed to resolve local registry ref digest")
     }
 
     fn resolve_ref_in(
@@ -458,12 +450,14 @@ impl SqliteIndexStore {
     ) -> Result<Option<Descriptor>> {
         conn.query_row(
             r#"
-            SELECT manifest_media_type, manifest_digest, manifest_size
+            SELECT refs.manifest_digest, artifact_manifests.manifest_json
             FROM refs
+            JOIN artifact_manifests
+              ON refs.manifest_digest = artifact_manifests.manifest_digest
             WHERE name = ?1 AND reference = ?2
             "#,
             params![name, reference],
-            descriptor_from_row,
+            descriptor_from_cached_manifest_row,
         )
         .optional()
         .context("Failed to resolve local registry ref")
@@ -531,9 +525,7 @@ impl SqliteIndexStore {
                 SELECT
                     name,
                     reference,
-                    manifest_media_type,
                     manifest_digest,
-                    manifest_size,
                     updated_at
                 FROM refs
                 WHERE substr(
@@ -556,9 +548,7 @@ impl SqliteIndexStore {
                 SELECT
                     name,
                     reference,
-                    manifest_media_type,
                     manifest_digest,
-                    manifest_size,
                     updated_at
                 FROM refs
                 ORDER BY name, reference
@@ -876,9 +866,7 @@ impl SqliteIndexStore {
             CREATE TABLE IF NOT EXISTS refs (
                 name TEXT NOT NULL,
                 reference TEXT NOT NULL,
-                manifest_media_type TEXT NOT NULL,
                 manifest_digest TEXT NOT NULL,
-                manifest_size INTEGER NOT NULL CHECK(manifest_size >= 0),
                 updated_at TEXT NOT NULL,
                 PRIMARY KEY(name, reference)
             );
@@ -887,8 +875,6 @@ impl SqliteIndexStore {
 
             CREATE TABLE IF NOT EXISTS artifact_manifests (
                 manifest_digest TEXT PRIMARY KEY,
-                manifest_media_type TEXT NOT NULL,
-                manifest_size INTEGER NOT NULL CHECK(manifest_size >= 0),
                 manifest_json BLOB NOT NULL,
                 artifact_type TEXT NOT NULL,
                 config_digest TEXT NOT NULL
@@ -945,23 +931,21 @@ impl SqliteIndexStore {
     }
 
     pub fn resolve_image_name(&self, image_name: &ImageRef) -> Result<Option<Digest>> {
-        Ok(self
-            .resolve_image_descriptor(image_name)?
-            .map(|descriptor| descriptor.digest().clone()))
+        let conn = self.lock();
+        Self::resolve_ref_digest_in(&conn, &image_name.repository_key(), image_name.reference())
     }
 }
 
 fn ref_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<RefRecord> {
+    let digest: String = row.get(2)?;
+    let manifest_digest = Digest::from_str(&digest)
+        .map_err(|err| rusqlite::Error::FromSqlConversionFailure(2, Type::Text, Box::new(err)))?;
     Ok(RefRecord {
         name: row.get(0)?,
         reference: row.get(1)?,
-        descriptor: descriptor_from_ref_row(row, 2)?,
-        updated_at: row.get(5)?,
+        manifest_digest,
+        updated_at: row.get(3)?,
     })
-}
-
-fn descriptor_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Descriptor> {
-    descriptor_from_ref_row(row, 0)
 }
 
 fn experiment_ref_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ExperimentRefRecord> {
@@ -999,6 +983,12 @@ fn string_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<String> {
     row.get(0)
 }
 
+fn digest_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Digest> {
+    let digest: String = row.get(0)?;
+    Digest::from_str(&digest)
+        .map_err(|err| rusqlite::Error::FromSqlConversionFailure(0, Type::Text, Box::new(err)))
+}
+
 fn image_ref_and_digest_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<(ImageRef, Digest)> {
     let name: String = row.get(0)?;
     let reference: String = row.get(1)?;
@@ -1026,23 +1016,17 @@ fn has_user_tables(conn: &Connection) -> Result<bool> {
     Ok(count > 0)
 }
 
-fn descriptor_from_ref_row(row: &rusqlite::Row<'_>, offset: usize) -> rusqlite::Result<Descriptor> {
-    let media_type: String = row.get(offset)?;
-    let digest: String = row.get(offset + 1)?;
-    let size = read_u64(row, offset + 2)?;
-    let digest = Digest::from_str(&digest).map_err(|err| {
-        rusqlite::Error::FromSqlConversionFailure(offset + 1, Type::Text, Box::new(err))
-    })?;
+fn descriptor_from_cached_manifest_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Descriptor> {
+    let digest: String = row.get(0)?;
+    let manifest_json: Vec<u8> = row.get(1)?;
+    let digest = Digest::from_str(&digest)
+        .map_err(|err| rusqlite::Error::FromSqlConversionFailure(0, Type::Text, Box::new(err)))?;
     DescriptorBuilder::default()
-        .media_type(media_type_from_string(media_type))
+        .media_type(MediaType::ImageManifest)
         .digest(digest)
-        .size(size)
+        .size(manifest_json.len() as u64)
         .build()
-        .map_err(|err| rusqlite::Error::FromSqlConversionFailure(offset, Type::Text, err.into()))
-}
-
-fn media_type_from_string(media_type: String) -> MediaType {
-    MediaType::from(media_type.as_str())
+        .map_err(|err| rusqlite::Error::FromSqlConversionFailure(0, Type::Text, err.into()))
 }
 
 fn read_u64(row: &rusqlite::Row<'_>, idx: usize) -> rusqlite::Result<u64> {

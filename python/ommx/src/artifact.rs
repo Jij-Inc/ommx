@@ -1048,8 +1048,6 @@ pub struct PyAnonymousArtifactRef {
     name: String,
     reference: String,
     digest: String,
-    size: u64,
-    media_type: String,
     updated_at: String,
 }
 
@@ -1060,9 +1058,7 @@ impl PyAnonymousArtifactRef {
             image_name,
             name: record.name,
             reference: record.reference,
-            digest: record.descriptor.digest().to_string(),
-            size: record.descriptor.size(),
-            media_type: record.descriptor.media_type().to_string(),
+            digest: record.manifest_digest.to_string(),
             updated_at: record.updated_at,
         })
     }
@@ -1090,17 +1086,6 @@ impl PyAnonymousArtifactRef {
     #[getter]
     pub fn digest(&self) -> String {
         self.digest.clone()
-    }
-
-    /// Manifest size in bytes.
-    #[getter]
-    pub fn size(&self) -> u64 {
-        self.size
-    }
-
-    #[getter]
-    pub fn media_type(&self) -> String {
-        self.media_type.clone()
     }
 
     /// SQLite ref update timestamp, stored as an RFC3339 string.

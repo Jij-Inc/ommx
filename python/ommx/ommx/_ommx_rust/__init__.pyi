@@ -144,13 +144,6 @@ class AnonymousArtifactRef:
         Manifest digest pointed to by this anonymous ref.
         """
     @property
-    def size(self) -> builtins.int:
-        r"""
-        Manifest size in bytes.
-        """
-    @property
-    def media_type(self) -> builtins.str: ...
-    @property
     def updated_at(self) -> builtins.str:
         r"""
         SQLite ref update timestamp, stored as an RFC3339 string.

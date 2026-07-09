@@ -228,20 +228,20 @@ impl LocalRegistry {
         // writers still get a consistent outcome; this is purely a fast
         // path for the common single-writer case.
         if write_mode == RefWriteMode::Publish {
-            if let Some(existing_descriptor) =
-                self.index.resolve_image_descriptor(&effective_image_name)?
+            if let Some(existing_manifest_digest) =
+                self.index.resolve_image_name(&effective_image_name)?
             {
-                if existing_descriptor.digest() != entry.manifest_descriptor.digest() {
+                if &existing_manifest_digest != entry.manifest_descriptor.digest() {
                     if conflict_handling == RefConflictHandling::Error {
                         anyhow::bail!(
                             "Local registry ref conflict for {}: existing manifest {}, incoming manifest {}",
                             effective_image_name,
-                            existing_descriptor.digest(),
+                            existing_manifest_digest,
                             entry.manifest_descriptor.digest(),
                         );
                     }
                     let conflict = RefUpdate::Conflicted {
-                        existing_manifest_digest: existing_descriptor.digest().clone(),
+                        existing_manifest_digest,
                         incoming_manifest_digest: entry.manifest_descriptor.digest().clone(),
                     };
                     return Ok((

@@ -24535,17 +24535,6 @@
               "is_readonly": true
             },
             {
-              "name": "media_type",
-              "doc": "",
-              "type_": {
-                "display": "str",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
               "name": "name",
               "doc": "",
               "type_": {
@@ -24561,17 +24550,6 @@
               "doc": "",
               "type_": {
                 "display": "str",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "size",
-              "doc": "Manifest size in bytes.",
-              "type_": {
-                "display": "int",
                 "link_target": null,
                 "children": []
               },
