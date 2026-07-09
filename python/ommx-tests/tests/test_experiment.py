@@ -149,15 +149,21 @@ def test_run_parameters_df_preserves_non_finite_float_values():
             run.log_parameter("positive_infinity", math.inf)
             run.log_parameter("negative_infinity", -math.inf)
             run.log_parameter("not_a_number", math.nan)
+        with experiment.run():
+            pass
 
     loaded = Experiment.from_artifact(experiment.artifact)
     df = loaded.run_parameters_df()
 
+    assert list(df.index) == [0, 1]
     assert math.isinf(df.loc[0, "positive_infinity"])
     assert df.loc[0, "positive_infinity"] > 0
     assert math.isinf(df.loc[0, "negative_infinity"])
     assert df.loc[0, "negative_infinity"] < 0
     assert math.isnan(df.loc[0, "not_a_number"])
+    assert pd.isna(df.loc[1, "positive_infinity"])
+    assert pd.isna(df.loc[1, "negative_infinity"])
+    assert pd.isna(df.loc[1, "not_a_number"])
 
 
 def test_create_experiment_run_attachments_and_commit(snapshot):

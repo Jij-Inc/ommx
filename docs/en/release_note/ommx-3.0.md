@@ -28,12 +28,14 @@ recreated with a build that writes the dedicated Experiment artifact type.
 `-float("inf")`, and `float("nan")`. These values round-trip through committed
 Experiment artifacts and are restored by
 {meth}`~ommx.experiment.Experiment.run_parameters_df` as ordinary pandas
-`float64` values. This keeps legitimate experiment observations such as
-unbounded ratios or infeasibility summaries distinct from missing cells.
+`float64` values. This keeps `+inf` and `-inf` observations, such as unbounded
+ratios or infeasibility summaries, distinct from missing cells. `NaN` values
+remain `NaN`; in the wide pandas `float64` DataFrame, missing float cells are
+also represented as `NaN`.
 
 The run-parameter table layer is stored as MessagePack instead of JSON so it
-can preserve IEEE 754 non-finite values. NaN values are guaranteed to remain
-NaN, but individual NaN payload bits are not part of the API guarantee.
+can preserve IEEE 754 non-finite values. Individual NaN payload bits are not
+part of the API guarantee.
 
 ### 🆕 Unary integer encoding ([#1010](https://github.com/Jij-Inc/ommx/pull/1010))
 
