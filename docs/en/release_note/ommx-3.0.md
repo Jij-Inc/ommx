@@ -25,6 +25,8 @@ explicitly when the auxiliary-variable cost is intentional.
 
 Both `Instance.unary_encode(..., atol=...)` and `Instance.log_encode(..., atol=...)`
 use the same ATol-aware integer-bound normalization as the rest of the SDK.
+Passing an explicit fixed decision-variable ID is rejected before substitution,
+so fixed values and dependent-variable assignments remain disjoint.
 
 ```python
 from ommx import DecisionVariable, Instance

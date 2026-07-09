@@ -439,6 +439,34 @@ def test_encode_methods_reject_explicit_non_integer_variables():
         assert _variables_named(unary_instance, "ommx.unary_encode") == []
 
 
+def test_encode_methods_reject_fixed_variables():
+    x = DecisionVariable.integer(0, lower=0, upper=3, name="x")
+
+    log_instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        constraints={},
+        sense=Instance.MAXIMIZE,
+    ).partial_evaluate({0: 1})
+    with pytest.raises(RuntimeError, match="fixed decision variable"):
+        log_instance.log_encode({0})
+    assert log_instance.fixed_decision_variables() == {0: 1.0}
+    assert log_instance.dependent_decision_variable_ids() == set()
+    assert _variables_named(log_instance, "ommx.log_encode") == []
+
+    unary_instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        constraints={},
+        sense=Instance.MAXIMIZE,
+    ).partial_evaluate({0: 1})
+    with pytest.raises(RuntimeError, match="fixed decision variable"):
+        unary_instance.unary_encode({0})
+    assert unary_instance.fixed_decision_variables() == {0: 1.0}
+    assert unary_instance.dependent_decision_variable_ids() == set()
+    assert _variables_named(unary_instance, "ommx.unary_encode") == []
+
+
 def test_log_encode_auto_detect_is_transactional_on_failure():
     x = [
         DecisionVariable.integer(0, lower=0, upper=3, name="x", subscripts=[0]),

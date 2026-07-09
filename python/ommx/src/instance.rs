@@ -1780,11 +1780,8 @@ impl Instance {
         } else {
             decision_variable_ids
         };
-        let mut inner = self.inner.clone();
-        for id in ids.iter() {
-            inner.log_encode((*id).into(), atol)?;
-        }
-        self.inner = inner;
+        self.inner
+            .log_encode_many(ids.iter().map(|id| (*id).into()), atol)?;
         Ok(())
     }
 
@@ -1851,11 +1848,8 @@ impl Instance {
         } else {
             decision_variable_ids
         };
-        let mut inner = self.inner.clone();
-        for id in ids.iter() {
-            inner.unary_encode((*id).into(), max_range, atol)?;
-        }
-        self.inner = inner;
+        self.inner
+            .unary_encode_many(ids.iter().map(|id| (*id).into()), max_range, atol)?;
         Ok(())
     }
 
