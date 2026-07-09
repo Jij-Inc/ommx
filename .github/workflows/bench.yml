@@ -27,11 +27,11 @@ jobs:
       - name: Install cargo-codspeed
         run: cargo install cargo-codspeed --locked
       - name: Build CodSpeed Benchmark Target(s)
-        run: cargo codspeed build -p ommx
+        run: cargo codspeed build -p ommx --no-default-features
       - name: Run the benchmarks
         uses: CodSpeedHQ/action@v4
         with:
-          run: cargo codspeed run -p ommx
+          run: cargo codspeed run -p ommx --no-default-features
           token: ${{ secrets.CODSPEED_TOKEN }}
           mode: simulation
 
@@ -47,20 +47,24 @@ jobs:
           # but updates in 3.13 seems to be required for generating trace information.
           # https://docs.python.org/3/library/sys.monitoring.html
           python-version: "3.13"
+          cache: pip
+          cache-dependency-path: |
+            python/ommx/pyproject.toml
+            python/ommx-tests/pyproject.toml
 
       - uses: dtolnay/rust-toolchain@stable
 
       - uses: Swatinem/rust-cache@v2
 
-      # FIXME: `codspeed` command used in `CodSpeedHQ/action` cannot work with `uv run`
       - name: Build wheel
         env:
           # Keep Rust/PyO3 frames useful in CodSpeed's Python FFI flame graphs
           # without forcing debuginfo into every release build.
           CARGO_PROFILE_RELEASE_DEBUG: "true"
         run: |
-          pip install python/ommx
-          pip install pytest-codspeed
+          pip install "maturin>=1.12.2" pytest-codspeed
+          maturin build --out wheels -m python/ommx/Cargo.toml
+          pip install wheels/*.whl
 
       - name: Run benchmarks
         uses: CodSpeedHQ/action@v4
