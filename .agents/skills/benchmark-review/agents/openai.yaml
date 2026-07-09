@@ -1,0 +1,4 @@
+interface:
+  display_name: "Benchmark Review"
+  short_description: "Review benchmark intent and cost models"
+  default_prompt: "Review this benchmark by stating the intended measurement, cost model, expected flamegraph, and regression it should detect."
