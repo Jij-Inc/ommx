@@ -1,0 +1,4 @@
+interface:
+  display_name: "OMMX PR Labeling"
+  short_description: "Classify OMMX PR release labels"
+  default_prompt: "Use $ommx-pr-labeling to decide the GitHub Release labels for this OMMX PR."
