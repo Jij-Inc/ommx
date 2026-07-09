@@ -1,3 +1,10 @@
+"""Python API benchmarks for generic Function addition.
+
+These benchmarks measure the public Python operator path after degree-specific
+expressions have been wrapped as Function values. They cover many small
+objects and a few large objects to make wrapper dispatch costs visible.
+"""
+
 import pytest
 from ommx import Function, Rng
 
@@ -40,11 +47,11 @@ def sum_function_functions(functions: list[Function]):
 
 @pytest.mark.benchmark
 def test_sum_function_small_many(benchmark, function_small_many):
-    """Benchmark summing many small functions"""
+    """Measure repeated accumulation of many small Function wrappers."""
     benchmark(sum_function_functions, function_small_many)
 
 
 @pytest.mark.benchmark
 def test_sum_function_large_little(benchmark, function_large_little):
-    """Benchmark summing few large functions"""
+    """Measure accumulation of a few high-term-count Function wrappers."""
     benchmark(sum_function_functions, function_large_little)

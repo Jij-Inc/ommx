@@ -1,3 +1,10 @@
+"""Python API benchmarks for linear-function addition.
+
+These benchmarks measure the public Python operator path for two shapes:
+many small objects, and a few large objects. They intentionally include
+Python object dispatch plus the Rust-backed addition work reached through it.
+"""
+
 import pytest
 from ommx import Linear, Rng
 
@@ -38,11 +45,11 @@ def sum_linear_functions(functions: list[Linear]):
 
 @pytest.mark.benchmark
 def test_sum_linear_small_many(benchmark, linear_small_many):
-    """Benchmark summing many small linear functions"""
+    """Measure repeated accumulation of many small Linear objects."""
     benchmark(sum_linear_functions, linear_small_many)
 
 
 @pytest.mark.benchmark
 def test_sum_linear_large_little(benchmark, linear_large_little):
-    """Benchmark summing few large linear functions"""
+    """Measure accumulation of a few high-term-count Linear objects."""
     benchmark(sum_linear_functions, linear_large_little)

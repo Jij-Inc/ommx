@@ -1,3 +1,10 @@
+"""Python API benchmarks for `Instance.to_qubo`.
+
+These benchmarks measure end-to-end conversion through the public Python API,
+including the defensive copy needed because `to_qubo` consumes mutable instance
+state. Large pseudo-Boolean scaling should be covered by Rust SDK benchmarks.
+"""
+
 import pytest
 import random
 from copy import deepcopy
@@ -54,9 +61,11 @@ def to_qubo(instance: Instance):
 
 @pytest.mark.benchmark
 def test_to_qubo_small(small: Instance):
+    """Measure a tiny integer-constrained model through Python `to_qubo`."""
     to_qubo(small)
 
 
 @pytest.mark.benchmark
 def test_to_qubo_pbi(pseudo_boolean_inequality: Instance):
+    """Measure moderate pseudo-Boolean inequality conversion via Python."""
     to_qubo(pseudo_boolean_inequality)

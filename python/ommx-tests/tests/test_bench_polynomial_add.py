@@ -1,3 +1,10 @@
+"""Python API benchmarks for polynomial-function addition.
+
+These benchmarks measure the public Python operator path for two shapes:
+many small objects, and a few large objects. They intentionally include
+Python object dispatch plus the Rust-backed addition work reached through it.
+"""
+
 import pytest
 from ommx import Polynomial, Rng
 
@@ -40,11 +47,11 @@ def sum_polynomial_functions(functions: list[Polynomial]):
 
 @pytest.mark.benchmark
 def test_sum_polynomial_small_many(benchmark, polynomial_small_many):
-    """Benchmark summing many small polynomial functions"""
+    """Measure repeated accumulation of many small Polynomial objects."""
     benchmark(sum_polynomial_functions, polynomial_small_many)
 
 
 @pytest.mark.benchmark
 def test_sum_polynomial_large_little(benchmark, polynomial_large_little):
-    """Benchmark summing few large polynomial functions"""
+    """Measure accumulation of a few high-term-count Polynomial objects."""
     benchmark(sum_polynomial_functions, polynomial_large_little)

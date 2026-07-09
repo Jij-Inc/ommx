@@ -1,3 +1,10 @@
+"""Python API benchmarks for quadratic-function addition.
+
+These benchmarks measure the public Python operator path for two shapes:
+many small objects, and a few large objects. They intentionally include
+Python object dispatch plus the Rust-backed addition work reached through it.
+"""
+
 import pytest
 from ommx import Quadratic, Rng
 
@@ -38,11 +45,11 @@ def sum_quadratic_functions(functions: list[Quadratic]):
 
 @pytest.mark.benchmark
 def test_sum_quadratic_small_many(benchmark, quadratic_small_many):
-    """Benchmark summing many small quadratic functions"""
+    """Measure repeated accumulation of many small Quadratic objects."""
     benchmark(sum_quadratic_functions, quadratic_small_many)
 
 
 @pytest.mark.benchmark
 def test_sum_quadratic_large_little(benchmark, quadratic_large_little):
-    """Benchmark summing few large quadratic functions"""
+    """Measure accumulation of a few high-term-count Quadratic objects."""
     benchmark(sum_quadratic_functions, quadratic_large_little)

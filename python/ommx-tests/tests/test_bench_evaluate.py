@@ -1,3 +1,10 @@
+"""Python API benchmarks for Instance evaluation.
+
+These benchmarks measure end-to-end evaluation through the public Python
+bindings on a real MIPLIB instance. Large-scale evaluation throughput belongs
+in Rust SDK benchmarks; this file keeps representative Python-call coverage.
+"""
+
 import pytest
 from ommx import Rng
 from ommx.dataset import miplib2017
@@ -38,11 +45,11 @@ def evaluate_samples_batch(instance, samples):
 
 @pytest.mark.benchmark
 def test_evaluate(benchmark, miplib_supportcase10, random_state):
-    """Benchmark individual evaluate call"""
+    """Measure one public `Instance.evaluate` call on a real instance."""
     benchmark(evaluate_state, miplib_supportcase10, random_state)
 
 
 @pytest.mark.benchmark
 def test_evaluate_samples(benchmark, miplib_supportcase10, samples):
-    """Benchmark evaluate_samples with different configurations"""
+    """Measure one representative public `Instance.evaluate_samples` call."""
     benchmark(evaluate_samples_batch, miplib_supportcase10, samples)
