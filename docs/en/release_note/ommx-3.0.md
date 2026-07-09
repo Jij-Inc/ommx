@@ -8,6 +8,46 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🆕 Unary integer encoding ([#1010](https://github.com/Jij-Inc/ommx/pull/1010))
+
+{meth}`~ommx.Instance.unary_encode` is now available as a sampler-friendly
+alternative to {meth}`~ommx.Instance.log_encode` for finite integer variables.
+For an integer variable `x` in `[lower, upper]`, unary encoding introduces
+`upper - lower` binary variables and substitutes `x = lower + sum(b)`.
+
+Every binary assignment decodes to a value in the original integer range, so
+no encoding-validity constraint or penalty is added. Since the number of
+auxiliary variables grows linearly with the range width, prefer this encoding
+for narrow ranges and keep using log encoding for wider variables. To avoid
+accidental large allocations, `Instance.unary_encode()` rejects variables with
+range width above `max_range` (default: `16`); pass a larger `max_range`
+explicitly when the auxiliary-variable cost is intentional.
+
+Both `Instance.unary_encode(..., atol=...)` and `Instance.log_encode(..., atol=...)`
+use the same ATol-aware integer-bound normalization as the rest of the SDK.
+`Instance.log_encode()` rejects integer ranges that would require more than 53
+auxiliary binary variables instead of accepting impractically large encoded
+search spaces.
+Both encoders also reject non-point integer ranges outside the unit-spaced
+`float` integer interval, so every accepted encoded integer value remains
+distinguishable after adding the encoding offset.
+Passing an explicit fixed decision-variable ID is rejected before substitution,
+so fixed values and dependent-variable assignments remain disjoint.
+
+```python
+from ommx import DecisionVariable, Instance
+
+x = DecisionVariable.integer(0, lower=2, upper=5)
+instance = Instance.from_components(
+    sense=Instance.MAXIMIZE,
+    objective=x,
+    decision_variables=[x],
+    constraints={},
+)
+
+instance.unary_encode({0})
+```
+
 ### 🆕 Context-aware function formatting ([#408](https://github.com/Jij-Inc/ommx/issues/408))
 
 {class}`~ommx.Instance` and {class}`~ommx.ParametricInstance` now provide

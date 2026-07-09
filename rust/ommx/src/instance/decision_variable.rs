@@ -47,18 +47,44 @@ impl Instance {
         })
     }
 
-    /// Returns the next available VariableID.
+    /// Returns the next available [`VariableID`].
     ///
     /// Finds the maximum ID from decision variables, then adds 1.
-    /// If there are no variables, returns VariableID(0).
+    /// If there are no variables, returns `Ok(VariableID(0))`.
     ///
     /// Note: This method does not track which IDs have been allocated.
     /// Consecutive calls will return the same ID until a variable is actually added.
-    pub fn next_variable_id(&self) -> VariableID {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DecisionVariableError::NoAvailableID`] when the existing
+    /// maximum ID is `u64::MAX` and no fresh ID can be allocated.
+    pub fn next_variable_id(&self) -> Result<VariableID, DecisionVariableError> {
         self.decision_variables
             .last_key_value()
-            .map(|(id, _)| VariableID::from(id.into_inner() + 1))
-            .unwrap_or(VariableID::from(0))
+            .map(|(id, _)| {
+                id.into_inner()
+                    .checked_add(1)
+                    .map(VariableID::from)
+                    .ok_or(DecisionVariableError::NoAvailableID)
+            })
+            .unwrap_or(Ok(VariableID::from(0)))
+    }
+
+    pub(super) fn ensure_new_decision_variable_capacity(
+        &self,
+        count: usize,
+    ) -> Result<(), DecisionVariableError> {
+        if count == 0 {
+            return Ok(());
+        }
+        let count = u64::try_from(count).map_err(|_| DecisionVariableError::NoAvailableID)?;
+        if let Some((id, _)) = self.decision_variables.last_key_value() {
+            id.into_inner()
+                .checked_add(count)
+                .ok_or(DecisionVariableError::NoAvailableID)?;
+        }
+        Ok(())
     }
 
     pub fn new_decision_variable(
@@ -85,7 +111,7 @@ impl Instance {
         fixed_value: Option<f64>,
         atol: ATol,
     ) -> Result<VariableID, DecisionVariableError> {
-        let id = self.next_variable_id();
+        let id = self.next_variable_id()?;
         let dv = DecisionVariable::new(kind, bound, atol)?;
         self.decision_variables
             .insert(id, dv, label, fixed_value, atol)?;
@@ -126,7 +152,7 @@ impl Instance {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{coeff, linear, Sense};
+    use crate::{coeff, linear, Function, Sense};
     use maplit::btreemap;
     use std::collections::BTreeMap;
 
@@ -142,7 +168,7 @@ mod tests {
             BTreeMap::new(),
         )
         .unwrap();
-        assert_eq!(instance.next_variable_id(), VariableID::from(0));
+        assert_eq!(instance.next_variable_id().unwrap(), VariableID::from(0));
 
         // Instance with variables should return max_id + 1
         let decision_variables = btreemap! {
@@ -159,7 +185,30 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(instance.next_variable_id(), VariableID::from(101));
+        assert_eq!(instance.next_variable_id().unwrap(), VariableID::from(101));
+    }
+
+    #[test]
+    fn test_next_variable_id_errors_when_id_space_is_exhausted() {
+        let decision_variables = btreemap! {
+            VariableID::from(u64::MAX) => DecisionVariable::binary(),
+        };
+        let instance = Instance::new(
+            Sense::Minimize,
+            Function::Zero,
+            decision_variables,
+            BTreeMap::new(),
+        )
+        .unwrap();
+
+        assert!(matches!(
+            instance.next_variable_id(),
+            Err(DecisionVariableError::NoAvailableID)
+        ));
+        assert!(matches!(
+            instance.ensure_new_decision_variable_capacity(1),
+            Err(DecisionVariableError::NoAvailableID)
+        ));
     }
 
     #[test]
@@ -181,6 +230,6 @@ mod tests {
         let var2 = instance.new_binary();
         assert_eq!(var2, VariableID::from(1));
 
-        assert_eq!(instance.next_variable_id(), VariableID::from(2));
+        assert_eq!(instance.next_variable_id().unwrap(), VariableID::from(2));
     }
 }
