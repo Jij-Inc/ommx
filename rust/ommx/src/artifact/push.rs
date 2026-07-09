@@ -13,6 +13,7 @@
 //! followed by each entry in `layers[]`.
 
 use super::{remote_transport::RemoteTransport, LocalArtifact, LocalManifest};
+use oci_client::RegistryOperation;
 use oci_spec::image::Descriptor;
 
 impl LocalArtifact<'_> {
@@ -28,20 +29,26 @@ impl LocalArtifact<'_> {
     /// the registry without a tag pointing at incomplete data. Blobs
     /// already present at the destination are skipped after a remote
     /// existence check; missing blobs are read from the Local Registry
-    /// and uploaded.
+    /// and uploaded. The blob phase authenticates for pull-scoped
+    /// existence checks first, then for push-scoped uploads and
+    /// manifest publishing.
     pub fn push(&self) -> crate::Result<()> {
         let manifest = self.get_manifest()?.clone();
         let blob_descriptors = collect_blob_descriptors(&manifest);
 
         let transport = RemoteTransport::new(self.image_name())?;
-        transport.auth(self.image_name())?;
+        transport.auth_for(self.image_name(), RegistryOperation::Pull)?;
+        let missing_blob_descriptors =
+            collect_missing_blob_descriptors(self.image_name(), &blob_descriptors, |digest| {
+                transport.blob_exists(self.image_name(), digest)
+            })?;
 
-        for descriptor in &blob_descriptors {
-            push_descriptor_blob(
+        transport.auth(self.image_name())?;
+        for descriptor in missing_blob_descriptors {
+            push_missing_descriptor_blob(
                 self.image_name(),
                 descriptor,
                 |descriptor| self.get_blob_by_descriptor(descriptor),
-                |digest| transport.blob_exists(self.image_name(), digest),
                 |digest, bytes| transport.push_blob(self.image_name(), digest, bytes),
             )?;
         }
@@ -70,25 +77,30 @@ fn collect_blob_descriptors(manifest: &LocalManifest) -> Vec<Descriptor> {
     out
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum BlobPushAction {
-    SkippedExisting,
-    Uploaded,
+fn collect_missing_blob_descriptors<'a>(
+    image_name: &crate::artifact::ImageRef,
+    descriptors: &'a [Descriptor],
+    mut remote_blob_exists: impl FnMut(&str) -> crate::Result<bool>,
+) -> crate::Result<Vec<&'a Descriptor>> {
+    let mut missing = Vec::new();
+    for descriptor in descriptors {
+        let digest = descriptor.digest().to_string();
+        if remote_blob_exists(&digest)? {
+            tracing::debug!("Skipping blob {digest} of {image_name}; already present in remote");
+        } else {
+            missing.push(descriptor);
+        }
+    }
+    Ok(missing)
 }
 
-fn push_descriptor_blob(
+fn push_missing_descriptor_blob(
     image_name: &crate::artifact::ImageRef,
     descriptor: &Descriptor,
     read_blob: impl FnOnce(&Descriptor) -> crate::Result<Vec<u8>>,
-    remote_blob_exists: impl FnOnce(&str) -> crate::Result<bool>,
     push_blob: impl FnOnce(&str, Vec<u8>) -> crate::Result<()>,
-) -> crate::Result<BlobPushAction> {
+) -> crate::Result<()> {
     let digest = descriptor.digest().to_string();
-    if remote_blob_exists(&digest)? {
-        tracing::debug!("Skipping blob {digest} of {image_name}; already present in remote");
-        return Ok(BlobPushAction::SkippedExisting);
-    }
-
     let bytes = read_blob(descriptor)?;
     tracing::debug!(size = bytes.len(), "Pushing blob {digest} of {image_name}");
     // `bytes` is moved into `push_blob`, which moves it into
@@ -96,7 +108,7 @@ fn push_descriptor_blob(
     // value. Avoid `to_vec()`-ing a buffer that is already owned
     // (blobs can be tens of MB).
     push_blob(&digest, bytes)?;
-    Ok(BlobPushAction::Uploaded)
+    Ok(())
 }
 
 #[cfg(test)]
@@ -123,38 +135,34 @@ mod tests {
     }
 
     #[test]
-    fn existing_remote_blob_skips_local_read_and_upload() -> crate::Result<()> {
+    fn existing_remote_blob_is_not_marked_missing() -> crate::Result<()> {
         let image_name = image_name();
-        let descriptor = descriptor_for(b"already remote");
+        let descriptors = vec![descriptor_for(b"already remote")];
         let checked_digest = RefCell::new(None);
-        let read_count = Cell::new(0);
-        let push_count = Cell::new(0);
 
-        let action = push_descriptor_blob(
-            &image_name,
-            &descriptor,
-            |_| {
-                read_count.set(read_count.get() + 1);
-                Ok(Vec::new())
-            },
-            |digest| {
-                checked_digest.replace(Some(digest.to_string()));
-                Ok(true)
-            },
-            |_, _| {
-                push_count.set(push_count.get() + 1);
-                Ok(())
-            },
-        )?;
+        let missing = collect_missing_blob_descriptors(&image_name, &descriptors, |digest| {
+            checked_digest.replace(Some(digest.to_string()));
+            Ok(true)
+        })?;
 
-        assert_eq!(action, BlobPushAction::SkippedExisting);
-        let expected_digest = descriptor.digest().to_string();
+        assert!(missing.is_empty());
+        let expected_digest = descriptors[0].digest().to_string();
         assert_eq!(
             checked_digest.into_inner().as_deref(),
             Some(expected_digest.as_str())
         );
-        assert_eq!(read_count.get(), 0);
-        assert_eq!(push_count.get(), 0);
+        Ok(())
+    }
+
+    #[test]
+    fn missing_remote_blob_is_marked_missing() -> crate::Result<()> {
+        let image_name = image_name();
+        let descriptors = vec![descriptor_for(b"needs upload")];
+
+        let missing = collect_missing_blob_descriptors(&image_name, &descriptors, |_| Ok(false))?;
+
+        assert_eq!(missing.len(), 1);
+        assert_eq!(missing[0].digest(), descriptors[0].digest());
         Ok(())
     }
 
@@ -166,21 +174,19 @@ mod tests {
         let read_count = Cell::new(0);
         let pushed = RefCell::new(Vec::new());
 
-        let action = push_descriptor_blob(
+        push_missing_descriptor_blob(
             &image_name,
             &descriptor,
             |_| {
                 read_count.set(read_count.get() + 1);
                 Ok(bytes.clone())
             },
-            |_| Ok(false),
             |digest, bytes| {
                 pushed.borrow_mut().push((digest.to_string(), bytes));
                 Ok(())
             },
         )?;
 
-        assert_eq!(action, BlobPushAction::Uploaded);
         assert_eq!(read_count.get(), 1);
         let pushed = pushed.into_inner();
         assert_eq!(pushed.len(), 1);
@@ -190,30 +196,16 @@ mod tests {
     }
 
     #[test]
-    fn remote_check_error_stops_before_read_or_upload() {
+    fn remote_check_error_stops_missing_collection() {
         let image_name = image_name();
-        let descriptor = descriptor_for(b"unreachable remote");
-        let read_count = Cell::new(0);
-        let push_count = Cell::new(0);
+        let descriptors = vec![descriptor_for(b"unreachable remote")];
 
-        let err = push_descriptor_blob(
-            &image_name,
-            &descriptor,
-            |_| {
-                read_count.set(read_count.get() + 1);
-                Ok(Vec::new())
-            },
-            |_| Err(anyhow!("registry HEAD failed")),
-            |_, _| {
-                push_count.set(push_count.get() + 1);
-                Ok(())
-            },
-        )
+        let err = collect_missing_blob_descriptors(&image_name, &descriptors, |_| {
+            Err(anyhow!("registry HEAD failed"))
+        })
         .context("push decision should fail")
         .unwrap_err();
 
         assert!(err.to_string().contains("push decision should fail"));
-        assert_eq!(read_count.get(), 0);
-        assert_eq!(push_count.get(), 0);
     }
 }
