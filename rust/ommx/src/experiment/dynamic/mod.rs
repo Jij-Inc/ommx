@@ -484,7 +484,7 @@ impl ExperimentDyn {
         image_name: ImageRef,
     ) -> Result<Self> {
         let registry_handle = sealed.registry_handle();
-        let state = sealed.create_forked_child_state(image_name)?;
+        let state = sealed.create_restored_checkpoint_state(image_name)?;
         Ok(Self {
             registry_handle: registry_handle.clone(),
             state: Arc::new(Mutex::new(ExperimentDynState {
@@ -1159,6 +1159,21 @@ impl SealedExperimentDynState {
         &self,
         image_name: ImageRef,
     ) -> Result<UnsealedExperimentDynState> {
+        self.create_child_state(image_name, HashMap::new())
+    }
+
+    fn create_restored_checkpoint_state(
+        &self,
+        image_name: ImageRef,
+    ) -> Result<UnsealedExperimentDynState> {
+        self.create_child_state(image_name, self.artifact.annotations()?)
+    }
+
+    fn create_child_state(
+        &self,
+        image_name: ImageRef,
+        annotations: HashMap<String, String>,
+    ) -> Result<UnsealedExperimentDynState> {
         let subject = Some(
             self.artifact
                 .as_local_artifact()
@@ -1201,7 +1216,7 @@ impl SealedExperimentDynState {
         Ok(UnsealedExperimentDynState {
             image_name,
             subject,
-            annotations: HashMap::new(),
+            annotations,
             attachments: self.attachments.clone(),
             next_run_id: next_run_id(runs.keys().copied())?,
             runs,

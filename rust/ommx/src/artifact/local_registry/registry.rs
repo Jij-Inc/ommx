@@ -443,11 +443,7 @@ impl LocalRegistry {
         &self,
         requested_image_name: &ImageRef,
     ) -> Result<ImageRef> {
-        let registry_id = self.index.registry_id()?;
-        let repository_key = crate::artifact::anonymous_local_repository_key(
-            &registry_id,
-            EXPERIMENT_CHECKPOINT_REPOSITORY,
-        )?;
+        let repository_key = self.experiment_checkpoint_repository_key()?;
         let digest = sha256_digest(requested_image_name.to_string().as_bytes());
         let tag = digest
             .strip_prefix("sha256:")
@@ -455,6 +451,14 @@ impl LocalRegistry {
         ImageRef::parse(&format!("{repository_key}:{tag}")).with_context(|| {
             format!("Failed to derive experiment checkpoint image name for {requested_image_name}")
         })
+    }
+
+    fn experiment_checkpoint_repository_key(&self) -> Result<String> {
+        let registry_id = self.index.registry_id()?;
+        crate::artifact::anonymous_local_repository_key(
+            &registry_id,
+            EXPERIMENT_CHECKPOINT_REPOSITORY,
+        )
     }
 
     /// List every SQLite ref whose `(name, reference)` matches the
@@ -512,11 +516,15 @@ impl LocalRegistry {
     pub fn list_experiments(&self, name_prefix: Option<&str>) -> Result<Vec<ExperimentRefRecord>> {
         let refs = self.index.list_refs(name_prefix)?;
         let cached = self.index.list_experiment_refs(name_prefix)?;
+        let checkpoint_repository_key = self.experiment_checkpoint_repository_key()?;
         let cached_refs = cached
             .iter()
             .map(|r| r.image_name.to_string())
             .collect::<BTreeSet<_>>();
         for r in refs {
+            if r.name == checkpoint_repository_key {
+                continue;
+            }
             let image_name = ImageRef::from_repository_and_reference(&r.name, &r.reference)?;
             if cached_refs.contains(&image_name.to_string()) {
                 continue;

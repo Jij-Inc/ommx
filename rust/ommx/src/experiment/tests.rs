@@ -161,8 +161,7 @@ fn local_registry_lists_committed_experiment_refs_from_projection() -> anyhow::R
 }
 
 #[test]
-fn list_experiments_backfills_missing_projection_and_rejects_corrupt_status() -> anyhow::Result<()>
-{
+fn list_experiments_backfills_missing_and_non_finished_projection() -> anyhow::Result<()> {
     let dir = tempfile::tempdir()?;
     let registry = LocalRegistry::open(dir.path())?;
     let image_name = ImageRef::parse("example.com/catgt/backfill:latest")?;
@@ -184,13 +183,15 @@ fn list_experiments_backfills_missing_projection_and_rejects_corrupt_status() ->
         "UPDATE experiment_manifests SET status = 'not-a-status' WHERE manifest_digest = ?1",
         rusqlite::params![manifest_digest],
     )?;
-    let err = registry
-        .list_experiments(Some("example.com/catgt/backfill"))
-        .expect_err("corrupt Experiment projection status must be rejected");
-    assert!(
-        err.to_string().contains("not-a-status"),
-        "unexpected error: {err}"
-    );
+    let records = registry.list_experiments(Some("example.com/catgt/backfill"))?;
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].status, EXPERIMENT_STATUS_FINISHED);
+    let restored_status: String = conn.query_row(
+        "SELECT status FROM experiment_manifests WHERE manifest_digest = ?1",
+        rusqlite::params![manifest_digest],
+        |row| row.get(0),
+    )?;
+    assert_eq!(restored_status, EXPERIMENT_STATUS_FINISHED);
     Ok(())
 }
 
@@ -1802,6 +1803,22 @@ fn experiment_dyn_publishes_failed_checkpoint() {
     assert_eq!(checkpoint.image_name(), &checkpoint_image_name);
 
     assert!(checkpoint.annotations().unwrap().is_empty());
+    assert!(
+        registry_handle
+            .registry()
+            .list_experiments(None)
+            .unwrap()
+            .is_empty(),
+        "public Experiment listing must not expose internal checkpoint refs"
+    );
+    assert!(
+        registry_handle
+            .registry()
+            .list_experiments(Some(&checkpoint_image_name.to_string()))
+            .unwrap()
+            .is_empty(),
+        "public Experiment listing must not expose checkpoint refs even by exact prefix"
+    );
 
     let checkpoint_artifact = checkpoint.as_local_artifact();
     let config = experiment_config(&checkpoint_artifact);
@@ -1818,6 +1835,9 @@ fn experiment_dyn_recovers_failed_artifact_with_requested_image_name() {
     let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:failed-run").unwrap();
     let experiment =
         ExperimentDyn::with_registry_handle(registry_handle.clone(), image_name.clone()).unwrap();
+    experiment
+        .set_annotation("com.example.problem", "qap")
+        .unwrap();
     {
         let mut run = experiment.run().unwrap();
         run.log_parameter("solver", "scip").unwrap();
@@ -1836,6 +1856,10 @@ fn experiment_dyn_recovers_failed_artifact_with_requested_image_name() {
     )
     .unwrap();
     assert_eq!(checkpoint.image_name(), &checkpoint_image_name);
+    assert_eq!(
+        checkpoint.annotations().unwrap().get("com.example.problem"),
+        Some(&"qap".to_string())
+    );
 
     let recovered = ExperimentDyn::restore_from_checkpoint_in_registry_handle(
         registry_handle,
@@ -1844,6 +1868,10 @@ fn experiment_dyn_recovers_failed_artifact_with_requested_image_name() {
     .unwrap();
     assert!(recovered.is_unsealed());
     assert_eq!(recovered.image_name().unwrap(), image_name);
+    assert_eq!(
+        recovered.annotations().unwrap().get("com.example.problem"),
+        Some(&"qap".to_string())
+    );
     {
         let mut run = recovered.run().unwrap();
         assert_eq!(run.run_id().unwrap(), 1);
@@ -1852,6 +1880,10 @@ fn experiment_dyn_recovers_failed_artifact_with_requested_image_name() {
     }
     let artifact = recovered.commit().unwrap();
     assert_eq!(artifact.image_name(), &image_name);
+    assert_eq!(
+        artifact.annotations().unwrap().get("com.example.problem"),
+        Some(&"qap".to_string())
+    );
 
     let child_runs = recovered.runs().unwrap();
     assert_eq!(child_runs.len(), 2);

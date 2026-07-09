@@ -114,6 +114,7 @@ impl SqliteIndexStore {
         descriptor: &Descriptor,
         experiment: &ExperimentManifestRecord,
     ) -> Result<RefUpdate> {
+        Self::ensure_experiment_descriptor_matches_ref_descriptor(descriptor, experiment)?;
         let mut conn = self.lock();
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let update = Self::publish_ref_in(
@@ -135,6 +136,7 @@ impl SqliteIndexStore {
         descriptor: &Descriptor,
         experiment: &ExperimentManifestRecord,
     ) -> Result<RefUpdate> {
+        Self::ensure_experiment_descriptor_matches_ref_descriptor(descriptor, experiment)?;
         let mut conn = self.lock();
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let update = Self::replace_ref_in(
@@ -228,6 +230,32 @@ impl SqliteIndexStore {
                 i64::try_from(experiment.solve_count).context("Solve count does not fit in i64")?,
             ],
         )?;
+        Ok(())
+    }
+
+    fn ensure_experiment_descriptor_matches_ref_descriptor(
+        descriptor: &Descriptor,
+        experiment: &ExperimentManifestRecord,
+    ) -> Result<()> {
+        let manifest_descriptor = &experiment.manifest_descriptor;
+        ensure!(
+            descriptor.digest() == manifest_descriptor.digest(),
+            "Experiment projection digest {} does not match ref descriptor digest {}",
+            manifest_descriptor.digest(),
+            descriptor.digest()
+        );
+        ensure!(
+            descriptor.media_type() == manifest_descriptor.media_type(),
+            "Experiment projection media type {} does not match ref descriptor media type {}",
+            manifest_descriptor.media_type(),
+            descriptor.media_type()
+        );
+        ensure!(
+            descriptor.size() == manifest_descriptor.size(),
+            "Experiment projection size {} does not match ref descriptor size {}",
+            manifest_descriptor.size(),
+            descriptor.size()
+        );
         Ok(())
     }
 
@@ -502,7 +530,8 @@ impl SqliteIndexStore {
                 FROM refs
                 JOIN experiment_manifests
                   ON refs.manifest_digest = experiment_manifests.manifest_digest
-                WHERE substr(
+                WHERE experiment_manifests.status = ?3
+                  AND substr(
                     refs.name ||
                     CASE WHEN instr(refs.reference, ':') > 0 THEN '@' ELSE ':' END ||
                     refs.reference,
@@ -512,7 +541,14 @@ impl SqliteIndexStore {
                 ORDER BY refs.name, refs.reference
                 "#,
             )?;
-            let rows = stmt.query_map(params![prefix_len, prefix], experiment_ref_from_row)?;
+            let rows = stmt.query_map(
+                params![
+                    prefix_len,
+                    prefix,
+                    crate::experiment::ExperimentStatus::Finished.as_str()
+                ],
+                experiment_ref_from_row,
+            )?;
             for row in rows {
                 out.push(row?);
             }
@@ -531,10 +567,14 @@ impl SqliteIndexStore {
                 FROM refs
                 JOIN experiment_manifests
                   ON refs.manifest_digest = experiment_manifests.manifest_digest
+                WHERE experiment_manifests.status = ?1
                 ORDER BY refs.name, refs.reference
                 "#,
             )?;
-            let rows = stmt.query_map([], experiment_ref_from_row)?;
+            let rows = stmt.query_map(
+                params![crate::experiment::ExperimentStatus::Finished.as_str()],
+                experiment_ref_from_row,
+            )?;
             for row in rows {
                 out.push(row?);
             }

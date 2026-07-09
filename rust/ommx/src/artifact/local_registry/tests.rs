@@ -6,7 +6,7 @@ use crate::artifact::{
 };
 use anyhow::{Context, Result};
 use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, ImageManifestBuilder, MediaType};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -202,6 +202,44 @@ fn sqlite_index_store_round_trip() -> Result<()> {
     let refs = store.list_refs(Some("example.com/foo_bar"))?;
     assert_eq!(refs.len(), 1);
     assert_eq!(refs[0].name, "example.com/foo_bar/experiment");
+    Ok(())
+}
+
+#[test]
+fn sqlite_experiment_ref_rejects_mismatched_projection_descriptor() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let store = SqliteIndexStore::open(dir.path().join(SQLITE_INDEX_FILE_NAME))?;
+    let image_name = ImageRef::parse("example.com/ommx/experiment:mismatch")?;
+    let ref_descriptor = test_manifest_descriptor(b"ref-manifest")?;
+    let projection_manifest_bytes = b"projection-manifest".to_vec();
+    let projection_manifest_descriptor = test_manifest_descriptor(&projection_manifest_bytes)?;
+    let config_bytes = b"experiment-config".to_vec();
+    let config_descriptor = test_manifest_descriptor(&config_bytes)?;
+    let experiment = ExperimentManifestRecord {
+        manifest_descriptor: projection_manifest_descriptor,
+        manifest_json: projection_manifest_bytes,
+        manifest_annotations: BTreeMap::new(),
+        config_descriptor,
+        config_json: config_bytes,
+        status: "finished".to_string(),
+        run_count: 0,
+        solve_count: 0,
+    };
+
+    let err = store
+        .publish_experiment_ref(&image_name, &ref_descriptor, &experiment)
+        .expect_err("ref descriptor and Experiment projection descriptor must match");
+    assert!(
+        err.to_string()
+            .contains("does not match ref descriptor digest"),
+        "unexpected error: {err}"
+    );
+    assert!(
+        store
+            .resolve_ref(&image_name.repository_key(), image_name.reference())?
+            .is_none(),
+        "mismatched Experiment projection must not publish the ref"
+    );
     Ok(())
 }
 

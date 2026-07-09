@@ -274,6 +274,7 @@ def test_experiment_context_restores_failed_checkpoint_on_exception():
     with pytest.raises(ValueError):
         with Experiment(image_name) as experiment:
             experiments.append(experiment)
+            experiment.set_annotation("com.example.problem", "qap")
             with experiment.run() as run:
                 run.log_parameter("solver", "scip")
             raise ValueError("failed")
@@ -285,12 +286,14 @@ def test_experiment_context_restores_failed_checkpoint_on_exception():
     resumed = Experiment.restore_from_checkpoint(image_name)
     assert resumed.status is None
     assert resumed.image_name == image_name
+    assert resumed.annotations["com.example.problem"] == "qap"
     with resumed:
         with resumed.run() as run:
             assert run.run_id == 1
             run.log_parameter("solver", "highs")
     assert [run.status for run in resumed.runs] == ["finished", "finished"]
     assert list(resumed.run_parameters_df().index) == [0, 1]
+    assert resumed.annotations["com.example.problem"] == "qap"
 
 
 def test_checkpoint_keeps_failed_run_and_can_be_restored():
