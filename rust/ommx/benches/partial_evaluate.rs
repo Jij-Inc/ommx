@@ -3,7 +3,9 @@
 //! Expression families vary total term count while assignment density is one,
 //! half, or all required IDs; each should traverse terms linearly. Instance
 //! families originate from issue #1027 and compare removed-only transaction
-//! overhead with active-constraint atomic and consuming paths.
+//! overhead with active-constraint atomic and consuming paths. Each Instance
+//! family should remain O(C) in the constraint count C; the consuming path is
+//! expected to avoid the atomic path's whole-Instance clone constant.
 
 use criterion::{
     criterion_group, criterion_main, AxisScale, BenchmarkId, Criterion, PlotConfiguration,

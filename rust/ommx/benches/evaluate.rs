@@ -3,7 +3,8 @@
 //! The expression families vary term count and should remain O(N). The
 //! Instance families reproduce the evaluate/evaluate_samples boundary from
 //! issue #336, using synthetic one-variable constraints so Rust-internal
-//! scaling is measured without the heavy MIPLIB profiling fixture.
+//! scaling is measured without the heavy MIPLIB profiling fixture. Both
+//! Instance paths should remain O(C) in the constraint count C.
 
 use criterion::{
     criterion_group, criterion_main, AxisScale, BenchmarkId, Criterion, PlotConfiguration,

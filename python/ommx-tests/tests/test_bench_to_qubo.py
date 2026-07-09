@@ -3,8 +3,11 @@
 ``to_qubo`` is a Python driver API that sequences several Rust transformations,
 so the public boundary is part of the measured operation. The pseudo-Boolean
 family originates from issue #404 and PR #495 and varies the number of terms to
-detect renewed superlinear conversion. The defensive copy is included because
-the driver consumes mutable instance state.
+guard the expected output-sensitive cost: penalizing an N-term equality creates
+Theta(N^2) QUBO coefficients, so conversion should not grow beyond quadratic.
+The bounded 10/32/100 inputs retain that trend without restoring the 1,000-term
+profile that dominated the CodSpeed workflow. The defensive copy is included
+because the driver consumes mutable instance state.
 """
 
 import pytest
