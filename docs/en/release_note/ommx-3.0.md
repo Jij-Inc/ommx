@@ -8,6 +8,15 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### ⚠ Dedicated Experiment artifact type ([#1033](https://github.com/Jij-Inc/ommx/pull/1033))
+
+Committed Experiment artifacts now write `application/org.ommx.v1.experiment`
+as the OCI Manifest `artifactType` instead of the generic
+`application/org.ommx.v1.artifact` type. Loading an Experiment validates this
+root artifact type before decoding the Experiment config, so a generic Artifact
+is not interpreted as an Experiment merely because its config descriptor uses
+the Experiment config media type.
+
 ### 🆕 Unary integer encoding ([#1010](https://github.com/Jij-Inc/ommx/pull/1010))
 
 {meth}`~ommx.Instance.unary_encode` is now available as a sampler-friendly
