@@ -172,17 +172,6 @@ pub struct DecisionVariableTable<S: DecisionVariableTableStage = Created> {
     columns: S::Columns,
 }
 
-/// Table-local proof that a replacement fixed-value column is valid for a
-/// created decision-variable table.
-///
-/// This is crate-visible because `Instance` owns the cross-table decision
-/// variable role invariants, while this table owns row existence and
-/// kind/bound consistency.
-#[derive(Debug, Clone, PartialEq, LogicalMemoryProfile)]
-pub(crate) struct ValidatedFixedValuesReplacement {
-    fixed_values: BTreeMap<VariableID, f64>,
-}
-
 /// Evaluated-stage decision-variable table used by [`crate::Solution`].
 pub type EvaluatedDecisionVariableTable = DecisionVariableTable<Evaluated>;
 
@@ -318,29 +307,6 @@ impl DecisionVariableTable<Created> {
         self.columns.fixed_values.get(&id).copied()
     }
 
-    /// Validate a full fixed-value column replacement.
-    ///
-    /// This only proves table-local invariants: every fixed ID exists and each
-    /// value satisfies the row's kind/bound. The enclosing root object remains
-    /// responsible for cross-table facts such as fixed/used/dependent role
-    /// disjointness.
-    pub(crate) fn validate_fixed_values_replacement(
-        &self,
-        fixed_values: BTreeMap<VariableID, f64>,
-        atol: ATol,
-    ) -> crate::Result<ValidatedFixedValuesReplacement> {
-        validate_created_fixed_values(&self.entries, &fixed_values, atol)?;
-        Ok(ValidatedFixedValuesReplacement { fixed_values })
-    }
-
-    /// Replace the fixed-value column with a table-validated replacement.
-    pub(crate) fn replace_fixed_values_with_validated(
-        &mut self,
-        fixed_values: ValidatedFixedValuesReplacement,
-    ) {
-        self.columns.fixed_values = fixed_values.fixed_values;
-    }
-
     /// Set a fixed value for an existing decision-variable row.
     pub fn set_fixed_value(&mut self, id: VariableID, value: f64, atol: ATol) -> crate::Result<()> {
         let Some(row) = self.entries.get(&id) else {
@@ -381,6 +347,40 @@ impl DecisionVariableTable<Created> {
         } else {
             self.columns.fixed_values.insert(id, value);
         }
+        Ok(())
+    }
+
+    /// Add fixed values atomically unless the rows are already fixed consistently.
+    pub(crate) fn ensure_fixed_values(
+        &mut self,
+        fixed_values: &[(VariableID, f64)],
+        atol: ATol,
+    ) -> crate::Result<()> {
+        for &(id, value) in fixed_values {
+            let Some(row) = self.entries.get(&id) else {
+                crate::bail!(
+                    { ?id },
+                    "Fixed decision-variable value references unknown decision variable ID {id:?}",
+                );
+            };
+            row.check_value_consistency(id, value, atol)?;
+            if let Some(previous_value) = self.columns.fixed_values.get(&id).copied() {
+                if !previous_value.is_finite() || (previous_value - value).abs() > *atol {
+                    return Err(DecisionVariableError::SubstitutedValueOverwrite {
+                        id,
+                        previous_value,
+                        new_value: value,
+                        atol,
+                    }
+                    .into());
+                }
+            }
+        }
+
+        for &(id, value) in fixed_values {
+            self.columns.fixed_values.entry(id).or_insert(value);
+        }
+
         Ok(())
     }
 
@@ -1009,6 +1009,33 @@ mod tests {
             "unexpected error: {err}"
         );
         assert_eq!(table.fixed_value(id), Some(1.0));
+    }
+
+    #[test]
+    fn definition_table_ensure_fixed_values_rejects_batch_atomically() {
+        let first = VariableID::from(1);
+        let second = VariableID::from(2);
+        let mut table = DecisionVariableTable::with_fixed_values(
+            BTreeMap::from([
+                (first, DecisionVariable::continuous()),
+                (second, DecisionVariable::continuous()),
+            ]),
+            VariableLabelStore::default(),
+            BTreeMap::from([(second, 0.0)]),
+            ATol::default(),
+        )
+        .unwrap();
+
+        let err = table
+            .ensure_fixed_values(&[(first, 1.0), (second, 2.0)], ATol::default())
+            .unwrap_err();
+
+        assert!(
+            err.to_string().contains("cannot be overwritten") && err.to_string().contains("ID=2"),
+            "unexpected error: {err}"
+        );
+        assert_eq!(table.fixed_value(first), None);
+        assert_eq!(table.fixed_value(second), Some(0.0));
     }
 
     #[test]

@@ -1,8 +1,8 @@
 use super::*;
 use crate::Result;
 use crate::{
-    constraint::RemovedReason, ATol, Bound, DecisionVariableError, Evaluate, Kind, Propagate,
-    PropagateOutcome, ValidatedFixedValuesReplacement, VariableIDSet,
+    constraint::RemovedReason, ATol, Bound, Evaluate, Kind, Propagate, PropagateOutcome,
+    VariableIDSet,
 };
 use std::collections::BTreeMap;
 
@@ -124,47 +124,21 @@ struct StatePopulationPlan<'a> {
 }
 
 struct PartialEvaluatePlan {
-    fixed_values: ValidatedFixedValuesReplacement,
+    fixed_values: Vec<(VariableID, f64)>,
 }
 
 impl PartialEvaluatePlan {
-    fn prepare_removed_only(
-        instance: &Instance,
-        state: &v1::State,
-        atol: ATol,
-    ) -> Result<Option<Self>> {
+    fn prepare_removed_only(instance: &Instance, state: &v1::State) -> Result<Option<Self>> {
         if !Self::supports_removed_only_fast_path(instance) {
             return Ok(None);
         }
 
-        let mut fixed_values = instance.fixed_decision_variable_values().clone();
+        let mut fixed_values = Vec::with_capacity(state.entries.len());
         for (&id, &value) in &state.entries {
             ensure_state_value_is_finite(id, value)?;
-            let var_id = VariableID::from(id);
-            let Some(dv) = instance.decision_variables.get(&var_id) else {
-                return Err(crate::error!(
-                    "Unknown decision variable (ID={id}) in state."
-                ));
-            };
-            dv.check_value_consistency(var_id, value, atol)?;
-            if let Some(previous_value) = fixed_values.get(&var_id).copied() {
-                if !values_are_consistent(previous_value, value, atol) {
-                    return Err(DecisionVariableError::SubstitutedValueOverwrite {
-                        id: var_id,
-                        previous_value,
-                        new_value: value,
-                        atol,
-                    }
-                    .into());
-                }
-            } else {
-                fixed_values.insert(var_id, value);
-            }
+            fixed_values.push((VariableID::from(id), value));
         }
 
-        let fixed_values = instance
-            .decision_variables
-            .validate_fixed_values_replacement(fixed_values, atol)?;
         Ok(Some(Self { fixed_values }))
     }
 
@@ -313,9 +287,13 @@ impl Instance {
         self.state_population_plan().populate(state, atol)
     }
 
-    fn commit_partial_evaluate_plan(&mut self, plan: PartialEvaluatePlan) {
+    fn commit_partial_evaluate_plan(
+        &mut self,
+        plan: PartialEvaluatePlan,
+        atol: ATol,
+    ) -> Result<()> {
         self.decision_variables
-            .replace_fixed_values_with_validated(plan.fixed_values);
+            .ensure_fixed_values(&plan.fixed_values, atol)
     }
 
     fn normalize_constant_dependencies(
@@ -482,8 +460,8 @@ impl Evaluate for Instance {
 
     #[tracing::instrument(skip_all)]
     fn partial_evaluate(&mut self, state: &v1::State, atol: ATol) -> Result<()> {
-        if let Some(plan) = PartialEvaluatePlan::prepare_removed_only(self, state, atol)? {
-            self.commit_partial_evaluate_plan(plan);
+        if let Some(plan) = PartialEvaluatePlan::prepare_removed_only(self, state)? {
+            self.commit_partial_evaluate_plan(plan, atol)?;
             return Ok(());
         }
 
@@ -761,6 +739,32 @@ mod tests {
             .build()
             .unwrap();
         (instance, constraint_id)
+    }
+
+    #[test]
+    fn test_partial_evaluate_removed_only_fast_path_does_not_revalidate_existing_fixed_values() {
+        let var_id = VariableID::from(1);
+        let existing_value = 1.0000005;
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::from([(
+                var_id,
+                crate::DecisionVariable::integer(),
+            )]))
+            .fixed_decision_variable_values(BTreeMap::from([(var_id, existing_value)]))
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap();
+
+        instance
+            .partial_evaluate(&v1::State::default(), ATol::new(1e-9).unwrap())
+            .unwrap();
+
+        assert_eq!(
+            instance.fixed_decision_variable_value(var_id),
+            Some(existing_value)
+        );
     }
 
     #[test]
