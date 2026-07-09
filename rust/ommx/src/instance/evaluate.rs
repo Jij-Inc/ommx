@@ -123,16 +123,31 @@ struct StatePopulationPlan<'a> {
     dependency: &'a AcyclicAssignments,
 }
 
-struct PartialEvaluatePlan {
-    fixed_values: BTreeMap<VariableID, f64>,
-    objective: Function,
-    active_constraint_replacements: BTreeMap<ConstraintID, Constraint>,
-    named_function_replacements: BTreeMap<NamedFunctionID, NamedFunction>,
+enum PartialEvaluatePlan {
+    FixedValuesOnly {
+        fixed_values: BTreeMap<VariableID, f64>,
+    },
+    RegularReplacement {
+        fixed_values: BTreeMap<VariableID, f64>,
+        objective: Function,
+        active_constraint_replacements: BTreeMap<ConstraintID, Constraint>,
+        named_function_replacements: BTreeMap<NamedFunctionID, NamedFunction>,
+    },
 }
 
 impl PartialEvaluatePlan {
     fn prepare(instance: &Instance, state: &v1::State, atol: ATol) -> Result<Option<Self>> {
-        if !Self::supports_regular_plan(instance) {
+        let fixed_values_only = Self::supports_fixed_values_only_fast_path(instance);
+        if fixed_values_only {
+            if !Self::supports_regular_shape(instance) {
+                return Ok(None);
+            }
+            return Ok(Some(Self::FixedValuesOnly {
+                fixed_values: Self::prepare_fixed_values(instance, state, atol)?,
+            }));
+        }
+
+        if !Self::has_removed_regular_rows(instance) || !Self::supports_regular_shape(instance) {
             return Ok(None);
         }
 
@@ -156,7 +171,7 @@ impl PartialEvaluatePlan {
             named_function_replacements.insert(id, named_function);
         }
 
-        Ok(Some(Self {
+        Ok(Some(Self::RegularReplacement {
             fixed_values,
             objective,
             active_constraint_replacements,
@@ -164,7 +179,23 @@ impl PartialEvaluatePlan {
         }))
     }
 
-    fn supports_regular_plan(instance: &Instance) -> bool {
+    fn prepare_fixed_values_only(
+        instance: &Instance,
+        state: &v1::State,
+        atol: ATol,
+    ) -> Result<Option<Self>> {
+        if !Self::supports_regular_shape(instance)
+            || !Self::supports_fixed_values_only_fast_path(instance)
+        {
+            return Ok(None);
+        }
+
+        Ok(Some(Self::FixedValuesOnly {
+            fixed_values: Self::prepare_fixed_values(instance, state, atol)?,
+        }))
+    }
+
+    fn supports_regular_shape(instance: &Instance) -> bool {
         instance.indicator_constraint_collection.active().is_empty()
             && instance
                 .indicator_constraint_collection
@@ -175,6 +206,16 @@ impl PartialEvaluatePlan {
             && instance.sos1_constraint_collection.active().is_empty()
             && instance.sos1_constraint_collection.removed().is_empty()
             && instance.decision_variable_dependency.is_empty()
+    }
+
+    fn supports_fixed_values_only_fast_path(instance: &Instance) -> bool {
+        instance.objective.required_ids().is_empty()
+            && instance.constraint_collection.active().is_empty()
+            && instance.named_functions.required_ids().is_empty()
+    }
+
+    fn has_removed_regular_rows(instance: &Instance) -> bool {
+        !instance.constraint_collection.removed().is_empty()
     }
 
     fn prepare_fixed_values(
@@ -366,7 +407,7 @@ impl Instance {
     }
 
     fn partial_evaluate_in_place(&mut self, state: &v1::State, atol: ATol) -> Result<()> {
-        if let Some(plan) = PartialEvaluatePlan::prepare(self, state, atol)? {
+        if let Some(plan) = PartialEvaluatePlan::prepare_fixed_values_only(self, state, atol)? {
             self.commit_partial_evaluate_plan(plan, atol);
             return Ok(());
         }
@@ -375,15 +416,30 @@ impl Instance {
     }
 
     fn commit_partial_evaluate_plan(&mut self, plan: PartialEvaluatePlan, atol: ATol) {
-        self.decision_variables
-            .merge_validated_fixed_values(plan.fixed_values, atol);
-        self.objective = plan.objective;
-        self.constraint_collection
-            .replace_active_rows(plan.active_constraint_replacements)
-            .expect("partial-evaluate plan prepared replacements from active constraint IDs");
-        self.named_functions
-            .replace_rows(plan.named_function_replacements)
-            .expect("partial-evaluate plan prepared replacements from named-function IDs");
+        match plan {
+            PartialEvaluatePlan::FixedValuesOnly { fixed_values } => {
+                self.decision_variables
+                    .merge_validated_fixed_values(fixed_values, atol);
+            }
+            PartialEvaluatePlan::RegularReplacement {
+                fixed_values,
+                objective,
+                active_constraint_replacements,
+                named_function_replacements,
+            } => {
+                self.decision_variables
+                    .merge_validated_fixed_values(fixed_values, atol);
+                self.objective = objective;
+                self.constraint_collection
+                    .replace_active_rows(active_constraint_replacements)
+                    .expect(
+                        "partial-evaluate plan prepared replacements from active constraint IDs",
+                    );
+                self.named_functions
+                    .replace_rows(named_function_replacements)
+                    .expect("partial-evaluate plan prepared replacements from named-function IDs");
+            }
+        }
     }
 
     fn partial_evaluate_fallback_in_place(&mut self, state: &v1::State, atol: ATol) -> Result<()> {
@@ -927,6 +983,11 @@ mod tests {
         let named_function_id = crate::NamedFunctionID::from(1);
         let constraint_id = ConstraintID::from(1);
         let remaining_constraint_id = ConstraintID::from(2);
+        let removed_constraint_id = ConstraintID::from(10);
+        let removed_reason = RemovedReason {
+            reason: "test".to_string(),
+            parameters: Default::default(),
+        };
         Instance::builder()
             .sense(Sense::Minimize)
             .objective(Function::from((linear!(1) + linear!(3)).unwrap()))
@@ -946,6 +1007,13 @@ mod tests {
                     Constraint::equal_to_zero(Function::from(linear!(3))),
                 ),
             ]))
+            .removed_constraints(BTreeMap::from([(
+                removed_constraint_id,
+                (
+                    Constraint::equal_to_zero(Function::from(linear!(2))),
+                    removed_reason,
+                ),
+            )]))
             .named_functions(BTreeMap::from([(
                 named_function_id,
                 crate::NamedFunction {
