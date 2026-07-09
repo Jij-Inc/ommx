@@ -216,10 +216,13 @@ fn sqlite_experiment_ref_rejects_mismatched_projection_descriptor() -> Result<()
     let config_bytes = b"experiment-config".to_vec();
     let config_descriptor = test_manifest_descriptor(&config_bytes)?;
     let experiment = ExperimentManifestRecord {
-        manifest_descriptor: projection_manifest_descriptor,
-        manifest_json: projection_manifest_bytes,
-        manifest_annotations: BTreeMap::new(),
-        config_descriptor,
+        artifact: ArtifactManifestRecord {
+            manifest_descriptor: projection_manifest_descriptor,
+            manifest_json: projection_manifest_bytes,
+            manifest_annotations: BTreeMap::new(),
+            artifact_type: MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
+            config_descriptor,
+        },
         config_json: config_bytes,
         status: "finished".to_string(),
         run_count: 0,
@@ -230,8 +233,7 @@ fn sqlite_experiment_ref_rejects_mismatched_projection_descriptor() -> Result<()
         .publish_experiment_ref(&image_name, &ref_descriptor, &experiment)
         .expect_err("ref descriptor and Experiment projection descriptor must match");
     assert!(
-        err.to_string()
-            .contains("does not match ref descriptor digest"),
+        err.to_string().contains("Manifest cache digest"),
         "unexpected error: {err}"
     );
     assert!(

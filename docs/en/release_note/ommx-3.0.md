@@ -10,8 +10,8 @@ Changes merged after the most recent release will be appended here as they land,
 
 ### 🆕 Experiment listing from the Local Registry ([#1029](https://github.com/Jij-Inc/ommx/pull/1029))
 
-`ommx.experiment.list_experiments()` now lists committed Experiment refs from
-the SQLite Local Registry without opening each Experiment artifact. The returned
+`ommx.experiment.list_experiments()` now lists Experiment refs from the
+SQLite Local Registry without opening each Experiment artifact. The returned
 `ExperimentRef` records include the image name, manifest digest, status,
 run/solve counts, update timestamp, and manifest annotations. The optional
 `prefix` filter matches the full image reference string.

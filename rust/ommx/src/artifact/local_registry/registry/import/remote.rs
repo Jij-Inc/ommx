@@ -23,8 +23,9 @@
 //!    to the registry. The manifest is stored last so it sits behind
 //!    its blobs (matching the OCI distribution
 //!    publish order).
-//! 3. SQLite publishes only the manifest descriptor under the requested
-//!    `image_name`. A crash between blob writes and ref publish leaves
+//! 3. SQLite publishes the manifest descriptor under the requested
+//!    `image_name` and records digest-addressed catalog projections for
+//!    blob-free listing. A crash between blob writes and ref publish leaves
 //!    orphan CAS bytes (recovered by GC, not visible through the index).
 //!
 //! v3 has no on-disk OCI Image Layout intermediate for pulls — SQLite
@@ -122,9 +123,12 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
                 record,
             )?
         } else {
-            self.registry
-                .index
-                .publish_image_ref(self.image_name, &manifest_descriptor)?
+            let artifact_record = self.registry.artifact_manifest_record(&manifest_digest)?;
+            self.registry.index.publish_artifact_ref(
+                self.image_name,
+                &manifest_descriptor,
+                &artifact_record,
+            )?
         };
         self.reject_conflicting_ref(&ref_update)?;
 

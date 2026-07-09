@@ -86,7 +86,7 @@ def test_list_experiments_returns_cached_ref_records(tmp_path):
     image_name = f"{prefix}/case:latest"
 
     with Experiment(image_name) as experiment:
-        experiment.set_annotation("com.jij.catgt.problem", "qap")
+        experiment.set_annotation("com.example.problem", "qap")
         with experiment.run() as run:
             run.log_parameter("capacity", 10)
 
@@ -97,7 +97,7 @@ def test_list_experiments_returns_cached_ref_records(tmp_path):
     assert ref.status == "finished"
     assert ref.run_count == 1
     assert ref.solve_count == 0
-    assert ref.annotations["com.jij.catgt.problem"] == "qap"
+    assert ref.annotations["com.example.problem"] == "qap"
     assert "sha256:" in ref.manifest_digest
     assert "T" in ref.updated_at
     assert [ref.image_name for ref in list_experiments(f"{prefix}/case:lat")] == [

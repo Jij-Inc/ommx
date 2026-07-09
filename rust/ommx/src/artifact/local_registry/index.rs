@@ -1,6 +1,6 @@
 use super::{
-    now_rfc3339, ExperimentManifestRecord, ExperimentRefRecord, RefRecord, RefUpdate,
-    SQLITE_INDEX_FILE_NAME,
+    now_rfc3339, ArtifactManifestRecord, ExperimentManifestRecord, ExperimentRefRecord, RefRecord,
+    RefUpdate, SQLITE_INDEX_FILE_NAME,
 };
 use crate::artifact::digest::validate_digest;
 use crate::artifact::{stable_json_bytes, ImageRef};
@@ -8,7 +8,7 @@ use anyhow::{bail, ensure, Context, Result};
 use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, MediaType};
 use rusqlite::{params, types::Type, Connection, OptionalExtension, TransactionBehavior};
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     fs,
     path::Path,
     str::FromStr,
@@ -26,8 +26,10 @@ const SQLITE_BUSY_TIMEOUT: Duration = Duration::from_secs(30);
 ///
 /// This store is the concurrency-safe equivalent of an OCI `index.json`:
 /// it stores refs and their target manifest descriptors. Content bytes
-/// live in the Local Registry content-addressed storage, and manifests / layers are
-/// read from that CAS by descriptor digest instead of being cached here.
+/// live in the Local Registry content-addressed storage. The index also
+/// keeps digest-addressed manifest/config projections used for blob-free
+/// catalog listings; those rows are caches of CAS-addressed bytes, not a
+/// second editable source of truth.
 ///
 /// `rusqlite::Connection` is `Send` but `!Sync`, so it lives behind a
 /// [`Mutex`] here. That makes [`SqliteIndexStore`] (and the enclosing
@@ -95,6 +97,7 @@ impl SqliteIndexStore {
             .context("Failed to read local registry schema version")
     }
 
+    #[cfg(test)]
     pub fn replace_ref(
         &self,
         name: &str,
@@ -114,7 +117,7 @@ impl SqliteIndexStore {
         descriptor: &Descriptor,
         experiment: &ExperimentManifestRecord,
     ) -> Result<RefUpdate> {
-        Self::ensure_experiment_descriptor_matches_ref_descriptor(descriptor, experiment)?;
+        Self::ensure_artifact_descriptor_matches_ref_descriptor(descriptor, &experiment.artifact)?;
         let mut conn = self.lock();
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let update = Self::publish_ref_in(
@@ -136,7 +139,7 @@ impl SqliteIndexStore {
         descriptor: &Descriptor,
         experiment: &ExperimentManifestRecord,
     ) -> Result<RefUpdate> {
-        Self::ensure_experiment_descriptor_matches_ref_descriptor(descriptor, experiment)?;
+        Self::ensure_artifact_descriptor_matches_ref_descriptor(descriptor, &experiment.artifact)?;
         let mut conn = self.lock();
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let update = Self::replace_ref_in(
@@ -150,6 +153,48 @@ impl SqliteIndexStore {
         Ok(update)
     }
 
+    pub fn publish_artifact_ref(
+        &self,
+        image_name: &ImageRef,
+        descriptor: &Descriptor,
+        artifact: &ArtifactManifestRecord,
+    ) -> Result<RefUpdate> {
+        Self::ensure_artifact_descriptor_matches_ref_descriptor(descriptor, artifact)?;
+        let mut conn = self.lock();
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let update = Self::publish_ref_in(
+            &tx,
+            &image_name.repository_key(),
+            image_name.reference(),
+            descriptor,
+        )?;
+        if !matches!(update, RefUpdate::Conflicted { .. }) {
+            Self::upsert_artifact_manifest_in(&tx, artifact)?;
+        }
+        tx.commit()?;
+        Ok(update)
+    }
+
+    pub fn replace_artifact_ref(
+        &self,
+        image_name: &ImageRef,
+        descriptor: &Descriptor,
+        artifact: &ArtifactManifestRecord,
+    ) -> Result<RefUpdate> {
+        Self::ensure_artifact_descriptor_matches_ref_descriptor(descriptor, artifact)?;
+        let mut conn = self.lock();
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let update = Self::replace_ref_in(
+            &tx,
+            &image_name.repository_key(),
+            image_name.reference(),
+            descriptor,
+        )?;
+        Self::upsert_artifact_manifest_in(&tx, artifact)?;
+        tx.commit()?;
+        Ok(update)
+    }
+
     pub fn upsert_experiment_manifest(&self, experiment: &ExperimentManifestRecord) -> Result<()> {
         let mut conn = self.lock();
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -158,21 +203,87 @@ impl SqliteIndexStore {
         Ok(())
     }
 
+    pub fn upsert_artifact_manifest(&self, artifact: &ArtifactManifestRecord) -> Result<()> {
+        let mut conn = self.lock();
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        Self::upsert_artifact_manifest_in(&tx, artifact)?;
+        tx.commit()?;
+        Ok(())
+    }
+
     fn upsert_experiment_manifest_in(
         conn: &Connection,
         experiment: &ExperimentManifestRecord,
     ) -> Result<()> {
-        let manifest_descriptor = &experiment.manifest_descriptor;
-        let config_descriptor = &experiment.config_descriptor;
+        Self::upsert_artifact_manifest_in(conn, &experiment.artifact)?;
+        Self::upsert_experiment_config_in(conn, experiment)
+    }
+
+    fn upsert_artifact_manifest_in(
+        conn: &Connection,
+        artifact: &ArtifactManifestRecord,
+    ) -> Result<()> {
+        let manifest_descriptor = &artifact.manifest_descriptor;
+        let config_descriptor = &artifact.config_descriptor;
         validate_digest(manifest_descriptor.digest().as_ref())?;
         validate_digest(config_descriptor.digest().as_ref())?;
         ensure!(
-            manifest_descriptor.size() == experiment.manifest_json.len() as u64,
-            "Experiment manifest cache size mismatch for {}: descriptor={}, bytes={}",
+            manifest_descriptor.size() == artifact.manifest_json.len() as u64,
+            "Artifact manifest cache size mismatch for {}: descriptor={}, bytes={}",
             manifest_descriptor.digest(),
             manifest_descriptor.size(),
-            experiment.manifest_json.len()
+            artifact.manifest_json.len()
         );
+        let manifest_annotations_json =
+            String::from_utf8(stable_json_bytes(&artifact.manifest_annotations)?)
+                .context("Artifact manifest annotations JSON must be UTF-8")?;
+        conn.execute(
+            r#"
+            INSERT INTO artifact_manifests (
+                manifest_digest,
+                manifest_media_type,
+                manifest_size,
+                manifest_json,
+                manifest_annotations_json,
+                artifact_type,
+                config_digest,
+                config_media_type,
+                config_size
+            )
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+            ON CONFLICT(manifest_digest) DO UPDATE SET
+                manifest_media_type = excluded.manifest_media_type,
+                manifest_size = excluded.manifest_size,
+                manifest_json = excluded.manifest_json,
+                manifest_annotations_json = excluded.manifest_annotations_json,
+                artifact_type = excluded.artifact_type,
+                config_digest = excluded.config_digest,
+                config_media_type = excluded.config_media_type,
+                config_size = excluded.config_size
+            "#,
+            params![
+                manifest_descriptor.digest().to_string(),
+                manifest_descriptor.media_type().to_string(),
+                i64::try_from(manifest_descriptor.size())
+                    .context("Manifest size does not fit in i64")?,
+                &artifact.manifest_json,
+                manifest_annotations_json,
+                artifact.artifact_type.to_string(),
+                config_descriptor.digest().to_string(),
+                config_descriptor.media_type().to_string(),
+                i64::try_from(config_descriptor.size())
+                    .context("Config size does not fit in i64")?,
+            ],
+        )?;
+        Ok(())
+    }
+
+    fn upsert_experiment_config_in(
+        conn: &Connection,
+        experiment: &ExperimentManifestRecord,
+    ) -> Result<()> {
+        let config_descriptor = &experiment.artifact.config_descriptor;
+        validate_digest(config_descriptor.digest().as_ref())?;
         ensure!(
             config_descriptor.size() == experiment.config_json.len() as u64,
             "Experiment config cache size mismatch for {}: descriptor={}, bytes={}",
@@ -180,17 +291,9 @@ impl SqliteIndexStore {
             config_descriptor.size(),
             experiment.config_json.len()
         );
-        let manifest_annotations_json =
-            String::from_utf8(stable_json_bytes(&experiment.manifest_annotations)?)
-                .context("Experiment manifest annotations JSON must be UTF-8")?;
         conn.execute(
             r#"
-            INSERT INTO experiment_manifests (
-                manifest_digest,
-                manifest_media_type,
-                manifest_size,
-                manifest_json,
-                manifest_annotations_json,
+            INSERT INTO experiment_configs (
                 config_digest,
                 config_media_type,
                 config_size,
@@ -199,13 +302,8 @@ impl SqliteIndexStore {
                 run_count,
                 solve_count
             )
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
-            ON CONFLICT(manifest_digest) DO UPDATE SET
-                manifest_media_type = excluded.manifest_media_type,
-                manifest_size = excluded.manifest_size,
-                manifest_json = excluded.manifest_json,
-                manifest_annotations_json = excluded.manifest_annotations_json,
-                config_digest = excluded.config_digest,
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            ON CONFLICT(config_digest) DO UPDATE SET
                 config_media_type = excluded.config_media_type,
                 config_size = excluded.config_size,
                 config_json = excluded.config_json,
@@ -214,12 +312,6 @@ impl SqliteIndexStore {
                 solve_count = excluded.solve_count
             "#,
             params![
-                manifest_descriptor.digest().to_string(),
-                manifest_descriptor.media_type().to_string(),
-                i64::try_from(manifest_descriptor.size())
-                    .context("Manifest size does not fit in i64")?,
-                &experiment.manifest_json,
-                manifest_annotations_json,
                 config_descriptor.digest().to_string(),
                 config_descriptor.media_type().to_string(),
                 i64::try_from(config_descriptor.size())
@@ -233,26 +325,26 @@ impl SqliteIndexStore {
         Ok(())
     }
 
-    fn ensure_experiment_descriptor_matches_ref_descriptor(
+    fn ensure_artifact_descriptor_matches_ref_descriptor(
         descriptor: &Descriptor,
-        experiment: &ExperimentManifestRecord,
+        artifact: &ArtifactManifestRecord,
     ) -> Result<()> {
-        let manifest_descriptor = &experiment.manifest_descriptor;
+        let manifest_descriptor = &artifact.manifest_descriptor;
         ensure!(
             descriptor.digest() == manifest_descriptor.digest(),
-            "Experiment projection digest {} does not match ref descriptor digest {}",
+            "Manifest cache digest {} does not match ref descriptor digest {}",
             manifest_descriptor.digest(),
             descriptor.digest()
         );
         ensure!(
             descriptor.media_type() == manifest_descriptor.media_type(),
-            "Experiment projection media type {} does not match ref descriptor media type {}",
+            "Manifest cache media type {} does not match ref descriptor media type {}",
             manifest_descriptor.media_type(),
             descriptor.media_type()
         );
         ensure!(
             descriptor.size() == manifest_descriptor.size(),
-            "Experiment projection size {} does not match ref descriptor size {}",
+            "Manifest cache size {} does not match ref descriptor size {}",
             manifest_descriptor.size(),
             descriptor.size()
         );
@@ -299,6 +391,7 @@ impl SqliteIndexStore {
         Ok(())
     }
 
+    #[cfg(test)]
     pub fn publish_ref(
         &self,
         name: &str,
@@ -507,6 +600,197 @@ impl SqliteIndexStore {
         Ok(out)
     }
 
+    pub fn list_cached_artifact_manifest_digests(
+        &self,
+        name_prefix: Option<&str>,
+    ) -> Result<BTreeSet<String>> {
+        let conn = self.lock();
+        let mut out = BTreeSet::new();
+        if let Some(prefix) = name_prefix {
+            let prefix_len = i64::try_from(prefix.chars().count())
+                .context("Ref prefix length does not fit in i64")?;
+            let mut stmt = conn.prepare(
+                r#"
+                SELECT artifact_manifests.manifest_digest
+                FROM refs
+                JOIN artifact_manifests
+                  ON refs.manifest_digest = artifact_manifests.manifest_digest
+                WHERE substr(
+                    refs.name ||
+                    CASE WHEN instr(refs.reference, ':') > 0 THEN '@' ELSE ':' END ||
+                    refs.reference,
+                    1,
+                    ?1
+                ) = ?2
+                "#,
+            )?;
+            let rows = stmt.query_map(params![prefix_len, prefix], string_from_row)?;
+            for row in rows {
+                out.insert(row?);
+            }
+        } else {
+            let mut stmt = conn.prepare(
+                r#"
+                SELECT artifact_manifests.manifest_digest
+                FROM refs
+                JOIN artifact_manifests
+                  ON refs.manifest_digest = artifact_manifests.manifest_digest
+                "#,
+            )?;
+            let rows = stmt.query_map([], string_from_row)?;
+            for row in rows {
+                out.insert(row?);
+            }
+        }
+        Ok(out)
+    }
+
+    pub fn list_missing_experiment_config_refs(
+        &self,
+        name_prefix: Option<&str>,
+    ) -> Result<Vec<(ImageRef, Digest)>> {
+        let conn = self.lock();
+        let mut out = Vec::new();
+        if let Some(prefix) = name_prefix {
+            let prefix_len = i64::try_from(prefix.chars().count())
+                .context("Ref prefix length does not fit in i64")?;
+            let mut stmt = conn.prepare(
+                r#"
+                SELECT refs.name, refs.reference, artifact_manifests.manifest_digest
+                FROM refs
+                JOIN artifact_manifests
+                  ON refs.manifest_digest = artifact_manifests.manifest_digest
+                LEFT JOIN experiment_configs
+                  ON artifact_manifests.config_digest = experiment_configs.config_digest
+                WHERE artifact_manifests.config_media_type = ?3
+                  AND experiment_configs.config_digest IS NULL
+                  AND substr(
+                    refs.name ||
+                    CASE WHEN instr(refs.reference, ':') > 0 THEN '@' ELSE ':' END ||
+                    refs.reference,
+                    1,
+                    ?1
+                ) = ?2
+                ORDER BY refs.name, refs.reference
+                "#,
+            )?;
+            let rows = stmt.query_map(
+                params![
+                    prefix_len,
+                    prefix,
+                    crate::experiment::EXPERIMENT_CONFIG_MEDIA_TYPE
+                ],
+                image_ref_and_digest_from_row,
+            )?;
+            for row in rows {
+                out.push(row?);
+            }
+        } else {
+            let mut stmt = conn.prepare(
+                r#"
+                SELECT refs.name, refs.reference, artifact_manifests.manifest_digest
+                FROM refs
+                JOIN artifact_manifests
+                  ON refs.manifest_digest = artifact_manifests.manifest_digest
+                LEFT JOIN experiment_configs
+                  ON artifact_manifests.config_digest = experiment_configs.config_digest
+                WHERE artifact_manifests.config_media_type = ?1
+                  AND experiment_configs.config_digest IS NULL
+                ORDER BY refs.name, refs.reference
+                "#,
+            )?;
+            let rows = stmt.query_map(
+                params![crate::experiment::EXPERIMENT_CONFIG_MEDIA_TYPE],
+                image_ref_and_digest_from_row,
+            )?;
+            for row in rows {
+                out.push(row?);
+            }
+        }
+        Ok(out)
+    }
+
+    pub fn list_invalid_experiment_config_refs(
+        &self,
+        name_prefix: Option<&str>,
+    ) -> Result<Vec<(ImageRef, Digest)>> {
+        let conn = self.lock();
+        let valid_statuses = [
+            crate::experiment::ExperimentStatus::Finished.as_str(),
+            crate::experiment::ExperimentStatus::Draft.as_str(),
+            crate::experiment::ExperimentStatus::Failed.as_str(),
+            crate::experiment::ExperimentStatus::Interrupted.as_str(),
+        ];
+        let mut out = Vec::new();
+        if let Some(prefix) = name_prefix {
+            let prefix_len = i64::try_from(prefix.chars().count())
+                .context("Ref prefix length does not fit in i64")?;
+            let mut stmt = conn.prepare(
+                r#"
+                SELECT refs.name, refs.reference, artifact_manifests.manifest_digest
+                FROM refs
+                JOIN artifact_manifests
+                  ON refs.manifest_digest = artifact_manifests.manifest_digest
+                JOIN experiment_configs
+                  ON artifact_manifests.config_digest = experiment_configs.config_digest
+                WHERE artifact_manifests.config_media_type = ?3
+                  AND experiment_configs.status NOT IN (?4, ?5, ?6, ?7)
+                  AND substr(
+                    refs.name ||
+                    CASE WHEN instr(refs.reference, ':') > 0 THEN '@' ELSE ':' END ||
+                    refs.reference,
+                    1,
+                    ?1
+                ) = ?2
+                ORDER BY refs.name, refs.reference
+                "#,
+            )?;
+            let rows = stmt.query_map(
+                params![
+                    prefix_len,
+                    prefix,
+                    crate::experiment::EXPERIMENT_CONFIG_MEDIA_TYPE,
+                    valid_statuses[0],
+                    valid_statuses[1],
+                    valid_statuses[2],
+                    valid_statuses[3],
+                ],
+                image_ref_and_digest_from_row,
+            )?;
+            for row in rows {
+                out.push(row?);
+            }
+        } else {
+            let mut stmt = conn.prepare(
+                r#"
+                SELECT refs.name, refs.reference, artifact_manifests.manifest_digest
+                FROM refs
+                JOIN artifact_manifests
+                  ON refs.manifest_digest = artifact_manifests.manifest_digest
+                JOIN experiment_configs
+                  ON artifact_manifests.config_digest = experiment_configs.config_digest
+                WHERE artifact_manifests.config_media_type = ?1
+                  AND experiment_configs.status NOT IN (?2, ?3, ?4, ?5)
+                ORDER BY refs.name, refs.reference
+                "#,
+            )?;
+            let rows = stmt.query_map(
+                params![
+                    crate::experiment::EXPERIMENT_CONFIG_MEDIA_TYPE,
+                    valid_statuses[0],
+                    valid_statuses[1],
+                    valid_statuses[2],
+                    valid_statuses[3],
+                ],
+                image_ref_and_digest_from_row,
+            )?;
+            for row in rows {
+                out.push(row?);
+            }
+        }
+        Ok(out)
+    }
+
     pub fn list_experiment_refs(
         &self,
         name_prefix: Option<&str>,
@@ -522,15 +806,17 @@ impl SqliteIndexStore {
                     refs.name,
                     refs.reference,
                     refs.updated_at,
-                    experiment_manifests.manifest_digest,
-                    experiment_manifests.status,
-                    experiment_manifests.run_count,
-                    experiment_manifests.solve_count,
-                    experiment_manifests.manifest_annotations_json
+                    artifact_manifests.manifest_digest,
+                    experiment_configs.status,
+                    experiment_configs.run_count,
+                    experiment_configs.solve_count,
+                    artifact_manifests.manifest_annotations_json
                 FROM refs
-                JOIN experiment_manifests
-                  ON refs.manifest_digest = experiment_manifests.manifest_digest
-                WHERE experiment_manifests.status = ?3
+                JOIN artifact_manifests
+                  ON refs.manifest_digest = artifact_manifests.manifest_digest
+                JOIN experiment_configs
+                  ON artifact_manifests.config_digest = experiment_configs.config_digest
+                WHERE artifact_manifests.config_media_type = ?3
                   AND substr(
                     refs.name ||
                     CASE WHEN instr(refs.reference, ':') > 0 THEN '@' ELSE ':' END ||
@@ -545,7 +831,7 @@ impl SqliteIndexStore {
                 params![
                     prefix_len,
                     prefix,
-                    crate::experiment::ExperimentStatus::Finished.as_str()
+                    crate::experiment::EXPERIMENT_CONFIG_MEDIA_TYPE
                 ],
                 experiment_ref_from_row,
             )?;
@@ -559,20 +845,22 @@ impl SqliteIndexStore {
                     refs.name,
                     refs.reference,
                     refs.updated_at,
-                    experiment_manifests.manifest_digest,
-                    experiment_manifests.status,
-                    experiment_manifests.run_count,
-                    experiment_manifests.solve_count,
-                    experiment_manifests.manifest_annotations_json
+                    artifact_manifests.manifest_digest,
+                    experiment_configs.status,
+                    experiment_configs.run_count,
+                    experiment_configs.solve_count,
+                    artifact_manifests.manifest_annotations_json
                 FROM refs
-                JOIN experiment_manifests
-                  ON refs.manifest_digest = experiment_manifests.manifest_digest
-                WHERE experiment_manifests.status = ?1
+                JOIN artifact_manifests
+                  ON refs.manifest_digest = artifact_manifests.manifest_digest
+                JOIN experiment_configs
+                  ON artifact_manifests.config_digest = experiment_configs.config_digest
+                WHERE artifact_manifests.config_media_type = ?1
                 ORDER BY refs.name, refs.reference
                 "#,
             )?;
             let rows = stmt.query_map(
-                params![crate::experiment::ExperimentStatus::Finished.as_str()],
+                params![crate::experiment::EXPERIMENT_CONFIG_MEDIA_TYPE],
                 experiment_ref_from_row,
             )?;
             for row in rows {
@@ -634,13 +922,23 @@ impl SqliteIndexStore {
 
             CREATE INDEX IF NOT EXISTS idx_refs_name ON refs(name);
 
-            CREATE TABLE IF NOT EXISTS experiment_manifests (
+            CREATE TABLE IF NOT EXISTS artifact_manifests (
                 manifest_digest TEXT PRIMARY KEY,
                 manifest_media_type TEXT NOT NULL,
                 manifest_size INTEGER NOT NULL CHECK(manifest_size >= 0),
                 manifest_json BLOB NOT NULL,
                 manifest_annotations_json TEXT NOT NULL DEFAULT '{}',
+                artifact_type TEXT NOT NULL,
                 config_digest TEXT NOT NULL,
+                config_media_type TEXT NOT NULL,
+                config_size INTEGER NOT NULL CHECK(config_size >= 0)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_artifact_manifests_config_media_type
+                ON artifact_manifests(config_media_type);
+
+            CREATE TABLE IF NOT EXISTS experiment_configs (
+                config_digest TEXT PRIMARY KEY,
                 config_media_type TEXT NOT NULL,
                 config_size INTEGER NOT NULL CHECK(config_size >= 0),
                 config_json BLOB NOT NULL,
@@ -649,8 +947,8 @@ impl SqliteIndexStore {
                 solve_count INTEGER NOT NULL CHECK(solve_count >= 0)
             );
 
-            CREATE INDEX IF NOT EXISTS idx_experiment_manifests_status
-                ON experiment_manifests(status);
+            CREATE INDEX IF NOT EXISTS idx_experiment_configs_status
+                ON experiment_configs(status);
             "#,
         )?;
         Ok(())
@@ -658,6 +956,7 @@ impl SqliteIndexStore {
 }
 
 impl SqliteIndexStore {
+    #[cfg(test)]
     pub fn publish_image_ref(
         &self,
         image_name: &ImageRef,
@@ -670,6 +969,7 @@ impl SqliteIndexStore {
         )
     }
 
+    #[cfg(test)]
     pub fn replace_image_ref(
         &self,
         image_name: &ImageRef,
@@ -728,6 +1028,21 @@ fn experiment_ref_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Experime
         solve_count: read_u64(row, 6)?,
         annotations,
     })
+}
+
+fn string_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<String> {
+    row.get(0)
+}
+
+fn image_ref_and_digest_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<(ImageRef, Digest)> {
+    let name: String = row.get(0)?;
+    let reference: String = row.get(1)?;
+    let image_name = ImageRef::from_repository_and_reference(&name, &reference)
+        .map_err(|err| rusqlite::Error::FromSqlConversionFailure(0, Type::Text, err.into()))?;
+    let digest: String = row.get(2)?;
+    let digest = Digest::from_str(&digest)
+        .map_err(|err| rusqlite::Error::FromSqlConversionFailure(2, Type::Text, Box::new(err)))?;
+    Ok((image_name, digest))
 }
 
 fn has_user_tables(conn: &Connection) -> Result<bool> {

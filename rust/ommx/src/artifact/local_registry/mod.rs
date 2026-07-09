@@ -3,7 +3,9 @@
 //! The Local Registry stores artifact bytes in a filesystem-backed
 //! content-addressed store. Its SQLite index is the concurrency-safe
 //! equivalent of OCI `index.json`: it stores refs and their target
-//! manifest descriptors, not a cache of blobs, manifests, or layers.
+//! manifest descriptors. It also stores digest-addressed manifest and
+//! Experiment-config projections for catalog queries; the filesystem CAS
+//! remains the source of truth for bytes.
 //!
 //! Two distinct layers live here:
 //!
@@ -86,7 +88,7 @@ pub use registry::{
     GcReferenceKind, GcReport, GcRoot, LegacyImportReport, LocalRegistry, OciDirImport, OciDirRef,
     StoredDescriptor, TempLocalRegistry,
 };
-pub(crate) use types::ExperimentManifestRecord;
+pub(crate) use types::{ArtifactManifestRecord, ExperimentManifestRecord};
 pub use types::{
     ExperimentRefRecord, RefRecord, RefUpdate, OCI_IMAGE_REF_NAME_ANNOTATION,
     SQLITE_INDEX_FILE_NAME,

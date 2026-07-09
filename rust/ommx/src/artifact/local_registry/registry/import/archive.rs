@@ -24,7 +24,8 @@
 //! the registry by digest, parse the manifest, and write the manifest
 //! descriptor under the `org.opencontainers.image.ref.name` annotated ref.
 //! A crash between blob writes and ref publish leaves orphan CAS bytes
-//! recoverable by GC; the SQLite index never stores a manifest / layer cache.
+//! recoverable by GC; digest-addressed SQLite catalog projections are caches
+//! of those CAS bytes, not the byte source of truth.
 
 use super::super::super::{RefUpdate, OCI_IMAGE_REF_NAME_ANNOTATION};
 use super::super::LocalRegistry;
@@ -287,8 +288,9 @@ impl LocalRegistry {
             self.index
                 .publish_experiment_ref(&image_name, index_descriptor, record)?
         } else {
+            let artifact_record = self.artifact_manifest_record(&manifest_digest)?;
             self.index
-                .publish_image_ref(&image_name, index_descriptor)?
+                .publish_artifact_ref(&image_name, index_descriptor, &artifact_record)?
         };
         // Public entry point: surface a ref conflict as `Err`. Callers
         // that need batch / report-style handling (e.g. legacy import)

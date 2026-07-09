@@ -9,7 +9,9 @@ use super::{
     SolveDiagnosticPayload, SolveStatus, Trace, EXPERIMENT_CONFIG_MEDIA_TYPE,
     RUN_PARAMETERS_MEDIA_TYPE,
 };
-use crate::artifact::local_registry::{ExperimentManifestRecord, StoredDescriptor};
+use crate::artifact::local_registry::{
+    ArtifactManifestRecord, ExperimentManifestRecord, StoredDescriptor,
+};
 use crate::artifact::{media_types, ImageRef, LocalArtifact};
 use crate::{Instance, ParametricInstance, SampleSet, Solution};
 use anyhow::{Context, Result};
@@ -195,10 +197,13 @@ pub(crate) fn experiment_manifest_record_from_artifact(
         .map(|run| run.solves.len() as u64)
         .sum();
     Ok(Some(ExperimentManifestRecord {
-        manifest_descriptor: artifact.stored_manifest_descriptor()?.into(),
-        manifest_json,
-        manifest_annotations: manifest.annotations().into_iter().collect(),
-        config_descriptor,
+        artifact: ArtifactManifestRecord {
+            manifest_descriptor: artifact.stored_manifest_descriptor()?.into(),
+            manifest_json,
+            manifest_annotations: manifest.annotations().into_iter().collect(),
+            artifact_type: manifest.artifact_type().clone(),
+            config_descriptor,
+        },
         config_json,
         status: sealed.status.as_str().to_string(),
         run_count: sealed.runs.len() as u64,

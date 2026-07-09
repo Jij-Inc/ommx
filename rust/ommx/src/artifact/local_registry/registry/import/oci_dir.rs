@@ -278,12 +278,22 @@ impl LocalRegistry {
                 &entry.manifest_descriptor,
                 record,
             )?,
-            (RefWriteMode::Publish, None) => self
-                .index
-                .publish_image_ref(&effective_image_name, &entry.manifest_descriptor)?,
-            (RefWriteMode::Replace, None) => self
-                .index
-                .replace_image_ref(&effective_image_name, &entry.manifest_descriptor)?,
+            (RefWriteMode::Publish, None) => {
+                let artifact_record = self.artifact_manifest_record(&entry.manifest_digest)?;
+                self.index.publish_artifact_ref(
+                    &effective_image_name,
+                    &entry.manifest_descriptor,
+                    &artifact_record,
+                )?
+            }
+            (RefWriteMode::Replace, None) => {
+                let artifact_record = self.artifact_manifest_record(&entry.manifest_digest)?;
+                self.index.replace_artifact_ref(
+                    &effective_image_name,
+                    &entry.manifest_descriptor,
+                    &artifact_record,
+                )?
+            }
         };
         if let RefUpdate::Conflicted {
             existing_manifest_digest,

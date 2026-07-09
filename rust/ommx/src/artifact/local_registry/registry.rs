@@ -1,5 +1,5 @@
 use super::index::SqliteIndexStore;
-use super::{ExperimentManifestRecord, ExperimentRefRecord, RefUpdate};
+use super::{ArtifactManifestRecord, ExperimentManifestRecord, ExperimentRefRecord, RefUpdate};
 use crate::artifact::{
     media_types::{self, RootPayloadVersion},
     sha256_digest, stable_json_bytes, ImageRef, LocalArtifact,
@@ -515,23 +515,47 @@ impl LocalRegistry {
     /// full image-reference prefix.
     pub fn list_experiments(&self, name_prefix: Option<&str>) -> Result<Vec<ExperimentRefRecord>> {
         let refs = self.index.list_refs(name_prefix)?;
-        let cached = self.index.list_experiment_refs(name_prefix)?;
         let checkpoint_repository_key = self.experiment_checkpoint_repository_key()?;
-        let cached_refs = cached
-            .iter()
-            .map(|r| r.image_name.to_string())
-            .collect::<BTreeSet<_>>();
+        let cached_manifest_digests = self
+            .index
+            .list_cached_artifact_manifest_digests(name_prefix)?;
         for r in refs {
             if r.name == checkpoint_repository_key {
                 continue;
             }
-            let image_name = ImageRef::from_repository_and_reference(&r.name, &r.reference)?;
-            if cached_refs.contains(&image_name.to_string()) {
+            if cached_manifest_digests.contains(r.descriptor.digest().as_ref()) {
                 continue;
             }
-            self.backfill_experiment_manifest(&image_name, r.descriptor.digest())?;
+            self.backfill_artifact_manifest(r.descriptor.digest())?;
         }
-        self.index.list_experiment_refs(name_prefix)
+        for (image_name, manifest_digest) in self
+            .index
+            .list_missing_experiment_config_refs(name_prefix)?
+        {
+            if image_name.repository_key() == checkpoint_repository_key {
+                continue;
+            }
+            self.backfill_experiment_manifest(&image_name, &manifest_digest)?;
+        }
+        for (image_name, manifest_digest) in self
+            .index
+            .list_invalid_experiment_config_refs(name_prefix)?
+        {
+            if image_name.repository_key() == checkpoint_repository_key {
+                continue;
+            }
+            self.backfill_experiment_manifest(&image_name, &manifest_digest)?;
+        }
+        let records = self.index.list_experiment_refs(name_prefix)?;
+        Ok(records
+            .into_iter()
+            .filter(|r| r.image_name.repository_key() != checkpoint_repository_key)
+            .collect())
+    }
+
+    fn backfill_artifact_manifest(&self, manifest_digest: &Digest) -> Result<()> {
+        let record = self.artifact_manifest_record(manifest_digest)?;
+        self.index.upsert_artifact_manifest(&record)
     }
 
     fn backfill_experiment_manifest(
@@ -555,6 +579,39 @@ impl LocalRegistry {
     ) -> Result<Option<ExperimentManifestRecord>> {
         let artifact = LocalArtifact::from_parts(self, image_name.clone(), manifest_digest.clone());
         crate::experiment::experiment_manifest_record_from_artifact(&artifact)
+    }
+
+    pub(crate) fn artifact_manifest_record(
+        &self,
+        manifest_digest: &Digest,
+    ) -> Result<ArtifactManifestRecord> {
+        let manifest_json = self.read_blob(manifest_digest)?;
+        let manifest: ImageManifest = serde_json::from_slice(&manifest_json)
+            .with_context(|| format!("Failed to parse OCI image manifest {manifest_digest}"))?;
+        Self::validate_manifest(&manifest)?;
+        let manifest_descriptor = Self::build_manifest_descriptor(&manifest_json)?;
+        ensure!(
+            manifest_descriptor.digest() == manifest_digest,
+            "Manifest blob digest mismatch: requested {}, computed {}",
+            manifest_digest,
+            manifest_descriptor.digest()
+        );
+        Ok(ArtifactManifestRecord {
+            manifest_descriptor,
+            manifest_json,
+            manifest_annotations: manifest
+                .annotations()
+                .clone()
+                .unwrap_or_default()
+                .into_iter()
+                .collect(),
+            artifact_type: manifest
+                .artifact_type()
+                .as_ref()
+                .context("Validated OMMX image manifest is missing artifactType")?
+                .clone(),
+            config_descriptor: manifest.config().clone(),
+        })
     }
 
     /// Seal an unsealed OMMX Artifact manifest into the Local Registry.
@@ -593,7 +650,9 @@ impl LocalRegistry {
             sealed_artifact.is_stored_in(self),
             "Sealed artifact descriptor belongs to a different Local Registry"
         );
-        self.index.publish_image_ref(image_name, &sealed_artifact.0)
+        let artifact = self.artifact_manifest_record(sealed_artifact.digest())?;
+        self.index
+            .publish_artifact_ref(image_name, &sealed_artifact.0, &artifact)
     }
 
     /// Publish a sealed Experiment manifest and its verified listing projection
@@ -626,7 +685,9 @@ impl LocalRegistry {
             manifest.is_stored_in(self),
             "Manifest descriptor belongs to a different Local Registry"
         );
-        self.index.publish_image_ref(image_name, manifest)
+        let artifact = self.artifact_manifest_record(manifest.digest())?;
+        self.index
+            .publish_artifact_ref(image_name, manifest, &artifact)
     }
 
     /// Replace the ref target with a sealed root manifest descriptor.
@@ -643,7 +704,9 @@ impl LocalRegistry {
             sealed_artifact.is_stored_in(self),
             "Sealed artifact descriptor belongs to a different Local Registry"
         );
-        self.index.replace_image_ref(image_name, &sealed_artifact.0)
+        let artifact = self.artifact_manifest_record(sealed_artifact.digest())?;
+        self.index
+            .replace_artifact_ref(image_name, &sealed_artifact.0, &artifact)
     }
 
     /// Replace an Experiment ref and its verified listing projection in one

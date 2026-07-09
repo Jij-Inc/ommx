@@ -81,6 +81,14 @@ fn digest_for_bytes(bytes: &[u8]) -> Digest {
     Digest::from_str(&sha256_digest(bytes)).unwrap()
 }
 
+fn blob_path(root: &std::path::Path, digest: &Digest) -> std::path::PathBuf {
+    let (algorithm, encoded) = digest
+        .as_ref()
+        .split_once(':')
+        .expect("OCI digest should contain algorithm separator");
+    root.join("blobs").join(algorithm).join(encoded)
+}
+
 fn assert_blob_absent(experiment: &Experiment<'_>, bytes: &[u8]) {
     let digest = digest_for_bytes(bytes);
     assert!(
@@ -119,7 +127,7 @@ fn local_registry_lists_committed_experiment_refs_from_projection() -> anyhow::R
     let artifact_name = ImageRef::parse("example.com/cat_gt/plain-artifact:latest")?;
 
     let experiment = Experiment::with_registry(&registry, image_name.clone())?;
-    experiment.set_annotation("com.jij.catgt.problem", "qap")?;
+    experiment.set_annotation("com.example.problem", "qap")?;
     experiment.run()?.finish()?;
     experiment.commit()?;
 
@@ -141,7 +149,7 @@ fn local_registry_lists_committed_experiment_refs_from_projection() -> anyhow::R
     assert_eq!(record.run_count, 1);
     assert_eq!(record.solve_count, 0);
     assert_eq!(
-        record.annotations.get("com.jij.catgt.problem"),
+        record.annotations.get("com.example.problem"),
         Some(&"qap".to_string())
     );
     let tag_prefix = registry.list_experiments(Some("example.com/cat_gt/experiment:lat"))?;
@@ -164,34 +172,96 @@ fn local_registry_lists_committed_experiment_refs_from_projection() -> anyhow::R
 fn list_experiments_backfills_missing_and_non_finished_projection() -> anyhow::Result<()> {
     let dir = tempfile::tempdir()?;
     let registry = LocalRegistry::open(dir.path())?;
-    let image_name = ImageRef::parse("example.com/catgt/backfill:latest")?;
+    let image_name = ImageRef::parse("example.com/experiments/backfill:latest")?;
 
     let sealed = Experiment::with_registry(&registry, image_name.clone())?.commit()?;
     let manifest_digest = sealed.artifact().manifest_digest().to_string();
 
     let conn = rusqlite::Connection::open(registry.root().join(SQLITE_INDEX_FILE_NAME))?;
-    conn.execute(
-        "DELETE FROM experiment_manifests WHERE manifest_digest = ?1",
-        rusqlite::params![manifest_digest],
-    )?;
-
-    let records = registry.list_experiments(Some("example.com/catgt/backfill"))?;
-    assert_eq!(records.len(), 1);
-    assert_eq!(records[0].image_name, image_name);
-
-    conn.execute(
-        "UPDATE experiment_manifests SET status = 'not-a-status' WHERE manifest_digest = ?1",
-        rusqlite::params![manifest_digest],
-    )?;
-    let records = registry.list_experiments(Some("example.com/catgt/backfill"))?;
-    assert_eq!(records.len(), 1);
-    assert_eq!(records[0].status, EXPERIMENT_STATUS_FINISHED);
-    let restored_status: String = conn.query_row(
-        "SELECT status FROM experiment_manifests WHERE manifest_digest = ?1",
+    let config_digest: String = conn.query_row(
+        "SELECT config_digest FROM artifact_manifests WHERE manifest_digest = ?1",
         rusqlite::params![manifest_digest],
         |row| row.get(0),
     )?;
+    conn.execute(
+        "DELETE FROM artifact_manifests WHERE manifest_digest = ?1",
+        rusqlite::params![manifest_digest],
+    )?;
+    conn.execute(
+        "DELETE FROM experiment_configs WHERE config_digest = ?1",
+        rusqlite::params![config_digest],
+    )?;
+
+    let records = registry.list_experiments(Some("example.com/experiments/backfill"))?;
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].image_name, image_name);
+
+    let config_digest: String = conn.query_row(
+        "SELECT config_digest FROM artifact_manifests WHERE manifest_digest = ?1",
+        rusqlite::params![manifest_digest],
+        |row| row.get(0),
+    )?;
+    conn.execute(
+        "UPDATE experiment_configs SET status = 'not-a-status' WHERE config_digest = ?1",
+        rusqlite::params![config_digest],
+    )?;
+    let records = registry.list_experiments(Some("example.com/experiments/backfill"))?;
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].status, EXPERIMENT_STATUS_FINISHED);
+    let restored_status: String = conn.query_row(
+        "SELECT status FROM experiment_configs WHERE config_digest = ?1",
+        rusqlite::params![config_digest],
+        |row| row.get(0),
+    )?;
     assert_eq!(restored_status, EXPERIMENT_STATUS_FINISHED);
+    Ok(())
+}
+
+#[test]
+fn list_experiments_caches_non_experiment_manifests_as_negative_results() -> anyhow::Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let experiment_name = ImageRef::parse("example.com/catalog/experiment:latest")?;
+    let artifact_name = ImageRef::parse("example.com/catalog/plain-artifact:latest")?;
+
+    Experiment::with_registry(&registry, experiment_name.clone())?.commit()?;
+    let mut draft = ArtifactDraft::with_registry(&registry, artifact_name.clone());
+    draft.add_layer_bytes(
+        MediaType::Other("application/json".to_string()),
+        b"{}".to_vec(),
+        HashMap::new(),
+    )?;
+    let artifact = draft.commit()?;
+    let artifact_manifest_digest = artifact.manifest_digest().clone();
+
+    let records = registry.list_experiments(Some("example.com/catalog"))?;
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].image_name, experiment_name);
+
+    let conn = rusqlite::Connection::open(registry.root().join(SQLITE_INDEX_FILE_NAME))?;
+    let cached_config_media_type: String = conn.query_row(
+        "SELECT config_media_type FROM artifact_manifests WHERE manifest_digest = ?1",
+        rusqlite::params![artifact_manifest_digest.to_string()],
+        |row| row.get(0),
+    )?;
+    assert_ne!(cached_config_media_type, EXPERIMENT_CONFIG_MEDIA_TYPE);
+    let experiment_config_rows: i64 = conn.query_row(
+        r#"
+        SELECT COUNT(*)
+        FROM artifact_manifests
+        JOIN experiment_configs
+          ON artifact_manifests.config_digest = experiment_configs.config_digest
+        WHERE artifact_manifests.manifest_digest = ?1
+        "#,
+        rusqlite::params![artifact_manifest_digest.to_string()],
+        |row| row.get(0),
+    )?;
+    assert_eq!(experiment_config_rows, 0);
+
+    fs::remove_file(blob_path(registry.root(), &artifact_manifest_digest))?;
+    let records = registry.list_experiments(Some("example.com/catalog"))?;
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].image_name, experiment_name);
     Ok(())
 }
 
