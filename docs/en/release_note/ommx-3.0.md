@@ -22,6 +22,19 @@ created by earlier 3.0 alpha builds that wrote the generic
 `application/org.ommx.v1.artifact` `artifactType`. Those alpha artifacts must be
 recreated with a build that writes the dedicated Experiment artifact type.
 
+### 🆕 Non-finite float Run parameters
+
+{meth}`~ommx.experiment.Run.log_parameter` now accepts `float("inf")`,
+`-float("inf")`, and `float("nan")`. These values round-trip through committed
+Experiment artifacts and are restored by
+{meth}`~ommx.experiment.Experiment.run_parameters_df` as ordinary pandas
+`float64` values. This keeps legitimate experiment observations such as
+unbounded ratios or infeasibility summaries distinct from missing cells.
+
+The run-parameter table layer is stored as MessagePack instead of JSON so it
+can preserve IEEE 754 non-finite values. NaN values are guaranteed to remain
+NaN, but individual NaN payload bits are not part of the API guarantee.
+
 ### 🆕 Unary integer encoding ([#1010](https://github.com/Jij-Inc/ommx/pull/1010))
 
 {meth}`~ommx.Instance.unary_encode` is now available as a sampler-friendly

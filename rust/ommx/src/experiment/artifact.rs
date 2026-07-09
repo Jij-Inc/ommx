@@ -164,11 +164,7 @@ impl<'reg> UnsealedExperimentState<'reg> {
         &self,
         registry: &'reg LocalRegistry,
     ) -> Result<StoredDescriptor<'reg>> {
-        store_aggregate_json_layer(
-            registry,
-            RUN_PARAMETERS_MEDIA_TYPE,
-            &RunParameterTable::from_runs(self.runs.values())?,
-        )
+        store_aggregate_msgpack_layer(registry, &RunParameterTable::from_runs(self.runs.values())?)
     }
 
     fn experiment_config(
@@ -260,10 +256,14 @@ impl<'reg> LayerTable<'reg> {
     }
 }
 
-fn store_aggregate_json_layer<'reg>(
+fn store_aggregate_msgpack_layer<'reg>(
     registry: &'reg LocalRegistry,
-    media_type: &str,
-    value: &impl serde::Serialize,
+    value: &RunParameterTable,
 ) -> Result<StoredDescriptor<'reg>> {
-    registry.store_json_layer_blob(MediaType::from(media_type), value, Default::default())
+    let bytes = value.to_msgpack_bytes()?;
+    registry.store_layer_blob(
+        MediaType::from(RUN_PARAMETERS_MEDIA_TYPE),
+        &bytes,
+        Default::default(),
+    )
 }

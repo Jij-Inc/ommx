@@ -143,6 +143,23 @@ def test_view_run_parameters_from_committed_artifact(snapshot):
     assert _df_snap(df) == snapshot
 
 
+def test_run_parameters_df_preserves_non_finite_float_values():
+    with Experiment.with_temp_local_registry() as experiment:
+        with experiment.run() as run:
+            run.log_parameter("positive_infinity", math.inf)
+            run.log_parameter("negative_infinity", -math.inf)
+            run.log_parameter("not_a_number", math.nan)
+
+    loaded = Experiment.from_artifact(experiment.artifact)
+    df = loaded.run_parameters_df()
+
+    assert math.isinf(df.loc[0, "positive_infinity"])
+    assert df.loc[0, "positive_infinity"] > 0
+    assert math.isinf(df.loc[0, "negative_infinity"])
+    assert df.loc[0, "negative_infinity"] < 0
+    assert math.isnan(df.loc[0, "not_a_number"])
+
+
 def test_create_experiment_run_attachments_and_commit(snapshot):
     experiment = Experiment.with_temp_local_registry()
     assert ".ommx.local/experiment:" in experiment.image_name

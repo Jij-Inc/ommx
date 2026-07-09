@@ -462,8 +462,8 @@ fn load_run_parameters(
         );
     }
     let bytes = artifact.get_blob(descriptor)?;
-    serde_json::from_slice::<RunParameterTable>(&bytes)
-        .context("Failed to decode run-parameter table JSON")
+    RunParameterTable::from_msgpack_bytes(&bytes)
+        .context("Failed to decode run-parameter table MessagePack")
 }
 
 fn resolve_layer<'a, 'reg>(
