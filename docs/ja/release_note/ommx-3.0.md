@@ -17,6 +17,11 @@ Experiment を読み込むときは、Experiment config を decode する前に 
 artifact type を検証します。これにより、config descriptor が Experiment config
 media type を持っているだけの汎用 Artifact を Experiment として解釈しません。
 
+この変更では、以前の 3.0 alpha build が汎用の
+`application/org.ommx.v1.artifact` を `artifactType` として書いた
+Experiment Artifact との互換性は意図的に提供しません。そのような alpha 期の
+Artifact は、Experiment 専用 artifact type を書く build で作り直してください。
+
 ### 🆕 Unary integer encoding ([#1010](https://github.com/Jij-Inc/ommx/pull/1010))
 
 有限な範囲を持つ integer 変数向けに、{meth}`~ommx.Instance.log_encode`
