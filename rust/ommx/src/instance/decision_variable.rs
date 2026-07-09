@@ -47,13 +47,18 @@ impl Instance {
         })
     }
 
-    /// Returns the next available VariableID.
+    /// Returns the next available [`VariableID`].
     ///
     /// Finds the maximum ID from decision variables, then adds 1.
-    /// If there are no variables, returns VariableID(0).
+    /// If there are no variables, returns `Ok(VariableID(0))`.
     ///
     /// Note: This method does not track which IDs have been allocated.
     /// Consecutive calls will return the same ID until a variable is actually added.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DecisionVariableError::NoAvailableID`] when the existing
+    /// maximum ID is `u64::MAX` and no fresh ID can be allocated.
     pub fn next_variable_id(&self) -> Result<VariableID, DecisionVariableError> {
         self.decision_variables
             .last_key_value()
