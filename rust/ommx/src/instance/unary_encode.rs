@@ -159,8 +159,9 @@ impl Instance {
 mod tests {
     use super::*;
     use crate::{
-        coeff, v1::State, Bound, DecisionVariable, Evaluate, Function, Instance, Kind,
-        LinearMonomial, Sense, Solution, Sos1Constraint, Sos1ConstraintID,
+        coeff, v1::State, Bound, DecisionVariable, Equality, Evaluate, Function,
+        IndicatorConstraint, IndicatorConstraintID, Instance, Kind, LinearMonomial,
+        OneHotConstraint, OneHotConstraintID, Sense, Solution, Sos1Constraint, Sos1ConstraintID,
     };
     use approx::relative_eq;
     use proptest::prelude::*;
@@ -669,6 +670,83 @@ mod tests {
     }
 
     #[test]
+    fn test_unary_encode_rejects_indicator_variable_without_side_effects() {
+        let indicator_id = VariableID::from(0);
+        let body_id = VariableID::from(1);
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(crate::linear!(1)))
+            .decision_variables(BTreeMap::from([
+                (indicator_id, DecisionVariable::binary()),
+                (
+                    body_id,
+                    DecisionVariable::new(
+                        Kind::Integer,
+                        Bound::new(0.0, 3.0).unwrap(),
+                        ATol::default(),
+                    )
+                    .unwrap(),
+                ),
+            ]))
+            .constraints(BTreeMap::new())
+            .indicator_constraints(BTreeMap::from([(
+                IndicatorConstraintID::from(0),
+                IndicatorConstraint::new(
+                    indicator_id,
+                    Equality::LessThanOrEqualToZero,
+                    Function::from(crate::linear!(1)),
+                ),
+            )]))
+            .build()
+            .unwrap();
+
+        let err = instance
+            .unary_encode(
+                [indicator_id],
+                Instance::DEFAULT_UNARY_ENCODING_MAX_RANGE,
+                ATol::default(),
+            )
+            .unwrap_err();
+        assert!(err.to_string().contains("must be integer"));
+        assert!(instance
+            .decision_variable_dependency
+            .get(&indicator_id)
+            .is_none());
+        assert_eq!(aux_variable_count(&instance, "ommx.unary_encode"), 0);
+    }
+
+    #[test]
+    fn test_unary_encode_rejects_one_hot_member_without_side_effects() {
+        let id0 = VariableID::from(0);
+        let id1 = VariableID::from(1);
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(crate::linear!(0)))
+            .decision_variables(BTreeMap::from([
+                (id0, DecisionVariable::binary()),
+                (id1, DecisionVariable::binary()),
+            ]))
+            .constraints(BTreeMap::new())
+            .one_hot_constraints(BTreeMap::from([(
+                OneHotConstraintID::from(0),
+                OneHotConstraint::new(BTreeSet::from([id0, id1])).unwrap(),
+            )]))
+            .build()
+            .unwrap();
+
+        let err = instance
+            .unary_encode(
+                [id0],
+                Instance::DEFAULT_UNARY_ENCODING_MAX_RANGE,
+                ATol::default(),
+            )
+            .unwrap_err();
+        assert!(err.to_string().contains("must be integer"));
+        assert!(instance.decision_variable_dependency.get(&id0).is_none());
+        assert_eq!(aux_variable_count(&instance, "ommx.unary_encode"), 0);
+    }
+
+    #[test]
     fn test_unary_encode_is_atomic_when_substitution_fails() {
         let id = VariableID::from(0);
         let var = DecisionVariable::new(
@@ -697,6 +775,7 @@ mod tests {
             )
             .unwrap_err();
         assert!(err.to_string().contains("SOS1"));
+        assert!(instance.decision_variable_dependency.get(&id).is_none());
         assert_eq!(aux_variable_count(&instance, "ommx.unary_encode"), 0);
     }
 

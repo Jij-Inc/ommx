@@ -25,6 +25,9 @@ explicitly when the auxiliary-variable cost is intentional.
 
 Both `Instance.unary_encode(..., atol=...)` and `Instance.log_encode(..., atol=...)`
 use the same ATol-aware integer-bound normalization as the rest of the SDK.
+`Instance.log_encode()` rejects integer ranges that would require more than 53
+auxiliary binary variables instead of accepting impractically large encoded
+search spaces.
 Passing an explicit fixed decision-variable ID is rejected before substitution,
 so fixed values and dependent-variable assignments remain disjoint.
 
