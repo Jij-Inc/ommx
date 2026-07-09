@@ -104,9 +104,8 @@ const EXPERIMENT_STATUS_FAILED: &str = "failed";
 const EXPERIMENT_STATUS_INTERRUPTED: &str = "interrupted";
 
 const RUN_PARAMETERS_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment.run-parameters+json";
-pub(crate) const EXPERIMENT_ARTIFACT_MEDIA_TYPE: &str = media_types::V1_EXPERIMENT_MEDIA_TYPE;
-pub(crate) const EXPERIMENT_CONFIG_MEDIA_TYPE: &str =
-    "application/org.ommx.v1.experiment.config+json";
+const EXPERIMENT_ARTIFACT_MEDIA_TYPE: &str = media_types::V1_EXPERIMENT_MEDIA_TYPE;
+const EXPERIMENT_CONFIG_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment.config+json";
 
 const RUN_STATUS_FINISHED: &str = "finished";
 const RUN_STATUS_FAILED: &str = "failed";

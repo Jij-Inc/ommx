@@ -3,6 +3,7 @@ use super::{
     RefUpdate, SQLITE_INDEX_FILE_NAME,
 };
 use crate::artifact::digest::validate_digest;
+use crate::artifact::media_types;
 use crate::artifact::{stable_json_bytes, ImageRef};
 use anyhow::{bail, ensure, Context, Result};
 use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, MediaType};
@@ -675,11 +676,7 @@ impl SqliteIndexStore {
                 "#,
             )?;
             let rows = stmt.query_map(
-                params![
-                    prefix_len,
-                    prefix,
-                    crate::experiment::EXPERIMENT_ARTIFACT_MEDIA_TYPE
-                ],
+                params![prefix_len, prefix, media_types::V1_EXPERIMENT_MEDIA_TYPE],
                 image_ref_and_digest_from_row,
             )?;
             for row in rows {
@@ -700,7 +697,7 @@ impl SqliteIndexStore {
                 "#,
             )?;
             let rows = stmt.query_map(
-                params![crate::experiment::EXPERIMENT_ARTIFACT_MEDIA_TYPE],
+                params![media_types::V1_EXPERIMENT_MEDIA_TYPE],
                 image_ref_and_digest_from_row,
             )?;
             for row in rows {
@@ -749,7 +746,7 @@ impl SqliteIndexStore {
                 params![
                     prefix_len,
                     prefix,
-                    crate::experiment::EXPERIMENT_ARTIFACT_MEDIA_TYPE,
+                    media_types::V1_EXPERIMENT_MEDIA_TYPE,
                     valid_statuses[0],
                     valid_statuses[1],
                     valid_statuses[2],
@@ -776,7 +773,7 @@ impl SqliteIndexStore {
             )?;
             let rows = stmt.query_map(
                 params![
-                    crate::experiment::EXPERIMENT_ARTIFACT_MEDIA_TYPE,
+                    media_types::V1_EXPERIMENT_MEDIA_TYPE,
                     valid_statuses[0],
                     valid_statuses[1],
                     valid_statuses[2],
@@ -828,11 +825,7 @@ impl SqliteIndexStore {
                 "#,
             )?;
             let rows = stmt.query_map(
-                params![
-                    prefix_len,
-                    prefix,
-                    crate::experiment::EXPERIMENT_ARTIFACT_MEDIA_TYPE
-                ],
+                params![prefix_len, prefix, media_types::V1_EXPERIMENT_MEDIA_TYPE],
                 experiment_ref_from_row,
             )?;
             for row in rows {
@@ -860,7 +853,7 @@ impl SqliteIndexStore {
                 "#,
             )?;
             let rows = stmt.query_map(
-                params![crate::experiment::EXPERIMENT_ARTIFACT_MEDIA_TYPE],
+                params![media_types::V1_EXPERIMENT_MEDIA_TYPE],
                 experiment_ref_from_row,
             )?;
             for row in rows {

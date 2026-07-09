@@ -117,7 +117,12 @@ pub fn v1_experiment() -> MediaType {
     MediaType::Other(V1_EXPERIMENT_MEDIA_TYPE.to_string())
 }
 
-pub(crate) fn is_ommx_artifact_type(media_type: &MediaType) -> bool {
+/// Whether the media type is an OMMX-owned OCI Manifest `artifactType`.
+///
+/// This matches root artifact types such as [`V1_ARTIFACT_MEDIA_TYPE`] and
+/// [`V1_EXPERIMENT_MEDIA_TYPE`]. It does not match OMMX payload layer media
+/// types such as [`V1_INSTANCE_MEDIA_TYPE`].
+pub fn is_ommx_artifact_type(media_type: &MediaType) -> bool {
     let actual = media_type.as_ref();
     actual == V1_ARTIFACT_MEDIA_TYPE || actual == V1_EXPERIMENT_MEDIA_TYPE
 }

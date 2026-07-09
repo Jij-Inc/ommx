@@ -175,12 +175,11 @@ pub(crate) fn experiment_manifest_record_from_artifact(
     artifact: &LocalArtifact<'_>,
 ) -> Result<Option<ExperimentManifestRecord>> {
     let manifest = artifact.get_manifest()?;
-    if manifest.artifact_type() != &MediaType::Other(EXPERIMENT_ARTIFACT_MEDIA_TYPE.to_string()) {
+    if manifest.artifact_type().as_ref() != EXPERIMENT_ARTIFACT_MEDIA_TYPE {
         return Ok(None);
     }
     let config_descriptor = manifest.config();
-    if config_descriptor.media_type() != &MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string())
-    {
+    if config_descriptor.media_type().as_ref() != EXPERIMENT_CONFIG_MEDIA_TYPE {
         crate::bail!(
             "Experiment config media type is {}, expected {}",
             config_descriptor.media_type(),

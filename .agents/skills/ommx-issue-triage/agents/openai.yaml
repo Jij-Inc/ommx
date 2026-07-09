@@ -1,0 +1,3 @@
+interface:
+  display_name: "OMMX Issue Triage"
+  short_description: "Organize OMMX GitHub issues with consistent labels"

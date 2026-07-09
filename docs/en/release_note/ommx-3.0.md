@@ -29,6 +29,20 @@ refs = list_experiments("example.com/team/experiments")
 assert refs[0].annotations["com.example.problem"] == "demo"
 ```
 
+### ⚠ Dedicated Experiment artifact type ([#1033](https://github.com/Jij-Inc/ommx/pull/1033))
+
+Committed Experiment artifacts now write `application/org.ommx.v1.experiment`
+as the OCI Manifest `artifactType` instead of the generic
+`application/org.ommx.v1.artifact` type. Loading an Experiment validates this
+root artifact type before decoding the Experiment config, so a generic Artifact
+is not interpreted as an Experiment merely because its config descriptor uses
+the Experiment config media type.
+
+This intentionally does not preserve compatibility with Experiment artifacts
+created by earlier 3.0 alpha builds that wrote the generic
+`application/org.ommx.v1.artifact` `artifactType`. Those alpha artifacts must be
+recreated with a build that writes the dedicated Experiment artifact type.
+
 ### 🆕 Unary integer encoding ([#1010](https://github.com/Jij-Inc/ommx/pull/1010))
 
 {meth}`~ommx.Instance.unary_encode` is now available as a sampler-friendly
