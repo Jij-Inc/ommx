@@ -1,8 +1,9 @@
 """Python expression-construction benchmarks for direct TSP QUBO generation.
 
-This benchmark measures the cost of constructing an OMMX expression through
-Python loops and overloaded arithmetic. It does not measure solver runtime or
-`Instance.to_qubo`; larger algorithmic scaling should live in Rust benchmarks.
+This benchmark measures Python-driven OMMX expression construction, including
+PyO3 overloaded arithmetic and the Rust-backed expression clone/add work it
+triggers. It does not measure solver runtime or `Instance.to_qubo`; larger
+algorithmic scaling should live in Rust benchmarks.
 """
 
 import pytest
@@ -84,6 +85,6 @@ def make_tsp_qubo_by_ommx(
 
 @pytest.mark.benchmark
 def test_tsp_qubo_direct_generation(tsp_distance_matrix: np.ndarray):
-    """Measure direct Python construction of a TSP QUBO expression."""
+    """Measure Python-driven construction of a TSP QUBO expression."""
     # Generate QUBO with custom penalty weights
     make_tsp_qubo_by_ommx(tsp_distance_matrix, lambda1=10.0, lambda2=10.0)
