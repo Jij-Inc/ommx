@@ -211,6 +211,26 @@ impl<T> NamedFunctionTable<T> {
         Ok(())
     }
 
+    /// Replace existing named-function rows while preserving row identity and labels.
+    ///
+    /// Crate-internal: host objects own semantic expression rewrites and use
+    /// this table primitive only to commit precomputed row replacements.
+    pub(crate) fn replace_rows(
+        &mut self,
+        replacements: BTreeMap<NamedFunctionID, T>,
+    ) -> crate::Result<()> {
+        for id in replacements.keys() {
+            if !self.entries.contains_key(id) {
+                crate::bail!({ ?id }, "Named function with ID {id:?} not found");
+            }
+        }
+
+        for (id, row) in replacements {
+            self.entries.insert(id, row);
+        }
+        Ok(())
+    }
+
     pub fn contains_key(&self, id: &NamedFunctionID) -> bool {
         self.entries.contains_key(id)
     }

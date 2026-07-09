@@ -101,9 +101,8 @@ fn partial_evaluate_instance_removed_constraints(c: &mut Criterion) {
 }
 
 /// Substitute all decision variables in an Instance that still has many active
-/// regular constraints. This exercises the fallback path where borrowed
-/// partial_evaluate keeps atomic rollback by cloning the whole Instance, while
-/// into_partial_evaluated can mutate the consumed Instance directly.
+/// regular constraints. This compares borrowed atomic partial_evaluate with
+/// consuming into_partial_evaluated on the same regular-only shape.
 fn partial_evaluate_instance_active_constraints(c: &mut Criterion) {
     let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
     let mut group = c.benchmark_group("partial-evaluate-instance-active-constraints");

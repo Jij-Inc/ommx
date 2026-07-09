@@ -125,31 +125,98 @@ struct StatePopulationPlan<'a> {
 
 struct PartialEvaluatePlan {
     fixed_values: BTreeMap<VariableID, f64>,
+    objective: Function,
+    active_constraint_replacements: BTreeMap<ConstraintID, Constraint>,
+    named_function_replacements: BTreeMap<NamedFunctionID, NamedFunction>,
 }
 
 impl PartialEvaluatePlan {
-    fn prepare_removed_only(instance: &Instance, state: &v1::State) -> Result<Option<Self>> {
-        if !Self::supports_removed_only_fast_path(instance) {
+    fn prepare(instance: &Instance, state: &v1::State, atol: ATol) -> Result<Option<Self>> {
+        if !Self::supports_regular_plan(instance) {
             return Ok(None);
         }
 
+        let fixed_values = Self::prepare_fixed_values(instance, state, atol)?;
+        let evaluation_state = Self::evaluation_state(instance, &fixed_values);
+
+        let mut objective = instance.objective.clone();
+        objective.partial_evaluate(&evaluation_state, atol)?;
+
+        let mut active_constraint_replacements = BTreeMap::new();
+        for (&id, constraint) in instance.constraint_collection.active() {
+            let mut constraint = constraint.clone();
+            constraint.partial_evaluate(&evaluation_state, atol)?;
+            active_constraint_replacements.insert(id, constraint);
+        }
+
+        let mut named_function_replacements = BTreeMap::new();
+        for (&id, named_function) in instance.named_functions.entries() {
+            let mut named_function = named_function.clone();
+            named_function.partial_evaluate(&evaluation_state, atol)?;
+            named_function_replacements.insert(id, named_function);
+        }
+
+        Ok(Some(Self {
+            fixed_values,
+            objective,
+            active_constraint_replacements,
+            named_function_replacements,
+        }))
+    }
+
+    fn supports_regular_plan(instance: &Instance) -> bool {
+        instance.indicator_constraint_collection.active().is_empty()
+            && instance
+                .indicator_constraint_collection
+                .removed()
+                .is_empty()
+            && instance.one_hot_constraint_collection.active().is_empty()
+            && instance.one_hot_constraint_collection.removed().is_empty()
+            && instance.sos1_constraint_collection.active().is_empty()
+            && instance.sos1_constraint_collection.removed().is_empty()
+            && instance.decision_variable_dependency.is_empty()
+    }
+
+    fn prepare_fixed_values(
+        instance: &Instance,
+        state: &v1::State,
+        atol: ATol,
+    ) -> Result<BTreeMap<VariableID, f64>> {
         let mut fixed_values = BTreeMap::new();
         for (&id, &value) in &state.entries {
             ensure_state_value_is_finite(id, value)?;
-            fixed_values.insert(VariableID::from(id), value);
+            let var_id = VariableID::from(id);
+            let Some(dv) = instance.decision_variables.get(&var_id) else {
+                return Err(crate::error!(
+                    "Unknown decision variable (ID={id}) in state."
+                ));
+            };
+            dv.check_value_consistency(var_id, value, atol)?;
+            if let Some(previous_value) = instance.decision_variables.fixed_value(var_id) {
+                if !values_are_consistent(previous_value, value, atol) {
+                    return Err(DecisionVariableError::SubstitutedValueOverwrite {
+                        id: var_id,
+                        previous_value,
+                        new_value: value,
+                        atol,
+                    }
+                    .into());
+                }
+            }
+            fixed_values.insert(var_id, value);
         }
-
-        Ok(Some(Self { fixed_values }))
+        Ok(fixed_values)
     }
 
-    fn supports_removed_only_fast_path(instance: &Instance) -> bool {
-        instance.objective.required_ids().is_empty()
-            && instance.constraint_collection.active().is_empty()
-            && instance.indicator_constraint_collection.active().is_empty()
-            && instance.one_hot_constraint_collection.active().is_empty()
-            && instance.sos1_constraint_collection.active().is_empty()
-            && instance.decision_variable_dependency.is_empty()
-            && instance.named_functions.required_ids().is_empty()
+    fn evaluation_state(
+        instance: &Instance,
+        fixed_values: &BTreeMap<VariableID, f64>,
+    ) -> v1::State {
+        let mut merged = instance.fixed_decision_variable_values().clone();
+        for (&id, &value) in fixed_values {
+            merged.entry(id).or_insert(value);
+        }
+        fixed_values_state(&merged)
     }
 }
 
@@ -299,54 +366,24 @@ impl Instance {
     }
 
     fn partial_evaluate_in_place(&mut self, state: &v1::State, atol: ATol) -> Result<()> {
-        if let Some(plan) = PartialEvaluatePlan::prepare_removed_only(self, state)? {
-            self.commit_partial_evaluate_plan(plan, atol)?;
+        if let Some(plan) = PartialEvaluatePlan::prepare(self, state, atol)? {
+            self.commit_partial_evaluate_plan(plan, atol);
             return Ok(());
         }
 
         self.partial_evaluate_fallback_in_place(state, atol)
     }
 
-    fn commit_partial_evaluate_plan(
-        &mut self,
-        plan: PartialEvaluatePlan,
-        atol: ATol,
-    ) -> Result<()> {
-        self.ensure_decision_variable_fixed_values(&plan.fixed_values, atol)
-    }
-
-    fn ensure_decision_variable_fixed_values(
-        &mut self,
-        fixed_values: &BTreeMap<VariableID, f64>,
-        atol: ATol,
-    ) -> Result<()> {
-        for (&id, &value) in fixed_values {
-            let Some(dv) = self.decision_variables.get(&id) else {
-                return Err(crate::error!(
-                    "Unknown decision variable (ID={}) in state.",
-                    id.into_inner()
-                ));
-            };
-            dv.check_value_consistency(id, value, atol)?;
-            if let Some(previous_value) = self.decision_variables.fixed_value(id) {
-                if !values_are_consistent(previous_value, value, atol) {
-                    return Err(DecisionVariableError::SubstitutedValueOverwrite {
-                        id,
-                        previous_value,
-                        new_value: value,
-                        atol,
-                    }
-                    .into());
-                }
-            }
-        }
-
-        for (&id, &value) in fixed_values {
-            self.decision_variables
-                .ensure_fixed_value(id, value, atol)?;
-        }
-
-        Ok(())
+    fn commit_partial_evaluate_plan(&mut self, plan: PartialEvaluatePlan, atol: ATol) {
+        self.decision_variables
+            .merge_validated_fixed_values(plan.fixed_values, atol);
+        self.objective = plan.objective;
+        self.constraint_collection
+            .replace_active_rows(plan.active_constraint_replacements)
+            .expect("partial-evaluate plan prepared replacements from active constraint IDs");
+        self.named_functions
+            .replace_rows(plan.named_function_replacements)
+            .expect("partial-evaluate plan prepared replacements from named-function IDs");
     }
 
     fn partial_evaluate_fallback_in_place(&mut self, state: &v1::State, atol: ATol) -> Result<()> {
@@ -550,8 +587,8 @@ impl Evaluate for Instance {
 
     #[tracing::instrument(skip_all)]
     fn partial_evaluate(&mut self, state: &v1::State, atol: ATol) -> Result<()> {
-        if let Some(plan) = PartialEvaluatePlan::prepare_removed_only(self, state)? {
-            self.commit_partial_evaluate_plan(plan, atol)?;
+        if let Some(plan) = PartialEvaluatePlan::prepare(self, state, atol)? {
+            self.commit_partial_evaluate_plan(plan, atol);
             return Ok(());
         }
 
@@ -886,6 +923,185 @@ mod tests {
         assert_eq!(instance.removed_constraints(), &removed_before);
     }
 
+    fn regular_plan_instance() -> Instance {
+        let named_function_id = crate::NamedFunctionID::from(1);
+        let constraint_id = ConstraintID::from(1);
+        let remaining_constraint_id = ConstraintID::from(2);
+        Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from((linear!(1) + linear!(3)).unwrap()))
+            .decision_variables(BTreeMap::from([
+                (VariableID::from(1), crate::DecisionVariable::continuous()),
+                (VariableID::from(2), crate::DecisionVariable::continuous()),
+                (VariableID::from(3), crate::DecisionVariable::continuous()),
+            ]))
+            .fixed_decision_variable_values(BTreeMap::from([(VariableID::from(2), 3.0)]))
+            .constraints(BTreeMap::from([
+                (
+                    constraint_id,
+                    Constraint::equal_to_zero(Function::from((linear!(1) + linear!(3)).unwrap())),
+                ),
+                (
+                    remaining_constraint_id,
+                    Constraint::equal_to_zero(Function::from(linear!(3))),
+                ),
+            ]))
+            .named_functions(BTreeMap::from([(
+                named_function_id,
+                crate::NamedFunction {
+                    function: Function::from(
+                        ((linear!(1) + linear!(2)).unwrap() + linear!(3)).unwrap(),
+                    ),
+                },
+            )]))
+            .build()
+            .unwrap()
+    }
+
+    #[test]
+    fn test_partial_evaluate_regular_plan_matches_consuming_path() {
+        let instance = regular_plan_instance();
+        let state = v1::State::from(HashMap::from([(1, 2.0)]));
+
+        assert!(
+            PartialEvaluatePlan::prepare(&instance, &state, ATol::default())
+                .unwrap()
+                .is_some()
+        );
+
+        let mut borrowed = instance.clone();
+        borrowed.partial_evaluate(&state, ATol::default()).unwrap();
+        let consumed = instance
+            .clone()
+            .into_partial_evaluated(&state, ATol::default())
+            .unwrap();
+
+        assert_eq!(borrowed, consumed);
+        assert_eq!(
+            borrowed.fixed_decision_variable_values(),
+            &BTreeMap::from([(VariableID::from(1), 2.0), (VariableID::from(2), 3.0)])
+        );
+        assert_eq!(
+            borrowed.objective().required_ids(),
+            VariableIDSet::from([VariableID::from(3)])
+        );
+        assert_eq!(
+            borrowed
+                .constraints()
+                .get(&ConstraintID::from(1))
+                .unwrap()
+                .required_ids(),
+            VariableIDSet::from([VariableID::from(3)])
+        );
+
+        let original_solution = instance
+            .evaluate(
+                &v1::State::from(HashMap::from([(1, 2.0), (3, 5.0)])),
+                ATol::default(),
+            )
+            .unwrap();
+        let rewritten_solution = borrowed
+            .evaluate(&v1::State::from(HashMap::from([(3, 5.0)])), ATol::default())
+            .unwrap();
+        assert_eq!(
+            original_solution.objective(),
+            rewritten_solution.objective()
+        );
+        assert_eq!(
+            original_solution
+                .evaluated_named_functions()
+                .get(&crate::NamedFunctionID::from(1))
+                .unwrap()
+                .evaluated_value(),
+            rewritten_solution
+                .evaluated_named_functions()
+                .get(&crate::NamedFunctionID::from(1))
+                .unwrap()
+                .evaluated_value()
+        );
+    }
+
+    #[test]
+    fn test_partial_evaluate_regular_plan_error_leaves_original_unchanged() {
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from((coeff!(f64::MAX) * linear!(1)).unwrap()))
+            .decision_variables(BTreeMap::from([(
+                VariableID::from(1),
+                crate::DecisionVariable::continuous(),
+            )]))
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap();
+        let before = instance.clone();
+
+        let err = instance
+            .partial_evaluate(
+                &v1::State::from(HashMap::from([(1, f64::MAX)])),
+                ATol::default(),
+            )
+            .unwrap_err();
+
+        assert!(
+            err.to_string().contains("finite"),
+            "unexpected error: {err}"
+        );
+        assert_eq!(instance, before);
+    }
+
+    #[test]
+    fn test_partial_evaluate_active_special_constraint_stays_on_fallback_path() {
+        use crate::{DecisionVariable, OneHotConstraint, OneHotConstraintID};
+
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(
+                ((linear!(1) + linear!(2)).unwrap() + linear!(3)).unwrap(),
+            ))
+            .decision_variables(BTreeMap::from([
+                (VariableID::from(1), DecisionVariable::binary()),
+                (VariableID::from(2), DecisionVariable::binary()),
+                (VariableID::from(3), DecisionVariable::binary()),
+            ]))
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap();
+        instance
+            .one_hot_constraint_collection
+            .insert_active_with_context(
+                OneHotConstraintID::from(1),
+                OneHotConstraint::new([1, 2, 3].into_iter().map(VariableID::from).collect())
+                    .unwrap(),
+                crate::ConstraintContext::default(),
+            )
+            .unwrap();
+        let state = v1::State::from(HashMap::from([(2, 1.0)]));
+
+        assert!(
+            PartialEvaluatePlan::prepare(&instance, &state, ATol::default())
+                .unwrap()
+                .is_none()
+        );
+
+        let mut borrowed = instance.clone();
+        borrowed.partial_evaluate(&state, ATol::default()).unwrap();
+        let consumed = instance
+            .into_partial_evaluated(&state, ATol::default())
+            .unwrap();
+
+        assert_eq!(borrowed, consumed);
+        assert!(borrowed.one_hot_constraint_collection.active().is_empty());
+        assert_eq!(borrowed.one_hot_constraint_collection.removed().len(), 1);
+        assert_eq!(
+            borrowed.fixed_decision_variable_values(),
+            &BTreeMap::from([
+                (VariableID::from(1), 0.0),
+                (VariableID::from(2), 1.0),
+                (VariableID::from(3), 0.0),
+            ])
+        );
+    }
+
     #[test]
     fn test_evaluate_samples_preserves_sample_groups_for_decision_variables() {
         let instance = Instance::builder()
@@ -958,6 +1174,12 @@ mod tests {
         let mut instance = dependent_instance_y_eq_2x();
 
         let state = v1::State::from(HashMap::from([(1, 2.0)]));
+        assert!(
+            PartialEvaluatePlan::prepare(&instance, &state, ATol::default())
+                .unwrap()
+                .is_none()
+        );
+
         instance.partial_evaluate(&state, ATol::default()).unwrap();
 
         assert_eq!(
