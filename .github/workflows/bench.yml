@@ -27,11 +27,11 @@ jobs:
       - name: Install cargo-codspeed
         run: cargo install cargo-codspeed --locked
       - name: Build CodSpeed Benchmark Target(s)
-        run: cargo codspeed build
+        run: cargo codspeed build -p ommx
       - name: Run the benchmarks
         uses: CodSpeedHQ/action@v4
         with:
-          run: cargo codspeed run
+          run: cargo codspeed run -p ommx
           token: ${{ secrets.CODSPEED_TOKEN }}
           mode: simulation
 
@@ -48,6 +48,10 @@ jobs:
           # https://docs.python.org/3/library/sys.monitoring.html
           python-version: "3.13"
 
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
       # FIXME: `codspeed` command used in `CodSpeedHQ/action` cannot work with `uv run`
       - name: Build wheel
         env:
@@ -61,6 +65,6 @@ jobs:
       - name: Run benchmarks
         uses: CodSpeedHQ/action@v4
         with:
-          run: pytest python/ommx-tests/ --codspeed
+          run: pytest python/ommx-tests/tests/test_bench_*.py --codspeed
           token: ${{ secrets.CODSPEED_TOKEN }}
           mode: simulation
