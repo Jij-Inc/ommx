@@ -3,11 +3,78 @@ use criterion::{
     criterion_group, criterion_main, AxisScale, BenchmarkId, Criterion, PlotConfiguration,
 };
 use ommx::{
+    linear,
     random::{arbitrary_state, random_deterministic, sample_deterministic},
-    Evaluate, Linear, LinearParameters, Polynomial, PolynomialParameters, Quadratic,
-    QuadraticParameters, VariableID, VariableIDSet,
+    Constraint, ConstraintID, DecisionVariable, Evaluate, Function, Instance, Linear,
+    LinearParameters, Polynomial, PolynomialParameters, Quadratic, QuadraticParameters,
+    RemovedReason, Sense, VariableID, VariableIDSet,
 };
 use proptest::prelude::Arbitrary;
+use std::collections::BTreeMap;
+
+fn removed_constraint_instance(num_constraints: usize) -> (Instance, ommx::v1::State) {
+    let decision_variables = (0..num_constraints as u64)
+        .map(|id| (VariableID::from(id), DecisionVariable::continuous()))
+        .collect();
+    let removed_reason = RemovedReason {
+        reason: "ommx.bench.partial_evaluate.removed_regular_constraints".to_string(),
+        parameters: Default::default(),
+    };
+    let removed_constraints = (0..num_constraints as u64)
+        .map(|id| {
+            (
+                ConstraintID::from(id),
+                (
+                    Constraint::equal_to_zero(Function::from(linear!(id))),
+                    removed_reason.clone(),
+                ),
+            )
+        })
+        .collect();
+    let state = (0..num_constraints as u64).map(|id| (id, 0.0)).collect();
+    let instance = Instance::builder()
+        .sense(Sense::Minimize)
+        .objective(Function::Zero)
+        .decision_variables(decision_variables)
+        .constraints(BTreeMap::new())
+        .removed_constraints(removed_constraints)
+        .build()
+        .unwrap();
+
+    (instance, state)
+}
+
+/// Substitute all decision variables in an Instance that has many regular
+/// constraints already moved into removed_constraints.
+fn partial_evaluate_instance_removed_constraints(c: &mut Criterion) {
+    let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
+    let mut group = c.benchmark_group("partial-evaluate-instance-removed-constraints");
+    group.plot_config(plot_config);
+
+    for num_constraints in [1_000, 8_000, 32_000] {
+        let (instance, state) = removed_constraint_instance(num_constraints);
+        group.bench_with_input(
+            BenchmarkId::new(
+                "partial-evaluate-instance-removed-constraints",
+                num_constraints.to_string(),
+            ),
+            &(instance, state),
+            |b, (instance, state)| {
+                b.iter_batched_ref(
+                    || instance.clone(),
+                    |instance| {
+                        instance
+                            .partial_evaluate(state, ommx::ATol::default())
+                            .unwrap();
+                    },
+                    criterion::BatchSize::LargeInput,
+                )
+            },
+        );
+    }
+
+    group.finish();
+}
 
 fn bench_partial_evaluate<T, Parameters>(
     c: &mut Criterion,
@@ -161,5 +228,6 @@ criterion_group!(
     partial_evaluate_polynomial_all,
     partial_evaluate_polynomial_half,
     partial_evaluate_polynomial_one,
+    partial_evaluate_instance_removed_constraints,
 );
 criterion_main!(benches);

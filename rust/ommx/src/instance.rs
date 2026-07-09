@@ -5,6 +5,7 @@ mod builder;
 mod clip_bounds;
 mod convert;
 mod decision_variable;
+mod encoding;
 mod evaluate;
 mod format_function;
 mod indicator;
@@ -25,6 +26,7 @@ mod slack;
 mod sos1;
 mod stats;
 mod substitute;
+mod unary_encode;
 
 pub use analysis::*;
 pub use arbitrary::{InstanceParameters, InstanceSpace};

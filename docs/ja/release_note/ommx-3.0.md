@@ -22,11 +22,49 @@ annotation を保存できます。OMMX が予約している annotation key は
 ```python
 from ommx.experiment import Experiment, list_experiments
 
-with Experiment("example.com/team/catgt:latest") as experiment:
-    experiment.set_annotation("com.example.problem", "qap")
+with Experiment("example.com/team/experiments/demo:latest") as experiment:
+    experiment.set_annotation("com.example.problem", "demo")
 
-refs = list_experiments("example.com/team/catgt")
-assert refs[0].annotations["com.example.problem"] == "qap"
+refs = list_experiments("example.com/team/experiments")
+assert refs[0].annotations["com.example.problem"] == "demo"
+```
+
+### 🆕 Unary integer encoding ([#1010](https://github.com/Jij-Inc/ommx/pull/1010))
+
+有限な範囲を持つ integer 変数向けに、{meth}`~ommx.Instance.log_encode`
+の sampler-friendly な代替として {meth}`~ommx.Instance.unary_encode` を追加しました。
+integer 変数 `x` の範囲が `[lower, upper]` のとき、unary encoding は
+`upper - lower` 個の binary 変数を追加し、`x = lower + sum(b)` として置換します。
+
+任意の binary assignment が元の integer range 内の値に decode されるため、
+encoding の妥当性を保つ制約や penalty は追加されません。補助変数の数は range
+幅に対して線形に増えるため、狭い range では unary encoding を、広い range では
+引き続き log encoding を使ってください。意図しない大量の補助変数作成を避けるため、
+`Instance.unary_encode()` は `max_range`（既定値: `16`）を超える range 幅の変数を
+拒否します。補助変数数を把握したうえで広い range を unary encoding する場合は、
+`max_range` を明示してください。
+
+`Instance.unary_encode(..., atol=...)` と `Instance.log_encode(..., atol=...)` は、
+SDK の他の API と同じ ATol-aware な integer bound 正規化を使います。
+`Instance.log_encode()` は、53 個を超える補助 binary 変数が必要になる integer
+range を、非現実的に大きな encoded search space として拒否します。
+また両方の encoder は、offset 加算後も各 integer 値を区別できるよう、
+unit-spaced な `float` integer 範囲外の非 point range を拒否します。
+固定済みの決定変数 ID を明示的に渡した場合は、固定値と dependent 変数割り当ての
+source of truth が混在しないよう、置換前に拒否します。
+
+```python
+from ommx import DecisionVariable, Instance
+
+x = DecisionVariable.integer(0, lower=2, upper=5)
+instance = Instance.from_components(
+    sense=Instance.MAXIMIZE,
+    objective=x,
+    decision_variables=[x],
+    constraints={},
+)
+
+instance.unary_encode({0})
 ```
 
 ### 🆕 文脈付き Function formatting ([#408](https://github.com/Jij-Inc/ommx/issues/408))

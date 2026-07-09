@@ -3700,7 +3700,10 @@ class Instance:
         the instance is left untouched.
         """
     def log_encode(
-        self, decision_variable_ids: builtins.set[builtins.int] = set()
+        self,
+        decision_variable_ids: builtins.set[builtins.int] = set(),
+        *,
+        atol: typing.Optional[builtins.float] = None,
     ) -> None:
         r"""
         Log-encode the integer decision variables.
@@ -3713,7 +3716,9 @@ class Instance:
 
         **Args:**
         - `decision_variable_ids`: The IDs of the integer decision variables to log-encode.
-          If not specified (or empty), all integer variables are log-encoded.
+          If not specified (or empty), all used integer variables are log-encoded.
+        - `atol`: Optional absolute tolerance used when normalizing integer
+          bounds before encoding. If None, uses the default tolerance.
 
         # Examples
 
@@ -3750,6 +3755,51 @@ class Instance:
         ```python
         >>> instance.objective
         Function(x1 + x3 + 2*x4 + x5 + 2*x6)
+        ```
+        """
+    def unary_encode(
+        self,
+        decision_variable_ids: builtins.set[builtins.int] = set(),
+        *,
+        max_range: builtins.int = 16,
+        atol: typing.Optional[builtins.float] = None,
+    ) -> None:
+        r"""
+        Unary-encode the integer decision variables.
+
+        Unary encoding of an integer variable $x \in [l, u]$ is to represent it
+        by $u - l$ bits $b_j \in \{0, 1\}$:
+
+        $$x = l + \sum_j b_j$$
+
+        Every bit configuration maps to a valid integer in the original range,
+        so no encoding-validity penalty or linking constraint is added. This
+        costs linearly many auxiliary variables, so use it for narrow integer
+        ranges.
+
+        **Args:**
+        - `decision_variable_ids`: The IDs of the integer decision variables to unary-encode.
+          If not specified (or empty), all used integer variables are unary-encoded.
+        - `max_range`: Maximum allowed `upper - lower` range for each encoded
+          variable. This also bounds the number of auxiliary binary variables
+          introduced per integer variable.
+        - `atol`: Optional absolute tolerance used when normalizing integer
+          bounds before encoding. If None, uses the default tolerance.
+
+        # Examples
+
+        ```python
+        >>> from ommx import Instance, DecisionVariable
+        >>> x = DecisionVariable.integer(0, lower=2, upper=5, name="x")
+        >>> instance = Instance.from_components(
+        ...     decision_variables=[x],
+        ...     objective=x,
+        ...     constraints=[],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        >>> instance.unary_encode({0})
+        >>> instance.objective
+        Function(x1 + x2 + x3 + 2)
         ```
         """
     def substitute(self, assignments: typing.Mapping[builtins.int, ToFunction]) -> None:
