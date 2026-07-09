@@ -8,12 +8,12 @@ use pyo3::{
     },
 };
 use std::{
-    collections::{btree_map::Entry, BTreeMap, HashMap},
+    collections::{btree_map::Entry, BTreeMap, BTreeSet, HashMap},
     mem,
     path::PathBuf,
 };
 
-use crate::pandas::{raw_entries_to_dataframe, PyDataFrame};
+use crate::pandas::{get_na, PyDataFrame};
 use crate::PyArtifact;
 use ommx::artifact::local_registry::ExperimentRefRecord;
 use ommx::artifact::AsArtifact;
@@ -668,43 +668,23 @@ impl PyExperiment {
     /// Adapter options recorded by `Run.log_solve` are solve metadata and do
     /// not appear in this table.
     pub fn run_parameters_df<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDataFrame>> {
-        let mut rows = BTreeMap::new();
+        let mut run_ids = BTreeSet::new();
         for run in self.inner.runs()? {
-            let run_id = run.run_id();
-            let dict = PyDict::new(py);
-            dict.set_item("run_id", run_id)?;
-            rows.insert(run_id, dict);
+            run_ids.insert(run.run_id());
         }
+        let mut columns: BTreeMap<String, RunParameterDataFrameColumn> = BTreeMap::new();
         for cell in self.inner.run_parameter_cells()? {
-            let row = match rows.entry(cell.run_id) {
+            run_ids.insert(cell.run_id);
+            let column = match columns.entry(cell.name) {
                 Entry::Occupied(entry) => entry.into_mut(),
                 Entry::Vacant(entry) => {
-                    let dict = PyDict::new(py);
-                    dict.set_item("run_id", cell.run_id)?;
-                    entry.insert(dict)
+                    entry.insert(RunParameterDataFrameColumn::from_value(&cell.value))
                 }
             };
-            match cell.value {
-                ommx::experiment::ParameterValue::Bool(value) => {
-                    row.set_item(cell.name, value)?;
-                }
-                ommx::experiment::ParameterValue::Int(value) => {
-                    row.set_item(cell.name, value)?;
-                }
-                ommx::experiment::ParameterValue::Float(value) => {
-                    row.set_item(cell.name, value)?;
-                }
-                ommx::experiment::ParameterValue::String(value) => {
-                    row.set_item(cell.name, value)?;
-                }
-            }
+            column.insert(cell.run_id, cell.value)?;
         }
 
-        let entries = rows
-            .into_values()
-            .map(|row| row.into_any())
-            .collect::<Vec<_>>();
-        Ok(raw_entries_to_dataframe(py, entries, "run_id")?)
+        run_parameters_to_dataframe(py, run_ids.into_iter().collect(), columns)
     }
 
     pub fn __repr__(&self) -> Result<String> {
@@ -751,6 +731,246 @@ fn open_experiment_registry(
         Some(root) => ommx::artifact::local_registry::LocalRegistry::open(root),
         None => ommx::artifact::local_registry::LocalRegistry::open_default(),
     }
+}
+
+enum RunParameterDataFrameColumn {
+    Bool(BTreeMap<u64, bool>),
+    Int(BTreeMap<u64, i64>),
+    Float(BTreeMap<u64, f64>),
+    String(BTreeMap<u64, String>),
+}
+
+impl RunParameterDataFrameColumn {
+    fn from_value(value: &ommx::experiment::ParameterValue) -> Self {
+        match value {
+            ommx::experiment::ParameterValue::Bool(_) => Self::Bool(BTreeMap::new()),
+            ommx::experiment::ParameterValue::Int(_) => Self::Int(BTreeMap::new()),
+            ommx::experiment::ParameterValue::Float(_) => Self::Float(BTreeMap::new()),
+            ommx::experiment::ParameterValue::String(_) => Self::String(BTreeMap::new()),
+        }
+    }
+
+    fn insert(&mut self, run_id: u64, value: ommx::experiment::ParameterValue) -> Result<()> {
+        match (self, value) {
+            (Self::Bool(values), ommx::experiment::ParameterValue::Bool(value)) => {
+                values.insert(run_id, value);
+                Ok(())
+            }
+            (Self::Int(values), ommx::experiment::ParameterValue::Int(value)) => {
+                values.insert(run_id, value);
+                Ok(())
+            }
+            (column @ Self::Int(_), ommx::experiment::ParameterValue::Float(value)) => {
+                let mut values = match std::mem::replace(column, Self::Float(BTreeMap::new())) {
+                    Self::Int(values) => values
+                        .into_iter()
+                        .map(|(run_id, value)| (run_id, value as f64))
+                        .collect::<BTreeMap<_, _>>(),
+                    _ => unreachable!(),
+                };
+                values.insert(run_id, value);
+                *column = Self::Float(values);
+                Ok(())
+            }
+            (Self::Float(values), ommx::experiment::ParameterValue::Int(value)) => {
+                values.insert(run_id, value as f64);
+                Ok(())
+            }
+            (Self::Float(values), ommx::experiment::ParameterValue::Float(value)) => {
+                values.insert(run_id, value);
+                Ok(())
+            }
+            (Self::String(values), ommx::experiment::ParameterValue::String(value)) => {
+                values.insert(run_id, value);
+                Ok(())
+            }
+            (column, value) => {
+                anyhow::bail!(
+                    "Run parameter has mixed column types: existing {}, incoming {}",
+                    column.type_name(),
+                    parameter_value_type_name(&value),
+                )
+            }
+        }
+    }
+
+    fn type_name(&self) -> &'static str {
+        match self {
+            Self::Bool(_) => "bool",
+            Self::Int(_) => "int64",
+            Self::Float(_) => "float64",
+            Self::String(_) => "string",
+        }
+    }
+
+    fn contains_run(&self, run_id: u64) -> bool {
+        match self {
+            Self::Bool(values) => values.contains_key(&run_id),
+            Self::Int(values) => values.contains_key(&run_id),
+            Self::Float(values) => values.contains_key(&run_id),
+            Self::String(values) => values.contains_key(&run_id),
+        }
+    }
+
+    fn to_pandas_column<'py>(
+        &self,
+        py: Python<'py>,
+        run_ids: &[u64],
+    ) -> PyResult<Bound<'py, PyAny>> {
+        match self {
+            Self::Bool(values) => nullable_bool_array(py, run_ids, values),
+            Self::Int(values) => nullable_int_array(py, run_ids, values),
+            Self::Float(values) => nullable_float_array(py, run_ids, values),
+            Self::String(values) => nullable_string_array(py, run_ids, values),
+        }
+    }
+}
+
+fn parameter_value_type_name(value: &ommx::experiment::ParameterValue) -> &'static str {
+    match value {
+        ommx::experiment::ParameterValue::Bool(_) => "bool",
+        ommx::experiment::ParameterValue::Int(_) => "int64",
+        ommx::experiment::ParameterValue::Float(_) => "float64",
+        ommx::experiment::ParameterValue::String(_) => "string",
+    }
+}
+
+fn run_parameters_to_dataframe<'py>(
+    py: Python<'py>,
+    run_ids: Vec<u64>,
+    columns: BTreeMap<String, RunParameterDataFrameColumn>,
+) -> Result<Bound<'py, PyDataFrame>> {
+    let pandas = py.import("pandas")?;
+    let data = PyDict::new(py);
+    data.set_item("run_id", PyList::new(py, run_ids.iter())?)?;
+    for name in run_parameter_column_order(&run_ids, &columns) {
+        let column = columns
+            .get(&name)
+            .expect("column order must only contain known run parameters");
+        data.set_item(name, column.to_pandas_column(py, &run_ids)?)?;
+    }
+    let df = pandas.call_method1("DataFrame", (data,))?;
+    let df = df.call_method1("set_index", ("run_id",))?;
+    Ok(df.cast_into().map_err(PyErr::from)?)
+}
+
+fn run_parameter_column_order(
+    run_ids: &[u64],
+    columns: &BTreeMap<String, RunParameterDataFrameColumn>,
+) -> Vec<String> {
+    let mut seen = BTreeSet::new();
+    let mut order = Vec::new();
+    for run_id in run_ids {
+        for (name, column) in columns {
+            if column.contains_run(*run_id) && seen.insert(name.clone()) {
+                order.push(name.clone());
+            }
+        }
+    }
+    for name in columns.keys() {
+        if seen.insert(name.clone()) {
+            order.push(name.clone());
+        }
+    }
+    order
+}
+
+fn nullable_bool_array<'py>(
+    py: Python<'py>,
+    run_ids: &[u64],
+    values: &BTreeMap<u64, bool>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let list = PyList::empty(py);
+    let na = get_na(py)?;
+    for run_id in run_ids {
+        match values.get(run_id) {
+            Some(value) => list.append(*value)?,
+            None => list.append(&na)?,
+        }
+    }
+    pandas_array(py, &list, "boolean")
+}
+
+fn nullable_int_array<'py>(
+    py: Python<'py>,
+    run_ids: &[u64],
+    values: &BTreeMap<u64, i64>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let list = PyList::empty(py);
+    let na = get_na(py)?;
+    for run_id in run_ids {
+        match values.get(run_id) {
+            Some(value) => list.append(*value)?,
+            None => list.append(&na)?,
+        }
+    }
+    pandas_array(py, &list, "Int64")
+}
+
+fn nullable_string_array<'py>(
+    py: Python<'py>,
+    run_ids: &[u64],
+    values: &BTreeMap<u64, String>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let list = PyList::empty(py);
+    let na = get_na(py)?;
+    for run_id in run_ids {
+        match values.get(run_id) {
+            Some(value) => list.append(value)?,
+            None => list.append(&na)?,
+        }
+    }
+    pandas_array(py, &list, "string")
+}
+
+fn pandas_array<'py>(
+    py: Python<'py>,
+    values: &Bound<'py, PyList>,
+    dtype: &str,
+) -> PyResult<Bound<'py, PyAny>> {
+    let kwargs = PyDict::new(py);
+    kwargs.set_item("dtype", dtype)?;
+    py.import("pandas")?
+        .call_method("array", (values,), Some(&kwargs))
+}
+
+fn nullable_float_array<'py>(
+    py: Python<'py>,
+    run_ids: &[u64],
+    values: &BTreeMap<u64, f64>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let data = PyList::empty(py);
+    let mask = PyList::empty(py);
+    for run_id in run_ids {
+        match values.get(run_id) {
+            Some(value) => {
+                data.append(*value)?;
+                mask.append(false)?;
+            }
+            None => {
+                data.append(f64::NAN)?;
+                mask.append(true)?;
+            }
+        }
+    }
+
+    let data = numpy_array(py, &data, "float64")?;
+    let mask = numpy_array(py, &mask, "bool")?;
+    py.import("pandas")?
+        .getattr("arrays")?
+        .getattr("FloatingArray")?
+        .call1((data, mask))
+}
+
+fn numpy_array<'py>(
+    py: Python<'py>,
+    values: &Bound<'py, PyList>,
+    dtype: &str,
+) -> PyResult<Bound<'py, PyAny>> {
+    let kwargs = PyDict::new(py);
+    kwargs.set_item("dtype", dtype)?;
+    py.import("numpy")?
+        .call_method("array", (values,), Some(&kwargs))
 }
 
 fn start_python_span(py: Python<'_>, name: &str) -> Result<Py<PyAny>> {

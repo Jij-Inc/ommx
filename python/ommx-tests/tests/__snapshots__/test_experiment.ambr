@@ -2,16 +2,16 @@
 # name: test_create_experiment_run_attachments_and_commit
   '''
          solver  time_limit
-  run_id                   
+  run_id
   0        scip        20.0
   '''
 # ---
 # name: test_view_run_parameters_from_committed_artifact
   '''
-         solver  time_limit presolve
-  run_id                            
-  0        scip        20.0     <NA>
-  1       highs        <NA>     True
-  2        <NA>        <NA>     <NA>
+         solver  time_limit  presolve
+  run_id
+  0        scip        20.0      <NA>
+  1       highs        <NA>      True
+  2        <NA>        <NA>      <NA>
   '''
 # ---

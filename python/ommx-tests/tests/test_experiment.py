@@ -39,7 +39,7 @@ class UnserializableDiagnostic:
 
 
 def _df_snap(df: pd.DataFrame) -> str:
-    return df.to_string(na_rep="<NA>")
+    return "\n".join(line.rstrip() for line in df.to_string(na_rep="<NA>").splitlines())
 
 
 def _require_trace(trace: TraceResult | None) -> TraceResult:
@@ -176,6 +176,35 @@ def test_view_run_parameters_from_committed_artifact(snapshot):
     df = loaded.run_parameters_df()
 
     assert _df_snap(df) == snapshot
+    assert df.loc[1, "time_limit"] is pd.NA
+    assert df.loc[0, "presolve"] is pd.NA
+    assert df.loc[2, "solver"] is pd.NA
+
+
+def test_run_parameters_df_preserves_non_finite_float_values():
+    with Experiment.with_temp_local_registry() as experiment:
+        with experiment.run() as run:
+            run.log_parameter("positive_infinity", math.inf)
+            run.log_parameter("negative_infinity", -math.inf)
+            run.log_parameter("not_a_number", math.nan)
+        with experiment.run():
+            pass
+
+    loaded = Experiment.from_artifact(experiment.artifact)
+    df = loaded.run_parameters_df()
+
+    assert list(df.index) == [0, 1]
+    assert str(df["positive_infinity"].dtype) == "Float64"
+    assert str(df["negative_infinity"].dtype) == "Float64"
+    assert str(df["not_a_number"].dtype) == "Float64"
+    assert math.isinf(df.loc[0, "positive_infinity"])
+    assert df.loc[0, "positive_infinity"] > 0
+    assert math.isinf(df.loc[0, "negative_infinity"])
+    assert df.loc[0, "negative_infinity"] < 0
+    assert math.isnan(df.loc[0, "not_a_number"])
+    assert df.loc[1, "positive_infinity"] is pd.NA
+    assert df.loc[1, "negative_infinity"] is pd.NA
+    assert df.loc[1, "not_a_number"] is pd.NA
 
 
 def test_create_experiment_run_attachments_and_commit(snapshot):

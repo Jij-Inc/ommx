@@ -1,6 +1,7 @@
 //! Tests for the experiment session model.
 
 use super::config::{ExperimentConfig, ExperimentConfigRun, ExperimentConfigSolve, LayerRef};
+use super::parameter::RunParameterTable;
 use super::UnsealedExperimentState;
 use super::{
     AttachmentLogger, AttachmentTable, Experiment, ExperimentDyn, ExperimentStatus, Name,
@@ -87,6 +88,17 @@ fn blob_path(root: &std::path::Path, digest: &Digest) -> std::path::PathBuf {
         .split_once(':')
         .expect("OCI digest should contain algorithm separator");
     root.join("blobs").join(algorithm).join(encoded)
+}
+
+fn empty_run_parameters_layer<'reg>(registry: &'reg LocalRegistry) -> StoredDescriptor<'reg> {
+    let bytes = RunParameterTable::default().to_msgpack_bytes().unwrap();
+    registry
+        .store_layer_blob(
+            MediaType::Other(RUN_PARAMETERS_MEDIA_TYPE.to_string()),
+            &bytes,
+            HashMap::new(),
+        )
+        .unwrap()
 }
 
 fn assert_blob_absent(experiment: &Experiment<'_>, bytes: &[u8]) {
@@ -236,11 +248,7 @@ fn list_experiments_caches_non_experiment_manifests_as_negative_results() -> any
     let artifact = draft.commit()?;
     let artifact_manifest_digest = artifact.manifest_digest().clone();
 
-    let run_parameters = registry.store_json_layer_blob(
-        MediaType::Other(RUN_PARAMETERS_MEDIA_TYPE.to_string()),
-        &json!({ "columns": {} }),
-        HashMap::new(),
-    )?;
+    let run_parameters = empty_run_parameters_layer(&registry);
     let config = ExperimentConfig {
         status: EXPERIMENT_STATUS_FINISHED.to_string(),
         requested_image_name: Some(generic_with_experiment_config_name.to_string()),
@@ -679,13 +687,7 @@ fn commit_produces_experiment_artifact() {
 fn generic_artifact_with_experiment_config_is_not_an_experiment() {
     let temp = crate::artifact::local_registry::TempLocalRegistry::new().unwrap();
     let registry = temp.registry();
-    let run_parameters = registry
-        .store_json_layer_blob(
-            MediaType::Other(RUN_PARAMETERS_MEDIA_TYPE.to_string()),
-            &json!({ "columns": {} }),
-            HashMap::new(),
-        )
-        .unwrap();
+    let run_parameters = empty_run_parameters_layer(registry);
     let config = ExperimentConfig {
         status: EXPERIMENT_STATUS_FINISHED.to_string(),
         requested_image_name: None,
@@ -750,34 +752,22 @@ fn log_parameter_materializes_run_parameter_table() {
             .as_ref()
             .is_none_or(HashMap::is_empty));
         let bytes = blob_bytes(&artifact, run_params);
-        let table: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-
-        assert_eq!(
-            table,
-            json!({
-                "columns": {
-                    "presolve": {
-                        "type": "bool",
-                        "values": {
-                            "1": true,
-                        },
-                    },
-                    "solver": {
-                        "type": "string",
-                        "values": {
-                            "0": "scip",
-                            "1": "highs",
-                        },
-                    },
-                    "time_limit": {
-                        "type": "float64",
-                        "values": {
-                            "0": 20.0,
-                        },
-                    },
-                },
-            })
-        );
+        let table = RunParameterTable::from_msgpack_bytes(&bytes).unwrap();
+        let mut cells = table.cells();
+        cells.sort_by(|left, right| (left.run_id, &left.name).cmp(&(right.run_id, &right.name)));
+        assert_eq!(cells.len(), 4);
+        assert_eq!(cells[0].run_id, 0);
+        assert_eq!(cells[0].name, "solver");
+        assert_eq!(cells[0].value, ParameterValue::String("scip".to_string()));
+        assert_eq!(cells[1].run_id, 0);
+        assert_eq!(cells[1].name, "time_limit");
+        assert_eq!(cells[1].value, ParameterValue::Float(20.0));
+        assert_eq!(cells[2].run_id, 1);
+        assert_eq!(cells[2].name, "presolve");
+        assert_eq!(cells[2].value, ParameterValue::Bool(true));
+        assert_eq!(cells[3].run_id, 1);
+        assert_eq!(cells[3].name, "solver");
+        assert_eq!(cells[3].value, ParameterValue::String("highs".to_string()));
         Ok(())
     });
 }
@@ -1225,13 +1215,7 @@ fn loaded_experiment_rejects_invalid_diagnostic_payload() {
             HashMap::new(),
         )
         .unwrap();
-    let run_parameters = registry
-        .store_json_layer_blob(
-            MediaType::Other(RUN_PARAMETERS_MEDIA_TYPE.to_string()),
-            &json!({ "columns": {} }),
-            HashMap::new(),
-        )
-        .unwrap();
+    let run_parameters = empty_run_parameters_layer(registry);
     let config = ExperimentConfig {
         status: EXPERIMENT_STATUS_FINISHED.to_string(),
         requested_image_name: None,
@@ -1293,13 +1277,7 @@ fn loaded_experiment_rejects_failed_solve_with_output() {
     let output = registry
         .store_layer_blob(media_types::v1_solution(), b"output", HashMap::new())
         .unwrap();
-    let run_parameters = registry
-        .store_json_layer_blob(
-            MediaType::Other(RUN_PARAMETERS_MEDIA_TYPE.to_string()),
-            &json!({ "columns": {} }),
-            HashMap::new(),
-        )
-        .unwrap();
+    let run_parameters = empty_run_parameters_layer(registry);
     let config = ExperimentConfig {
         status: EXPERIMENT_STATUS_FINISHED.to_string(),
         requested_image_name: None,
@@ -1351,13 +1329,7 @@ fn loaded_experiment_rejects_failed_solve_with_output() {
 fn loaded_experiment_rejects_non_finished_status() {
     let temp = crate::artifact::local_registry::TempLocalRegistry::new().unwrap();
     let registry = temp.registry();
-    let run_parameters = registry
-        .store_json_layer_blob(
-            MediaType::Other(RUN_PARAMETERS_MEDIA_TYPE.to_string()),
-            &json!({ "columns": {} }),
-            HashMap::new(),
-        )
-        .unwrap();
+    let run_parameters = empty_run_parameters_layer(registry);
     let config = ExperimentConfig {
         status: "crashed".to_string(),
         requested_image_name: None,
@@ -1400,13 +1372,7 @@ fn loaded_experiment_rejects_config_attachment_not_listed_in_layers() {
             HashMap::new(),
         )
         .unwrap();
-    let run_parameters = registry
-        .store_json_layer_blob(
-            MediaType::Other(RUN_PARAMETERS_MEDIA_TYPE.to_string()),
-            &json!({ "columns": {} }),
-            HashMap::new(),
-        )
-        .unwrap();
+    let run_parameters = empty_run_parameters_layer(registry);
     let config = ExperimentConfig {
         status: EXPERIMENT_STATUS_FINISHED.to_string(),
         requested_image_name: None,
@@ -1457,13 +1423,7 @@ fn loaded_experiment_uses_config_table_for_attachment_names() {
         )
         .unwrap();
 
-    let run_parameters = registry
-        .store_json_layer_blob(
-            MediaType::Other(RUN_PARAMETERS_MEDIA_TYPE.to_string()),
-            &json!({ "columns": {} }),
-            HashMap::new(),
-        )
-        .unwrap();
+    let run_parameters = empty_run_parameters_layer(registry);
     let config = ExperimentConfig {
         status: EXPERIMENT_STATUS_FINISHED.to_string(),
         requested_image_name: None,
@@ -1508,13 +1468,7 @@ fn loaded_experiment_uses_config_table_for_attachment_names() {
 fn loaded_experiment_rejects_filename_without_attachment_entry() {
     let temp = crate::artifact::local_registry::TempLocalRegistry::new().unwrap();
     let registry = temp.registry();
-    let run_parameters = registry
-        .store_json_layer_blob(
-            MediaType::Other(RUN_PARAMETERS_MEDIA_TYPE.to_string()),
-            &json!({ "columns": {} }),
-            HashMap::new(),
-        )
-        .unwrap();
+    let run_parameters = empty_run_parameters_layer(registry);
     let config = json!({
         "status": EXPERIMENT_STATUS_FINISHED,
         "attachments": {
@@ -1566,13 +1520,7 @@ fn loaded_experiment_rejects_config_run_attachment_not_listed_in_layers() {
             HashMap::new(),
         )
         .unwrap();
-    let run_parameters = registry
-        .store_json_layer_blob(
-            MediaType::Other(RUN_PARAMETERS_MEDIA_TYPE.to_string()),
-            &json!({ "columns": {} }),
-            HashMap::new(),
-        )
-        .unwrap();
+    let run_parameters = empty_run_parameters_layer(registry);
     let config = ExperimentConfig {
         status: EXPERIMENT_STATUS_FINISHED.to_string(),
         requested_image_name: None,
@@ -1616,13 +1564,7 @@ fn loaded_experiment_rejects_config_run_attachment_not_listed_in_layers() {
 fn loaded_experiment_rejects_run_parameters_not_listed_in_layers() {
     let temp = crate::artifact::local_registry::TempLocalRegistry::new().unwrap();
     let registry = temp.registry();
-    let _run_parameters = registry
-        .store_json_layer_blob(
-            MediaType::Other(RUN_PARAMETERS_MEDIA_TYPE.to_string()),
-            &json!({ "columns": {} }),
-            HashMap::new(),
-        )
-        .unwrap();
+    let _run_parameters = empty_run_parameters_layer(registry);
     let config = ExperimentConfig {
         status: EXPERIMENT_STATUS_FINISHED.to_string(),
         requested_image_name: None,
@@ -1657,14 +1599,47 @@ fn loaded_experiment_rejects_run_parameters_not_listed_in_layers() {
 }
 
 #[test]
-fn log_parameter_rejects_non_finite_float_values() {
+fn log_parameter_round_trips_non_finite_float_values() {
     with_temp_experiment(|experiment| {
-        let mut run = experiment.run().unwrap();
+        {
+            let mut run = experiment.run().unwrap();
+            run.log_parameter("positive_infinity", f64::INFINITY)
+                .unwrap();
+            run.log_parameter("negative_infinity", f64::NEG_INFINITY)
+                .unwrap();
+            run.log_parameter("not_a_number", f64::NAN).unwrap();
+            run.finish().unwrap();
+        }
 
-        let err = run
-            .log_parameter("time_limit", f64::NAN)
-            .expect_err("parameter table accepts only finite float values");
-        assert!(err.to_string().contains("must be finite"));
+        let artifact = experiment.commit().unwrap().into_artifact();
+        let loaded = SealedExperiment::from_artifact(artifact).unwrap();
+        let mut cells = loaded.run_parameter_cells();
+        cells.sort_by(|left, right| left.name.cmp(&right.name));
+
+        assert_eq!(cells.len(), 3);
+        assert_eq!(cells[0].name, "negative_infinity");
+        match &cells[0].value {
+            ParameterValue::Float(value) => {
+                assert!(value.is_infinite());
+                assert!(value.is_sign_negative());
+            }
+            _ => panic!("negative_infinity must decode as float"),
+        };
+
+        assert_eq!(cells[1].name, "not_a_number");
+        match &cells[1].value {
+            ParameterValue::Float(value) => assert!(value.is_nan()),
+            _ => panic!("not_a_number must decode as float"),
+        };
+
+        assert_eq!(cells[2].name, "positive_infinity");
+        match &cells[2].value {
+            ParameterValue::Float(value) => {
+                assert!(value.is_infinite());
+                assert!(value.is_sign_positive());
+            }
+            _ => panic!("positive_infinity must decode as float"),
+        };
         Ok(())
     });
 }
@@ -1692,22 +1667,17 @@ fn log_parameter_promotes_int_column_to_float_at_commit() {
             &MediaType::Other(RUN_PARAMETERS_MEDIA_TYPE.to_string())
         );
         let bytes = blob_bytes(&artifact, run_params);
-        let table: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        let table = RunParameterTable::from_msgpack_bytes(&bytes).unwrap();
+        let mut cells = table.cells();
+        cells.sort_by_key(|cell| cell.run_id);
 
-        assert_eq!(
-            table,
-            json!({
-                "columns": {
-                    "time_limit": {
-                        "type": "float64",
-                        "values": {
-                            "0": 10.0,
-                            "1": 20.5,
-                        },
-                    },
-                },
-            })
-        );
+        assert_eq!(cells.len(), 2);
+        assert_eq!(cells[0].run_id, 0);
+        assert_eq!(cells[0].name, "time_limit");
+        assert_eq!(cells[0].value, ParameterValue::Float(10.0));
+        assert_eq!(cells[1].run_id, 1);
+        assert_eq!(cells[1].name, "time_limit");
+        assert_eq!(cells[1].value, ParameterValue::Float(20.5));
         Ok(())
     });
 }
