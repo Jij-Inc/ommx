@@ -3,20 +3,23 @@
 use super::config::{ExperimentConfig, ExperimentConfigRun, ExperimentConfigSolve, LayerRef};
 use super::parameter::RunParameterTable;
 use super::UnsealedExperimentState;
-use super::{EXPERIMENT_CONFIG_MEDIA_TYPE, RUN_PARAMETERS_MEDIA_TYPE};
+use super::{
+    EXPERIMENT_ARTIFACT_MEDIA_TYPE, EXPERIMENT_CONFIG_MEDIA_TYPE, RUN_PARAMETERS_MEDIA_TYPE,
+};
 use crate::artifact::local_registry::{
     LocalRegistry, RefUpdate, StoredDescriptor, UnsealedArtifact,
 };
-use crate::artifact::{media_types, ImageRef, LocalArtifact};
+use crate::artifact::{ImageRef, LocalArtifact};
 use anyhow::{Context, Result};
 use oci_spec::image::MediaType;
 
 /// Persistence boundary for the Experiment Artifact layout.
 ///
-/// This view owns the knowledge that the OCI config blob contains an
-/// [`ExperimentConfig`] with [`EXPERIMENT_CONFIG_MEDIA_TYPE`]. The config
-/// type itself remains a serialized schema, and sealed / dynamic models
-/// only ask this boundary to decode that schema from an artifact.
+/// This view owns the knowledge that an Experiment Artifact is identified by
+/// [`EXPERIMENT_ARTIFACT_MEDIA_TYPE`] and that its OCI config blob contains an
+/// [`ExperimentConfig`] with [`EXPERIMENT_CONFIG_MEDIA_TYPE`]. The config type
+/// itself remains a serialized schema, and sealed / dynamic models only ask
+/// this boundary to decode that schema from an artifact.
 pub struct ExperimentArtifactView<'a, 'reg> {
     artifact: &'a LocalArtifact<'reg>,
 }
@@ -27,6 +30,15 @@ impl<'a, 'reg> ExperimentArtifactView<'a, 'reg> {
     }
 
     pub fn config(&self) -> Result<ExperimentConfig> {
+        let manifest = self.artifact.get_manifest()?;
+        if manifest.artifact_type() != &MediaType::Other(EXPERIMENT_ARTIFACT_MEDIA_TYPE.to_string())
+        {
+            crate::bail!(
+                "Experiment artifact type is {}, expected {}",
+                manifest.artifact_type(),
+                EXPERIMENT_ARTIFACT_MEDIA_TYPE
+            );
+        }
         let config = self.artifact.stored_config()?;
         if config.media_type() != &MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()) {
             crate::bail!(
@@ -119,7 +131,7 @@ impl<'reg> UnsealedExperimentState<'reg> {
             &config,
         )?;
         let artifact = UnsealedArtifact::new(
-            MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
+            MediaType::Other(EXPERIMENT_ARTIFACT_MEDIA_TYPE.to_string()),
             config_descriptor,
             layers.into_layers(),
             self.subject.clone(),

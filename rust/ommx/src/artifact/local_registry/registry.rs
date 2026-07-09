@@ -693,9 +693,8 @@ impl LocalRegistry {
             .as_ref()
             .context("Manifest does not carry the OMMX `artifactType` field")?;
         ensure!(
-            artifact_type == &MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
-            "Manifest `artifactType` must be `{}`, got `{}`",
-            media_types::V1_ARTIFACT_MEDIA_TYPE,
+            media_types::is_ommx_artifact_type(artifact_type),
+            "Manifest `artifactType` must be an OMMX artifact type, got `{}`",
             artifact_type,
         );
         Ok(())
