@@ -31,7 +31,7 @@ jobs:
       - name: Run the benchmarks
         uses: CodSpeedHQ/action@v4
         with:
-          run: cargo codspeed run -p ommx --no-default-features
+          run: cargo codspeed run -p ommx
           token: ${{ secrets.CODSPEED_TOKEN }}
           mode: simulation
 
@@ -63,7 +63,7 @@ jobs:
           CARGO_PROFILE_RELEASE_DEBUG: "true"
         run: |
           pip install "maturin>=1.12.2" pytest-codspeed
-          maturin build --out wheels -m python/ommx/Cargo.toml
+          maturin build --release --out wheels -m python/ommx/Cargo.toml
           pip install wheels/*.whl
 
       - name: Run benchmarks
