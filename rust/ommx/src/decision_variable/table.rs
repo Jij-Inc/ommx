@@ -172,6 +172,17 @@ pub struct DecisionVariableTable<S: DecisionVariableTableStage = Created> {
     columns: S::Columns,
 }
 
+/// Table-local proof that a replacement fixed-value column is valid for a
+/// created decision-variable table.
+///
+/// This is crate-visible because `Instance` owns the cross-table decision
+/// variable role invariants, while this table owns row existence and
+/// kind/bound consistency.
+#[derive(Debug, Clone, PartialEq, LogicalMemoryProfile)]
+pub(crate) struct ValidatedFixedValuesReplacement {
+    fixed_values: BTreeMap<VariableID, f64>,
+}
+
 /// Evaluated-stage decision-variable table used by [`crate::Solution`].
 pub type EvaluatedDecisionVariableTable = DecisionVariableTable<Evaluated>;
 
@@ -305,6 +316,29 @@ impl DecisionVariableTable<Created> {
     /// Return the fixed value for one decision variable, if it is fixed.
     pub fn fixed_value(&self, id: VariableID) -> Option<f64> {
         self.columns.fixed_values.get(&id).copied()
+    }
+
+    /// Validate a full fixed-value column replacement.
+    ///
+    /// This only proves table-local invariants: every fixed ID exists and each
+    /// value satisfies the row's kind/bound. The enclosing root object remains
+    /// responsible for cross-table facts such as fixed/used/dependent role
+    /// disjointness.
+    pub(crate) fn validate_fixed_values_replacement(
+        &self,
+        fixed_values: BTreeMap<VariableID, f64>,
+        atol: ATol,
+    ) -> crate::Result<ValidatedFixedValuesReplacement> {
+        validate_created_fixed_values(&self.entries, &fixed_values, atol)?;
+        Ok(ValidatedFixedValuesReplacement { fixed_values })
+    }
+
+    /// Replace the fixed-value column with a table-validated replacement.
+    pub(crate) fn replace_fixed_values_with_validated(
+        &mut self,
+        fixed_values: ValidatedFixedValuesReplacement,
+    ) {
+        self.columns.fixed_values = fixed_values.fixed_values;
     }
 
     /// Set a fixed value for an existing decision-variable row.
