@@ -1,7 +1,7 @@
 use super::index::SqliteIndexStore;
 use super::*;
 use crate::artifact::{
-    media_types, ArtifactDraft, ImageRef, LocalArtifact, LocalManifest,
+    media_types, stable_json_bytes, ArtifactDraft, ImageRef, LocalArtifact, LocalManifest,
     OCI_IMAGE_MANIFEST_MEDIA_TYPE,
 };
 use anyhow::{Context, Result};
@@ -210,27 +210,64 @@ fn sqlite_index_store_round_trip() -> Result<()> {
 }
 
 #[test]
+fn sqlite_index_rejects_old_development_schema_version() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let path = dir.path().join(SQLITE_INDEX_FILE_NAME);
+    let conn = rusqlite::Connection::open(&path)?;
+    conn.pragma_update(None, "user_version", 1_i64)?;
+    conn.execute_batch(
+        r#"
+        CREATE TABLE refs (
+            name TEXT NOT NULL,
+            reference TEXT NOT NULL,
+            manifest_media_type TEXT NOT NULL,
+            manifest_digest TEXT NOT NULL,
+            manifest_size INTEGER NOT NULL CHECK(manifest_size >= 0),
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY(name, reference)
+        );
+        "#,
+    )?;
+    drop(conn);
+
+    let err = SqliteIndexStore::open(&path)
+        .expect_err("old development schema must fail fast instead of mixed migration");
+    assert!(
+        err.to_string()
+            .contains("Unsupported local registry schema version: 1"),
+        "unexpected error: {err}"
+    );
+    Ok(())
+}
+
+#[test]
 fn sqlite_experiment_ref_rejects_mismatched_projection_descriptor() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let store = SqliteIndexStore::open(dir.path().join(SQLITE_INDEX_FILE_NAME))?;
     let image_name = ImageRef::parse("example.com/ommx/experiment:mismatch")?;
     let ref_descriptor = test_manifest_descriptor(b"ref-manifest")?;
-    let projection_manifest_bytes = b"projection-manifest".to_vec();
-    let projection_manifest_descriptor = test_manifest_descriptor(&projection_manifest_bytes)?;
     let config_bytes = b"experiment-config".to_vec();
     let config_descriptor = test_manifest_descriptor(&config_bytes)?;
-    let experiment = ExperimentManifestRecord {
-        artifact: ArtifactManifestRecord {
-            manifest_digest: projection_manifest_descriptor.digest().clone(),
-            manifest_json: projection_manifest_bytes,
-            artifact_type: media_types::v1_experiment(),
-            config_digest: config_descriptor.digest().clone(),
-        },
-        config_json: config_bytes,
-        status: "finished".to_string(),
-        run_count: 0,
-        solve_count: 0,
-    };
+    let projection_manifest = ImageManifestBuilder::default()
+        .schema_version(2_u32)
+        .artifact_type(media_types::v1_experiment())
+        .config(config_descriptor.clone())
+        .layers(Vec::new())
+        .build()?;
+    let projection_manifest_bytes = stable_json_bytes(&projection_manifest)?;
+    let projection_manifest_descriptor = test_manifest_descriptor(&projection_manifest_bytes)?;
+    let artifact = ArtifactManifestRecord::from_image_manifest(
+        projection_manifest_descriptor.digest().clone(),
+        projection_manifest_bytes,
+        &projection_manifest,
+    )?;
+    let experiment = ExperimentManifestRecord::from_validated_summary(
+        artifact,
+        config_bytes,
+        "finished".to_string(),
+        0,
+        0,
+    )?;
 
     let err = store
         .publish_experiment_ref(&image_name, &ref_descriptor, &experiment)

@@ -596,16 +596,11 @@ impl LocalRegistry {
             manifest_digest,
             manifest_descriptor.digest()
         );
-        Ok(ArtifactManifestRecord {
-            manifest_digest: manifest_descriptor.digest().clone(),
+        ArtifactManifestRecord::from_image_manifest(
+            manifest_descriptor.digest().clone(),
             manifest_json,
-            artifact_type: manifest
-                .artifact_type()
-                .as_ref()
-                .context("Validated OMMX image manifest is missing artifactType")?
-                .clone(),
-            config_digest: manifest.config().digest().clone(),
-        })
+            &manifest,
+        )
     }
 
     /// Seal an unsealed OMMX Artifact manifest into the Local Registry.

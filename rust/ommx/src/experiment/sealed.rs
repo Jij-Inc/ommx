@@ -202,18 +202,18 @@ pub(crate) fn experiment_manifest_record_from_artifact(
         .values()
         .map(|run| run.solves.len() as u64)
         .sum();
-    Ok(Some(ExperimentManifestRecord {
-        artifact: ArtifactManifestRecord {
-            manifest_digest: artifact.manifest_digest().clone(),
-            manifest_json,
-            artifact_type: manifest.artifact_type().clone(),
-            config_digest: config_descriptor.digest().clone(),
-        },
+    let artifact_record = ArtifactManifestRecord::from_image_manifest(
+        artifact.manifest_digest().clone(),
+        manifest_json,
+        manifest.as_image_manifest(),
+    )?;
+    Ok(Some(ExperimentManifestRecord::from_validated_summary(
+        artifact_record,
         config_json,
-        status: sealed.status.as_str().to_string(),
-        run_count: sealed.runs.len() as u64,
+        sealed.status.as_str().to_string(),
+        sealed.runs.len() as u64,
         solve_count,
-    }))
+    )?))
 }
 
 /// Read-only Run reconstructed from a sealed Experiment config.

@@ -140,15 +140,10 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
     }
 
     fn cached_ref(&self) -> Result<Option<OciDirImport>> {
-        let Some(manifest_descriptor) = self
-            .registry
-            .index
-            .resolve_image_descriptor(self.image_name)?
-        else {
+        let Some(manifest_digest) = self.registry.index.resolve_image_name(self.image_name)? else {
             return Ok(None);
         };
-        let manifest_digest = manifest_descriptor.digest().clone();
-        if self.cached_manifest_closure_is_present(&manifest_descriptor)? {
+        if self.cached_manifest_closure_is_present(&manifest_digest)? {
             return Ok(Some(OciDirImport {
                 manifest_digest,
                 image_name: self.image_name.clone(),
@@ -164,21 +159,8 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
         Ok(None)
     }
 
-    fn cached_manifest_closure_is_present(&self, manifest_descriptor: &Descriptor) -> Result<bool> {
-        let manifest_digest = manifest_descriptor.digest();
+    fn cached_manifest_closure_is_present(&self, manifest_digest: &Digest) -> Result<bool> {
         if !self.registry.contains_blob(manifest_digest)? {
-            return Ok(false);
-        }
-        let manifest_size = self.registry.blob_size(manifest_digest)?;
-        if manifest_size != manifest_descriptor.size() {
-            tracing::warn!(
-                "SQLite ref resolves {} → {}, but the manifest blob size is {}; \
-                 expected {}",
-                self.image_name,
-                manifest_digest,
-                manifest_size,
-                manifest_descriptor.size(),
-            );
             return Ok(false);
         }
 

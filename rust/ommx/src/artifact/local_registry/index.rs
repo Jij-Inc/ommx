@@ -6,7 +6,9 @@ use crate::artifact::digest::validate_digest;
 use crate::artifact::media_types;
 use crate::artifact::{sha256_digest, ImageRef};
 use anyhow::{bail, ensure, Context, Result};
-use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, ImageManifest, MediaType};
+#[cfg(test)]
+use oci_spec::image::DescriptorBuilder;
+use oci_spec::image::{Descriptor, Digest, ImageManifest, MediaType};
 use rusqlite::{params, types::Type, Connection, OptionalExtension, TransactionBehavior};
 use std::{
     collections::BTreeSet,
@@ -118,7 +120,7 @@ impl SqliteIndexStore {
         descriptor: &Descriptor,
         experiment: &ExperimentManifestRecord,
     ) -> Result<RefUpdate> {
-        Self::ensure_artifact_descriptor_matches_ref_descriptor(descriptor, &experiment.artifact)?;
+        Self::ensure_artifact_descriptor_matches_ref_descriptor(descriptor, experiment.artifact())?;
         let mut conn = self.lock();
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let update = Self::publish_ref_in(
@@ -140,7 +142,7 @@ impl SqliteIndexStore {
         descriptor: &Descriptor,
         experiment: &ExperimentManifestRecord,
     ) -> Result<RefUpdate> {
-        Self::ensure_artifact_descriptor_matches_ref_descriptor(descriptor, &experiment.artifact)?;
+        Self::ensure_artifact_descriptor_matches_ref_descriptor(descriptor, experiment.artifact())?;
         let mut conn = self.lock();
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let update = Self::replace_ref_in(
@@ -216,7 +218,7 @@ impl SqliteIndexStore {
         conn: &Connection,
         experiment: &ExperimentManifestRecord,
     ) -> Result<()> {
-        Self::upsert_artifact_manifest_in(conn, &experiment.artifact)?;
+        Self::upsert_artifact_manifest_in(conn, experiment.artifact())?;
         Self::upsert_experiment_config_in(conn, experiment)
     }
 
@@ -224,12 +226,12 @@ impl SqliteIndexStore {
         conn: &Connection,
         artifact: &ArtifactManifestRecord,
     ) -> Result<()> {
-        validate_digest(artifact.manifest_digest.as_ref())?;
-        validate_digest(artifact.config_digest.as_ref())?;
+        validate_digest(artifact.manifest_digest().as_ref())?;
+        validate_digest(artifact.config_digest().as_ref())?;
         ensure!(
-            artifact.manifest_digest.as_ref() == sha256_digest(&artifact.manifest_json),
+            artifact.manifest_digest().as_ref() == sha256_digest(artifact.manifest_json()),
             "Artifact manifest cache digest mismatch for {}",
-            artifact.manifest_digest
+            artifact.manifest_digest()
         );
         conn.execute(
             r#"
@@ -246,10 +248,10 @@ impl SqliteIndexStore {
                 config_digest = excluded.config_digest
             "#,
             params![
-                artifact.manifest_digest.to_string(),
-                &artifact.manifest_json,
-                artifact.artifact_type.to_string(),
-                artifact.config_digest.to_string(),
+                artifact.manifest_digest().to_string(),
+                artifact.manifest_json(),
+                artifact.artifact_type().to_string(),
+                artifact.config_digest().to_string(),
             ],
         )?;
         Ok(())
@@ -259,10 +261,10 @@ impl SqliteIndexStore {
         conn: &Connection,
         experiment: &ExperimentManifestRecord,
     ) -> Result<()> {
-        let config_digest = &experiment.artifact.config_digest;
+        let config_digest = experiment.artifact().config_digest();
         validate_digest(config_digest.as_ref())?;
         ensure!(
-            config_digest.as_ref() == sha256_digest(&experiment.config_json),
+            config_digest.as_ref() == sha256_digest(experiment.config_json()),
             "Experiment config cache digest mismatch for {}",
             config_digest
         );
@@ -284,10 +286,11 @@ impl SqliteIndexStore {
             "#,
             params![
                 config_digest.to_string(),
-                &experiment.config_json,
-                experiment.status,
-                i64::try_from(experiment.run_count).context("Run count does not fit in i64")?,
-                i64::try_from(experiment.solve_count).context("Solve count does not fit in i64")?,
+                experiment.config_json(),
+                experiment.status(),
+                i64::try_from(experiment.run_count()).context("Run count does not fit in i64")?,
+                i64::try_from(experiment.solve_count())
+                    .context("Solve count does not fit in i64")?,
             ],
         )?;
         Ok(())
@@ -298,9 +301,9 @@ impl SqliteIndexStore {
         artifact: &ArtifactManifestRecord,
     ) -> Result<()> {
         ensure!(
-            descriptor.digest() == &artifact.manifest_digest,
+            descriptor.digest() == artifact.manifest_digest(),
             "Manifest cache digest {} does not match ref descriptor digest {}",
-            artifact.manifest_digest,
+            artifact.manifest_digest(),
             descriptor.digest()
         );
         ensure!(
@@ -309,9 +312,9 @@ impl SqliteIndexStore {
             descriptor.media_type()
         );
         ensure!(
-            descriptor.size() == artifact.manifest_json.len() as u64,
+            descriptor.size() == artifact.manifest_json().len() as u64,
             "Manifest cache size {} does not match ref descriptor size {}",
-            artifact.manifest_json.len(),
+            artifact.manifest_json().len(),
             descriptor.size()
         );
         Ok(())
@@ -443,6 +446,7 @@ impl SqliteIndexStore {
         .context("Failed to resolve local registry ref digest")
     }
 
+    #[cfg(test)]
     fn resolve_ref_in(
         conn: &Connection,
         name: &str,
@@ -463,6 +467,7 @@ impl SqliteIndexStore {
         .context("Failed to resolve local registry ref")
     }
 
+    #[cfg(test)]
     pub fn resolve_ref(&self, name: &str, reference: &str) -> Result<Option<Descriptor>> {
         let conn = self.lock();
         Self::resolve_ref_in(&conn, name, reference)
@@ -846,9 +851,6 @@ impl SqliteIndexStore {
             // development schema.
             conn.pragma_update(None, "user_version", SCHEMA_VERSION)
                 .context("Failed to initialize local registry schema version")?;
-        } else if version == 1 {
-            conn.pragma_update(None, "user_version", SCHEMA_VERSION)
-                .context("Failed to migrate local registry schema from version 1")?;
         } else {
             ensure!(
                 version == SCHEMA_VERSION,
@@ -926,6 +928,7 @@ impl SqliteIndexStore {
         )
     }
 
+    #[cfg(test)]
     pub fn resolve_image_descriptor(&self, image_name: &ImageRef) -> Result<Option<Descriptor>> {
         self.resolve_ref(&image_name.repository_key(), image_name.reference())
     }
@@ -1016,6 +1019,7 @@ fn has_user_tables(conn: &Connection) -> Result<bool> {
     Ok(count > 0)
 }
 
+#[cfg(test)]
 fn descriptor_from_cached_manifest_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Descriptor> {
     let digest: String = row.get(0)?;
     let manifest_json: Vec<u8> = row.get(1)?;
