@@ -17,6 +17,10 @@ use ommx::{
 };
 use proptest::prelude::Arbitrary;
 
+// A 10x span separates linear from quadratic growth without making every
+// instrumented expression benchmark pay for a 10,000-term profile.
+const EXPRESSION_SCALE: [usize; 3] = [100, 320, 1_000];
+
 fn evaluate<T, Params>(
     c: &mut Criterion,
     title: &str,
@@ -27,7 +31,7 @@ fn evaluate<T, Params>(
     let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
     let mut group = c.benchmark_group(title);
     group.plot_config(plot_config.clone());
-    for num_terms in [100, 1000, 10_000] {
+    for num_terms in EXPRESSION_SCALE {
         let params = parameter_generator(num_terms);
         let f: T = random_deterministic(params);
         let state = sample_deterministic(arbitrary_state(f.required_ids()));
