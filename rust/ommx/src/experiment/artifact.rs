@@ -31,8 +31,7 @@ impl<'a, 'reg> ExperimentArtifactView<'a, 'reg> {
 
     pub fn config(&self) -> Result<ExperimentConfig> {
         let manifest = self.artifact.get_manifest()?;
-        if manifest.artifact_type() != &MediaType::Other(EXPERIMENT_ARTIFACT_MEDIA_TYPE.to_string())
-        {
+        if manifest.artifact_type().as_ref() != EXPERIMENT_ARTIFACT_MEDIA_TYPE {
             crate::bail!(
                 "Experiment artifact type is {}, expected {}",
                 manifest.artifact_type(),
@@ -40,7 +39,7 @@ impl<'a, 'reg> ExperimentArtifactView<'a, 'reg> {
             );
         }
         let config = self.artifact.stored_config()?;
-        if config.media_type() != &MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()) {
+        if config.media_type().as_ref() != EXPERIMENT_CONFIG_MEDIA_TYPE {
             crate::bail!(
                 "Experiment config media type is {}, expected {}",
                 config.media_type(),
