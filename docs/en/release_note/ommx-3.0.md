@@ -8,6 +8,27 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🆕 Experiment listing from the Local Registry ([#1029](https://github.com/Jij-Inc/ommx/pull/1029))
+
+`ommx.experiment.list_experiments()` now lists committed Experiment refs from
+the SQLite Local Registry without opening each Experiment artifact. The returned
+`ExperimentRef` records include the image name, manifest digest, status,
+run/solve counts, update timestamp, and manifest annotations. The optional
+`prefix` filter matches the full image reference string.
+
+Experiments can also store caller-owned manifest annotations with
+`Experiment.set_annotation(...)`; OMMX-reserved annotation keys remain rejected.
+
+```python
+from ommx.experiment import Experiment, list_experiments
+
+with Experiment("example.com/team/catgt:latest") as experiment:
+    experiment.set_annotation("com.example.problem", "qap")
+
+refs = list_experiments("example.com/team/catgt")
+assert refs[0].annotations["com.example.problem"] == "qap"
+```
+
 ### 🆕 Context-aware function formatting ([#408](https://github.com/Jij-Inc/ommx/issues/408))
 
 {class}`~ommx.Instance` and {class}`~ommx.ParametricInstance` now provide
