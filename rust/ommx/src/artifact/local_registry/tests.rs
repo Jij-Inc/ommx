@@ -6,7 +6,7 @@ use crate::artifact::{
 };
 use anyhow::{Context, Result};
 use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, ImageManifestBuilder, MediaType};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -171,7 +171,7 @@ fn gc_deletes_only_orphan_candidates() -> Result<()> {
 fn sqlite_index_store_round_trip() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let store = SqliteIndexStore::open(dir.path().join(SQLITE_INDEX_FILE_NAME))?;
-    assert_eq!(store.schema_version()?, 3);
+    assert_eq!(store.schema_version()?, 4);
 
     let manifest_descriptor = test_manifest_descriptor(b"manifest")?;
     store.replace_ref(
@@ -217,11 +217,12 @@ fn sqlite_experiment_ref_rejects_mismatched_projection_descriptor() -> Result<()
     let config_descriptor = test_manifest_descriptor(&config_bytes)?;
     let experiment = ExperimentManifestRecord {
         artifact: ArtifactManifestRecord {
-            manifest_descriptor: projection_manifest_descriptor,
+            manifest_digest: projection_manifest_descriptor.digest().clone(),
+            manifest_media_type: projection_manifest_descriptor.media_type().clone(),
+            manifest_size: projection_manifest_descriptor.size(),
             manifest_json: projection_manifest_bytes,
-            manifest_annotations: BTreeMap::new(),
             artifact_type: media_types::v1_experiment(),
-            config_descriptor,
+            config_digest: config_descriptor.digest().clone(),
         },
         config_json: config_bytes,
         status: "finished".to_string(),
@@ -373,7 +374,7 @@ fn imports_oci_dir_into_sqlite_registry_preserving_image_manifest() -> Result<()
 }
 
 #[test]
-fn imports_oci_dir_preserves_index_descriptor_annotations() -> Result<()> {
+fn imports_oci_dir_does_not_persist_descriptor_annotations() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let oci_dir = dir.path().join("oci-dir");
     let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:descriptor-annotation")?;
@@ -403,20 +404,7 @@ fn imports_oci_dir_preserves_index_descriptor_annotations() -> Result<()> {
     let descriptor = index_store
         .resolve_image_descriptor(&image_name)?
         .context("Imported ref descriptor is missing")?;
-    let annotations = descriptor
-        .annotations()
-        .as_ref()
-        .context("Imported ref descriptor should preserve index.json descriptor annotations")?;
-    assert_eq!(
-        annotations
-            .get("org.ommx.test.descriptor")
-            .map(String::as_str),
-        Some("preserved")
-    );
-    assert_eq!(
-        annotations.get(OCI_IMAGE_REF_NAME_ANNOTATION),
-        Some(&image_name.to_string())
-    );
+    assert!(descriptor.annotations().is_none());
     Ok(())
 }
 

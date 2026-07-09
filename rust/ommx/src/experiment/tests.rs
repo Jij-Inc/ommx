@@ -282,13 +282,7 @@ fn list_experiments_caches_non_experiment_manifests_as_negative_results() -> any
         rusqlite::params![generic_with_experiment_config_digest.to_string()],
         |row| row.get(0),
     )?;
-    let generic_config_media_type: String = conn.query_row(
-        "SELECT config_media_type FROM artifact_manifests WHERE manifest_digest = ?1",
-        rusqlite::params![generic_with_experiment_config_digest.to_string()],
-        |row| row.get(0),
-    )?;
     assert_eq!(generic_artifact_type, media_types::V1_ARTIFACT_MEDIA_TYPE);
-    assert_eq!(generic_config_media_type, EXPERIMENT_CONFIG_MEDIA_TYPE);
     let experiment_config_rows: i64 = conn.query_row(
         r#"
         SELECT COUNT(*)

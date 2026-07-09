@@ -202,13 +202,15 @@ pub(crate) fn experiment_manifest_record_from_artifact(
         .values()
         .map(|run| run.solves.len() as u64)
         .sum();
+    let manifest_descriptor: Descriptor = artifact.stored_manifest_descriptor()?.into();
     Ok(Some(ExperimentManifestRecord {
         artifact: ArtifactManifestRecord {
-            manifest_descriptor: artifact.stored_manifest_descriptor()?.into(),
+            manifest_digest: manifest_descriptor.digest().clone(),
+            manifest_media_type: manifest_descriptor.media_type().clone(),
+            manifest_size: manifest_descriptor.size(),
             manifest_json,
-            manifest_annotations: manifest.annotations().into_iter().collect(),
             artifact_type: manifest.artifact_type().clone(),
-            config_descriptor,
+            config_digest: config_descriptor.digest().clone(),
         },
         config_json,
         status: sealed.status.as_str().to_string(),

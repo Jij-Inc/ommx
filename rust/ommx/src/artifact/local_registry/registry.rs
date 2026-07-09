@@ -597,20 +597,16 @@ impl LocalRegistry {
             manifest_descriptor.digest()
         );
         Ok(ArtifactManifestRecord {
-            manifest_descriptor,
+            manifest_digest: manifest_descriptor.digest().clone(),
+            manifest_media_type: manifest_descriptor.media_type().clone(),
+            manifest_size: manifest_descriptor.size(),
             manifest_json,
-            manifest_annotations: manifest
-                .annotations()
-                .clone()
-                .unwrap_or_default()
-                .into_iter()
-                .collect(),
             artifact_type: manifest
                 .artifact_type()
                 .as_ref()
                 .context("Validated OMMX image manifest is missing artifactType")?
                 .clone(),
-            config_descriptor: manifest.config().clone(),
+            config_digest: manifest.config().digest().clone(),
         })
     }
 
