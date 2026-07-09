@@ -350,40 +350,6 @@ impl DecisionVariableTable<Created> {
         Ok(())
     }
 
-    /// Add fixed values atomically unless the rows are already fixed consistently.
-    pub(crate) fn ensure_fixed_values(
-        &mut self,
-        fixed_values: &[(VariableID, f64)],
-        atol: ATol,
-    ) -> crate::Result<()> {
-        for &(id, value) in fixed_values {
-            let Some(row) = self.entries.get(&id) else {
-                crate::bail!(
-                    { ?id },
-                    "Fixed decision-variable value references unknown decision variable ID {id:?}",
-                );
-            };
-            row.check_value_consistency(id, value, atol)?;
-            if let Some(previous_value) = self.columns.fixed_values.get(&id).copied() {
-                if !previous_value.is_finite() || (previous_value - value).abs() > *atol {
-                    return Err(DecisionVariableError::SubstitutedValueOverwrite {
-                        id,
-                        previous_value,
-                        new_value: value,
-                        atol,
-                    }
-                    .into());
-                }
-            }
-        }
-
-        for &(id, value) in fixed_values {
-            self.columns.fixed_values.entry(id).or_insert(value);
-        }
-
-        Ok(())
-    }
-
     /// Insert one fresh row, its label, and optionally its fixed value.
     pub fn insert(
         &mut self,
@@ -1009,33 +975,6 @@ mod tests {
             "unexpected error: {err}"
         );
         assert_eq!(table.fixed_value(id), Some(1.0));
-    }
-
-    #[test]
-    fn definition_table_ensure_fixed_values_rejects_batch_atomically() {
-        let first = VariableID::from(1);
-        let second = VariableID::from(2);
-        let mut table = DecisionVariableTable::with_fixed_values(
-            BTreeMap::from([
-                (first, DecisionVariable::continuous()),
-                (second, DecisionVariable::continuous()),
-            ]),
-            VariableLabelStore::default(),
-            BTreeMap::from([(second, 0.0)]),
-            ATol::default(),
-        )
-        .unwrap();
-
-        let err = table
-            .ensure_fixed_values(&[(first, 1.0), (second, 2.0)], ATol::default())
-            .unwrap_err();
-
-        assert!(
-            err.to_string().contains("cannot be overwritten") && err.to_string().contains("ID=2"),
-            "unexpected error: {err}"
-        );
-        assert_eq!(table.fixed_value(first), None);
-        assert_eq!(table.fixed_value(second), Some(0.0));
     }
 
     #[test]

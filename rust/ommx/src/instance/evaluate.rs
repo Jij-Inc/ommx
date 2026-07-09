@@ -1,8 +1,8 @@
 use super::*;
 use crate::Result;
 use crate::{
-    constraint::RemovedReason, ATol, Bound, Evaluate, Kind, Propagate, PropagateOutcome,
-    VariableIDSet,
+    constraint::RemovedReason, ATol, Bound, DecisionVariableError, Evaluate, Kind, Propagate,
+    PropagateOutcome, VariableIDSet,
 };
 use std::collections::BTreeMap;
 
@@ -124,7 +124,7 @@ struct StatePopulationPlan<'a> {
 }
 
 struct PartialEvaluatePlan {
-    fixed_values: Vec<(VariableID, f64)>,
+    fixed_values: BTreeMap<VariableID, f64>,
 }
 
 impl PartialEvaluatePlan {
@@ -133,10 +133,10 @@ impl PartialEvaluatePlan {
             return Ok(None);
         }
 
-        let mut fixed_values = Vec::with_capacity(state.entries.len());
+        let mut fixed_values = BTreeMap::new();
         for (&id, &value) in &state.entries {
             ensure_state_value_is_finite(id, value)?;
-            fixed_values.push((VariableID::from(id), value));
+            fixed_values.insert(VariableID::from(id), value);
         }
 
         Ok(Some(Self { fixed_values }))
@@ -292,8 +292,41 @@ impl Instance {
         plan: PartialEvaluatePlan,
         atol: ATol,
     ) -> Result<()> {
-        self.decision_variables
-            .ensure_fixed_values(&plan.fixed_values, atol)
+        self.ensure_decision_variable_fixed_values(&plan.fixed_values, atol)
+    }
+
+    fn ensure_decision_variable_fixed_values(
+        &mut self,
+        fixed_values: &BTreeMap<VariableID, f64>,
+        atol: ATol,
+    ) -> Result<()> {
+        for (&id, &value) in fixed_values {
+            let Some(dv) = self.decision_variables.get(&id) else {
+                return Err(crate::error!(
+                    "Unknown decision variable (ID={}) in state.",
+                    id.into_inner()
+                ));
+            };
+            dv.check_value_consistency(id, value, atol)?;
+            if let Some(previous_value) = self.decision_variables.fixed_value(id) {
+                if !values_are_consistent(previous_value, value, atol) {
+                    return Err(DecisionVariableError::SubstitutedValueOverwrite {
+                        id,
+                        previous_value,
+                        new_value: value,
+                        atol,
+                    }
+                    .into());
+                }
+            }
+        }
+
+        for (&id, &value) in fixed_values {
+            self.decision_variables
+                .ensure_fixed_value(id, value, atol)?;
+        }
+
+        Ok(())
     }
 
     fn normalize_constant_dependencies(
@@ -790,11 +823,11 @@ mod tests {
     #[test]
     fn test_partial_evaluate_removed_only_fast_path_rejects_conflict_atomically() {
         let (mut instance, _constraint_id) =
-            removed_only_instance(BTreeMap::from([(VariableID::from(1), 0.0)]));
+            removed_only_instance(BTreeMap::from([(VariableID::from(2), 0.0)]));
         let fixed_before = instance.fixed_decision_variable_values().clone();
         let removed_before = instance.removed_constraints().clone();
 
-        let state = v1::State::from(HashMap::from([(1, 2.0)]));
+        let state = v1::State::from(HashMap::from([(1, 1.0), (2, 2.0)]));
         let err = instance
             .partial_evaluate(&state, ATol::default())
             .unwrap_err();
