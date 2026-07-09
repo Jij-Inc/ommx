@@ -37,7 +37,7 @@ live file and explain the difference.
 | `python` | The Python SDK or adapter public API or Python-user-visible behavior changes. Examples: top-level `ommx` exports, PyO3 bindings, generated `.pyi` stubs that reflect a real API change, adapter APIs, or Python-visible semantics/errors. | The PR only changes Rust internals, test fixtures, formatting, or generated artifacts without a real Python API or behavior change. |
 | `proto` | `proto/` schema or the generated protobuf contract changes. Examples: message fields, enums, field numbers, wire-format compatibility, or Buf-published schema behavior. | The PR only documents protobuf concepts without changing the schema or generated protobuf contract. |
 | `documentation` | The PR is documentation-only: Sphinx pages, migration guides, tutorials, examples, rustdoc prose, release notes, or API reference wiring with no code/proto behavior change. | Docs accompany a Rust/Python/proto behavior change. In that case, label the changed surface instead of adding `documentation` merely because docs were updated. |
-| `bug` | The PR fixes observed incorrect behavior, a failing user workflow, or a release-relevant regression. This may combine with `rust`, `python`, or `proto` when the fix affects those surfaces. | The PR is cleanup, a feature, docs-only work, or preventive hardening without an observed failure. |
+| `bug` | The PR fixes behavior that was wrong in the latest released OMMX version and should be reported to users as a bug fix. This may combine with `rust`, `python`, or `proto` when the released bug affected those surfaces. | The PR only fixes behavior that existed on `main` after the latest release and was never shipped to release users; the PR is cleanup, a feature, docs-only work, or preventive hardening without a released-user-visible failure. |
 | `breaking change` | The PR intentionally breaks compatibility or requires user migration. Combine it with the affected surface labels. | The change is additive or internal, even if the implementation was large. |
 | `dependencies` | A dependency update PR should be excluded from release notes according to `.github/release.yml`. Leave Dependabot-owned labels alone unless the user asks. | Ordinary feature, bug-fix, docs, schema, or SDK work. |
 
@@ -61,13 +61,24 @@ live file and explain the difference.
      docs can confirm a public API change, but pure regeneration noise is not
      enough.
 
-3. Separate docs-only from docs-accompanying-code.
+3. Apply the `bug` label only from a released-user viewpoint.
+   - Before adding `bug`, identify whether the bad behavior existed in the
+     latest released OMMX version for the affected surface. Check release notes,
+     tags, or the PR/issue history when this is not obvious from the diff.
+   - Use `bug` only when a user who stayed on released OMMX could have hit the
+     bad behavior and should see the PR summarized as a bug fix in GitHub
+     Release notes.
+   - Do not use `bug` for corrections to unreleased work already on `main`,
+     follow-up fixes before the next release, test-only failures, or internal
+     consistency fixes that no released user could observe.
+
+4. Separate docs-only from docs-accompanying-code.
    - If the PR only changes docs, examples, migration text, release notes, or
      API reference wiring, use `documentation`.
    - If docs were updated to explain a Rust/Python/proto change, do not add
      `documentation` unless the maintainer explicitly wants mixed docs labels.
 
-4. Propose or apply labels narrowly.
+5. Propose or apply labels narrowly.
    - For audit requests, show current labels, proposed additions/removals, and a
      one-line evidence note for each release label.
    - For action requests, mutate only the release labels needed for this PR.
