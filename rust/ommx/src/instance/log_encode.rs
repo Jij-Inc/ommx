@@ -1,5 +1,5 @@
 use super::{encoding::ensure_unit_spaced_integer_bound, Instance};
-use crate::{ATol, Bound, Coefficient, Function, Kind, Linear, Substitute, VariableID};
+use crate::{ATol, Bound, Coefficient, Function, Kind, Linear, VariableID};
 use std::collections::{BTreeMap, BTreeSet};
 
 const MAX_LOG_ENCODING_BITS: usize = 53;
@@ -84,10 +84,17 @@ impl Instance {
 
     /// Log-encode integer decision variables into binary decision variables.
     ///
-    /// The instance is cloned once, every requested variable is encoded on a
-    /// clone, and the result is committed back only if all encodings succeed.
-    /// Duplicate IDs are encoded once. Pass a single-element iterator such as
-    /// `[id]` to encode exactly one variable.
+    /// Every requested variable is validated against `self` up front (unknown
+    /// or fixed variables, wrong kind, an encodable range, decision-variable
+    /// ID capacity, and any indicator/one-hot/SOS1 constraint that would be
+    /// broken by substituting it) before anything is mutated, so a failure
+    /// never leaves `self` partially rewritten. Once validation succeeds, the
+    /// auxiliary binary variables are created and substituted directly on
+    /// `self` — no whole-instance clone is made, so untouched state (removed
+    /// constraints, other special constraints, named functions, metadata) is
+    /// neither cloned nor dropped by this call. Duplicate IDs are encoded
+    /// once. Pass a single-element iterator such as `[id]` to encode exactly
+    /// one variable.
     ///
     /// `atol` is used when normalizing each decision variable bound to an
     /// integer bound. Ranges that would require more than
@@ -104,28 +111,80 @@ impl Instance {
             return Ok(BTreeMap::new());
         }
 
-        let mut encoded = self.clone();
+        // Plan: validate every requested id against `self` (read-only) and
+        // compute its encoding spec, before mutating anything.
         let mut encoding_specs = Vec::new();
-        for id in ids {
-            let (coefficients, offset) = encoded.log_encoding_spec(id, atol)?;
+        for &id in &ids {
+            let (coefficients, offset) = self.log_encoding_spec(id, atol)?;
             encoding_specs.push((id, coefficients, offset));
         }
         let auxiliary_count = encoding_specs
             .iter()
             .map(|(_, coefficients, _)| coefficients.len())
             .sum();
-        encoded.ensure_new_decision_variable_capacity(auxiliary_count)?;
+        self.ensure_new_decision_variable_capacity(auxiliary_count)?;
+        // `Instance::substitute_acyclic_mut` would reject substituting any of
+        // these ids if it's an indicator/one-hot/SOS1 variable. Check that
+        // up front too, so the commit phase below is infallible: it can
+        // therefore create auxiliary variables and substitute directly on
+        // `self` without needing to roll back a partial mutation.
+        self.ensure_log_encodable(&ids)?;
 
+        // Commit: create the auxiliary binary variables and substitute the
+        // encoded variables directly on `self`.
         let mut encodings = BTreeMap::new();
         let mut assignments = Vec::new();
         for (id, coefficients, offset) in encoding_specs {
-            let linear = encoded.create_log_encoding(id, coefficients, offset, atol)?;
+            let linear = self.create_log_encoding(id, coefficients, offset, atol)?;
             assignments.push((id, Function::from(linear.clone())));
             encodings.insert(id, linear);
         }
-        encoded = encoded.substitute(assignments)?;
-        *self = encoded;
+        // Safe unwrap: none of these assignments can be self-referential or
+        // cyclic, since every right-hand side is built purely from the
+        // auxiliary variable IDs just created above, none of which appear in
+        // `ids`.
+        let acyclic = crate::AcyclicAssignments::new(assignments).unwrap();
+        self.substitute_acyclic_mut(&acyclic)?;
         Ok(encodings)
+    }
+
+    /// Check that none of `ids` is an indicator, one-hot, or SOS1 variable,
+    /// mirroring the checks `Instance::substitute_acyclic_mut` performs on
+    /// the substituted variables. Runs before any mutation so `log_encode`'s
+    /// commit phase never needs to roll back a partial rewrite.
+    fn ensure_log_encodable(
+        &self,
+        ids: &BTreeSet<VariableID>,
+    ) -> Result<(), crate::SubstitutionError> {
+        for (&constraint_id, ic) in self.indicator_constraint_collection.active().iter() {
+            if ids.contains(&ic.indicator_variable) {
+                return Err(crate::SubstitutionError::IndicatorVariableSubstitution {
+                    indicator_variable: ic.indicator_variable,
+                    constraint_id,
+                });
+            }
+        }
+        for (&constraint_id, oh) in self.one_hot_constraint_collection.active().iter() {
+            for &variable in &oh.variables {
+                if ids.contains(&variable) {
+                    return Err(crate::SubstitutionError::OneHotVariableSubstitution {
+                        variable,
+                        constraint_id,
+                    });
+                }
+            }
+        }
+        for (&constraint_id, sos1) in self.sos1_constraint_collection.active().iter() {
+            for &variable in &sos1.variables {
+                if ids.contains(&variable) {
+                    return Err(crate::SubstitutionError::Sos1VariableSubstitution {
+                        variable,
+                        constraint_id,
+                    });
+                }
+            }
+        }
+        Ok(())
     }
 
     fn log_encoding_spec(

@@ -5,15 +5,22 @@ use crate::{
 };
 use std::collections::BTreeMap;
 
-impl Substitute for Instance {
-    type Output = Self;
-
-    fn substitute_acyclic(
-        mut self,
+impl Instance {
+    /// In-place version of [`Substitute::substitute_acyclic`].
+    ///
+    /// Mutates `self` directly instead of consuming and returning an owned
+    /// `Instance`, so callers that already hold `&mut Instance` (such as
+    /// [`Instance::log_encode`](super::Instance::log_encode)) can substitute
+    /// without cloning the whole instance up front. Only the objective,
+    /// affected active constraints, affected special constraints, named
+    /// functions, and dependency table are touched; removed constraints and
+    /// other untouched state are left alone.
+    pub(crate) fn substitute_acyclic_mut(
+        &mut self,
         acyclic: &crate::AcyclicAssignments,
-    ) -> Result<Self::Output, crate::SubstitutionError> {
+    ) -> Result<(), crate::SubstitutionError> {
         if acyclic.is_empty() {
-            return Ok(self);
+            return Ok(());
         }
 
         // Get the set of variables being substituted
@@ -106,6 +113,18 @@ impl Substitute for Instance {
         substitute_acyclic(&mut self.named_functions, acyclic)?;
         substitute_acyclic(&mut self.decision_variable_dependency, acyclic)?;
 
+        Ok(())
+    }
+}
+
+impl Substitute for Instance {
+    type Output = Self;
+
+    fn substitute_acyclic(
+        mut self,
+        acyclic: &crate::AcyclicAssignments,
+    ) -> Result<Self::Output, crate::SubstitutionError> {
+        self.substitute_acyclic_mut(acyclic)?;
         Ok(self)
     }
 
