@@ -28,6 +28,9 @@ use the same ATol-aware integer-bound normalization as the rest of the SDK.
 `Instance.log_encode()` rejects integer ranges that would require more than 53
 auxiliary binary variables instead of accepting impractically large encoded
 search spaces.
+Both encoders also reject non-point integer ranges outside the unit-spaced
+`float` integer interval, so every accepted encoded integer value remains
+distinguishable after adding the encoding offset.
 Passing an explicit fixed decision-variable ID is rejected before substitution,
 so fixed values and dependent-variable assignments remain disjoint.
 

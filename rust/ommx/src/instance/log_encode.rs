@@ -1,4 +1,4 @@
-use super::Instance;
+use super::{encoding::ensure_unit_spaced_integer_bound, Instance};
 use crate::{ATol, Bound, Coefficient, Function, Kind, Linear, Substitute, VariableID};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -46,6 +46,7 @@ fn log_encoding_coefficients(bound: Bound, atol: ATol) -> crate::Result<(Vec<Coe
     if !integer_bound.is_finite() {
         crate::bail!({ ?bound }, "bound must be finite for log-encoding: {bound}");
     }
+    ensure_unit_spaced_integer_bound(integer_bound, "log-encoding")?;
 
     let u_l = integer_bound.width();
     if u_l < 0.0 {
@@ -109,6 +110,11 @@ impl Instance {
             let (coefficients, offset) = encoded.log_encoding_spec(id, atol)?;
             encoding_specs.push((id, coefficients, offset));
         }
+        let auxiliary_count = encoding_specs
+            .iter()
+            .map(|(_, coefficients, _)| coefficients.len())
+            .sum();
+        encoded.ensure_new_decision_variable_capacity(auxiliary_count)?;
 
         let mut encodings = BTreeMap::new();
         let mut assignments = Vec::new();
@@ -249,6 +255,9 @@ mod tests {
     fn log_range(bound: Bound, max_bits: usize) -> Option<(i64, u64)> {
         let integer_bound = bound.as_integer_bound(ATol::default())?;
         if !integer_bound.is_finite() {
+            return None;
+        }
+        if ensure_unit_spaced_integer_bound(integer_bound, "log-encoding").is_err() {
             return None;
         }
         let width = integer_bound.width();
@@ -637,6 +646,20 @@ mod tests {
     }
 
     #[test]
+    fn test_log_encoding_rejects_non_unit_spaced_integer_range() {
+        let max_exact_integer = 2.0_f64.powi(53);
+        let accepted_bound = Bound::new(max_exact_integer - 2.0, max_exact_integer).unwrap();
+        let (coefficients, offset) =
+            log_encoding_coefficients(accepted_bound, ATol::default()).unwrap();
+        assert_eq!(coefficients, vec![coeff!(1.0), coeff!(1.0)]);
+        assert_eq!(offset, max_exact_integer - 2.0);
+
+        let rejected_bound = Bound::new(max_exact_integer, max_exact_integer + 2.0).unwrap();
+        let err = log_encoding_coefficients(rejected_bound, ATol::default()).unwrap_err();
+        assert!(err.to_string().contains("too far from zero"));
+    }
+
+    #[test]
     fn test_log_encode_rejects_non_integer_variables() {
         let cases = [
             (Kind::Binary, Bound::of_binary()),
@@ -735,6 +758,36 @@ mod tests {
         let err = instance.log_encode([id0], ATol::default()).unwrap_err();
         assert!(err.to_string().contains("must be integer"));
         assert!(instance.decision_variable_dependency.get(&id0).is_none());
+        assert_eq!(aux_variable_count(&instance, "ommx.log_encode"), 0);
+    }
+
+    #[test]
+    fn test_log_encode_fails_before_auxiliary_id_overflow() {
+        let id = VariableID::from(0);
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(crate::linear!(0)))
+            .decision_variables(BTreeMap::from([
+                (
+                    id,
+                    DecisionVariable::new(
+                        Kind::Integer,
+                        Bound::new(0.0, 3.0).unwrap(),
+                        ATol::default(),
+                    )
+                    .unwrap(),
+                ),
+                (VariableID::from(u64::MAX), DecisionVariable::binary()),
+            ]))
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap();
+
+        let err = instance.log_encode([id], ATol::default()).unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("No available decision variable ID"));
+        assert!(instance.decision_variable_dependency.get(&id).is_none());
         assert_eq!(aux_variable_count(&instance, "ommx.log_encode"), 0);
     }
 

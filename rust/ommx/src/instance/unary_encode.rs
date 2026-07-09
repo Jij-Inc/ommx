@@ -1,4 +1,4 @@
-use super::Instance;
+use super::{encoding::ensure_unit_spaced_integer_bound, Instance};
 use crate::{ATol, Bound, Coefficient, Function, Kind, Linear, Substitute, VariableID};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -17,6 +17,7 @@ fn unary_encoding_size(bound: Bound, max_range: usize, atol: ATol) -> crate::Res
     if !integer_bound.is_finite() {
         crate::bail!({ ?bound }, "bound must be finite for unary-encoding: {bound}");
     }
+    ensure_unit_spaced_integer_bound(integer_bound, "unary-encoding")?;
 
     let width = integer_bound.width();
     if width < 0.0 {
@@ -88,6 +89,11 @@ impl Instance {
                 encoded.unary_encoding_spec(id, max_range, atol)?;
             encoding_specs.push((id, num_binary_variables, offset));
         }
+        let auxiliary_count = encoding_specs
+            .iter()
+            .map(|(_, num_binary_variables, _)| *num_binary_variables)
+            .sum();
+        encoded.ensure_new_decision_variable_capacity(auxiliary_count)?;
 
         let mut encodings = BTreeMap::new();
         let mut assignments = Vec::new();
@@ -207,6 +213,9 @@ mod tests {
     fn unary_range(bound: Bound, max_width: usize) -> Option<(i64, usize)> {
         let integer_bound = bound.as_integer_bound(ATol::default())?;
         if !integer_bound.is_finite() {
+            return None;
+        }
+        if ensure_unit_spaced_integer_bound(integer_bound, "unary-encoding").is_err() {
             return None;
         }
         let width = integer_bound.width();
@@ -623,6 +632,20 @@ mod tests {
     }
 
     #[test]
+    fn test_unary_encoding_rejects_non_unit_spaced_integer_range() {
+        let max_exact_integer = 2.0_f64.powi(53);
+        let accepted_bound = Bound::new(max_exact_integer - 2.0, max_exact_integer).unwrap();
+        let (num_binary_variables, offset) =
+            unary_encoding_size(accepted_bound, 2, ATol::default()).unwrap();
+        assert_eq!(num_binary_variables, 2);
+        assert_eq!(offset, max_exact_integer - 2.0);
+
+        let rejected_bound = Bound::new(max_exact_integer, max_exact_integer + 2.0).unwrap();
+        let err = unary_encoding_size(rejected_bound, 2, ATol::default()).unwrap_err();
+        assert!(err.to_string().contains("too far from zero"));
+    }
+
+    #[test]
     fn test_unary_encode_rejects_non_integer_variables() {
         let cases = [
             (Kind::Binary, Bound::of_binary()),
@@ -743,6 +766,42 @@ mod tests {
             .unwrap_err();
         assert!(err.to_string().contains("must be integer"));
         assert!(instance.decision_variable_dependency.get(&id0).is_none());
+        assert_eq!(aux_variable_count(&instance, "ommx.unary_encode"), 0);
+    }
+
+    #[test]
+    fn test_unary_encode_fails_before_auxiliary_id_overflow() {
+        let id = VariableID::from(0);
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(crate::linear!(0)))
+            .decision_variables(BTreeMap::from([
+                (
+                    id,
+                    DecisionVariable::new(
+                        Kind::Integer,
+                        Bound::new(0.0, 3.0).unwrap(),
+                        ATol::default(),
+                    )
+                    .unwrap(),
+                ),
+                (VariableID::from(u64::MAX), DecisionVariable::binary()),
+            ]))
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap();
+
+        let err = instance
+            .unary_encode(
+                [id],
+                Instance::DEFAULT_UNARY_ENCODING_MAX_RANGE,
+                ATol::default(),
+            )
+            .unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("No available decision variable ID"));
+        assert!(instance.decision_variable_dependency.get(&id).is_none());
         assert_eq!(aux_variable_count(&instance, "ommx.unary_encode"), 0);
     }
 

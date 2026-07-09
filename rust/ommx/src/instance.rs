@@ -5,6 +5,7 @@ mod builder;
 mod clip_bounds;
 mod convert;
 mod decision_variable;
+mod encoding;
 mod evaluate;
 mod format_function;
 mod indicator;
