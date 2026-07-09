@@ -2,101 +2,79 @@ use super::{encoding::ensure_unit_spaced_integer_bound, Instance};
 use crate::{ATol, Bound, Coefficient, Function, Kind, Linear, Substitute, VariableID};
 use std::collections::{BTreeMap, BTreeSet};
 
-const MAX_LOG_ENCODING_BITS: usize = 53;
-const MAX_LOG_ENCODING_RANGE_WIDTH: u64 = (1_u64 << MAX_LOG_ENCODING_BITS) - 1;
-
-fn log_encoding_bit_count(width: f64) -> crate::Result<usize> {
-    if width == 0.0 {
-        return Ok(0);
-    }
-    if width > MAX_LOG_ENCODING_RANGE_WIDTH as f64 {
-        crate::bail!(
-            { width, max_bits = MAX_LOG_ENCODING_BITS },
-            "range is too large for log-encoding: width {width} requires more than {MAX_LOG_ENCODING_BITS} binary variables",
-        );
-    }
-    if width.fract() != 0.0 {
-        crate::bail!(
-            { width },
-            "integer range width is not exactly representable for log-encoding: {width}",
-        );
-    }
-    let width = width as u64;
-    Ok((u64::BITS - width.leading_zeros()) as usize)
-}
-
-/// Calculate log-encoding coefficients for a given bound.
+/// Calculate the number of binary variables for unary encoding.
 ///
-/// Returns `(coefficients, constant_offset)` where:
-/// - `coefficients`: Vector of coefficients for binary variables as `Coefficient` values
-/// - `constant_offset`: Constant term to add
-///
-/// # Arguments
-///
-/// * `bound` - The bound of the integer variable to encode
+/// Returns `(num_binary_variables, constant_offset)`.
 ///
 /// # Errors
 ///
 /// Returns an error if the bound is not finite, or if no feasible integer
 /// values exist within the bound.
-fn log_encoding_coefficients(bound: Bound, atol: ATol) -> crate::Result<(Vec<Coefficient>, f64)> {
+fn unary_encoding_size(bound: Bound, max_range: usize, atol: ATol) -> crate::Result<(usize, f64)> {
     let integer_bound = bound.as_integer_bound(atol).ok_or_else(|| {
-        crate::error!({ ?bound }, "no feasible integer values in bound for log-encoding: {bound}")
+        crate::error!({ ?bound }, "no feasible integer values in bound for unary-encoding: {bound}")
     })?;
     if !integer_bound.is_finite() {
-        crate::bail!({ ?bound }, "bound must be finite for log-encoding: {bound}");
+        crate::bail!({ ?bound }, "bound must be finite for unary-encoding: {bound}");
     }
-    ensure_unit_spaced_integer_bound(integer_bound, "log-encoding")?;
+    ensure_unit_spaced_integer_bound(integer_bound, "unary-encoding")?;
 
-    let u_l = integer_bound.width();
-    if u_l < 0.0 {
-        // No feasible integer values in the range
-        crate::bail!({ ?bound }, "no feasible integer values in bound for log-encoding: {bound}");
-    }
-
-    let n = log_encoding_bit_count(u_l)?;
-    // There is only one feasible integer, and no need to encode
-    if n == 0 {
-        return Ok((vec![], integer_bound.lower()));
+    let width = integer_bound.width();
+    if width < 0.0 {
+        crate::bail!({ ?bound }, "no feasible integer values in bound for unary-encoding: {bound}");
     }
 
-    let coefficients = (0..n)
-        .map(|i| {
-            // Calculate coefficient for each binary variable
-            let coeff_value = if i == n - 1 {
-                // Last binary variable gets special coefficient to handle exact range
-                u_l - 2.0f64.powi(i as i32) + 1.0
-            } else {
-                // Other variables get power of 2 coefficients
-                2.0f64.powi(i as i32)
-            };
-            Coefficient::try_from(coeff_value).unwrap()
-        })
-        .collect::<Vec<_>>();
+    if width > max_range as f64 {
+        crate::bail!(
+            { ?bound, width, max_range },
+            "range is too large for unary-encoding: {width} > max_range({max_range})"
+        );
+    }
 
-    Ok((coefficients, integer_bound.lower()))
+    if width > usize::MAX as f64 {
+        crate::bail!(
+            { ?bound, width },
+            "range is too large for unary-encoding: {width}"
+        );
+    }
+
+    Ok((width as usize, integer_bound.lower()))
 }
 
 impl Instance {
-    /// Maximum number of auxiliary binary variables introduced by log encoding
-    /// for one integer decision variable.
-    pub const MAX_LOG_ENCODING_BITS: usize = MAX_LOG_ENCODING_BITS;
+    /// Default maximum integer range recommended for unary encoding.
+    ///
+    /// Unary encoding creates `upper - lower` auxiliary binary variables for
+    /// one integer variable. This default is intentionally narrow so accidental
+    /// auto-encoding cannot allocate many auxiliary variables.
+    pub const DEFAULT_UNARY_ENCODING_MAX_RANGE: usize = 16;
 
-    /// Log-encode integer decision variables into binary decision variables.
+    /// Unary-encode integer decision variables into binary decision variables.
+    ///
+    /// For an integer variable `x` with feasible integer range `[lower, upper]`,
+    /// this creates `upper - lower` binary variables `b_j` and substitutes:
+    ///
+    /// `x = lower + sum_j b_j`
+    ///
+    /// Every binary configuration maps to an integer in the original range, so
+    /// this encoding does not require an additional encoding-validity
+    /// constraint. The number of auxiliary variables grows linearly with the
+    /// range width, so this is intended for narrow integer ranges.
+    ///
+    /// `max_range` is an upper bound on `upper - lower`, which is also the
+    /// number of auxiliary binary variables introduced for this decision
+    /// variable. `atol` is used when normalizing the decision variable bound to
+    /// an integer bound.
     ///
     /// The instance is cloned once, every requested variable is encoded on a
     /// clone, and the result is committed back only if all encodings succeed.
     /// Duplicate IDs are encoded once. Pass a single-element iterator such as
     /// `[id]` to encode exactly one variable.
-    ///
-    /// `atol` is used when normalizing each decision variable bound to an
-    /// integer bound. Ranges that would require more than
-    /// [`Self::MAX_LOG_ENCODING_BITS`] binary variables are rejected instead of
-    /// creating an impractically large encoded search space.
     #[tracing::instrument(skip(self, ids))]
-    pub fn log_encode(
+    pub fn unary_encode(
         &mut self,
         ids: impl IntoIterator<Item = VariableID>,
+        max_range: usize,
         atol: ATol,
     ) -> crate::Result<BTreeMap<VariableID, Linear>> {
         let ids = ids.into_iter().collect::<BTreeSet<_>>();
@@ -107,19 +85,20 @@ impl Instance {
         let mut encoded = self.clone();
         let mut encoding_specs = Vec::new();
         for id in ids {
-            let (coefficients, offset) = encoded.log_encoding_spec(id, atol)?;
-            encoding_specs.push((id, coefficients, offset));
+            let (num_binary_variables, offset) =
+                encoded.unary_encoding_spec(id, max_range, atol)?;
+            encoding_specs.push((id, num_binary_variables, offset));
         }
         let auxiliary_count = encoding_specs
             .iter()
-            .map(|(_, coefficients, _)| coefficients.len())
+            .map(|(_, num_binary_variables, _)| *num_binary_variables)
             .sum();
         encoded.ensure_new_decision_variable_capacity(auxiliary_count)?;
 
         let mut encodings = BTreeMap::new();
         let mut assignments = Vec::new();
-        for (id, coefficients, offset) in encoding_specs {
-            let linear = encoded.create_log_encoding(id, coefficients, offset, atol)?;
+        for (id, num_binary_variables, offset) in encoding_specs {
+            let linear = encoded.create_unary_encoding(id, num_binary_variables, offset, atol)?;
             assignments.push((id, Function::from(linear.clone())));
             encodings.insert(id, linear);
         }
@@ -128,53 +107,55 @@ impl Instance {
         Ok(encodings)
     }
 
-    fn log_encoding_spec(
+    fn unary_encoding_spec(
         &self,
         id: VariableID,
+        max_range: usize,
         atol: ATol,
-    ) -> crate::Result<(Vec<Coefficient>, f64)> {
+    ) -> crate::Result<(usize, f64)> {
         let v = self
             .decision_variables
             .get(&id)
-            .ok_or_else(|| crate::error!({ ?id }, "unknown variable for log-encoding: {id:?}"))?;
+            .ok_or_else(|| crate::error!({ ?id }, "unknown variable for unary-encoding: {id:?}"))?;
         if self.fixed_decision_variable_value(id).is_some() {
             crate::bail!(
                 { ?id },
-                "fixed decision variable cannot be log-encoded: id={id:?}",
+                "fixed decision variable cannot be unary-encoded: id={id:?}",
             );
         }
         if v.kind() != Kind::Integer {
             let kind = v.kind();
             crate::bail!(
                 { ?id, ?kind },
-                "variable must be integer for log-encoding: id={id:?}, kind={kind:?}",
+                "variable must be integer for unary-encoding: id={id:?}, kind={kind:?}",
             );
         }
-        log_encoding_coefficients(v.bound(), atol)
+        unary_encoding_size(v.bound(), max_range, atol)
     }
 
-    fn create_log_encoding(
+    fn create_unary_encoding(
         &mut self,
         id: VariableID,
-        coefficients: Vec<Coefficient>,
+        num_binary_variables: usize,
         offset: f64,
         atol: ATol,
     ) -> crate::Result<Linear> {
-        // Safe unwrap: offset is always finite from log_encoding_coefficients
+        // Safe unwrap: offset is always finite from unary_encoding_size.
         let mut linear = Linear::try_from(offset).unwrap();
-        for (i, coefficient) in coefficients.iter().enumerate() {
+        let coefficient = Coefficient::try_from(1.0).unwrap();
+        for i in 0..num_binary_variables {
             let binary_id = self.new_decision_variable_with_label(
                 Kind::Binary,
                 Bound::of_binary(),
                 crate::ModelingLabel {
-                    name: Some("ommx.log_encode".to_string()),
+                    name: Some("ommx.unary_encode".to_string()),
                     subscripts: vec![id.into_inner() as i64, i as i64],
                     ..Default::default()
                 },
                 None,
                 atol,
             )?;
-            linear.add_term(binary_id.into(), *coefficient)?;
+            linear.add_term(binary_id.into(), coefficient)?;
         }
         Ok(linear)
     }
@@ -192,7 +173,7 @@ mod tests {
     use proptest::prelude::*;
     use std::collections::{BTreeMap, BTreeSet};
 
-    const MAX_PROPTEST_LOG_BITS: usize = 6;
+    const MAX_PROPTEST_UNARY_WIDTH: usize = 8;
     const EVALUATION_EQ_ABS_TOL: f64 = 1e-8;
     const EVALUATION_EQ_REL_TOL: f64 = 1e-12;
 
@@ -223,10 +204,25 @@ mod tests {
     }
 
     #[derive(Clone, Debug)]
-    struct LogEncodeTarget {
+    struct UnaryEncodeTarget {
         id: VariableID,
         lower: i64,
-        width: u64,
+        width: usize,
+    }
+
+    fn unary_range(bound: Bound, max_width: usize) -> Option<(i64, usize)> {
+        let integer_bound = bound.as_integer_bound(ATol::default())?;
+        if !integer_bound.is_finite() {
+            return None;
+        }
+        if ensure_unit_spaced_integer_bound(integer_bound, "unary-encoding").is_err() {
+            return None;
+        }
+        let width = integer_bound.width();
+        if width < 0.0 || width > max_width as f64 {
+            return None;
+        }
+        Some((integer_bound.lower() as i64, width as usize))
     }
 
     fn active_special_constraint_variables(instance: &Instance) -> BTreeSet<VariableID> {
@@ -252,48 +248,28 @@ mod tests {
         ids
     }
 
-    fn log_range(bound: Bound, max_bits: usize) -> Option<(i64, u64)> {
-        let integer_bound = bound.as_integer_bound(ATol::default())?;
-        if !integer_bound.is_finite() {
-            return None;
-        }
-        if ensure_unit_spaced_integer_bound(integer_bound, "log-encoding").is_err() {
-            return None;
-        }
-        let width = integer_bound.width();
-        if width < 0.0 || log_encoding_bit_count(width).ok()? > max_bits {
-            return None;
-        }
-        if integer_bound.lower() < i64::MIN as f64 || integer_bound.lower() > i64::MAX as f64 {
-            return None;
-        }
-        Some((integer_bound.lower() as i64, width as u64))
-    }
-
-    fn log_encode_targets(instance: &Instance, max_bits: usize) -> Vec<LogEncodeTarget> {
+    fn unary_encode_targets(instance: &Instance, max_width: usize) -> Vec<UnaryEncodeTarget> {
         let special_variables = active_special_constraint_variables(instance);
         instance
             .decision_variable_usage()
             .used_integer()
             .into_iter()
             .filter_map(|(id, bound)| {
-                if special_variables.contains(&id)
-                    || instance.fixed_decision_variable_value(id).is_some()
-                {
+                if special_variables.contains(&id) {
                     return None;
                 }
-                let (lower, width) = log_range(bound, max_bits)?;
-                Some(LogEncodeTarget { id, lower, width })
+                let (lower, width) = unary_range(bound, max_width)?;
+                Some(UnaryEncodeTarget { id, lower, width })
             })
             .collect()
     }
 
-    fn arbitrary_log_encode_case() -> BoxedStrategy<(Instance, LogEncodeTarget, State)> {
+    fn arbitrary_unary_encode_case() -> BoxedStrategy<(Instance, UnaryEncodeTarget, State)> {
         Instance::arbitrary()
             .prop_filter_map(
                 "instance must contain an encodable used integer variable",
                 |instance| {
-                    let targets = log_encode_targets(&instance, MAX_PROPTEST_LOG_BITS);
+                    let targets = unary_encode_targets(&instance, MAX_PROPTEST_UNARY_WIDTH);
                     (!targets.is_empty()).then_some((instance, targets))
                 },
             )
@@ -306,12 +282,7 @@ mod tests {
             .boxed()
     }
 
-    fn sorted_log_binary_ids(
-        instance: &Instance,
-        encoding: &Linear,
-        original_id: VariableID,
-    ) -> Vec<VariableID> {
-        let store = instance.variable_labels();
+    fn sorted_unary_binary_ids(encoding: &Linear) -> Vec<VariableID> {
         let mut ids: Vec<_> = encoding
             .iter()
             .filter_map(|(monomial, _)| match monomial {
@@ -319,44 +290,26 @@ mod tests {
                 LinearMonomial::Constant => None,
             })
             .collect();
-        ids.sort_by_key(|id| {
-            let subscripts = store.subscripts(*id);
-            (
-                subscripts.first().copied() != Some(original_id.into_inner() as i64),
-                subscripts.get(1).copied().unwrap_or(i64::MAX),
-                id.into_inner(),
-            )
-        });
+        ids.sort();
         ids
     }
 
-    fn log_bits_for_delta(delta: u64, coefficients: &[Coefficient]) -> Vec<bool> {
-        if coefficients.is_empty() {
-            return Vec::new();
-        }
-        let regular_bits = coefficients.len() - 1;
-        let regular_capacity = (1_u64 << regular_bits) - 1;
-        let last_coefficient = coefficients.last().unwrap().into_inner() as u64;
-        let (last_bit, remainder) = if delta <= regular_capacity {
-            (false, delta)
-        } else {
-            (true, delta - last_coefficient)
-        };
-        let mut bits: Vec<_> = (0..regular_bits)
-            .map(|i| ((remainder >> i) & 1) == 1)
-            .collect();
-        bits.push(last_bit);
-        bits
+    fn decoded_unary_value(lower: i64, bits: &[bool]) -> f64 {
+        lower as f64 + bits.iter().filter(|bit| **bit).count() as f64
     }
 
-    fn state_with_original_value(mut state: State, target: &LogEncodeTarget, value: f64) -> State {
+    fn state_with_original_value(
+        mut state: State,
+        target: &UnaryEncodeTarget,
+        value: f64,
+    ) -> State {
         state.entries.insert(target.id.into_inner(), value);
         state
     }
 
-    fn state_with_log_bits(
+    fn state_with_unary_bits(
         mut state: State,
-        target: &LogEncodeTarget,
+        target: &UnaryEncodeTarget,
         binary_ids: &[VariableID],
         bits: &[bool],
     ) -> State {
@@ -519,44 +472,82 @@ mod tests {
 
     proptest! {
         #[test]
-        fn log_encode_preserves_full_v3_instance_evaluation(
-            (instance, target, state, delta) in arbitrary_log_encode_case()
+        fn unary_encode_preserves_full_v3_instance_evaluation(
+            (instance, target, state, bits) in arbitrary_unary_encode_case()
                 .prop_flat_map(|(instance, target, state)| {
-                    let delta = 0..=target.width;
-                    (Just(instance), Just(target), Just(state), delta)
+                    let bits = proptest::collection::vec(any::<bool>(), target.width);
+                    (Just(instance), Just(target), Just(state), bits)
                 })
         ) {
-            let decoded_value = target.lower as f64 + delta as f64;
+            let decoded_value = decoded_unary_value(target.lower, &bits);
             let expected_state = state_with_original_value(state.clone(), &target, decoded_value);
             let expected = instance.evaluate(&expected_state, ATol::default()).unwrap();
 
-            let (coefficients, _) =
-                log_encoding_coefficients(instance.decision_variables().get(&target.id).unwrap().bound(), ATol::default()).unwrap();
-            let bits = log_bits_for_delta(delta, &coefficients);
-
             let mut encoded_instance = instance.clone();
             let encoding = encoded_instance
-                .log_encode([target.id], ATol::default())
+                .unary_encode(
+                    [target.id],
+                    Instance::DEFAULT_UNARY_ENCODING_MAX_RANGE,
+                    ATol::default(),
+                )
                 .unwrap();
             let encoding = encoding.get(&target.id).unwrap();
-            let binary_ids = sorted_log_binary_ids(&encoded_instance, encoding, target.id);
-            prop_assert_eq!(binary_ids.len(), bits.len());
+            let binary_ids = sorted_unary_binary_ids(encoding);
+            prop_assert_eq!(binary_ids.len(), target.width);
 
-            let encoded_state = state_with_log_bits(state, &target, &binary_ids, &bits);
+            let encoded_state = state_with_unary_bits(state, &target, &binary_ids, &bits);
             let actual = encoded_instance.evaluate(&encoded_state, ATol::default()).unwrap();
 
             assert_same_observable_evaluation(&expected, &actual)?;
         }
+
+        #[test]
+        fn unary_encode_depends_only_on_unary_bit_sum(
+            (instance, target, state, bit_sum) in arbitrary_unary_encode_case()
+                .prop_flat_map(|(instance, target, state)| {
+                    let bit_sum = 0..=target.width;
+                    (Just(instance), Just(target), Just(state), bit_sum)
+                })
+        ) {
+            let mut encoded_instance = instance;
+            let encoding = encoded_instance
+                .unary_encode(
+                    [target.id],
+                    Instance::DEFAULT_UNARY_ENCODING_MAX_RANGE,
+                    ATol::default(),
+                )
+                .unwrap();
+            let encoding = encoding.get(&target.id).unwrap();
+            let binary_ids = sorted_unary_binary_ids(encoding);
+            prop_assert_eq!(binary_ids.len(), target.width);
+
+            let mut prefix_bits = vec![false; target.width];
+            prefix_bits.iter_mut().take(bit_sum).for_each(|bit| *bit = true);
+            let mut suffix_bits = vec![false; target.width];
+            suffix_bits
+                .iter_mut()
+                .rev()
+                .take(bit_sum)
+                .for_each(|bit| *bit = true);
+
+            let prefix_state =
+                state_with_unary_bits(state.clone(), &target, &binary_ids, &prefix_bits);
+            let suffix_state = state_with_unary_bits(state, &target, &binary_ids, &suffix_bits);
+            let prefix = encoded_instance.evaluate(&prefix_state, ATol::default()).unwrap();
+            let suffix = encoded_instance.evaluate(&suffix_state, ATol::default()).unwrap();
+
+            assert_same_observable_evaluation(&prefix, &suffix)?;
+        }
     }
 
     #[test]
-    fn test_log_encode_instance() {
-        // Create instance with integer variable in range [2, 7]
+    fn test_unary_encode_instance() {
+        // Create instance with integer variable in range [2, 5].
         let mut instance = Instance::default();
         let id = VariableID::from(0);
         let var = DecisionVariable::new(
             Kind::Integer,
-            Bound::new(2.0, 7.0).unwrap(),
+            Bound::new(2.0, 5.0).unwrap(),
             crate::ATol::default(),
         )
         .unwrap();
@@ -564,103 +555,98 @@ mod tests {
             .add_decision_variable(id, var, Default::default())
             .unwrap();
 
-        // Perform log encoding
-        let encoded = instance.log_encode([id], ATol::default()).unwrap();
+        let encoded = instance
+            .unary_encode(
+                [id],
+                Instance::DEFAULT_UNARY_ENCODING_MAX_RANGE,
+                ATol::default(),
+            )
+            .unwrap();
         let encoded = encoded.get(&id).unwrap();
 
-        // The original variable is still present but substituted
+        // The original variable is still present but substituted.
         assert!(instance.decision_variables.contains_key(&id));
 
-        // Check binary variables were created with correct labels
+        // Check binary variables were created with correct labels.
         let store = instance.variable_labels();
-        let binary_vars: Vec<_> = instance
+        let binary_ids: Vec<_> = instance
             .decision_variables
             .iter()
             .filter(|(id, _)| {
-                store.name(**id) == Some("ommx.log_encode")
+                store.name(**id) == Some("ommx.unary_encode")
                     && store.subscripts(**id).first().copied() == Some(0)
             })
-            .map(|(_, dv)| dv)
+            .map(|(id, dv)| {
+                assert_eq!(dv.kind(), Kind::Binary);
+                *id
+            })
             .collect();
 
-        // For range [2, 7] (6 values), we need ceil(log2(6)) = 3 bits
-        assert_eq!(binary_vars.len(), 3);
+        // For range [2, 5], unary encoding needs upper - lower = 3 bits.
+        assert_eq!(binary_ids.len(), 3);
 
-        // Check all are binary variables
-        for var in &binary_vars {
-            assert_eq!(var.kind(), Kind::Binary);
+        assert_eq!(encoded.get(&LinearMonomial::Constant), Some(coeff!(2.0)));
+        for id in binary_ids {
+            assert_eq!(
+                encoded.get(&LinearMonomial::Variable(id)),
+                Some(coeff!(1.0))
+            );
         }
-
-        // Check the encoded linear expression has correct number of terms
-        // Should have 3 terms for binary variables + 1 constant term
-        assert_eq!(encoded.num_terms(), 4);
     }
 
     #[test]
-    fn test_log_encoding_coefficients() {
-        // 2^3 case
-        let bound = Bound::new(0.0, 7.0).unwrap();
-        let (coefficients, offset) = log_encoding_coefficients(bound, ATol::default()).unwrap();
-        assert_eq!(coefficients, vec![coeff!(1.0), coeff!(2.0), coeff!(4.0)]);
+    fn test_unary_encoding_size() {
+        let bound = Bound::new(0.0, 3.0).unwrap();
+        let (num_binary_variables, offset) =
+            unary_encoding_size(bound, 3, ATol::default()).unwrap();
+        assert_eq!(num_binary_variables, 3);
         assert_eq!(offset, 0.0);
 
-        // [1, 6] should be x = 1 + b1 + 2*b2 + 2*b3, the last coefficient is shifted
-        // Then, 1 + 1 + 2 + 2 = 6
         let bound = Bound::new(1.0, 6.0).unwrap();
-        let (coefficients, offset) = log_encoding_coefficients(bound, ATol::default()).unwrap();
-        assert_eq!(coefficients, vec![coeff!(1.0), coeff!(2.0), coeff!(2.0)]);
-        assert_eq!(offset, 1.0);
-        assert_eq!(
-            offset + coefficients.iter().map(|c| c.into_inner()).sum::<f64>(),
-            6.0
-        );
-
-        let bound = Bound::new(1.000000000001, 6.000000000001).unwrap();
-        let (coefficients, offset) = log_encoding_coefficients(bound, ATol::default()).unwrap();
-        assert_eq!(coefficients, vec![coeff!(1.0), coeff!(2.0), coeff!(2.0)]);
+        let (num_binary_variables, offset) =
+            unary_encoding_size(bound, 5, ATol::default()).unwrap();
+        assert_eq!(num_binary_variables, 5);
         assert_eq!(offset, 1.0);
 
-        // [2, 2] should be x = 2, no binary variables needed
+        let bound = Bound::new(1.000000000001, 2.999999999999).unwrap();
+        let (num_binary_variables, offset) =
+            unary_encoding_size(bound, 2, ATol::default()).unwrap();
+        assert_eq!(num_binary_variables, 2);
+        assert_eq!(offset, 1.0);
+
         let bound = Bound::new(2.0, 2.0).unwrap();
-        let (coefficients, offset) = log_encoding_coefficients(bound, ATol::default()).unwrap();
-        assert!(coefficients.is_empty());
+        let (num_binary_variables, offset) =
+            unary_encoding_size(bound, 0, ATol::default()).unwrap();
+        assert_eq!(num_binary_variables, 0);
         assert_eq!(offset, 2.0);
 
-        // No feasible integer values
         let bound = Bound::new(1.3, 1.6).unwrap();
-        assert!(log_encoding_coefficients(bound, ATol::default()).is_err());
+        assert!(unary_encoding_size(bound, 1, ATol::default()).is_err());
     }
 
     #[test]
-    fn test_log_encoding_rejects_range_requiring_too_many_bits() {
-        let accepted_bound = Bound::new(0.0, MAX_LOG_ENCODING_RANGE_WIDTH as f64).unwrap();
-        let (coefficients, offset) =
-            log_encoding_coefficients(accepted_bound, ATol::default()).unwrap();
-        assert_eq!(coefficients.len(), Instance::MAX_LOG_ENCODING_BITS);
-        assert_eq!(offset, 0.0);
-
-        let rejected_upper = 2.0_f64.powi(Instance::MAX_LOG_ENCODING_BITS as i32);
-        let rejected_bound = Bound::new(0.0, rejected_upper).unwrap();
-        let err = log_encoding_coefficients(rejected_bound, ATol::default()).unwrap_err();
-        assert!(err.to_string().contains("too large for log-encoding"));
+    fn test_unary_encoding_size_respects_max_range() {
+        let bound = Bound::new(0.0, 6.0).unwrap();
+        let err = unary_encoding_size(bound, 5, ATol::default()).unwrap_err();
+        assert!(err.to_string().contains("max_range(5)"));
     }
 
     #[test]
-    fn test_log_encoding_rejects_non_unit_spaced_integer_range() {
+    fn test_unary_encoding_rejects_non_unit_spaced_integer_range() {
         let max_exact_integer = 2.0_f64.powi(53);
         let accepted_bound = Bound::new(max_exact_integer - 2.0, max_exact_integer).unwrap();
-        let (coefficients, offset) =
-            log_encoding_coefficients(accepted_bound, ATol::default()).unwrap();
-        assert_eq!(coefficients, vec![coeff!(1.0), coeff!(1.0)]);
+        let (num_binary_variables, offset) =
+            unary_encoding_size(accepted_bound, 2, ATol::default()).unwrap();
+        assert_eq!(num_binary_variables, 2);
         assert_eq!(offset, max_exact_integer - 2.0);
 
         let rejected_bound = Bound::new(max_exact_integer, max_exact_integer + 2.0).unwrap();
-        let err = log_encoding_coefficients(rejected_bound, ATol::default()).unwrap_err();
+        let err = unary_encoding_size(rejected_bound, 2, ATol::default()).unwrap_err();
         assert!(err.to_string().contains("too far from zero"));
     }
 
     #[test]
-    fn test_log_encode_rejects_non_integer_variables() {
+    fn test_unary_encode_rejects_non_integer_variables() {
         let cases = [
             (Kind::Binary, Bound::of_binary()),
             (Kind::Continuous, Bound::new(0.0, 3.0).unwrap()),
@@ -676,26 +662,38 @@ mod tests {
                 .add_decision_variable(id, var, Default::default())
                 .unwrap();
 
-            let err = instance.log_encode([id], ATol::default()).unwrap_err();
+            let err = instance
+                .unary_encode(
+                    [id],
+                    Instance::DEFAULT_UNARY_ENCODING_MAX_RANGE,
+                    ATol::default(),
+                )
+                .unwrap_err();
             assert!(err.to_string().contains("must be integer"));
-            assert_eq!(aux_variable_count(&instance, "ommx.log_encode"), 0);
+            assert_eq!(aux_variable_count(&instance, "ommx.unary_encode"), 0);
         }
     }
 
     #[test]
-    fn test_log_encode_rejects_fixed_variable() {
+    fn test_unary_encode_rejects_fixed_variable() {
         let id = VariableID::from(0);
         let mut instance = fixed_integer_instance(id);
 
-        let err = instance.log_encode([id], ATol::default()).unwrap_err();
+        let err = instance
+            .unary_encode(
+                [id],
+                Instance::DEFAULT_UNARY_ENCODING_MAX_RANGE,
+                ATol::default(),
+            )
+            .unwrap_err();
         assert!(err.to_string().contains("fixed decision variable"));
         assert_eq!(instance.fixed_decision_variable_value(id), Some(1.0));
         assert!(instance.decision_variable_dependency.get(&id).is_none());
-        assert_eq!(aux_variable_count(&instance, "ommx.log_encode"), 0);
+        assert_eq!(aux_variable_count(&instance, "ommx.unary_encode"), 0);
     }
 
     #[test]
-    fn test_log_encode_rejects_indicator_variable_without_side_effects() {
+    fn test_unary_encode_rejects_indicator_variable_without_side_effects() {
         let indicator_id = VariableID::from(0);
         let body_id = VariableID::from(1);
         let mut instance = Instance::builder()
@@ -726,18 +724,22 @@ mod tests {
             .unwrap();
 
         let err = instance
-            .log_encode([indicator_id], ATol::default())
+            .unary_encode(
+                [indicator_id],
+                Instance::DEFAULT_UNARY_ENCODING_MAX_RANGE,
+                ATol::default(),
+            )
             .unwrap_err();
         assert!(err.to_string().contains("must be integer"));
         assert!(instance
             .decision_variable_dependency
             .get(&indicator_id)
             .is_none());
-        assert_eq!(aux_variable_count(&instance, "ommx.log_encode"), 0);
+        assert_eq!(aux_variable_count(&instance, "ommx.unary_encode"), 0);
     }
 
     #[test]
-    fn test_log_encode_rejects_one_hot_member_without_side_effects() {
+    fn test_unary_encode_rejects_one_hot_member_without_side_effects() {
         let id0 = VariableID::from(0);
         let id1 = VariableID::from(1);
         let mut instance = Instance::builder()
@@ -755,14 +757,20 @@ mod tests {
             .build()
             .unwrap();
 
-        let err = instance.log_encode([id0], ATol::default()).unwrap_err();
+        let err = instance
+            .unary_encode(
+                [id0],
+                Instance::DEFAULT_UNARY_ENCODING_MAX_RANGE,
+                ATol::default(),
+            )
+            .unwrap_err();
         assert!(err.to_string().contains("must be integer"));
         assert!(instance.decision_variable_dependency.get(&id0).is_none());
-        assert_eq!(aux_variable_count(&instance, "ommx.log_encode"), 0);
+        assert_eq!(aux_variable_count(&instance, "ommx.unary_encode"), 0);
     }
 
     #[test]
-    fn test_log_encode_fails_before_auxiliary_id_overflow() {
+    fn test_unary_encode_fails_before_auxiliary_id_overflow() {
         let id = VariableID::from(0);
         let mut instance = Instance::builder()
             .sense(Sense::Minimize)
@@ -783,16 +791,22 @@ mod tests {
             .build()
             .unwrap();
 
-        let err = instance.log_encode([id], ATol::default()).unwrap_err();
+        let err = instance
+            .unary_encode(
+                [id],
+                Instance::DEFAULT_UNARY_ENCODING_MAX_RANGE,
+                ATol::default(),
+            )
+            .unwrap_err();
         assert!(err
             .to_string()
             .contains("No available decision variable ID"));
         assert!(instance.decision_variable_dependency.get(&id).is_none());
-        assert_eq!(aux_variable_count(&instance, "ommx.log_encode"), 0);
+        assert_eq!(aux_variable_count(&instance, "ommx.unary_encode"), 0);
     }
 
     #[test]
-    fn test_log_encode_is_atomic_when_substitution_fails() {
+    fn test_unary_encode_is_atomic_when_substitution_fails() {
         let id = VariableID::from(0);
         let var = DecisionVariable::new(
             Kind::Integer,
@@ -812,14 +826,20 @@ mod tests {
             .build()
             .unwrap();
 
-        let err = instance.log_encode([id], ATol::default()).unwrap_err();
+        let err = instance
+            .unary_encode(
+                [id],
+                Instance::DEFAULT_UNARY_ENCODING_MAX_RANGE,
+                ATol::default(),
+            )
+            .unwrap_err();
         assert!(err.to_string().contains("SOS1"));
         assert!(instance.decision_variable_dependency.get(&id).is_none());
-        assert_eq!(aux_variable_count(&instance, "ommx.log_encode"), 0);
+        assert_eq!(aux_variable_count(&instance, "ommx.unary_encode"), 0);
     }
 
     #[test]
-    fn test_log_encode_is_atomic_when_later_id_fails() {
+    fn test_unary_encode_is_atomic_when_later_id_fails() {
         let id0 = VariableID::from(0);
         let id1 = VariableID::from(1);
         let var0 = DecisionVariable::new(
@@ -828,7 +848,12 @@ mod tests {
             ATol::default(),
         )
         .unwrap();
-        let var1 = DecisionVariable::integer();
+        let var1 = DecisionVariable::new(
+            Kind::Integer,
+            Bound::new(0.0, 20.0).unwrap(),
+            ATol::default(),
+        )
+        .unwrap();
         let mut instance = Instance::builder()
             .sense(Sense::Minimize)
             .objective(Function::from(
@@ -840,16 +865,20 @@ mod tests {
             .unwrap();
 
         let err = instance
-            .log_encode([id0, id1], ATol::default())
+            .unary_encode(
+                [id0, id1],
+                Instance::DEFAULT_UNARY_ENCODING_MAX_RANGE,
+                ATol::default(),
+            )
             .unwrap_err();
-        assert!(err.to_string().contains("bound must be finite"));
+        assert!(err.to_string().contains("max_range"));
         assert!(instance.decision_variable_dependency.get(&id0).is_none());
         assert!(instance.decision_variable_dependency.get(&id1).is_none());
-        assert_eq!(aux_variable_count(&instance, "ommx.log_encode"), 0);
+        assert_eq!(aux_variable_count(&instance, "ommx.unary_encode"), 0);
     }
 
     #[test]
-    fn test_log_encode_validates_all_ids_before_creating_aux_variables() {
+    fn test_unary_encode_validates_all_ids_before_creating_aux_variables() {
         let id0 = VariableID::from(0);
         let id1 = VariableID::from(1);
         let var0 = DecisionVariable::new(
@@ -867,10 +896,14 @@ mod tests {
             .unwrap();
 
         let err = instance
-            .log_encode([id0, id1], ATol::default())
+            .unary_encode(
+                [id0, id1],
+                Instance::DEFAULT_UNARY_ENCODING_MAX_RANGE,
+                ATol::default(),
+            )
             .unwrap_err();
         assert!(err.to_string().contains("unknown variable"));
         assert!(instance.decision_variable_dependency.get(&id0).is_none());
-        assert_eq!(aux_variable_count(&instance, "ommx.log_encode"), 0);
+        assert_eq!(aux_variable_count(&instance, "ommx.unary_encode"), 0);
     }
 }
