@@ -44,6 +44,30 @@ fn removed_constraint_instance(num_constraints: usize) -> (Instance, ommx::v1::S
     (instance, state)
 }
 
+fn active_constraint_instance(num_constraints: usize) -> (Instance, ommx::v1::State) {
+    let decision_variables = (0..num_constraints as u64)
+        .map(|id| (VariableID::from(id), DecisionVariable::continuous()))
+        .collect();
+    let constraints = (0..num_constraints as u64)
+        .map(|id| {
+            (
+                ConstraintID::from(id),
+                Constraint::equal_to_zero(Function::from(linear!(id))),
+            )
+        })
+        .collect();
+    let state = (0..num_constraints as u64).map(|id| (id, 0.0)).collect();
+    let instance = Instance::builder()
+        .sense(Sense::Minimize)
+        .objective(Function::Zero)
+        .decision_variables(decision_variables)
+        .constraints(constraints)
+        .build()
+        .unwrap();
+
+    (instance, state)
+}
+
 /// Substitute all decision variables in an Instance that has many regular
 /// constraints already moved into removed_constraints.
 fn partial_evaluate_instance_removed_constraints(c: &mut Criterion) {
@@ -66,6 +90,58 @@ fn partial_evaluate_instance_removed_constraints(c: &mut Criterion) {
                         instance
                             .partial_evaluate(state, ommx::ATol::default())
                             .unwrap();
+                    },
+                    criterion::BatchSize::LargeInput,
+                )
+            },
+        );
+    }
+
+    group.finish();
+}
+
+/// Substitute all decision variables in an Instance that still has many active
+/// regular constraints. This exercises the fallback path where borrowed
+/// partial_evaluate keeps atomic rollback by cloning the whole Instance, while
+/// into_partial_evaluated can mutate the consumed Instance directly.
+fn partial_evaluate_instance_active_constraints(c: &mut Criterion) {
+    let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
+    let mut group = c.benchmark_group("partial-evaluate-instance-active-constraints");
+    group.plot_config(plot_config);
+
+    for num_constraints in [1_000, 8_000, 32_000] {
+        let (instance, state) = active_constraint_instance(num_constraints);
+        group.bench_with_input(
+            BenchmarkId::new(
+                "partial-evaluate-instance-active-constraints-atomic",
+                num_constraints.to_string(),
+            ),
+            &(instance.clone(), state.clone()),
+            |b, (instance, state)| {
+                b.iter_batched_ref(
+                    || instance.clone(),
+                    |instance| {
+                        instance
+                            .partial_evaluate(state, ommx::ATol::default())
+                            .unwrap();
+                    },
+                    criterion::BatchSize::LargeInput,
+                )
+            },
+        );
+        group.bench_with_input(
+            BenchmarkId::new(
+                "into-partial-evaluated-instance-active-constraints-in-place",
+                num_constraints.to_string(),
+            ),
+            &(instance, state),
+            |b, (instance, state)| {
+                b.iter_batched(
+                    || instance.clone(),
+                    |instance| {
+                        instance
+                            .into_partial_evaluated(state, ommx::ATol::default())
+                            .unwrap()
                     },
                     criterion::BatchSize::LargeInput,
                 )
@@ -229,5 +305,6 @@ criterion_group!(
     partial_evaluate_polynomial_half,
     partial_evaluate_polynomial_one,
     partial_evaluate_instance_removed_constraints,
+    partial_evaluate_instance_active_constraints,
 );
 criterion_main!(benches);
