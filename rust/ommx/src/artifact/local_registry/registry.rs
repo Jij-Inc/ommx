@@ -737,18 +737,6 @@ impl LocalRegistry {
         self.store_blob(descriptor, bytes)
     }
 
-    /// Serialize `value` as JSON and store it as an OCI layer blob in
-    /// this registry. Crate-visible for Experiment trace/checkpoint layers.
-    pub(crate) fn store_json_layer_blob(
-        &self,
-        media_type: MediaType,
-        value: &impl serde::Serialize,
-        annotations: HashMap<String, String>,
-    ) -> Result<StoredDescriptor<'_>> {
-        let bytes = serde_json::to_vec(value).context("Failed to encode JSON layer")?;
-        self.store_layer_blob(media_type, &bytes, annotations)
-    }
-
     /// Serialize `value` as JSON and store it as a generic OCI blob
     /// descriptor without layer annotations. Crate-visible for Experiment
     /// config blobs created outside the `local_registry` module.

@@ -97,7 +97,7 @@ const EXPERIMENT_STATUS_DRAFT: &str = "draft";
 const EXPERIMENT_STATUS_FAILED: &str = "failed";
 const EXPERIMENT_STATUS_INTERRUPTED: &str = "interrupted";
 
-const RUN_PARAMETERS_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment.run-parameters+json";
+const RUN_PARAMETERS_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment.run-parameters+msgpack";
 const EXPERIMENT_ARTIFACT_MEDIA_TYPE: &str = media_types::V1_EXPERIMENT_MEDIA_TYPE;
 const EXPERIMENT_CONFIG_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment.config+json";
 
