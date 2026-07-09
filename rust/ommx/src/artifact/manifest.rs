@@ -443,8 +443,8 @@ impl<'reg> LocalArtifact<'reg> {
 
 /// A manifest read from the SQLite Local Registry. v3 stores OCI Image
 /// Manifest as the only native format; OMMX artifacts are identified
-/// at parse time by the `artifactType` field (validated against
-/// `application/org.ommx.v1.artifact`). The native build path also
+/// at parse time by the `artifactType` field (validated against the
+/// OMMX-owned artifact type set). The native build path also
 /// writes an `application/vnd.oci.empty.v1+json` empty config descriptor
 /// — matching the SDK v2 archive build — but `parse` does not assert
 /// on the config blob, so legacy v2 imports that carry an OMMX-specific
@@ -769,7 +769,7 @@ fn ensure_ommx_image_manifest(manifest: &ImageManifest) -> Result<()> {
         .as_ref()
         .context("OCI image manifest is not an OMMX artifact: artifactType is missing")?;
     anyhow::ensure!(
-        artifact_type == &media_types::v1_artifact(),
+        media_types::is_ommx_artifact_type(artifact_type),
         "OCI image manifest is not an OMMX artifact: {artifact_type}",
     );
     Ok(())

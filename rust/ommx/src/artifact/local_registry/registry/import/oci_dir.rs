@@ -460,7 +460,7 @@ fn ensure_ommx_artifact_type(artifact_type: Option<&MediaType>) -> Result<()> {
     let artifact_type =
         artifact_type.context("OCI dir is not an OMMX artifact: artifactType is missing")?;
     ensure!(
-        artifact_type == &media_types::v1_artifact(),
+        media_types::is_ommx_artifact_type(artifact_type),
         "OCI dir is not an OMMX artifact: {}",
         artifact_type
     );

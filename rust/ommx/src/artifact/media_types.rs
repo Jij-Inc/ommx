@@ -16,6 +16,7 @@ pub const OCI_EMPTY_CONFIG_DIGEST: &str =
     "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a";
 
 pub const V1_ARTIFACT_MEDIA_TYPE: &str = "application/org.ommx.v1.artifact";
+pub const V1_EXPERIMENT_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment";
 pub const V1_CONFIG_MEDIA_TYPE: &str = "application/org.ommx.v1.config+json";
 pub const V1_INSTANCE_MEDIA_TYPE: &str = "application/org.ommx.v1.instance";
 pub const V1_PARAMETRIC_INSTANCE_MEDIA_TYPE: &str = "application/org.ommx.v1.parametric-instance";
@@ -109,6 +110,21 @@ pub fn is_sample_set_payload_media_type(media_type: &MediaType) -> bool {
 /// Media type of [crate::artifact::LocalArtifact], `application/org.ommx.v1.artifact`
 pub fn v1_artifact() -> MediaType {
     MediaType::Other(V1_ARTIFACT_MEDIA_TYPE.to_string())
+}
+
+/// Media type of an Experiment Artifact, `application/org.ommx.v1.experiment`
+pub fn v1_experiment() -> MediaType {
+    MediaType::Other(V1_EXPERIMENT_MEDIA_TYPE.to_string())
+}
+
+/// Whether the media type is an OMMX-owned OCI Manifest `artifactType`.
+///
+/// This matches root artifact types such as [`V1_ARTIFACT_MEDIA_TYPE`] and
+/// [`V1_EXPERIMENT_MEDIA_TYPE`]. It does not match OMMX payload layer media
+/// types such as [`V1_INSTANCE_MEDIA_TYPE`].
+pub fn is_ommx_artifact_type(media_type: &MediaType) -> bool {
+    let actual = media_type.as_ref();
+    actual == V1_ARTIFACT_MEDIA_TYPE || actual == V1_EXPERIMENT_MEDIA_TYPE
 }
 
 /// Media type of the `config` storing [crate::artifact::Config], `application/org.ommx.v1.config+json`
