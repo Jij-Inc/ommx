@@ -112,10 +112,20 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
 
         self.store_manifest_blob(&manifest_descriptor, &manifest_bytes, &manifest_digest)?;
 
-        let ref_update = self
+        let experiment_record = self
             .registry
-            .index
-            .publish_image_ref(self.image_name, &manifest_descriptor)?;
+            .experiment_manifest_record(self.image_name, &manifest_digest)?;
+        let ref_update = if let Some(record) = experiment_record.as_ref() {
+            self.registry.index.publish_experiment_ref(
+                self.image_name,
+                &manifest_descriptor,
+                record,
+            )?
+        } else {
+            self.registry
+                .index
+                .publish_image_ref(self.image_name, &manifest_descriptor)?
+        };
         self.reject_conflicting_ref(&ref_update)?;
 
         Ok(OciDirImport {

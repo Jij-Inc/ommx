@@ -86,7 +86,11 @@ pub use registry::{
     GcReferenceKind, GcReport, GcRoot, LegacyImportReport, LocalRegistry, OciDirImport, OciDirRef,
     StoredDescriptor, TempLocalRegistry,
 };
-pub use types::{RefRecord, RefUpdate, OCI_IMAGE_REF_NAME_ANNOTATION, SQLITE_INDEX_FILE_NAME};
+pub(crate) use types::ExperimentManifestRecord;
+pub use types::{
+    ExperimentRefRecord, RefRecord, RefUpdate, OCI_IMAGE_REF_NAME_ANNOTATION,
+    SQLITE_INDEX_FILE_NAME,
+};
 
 fn now_rfc3339() -> String {
     Utc::now().to_rfc3339()

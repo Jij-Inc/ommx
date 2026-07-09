@@ -15,10 +15,92 @@ use std::{
 
 use crate::pandas::{raw_entries_to_dataframe, PyDataFrame};
 use crate::PyArtifact;
+use ommx::artifact::local_registry::ExperimentRefRecord;
 use ommx::artifact::AsArtifact;
 use ommx::experiment::{
     AttachmentLogger, FailedSolveRecord, FinishedSolveRecord, SolveDiagnosticPayload, SolveStatus,
 };
+
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
+#[pyclass]
+#[pyo3(module = "ommx._ommx_rust", name = "ExperimentRef")]
+/// A local-registry image reference that points to an Experiment artifact.
+pub struct PyExperimentRef {
+    image_name: String,
+    manifest_digest: String,
+    updated_at: String,
+    status: String,
+    run_count: u64,
+    solve_count: u64,
+    annotations: HashMap<String, String>,
+}
+
+impl PyExperimentRef {
+    fn from_record(record: ExperimentRefRecord) -> Self {
+        Self {
+            image_name: record.image_name.to_string(),
+            manifest_digest: record.manifest_digest.to_string(),
+            updated_at: record.updated_at,
+            status: record.status,
+            run_count: record.run_count,
+            solve_count: record.solve_count,
+            annotations: record.annotations.into_iter().collect(),
+        }
+    }
+}
+
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
+#[pymethods]
+impl PyExperimentRef {
+    #[getter]
+    /// Local registry image reference.
+    pub fn image_name(&self) -> &str {
+        &self.image_name
+    }
+
+    #[getter]
+    /// Immutable OCI manifest digest for the Experiment artifact.
+    pub fn manifest_digest(&self) -> &str {
+        &self.manifest_digest
+    }
+
+    #[getter]
+    /// RFC 3339 timestamp when this local ref was last updated.
+    pub fn updated_at(&self) -> &str {
+        &self.updated_at
+    }
+
+    #[getter]
+    /// Experiment status stored in the Experiment config.
+    pub fn status(&self) -> &str {
+        &self.status
+    }
+
+    #[getter]
+    /// Number of closed runs recorded in the Experiment config.
+    pub fn run_count(&self) -> u64 {
+        self.run_count
+    }
+
+    #[getter]
+    /// Total number of solves recorded across all runs.
+    pub fn solve_count(&self) -> u64 {
+        self.solve_count
+    }
+
+    #[getter]
+    /// Manifest annotations stored on the Experiment artifact.
+    pub fn annotations(&self) -> HashMap<String, String> {
+        self.annotations.clone()
+    }
+
+    pub fn __repr__(&self) -> String {
+        format!(
+            "ExperimentRef(image_name='{}', status='{}', runs={}, solves={})",
+            self.image_name, self.status, self.run_count, self.solve_count
+        )
+    }
+}
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
@@ -251,6 +333,20 @@ impl PyExperiment {
     /// OCI image reference used to store this Experiment in a local registry.
     pub fn image_name(&self) -> Result<String> {
         Ok(self.inner.image_name()?.to_string())
+    }
+
+    #[getter]
+    /// Manifest annotations that will be written, or were written, to this Experiment artifact.
+    pub fn annotations(&self) -> Result<HashMap<String, String>> {
+        self.inner.annotations()
+    }
+
+    /// Set a manifest annotation on this unsealed Experiment.
+    ///
+    /// OMMX-owned annotation keys are reserved. Use reverse-DNS style keys
+    /// such as `"com.example.project"` for caller-owned metadata.
+    pub fn set_annotation(&mut self, key: &str, value: &str) -> Result<()> {
+        self.inner.set_annotation(key, value)
     }
 
     /// Rename this Experiment to another local registry image reference.
@@ -625,6 +721,35 @@ impl PyExperiment {
     fn commit_inner(&mut self, py: Python<'_>) -> Result<PyArtifact> {
         let _guard = crate::TRACING.attach_parent_context(py);
         Ok(PyArtifact::new(self.inner.commit()?))
+    }
+}
+
+#[pyo3_stub_gen::derive::gen_stub_pyfunction]
+#[pyfunction]
+#[pyo3(signature = (prefix = None, *, root = None))]
+/// List Experiment refs in the Local Registry without opening each Experiment artifact.
+///
+/// If `prefix` is given, it is matched against the full image reference string.
+pub fn list_experiments(
+    py: Python<'_>,
+    prefix: Option<&str>,
+    root: Option<PathBuf>,
+) -> Result<Vec<PyExperimentRef>> {
+    let _guard = crate::TRACING.attach_parent_context(py);
+    let registry = open_experiment_registry(root)?;
+    registry
+        .list_experiments(prefix)?
+        .into_iter()
+        .map(|record| Ok(PyExperimentRef::from_record(record)))
+        .collect()
+}
+
+fn open_experiment_registry(
+    root: Option<PathBuf>,
+) -> Result<ommx::artifact::local_registry::LocalRegistry> {
+    match root {
+        Some(root) => ommx::artifact::local_registry::LocalRegistry::open(root),
+        None => ommx::artifact::local_registry::LocalRegistry::open_default(),
     }
 }
 

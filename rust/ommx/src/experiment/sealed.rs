@@ -6,9 +6,10 @@ use super::config::{ExperimentConfigSolve, LayerRef};
 use super::parameter::{RunParameterCell, RunParameterTable};
 use super::{
     read_solve_diagnostic_payload, ExperimentStatus, RunStatus, SealedExperiment,
-    SolveDiagnosticPayload, SolveStatus, Trace, RUN_PARAMETERS_MEDIA_TYPE,
+    SolveDiagnosticPayload, SolveStatus, Trace, EXPERIMENT_CONFIG_MEDIA_TYPE,
+    RUN_PARAMETERS_MEDIA_TYPE,
 };
-use crate::artifact::local_registry::StoredDescriptor;
+use crate::artifact::local_registry::{ExperimentManifestRecord, StoredDescriptor};
 use crate::artifact::{media_types, ImageRef, LocalArtifact};
 use crate::{Instance, ParametricInstance, SampleSet, Solution};
 use anyhow::{Context, Result};
@@ -36,7 +37,10 @@ impl<'reg> SealedExperiment<'reg> {
         )
     }
 
-    fn from_artifact_with_allowed_statuses(
+    /// Reconstruct a sealed Experiment while accepting the given serialized
+    /// status set. Listing/checkpoint code uses this to validate non-finished
+    /// Experiment artifacts without exposing those states as normal loads.
+    pub(crate) fn from_artifact_with_allowed_statuses(
         artifact: LocalArtifact<'reg>,
         allowed_statuses: &[ExperimentStatus],
     ) -> Result<Self> {
@@ -159,6 +163,47 @@ impl<'reg> SealedExperiment<'reg> {
     pub fn run_parameter_cells(&self) -> Vec<RunParameterCell> {
         self.run_parameters.cells()
     }
+}
+
+/// Build the Local Registry's Experiment listing projection from an artifact.
+///
+/// This keeps Experiment manifest/config validation owned by the Experiment
+/// module while letting the registry store a SQLite read model.
+pub(crate) fn experiment_manifest_record_from_artifact(
+    artifact: &LocalArtifact<'_>,
+) -> Result<Option<ExperimentManifestRecord>> {
+    let manifest = artifact.get_manifest()?;
+    let config_descriptor = manifest.config();
+    if config_descriptor.media_type() != &MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string())
+    {
+        return Ok(None);
+    }
+    let manifest_json = artifact.read_blob_by_digest(artifact.manifest_digest())?;
+    let config_json = artifact.get_blob_by_descriptor(&config_descriptor)?;
+    let sealed = SealedExperiment::from_artifact_with_allowed_statuses(
+        artifact.clone(),
+        &[
+            ExperimentStatus::Finished,
+            ExperimentStatus::Draft,
+            ExperimentStatus::Failed,
+            ExperimentStatus::Interrupted,
+        ],
+    )?;
+    let solve_count = sealed
+        .runs
+        .values()
+        .map(|run| run.solves.len() as u64)
+        .sum();
+    Ok(Some(ExperimentManifestRecord {
+        manifest_descriptor: artifact.stored_manifest_descriptor()?.into(),
+        manifest_json,
+        manifest_annotations: manifest.annotations().into_iter().collect(),
+        config_descriptor,
+        config_json,
+        status: sealed.status.as_str().to_string(),
+        run_count: sealed.runs.len() as u64,
+        solve_count,
+    }))
 }
 
 /// Read-only Run reconstructed from a sealed Experiment config.

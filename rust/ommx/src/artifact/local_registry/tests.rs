@@ -171,7 +171,7 @@ fn gc_deletes_only_orphan_candidates() -> Result<()> {
 fn sqlite_index_store_round_trip() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let store = SqliteIndexStore::open(dir.path().join(SQLITE_INDEX_FILE_NAME))?;
-    assert_eq!(store.schema_version()?, 1);
+    assert_eq!(store.schema_version()?, 2);
 
     let manifest_descriptor = test_manifest_descriptor(b"manifest")?;
     store.replace_ref(

@@ -265,11 +265,23 @@ impl LocalRegistry {
         self.store_descriptor_bytes(config_descriptor, config_bytes)?;
         self.store_descriptor_bytes(&entry.manifest_descriptor, &entry.manifest_bytes)?;
 
-        let ref_update = match write_mode {
-            RefWriteMode::Publish => self
+        let experiment_record =
+            self.experiment_manifest_record(&effective_image_name, &entry.manifest_digest)?;
+        let ref_update = match (write_mode, experiment_record.as_ref()) {
+            (RefWriteMode::Publish, Some(record)) => self.index.publish_experiment_ref(
+                &effective_image_name,
+                &entry.manifest_descriptor,
+                record,
+            )?,
+            (RefWriteMode::Replace, Some(record)) => self.index.replace_experiment_ref(
+                &effective_image_name,
+                &entry.manifest_descriptor,
+                record,
+            )?,
+            (RefWriteMode::Publish, None) => self
                 .index
                 .publish_image_ref(&effective_image_name, &entry.manifest_descriptor)?,
-            RefWriteMode::Replace => self
+            (RefWriteMode::Replace, None) => self
                 .index
                 .replace_image_ref(&effective_image_name, &entry.manifest_descriptor)?,
         };

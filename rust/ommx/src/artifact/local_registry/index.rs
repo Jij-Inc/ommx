@@ -1,11 +1,14 @@
-use super::{now_rfc3339, RefRecord, RefUpdate, SQLITE_INDEX_FILE_NAME};
+use super::{
+    now_rfc3339, ExperimentManifestRecord, ExperimentRefRecord, RefRecord, RefUpdate,
+    SQLITE_INDEX_FILE_NAME,
+};
 use crate::artifact::digest::validate_digest;
-use crate::artifact::ImageRef;
+use crate::artifact::{stable_json_bytes, ImageRef};
 use anyhow::{bail, ensure, Context, Result};
 use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, MediaType};
 use rusqlite::{params, types::Type, Connection, OptionalExtension, TransactionBehavior};
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     fs,
     path::Path,
     str::FromStr,
@@ -16,7 +19,7 @@ use std::{
 /// SQLite Local Registry schema version stored in `PRAGMA user_version`.
 /// The SQLite Local Registry has not been released yet, so incompatible
 /// development schemas fail fast instead of carrying in-place migrations.
-const SCHEMA_VERSION: i64 = 1;
+const SCHEMA_VERSION: i64 = 2;
 const SQLITE_BUSY_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// SQLite-backed index store for the v3 Local Registry.
@@ -103,6 +106,129 @@ impl SqliteIndexStore {
         let update = Self::replace_ref_in(&tx, name, reference, descriptor)?;
         tx.commit()?;
         Ok(update)
+    }
+
+    pub fn publish_experiment_ref(
+        &self,
+        image_name: &ImageRef,
+        descriptor: &Descriptor,
+        experiment: &ExperimentManifestRecord,
+    ) -> Result<RefUpdate> {
+        let mut conn = self.lock();
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let update = Self::publish_ref_in(
+            &tx,
+            &image_name.repository_key(),
+            image_name.reference(),
+            descriptor,
+        )?;
+        if !matches!(update, RefUpdate::Conflicted { .. }) {
+            Self::upsert_experiment_manifest_in(&tx, experiment)?;
+        }
+        tx.commit()?;
+        Ok(update)
+    }
+
+    pub fn replace_experiment_ref(
+        &self,
+        image_name: &ImageRef,
+        descriptor: &Descriptor,
+        experiment: &ExperimentManifestRecord,
+    ) -> Result<RefUpdate> {
+        let mut conn = self.lock();
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let update = Self::replace_ref_in(
+            &tx,
+            &image_name.repository_key(),
+            image_name.reference(),
+            descriptor,
+        )?;
+        Self::upsert_experiment_manifest_in(&tx, experiment)?;
+        tx.commit()?;
+        Ok(update)
+    }
+
+    pub fn upsert_experiment_manifest(&self, experiment: &ExperimentManifestRecord) -> Result<()> {
+        let mut conn = self.lock();
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        Self::upsert_experiment_manifest_in(&tx, experiment)?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    fn upsert_experiment_manifest_in(
+        conn: &Connection,
+        experiment: &ExperimentManifestRecord,
+    ) -> Result<()> {
+        let manifest_descriptor = &experiment.manifest_descriptor;
+        let config_descriptor = &experiment.config_descriptor;
+        validate_digest(manifest_descriptor.digest().as_ref())?;
+        validate_digest(config_descriptor.digest().as_ref())?;
+        ensure!(
+            manifest_descriptor.size() == experiment.manifest_json.len() as u64,
+            "Experiment manifest cache size mismatch for {}: descriptor={}, bytes={}",
+            manifest_descriptor.digest(),
+            manifest_descriptor.size(),
+            experiment.manifest_json.len()
+        );
+        ensure!(
+            config_descriptor.size() == experiment.config_json.len() as u64,
+            "Experiment config cache size mismatch for {}: descriptor={}, bytes={}",
+            config_descriptor.digest(),
+            config_descriptor.size(),
+            experiment.config_json.len()
+        );
+        let manifest_annotations_json =
+            String::from_utf8(stable_json_bytes(&experiment.manifest_annotations)?)
+                .context("Experiment manifest annotations JSON must be UTF-8")?;
+        conn.execute(
+            r#"
+            INSERT INTO experiment_manifests (
+                manifest_digest,
+                manifest_media_type,
+                manifest_size,
+                manifest_json,
+                manifest_annotations_json,
+                config_digest,
+                config_media_type,
+                config_size,
+                config_json,
+                status,
+                run_count,
+                solve_count
+            )
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+            ON CONFLICT(manifest_digest) DO UPDATE SET
+                manifest_media_type = excluded.manifest_media_type,
+                manifest_size = excluded.manifest_size,
+                manifest_json = excluded.manifest_json,
+                manifest_annotations_json = excluded.manifest_annotations_json,
+                config_digest = excluded.config_digest,
+                config_media_type = excluded.config_media_type,
+                config_size = excluded.config_size,
+                config_json = excluded.config_json,
+                status = excluded.status,
+                run_count = excluded.run_count,
+                solve_count = excluded.solve_count
+            "#,
+            params![
+                manifest_descriptor.digest().to_string(),
+                manifest_descriptor.media_type().to_string(),
+                i64::try_from(manifest_descriptor.size())
+                    .context("Manifest size does not fit in i64")?,
+                &experiment.manifest_json,
+                manifest_annotations_json,
+                config_descriptor.digest().to_string(),
+                config_descriptor.media_type().to_string(),
+                i64::try_from(config_descriptor.size())
+                    .context("Config size does not fit in i64")?,
+                &experiment.config_json,
+                experiment.status,
+                i64::try_from(experiment.run_count).context("Run count does not fit in i64")?,
+                i64::try_from(experiment.solve_count).context("Solve count does not fit in i64")?,
+            ],
+        )?;
+        Ok(())
     }
 
     fn upsert_ref_in(
@@ -316,7 +442,13 @@ impl SqliteIndexStore {
                     manifest_annotations_json,
                     updated_at
                 FROM refs
-                WHERE substr(name, 1, ?1) = ?2
+                WHERE substr(
+                    name ||
+                    CASE WHEN instr(reference, ':') > 0 THEN '@' ELSE ':' END ||
+                    reference,
+                    1,
+                    ?1
+                ) = ?2
                 ORDER BY name, reference
                 "#,
             )?;
@@ -347,6 +479,69 @@ impl SqliteIndexStore {
         Ok(out)
     }
 
+    pub fn list_experiment_refs(
+        &self,
+        name_prefix: Option<&str>,
+    ) -> Result<Vec<ExperimentRefRecord>> {
+        let conn = self.lock();
+        let mut out = Vec::new();
+        if let Some(prefix) = name_prefix {
+            let prefix_len = i64::try_from(prefix.chars().count())
+                .context("Ref prefix length does not fit in i64")?;
+            let mut stmt = conn.prepare(
+                r#"
+                SELECT
+                    refs.name,
+                    refs.reference,
+                    refs.updated_at,
+                    experiment_manifests.manifest_digest,
+                    experiment_manifests.status,
+                    experiment_manifests.run_count,
+                    experiment_manifests.solve_count,
+                    experiment_manifests.manifest_annotations_json
+                FROM refs
+                JOIN experiment_manifests
+                  ON refs.manifest_digest = experiment_manifests.manifest_digest
+                WHERE substr(
+                    refs.name ||
+                    CASE WHEN instr(refs.reference, ':') > 0 THEN '@' ELSE ':' END ||
+                    refs.reference,
+                    1,
+                    ?1
+                ) = ?2
+                ORDER BY refs.name, refs.reference
+                "#,
+            )?;
+            let rows = stmt.query_map(params![prefix_len, prefix], experiment_ref_from_row)?;
+            for row in rows {
+                out.push(row?);
+            }
+        } else {
+            let mut stmt = conn.prepare(
+                r#"
+                SELECT
+                    refs.name,
+                    refs.reference,
+                    refs.updated_at,
+                    experiment_manifests.manifest_digest,
+                    experiment_manifests.status,
+                    experiment_manifests.run_count,
+                    experiment_manifests.solve_count,
+                    experiment_manifests.manifest_annotations_json
+                FROM refs
+                JOIN experiment_manifests
+                  ON refs.manifest_digest = experiment_manifests.manifest_digest
+                ORDER BY refs.name, refs.reference
+                "#,
+            )?;
+            let rows = stmt.query_map([], experiment_ref_from_row)?;
+            for row in rows {
+                out.push(row?);
+            }
+        }
+        Ok(out)
+    }
+
     fn init_schema(&self) -> Result<()> {
         let conn = self.lock();
         conn.execute_batch("PRAGMA foreign_keys = ON;")?;
@@ -369,6 +564,9 @@ impl SqliteIndexStore {
             // development schema.
             conn.pragma_update(None, "user_version", SCHEMA_VERSION)
                 .context("Failed to initialize local registry schema version")?;
+        } else if version == 1 {
+            conn.pragma_update(None, "user_version", SCHEMA_VERSION)
+                .context("Failed to migrate local registry schema from version 1")?;
         } else {
             ensure!(
                 version == SCHEMA_VERSION,
@@ -395,6 +593,24 @@ impl SqliteIndexStore {
             );
 
             CREATE INDEX IF NOT EXISTS idx_refs_name ON refs(name);
+
+            CREATE TABLE IF NOT EXISTS experiment_manifests (
+                manifest_digest TEXT PRIMARY KEY,
+                manifest_media_type TEXT NOT NULL,
+                manifest_size INTEGER NOT NULL CHECK(manifest_size >= 0),
+                manifest_json BLOB NOT NULL,
+                manifest_annotations_json TEXT NOT NULL DEFAULT '{}',
+                config_digest TEXT NOT NULL,
+                config_media_type TEXT NOT NULL,
+                config_size INTEGER NOT NULL CHECK(config_size >= 0),
+                config_json BLOB NOT NULL,
+                status TEXT NOT NULL,
+                run_count INTEGER NOT NULL CHECK(run_count >= 0),
+                solve_count INTEGER NOT NULL CHECK(solve_count >= 0)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_experiment_manifests_status
+                ON experiment_manifests(status);
             "#,
         )?;
         Ok(())
@@ -450,6 +666,30 @@ fn descriptor_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Descriptor> 
     descriptor_from_ref_row(row, 0)
 }
 
+fn experiment_ref_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ExperimentRefRecord> {
+    let name: String = row.get(0)?;
+    let reference: String = row.get(1)?;
+    let image_name = ImageRef::from_repository_and_reference(&name, &reference)
+        .map_err(|err| rusqlite::Error::FromSqlConversionFailure(0, Type::Text, err.into()))?;
+    let digest: String = row.get(3)?;
+    let manifest_digest = Digest::from_str(&digest)
+        .map_err(|err| rusqlite::Error::FromSqlConversionFailure(3, Type::Text, Box::new(err)))?;
+    let status: String = row.get(4)?;
+    crate::experiment::ExperimentStatus::from_config(&status)
+        .map_err(|err| rusqlite::Error::FromSqlConversionFailure(4, Type::Text, err.into()))?;
+    let annotations_json: String = row.get(7)?;
+    let annotations = parse_btree_annotations_json(&annotations_json, 7)?;
+    Ok(ExperimentRefRecord {
+        image_name,
+        manifest_digest,
+        updated_at: row.get(2)?,
+        status,
+        run_count: read_u64(row, 5)?,
+        solve_count: read_u64(row, 6)?,
+        annotations,
+    })
+}
+
 fn has_user_tables(conn: &Connection) -> Result<bool> {
     let count: i64 = conn
         .query_row(
@@ -499,6 +739,15 @@ fn parse_annotations_json(
     json: &str,
     column_index: usize,
 ) -> rusqlite::Result<HashMap<String, String>> {
+    serde_json::from_str(json).map_err(|err| {
+        rusqlite::Error::FromSqlConversionFailure(column_index, Type::Text, Box::new(err))
+    })
+}
+
+fn parse_btree_annotations_json(
+    json: &str,
+    column_index: usize,
+) -> rusqlite::Result<BTreeMap<String, String>> {
     serde_json::from_str(json).map_err(|err| {
         rusqlite::Error::FromSqlConversionFailure(column_index, Type::Text, Box::new(err))
     })

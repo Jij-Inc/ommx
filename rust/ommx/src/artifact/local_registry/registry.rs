@@ -1,8 +1,8 @@
 use super::index::SqliteIndexStore;
-use super::RefUpdate;
+use super::{ExperimentManifestRecord, ExperimentRefRecord, RefUpdate};
 use crate::artifact::{
     media_types::{self, RootPayloadVersion},
-    sha256_digest, stable_json_bytes, ImageRef,
+    sha256_digest, stable_json_bytes, ImageRef, LocalArtifact,
 };
 use anyhow::{ensure, Context, Result};
 use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, ImageManifest, MediaType};
@@ -507,6 +507,48 @@ impl LocalRegistry {
             .collect()
     }
 
+    /// List Experiment refs stored in this registry, optionally filtered by
+    /// full image-reference prefix.
+    pub fn list_experiments(&self, name_prefix: Option<&str>) -> Result<Vec<ExperimentRefRecord>> {
+        let refs = self.index.list_refs(name_prefix)?;
+        let cached = self.index.list_experiment_refs(name_prefix)?;
+        let cached_refs = cached
+            .iter()
+            .map(|r| r.image_name.to_string())
+            .collect::<BTreeSet<_>>();
+        for r in refs {
+            let image_name = ImageRef::from_repository_and_reference(&r.name, &r.reference)?;
+            if cached_refs.contains(&image_name.to_string()) {
+                continue;
+            }
+            self.backfill_experiment_manifest(&image_name, r.descriptor.digest())?;
+        }
+        self.index.list_experiment_refs(name_prefix)
+    }
+
+    fn backfill_experiment_manifest(
+        &self,
+        image_name: &ImageRef,
+        manifest_digest: &Digest,
+    ) -> Result<()> {
+        if let Some(record) = self.experiment_manifest_record(image_name, manifest_digest)? {
+            self.index.upsert_experiment_manifest(&record)?;
+        }
+        Ok(())
+    }
+
+    /// Build a validated Experiment listing projection for a stored manifest.
+    ///
+    /// Returns `None` for non-Experiment artifacts.
+    pub(crate) fn experiment_manifest_record(
+        &self,
+        image_name: &ImageRef,
+        manifest_digest: &Digest,
+    ) -> Result<Option<ExperimentManifestRecord>> {
+        let artifact = LocalArtifact::from_parts(self, image_name.clone(), manifest_digest.clone());
+        crate::experiment::experiment_manifest_record_from_artifact(&artifact)
+    }
+
     /// Seal an unsealed OMMX Artifact manifest into the Local Registry.
     ///
     /// The manifest's config/layers are represented as
@@ -546,6 +588,22 @@ impl LocalRegistry {
         self.index.publish_image_ref(image_name, &sealed_artifact.0)
     }
 
+    /// Publish a sealed Experiment manifest and its verified listing projection
+    /// under an image ref in one SQLite transaction.
+    pub(crate) fn publish_experiment_manifest_ref(
+        &self,
+        image_name: &ImageRef,
+        sealed_artifact: &SealedArtifact<'_>,
+        experiment: &ExperimentManifestRecord,
+    ) -> Result<RefUpdate> {
+        ensure!(
+            sealed_artifact.is_stored_in(self),
+            "Sealed artifact descriptor belongs to a different Local Registry"
+        );
+        self.index
+            .publish_experiment_ref(image_name, &sealed_artifact.0, experiment)
+    }
+
     /// Publish an already-stored root manifest descriptor under an image ref.
     ///
     /// This is used when adding another local name for an existing artifact.
@@ -578,6 +636,22 @@ impl LocalRegistry {
             "Sealed artifact descriptor belongs to a different Local Registry"
         );
         self.index.replace_image_ref(image_name, &sealed_artifact.0)
+    }
+
+    /// Replace an Experiment ref and its verified listing projection in one
+    /// SQLite transaction.
+    pub(crate) fn replace_experiment_manifest_ref(
+        &self,
+        image_name: &ImageRef,
+        sealed_artifact: &SealedArtifact<'_>,
+        experiment: &ExperimentManifestRecord,
+    ) -> Result<RefUpdate> {
+        ensure!(
+            sealed_artifact.is_stored_in(self),
+            "Sealed artifact descriptor belongs to a different Local Registry"
+        );
+        self.index
+            .replace_experiment_ref(image_name, &sealed_artifact.0, experiment)
     }
 
     /// Delete a local manifest ref. Content-addressed blobs are not removed.

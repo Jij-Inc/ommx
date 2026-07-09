@@ -40,6 +40,7 @@ __all__ = [
     "EvaluatedDecisionVariable",
     "EvaluatedNamedFunction",
     "Experiment",
+    "ExperimentRef",
     "Function",
     "GcBlob",
     "GcInvalidManifest",
@@ -90,6 +91,7 @@ __all__ = [
     "get_default_atol",
     "get_images",
     "get_local_registry_root",
+    "list_experiments",
     "miplib2017_instance_annotations",
     "prune_anonymous",
     "qplib_instance_annotations",
@@ -1752,6 +1754,11 @@ class Experiment:
         OCI image reference used to store this Experiment in a local registry.
         """
     @property
+    def annotations(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Manifest annotations that will be written, or were written, to this Experiment artifact.
+        """
+    @property
     def attachment_names(self) -> builtins.list[builtins.str]:
         r"""
         Names of experiment-level attachments.
@@ -1893,6 +1900,13 @@ class Experiment:
         exc_value: typing.Optional[typing.Any] = None,
         traceback: typing.Optional[typing.Any] = None,
     ) -> builtins.bool: ...
+    def set_annotation(self, key: builtins.str, value: builtins.str) -> None:
+        r"""
+        Set a manifest annotation on this unsealed Experiment.
+
+        OMMX-owned annotation keys are reserved. Use reverse-DNS style keys
+        such as `"com.example.project"` for caller-owned metadata.
+        """
     def rename(self, image_name: builtins.str) -> None:
         r"""
         Rename this Experiment to another local registry image reference.
@@ -2089,6 +2103,48 @@ class Experiment:
         Closed runs with no parameters are still present as index rows.
         Adapter options recorded by `Run.log_solve` are solve metadata and do
         not appear in this table.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class ExperimentRef:
+    r"""
+    A local-registry image reference that points to an Experiment artifact.
+    """
+    @property
+    def image_name(self) -> builtins.str:
+        r"""
+        Local registry image reference.
+        """
+    @property
+    def manifest_digest(self) -> builtins.str:
+        r"""
+        Immutable OCI manifest digest for the Experiment artifact.
+        """
+    @property
+    def updated_at(self) -> builtins.str:
+        r"""
+        RFC 3339 timestamp when this local ref was last updated.
+        """
+    @property
+    def status(self) -> builtins.str:
+        r"""
+        Experiment status stored in the Experiment config.
+        """
+    @property
+    def run_count(self) -> builtins.int:
+        r"""
+        Number of closed runs recorded in the Experiment config.
+        """
+    @property
+    def solve_count(self) -> builtins.int:
+        r"""
+        Total number of solves recorded across all runs.
+        """
+    @property
+    def annotations(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Manifest annotations stored on the Experiment artifact.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -7206,6 +7262,17 @@ def get_images() -> builtins.list[builtins.str]:
 def get_local_registry_root() -> pathlib.Path:
     r"""
     Get the current OMMX Local Registry root path.
+    """
+
+def list_experiments(
+    prefix: typing.Optional[builtins.str] = None,
+    *,
+    root: typing.Optional[builtins.str | os.PathLike | pathlib.Path] = None,
+) -> builtins.list[ExperimentRef]:
+    r"""
+    List Experiment refs in the Local Registry without opening each Experiment artifact.
+
+    If `prefix` is given, it is matched against the full image reference string.
     """
 
 def miplib2017_instance_annotations() -> builtins.dict[

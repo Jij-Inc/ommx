@@ -28217,6 +28217,41 @@
               "deprecated": null
             },
             {
+              "name": "set_annotation",
+              "doc": "Set a manifest annotation on this unsealed Experiment.\n\nOMMX-owned annotation keys are reserved. Use reverse-DNS style keys\nsuch as `\"com.example.project\"` for caller-owned metadata.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "value",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "with_temp_local_registry",
               "doc": "Start a new Experiment backed by a temporary Local Registry.\n\nThe temporary registry is kept alive by the returned Experiment\nand by Artifacts / loaded Experiments derived from it. This is useful\nfor examples and tests because it does not write entries into the\nprocess-wide default local registry.\n\nSet `store_trace=True` to store traces for `Run` context managers\ncreated from this Experiment. The Experiment itself does not need to\nbe used as a context manager.",
               "signatures": [
@@ -28334,6 +28369,28 @@
           ],
           "attributes": [
             {
+              "name": "annotations",
+              "doc": "Manifest annotations that will be written, or were written, to this Experiment artifact.",
+              "type_": {
+                "display": "dict[str, str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "artifact",
               "doc": "Committed OMMX Artifact for this Experiment.\n\nRaises an error if the Experiment has not been committed yet.",
               "type_": {
@@ -28412,6 +28469,121 @@
                     "children": []
                   }
                 ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "ExperimentRef",
+          "doc": "A local-registry image reference that points to an Experiment artifact.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "annotations",
+              "doc": "Manifest annotations stored on the Experiment artifact.",
+              "type_": {
+                "display": "dict[str, str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "image_name",
+              "doc": "Local registry image reference.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "manifest_digest",
+              "doc": "Immutable OCI manifest digest for the Experiment artifact.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "run_count",
+              "doc": "Number of closed runs recorded in the Experiment config.",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "solve_count",
+              "doc": "Total number of solves recorded across all runs.",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "status",
+              "doc": "Experiment status stored in the Experiment config.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "updated_at",
+              "doc": "RFC 3339 timestamp when this local ref was last updated.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
               },
               "is_property": true,
               "is_readonly": true
@@ -29924,6 +30096,87 @@
             }
           ],
           "deprecated": null
+        },
+        {
+          "kind": "Function",
+          "name": "list_experiments",
+          "doc": "List Experiment refs in the Local Registry without opening each Experiment artifact.\n\nIf `prefix` is given, it is matched against the full image reference string.",
+          "signatures": [
+            {
+              "parameters": [
+                {
+                  "name": "prefix",
+                  "type_": {
+                    "display": "Optional[str]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  },
+                  "default": {
+                    "kind": "Simple",
+                    "value": "None"
+                  }
+                },
+                {
+                  "name": "root",
+                  "type_": {
+                    "display": "Optional[str | PathLike | Path]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "str | PathLike | Path",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "PathLike",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Path",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "default": {
+                    "kind": "Simple",
+                    "value": "None"
+                  }
+                }
+              ],
+              "return_type": {
+                "display": "list[_ommx_rust.ExperimentRef]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "ExperimentRef",
+                    "link_target": {
+                      "fqn": "ommx.experiment.ExperimentRef",
+                      "doc_module": "ommx.experiment",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                ]
+              }
+            }
+          ],
+          "is_async": false,
+          "deprecated": null
         }
       ],
       "submodules": []
@@ -29993,10 +30246,12 @@
     "ommx.artifact.prune_anonymous": "ommx.artifact",
     "ommx.artifact.set_local_registry_root": "ommx.artifact",
     "ommx.experiment.Experiment": "ommx.experiment",
+    "ommx.experiment.ExperimentRef": "ommx.experiment",
     "ommx.experiment.OpenSolve": "ommx.experiment",
     "ommx.experiment.Run": "ommx.experiment",
     "ommx.experiment.SealedRun": "ommx.experiment",
     "ommx.experiment.Solve": "ommx.experiment",
+    "ommx.experiment.list_experiments": "ommx.experiment",
     "ommx.get_default_atol": "ommx",
     "ommx.set_default_atol": "ommx"
   },

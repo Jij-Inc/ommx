@@ -9,10 +9,12 @@ use super::{
     EXPERIMENT_STATUS_FINISHED, EXPERIMENT_STATUS_INTERRUPTED, RUN_PARAMETERS_MEDIA_TYPE,
     RUN_STATUS_FAILED, RUN_STATUS_FINISHED, RUN_STATUS_INTERRUPTED,
 };
-use crate::artifact::local_registry::{StoredDescriptor, UnsealedArtifact};
+use crate::artifact::local_registry::{
+    LocalRegistry, StoredDescriptor, UnsealedArtifact, SQLITE_INDEX_FILE_NAME,
+};
 use crate::artifact::{
-    media_types, sha256_digest, AsArtifact, ImageRef, LocalArtifact, LocalArtifactDyn,
-    LocalRegistryHandle,
+    media_types, sha256_digest, ArtifactDraft, AsArtifact, ImageRef, LocalArtifact,
+    LocalArtifactDyn, LocalRegistryHandle,
 };
 use crate::{Coefficient, Evaluate, Function, Instance, Sense};
 use oci_spec::image::{Digest, MediaType};
@@ -106,6 +108,90 @@ fn empty_solution(instance: &Instance) -> crate::Solution {
             crate::ATol::default(),
         )
         .unwrap()
+}
+
+#[test]
+fn local_registry_lists_committed_experiment_refs_from_projection() -> anyhow::Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let image_name = ImageRef::parse("example.com/cat_gt/experiment:latest")?;
+    let other_experiment_name = ImageRef::parse("example.com/catzgt/experiment:latest")?;
+    let artifact_name = ImageRef::parse("example.com/cat_gt/plain-artifact:latest")?;
+
+    let experiment = Experiment::with_registry(&registry, image_name.clone())?;
+    experiment.set_annotation("com.jij.catgt.problem", "qap")?;
+    experiment.run()?.finish()?;
+    experiment.commit()?;
+
+    Experiment::with_registry(&registry, other_experiment_name.clone())?.commit()?;
+
+    let mut draft = ArtifactDraft::with_registry(&registry, artifact_name);
+    draft.add_layer_bytes(
+        MediaType::Other("application/json".to_string()),
+        b"{}".to_vec(),
+        HashMap::new(),
+    )?;
+    draft.commit()?;
+
+    let records = registry.list_experiments(Some("example.com/cat_gt"))?;
+    assert_eq!(records.len(), 1);
+    let record = &records[0];
+    assert_eq!(record.image_name, image_name);
+    assert_eq!(record.status, EXPERIMENT_STATUS_FINISHED);
+    assert_eq!(record.run_count, 1);
+    assert_eq!(record.solve_count, 0);
+    assert_eq!(
+        record.annotations.get("com.jij.catgt.problem"),
+        Some(&"qap".to_string())
+    );
+    let tag_prefix = registry.list_experiments(Some("example.com/cat_gt/experiment:lat"))?;
+    assert_eq!(tag_prefix.len(), 1);
+    assert_eq!(tag_prefix[0].image_name, image_name);
+
+    let broader = registry.list_experiments(Some("example.com/cat"))?;
+    let mut broader_names = broader
+        .iter()
+        .map(|record| record.image_name.to_string())
+        .collect::<Vec<_>>();
+    broader_names.sort();
+    let mut expected_names = vec![image_name.to_string(), other_experiment_name.to_string()];
+    expected_names.sort();
+    assert_eq!(broader_names, expected_names);
+    Ok(())
+}
+
+#[test]
+fn list_experiments_backfills_missing_projection_and_rejects_corrupt_status() -> anyhow::Result<()>
+{
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let image_name = ImageRef::parse("example.com/catgt/backfill:latest")?;
+
+    let sealed = Experiment::with_registry(&registry, image_name.clone())?.commit()?;
+    let manifest_digest = sealed.artifact().manifest_digest().to_string();
+
+    let conn = rusqlite::Connection::open(registry.root().join(SQLITE_INDEX_FILE_NAME))?;
+    conn.execute(
+        "DELETE FROM experiment_manifests WHERE manifest_digest = ?1",
+        rusqlite::params![manifest_digest],
+    )?;
+
+    let records = registry.list_experiments(Some("example.com/catgt/backfill"))?;
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].image_name, image_name);
+
+    conn.execute(
+        "UPDATE experiment_manifests SET status = 'not-a-status' WHERE manifest_digest = ?1",
+        rusqlite::params![manifest_digest],
+    )?;
+    let err = registry
+        .list_experiments(Some("example.com/catgt/backfill"))
+        .expect_err("corrupt Experiment projection status must be rejected");
+    assert!(
+        err.to_string().contains("not-a-status"),
+        "unexpected error: {err}"
+    );
+    Ok(())
 }
 
 /// `run()` hands out fresh 0-based ids; `finish()` consumes the run

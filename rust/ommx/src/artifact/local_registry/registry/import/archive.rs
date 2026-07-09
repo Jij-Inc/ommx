@@ -282,9 +282,14 @@ impl LocalRegistry {
             self.ensure_archive_blob_exists(layer, path)?;
         }
 
-        let ref_update = self
-            .index
-            .publish_image_ref(&image_name, index_descriptor)?;
+        let experiment_record = self.experiment_manifest_record(&image_name, &manifest_digest)?;
+        let ref_update = if let Some(record) = experiment_record.as_ref() {
+            self.index
+                .publish_experiment_ref(&image_name, index_descriptor, record)?
+        } else {
+            self.index
+                .publish_image_ref(&image_name, index_descriptor)?
+        };
         // Public entry point: surface a ref conflict as `Err`. Callers
         // that need batch / report-style handling (e.g. legacy import)
         // use the directory import path, which can return conflicts.

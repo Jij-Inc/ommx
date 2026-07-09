@@ -9,7 +9,7 @@ from opentelemetry import trace as otel_trace
 from opentelemetry.proto.trace.v1.trace_pb2 import Status as ProtoStatus
 
 from ommx.adapter import SolverAdapter
-from ommx.experiment import Experiment
+from ommx.experiment import Experiment, list_experiments
 from ommx.tracing import TraceResult, render_text_tree
 from ommx import Instance, Solution
 
@@ -79,6 +79,41 @@ def _span_int_attributes(span) -> dict[str, int]:
         for attribute in span.attributes
         if attribute.value.WhichOneof("value") == "int_value"
     }
+
+
+def test_list_experiments_returns_cached_ref_records(tmp_path):
+    prefix = f"example.com/ommx-tests/list-experiments-{uuid.uuid4().hex}"
+    image_name = f"{prefix}/case:latest"
+
+    with Experiment(image_name) as experiment:
+        experiment.set_annotation("com.jij.catgt.problem", "qap")
+        with experiment.run() as run:
+            run.log_parameter("capacity", 10)
+
+    refs = list_experiments(prefix)
+    assert len(refs) == 1
+    ref = refs[0]
+    assert ref.image_name == image_name
+    assert ref.status == "finished"
+    assert ref.run_count == 1
+    assert ref.solve_count == 0
+    assert ref.annotations["com.jij.catgt.problem"] == "qap"
+    assert "sha256:" in ref.manifest_digest
+    assert "T" in ref.updated_at
+    assert [ref.image_name for ref in list_experiments(f"{prefix}/case:lat")] == [
+        image_name
+    ]
+
+    assert list_experiments(prefix, root=tmp_path / "empty-registry") == []
+
+
+def test_experiment_annotations_reject_reserved_keys():
+    experiment = Experiment.with_temp_local_registry()
+    experiment.set_annotation("com.example.owner", "value")
+    assert experiment.annotations == {"com.example.owner": "value"}
+
+    with pytest.raises(Exception, match="reserved for OMMX metadata"):
+        experiment.set_annotation("org.ommx.v1.reserved", "value")
 
 
 def _assert_open_solve_terminal_state(

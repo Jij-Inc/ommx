@@ -28,7 +28,7 @@ use crate::artifact::{
 use crate::{Instance, ParametricInstance, SampleSet, Solution};
 use anyhow::{ensure, Context, Result};
 use oci_spec::image::{Descriptor, MediaType};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -150,6 +150,7 @@ impl ExperimentCheckpoint {
 struct UnsealedExperimentDynState {
     image_name: ImageRef,
     subject: Option<Descriptor>,
+    annotations: HashMap<String, String>,
     attachments: AttachmentTable<Descriptor>,
     runs: BTreeMap<u64, RunEntryDyn>,
     next_run_id: u64,
@@ -410,6 +411,7 @@ impl ExperimentDyn {
                     state: Some(Box::new(UnsealedExperimentDynState {
                         image_name,
                         subject: None,
+                        annotations: HashMap::new(),
                         attachments: AttachmentTable::new(),
                         runs: BTreeMap::new(),
                         next_run_id: 0,
@@ -536,6 +538,28 @@ impl ExperimentDyn {
         }
     }
 
+    /// Set a manifest annotation on this unsealed Experiment.
+    ///
+    /// OMMX-owned annotation keys are reserved. Use caller-owned keys such as
+    /// reverse-DNS names for metadata that should appear in registry listings.
+    pub fn set_annotation(&self, key: impl Into<String>, value: impl Into<String>) -> Result<()> {
+        let key = key.into();
+        ensure!(
+            !crate::is_reserved_annotation_key(&key),
+            "Annotation key `{key}` is reserved for OMMX metadata"
+        );
+        let mut dyn_state = lock_experiment_state(&self.state);
+        ensure_unsealed_for_attachment_write(&dyn_state)?;
+        let ExperimentDynLifecycle::Unsealed { state, .. } = &mut dyn_state.lifecycle else {
+            return bail_non_unsealed(&dyn_state.lifecycle);
+        };
+        let state = state
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
+        state.annotations.insert(key, value.into());
+        Ok(())
+    }
+
     pub fn rename(&self, image_name: crate::artifact::ImageRef) -> Result<()> {
         let mut dyn_state = lock_experiment_state(&self.state);
         let registry_handle = dyn_state.registry_handle.clone();
@@ -589,6 +613,27 @@ impl ExperimentDyn {
         match &lock_experiment_state(&self.state).lifecycle {
             ExperimentDynLifecycle::Sealed(sealed) => Some(sealed.status),
             ExperimentDynLifecycle::Unsealed { .. } | ExperimentDynLifecycle::Failed { .. } => None,
+        }
+    }
+
+    /// Manifest annotations for this Experiment.
+    ///
+    /// Unsealed handles return the pending annotations. Sealed handles return
+    /// annotations read from the committed artifact manifest.
+    pub fn annotations(&self) -> Result<HashMap<String, String>> {
+        let dyn_state = lock_experiment_state(&self.state);
+        match &dyn_state.lifecycle {
+            ExperimentDynLifecycle::Unsealed { state, .. } => Ok(state
+                .as_ref()
+                .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?
+                .annotations
+                .clone()),
+            ExperimentDynLifecycle::Sealed(sealed) => sealed.artifact.annotations(),
+            ExperimentDynLifecycle::Failed {
+                checkpoint_artifact: Some(artifact),
+                ..
+            } => artifact.annotations(),
+            lifecycle => bail_not_sealed(lifecycle),
         }
     }
 
@@ -916,6 +961,7 @@ impl UnsealedExperimentDynState {
         Ok(UnsealedExperimentState {
             image_name: self.image_name.clone(),
             subject: self.subject.clone(),
+            annotations: self.annotations.clone(),
             attachments: self
                 .attachments
                 .clone()
@@ -980,6 +1026,7 @@ impl UnsealedExperimentDynState {
         Ok(UnsealedExperimentState {
             image_name: self.image_name,
             subject: self.subject,
+            annotations: self.annotations,
             attachments: self
                 .attachments
                 .try_map_owned(|descriptor| registry.stored_descriptor(descriptor))?,
@@ -1154,6 +1201,7 @@ impl SealedExperimentDynState {
         Ok(UnsealedExperimentDynState {
             image_name,
             subject,
+            annotations: HashMap::new(),
             attachments: self.attachments.clone(),
             next_run_id: next_run_id(runs.keys().copied())?,
             runs,
