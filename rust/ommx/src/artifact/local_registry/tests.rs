@@ -171,7 +171,7 @@ fn gc_deletes_only_orphan_candidates() -> Result<()> {
 fn sqlite_index_store_round_trip() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let store = SqliteIndexStore::open(dir.path().join(SQLITE_INDEX_FILE_NAME))?;
-    assert_eq!(store.schema_version()?, 2);
+    assert_eq!(store.schema_version()?, 3);
 
     let manifest_descriptor = test_manifest_descriptor(b"manifest")?;
     store.replace_ref(
@@ -220,7 +220,7 @@ fn sqlite_experiment_ref_rejects_mismatched_projection_descriptor() -> Result<()
             manifest_descriptor: projection_manifest_descriptor,
             manifest_json: projection_manifest_bytes,
             manifest_annotations: BTreeMap::new(),
-            artifact_type: MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
+            artifact_type: media_types::v1_experiment(),
             config_descriptor,
         },
         config_json: config_bytes,

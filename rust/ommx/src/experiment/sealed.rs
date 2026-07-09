@@ -6,8 +6,8 @@ use super::config::{ExperimentConfigSolve, LayerRef};
 use super::parameter::{RunParameterCell, RunParameterTable};
 use super::{
     read_solve_diagnostic_payload, ExperimentStatus, RunStatus, SealedExperiment,
-    SolveDiagnosticPayload, SolveStatus, Trace, EXPERIMENT_CONFIG_MEDIA_TYPE,
-    RUN_PARAMETERS_MEDIA_TYPE,
+    SolveDiagnosticPayload, SolveStatus, Trace, EXPERIMENT_ARTIFACT_MEDIA_TYPE,
+    EXPERIMENT_CONFIG_MEDIA_TYPE, RUN_PARAMETERS_MEDIA_TYPE,
 };
 use crate::artifact::local_registry::{
     ArtifactManifestRecord, ExperimentManifestRecord, StoredDescriptor,
@@ -175,10 +175,17 @@ pub(crate) fn experiment_manifest_record_from_artifact(
     artifact: &LocalArtifact<'_>,
 ) -> Result<Option<ExperimentManifestRecord>> {
     let manifest = artifact.get_manifest()?;
+    if manifest.artifact_type() != &MediaType::Other(EXPERIMENT_ARTIFACT_MEDIA_TYPE.to_string()) {
+        return Ok(None);
+    }
     let config_descriptor = manifest.config();
     if config_descriptor.media_type() != &MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string())
     {
-        return Ok(None);
+        crate::bail!(
+            "Experiment config media type is {}, expected {}",
+            config_descriptor.media_type(),
+            EXPERIMENT_CONFIG_MEDIA_TYPE
+        );
     }
     let manifest_json = artifact.read_blob_by_digest(artifact.manifest_digest())?;
     let config_json = artifact.get_blob_by_descriptor(&config_descriptor)?;

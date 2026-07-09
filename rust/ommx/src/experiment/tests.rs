@@ -5,9 +5,9 @@ use super::UnsealedExperimentState;
 use super::{
     AttachmentLogger, AttachmentTable, Experiment, ExperimentDyn, ExperimentStatus, Name,
     ParameterValue, SealedExperiment, SolveDiagnosticPayload, SolveStatus, Trace,
-    EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_STATUS_DRAFT, EXPERIMENT_STATUS_FAILED,
-    EXPERIMENT_STATUS_FINISHED, EXPERIMENT_STATUS_INTERRUPTED, RUN_PARAMETERS_MEDIA_TYPE,
-    RUN_STATUS_FAILED, RUN_STATUS_FINISHED, RUN_STATUS_INTERRUPTED,
+    EXPERIMENT_ARTIFACT_MEDIA_TYPE, EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_STATUS_DRAFT,
+    EXPERIMENT_STATUS_FAILED, EXPERIMENT_STATUS_FINISHED, EXPERIMENT_STATUS_INTERRUPTED,
+    RUN_PARAMETERS_MEDIA_TYPE, RUN_STATUS_FAILED, RUN_STATUS_FINISHED, RUN_STATUS_INTERRUPTED,
 };
 use crate::artifact::local_registry::{
     LocalRegistry, StoredDescriptor, UnsealedArtifact, SQLITE_INDEX_FILE_NAME,
@@ -223,6 +223,8 @@ fn list_experiments_caches_non_experiment_manifests_as_negative_results() -> any
     let registry = LocalRegistry::open(dir.path())?;
     let experiment_name = ImageRef::parse("example.com/catalog/experiment:latest")?;
     let artifact_name = ImageRef::parse("example.com/catalog/plain-artifact:latest")?;
+    let generic_with_experiment_config_name =
+        ImageRef::parse("example.com/catalog/generic-experiment-config:latest")?;
 
     Experiment::with_registry(&registry, experiment_name.clone())?.commit()?;
     let mut draft = ArtifactDraft::with_registry(&registry, artifact_name.clone());
@@ -234,17 +236,59 @@ fn list_experiments_caches_non_experiment_manifests_as_negative_results() -> any
     let artifact = draft.commit()?;
     let artifact_manifest_digest = artifact.manifest_digest().clone();
 
+    let run_parameters = registry.store_json_layer_blob(
+        MediaType::Other(RUN_PARAMETERS_MEDIA_TYPE.to_string()),
+        &json!({ "columns": {} }),
+        HashMap::new(),
+    )?;
+    let config = ExperimentConfig {
+        status: EXPERIMENT_STATUS_FINISHED.to_string(),
+        requested_image_name: Some(generic_with_experiment_config_name.to_string()),
+        attachments: AttachmentTable::new(),
+        runs: Vec::new(),
+        run_parameters: LayerRef(0),
+    };
+    let config_descriptor = registry.store_json_blob(
+        MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()),
+        &config,
+    )?;
+    let generic_with_experiment_config = UnsealedArtifact::new(
+        media_types::v1_artifact(),
+        config_descriptor,
+        vec![run_parameters],
+        None,
+        HashMap::new(),
+    );
+    let generic_with_experiment_config = registry.seal_artifact(generic_with_experiment_config)?;
+    let generic_with_experiment_config_digest = generic_with_experiment_config.digest().clone();
+    registry.publish_manifest_ref(
+        &generic_with_experiment_config_name,
+        &generic_with_experiment_config,
+    )?;
+
     let records = registry.list_experiments(Some("example.com/catalog"))?;
     assert_eq!(records.len(), 1);
     assert_eq!(records[0].image_name, experiment_name);
 
     let conn = rusqlite::Connection::open(registry.root().join(SQLITE_INDEX_FILE_NAME))?;
-    let cached_config_media_type: String = conn.query_row(
-        "SELECT config_media_type FROM artifact_manifests WHERE manifest_digest = ?1",
+    let cached_artifact_type: String = conn.query_row(
+        "SELECT artifact_type FROM artifact_manifests WHERE manifest_digest = ?1",
         rusqlite::params![artifact_manifest_digest.to_string()],
         |row| row.get(0),
     )?;
-    assert_ne!(cached_config_media_type, EXPERIMENT_CONFIG_MEDIA_TYPE);
+    assert_ne!(cached_artifact_type, EXPERIMENT_ARTIFACT_MEDIA_TYPE);
+    let generic_artifact_type: String = conn.query_row(
+        "SELECT artifact_type FROM artifact_manifests WHERE manifest_digest = ?1",
+        rusqlite::params![generic_with_experiment_config_digest.to_string()],
+        |row| row.get(0),
+    )?;
+    let generic_config_media_type: String = conn.query_row(
+        "SELECT config_media_type FROM artifact_manifests WHERE manifest_digest = ?1",
+        rusqlite::params![generic_with_experiment_config_digest.to_string()],
+        |row| row.get(0),
+    )?;
+    assert_eq!(generic_artifact_type, media_types::V1_ARTIFACT_MEDIA_TYPE);
+    assert_eq!(generic_config_media_type, EXPERIMENT_CONFIG_MEDIA_TYPE);
     let experiment_config_rows: i64 = conn.query_row(
         r#"
         SELECT COUNT(*)
@@ -257,8 +301,24 @@ fn list_experiments_caches_non_experiment_manifests_as_negative_results() -> any
         |row| row.get(0),
     )?;
     assert_eq!(experiment_config_rows, 0);
+    let generic_experiment_config_rows: i64 = conn.query_row(
+        r#"
+        SELECT COUNT(*)
+        FROM artifact_manifests
+        JOIN experiment_configs
+          ON artifact_manifests.config_digest = experiment_configs.config_digest
+        WHERE artifact_manifests.manifest_digest = ?1
+        "#,
+        rusqlite::params![generic_with_experiment_config_digest.to_string()],
+        |row| row.get(0),
+    )?;
+    assert_eq!(generic_experiment_config_rows, 0);
 
     fs::remove_file(blob_path(registry.root(), &artifact_manifest_digest))?;
+    fs::remove_file(blob_path(
+        registry.root(),
+        &generic_with_experiment_config_digest,
+    ))?;
     let records = registry.list_experiments(Some("example.com/catalog"))?;
     assert_eq!(records.len(), 1);
     assert_eq!(records[0].image_name, experiment_name);
@@ -557,6 +617,10 @@ fn commit_produces_experiment_artifact() {
         assert!(annotations.is_empty());
 
         let config = artifact.stored_config().unwrap();
+        assert_eq!(
+            artifact.get_manifest().unwrap().artifact_type(),
+            &MediaType::Other(EXPERIMENT_ARTIFACT_MEDIA_TYPE.to_string())
+        );
         assert_eq!(
             config.media_type(),
             &MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string())
@@ -1159,7 +1223,7 @@ fn loaded_experiment_rejects_invalid_diagnostic_payload() {
         )
         .unwrap();
     let unsealed = UnsealedArtifact::new(
-        MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
+        MediaType::Other(EXPERIMENT_ARTIFACT_MEDIA_TYPE.to_string()),
         config_descriptor,
         vec![input, output, diagnostics, run_parameters],
         None,
@@ -1227,7 +1291,7 @@ fn loaded_experiment_rejects_failed_solve_with_output() {
         )
         .unwrap();
     let unsealed = UnsealedArtifact::new(
-        MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
+        MediaType::Other(EXPERIMENT_ARTIFACT_MEDIA_TYPE.to_string()),
         config_descriptor,
         vec![input, output, run_parameters],
         None,
@@ -1271,7 +1335,7 @@ fn loaded_experiment_rejects_non_finished_status() {
         )
         .unwrap();
     let unsealed = UnsealedArtifact::new(
-        MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
+        MediaType::Other(EXPERIMENT_ARTIFACT_MEDIA_TYPE.to_string()),
         config_descriptor,
         vec![run_parameters],
         None,
@@ -1320,7 +1384,7 @@ fn loaded_experiment_rejects_config_attachment_not_listed_in_layers() {
         )
         .unwrap();
     let unsealed = UnsealedArtifact::new(
-        MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
+        MediaType::Other(EXPERIMENT_ARTIFACT_MEDIA_TYPE.to_string()),
         config_descriptor,
         vec![run_parameters],
         None,
@@ -1377,7 +1441,7 @@ fn loaded_experiment_uses_config_table_for_attachment_names() {
         )
         .unwrap();
     let unsealed = UnsealedArtifact::new(
-        MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
+        MediaType::Other(EXPERIMENT_ARTIFACT_MEDIA_TYPE.to_string()),
         config_descriptor,
         vec![listed_attachment, run_parameters],
         None,
@@ -1432,7 +1496,7 @@ fn loaded_experiment_rejects_filename_without_attachment_entry() {
         )
         .unwrap();
     let unsealed = UnsealedArtifact::new(
-        MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
+        MediaType::Other(EXPERIMENT_ARTIFACT_MEDIA_TYPE.to_string()),
         config_descriptor,
         vec![run_parameters],
         None,
@@ -1492,7 +1556,7 @@ fn loaded_experiment_rejects_config_run_attachment_not_listed_in_layers() {
         )
         .unwrap();
     let unsealed = UnsealedArtifact::new(
-        MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
+        MediaType::Other(EXPERIMENT_ARTIFACT_MEDIA_TYPE.to_string()),
         config_descriptor,
         vec![run_parameters],
         None,
@@ -1536,7 +1600,7 @@ fn loaded_experiment_rejects_run_parameters_not_listed_in_layers() {
         )
         .unwrap();
     let unsealed = UnsealedArtifact::new(
-        MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()),
+        MediaType::Other(EXPERIMENT_ARTIFACT_MEDIA_TYPE.to_string()),
         config_descriptor,
         Vec::new(),
         None,

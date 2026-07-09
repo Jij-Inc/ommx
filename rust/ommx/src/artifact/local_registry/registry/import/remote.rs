@@ -225,7 +225,7 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
             .as_ref()
             .context("Remote manifest is not an OMMX artifact: artifactType is missing")?;
         anyhow::ensure!(
-            artifact_type == &media_types::v1_artifact(),
+            media_types::is_ommx_artifact_type(artifact_type),
             "Remote manifest is not an OMMX artifact: {artifact_type}"
         );
         if let Some(media_type) = manifest.media_type() {

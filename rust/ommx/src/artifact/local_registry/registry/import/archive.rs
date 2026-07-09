@@ -426,7 +426,7 @@ fn ensure_ommx_artifact_type(artifact_type: Option<&MediaType>) -> Result<()> {
     let artifact_type =
         artifact_type.context("OCI archive is not an OMMX artifact: artifactType is missing")?;
     anyhow::ensure!(
-        artifact_type == &media_types::v1_artifact(),
+        media_types::is_ommx_artifact_type(artifact_type),
         "OCI archive is not an OMMX artifact: {artifact_type}"
     );
     Ok(())

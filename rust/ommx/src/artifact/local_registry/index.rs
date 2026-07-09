@@ -19,7 +19,7 @@ use std::{
 /// SQLite Local Registry schema version stored in `PRAGMA user_version`.
 /// The SQLite Local Registry has not been released yet, so incompatible
 /// development schemas fail fast instead of carrying in-place migrations.
-const SCHEMA_VERSION: i64 = 2;
+const SCHEMA_VERSION: i64 = 3;
 const SQLITE_BUSY_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// SQLite-backed index store for the v3 Local Registry.
@@ -662,7 +662,7 @@ impl SqliteIndexStore {
                   ON refs.manifest_digest = artifact_manifests.manifest_digest
                 LEFT JOIN experiment_configs
                   ON artifact_manifests.config_digest = experiment_configs.config_digest
-                WHERE artifact_manifests.config_media_type = ?3
+                WHERE artifact_manifests.artifact_type = ?3
                   AND experiment_configs.config_digest IS NULL
                   AND substr(
                     refs.name ||
@@ -678,7 +678,7 @@ impl SqliteIndexStore {
                 params![
                     prefix_len,
                     prefix,
-                    crate::experiment::EXPERIMENT_CONFIG_MEDIA_TYPE
+                    crate::experiment::EXPERIMENT_ARTIFACT_MEDIA_TYPE
                 ],
                 image_ref_and_digest_from_row,
             )?;
@@ -694,13 +694,13 @@ impl SqliteIndexStore {
                   ON refs.manifest_digest = artifact_manifests.manifest_digest
                 LEFT JOIN experiment_configs
                   ON artifact_manifests.config_digest = experiment_configs.config_digest
-                WHERE artifact_manifests.config_media_type = ?1
+                WHERE artifact_manifests.artifact_type = ?1
                   AND experiment_configs.config_digest IS NULL
                 ORDER BY refs.name, refs.reference
                 "#,
             )?;
             let rows = stmt.query_map(
-                params![crate::experiment::EXPERIMENT_CONFIG_MEDIA_TYPE],
+                params![crate::experiment::EXPERIMENT_ARTIFACT_MEDIA_TYPE],
                 image_ref_and_digest_from_row,
             )?;
             for row in rows {
@@ -733,7 +733,7 @@ impl SqliteIndexStore {
                   ON refs.manifest_digest = artifact_manifests.manifest_digest
                 JOIN experiment_configs
                   ON artifact_manifests.config_digest = experiment_configs.config_digest
-                WHERE artifact_manifests.config_media_type = ?3
+                WHERE artifact_manifests.artifact_type = ?3
                   AND experiment_configs.status NOT IN (?4, ?5, ?6, ?7)
                   AND substr(
                     refs.name ||
@@ -749,7 +749,7 @@ impl SqliteIndexStore {
                 params![
                     prefix_len,
                     prefix,
-                    crate::experiment::EXPERIMENT_CONFIG_MEDIA_TYPE,
+                    crate::experiment::EXPERIMENT_ARTIFACT_MEDIA_TYPE,
                     valid_statuses[0],
                     valid_statuses[1],
                     valid_statuses[2],
@@ -769,14 +769,14 @@ impl SqliteIndexStore {
                   ON refs.manifest_digest = artifact_manifests.manifest_digest
                 JOIN experiment_configs
                   ON artifact_manifests.config_digest = experiment_configs.config_digest
-                WHERE artifact_manifests.config_media_type = ?1
+                WHERE artifact_manifests.artifact_type = ?1
                   AND experiment_configs.status NOT IN (?2, ?3, ?4, ?5)
                 ORDER BY refs.name, refs.reference
                 "#,
             )?;
             let rows = stmt.query_map(
                 params![
-                    crate::experiment::EXPERIMENT_CONFIG_MEDIA_TYPE,
+                    crate::experiment::EXPERIMENT_ARTIFACT_MEDIA_TYPE,
                     valid_statuses[0],
                     valid_statuses[1],
                     valid_statuses[2],
@@ -816,7 +816,7 @@ impl SqliteIndexStore {
                   ON refs.manifest_digest = artifact_manifests.manifest_digest
                 JOIN experiment_configs
                   ON artifact_manifests.config_digest = experiment_configs.config_digest
-                WHERE artifact_manifests.config_media_type = ?3
+                WHERE artifact_manifests.artifact_type = ?3
                   AND substr(
                     refs.name ||
                     CASE WHEN instr(refs.reference, ':') > 0 THEN '@' ELSE ':' END ||
@@ -831,7 +831,7 @@ impl SqliteIndexStore {
                 params![
                     prefix_len,
                     prefix,
-                    crate::experiment::EXPERIMENT_CONFIG_MEDIA_TYPE
+                    crate::experiment::EXPERIMENT_ARTIFACT_MEDIA_TYPE
                 ],
                 experiment_ref_from_row,
             )?;
@@ -855,12 +855,12 @@ impl SqliteIndexStore {
                   ON refs.manifest_digest = artifact_manifests.manifest_digest
                 JOIN experiment_configs
                   ON artifact_manifests.config_digest = experiment_configs.config_digest
-                WHERE artifact_manifests.config_media_type = ?1
+                WHERE artifact_manifests.artifact_type = ?1
                 ORDER BY refs.name, refs.reference
                 "#,
             )?;
             let rows = stmt.query_map(
-                params![crate::experiment::EXPERIMENT_CONFIG_MEDIA_TYPE],
+                params![crate::experiment::EXPERIMENT_ARTIFACT_MEDIA_TYPE],
                 experiment_ref_from_row,
             )?;
             for row in rows {
@@ -936,6 +936,9 @@ impl SqliteIndexStore {
 
             CREATE INDEX IF NOT EXISTS idx_artifact_manifests_config_media_type
                 ON artifact_manifests(config_media_type);
+
+            CREATE INDEX IF NOT EXISTS idx_artifact_manifests_artifact_type
+                ON artifact_manifests(artifact_type);
 
             CREATE TABLE IF NOT EXISTS experiment_configs (
                 config_digest TEXT PRIMARY KEY,
