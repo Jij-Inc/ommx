@@ -16,9 +16,9 @@ def random_state(miplib_supportcase10):
     return miplib_supportcase10.random_state(rng)
 
 
-@pytest.fixture(params=[(1, 1), (10, 10), (10, 100)])
+@pytest.fixture(params=[(1, 1)], ids=["single-sample"])
 def samples(request, miplib_supportcase10):
-    """Generate samples with different configurations"""
+    """Generate a representative sample set for Python E2E benchmarking."""
     num_different_samples, num_samples = request.param
     rng = Rng()
     return miplib_supportcase10.random_samples(

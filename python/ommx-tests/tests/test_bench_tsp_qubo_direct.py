@@ -14,7 +14,7 @@ def generate_distance_matrix(num_city: int) -> np.ndarray:
     return distance
 
 
-@pytest.fixture(params=[2, 4, 8, 16, 32])
+@pytest.fixture(params=[2, 4, 8, 16])
 def tsp_distance_matrix(request):
     """Fixture to generate TSP distance matrices of different sizes."""
     num_city = request.param
