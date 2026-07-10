@@ -12,6 +12,7 @@ use crate::artifact::{
 use anyhow::{bail, ensure, Context, Result};
 use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, ImageManifest, MediaType};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::fs::{File, OpenOptions};
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -31,6 +32,7 @@ pub use import::{ArchiveInspectView, LegacyImportReport, OciDirImport, OciDirRef
 static DEFAULT_LOCAL_REGISTRY: OnceLock<LocalRegistry> = OnceLock::new();
 const EXPERIMENT_CHECKPOINT_REPOSITORY: &str = "checkpoint";
 const FILE_BLOB_STORE_DIR_NAME: &str = "blobs";
+const GC_EXCLUSION_LOCK_FILE_NAME: &str = ".gc-exclusion.lock";
 
 struct InvalidCachedRefs {
     manifest_digest: Digest,
@@ -307,6 +309,31 @@ impl<'reg> Deref for SealedArtifact<'reg> {
 impl SealedArtifact<'_> {
     fn is_stored_in(&self, registry: &LocalRegistry) -> bool {
         self.0.is_stored_in(registry)
+    }
+}
+
+/// An existing manifest whose complete config/layer/subject closure has been
+/// verified from this Local Registry's CAS.
+///
+/// This capability stays private to the registry owner so an existing digest
+/// cannot be published without first proving that it remains materializable.
+struct VerifiedManifestClosure<'reg> {
+    manifest: StoredDescriptor<'reg>,
+    projection: VerifiedManifestProjection,
+}
+
+enum VerifiedManifestProjection {
+    Artifact(ArtifactManifestRecord),
+    Experiment(ExperimentManifestRecord),
+}
+
+struct GcExclusionGuard {
+    file: File,
+}
+
+impl Drop for GcExclusionGuard {
+    fn drop(&mut self) {
+        let _ = self.file.unlock();
     }
 }
 
@@ -663,14 +690,7 @@ impl LocalRegistry {
     pub fn list_anonymous_artifact_refs(
         &self,
     ) -> Result<Vec<crate::artifact::local_registry::RefRecord>> {
-        let all = self.index.list_refs(None)?;
-        Ok(all
-            .into_iter()
-            .filter(|r| {
-                crate::artifact::is_anonymous_artifact_ref_name(&r.name)
-                    && crate::artifact::is_anonymous_artifact_tag(&r.reference)
-            })
-            .collect())
+        self.list_anonymous_refs(&crate::artifact::local_registry::AnonymousRefOptions::default())
     }
 
     /// Bulk-delete every SQLite ref produced by
@@ -685,11 +705,66 @@ impl LocalRegistry {
     pub fn prune_anonymous_artifact_refs(
         &self,
     ) -> Result<Vec<crate::artifact::local_registry::RefRecord>> {
-        let refs = self.list_anonymous_artifact_refs()?;
-        for r in &refs {
-            self.index.delete_ref(&r.name, &r.reference)?;
+        self.prune_anonymous_refs(&crate::artifact::local_registry::AnonymousRefOptions::default())
+    }
+
+    /// List synthetic anonymous refs eligible for cleanup.
+    ///
+    /// Anonymous Artifact refs are always included. Options can additionally
+    /// include anonymous Experiment refs and restrict results by ref age.
+    pub fn list_anonymous_refs(
+        &self,
+        options: &crate::artifact::local_registry::AnonymousRefOptions,
+    ) -> Result<Vec<crate::artifact::local_registry::RefRecord>> {
+        let cutoff = options
+            .older_than
+            .map(|age| {
+                let age = chrono::Duration::from_std(age)
+                    .context("Anonymous ref retention duration is too large")?;
+                chrono::Utc::now()
+                    .checked_sub_signed(age)
+                    .context("Anonymous ref retention cutoff is out of range")
+            })
+            .transpose()?;
+        let mut refs = Vec::new();
+        for record in self.index.list_refs(None)? {
+            let anonymous_artifact = crate::artifact::is_anonymous_artifact_ref_name(&record.name);
+            let anonymous_experiment = options.include_experiments
+                && crate::artifact::is_anonymous_experiment_ref_name(&record.name);
+            if !(anonymous_artifact || anonymous_experiment)
+                || !crate::artifact::is_anonymous_artifact_tag(&record.reference)
+            {
+                continue;
+            }
+            if let Some(cutoff) = cutoff {
+                let updated_at = chrono::DateTime::parse_from_rfc3339(&record.updated_at)
+                    .with_context(|| {
+                        format!(
+                            "Invalid Local Registry ref timestamp for {}:{}",
+                            record.name, record.reference
+                        )
+                    })?
+                    .with_timezone(&chrono::Utc);
+                if updated_at > cutoff {
+                    continue;
+                }
+            }
+            refs.push(record);
         }
         Ok(refs)
+    }
+
+    /// Delete synthetic anonymous refs selected by [`Self::list_anonymous_refs`].
+    ///
+    /// Only SQLite refs are removed. Immutable manifest and payload blobs stay
+    /// in the CAS until [`Self::gc`] reclaims them. Candidate rows are deleted
+    /// only if they have not changed since selection.
+    pub fn prune_anonymous_refs(
+        &self,
+        options: &crate::artifact::local_registry::AnonymousRefOptions,
+    ) -> Result<Vec<crate::artifact::local_registry::RefRecord>> {
+        let refs = self.list_anonymous_refs(options)?;
+        self.index.delete_refs_if_unchanged(&refs)
     }
 
     /// List every image ref stored in this registry.
@@ -1089,6 +1164,18 @@ impl LocalRegistry {
         &self,
         manifest_digest: &Digest,
     ) -> Result<ArtifactManifestRecord> {
+        let (manifest_json, manifest, _) = self.read_artifact_manifest(manifest_digest)?;
+        ArtifactManifestRecord::from_image_manifest(
+            manifest_digest.clone(),
+            manifest_json,
+            &manifest,
+        )
+    }
+
+    fn read_artifact_manifest(
+        &self,
+        manifest_digest: &Digest,
+    ) -> Result<(Vec<u8>, ImageManifest, Descriptor)> {
         let manifest_json = self.read_blob(manifest_digest)?;
         let manifest: ImageManifest = serde_json::from_slice(&manifest_json)
             .with_context(|| format!("Failed to parse OCI image manifest {manifest_digest}"))?;
@@ -1100,11 +1187,81 @@ impl LocalRegistry {
             manifest_digest,
             manifest_descriptor.digest()
         );
-        ArtifactManifestRecord::from_image_manifest(
-            manifest_descriptor.digest().clone(),
+        Ok((manifest_json, manifest, manifest_descriptor))
+    }
+
+    fn verify_manifest_closure(
+        &self,
+        image_name: &ImageRef,
+        manifest_digest: &Digest,
+    ) -> Result<VerifiedManifestClosure<'_>> {
+        let (manifest_json, manifest, manifest_descriptor) =
+            self.read_artifact_manifest(manifest_digest)?;
+        let mut visited = BTreeSet::from([manifest_digest.as_ref().to_string()]);
+        self.verify_manifest_dependencies(&manifest, &mut visited)?;
+        let artifact = ArtifactManifestRecord::from_image_manifest(
+            manifest_digest.clone(),
             manifest_json,
             &manifest,
-        )
+        )?;
+        let projection = match self.experiment_manifest_record(image_name, manifest_digest)? {
+            Some(experiment) => VerifiedManifestProjection::Experiment(experiment),
+            None => VerifiedManifestProjection::Artifact(artifact),
+        };
+        let manifest = self.stored_descriptor(manifest_descriptor)?;
+        Ok(VerifiedManifestClosure {
+            manifest,
+            projection,
+        })
+    }
+
+    fn verify_manifest_dependencies(
+        &self,
+        manifest: &ImageManifest,
+        visited: &mut BTreeSet<String>,
+    ) -> Result<()> {
+        self.verify_descriptor_blob(manifest.config())?;
+        for layer in manifest.layers() {
+            self.verify_descriptor_blob(layer)?;
+        }
+        if let Some(subject) = manifest.subject() {
+            self.verify_subject_manifest_closure(subject, visited)?;
+        }
+        Ok(())
+    }
+
+    fn verify_descriptor_blob(&self, descriptor: &Descriptor) -> Result<()> {
+        let digest = descriptor.digest().clone();
+        let descriptor = self
+            .stored_descriptor(descriptor.clone())
+            .with_context(|| format!("Manifest closure blob is missing or invalid: {digest}"))?;
+        self.get_blob(&descriptor)
+            .with_context(|| format!("Manifest closure blob is missing or invalid: {digest}"))?;
+        Ok(())
+    }
+
+    fn verify_subject_manifest_closure(
+        &self,
+        descriptor: &Descriptor,
+        visited: &mut BTreeSet<String>,
+    ) -> Result<()> {
+        if !visited.insert(descriptor.digest().as_ref().to_string()) {
+            return Ok(());
+        }
+        let digest = descriptor.digest().clone();
+        let descriptor = self
+            .stored_descriptor(descriptor.clone())
+            .with_context(|| format!("Subject manifest is missing or invalid: {digest}"))?;
+        let bytes = self
+            .get_blob(&descriptor)
+            .with_context(|| format!("Subject manifest is missing or invalid: {digest}"))?;
+        let manifest: ImageManifest = serde_json::from_slice(&bytes).with_context(|| {
+            format!(
+                "Failed to parse subject OCI image manifest {}",
+                descriptor.digest()
+            )
+        })?;
+        self.verify_manifest_dependencies(&manifest, visited)
     }
 
     /// Seal an unsealed OMMX Artifact manifest into the Local Registry.
@@ -1164,23 +1321,29 @@ impl LocalRegistry {
             .publish_experiment_ref(image_name, &sealed_artifact.0, experiment)
     }
 
-    /// Publish an already-stored root manifest descriptor under an image ref.
+    /// Publish an existing, complete manifest closure under an image ref.
     ///
-    /// This is used when adding another local name for an existing artifact.
-    /// It is an IndexStore operation only: no payload blobs or manifest bytes
-    /// are rewritten. Crate-visible for `LocalArtifact::tag_as`.
-    pub(crate) fn publish_stored_manifest_ref(
+    /// Existing closures can contain old blobs that are immediately eligible
+    /// for GC. Validation and publication therefore share the same
+    /// cross-process exclusion boundary as the deleting GC pass. Crate-visible
+    /// for `LocalArtifact::tag_as`; the verified-closure capability remains
+    /// private to the Local Registry owner.
+    pub(crate) fn publish_existing_manifest_ref(
         &self,
         image_name: &ImageRef,
-        manifest: &StoredDescriptor<'_>,
+        manifest_digest: &Digest,
     ) -> Result<RefUpdate> {
-        ensure!(
-            manifest.is_stored_in(self),
-            "Manifest descriptor belongs to a different Local Registry"
-        );
-        let artifact = self.artifact_manifest_record(manifest.digest())?;
-        self.index
-            .publish_artifact_ref(image_name, manifest, &artifact)
+        let _gc_exclusion = self.lock_gc_exclusion()?;
+        let verified = self.verify_manifest_closure(image_name, manifest_digest)?;
+        match verified.projection {
+            VerifiedManifestProjection::Artifact(artifact) => {
+                self.index
+                    .publish_artifact_ref(image_name, &verified.manifest, &artifact)
+            }
+            VerifiedManifestProjection::Experiment(experiment) => self
+                .index
+                .publish_experiment_ref(image_name, &verified.manifest, &experiment),
+        }
     }
 
     /// Replace the ref target with a sealed root manifest descriptor.
@@ -1218,11 +1381,53 @@ impl LocalRegistry {
             .replace_experiment_ref(image_name, &sealed_artifact.0, experiment)
     }
 
-    /// Delete a local manifest ref. Content-addressed blobs are not removed.
-    /// Crate-visible for Experiment checkpoint cleanup; GC handles blob removal.
-    pub(crate) fn delete_manifest_ref(&self, image_name: &ImageRef) -> Result<bool> {
+    /// Remove a local image ref without deleting content-addressed blobs.
+    ///
+    /// The mutable `(name, reference) -> manifest digest` row is removed from
+    /// this Local Registry. The immutable manifest, config, and layer blobs are
+    /// reclaimed only when a later [`Self::gc`] pass finds them unreachable.
+    /// Returns the removed ref record, including the manifest digest needed by
+    /// [`Self::restore_image_ref`], or `None` when the ref did not exist.
+    pub fn remove_image_ref(
+        &self,
+        image_name: &ImageRef,
+    ) -> Result<Option<crate::artifact::local_registry::RefRecord>> {
         self.index
             .delete_ref(&image_name.repository_key(), image_name.reference())
+    }
+
+    /// Restore an image ref to a manifest that remains in this Local Registry.
+    ///
+    /// The manifest and its complete config/layer/subject closure are verified
+    /// from the CAS before the ref is published. Verification and publication
+    /// are serialized against deleting GC passes across processes. An existing
+    /// ref at the same name is never moved: the returned
+    /// [`RefUpdate::Conflicted`] identifies a different current target, while
+    /// an identical target returns [`RefUpdate::Unchanged`].
+    pub fn restore_image_ref(
+        &self,
+        image_name: &ImageRef,
+        manifest_digest: &Digest,
+    ) -> Result<RefUpdate> {
+        self.publish_existing_manifest_ref(image_name, manifest_digest)
+    }
+
+    /// Exclude deletion GC while an existing CAS closure is validated and
+    /// published. The file lock coordinates independent registry instances and
+    /// processes; SQLite and blob-store locks remain responsible for their
+    /// respective local mutations inside this owner-level boundary.
+    fn lock_gc_exclusion(&self) -> Result<GcExclusionGuard> {
+        let path = self.root.join(GC_EXCLUSION_LOCK_FILE_NAME);
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&path)
+            .with_context(|| format!("Failed to open GC exclusion lock {}", path.display()))?;
+        file.lock()
+            .with_context(|| format!("Failed to lock GC exclusion at {}", path.display()))?;
+        Ok(GcExclusionGuard { file })
     }
 
     fn store_blob_bytes(&self, bytes: &[u8]) -> Result<Digest> {
@@ -1252,14 +1457,6 @@ impl LocalRegistry {
         self.blobs.size(digest)
     }
 
-    /// Touch a raw blob's mtime for crate-internal ref-preservation flows.
-    ///
-    /// The public API does not expose mtime management; this is used when
-    /// registry-owned manifest closures are re-tagged.
-    pub(crate) fn touch_blob(&self, digest: &Digest) -> Result<()> {
-        self.blobs.touch_blob(digest)
-    }
-
     fn list_blob_records(&self) -> Result<Vec<BlobRecord>> {
         self.blobs.list_blobs()
     }
@@ -1287,41 +1484,6 @@ impl LocalRegistry {
             .build()
             .context("Failed to build manifest descriptor")?;
         self.stored_descriptor(descriptor)
-    }
-
-    /// Touch every blob reachable from a manifest, including subject manifests.
-    ///
-    /// Crate-visible for `LocalArtifact::tag_as`; the traversal is registry
-    /// internal so callers do not pass BLOB protection lists around.
-    pub(crate) fn touch_manifest_closure(
-        &self,
-        manifest_digest: &Digest,
-        visited: &mut BTreeSet<String>,
-    ) -> Result<()> {
-        if !visited.insert(manifest_digest.as_ref().to_string()) {
-            return Ok(());
-        }
-        self.touch_blob(manifest_digest)?;
-        let bytes = self
-            .read_blob(manifest_digest)
-            .with_context(|| format!("Failed to read manifest blob {manifest_digest}"))?;
-        let manifest: ImageManifest = serde_json::from_slice(&bytes)
-            .with_context(|| format!("Failed to parse OCI image manifest {manifest_digest}"))?;
-
-        self.touch_descriptor_blob(manifest.config())?;
-        for layer in manifest.layers() {
-            self.touch_descriptor_blob(layer)?;
-        }
-        if let Some(subject) = manifest.subject() {
-            let subject = self.stored_descriptor(subject.clone())?;
-            self.touch_manifest_closure(subject.digest(), visited)?;
-        }
-        Ok(())
-    }
-
-    fn touch_descriptor_blob(&self, descriptor: &Descriptor) -> Result<()> {
-        let descriptor = self.stored_descriptor(descriptor.clone())?;
-        self.touch_blob(descriptor.digest())
     }
 
     /// Validate that the manifest carries the OMMX `artifactType`.

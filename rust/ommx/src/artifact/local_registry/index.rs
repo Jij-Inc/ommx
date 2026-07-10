@@ -543,20 +543,69 @@ impl SqliteIndexStore {
         }
     }
 
-    /// Delete a single ref row by `(name, reference)`. Returns `true`
-    /// when a row was actually removed. Content blobs are not touched;
+    /// Delete a single ref row by `(name, reference)` and return the removed
+    /// record needed to restore it. Content blobs are not touched;
     /// unreferenced CAS bytes are reclaimed by a future GC sweep, not
     /// by this primitive.
-    pub fn delete_ref(&self, name: &str, reference: &str) -> Result<bool> {
+    pub fn delete_ref(&self, name: &str, reference: &str) -> Result<Option<RefRecord>> {
         let mut conn = self.lock();
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let affected = tx.execute(
-            r#"DELETE FROM refs WHERE name = ?1 AND reference = ?2"#,
-            params![name, reference],
-        )?;
+        let record = tx
+            .query_row(
+                r#"SELECT name, reference, manifest_digest, updated_at
+                   FROM refs WHERE name = ?1 AND reference = ?2"#,
+                params![name, reference],
+                |row| {
+                    Ok(RefRecord {
+                        name: row.get(0)?,
+                        reference: row.get(1)?,
+                        manifest_digest: digest_from_column(row, 2)?,
+                        updated_at: row.get(3)?,
+                    })
+                },
+            )
+            .optional()?;
+        if record.is_some() {
+            tx.execute(
+                r#"DELETE FROM refs WHERE name = ?1 AND reference = ?2"#,
+                params![name, reference],
+            )?;
+        }
         Self::prune_unreferenced_cache_in(&tx)?;
         tx.commit()?;
-        Ok(affected > 0)
+        Ok(record)
+    }
+
+    /// Delete candidate refs only while their digest and update timestamp
+    /// still match the listing snapshot used to select them.
+    ///
+    /// This compare-and-delete boundary prevents a concurrent ref replacement
+    /// from being removed by a prune pass that selected the older row.
+    pub fn delete_refs_if_unchanged(&self, candidates: &[RefRecord]) -> Result<Vec<RefRecord>> {
+        let mut conn = self.lock();
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let mut removed = Vec::new();
+        for candidate in candidates {
+            let affected = tx.execute(
+                r#"DELETE FROM refs
+                   WHERE name = ?1
+                     AND reference = ?2
+                     AND manifest_digest = ?3
+                     AND updated_at = ?4"#,
+                params![
+                    &candidate.name,
+                    &candidate.reference,
+                    candidate.manifest_digest.as_ref(),
+                    &candidate.updated_at,
+                ],
+            )?;
+            if affected > 0 {
+                removed.push(candidate.clone());
+            }
+        }
+        Self::prune_unreferenced_cache_in(&tx)?;
+        tx.commit()?;
+        Ok(removed)
     }
 
     pub fn list_refs(&self, name_prefix: Option<&str>) -> Result<Vec<RefRecord>> {
@@ -1183,9 +1232,13 @@ fn cache_conversion_failure(
 }
 
 fn digest_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Digest> {
-    let digest: String = row.get(0)?;
+    digest_from_column(row, 0)
+}
+
+fn digest_from_column(row: &rusqlite::Row<'_>, column: usize) -> rusqlite::Result<Digest> {
+    let digest: String = row.get(column)?;
     Digest::from_str(&digest)
-        .map_err(|err| rusqlite::Error::FromSqlConversionFailure(0, Type::Text, Box::new(err)))
+        .map_err(|err| rusqlite::Error::FromSqlConversionFailure(column, Type::Text, Box::new(err)))
 }
 
 fn create_schema(conn: &Connection) -> Result<()> {

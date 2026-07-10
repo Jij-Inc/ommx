@@ -84,19 +84,6 @@ impl FileBlobStore {
             .len())
     }
 
-    pub fn touch_blob(&self, digest: &Digest) -> Result<()> {
-        let _lock = self.lock_store()?;
-        let path = self.path_for_digest(digest)?;
-        let metadata = fs::metadata(&path)
-            .with_context(|| format!("Failed to read blob metadata {}", path.display()))?;
-        ensure!(
-            metadata.is_file(),
-            "Blob path is not a file for {digest}: {}",
-            path.display()
-        );
-        touch_existing_blob(&path, digest.as_ref())
-    }
-
     pub fn list_blobs(&self) -> Result<Vec<BlobRecord>> {
         let mut out = Vec::new();
         if !self.root.exists() {

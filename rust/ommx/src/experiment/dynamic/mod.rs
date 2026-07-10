@@ -593,9 +593,9 @@ impl ExperimentDyn {
                 state.image_name = image_name;
                 match registry_handle
                     .registry()
-                    .delete_manifest_ref(&old_checkpoint_image_name)
+                    .remove_image_ref(&old_checkpoint_image_name)
                 {
-                    Ok(true) => {
+                    Ok(Some(_)) => {
                         let run_count = state.runs.len();
                         state
                             .autosave
@@ -610,7 +610,7 @@ impl ExperimentDyn {
                             }
                         }
                     }
-                    Ok(false) => {}
+                    Ok(None) => {}
                     Err(error) => {
                         tracing::warn!(
                             error = %error,

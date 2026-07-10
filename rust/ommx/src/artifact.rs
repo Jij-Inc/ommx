@@ -66,6 +66,7 @@ pub use image_ref::ImageRef;
 pub(crate) use manifest::stable_json_bytes;
 pub(crate) use manifest::{
     anonymous_artifact_image_name, anonymous_local_image_name, anonymous_local_repository_key,
+    is_anonymous_experiment_ref_name,
 };
 pub use manifest::{
     is_anonymous_artifact_ref_name, is_anonymous_artifact_tag, ArtifactDraft, AsArtifact,

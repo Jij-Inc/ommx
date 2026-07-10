@@ -100,6 +100,8 @@ __all__ = [
     "miplib2017_instance_annotations",
     "prune_anonymous",
     "qplib_instance_annotations",
+    "remove_image",
+    "restore_image",
     "set_default_atol",
     "set_local_registry_root",
 ]
@@ -135,10 +137,15 @@ ToState: TypeAlias = (
 @typing.final
 class AnonymousArtifactRef:
     r"""
-    Anonymous Artifact ref matched by {func}`prune_anonymous`.
+    Anonymous Artifact or Experiment ref matched by {func}`prune_anonymous`.
     """
     @property
     def image_name(self) -> builtins.str: ...
+    @property
+    def kind(self) -> builtins.str:
+        r"""
+        Synthetic ref kind: `"artifact"` or `"experiment"`.
+        """
     @property
     def name(self) -> builtins.str: ...
     @property
@@ -7532,13 +7539,17 @@ def prune_anonymous(
     *,
     root: typing.Optional[builtins.str | os.PathLike | pathlib.Path] = None,
     delete: builtins.bool = False,
+    experiments: builtins.bool = False,
+    older_than: typing.Optional[builtins.str] = None,
 ) -> PruneAnonymousReport:
     r"""
-    Report or delete anonymous Artifact refs in the Local Registry.
+    Report or delete anonymous Artifact and Experiment refs in the Local Registry.
 
     This is the Python SDK equivalent of `ommx prune-anonymous`.
     It only removes SQLite refs when `delete=True`; manifest and payload blobs
     are left for {func}`gc` to reclaim if they become unreachable.
+    Anonymous Experiment refs are included only when `experiments=True`.
+    `older_than` accepts the same `s`, `m`, `h`, and `d` suffixes as the CLI.
 
     ```python
     >>> from ommx.artifact import prune_anonymous
@@ -7552,6 +7563,39 @@ def prune_anonymous(
 def qplib_instance_annotations() -> builtins.dict[
     builtins.str, builtins.dict[builtins.str, builtins.str]
 ]: ...
+def remove_image(
+    image_name: builtins.str,
+    *,
+    root: typing.Optional[builtins.str | os.PathLike | pathlib.Path] = None,
+) -> typing.Optional[builtins.str]:
+    r"""
+    Remove one image ref from the Local Registry.
+
+    This removes only the mutable local ref. Immutable manifest and payload
+    blobs remain available to other refs and are reclaimed by {func}`gc` once
+    unreachable. Returns the atomically removed Manifest digest, or `None` when
+    the ref did not exist. Pass that digest to {func}`restore_image` to roll back
+    this exact deletion.
+    """
+
+def restore_image(
+    image_name: builtins.str,
+    manifest_digest: builtins.str,
+    *,
+    root: typing.Optional[builtins.str | os.PathLike | pathlib.Path] = None,
+) -> builtins.bool:
+    r"""
+    Restore a removed Local Registry image ref from its manifest digest.
+
+    The digest is printed as part of the CLI rollback command after `ommx rm`
+    and `ommx prune-anonymous --delete`. The manifest and its complete
+    config/layer/subject closure must still be present and valid in the Local
+    Registry CAS. Restore is serialized against deleting GC passes. Returns
+    `True` when the ref is inserted and `False` when it already points to the
+    requested digest. A different existing target is reported as a conflict and
+    is never replaced.
+    """
+
 def set_default_atol(value: builtins.float) -> None: ...
 def set_local_registry_root(path: builtins.str | os.PathLike | pathlib.Path) -> None:
     r"""

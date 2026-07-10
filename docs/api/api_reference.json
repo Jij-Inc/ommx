@@ -24491,7 +24491,7 @@
         {
           "kind": "Class",
           "name": "AnonymousArtifactRef",
-          "doc": "Anonymous Artifact ref matched by {func}`prune_anonymous`.",
+          "doc": "Anonymous Artifact or Experiment ref matched by {func}`prune_anonymous`.",
           "bases": [],
           "methods": [
             {
@@ -24526,6 +24526,17 @@
             {
               "name": "image_name",
               "doc": "",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "kind",
+              "doc": "Synthetic ref kind: `\"artifact\"` or `\"experiment\"`.",
               "type_": {
                 "display": "str",
                 "link_target": null,
@@ -27270,7 +27281,7 @@
         {
           "kind": "Function",
           "name": "prune_anonymous",
-          "doc": "Report or delete anonymous Artifact refs in the Local Registry.\n\nThis is the Python SDK equivalent of `ommx prune-anonymous`.\nIt only removes SQLite refs when `delete=True`; manifest and payload blobs\nare left for {func}`gc` to reclaim if they become unreachable.\n\n```python\n>>> from ommx.artifact import prune_anonymous\n>>> report = prune_anonymous()\n>>> report.delete_applied\nFalse\n\n```",
+          "doc": "Report or delete anonymous Artifact and Experiment refs in the Local Registry.\n\nThis is the Python SDK equivalent of `ommx prune-anonymous`.\nIt only removes SQLite refs when `delete=True`; manifest and payload blobs\nare left for {func}`gc` to reclaim if they become unreachable.\nAnonymous Experiment refs are included only when `experiments=True`.\n`older_than` accepts the same `s`, `m`, `h`, and `d` suffixes as the CLI.\n\n```python\n>>> from ommx.artifact import prune_anonymous\n>>> report = prune_anonymous()\n>>> report.delete_applied\nFalse\n\n```",
           "signatures": [
             {
               "parameters": [
@@ -27319,6 +27330,36 @@
                     "kind": "Simple",
                     "value": "False"
                   }
+                },
+                {
+                  "name": "experiments",
+                  "type_": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  },
+                  "default": {
+                    "kind": "Simple",
+                    "value": "False"
+                  }
+                },
+                {
+                  "name": "older_than",
+                  "type_": {
+                    "display": "Optional[str]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  },
+                  "default": {
+                    "kind": "Simple",
+                    "value": "None"
+                  }
                 }
               ],
               "return_type": {
@@ -27329,6 +27370,143 @@
                   "kind": "Class",
                   "attribute": null
                 },
+                "children": []
+              }
+            }
+          ],
+          "is_async": false,
+          "deprecated": null
+        },
+        {
+          "kind": "Function",
+          "name": "remove_image",
+          "doc": "Remove one image ref from the Local Registry.\n\nThis removes only the mutable local ref. Immutable manifest and payload\nblobs remain available to other refs and are reclaimed by {func}`gc` once\nunreachable. Returns the atomically removed Manifest digest, or `None` when\nthe ref did not exist. Pass that digest to {func}`restore_image` to roll back\nthis exact deletion.",
+          "signatures": [
+            {
+              "parameters": [
+                {
+                  "name": "image_name",
+                  "type_": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  "default": null
+                },
+                {
+                  "name": "root",
+                  "type_": {
+                    "display": "Optional[str | PathLike | Path]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "str | PathLike | Path",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "PathLike",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Path",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "default": {
+                    "kind": "Simple",
+                    "value": "None"
+                  }
+                }
+              ],
+              "return_type": {
+                "display": "Optional[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              }
+            }
+          ],
+          "is_async": false,
+          "deprecated": null
+        },
+        {
+          "kind": "Function",
+          "name": "restore_image",
+          "doc": "Restore a removed Local Registry image ref from its manifest digest.\n\nThe digest is printed as part of the CLI rollback command after `ommx rm`\nand `ommx prune-anonymous --delete`. The manifest and its complete\nconfig/layer/subject closure must still be present and valid in the Local\nRegistry CAS. Restore is serialized against deleting GC passes. Returns\n`True` when the ref is inserted and `False` when it already points to the\nrequested digest. A different existing target is reported as a conflict and\nis never replaced.",
+          "signatures": [
+            {
+              "parameters": [
+                {
+                  "name": "image_name",
+                  "type_": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  "default": null
+                },
+                {
+                  "name": "manifest_digest",
+                  "type_": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  "default": null
+                },
+                {
+                  "name": "root",
+                  "type_": {
+                    "display": "Optional[str | PathLike | Path]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "str | PathLike | Path",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "PathLike",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Path",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "default": {
+                    "kind": "Simple",
+                    "value": "None"
+                  }
+                }
+              ],
+              "return_type": {
+                "display": "bool",
+                "link_target": null,
                 "children": []
               }
             }
@@ -31020,6 +31198,8 @@
     "ommx.artifact.get_local_registry_root": "ommx.artifact",
     "ommx.artifact.list_artifacts": "ommx.artifact",
     "ommx.artifact.prune_anonymous": "ommx.artifact",
+    "ommx.artifact.remove_image": "ommx.artifact",
+    "ommx.artifact.restore_image": "ommx.artifact",
     "ommx.artifact.set_local_registry_root": "ommx.artifact",
     "ommx.experiment.AutosavePolicy": "ommx.experiment",
     "ommx.experiment.Experiment": "ommx.experiment",

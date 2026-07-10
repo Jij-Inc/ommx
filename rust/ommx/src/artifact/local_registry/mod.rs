@@ -89,7 +89,7 @@ pub use registry::{
     StoredDescriptor, TempLocalRegistry,
 };
 pub use types::{
-    ArtifactListOptions, ArtifactRefRecord, ExperimentCheckpointListOptions,
+    AnonymousRefOptions, ArtifactListOptions, ArtifactRefRecord, ExperimentCheckpointListOptions,
     ExperimentCheckpointRefRecord, ExperimentListOptions, ExperimentRefRecord, RefRecord,
     RefUpdate, RegistryListReport, RegistryListWarning, RegistryListWarningStage,
     OCI_IMAGE_REF_NAME_ANNOTATION, SQLITE_INDEX_FILE_NAME,
