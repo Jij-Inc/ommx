@@ -14,11 +14,15 @@
 //
 // Active-constraint family
 // - Purpose: persistent scaling guardrail for the necessary active-row scan.
-// - Regression: an extra owner clone adds avoidable work on top of that scan.
+// - Regression: repeated collection rebuilds or nested row scans change the
+//   expected O(N) traversal into superlinear work.
 // - Origin/boundary: the issues above; Rust SDK operation.
 // - Independent variable: active regular constraint count N; variable count,
 //   expression size, and the single objective rewrite stay fixed.
 // - Cost model/evidence: inspect N active rows without rewriting them, so p ~= 1.
+//   This exponent is a complexity guardrail, not evidence about constant-factor
+//   whole-owner cloning; use the removed family or same-input run comparisons
+//   for that regression.
 //
 // Input rationale: 1,000/8,000/32,000 expose the dominant term while keeping
 // the largest measured case below a 25 ms simulation budget. Lifecycle/run

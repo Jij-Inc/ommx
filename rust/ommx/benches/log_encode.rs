@@ -14,11 +14,15 @@
 //
 // Active-constraint family
 // - Purpose: persistent scaling guardrail for the necessary active-row scan.
-// - Regression: an extra owner clone adds avoidable work on top of that scan.
+// - Regression: repeated collection rebuilds or nested row scans change the
+//   expected O(N) traversal into superlinear work.
 // - Origin/boundary: the issues above; Rust SDK operation.
 // - Independent variable: active regular constraint count N; variable count,
 //   expression size, and ten-bit encoding work stay fixed.
 // - Cost model/evidence: inspect N active rows without rewriting them, so p ~= 1.
+//   This exponent is a complexity guardrail, not evidence about constant-factor
+//   whole-owner cloning; use the removed family or same-input run comparisons
+//   for that regression.
 //
 // Unrelated-named-function family
 // - Purpose: persistent fixed-input regression guardrail.
@@ -31,6 +35,18 @@
 //   encoding work, without cloning their rows; compare the same URI across
 //   commits and use a profile only to diagnose a detected regression.
 //
+// Unrelated-dependency family
+// - Purpose: persistent fixed-input regression guardrail.
+// - Regression: atomic log encoding clones every unrelated dependency RHS
+//   before adding the encoded variable assignment.
+// - Origin: https://github.com/Jij-Inc/ommx/pull/1047#discussion_r3556489103.
+// - Measured boundary/input: Rust SDK Instance::log_encode with 32,000 fixed,
+//   deterministic dependency assignments whose RHS does not reference the
+//   encoded variable.
+// - Cost model/evidence: inspect N assignments and rebuild the dependency
+//   graph, but clone/rewrite no unrelated RHS; compare the same URI and input
+//   shape across commits, using a profile only after a detected regression.
+//
 // Input rationale: 1,000/8,000/32,000 expose the dominant term while keeping
 // the largest measured case below a 25 ms simulation budget. Lifecycle/run
 // policy: retain on main; run automatically on main/releases and manually on
@@ -39,8 +55,8 @@ use criterion::{
     criterion_group, criterion_main, AxisScale, BenchmarkId, Criterion, PlotConfiguration,
 };
 use ommx::{
-    linear, ATol, Bound, Constraint, ConstraintID, DecisionVariable, Function, Instance, Kind,
-    NamedFunction, NamedFunctionID, RemovedReason, Sense, VariableID,
+    linear, ATol, AcyclicAssignments, Bound, Constraint, ConstraintID, DecisionVariable, Function,
+    Instance, Kind, NamedFunction, NamedFunctionID, RemovedReason, Sense, VariableID,
 };
 use std::collections::BTreeMap;
 
@@ -162,6 +178,39 @@ fn instance_with_unrelated_named_functions(num_named_functions: usize) -> Instan
         .unwrap()
 }
 
+fn instance_with_unrelated_dependencies(num_dependencies: usize) -> Instance {
+    let mut decision_variables = BTreeMap::from([
+        (
+            VariableID::from(0),
+            DecisionVariable::new(
+                Kind::Integer,
+                Bound::new(0.0, INTEGER_BOUND_WIDTH).unwrap(),
+                ATol::default(),
+            )
+            .unwrap(),
+        ),
+        (VariableID::from(1), DecisionVariable::continuous()),
+    ]);
+    decision_variables.extend(
+        (2..num_dependencies as u64 + 2)
+            .map(|id| (VariableID::from(id), DecisionVariable::continuous())),
+    );
+    let dependencies = AcyclicAssignments::new(
+        (2..num_dependencies as u64 + 2)
+            .map(|id| (VariableID::from(id), Function::from(linear!(1)))),
+    )
+    .unwrap();
+
+    Instance::builder()
+        .sense(Sense::Minimize)
+        .objective(Function::Zero)
+        .decision_variables(decision_variables)
+        .constraints(BTreeMap::new())
+        .decision_variable_dependency(dependencies)
+        .build()
+        .unwrap()
+}
+
 fn log_encode_removed_constraints(c: &mut Criterion) {
     let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
     let mut group = c.benchmark_group("log-encode-removed-constraints");
@@ -232,10 +281,27 @@ fn log_encode_unrelated_named_functions(c: &mut Criterion) {
     });
 }
 
+fn log_encode_unrelated_dependencies(c: &mut Criterion) {
+    const NUM_DEPENDENCIES: usize = 32_000;
+    let instance = instance_with_unrelated_dependencies(NUM_DEPENDENCIES);
+    c.bench_function("log-encode-unrelated-dependencies[32000]", |b| {
+        b.iter_batched_ref(
+            || instance.clone(),
+            |instance| {
+                instance
+                    .log_encode([VariableID::from(0)], ATol::default())
+                    .unwrap();
+            },
+            criterion::BatchSize::LargeInput,
+        )
+    });
+}
+
 criterion_group!(
     benches,
     log_encode_removed_constraints,
     log_encode_active_constraints,
     log_encode_unrelated_named_functions,
+    log_encode_unrelated_dependencies,
 );
 criterion_main!(benches);

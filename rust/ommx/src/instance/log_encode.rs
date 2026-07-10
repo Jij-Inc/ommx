@@ -6,12 +6,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 const MAX_LOG_ENCODING_BITS: usize = 53;
 const MAX_LOG_ENCODING_RANGE_WIDTH: u64 = (1_u64 << MAX_LOG_ENCODING_BITS) - 1;
-
-struct PlannedAuxiliaryVariable {
-    id: VariableID,
-    variable: DecisionVariable,
-    label: ModelingLabel,
-}
+type PlannedAuxiliaryVariable = (VariableID, DecisionVariable, ModelingLabel);
+type PlannedLogEncodings = (BTreeMap<VariableID, Linear>, Vec<PlannedAuxiliaryVariable>);
 
 fn log_encoding_bit_count(width: f64) -> crate::Result<usize> {
     if width == 0.0 {
@@ -136,16 +132,7 @@ impl Instance {
         // Safe unwrap: each right-hand side uses only the fresh auxiliary IDs
         // planned above, none of which are assignment keys.
         let acyclic = crate::AcyclicAssignments::new(assignments).unwrap();
-        let substitution_plan = self.plan_substitution(&acyclic)?;
-
-        // Every fallible operation has completed. Fresh insertion and row
-        // replacement IDs were derived from `self`, so commit cannot fail.
-        for planned in auxiliary_variables {
-            self.decision_variables
-                .insert(planned.id, planned.variable, planned.label, None, atol)
-                .expect("auxiliary variable IDs were reserved from this instance");
-        }
-        self.commit_substitution(substitution_plan);
+        self.substitute_acyclic_with_fresh_decision_variables(&acyclic, auxiliary_variables, atol)?;
         Ok(encodings)
     }
 
@@ -153,7 +140,7 @@ impl Instance {
         &self,
         encoding_specs: Vec<(VariableID, Vec<Coefficient>, f64)>,
         auxiliary_count: usize,
-    ) -> crate::Result<(BTreeMap<VariableID, Linear>, Vec<PlannedAuxiliaryVariable>)> {
+    ) -> crate::Result<PlannedLogEncodings> {
         let first_auxiliary_id = if auxiliary_count == 0 {
             0
         } else {
@@ -174,15 +161,15 @@ impl Instance {
                         .expect("auxiliary ID capacity was validated"),
                 );
                 linear.add_term(binary_id.into(), coefficient)?;
-                auxiliary_variables.push(PlannedAuxiliaryVariable {
-                    id: binary_id,
-                    variable: DecisionVariable::binary(),
-                    label: ModelingLabel {
+                auxiliary_variables.push((
+                    binary_id,
+                    DecisionVariable::binary(),
+                    ModelingLabel {
                         name: Some("ommx.log_encode".to_string()),
                         subscripts: vec![id.into_inner() as i64, index as i64],
                         ..Default::default()
                     },
-                });
+                ));
             }
             encodings.insert(id, linear);
         }
@@ -883,6 +870,48 @@ mod tests {
 
         assert!(err.to_string().contains("Coefficient must be finite"));
         assert_eq!(instance, before);
+    }
+
+    #[test]
+    fn test_log_encode_preserves_unrelated_dependency_assignment() {
+        let encoded_id = VariableID::from(0);
+        let source_id = VariableID::from(1);
+        let dependent_id = VariableID::from(2);
+        let unrelated = Function::from(crate::linear!(1));
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(crate::linear!(0)))
+            .decision_variables(BTreeMap::from([
+                (
+                    encoded_id,
+                    DecisionVariable::new(
+                        Kind::Integer,
+                        Bound::new(0.0, 3.0).unwrap(),
+                        ATol::default(),
+                    )
+                    .unwrap(),
+                ),
+                (source_id, DecisionVariable::continuous()),
+                (dependent_id, DecisionVariable::continuous()),
+            ]))
+            .constraints(BTreeMap::new())
+            .decision_variable_dependency(crate::assign! {
+                2 <- crate::linear!(1)
+            })
+            .build()
+            .unwrap();
+
+        instance.log_encode([encoded_id], ATol::default()).unwrap();
+
+        assert_eq!(
+            instance.decision_variable_dependency.get(&dependent_id),
+            Some(&unrelated)
+        );
+        assert!(instance
+            .decision_variable_dependency
+            .get(&encoded_id)
+            .is_some());
+        assert_eq!(instance.decision_variable_dependency.len(), 2);
     }
 
     #[test]

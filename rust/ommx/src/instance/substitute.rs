@@ -1,7 +1,8 @@
 use super::*;
 use crate::{
-    substitute_acyclic, substitute_one_via_acyclic, Function, IndicatorConstraintID,
-    NamedFunctionID, Substitute, SubstitutionError, VariableID,
+    substitute_acyclic, substitute_one_via_acyclic, ATol, DecisionVariable, Function,
+    IndicatorConstraintID, ModelingLabel, NamedFunctionID, Substitute, SubstitutionError,
+    VariableID,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -10,17 +11,16 @@ use std::collections::{BTreeMap, BTreeSet};
 /// The root object prepares this plan without mutation, then commits only
 /// table-local replacements. This keeps substitution atomic without granting
 /// crate-wide access to a partially mutating `Instance` operation.
-pub(super) struct InstanceSubstitutionPlan {
+struct InstanceSubstitutionPlan {
     objective: Option<Function>,
     constraint_replacements: BTreeMap<ConstraintID, Constraint>,
     indicator_replacements: BTreeMap<IndicatorConstraintID, IndicatorConstraint>,
     named_function_replacements: BTreeMap<NamedFunctionID, NamedFunction>,
-    decision_variable_dependency: crate::AcyclicAssignments,
 }
 
 impl Instance {
     /// Prepare every fallible rewrite required by an acyclic substitution.
-    pub(super) fn plan_substitution(
+    fn plan_substitution(
         &self,
         acyclic: &crate::AcyclicAssignments,
     ) -> Result<InstanceSubstitutionPlan, crate::SubstitutionError> {
@@ -111,22 +111,16 @@ impl Instance {
             }
         }
 
-        let decision_variable_dependency = self
-            .decision_variable_dependency
-            .clone()
-            .substitute_acyclic(acyclic)?;
-
         Ok(InstanceSubstitutionPlan {
             objective,
             constraint_replacements,
             indicator_replacements,
             named_function_replacements,
-            decision_variable_dependency,
         })
     }
 
     /// Commit a fully validated substitution plan using table-local effects.
-    pub(super) fn commit_substitution(&mut self, plan: InstanceSubstitutionPlan) {
+    fn commit_substitution(&mut self, plan: InstanceSubstitutionPlan) {
         if let Some(objective) = plan.objective {
             self.objective = objective;
         }
@@ -139,7 +133,54 @@ impl Instance {
         self.named_functions
             .replace_rows(plan.named_function_replacements)
             .expect("replacement IDs were read from named functions");
-        self.decision_variable_dependency = plan.decision_variable_dependency;
+    }
+
+    /// Apply a substitution together with prevalidated fresh decision variables.
+    ///
+    /// This owner-level operation is the narrow cross-module boundary used by
+    /// log encoding. The substitution plan cannot be detached from this
+    /// receiver and committed to another [`Instance`].
+    pub(super) fn substitute_acyclic_with_fresh_decision_variables(
+        &mut self,
+        acyclic: &crate::AcyclicAssignments,
+        fresh_variables: Vec<(VariableID, DecisionVariable, ModelingLabel)>,
+        atol: ATol,
+    ) -> crate::Result<()> {
+        let mut fresh_ids = BTreeSet::new();
+        for (id, _, _) in &fresh_variables {
+            if self.decision_variables.contains_key(id) || !fresh_ids.insert(*id) {
+                crate::bail!({ ?id }, "Fresh decision variable ID is already owned: {id:?}");
+            }
+        }
+        for id in acyclic.keys() {
+            if !self.decision_variables.contains_key(&id) {
+                crate::bail!({ ?id }, "Substitution target is not owned by this instance: {id:?}");
+            }
+        }
+        for id in acyclic.required_ids() {
+            if !self.decision_variables.contains_key(&id) && !fresh_ids.contains(&id) {
+                crate::bail!(
+                    { ?id },
+                    "Substitution references an unowned decision variable: {id:?}",
+                );
+            }
+        }
+
+        let plan = self.plan_substitution(acyclic)?;
+
+        // This is the last fallible operation. It plans and validates the
+        // dependency update before mutating the table, and clones only the
+        // assignment functions affected by this substitution.
+        self.decision_variable_dependency
+            .substitute_acyclic_in_place_atomic(acyclic)?;
+
+        for (id, variable, label) in fresh_variables {
+            self.decision_variables
+                .insert(id, variable, label, None, atol)
+                .expect("fresh decision variable IDs were reserved from this instance");
+        }
+        self.commit_substitution(plan);
+        Ok(())
     }
 }
 
@@ -154,6 +195,8 @@ impl Substitute for Instance {
             return Ok(self);
         }
         let plan = self.plan_substitution(acyclic)?;
+        self.decision_variable_dependency =
+            std::mem::take(&mut self.decision_variable_dependency).substitute_acyclic(acyclic)?;
         self.commit_substitution(plan);
         Ok(self)
     }
@@ -337,6 +380,27 @@ mod tests {
                 .into_iter()
                 .collect();
         assert_eq!(named_function.required_ids(), expected_ids);
+    }
+
+    #[test]
+    fn fresh_variable_substitution_rejects_unowned_rhs_atomically() {
+        let id = VariableID::from(0);
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(linear!(0)))
+            .decision_variables(BTreeMap::from([(id, DecisionVariable::continuous())]))
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap();
+        let acyclic = crate::AcyclicAssignments::new([(id, Function::from(linear!(999)))]).unwrap();
+        let before = instance.clone();
+
+        let err = instance
+            .substitute_acyclic_with_fresh_decision_variables(&acyclic, Vec::new(), ATol::default())
+            .unwrap_err();
+
+        assert!(err.to_string().contains("unowned decision variable"));
+        assert_eq!(instance, before);
     }
 
     #[test]

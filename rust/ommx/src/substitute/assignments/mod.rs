@@ -10,6 +10,38 @@ use petgraph::algo;
 use petgraph::prelude::DiGraphMap;
 use proptest::prelude::*;
 
+fn build_dependency_graph<'a>(
+    assignments: impl IntoIterator<Item = (VariableID, &'a Function)>,
+) -> Result<(DiGraphMap<VariableID, ()>, Vec<VariableID>), SubstitutionError> {
+    let assignments = assignments.into_iter().collect::<Vec<_>>();
+    let assigned_variables = assignments
+        .iter()
+        .map(|(id, _)| *id)
+        .collect::<std::collections::BTreeSet<_>>();
+    let mut dependency = DiGraphMap::new();
+
+    for &var_id in &assigned_variables {
+        dependency.add_node(var_id);
+    }
+    for &(assigned_var, function) in &assignments {
+        for required_var in function.required_ids() {
+            if required_var == assigned_var {
+                return Err(SubstitutionError::RecursiveAssignment {
+                    var_id: assigned_var,
+                });
+            }
+            dependency.add_edge(assigned_var, required_var, ());
+        }
+    }
+
+    let topological_order = algo::toposort(&dependency, None)
+        .map_err(|_| SubstitutionError::CyclicAssignmentDetected)?
+        .into_iter()
+        .filter(|var_id| assigned_variables.contains(var_id))
+        .collect();
+    Ok((dependency, topological_order))
+}
+
 /// Represents a set of assignment rules (`VariableID` -> `Function`)
 /// that has been validated to be free of any circular dependencies.
 #[derive(Debug, Clone, Default)]
@@ -26,32 +58,8 @@ impl AcyclicAssignments {
         iter: impl IntoIterator<Item = (VariableID, Function)>,
     ) -> Result<Self, SubstitutionError> {
         let assignments: FnvHashMap<VariableID, Function> = iter.into_iter().collect();
-        let mut dependency = DiGraphMap::new();
-
-        // Add all variables being assigned to as nodes
-        for &var_id in assignments.keys() {
-            dependency.add_node(var_id);
-        }
-
-        // Add edges for dependencies
-        for (&assigned_var, linear) in &assignments {
-            for required_var in linear.required_ids() {
-                if required_var == assigned_var {
-                    return Err(SubstitutionError::RecursiveAssignment {
-                        var_id: assigned_var,
-                    });
-                }
-                // Add edge from assigned variable to required variable
-                // to keep the order of topological sorting correct
-                dependency.add_edge(assigned_var, required_var, ());
-            }
-        }
-
-        let topological_order = algo::toposort(&dependency, None)
-            .map_err(|_| SubstitutionError::CyclicAssignmentDetected)?
-            .into_iter()
-            .filter(|var_id| assignments.contains_key(var_id))
-            .collect();
+        let (dependency, topological_order) =
+            build_dependency_graph(assignments.iter().map(|(&id, function)| (id, function)))?;
 
         Ok(Self {
             assignments,
@@ -74,6 +82,58 @@ impl AcyclicAssignments {
 
     pub fn iter(&self) -> impl Iterator<Item = (&VariableID, &Function)> {
         self.assignments.iter()
+    }
+
+    /// Apply an acyclic substitution atomically without cloning unaffected assignments.
+    ///
+    /// Crate-internal root operations use this storage effect after planning
+    /// every other fallible owner-level rewrite. Only assignment functions
+    /// whose right-hand sides reference substituted variables are cloned and
+    /// rewritten; the dependency graph is rebuilt from borrowed unchanged rows.
+    pub(crate) fn substitute_acyclic_in_place_atomic(
+        &mut self,
+        acyclic: &AcyclicAssignments,
+    ) -> Result<(), SubstitutionError> {
+        if acyclic.is_empty() {
+            return Ok(());
+        }
+        if self.is_empty() {
+            *self = acyclic.clone();
+            return Ok(());
+        }
+
+        let substituted_variables = acyclic.keys().collect::<std::collections::BTreeSet<_>>();
+        let mut replacements = FnvHashMap::default();
+        for (&id, function) in &self.assignments {
+            if !function.required_ids().is_disjoint(&substituted_variables) {
+                replacements.insert(id, function.clone().substitute_acyclic(acyclic)?);
+            }
+        }
+
+        // The consuming implementation normalizes newly inserted assignments
+        // through later substitutions when `self` is non-empty. Preserve that
+        // representation while cloning only the incoming assignment set.
+        let incoming = acyclic
+            .assignments
+            .iter()
+            .map(|(&id, function)| Ok((id, function.clone().substitute_acyclic(acyclic)?)))
+            .collect::<Result<FnvHashMap<_, _>, SubstitutionError>>()?;
+
+        let mut final_assignments = Vec::with_capacity(self.assignments.len() + incoming.len());
+        for (&id, function) in &self.assignments {
+            if incoming.contains_key(&id) {
+                continue;
+            }
+            final_assignments.push((id, replacements.get(&id).unwrap_or(function)));
+        }
+        final_assignments.extend(incoming.iter().map(|(&id, function)| (id, function)));
+        let (dependency, topological_order) = build_dependency_graph(final_assignments)?;
+
+        self.assignments.extend(replacements);
+        self.assignments.extend(incoming);
+        self.dependency = dependency;
+        self.topological_order = topological_order;
+        Ok(())
     }
 
     /// Get the assignments in substitution order (variables that need to be replaced first).
@@ -373,6 +433,48 @@ mod tests {
             initial.substitute_acyclic(&substitution).unwrap_err(),
             @"Recursive assignment detected: variable 1 cannot be assigned to a function that depends on itself"
         );
+    }
+
+    #[test]
+    fn substitute_acyclic_in_place_atomic_matches_consuming_result() {
+        let initial = assign! {
+            1 <- linear!(2) + linear!(5),
+            2 <- linear!(6),
+            9 <- linear!(10)
+        };
+        let substitution = assign! {
+            2 <- linear!(3) + coeff!(1.0),
+            3 <- linear!(4)
+        };
+        let expected = initial.clone().substitute_acyclic(&substitution).unwrap();
+        let mut actual = initial;
+
+        actual
+            .substitute_acyclic_in_place_atomic(&substitution)
+            .unwrap();
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn substitute_acyclic_in_place_atomic_preserves_value_on_error() {
+        let huge = crate::Coefficient::try_from(f64::MAX).unwrap();
+        let mut initial = AcyclicAssignments::new([(
+            VariableID::from(1),
+            Function::from((huge * linear!(2)).unwrap()),
+        )])
+        .unwrap();
+        let substitution = assign! {
+            2 <- (coeff!(2.0) * linear!(3)).unwrap()
+        };
+        let before = initial.clone();
+
+        let err = initial
+            .substitute_acyclic_in_place_atomic(&substitution)
+            .unwrap_err();
+
+        assert!(err.to_string().contains("Coefficient must be finite"));
+        assert_eq!(initial, before);
     }
 
     #[test]
