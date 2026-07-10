@@ -30,6 +30,7 @@ __all__ = [
     "AttachedIndicatorConstraint",
     "AttachedOneHotConstraint",
     "AttachedSos1Constraint",
+    "AutosavePolicy",
     "Bound",
     "Constraint",
     "DecisionVariable",
@@ -1192,6 +1193,40 @@ class AttachedSos1Constraint:
         """
 
 @typing.final
+class AutosavePolicy:
+    r"""
+    Policy controlling rolling draft checkpoints after a `Run` closes.
+
+    Construct a policy with one of the static methods, then pass it to
+    `Experiment.set_autosave_policy(...)`. The policy applies only to the
+    current unsealed session and is not stored in committed Experiments or
+    checkpoints.
+    """
+    @staticmethod
+    def every_run_close() -> AutosavePolicy:
+        r"""
+        Checkpoint after every Run closes. This is the default.
+        """
+    @staticmethod
+    def every_n_runs(runs: builtins.int) -> AutosavePolicy:
+        r"""
+        Checkpoint after `runs` additional Runs close.
+        """
+    @staticmethod
+    def min_interval(seconds: builtins.float) -> AutosavePolicy:
+        r"""
+        Attempt to checkpoint the first subsequently closed Run immediately,
+        then at most once per `seconds` interval. Failed attempts also wait for
+        the interval before retrying.
+        """
+    @staticmethod
+    def disabled() -> AutosavePolicy:
+        r"""
+        Disable rolling draft checkpoints after Run close.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class Bound:
     r"""
     Variable bound wrapper for Python
@@ -1754,9 +1789,12 @@ class Experiment:
 
     Logging APIs store payload bytes in the Local Registry immediately. The
     final commit writes an Experiment config and manifest that make those
-    payloads reachable as one immutable Artifact. A closed `Run` also publishes
-    a best-effort `"draft"` checkpoint so a later process can resume from the
-    latest closed Run with `Experiment.restore_from_checkpoint(...)`.
+    payloads reachable as one immutable Artifact. By default, a closed `Run`
+    also publishes a best-effort `"draft"` checkpoint so a later process can
+    resume from the latest closed Run with
+    `Experiment.restore_from_checkpoint(...)`. Use
+    `set_autosave_policy(...)` to batch, rate-limit, or disable these
+    Run-close checkpoints.
 
     Use experiment-level attachments for shared context such as dataset or
     source-problem metadata. Use `Run.log_parameter(...)` for scalar values
@@ -1947,6 +1985,14 @@ class Experiment:
         OMMX-owned annotation keys are reserved. Use reverse-DNS style keys
         such as `"com.example.project"` for caller-owned metadata.
         """
+    def set_autosave_policy(self, policy: AutosavePolicy) -> None:
+        r"""
+        Set the rolling draft checkpoint policy for this unsealed Experiment.
+
+        Changing the policy resets its schedule at the current closed-Run
+        count. The policy affects only draft autosaves after Run close;
+        exception-driven failed or interrupted checkpoints are still written.
+        """
     def rename(self, image_name: builtins.str) -> None:
         r"""
         Rename this Experiment to another local registry image reference.
@@ -2055,10 +2101,11 @@ class Experiment:
         ```
 
         Closing a Run records its status as `"finished"`, `"failed"`, or
-        `"interrupted"` and publishes a best-effort draft checkpoint for the
-        parent Experiment. Payloads written by an open Run before it is closed
-        are stored in the Local Registry but are not recoverable through a
-        checkpoint until the Run is closed.
+        `"interrupted"`. It also publishes a best-effort draft checkpoint when
+        the Experiment's autosave policy is due. Payloads written by an open
+        Run before it is closed are stored in the Local Registry but are not
+        recoverable through a checkpoint until a later checkpoint includes
+        that Run.
         """
     def log_attachment(
         self, name: builtins.str, media_type: builtins.str, bytes: bytes

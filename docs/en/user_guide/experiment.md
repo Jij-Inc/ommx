@@ -218,8 +218,8 @@ A successful {py:meth}`~ommx.experiment.Experiment.commit` writes the Experiment
 
 Use `Run` objects as context managers. A Run is one trial, and closing it is
 the recovery boundary that adds the closed Run to the parent Experiment's
-uncommitted state. After the Run is closed, OMMX writes a draft checkpoint for
-that parent Experiment and publishes the checkpoint ref.
+uncommitted state. By default, after the Run is closed, OMMX writes a draft
+checkpoint for that parent Experiment and publishes the checkpoint ref.
 
 An Experiment does not have to be a context manager. In notebooks, a typical
 workflow keeps one Experiment open across multiple cells: run one trial,
@@ -245,6 +245,28 @@ with experiment.run() as run:
 artifact = experiment.commit()
 ```
 
+For a parameter sweep with many short Runs, checkpointing the growing
+Experiment after every Run can create many superseded config and run-parameter
+blobs before the final commit. Set an autosave policy on the unsealed session
+to choose a different recovery/storage tradeoff:
+
+```python
+from ommx.experiment import AutosavePolicy, Experiment
+
+experiment = Experiment(image_name)
+experiment.set_autosave_policy(AutosavePolicy.every_n_runs(25))
+```
+
+`every_n_runs(n)` checkpoints after each group of `n` additional closed Runs.
+`min_interval(seconds)` attempts to checkpoint the first subsequently closed
+Run and then at most once per interval; a failed publish attempt also waits for
+the interval before retrying. `disabled()` skips Run-close draft checkpoints, and
+`every_run_close()` restores the default. Changing policy starts a fresh
+schedule at the current closed-Run count. The policy belongs to the current
+unsealed session and is not persisted in a checkpoint or committed Experiment.
+Failed and interrupted checkpoints produced by an exceptional Experiment
+context exit are not disabled by this policy.
+
 For batch scripts where all Runs are known in advance, `with Experiment(...)`
 is a convenience: normal exit calls `commit()`, and exceptional exit publishes
 a failed or interrupted checkpoint instead of advancing the successful image
@@ -252,12 +274,12 @@ reference.
 
 | Operation or event | Stored state |
 |---|---|
-| `Run` exits normally | The closed Run is added to the parent Experiment with status `"finished"`, and a best-effort draft checkpoint for that Experiment is published. |
-| `Run` exits with an exception | The closed Run is added to the parent Experiment with status `"failed"` or `"interrupted"`, and a best-effort draft checkpoint for that Experiment is published. The exception still propagates. |
+| `Run` exits normally | The closed Run is added to the parent Experiment with status `"finished"`. A best-effort draft checkpoint is published when the autosave policy is due. |
+| `Run` exits with an exception | The closed Run is added to the parent Experiment with status `"failed"` or `"interrupted"`. A best-effort draft checkpoint is published when the autosave policy is due. The exception still propagates. |
 | `experiment.commit()` succeeds | The final Experiment is committed, the requested image reference is published, and any local checkpoint for that Experiment is removed. |
 | `with Experiment(...)` exits normally | Equivalent to calling `commit()` at the end of the block. |
 | `with Experiment(...)` exits with an exception | The requested successful image reference is not advanced. A checkpoint Experiment is published with status `"failed"` or `"interrupted"`. |
-| A notebook kernel or process dies after a Run has closed but before `commit()` | Recovery starts from the latest Experiment draft checkpoint produced after a Run close. |
+| A notebook kernel or process dies after a Run has closed but before `commit()` | Recovery starts from the latest Experiment draft checkpoint allowed by the autosave policy; Runs closed after that checkpoint must be repeated. |
 | A notebook kernel or process dies before an open `Run` exits | Payload blobs written by that open Run may exist, but they are not part of recoverable Run state. Recovery starts from the latest checkpoint before that Run. |
 
 `KeyboardInterrupt` is recorded as `"interrupted"` for both Run and Experiment status. Other exceptions are recorded as `"failed"`.

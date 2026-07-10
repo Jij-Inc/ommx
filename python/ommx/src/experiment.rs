@@ -11,6 +11,7 @@ use std::{
     collections::{btree_map::Entry, BTreeMap, BTreeSet, HashMap},
     mem,
     path::PathBuf,
+    time::Duration,
 };
 
 use crate::pandas::{get_na, PyDataFrame};
@@ -18,7 +19,8 @@ use crate::PyArtifact;
 use ommx::artifact::local_registry::{ExperimentCheckpointRefRecord, ExperimentRefRecord};
 use ommx::artifact::AsArtifact;
 use ommx::experiment::{
-    AttachmentLogger, FailedSolveRecord, FinishedSolveRecord, SolveDiagnosticPayload, SolveStatus,
+    AttachmentLogger, AutosavePolicy, FailedSolveRecord, FinishedSolveRecord,
+    SolveDiagnosticPayload, SolveStatus,
 };
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
@@ -236,6 +238,74 @@ impl PyExperimentCheckpointRef {
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
+#[pyclass(frozen)]
+#[pyo3(module = "ommx._ommx_rust", name = "AutosavePolicy")]
+/// Policy controlling rolling draft checkpoints after a `Run` closes.
+///
+/// Construct a policy with one of the static methods, then pass it to
+/// `Experiment.set_autosave_policy(...)`. The policy applies only to the
+/// current unsealed session and is not stored in committed Experiments or
+/// checkpoints.
+#[derive(Clone)]
+pub struct PyAutosavePolicy {
+    inner: AutosavePolicy,
+}
+
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
+#[pymethods]
+impl PyAutosavePolicy {
+    /// Checkpoint after every Run closes. This is the default.
+    #[staticmethod]
+    pub fn every_run_close() -> Self {
+        Self {
+            inner: AutosavePolicy::EveryRunClose,
+        }
+    }
+
+    /// Checkpoint after `runs` additional Runs close.
+    #[staticmethod]
+    pub fn every_n_runs(runs: u32) -> Result<Self> {
+        anyhow::ensure!(runs > 0, "runs must be greater than zero");
+        Ok(Self {
+            inner: AutosavePolicy::EveryNRuns(runs),
+        })
+    }
+
+    /// Attempt to checkpoint the first subsequently closed Run immediately,
+    /// then at most once per `seconds` interval. Failed attempts also wait for
+    /// the interval before retrying.
+    #[staticmethod]
+    pub fn min_interval(seconds: f64) -> Result<Self> {
+        let interval = Duration::try_from_secs_f64(seconds)
+            .map_err(|_| anyhow::anyhow!("seconds must be finite and non-negative"))?;
+        Ok(Self {
+            inner: AutosavePolicy::MinInterval(interval),
+        })
+    }
+
+    /// Disable rolling draft checkpoints after Run close.
+    #[staticmethod]
+    pub fn disabled() -> Self {
+        Self {
+            inner: AutosavePolicy::Disabled,
+        }
+    }
+
+    pub fn __repr__(&self) -> String {
+        match self.inner {
+            AutosavePolicy::EveryRunClose => "AutosavePolicy.every_run_close()".to_string(),
+            AutosavePolicy::EveryNRuns(runs) => {
+                format!("AutosavePolicy.every_n_runs({runs})")
+            }
+            AutosavePolicy::MinInterval(interval) => {
+                format!("AutosavePolicy.min_interval({})", interval.as_secs_f64())
+            }
+            AutosavePolicy::Disabled => "AutosavePolicy.disabled()".to_string(),
+        }
+    }
+}
+
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust", name = "Experiment")]
 /// A collection of optimization experiment records stored as one OMMX Artifact.
@@ -254,9 +324,12 @@ impl PyExperimentCheckpointRef {
 ///
 /// Logging APIs store payload bytes in the Local Registry immediately. The
 /// final commit writes an Experiment config and manifest that make those
-/// payloads reachable as one immutable Artifact. A closed `Run` also publishes
-/// a best-effort `"draft"` checkpoint so a later process can resume from the
-/// latest closed Run with `Experiment.restore_from_checkpoint(...)`.
+/// payloads reachable as one immutable Artifact. By default, a closed `Run`
+/// also publishes a best-effort `"draft"` checkpoint so a later process can
+/// resume from the latest closed Run with
+/// `Experiment.restore_from_checkpoint(...)`. Use
+/// `set_autosave_policy(...)` to batch, rate-limit, or disable these
+/// Run-close checkpoints.
 ///
 /// Use experiment-level attachments for shared context such as dataset or
 /// source-problem metadata. Use `Run.log_parameter(...)` for scalar values
@@ -483,6 +556,15 @@ impl PyExperiment {
         self.inner.set_annotation(key, value)
     }
 
+    /// Set the rolling draft checkpoint policy for this unsealed Experiment.
+    ///
+    /// Changing the policy resets its schedule at the current closed-Run
+    /// count. The policy affects only draft autosaves after Run close;
+    /// exception-driven failed or interrupted checkpoints are still written.
+    pub fn set_autosave_policy(&mut self, policy: &PyAutosavePolicy) -> Result<()> {
+        self.inner.set_autosave_policy(policy.inner)
+    }
+
     /// Rename this Experiment to another local registry image reference.
     ///
     /// Before commit, this changes the image reference that `commit()` will
@@ -662,10 +744,11 @@ impl PyExperiment {
     /// ```
     ///
     /// Closing a Run records its status as `"finished"`, `"failed"`, or
-    /// `"interrupted"` and publishes a best-effort draft checkpoint for the
-    /// parent Experiment. Payloads written by an open Run before it is closed
-    /// are stored in the Local Registry but are not recoverable through a
-    /// checkpoint until the Run is closed.
+    /// `"interrupted"`. It also publishes a best-effort draft checkpoint when
+    /// the Experiment's autosave policy is due. Payloads written by an open
+    /// Run before it is closed are stored in the Local Registry but are not
+    /// recoverable through a checkpoint until a later checkpoint includes
+    /// that Run.
     pub fn run(&self) -> Result<PyRun> {
         Ok(PyRun {
             state: PyRunState::Open {
