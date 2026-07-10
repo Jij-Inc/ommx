@@ -9,7 +9,7 @@ from opentelemetry import trace as otel_trace
 from opentelemetry.proto.trace.v1.trace_pb2 import Status as ProtoStatus
 
 from ommx.adapter import SolverAdapter
-from ommx.experiment import Experiment
+from ommx.experiment import Experiment, list_experiments
 from ommx.tracing import TraceResult, render_text_tree
 from ommx import Instance, Solution
 
@@ -79,6 +79,45 @@ def _span_int_attributes(span) -> dict[str, int]:
         for attribute in span.attributes
         if attribute.value.WhichOneof("value") == "int_value"
     }
+
+
+def test_list_experiments_returns_cached_ref_records(tmp_path):
+    prefix = f"example.com/ommx-tests/list-experiments-{uuid.uuid4().hex}"
+    image_name = f"{prefix}/case:latest"
+
+    with Experiment(image_name) as experiment:
+        experiment.set_annotation("com.example.problem", "qap")
+        with experiment.run() as run:
+            run.log_parameter("capacity", 10)
+
+    refs = list_experiments(prefix)
+    assert len(refs) == 1
+    ref = refs[0]
+    assert ref.image_name == image_name
+    assert ref.status == "finished"
+    assert ref.run_count == 1
+    assert ref.solve_count == 0
+    assert ref.annotations["com.example.problem"] == "qap"
+    assert "sha256:" in ref.manifest_digest
+    assert "sha256:" in ref.config_digest
+    assert ref.config["status"] == "finished"
+    assert len(ref.config["runs"]) == 1
+    assert ref.config["runs"][0]["solves"] == []
+    assert "T" in ref.updated_at
+    assert [ref.image_name for ref in list_experiments(f"{prefix}/case:lat")] == [
+        image_name
+    ]
+
+    assert list_experiments(prefix, root=tmp_path / "empty-registry") == []
+
+
+def test_experiment_annotations_reject_reserved_keys():
+    experiment = Experiment.with_temp_local_registry()
+    experiment.set_annotation("com.example.owner", "value")
+    assert experiment.annotations == {"com.example.owner": "value"}
+
+    with pytest.raises(Exception, match="reserved for OMMX metadata"):
+        experiment.set_annotation("org.ommx.v1.reserved", "value")
 
 
 def _assert_open_solve_terminal_state(
@@ -268,6 +307,7 @@ def test_experiment_context_restores_failed_checkpoint_on_exception():
     with pytest.raises(ValueError):
         with Experiment(image_name) as experiment:
             experiments.append(experiment)
+            experiment.set_annotation("com.example.problem", "qap")
             with experiment.run() as run:
                 run.log_parameter("solver", "scip")
             raise ValueError("failed")
@@ -279,12 +319,14 @@ def test_experiment_context_restores_failed_checkpoint_on_exception():
     resumed = Experiment.restore_from_checkpoint(image_name)
     assert resumed.status is None
     assert resumed.image_name == image_name
+    assert resumed.annotations["com.example.problem"] == "qap"
     with resumed:
         with resumed.run() as run:
             assert run.run_id == 1
             run.log_parameter("solver", "highs")
     assert [run.status for run in resumed.runs] == ["finished", "finished"]
     assert list(resumed.run_parameters_df().index) == [0, 1]
+    assert resumed.annotations["com.example.problem"] == "qap"
 
 
 def test_checkpoint_keeps_failed_run_and_can_be_restored():

@@ -228,20 +228,20 @@ impl LocalRegistry {
         // writers still get a consistent outcome; this is purely a fast
         // path for the common single-writer case.
         if write_mode == RefWriteMode::Publish {
-            if let Some(existing_descriptor) =
-                self.index.resolve_image_descriptor(&effective_image_name)?
+            if let Some(existing_manifest_digest) =
+                self.index.resolve_image_name(&effective_image_name)?
             {
-                if existing_descriptor.digest() != entry.manifest_descriptor.digest() {
+                if &existing_manifest_digest != entry.manifest_descriptor.digest() {
                     if conflict_handling == RefConflictHandling::Error {
                         anyhow::bail!(
                             "Local registry ref conflict for {}: existing manifest {}, incoming manifest {}",
                             effective_image_name,
-                            existing_descriptor.digest(),
+                            existing_manifest_digest,
                             entry.manifest_descriptor.digest(),
                         );
                     }
                     let conflict = RefUpdate::Conflicted {
-                        existing_manifest_digest: existing_descriptor.digest().clone(),
+                        existing_manifest_digest,
                         incoming_manifest_digest: entry.manifest_descriptor.digest().clone(),
                     };
                     return Ok((
@@ -265,13 +265,35 @@ impl LocalRegistry {
         self.store_descriptor_bytes(config_descriptor, config_bytes)?;
         self.store_descriptor_bytes(&entry.manifest_descriptor, &entry.manifest_bytes)?;
 
-        let ref_update = match write_mode {
-            RefWriteMode::Publish => self
-                .index
-                .publish_image_ref(&effective_image_name, &entry.manifest_descriptor)?,
-            RefWriteMode::Replace => self
-                .index
-                .replace_image_ref(&effective_image_name, &entry.manifest_descriptor)?,
+        let experiment_record =
+            self.experiment_manifest_record(&effective_image_name, &entry.manifest_digest)?;
+        let ref_update = match (write_mode, experiment_record.as_ref()) {
+            (RefWriteMode::Publish, Some(record)) => self.index.publish_experiment_ref(
+                &effective_image_name,
+                &entry.manifest_descriptor,
+                record,
+            )?,
+            (RefWriteMode::Replace, Some(record)) => self.index.replace_experiment_ref(
+                &effective_image_name,
+                &entry.manifest_descriptor,
+                record,
+            )?,
+            (RefWriteMode::Publish, None) => {
+                let artifact_record = self.artifact_manifest_record(&entry.manifest_digest)?;
+                self.index.publish_artifact_ref(
+                    &effective_image_name,
+                    &entry.manifest_descriptor,
+                    &artifact_record,
+                )?
+            }
+            (RefWriteMode::Replace, None) => {
+                let artifact_record = self.artifact_manifest_record(&entry.manifest_digest)?;
+                self.index.replace_artifact_ref(
+                    &effective_image_name,
+                    &entry.manifest_descriptor,
+                    &artifact_record,
+                )?
+            }
         };
         if let RefUpdate::Conflicted {
             existing_manifest_digest,

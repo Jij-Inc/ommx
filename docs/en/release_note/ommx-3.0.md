@@ -8,6 +8,62 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🆕 Artifact and Experiment listing from the Local Registry ([#1029](https://github.com/Jij-Inc/ommx/pull/1029))
+
+`ommx.artifact.list_artifacts()` now lists every OMMX Artifact ref from the
+SQLite Local Registry. The returned `ArtifactRef` records include the image
+name, Manifest and Config digests, update timestamp, `artifactType`, Manifest
+annotations, and the complete OCI Manifest as a Python `dict`.
+
+`ommx.experiment.list_experiments()` provides the Experiment-specific view. Its
+`ExperimentRef` records additionally include status, run/solve counts, and the
+complete Experiment Config. Both functions accept an optional `prefix` filter
+matched against the full image reference string.
+
+Internal Experiment checkpoint refs are hidden from `list_artifacts()` by
+default. `ommx.experiment.list_experiment_checkpoints()` provides the recovery
+view, filtering by the original requested image-name prefix and any combination
+of `draft`, `failed`, and `interrupted` status. Pass
+`list_artifacts(..., include_internal=True)` only when diagnosing the underlying
+registry refs.
+
+Manifest and Experiment Config JSON are cached in SQLite under their content
+digests. A missing row is backfilled from the CAS on listing; subsequent
+listings do not need to construct each Experiment. Existing version 1 Local
+Registries are migrated to version 2 in place while preserving refs and the
+registry ID. Invalid per-ref cache entries are repaired from the CAS when
+possible and otherwise skipped with `RuntimeWarning`. Malformed individual ref
+identities are also warned and skipped; `strict=True` turns these individual
+failures into errors. SQLite schema, query, and cache-write failures remain hard
+errors.
+
+Experiments can also store caller-owned manifest annotations with
+`Experiment.set_annotation(...)`; OMMX-reserved annotation keys remain rejected.
+
+```python
+from ommx.artifact import list_artifacts
+from ommx.experiment import Experiment, list_experiment_checkpoints, list_experiments
+
+with Experiment("example.com/team/experiments/demo:latest") as experiment:
+    experiment.set_annotation("com.example.problem", "demo")
+
+refs = list_experiments("example.com/team/experiments")
+assert refs[0].annotations["com.example.problem"] == "demo"
+assert refs[0].config["status"] == "finished"
+
+artifacts = list_artifacts("example.com/team")
+assert artifacts[0].manifest["artifactType"].startswith("application/org.ommx")
+
+recoverable = list_experiment_checkpoints(
+    "example.com/team/experiments",
+    statuses=["draft", "failed", "interrupted"],
+)
+```
+
+Local Registry refs now store only their target manifest digest. Consequently,
+`AnonymousArtifactRef.size` and `AnonymousArtifactRef.media_type` are removed;
+descriptor fields are no longer part of the ref listing API.
+
 ### ⚠ Dedicated Experiment artifact type ([#1033](https://github.com/Jij-Inc/ommx/pull/1033))
 
 Committed Experiment artifacts now write `application/org.ommx.v1.experiment`
@@ -274,7 +330,7 @@ Descriptor-oriented attachment views from earlier 3.0 alphas, including `Experim
 
 {class}`~ommx.experiment.Experiment` now publishes local checkpoints for partial experiment state. Closing a {class}`~ommx.experiment.Run` writes a best-effort draft checkpoint, and exiting an Experiment with an exception writes a failed or interrupted checkpoint instead of advancing the successful Experiment image reference. Closed Runs keep their attachments, solves, traces, and run parameters, including Runs closed as `"failed"` or `"interrupted"` after exceptions such as `KeyboardInterrupt`.
 
-See [Experiment Recovery and Cleanup](../user_guide/experiment.md) for Run close boundaries, checkpoint restoration, and Local Registry cleanup behavior.
+See [Experiment Discovery, Recovery, and Cleanup](../user_guide/experiment.md) for Experiment catalog filtering, Run close boundaries, checkpoint restoration, and Local Registry cleanup behavior.
 
 Use {meth}`~ommx.experiment.Experiment.restore_from_checkpoint` with the original Experiment image name to resume from the latest checkpoint:
 

@@ -10,10 +10,13 @@ use super::{
     EXPERIMENT_STATUS_FAILED, EXPERIMENT_STATUS_FINISHED, EXPERIMENT_STATUS_INTERRUPTED,
     RUN_PARAMETERS_MEDIA_TYPE, RUN_STATUS_FAILED, RUN_STATUS_FINISHED, RUN_STATUS_INTERRUPTED,
 };
-use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor, UnsealedArtifact};
+use crate::artifact::local_registry::{
+    ArtifactListOptions, ExperimentCheckpointListOptions, ExperimentListOptions, LocalRegistry,
+    RegistryListWarningStage, StoredDescriptor, UnsealedArtifact, SQLITE_INDEX_FILE_NAME,
+};
 use crate::artifact::{
-    media_types, sha256_digest, AsArtifact, ImageRef, LocalArtifact, LocalArtifactDyn,
-    LocalRegistryHandle,
+    media_types, sha256_digest, stable_json_bytes, ArtifactDraft, AsArtifact, ImageRef,
+    LocalArtifact, LocalArtifactDyn, LocalRegistryHandle,
 };
 use crate::{Coefficient, Evaluate, Function, Instance, Sense};
 use oci_spec::image::{Digest, MediaType};
@@ -80,6 +83,14 @@ fn digest_for_bytes(bytes: &[u8]) -> Digest {
     Digest::from_str(&sha256_digest(bytes)).unwrap()
 }
 
+fn blob_path(root: &std::path::Path, digest: &Digest) -> std::path::PathBuf {
+    let (algorithm, encoded) = digest
+        .as_ref()
+        .split_once(':')
+        .expect("OCI digest should contain algorithm separator");
+    root.join("blobs").join(algorithm).join(encoded)
+}
+
 fn empty_run_parameters_layer<'reg>(registry: &'reg LocalRegistry) -> StoredDescriptor<'reg> {
     let bytes = RunParameterTable::default().to_msgpack_bytes().unwrap();
     registry
@@ -118,6 +129,498 @@ fn empty_solution(instance: &Instance) -> crate::Solution {
             crate::ATol::default(),
         )
         .unwrap()
+}
+
+#[test]
+fn local_registry_lists_committed_experiment_refs_from_projection() -> anyhow::Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let image_name = ImageRef::parse("example.com/study_a/experiment:latest")?;
+    let other_experiment_name = ImageRef::parse("example.com/studyx/experiment:latest")?;
+    let artifact_name = ImageRef::parse("example.com/study_a/plain-artifact:latest")?;
+
+    let experiment = Experiment::with_registry(&registry, image_name.clone())?;
+    experiment.set_annotation("com.example.problem", "qap")?;
+    experiment.run()?.finish()?;
+    let sealed = experiment.commit()?;
+    let config_digest = sealed.artifact().stored_config()?.digest().clone();
+
+    Experiment::with_registry(&registry, other_experiment_name.clone())?.commit()?;
+
+    let mut draft = ArtifactDraft::with_registry(&registry, artifact_name);
+    draft.add_layer_bytes(
+        MediaType::Other("application/json".to_string()),
+        b"{}".to_vec(),
+        HashMap::new(),
+    )?;
+    draft.commit()?;
+
+    let records = registry.list_experiments(Some("example.com/study_a"))?;
+    assert_eq!(records.len(), 1);
+    let record = &records[0];
+    assert_eq!(record.image_name, image_name);
+    assert_eq!(record.config_digest, config_digest);
+    assert_eq!(record.status, EXPERIMENT_STATUS_FINISHED);
+    assert_eq!(record.run_count, 1);
+    assert_eq!(record.solve_count, 0);
+    assert_eq!(
+        record.annotations.get("com.example.problem"),
+        Some(&"qap".to_string())
+    );
+    assert_eq!(record.config["status"], EXPERIMENT_STATUS_FINISHED);
+    assert_eq!(record.config["runs"].as_array().unwrap().len(), 1);
+    let tag_prefix = registry.list_experiments(Some("example.com/study_a/experiment:lat"))?;
+    assert_eq!(tag_prefix.len(), 1);
+    assert_eq!(tag_prefix[0].image_name, image_name);
+
+    let broader = registry.list_experiments(Some("example.com/study"))?;
+    let mut broader_names = broader
+        .iter()
+        .map(|record| record.image_name.to_string())
+        .collect::<Vec<_>>();
+    broader_names.sort();
+    let mut expected_names = vec![image_name.to_string(), other_experiment_name.to_string()];
+    expected_names.sort();
+    assert_eq!(broader_names, expected_names);
+    Ok(())
+}
+
+#[test]
+fn list_experiments_preserves_complete_config_json() -> anyhow::Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let image_name = ImageRef::parse("example.com/experiments/config-json:latest")?;
+    let run_parameters = empty_run_parameters_layer(&registry);
+    let config = json!({
+        "status": EXPERIMENT_STATUS_FINISHED,
+        "requested_image_name": image_name.to_string(),
+        "attachments": { "entries": {} },
+        "runs": [],
+        "run_parameters": 0,
+        "com.example.extension": {
+            "campaign": "nightly",
+            "priority": 3,
+        },
+    });
+    let config_descriptor = registry.store_json_blob(
+        MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()),
+        &config,
+    )?;
+    let artifact = UnsealedArtifact::new(
+        media_types::v1_experiment(),
+        config_descriptor,
+        vec![run_parameters],
+        None,
+        HashMap::new(),
+    );
+    let artifact = registry.seal_artifact(artifact)?;
+    registry.publish_manifest_ref(&image_name, &artifact)?;
+
+    let records = registry.list_experiments(Some("example.com/experiments/config-json"))?;
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].config, config);
+    assert_eq!(records[0].status, EXPERIMENT_STATUS_FINISHED);
+    assert_eq!(records[0].run_count, 0);
+    assert_eq!(records[0].solve_count, 0);
+    Ok(())
+}
+
+#[test]
+fn list_experiments_repairs_invalid_cached_json() -> anyhow::Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let image_name = ImageRef::parse("example.com/experiments/cache-integrity:latest")?;
+    let sealed = Experiment::with_registry(&registry, image_name.clone())?.commit()?;
+    let manifest_digest = sealed.artifact().manifest_digest().clone();
+    let config_digest = sealed.artifact().stored_config()?.digest().clone();
+    let conn = rusqlite::Connection::open(registry.root().join(SQLITE_INDEX_FILE_NAME))?;
+
+    let original_config = registry.read_blob(&config_digest)?;
+    let mut changed_config: serde_json::Value = serde_json::from_slice(&original_config)?;
+    changed_config["status"] = json!(EXPERIMENT_STATUS_FAILED);
+    conn.execute(
+        "UPDATE experiment_configs SET config_json = ?1 WHERE config_digest = ?2",
+        rusqlite::params![
+            stable_json_bytes(&changed_config)?,
+            config_digest.to_string()
+        ],
+    )?;
+    let report = registry.list_experiments_with_options(
+        Some("example.com/experiments/cache-integrity"),
+        &ExperimentListOptions::default(),
+    )?;
+    assert_eq!(report.records.len(), 1);
+    assert_eq!(report.warnings.len(), 1);
+    assert_eq!(
+        report.warnings[0].stage,
+        RegistryListWarningStage::ExperimentConfigCacheRepair
+    );
+    assert!(report.warnings[0].message.contains("repaired from CAS"));
+
+    conn.execute(
+        "UPDATE experiment_configs SET config_json = ?1 WHERE config_digest = ?2",
+        rusqlite::params![
+            stable_json_bytes(&changed_config)?,
+            config_digest.to_string()
+        ],
+    )?;
+    let error = registry
+        .list_experiments_with_options(
+            Some("example.com/experiments/cache-integrity"),
+            &ExperimentListOptions { strict: true },
+        )
+        .expect_err("strict listing must reject changed Config JSON");
+    assert!(format!("{error:#}").contains("Cached Experiment Config JSON does not match"));
+    conn.execute(
+        "UPDATE experiment_configs SET config_json = ?1 WHERE config_digest = ?2",
+        rusqlite::params![original_config, config_digest.to_string()],
+    )?;
+
+    let original_manifest = registry.read_blob(&manifest_digest)?;
+    let mut changed_manifest: serde_json::Value = serde_json::from_slice(&original_manifest)?;
+    changed_manifest["annotations"] = json!({ "com.example.changed": "true" });
+    conn.execute(
+        "UPDATE artifact_manifests SET manifest_json = ?1 WHERE manifest_digest = ?2",
+        rusqlite::params![
+            stable_json_bytes(&changed_manifest)?,
+            manifest_digest.to_string()
+        ],
+    )?;
+    let report = registry.list_experiments_with_options(
+        Some("example.com/experiments/cache-integrity"),
+        &ExperimentListOptions::default(),
+    )?;
+    assert_eq!(report.records.len(), 1);
+    assert_eq!(report.warnings.len(), 1);
+    assert_eq!(
+        report.warnings[0].stage,
+        RegistryListWarningStage::ManifestCacheRepair
+    );
+    assert!(report.warnings[0].message.contains("repaired from CAS"));
+
+    conn.execute(
+        "UPDATE artifact_manifests SET manifest_json = ?1 WHERE manifest_digest = ?2",
+        rusqlite::params![
+            stable_json_bytes(&changed_manifest)?,
+            manifest_digest.to_string()
+        ],
+    )?;
+    let error = registry
+        .list_experiments_with_options(
+            Some("example.com/experiments/cache-integrity"),
+            &ExperimentListOptions { strict: true },
+        )
+        .expect_err("strict listing must reject changed Manifest JSON");
+    assert!(format!("{error:#}").contains("Cached Manifest JSON does not match"));
+    Ok(())
+}
+
+#[test]
+fn list_experiments_propagates_config_cache_write_failures() -> anyhow::Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let image_name = ImageRef::parse("example.com/experiments/write-failure:latest")?;
+    let sealed = Experiment::with_registry(&registry, image_name)?.commit()?;
+    let config_digest = sealed.artifact().stored_config()?.digest().clone();
+    let original_config = registry.read_blob(&config_digest)?;
+    let mut changed_config: serde_json::Value = serde_json::from_slice(&original_config)?;
+    changed_config["status"] = json!(EXPERIMENT_STATUS_FAILED);
+    let conn = rusqlite::Connection::open(registry.root().join(SQLITE_INDEX_FILE_NAME))?;
+    conn.execute(
+        "UPDATE experiment_configs SET config_json = ?1 WHERE config_digest = ?2",
+        rusqlite::params![
+            stable_json_bytes(&changed_config)?,
+            config_digest.to_string()
+        ],
+    )?;
+    conn.execute_batch(
+        r#"
+        CREATE TRIGGER reject_experiment_config_cache_repair
+        BEFORE UPDATE ON experiment_configs
+        BEGIN
+            SELECT RAISE(ABORT, 'Experiment Config cache writes disabled');
+        END;
+        "#,
+    )?;
+
+    let error = registry
+        .list_experiments_with_options(
+            Some("example.com/experiments/write-failure"),
+            &ExperimentListOptions::default(),
+        )
+        .expect_err("SQLite Config cache write failures must abort the listing");
+    assert!(
+        format!("{error:#}").contains("Experiment Config cache writes disabled"),
+        "unexpected error: {error:#}"
+    );
+    Ok(())
+}
+
+#[test]
+fn list_experiments_backfills_missing_cache_rows() -> anyhow::Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let image_name = ImageRef::parse("example.com/experiments/backfill:latest")?;
+
+    let sealed = Experiment::with_registry(&registry, image_name.clone())?.commit()?;
+    let manifest_digest = sealed.artifact().manifest_digest().to_string();
+
+    let conn = rusqlite::Connection::open(registry.root().join(SQLITE_INDEX_FILE_NAME))?;
+    let config_digest: String = conn.query_row(
+        "SELECT config_digest FROM artifact_manifests WHERE manifest_digest = ?1",
+        rusqlite::params![manifest_digest],
+        |row| row.get(0),
+    )?;
+    conn.execute(
+        "DELETE FROM artifact_manifests WHERE manifest_digest = ?1",
+        rusqlite::params![manifest_digest],
+    )?;
+    conn.execute(
+        "DELETE FROM experiment_configs WHERE config_digest = ?1",
+        rusqlite::params![config_digest],
+    )?;
+
+    let records = registry.list_experiments(Some("example.com/experiments/backfill"))?;
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].image_name, image_name);
+    assert_eq!(records[0].config_digest.to_string(), config_digest);
+    assert_eq!(records[0].config["status"], EXPERIMENT_STATUS_FINISHED);
+    Ok(())
+}
+
+#[test]
+fn local_registry_v1_migration_preserves_refs_and_backfills_cache() -> anyhow::Result<()> {
+    let dir = tempfile::tempdir()?;
+    let image_name = ImageRef::parse("example.com/experiments/migrated:latest")?;
+    let registry_id = {
+        let registry = LocalRegistry::open(dir.path())?;
+        let experiment = Experiment::with_registry(&registry, image_name.clone())?;
+        experiment.run()?.finish()?;
+        experiment.commit()?;
+        registry.registry_id()?
+    };
+
+    let index_path = dir.path().join(SQLITE_INDEX_FILE_NAME);
+    let conn = rusqlite::Connection::open(&index_path)?;
+    conn.execute_batch(
+        r#"
+        BEGIN IMMEDIATE;
+        DROP TABLE experiment_configs;
+        DROP TABLE artifact_manifests;
+        DROP INDEX idx_refs_manifest_digest;
+        ALTER TABLE refs RENAME TO refs_v2;
+        CREATE TABLE refs (
+            name TEXT NOT NULL,
+            reference TEXT NOT NULL,
+            manifest_media_type TEXT NOT NULL,
+            manifest_digest TEXT NOT NULL,
+            manifest_size INTEGER NOT NULL CHECK(manifest_size >= 0),
+            manifest_annotations_json TEXT NOT NULL DEFAULT '{}',
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY(name, reference)
+        );
+        CREATE INDEX idx_refs_name ON refs(name);
+        INSERT INTO refs (
+            name,
+            reference,
+            manifest_media_type,
+            manifest_digest,
+            manifest_size,
+            manifest_annotations_json,
+            updated_at
+        )
+        SELECT
+            name,
+            reference,
+            'application/vnd.oci.image.manifest.v1+json',
+            manifest_digest,
+            0,
+            '{}',
+            updated_at
+        FROM refs_v2;
+        DROP TABLE refs_v2;
+        PRAGMA user_version = 1;
+        COMMIT;
+        "#,
+    )?;
+    drop(conn);
+
+    let registry = LocalRegistry::open(dir.path())?;
+    assert_eq!(registry.registry_id()?, registry_id);
+    let records = registry.list_experiments(Some("example.com/experiments/migrated"))?;
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].image_name, image_name);
+    assert_eq!(records[0].run_count, 1);
+    assert_eq!(records[0].config["status"], EXPERIMENT_STATUS_FINISHED);
+
+    let conn = rusqlite::Connection::open(index_path)?;
+    let version: i64 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
+    assert_eq!(version, 2);
+    assert_eq!(
+        conn.query_row("SELECT COUNT(*) FROM artifact_manifests", [], |row| {
+            row.get::<_, i64>(0)
+        })?,
+        1
+    );
+    assert_eq!(
+        conn.query_row("SELECT COUNT(*) FROM experiment_configs", [], |row| {
+            row.get::<_, i64>(0)
+        })?,
+        1
+    );
+    Ok(())
+}
+
+#[test]
+fn experiment_cache_keeps_only_rows_reachable_from_refs() -> anyhow::Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let image_name = ImageRef::parse("example.com/experiments/cache:latest")?;
+    let alias = ImageRef::parse("example.com/experiments/cache:alias")?;
+    let experiment = Experiment::with_registry(&registry, image_name.clone())?;
+
+    for _ in 0..4 {
+        experiment.run()?.finish()?;
+    }
+    let sealed = experiment.commit()?;
+    sealed.artifact().tag_as(alias.clone())?;
+    registry.delete_manifest_ref(&image_name)?;
+
+    let records = registry.list_experiments(Some("example.com/experiments/cache"))?;
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].image_name, alias);
+    let config_bytes = registry.read_blob(&records[0].config_digest)?;
+    let conn = rusqlite::Connection::open(registry.root().join(SQLITE_INDEX_FILE_NAME))?;
+    let cached_config: Vec<u8> = conn.query_row(
+        "SELECT config_json FROM experiment_configs WHERE config_digest = ?1",
+        rusqlite::params![records[0].config_digest.to_string()],
+        |row| row.get(0),
+    )?;
+    assert_eq!(cached_config, config_bytes);
+    assert_eq!(
+        conn.query_row("SELECT COUNT(*) FROM artifact_manifests", [], |row| {
+            row.get::<_, i64>(0)
+        })?,
+        1
+    );
+    assert_eq!(
+        conn.query_row("SELECT COUNT(*) FROM experiment_configs", [], |row| {
+            row.get::<_, i64>(0)
+        })?,
+        1
+    );
+    registry.delete_manifest_ref(&alias)?;
+    assert_eq!(
+        conn.query_row("SELECT COUNT(*) FROM artifact_manifests", [], |row| {
+            row.get::<_, i64>(0)
+        })?,
+        0
+    );
+    assert_eq!(
+        conn.query_row("SELECT COUNT(*) FROM experiment_configs", [], |row| {
+            row.get::<_, i64>(0)
+        })?,
+        0
+    );
+    Ok(())
+}
+
+#[test]
+fn list_experiments_caches_non_experiment_manifests_as_negative_results() -> anyhow::Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let experiment_name = ImageRef::parse("example.com/catalog/experiment:latest")?;
+    let artifact_name = ImageRef::parse("example.com/catalog/plain-artifact:latest")?;
+    let generic_with_experiment_config_name =
+        ImageRef::parse("example.com/catalog/generic-experiment-config:latest")?;
+
+    Experiment::with_registry(&registry, experiment_name.clone())?.commit()?;
+    let mut draft = ArtifactDraft::with_registry(&registry, artifact_name.clone());
+    draft.add_layer_bytes(
+        MediaType::Other("application/json".to_string()),
+        b"{}".to_vec(),
+        HashMap::new(),
+    )?;
+    let artifact = draft.commit()?;
+    let artifact_manifest_digest = artifact.manifest_digest().clone();
+
+    let run_parameters = empty_run_parameters_layer(&registry);
+    let config = ExperimentConfig {
+        status: EXPERIMENT_STATUS_FINISHED.to_string(),
+        requested_image_name: Some(generic_with_experiment_config_name.to_string()),
+        attachments: AttachmentTable::new(),
+        runs: Vec::new(),
+        run_parameters: LayerRef(0),
+    };
+    let config_descriptor = registry.store_json_blob(
+        MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()),
+        &config,
+    )?;
+    let generic_with_experiment_config = UnsealedArtifact::new(
+        media_types::v1_artifact(),
+        config_descriptor,
+        vec![run_parameters],
+        None,
+        HashMap::new(),
+    );
+    let generic_with_experiment_config = registry.seal_artifact(generic_with_experiment_config)?;
+    let generic_with_experiment_config_digest = generic_with_experiment_config.digest().clone();
+    registry.publish_manifest_ref(
+        &generic_with_experiment_config_name,
+        &generic_with_experiment_config,
+    )?;
+
+    let records = registry.list_experiments(Some("example.com/catalog"))?;
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].image_name, experiment_name);
+
+    let conn = rusqlite::Connection::open(registry.root().join(SQLITE_INDEX_FILE_NAME))?;
+    let cached_artifact_type: String = conn.query_row(
+        "SELECT artifact_type FROM artifact_manifests WHERE manifest_digest = ?1",
+        rusqlite::params![artifact_manifest_digest.to_string()],
+        |row| row.get(0),
+    )?;
+    assert_ne!(cached_artifact_type, EXPERIMENT_ARTIFACT_MEDIA_TYPE);
+    let generic_artifact_type: String = conn.query_row(
+        "SELECT artifact_type FROM artifact_manifests WHERE manifest_digest = ?1",
+        rusqlite::params![generic_with_experiment_config_digest.to_string()],
+        |row| row.get(0),
+    )?;
+    assert_eq!(generic_artifact_type, media_types::V1_ARTIFACT_MEDIA_TYPE);
+    let experiment_config_rows: i64 = conn.query_row(
+        r#"
+        SELECT COUNT(*)
+        FROM artifact_manifests
+        JOIN experiment_configs
+          ON artifact_manifests.config_digest = experiment_configs.config_digest
+        WHERE artifact_manifests.manifest_digest = ?1
+        "#,
+        rusqlite::params![artifact_manifest_digest.to_string()],
+        |row| row.get(0),
+    )?;
+    assert_eq!(experiment_config_rows, 0);
+    let generic_experiment_config_rows: i64 = conn.query_row(
+        r#"
+        SELECT COUNT(*)
+        FROM artifact_manifests
+        JOIN experiment_configs
+          ON artifact_manifests.config_digest = experiment_configs.config_digest
+        WHERE artifact_manifests.manifest_digest = ?1
+        "#,
+        rusqlite::params![generic_with_experiment_config_digest.to_string()],
+        |row| row.get(0),
+    )?;
+    assert_eq!(generic_experiment_config_rows, 0);
+
+    fs::remove_file(blob_path(registry.root(), &artifact_manifest_digest))?;
+    fs::remove_file(blob_path(
+        registry.root(),
+        &generic_with_experiment_config_digest,
+    ))?;
+    let records = registry.list_experiments(Some("example.com/catalog"))?;
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].image_name, experiment_name);
+    Ok(())
 }
 
 /// `run()` hands out fresh 0-based ids; `finish()` consumes the run
@@ -1737,6 +2240,129 @@ fn experiment_dyn_publishes_failed_checkpoint() {
     assert_eq!(checkpoint.image_name(), &checkpoint_image_name);
 
     assert!(checkpoint.annotations().unwrap().is_empty());
+    assert!(
+        registry_handle
+            .registry()
+            .list_experiments(None)
+            .unwrap()
+            .is_empty(),
+        "public Experiment listing must not expose internal checkpoint refs"
+    );
+    assert!(
+        registry_handle
+            .registry()
+            .list_experiments(Some(&checkpoint_image_name.to_string()))
+            .unwrap()
+            .is_empty(),
+        "public Experiment listing must not expose checkpoint refs even by exact prefix"
+    );
+    assert!(
+        registry_handle
+            .registry()
+            .list_artifacts(None)
+            .unwrap()
+            .is_empty(),
+        "the user-facing Artifact catalog must hide internal checkpoint refs"
+    );
+    let internal_artifacts = registry_handle
+        .registry()
+        .list_artifacts_with_options(
+            None,
+            &ArtifactListOptions {
+                include_internal: true,
+                strict: true,
+            },
+        )
+        .unwrap();
+    assert_eq!(internal_artifacts.records.len(), 1);
+    assert_eq!(
+        internal_artifacts.records[0].image_name,
+        checkpoint_image_name
+    );
+
+    let checkpoints = registry_handle
+        .registry()
+        .list_experiment_checkpoints(Some("ghcr.io/jij-inc/ommx/experiment-test:will"))
+        .unwrap();
+    assert_eq!(checkpoints.len(), 1);
+    assert_eq!(checkpoints[0].checkpoint_image_name, checkpoint_image_name);
+    assert_eq!(checkpoints[0].requested_image_name, image_name);
+    assert_eq!(checkpoints[0].status, EXPERIMENT_STATUS_FAILED);
+    assert_eq!(checkpoints[0].run_count, 1);
+    assert_eq!(checkpoints[0].solve_count, 0);
+    assert!(registry_handle
+        .registry()
+        .list_experiment_checkpoints_with_options(
+            None,
+            &ExperimentCheckpointListOptions {
+                statuses: vec![ExperimentStatus::Draft],
+                strict: true,
+            },
+        )
+        .unwrap()
+        .records
+        .is_empty());
+    assert_eq!(
+        registry_handle
+            .registry()
+            .list_experiment_checkpoints_with_options(
+                None,
+                &ExperimentCheckpointListOptions {
+                    statuses: vec![ExperimentStatus::Failed],
+                    strict: true,
+                },
+            )
+            .unwrap()
+            .records
+            .len(),
+        1
+    );
+
+    let wrong_checkpoint_image_name = ImageRef::parse(&format!(
+        "{}:wrong-tag",
+        checkpoint_image_name.repository_key()
+    ))
+    .unwrap();
+    checkpoint
+        .as_local_artifact()
+        .tag_as(wrong_checkpoint_image_name.clone())
+        .unwrap();
+    let checkpoint_report = registry_handle
+        .registry()
+        .list_experiment_checkpoints_with_options(None, &ExperimentCheckpointListOptions::default())
+        .unwrap();
+    assert_eq!(checkpoint_report.records.len(), 1);
+    assert_eq!(
+        checkpoint_report.records[0].checkpoint_image_name,
+        checkpoint_image_name
+    );
+    assert_eq!(checkpoint_report.warnings.len(), 1);
+    assert_eq!(
+        checkpoint_report.warnings[0].image_name,
+        wrong_checkpoint_image_name.to_string()
+    );
+    assert_eq!(
+        checkpoint_report.warnings[0].stage,
+        RegistryListWarningStage::CheckpointProjection
+    );
+    assert!(checkpoint_report.warnings[0]
+        .message
+        .contains("does not match `requested_image_name`"));
+    let error = registry_handle
+        .registry()
+        .list_experiment_checkpoints_with_options(
+            None,
+            &ExperimentCheckpointListOptions {
+                statuses: Vec::new(),
+                strict: true,
+            },
+        )
+        .expect_err("strict checkpoint listing must reject a mismatched internal ref");
+    assert!(format!("{error:#}").contains("does not match `requested_image_name`"));
+    registry_handle
+        .registry()
+        .delete_manifest_ref(&wrong_checkpoint_image_name)
+        .unwrap();
 
     let checkpoint_artifact = checkpoint.as_local_artifact();
     let config = experiment_config(&checkpoint_artifact);
@@ -1753,6 +2379,9 @@ fn experiment_dyn_recovers_failed_artifact_with_requested_image_name() {
     let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:failed-run").unwrap();
     let experiment =
         ExperimentDyn::with_registry_handle(registry_handle.clone(), image_name.clone()).unwrap();
+    experiment
+        .set_annotation("com.example.problem", "qap")
+        .unwrap();
     {
         let mut run = experiment.run().unwrap();
         run.log_parameter("solver", "scip").unwrap();
@@ -1771,6 +2400,10 @@ fn experiment_dyn_recovers_failed_artifact_with_requested_image_name() {
     )
     .unwrap();
     assert_eq!(checkpoint.image_name(), &checkpoint_image_name);
+    assert_eq!(
+        checkpoint.annotations().unwrap().get("com.example.problem"),
+        Some(&"qap".to_string())
+    );
 
     let recovered = ExperimentDyn::restore_from_checkpoint_in_registry_handle(
         registry_handle,
@@ -1779,6 +2412,10 @@ fn experiment_dyn_recovers_failed_artifact_with_requested_image_name() {
     .unwrap();
     assert!(recovered.is_unsealed());
     assert_eq!(recovered.image_name().unwrap(), image_name);
+    assert_eq!(
+        recovered.annotations().unwrap().get("com.example.problem"),
+        Some(&"qap".to_string())
+    );
     {
         let mut run = recovered.run().unwrap();
         assert_eq!(run.run_id().unwrap(), 1);
@@ -1787,6 +2424,10 @@ fn experiment_dyn_recovers_failed_artifact_with_requested_image_name() {
     }
     let artifact = recovered.commit().unwrap();
     assert_eq!(artifact.image_name(), &image_name);
+    assert_eq!(
+        artifact.annotations().unwrap().get("com.example.problem"),
+        Some(&"qap".to_string())
+    );
 
     let child_runs = recovered.runs().unwrap();
     assert_eq!(child_runs.len(), 2);

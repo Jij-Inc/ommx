@@ -3,7 +3,9 @@
 //! The Local Registry stores artifact bytes in a filesystem-backed
 //! content-addressed store. Its SQLite index is the concurrency-safe
 //! equivalent of OCI `index.json`: it stores refs and their target
-//! manifest descriptors, not a cache of blobs, manifests, or layers.
+//! manifest digests. It also caches the original Manifest and Experiment
+//! Config JSON bytes under their content digests for catalog queries; the
+//! filesystem CAS remains the source of truth for bytes.
 //!
 //! Two distinct layers live here:
 //!
@@ -51,12 +53,12 @@
 //!   yields a `SealedArtifact`. It does not write
 //!   the SQLite index.
 //! - **Publish** belongs to the registry index. Publishing records that
-//!   a ref points at a sealed root manifest descriptor in
-//!   the SQLite index. It succeeds for a new ref or an idempotent
+//!   a ref points at a sealed root manifest digest in the SQLite index.
+//!   It succeeds for a new ref or an idempotent
 //!   same-digest ref, and reports a conflict when the ref already
 //!   points at a different digest. It does not write payload blobs.
 //! - **Replace** also belongs to the registry index. Replacing moves a
-//!   ref to a different sealed root manifest descriptor and reports
+//!   ref to a different sealed root manifest digest and reports
 //!   the previous digest when one existed.
 //! - **Commit** belongs to higher-level mutable objects such as
 //!   `ArtifactDraft` and Experiment sessions. A commit seals their
@@ -86,7 +88,13 @@ pub use registry::{
     GcReferenceKind, GcReport, GcRoot, LegacyImportReport, LocalRegistry, OciDirImport, OciDirRef,
     StoredDescriptor, TempLocalRegistry,
 };
-pub use types::{RefRecord, RefUpdate, OCI_IMAGE_REF_NAME_ANNOTATION, SQLITE_INDEX_FILE_NAME};
+pub use types::{
+    ArtifactListOptions, ArtifactRefRecord, ExperimentCheckpointListOptions,
+    ExperimentCheckpointRefRecord, ExperimentListOptions, ExperimentRefRecord, RefRecord,
+    RefUpdate, RegistryListReport, RegistryListWarning, RegistryListWarningStage,
+    OCI_IMAGE_REF_NAME_ANNOTATION, SQLITE_INDEX_FILE_NAME,
+};
+pub(crate) use types::{ArtifactManifestRecord, ExperimentManifestRecord};
 
 fn now_rfc3339() -> String {
     Utc::now().to_rfc3339()

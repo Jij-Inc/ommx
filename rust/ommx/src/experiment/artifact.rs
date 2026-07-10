@@ -2,7 +2,7 @@
 
 use super::config::{ExperimentConfig, ExperimentConfigRun, ExperimentConfigSolve, LayerRef};
 use super::parameter::RunParameterTable;
-use super::UnsealedExperimentState;
+use super::{experiment_manifest_record_from_artifact, UnsealedExperimentState};
 use super::{
     EXPERIMENT_ARTIFACT_MEDIA_TYPE, EXPERIMENT_CONFIG_MEDIA_TYPE, RUN_PARAMETERS_MEDIA_TYPE,
 };
@@ -134,12 +134,27 @@ impl<'reg> UnsealedExperimentState<'reg> {
             config_descriptor,
             layers.into_layers(),
             self.subject.clone(),
-            Default::default(),
+            self.annotations.clone(),
         );
         let sealed_artifact = registry.seal_artifact(artifact)?;
+        let local_artifact = LocalArtifact::from_parts(
+            registry,
+            image_name.clone(),
+            sealed_artifact.digest().clone(),
+        );
+        let experiment_record = experiment_manifest_record_from_artifact(&local_artifact)?
+            .context("Committed Experiment artifact should be indexable as an Experiment")?;
         let ref_update = match publish_mode {
-            RefPublishMode::Publish => registry.publish_manifest_ref(&image_name, &sealed_artifact),
-            RefPublishMode::Replace => registry.replace_manifest_ref(&image_name, &sealed_artifact),
+            RefPublishMode::Publish => registry.publish_experiment_manifest_ref(
+                &image_name,
+                &sealed_artifact,
+                &experiment_record,
+            ),
+            RefPublishMode::Replace => registry.replace_experiment_manifest_ref(
+                &image_name,
+                &sealed_artifact,
+                &experiment_record,
+            ),
         }?;
         if let RefUpdate::Conflicted {
             existing_manifest_digest,

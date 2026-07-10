@@ -497,6 +497,12 @@ impl LocalManifest {
         *self.0
     }
 
+    /// Borrow the validated OCI Image Manifest for crate-internal projection
+    /// builders that need the parsed manifest and the original JSON bytes.
+    pub(crate) fn as_image_manifest(&self) -> &ImageManifest {
+        &self.0
+    }
+
     pub fn annotations(&self) -> HashMap<String, String> {
         self.0.annotations().clone().unwrap_or_default()
     }

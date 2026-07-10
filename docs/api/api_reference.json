@@ -24535,17 +24535,6 @@
               "is_readonly": true
             },
             {
-              "name": "media_type",
-              "doc": "",
-              "type_": {
-                "display": "str",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
               "name": "name",
               "doc": "",
               "type_": {
@@ -24561,17 +24550,6 @@
               "doc": "",
               "type_": {
                 "display": "str",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "size",
-              "doc": "Manifest size in bytes.",
-              "type_": {
-                "display": "int",
                 "link_target": null,
                 "children": []
               },
@@ -26117,6 +26095,132 @@
         },
         {
           "kind": "Class",
+          "name": "ArtifactRef",
+          "doc": "A local-registry image reference and its cached OCI Manifest projection.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "annotations",
+              "doc": "Manifest annotations stored on the Artifact.",
+              "type_": {
+                "display": "dict[str, str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "artifact_type",
+              "doc": "OCI Manifest `artifactType` identifying the OMMX Artifact kind.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "config_digest",
+              "doc": "Immutable digest of the config blob referenced by the Manifest.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "image_name",
+              "doc": "Local registry image reference.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "manifest",
+              "doc": "Complete OCI Manifest JSON stored by `manifest_digest`.",
+              "type_": {
+                "display": "dict[str, Any]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "Any",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "manifest_digest",
+              "doc": "Immutable OCI Manifest digest for the Artifact.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "updated_at",
+              "doc": "RFC 3339 timestamp when this local ref was last updated.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
           "name": "Descriptor",
           "doc": "Descriptor of a blob stored in the local registry.\n\n`PyDescriptor` intentionally does not carry a `LocalRegistryHandle`.\nIt is a lightweight descriptor view returned by registry-owning\n`Artifact` objects. The blob can only be read\nby passing this value back to one of those owner objects, whose handle\nkeeps temporary registries alive. If a descriptor outlives every\nowner of its temporary registry, it is just inert metadata and cannot\nbe used to access bytes.",
           "bases": [],
@@ -27052,6 +27156,111 @@
                 "display": "Path",
                 "link_target": null,
                 "children": []
+              }
+            }
+          ],
+          "is_async": false,
+          "deprecated": null
+        },
+        {
+          "kind": "Function",
+          "name": "list_artifacts",
+          "doc": "List Artifact refs using the Local Registry's digest-addressed Manifest\ncache.\n\nMissing Manifest rows are backfilled from the CAS before records are\nreturned. If `prefix` is given, it is matched against the full image\nreference string. Internal implementation refs, including Experiment\ncheckpoints, are hidden by default; pass `include_internal=True` for\nregistry diagnostics.\n\nBy default, an invalid cached record is repaired from the CAS when possible.\nOMMX emits `RuntimeWarning` for repaired or skipped refs and returns the\nremaining records. Pass `strict=True` to fail on the first invalid ref.",
+          "signatures": [
+            {
+              "parameters": [
+                {
+                  "name": "prefix",
+                  "type_": {
+                    "display": "Optional[str]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  },
+                  "default": {
+                    "kind": "Simple",
+                    "value": "None"
+                  }
+                },
+                {
+                  "name": "root",
+                  "type_": {
+                    "display": "Optional[str | PathLike | Path]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "str | PathLike | Path",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "PathLike",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Path",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "default": {
+                    "kind": "Simple",
+                    "value": "None"
+                  }
+                },
+                {
+                  "name": "include_internal",
+                  "type_": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  },
+                  "default": {
+                    "kind": "Simple",
+                    "value": "False"
+                  }
+                },
+                {
+                  "name": "strict",
+                  "type_": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  },
+                  "default": {
+                    "kind": "Simple",
+                    "value": "False"
+                  }
+                }
+              ],
+              "return_type": {
+                "display": "list[_ommx_rust.ArtifactRef]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "ArtifactRef",
+                    "link_target": {
+                      "fqn": "ommx.artifact.ArtifactRef",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                ]
               }
             }
           ],
@@ -28191,7 +28400,7 @@
             },
             {
               "name": "restore_from_checkpoint",
-              "doc": "Restore an unsealed Experiment from its checkpoint.\n\nPass the original requested Experiment image name, not the generated\ncheckpoint ref. This accepts checkpoint statuses such as `draft`,\n`failed`, or `interrupted`, and returns a new unsealed Experiment whose\nimage name is the original requested Experiment image name recorded in\nthe checkpoint metadata. Checkpoint Artifact handles and checkpoint\nimage names are not part of the public API.",
+              "doc": "Restore an unsealed Experiment from its checkpoint.\n\nPass the original requested Experiment image name, not the generated\ncheckpoint ref. This accepts checkpoint statuses such as `draft`,\n`failed`, or `interrupted`, and returns a new unsealed Experiment whose\nimage name is the original requested Experiment image name recorded in\nthe checkpoint metadata. Use `list_experiment_checkpoints(...)` to\ndiscover recovery points, but pass its `requested_image_name` here\nrather than its internal `checkpoint_image_name`.",
               "signatures": [
                 {
                   "parameters": [
@@ -28285,6 +28494,41 @@
                             "children": []
                           }
                         ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "set_annotation",
+              "doc": "Set a manifest annotation on this unsealed Experiment.\n\nOMMX-owned annotation keys are reserved. Use reverse-DNS style keys\nsuch as `\"com.example.project\"` for caller-owned metadata.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "value",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
                       },
                       "default": null
                     }
@@ -28417,6 +28661,28 @@
           ],
           "attributes": [
             {
+              "name": "annotations",
+              "doc": "Manifest annotations that will be written, or were written, to this Experiment artifact.",
+              "type_": {
+                "display": "dict[str, str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "artifact",
               "doc": "Committed OMMX Artifact for this Experiment.\n\nRaises an error if the Experiment has not been committed yet.",
               "type_": {
@@ -28495,6 +28761,313 @@
                     "children": []
                   }
                 ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "ExperimentCheckpointRef",
+          "doc": "A Local Registry checkpoint that can restore an uncommitted Experiment.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "annotations",
+              "doc": "Manifest annotations stored on the checkpoint Artifact.",
+              "type_": {
+                "display": "dict[str, str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "checkpoint_image_name",
+              "doc": "Internal Local Registry ref holding the checkpoint Artifact.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "config",
+              "doc": "Complete Experiment Config JSON stored by `config_digest`.",
+              "type_": {
+                "display": "dict[str, Any]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "Any",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "config_digest",
+              "doc": "Immutable digest of the checkpoint's Experiment Config JSON.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "manifest_digest",
+              "doc": "Immutable OCI Manifest digest for the checkpoint Artifact.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "requested_image_name",
+              "doc": "User-facing Experiment image name restored by this checkpoint.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "run_count",
+              "doc": "Number of closed Runs available at this recovery point.",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "solve_count",
+              "doc": "Total number of Solves recorded across the checkpoint's closed Runs.",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "status",
+              "doc": "Checkpoint lifecycle status: `draft`, `failed`, or `interrupted`.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "updated_at",
+              "doc": "RFC 3339 timestamp when the checkpoint ref was last updated.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "ExperimentRef",
+          "doc": "A local-registry image reference that points to an Experiment artifact.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "annotations",
+              "doc": "Manifest annotations stored on the Experiment artifact.",
+              "type_": {
+                "display": "dict[str, str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "config",
+              "doc": "Complete Experiment config JSON stored by `config_digest`.",
+              "type_": {
+                "display": "dict[str, Any]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "Any",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "config_digest",
+              "doc": "Immutable digest of the Experiment config JSON.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "image_name",
+              "doc": "Local registry image reference.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "manifest_digest",
+              "doc": "Immutable OCI manifest digest for the Experiment artifact.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "run_count",
+              "doc": "Number of closed runs recorded in the Experiment config.",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "solve_count",
+              "doc": "Total number of solves recorded across all runs.",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "status",
+              "doc": "Experiment status stored in the Experiment config.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "updated_at",
+              "doc": "RFC 3339 timestamp when this local ref was last updated.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
               },
               "is_property": true,
               "is_readonly": true
@@ -30007,6 +30580,216 @@
             }
           ],
           "deprecated": null
+        },
+        {
+          "kind": "Function",
+          "name": "list_experiment_checkpoints",
+          "doc": "List internal Experiment checkpoints by requested image name and lifecycle\nstatus.\n\n`statuses` accepts `draft`, `failed`, and `interrupted`. An omitted or empty\nlist returns every checkpoint status. The prefix is matched against the\nuser-facing requested image name, not the internal hashed checkpoint ref.\nInvalid cache entries are repaired from the CAS when possible; repaired or\nskipped refs emit `RuntimeWarning`. Pass `strict=True` to fail on the first\ninvalid ref.",
+          "signatures": [
+            {
+              "parameters": [
+                {
+                  "name": "prefix",
+                  "type_": {
+                    "display": "Optional[str]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  },
+                  "default": {
+                    "kind": "Simple",
+                    "value": "None"
+                  }
+                },
+                {
+                  "name": "statuses",
+                  "type_": {
+                    "display": "Optional[Sequence[str]]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "Sequence[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "default": {
+                    "kind": "Simple",
+                    "value": "None"
+                  }
+                },
+                {
+                  "name": "root",
+                  "type_": {
+                    "display": "Optional[str | PathLike | Path]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "str | PathLike | Path",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "PathLike",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Path",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "default": {
+                    "kind": "Simple",
+                    "value": "None"
+                  }
+                },
+                {
+                  "name": "strict",
+                  "type_": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  },
+                  "default": {
+                    "kind": "Simple",
+                    "value": "False"
+                  }
+                }
+              ],
+              "return_type": {
+                "display": "list[_ommx_rust.ExperimentCheckpointRef]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "ExperimentCheckpointRef",
+                    "link_target": {
+                      "fqn": "ommx.experiment.ExperimentCheckpointRef",
+                      "doc_module": "ommx.experiment",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                ]
+              }
+            }
+          ],
+          "is_async": false,
+          "deprecated": null
+        },
+        {
+          "kind": "Function",
+          "name": "list_experiments",
+          "doc": "List Experiment refs using the Local Registry's digest-addressed JSON cache.\n\nMissing Manifest or Config rows are backfilled from the CAS before records\nare returned. If `prefix` is given, it is matched against the full image\nreference string. Invalid cache entries are repaired from the CAS when\npossible; repaired or skipped refs emit `RuntimeWarning`. Pass `strict=True`\nto fail on the first invalid ref.",
+          "signatures": [
+            {
+              "parameters": [
+                {
+                  "name": "prefix",
+                  "type_": {
+                    "display": "Optional[str]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  },
+                  "default": {
+                    "kind": "Simple",
+                    "value": "None"
+                  }
+                },
+                {
+                  "name": "root",
+                  "type_": {
+                    "display": "Optional[str | PathLike | Path]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "str | PathLike | Path",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "PathLike",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Path",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "default": {
+                    "kind": "Simple",
+                    "value": "None"
+                  }
+                },
+                {
+                  "name": "strict",
+                  "type_": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  },
+                  "default": {
+                    "kind": "Simple",
+                    "value": "False"
+                  }
+                }
+              ],
+              "return_type": {
+                "display": "list[_ommx_rust.ExperimentRef]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "ExperimentRef",
+                    "link_target": {
+                      "fqn": "ommx.experiment.ExperimentRef",
+                      "doc_module": "ommx.experiment",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                ]
+              }
+            }
+          ],
+          "is_async": false,
+          "deprecated": null
         }
       ],
       "submodules": []
@@ -30063,6 +30846,7 @@
     "ommx.artifact.ArchiveManifest": "ommx.artifact",
     "ommx.artifact.Artifact": "ommx.artifact",
     "ommx.artifact.ArtifactDraft": "ommx.artifact",
+    "ommx.artifact.ArtifactRef": "ommx.artifact",
     "ommx.artifact.Descriptor": "ommx.artifact",
     "ommx.artifact.GcBlob": "ommx.artifact",
     "ommx.artifact.GcInvalidManifest": "ommx.artifact",
@@ -30073,13 +30857,18 @@
     "ommx.artifact.gc": "ommx.artifact",
     "ommx.artifact.get_images": "ommx.artifact",
     "ommx.artifact.get_local_registry_root": "ommx.artifact",
+    "ommx.artifact.list_artifacts": "ommx.artifact",
     "ommx.artifact.prune_anonymous": "ommx.artifact",
     "ommx.artifact.set_local_registry_root": "ommx.artifact",
     "ommx.experiment.Experiment": "ommx.experiment",
+    "ommx.experiment.ExperimentCheckpointRef": "ommx.experiment",
+    "ommx.experiment.ExperimentRef": "ommx.experiment",
     "ommx.experiment.OpenSolve": "ommx.experiment",
     "ommx.experiment.Run": "ommx.experiment",
     "ommx.experiment.SealedRun": "ommx.experiment",
     "ommx.experiment.Solve": "ommx.experiment",
+    "ommx.experiment.list_experiment_checkpoints": "ommx.experiment",
+    "ommx.experiment.list_experiments": "ommx.experiment",
     "ommx.get_default_atol": "ommx",
     "ommx.set_default_atol": "ommx"
   },

@@ -1,12 +1,17 @@
-use super::index::SqliteIndexStore;
-use super::RefUpdate;
+use super::index::{CachedRefIdentity, CachedRefRead as IndexCachedRefRead, SqliteIndexStore};
+use super::{
+    ArtifactListOptions, ArtifactManifestRecord, ArtifactRefRecord,
+    ExperimentCheckpointListOptions, ExperimentCheckpointRefRecord, ExperimentListOptions,
+    ExperimentManifestRecord, ExperimentRefRecord, RefUpdate, RegistryListReport,
+    RegistryListWarning, RegistryListWarningStage,
+};
 use crate::artifact::{
     media_types::{self, RootPayloadVersion},
-    sha256_digest, stable_json_bytes, ImageRef,
+    sha256_digest, stable_json_bytes, ImageRef, LocalArtifact,
 };
-use anyhow::{ensure, Context, Result};
+use anyhow::{bail, ensure, Context, Result};
 use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, ImageManifest, MediaType};
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -26,6 +31,191 @@ pub use import::{ArchiveInspectView, LegacyImportReport, OciDirImport, OciDirRef
 static DEFAULT_LOCAL_REGISTRY: OnceLock<LocalRegistry> = OnceLock::new();
 const EXPERIMENT_CHECKPOINT_REPOSITORY: &str = "checkpoint";
 const FILE_BLOB_STORE_DIR_NAME: &str = "blobs";
+
+struct InvalidCachedRefs {
+    manifest_digest: Digest,
+    refs: Vec<(ImageRef, String)>,
+}
+
+struct CachedRefRead<T> {
+    image_name: ImageRef,
+    manifest_digest: Digest,
+    record: std::result::Result<T, String>,
+}
+
+struct RefGroup {
+    manifest_digest: Digest,
+    refs: Vec<ImageRef>,
+}
+
+fn group_refs_by_manifest_digest(
+    refs: impl IntoIterator<Item = (ImageRef, Digest)>,
+) -> BTreeMap<String, RefGroup> {
+    let mut groups = BTreeMap::new();
+    for (image_name, manifest_digest) in refs {
+        groups
+            .entry(manifest_digest.to_string())
+            .or_insert_with(|| RefGroup {
+                manifest_digest,
+                refs: Vec::new(),
+            })
+            .refs
+            .push(image_name);
+    }
+    groups
+}
+
+fn invalid_cached_refs<T>(reads: &[CachedRefRead<T>]) -> BTreeMap<String, InvalidCachedRefs> {
+    let mut groups = BTreeMap::new();
+    for read in reads {
+        let Err(error) = &read.record else {
+            continue;
+        };
+        groups
+            .entry(read.manifest_digest.to_string())
+            .or_insert_with(|| InvalidCachedRefs {
+                manifest_digest: read.manifest_digest.clone(),
+                refs: Vec::new(),
+            })
+            .refs
+            .push((read.image_name.clone(), error.clone()));
+    }
+    groups
+}
+
+fn validate_ref_identities(
+    identities: Vec<CachedRefIdentity>,
+    include_repository: &impl Fn(&str) -> bool,
+    strict: bool,
+    warnings: &mut Vec<RegistryListWarning>,
+    stage: RegistryListWarningStage,
+) -> Result<Vec<(ImageRef, Digest)>> {
+    let mut valid = Vec::new();
+    for identity in identities {
+        if !include_repository(&identity.name) {
+            continue;
+        }
+        let raw_image_name = identity.image_name();
+        let raw_manifest_digest = identity.manifest_digest.clone();
+        match identity.parsed {
+            Ok(parsed) => valid.push(parsed),
+            Err(error) => push_warning_or_error(
+                strict,
+                warnings,
+                registry_list_warning(raw_image_name, raw_manifest_digest, stage, error),
+            )?,
+        }
+    }
+    Ok(valid)
+}
+
+fn validate_cached_ref_reads<T>(
+    reads: Vec<IndexCachedRefRead<T>>,
+    include_repository: &impl Fn(&str) -> bool,
+    strict: bool,
+    warnings: &mut Vec<RegistryListWarning>,
+    stage: RegistryListWarningStage,
+) -> Result<Vec<CachedRefRead<T>>> {
+    let mut valid = Vec::new();
+    for read in reads {
+        if !include_repository(&read.identity.name) {
+            continue;
+        }
+        let raw_image_name = read.identity.image_name();
+        let raw_manifest_digest = read.identity.manifest_digest.clone();
+        match read.identity.parsed {
+            Ok((image_name, manifest_digest)) => valid.push(CachedRefRead {
+                image_name,
+                manifest_digest,
+                record: read.record,
+            }),
+            Err(error) => push_warning_or_error(
+                strict,
+                warnings,
+                registry_list_warning(raw_image_name, raw_manifest_digest, stage, error),
+            )?,
+        }
+    }
+    Ok(valid)
+}
+
+fn registry_list_warning(
+    image_name: impl ToString,
+    manifest_digest: impl ToString,
+    stage: RegistryListWarningStage,
+    message: String,
+) -> RegistryListWarning {
+    RegistryListWarning {
+        image_name: image_name.to_string(),
+        manifest_digest: manifest_digest.to_string(),
+        stage,
+        message,
+    }
+}
+
+fn push_warning_or_error(
+    strict: bool,
+    warnings: &mut Vec<RegistryListWarning>,
+    warning: RegistryListWarning,
+) -> Result<()> {
+    if strict {
+        bail!("{warning}");
+    }
+    if !warnings.contains(&warning) {
+        warnings.push(warning);
+    }
+    Ok(())
+}
+
+fn log_registry_list_warnings(warnings: &[RegistryListWarning]) {
+    for warning in warnings {
+        tracing::warn!(
+            image_name = %warning.image_name,
+            manifest_digest = %warning.manifest_digest,
+            stage = %warning.stage,
+            error = %warning.message,
+            "Local Registry listing skipped or repaired a ref"
+        );
+    }
+}
+
+fn experiment_checkpoint_ref_from_record(
+    registry: &LocalRegistry,
+    record: ExperimentRefRecord,
+) -> Result<ExperimentCheckpointRefRecord> {
+    let requested_image_name = record
+        .config
+        .get("requested_image_name")
+        .and_then(serde_json::Value::as_str)
+        .context("Experiment checkpoint Config is missing `requested_image_name`")?;
+    let requested_image_name = ImageRef::parse(requested_image_name)
+        .context("Experiment checkpoint Config contains an invalid `requested_image_name`")?;
+    let status = crate::experiment::ExperimentStatus::from_config(&record.status)?;
+    ensure!(
+        status != crate::experiment::ExperimentStatus::Finished,
+        "Internal Experiment checkpoint has `finished` status"
+    );
+    let expected_checkpoint_image_name =
+        registry.experiment_checkpoint_image_name(&requested_image_name)?;
+    ensure!(
+        record.image_name == expected_checkpoint_image_name,
+        "Experiment checkpoint ref does not match `requested_image_name`: expected {}, got {}",
+        expected_checkpoint_image_name,
+        record.image_name,
+    );
+    Ok(ExperimentCheckpointRefRecord {
+        checkpoint_image_name: record.image_name,
+        requested_image_name,
+        manifest_digest: record.manifest_digest,
+        config_digest: record.config_digest,
+        updated_at: record.updated_at,
+        status: record.status,
+        run_count: record.run_count,
+        solve_count: record.solve_count,
+        annotations: record.annotations,
+        config: record.config,
+    })
+}
 
 /// OCI descriptor whose referenced bytes are known to exist in the
 /// referenced Local Registry.
@@ -443,11 +633,7 @@ impl LocalRegistry {
         &self,
         requested_image_name: &ImageRef,
     ) -> Result<ImageRef> {
-        let registry_id = self.index.registry_id()?;
-        let repository_key = crate::artifact::anonymous_local_repository_key(
-            &registry_id,
-            EXPERIMENT_CHECKPOINT_REPOSITORY,
-        )?;
+        let repository_key = self.experiment_checkpoint_repository_key()?;
         let digest = sha256_digest(requested_image_name.to_string().as_bytes());
         let tag = digest
             .strip_prefix("sha256:")
@@ -455,6 +641,14 @@ impl LocalRegistry {
         ImageRef::parse(&format!("{repository_key}:{tag}")).with_context(|| {
             format!("Failed to derive experiment checkpoint image name for {requested_image_name}")
         })
+    }
+
+    fn experiment_checkpoint_repository_key(&self) -> Result<String> {
+        let registry_id = self.index.registry_id()?;
+        crate::artifact::anonymous_local_repository_key(
+            &registry_id,
+            EXPERIMENT_CHECKPOINT_REPOSITORY,
+        )
     }
 
     /// List every SQLite ref whose `(name, reference)` matches the
@@ -507,6 +701,412 @@ impl LocalRegistry {
             .collect()
     }
 
+    /// List OMMX Artifact refs stored in this registry, optionally filtered by
+    /// full image-reference prefix.
+    ///
+    /// Missing Manifest cache rows are backfilled from the content-addressed
+    /// blob store before the digest-validated SQLite projections are returned.
+    /// Internal implementation refs, including Experiment checkpoints, are
+    /// excluded from this user-facing catalog.
+    pub fn list_artifacts(&self, name_prefix: Option<&str>) -> Result<Vec<ArtifactRefRecord>> {
+        let report =
+            self.list_artifacts_with_options(name_prefix, &ArtifactListOptions::default())?;
+        log_registry_list_warnings(&report.warnings);
+        Ok(report.records)
+    }
+
+    /// List OMMX Artifact refs with explicit internal-ref and corruption
+    /// handling options.
+    pub fn list_artifacts_with_options(
+        &self,
+        name_prefix: Option<&str>,
+        options: &ArtifactListOptions,
+    ) -> Result<RegistryListReport<ArtifactRefRecord>> {
+        let checkpoint_repository_key = self.experiment_checkpoint_repository_key()?;
+        let include_repository = |repository_key: &str| {
+            options.include_internal || repository_key != checkpoint_repository_key
+        };
+        let mut warnings =
+            self.backfill_artifact_manifests(name_prefix, options.strict, &include_repository)?;
+        let mut reads = validate_cached_ref_reads(
+            self.index.list_artifact_ref_reads(name_prefix)?,
+            &include_repository,
+            options.strict,
+            &mut warnings,
+            RegistryListWarningStage::ManifestCacheRepair,
+        )?;
+
+        let invalid = invalid_cached_refs(&reads);
+        if options.strict {
+            if let Some(group) = invalid.values().next() {
+                let (image_name, message) = &group.refs[0];
+                bail!(
+                    "{}",
+                    registry_list_warning(
+                        image_name.clone(),
+                        group.manifest_digest.clone(),
+                        RegistryListWarningStage::ManifestCacheRepair,
+                        message.clone(),
+                    )
+                );
+            }
+        }
+
+        let mut repair_failures = BTreeMap::new();
+        for (digest_key, group) in &invalid {
+            match self.artifact_manifest_record(&group.manifest_digest) {
+                Ok(record) => {
+                    self.index.upsert_artifact_manifest(&record)?;
+                    for (image_name, message) in &group.refs {
+                        warnings.push(registry_list_warning(
+                            image_name.clone(),
+                            group.manifest_digest.clone(),
+                            RegistryListWarningStage::ManifestCacheRepair,
+                            format!("Invalid cached Manifest was repaired from CAS: {message}"),
+                        ));
+                    }
+                }
+                Err(error) => {
+                    repair_failures.insert(digest_key.clone(), format!("{error:#}"));
+                }
+            }
+        }
+
+        if !invalid.is_empty() {
+            reads = validate_cached_ref_reads(
+                self.index.list_artifact_ref_reads(name_prefix)?,
+                &include_repository,
+                options.strict,
+                &mut warnings,
+                RegistryListWarningStage::ManifestCacheRepair,
+            )?;
+        }
+
+        let mut records = Vec::new();
+        for read in reads {
+            match read.record {
+                Ok(record) => records.push(record),
+                Err(error) => {
+                    let repair_error = repair_failures
+                        .get(read.manifest_digest.as_ref())
+                        .map(|repair_error| format!("; CAS repair failed: {repair_error}"))
+                        .unwrap_or_default();
+                    warnings.push(registry_list_warning(
+                        read.image_name,
+                        read.manifest_digest,
+                        RegistryListWarningStage::ManifestCacheRepair,
+                        format!("Invalid cached Manifest: {error}{repair_error}"),
+                    ));
+                }
+            }
+        }
+        Ok(RegistryListReport { records, warnings })
+    }
+
+    /// List Experiment refs stored in this registry, optionally filtered by
+    /// full image-reference prefix.
+    pub fn list_experiments(&self, name_prefix: Option<&str>) -> Result<Vec<ExperimentRefRecord>> {
+        let report =
+            self.list_experiments_with_options(name_prefix, &ExperimentListOptions::default())?;
+        log_registry_list_warnings(&report.warnings);
+        Ok(report.records)
+    }
+
+    /// List committed Experiment refs with explicit corruption handling.
+    pub fn list_experiments_with_options(
+        &self,
+        name_prefix: Option<&str>,
+        options: &ExperimentListOptions,
+    ) -> Result<RegistryListReport<ExperimentRefRecord>> {
+        let checkpoint_repository_key = self.experiment_checkpoint_repository_key()?;
+        let artifact_report = self.list_artifacts_with_options(
+            name_prefix,
+            &ArtifactListOptions {
+                include_internal: false,
+                strict: options.strict,
+            },
+        )?;
+        let mut report =
+            self.list_experiment_records(name_prefix, options.strict, |repository_key| {
+                repository_key != checkpoint_repository_key
+            })?;
+        report.warnings.splice(0..0, artifact_report.warnings);
+        Ok(report)
+    }
+
+    /// List recoverable Experiment checkpoints by requested image-name prefix.
+    pub fn list_experiment_checkpoints(
+        &self,
+        requested_name_prefix: Option<&str>,
+    ) -> Result<Vec<ExperimentCheckpointRefRecord>> {
+        let report = self.list_experiment_checkpoints_with_options(
+            requested_name_prefix,
+            &ExperimentCheckpointListOptions::default(),
+        )?;
+        log_registry_list_warnings(&report.warnings);
+        Ok(report.records)
+    }
+
+    /// List recoverable Experiment checkpoints with lifecycle-status and
+    /// corruption handling options.
+    pub fn list_experiment_checkpoints_with_options(
+        &self,
+        requested_name_prefix: Option<&str>,
+        options: &ExperimentCheckpointListOptions,
+    ) -> Result<RegistryListReport<ExperimentCheckpointRefRecord>> {
+        ensure!(
+            options
+                .statuses
+                .iter()
+                .all(|status| *status != crate::experiment::ExperimentStatus::Finished),
+            "Experiment checkpoint status filter cannot include `finished`"
+        );
+        let checkpoint_repository_key = self.experiment_checkpoint_repository_key()?;
+        let checkpoint_prefix = format!("{checkpoint_repository_key}:");
+        let artifact_report = self.list_artifacts_with_options(
+            Some(&checkpoint_prefix),
+            &ArtifactListOptions {
+                include_internal: true,
+                strict: options.strict,
+            },
+        )?;
+        let experiment_report = self.list_experiment_records(
+            Some(&checkpoint_prefix),
+            options.strict,
+            |repository_key| repository_key == checkpoint_repository_key,
+        )?;
+        let mut warnings = artifact_report.warnings;
+        warnings.extend(experiment_report.warnings);
+        let mut records = Vec::new();
+        for record in experiment_report.records {
+            let checkpoint_image_name = record.image_name.clone();
+            let manifest_digest = record.manifest_digest.clone();
+            match experiment_checkpoint_ref_from_record(self, record) {
+                Ok(record) => {
+                    let prefix_matches = requested_name_prefix
+                        .map(|prefix| record.requested_image_name.to_string().starts_with(prefix))
+                        .unwrap_or(true);
+                    let status_matches = options.statuses.is_empty()
+                        || options
+                            .statuses
+                            .iter()
+                            .any(|status| status.as_str() == record.status);
+                    if prefix_matches && status_matches {
+                        records.push(record);
+                    }
+                }
+                Err(error) => {
+                    let warning = registry_list_warning(
+                        checkpoint_image_name,
+                        manifest_digest,
+                        RegistryListWarningStage::CheckpointProjection,
+                        format!("{error:#}"),
+                    );
+                    push_warning_or_error(options.strict, &mut warnings, warning)?;
+                }
+            }
+        }
+        records.sort_by(|left, right| {
+            left.requested_image_name
+                .to_string()
+                .cmp(&right.requested_image_name.to_string())
+                .then_with(|| {
+                    left.checkpoint_image_name
+                        .to_string()
+                        .cmp(&right.checkpoint_image_name.to_string())
+                })
+        });
+        Ok(RegistryListReport { records, warnings })
+    }
+
+    fn list_experiment_records(
+        &self,
+        name_prefix: Option<&str>,
+        strict: bool,
+        include_repository: impl Fn(&str) -> bool,
+    ) -> Result<RegistryListReport<ExperimentRefRecord>> {
+        let mut warnings = Vec::new();
+        let missing = validate_ref_identities(
+            self.index
+                .list_missing_experiment_config_refs(name_prefix)?,
+            &include_repository,
+            strict,
+            &mut warnings,
+            RegistryListWarningStage::ExperimentConfigBackfill,
+        )?;
+        let groups = group_refs_by_manifest_digest(missing);
+        for group in groups.values() {
+            let image_name = group.refs[0].clone();
+            match self.required_experiment_manifest_record(&image_name, &group.manifest_digest) {
+                Ok(record) => self.index.upsert_experiment_manifest(&record)?,
+                Err(error) => {
+                    for image_name in &group.refs {
+                        let warning = registry_list_warning(
+                            image_name.clone(),
+                            group.manifest_digest.clone(),
+                            RegistryListWarningStage::ExperimentConfigBackfill,
+                            format!("{error:#}"),
+                        );
+                        push_warning_or_error(strict, &mut warnings, warning)?;
+                    }
+                }
+            }
+        }
+
+        let mut reads = validate_cached_ref_reads(
+            self.index.list_experiment_ref_reads(name_prefix)?,
+            &include_repository,
+            strict,
+            &mut warnings,
+            RegistryListWarningStage::ExperimentConfigCacheRepair,
+        )?;
+        let invalid = invalid_cached_refs(&reads);
+        if strict {
+            if let Some(group) = invalid.values().next() {
+                let (image_name, message) = &group.refs[0];
+                bail!(
+                    "{}",
+                    registry_list_warning(
+                        image_name.clone(),
+                        group.manifest_digest.clone(),
+                        RegistryListWarningStage::ExperimentConfigCacheRepair,
+                        message.clone(),
+                    )
+                );
+            }
+        }
+
+        let mut repair_failures = BTreeMap::new();
+        for (digest_key, group) in &invalid {
+            let image_name = group.refs[0].0.clone();
+            match self.required_experiment_manifest_record(&image_name, &group.manifest_digest) {
+                Ok(record) => {
+                    self.index.upsert_experiment_manifest(&record)?;
+                    for (image_name, message) in &group.refs {
+                        warnings.push(registry_list_warning(
+                            image_name.clone(),
+                            group.manifest_digest.clone(),
+                            RegistryListWarningStage::ExperimentConfigCacheRepair,
+                            format!(
+                                "Invalid cached Experiment projection was repaired from CAS: {message}"
+                            ),
+                        ));
+                    }
+                }
+                Err(error) => {
+                    repair_failures.insert(digest_key.clone(), format!("{error:#}"));
+                }
+            }
+        }
+        if !invalid.is_empty() {
+            reads = validate_cached_ref_reads(
+                self.index.list_experiment_ref_reads(name_prefix)?,
+                &include_repository,
+                strict,
+                &mut warnings,
+                RegistryListWarningStage::ExperimentConfigCacheRepair,
+            )?;
+        }
+
+        let mut records = Vec::new();
+        for read in reads {
+            match read.record {
+                Ok(record) => records.push(record),
+                Err(error) => {
+                    let repair_error = repair_failures
+                        .get(read.manifest_digest.as_ref())
+                        .map(|repair_error| format!("; CAS repair failed: {repair_error}"))
+                        .unwrap_or_default();
+                    warnings.push(registry_list_warning(
+                        read.image_name,
+                        read.manifest_digest,
+                        RegistryListWarningStage::ExperimentConfigCacheRepair,
+                        format!("Invalid cached Experiment projection: {error}{repair_error}"),
+                    ));
+                }
+            }
+        }
+        Ok(RegistryListReport { records, warnings })
+    }
+
+    fn backfill_artifact_manifests(
+        &self,
+        name_prefix: Option<&str>,
+        strict: bool,
+        include_repository: &impl Fn(&str) -> bool,
+    ) -> Result<Vec<RegistryListWarning>> {
+        let mut warnings = Vec::new();
+        let missing = validate_ref_identities(
+            self.index
+                .list_missing_artifact_manifest_refs(name_prefix)?,
+            include_repository,
+            strict,
+            &mut warnings,
+            RegistryListWarningStage::ManifestBackfill,
+        )?;
+        let groups = group_refs_by_manifest_digest(missing);
+        for group in groups.values() {
+            match self.artifact_manifest_record(&group.manifest_digest) {
+                Ok(record) => self.index.upsert_artifact_manifest(&record)?,
+                Err(error) => {
+                    for image_name in &group.refs {
+                        let warning = registry_list_warning(
+                            image_name.clone(),
+                            group.manifest_digest.clone(),
+                            RegistryListWarningStage::ManifestBackfill,
+                            format!("{error:#}"),
+                        );
+                        push_warning_or_error(strict, &mut warnings, warning)?;
+                    }
+                }
+            }
+        }
+        Ok(warnings)
+    }
+
+    fn required_experiment_manifest_record(
+        &self,
+        image_name: &ImageRef,
+        manifest_digest: &Digest,
+    ) -> Result<ExperimentManifestRecord> {
+        self.experiment_manifest_record(image_name, manifest_digest)?
+            .context("Manifest is not an Experiment Artifact")
+    }
+
+    /// Build a validated Experiment listing projection for a stored manifest.
+    ///
+    /// Returns `None` for non-Experiment artifacts.
+    pub(crate) fn experiment_manifest_record(
+        &self,
+        image_name: &ImageRef,
+        manifest_digest: &Digest,
+    ) -> Result<Option<ExperimentManifestRecord>> {
+        let artifact = LocalArtifact::from_parts(self, image_name.clone(), manifest_digest.clone());
+        crate::experiment::experiment_manifest_record_from_artifact(&artifact)
+    }
+
+    pub(crate) fn artifact_manifest_record(
+        &self,
+        manifest_digest: &Digest,
+    ) -> Result<ArtifactManifestRecord> {
+        let manifest_json = self.read_blob(manifest_digest)?;
+        let manifest: ImageManifest = serde_json::from_slice(&manifest_json)
+            .with_context(|| format!("Failed to parse OCI image manifest {manifest_digest}"))?;
+        Self::validate_manifest(&manifest)?;
+        let manifest_descriptor = Self::build_manifest_descriptor(&manifest_json)?;
+        ensure!(
+            manifest_descriptor.digest() == manifest_digest,
+            "Manifest blob digest mismatch: requested {}, computed {}",
+            manifest_digest,
+            manifest_descriptor.digest()
+        );
+        ArtifactManifestRecord::from_image_manifest(
+            manifest_descriptor.digest().clone(),
+            manifest_json,
+            &manifest,
+        )
+    }
+
     /// Seal an unsealed OMMX Artifact manifest into the Local Registry.
     ///
     /// The manifest's config/layers are represented as
@@ -543,7 +1143,25 @@ impl LocalRegistry {
             sealed_artifact.is_stored_in(self),
             "Sealed artifact descriptor belongs to a different Local Registry"
         );
-        self.index.publish_image_ref(image_name, &sealed_artifact.0)
+        let artifact = self.artifact_manifest_record(sealed_artifact.digest())?;
+        self.index
+            .publish_artifact_ref(image_name, &sealed_artifact.0, &artifact)
+    }
+
+    /// Publish a sealed Experiment manifest and its verified listing projection
+    /// under an image ref in one SQLite transaction.
+    pub(crate) fn publish_experiment_manifest_ref(
+        &self,
+        image_name: &ImageRef,
+        sealed_artifact: &SealedArtifact<'_>,
+        experiment: &ExperimentManifestRecord,
+    ) -> Result<RefUpdate> {
+        ensure!(
+            sealed_artifact.is_stored_in(self),
+            "Sealed artifact descriptor belongs to a different Local Registry"
+        );
+        self.index
+            .publish_experiment_ref(image_name, &sealed_artifact.0, experiment)
     }
 
     /// Publish an already-stored root manifest descriptor under an image ref.
@@ -560,7 +1178,9 @@ impl LocalRegistry {
             manifest.is_stored_in(self),
             "Manifest descriptor belongs to a different Local Registry"
         );
-        self.index.publish_image_ref(image_name, manifest)
+        let artifact = self.artifact_manifest_record(manifest.digest())?;
+        self.index
+            .publish_artifact_ref(image_name, manifest, &artifact)
     }
 
     /// Replace the ref target with a sealed root manifest descriptor.
@@ -577,7 +1197,25 @@ impl LocalRegistry {
             sealed_artifact.is_stored_in(self),
             "Sealed artifact descriptor belongs to a different Local Registry"
         );
-        self.index.replace_image_ref(image_name, &sealed_artifact.0)
+        let artifact = self.artifact_manifest_record(sealed_artifact.digest())?;
+        self.index
+            .replace_artifact_ref(image_name, &sealed_artifact.0, &artifact)
+    }
+
+    /// Replace an Experiment ref and its verified listing projection in one
+    /// SQLite transaction.
+    pub(crate) fn replace_experiment_manifest_ref(
+        &self,
+        image_name: &ImageRef,
+        sealed_artifact: &SealedArtifact<'_>,
+        experiment: &ExperimentManifestRecord,
+    ) -> Result<RefUpdate> {
+        ensure!(
+            sealed_artifact.is_stored_in(self),
+            "Sealed artifact descriptor belongs to a different Local Registry"
+        );
+        self.index
+            .replace_experiment_ref(image_name, &sealed_artifact.0, experiment)
     }
 
     /// Delete a local manifest ref. Content-addressed blobs are not removed.

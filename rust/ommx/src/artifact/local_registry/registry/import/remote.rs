@@ -23,8 +23,9 @@
 //!    to the registry. The manifest is stored last so it sits behind
 //!    its blobs (matching the OCI distribution
 //!    publish order).
-//! 3. SQLite publishes only the manifest descriptor under the requested
-//!    `image_name`. A crash between blob writes and ref publish leaves
+//! 3. SQLite publishes the manifest descriptor under the requested
+//!    `image_name` and records digest-addressed catalog projections for
+//!    blob-free listing. A crash between blob writes and ref publish leaves
 //!    orphan CAS bytes (recovered by GC, not visible through the index).
 //!
 //! v3 has no on-disk OCI Image Layout intermediate for pulls — SQLite
@@ -112,10 +113,23 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
 
         self.store_manifest_blob(&manifest_descriptor, &manifest_bytes, &manifest_digest)?;
 
-        let ref_update = self
+        let experiment_record = self
             .registry
-            .index
-            .publish_image_ref(self.image_name, &manifest_descriptor)?;
+            .experiment_manifest_record(self.image_name, &manifest_digest)?;
+        let ref_update = if let Some(record) = experiment_record.as_ref() {
+            self.registry.index.publish_experiment_ref(
+                self.image_name,
+                &manifest_descriptor,
+                record,
+            )?
+        } else {
+            let artifact_record = self.registry.artifact_manifest_record(&manifest_digest)?;
+            self.registry.index.publish_artifact_ref(
+                self.image_name,
+                &manifest_descriptor,
+                &artifact_record,
+            )?
+        };
         self.reject_conflicting_ref(&ref_update)?;
 
         Ok(OciDirImport {
@@ -126,15 +140,10 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
     }
 
     fn cached_ref(&self) -> Result<Option<OciDirImport>> {
-        let Some(manifest_descriptor) = self
-            .registry
-            .index
-            .resolve_image_descriptor(self.image_name)?
-        else {
+        let Some(manifest_digest) = self.registry.index.resolve_image_name(self.image_name)? else {
             return Ok(None);
         };
-        let manifest_digest = manifest_descriptor.digest().clone();
-        if self.cached_manifest_closure_is_present(&manifest_descriptor)? {
+        if self.cached_manifest_closure_is_present(&manifest_digest)? {
             return Ok(Some(OciDirImport {
                 manifest_digest,
                 image_name: self.image_name.clone(),
@@ -150,21 +159,8 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
         Ok(None)
     }
 
-    fn cached_manifest_closure_is_present(&self, manifest_descriptor: &Descriptor) -> Result<bool> {
-        let manifest_digest = manifest_descriptor.digest();
+    fn cached_manifest_closure_is_present(&self, manifest_digest: &Digest) -> Result<bool> {
         if !self.registry.contains_blob(manifest_digest)? {
-            return Ok(false);
-        }
-        let manifest_size = self.registry.blob_size(manifest_digest)?;
-        if manifest_size != manifest_descriptor.size() {
-            tracing::warn!(
-                "SQLite ref resolves {} → {}, but the manifest blob size is {}; \
-                 expected {}",
-                self.image_name,
-                manifest_digest,
-                manifest_size,
-                manifest_descriptor.size(),
-            );
             return Ok(false);
         }
 

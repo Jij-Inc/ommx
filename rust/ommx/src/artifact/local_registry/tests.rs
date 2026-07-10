@@ -1,12 +1,13 @@
 use super::index::SqliteIndexStore;
 use super::*;
 use crate::artifact::{
-    media_types, ArtifactDraft, ImageRef, LocalArtifact, LocalManifest,
+    media_types, stable_json_bytes, ArtifactDraft, ImageRef, LocalArtifact, LocalManifest,
     OCI_IMAGE_MANIFEST_MEDIA_TYPE,
 };
 use anyhow::{Context, Result};
 use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, ImageManifestBuilder, MediaType};
 use std::collections::HashMap;
+use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -36,6 +37,29 @@ fn save_test_archive(
 
 fn open_test_index(registry: &LocalRegistry) -> Result<SqliteIndexStore> {
     SqliteIndexStore::open_in_registry_root(registry.root())
+}
+
+fn table_columns(conn: &rusqlite::Connection, table: &str) -> Result<Vec<String>> {
+    let mut stmt = conn.prepare("SELECT name FROM pragma_table_info(?1) ORDER BY cid")?;
+    let rows = stmt.query_map([table], |row| row.get(0))?;
+    rows.collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(Into::into)
+}
+
+fn has_table(conn: &rusqlite::Connection, table: &str) -> Result<bool> {
+    conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1)",
+        [table],
+        |row| row.get(0),
+    )
+    .map_err(Into::into)
+}
+
+fn query_plan(conn: &rusqlite::Connection, sql: &str) -> Result<Vec<String>> {
+    let mut stmt = conn.prepare(sql)?;
+    let rows = stmt.query_map([], |row| row.get(3))?;
+    rows.collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(Into::into)
 }
 
 #[test]
@@ -171,7 +195,7 @@ fn gc_deletes_only_orphan_candidates() -> Result<()> {
 fn sqlite_index_store_round_trip() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let store = SqliteIndexStore::open(dir.path().join(SQLITE_INDEX_FILE_NAME))?;
-    assert_eq!(store.schema_version()?, 1);
+    assert_eq!(store.schema_version()?, 2);
 
     let manifest_descriptor = test_manifest_descriptor(b"manifest")?;
     store.replace_ref(
@@ -179,14 +203,18 @@ fn sqlite_index_store_round_trip() -> Result<()> {
         "latest",
         &manifest_descriptor,
     )?;
+    let image_name = ImageRef::parse("example.com/ommx/experiment:latest")?;
     assert_eq!(
-        store.resolve_ref("example.com/ommx/experiment", "latest")?,
-        Some(manifest_descriptor.clone())
+        store.resolve_image_name(&image_name)?,
+        Some(manifest_descriptor.digest().clone())
     );
     let refs = store.list_refs(Some("example.com/ommx"))?;
     assert_eq!(refs.len(), 1);
     assert_eq!(refs[0].reference, "latest");
-    assert_eq!(refs[0].descriptor, manifest_descriptor);
+    assert_eq!(
+        refs[0].manifest_digest,
+        manifest_descriptor.digest().clone()
+    );
 
     let manifest_descriptor = test_manifest_descriptor(b"other-manifest")?;
     store.replace_ref(
@@ -202,6 +230,258 @@ fn sqlite_index_store_round_trip() -> Result<()> {
     let refs = store.list_refs(Some("example.com/foo_bar"))?;
     assert_eq!(refs.len(), 1);
     assert_eq!(refs[0].name, "example.com/foo_bar/experiment");
+    Ok(())
+}
+
+#[test]
+fn sqlite_cache_prune_uses_reverse_lookup_indexes() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let path = dir.path().join(SQLITE_INDEX_FILE_NAME);
+    SqliteIndexStore::open(&path)?;
+    let conn = rusqlite::Connection::open(path)?;
+
+    let manifest_plan = query_plan(
+        &conn,
+        r#"
+        EXPLAIN QUERY PLAN
+        DELETE FROM artifact_manifests
+        WHERE NOT EXISTS (
+            SELECT 1 FROM refs
+            WHERE refs.manifest_digest = artifact_manifests.manifest_digest
+        )
+        "#,
+    )?;
+    assert!(
+        manifest_plan
+            .iter()
+            .any(|detail| detail.contains("idx_refs_manifest_digest")),
+        "unexpected query plan: {manifest_plan:?}"
+    );
+
+    let config_plan = query_plan(
+        &conn,
+        r#"
+        EXPLAIN QUERY PLAN
+        DELETE FROM experiment_configs
+        WHERE NOT EXISTS (
+            SELECT 1 FROM artifact_manifests
+            WHERE artifact_manifests.config_digest = experiment_configs.config_digest
+        )
+        "#,
+    )?;
+    assert!(
+        config_plan
+            .iter()
+            .any(|detail| detail.contains("idx_artifact_manifests_config_digest")),
+        "unexpected query plan: {config_plan:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn sqlite_index_migrates_v1_schema() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let path = dir.path().join(SQLITE_INDEX_FILE_NAME);
+    let conn = rusqlite::Connection::open(&path)?;
+    conn.pragma_update(None, "user_version", 1_i64)?;
+    conn.execute_batch(
+        r#"
+        CREATE TABLE ommx_local_registry_metadata (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
+        CREATE TABLE refs (
+            name TEXT NOT NULL,
+            reference TEXT NOT NULL,
+            manifest_media_type TEXT NOT NULL,
+            manifest_digest TEXT NOT NULL,
+            manifest_size INTEGER NOT NULL CHECK(manifest_size >= 0),
+            manifest_annotations_json TEXT NOT NULL DEFAULT '{}',
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY(name, reference)
+        );
+        CREATE INDEX idx_refs_name ON refs(name);
+        INSERT INTO ommx_local_registry_metadata (key, value)
+        VALUES ('registry_id', 'existing-registry-id');
+        "#,
+    )?;
+    let descriptor = test_manifest_descriptor(b"v1-manifest")?;
+    conn.execute(
+        r#"
+        INSERT INTO refs (
+            name,
+            reference,
+            manifest_media_type,
+            manifest_digest,
+            manifest_size,
+            manifest_annotations_json,
+            updated_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5, '{}', ?6)
+        "#,
+        rusqlite::params![
+            "example.com/ommx/experiment",
+            "latest",
+            descriptor.media_type().to_string(),
+            descriptor.digest().to_string(),
+            descriptor.size() as i64,
+            "2026-07-10T00:00:00Z",
+        ],
+    )?;
+    drop(conn);
+
+    let store = SqliteIndexStore::open(&path)?;
+    assert_eq!(store.schema_version()?, 2);
+    assert_eq!(store.registry_id()?, "existing-registry-id");
+    assert_eq!(
+        store.resolve_image_name(&ImageRef::parse("example.com/ommx/experiment:latest")?)?,
+        Some(descriptor.digest().clone())
+    );
+    let refs = store.list_refs(None)?;
+    assert_eq!(refs.len(), 1);
+    assert_eq!(refs[0].updated_at, "2026-07-10T00:00:00Z");
+
+    let conn = rusqlite::Connection::open(&path)?;
+    let ref_columns = table_columns(&conn, "refs")?;
+    assert_eq!(
+        ref_columns,
+        vec!["name", "reference", "manifest_digest", "updated_at"]
+    );
+    assert_eq!(
+        table_columns(&conn, "experiment_configs")?,
+        vec!["config_digest", "config_json"]
+    );
+    Ok(())
+}
+
+#[test]
+fn sqlite_index_v1_migration_is_atomic() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let path = dir.path().join(SQLITE_INDEX_FILE_NAME);
+    let conn = rusqlite::Connection::open(&path)?;
+    conn.pragma_update(None, "user_version", 1_i64)?;
+    conn.execute_batch(
+        r#"
+        CREATE TABLE refs (
+            name TEXT NOT NULL,
+            reference TEXT NOT NULL,
+            manifest_digest TEXT NOT NULL,
+            PRIMARY KEY(name, reference)
+        );
+        "#,
+    )?;
+    drop(conn);
+
+    SqliteIndexStore::open(&path).expect_err("malformed v1 schema must not migrate partially");
+
+    let conn = rusqlite::Connection::open(&path)?;
+    let version: i64 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
+    assert_eq!(version, 1);
+    assert!(table_columns(&conn, "refs")?.contains(&"manifest_digest".to_string()));
+    assert!(!has_table(&conn, "refs_legacy")?);
+    assert!(!has_table(&conn, "artifact_manifests")?);
+    Ok(())
+}
+
+#[test]
+fn sqlite_index_normalizes_unreleased_version_2_shape() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let path = dir.path().join(SQLITE_INDEX_FILE_NAME);
+    let conn = rusqlite::Connection::open(&path)?;
+    conn.pragma_update(None, "user_version", 2_i64)?;
+    conn.execute_batch(
+        r#"
+        CREATE TABLE refs (
+            name TEXT NOT NULL,
+            reference TEXT NOT NULL,
+            manifest_media_type TEXT NOT NULL,
+            manifest_digest TEXT NOT NULL,
+            manifest_size INTEGER NOT NULL CHECK(manifest_size >= 0),
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY(name, reference)
+        );
+        INSERT INTO refs (
+            name,
+            reference,
+            manifest_media_type,
+            manifest_digest,
+            manifest_size,
+            updated_at
+        ) VALUES (
+            'example.com/ommx/experiment',
+            'latest',
+            'application/vnd.oci.image.manifest.v1+json',
+            'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+            0,
+            '2026-07-10T00:00:00Z'
+        );
+        "#,
+    )?;
+    drop(conn);
+
+    let store = SqliteIndexStore::open(&path)?;
+    assert_eq!(store.schema_version()?, 2);
+    assert_eq!(store.list_refs(None)?.len(), 1);
+    let conn = rusqlite::Connection::open(&path)?;
+    assert_eq!(
+        table_columns(&conn, "experiment_configs")?,
+        vec!["config_digest", "config_json"]
+    );
+    Ok(())
+}
+
+#[test]
+fn sqlite_index_rejects_unknown_schema_version() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let path = dir.path().join(SQLITE_INDEX_FILE_NAME);
+    let conn = rusqlite::Connection::open(&path)?;
+    conn.pragma_update(None, "user_version", 3_i64)?;
+    drop(conn);
+
+    let err = SqliteIndexStore::open(&path).expect_err("unknown schema version must fail");
+    assert!(
+        err.to_string()
+            .contains("Unsupported local registry schema version: 3"),
+        "unexpected error: {err}"
+    );
+    Ok(())
+}
+
+#[test]
+fn sqlite_experiment_ref_rejects_mismatched_projection_descriptor() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let store = SqliteIndexStore::open(dir.path().join(SQLITE_INDEX_FILE_NAME))?;
+    let image_name = ImageRef::parse("example.com/ommx/experiment:mismatch")?;
+    let ref_descriptor = test_manifest_descriptor(b"ref-manifest")?;
+    let config_bytes = b"experiment-config".to_vec();
+    let config_descriptor = test_manifest_descriptor(&config_bytes)?;
+    let projection_manifest = ImageManifestBuilder::default()
+        .schema_version(2_u32)
+        .artifact_type(media_types::v1_experiment())
+        .config(config_descriptor.clone())
+        .layers(Vec::new())
+        .build()?;
+    let projection_manifest_bytes = stable_json_bytes(&projection_manifest)?;
+    let projection_manifest_descriptor = test_manifest_descriptor(&projection_manifest_bytes)?;
+    let artifact = ArtifactManifestRecord::from_image_manifest(
+        projection_manifest_descriptor.digest().clone(),
+        projection_manifest_bytes,
+        &projection_manifest,
+    )?;
+    let experiment = ExperimentManifestRecord::from_validated_config(artifact, config_bytes)?;
+
+    let err = store
+        .publish_experiment_ref(&image_name, &ref_descriptor, &experiment)
+        .expect_err("ref descriptor and Experiment projection descriptor must match");
+    assert!(
+        err.to_string().contains("Manifest cache digest"),
+        "unexpected error: {err}"
+    );
+    assert!(
+        store
+            .resolve_ref(&image_name.repository_key(), image_name.reference())?
+            .is_none(),
+        "mismatched Experiment projection must not publish the ref"
+    );
     Ok(())
 }
 
@@ -333,7 +613,7 @@ fn imports_oci_dir_into_sqlite_registry_preserving_image_manifest() -> Result<()
 }
 
 #[test]
-fn imports_oci_dir_preserves_index_descriptor_annotations() -> Result<()> {
+fn imports_oci_dir_does_not_persist_descriptor_annotations() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let oci_dir = dir.path().join("oci-dir");
     let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:descriptor-annotation")?;
@@ -363,20 +643,7 @@ fn imports_oci_dir_preserves_index_descriptor_annotations() -> Result<()> {
     let descriptor = index_store
         .resolve_image_descriptor(&image_name)?
         .context("Imported ref descriptor is missing")?;
-    let annotations = descriptor
-        .annotations()
-        .as_ref()
-        .context("Imported ref descriptor should preserve index.json descriptor annotations")?;
-    assert_eq!(
-        annotations
-            .get("org.ommx.test.descriptor")
-            .map(String::as_str),
-        Some("preserved")
-    );
-    assert_eq!(
-        annotations.get(OCI_IMAGE_REF_NAME_ANNOTATION),
-        Some(&image_name.to_string())
-    );
+    assert!(descriptor.annotations().is_none());
     Ok(())
 }
 
@@ -665,6 +932,385 @@ fn local_registry_builds_native_image_manifest_with_artifact_type() -> Result<()
         media_types::OCI_EMPTY_CONFIG_BYTES
     );
     assert!(registry.contains_blob(&Digest::from_str(media_types::OCI_EMPTY_CONFIG_DIGEST)?)?);
+    Ok(())
+}
+
+#[test]
+fn sqlite_backfill_does_not_retain_unreferenced_cache_rows() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let path = dir.path().join(SQLITE_INDEX_FILE_NAME);
+    let store = SqliteIndexStore::open(&path)?;
+    let config_bytes = br#"{"status":"finished"}"#.to_vec();
+    let config_descriptor = test_manifest_descriptor(&config_bytes)?;
+    let manifest = ImageManifestBuilder::default()
+        .schema_version(2_u32)
+        .artifact_type(media_types::v1_experiment())
+        .config(config_descriptor)
+        .layers(Vec::new())
+        .build()?;
+    let manifest_bytes = stable_json_bytes(&manifest)?;
+    let manifest_descriptor = test_manifest_descriptor(&manifest_bytes)?;
+    let artifact = ArtifactManifestRecord::from_image_manifest(
+        manifest_descriptor.digest().clone(),
+        manifest_bytes,
+        &manifest,
+    )?;
+    let experiment = ExperimentManifestRecord::from_validated_config(artifact, config_bytes)?;
+
+    // This is the state seen when a ref is deleted while a backfill is reading
+    // the CAS. The upsert transaction must re-check reachability before commit.
+    store.upsert_experiment_manifest(&experiment)?;
+
+    let conn = rusqlite::Connection::open(path)?;
+    assert_eq!(
+        conn.query_row("SELECT COUNT(*) FROM artifact_manifests", [], |row| {
+            row.get::<_, i64>(0)
+        })?,
+        0
+    );
+    assert_eq!(
+        conn.query_row("SELECT COUNT(*) FROM experiment_configs", [], |row| {
+            row.get::<_, i64>(0)
+        })?,
+        0
+    );
+    Ok(())
+}
+
+#[test]
+fn registry_list_warning_stage_strings_are_consistently_lowercase() {
+    let stages = [
+        (
+            RegistryListWarningStage::ManifestBackfill,
+            "manifest backfill",
+        ),
+        (
+            RegistryListWarningStage::ManifestCacheRepair,
+            "manifest cache repair",
+        ),
+        (
+            RegistryListWarningStage::ExperimentConfigBackfill,
+            "experiment config backfill",
+        ),
+        (
+            RegistryListWarningStage::ExperimentConfigCacheRepair,
+            "experiment config cache repair",
+        ),
+        (
+            RegistryListWarningStage::CheckpointProjection,
+            "checkpoint projection",
+        ),
+    ];
+
+    for (stage, expected) in stages {
+        assert_eq!(stage.as_str(), expected);
+        assert_eq!(stage.to_string(), expected);
+    }
+}
+
+#[test]
+fn local_registry_lists_artifacts_from_manifest_cache() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let image_name = ImageRef::parse("example.com/catalog/artifact:latest")?;
+    let other_name = ImageRef::parse("example.com/other/artifact:latest")?;
+
+    let mut draft = ArtifactDraft::with_registry(&registry, image_name.clone());
+    draft.add_annotation("com.example.problem", "qap");
+    draft.add_layer_bytes(
+        MediaType::Other("application/json".to_string()),
+        br#"{"value":1}"#.to_vec(),
+        HashMap::new(),
+    )?;
+    let artifact = draft.commit()?;
+    build_test_local_artifact(&registry, &other_name, b"other")?;
+
+    let records = registry.list_artifacts(Some("example.com/catalog"))?;
+    assert_eq!(records.len(), 1);
+    let record = &records[0];
+    assert_eq!(record.image_name, image_name);
+    assert_eq!(&record.manifest_digest, artifact.manifest_digest());
+    assert_eq!(
+        record.artifact_type,
+        MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string())
+    );
+    assert_eq!(&record.config_digest, artifact.stored_config()?.digest());
+    assert_eq!(
+        record.annotations.get("com.example.problem"),
+        Some(&"qap".to_string())
+    );
+    assert_eq!(
+        record.manifest["artifactType"],
+        media_types::V1_ARTIFACT_MEDIA_TYPE
+    );
+    assert_eq!(record.manifest["layers"].as_array().unwrap().len(), 1);
+    assert!(record.updated_at.contains('T'));
+    Ok(())
+}
+
+#[test]
+fn list_artifacts_backfills_shared_missing_manifest() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let image_name = ImageRef::parse("example.com/catalog/original:latest")?;
+    let alias = ImageRef::parse("example.com/catalog/alias:latest")?;
+    let artifact = build_test_local_artifact(&registry, &image_name, b"shared")?;
+    artifact.tag_as(alias.clone())?;
+
+    let conn = rusqlite::Connection::open(registry.root().join(SQLITE_INDEX_FILE_NAME))?;
+    conn.execute(
+        "DELETE FROM artifact_manifests WHERE manifest_digest = ?1",
+        [artifact.manifest_digest().to_string()],
+    )?;
+
+    let index = open_test_index(&registry)?;
+    let missing = index.list_missing_artifact_manifest_refs(Some("example.com/catalog"))?;
+    assert_eq!(missing.len(), 2);
+    assert!(missing.iter().all(|identity| {
+        matches!(
+            &identity.parsed,
+            Ok((_, digest)) if digest == artifact.manifest_digest()
+        )
+    }));
+
+    let records = registry.list_artifacts(Some("example.com/catalog"))?;
+    assert_eq!(records.len(), 2);
+    assert_eq!(records[0].image_name, alias);
+    assert_eq!(records[1].image_name, image_name);
+    assert!(records
+        .iter()
+        .all(|record| &record.manifest_digest == artifact.manifest_digest()));
+    Ok(())
+}
+
+#[test]
+fn list_artifacts_repairs_manifest_cache_from_cas() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let image_name = ImageRef::parse("example.com/catalog/integrity:latest")?;
+    let artifact = build_test_local_artifact(&registry, &image_name, b"payload")?;
+    let manifest_digest = artifact.manifest_digest().clone();
+    let original_manifest = registry.read_blob(&manifest_digest)?;
+    let mut changed_manifest: serde_json::Value = serde_json::from_slice(&original_manifest)?;
+    changed_manifest["annotations"] = serde_json::json!({ "com.example.changed": "true" });
+    let conn = rusqlite::Connection::open(registry.root().join(SQLITE_INDEX_FILE_NAME))?;
+    conn.execute(
+        "UPDATE artifact_manifests SET manifest_json = ?1 WHERE manifest_digest = ?2",
+        rusqlite::params![
+            stable_json_bytes(&changed_manifest)?,
+            manifest_digest.to_string()
+        ],
+    )?;
+
+    let report = registry.list_artifacts_with_options(
+        Some("example.com/catalog/integrity"),
+        &ArtifactListOptions::default(),
+    )?;
+    assert_eq!(report.records.len(), 1);
+    assert_eq!(report.records[0].image_name, image_name);
+    assert_eq!(report.warnings.len(), 1);
+    assert_eq!(
+        report.warnings[0].stage,
+        RegistryListWarningStage::ManifestCacheRepair
+    );
+    assert!(report.warnings[0].message.contains("repaired from CAS"));
+    let repaired: Vec<u8> = conn.query_row(
+        "SELECT manifest_json FROM artifact_manifests WHERE manifest_digest = ?1",
+        [manifest_digest.to_string()],
+        |row| row.get(0),
+    )?;
+    assert_eq!(repaired, original_manifest);
+
+    conn.execute(
+        "UPDATE artifact_manifests SET manifest_json = ?1 WHERE manifest_digest = ?2",
+        rusqlite::params![
+            stable_json_bytes(&changed_manifest)?,
+            manifest_digest.to_string()
+        ],
+    )?;
+    let error = registry
+        .list_artifacts_with_options(
+            Some("example.com/catalog/integrity"),
+            &ArtifactListOptions {
+                include_internal: false,
+                strict: true,
+            },
+        )
+        .expect_err("strict listing must reject a corrupt Manifest cache row");
+    assert!(
+        format!("{error:#}").contains("Cached Manifest JSON does not match"),
+        "unexpected error: {error:#}"
+    );
+    Ok(())
+}
+
+#[test]
+fn list_artifacts_propagates_manifest_cache_write_failures() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let image_name = ImageRef::parse("example.com/catalog/write-failure:latest")?;
+    let artifact = build_test_local_artifact(&registry, &image_name, b"payload")?;
+    let manifest_digest = artifact.manifest_digest().clone();
+    let original_manifest = registry.read_blob(&manifest_digest)?;
+    let mut changed_manifest: serde_json::Value = serde_json::from_slice(&original_manifest)?;
+    changed_manifest["annotations"] = serde_json::json!({ "com.example.changed": "true" });
+    let conn = rusqlite::Connection::open(registry.root().join(SQLITE_INDEX_FILE_NAME))?;
+    conn.execute(
+        "UPDATE artifact_manifests SET manifest_json = ?1 WHERE manifest_digest = ?2",
+        rusqlite::params![
+            stable_json_bytes(&changed_manifest)?,
+            manifest_digest.to_string()
+        ],
+    )?;
+    conn.execute_batch(
+        r#"
+        CREATE TRIGGER reject_manifest_cache_repair
+        BEFORE UPDATE ON artifact_manifests
+        BEGIN
+            SELECT RAISE(ABORT, 'manifest cache writes disabled');
+        END;
+        "#,
+    )?;
+
+    let error = registry
+        .list_artifacts_with_options(
+            Some("example.com/catalog/write-failure"),
+            &ArtifactListOptions::default(),
+        )
+        .expect_err("SQLite cache write failures must abort the listing");
+    assert!(
+        format!("{error:#}").contains("manifest cache writes disabled"),
+        "unexpected error: {error:#}"
+    );
+    Ok(())
+}
+
+#[test]
+fn list_artifacts_warns_and_skips_malformed_ref_identity() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let good_name = ImageRef::parse("example.com/catalog/identity-good:latest")?;
+    let bad_name = ImageRef::parse("example.com/catalog/identity-bad-name:latest")?;
+    let bad_digest = ImageRef::parse("example.com/catalog/identity-bad-digest:latest")?;
+    let bad_type = ImageRef::parse("example.com/catalog/identity-bad-type:latest")?;
+    build_test_local_artifact(&registry, &good_name, b"good")?;
+    build_test_local_artifact(&registry, &bad_name, b"bad-name")?;
+    build_test_local_artifact(&registry, &bad_digest, b"bad-digest")?;
+    build_test_local_artifact(&registry, &bad_type, b"bad-type")?;
+
+    let invalid_repository = "example.com/catalog/invalid name";
+    let invalid_digest = "not-an-oci-digest";
+    let conn = rusqlite::Connection::open(registry.root().join(SQLITE_INDEX_FILE_NAME))?;
+    conn.execute(
+        "UPDATE refs SET name = ?1 WHERE name = ?2 AND reference = ?3",
+        rusqlite::params![
+            invalid_repository,
+            bad_name.repository_key(),
+            bad_name.reference()
+        ],
+    )?;
+    conn.execute(
+        "UPDATE refs SET manifest_digest = ?1 WHERE name = ?2 AND reference = ?3",
+        rusqlite::params![
+            invalid_digest,
+            bad_digest.repository_key(),
+            bad_digest.reference()
+        ],
+    )?;
+    conn.execute(
+        "UPDATE refs SET manifest_digest = ?1 WHERE name = ?2 AND reference = ?3",
+        rusqlite::params![
+            vec![0_u8, 1_u8, 2_u8],
+            bad_type.repository_key(),
+            bad_type.reference()
+        ],
+    )?;
+
+    let report = registry.list_artifacts_with_options(
+        Some("example.com/catalog"),
+        &ArtifactListOptions::default(),
+    )?;
+    assert_eq!(report.records.len(), 1);
+    assert_eq!(report.records[0].image_name, good_name);
+    assert_eq!(report.warnings.len(), 3);
+    assert!(report.warnings.iter().any(|warning| warning.image_name
+        == format!("{invalid_repository}:latest")
+        && warning.message.contains("Invalid Local Registry image ref")));
+    assert!(report.warnings.iter().any(|warning| {
+        warning.manifest_digest == invalid_digest
+            && warning
+                .message
+                .contains("Invalid Local Registry manifest digest")
+    }));
+    assert!(report.warnings.iter().any(|warning| {
+        warning.image_name == bad_type.to_string()
+            && warning
+                .message
+                .contains("Local Registry manifest digest must be TEXT, got BLOB")
+    }));
+
+    let error = registry
+        .list_artifacts_with_options(
+            Some("example.com/catalog"),
+            &ArtifactListOptions {
+                include_internal: false,
+                strict: true,
+            },
+        )
+        .expect_err("strict listing must reject malformed ref identity");
+    assert!(
+        format!("{error:#}").contains("Local Registry"),
+        "unexpected error: {error:#}"
+    );
+    Ok(())
+}
+
+#[test]
+fn list_artifacts_warns_and_skips_unrepairable_ref() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let good_name = ImageRef::parse("example.com/catalog/good:latest")?;
+    let bad_name = ImageRef::parse("example.com/catalog/bad:latest")?;
+    build_test_local_artifact(&registry, &good_name, b"good")?;
+    let bad = build_test_local_artifact(&registry, &bad_name, b"bad")?;
+    let bad_digest = bad.manifest_digest().clone();
+    let original_manifest = registry.read_blob(&bad_digest)?;
+    let mut changed_manifest: serde_json::Value = serde_json::from_slice(&original_manifest)?;
+    changed_manifest["annotations"] = serde_json::json!({ "com.example.changed": "true" });
+    let conn = rusqlite::Connection::open(registry.root().join(SQLITE_INDEX_FILE_NAME))?;
+    conn.execute(
+        "UPDATE artifact_manifests SET manifest_json = ?1 WHERE manifest_digest = ?2",
+        rusqlite::params![
+            stable_json_bytes(&changed_manifest)?,
+            bad_digest.to_string()
+        ],
+    )?;
+    let (algorithm, encoded) = bad_digest
+        .as_ref()
+        .split_once(':')
+        .context("test Manifest digest must contain an algorithm")?;
+    fs::remove_file(registry.root().join("blobs").join(algorithm).join(encoded))?;
+
+    let report = registry.list_artifacts_with_options(
+        Some("example.com/catalog"),
+        &ArtifactListOptions::default(),
+    )?;
+    assert_eq!(report.records.len(), 1);
+    assert_eq!(report.records[0].image_name, good_name);
+    assert_eq!(report.warnings.len(), 1);
+    assert_eq!(report.warnings[0].image_name, bad_name.to_string());
+    assert!(report.warnings[0].message.contains("CAS repair failed"));
+
+    let error = registry
+        .list_artifacts_with_options(
+            Some("example.com/catalog"),
+            &ArtifactListOptions {
+                include_internal: false,
+                strict: true,
+            },
+        )
+        .expect_err("strict listing must reject the corrupt ref");
+    assert!(format!("{error:#}").contains("Cached Manifest JSON does not match"));
     Ok(())
 }
 

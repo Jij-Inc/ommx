@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 #[serde(transparent)]
 pub struct LayerRef(pub u32);
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[non_exhaustive]
 pub struct ExperimentConfig {
     pub status: String,
@@ -18,7 +18,7 @@ pub struct ExperimentConfig {
     pub run_parameters: LayerRef,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[non_exhaustive]
 pub struct ExperimentConfigRun {
     pub run_id: u64,
@@ -31,7 +31,7 @@ pub struct ExperimentConfigRun {
     pub solves: Vec<ExperimentConfigSolve>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[non_exhaustive]
 pub struct ExperimentConfigSolve {
     pub solve_id: u64,

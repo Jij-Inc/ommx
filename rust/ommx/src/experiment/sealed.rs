@@ -6,9 +6,12 @@ use super::config::{ExperimentConfigSolve, LayerRef};
 use super::parameter::{RunParameterCell, RunParameterTable};
 use super::{
     read_solve_diagnostic_payload, ExperimentStatus, RunStatus, SealedExperiment,
-    SolveDiagnosticPayload, SolveStatus, Trace, RUN_PARAMETERS_MEDIA_TYPE,
+    SolveDiagnosticPayload, SolveStatus, Trace, EXPERIMENT_ARTIFACT_MEDIA_TYPE,
+    EXPERIMENT_CONFIG_MEDIA_TYPE, RUN_PARAMETERS_MEDIA_TYPE,
 };
-use crate::artifact::local_registry::StoredDescriptor;
+use crate::artifact::local_registry::{
+    ArtifactManifestRecord, ExperimentManifestRecord, StoredDescriptor,
+};
 use crate::artifact::{media_types, ImageRef, LocalArtifact};
 use crate::{Instance, ParametricInstance, SampleSet, Solution};
 use anyhow::{Context, Result};
@@ -36,7 +39,10 @@ impl<'reg> SealedExperiment<'reg> {
         )
     }
 
-    fn from_artifact_with_allowed_statuses(
+    /// Reconstruct a sealed Experiment while accepting the given serialized
+    /// status set. Listing/checkpoint code uses this to validate non-finished
+    /// Experiment artifacts without exposing those states as normal loads.
+    pub(crate) fn from_artifact_with_allowed_statuses(
         artifact: LocalArtifact<'reg>,
         allowed_statuses: &[ExperimentStatus],
     ) -> Result<Self> {
@@ -159,6 +165,47 @@ impl<'reg> SealedExperiment<'reg> {
     pub fn run_parameter_cells(&self) -> Vec<RunParameterCell> {
         self.run_parameters.cells()
     }
+}
+
+/// Build the Local Registry's Experiment listing projection from an artifact.
+///
+/// This keeps Experiment manifest/config validation owned by the Experiment
+/// module while letting the registry store a SQLite read model.
+pub(crate) fn experiment_manifest_record_from_artifact(
+    artifact: &LocalArtifact<'_>,
+) -> Result<Option<ExperimentManifestRecord>> {
+    let manifest = artifact.get_manifest()?;
+    if manifest.artifact_type().as_ref() != EXPERIMENT_ARTIFACT_MEDIA_TYPE {
+        return Ok(None);
+    }
+    let config_descriptor = manifest.config();
+    if config_descriptor.media_type().as_ref() != EXPERIMENT_CONFIG_MEDIA_TYPE {
+        crate::bail!(
+            "Experiment config media type is {}, expected {}",
+            config_descriptor.media_type(),
+            EXPERIMENT_CONFIG_MEDIA_TYPE
+        );
+    }
+    let manifest_json = artifact.read_blob_by_digest(artifact.manifest_digest())?;
+    let config_json = artifact.get_blob_by_descriptor(&config_descriptor)?;
+    SealedExperiment::from_artifact_with_allowed_statuses(
+        artifact.clone(),
+        &[
+            ExperimentStatus::Finished,
+            ExperimentStatus::Draft,
+            ExperimentStatus::Failed,
+            ExperimentStatus::Interrupted,
+        ],
+    )?;
+    let artifact_record = ArtifactManifestRecord::from_image_manifest(
+        artifact.manifest_digest().clone(),
+        manifest_json,
+        manifest.as_image_manifest(),
+    )?;
+    Ok(Some(ExperimentManifestRecord::from_validated_config(
+        artifact_record,
+        config_json,
+    )?))
 }
 
 /// Read-only Run reconstructed from a sealed Experiment config.

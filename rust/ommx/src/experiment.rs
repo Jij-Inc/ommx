@@ -79,6 +79,9 @@ pub use dynamic::{ExperimentDyn, RunDyn, SealedRunDyn, SolveDyn};
 pub use logging::AttachmentLogger;
 pub use parameter::{ParameterValue, RunParameterCell};
 pub use run::{FailedSolveRecord, FinishedSolveRecord};
+// Local Registry owns the SQLite projection, while Experiment owns validation
+// of Experiment manifests/configs before those projection rows are written.
+pub(crate) use sealed::experiment_manifest_record_from_artifact;
 pub use sealed::{SealedRun, Solve};
 
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor, TempLocalRegistry};
@@ -88,7 +91,10 @@ use oci_spec::image::Descriptor;
 use parameter::ParameterSet;
 use rmpv::Value as MessagePackValue;
 use std::sync::{Mutex, MutexGuard};
-use std::{collections::BTreeMap, io::Cursor};
+use std::{
+    collections::{BTreeMap, HashMap},
+    io::Cursor,
+};
 
 // --- Artifact mapping constants ---------------------------------------------
 
@@ -99,7 +105,8 @@ const EXPERIMENT_STATUS_INTERRUPTED: &str = "interrupted";
 
 const RUN_PARAMETERS_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment.run-parameters+msgpack";
 const EXPERIMENT_ARTIFACT_MEDIA_TYPE: &str = media_types::V1_EXPERIMENT_MEDIA_TYPE;
-const EXPERIMENT_CONFIG_MEDIA_TYPE: &str = "application/org.ommx.v1.experiment.config+json";
+pub(crate) const EXPERIMENT_CONFIG_MEDIA_TYPE: &str =
+    "application/org.ommx.v1.experiment.config+json";
 
 const RUN_STATUS_FINISHED: &str = "finished";
 const RUN_STATUS_FAILED: &str = "failed";
@@ -132,7 +139,9 @@ impl ExperimentStatus {
         }
     }
 
-    fn from_config(status: &str) -> Result<Self> {
+    /// Validate status strings reconstructed from serialized Experiment
+    /// configs or registry-side Experiment listing projections.
+    pub(crate) fn from_config(status: &str) -> Result<Self> {
         match status {
             EXPERIMENT_STATUS_FINISHED => Ok(Self::Finished),
             EXPERIMENT_STATUS_DRAFT => Ok(Self::Draft),
@@ -427,6 +436,8 @@ struct UnsealedExperimentState<'reg> {
     /// Parent Experiment manifest descriptor for lineage. `None` for
     /// a root Experiment and `Some` for a forked child Experiment.
     subject: Option<oci_spec::image::Descriptor>,
+    /// Manifest annotations written to the root OCI manifest at commit.
+    annotations: HashMap<String, String>,
     /// Experiment-space attachments.
     attachments: AttachmentTable<StoredDescriptor<'reg>>,
     runs: BTreeMap<u64, RunEntry<'reg>>,
@@ -469,6 +480,7 @@ impl<'reg> Experiment<'reg> {
             state: Mutex::new(UnsealedExperimentState {
                 image_name,
                 subject: None,
+                annotations: HashMap::new(),
                 attachments: AttachmentTable::new(),
                 runs: BTreeMap::new(),
                 next_run_id: 0,
@@ -480,6 +492,17 @@ impl<'reg> Experiment<'reg> {
     /// to when committed.
     pub fn image_name(&self) -> ImageRef {
         self.lock_state().image_name.clone()
+    }
+
+    /// Set a manifest annotation on the Experiment artifact committed by this session.
+    pub fn set_annotation(&self, key: impl Into<String>, value: impl Into<String>) -> Result<()> {
+        let key = key.into();
+        ensure!(
+            !crate::is_reserved_annotation_key(&key),
+            "Annotation key `{key}` is reserved for OMMX metadata"
+        );
+        self.lock_state().annotations.insert(key, value.into());
+        Ok(())
     }
 
     /// Start a new [`Run`]. Each run gets a fresh 0-based `run_id`.
@@ -619,6 +642,7 @@ impl<'reg> SealedExperiment<'reg> {
             state: Mutex::new(UnsealedExperimentState {
                 image_name,
                 subject,
+                annotations: HashMap::new(),
                 attachments: self.attachments.clone(),
                 next_run_id: next_run_id(runs.keys().copied())?,
                 runs,
