@@ -8472,6 +8472,47 @@
               "deprecated": null
             },
             {
+              "name": "check_promotion_witness",
+              "doc": "Check a detector-supplied one-hot promotion witness without mutation.\n\n``allowed`` is the caller's capability boundary and must contain\n:attr:`AdditionalCapability.OneHot`. The returned preview is\ninformational only; promotion methods re-validate the witness\nagainst the then-current instance.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "witness",
+                      "type_": {
+                        "display": "OneHotPromotionWitness",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "allowed",
+                      "type_": {
+                        "display": "set[AdditionalCapability]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "AdditionalCapability",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "PromotionPreview",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "constraint_context_df",
               "doc": "Constraint context DataFrame (id-indexed wide format).\n\nOne row per constraint id (active + removed) with columns\n`name`, `subscripts`, `description`. Index column is\n`{kind}_constraint_id`. `kind` selects which constraint family\nto read: `\"regular\"`, `\"indicator\"`, `\"one_hot\"`, or `\"sos1\"`.",
               "signatures": [
@@ -10109,6 +10150,94 @@
               "deprecated": null
             },
             {
+              "name": "promote_with_witness",
+              "doc": "Verify and atomically promote one regular constraint to one-hot form.\n\nThe source regular constraint is retained in ``removed_constraints``\nwith reserved ``promotion.*`` audit metadata, and its full context is\ncopied to the new active one-hot constraint. On error the instance is\nunchanged.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "witness",
+                      "type_": {
+                        "display": "OneHotPromotionWitness",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "allowed",
+                      "type_": {
+                        "display": "set[AdditionalCapability]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "AdditionalCapability",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "PromotionResult",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "promote_with_witnesses",
+              "doc": "Verify and atomically apply multiple one-hot promotion witnesses.\n\nEvery witness is checked against one pre-promotion snapshot.\nExplicit target IDs are reserved before omitted IDs are allocated. Any\ninvalid or conflicting witness leaves the instance unchanged.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "witnesses",
+                      "type_": {
+                        "display": "Sequence[OneHotPromotionWitness]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "OneHotPromotionWitness",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "allowed",
+                      "type_": {
+                        "display": "set[AdditionalCapability]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "AdditionalCapability",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "PromotionReport",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "random_samples",
               "doc": "Generate random samples for this instance.\n\nThe generated samples will contain ``num_samples`` sample entries divided into\n``num_different_samples`` groups, where each group shares the same state but has\ndifferent sample IDs.\n\n**Args:**\n- `rng`: Random number generator\n- `num_different_samples`: Number of different states to generate\n- `num_samples`: Total number of samples to generate\n- `max_sample_id`: Maximum sample ID (default: ``num_samples``)\n\n**Returns:**\nSamples object\n\n# Examples\n\nGenerate samples for a simple instance:\n\n```python\n>>> from ommx import Instance, DecisionVariable, Rng\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[(sum(x) <= 2).set_id(0)],\n...     sense=Instance.MAXIMIZE,\n... )\n\n>>> rng = Rng()\n>>> samples = instance.random_samples(rng, num_different_samples=2, num_samples=5)\n>>> samples.num_samples()\n5\n```",
               "signatures": [
@@ -10872,6 +11001,32 @@
                   "parameters": [],
                   "return_type": {
                     "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "verify_promotion_history",
+              "doc": "Re-validate a retained one-hot promotion audit trail.\n\nThe removed regular source, reserved metadata, and active or removed\none-hot target are checked again without trusting the original detector.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "source_constraint_id",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "PromotionAudit",
                     "link_target": null,
                     "children": []
                   }
@@ -13711,6 +13866,163 @@
             {
               "name": "variables",
               "doc": "",
+              "type_": {
+                "display": "list[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "OneHotPromotionWitness",
+          "doc": "Detector-supplied witness for promoting a regular constraint to one-hot form.\n\nConstruction validates only the witness's Python shape. Full semantic\nvalidation is performed by :meth:`Instance.check_promotion_witness` or\none of the promotion mutation methods against the current instance.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__new__",
+              "doc": "Create a one-hot promotion witness.\n\n**Args:**\n\n- `source_constraint_id`: Active regular constraint claimed to be one-hot.\n- `variables`: Claimed one-hot decision-variable IDs. Duplicates are rejected.\n- `target_one_hot_constraint_id`: Optional requested target ID. Omit to allocate one.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "source_constraint_id",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "variables",
+                      "type_": {
+                        "display": "Sequence[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "target_one_hot_constraint_id",
+                      "type_": {
+                        "display": "Optional[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "OneHotPromotionWitness",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "source_constraint_id",
+              "doc": "Active regular constraint claimed to be one-hot.",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "target_one_hot_constraint_id",
+              "doc": "Requested target ID, or `None` when OMMX should allocate one.",
+              "type_": {
+                "display": "Optional[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "variables",
+              "doc": "Claimed one-hot variable IDs in sorted order.",
               "type_": {
                 "display": "list[int]",
                 "link_target": null,
@@ -17750,6 +18062,287 @@
             }
           ],
           "attributes": [],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "PromotionAudit",
+          "doc": "Re-validated audit record for a previous one-hot promotion.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "source_constraint_id",
+              "doc": "",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "target_is_active",
+              "doc": "Whether the target one-hot constraint is active rather than removed.",
+              "type_": {
+                "display": "bool",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "target_one_hot_constraint_id",
+              "doc": "",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "variables",
+              "doc": "Original one-hot members reconstructed from the retained regular source.",
+              "type_": {
+                "display": "list[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "PromotionPreview",
+          "doc": "Informational result of checking a promotion witness.\n\nThis object is not an applicable mutation plan. Promotion methods always\nre-validate the original witness against the current instance.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "source_constraint_id",
+              "doc": "",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "target_one_hot_constraint_id",
+              "doc": "",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "variables",
+              "doc": "",
+              "type_": {
+                "display": "list[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "PromotionReport",
+          "doc": "Result of an all-or-nothing bulk promotion.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "source_to_target",
+              "doc": "Mapping from promoted regular constraint IDs to one-hot target IDs.",
+              "type_": {
+                "display": "dict[int, int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "PromotionResult",
+          "doc": "Result of one successfully applied promotion.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "source_constraint_id",
+              "doc": "",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "target_one_hot_constraint_id",
+              "doc": "",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
           "deprecated": null
         },
         {
@@ -30034,10 +30627,15 @@
     "ommx.Linear": "ommx",
     "ommx.NamedFunction": "ommx",
     "ommx.OneHotConstraint": "ommx",
+    "ommx.OneHotPromotionWitness": "ommx",
     "ommx.Optimality": "ommx",
     "ommx.Parameter": "ommx",
     "ommx.ParametricInstance": "ommx",
     "ommx.Polynomial": "ommx",
+    "ommx.PromotionAudit": "ommx",
+    "ommx.PromotionPreview": "ommx",
+    "ommx.PromotionReport": "ommx",
+    "ommx.PromotionResult": "ommx",
     "ommx.Provenance": "ommx",
     "ommx.ProvenanceKind": "ommx",
     "ommx.Quadratic": "ommx",

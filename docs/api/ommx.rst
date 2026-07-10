@@ -23,6 +23,11 @@ ommx
    _items/ommx.AttachedDecisionVariable
    _items/ommx.Parameter
    _items/ommx.AdditionalCapability
+   _items/ommx.OneHotPromotionWitness
+   _items/ommx.PromotionPreview
+   _items/ommx.PromotionResult
+   _items/ommx.PromotionReport
+   _items/ommx.PromotionAudit
    _items/ommx.Constraint
    _items/ommx.AttachedConstraint
    _items/ommx.IndicatorConstraint

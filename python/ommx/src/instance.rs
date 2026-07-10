@@ -660,6 +660,77 @@ impl Instance {
         Ok(converted.into_iter().map(|c| c.into()).collect())
     }
 
+    /// Check a detector-supplied one-hot promotion witness without mutation.
+    ///
+    /// ``allowed`` is the caller's capability boundary and must contain
+    /// :attr:`AdditionalCapability.OneHot`. The returned preview is
+    /// informational only; promotion methods re-validate the witness
+    /// against the then-current instance.
+    pub fn check_promotion_witness(
+        &self,
+        witness: crate::OneHotPromotionWitness,
+        allowed: std::collections::HashSet<crate::AdditionalCapability>,
+    ) -> anyhow::Result<crate::PromotionPreview> {
+        let allowed: ommx::Capabilities = allowed.into_iter().map(Into::into).collect();
+        Ok(self
+            .inner
+            .check_promotion_witness(&ommx::PromotionWitness::OneHot(witness.0), &allowed)?
+            .into())
+    }
+
+    /// Verify and atomically promote one regular constraint to one-hot form.
+    ///
+    /// The source regular constraint is retained in ``removed_constraints``
+    /// with reserved ``promotion.*`` audit metadata, and its full context is
+    /// copied to the new active one-hot constraint. On error the instance is
+    /// unchanged.
+    pub fn promote_with_witness(
+        &mut self,
+        witness: crate::OneHotPromotionWitness,
+        allowed: std::collections::HashSet<crate::AdditionalCapability>,
+    ) -> anyhow::Result<crate::PromotionResult> {
+        let allowed: ommx::Capabilities = allowed.into_iter().map(Into::into).collect();
+        Ok(self
+            .inner
+            .promote_with_witness(ommx::PromotionWitness::OneHot(witness.0), &allowed)?
+            .into())
+    }
+
+    /// Verify and atomically apply multiple one-hot promotion witnesses.
+    ///
+    /// Every witness is checked against one pre-promotion snapshot.
+    /// Explicit target IDs are reserved before omitted IDs are allocated. Any
+    /// invalid or conflicting witness leaves the instance unchanged.
+    pub fn promote_with_witnesses(
+        &mut self,
+        witnesses: Vec<crate::OneHotPromotionWitness>,
+        allowed: std::collections::HashSet<crate::AdditionalCapability>,
+    ) -> anyhow::Result<crate::PromotionReport> {
+        let allowed: ommx::Capabilities = allowed.into_iter().map(Into::into).collect();
+        let witnesses = witnesses
+            .into_iter()
+            .map(|witness| ommx::PromotionWitness::OneHot(witness.0))
+            .collect();
+        Ok(self
+            .inner
+            .promote_with_witnesses(witnesses, &allowed)?
+            .into())
+    }
+
+    /// Re-validate a retained one-hot promotion audit trail.
+    ///
+    /// The removed regular source, reserved metadata, and active or removed
+    /// one-hot target are checked again without trusting the original detector.
+    pub fn verify_promotion_history(
+        &self,
+        source_constraint_id: u64,
+    ) -> anyhow::Result<crate::PromotionAudit> {
+        Ok(self
+            .inner
+            .verify_promotion_history(ommx::ConstraintID::from(source_constraint_id))?
+            .into())
+    }
+
     /// Dict of all removed constraints in the instance keyed by their IDs.
     #[getter]
     pub fn removed_constraints(&self) -> BTreeMap<u64, RemovedConstraint> {

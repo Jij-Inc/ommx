@@ -27,6 +27,7 @@ mod parameter;
 mod parameters;
 mod parametric_instance;
 mod polynomial;
+mod promotion;
 mod provenance;
 mod quadratic;
 mod random;
@@ -65,6 +66,7 @@ pub use parameter::*;
 pub use parameters::*;
 pub use parametric_instance::*;
 pub use polynomial::*;
+pub use promotion::*;
 pub use provenance::*;
 pub use quadratic::*;
 pub use random::*;
@@ -181,6 +183,11 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<AttachedDecisionVariable>()?;
     m.add_class::<Parameter>()?;
     m.add_class::<AdditionalCapability>()?;
+    m.add_class::<OneHotPromotionWitness>()?;
+    m.add_class::<PromotionPreview>()?;
+    m.add_class::<PromotionResult>()?;
+    m.add_class::<PromotionReport>()?;
+    m.add_class::<PromotionAudit>()?;
     m.add_class::<Constraint>()?;
     m.add_class::<AttachedConstraint>()?;
     m.add_class::<IndicatorConstraint>()?;
@@ -262,6 +269,12 @@ pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
     "Parameter",
     // Constraint capability
     "AdditionalCapability",
+    // Verified constraint promotion
+    "OneHotPromotionWitness",
+    "PromotionPreview",
+    "PromotionResult",
+    "PromotionReport",
+    "PromotionAudit",
     // Constraint and named function
     "Constraint",
     "AttachedConstraint",
