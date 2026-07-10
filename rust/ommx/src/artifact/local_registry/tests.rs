@@ -39,6 +39,15 @@ fn open_test_index(registry: &LocalRegistry) -> Result<SqliteIndexStore> {
     SqliteIndexStore::open_in_registry_root(registry.root())
 }
 
+fn remove_test_blob(registry: &LocalRegistry, digest: &Digest) -> Result<()> {
+    let (algorithm, encoded) = digest
+        .as_ref()
+        .split_once(':')
+        .context("test blob digest must contain an algorithm")?;
+    fs::remove_file(registry.root().join("blobs").join(algorithm).join(encoded))?;
+    Ok(())
+}
+
 fn table_columns(conn: &rusqlite::Connection, table: &str) -> Result<Vec<String>> {
     let mut stmt = conn.prepare("SELECT name FROM pragma_table_info(?1) ORDER BY cid")?;
     let rows = stmt.query_map([table], |row| row.get(0))?;
@@ -254,6 +263,76 @@ fn restore_image_ref_does_not_replace_a_new_target() -> Result<()> {
         registry.resolve_image_name(&image_name)?,
         Some(replacement_digest)
     );
+    Ok(())
+}
+
+#[test]
+fn restore_image_ref_rejects_a_missing_config_blob() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let image_name = ImageRef::parse("example.com/ommx/restore-missing-config:latest")?;
+    let artifact = build_test_local_artifact(&registry, &image_name, b"layer")?;
+    let manifest_digest = artifact.manifest_digest().clone();
+    let config_digest = artifact.stored_config()?.digest().clone();
+    registry.remove_image_ref(&image_name)?;
+    remove_test_blob(&registry, &config_digest)?;
+
+    let error = registry
+        .restore_image_ref(&image_name, &manifest_digest)
+        .expect_err("restore must reject a missing config blob");
+    assert!(format!("{error:#}").contains(config_digest.as_ref()));
+    assert!(registry.resolve_image_name(&image_name)?.is_none());
+    Ok(())
+}
+
+#[test]
+fn restore_image_ref_rejects_a_missing_layer_blob() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let image_name = ImageRef::parse("example.com/ommx/restore-missing-layer:latest")?;
+    let artifact = build_test_local_artifact(&registry, &image_name, b"layer")?;
+    let manifest_digest = artifact.manifest_digest().clone();
+    let layer_digest = artifact.layers()?[0].digest().clone();
+    registry.remove_image_ref(&image_name)?;
+    remove_test_blob(&registry, &layer_digest)?;
+
+    let error = registry
+        .restore_image_ref(&image_name, &manifest_digest)
+        .expect_err("restore must reject a missing layer blob");
+    assert!(format!("{error:#}").contains(layer_digest.as_ref()));
+    assert!(registry.resolve_image_name(&image_name)?.is_none());
+    Ok(())
+}
+
+#[test]
+fn restore_image_ref_rejects_a_missing_subject_manifest() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let parent_name = ImageRef::parse("example.com/ommx/restore-subject:parent")?;
+    let parent = build_test_local_artifact(&registry, &parent_name, b"parent")?;
+    let parent_manifest = parent.stored_manifest_descriptor()?;
+    let parent_digest = parent.manifest_digest().clone();
+
+    let child_name = ImageRef::parse("example.com/ommx/restore-subject:child")?;
+    let mut child = ArtifactDraft::with_registry(&registry, child_name.clone());
+    child.add_layer_bytes(
+        MediaType::Other("application/octet-stream".to_string()),
+        b"child".to_vec(),
+        HashMap::new(),
+    )?;
+    child.set_subject(parent_manifest.into());
+    let child = child.commit()?;
+    let child_digest = child.manifest_digest().clone();
+
+    registry.remove_image_ref(&parent_name)?;
+    registry.remove_image_ref(&child_name)?;
+    remove_test_blob(&registry, &parent_digest)?;
+
+    let error = registry
+        .restore_image_ref(&child_name, &child_digest)
+        .expect_err("restore must reject a missing subject manifest");
+    assert!(format!("{error:#}").contains(parent_digest.as_ref()));
+    assert!(registry.resolve_image_name(&child_name)?.is_none());
     Ok(())
 }
 

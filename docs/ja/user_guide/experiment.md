@@ -373,11 +373,12 @@ rollback command を表示します。
     Rollback ommx restore-ref 'example.com/team/experiment:obsolete' 'sha256:...'
 ```
 
-`restore-ref` は保存済み Manifest を検証し、同じ ref が別の digest を指している場合は
-上書きを拒否します。rollback には Manifest closure が Local Registry CAS に残っている
-必要があります。`ommx rm --gc` の GC pass では直前に削除した Manifest を保護しますが、
-その後に単独で `ommx gc --delete` を実行すると回収される可能性があります。
-`prune-anonymous --delete` は削除した ref ごとに rollback command を表示します。
+`restore-ref` は保存済み Manifest と config/layer/subject を含む完全な closure を検証し、
+同じ ref が別の digest を指している場合は上書きを拒否します。検証と ref の publish は、
+別 process の削除 GC とも直列化されます。rollback には完全な closure が Local Registry
+CAS に残っている必要があります。`ommx rm --gc` の GC pass では直前に削除した Manifest
+を保護しますが、その後に単独で `ommx gc --delete` を実行すると回収される可能性が
+あります。`prune-anonymous --delete` は削除した ref ごとに rollback command を表示します。
 
 同じ操作は Python SDK からも実行できます。Python API は整形済みの CLI output ではなく、
 structured report を返します。

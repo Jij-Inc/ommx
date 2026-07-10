@@ -18,7 +18,8 @@ CLI では `ommx rm <ref>` を使います。ref 削除後に既存の garbage c
 削除時の output には、そのまま実行できる
 `ommx restore-ref <ref> <manifest-digest>` command が表示されます。Python では
 `ommx.artifact.restore_image()` が同じ操作に対応します。restore は CAS に残っている
-Manifest を検証し、ref がすでに別 digest へ移動している場合は上書きを拒否します。
+完全な Manifest closure を検証し、削除 GC と直列化されます。ref がすでに別 digest へ
+移動している場合は上書きを拒否します。
 
 `ommx.artifact.prune_anonymous()` に `experiments=True` を指定すると anonymous
 Experiment refs も対象になり、`older_than="7d"` で経過時間に基づく retention を

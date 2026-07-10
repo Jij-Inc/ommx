@@ -381,8 +381,10 @@ removed ref's immutable Manifest digest:
     Rollback ommx restore-ref 'example.com/team/experiment:obsolete' 'sha256:...'
 ```
 
-`restore-ref` validates the stored Manifest and refuses to overwrite the ref if
-it now points to a different digest. Rollback requires the Manifest closure to
+`restore-ref` validates the stored Manifest and its complete
+config/layer/subject closure, and refuses to overwrite the ref if it now points
+to a different digest. Validation and ref publication are serialized against
+deleting GC passes across processes. Rollback requires the complete closure to
 remain in the Local Registry CAS. `ommx rm --gc` protects the just-removed
 Manifest during that GC pass, but a later standalone `ommx gc --delete` may
 reclaim it. `prune-anonymous --delete` prints one rollback command per removed

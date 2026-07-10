@@ -17,8 +17,9 @@ ref is removed.
 
 Deletion output includes a copyable `ommx restore-ref <ref> <manifest-digest>`
 command. The equivalent Python API is `ommx.artifact.restore_image()`. Restore
-validates the Manifest still present in the CAS and refuses to replace a ref
-that has since moved to another digest.
+validates the complete Manifest closure still present in the CAS, is serialized
+against deleting GC passes, and refuses to replace a ref that has since moved
+to another digest.
 
 `ommx.artifact.prune_anonymous()` now accepts `experiments=True` to include
 anonymous Experiment refs and `older_than="7d"` for age-based retention. The

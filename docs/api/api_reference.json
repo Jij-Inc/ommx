@@ -27441,7 +27441,7 @@
         {
           "kind": "Function",
           "name": "restore_image",
-          "doc": "Restore a removed Local Registry image ref from its manifest digest.\n\nThe digest is printed as part of the CLI rollback command after `ommx rm`\nand `ommx prune-anonymous --delete`. The manifest must still be present in\nthe Local Registry CAS. Returns `True` when the ref is inserted and `False`\nwhen it already points to the requested digest. A different existing target\nis reported as a conflict and is never replaced.",
+          "doc": "Restore a removed Local Registry image ref from its manifest digest.\n\nThe digest is printed as part of the CLI rollback command after `ommx rm`\nand `ommx prune-anonymous --delete`. The manifest and its complete\nconfig/layer/subject closure must still be present and valid in the Local\nRegistry CAS. Restore is serialized against deleting GC passes. Returns\n`True` when the ref is inserted and `False` when it already points to the\nrequested digest. A different existing target is reported as a conflict and\nis never replaced.",
           "signatures": [
             {
               "parameters": [

@@ -11,7 +11,7 @@ use anyhow::{bail, ensure, Context, Result};
 use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, ImageManifest, MediaType};
 use serde::Serialize;
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::HashMap,
     path::Path,
     str::FromStr,
     sync::{Arc, OnceLock},
@@ -426,12 +426,9 @@ impl<'reg> LocalArtifact<'reg> {
     /// new Local Registry ref to the same root manifest digest and returns a
     /// handle whose `image_name` is the new reference.
     pub fn tag_as(&self, image_name: ImageRef) -> Result<Self> {
-        let manifest = self.stored_manifest_descriptor()?;
-        self.registry
-            .touch_manifest_closure(manifest.digest(), &mut BTreeSet::new())?;
         let ref_update = self
             .registry
-            .publish_stored_manifest_ref(&image_name, &manifest)?;
+            .publish_existing_manifest_ref(&image_name, &self.manifest_digest)?;
         reject_conflicting_ref(&image_name, ref_update)?;
         Ok(Self::from_parts(
             self.registry,

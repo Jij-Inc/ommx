@@ -7539,10 +7539,12 @@ def restore_image(
     Restore a removed Local Registry image ref from its manifest digest.
 
     The digest is printed as part of the CLI rollback command after `ommx rm`
-    and `ommx prune-anonymous --delete`. The manifest must still be present in
-    the Local Registry CAS. Returns `True` when the ref is inserted and `False`
-    when it already points to the requested digest. A different existing target
-    is reported as a conflict and is never replaced.
+    and `ommx prune-anonymous --delete`. The manifest and its complete
+    config/layer/subject closure must still be present and valid in the Local
+    Registry CAS. Restore is serialized against deleting GC passes. Returns
+    `True` when the ref is inserted and `False` when it already points to the
+    requested digest. A different existing target is reported as a conflict and
+    is never replaced.
     """
 
 def set_default_atol(value: builtins.float) -> None: ...
