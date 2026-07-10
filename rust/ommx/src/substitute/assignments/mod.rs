@@ -105,6 +105,12 @@ impl AcyclicAssignments {
         let substituted_variables = acyclic.keys().collect::<std::collections::BTreeSet<_>>();
         let mut replacements = FnvHashMap::default();
         for (&id, function) in &self.assignments {
+            // Incoming assignments replace rows with the same ID. Do not
+            // evaluate an obsolete right-hand side: besides wasting work, it
+            // could fail even though that row is absent from the final value.
+            if substituted_variables.contains(&id) {
+                continue;
+            }
             if !function.required_ids().is_disjoint(&substituted_variables) {
                 replacements.insert(id, function.clone().substitute_acyclic(acyclic)?);
             }
@@ -475,6 +481,26 @@ mod tests {
 
         assert!(err.to_string().contains("Coefficient must be finite"));
         assert_eq!(initial, before);
+    }
+
+    #[test]
+    fn substitute_acyclic_in_place_atomic_skips_overwritten_rhs() {
+        let huge = crate::Coefficient::try_from(f64::MAX).unwrap();
+        let mut initial = AcyclicAssignments::new([(
+            VariableID::from(1),
+            Function::from((huge * linear!(2)).unwrap()),
+        )])
+        .unwrap();
+        let substitution = assign! {
+            1 <- linear!(3),
+            2 <- (coeff!(2.0) * linear!(4)).unwrap()
+        };
+
+        initial
+            .substitute_acyclic_in_place_atomic(&substitution)
+            .unwrap();
+
+        assert_eq!(initial, substitution);
     }
 
     #[test]

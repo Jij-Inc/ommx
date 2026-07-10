@@ -29,7 +29,7 @@
 // - Regression: routing through a generic atomic helper clones and rebuilds
 //   every unrelated named-function row.
 // - Origin: https://github.com/Jij-Inc/ommx/pull/1047.
-// - Measured boundary/input: Rust SDK Instance::log_encode with 8,000 fixed,
+// - Measured boundary/input: Rust SDK Instance::log_encode with 32,000 fixed,
 //   deterministic named functions that do not reference the encoded variable.
 // - Cost model/evidence: inspect N functions for affected IDs plus fixed
 //   encoding work, without cloning their rows; compare the same URI across
@@ -40,7 +40,7 @@
 // - Regression: atomic log encoding clones every unrelated dependency RHS
 //   before adding the encoded variable assignment.
 // - Origin: https://github.com/Jij-Inc/ommx/pull/1047#discussion_r3556489103.
-// - Measured boundary/input: Rust SDK Instance::log_encode with 32,000 fixed,
+// - Measured boundary/input: Rust SDK Instance::log_encode with 8,000 fixed,
 //   deterministic dependency assignments whose RHS does not reference the
 //   encoded variable.
 // - Cost model/evidence: inspect N assignments and rebuild the dependency
