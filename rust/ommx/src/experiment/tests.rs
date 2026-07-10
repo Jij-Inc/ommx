@@ -85,6 +85,16 @@ fn compressed_attachment_is_transparent_to_attachment_readers() {
         let trace = layer_from_ref(&layers, *config.attachments.get("trace").unwrap());
         assert_eq!(trace.media_type().as_ref(), "application/json+zstd");
         assert_eq!(
+            trace
+                .annotations()
+                .as_ref()
+                .and_then(|annotations| {
+                    annotations.get(crate::annotation_keys::ATTACHMENT_COMPRESSION)
+                })
+                .map(String::as_str),
+            Some("zstd")
+        );
+        assert_eq!(
             zstd::stream::decode_all(blob_bytes(&artifact, trace).as_slice())?,
             payload
         );
@@ -95,6 +105,77 @@ fn compressed_attachment_is_transparent_to_attachment_readers() {
             MediaType::from("application/json")
         );
         assert_eq!(loaded.attachment_blob("trace")?, payload);
+        Ok(())
+    });
+}
+
+#[test]
+fn zstd_media_type_suffix_is_preserved_without_compression_marker() {
+    let media_type = MediaType::from("application/vnd.example+zstd");
+    let payload = b"uncompressed payload whose logical type ends in +zstd";
+    with_temp_experiment(|experiment| {
+        AttachmentLogger::log_attachment(
+            &experiment,
+            "suffix",
+            media_type.clone(),
+            payload,
+            HashMap::new(),
+        )?;
+
+        let artifact = experiment.commit()?.into_artifact();
+        let loaded = SealedExperiment::from_artifact(artifact)?;
+        assert_eq!(loaded.attachment_media_type("suffix")?, media_type);
+        assert_eq!(loaded.attachment_blob("suffix")?, payload);
+        Ok(())
+    });
+}
+
+#[test]
+fn compressed_attachment_preserves_logical_zstd_media_type_suffix() {
+    let media_type = MediaType::from("application/vnd.example+zstd");
+    let payload = b"compressed payload whose logical type ends in +zstd";
+    with_temp_experiment(|experiment| {
+        AttachmentLogger::log_attachment_compressed(
+            &experiment,
+            "suffix",
+            media_type.clone(),
+            payload,
+            HashMap::new(),
+            Compression::Zstd,
+        )?;
+
+        let artifact = experiment.commit()?.into_artifact();
+        let layers = artifact.layers()?;
+        let config = experiment_config(&artifact);
+        let stored = layer_from_ref(&layers, *config.attachments.get("suffix").unwrap());
+        assert_eq!(
+            stored.media_type().as_ref(),
+            "application/vnd.example+zstd+zstd"
+        );
+
+        let loaded = SealedExperiment::from_artifact(artifact)?;
+        assert_eq!(loaded.attachment_media_type("suffix")?, media_type);
+        assert_eq!(loaded.attachment_blob("suffix")?, payload);
+        Ok(())
+    });
+}
+
+#[test]
+fn attachment_logger_rejects_compression_marker_from_caller() {
+    with_temp_experiment(|experiment| {
+        let error = AttachmentLogger::log_attachment(
+            &experiment,
+            "marker",
+            MediaType::from("application/octet-stream"),
+            b"payload",
+            HashMap::from([(
+                crate::annotation_keys::ATTACHMENT_COMPRESSION.to_string(),
+                "zstd".to_string(),
+            )]),
+        )
+        .expect_err("OMMX compression marker must be reserved");
+        assert!(error.to_string().contains("reserved"));
+        assert_blob_absent(&experiment, b"payload");
         Ok(())
     });
 }
@@ -1795,6 +1876,75 @@ fn loaded_experiment_rejects_config_attachment_not_listed_in_layers() {
     assert!(err
         .to_string()
         .contains("Failed to resolve experiment attachment `outside` LayerRef 1"));
+}
+
+#[test]
+fn loaded_experiment_rejects_invalid_attachment_storage_format() {
+    for (case, media_type, marker, expected_error) in [
+        (
+            "missing-suffix",
+            "application/json",
+            "zstd",
+            "must have a media type ending in `+zstd`",
+        ),
+        (
+            "unknown-marker",
+            "application/json+zstd",
+            "brotli",
+            "Unsupported Attachment compression `brotli`",
+        ),
+    ] {
+        let temp = crate::artifact::local_registry::TempLocalRegistry::new().unwrap();
+        let registry = temp.registry();
+        let attachment = registry
+            .store_layer_blob(
+                MediaType::Other(media_type.to_string()),
+                &zstd::stream::encode_all(br#"{}"#.as_slice(), 0).unwrap(),
+                HashMap::from([(
+                    crate::annotation_keys::ATTACHMENT_COMPRESSION.to_string(),
+                    marker.to_string(),
+                )]),
+            )
+            .unwrap();
+        let run_parameters = empty_run_parameters_layer(registry);
+        let config = ExperimentConfig {
+            status: EXPERIMENT_STATUS_FINISHED.to_string(),
+            requested_image_name: None,
+            attachments: AttachmentTable::from_entries([("invalid", LayerRef(0))]).unwrap(),
+            runs: Vec::new(),
+            run_parameters: LayerRef(1),
+        };
+        let config_descriptor = registry
+            .store_json_blob(
+                MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()),
+                &config,
+            )
+            .unwrap();
+        let unsealed = UnsealedArtifact::new(
+            MediaType::Other(EXPERIMENT_ARTIFACT_MEDIA_TYPE.to_string()),
+            config_descriptor,
+            vec![attachment, run_parameters],
+            None,
+            HashMap::new(),
+        );
+        let sealed_artifact = registry.seal_artifact(unsealed).unwrap();
+        let image_name =
+            ImageRef::parse(&format!("ghcr.io/jij-inc/ommx/experiment-test:{case}")).unwrap();
+        let artifact =
+            LocalArtifact::from_parts(registry, image_name, sealed_artifact.digest().clone());
+
+        let error = SealedExperiment::from_artifact(artifact)
+            .expect_err("invalid attachment storage metadata must be rejected while loading");
+        let message = format!("{error:#}");
+        assert!(
+            message.contains("Invalid experiment attachment `invalid` storage format"),
+            "unexpected error: {message}"
+        );
+        assert!(
+            message.contains(expected_error),
+            "unexpected error: {message}"
+        );
+    }
 }
 
 #[test]

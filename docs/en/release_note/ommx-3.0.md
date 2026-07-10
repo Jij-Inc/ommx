@@ -12,9 +12,11 @@ Changes merged after the most recent release will be appended here as they land,
 
 {class}`~ommx.experiment.Experiment` and {class}`~ommx.experiment.Run` attachment
 logging methods now accept `compression="zstd"`. OMMX stores the compressed
-layer with a `+zstd` media-type suffix, while `attachment_media_type`,
-`get_attachment`, typed getters, codecs, and file export expose the original
-media type and decompressed payload.
+layer with a `+zstd` media-type suffix and a reserved compression annotation,
+while `attachment_media_type`, `get_attachment`, typed getters, codecs, and
+file export expose the original media type and decompressed payload. Readers
+only decompress marked layers, so logical media types ending in `+zstd` remain
+unambiguous.
 
 ```python
 experiment.log_json("trace", trace_values, compression="zstd")

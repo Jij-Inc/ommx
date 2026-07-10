@@ -93,6 +93,21 @@ def test_compressed_attachment_round_trip_is_transparent():
     )
 
 
+@pytest.mark.parametrize("compression", ["none", "zstd"])
+def test_logical_zstd_media_type_suffix_round_trip(compression):
+    media_type = "application/vnd.ommx-tests.payload+zstd"
+    payload = b"payload"
+
+    with Experiment.with_temp_local_registry() as experiment:
+        experiment.log_attachment(
+            "suffix", media_type, payload, compression=compression
+        )
+
+    loaded = Experiment.from_artifact(experiment.artifact)
+    assert loaded.attachment_media_type("suffix") == media_type
+    assert loaded.get_blob("suffix") == payload
+
+
 def test_attachment_rejects_unknown_compression():
     with Experiment.with_temp_local_registry() as experiment:
         with pytest.raises(Exception, match="expected `none` or `zstd`"):

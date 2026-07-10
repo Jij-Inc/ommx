@@ -5,7 +5,7 @@ use oci_spec::image::Digest;
 use sha2::{Digest as _, Sha256};
 use std::{
     fs::{self, File, OpenOptions},
-    io::{Cursor, ErrorKind, Read, Write},
+    io::{ErrorKind, Read, Write},
     path::{Path, PathBuf},
     str::FromStr,
     time::SystemTime,
@@ -41,12 +41,33 @@ impl FileBlobStore {
     }
 
     pub fn put_bytes(&self, bytes: &[u8]) -> Result<Digest> {
-        let (digest, size) = self.put_reader(Cursor::new(bytes))?;
-        ensure!(
-            size == bytes.len() as u64,
-            "Stored blob size mismatch for {digest}: expected={}, actual={size}",
-            bytes.len()
-        );
+        let digest = Digest::from_str(&sha256_digest(bytes)).context("Failed to parse digest")?;
+        let path = self.path_for_digest(&digest)?;
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("Failed to create {}", parent.display()))?;
+        }
+        if path.exists() {
+            let _lock = self.lock_store()?;
+            if path.exists() {
+                verify_existing_blob(&path, &digest, bytes.len() as u64)?;
+                touch_existing_blob(&path, digest.as_ref())?;
+                return Ok(digest);
+            }
+        }
+
+        let mut temp_file = tempfile::NamedTempFile::new_in(&self.root).with_context(|| {
+            format!("Failed to create temporary blob in {}", self.root.display())
+        })?;
+        temp_file
+            .write_all(bytes)
+            .context("Failed to write temporary blob")?;
+        temp_file
+            .as_file_mut()
+            .sync_all()
+            .context("Failed to sync temporary blob")?;
+        let _lock = self.lock_store()?;
+        self.publish_temp_blob(temp_file.path(), &digest, bytes.len() as u64, &path)?;
         Ok(digest)
     }
 
@@ -323,4 +344,25 @@ fn encode_hex(bytes: &[u8]) -> String {
 fn touch_existing_blob(path: &Path, digest: &str) -> Result<()> {
     filetime::set_file_mtime(path, FileTime::now())
         .with_context(|| format!("Failed to touch existing blob {digest}"))
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+
+    #[test]
+    fn put_bytes_reuses_existing_blob_without_creating_temp_file() {
+        let root = tempfile::tempdir().unwrap();
+        let store = FileBlobStore::new(root.path()).unwrap();
+        let payload = b"already stored";
+        let expected = store.put_bytes(payload).unwrap();
+
+        let original_permissions = fs::metadata(root.path()).unwrap().permissions();
+        fs::set_permissions(root.path(), fs::Permissions::from_mode(0o555)).unwrap();
+        let result = store.put_bytes(payload);
+        fs::set_permissions(root.path(), original_permissions).unwrap();
+
+        assert_eq!(result.unwrap(), expected);
+    }
 }

@@ -289,7 +289,7 @@ run_id
 
 Experiment単位で保存したAttachmentは名前で確認し、必要なものを名前で取り出します。{py:meth}`~ommx.experiment.Experiment.get_attachment` は保存時のMedia Typeを見て、JSONならPythonの値、{py:class}`~ommx.ParametricInstance` ならそのオブジェクト、というように変換して返します。期待する型が分かっている場合は {py:meth}`~ommx.experiment.Experiment.get_json` や {py:meth}`~ommx.experiment.Experiment.get_parametric_instance` のような型ごとのメソッドを使うと、Media Typeが違っていた場合にエラーになります。
 
-大きなJSON、codec payload、bytes、ファイルを保存するときは、対応する `log_*` メソッドに `compression="zstd"` を指定できます。圧縮は保存形式だけの詳細であり、`attachment_media_type`、`get_attachment`、型付きgetter、codec、ファイル書き出しでは、元のMedia Typeと展開済みpayloadがそのまま見えます。また `log_file` はファイル全体を先にメモリへ読み込まず、Local Registryへストリーミングして保存します。
+大きなJSON、codec payload、bytes、ファイルを保存するときは、対応する `log_*` メソッドに `compression="zstd"` を指定できます。圧縮は保存形式だけの詳細であり、OMMX は圧縮した OCI layer を予約 annotation で識別します。`attachment_media_type`、`get_attachment`、型付きgetter、codec、ファイル書き出しでは、元のMedia Typeと展開済みpayloadがそのまま見え、元から `+zstd` で終わる論理 Media Type も曖昧になりません。また `log_file` はファイル全体を先にメモリへ読み込まず、Local Registryへストリーミングして保存します。
 
 ```python
 experiment.log_json("trace", trace_values, compression="zstd")

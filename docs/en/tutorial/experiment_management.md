@@ -289,7 +289,7 @@ run_id
 
 Experiment-level Attachments can be checked by name and retrieved by name. {py:meth}`~ommx.experiment.Experiment.get_attachment` checks the saved Media Type and returns JSON as a Python value, {py:class}`~ommx.ParametricInstance` as that object, and so on. If you know the expected type, use type-specific methods such as {py:meth}`~ommx.experiment.Experiment.get_json` or {py:meth}`~ommx.experiment.Experiment.get_parametric_instance`; they raise an error if the Media Type does not match.
 
-For large JSON, codec, byte, or file payloads, pass `compression="zstd"` to the corresponding `log_*` method. Compression is a storage detail: `attachment_media_type`, `get_attachment`, typed getters, codecs, and file export all expose the original media type and decompressed payload. `log_file` also streams the source file into the Local Registry instead of loading the complete file into memory first.
+For large JSON, codec, byte, or file payloads, pass `compression="zstd"` to the corresponding `log_*` method. Compression is a storage detail: OMMX marks compressed OCI layers with a reserved annotation, while `attachment_media_type`, `get_attachment`, typed getters, codecs, and file export all expose the original media type and decompressed payload. This keeps logical media types that already end in `+zstd` unambiguous. `log_file` also streams the source file into the Local Registry instead of loading the complete file into memory first.
 
 ```python
 experiment.log_json("trace", trace_values, compression="zstd")

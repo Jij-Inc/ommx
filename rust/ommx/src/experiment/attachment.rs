@@ -9,7 +9,7 @@ use anyhow::{ensure, Context, Result};
 use oci_spec::image::MediaType;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashMap},
     fs::{self, File},
     io::{Read, Seek, SeekFrom},
     path::{Path, PathBuf},
@@ -22,9 +22,10 @@ const ZSTD_MEDIA_TYPE_SUFFIX: &str = "+zstd";
 
 /// Compression applied to an Attachment's stored OCI layer.
 ///
-/// Attachment readers remove the storage suffix, decompress the blob, and
-/// expose the original media type and payload bytes. Compression is therefore
-/// a storage detail rather than part of the attachment's logical type.
+/// Attachment readers use an OMMX storage annotation to identify compressed
+/// layers, remove the storage suffix, decompress the blob, and expose the
+/// original media type and payload bytes. Compression is therefore a storage
+/// detail rather than part of the attachment's logical type.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Compression {
     /// Store the attachment bytes unchanged.
@@ -34,10 +35,28 @@ pub enum Compression {
     Zstd,
 }
 
-pub fn stored_media_type(compression: Compression, media_type: MediaType) -> MediaType {
+pub fn prepare_attachment_storage(
+    compression: Compression,
+    media_type: MediaType,
+    mut annotations: HashMap<String, String>,
+) -> Result<(MediaType, HashMap<String, String>)> {
+    ensure!(
+        !annotations.contains_key(crate::annotation_keys::ATTACHMENT_COMPRESSION),
+        "Attachment annotation `{}` is reserved for OMMX storage metadata",
+        crate::annotation_keys::ATTACHMENT_COMPRESSION,
+    );
     match compression {
-        Compression::None => media_type,
-        Compression::Zstd => MediaType::Other(format!("{media_type}{ZSTD_MEDIA_TYPE_SUFFIX}")),
+        Compression::None => Ok((media_type, annotations)),
+        Compression::Zstd => {
+            annotations.insert(
+                crate::annotation_keys::ATTACHMENT_COMPRESSION.to_string(),
+                "zstd".to_string(),
+            );
+            Ok((
+                MediaType::Other(format!("{media_type}{ZSTD_MEDIA_TYPE_SUFFIX}")),
+                annotations,
+            ))
+        }
     }
 }
 
@@ -187,7 +206,7 @@ impl<'reg> AttachmentTable<StoredDescriptor<'reg>> {
     }
 
     pub(crate) fn media_type(&self, name: &str) -> Result<MediaType> {
-        Ok(logical_media_type(self.attachment(name)?.media_type()).0)
+        Ok(attachment_storage_format(self.attachment(name)?)?.logical_media_type)
     }
 
     pub(crate) fn blob(&self, name: &str) -> Result<Vec<u8>> {
@@ -264,24 +283,67 @@ pub(crate) fn encode_json(name: &str, value: impl serde::Serialize) -> Result<Ve
         .map_err(|e| crate::error!("Failed to encode JSON attachment `{name}`: {e}"))
 }
 
-fn logical_media_type(stored: &MediaType) -> (MediaType, Compression) {
-    match stored.as_ref().strip_suffix(ZSTD_MEDIA_TYPE_SUFFIX) {
-        Some(media_type) if !media_type.is_empty() => {
-            (MediaType::from(media_type), Compression::Zstd)
+struct AttachmentStorageFormat {
+    logical_media_type: MediaType,
+    compression: Compression,
+}
+
+fn attachment_storage_format(descriptor: &StoredDescriptor<'_>) -> Result<AttachmentStorageFormat> {
+    let compression = descriptor
+        .annotations()
+        .as_ref()
+        .and_then(|annotations| annotations.get(crate::annotation_keys::ATTACHMENT_COMPRESSION));
+    match compression.map(String::as_str) {
+        None => Ok(AttachmentStorageFormat {
+            logical_media_type: descriptor.media_type().clone(),
+            compression: Compression::None,
+        }),
+        Some("zstd") => {
+            let media_type = descriptor
+                .media_type()
+                .as_ref()
+                .strip_suffix(ZSTD_MEDIA_TYPE_SUFFIX)
+                .filter(|media_type| !media_type.is_empty())
+                .with_context(|| {
+                    format!(
+                        "Attachment marked as zstd must have a media type ending in `{ZSTD_MEDIA_TYPE_SUFFIX}`, got `{}`",
+                        descriptor.media_type()
+                    )
+                })?;
+            Ok(AttachmentStorageFormat {
+                logical_media_type: MediaType::from(media_type),
+                compression: Compression::Zstd,
+            })
         }
-        _ => (stored.clone(), Compression::None),
+        Some(value) => crate::bail!(
+            "Unsupported Attachment compression `{value}` in annotation `{}`",
+            crate::annotation_keys::ATTACHMENT_COMPRESSION,
+        ),
     }
 }
 
+pub fn validate_attachment_storage(descriptor: &StoredDescriptor<'_>) -> Result<()> {
+    attachment_storage_format(descriptor)?;
+    Ok(())
+}
+
 fn attachment_payload(descriptor: &StoredDescriptor<'_>) -> Result<(MediaType, Vec<u8>)> {
-    let media_type = logical_media_type(descriptor.media_type()).0;
-    let bytes = attachment_blob(descriptor)?;
-    Ok((media_type, bytes))
+    let format = attachment_storage_format(descriptor)?;
+    let bytes = read_attachment_blob(descriptor, format.compression)?;
+    Ok((format.logical_media_type, bytes))
 }
 
 fn attachment_blob(descriptor: &StoredDescriptor<'_>) -> Result<Vec<u8>> {
+    let format = attachment_storage_format(descriptor)?;
+    read_attachment_blob(descriptor, format.compression)
+}
+
+fn read_attachment_blob(
+    descriptor: &StoredDescriptor<'_>,
+    compression: Compression,
+) -> Result<Vec<u8>> {
     let bytes = descriptor.registry().get_blob(descriptor)?;
-    match logical_media_type(descriptor.media_type()).1 {
+    match compression {
         Compression::None => Ok(bytes),
         Compression::Zstd => zstd::stream::decode_all(bytes.as_slice())
             .context("Failed to decompress zstd attachment"),

@@ -7,8 +7,8 @@ use oci_spec::image::{Descriptor, MediaType};
 use std::{collections::HashMap, io::Read, path::Path};
 
 use super::attachment::{
-    encode_json, json_media_type, open_file_attachment, stored_media_type, AttachmentTable,
-    Compression,
+    encode_json, json_media_type, open_file_attachment, prepare_attachment_storage,
+    AttachmentTable, Compression,
 };
 
 /// A handle that can log attachment payloads into an Experiment space.
@@ -255,7 +255,8 @@ fn log_attachment_reader<T: AttachmentLoggerStorage>(
     compression: Compression,
 ) -> Result<()> {
     ensure_attachment_name_available(&mut logger, name)?;
-    let stored_media_type = stored_media_type(compression, media_type);
+    let (stored_media_type, annotations) =
+        prepare_attachment_storage(compression, media_type, annotations)?;
     let descriptor = AttachmentLoggerStorage::with_local_registry(&logger, |registry| {
         let descriptor = match compression {
             Compression::None => attachment_storage::store_layer_reader(
