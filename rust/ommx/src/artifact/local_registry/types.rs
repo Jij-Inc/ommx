@@ -6,6 +6,7 @@ use anyhow::{ensure, Context, Result};
 use oci_spec::image::{Digest, ImageManifest, MediaType};
 use std::collections::BTreeMap;
 use std::fmt;
+use std::time::Duration;
 
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -14,6 +15,20 @@ pub struct RefRecord {
     pub reference: String,
     pub manifest_digest: Digest,
     pub updated_at: String,
+}
+
+/// Selects synthetic anonymous refs for Local Registry cleanup.
+///
+/// Anonymous Artifact refs are always included. Set
+/// [`Self::include_experiments`] to also include refs created by anonymous
+/// Experiment sessions. [`Self::older_than`] applies to the mutable ref's
+/// `updated_at` timestamp; it does not inspect immutable Artifact metadata.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct AnonymousRefOptions {
+    /// Include anonymous Experiment refs in addition to anonymous Artifact refs.
+    pub include_experiments: bool,
+    /// Include only refs whose last update is at least this old.
+    pub older_than: Option<Duration>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

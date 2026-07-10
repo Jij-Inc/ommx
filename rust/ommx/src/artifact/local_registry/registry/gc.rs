@@ -172,6 +172,7 @@ impl LocalRegistry {
     }
 
     pub fn gc(&self, options: &GcOptions) -> Result<GcDeleteReport> {
+        let _gc_exclusion = self.lock_gc_exclusion()?;
         let report = self.gc_report(options)?;
         let Some(delete_cutoff) = SystemTime::now().checked_sub(options.grace_period) else {
             let skipped_blobs = report.orphan_candidates.clone();
@@ -429,5 +430,78 @@ impl BlobRecord {
 impl GcBlob {
     fn total_size(blobs: &[Self]) -> u64 {
         blobs.iter().map(|blob| blob.size).sum()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::artifact::{ArtifactDraft, ImageRef};
+    use std::sync::mpsc;
+    use std::thread;
+
+    #[test]
+    fn restore_and_deleting_gc_share_the_gc_exclusion_lock() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let registry = LocalRegistry::open(dir.path())?;
+        let image_name = ImageRef::parse("example.com/ommx/gc-lock:latest")?;
+        let artifact = ArtifactDraft::with_registry(&registry, image_name.clone()).commit()?;
+        let manifest_digest = artifact.manifest_digest().clone();
+        registry.remove_image_ref(&image_name)?;
+
+        let held_registry = LocalRegistry::open(dir.path())?;
+        let guard = held_registry.lock_gc_exclusion()?;
+        let restore_registry = LocalRegistry::open(dir.path())?;
+        let restore_name = image_name.clone();
+        let restore_digest = manifest_digest.clone();
+        let (restore_started_tx, restore_started_rx) = mpsc::channel();
+        let (restore_done_tx, restore_done_rx) = mpsc::channel();
+        let restore_thread = thread::spawn(move || {
+            restore_started_tx.send(()).unwrap();
+            restore_done_tx
+                .send(restore_registry.restore_image_ref(&restore_name, &restore_digest))
+                .unwrap();
+        });
+        restore_started_rx.recv()?;
+        assert!(
+            restore_done_rx
+                .recv_timeout(Duration::from_millis(250))
+                .is_err(),
+            "restore must wait while the GC exclusion lock is held"
+        );
+        drop(guard);
+        assert_eq!(
+            restore_done_rx.recv_timeout(Duration::from_secs(5))??,
+            super::super::RefUpdate::Inserted
+        );
+        restore_thread.join().unwrap();
+
+        registry.remove_image_ref(&image_name)?;
+        let guard = held_registry.lock_gc_exclusion()?;
+        let gc_registry = LocalRegistry::open(dir.path())?;
+        let (gc_started_tx, gc_started_rx) = mpsc::channel();
+        let (gc_done_tx, gc_done_rx) = mpsc::channel();
+        let gc_thread = thread::spawn(move || {
+            gc_started_tx.send(()).unwrap();
+            gc_done_tx
+                .send(gc_registry.gc(&GcOptions {
+                    grace_period: Duration::ZERO,
+                    ..GcOptions::default()
+                }))
+                .unwrap();
+        });
+        gc_started_rx.recv()?;
+        assert!(
+            gc_done_rx.recv_timeout(Duration::from_millis(250)).is_err(),
+            "deleting GC must wait while the GC exclusion lock is held"
+        );
+        drop(guard);
+        let report = gc_done_rx.recv_timeout(Duration::from_secs(5))??;
+        assert!(report
+            .deleted_blobs
+            .iter()
+            .any(|blob| blob.digest == manifest_digest));
+        gc_thread.join().unwrap();
+        Ok(())
     }
 }

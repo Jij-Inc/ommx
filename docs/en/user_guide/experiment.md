@@ -360,7 +360,7 @@ Local Registry cleanup is based on reachability from SQLite refs.
 | A committed Experiment image ref | Yes | `ommx gc` keeps its manifest, config, layers, and subject chain. |
 | An Experiment checkpoint ref | Yes | `ommx gc` keeps the checkpoint so it can be restored. A successful commit removes the checkpoint. |
 | A forked Experiment's parent manifest through OCI `subject` | Yes, if the child ref is kept | `ommx gc` walks the subject chain and keeps parent payloads reachable from kept children. |
-| Anonymous artifact refs | Yes while the ref exists | `ommx prune-anonymous` removes these refs; a later `ommx gc` can reclaim their now-unreachable blobs. |
+| Anonymous Artifact and Experiment refs | Yes while the ref exists | `ommx prune-anonymous` removes anonymous Artifact refs; add `--experiments` to include anonymous Experiments. A later `ommx gc` can reclaim their now-unreachable blobs. |
 | Blobs written by a process that died before manifest/ref publication | No | `ommx gc` reports them as orphan candidates after the grace period. |
 | Blobs written by a currently active process | Usually no until a checkpoint or commit exists | `ommx gc` defers them while they are newer than the grace period. |
 
@@ -376,29 +376,68 @@ ommx gc
 ```
 
 Both commands are dry-run by default and mutate the registry only with `--delete`.
+Include anonymous Experiments explicitly, and use `--older-than` for age-based
+retention.
 
 ```bash
-ommx prune-anonymous --delete
+ommx prune-anonymous --experiments --older-than 7d
+ommx prune-anonymous --delete --experiments --older-than 7d
 ommx gc --delete
 ```
+
+Remove a specific named or anonymous ref with `ommx rm`. This removes only the
+mutable ref. Blob reclamation remains a separate `ommx gc --delete` operation,
+with the normal GC grace period applying.
+
+```bash
+ommx rm example.com/team/experiment:obsolete
+```
+
+After each deletion, the CLI prints a copyable rollback command containing the
+removed ref's immutable Manifest digest:
+
+```text
+     Removed example.com/team/experiment:obsolete
+    Rollback ommx restore-ref 'example.com/team/experiment:obsolete' 'sha256:...'
+     Storage Unreferenced data remains until a later `ommx gc --delete` removes it after the grace period.
+```
+
+`restore-ref` validates the stored Manifest and its complete
+config/layer/subject closure, and refuses to overwrite the ref if it now points
+to a different digest. Validation and ref publication are serialized against
+deleting GC passes across processes. Restoring an Experiment also republishes
+its validated listing projection atomically with the ref. Rollback requires the
+complete closure to remain in the Local Registry CAS. A later
+`ommx gc --delete` may reclaim it once it is unreachable and past the grace
+period. `prune-anonymous --delete` prints one rollback command per removed ref.
 
 The same operations are available from the Python SDK. Python returns
 structured reports instead of formatted CLI output.
 
 ```python
-from ommx.artifact import gc, prune_anonymous
+from ommx.artifact import gc, prune_anonymous, remove_image, restore_image
 
-prune_report = prune_anonymous()
+prune_report = prune_anonymous(experiments=True, older_than="7d")
 gc_report = gc()
 
-prune_deleted = prune_anonymous(delete=True)
+prune_deleted = prune_anonymous(
+    delete=True,
+    experiments=True,
+    older_than="7d",
+)
+removed_digest = remove_image("example.com/team/experiment:obsolete")
+assert removed_digest is not None
+restored = restore_image(
+    "example.com/team/experiment:obsolete",
+    removed_digest,
+)
 gc_deleted = gc(delete=True)
 ```
 
 Use `root=...` to inspect a non-default Local Registry and
 `grace_period="2h"` to override the GC grace period.
 
-Use {command}`ommx prune-anonymous` first when you have anonymous Artifact refs from temporary Artifact builds or unnamed archive imports. This command only removes matching SQLite refs; it does not unlink blobs. Those blobs become reclaimable by {command}`ommx gc` if no other ref reaches them.
+Use {command}`ommx prune-anonymous` first when you have anonymous Artifact refs from temporary Artifact builds or unnamed archive imports. Add `--experiments` for anonymous Experiment sessions. This command only removes matching SQLite refs; it does not unlink blobs. Those blobs become reclaimable by {command}`ommx gc` if no other ref reaches them. Pruning uses compare-and-delete semantics so a ref replaced after candidate selection is not removed as the stale candidate.
 
 {command}`ommx gc` performs a mark-sweep pass:
 

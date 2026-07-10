@@ -66,7 +66,7 @@ impl<'reg> UnsealedExperimentState<'reg> {
             RefPublishMode::Publish,
         )?;
         let checkpoint_image_name = registry.experiment_checkpoint_image_name(&image_name)?;
-        if let Err(error) = registry.delete_manifest_ref(&checkpoint_image_name) {
+        if let Err(error) = registry.remove_image_ref(&checkpoint_image_name) {
             tracing::warn!(
                 error = %error,
                 checkpoint_image_name = %checkpoint_image_name,

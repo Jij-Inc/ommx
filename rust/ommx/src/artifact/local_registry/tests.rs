@@ -39,6 +39,15 @@ fn open_test_index(registry: &LocalRegistry) -> Result<SqliteIndexStore> {
     SqliteIndexStore::open_in_registry_root(registry.root())
 }
 
+fn remove_test_blob(registry: &LocalRegistry, digest: &Digest) -> Result<()> {
+    let (algorithm, encoded) = digest
+        .as_ref()
+        .split_once(':')
+        .context("test blob digest must contain an algorithm")?;
+    fs::remove_file(registry.root().join("blobs").join(algorithm).join(encoded))?;
+    Ok(())
+}
+
 fn table_columns(conn: &rusqlite::Connection, table: &str) -> Result<Vec<String>> {
     let mut stmt = conn.prepare("SELECT name FROM pragma_table_info(?1) ORDER BY cid")?;
     let rows = stmt.query_map([table], |row| row.get(0))?;
@@ -130,7 +139,7 @@ fn gc_report_walks_subject_chain_from_live_ref() -> Result<()> {
     let parent_manifest = parent.stored_manifest_descriptor()?;
     let parent_manifest_digest = parent.manifest_digest().clone();
     let parent_layer_digest = parent.layers()?[0].digest().clone();
-    registry.delete_manifest_ref(&parent_image)?;
+    registry.remove_image_ref(&parent_image)?;
 
     let child_image = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:child")?;
     let mut child = ArtifactDraft::with_registry(&registry, child_image);
@@ -188,6 +197,241 @@ fn gc_deletes_only_orphan_candidates() -> Result<()> {
     assert!(blob_list_contains(&result.deleted_blobs, &orphan_digest));
     assert!(!registry.contains_blob(&orphan_digest)?);
     assert!(registry.contains_blob(&reachable_layer)?);
+    Ok(())
+}
+
+#[test]
+fn remove_image_ref_removes_only_the_mutable_ref() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let image_name = ImageRef::parse("example.com/ommx/remove-me:latest")?;
+    let artifact = build_test_local_artifact(&registry, &image_name, b"retained-layer")?;
+    let manifest_digest = artifact.manifest_digest().clone();
+    let layer_digest = artifact.layers()?[0].digest().clone();
+
+    let removed = registry
+        .remove_image_ref(&image_name)?
+        .expect("published ref is removed");
+    assert_eq!(removed.manifest_digest, manifest_digest);
+    assert!(registry.remove_image_ref(&image_name)?.is_none());
+    assert!(registry.resolve_image_name(&image_name)?.is_none());
+    assert!(registry.contains_blob(&manifest_digest)?);
+    assert!(registry.contains_blob(&layer_digest)?);
+
+    let report = registry.gc_report(&GcOptions {
+        grace_period: Duration::ZERO,
+        ..GcOptions::default()
+    })?;
+    assert!(blob_list_contains(
+        &report.orphan_candidates,
+        &manifest_digest
+    ));
+    assert!(blob_list_contains(&report.orphan_candidates, &layer_digest));
+
+    assert_eq!(
+        registry.restore_image_ref(&image_name, &manifest_digest)?,
+        RefUpdate::Inserted
+    );
+    assert_eq!(
+        registry.resolve_image_name(&image_name)?,
+        Some(manifest_digest)
+    );
+    Ok(())
+}
+
+#[test]
+fn restore_image_ref_does_not_replace_a_new_target() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let image_name = ImageRef::parse("example.com/ommx/restore-conflict:latest")?;
+    let original = build_test_local_artifact(&registry, &image_name, b"original")?;
+    let original_digest = original.manifest_digest().clone();
+    registry
+        .remove_image_ref(&image_name)?
+        .expect("original ref is removed");
+
+    let replacement = build_test_local_artifact(&registry, &image_name, b"replacement")?;
+    let replacement_digest = replacement.manifest_digest().clone();
+    assert_eq!(
+        registry.restore_image_ref(&image_name, &original_digest)?,
+        RefUpdate::Conflicted {
+            existing_manifest_digest: replacement_digest.clone(),
+            incoming_manifest_digest: original_digest,
+        }
+    );
+    assert_eq!(
+        registry.resolve_image_name(&image_name)?,
+        Some(replacement_digest)
+    );
+    Ok(())
+}
+
+#[test]
+fn restore_experiment_ref_restores_listing_projection_atomically() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let image_name = ImageRef::parse("example.com/ommx/restore-experiment:latest")?;
+    let experiment =
+        crate::experiment::Experiment::with_registry(&registry, image_name.clone())?.commit()?;
+    let manifest_digest = experiment.artifact().manifest_digest().clone();
+
+    registry
+        .remove_image_ref(&image_name)?
+        .expect("Experiment ref is removed");
+    assert_eq!(
+        registry.restore_image_ref(&image_name, &manifest_digest)?,
+        RefUpdate::Inserted
+    );
+
+    let index = open_test_index(&registry)?;
+    assert!(index
+        .list_missing_experiment_config_refs(Some(&image_name.to_string()))?
+        .is_empty());
+    let records = registry.list_experiments(Some(&image_name.to_string()))?;
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].image_name, image_name);
+    assert_eq!(records[0].manifest_digest, manifest_digest);
+    Ok(())
+}
+
+#[test]
+fn restore_image_ref_rejects_a_missing_config_blob() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let image_name = ImageRef::parse("example.com/ommx/restore-missing-config:latest")?;
+    let artifact = build_test_local_artifact(&registry, &image_name, b"layer")?;
+    let manifest_digest = artifact.manifest_digest().clone();
+    let config_digest = artifact.stored_config()?.digest().clone();
+    registry.remove_image_ref(&image_name)?;
+    remove_test_blob(&registry, &config_digest)?;
+
+    let error = registry
+        .restore_image_ref(&image_name, &manifest_digest)
+        .expect_err("restore must reject a missing config blob");
+    assert!(format!("{error:#}").contains(config_digest.as_ref()));
+    assert!(registry.resolve_image_name(&image_name)?.is_none());
+    Ok(())
+}
+
+#[test]
+fn restore_image_ref_rejects_a_missing_layer_blob() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let image_name = ImageRef::parse("example.com/ommx/restore-missing-layer:latest")?;
+    let artifact = build_test_local_artifact(&registry, &image_name, b"layer")?;
+    let manifest_digest = artifact.manifest_digest().clone();
+    let layer_digest = artifact.layers()?[0].digest().clone();
+    registry.remove_image_ref(&image_name)?;
+    remove_test_blob(&registry, &layer_digest)?;
+
+    let error = registry
+        .restore_image_ref(&image_name, &manifest_digest)
+        .expect_err("restore must reject a missing layer blob");
+    assert!(format!("{error:#}").contains(layer_digest.as_ref()));
+    assert!(registry.resolve_image_name(&image_name)?.is_none());
+    Ok(())
+}
+
+#[test]
+fn restore_image_ref_rejects_a_missing_subject_manifest() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let parent_name = ImageRef::parse("example.com/ommx/restore-subject:parent")?;
+    let parent = build_test_local_artifact(&registry, &parent_name, b"parent")?;
+    let parent_manifest = parent.stored_manifest_descriptor()?;
+    let parent_digest = parent.manifest_digest().clone();
+
+    let child_name = ImageRef::parse("example.com/ommx/restore-subject:child")?;
+    let mut child = ArtifactDraft::with_registry(&registry, child_name.clone());
+    child.add_layer_bytes(
+        MediaType::Other("application/octet-stream".to_string()),
+        b"child".to_vec(),
+        HashMap::new(),
+    )?;
+    child.set_subject(parent_manifest.into());
+    let child = child.commit()?;
+    let child_digest = child.manifest_digest().clone();
+
+    registry.remove_image_ref(&parent_name)?;
+    registry.remove_image_ref(&child_name)?;
+    remove_test_blob(&registry, &parent_digest)?;
+
+    let error = registry
+        .restore_image_ref(&child_name, &child_digest)
+        .expect_err("restore must reject a missing subject manifest");
+    assert!(format!("{error:#}").contains(parent_digest.as_ref()));
+    assert!(registry.resolve_image_name(&child_name)?.is_none());
+    Ok(())
+}
+
+#[test]
+fn anonymous_ref_cleanup_can_include_experiments_and_filter_by_age() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let anonymous_artifact = ArtifactDraft::new_anonymous_in_registry(&registry)?.commit()?;
+    let anonymous_artifact_name = anonymous_artifact.image_name().clone();
+    let anonymous_experiment = crate::experiment::Experiment::with_registry(
+        &registry,
+        crate::experiment::Name::Anonymous,
+    )?
+    .commit()?
+    .into_artifact();
+    let anonymous_experiment_name = anonymous_experiment.image_name().clone();
+    let named_image = ImageRef::parse("example.com/ommx/named:latest")?;
+    build_test_local_artifact(&registry, &named_image, b"named")?;
+
+    let artifacts_only = registry.list_anonymous_refs(&AnonymousRefOptions::default())?;
+    assert_eq!(artifacts_only.len(), 1);
+    assert_eq!(
+        ImageRef::from_repository_and_reference(
+            &artifacts_only[0].name,
+            &artifacts_only[0].reference
+        )?,
+        anonymous_artifact_name
+    );
+
+    let all_anonymous = AnonymousRefOptions {
+        include_experiments: true,
+        older_than: None,
+    };
+    assert_eq!(registry.list_anonymous_refs(&all_anonymous)?.len(), 2);
+    assert!(registry
+        .list_anonymous_refs(&AnonymousRefOptions {
+            include_experiments: true,
+            older_than: Some(Duration::from_secs(365 * 24 * 60 * 60)),
+        })?
+        .is_empty());
+
+    let removed = registry.prune_anonymous_refs(&AnonymousRefOptions {
+        include_experiments: true,
+        older_than: Some(Duration::ZERO),
+    })?;
+    assert_eq!(removed.len(), 2);
+    assert!(registry
+        .resolve_image_name(&anonymous_artifact_name)?
+        .is_none());
+    assert!(registry
+        .resolve_image_name(&anonymous_experiment_name)?
+        .is_none());
+    assert!(registry.resolve_image_name(&named_image)?.is_some());
+    Ok(())
+}
+
+#[test]
+fn conditional_prune_does_not_delete_a_replaced_ref() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let store = SqliteIndexStore::open(dir.path().join(SQLITE_INDEX_FILE_NAME))?;
+    let first = test_manifest_descriptor(b"first")?;
+    store.replace_ref("example.com/ommx/anonymous", "latest", &first)?;
+    let candidate = store.list_refs(None)?;
+
+    let replacement = test_manifest_descriptor(b"replacement")?;
+    store.replace_ref("example.com/ommx/anonymous", "latest", &replacement)?;
+
+    assert!(store.delete_refs_if_unchanged(&candidate)?.is_empty());
+    let remaining = store.list_refs(None)?;
+    assert_eq!(remaining.len(), 1);
+    assert_eq!(remaining[0].manifest_digest, replacement.digest().clone());
     Ok(())
 }
 

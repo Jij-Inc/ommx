@@ -26,6 +26,36 @@ experiment.log_file("solver-log", log_path, compression="zstd")
 `log_file` now streams the source file into the Local Registry instead of
 buffering the whole file before the content-addressed write.
 
+### 🆕 Local Registry ref deletion and Experiment retention ([#1053](https://github.com/Jij-Inc/ommx/pull/1053))
+
+`ommx.artifact.remove_image()` removes a named or anonymous image ref from the
+Local Registry without deleting its content-addressed blobs and returns the
+atomically removed Manifest digest for rollback, or `None` when the ref did not
+exist. The CLI equivalent is `ommx rm <ref>`. Its output explains that
+unreferenced data remains until a separate `ommx gc --delete` removes it after
+the grace period.
+
+Deletion output includes a copyable `ommx restore-ref <ref> <manifest-digest>`
+command. The equivalent Python API is `ommx.artifact.restore_image()`. Restore
+validates the complete Manifest closure still present in the CAS, is serialized
+against deleting GC passes, and refuses to replace a ref that has since moved
+to another digest.
+
+`ommx.artifact.prune_anonymous()` now accepts `experiments=True` to include
+anonymous Experiment refs and `older_than="7d"` for age-based retention. The
+CLI exposes the same behavior through `ommx prune-anonymous --experiments
+--older-than 7d`. See [Experiment cleanup](../user_guide/experiment.md)
+for the complete reachability and GC workflow.
+
+```python
+from ommx.artifact import prune_anonymous, remove_image, restore_image
+
+removed_digest = remove_image("example.com/team/experiment:obsolete")
+assert removed_digest is not None
+restore_image("example.com/team/experiment:obsolete", removed_digest)
+prune_anonymous(delete=True, experiments=True, older_than="7d")
+```
+
 ### 🆕 Configurable Experiment autosave frequency ([#1052](https://github.com/Jij-Inc/ommx/pull/1052))
 
 {class}`~ommx.experiment.Experiment` can now batch, rate-limit, or disable the

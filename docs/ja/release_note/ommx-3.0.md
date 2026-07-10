@@ -26,6 +26,35 @@ experiment.log_file("solver-log", log_path, compression="zstd")
 `log_file` はファイル全体を先に buffer せず、Local Registry の content-addressed
 write へ streaming するようになりました。
 
+### 🆕 Local Registry ref の削除と Experiment retention ([#1053](https://github.com/Jij-Inc/ommx/pull/1053))
+
+`ommx.artifact.remove_image()` で、content-addressed blob を削除せずに named
+または anonymous image ref を Local Registry から削除できるようになりました。戻り値は
+atomic に削除した Manifest digest、ref が存在しなければ `None` です。CLI では
+`ommx rm <ref>` を使います。出力には、到達不能なデータが独立した `ommx gc --delete`
+によって grace period 後に削除されるまで残ることも表示されます。
+
+削除時の output には、そのまま実行できる
+`ommx restore-ref <ref> <manifest-digest>` command が表示されます。Python では
+`ommx.artifact.restore_image()` が同じ操作に対応します。restore は CAS に残っている
+完全な Manifest closure を検証し、削除 GC と直列化されます。ref がすでに別 digest へ
+移動している場合は上書きを拒否します。
+
+`ommx.artifact.prune_anonymous()` に `experiments=True` を指定すると anonymous
+Experiment refs も対象になり、`older_than="7d"` で経過時間に基づく retention を
+設定できます。CLI では `ommx prune-anonymous --experiments --older-than 7d` が
+同じ操作に対応します。到達可能性と GC を含む全体の workflow は
+[Experiment cleanup](../user_guide/experiment.md) を参照してください。
+
+```python
+from ommx.artifact import prune_anonymous, remove_image, restore_image
+
+removed_digest = remove_image("example.com/team/experiment:obsolete")
+assert removed_digest is not None
+restore_image("example.com/team/experiment:obsolete", removed_digest)
+prune_anonymous(delete=True, experiments=True, older_than="7d")
+```
+
 ### 🆕 Experiment autosave 頻度の設定 ([#1052](https://github.com/Jij-Inc/ommx/pull/1052))
 
 {class}`~ommx.experiment.Experiment` で、Run close 後に書く rolling draft

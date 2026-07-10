@@ -11,7 +11,7 @@ use anyhow::{bail, ensure, Context, Result};
 use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, ImageManifest, MediaType};
 use serde::Serialize;
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::HashMap,
     path::Path,
     str::FromStr,
     sync::{Arc, OnceLock},
@@ -426,12 +426,9 @@ impl<'reg> LocalArtifact<'reg> {
     /// new Local Registry ref to the same root manifest digest and returns a
     /// handle whose `image_name` is the new reference.
     pub fn tag_as(&self, image_name: ImageRef) -> Result<Self> {
-        let manifest = self.stored_manifest_descriptor()?;
-        self.registry
-            .touch_manifest_closure(manifest.digest(), &mut BTreeSet::new())?;
         let ref_update = self
             .registry
-            .publish_stored_manifest_ref(&image_name, &manifest)?;
+            .publish_existing_manifest_ref(&image_name, &self.manifest_digest)?;
         reject_conflicting_ref(&image_name, ref_update)?;
         Ok(Self::from_parts(
             self.registry,
@@ -799,6 +796,7 @@ fn ensure_ommx_image_manifest(manifest: &ImageManifest) -> Result<()> {
 /// predicate — that is the stable public API; this literal can change
 /// over time without breaking external users.
 pub(crate) const ANONYMOUS_ARTIFACT_REF_NAME_SUFFIX: &str = ".ommx.local/anonymous";
+pub(crate) const ANONYMOUS_EXPERIMENT_REF_NAME_SUFFIX: &str = ".ommx.local/experiment";
 
 /// Number of hex chars from the full registry-id used as the
 /// hostname prefix. The metadata column stores the full 32-hex UUID;
@@ -898,7 +896,15 @@ pub(crate) fn anonymous_local_image_name(registry_id: &str, repository: &str) ->
 /// (e.g. an artifact pushed to a real mDNS host named
 /// `myhost.ommx.local`).
 pub fn is_anonymous_artifact_ref_name(name: &str) -> bool {
-    let Some(host_segment) = name.strip_suffix(ANONYMOUS_ARTIFACT_REF_NAME_SUFFIX) else {
+    is_anonymous_local_ref_name(name, ANONYMOUS_ARTIFACT_REF_NAME_SUFFIX)
+}
+
+pub(crate) fn is_anonymous_experiment_ref_name(name: &str) -> bool {
+    is_anonymous_local_ref_name(name, ANONYMOUS_EXPERIMENT_REF_NAME_SUFFIX)
+}
+
+fn is_anonymous_local_ref_name(name: &str, suffix: &str) -> bool {
+    let Some(host_segment) = name.strip_suffix(suffix) else {
         return false;
     };
     host_segment.len() == ANONYMOUS_REGISTRY_ID_HOST_LEN
