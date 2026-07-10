@@ -7567,13 +7567,15 @@ def remove_image(
     image_name: builtins.str,
     *,
     root: typing.Optional[builtins.str | os.PathLike | pathlib.Path] = None,
-) -> builtins.bool:
+) -> typing.Optional[builtins.str]:
     r"""
     Remove one image ref from the Local Registry.
 
     This removes only the mutable local ref. Immutable manifest and payload
     blobs remain available to other refs and are reclaimed by {func}`gc` once
-    unreachable. Returns `True` when the ref existed.
+    unreachable. Returns the atomically removed Manifest digest, or `None` when
+    the ref did not exist. Pass that digest to {func}`restore_image` to roll back
+    this exact deletion.
     """
 
 def restore_image(

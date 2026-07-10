@@ -76,8 +76,8 @@ def test_remove_image_deletes_named_ref_but_leaves_blobs_for_gc():
     draft.commit()
     manifest_digest = list_artifacts(image_name)[0].manifest_digest
 
-    assert remove_image(image_name) is True
-    assert remove_image(image_name) is False
+    assert remove_image(image_name) == manifest_digest
+    assert remove_image(image_name) is None
     assert list_artifacts(image_name) == []
     assert restore_image(image_name, manifest_digest) is True
     assert restore_image(image_name, manifest_digest) is False
@@ -85,7 +85,7 @@ def test_remove_image_deletes_named_ref_but_leaves_blobs_for_gc():
         manifest_digest
     ]
 
-    assert remove_image(image_name) is True
+    assert remove_image(image_name) == manifest_digest
     assert descriptor.digest in {
         blob.digest for blob in gc(grace_period="0s").orphan_candidates
     }
@@ -97,7 +97,7 @@ def test_restore_image_does_not_replace_a_new_target():
     original.add_layer("application/octet-stream", b"original", {})
     original.commit()
     original_digest = list_artifacts(image_name)[0].manifest_digest
-    assert remove_image(image_name) is True
+    assert remove_image(image_name) == original_digest
 
     replacement = ArtifactDraft.new(image_name)
     replacement.add_layer("application/octet-stream", b"replacement", {})

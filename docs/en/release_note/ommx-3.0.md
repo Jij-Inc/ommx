@@ -11,9 +11,11 @@ Changes merged after the most recent release will be appended here as they land,
 ### 🆕 Local Registry ref deletion and Experiment retention ([#1053](https://github.com/Jij-Inc/ommx/pull/1053))
 
 `ommx.artifact.remove_image()` removes a named or anonymous image ref from the
-Local Registry without deleting its content-addressed blobs. The CLI equivalent
-is `ommx rm <ref>`. Its output explains that unreferenced data remains until a
-separate `ommx gc --delete` removes it after the grace period.
+Local Registry without deleting its content-addressed blobs and returns the
+atomically removed Manifest digest for rollback, or `None` when the ref did not
+exist. The CLI equivalent is `ommx rm <ref>`. Its output explains that
+unreferenced data remains until a separate `ommx gc --delete` removes it after
+the grace period.
 
 Deletion output includes a copyable `ommx restore-ref <ref> <manifest-digest>`
 command. The equivalent Python API is `ommx.artifact.restore_image()`. Restore
@@ -30,8 +32,9 @@ for the complete reachability and GC workflow.
 ```python
 from ommx.artifact import prune_anonymous, remove_image, restore_image
 
-remove_image("example.com/team/experiment:obsolete")
-restore_image("example.com/team/experiment:obsolete", "sha256:...")
+removed_digest = remove_image("example.com/team/experiment:obsolete")
+assert removed_digest is not None
+restore_image("example.com/team/experiment:obsolete", removed_digest)
 prune_anonymous(delete=True, experiments=True, older_than="7d")
 ```
 

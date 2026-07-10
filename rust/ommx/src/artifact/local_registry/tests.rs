@@ -267,6 +267,34 @@ fn restore_image_ref_does_not_replace_a_new_target() -> Result<()> {
 }
 
 #[test]
+fn restore_experiment_ref_restores_listing_projection_atomically() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let image_name = ImageRef::parse("example.com/ommx/restore-experiment:latest")?;
+    let experiment =
+        crate::experiment::Experiment::with_registry(&registry, image_name.clone())?.commit()?;
+    let manifest_digest = experiment.artifact().manifest_digest().clone();
+
+    registry
+        .remove_image_ref(&image_name)?
+        .expect("Experiment ref is removed");
+    assert_eq!(
+        registry.restore_image_ref(&image_name, &manifest_digest)?,
+        RefUpdate::Inserted
+    );
+
+    let index = open_test_index(&registry)?;
+    assert!(index
+        .list_missing_experiment_config_refs(Some(&image_name.to_string()))?
+        .is_empty());
+    let records = registry.list_experiments(Some(&image_name.to_string()))?;
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].image_name, image_name);
+    assert_eq!(records[0].manifest_digest, manifest_digest);
+    Ok(())
+}
+
+#[test]
 fn restore_image_ref_rejects_a_missing_config_blob() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let registry = LocalRegistry::open(dir.path())?;

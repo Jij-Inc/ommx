@@ -1737,15 +1737,23 @@ pub(crate) fn emit_registry_list_warnings(
 ///
 /// This removes only the mutable local ref. Immutable manifest and payload
 /// blobs remain available to other refs and are reclaimed by {func}`gc` once
-/// unreachable. Returns `True` when the ref existed.
+/// unreachable. Returns the atomically removed Manifest digest, or `None` when
+/// the ref did not exist. Pass that digest to {func}`restore_image` to roll back
+/// this exact deletion.
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
 #[pyo3(signature = (image_name, *, root = None))]
-pub fn remove_image(py: Python<'_>, image_name: &str, root: Option<PathBuf>) -> Result<bool> {
+pub fn remove_image(
+    py: Python<'_>,
+    image_name: &str,
+    root: Option<PathBuf>,
+) -> Result<Option<String>> {
     let _guard = crate::TRACING.attach_parent_context(py);
     let registry = open_local_registry(root)?;
     let image_name = ommx::artifact::ImageRef::parse(image_name)?;
-    Ok(registry.remove_image_ref(&image_name)?.is_some())
+    Ok(registry
+        .remove_image_ref(&image_name)?
+        .map(|removed| removed.manifest_digest.to_string()))
 }
 
 /// Restore a removed Local Registry image ref from its manifest digest.

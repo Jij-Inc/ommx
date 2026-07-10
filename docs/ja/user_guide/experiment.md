@@ -397,10 +397,11 @@ rollback command を表示します。
 
 `restore-ref` は保存済み Manifest と config/layer/subject を含む完全な closure を検証し、
 同じ ref が別の digest を指している場合は上書きを拒否します。検証と ref の publish は、
-別 process の削除 GC とも直列化されます。rollback には完全な closure が Local Registry
-CAS に残っている必要があります。到達不能になって grace period を過ぎると、後から実行した
-`ommx gc --delete` に回収される可能性があります。`prune-anonymous --delete` は削除した
-ref ごとに rollback command を表示します。
+別 process の削除 GC とも直列化されます。Experiment の restore では、検証済みの listing
+projection も ref と同じ transaction で再登録します。rollback には完全な closure が Local
+Registry CAS に残っている必要があります。到達不能になって grace period を過ぎると、後から
+実行した `ommx gc --delete` に回収される可能性があります。`prune-anonymous --delete` は
+削除した ref ごとに rollback command を表示します。
 
 同じ操作は Python SDK からも実行できます。Python API は整形済みの CLI output ではなく、
 structured report を返します。
@@ -416,10 +417,11 @@ prune_deleted = prune_anonymous(
     experiments=True,
     older_than="7d",
 )
-removed = remove_image("example.com/team/experiment:obsolete")
+removed_digest = remove_image("example.com/team/experiment:obsolete")
+assert removed_digest is not None
 restored = restore_image(
     "example.com/team/experiment:obsolete",
-    "sha256:...",
+    removed_digest,
 )
 gc_deleted = gc(delete=True)
 ```

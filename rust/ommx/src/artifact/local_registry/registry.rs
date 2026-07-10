@@ -319,7 +319,12 @@ impl SealedArtifact<'_> {
 /// cannot be published without first proving that it remains materializable.
 struct VerifiedManifestClosure<'reg> {
     manifest: StoredDescriptor<'reg>,
-    artifact: ArtifactManifestRecord,
+    projection: VerifiedManifestProjection,
+}
+
+enum VerifiedManifestProjection {
+    Artifact(ArtifactManifestRecord),
+    Experiment(ExperimentManifestRecord),
 }
 
 struct GcExclusionGuard {
@@ -1187,6 +1192,7 @@ impl LocalRegistry {
 
     fn verify_manifest_closure(
         &self,
+        image_name: &ImageRef,
         manifest_digest: &Digest,
     ) -> Result<VerifiedManifestClosure<'_>> {
         let (manifest_json, manifest, manifest_descriptor) =
@@ -1198,8 +1204,15 @@ impl LocalRegistry {
             manifest_json,
             &manifest,
         )?;
+        let projection = match self.experiment_manifest_record(image_name, manifest_digest)? {
+            Some(experiment) => VerifiedManifestProjection::Experiment(experiment),
+            None => VerifiedManifestProjection::Artifact(artifact),
+        };
         let manifest = self.stored_descriptor(manifest_descriptor)?;
-        Ok(VerifiedManifestClosure { manifest, artifact })
+        Ok(VerifiedManifestClosure {
+            manifest,
+            projection,
+        })
     }
 
     fn verify_manifest_dependencies(
@@ -1321,9 +1334,16 @@ impl LocalRegistry {
         manifest_digest: &Digest,
     ) -> Result<RefUpdate> {
         let _gc_exclusion = self.lock_gc_exclusion()?;
-        let verified = self.verify_manifest_closure(manifest_digest)?;
-        self.index
-            .publish_artifact_ref(image_name, &verified.manifest, &verified.artifact)
+        let verified = self.verify_manifest_closure(image_name, manifest_digest)?;
+        match verified.projection {
+            VerifiedManifestProjection::Artifact(artifact) => {
+                self.index
+                    .publish_artifact_ref(image_name, &verified.manifest, &artifact)
+            }
+            VerifiedManifestProjection::Experiment(experiment) => self
+                .index
+                .publish_experiment_ref(image_name, &verified.manifest, &experiment),
+        }
     }
 
     /// Replace the ref target with a sealed root manifest descriptor.

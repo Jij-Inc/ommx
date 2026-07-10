@@ -405,10 +405,11 @@ removed ref's immutable Manifest digest:
 `restore-ref` validates the stored Manifest and its complete
 config/layer/subject closure, and refuses to overwrite the ref if it now points
 to a different digest. Validation and ref publication are serialized against
-deleting GC passes across processes. Rollback requires the complete closure to
-remain in the Local Registry CAS. A later `ommx gc --delete` may reclaim it
-once it is unreachable and past the grace period. `prune-anonymous --delete`
-prints one rollback command per removed ref.
+deleting GC passes across processes. Restoring an Experiment also republishes
+its validated listing projection atomically with the ref. Rollback requires the
+complete closure to remain in the Local Registry CAS. A later
+`ommx gc --delete` may reclaim it once it is unreachable and past the grace
+period. `prune-anonymous --delete` prints one rollback command per removed ref.
 
 The same operations are available from the Python SDK. Python returns
 structured reports instead of formatted CLI output.
@@ -424,10 +425,11 @@ prune_deleted = prune_anonymous(
     experiments=True,
     older_than="7d",
 )
-removed = remove_image("example.com/team/experiment:obsolete")
+removed_digest = remove_image("example.com/team/experiment:obsolete")
+assert removed_digest is not None
 restored = restore_image(
     "example.com/team/experiment:obsolete",
-    "sha256:...",
+    removed_digest,
 )
 gc_deleted = gc(delete=True)
 ```

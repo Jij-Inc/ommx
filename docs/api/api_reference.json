@@ -27380,7 +27380,7 @@
         {
           "kind": "Function",
           "name": "remove_image",
-          "doc": "Remove one image ref from the Local Registry.\n\nThis removes only the mutable local ref. Immutable manifest and payload\nblobs remain available to other refs and are reclaimed by {func}`gc` once\nunreachable. Returns `True` when the ref existed.",
+          "doc": "Remove one image ref from the Local Registry.\n\nThis removes only the mutable local ref. Immutable manifest and payload\nblobs remain available to other refs and are reclaimed by {func}`gc` once\nunreachable. Returns the atomically removed Manifest digest, or `None` when\nthe ref did not exist. Pass that digest to {func}`restore_image` to roll back\nthis exact deletion.",
           "signatures": [
             {
               "parameters": [
@@ -27429,9 +27429,15 @@
                 }
               ],
               "return_type": {
-                "display": "bool",
+                "display": "Optional[str]",
                 "link_target": null,
-                "children": []
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
               }
             }
           ],
