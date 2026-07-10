@@ -27440,6 +27440,76 @@
         },
         {
           "kind": "Function",
+          "name": "restore_image",
+          "doc": "Restore a removed Local Registry image ref from its manifest digest.\n\nThe digest is printed as part of the CLI rollback command after `ommx rm`\nand `ommx prune-anonymous --delete`. The manifest must still be present in\nthe Local Registry CAS. Returns `True` when the ref is inserted and `False`\nwhen it already points to the requested digest. A different existing target\nis reported as a conflict and is never replaced.",
+          "signatures": [
+            {
+              "parameters": [
+                {
+                  "name": "image_name",
+                  "type_": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  "default": null
+                },
+                {
+                  "name": "manifest_digest",
+                  "type_": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  "default": null
+                },
+                {
+                  "name": "root",
+                  "type_": {
+                    "display": "Optional[str | PathLike | Path]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "str | PathLike | Path",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "PathLike",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Path",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "default": {
+                    "kind": "Simple",
+                    "value": "None"
+                  }
+                }
+              ],
+              "return_type": {
+                "display": "bool",
+                "link_target": null,
+                "children": []
+              }
+            }
+          ],
+          "is_async": false,
+          "deprecated": null
+        },
+        {
+          "kind": "Function",
           "name": "set_local_registry_root",
           "doc": "Set the OMMX Local Registry root path.\n\n- The local registry root can be set only once per process,\n  and this function will return an error if it is already set.\n- The root path is automatically set when used for creating artifacts without calling this function.\n- Default path is following:\n  - If `OMMX_LOCAL_REGISTRY_ROOT` environment variable is set, its value is used.\n  - Otherwise, OS-specific path by [directories](https://docs.rs/directories/latest/directories/struct.ProjectDirs.html#method.data_dir) is used:\n    - `$XDG_DATA_HOME/ommx/` on Linux\n    - `$HOME/Library/Application Support/org.ommx.ommx/` on macOS",
           "signatures": [
@@ -30962,6 +31032,7 @@
     "ommx.artifact.list_artifacts": "ommx.artifact",
     "ommx.artifact.prune_anonymous": "ommx.artifact",
     "ommx.artifact.remove_image": "ommx.artifact",
+    "ommx.artifact.restore_image": "ommx.artifact",
     "ommx.artifact.set_local_registry_root": "ommx.artifact",
     "ommx.experiment.Experiment": "ommx.experiment",
     "ommx.experiment.ExperimentCheckpointRef": "ommx.experiment",

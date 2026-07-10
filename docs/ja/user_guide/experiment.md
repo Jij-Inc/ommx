@@ -365,11 +365,25 @@ ommx rm example.com/team/experiment:obsolete
 ommx rm example.com/team/experiment:obsolete --gc
 ```
 
+削除後、CLI は削除した ref の immutable Manifest digest を含む、そのまま実行可能な
+rollback command を表示します。
+
+```text
+     Removed example.com/team/experiment:obsolete
+    Rollback ommx restore-ref 'example.com/team/experiment:obsolete' 'sha256:...'
+```
+
+`restore-ref` は保存済み Manifest を検証し、同じ ref が別の digest を指している場合は
+上書きを拒否します。rollback には Manifest closure が Local Registry CAS に残っている
+必要があります。`ommx rm --gc` の GC pass では直前に削除した Manifest を保護しますが、
+その後に単独で `ommx gc --delete` を実行すると回収される可能性があります。
+`prune-anonymous --delete` は削除した ref ごとに rollback command を表示します。
+
 同じ操作は Python SDK からも実行できます。Python API は整形済みの CLI output ではなく、
 structured report を返します。
 
 ```python
-from ommx.artifact import gc, prune_anonymous, remove_image
+from ommx.artifact import gc, prune_anonymous, remove_image, restore_image
 
 prune_report = prune_anonymous(experiments=True, older_than="7d")
 gc_report = gc()
@@ -380,6 +394,10 @@ prune_deleted = prune_anonymous(
     older_than="7d",
 )
 removed = remove_image("example.com/team/experiment:obsolete")
+restored = restore_image(
+    "example.com/team/experiment:obsolete",
+    "sha256:...",
+)
 gc_deleted = gc(delete=True)
 ```
 

@@ -200,8 +200,11 @@ fn remove_image_ref_removes_only_the_mutable_ref() -> Result<()> {
     let manifest_digest = artifact.manifest_digest().clone();
     let layer_digest = artifact.layers()?[0].digest().clone();
 
-    assert!(registry.remove_image_ref(&image_name)?);
-    assert!(!registry.remove_image_ref(&image_name)?);
+    let removed = registry
+        .remove_image_ref(&image_name)?
+        .expect("published ref is removed");
+    assert_eq!(removed.manifest_digest, manifest_digest);
+    assert!(registry.remove_image_ref(&image_name)?.is_none());
     assert!(registry.resolve_image_name(&image_name)?.is_none());
     assert!(registry.contains_blob(&manifest_digest)?);
     assert!(registry.contains_blob(&layer_digest)?);
@@ -215,6 +218,42 @@ fn remove_image_ref_removes_only_the_mutable_ref() -> Result<()> {
         &manifest_digest
     ));
     assert!(blob_list_contains(&report.orphan_candidates, &layer_digest));
+
+    assert_eq!(
+        registry.restore_image_ref(&image_name, &manifest_digest)?,
+        RefUpdate::Inserted
+    );
+    assert_eq!(
+        registry.resolve_image_name(&image_name)?,
+        Some(manifest_digest)
+    );
+    Ok(())
+}
+
+#[test]
+fn restore_image_ref_does_not_replace_a_new_target() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let image_name = ImageRef::parse("example.com/ommx/restore-conflict:latest")?;
+    let original = build_test_local_artifact(&registry, &image_name, b"original")?;
+    let original_digest = original.manifest_digest().clone();
+    registry
+        .remove_image_ref(&image_name)?
+        .expect("original ref is removed");
+
+    let replacement = build_test_local_artifact(&registry, &image_name, b"replacement")?;
+    let replacement_digest = replacement.manifest_digest().clone();
+    assert_eq!(
+        registry.restore_image_ref(&image_name, &original_digest)?,
+        RefUpdate::Conflicted {
+            existing_manifest_digest: replacement_digest.clone(),
+            incoming_manifest_digest: original_digest,
+        }
+    );
+    assert_eq!(
+        registry.resolve_image_name(&image_name)?,
+        Some(replacement_digest)
+    );
     Ok(())
 }
 

@@ -100,6 +100,7 @@ __all__ = [
     "prune_anonymous",
     "qplib_instance_annotations",
     "remove_image",
+    "restore_image",
     "set_default_atol",
     "set_local_registry_root",
 ]
@@ -7526,6 +7527,22 @@ def remove_image(
     This removes only the mutable local ref. Immutable manifest and payload
     blobs remain available to other refs and are reclaimed by {func}`gc` once
     unreachable. Returns `True` when the ref existed.
+    """
+
+def restore_image(
+    image_name: builtins.str,
+    manifest_digest: builtins.str,
+    *,
+    root: typing.Optional[builtins.str | os.PathLike | pathlib.Path] = None,
+) -> builtins.bool:
+    r"""
+    Restore a removed Local Registry image ref from its manifest digest.
+
+    The digest is printed as part of the CLI rollback command after `ommx rm`
+    and `ommx prune-anonymous --delete`. The manifest must still be present in
+    the Local Registry CAS. Returns `True` when the ref is inserted and `False`
+    when it already points to the requested digest. A different existing target
+    is reported as a conflict and is never replaced.
     """
 
 def set_default_atol(value: builtins.float) -> None: ...

@@ -373,11 +373,26 @@ ommx rm example.com/team/experiment:obsolete
 ommx rm example.com/team/experiment:obsolete --gc
 ```
 
+After each deletion, the CLI prints a copyable rollback command containing the
+removed ref's immutable Manifest digest:
+
+```text
+     Removed example.com/team/experiment:obsolete
+    Rollback ommx restore-ref 'example.com/team/experiment:obsolete' 'sha256:...'
+```
+
+`restore-ref` validates the stored Manifest and refuses to overwrite the ref if
+it now points to a different digest. Rollback requires the Manifest closure to
+remain in the Local Registry CAS. `ommx rm --gc` protects the just-removed
+Manifest during that GC pass, but a later standalone `ommx gc --delete` may
+reclaim it. `prune-anonymous --delete` prints one rollback command per removed
+ref.
+
 The same operations are available from the Python SDK. Python returns
 structured reports instead of formatted CLI output.
 
 ```python
-from ommx.artifact import gc, prune_anonymous, remove_image
+from ommx.artifact import gc, prune_anonymous, remove_image, restore_image
 
 prune_report = prune_anonymous(experiments=True, older_than="7d")
 gc_report = gc()
@@ -388,6 +403,10 @@ prune_deleted = prune_anonymous(
     older_than="7d",
 )
 removed = remove_image("example.com/team/experiment:obsolete")
+restored = restore_image(
+    "example.com/team/experiment:obsolete",
+    "sha256:...",
+)
 gc_deleted = gc(delete=True)
 ```
 

@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use ommx::artifact::media_types;
 use pyo3::{
     exceptions::PyRuntimeWarning,
@@ -1745,7 +1745,44 @@ pub fn remove_image(py: Python<'_>, image_name: &str, root: Option<PathBuf>) -> 
     let _guard = crate::TRACING.attach_parent_context(py);
     let registry = open_local_registry(root)?;
     let image_name = ommx::artifact::ImageRef::parse(image_name)?;
-    registry.remove_image_ref(&image_name)
+    Ok(registry.remove_image_ref(&image_name)?.is_some())
+}
+
+/// Restore a removed Local Registry image ref from its manifest digest.
+///
+/// The digest is printed as part of the CLI rollback command after `ommx rm`
+/// and `ommx prune-anonymous --delete`. The manifest must still be present in
+/// the Local Registry CAS. Returns `True` when the ref is inserted and `False`
+/// when it already points to the requested digest. A different existing target
+/// is reported as a conflict and is never replaced.
+#[pyo3_stub_gen::derive::gen_stub_pyfunction]
+#[pyfunction]
+#[pyo3(signature = (image_name, manifest_digest, *, root = None))]
+pub fn restore_image(
+    py: Python<'_>,
+    image_name: &str,
+    manifest_digest: &str,
+    root: Option<PathBuf>,
+) -> Result<bool> {
+    let _guard = crate::TRACING.attach_parent_context(py);
+    let registry = open_local_registry(root)?;
+    let image_name = ommx::artifact::ImageRef::parse(image_name)?;
+    let manifest_digest: oci_spec::image::Digest =
+        manifest_digest.parse().context("Invalid manifest digest")?;
+    match registry.restore_image_ref(&image_name, &manifest_digest)? {
+        ommx::artifact::local_registry::RefUpdate::Inserted => Ok(true),
+        ommx::artifact::local_registry::RefUpdate::Unchanged => Ok(false),
+        ommx::artifact::local_registry::RefUpdate::Conflicted {
+            existing_manifest_digest,
+            incoming_manifest_digest,
+        } => bail!(
+            "Cannot restore {image_name} to {incoming_manifest_digest}: ref currently points to \
+             {existing_manifest_digest}"
+        ),
+        ommx::artifact::local_registry::RefUpdate::Replaced { .. } => {
+            unreachable!("restore_image_ref never replaces an existing ref")
+        }
+    }
 }
 
 /// Report or delete anonymous Artifact and Experiment refs in the Local Registry.

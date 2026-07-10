@@ -15,6 +15,11 @@ Local Registry without deleting its content-addressed blobs. The CLI equivalent
 is `ommx rm <ref>`; add `--gc` to run the existing garbage collector after the
 ref is removed.
 
+Deletion output includes a copyable `ommx restore-ref <ref> <manifest-digest>`
+command. The equivalent Python API is `ommx.artifact.restore_image()`. Restore
+validates the Manifest still present in the CAS and refuses to replace a ref
+that has since moved to another digest.
+
 `ommx.artifact.prune_anonymous()` now accepts `experiments=True` to include
 anonymous Experiment refs and `older_than="7d"` for age-based retention. The
 CLI exposes the same behavior through `ommx prune-anonymous --experiments
@@ -22,9 +27,10 @@ CLI exposes the same behavior through `ommx prune-anonymous --experiments
 for the complete reachability and GC workflow.
 
 ```python
-from ommx.artifact import prune_anonymous, remove_image
+from ommx.artifact import prune_anonymous, remove_image, restore_image
 
 remove_image("example.com/team/experiment:obsolete")
+restore_image("example.com/team/experiment:obsolete", "sha256:...")
 prune_anonymous(delete=True, experiments=True, older_than="7d")
 ```
 

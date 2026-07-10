@@ -1271,10 +1271,32 @@ impl LocalRegistry {
     /// The mutable `(name, reference) -> manifest digest` row is removed from
     /// this Local Registry. The immutable manifest, config, and layer blobs are
     /// reclaimed only when a later [`Self::gc`] pass finds them unreachable.
-    /// Returns `true` when the ref existed.
-    pub fn remove_image_ref(&self, image_name: &ImageRef) -> Result<bool> {
+    /// Returns the removed ref record, including the manifest digest needed by
+    /// [`Self::restore_image_ref`], or `None` when the ref did not exist.
+    pub fn remove_image_ref(
+        &self,
+        image_name: &ImageRef,
+    ) -> Result<Option<crate::artifact::local_registry::RefRecord>> {
         self.index
             .delete_ref(&image_name.repository_key(), image_name.reference())
+    }
+
+    /// Restore an image ref to a manifest that remains in this Local Registry.
+    ///
+    /// The manifest blob is read from the CAS, verified against
+    /// `manifest_digest`, and validated as an OMMX OCI Image Manifest before
+    /// the ref is published. An existing ref at the same name is never moved:
+    /// the returned [`RefUpdate::Conflicted`] identifies a different current
+    /// target, while an identical target returns [`RefUpdate::Unchanged`].
+    pub fn restore_image_ref(
+        &self,
+        image_name: &ImageRef,
+        manifest_digest: &Digest,
+    ) -> Result<RefUpdate> {
+        let artifact = self.artifact_manifest_record(manifest_digest)?;
+        let manifest = self.stored_manifest_descriptor(manifest_digest)?;
+        self.index
+            .publish_artifact_ref(image_name, &manifest, &artifact)
     }
 
     fn store_blob_bytes(&self, bytes: &[u8]) -> Result<Digest> {

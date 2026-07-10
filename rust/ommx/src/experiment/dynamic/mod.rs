@@ -577,7 +577,7 @@ impl ExperimentDyn {
                     .registry()
                     .remove_image_ref(&old_checkpoint_image_name)
                 {
-                    Ok(true) => {
+                    Ok(Some(_)) => {
                         if let Err(error) = state.autosave_checkpoint(registry_handle.registry()) {
                             tracing::warn!(
                                 error = %error,
@@ -585,7 +585,7 @@ impl ExperimentDyn {
                             );
                         }
                     }
-                    Ok(false) => {}
+                    Ok(None) => {}
                     Err(error) => {
                         tracing::warn!(
                             error = %error,

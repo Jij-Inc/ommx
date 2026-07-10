@@ -8,6 +8,7 @@ from ommx.artifact import (
     list_artifacts,
     prune_anonymous,
     remove_image,
+    restore_image,
 )
 from ommx.experiment import Experiment
 
@@ -73,13 +74,41 @@ def test_remove_image_deletes_named_ref_but_leaves_blobs_for_gc():
     draft = ArtifactDraft.new(image_name)
     descriptor = draft.add_layer("application/octet-stream", b"remove-me", {})
     draft.commit()
+    manifest_digest = list_artifacts(image_name)[0].manifest_digest
 
     assert remove_image(image_name) is True
     assert remove_image(image_name) is False
     assert list_artifacts(image_name) == []
+    assert restore_image(image_name, manifest_digest) is True
+    assert restore_image(image_name, manifest_digest) is False
+    assert [record.manifest_digest for record in list_artifacts(image_name)] == [
+        manifest_digest
+    ]
+
+    assert remove_image(image_name) is True
     assert descriptor.digest in {
         blob.digest for blob in gc(grace_period="0s").orphan_candidates
     }
+
+
+def test_restore_image_does_not_replace_a_new_target():
+    image_name = f"example.com/ommx-tests/restore-{uuid.uuid4().hex}:latest"
+    original = ArtifactDraft.new(image_name)
+    original.add_layer("application/octet-stream", b"original", {})
+    original.commit()
+    original_digest = list_artifacts(image_name)[0].manifest_digest
+    assert remove_image(image_name) is True
+
+    replacement = ArtifactDraft.new(image_name)
+    replacement.add_layer("application/octet-stream", b"replacement", {})
+    replacement.commit()
+    replacement_digest = list_artifacts(image_name)[0].manifest_digest
+
+    with pytest.raises(RuntimeError, match="ref currently points to"):
+        restore_image(image_name, original_digest)
+    assert [record.manifest_digest for record in list_artifacts(image_name)] == [
+        replacement_digest
+    ]
 
 
 def test_prune_anonymous_can_include_experiments_and_filter_by_age():

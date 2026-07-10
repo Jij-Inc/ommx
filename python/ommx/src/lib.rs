@@ -168,6 +168,7 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<PyDiagnosticCollector>()?;
     m.add_function(wrap_pyfunction!(prune_anonymous, m)?)?;
     m.add_function(wrap_pyfunction!(remove_image, m)?)?;
+    m.add_function(wrap_pyfunction!(restore_image, m)?)?;
     m.add_function(wrap_pyfunction!(gc, m)?)?;
     m.add_function(wrap_pyfunction!(set_local_registry_root, m)?)?;
     m.add_function(wrap_pyfunction!(get_local_registry_root, m)?)?;
@@ -325,6 +326,7 @@ pyo3_stub_gen::reexport_module_members!("ommx.artifact" from "ommx._ommx_rust";
     "list_artifacts",
     "prune_anonymous",
     "remove_image",
+    "restore_image",
     "set_local_registry_root",
     "get_images"
 );
