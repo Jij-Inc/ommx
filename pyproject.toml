@@ -52,3 +52,10 @@ dev = [
   "ruff>=0.9.6",
   "syrupy>=4.7.2",
 ]
+
+[tool.pytest.ini_options]
+markers = [
+  "benchmark: performance benchmark collected by pytest-codspeed",
+  "benchmark_guardrail: persistent regression guardrail run on main and release tags",
+  "benchmark_diagnostic: profiling workload run only by the full manual benchmark suite",
+]

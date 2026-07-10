@@ -1,9 +1,188 @@
 use super::*;
 use crate::{
-    substitute_acyclic, substitute_one_via_acyclic, Function, Substitute, SubstitutionError,
+    substitute_acyclic, substitute_one_via_acyclic, ATol, DecisionVariable, Function,
+    IndicatorConstraintID, ModelingLabel, NamedFunctionID, Substitute, SubstitutionError,
     VariableID,
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
+
+/// All fallible results of substituting an [`Instance`].
+///
+/// The root object prepares this plan without mutation, then commits only
+/// table-local replacements. This keeps substitution atomic without granting
+/// crate-wide access to a partially mutating `Instance` operation.
+struct InstanceSubstitutionPlan {
+    objective: Option<Function>,
+    constraint_replacements: BTreeMap<ConstraintID, Constraint>,
+    indicator_replacements: BTreeMap<IndicatorConstraintID, IndicatorConstraint>,
+    named_function_replacements: BTreeMap<NamedFunctionID, NamedFunction>,
+}
+
+impl Instance {
+    /// Prepare every fallible rewrite required by an acyclic substitution.
+    fn plan_substitution(
+        &self,
+        acyclic: &crate::AcyclicAssignments,
+    ) -> Result<InstanceSubstitutionPlan, crate::SubstitutionError> {
+        debug_assert!(!acyclic.is_empty());
+        let substituted_variables: BTreeSet<VariableID> =
+            acyclic.iter().map(|(var_id, _)| *var_id).collect();
+
+        // Structural special-constraint variables cannot be substituted. Check
+        // every family while the operation is still read-only.
+        for (&constraint_id, constraint) in self.indicator_constraint_collection.active() {
+            if substituted_variables.contains(&constraint.indicator_variable) {
+                return Err(SubstitutionError::IndicatorVariableSubstitution {
+                    indicator_variable: constraint.indicator_variable,
+                    constraint_id,
+                });
+            }
+        }
+        for (&constraint_id, constraint) in self.one_hot_constraint_collection.active() {
+            for &variable in &constraint.variables {
+                if substituted_variables.contains(&variable) {
+                    return Err(SubstitutionError::OneHotVariableSubstitution {
+                        variable,
+                        constraint_id,
+                    });
+                }
+            }
+        }
+        for (&constraint_id, constraint) in self.sos1_constraint_collection.active() {
+            for &variable in &constraint.variables {
+                if substituted_variables.contains(&variable) {
+                    return Err(SubstitutionError::Sos1VariableSubstitution {
+                        variable,
+                        constraint_id,
+                    });
+                }
+            }
+        }
+
+        let objective = if self
+            .objective
+            .required_ids()
+            .is_disjoint(&substituted_variables)
+        {
+            None
+        } else {
+            Some(self.objective.clone().substitute_acyclic(acyclic)?)
+        };
+
+        // Removed constraints are intentionally not rewritten here; they are
+        // normalized through `restore_constraint` when reactivated.
+        let mut constraint_replacements = BTreeMap::new();
+        for (&constraint_id, constraint) in self.constraint_collection.active() {
+            if !constraint
+                .required_ids()
+                .is_disjoint(&substituted_variables)
+            {
+                let mut replacement = constraint.clone();
+                replacement.stage.function =
+                    replacement.stage.function.substitute_acyclic(acyclic)?;
+                constraint_replacements.insert(constraint_id, replacement);
+            }
+        }
+
+        let mut indicator_replacements = BTreeMap::new();
+        for (&constraint_id, constraint) in self.indicator_constraint_collection.active() {
+            if !constraint
+                .stage
+                .function
+                .required_ids()
+                .is_disjoint(&substituted_variables)
+            {
+                let mut replacement = constraint.clone();
+                replacement.stage.function =
+                    replacement.stage.function.substitute_acyclic(acyclic)?;
+                indicator_replacements.insert(constraint_id, replacement);
+            }
+        }
+
+        let mut named_function_replacements = BTreeMap::new();
+        for (&id, named_function) in self.named_functions.iter() {
+            if !named_function
+                .function
+                .required_ids()
+                .is_disjoint(&substituted_variables)
+            {
+                named_function_replacements
+                    .insert(id, named_function.clone().substitute_acyclic(acyclic)?);
+            }
+        }
+
+        Ok(InstanceSubstitutionPlan {
+            objective,
+            constraint_replacements,
+            indicator_replacements,
+            named_function_replacements,
+        })
+    }
+
+    /// Commit a fully validated substitution plan using table-local effects.
+    fn commit_substitution(&mut self, plan: InstanceSubstitutionPlan) {
+        if let Some(objective) = plan.objective {
+            self.objective = objective;
+        }
+        self.constraint_collection
+            .replace_active_rows(plan.constraint_replacements)
+            .expect("replacement IDs were read from active constraints");
+        self.indicator_constraint_collection
+            .replace_active_rows(plan.indicator_replacements)
+            .expect("replacement IDs were read from active indicator constraints");
+        self.named_functions
+            .replace_rows(plan.named_function_replacements)
+            .expect("replacement IDs were read from named functions");
+    }
+
+    /// Apply a substitution together with prevalidated fresh decision variables.
+    ///
+    /// This owner-level operation is the narrow cross-module boundary used by
+    /// log encoding. The substitution plan cannot be detached from this
+    /// receiver and committed to another [`Instance`].
+    pub(super) fn substitute_acyclic_with_fresh_decision_variables(
+        &mut self,
+        acyclic: &crate::AcyclicAssignments,
+        fresh_variables: Vec<(VariableID, DecisionVariable, ModelingLabel)>,
+        atol: ATol,
+    ) -> crate::Result<()> {
+        let mut fresh_ids = BTreeSet::new();
+        for (id, _, _) in &fresh_variables {
+            if self.decision_variables.contains_key(id) || !fresh_ids.insert(*id) {
+                crate::bail!({ ?id }, "Fresh decision variable ID is already owned: {id:?}");
+            }
+        }
+        for id in acyclic.keys() {
+            if !self.decision_variables.contains_key(&id) {
+                crate::bail!({ ?id }, "Substitution target is not owned by this instance: {id:?}");
+            }
+        }
+        for id in acyclic.required_ids() {
+            if !self.decision_variables.contains_key(&id) && !fresh_ids.contains(&id) {
+                crate::bail!(
+                    { ?id },
+                    "Substitution references an unowned decision variable: {id:?}",
+                );
+            }
+        }
+
+        let plan = self.plan_substitution(acyclic)?;
+
+        // This is the last fallible operation. It plans and validates the
+        // dependency update before mutating the table, and clones only the
+        // assignment functions affected by this substitution.
+        self.decision_variable_dependency
+            .substitute_acyclic_in_place_atomic(acyclic)?;
+
+        for (id, variable, label) in fresh_variables {
+            self.decision_variables
+                .insert(id, variable, label, None, atol)
+                .expect("fresh decision variable IDs were reserved from this instance");
+        }
+        self.commit_substitution(plan);
+        Ok(())
+    }
+}
 
 impl Substitute for Instance {
     type Output = Self;
@@ -15,97 +194,10 @@ impl Substitute for Instance {
         if acyclic.is_empty() {
             return Ok(self);
         }
-
-        // Get the set of variables being substituted
-        let substituted_variables: std::collections::BTreeSet<VariableID> =
-            acyclic.iter().map(|(var_id, _)| *var_id).collect();
-
-        // Identify constraint IDs that depend on substituted variables
-        let mut affected_constraint_ids = std::collections::BTreeSet::new();
-
-        // Check active constraints only.
-        // Removed constraints are not checked here; they will be substituted
-        // when restored via `restore_constraint`. Constraint hints for removed
-        // constraints are discarded when the constraint is removed.
-        for (constraint_id, constraint) in self.constraint_collection.active() {
-            let required_ids = constraint.required_ids();
-            if !required_ids.is_disjoint(&substituted_variables) {
-                affected_constraint_ids.insert(*constraint_id);
-            }
-        }
-
-        // Apply substitution to the objective function
-        substitute_acyclic(&mut self.objective, acyclic)?;
-
-        // Apply substitution only to affected active constraints.
-        // Removed constraints are not substituted here; they will be substituted
-        // when restored via `restore_constraint`.
-        let mut constraint_replacements = BTreeMap::new();
-        for (&constraint_id, constraint) in self.constraint_collection.active() {
-            if affected_constraint_ids.contains(&constraint_id) {
-                let mut constraint = constraint.clone();
-                substitute_acyclic(&mut constraint.stage.function, acyclic)?;
-                constraint_replacements.insert(constraint_id, constraint);
-            }
-        }
-        self.constraint_collection
-            .replace_active_rows(constraint_replacements)
-            .expect("replacement IDs were read from active constraints");
-
-        // Check that no indicator constraint's indicator_variable is being substituted.
-        // Substituting an indicator variable would change the constraint type
-        // (e.g. fixing it to 1 makes it a regular constraint, fixing to 0 removes it).
-        // This is not yet supported; fail explicitly rather than silently producing
-        // an inconsistent result.
-        for (&cid, ic) in self.indicator_constraint_collection.active().iter() {
-            if substituted_variables.contains(&ic.indicator_variable) {
-                return Err(SubstitutionError::IndicatorVariableSubstitution {
-                    indicator_variable: ic.indicator_variable,
-                    constraint_id: cid,
-                });
-            }
-        }
-
-        // Apply substitution to the function part of active indicator constraints
-        let mut indicator_replacements = BTreeMap::new();
-        for (&constraint_id, ic) in self.indicator_constraint_collection.active() {
-            let required_ids = ic.stage.function.required_ids();
-            if !required_ids.is_disjoint(&substituted_variables) {
-                let mut ic = ic.clone();
-                substitute_acyclic(&mut ic.stage.function, acyclic)?;
-                indicator_replacements.insert(constraint_id, ic);
-            }
-        }
-        self.indicator_constraint_collection
-            .replace_active_rows(indicator_replacements)
-            .expect("replacement IDs were read from active indicator constraints");
-
-        // Check that no one-hot or SOS1 variable is being substituted.
-        for (&cid, oh) in self.one_hot_constraint_collection.active().iter() {
-            for var_id in &oh.variables {
-                if substituted_variables.contains(var_id) {
-                    return Err(SubstitutionError::OneHotVariableSubstitution {
-                        variable: *var_id,
-                        constraint_id: cid,
-                    });
-                }
-            }
-        }
-        for (&cid, sos1) in self.sos1_constraint_collection.active().iter() {
-            for var_id in &sos1.variables {
-                if substituted_variables.contains(var_id) {
-                    return Err(SubstitutionError::Sos1VariableSubstitution {
-                        variable: *var_id,
-                        constraint_id: cid,
-                    });
-                }
-            }
-        }
-
-        // Apply substitution to named functions and existing dependencies.
-        substitute_acyclic(&mut self.named_functions, acyclic)?;
-        substitute_acyclic(&mut self.decision_variable_dependency, acyclic)?;
-
+        let plan = self.plan_substitution(acyclic)?;
+        self.decision_variable_dependency =
+            std::mem::take(&mut self.decision_variable_dependency).substitute_acyclic(acyclic)?;
+        self.commit_substitution(plan);
         Ok(self)
     }
 
@@ -288,6 +380,27 @@ mod tests {
                 .into_iter()
                 .collect();
         assert_eq!(named_function.required_ids(), expected_ids);
+    }
+
+    #[test]
+    fn fresh_variable_substitution_rejects_unowned_rhs_atomically() {
+        let id = VariableID::from(0);
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(linear!(0)))
+            .decision_variables(BTreeMap::from([(id, DecisionVariable::continuous())]))
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap();
+        let acyclic = crate::AcyclicAssignments::new([(id, Function::from(linear!(999)))]).unwrap();
+        let before = instance.clone();
+
+        let err = instance
+            .substitute_acyclic_with_fresh_decision_variables(&acyclic, Vec::new(), ATol::default())
+            .unwrap_err();
+
+        assert!(err.to_string().contains("unowned decision variable"));
+        assert_eq!(instance, before);
     }
 
     #[test]

@@ -1,4 +1,4 @@
-"""Benchmark eight Plant Placement Problem formulations through SCIP only.
+"""Manual diagnostic comparing eight Plant Placement formulations in SCIP.
 
 Each ``placement_inputs`` parameterisation is converted to ``ommx.Instance``,
 then to ``pyscipopt.Model``, in session-scoped fixtures — the OMMX construction
@@ -6,7 +6,9 @@ and the OMMX → SCIP translation are *not* in the measurement. Each benchmark
 calls ``model.freeTransform()`` to discard SCIP's transformed problem from any
 previous run, then ``model.optimize()`` to re-run presolve and
 branch-and-bound. The reported time is therefore SCIP's own processing time,
-isolated from adapter overhead.
+isolated from adapter overhead. Originating from PR #809, this is a local
+formulation experiment rather than an OMMX regression guardrail; it remains
+outside the CodSpeed workflow and should be run only when revisiting the model.
 """
 
 from __future__ import annotations
@@ -30,6 +32,9 @@ from ommx.testing.placement import (
 )
 from ommx import Instance
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
+
+
+pytestmark = pytest.mark.benchmark_diagnostic
 
 _SIZES = [(6, 10), (12, 20), (24, 40), (48, 80)]
 _INSTANCES_PER_SIZE = 3
