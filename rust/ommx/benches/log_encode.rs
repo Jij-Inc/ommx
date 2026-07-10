@@ -29,7 +29,7 @@
 // - Regression: routing through a generic atomic helper clones and rebuilds
 //   every unrelated named-function row.
 // - Origin: https://github.com/Jij-Inc/ommx/pull/1047.
-// - Measured boundary/input: Rust SDK Instance::log_encode with 32,000 fixed,
+// - Measured boundary/input: Rust SDK Instance::log_encode with 8,000 fixed,
 //   deterministic named functions that do not reference the encoded variable.
 // - Cost model/evidence: inspect N functions for affected IDs plus fixed
 //   encoding work, without cloning their rows; compare the same URI across
@@ -282,9 +282,9 @@ fn log_encode_unrelated_named_functions(c: &mut Criterion) {
 }
 
 fn log_encode_unrelated_dependencies(c: &mut Criterion) {
-    const NUM_DEPENDENCIES: usize = 32_000;
+    const NUM_DEPENDENCIES: usize = 8_000;
     let instance = instance_with_unrelated_dependencies(NUM_DEPENDENCIES);
-    c.bench_function("log-encode-unrelated-dependencies[32000]", |b| {
+    c.bench_function("log-encode-unrelated-dependencies[8000]", |b| {
         b.iter_batched_ref(
             || instance.clone(),
             |instance| {
