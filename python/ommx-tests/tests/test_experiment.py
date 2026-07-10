@@ -9,7 +9,12 @@ from opentelemetry import trace as otel_trace
 from opentelemetry.proto.trace.v1.trace_pb2 import Status as ProtoStatus
 
 from ommx.adapter import SolverAdapter
-from ommx.experiment import Experiment, list_experiments
+from ommx.experiment import (
+    AutosavePolicy,
+    Experiment,
+    list_experiment_checkpoints,
+    list_experiments,
+)
 from ommx.tracing import TraceResult, render_text_tree
 from ommx import Instance, Solution
 
@@ -365,6 +370,37 @@ def test_run_close_updates_live_state():
     assert [run.status for run in experiment.runs] == ["finished"]
     assert experiment.runs[0].get_json("before-commit") == {"step": 1}
     assert experiment.run_parameters_df().loc[0, "solver"] == "scip"
+
+
+def test_experiment_autosave_policy_every_n_runs():
+    image_name = _image_name("autosave-every-two")
+    experiment = Experiment(image_name)
+    policy = AutosavePolicy.every_n_runs(2)
+    assert repr(policy) == "AutosavePolicy.every_n_runs(2)"
+    experiment.set_autosave_policy(policy)
+
+    with experiment.run():
+        pass
+    assert list_experiment_checkpoints(image_name) == []
+
+    with experiment.run():
+        pass
+    checkpoints = list_experiment_checkpoints(image_name)
+    assert len(checkpoints) == 1
+    assert checkpoints[0].status == "draft"
+    assert checkpoints[0].run_count == 2
+
+    experiment.commit()
+    assert list_experiment_checkpoints(image_name) == []
+
+
+def test_autosave_policy_rejects_invalid_intervals():
+    with pytest.raises(Exception, match="greater than zero"):
+        AutosavePolicy.every_n_runs(0)
+    with pytest.raises(Exception, match="finite and non-negative"):
+        AutosavePolicy.min_interval(math.inf)
+    with pytest.raises(Exception, match="finite and non-negative"):
+        AutosavePolicy.min_interval(-1.0)
 
 
 def test_keyboard_interrupt_records_interrupted_run_and_checkpoint():

@@ -2,6 +2,7 @@
 # ruff: noqa: F401
 
 from ommx._ommx_rust import (
+    AutosavePolicy,
     Experiment,
     ExperimentCheckpointRef,
     ExperimentRef,
@@ -14,6 +15,7 @@ from ommx._ommx_rust import (
 )
 
 __all__ = [
+    "AutosavePolicy",
     "Experiment",
     "ExperimentCheckpointRef",
     "ExperimentRef",

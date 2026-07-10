@@ -278,7 +278,7 @@ impl RunDyn {
             },
         );
         decrement_open_runs(open_runs);
-        if let Err(error) = state.autosave_checkpoint(registry_handle.registry()) {
+        if let Err(error) = state.autosave_after_run_close(registry_handle.registry()) {
             tracing::warn!(
                 error = %error,
                 "Failed to publish Experiment autosave checkpoint after Run close"
@@ -324,7 +324,7 @@ impl RunDyn {
             },
         );
         decrement_open_runs(open_runs);
-        if let Err(error) = state.autosave_checkpoint(registry_handle.registry()) {
+        if let Err(error) = state.autosave_after_run_close(registry_handle.registry()) {
             tracing::warn!(
                 error = %error,
                 "Failed to publish Experiment autosave checkpoint after Run close"

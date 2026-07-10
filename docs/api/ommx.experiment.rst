@@ -6,6 +6,7 @@ ommx.experiment
 .. toctree::
    :hidden:
 
+   _items/ommx.experiment.AutosavePolicy
    _items/ommx.experiment.Experiment
    _items/ommx.experiment.ExperimentCheckpointRef
    _items/ommx.experiment.ExperimentRef
