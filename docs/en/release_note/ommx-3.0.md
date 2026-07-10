@@ -8,6 +8,26 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🆕 Local Registry ref deletion and Experiment retention ([#1053](https://github.com/Jij-Inc/ommx/pull/1053))
+
+`ommx.artifact.remove_image()` removes a named or anonymous image ref from the
+Local Registry without deleting its content-addressed blobs. The CLI equivalent
+is `ommx rm <ref>`; add `--gc` to run the existing garbage collector after the
+ref is removed.
+
+`ommx.artifact.prune_anonymous()` now accepts `experiments=True` to include
+anonymous Experiment refs and `older_than="7d"` for age-based retention. The
+CLI exposes the same behavior through `ommx prune-anonymous --experiments
+--older-than 7d`. See [Experiment cleanup](../user_guide/experiment.md)
+for the complete reachability and GC workflow.
+
+```python
+from ommx.artifact import prune_anonymous, remove_image
+
+remove_image("example.com/team/experiment:obsolete")
+prune_anonymous(delete=True, experiments=True, older_than="7d")
+```
+
 ### 🆕 Artifact and Experiment listing from the Local Registry ([#1029](https://github.com/Jij-Inc/ommx/pull/1029))
 
 `ommx.artifact.list_artifacts()` now lists every OMMX Artifact ref from the
