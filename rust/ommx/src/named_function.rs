@@ -211,22 +211,23 @@ impl<T> NamedFunctionTable<T> {
         Ok(())
     }
 
-    /// Apply host-computed row replacements while preserving table-owned labels.
+    /// Replace existing named-function rows while preserving row identity and labels.
     ///
-    /// This is a storage effect for root-object operations such as
-    /// [`crate::Instance`] substitution. Every replacement ID is validated
-    /// before any row is changed, so an unknown ID leaves the table unchanged.
+    /// Crate-internal: host objects own semantic expression rewrites and use
+    /// this table primitive only to commit precomputed row replacements.
     pub(crate) fn replace_rows(
         &mut self,
         replacements: BTreeMap<NamedFunctionID, T>,
     ) -> crate::Result<()> {
-        if let Some(id) = replacements
-            .keys()
-            .find(|id| !self.entries.contains_key(id))
-        {
-            crate::bail!({ ?id }, "Cannot replace unknown named function ID {id:?}");
+        for id in replacements.keys() {
+            if !self.entries.contains_key(id) {
+                crate::bail!({ ?id }, "Named function with ID {id:?} not found");
+            }
         }
-        self.entries.extend(replacements);
+
+        for (id, row) in replacements {
+            self.entries.insert(id, row);
+        }
         Ok(())
     }
 
@@ -711,7 +712,7 @@ mod table_tests {
                 },
             )]))
             .unwrap_err();
-        assert!(err.to_string().contains("unknown named function ID"));
+        assert!(err.to_string().contains("not found"));
         assert_eq!(table, before);
     }
 

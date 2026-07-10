@@ -2,10 +2,11 @@
 //!
 //! Expression families vary total term count while assignment density is one,
 //! half, or all required IDs; each should traverse terms linearly. Instance
-//! families originate from issue #1027 and compare removed-only transaction
-//! overhead with active-constraint atomic and consuming paths. Each Instance
-//! family should remain O(C) in the constraint count C; the consuming path is
-//! expected to avoid the atomic path's whole-Instance clone constant.
+//! families originate from issue #1027. Removed-only and active families scale
+//! state or semantic work with the constraint count C and should remain O(C).
+//! The mixed-regular family holds state and active work fixed while C removed
+//! rows grow, so its Plan/Commit path should avoid O(C) removed-row traversal;
+//! O(C) growth would indicate that whole-Instance cloning returned.
 
 use criterion::{
     criterion_group, criterion_main, AxisScale, BenchmarkId, Criterion, PlotConfiguration,
@@ -14,8 +15,8 @@ use ommx::{
     linear,
     random::{arbitrary_state, random_deterministic, sample_deterministic},
     Constraint, ConstraintID, DecisionVariable, Evaluate, Function, Instance, Linear,
-    LinearParameters, Polynomial, PolynomialParameters, Quadratic, QuadraticParameters,
-    RemovedReason, Sense, VariableID, VariableIDSet,
+    LinearParameters, NamedFunction, NamedFunctionID, Polynomial, PolynomialParameters, Quadratic,
+    QuadraticParameters, RemovedReason, Sense, VariableID, VariableIDSet,
 };
 use proptest::prelude::Arbitrary;
 use std::collections::BTreeMap;
@@ -80,6 +81,61 @@ fn active_constraint_instance(num_constraints: usize) -> (Instance, ommx::v1::St
     (instance, state)
 }
 
+fn mixed_regular_instance(num_removed_constraints: usize) -> (Instance, ommx::v1::State) {
+    let active_var = VariableID::from(num_removed_constraints as u64);
+    let objective_var = VariableID::from(num_removed_constraints as u64 + 1);
+    let named_var = VariableID::from(num_removed_constraints as u64 + 2);
+
+    let mut decision_variables: BTreeMap<_, _> = (0..num_removed_constraints as u64)
+        .map(|id| (VariableID::from(id), DecisionVariable::continuous()))
+        .collect();
+    decision_variables.insert(active_var, DecisionVariable::continuous());
+    decision_variables.insert(objective_var, DecisionVariable::continuous());
+    decision_variables.insert(named_var, DecisionVariable::continuous());
+
+    let removed_reason = RemovedReason {
+        reason: "ommx.bench.partial_evaluate.mixed_regular_removed_constraints".to_string(),
+        parameters: Default::default(),
+    };
+    let removed_constraints = (0..num_removed_constraints as u64)
+        .map(|id| {
+            (
+                ConstraintID::from(id),
+                (
+                    Constraint::equal_to_zero(Function::from(linear!(id))),
+                    removed_reason.clone(),
+                ),
+            )
+        })
+        .collect();
+    let active_constraint_id = ConstraintID::from(num_removed_constraints as u64);
+    let constraints = BTreeMap::from([(
+        active_constraint_id,
+        Constraint::equal_to_zero(Function::from(linear!(active_var.into_inner()))),
+    )]);
+    let named_functions = BTreeMap::from([(
+        NamedFunctionID::from(0),
+        NamedFunction {
+            function: Function::from(linear!(named_var.into_inner())),
+        },
+    )]);
+    let state = [active_var, objective_var, named_var]
+        .into_iter()
+        .map(|id| (id.into_inner(), 0.0))
+        .collect();
+    let instance = Instance::builder()
+        .sense(Sense::Minimize)
+        .objective(Function::from(linear!(objective_var.into_inner())))
+        .decision_variables(decision_variables)
+        .constraints(constraints)
+        .removed_constraints(removed_constraints)
+        .named_functions(named_functions)
+        .build()
+        .unwrap();
+
+    (instance, state)
+}
+
 /// Substitute all decision variables in an Instance that has many regular
 /// constraints already moved into removed_constraints.
 fn partial_evaluate_instance_removed_constraints(c: &mut Criterion) {
@@ -113,9 +169,8 @@ fn partial_evaluate_instance_removed_constraints(c: &mut Criterion) {
 }
 
 /// Substitute all decision variables in an Instance that still has many active
-/// regular constraints. This exercises the fallback path where borrowed
-/// partial_evaluate keeps atomic rollback by cloning the whole Instance, while
-/// into_partial_evaluated can mutate the consumed Instance directly.
+/// regular constraints. This compares borrowed atomic partial_evaluate with
+/// consuming into_partial_evaluated on the same regular-only shape.
 fn partial_evaluate_instance_active_constraints(c: &mut Criterion) {
     let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
     let mut group = c.benchmark_group("partial-evaluate-instance-active-constraints");
@@ -154,6 +209,44 @@ fn partial_evaluate_instance_active_constraints(c: &mut Criterion) {
                         instance
                             .into_partial_evaluated(state, ommx::ATol::default())
                             .unwrap()
+                    },
+                    criterion::BatchSize::LargeInput,
+                )
+            },
+        );
+    }
+
+    group.finish();
+}
+
+/// Persistent scaling guardrail for issue #1027 and PR #1048.
+///
+/// The removed regular-constraint count is the only growing dimension. The
+/// state, objective, active regular constraints, and named functions stay fixed,
+/// so private Plan/Commit should avoid O(C) removed-table work; clone-backed
+/// fallback would add it. The measured boundary is borrowed atomic
+/// `Instance::partial_evaluate`; `iter_batched_ref` keeps fixture cloning outside
+/// that boundary. The existing three Instance scale points bound runner cost.
+fn partial_evaluate_instance_mixed_regular(c: &mut Criterion) {
+    let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
+    let mut group = c.benchmark_group("partial-evaluate-instance-mixed-regular");
+    group.plot_config(plot_config);
+
+    for num_removed_constraints in [1_000, 8_000, 32_000] {
+        let (instance, state) = mixed_regular_instance(num_removed_constraints);
+        group.bench_with_input(
+            BenchmarkId::new(
+                "partial-evaluate-instance-mixed-regular-atomic",
+                num_removed_constraints.to_string(),
+            ),
+            &(instance, state),
+            |b, (instance, state)| {
+                b.iter_batched_ref(
+                    || instance.clone(),
+                    |instance| {
+                        instance
+                            .partial_evaluate(state, ommx::ATol::default())
+                            .unwrap();
                     },
                     criterion::BatchSize::LargeInput,
                 )
@@ -318,5 +411,6 @@ criterion_group!(
     partial_evaluate_polynomial_one,
     partial_evaluate_instance_removed_constraints,
     partial_evaluate_instance_active_constraints,
+    partial_evaluate_instance_mixed_regular,
 );
 criterion_main!(benches);
