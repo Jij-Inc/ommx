@@ -115,7 +115,7 @@ def test_attachment_rejects_unknown_compression():
                 "payload",
                 "application/octet-stream",
                 b"payload",
-                compression="gzip",
+                compression="gzip",  # pyright: ignore[reportArgumentType] - runtime rejection
             )
 
 
