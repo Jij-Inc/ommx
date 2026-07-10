@@ -126,3 +126,11 @@ harness = false
 [[bench]]
 name = "mul"
 harness = false
+
+[[bench]]
+name = "reduce_binary_power"
+harness = false
+
+[[bench]]
+name = "log_encode"
+harness = false

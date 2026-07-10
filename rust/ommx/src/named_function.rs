@@ -211,6 +211,26 @@ impl<T> NamedFunctionTable<T> {
         Ok(())
     }
 
+    /// Replace existing named-function rows while preserving row identity and labels.
+    ///
+    /// Crate-internal: host objects own semantic expression rewrites and use
+    /// this table primitive only to commit precomputed row replacements.
+    pub(crate) fn replace_rows(
+        &mut self,
+        replacements: BTreeMap<NamedFunctionID, T>,
+    ) -> crate::Result<()> {
+        for id in replacements.keys() {
+            if !self.entries.contains_key(id) {
+                crate::bail!({ ?id }, "Named function with ID {id:?} not found");
+            }
+        }
+
+        for (id, row) in replacements {
+            self.entries.insert(id, row);
+        }
+        Ok(())
+    }
+
     pub fn contains_key(&self, id: &NamedFunctionID) -> bool {
         self.entries.contains_key(id)
     }
@@ -662,6 +682,38 @@ mod table_tests {
         assert!(err.to_string().contains("Duplicate named function ID"));
         assert_eq!(table.get(&id), Some(&row));
         assert_eq!(table.labels().name(id), Some("cost"));
+    }
+
+    #[test]
+    fn replace_rows_preserves_labels_and_rejects_unknown_ids_atomically() {
+        let id = NamedFunctionID::from(0);
+        let row = NamedFunction {
+            function: Function::Zero,
+        };
+        let mut labels = NamedFunctionLabelStore::default();
+        labels.set_name(id, "cost");
+        let mut table = NamedFunctionTable::new(BTreeMap::from([(id, row)]), labels).unwrap();
+
+        let replacement = NamedFunction {
+            function: Function::from(crate::linear!(1)),
+        };
+        table
+            .replace_rows(BTreeMap::from([(id, replacement.clone())]))
+            .unwrap();
+        assert_eq!(table.get(&id), Some(&replacement));
+        assert_eq!(table.labels().name(id), Some("cost"));
+
+        let before = table.clone();
+        let err = table
+            .replace_rows(BTreeMap::from([(
+                NamedFunctionID::from(1),
+                NamedFunction {
+                    function: Function::Zero,
+                },
+            )]))
+            .unwrap_err();
+        assert!(err.to_string().contains("not found"));
+        assert_eq!(table, before);
     }
 
     #[test]

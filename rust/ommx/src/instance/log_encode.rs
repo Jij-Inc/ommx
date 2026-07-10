@@ -1,9 +1,13 @@
 use super::{encoding::ensure_unit_spaced_integer_bound, Instance};
-use crate::{ATol, Bound, Coefficient, Function, Kind, Linear, Substitute, VariableID};
+use crate::{
+    ATol, Bound, Coefficient, DecisionVariable, Function, Kind, Linear, ModelingLabel, VariableID,
+};
 use std::collections::{BTreeMap, BTreeSet};
 
 const MAX_LOG_ENCODING_BITS: usize = 53;
 const MAX_LOG_ENCODING_RANGE_WIDTH: u64 = (1_u64 << MAX_LOG_ENCODING_BITS) - 1;
+type PlannedAuxiliaryVariable = (VariableID, DecisionVariable, ModelingLabel);
+type PlannedLogEncodings = (BTreeMap<VariableID, Linear>, Vec<PlannedAuxiliaryVariable>);
 
 fn log_encoding_bit_count(width: f64) -> crate::Result<usize> {
     if width == 0.0 {
@@ -84,10 +88,14 @@ impl Instance {
 
     /// Log-encode integer decision variables into binary decision variables.
     ///
-    /// The instance is cloned once, every requested variable is encoded on a
-    /// clone, and the result is committed back only if all encodings succeed.
-    /// Duplicate IDs are encoded once. Pass a single-element iterator such as
-    /// `[id]` to encode exactly one variable.
+    /// Every requested variable, auxiliary variable, and affected expression
+    /// rewrite is planned against `self` before anything is mutated, so any
+    /// validation or coefficient-arithmetic failure leaves the entire instance
+    /// unchanged. The validated plan is then committed with narrow table-local
+    /// effects. No whole-instance clone is made, and unrelated removed
+    /// constraints, special constraints, named functions, or metadata are not
+    /// cloned or dropped. Duplicate IDs are encoded once. Pass a single-element
+    /// iterator such as `[id]` to encode exactly one variable.
     ///
     /// `atol` is used when normalizing each decision variable bound to an
     /// integer bound. Ranges that would require more than
@@ -104,28 +112,70 @@ impl Instance {
             return Ok(BTreeMap::new());
         }
 
-        let mut encoded = self.clone();
         let mut encoding_specs = Vec::new();
-        for id in ids {
-            let (coefficients, offset) = encoded.log_encoding_spec(id, atol)?;
+        for &id in &ids {
+            let (coefficients, offset) = self.log_encoding_spec(id, atol)?;
             encoding_specs.push((id, coefficients, offset));
         }
         let auxiliary_count = encoding_specs
             .iter()
             .map(|(_, coefficients, _)| coefficients.len())
             .sum();
-        encoded.ensure_new_decision_variable_capacity(auxiliary_count)?;
+        self.ensure_new_decision_variable_capacity(auxiliary_count)?;
 
+        let (encodings, auxiliary_variables) =
+            self.plan_log_encodings(encoding_specs, auxiliary_count)?;
+        let assignments = encodings
+            .iter()
+            .map(|(&id, linear)| (id, Function::from(linear.clone())))
+            .collect::<Vec<_>>();
+        // Safe unwrap: each right-hand side uses only the fresh auxiliary IDs
+        // planned above, none of which are assignment keys.
+        let acyclic = crate::AcyclicAssignments::new(assignments).unwrap();
+        self.substitute_acyclic_with_fresh_decision_variables(&acyclic, auxiliary_variables, atol)?;
+        Ok(encodings)
+    }
+
+    fn plan_log_encodings(
+        &self,
+        encoding_specs: Vec<(VariableID, Vec<Coefficient>, f64)>,
+        auxiliary_count: usize,
+    ) -> crate::Result<PlannedLogEncodings> {
+        let first_auxiliary_id = if auxiliary_count == 0 {
+            0
+        } else {
+            self.next_variable_id()?.into_inner()
+        };
+        let mut auxiliary_variables = Vec::with_capacity(auxiliary_count);
         let mut encodings = BTreeMap::new();
-        let mut assignments = Vec::new();
+
         for (id, coefficients, offset) in encoding_specs {
-            let linear = encoded.create_log_encoding(id, coefficients, offset, atol)?;
-            assignments.push((id, Function::from(linear.clone())));
+            // Safe unwrap: log_encoding_coefficients only returns finite offsets.
+            let mut linear = Linear::try_from(offset).unwrap();
+            for (index, coefficient) in coefficients.into_iter().enumerate() {
+                let offset = u64::try_from(auxiliary_variables.len())
+                    .expect("auxiliary count was validated as u64");
+                let binary_id = VariableID::from(
+                    first_auxiliary_id
+                        .checked_add(offset)
+                        .expect("auxiliary ID capacity was validated"),
+                );
+                linear.add_term(binary_id.into(), coefficient)?;
+                auxiliary_variables.push((
+                    binary_id,
+                    DecisionVariable::binary(),
+                    ModelingLabel {
+                        name: Some("ommx.log_encode".to_string()),
+                        subscripts: vec![id.into_inner() as i64, index as i64],
+                        ..Default::default()
+                    },
+                ));
+            }
             encodings.insert(id, linear);
         }
-        encoded = encoded.substitute(assignments)?;
-        *self = encoded;
-        Ok(encodings)
+
+        debug_assert_eq!(auxiliary_variables.len(), auxiliary_count);
+        Ok((encodings, auxiliary_variables))
     }
 
     fn log_encoding_spec(
@@ -151,32 +201,6 @@ impl Instance {
             );
         }
         log_encoding_coefficients(v.bound(), atol)
-    }
-
-    fn create_log_encoding(
-        &mut self,
-        id: VariableID,
-        coefficients: Vec<Coefficient>,
-        offset: f64,
-        atol: ATol,
-    ) -> crate::Result<Linear> {
-        // Safe unwrap: offset is always finite from log_encoding_coefficients
-        let mut linear = Linear::try_from(offset).unwrap();
-        for (i, coefficient) in coefficients.iter().enumerate() {
-            let binary_id = self.new_decision_variable_with_label(
-                Kind::Binary,
-                Bound::of_binary(),
-                crate::ModelingLabel {
-                    name: Some("ommx.log_encode".to_string()),
-                    subscripts: vec![id.into_inner() as i64, i as i64],
-                    ..Default::default()
-                },
-                None,
-                atol,
-            )?;
-            linear.add_term(binary_id.into(), *coefficient)?;
-        }
-        Ok(linear)
     }
 }
 
@@ -816,6 +840,78 @@ mod tests {
         assert!(err.to_string().contains("SOS1"));
         assert!(instance.decision_variable_dependency.get(&id).is_none());
         assert_eq!(aux_variable_count(&instance, "ommx.log_encode"), 0);
+    }
+
+    #[test]
+    fn test_log_encode_is_atomic_when_coefficient_arithmetic_fails() {
+        let id = VariableID::from(0);
+        let variable = DecisionVariable::new(
+            Kind::Integer,
+            Bound::new(0.0, 3.0).unwrap(),
+            ATol::default(),
+        )
+        .unwrap();
+        let huge = crate::Coefficient::try_from(f64::MAX).unwrap();
+        let overflowing_constraint =
+            crate::Constraint::equal_to_zero(Function::from((huge * crate::linear!(0)).unwrap()));
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(crate::linear!(0)))
+            .decision_variables(BTreeMap::from([(id, variable)]))
+            .constraints(BTreeMap::from([(
+                crate::ConstraintID::from(0),
+                overflowing_constraint,
+            )]))
+            .build()
+            .unwrap();
+        let before = instance.clone();
+
+        let err = instance.log_encode([id], ATol::default()).unwrap_err();
+
+        assert!(err.to_string().contains("Coefficient must be finite"));
+        assert_eq!(instance, before);
+    }
+
+    #[test]
+    fn test_log_encode_preserves_unrelated_dependency_assignment() {
+        let encoded_id = VariableID::from(0);
+        let source_id = VariableID::from(1);
+        let dependent_id = VariableID::from(2);
+        let unrelated = Function::from(crate::linear!(1));
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(crate::linear!(0)))
+            .decision_variables(BTreeMap::from([
+                (
+                    encoded_id,
+                    DecisionVariable::new(
+                        Kind::Integer,
+                        Bound::new(0.0, 3.0).unwrap(),
+                        ATol::default(),
+                    )
+                    .unwrap(),
+                ),
+                (source_id, DecisionVariable::continuous()),
+                (dependent_id, DecisionVariable::continuous()),
+            ]))
+            .constraints(BTreeMap::new())
+            .decision_variable_dependency(crate::assign! {
+                2 <- crate::linear!(1)
+            })
+            .build()
+            .unwrap();
+
+        instance.log_encode([encoded_id], ATol::default()).unwrap();
+
+        assert_eq!(
+            instance.decision_variable_dependency.get(&dependent_id),
+            Some(&unrelated)
+        );
+        assert!(instance
+            .decision_variable_dependency
+            .get(&encoded_id)
+            .is_some());
+        assert_eq!(instance.decision_variable_dependency.len(), 2);
     }
 
     #[test]
