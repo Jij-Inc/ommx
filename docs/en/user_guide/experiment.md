@@ -386,13 +386,11 @@ ommx gc --delete
 ```
 
 Remove a specific named or anonymous ref with `ommx rm`. This removes only the
-mutable ref by default. Add `--gc` to run the normal GC pass afterward; its
-default grace period remains `24h` and can be changed with
-`--gc-grace-period`.
+mutable ref. Blob reclamation remains a separate `ommx gc --delete` operation,
+with the normal GC grace period applying.
 
 ```bash
 ommx rm example.com/team/experiment:obsolete
-ommx rm example.com/team/experiment:obsolete --gc
 ```
 
 After each deletion, the CLI prints a copyable rollback command containing the
@@ -401,16 +399,16 @@ removed ref's immutable Manifest digest:
 ```text
      Removed example.com/team/experiment:obsolete
     Rollback ommx restore-ref 'example.com/team/experiment:obsolete' 'sha256:...'
+     Storage Unreferenced data remains until a later `ommx gc --delete` removes it after the grace period.
 ```
 
 `restore-ref` validates the stored Manifest and its complete
 config/layer/subject closure, and refuses to overwrite the ref if it now points
 to a different digest. Validation and ref publication are serialized against
 deleting GC passes across processes. Rollback requires the complete closure to
-remain in the Local Registry CAS. `ommx rm --gc` protects the just-removed
-Manifest during that GC pass, but a later standalone `ommx gc --delete` may
-reclaim it. `prune-anonymous --delete` prints one rollback command per removed
-ref.
+remain in the Local Registry CAS. A later `ommx gc --delete` may reclaim it
+once it is unreachable and past the grace period. `prune-anonymous --delete`
+prints one rollback command per removed ref.
 
 The same operations are available from the Python SDK. Python returns
 structured reports instead of formatted CLI output.

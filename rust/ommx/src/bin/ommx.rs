@@ -62,7 +62,7 @@ enum Command {
 
     /// Remove one image ref from the Local Registry.
     ///
-    /// Content-addressed blobs are left in place unless `--gc` is passed.
+    /// Content-addressed blobs are left in place for a later garbage collection.
     Rm {
         /// Container image name to remove.
         image_name: String,
@@ -70,18 +70,6 @@ enum Command {
         /// Local registry root. Defaults to OMMX_LOCAL_REGISTRY_ROOT or the OS default data dir.
         #[clap(long)]
         root: Option<PathBuf>,
-
-        /// Run Local Registry garbage collection after removing the ref.
-        #[clap(long)]
-        gc: bool,
-
-        /// Keep unreachable blobs newer than this duration during `--gc`.
-        #[clap(
-            long,
-            default_value = "24h",
-            value_parser = GcOptions::parse_grace_period
-        )]
-        gc_grace_period: Duration,
     },
 
     /// Restore a removed Local Registry ref from its manifest digest.
@@ -425,12 +413,7 @@ fn main() -> Result<()> {
 
         Command::Export { image_name, output } => handle_export(image_name, output)?,
 
-        Command::Rm {
-            image_name,
-            root,
-            gc,
-            gc_grace_period,
-        } => handle_rm(image_name, root.as_ref(), *gc, *gc_grace_period)?,
+        Command::Rm { image_name, root } => handle_rm(image_name, root.as_ref())?,
 
         Command::RestoreRef {
             image_name,
@@ -604,12 +587,7 @@ fn handle_export(image_name: &str, output: &Path) -> Result<()> {
     Ok(())
 }
 
-fn handle_rm(
-    image_name: &str,
-    root: Option<&PathBuf>,
-    run_gc: bool,
-    gc_grace_period: Duration,
-) -> Result<()> {
+fn handle_rm(image_name: &str, root: Option<&PathBuf>) -> Result<()> {
     let image_name = ImageRef::parse(image_name)?;
     let registry = open_registry(root)?;
     let Some(removed) = registry.remove_image_ref(&image_name)? else {
@@ -618,13 +596,7 @@ fn handle_rm(
     };
     print_status("Removed".red().bold(), &image_name);
     print_rollback(&image_name.to_string(), &removed.manifest_digest, root);
-    if run_gc {
-        let result = registry.gc(&GcOptions {
-            protected_digests: vec![removed.manifest_digest],
-            grace_period: gc_grace_period,
-        })?;
-        print_gc_delete_report(&registry, &result, false);
-    }
+    print_status("Storage".blue().bold(), rm_storage_message());
     Ok(())
 }
 
@@ -903,6 +875,10 @@ fn print_rollback(image_name: &str, manifest_digest: &Digest, root: Option<&Path
     );
 }
 
+fn rm_storage_message() -> &'static str {
+    "Unreferenced data remains until a later `ommx gc --delete` removes it after the grace period."
+}
+
 fn rollback_command(image_name: &str, manifest_digest: &Digest, root: Option<&PathBuf>) -> String {
     let mut command = format!(
         "ommx restore-ref {} {}",
@@ -989,6 +965,31 @@ mod tests {
                 "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' ",
                 "--root '/tmp/registry with '\"'\"' quote'"
             )
+        );
+    }
+
+    #[test]
+    fn rm_has_no_implicit_gc_option_and_explains_storage_lifecycle() {
+        let command = Command::try_parse_from([
+            "ommx",
+            "rm",
+            "example.com/ommx/demo:deleted",
+            "--root",
+            "/tmp/registry",
+        ])
+        .unwrap();
+        let Command::Rm { image_name, root } = command else {
+            panic!("expected rm command");
+        };
+        assert_eq!(image_name, "example.com/ommx/demo:deleted");
+        assert_eq!(root, Some(PathBuf::from("/tmp/registry")));
+        assert!(
+            Command::try_parse_from(["ommx", "rm", "example.com/ommx/demo:deleted", "--gc",])
+                .is_err()
+        );
+        assert_eq!(
+            rm_storage_message(),
+            "Unreferenced data remains until a later `ommx gc --delete` removes it after the grace period."
         );
     }
 }

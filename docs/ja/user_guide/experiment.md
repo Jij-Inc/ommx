@@ -378,13 +378,12 @@ ommx prune-anonymous --delete --experiments --older-than 7d
 ommx gc --delete
 ```
 
-特定の named ref または anonymous ref は `ommx rm` で削除できます。デフォルトでは
-mutable ref だけを削除します。続けて通常の GC を実行するには `--gc` を付けます。
-GC の default grace period は `24h` のままで、`--gc-grace-period` で変更できます。
+特定の named ref または anonymous ref は `ommx rm` で削除できます。この command は
+mutable ref だけを削除します。blob の回収は独立した `ommx gc --delete` 操作であり、
+通常の GC grace period が適用されます。
 
 ```bash
 ommx rm example.com/team/experiment:obsolete
-ommx rm example.com/team/experiment:obsolete --gc
 ```
 
 削除後、CLI は削除した ref の immutable Manifest digest を含む、そのまま実行可能な
@@ -393,14 +392,15 @@ rollback command を表示します。
 ```text
      Removed example.com/team/experiment:obsolete
     Rollback ommx restore-ref 'example.com/team/experiment:obsolete' 'sha256:...'
+     Storage Unreferenced data remains until a later `ommx gc --delete` removes it after the grace period.
 ```
 
 `restore-ref` は保存済み Manifest と config/layer/subject を含む完全な closure を検証し、
 同じ ref が別の digest を指している場合は上書きを拒否します。検証と ref の publish は、
 別 process の削除 GC とも直列化されます。rollback には完全な closure が Local Registry
-CAS に残っている必要があります。`ommx rm --gc` の GC pass では直前に削除した Manifest
-を保護しますが、その後に単独で `ommx gc --delete` を実行すると回収される可能性が
-あります。`prune-anonymous --delete` は削除した ref ごとに rollback command を表示します。
+CAS に残っている必要があります。到達不能になって grace period を過ぎると、後から実行した
+`ommx gc --delete` に回収される可能性があります。`prune-anonymous --delete` は削除した
+ref ごとに rollback command を表示します。
 
 同じ操作は Python SDK からも実行できます。Python API は整形済みの CLI output ではなく、
 structured report を返します。

@@ -12,8 +12,8 @@ Changes merged after the most recent release will be appended here as they land,
 
 `ommx.artifact.remove_image()` removes a named or anonymous image ref from the
 Local Registry without deleting its content-addressed blobs. The CLI equivalent
-is `ommx rm <ref>`; add `--gc` to run the existing garbage collector after the
-ref is removed.
+is `ommx rm <ref>`. Its output explains that unreferenced data remains until a
+separate `ommx gc --delete` removes it after the grace period.
 
 Deletion output includes a copyable `ommx restore-ref <ref> <manifest-digest>`
 command. The equivalent Python API is `ommx.artifact.restore_image()`. Restore
