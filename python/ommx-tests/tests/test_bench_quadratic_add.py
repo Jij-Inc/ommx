@@ -1,3 +1,13 @@
+"""Persistent Python scaling guardrails for ``Quadratic.__iadd__``.
+
+Originating from PR #498, ``small_many`` detects a fallback that clones the
+growing accumulator and changes fixed-size accumulation from O(N) to O(N^2).
+``large_little`` holds the addition count at three and detects superlinear
+merge or rehash cost as operand term count grows. Because that work is
+Rust-internal and covered by the Rust ``sum`` suite, ``large_little`` is kept
+as a manual Python diagnostic rather than a persistent boundary guardrail.
+"""
+
 import pytest
 from ommx import Quadratic, Rng
 
@@ -36,13 +46,15 @@ def sum_quadratic_functions(functions: list[Quadratic]):
     return result
 
 
+@pytest.mark.benchmark_guardrail
 @pytest.mark.benchmark
 def test_sum_quadratic_small_many(benchmark, quadratic_small_many):
-    """Benchmark summing many small quadratic functions"""
+    """Measure repeated accumulation of many small Quadratic objects."""
     benchmark(sum_quadratic_functions, quadratic_small_many)
 
 
+@pytest.mark.benchmark_diagnostic
 @pytest.mark.benchmark
 def test_sum_quadratic_large_little(benchmark, quadratic_large_little):
-    """Benchmark summing few large quadratic functions"""
+    """Measure accumulation of a few high-term-count Quadratic objects."""
     benchmark(sum_quadratic_functions, quadratic_large_little)

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Benchmark Review"
+  short_description: "Review benchmark intent, evidence, and lifecycle"
+  default_prompt: "Use $benchmark-review to classify this benchmark's purpose, define its cost model and required evidence, and recommend its lifecycle and CI run policy."

@@ -1,4 +1,12 @@
-// Create partial evaluation benchmarks for Linear
+//! Persistent scaling guardrails for partial evaluation.
+//!
+//! Expression families vary total term count while assignment density is one,
+//! half, or all required IDs; each should traverse terms linearly. Instance
+//! families originate from issue #1027 and compare removed-only transaction
+//! overhead with active-constraint atomic and consuming paths. Each Instance
+//! family should remain O(C) in the constraint count C; the consuming path is
+//! expected to avoid the atomic path's whole-Instance clone constant.
+
 use criterion::{
     criterion_group, criterion_main, AxisScale, BenchmarkId, Criterion, PlotConfiguration,
 };
@@ -11,6 +19,10 @@ use ommx::{
 };
 use proptest::prelude::Arbitrary;
 use std::collections::BTreeMap;
+
+// A 10x span separates linear from quadratic growth without making every
+// instrumented expression benchmark pay for a 10,000-term profile.
+const EXPRESSION_SCALE: [usize; 3] = [100, 320, 1_000];
 
 fn removed_constraint_instance(num_constraints: usize) -> (Instance, ommx::v1::State) {
     let decision_variables = (0..num_constraints as u64)
@@ -163,7 +175,7 @@ fn bench_partial_evaluate<T, Parameters>(
     let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
     let mut group = c.benchmark_group(group_name);
     group.plot_config(plot_config.clone());
-    for num_terms in [100, 1_000, 10_000] {
+    for num_terms in EXPRESSION_SCALE {
         let lin: T = random_deterministic(parameter_generator(num_terms));
         let ids = id_selector(lin.required_ids());
         let state = sample_deterministic(arbitrary_state(ids));

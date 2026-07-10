@@ -1,3 +1,13 @@
+"""Persistent Python scaling guardrails for ``Function.__iadd__``.
+
+PR #498 introduced the Python in-place path and PR #990 removed per-operation
+Function normalization round-trips. ``small_many`` detects a return to
+quadratic accumulator rebuilding; ``large_little`` holds the operation count
+fixed and varies operand size to expose merge and wrapper-normalization cost.
+The latter is Rust-internal characterization and remains in the manual Python
+diagnostic suite; the Python ``small_many`` operator path is the guardrail.
+"""
+
 import pytest
 from ommx import Function, Rng
 
@@ -38,13 +48,15 @@ def sum_function_functions(functions: list[Function]):
     return result
 
 
+@pytest.mark.benchmark_guardrail
 @pytest.mark.benchmark
 def test_sum_function_small_many(benchmark, function_small_many):
-    """Benchmark summing many small functions"""
+    """Measure repeated accumulation of many small Function wrappers."""
     benchmark(sum_function_functions, function_small_many)
 
 
+@pytest.mark.benchmark_diagnostic
 @pytest.mark.benchmark
 def test_sum_function_large_little(benchmark, function_large_little):
-    """Benchmark summing few large functions"""
+    """Measure accumulation of a few high-term-count Function wrappers."""
     benchmark(sum_function_functions, function_large_little)

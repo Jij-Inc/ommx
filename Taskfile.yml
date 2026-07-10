@@ -21,9 +21,9 @@ includes:
 
 tasks:
   codspeed:trigger:
-    desc: Trigger GitHub Actions workflow for Codspeed on current branch
+    desc: Trigger the full CodSpeed suite on the current branch
     cmds:
-      - gh workflow run bench.yml --ref $(git branch --show-current)
+      - gh workflow run bench.yml --ref $(git branch --show-current) --field suite=full
 
   codspeed:list:
     desc: List all Codspeed workflows
