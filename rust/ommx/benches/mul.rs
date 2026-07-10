@@ -1,3 +1,10 @@
+//! Persistent quadratic-scaling guardrails for expression multiplication.
+//!
+//! Squaring an N-term expression generates up to N^2 term products. These
+//! families distinguish that expected quadratic work from additional
+//! superlinear allocation, hashing, or Function normalization overhead. The
+//! Function and PolynomialBase paths retain the regression signal from PR #990.
+
 use criterion::{
     criterion_group, criterion_main, AxisScale, BenchmarkId, Criterion, PlotConfiguration,
 };
@@ -13,7 +20,7 @@ fn square_linear(c: &mut Criterion) {
     let mut group = c.benchmark_group("square-linear");
     group.plot_config(plot_config.clone());
 
-    for &num_terms in &[10, 100] {
+    for &num_terms in &[10, 32, 100] {
         let f: Linear = random_deterministic(
             LinearParameters::new(num_terms, (3 * num_terms as u64).into()).unwrap(),
         );
@@ -37,7 +44,7 @@ fn square_quadratic(c: &mut Criterion) {
     let mut group = c.benchmark_group("square-quadratic");
     group.plot_config(plot_config.clone());
 
-    for &num_terms in &[10, 100] {
+    for &num_terms in &[10, 32, 100] {
         let f: Quadratic = random_deterministic(
             QuadraticParameters::new(num_terms, (3 * num_terms as u64).into()).unwrap(),
         );
@@ -61,7 +68,7 @@ fn square_polynomial(c: &mut Criterion) {
     let mut group = c.benchmark_group("square-polynomial");
     group.plot_config(plot_config.clone());
 
-    for &num_terms in &[10, 100] {
+    for &num_terms in &[10, 32, 100] {
         let f: Polynomial = random_deterministic(
             PolynomialParameters::new(num_terms, 3.into(), (3 * num_terms as u64).into()).unwrap(),
         );
@@ -89,7 +96,7 @@ fn square_function_linear(c: &mut Criterion) {
     let mut group = c.benchmark_group("square-function-linear");
     group.plot_config(plot_config.clone());
 
-    for &num_terms in &[10, 100] {
+    for &num_terms in &[10, 32, 100] {
         let f: Function = random_deterministic::<Linear>(
             LinearParameters::new(num_terms, (3 * num_terms as u64).into()).unwrap(),
         )
