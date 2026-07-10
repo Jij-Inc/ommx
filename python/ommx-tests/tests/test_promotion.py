@@ -6,7 +6,7 @@ from ommx import (
     DecisionVariable,
     Instance,
     OneHotConstraint,
-    OneHotPromotionCertificate,
+    OneHotPromotionWitness,
     PromotionAudit,
     PromotionPreview,
     PromotionReport,
@@ -25,39 +25,37 @@ def _instance_with_one_source() -> Instance:
     )
 
 
-def _certificate(
+def _witness(
     source_constraint_id: int = 10,
     variables: list[int] | None = None,
     target_one_hot_constraint_id: int | None = None,
-) -> OneHotPromotionCertificate:
-    return OneHotPromotionCertificate(
+) -> OneHotPromotionWitness:
+    return OneHotPromotionWitness(
         source_constraint_id=source_constraint_id,
         variables=[0, 1, 2] if variables is None else variables,
         target_one_hot_constraint_id=target_one_hot_constraint_id,
     )
 
 
-def test_certificate_shape_and_dry_run() -> None:
+def test_witness_shape_and_dry_run() -> None:
     with pytest.raises(ValueError, match="must be unique"):
-        _certificate(variables=[0, 0, 1])
+        _witness(variables=[0, 0, 1])
 
-    assert repr(_certificate(target_one_hot_constraint_id=7)) == (
-        "OneHotPromotionCertificate(source_constraint_id=10, variables=[0, 1, 2], "
+    assert repr(_witness(target_one_hot_constraint_id=7)) == (
+        "OneHotPromotionWitness(source_constraint_id=10, variables=[0, 1, 2], "
         "target_one_hot_constraint_id=7)"
     )
-    assert repr(_certificate()).endswith("target_one_hot_constraint_id=None)")
+    assert repr(_witness()).endswith("target_one_hot_constraint_id=None)")
 
-    empty = _certificate(variables=[])
+    empty = _witness(variables=[])
     instance = _instance_with_one_source()
     with pytest.raises(RuntimeError, match="must not be empty"):
-        instance.check_promotion_certificate(
-            empty, allowed={AdditionalCapability.OneHot}
-        )
+        instance.check_promotion_witness(empty, allowed={AdditionalCapability.OneHot})
 
-    certificate = _certificate()
+    witness = _witness()
     before = instance.to_v2_bytes()
-    preview = instance.check_promotion_certificate(
-        certificate, allowed={AdditionalCapability.OneHot}
+    preview = instance.check_promotion_witness(
+        witness, allowed={AdditionalCapability.OneHot}
     )
     assert isinstance(preview, PromotionPreview)
     assert preview.source_constraint_id == 10
@@ -66,13 +64,13 @@ def test_certificate_shape_and_dry_run() -> None:
     assert instance.to_v2_bytes() == before
 
     with pytest.raises(RuntimeError, match="allowed capabilities"):
-        instance.check_promotion_certificate(certificate, allowed=set())
+        instance.check_promotion_witness(witness, allowed=set())
 
 
 def test_single_promotion_and_audit_round_trip() -> None:
     instance = _instance_with_one_source()
-    result = instance.promote_with_certificate(
-        _certificate(), allowed={AdditionalCapability.OneHot}
+    result = instance.promote_with_witness(
+        _witness(), allowed={AdditionalCapability.OneHot}
     )
 
     assert isinstance(result, PromotionResult)
@@ -88,7 +86,7 @@ def test_single_promotion_and_audit_round_trip() -> None:
     assert removed.removed_reason_parameters == {
         "promotion.kind": "one_hot",
         "promotion.target_id": "0",
-        "promotion.certificate_version": "1",
+        "promotion.witness_version": "1",
     }
 
     audit = instance.verify_promotion_history(10)
@@ -114,10 +112,10 @@ def test_bulk_reserves_explicit_targets_and_is_atomic() -> None:
         one_hot_constraints={5: OneHotConstraint(variables=[0])},
         sense=Instance.MINIMIZE,
     )
-    report = instance.promote_with_certificates(
+    report = instance.promote_with_witnesses(
         [
-            _certificate(10, [0, 1]),
-            _certificate(11, [2, 3], target_one_hot_constraint_id=10),
+            _witness(10, [0, 1]),
+            _witness(11, [2, 3], target_one_hot_constraint_id=10),
         ],
         allowed={AdditionalCapability.OneHot},
     )
@@ -135,8 +133,8 @@ def test_bulk_reserves_explicit_targets_and_is_atomic() -> None:
     )
     before = invalid.to_v2_bytes()
     with pytest.raises(RuntimeError, match="not an equality"):
-        invalid.promote_with_certificates(
-            [_certificate(20, [0, 1]), _certificate(21, [2, 3])],
+        invalid.promote_with_witnesses(
+            [_witness(20, [0, 1]), _witness(21, [2, 3])],
             allowed={AdditionalCapability.OneHot},
         )
     assert invalid.to_v2_bytes() == before
@@ -144,9 +142,7 @@ def test_bulk_reserves_explicit_targets_and_is_atomic() -> None:
 
 def test_lowering_blocks_restore_of_promoted_source() -> None:
     instance = _instance_with_one_source()
-    instance.promote_with_certificate(
-        _certificate(), allowed={AdditionalCapability.OneHot}
-    )
+    instance.promote_with_witness(_witness(), allowed={AdditionalCapability.OneHot})
     assert instance.reduce_capabilities(set()) == {AdditionalCapability.OneHot}
     assert instance.required_capabilities == set()
     assert 0 in instance.removed_one_hot_constraints

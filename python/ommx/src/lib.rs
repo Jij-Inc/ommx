@@ -183,7 +183,7 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<AttachedDecisionVariable>()?;
     m.add_class::<Parameter>()?;
     m.add_class::<AdditionalCapability>()?;
-    m.add_class::<OneHotPromotionCertificate>()?;
+    m.add_class::<OneHotPromotionWitness>()?;
     m.add_class::<PromotionPreview>()?;
     m.add_class::<PromotionResult>()?;
     m.add_class::<PromotionReport>()?;
@@ -270,7 +270,7 @@ pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
     // Constraint capability
     "AdditionalCapability",
     // Verified constraint promotion
-    "OneHotPromotionCertificate",
+    "OneHotPromotionWitness",
     "PromotionPreview",
     "PromotionResult",
     "PromotionReport",

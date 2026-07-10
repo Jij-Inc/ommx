@@ -54,7 +54,7 @@ __all__ = [
     "LinearLike",
     "NamedFunction",
     "OneHotConstraint",
-    "OneHotPromotionCertificate",
+    "OneHotPromotionWitness",
     "OpenSolve",
     "Optimality",
     "Parameter",
@@ -2880,22 +2880,22 @@ class Instance:
         Raises if any underlying Big-M conversion fails (e.g. a SOS1 variable
         with a non-finite bound).
         """
-    def check_promotion_certificate(
+    def check_promotion_witness(
         self,
-        certificate: OneHotPromotionCertificate,
+        witness: OneHotPromotionWitness,
         allowed: builtins.set[AdditionalCapability],
     ) -> PromotionPreview:
         r"""
-        Check a detector-supplied one-hot promotion certificate without mutation.
+        Check a detector-supplied one-hot promotion witness without mutation.
 
         ``allowed`` is the caller's capability boundary and must contain
         :attr:`AdditionalCapability.OneHot`. The returned preview is
-        informational only; promotion methods re-validate the certificate
+        informational only; promotion methods re-validate the witness
         against the then-current instance.
         """
-    def promote_with_certificate(
+    def promote_with_witness(
         self,
-        certificate: OneHotPromotionCertificate,
+        witness: OneHotPromotionWitness,
         allowed: builtins.set[AdditionalCapability],
     ) -> PromotionResult:
         r"""
@@ -2906,17 +2906,17 @@ class Instance:
         copied to the new active one-hot constraint. On error the instance is
         unchanged.
         """
-    def promote_with_certificates(
+    def promote_with_witnesses(
         self,
-        certificates: typing.Sequence[OneHotPromotionCertificate],
+        witnesses: typing.Sequence[OneHotPromotionWitness],
         allowed: builtins.set[AdditionalCapability],
     ) -> PromotionReport:
         r"""
-        Verify and atomically apply multiple one-hot promotion certificates.
+        Verify and atomically apply multiple one-hot promotion witnesses.
 
-        Every certificate is checked against one pre-promotion snapshot.
+        Every witness is checked against one pre-promotion snapshot.
         Explicit target IDs are reserved before omitted IDs are allocated. Any
-        invalid or conflicting certificate leaves the instance unchanged.
+        invalid or conflicting witness leaves the instance unchanged.
         """
     def verify_promotion_history(
         self, source_constraint_id: builtins.int
@@ -4675,12 +4675,12 @@ class OneHotConstraint:
     def __deepcopy__(self, _memo: typing.Any) -> OneHotConstraint: ...
 
 @typing.final
-class OneHotPromotionCertificate:
+class OneHotPromotionWitness:
     r"""
     Detector-supplied witness for promoting a regular constraint to one-hot form.
 
-    Construction validates only the certificate's Python shape. Full semantic
-    validation is performed by :meth:`Instance.check_promotion_certificate` or
+    Construction validates only the witness's Python shape. Full semantic
+    validation is performed by :meth:`Instance.check_promotion_witness` or
     one of the promotion mutation methods against the current instance.
     """
     @property
@@ -4705,9 +4705,9 @@ class OneHotPromotionCertificate:
         source_constraint_id: builtins.int,
         variables: typing.Sequence[builtins.int],
         target_one_hot_constraint_id: typing.Optional[builtins.int] = None,
-    ) -> OneHotPromotionCertificate:
+    ) -> OneHotPromotionWitness:
         r"""
-        Create a one-hot promotion certificate.
+        Create a one-hot promotion witness.
 
         **Args:**
 
@@ -5433,10 +5433,10 @@ class PromotionAudit:
 @typing.final
 class PromotionPreview:
     r"""
-    Informational result of checking a promotion certificate.
+    Informational result of checking a promotion witness.
 
     This object is not an applicable mutation plan. Promotion methods always
-    re-validate the original certificate against the current instance.
+    re-validate the original witness against the current instance.
     """
     @property
     def source_constraint_id(self) -> builtins.int: ...

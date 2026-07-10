@@ -660,24 +660,21 @@ impl Instance {
         Ok(converted.into_iter().map(|c| c.into()).collect())
     }
 
-    /// Check a detector-supplied one-hot promotion certificate without mutation.
+    /// Check a detector-supplied one-hot promotion witness without mutation.
     ///
     /// ``allowed`` is the caller's capability boundary and must contain
     /// :attr:`AdditionalCapability.OneHot`. The returned preview is
-    /// informational only; promotion methods re-validate the certificate
+    /// informational only; promotion methods re-validate the witness
     /// against the then-current instance.
-    pub fn check_promotion_certificate(
+    pub fn check_promotion_witness(
         &self,
-        certificate: crate::OneHotPromotionCertificate,
+        witness: crate::OneHotPromotionWitness,
         allowed: std::collections::HashSet<crate::AdditionalCapability>,
     ) -> anyhow::Result<crate::PromotionPreview> {
         let allowed: ommx::Capabilities = allowed.into_iter().map(Into::into).collect();
         Ok(self
             .inner
-            .check_promotion_certificate(
-                &ommx::PromotionCertificate::OneHot(certificate.0),
-                &allowed,
-            )?
+            .check_promotion_witness(&ommx::PromotionWitness::OneHot(witness.0), &allowed)?
             .into())
     }
 
@@ -687,36 +684,36 @@ impl Instance {
     /// with reserved ``promotion.*`` audit metadata, and its full context is
     /// copied to the new active one-hot constraint. On error the instance is
     /// unchanged.
-    pub fn promote_with_certificate(
+    pub fn promote_with_witness(
         &mut self,
-        certificate: crate::OneHotPromotionCertificate,
+        witness: crate::OneHotPromotionWitness,
         allowed: std::collections::HashSet<crate::AdditionalCapability>,
     ) -> anyhow::Result<crate::PromotionResult> {
         let allowed: ommx::Capabilities = allowed.into_iter().map(Into::into).collect();
         Ok(self
             .inner
-            .promote_with_certificate(ommx::PromotionCertificate::OneHot(certificate.0), &allowed)?
+            .promote_with_witness(ommx::PromotionWitness::OneHot(witness.0), &allowed)?
             .into())
     }
 
-    /// Verify and atomically apply multiple one-hot promotion certificates.
+    /// Verify and atomically apply multiple one-hot promotion witnesses.
     ///
-    /// Every certificate is checked against one pre-promotion snapshot.
+    /// Every witness is checked against one pre-promotion snapshot.
     /// Explicit target IDs are reserved before omitted IDs are allocated. Any
-    /// invalid or conflicting certificate leaves the instance unchanged.
-    pub fn promote_with_certificates(
+    /// invalid or conflicting witness leaves the instance unchanged.
+    pub fn promote_with_witnesses(
         &mut self,
-        certificates: Vec<crate::OneHotPromotionCertificate>,
+        witnesses: Vec<crate::OneHotPromotionWitness>,
         allowed: std::collections::HashSet<crate::AdditionalCapability>,
     ) -> anyhow::Result<crate::PromotionReport> {
         let allowed: ommx::Capabilities = allowed.into_iter().map(Into::into).collect();
-        let certificates = certificates
+        let witnesses = witnesses
             .into_iter()
-            .map(|certificate| ommx::PromotionCertificate::OneHot(certificate.0))
+            .map(|witness| ommx::PromotionWitness::OneHot(witness.0))
             .collect();
         Ok(self
             .inner
-            .promote_with_certificates(certificates, &allowed)?
+            .promote_with_witnesses(witnesses, &allowed)?
             .into())
     }
 

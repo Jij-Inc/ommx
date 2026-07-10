@@ -8472,15 +8472,15 @@
               "deprecated": null
             },
             {
-              "name": "check_promotion_certificate",
-              "doc": "Check a detector-supplied one-hot promotion certificate without mutation.\n\n``allowed`` is the caller's capability boundary and must contain\n:attr:`AdditionalCapability.OneHot`. The returned preview is\ninformational only; promotion methods re-validate the certificate\nagainst the then-current instance.",
+              "name": "check_promotion_witness",
+              "doc": "Check a detector-supplied one-hot promotion witness without mutation.\n\n``allowed`` is the caller's capability boundary and must contain\n:attr:`AdditionalCapability.OneHot`. The returned preview is\ninformational only; promotion methods re-validate the witness\nagainst the then-current instance.",
               "signatures": [
                 {
                   "parameters": [
                     {
-                      "name": "certificate",
+                      "name": "witness",
                       "type_": {
-                        "display": "OneHotPromotionCertificate",
+                        "display": "OneHotPromotionWitness",
                         "link_target": null,
                         "children": []
                       },
@@ -10150,15 +10150,15 @@
               "deprecated": null
             },
             {
-              "name": "promote_with_certificate",
+              "name": "promote_with_witness",
               "doc": "Verify and atomically promote one regular constraint to one-hot form.\n\nThe source regular constraint is retained in ``removed_constraints``\nwith reserved ``promotion.*`` audit metadata, and its full context is\ncopied to the new active one-hot constraint. On error the instance is\nunchanged.",
               "signatures": [
                 {
                   "parameters": [
                     {
-                      "name": "certificate",
+                      "name": "witness",
                       "type_": {
-                        "display": "OneHotPromotionCertificate",
+                        "display": "OneHotPromotionWitness",
                         "link_target": null,
                         "children": []
                       },
@@ -10191,19 +10191,19 @@
               "deprecated": null
             },
             {
-              "name": "promote_with_certificates",
-              "doc": "Verify and atomically apply multiple one-hot promotion certificates.\n\nEvery certificate is checked against one pre-promotion snapshot.\nExplicit target IDs are reserved before omitted IDs are allocated. Any\ninvalid or conflicting certificate leaves the instance unchanged.",
+              "name": "promote_with_witnesses",
+              "doc": "Verify and atomically apply multiple one-hot promotion witnesses.\n\nEvery witness is checked against one pre-promotion snapshot.\nExplicit target IDs are reserved before omitted IDs are allocated. Any\ninvalid or conflicting witness leaves the instance unchanged.",
               "signatures": [
                 {
                   "parameters": [
                     {
-                      "name": "certificates",
+                      "name": "witnesses",
                       "type_": {
-                        "display": "Sequence[OneHotPromotionCertificate]",
+                        "display": "Sequence[OneHotPromotionWitness]",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "OneHotPromotionCertificate",
+                            "display": "OneHotPromotionWitness",
                             "link_target": null,
                             "children": []
                           }
@@ -13885,8 +13885,8 @@
         },
         {
           "kind": "Class",
-          "name": "OneHotPromotionCertificate",
-          "doc": "Detector-supplied witness for promoting a regular constraint to one-hot form.\n\nConstruction validates only the certificate's Python shape. Full semantic\nvalidation is performed by :meth:`Instance.check_promotion_certificate` or\none of the promotion mutation methods against the current instance.",
+          "name": "OneHotPromotionWitness",
+          "doc": "Detector-supplied witness for promoting a regular constraint to one-hot form.\n\nConstruction validates only the witness's Python shape. Full semantic\nvalidation is performed by :meth:`Instance.check_promotion_witness` or\none of the promotion mutation methods against the current instance.",
           "bases": [],
           "methods": [
             {
@@ -13917,7 +13917,7 @@
             },
             {
               "name": "__new__",
-              "doc": "Create a one-hot promotion certificate.\n\n**Args:**\n\n- `source_constraint_id`: Active regular constraint claimed to be one-hot.\n- `variables`: Claimed one-hot decision-variable IDs. Duplicates are rejected.\n- `target_one_hot_constraint_id`: Optional requested target ID. Omit to allocate one.",
+              "doc": "Create a one-hot promotion witness.\n\n**Args:**\n\n- `source_constraint_id`: Active regular constraint claimed to be one-hot.\n- `variables`: Claimed one-hot decision-variable IDs. Duplicates are rejected.\n- `target_one_hot_constraint_id`: Optional requested target ID. Omit to allocate one.",
               "signatures": [
                 {
                   "parameters": [
@@ -13965,7 +13965,7 @@
                     }
                   ],
                   "return_type": {
-                    "display": "OneHotPromotionCertificate",
+                    "display": "OneHotPromotionWitness",
                     "link_target": null,
                     "children": []
                   }
@@ -18154,7 +18154,7 @@
         {
           "kind": "Class",
           "name": "PromotionPreview",
-          "doc": "Informational result of checking a promotion certificate.\n\nThis object is not an applicable mutation plan. Promotion methods always\nre-validate the original certificate against the current instance.",
+          "doc": "Informational result of checking a promotion witness.\n\nThis object is not an applicable mutation plan. Promotion methods always\nre-validate the original witness against the current instance.",
           "bases": [],
           "methods": [
             {
@@ -30627,7 +30627,7 @@
     "ommx.Linear": "ommx",
     "ommx.NamedFunction": "ommx",
     "ommx.OneHotConstraint": "ommx",
-    "ommx.OneHotPromotionCertificate": "ommx",
+    "ommx.OneHotPromotionWitness": "ommx",
     "ommx.Optimality": "ommx",
     "ommx.Parameter": "ommx",
     "ommx.ParametricInstance": "ommx",

@@ -6,29 +6,29 @@ use std::collections::{BTreeMap, BTreeSet};
 
 /// A detector-supplied witness for promoting a regular constraint.
 ///
-/// Certificates are never trusted as mutation plans. [`Instance`] recomputes
+/// Witnesses are never trusted as mutation plans. [`Instance`] recomputes
 /// the represented mathematical condition against its current state whenever
-/// a certificate is checked or applied.
+/// a witness is checked or applied.
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PromotionCertificate {
+pub enum PromotionWitness {
     /// Promote an exact linear equality over binary variables to one-hot form.
-    OneHot(OneHotPromotionCertificate),
+    OneHot(OneHotPromotionWitness),
 }
 
 // Data-carrying enums are not supported by the derive. Delegate to the
-// certificate payload so its variable-set allocation remains visible.
-impl crate::logical_memory::LogicalMemoryProfile for PromotionCertificate {
+// witness payload so its variable-set allocation remains visible.
+impl crate::logical_memory::LogicalMemoryProfile for PromotionWitness {
     fn visit_logical_memory<V: crate::logical_memory::LogicalMemoryVisitor>(
         &self,
         path: &mut crate::logical_memory::Path,
         visitor: &mut V,
     ) {
         match self {
-            Self::OneHot(certificate) => {
+            Self::OneHot(witness) => {
                 crate::logical_memory::LogicalMemoryProfile::visit_logical_memory(
-                    certificate,
-                    path.with("PromotionCertificate.OneHot").as_mut(),
+                    witness,
+                    path.with("PromotionWitness.OneHot").as_mut(),
                     visitor,
                 );
             }
@@ -36,9 +36,9 @@ impl crate::logical_memory::LogicalMemoryProfile for PromotionCertificate {
     }
 }
 
-impl From<OneHotPromotionCertificate> for PromotionCertificate {
-    fn from(certificate: OneHotPromotionCertificate) -> Self {
-        Self::OneHot(certificate)
+impl From<OneHotPromotionWitness> for PromotionWitness {
+    fn from(witness: OneHotPromotionWitness) -> Self {
+        Self::OneHot(witness)
     }
 }
 
@@ -46,10 +46,10 @@ impl From<OneHotPromotionCertificate> for PromotionCertificate {
 ///
 /// The fields are intentionally only claims. In particular, callers may
 /// construct an empty variable set, refer to non-binary variables, or choose a
-/// used target ID. [`Instance::check_promotion_certificate`] and the mutation
+/// used target ID. [`Instance::check_promotion_witness`] and the mutation
 /// methods validate every invariant against the current instance.
 #[derive(Debug, Clone, PartialEq, Eq, crate::logical_memory::LogicalMemoryProfile)]
-pub struct OneHotPromotionCertificate {
+pub struct OneHotPromotionWitness {
     /// Active regular constraint to replace with a one-hot constraint.
     pub source_constraint_id: ConstraintID,
     /// Claimed one-hot members. The set representation makes membership unique.
@@ -58,10 +58,10 @@ pub struct OneHotPromotionCertificate {
     pub target_one_hot_constraint_id: Option<OneHotConstraintID>,
 }
 
-/// Informational result of checking one promotion certificate.
+/// Informational result of checking one promotion witness.
 ///
 /// A preview cannot be applied. The instance may change after it is returned,
-/// so all mutation entry points verify the original certificate again.
+/// so all mutation entry points verify the original witness again.
 #[derive(Debug, Clone, PartialEq, Eq, crate::logical_memory::LogicalMemoryProfile)]
 pub struct PromotionPreview {
     source_constraint_id: ConstraintID,
@@ -174,55 +174,55 @@ impl PlannedOneHotPromotion {
 }
 
 impl Instance {
-    /// Check a detector-supplied certificate without mutating this instance.
+    /// Check a detector-supplied witness without mutating this instance.
     ///
-    /// `allowed` is the caller's capability boundary. A one-hot certificate is
+    /// `allowed` is the caller's capability boundary. A one-hot witness is
     /// rejected unless it contains [`AdditionalCapability::OneHot`]. Any target
     /// ID in the returned preview is informational only; applying the
-    /// certificate later repeats validation and allocation against the then
+    /// witness later repeats validation and allocation against the then
     /// current instance.
-    pub fn check_promotion_certificate(
+    pub fn check_promotion_witness(
         &self,
-        certificate: &PromotionCertificate,
+        witness: &PromotionWitness,
         allowed: &Capabilities,
     ) -> crate::Result<PromotionPreview> {
-        let plans = self.plan_promotions(std::slice::from_ref(certificate), allowed)?;
+        let plans = self.plan_promotions(std::slice::from_ref(witness), allowed)?;
         Ok(plans
             .first()
-            .expect("a one-element certificate slice produces one plan")
+            .expect("a one-element witness slice produces one plan")
             .preview())
     }
 
-    /// Verify and atomically apply one promotion certificate.
+    /// Verify and atomically apply one promotion witness.
     ///
     /// Verification is repeated against the current instance. On error, the
     /// instance remains unchanged.
-    pub fn promote_with_certificate(
+    pub fn promote_with_witness(
         &mut self,
-        certificate: PromotionCertificate,
+        witness: PromotionWitness,
         allowed: &Capabilities,
     ) -> crate::Result<PromotionResult> {
-        let plans = self.plan_promotions(std::slice::from_ref(&certificate), allowed)?;
+        let plans = self.plan_promotions(std::slice::from_ref(&witness), allowed)?;
         let result = plans
             .first()
-            .expect("a one-element certificate slice produces one plan")
+            .expect("a one-element witness slice produces one plan")
             .result();
         self.apply_promotion_plans(&plans)?;
         Ok(result)
     }
 
-    /// Verify and atomically apply multiple promotion certificates.
+    /// Verify and atomically apply multiple promotion witnesses.
     ///
-    /// All certificates are checked against one pre-promotion snapshot.
+    /// All witnesses are checked against one pre-promotion snapshot.
     /// Duplicate sources and targets are rejected. Explicit target IDs are
     /// reserved before omitted IDs are allocated, and any failure leaves this
     /// instance unchanged.
-    pub fn promote_with_certificates(
+    pub fn promote_with_witnesses(
         &mut self,
-        certificates: Vec<PromotionCertificate>,
+        witnesses: Vec<PromotionWitness>,
         allowed: &Capabilities,
     ) -> crate::Result<PromotionReport> {
-        let plans = self.plan_promotions(&certificates, allowed)?;
+        let plans = self.plan_promotions(&witnesses, allowed)?;
         let source_to_target = plans
             .iter()
             .map(|plan| (plan.source_constraint_id, plan.target_one_hot_constraint_id))
@@ -233,7 +233,7 @@ impl Instance {
 
     /// Re-validate the retained audit trail for a previous one-hot promotion.
     ///
-    /// This method trusts neither the original detector nor its certificate. It
+    /// This method trusts neither the original detector nor its witness. It
     /// reads the reserved `promotion.*` removal metadata, finds the target
     /// one-hot constraint in either lifecycle state, and checks exact
     /// equivalence with the retained regular source row again.
@@ -318,7 +318,7 @@ impl Instance {
 
     fn plan_promotions(
         &self,
-        certificates: &[PromotionCertificate],
+        witnesses: &[PromotionWitness],
         allowed: &Capabilities,
     ) -> crate::Result<Vec<PlannedOneHotPromotion>> {
         let mut source_ids = BTreeSet::new();
@@ -332,21 +332,21 @@ impl Instance {
         let existing_target_ids = target_ids.clone();
 
         // Reserve every explicit target before allocating any omitted target.
-        for certificate in certificates {
-            match certificate {
-                PromotionCertificate::OneHot(certificate) => {
+        for witness in witnesses {
+            match witness {
+                PromotionWitness::OneHot(witness) => {
                     if !allowed.contains(&AdditionalCapability::OneHot) {
                         crate::bail!(
                             "One-hot promotion is outside the caller's allowed capabilities"
                         );
                     }
-                    if !source_ids.insert(certificate.source_constraint_id) {
+                    if !source_ids.insert(witness.source_constraint_id) {
                         crate::bail!(
                             "Duplicate promotion source constraint ID {:?}",
-                            certificate.source_constraint_id
+                            witness.source_constraint_id
                         );
                     }
-                    if let Some(target_id) = certificate.target_one_hot_constraint_id {
+                    if let Some(target_id) = witness.target_one_hot_constraint_id {
                         if existing_target_ids.contains(&target_id) {
                             crate::bail!(
                                 "One-hot promotion target ID {target_id:?} is already used"
@@ -360,32 +360,32 @@ impl Instance {
             }
         }
 
-        let mut plans = Vec::with_capacity(certificates.len());
-        for certificate in certificates {
-            match certificate {
-                PromotionCertificate::OneHot(certificate) => {
-                    let target_id = match certificate.target_one_hot_constraint_id {
+        let mut plans = Vec::with_capacity(witnesses.len());
+        for witness in witnesses {
+            match witness {
+                PromotionWitness::OneHot(witness) => {
+                    let target_id = match witness.target_one_hot_constraint_id {
                         Some(target_id) => target_id,
                         None => allocate_one_hot_target_id(&mut target_ids)?,
                     };
                     let source = self
                         .constraint_collection
                         .active()
-                        .get(&certificate.source_constraint_id)
+                        .get(&witness.source_constraint_id)
                         .ok_or_else(|| {
                             crate::error!(
                                 "Active regular constraint {:?} was not found",
-                                certificate.source_constraint_id
+                                witness.source_constraint_id
                             )
                         })?;
                     self.verify_one_hot_equivalence(
-                        certificate.source_constraint_id,
+                        witness.source_constraint_id,
                         source,
-                        &certificate.variables,
+                        &witness.variables,
                     )?;
                     plans.push(PlannedOneHotPromotion {
-                        source_constraint_id: certificate.source_constraint_id,
-                        variables: certificate.variables.clone(),
+                        source_constraint_id: witness.source_constraint_id,
+                        variables: witness.variables.clone(),
                         target_one_hot_constraint_id: target_id,
                     });
                 }
@@ -490,8 +490,8 @@ impl Instance {
                 plan.target_one_hot_constraint_id.into_inner().to_string(),
             );
             parameters.insert(
-                PROMOTION_CERTIFICATE_VERSION_PARAMETER.to_string(),
-                PROMOTION_CERTIFICATE_VERSION.to_string(),
+                PROMOTION_WITNESS_VERSION_PARAMETER.to_string(),
+                PROMOTION_WITNESS_VERSION.to_string(),
             );
             staged.constraint_collection.relax(
                 plan.source_constraint_id,
@@ -610,12 +610,12 @@ mod tests {
         Function::Linear(Linear::try_from_terms(terms).unwrap())
     }
 
-    fn certificate(
+    fn witness(
         source_constraint_id: u64,
         variable_ids: impl IntoIterator<Item = u64>,
         target_one_hot_constraint_id: Option<u64>,
-    ) -> PromotionCertificate {
-        OneHotPromotionCertificate {
+    ) -> PromotionWitness {
+        OneHotPromotionWitness {
             source_constraint_id: ConstraintID::from(source_constraint_id),
             variables: variables(variable_ids),
             target_one_hot_constraint_id: target_one_hot_constraint_id
@@ -667,11 +667,11 @@ mod tests {
                 },
             )
             .unwrap();
-        let certificate = certificate(10, [1, 2, 3], None);
+        let witness = witness(10, [1, 2, 3], None);
 
         let before = instance.clone();
         let preview = instance
-            .check_promotion_certificate(&certificate, &allowed_one_hot())
+            .check_promotion_witness(&witness, &allowed_one_hot())
             .unwrap();
         assert_eq!(instance, before, "dry-run verification must not mutate");
         assert_eq!(preview.source_constraint_id(), ConstraintID::from(10));
@@ -682,7 +682,7 @@ mod tests {
         );
 
         let result = instance
-            .promote_with_certificate(certificate, &allowed_one_hot())
+            .promote_with_witness(witness, &allowed_one_hot())
             .unwrap();
         assert_eq!(result.source_constraint_id(), ConstraintID::from(10));
         assert_eq!(
@@ -730,8 +730,8 @@ mod tests {
         assert_eq!(
             removed_reason
                 .parameters
-                .get(PROMOTION_CERTIFICATE_VERSION_PARAMETER),
-            Some(&PROMOTION_CERTIFICATE_VERSION.to_string())
+                .get(PROMOTION_WITNESS_VERSION_PARAMETER),
+            Some(&PROMOTION_WITNESS_VERSION.to_string())
         );
 
         let audit = instance
@@ -750,28 +750,28 @@ mod tests {
     fn accepts_positive_and_negative_exact_scalar_multiples() {
         for coefficient in [1.0, 2.0, -1.0, -3.5] {
             one_source_instance(coefficient)
-                .check_promotion_certificate(&certificate(10, [1, 2, 3], None), &allowed_one_hot())
+                .check_promotion_witness(&witness(10, [1, 2, 3], None), &allowed_one_hot())
                 .unwrap();
         }
     }
 
     #[test]
-    fn rejects_disallowed_nonbinary_and_non_exact_certificates() {
+    fn rejects_disallowed_nonbinary_and_non_exact_witnesses() {
         let instance = one_source_instance(1.0);
         let err = instance
-            .check_promotion_certificate(&certificate(10, [1, 2, 3], None), &Capabilities::new())
+            .check_promotion_witness(&witness(10, [1, 2, 3], None), &Capabilities::new())
             .unwrap_err();
         assert!(err.to_string().contains("allowed capabilities"));
 
         for invalid in [
-            certificate(10, [], None),
-            certificate(10, [1, 2, 5], None),
-            certificate(10, [1, 2, 99], None),
-            certificate(10, [1, 2], None),
-            certificate(999, [1, 2, 3], None),
+            witness(10, [], None),
+            witness(10, [1, 2, 5], None),
+            witness(10, [1, 2, 99], None),
+            witness(10, [1, 2], None),
+            witness(999, [1, 2, 3], None),
         ] {
             assert!(instance
-                .check_promotion_certificate(&invalid, &allowed_one_hot())
+                .check_promotion_witness(&invalid, &allowed_one_hot())
                 .is_err());
         }
 
@@ -780,7 +780,7 @@ mod tests {
             Constraint::less_than_or_equal_to_zero(exact_one_hot_function(&[1, 2, 3], 1.0)),
         )]));
         assert!(inequality
-            .check_promotion_certificate(&certificate(10, [1, 2, 3], None), &allowed_one_hot(),)
+            .check_promotion_witness(&witness(10, [1, 2, 3], None), &allowed_one_hot(),)
             .is_err());
 
         let unequal = instance_with_constraints(BTreeMap::from([(
@@ -788,7 +788,7 @@ mod tests {
             Constraint::equal_to_zero(linear_function(&[(1, 1.0), (2, 2.0)], -1.0)),
         )]));
         assert!(unequal
-            .check_promotion_certificate(&certificate(10, [1, 2], None), &allowed_one_hot(),)
+            .check_promotion_witness(&witness(10, [1, 2], None), &allowed_one_hot(),)
             .is_err());
 
         let wrong_constant = instance_with_constraints(BTreeMap::from([(
@@ -796,7 +796,7 @@ mod tests {
             Constraint::equal_to_zero(linear_function(&[(1, 1.0), (2, 1.0)], -2.0)),
         )]));
         assert!(wrong_constant
-            .check_promotion_certificate(&certificate(10, [1, 2], None), &allowed_one_hot(),)
+            .check_promotion_witness(&witness(10, [1, 2], None), &allowed_one_hot(),)
             .is_err());
 
         let approximate = instance_with_constraints(BTreeMap::from([(
@@ -804,7 +804,7 @@ mod tests {
             Constraint::equal_to_zero(linear_function(&[(1, 1.0), (2, 1.0 + f64::EPSILON)], -1.0)),
         )]));
         assert!(approximate
-            .check_promotion_certificate(&certificate(10, [1, 2], None), &allowed_one_hot(),)
+            .check_promotion_witness(&witness(10, [1, 2], None), &allowed_one_hot(),)
             .is_err());
     }
 
@@ -818,7 +818,7 @@ mod tests {
         )]));
 
         let err = instance
-            .check_promotion_certificate(&certificate(10, [1, 2], None), &allowed_one_hot())
+            .check_promotion_witness(&witness(10, [1, 2], None), &allowed_one_hot())
             .unwrap_err();
         assert!(err.to_string().contains("not exactly linear"));
     }
@@ -836,14 +836,14 @@ mod tests {
             )
             .unwrap();
         assert!(active_collision
-            .check_promotion_certificate(&certificate(10, [1, 2, 3], Some(7)), &allowed_one_hot(),)
+            .check_promotion_witness(&witness(10, [1, 2, 3], Some(7)), &allowed_one_hot(),)
             .is_err());
 
         active_collision
             .convert_one_hot_to_constraint(OneHotConstraintID::from(7))
             .unwrap();
         assert!(active_collision
-            .check_promotion_certificate(&certificate(10, [1, 2, 3], Some(7)), &allowed_one_hot(),)
+            .check_promotion_witness(&witness(10, [1, 2, 3], Some(7)), &allowed_one_hot(),)
             .is_err());
     }
 
@@ -869,11 +869,8 @@ mod tests {
             .unwrap();
 
         let report = instance
-            .promote_with_certificates(
-                vec![
-                    certificate(10, [1, 2], None),
-                    certificate(11, [3, 4], Some(10)),
-                ],
+            .promote_with_witnesses(
+                vec![witness(10, [1, 2], None), witness(11, [3, 4], Some(10))],
                 &allowed_one_hot(),
             )
             .unwrap();
@@ -887,11 +884,8 @@ mod tests {
 
         let duplicate_source_before = instance.clone();
         assert!(instance
-            .promote_with_certificates(
-                vec![
-                    certificate(99, [1], Some(20)),
-                    certificate(99, [1], Some(21)),
-                ],
+            .promote_with_witnesses(
+                vec![witness(99, [1], Some(20)), witness(99, [1], Some(21)),],
                 &allowed_one_hot(),
             )
             .is_err());
@@ -909,8 +903,8 @@ mod tests {
         ]));
         let before = atomic.clone();
         assert!(atomic
-            .promote_with_certificates(
-                vec![certificate(20, [1, 2], None), certificate(21, [3, 4], None),],
+            .promote_with_witnesses(
+                vec![witness(20, [1, 2], None), witness(21, [3, 4], None),],
                 &allowed_one_hot(),
             )
             .is_err());
@@ -918,11 +912,8 @@ mod tests {
 
         let before = atomic.clone();
         assert!(atomic
-            .promote_with_certificates(
-                vec![
-                    certificate(20, [1, 2], Some(30)),
-                    certificate(21, [3, 4], Some(30)),
-                ],
+            .promote_with_witnesses(
+                vec![witness(20, [1, 2], Some(30)), witness(21, [3, 4], Some(30)),],
                 &allowed_one_hot(),
             )
             .is_err());
@@ -943,10 +934,10 @@ mod tests {
         ]));
 
         let report = instance
-            .promote_with_certificates(
+            .promote_with_witnesses(
                 vec![
-                    certificate(10, [1, 2], None),
-                    certificate(11, [3, 4], Some(u64::MAX)),
+                    witness(10, [1, 2], None),
+                    witness(11, [3, 4], Some(u64::MAX)),
                 ],
                 &allowed_one_hot(),
             )
@@ -963,9 +954,9 @@ mod tests {
     #[test]
     fn preview_is_not_a_reusable_plan() {
         let mut instance = one_source_instance(1.0);
-        let certificate = certificate(10, [1, 2, 3], None);
+        let witness = witness(10, [1, 2, 3], None);
         let preview = instance
-            .check_promotion_certificate(&certificate, &allowed_one_hot())
+            .check_promotion_witness(&witness, &allowed_one_hot())
             .unwrap();
         assert_eq!(
             preview.target_one_hot_constraint_id(),
@@ -981,7 +972,7 @@ mod tests {
             )
             .unwrap();
         let result = instance
-            .promote_with_certificate(certificate, &allowed_one_hot())
+            .promote_with_witness(witness, &allowed_one_hot())
             .unwrap();
         assert_eq!(
             result.target_one_hot_constraint_id(),
@@ -993,7 +984,7 @@ mod tests {
     fn lowering_retains_auditable_history_and_blocks_source_restore() {
         let mut instance = one_source_instance(-1.0);
         instance
-            .promote_with_certificate(certificate(10, [1, 2, 3], None), &allowed_one_hot())
+            .promote_with_witness(witness(10, [1, 2, 3], None), &allowed_one_hot())
             .unwrap();
         instance.reduce_capabilities(&Capabilities::new()).unwrap();
         assert!(instance.one_hot_constraints().is_empty());
@@ -1026,7 +1017,7 @@ mod tests {
     fn audit_normalizes_members_removed_by_exact_zero_propagation() {
         let mut instance = one_source_instance(1.0);
         instance
-            .promote_with_certificate(certificate(10, [1, 2, 3], None), &allowed_one_hot())
+            .promote_with_witness(witness(10, [1, 2, 3], None), &allowed_one_hot())
             .unwrap();
         instance
             .partial_evaluate(
@@ -1061,7 +1052,7 @@ mod tests {
     fn audit_rejects_unjustified_target_shrinkage() {
         let mut instance = one_source_instance(1.0);
         instance
-            .promote_with_certificate(certificate(10, [1, 2, 3], None), &allowed_one_hot())
+            .promote_with_witness(witness(10, [1, 2, 3], None), &allowed_one_hot())
             .unwrap();
         instance
             .one_hot_constraint_collection

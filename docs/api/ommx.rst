@@ -23,7 +23,7 @@ ommx
    _items/ommx.AttachedDecisionVariable
    _items/ommx.Parameter
    _items/ommx.AdditionalCapability
-   _items/ommx.OneHotPromotionCertificate
+   _items/ommx.OneHotPromotionWitness
    _items/ommx.PromotionPreview
    _items/ommx.PromotionResult
    _items/ommx.PromotionReport

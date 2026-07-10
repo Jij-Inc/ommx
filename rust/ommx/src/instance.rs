@@ -34,8 +34,8 @@ pub use arbitrary::{InstanceParameters, InstanceSpace};
 pub use builder::*;
 pub use parametric_builder::*;
 pub use promotion::{
-    OneHotPromotionCertificate, PromotionAudit, PromotionCertificate, PromotionPreview,
-    PromotionReport, PromotionResult,
+    OneHotPromotionWitness, PromotionAudit, PromotionPreview, PromotionReport, PromotionResult,
+    PromotionWitness,
 };
 pub use stats::*;
 
@@ -57,9 +57,9 @@ use std::collections::{BTreeMap, HashMap};
 const ONE_HOT_PROMOTION_REASON: &str = "ommx.Instance.promote_constraint_to_one_hot";
 const PROMOTION_KIND_PARAMETER: &str = "promotion.kind";
 const PROMOTION_TARGET_ID_PARAMETER: &str = "promotion.target_id";
-const PROMOTION_CERTIFICATE_VERSION_PARAMETER: &str = "promotion.certificate_version";
+const PROMOTION_WITNESS_VERSION_PARAMETER: &str = "promotion.witness_version";
 const ONE_HOT_PROMOTION_KIND: &str = "one_hot";
-const PROMOTION_CERTIFICATE_VERSION: &str = "1";
+const PROMOTION_WITNESS_VERSION: &str = "1";
 
 fn promoted_one_hot_target(
     removed_reason: &RemovedReason,
@@ -80,14 +80,14 @@ fn promoted_one_hot_target(
 
     let version = removed_reason
         .parameters
-        .get(PROMOTION_CERTIFICATE_VERSION_PARAMETER)
+        .get(PROMOTION_WITNESS_VERSION_PARAMETER)
         .ok_or_else(|| {
             crate::error!(
-                "Promotion metadata is missing parameter {PROMOTION_CERTIFICATE_VERSION_PARAMETER:?}"
+                "Promotion metadata is missing parameter {PROMOTION_WITNESS_VERSION_PARAMETER:?}"
             )
         })?;
-    if version != PROMOTION_CERTIFICATE_VERSION {
-        crate::bail!("Unsupported promotion certificate version {version:?}");
+    if version != PROMOTION_WITNESS_VERSION {
+        crate::bail!("Unsupported promotion witness version {version:?}");
     }
 
     let raw_target_id = removed_reason
@@ -255,7 +255,7 @@ pub enum Sense {
 /// [`Self::add_constraint`] / [`Self::add_indicator_constraint`] /
 /// [`Self::add_one_hot_constraint`] / [`Self::add_sos1_constraint`], and the
 /// internal `relax_constraint` / `relax_indicator_constraint` /
-/// `promote_with_certificate` / `convert_all_one_hots_to_constraints` /
+/// `promote_with_witness` / `convert_all_one_hots_to_constraints` /
 /// `convert_all_sos1_to_constraints` paths that populate the removed maps.
 /// Constraint-family storage is mutated through operation-level collection
 /// primitives so active/removed disjointness, removed reasons, and context

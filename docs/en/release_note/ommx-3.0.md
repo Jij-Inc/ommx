@@ -8,9 +8,9 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
-### 🆕 Verified one-hot promotion ([#1024](https://github.com/Jij-Inc/ommx/issues/1024))
+### 🆕 Verified one-hot promotion ([#1050](https://github.com/Jij-Inc/ommx/pull/1050))
 
-{class}`~ommx.OneHotPromotionCertificate` and the new
+{class}`~ommx.OneHotPromotionWitness` and the new
 {class}`~ommx.Instance` promotion methods let presolvers and other detectors
 promote an active regular equality such as `x1 + x2 + x3 = 1` to a first-class
 one-hot constraint. OMMX rechecks the witness exactly against the current
@@ -20,20 +20,20 @@ nonzero scalar multiple of `sum(x) - 1`. Approximate and nonlinear matches are
 rejected.
 
 ```python
-from ommx import AdditionalCapability, OneHotPromotionCertificate
+from ommx import AdditionalCapability, OneHotPromotionWitness
 
-certificate = OneHotPromotionCertificate(
+witness = OneHotPromotionWitness(
     source_constraint_id=10,
     variables=[1, 2, 3],
 )
-result = instance.promote_with_certificate(
-    certificate,
+result = instance.promote_with_witness(
+    witness,
     allowed={AdditionalCapability.OneHot},
 )
 ```
 
-Use {meth}`~ommx.Instance.check_promotion_certificate` for a non-mutating
-preview and {meth}`~ommx.Instance.promote_with_certificates` for all-or-nothing
+Use {meth}`~ommx.Instance.check_promotion_witness` for a non-mutating
+preview and {meth}`~ommx.Instance.promote_with_witnesses` for all-or-nothing
 bulk promotion. The original regular constraint is retained as removed with
 reserved `promotion.*` metadata, while
 {meth}`~ommx.Instance.verify_promotion_history` re-validates the retained

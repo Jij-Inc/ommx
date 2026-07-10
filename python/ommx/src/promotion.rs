@@ -4,18 +4,18 @@ use std::collections::{BTreeMap, BTreeSet};
 
 /// Detector-supplied witness for promoting a regular constraint to one-hot form.
 ///
-/// Construction validates only the certificate's Python shape. Full semantic
-/// validation is performed by :meth:`Instance.check_promotion_certificate` or
+/// Construction validates only the witness's Python shape. Full semantic
+/// validation is performed by :meth:`Instance.check_promotion_witness` or
 /// one of the promotion mutation methods against the current instance.
 #[gen_stub_pyclass]
 #[pyclass(eq, frozen)]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct OneHotPromotionCertificate(pub(crate) ommx::OneHotPromotionCertificate);
+pub struct OneHotPromotionWitness(pub(crate) ommx::OneHotPromotionWitness);
 
 #[gen_stub_pymethods]
 #[pymethods]
-impl OneHotPromotionCertificate {
-    /// Create a one-hot promotion certificate.
+impl OneHotPromotionWitness {
+    /// Create a one-hot promotion witness.
     ///
     /// **Args:**
     ///
@@ -34,10 +34,10 @@ impl OneHotPromotionCertificate {
             variables.into_iter().map(ommx::VariableID::from).collect();
         if variables.len() != variable_count {
             return Err(PyValueError::new_err(
-                "One-hot promotion certificate variables must be unique",
+                "One-hot promotion witness variables must be unique",
             ));
         }
-        Ok(Self(ommx::OneHotPromotionCertificate {
+        Ok(Self(ommx::OneHotPromotionWitness {
             source_constraint_id: ommx::ConstraintID::from(source_constraint_id),
             variables,
             target_one_hot_constraint_id: target_one_hot_constraint_id
@@ -70,17 +70,17 @@ impl OneHotPromotionCertificate {
             .target_one_hot_constraint_id()
             .map_or_else(|| "None".to_string(), |id| id.to_string());
         format!(
-            "OneHotPromotionCertificate(source_constraint_id={}, variables={:?}, target_one_hot_constraint_id={target})",
+            "OneHotPromotionWitness(source_constraint_id={}, variables={:?}, target_one_hot_constraint_id={target})",
             self.source_constraint_id(),
             self.variables(),
         )
     }
 }
 
-/// Informational result of checking a promotion certificate.
+/// Informational result of checking a promotion witness.
 ///
 /// This object is not an applicable mutation plan. Promotion methods always
-/// re-validate the original certificate against the current instance.
+/// re-validate the original witness against the current instance.
 #[gen_stub_pyclass]
 #[pyclass(eq, frozen)]
 #[derive(Debug, Clone, PartialEq, Eq)]
