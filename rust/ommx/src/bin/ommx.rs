@@ -46,6 +46,17 @@ enum Command {
     /// List the images in the local registry
     List,
 
+    /// Show the total size of unique blobs reachable from a local image ref
+    Size {
+        /// One or more container image names stored in the Local Registry
+        #[clap(required = true)]
+        image_names: Vec<String>,
+
+        /// Local registry root. Defaults to OMMX_LOCAL_REGISTRY_ROOT or the OS default data dir.
+        #[clap(long)]
+        root: Option<PathBuf>,
+    },
+
     /// Import an OCI archive or OCI Image Layout directory into the local registry
     Import {
         /// Path of OCI archive or OCI directory
@@ -427,6 +438,8 @@ fn main() -> Result<()> {
             }
         }
 
+        Command::Size { image_names, root } => handle_size(image_names, root.as_ref())?,
+
         Command::ImportLegacy { root, replace } => handle_import_legacy(root.as_ref(), *replace)?,
 
         Command::PruneAnonymous {
@@ -584,6 +597,27 @@ fn handle_import(path: &Path) -> Result<()> {
 fn handle_export(image_name: &str, output: &Path) -> Result<()> {
     let name = ImageRef::parse(image_name)?;
     LocalArtifact::open(name)?.save(output)?;
+    Ok(())
+}
+
+fn handle_size(image_names: &[String], root: Option<&PathBuf>) -> Result<()> {
+    let registry = open_registry(root)?;
+    let sizes = image_names
+        .iter()
+        .map(|image_name| {
+            let image_name = ImageRef::parse(image_name)?;
+            let artifact = LocalArtifact::open_in_registry(&registry, image_name.clone())?;
+            Ok((image_name, artifact.referenced_blob_size()?))
+        })
+        .collect::<Result<Vec<_>>>()?;
+
+    for (image_name, size) in sizes {
+        print_status("Image".blue().bold(), image_name);
+        print_status(
+            "Size".green().bold(),
+            format_args!("{} ({size} bytes)", format_bytes(size)),
+        );
+    }
     Ok(())
 }
 
@@ -991,5 +1025,34 @@ mod tests {
             rm_storage_message(),
             "Unreferenced data remains until a later `ommx gc --delete` removes it after the grace period."
         );
+    }
+
+    #[test]
+    fn size_cli_accepts_multiple_images_and_an_explicit_registry_root() {
+        let command = Command::try_parse_from([
+            "ommx",
+            "size",
+            "example.com/ommx/experiment:first",
+            "example.com/ommx/experiment:second",
+            "--root",
+            "/tmp/registry",
+        ])
+        .unwrap();
+        let Command::Size { image_names, root } = command else {
+            panic!("expected size command");
+        };
+        assert_eq!(
+            image_names,
+            [
+                "example.com/ommx/experiment:first",
+                "example.com/ommx/experiment:second"
+            ]
+        );
+        assert_eq!(root, Some(PathBuf::from("/tmp/registry")));
+    }
+
+    #[test]
+    fn size_cli_requires_at_least_one_image() {
+        assert!(Command::try_parse_from(["ommx", "size"]).is_err());
     }
 }

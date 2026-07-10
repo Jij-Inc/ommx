@@ -199,6 +199,22 @@ Experiment data is stored in the CAS, with refs and listing caches in SQLite.
 | Ref | SQLite rows in the Local Registry index | The name or checkpoint pointer that makes a manifest reachable |
 | Listing cache | SQLite rows keyed by manifest or config digest | Original Manifest and Experiment Config JSON used by registry listings |
 
+Use {command}`ommx size` to inspect the logical referenced size of one or more
+local Artifact or Experiment image refs:
+
+```console
+ommx size \
+  example.com/optimization/qap-experiments:tai20a-highs-20260710 \
+  example.com/optimization/qap-experiments:tai20a-scip-20260710
+```
+
+The reported value is the sum of unique CAS blobs reachable from that ref: its
+root manifest, config, layers, and recursive OCI `subject` chain. A blob is
+counted once within one ref even when the manifest contains the same digest
+more than once. Blobs shared by different refs are counted for every ref, so do
+not add these values to estimate the Local Registry's physical disk usage. Use
+`--root <path>` to inspect a non-default Local Registry.
+
 The cache stores the original JSON bytes under their content digest and verifies
 that digest when reading them. A missing cache row is populated from the CAS on
 listing, so the first listing after a v1 Local Registry migration or an older
