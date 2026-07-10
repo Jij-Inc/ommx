@@ -360,18 +360,11 @@ pub enum SolveOutput {
     SampleSet(SampleSet),
 }
 
-fn validate_solve_output_media_type(
-    media_type: &oci_spec::image::MediaType,
-    supports_sample_set_output: bool,
-) -> Result<()> {
-    if media_types::is_solution_payload_media_type(media_type) {
+fn validate_solve_output_media_type(media_type: &oci_spec::image::MediaType) -> Result<()> {
+    if media_types::is_solution_payload_media_type(media_type)
+        || media_types::is_sample_set_payload_media_type(media_type)
+    {
         return Ok(());
-    }
-    if supports_sample_set_output && media_types::is_sample_set_payload_media_type(media_type) {
-        return Ok(());
-    }
-    if media_types::is_sample_set_payload_media_type(media_type) {
-        crate::bail!("SampleSet Solve outputs require Experiment config format version 2");
     }
     crate::bail!(
         "Solve output media type is {}, expected an OMMX Solution or SampleSet payload",
@@ -380,7 +373,7 @@ fn validate_solve_output_media_type(
 }
 
 fn decode_solve_output(descriptor: &StoredDescriptor<'_>) -> Result<SolveOutput> {
-    validate_solve_output_media_type(descriptor.media_type(), true)?;
+    validate_solve_output_media_type(descriptor.media_type())?;
     if media_types::is_solution_payload_media_type(descriptor.media_type()) {
         Ok(SolveOutput::Solution(
             descriptor.registry().get_solution_layer(descriptor)?,

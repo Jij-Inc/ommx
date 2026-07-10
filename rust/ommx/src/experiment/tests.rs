@@ -1,9 +1,6 @@
 //! Tests for the experiment session model.
 
-use super::config::{
-    ExperimentConfig, ExperimentConfigRun, ExperimentConfigSolve, LayerRef,
-    CURRENT_EXPERIMENT_CONFIG_FORMAT_VERSION,
-};
+use super::config::{ExperimentConfig, ExperimentConfigRun, ExperimentConfigSolve, LayerRef};
 use super::parameter::RunParameterTable;
 use super::{
     AttachmentLogger, AttachmentTable, AutosavePolicy, Experiment, ExperimentDyn, ExperimentStatus,
@@ -176,39 +173,6 @@ fn no_feasible_sample_set() -> (Instance, crate::SampleSet) {
         .unwrap();
     assert!(sample_set.best_feasible().is_err());
     (instance, sample_set)
-}
-
-#[test]
-fn experiment_config_defaults_missing_format_version_to_legacy() {
-    let config: ExperimentConfig = serde_json::from_value(json!({
-        "status": EXPERIMENT_STATUS_FINISHED,
-        "attachments": { "entries": {} },
-        "runs": [],
-        "run_parameters": 0,
-    }))
-    .unwrap();
-    assert_eq!(config.format_version, 1);
-    config.validate_format_version().unwrap();
-}
-
-#[test]
-fn experiment_config_rejects_future_format_version() {
-    let config = ExperimentConfig {
-        format_version: CURRENT_EXPERIMENT_CONFIG_FORMAT_VERSION + 1,
-        status: EXPERIMENT_STATUS_FINISHED.to_string(),
-        requested_image_name: None,
-        attachments: AttachmentTable::new(),
-        runs: Vec::new(),
-        run_parameters: LayerRef(0),
-    };
-    let err = config
-        .validate_format_version()
-        .expect_err("future Experiment config formats must be rejected");
-    assert!(
-        err.to_string()
-            .contains("Unsupported Experiment config format version"),
-        "{err:#}"
-    );
 }
 
 #[test]
@@ -626,7 +590,6 @@ fn list_experiments_caches_non_experiment_manifests_as_negative_results() -> any
 
     let run_parameters = empty_run_parameters_layer(&registry);
     let config = ExperimentConfig {
-        format_version: CURRENT_EXPERIMENT_CONFIG_FORMAT_VERSION,
         status: EXPERIMENT_STATUS_FINISHED.to_string(),
         requested_image_name: Some(generic_with_experiment_config_name.to_string()),
         attachments: AttachmentTable::new(),
@@ -1066,7 +1029,6 @@ fn generic_artifact_with_experiment_config_is_not_an_experiment() {
     let registry = temp.registry();
     let run_parameters = empty_run_parameters_layer(registry);
     let config = ExperimentConfig {
-        format_version: CURRENT_EXPERIMENT_CONFIG_FORMAT_VERSION,
         status: EXPERIMENT_STATUS_FINISHED.to_string(),
         requested_image_name: None,
         attachments: AttachmentTable::new(),
@@ -1347,6 +1309,7 @@ fn log_finished_solve_materializes_solve_entry_with_layer_refs() {
         let config = artifact.stored_config().unwrap();
         let config_json: serde_json::Value =
             serde_json::from_slice(&blob_bytes(&artifact, &config)).unwrap();
+        assert!(config_json.get("format_version").is_none());
         assert_eq!(config_json["attachments"], json!({ "entries": {} }));
         assert_eq!(config_json["run_parameters"], json!(3));
         assert_eq!(config_json["runs"][0]["status"], json!(RUN_STATUS_FINISHED));
@@ -1426,10 +1389,6 @@ fn log_finished_sample_preserves_sample_set_without_feasible_samples() {
         let sealed = experiment.commit()?;
         let artifact = sealed.artifact();
         let config = experiment_config(&artifact);
-        assert_eq!(
-            config.format_version,
-            CURRENT_EXPERIMENT_CONFIG_FORMAT_VERSION
-        );
         let output_ref = config.runs[0].solves[0]
             .output
             .expect("finished sampler call has an output");
@@ -1451,15 +1410,21 @@ fn log_finished_sample_preserves_sample_set_without_feasible_samples() {
 }
 
 #[test]
-fn legacy_config_rejects_sample_set_solve_output() {
+fn loaded_experiment_rejects_unknown_solve_output_media_type() {
     let temp = crate::artifact::local_registry::TempLocalRegistry::new().unwrap();
     let registry = temp.registry();
-    let (instance, sample_set) = no_feasible_sample_set();
-    let input = registry.store_instance_layer(&instance).unwrap();
-    let output = registry.store_sample_set_layer(&sample_set).unwrap();
+    let input = registry
+        .store_layer_blob(media_types::v1_instance(), b"input", HashMap::new())
+        .unwrap();
+    let output = registry
+        .store_layer_blob(
+            MediaType::Other("application/json".into()),
+            b"{}",
+            HashMap::new(),
+        )
+        .unwrap();
     let run_parameters = empty_run_parameters_layer(registry);
     let config = ExperimentConfig {
-        format_version: 1,
         status: EXPERIMENT_STATUS_FINISHED.to_string(),
         requested_image_name: None,
         attachments: AttachmentTable::new(),
@@ -1473,7 +1438,7 @@ fn legacy_config_rejects_sample_set_solve_output() {
                 status: super::SOLVE_STATUS_FINISHED.to_string(),
                 input: LayerRef(0),
                 output: Some(LayerRef(1)),
-                adapter: "dummy.SamplerAdapter".to_string(),
+                adapter: "dummy.Adapter".to_string(),
                 adapter_options: "{}".to_string(),
                 diagnostics: None,
             }],
@@ -1496,15 +1461,14 @@ fn legacy_config_rejects_sample_set_solve_output() {
     let sealed_artifact = registry.seal_artifact(unsealed).unwrap();
     let artifact = LocalArtifact::from_parts(
         registry,
-        ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:legacy-sample-output").unwrap(),
+        ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:unknown-solve-output").unwrap(),
         sealed_artifact.digest().clone(),
     );
 
     let err = SealedExperiment::from_artifact(artifact)
-        .expect_err("Experiment config format version 1 must reject SampleSet output");
+        .expect_err("Solve output must be an OMMX Solution or SampleSet layer");
     assert!(
-        format!("{err:#}")
-            .contains("SampleSet Solve outputs require Experiment config format version 2"),
+        format!("{err:#}").contains("expected an OMMX Solution or SampleSet payload"),
         "{err:#}"
     );
 }
@@ -1699,7 +1663,6 @@ fn loaded_experiment_rejects_invalid_diagnostic_payload() {
         .unwrap();
     let run_parameters = empty_run_parameters_layer(registry);
     let config = ExperimentConfig {
-        format_version: CURRENT_EXPERIMENT_CONFIG_FORMAT_VERSION,
         status: EXPERIMENT_STATUS_FINISHED.to_string(),
         requested_image_name: None,
         attachments: AttachmentTable::new(),
@@ -1762,7 +1725,6 @@ fn loaded_experiment_rejects_failed_solve_with_output() {
         .unwrap();
     let run_parameters = empty_run_parameters_layer(registry);
     let config = ExperimentConfig {
-        format_version: CURRENT_EXPERIMENT_CONFIG_FORMAT_VERSION,
         status: EXPERIMENT_STATUS_FINISHED.to_string(),
         requested_image_name: None,
         attachments: AttachmentTable::new(),
@@ -1815,7 +1777,6 @@ fn loaded_experiment_rejects_non_finished_status() {
     let registry = temp.registry();
     let run_parameters = empty_run_parameters_layer(registry);
     let config = ExperimentConfig {
-        format_version: CURRENT_EXPERIMENT_CONFIG_FORMAT_VERSION,
         status: "crashed".to_string(),
         requested_image_name: None,
         attachments: AttachmentTable::new(),
@@ -1859,7 +1820,6 @@ fn loaded_experiment_rejects_config_attachment_not_listed_in_layers() {
         .unwrap();
     let run_parameters = empty_run_parameters_layer(registry);
     let config = ExperimentConfig {
-        format_version: CURRENT_EXPERIMENT_CONFIG_FORMAT_VERSION,
         status: EXPERIMENT_STATUS_FINISHED.to_string(),
         requested_image_name: None,
         attachments: AttachmentTable::from_entries([("outside", LayerRef(1))]).unwrap(),
@@ -1911,7 +1871,6 @@ fn loaded_experiment_uses_config_table_for_attachment_names() {
 
     let run_parameters = empty_run_parameters_layer(registry);
     let config = ExperimentConfig {
-        format_version: CURRENT_EXPERIMENT_CONFIG_FORMAT_VERSION,
         status: EXPERIMENT_STATUS_FINISHED.to_string(),
         requested_image_name: None,
         attachments: AttachmentTable::from_entries([("config-name", LayerRef(0))]).unwrap(),
@@ -2009,7 +1968,6 @@ fn loaded_experiment_rejects_config_run_attachment_not_listed_in_layers() {
         .unwrap();
     let run_parameters = empty_run_parameters_layer(registry);
     let config = ExperimentConfig {
-        format_version: CURRENT_EXPERIMENT_CONFIG_FORMAT_VERSION,
         status: EXPERIMENT_STATUS_FINISHED.to_string(),
         requested_image_name: None,
         attachments: AttachmentTable::new(),
@@ -2054,7 +2012,6 @@ fn loaded_experiment_rejects_run_parameters_not_listed_in_layers() {
     let registry = temp.registry();
     let _run_parameters = empty_run_parameters_layer(registry);
     let config = ExperimentConfig {
-        format_version: CURRENT_EXPERIMENT_CONFIG_FORMAT_VERSION,
         status: EXPERIMENT_STATUS_FINISHED.to_string(),
         requested_image_name: None,
         attachments: AttachmentTable::new(),
