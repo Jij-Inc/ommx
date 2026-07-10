@@ -181,8 +181,8 @@ impl RegistryListWarningStage {
         match self {
             Self::ManifestBackfill => "manifest backfill",
             Self::ManifestCacheRepair => "manifest cache repair",
-            Self::ExperimentConfigBackfill => "Experiment Config backfill",
-            Self::ExperimentConfigCacheRepair => "Experiment Config cache repair",
+            Self::ExperimentConfigBackfill => "experiment config backfill",
+            Self::ExperimentConfigCacheRepair => "experiment config cache repair",
             Self::CheckpointProjection => "checkpoint projection",
         }
     }
@@ -194,7 +194,7 @@ impl fmt::Display for RegistryListWarningStage {
     }
 }
 
-/// Structured warning for one Artifact ref omitted or repaired during a
+/// Structured warning for one Local Registry ref omitted or repaired during a
 /// best-effort Local Registry listing.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RegistryListWarning {

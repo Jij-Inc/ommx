@@ -174,7 +174,7 @@ fn log_registry_list_warnings(warnings: &[RegistryListWarning]) {
             manifest_digest = %warning.manifest_digest,
             stage = %warning.stage,
             error = %warning.message,
-            "Local Registry listing skipped or repaired an Artifact ref"
+            "Local Registry listing skipped or repaired a ref"
         );
     }
 }

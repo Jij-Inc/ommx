@@ -978,6 +978,37 @@ fn sqlite_backfill_does_not_retain_unreferenced_cache_rows() -> Result<()> {
 }
 
 #[test]
+fn registry_list_warning_stage_strings_are_consistently_lowercase() {
+    let stages = [
+        (
+            RegistryListWarningStage::ManifestBackfill,
+            "manifest backfill",
+        ),
+        (
+            RegistryListWarningStage::ManifestCacheRepair,
+            "manifest cache repair",
+        ),
+        (
+            RegistryListWarningStage::ExperimentConfigBackfill,
+            "experiment config backfill",
+        ),
+        (
+            RegistryListWarningStage::ExperimentConfigCacheRepair,
+            "experiment config cache repair",
+        ),
+        (
+            RegistryListWarningStage::CheckpointProjection,
+            "checkpoint projection",
+        ),
+    ];
+
+    for (stage, expected) in stages {
+        assert_eq!(stage.as_str(), expected);
+        assert_eq!(stage.to_string(), expected);
+    }
+}
+
+#[test]
 fn local_registry_lists_artifacts_from_manifest_cache() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let registry = LocalRegistry::open(dir.path())?;
