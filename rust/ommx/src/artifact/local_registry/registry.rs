@@ -13,7 +13,7 @@ use anyhow::{bail, ensure, Context, Result};
 use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, ImageManifest, MediaType};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs::{File, OpenOptions};
-use std::io::{Cursor, Read};
+use std::io::Read;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -1531,7 +1531,7 @@ impl LocalRegistry {
         bytes: &[u8],
         annotations: HashMap<String, String>,
     ) -> Result<StoredDescriptor<'_>> {
-        attachment_storage::store_layer_reader(self, media_type, Cursor::new(bytes), annotations)
+        attachment_storage::store_layer_bytes(self, media_type, bytes, annotations)
     }
 
     /// Serialize `value` as JSON and store it as a generic OCI blob

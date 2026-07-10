@@ -30,3 +30,24 @@ pub fn store_layer_reader<'reg>(
         descriptor,
     })
 }
+
+/// Store an in-memory OCI layer while preserving the CAS byte-slice fast path.
+pub fn store_layer_bytes<'reg>(
+    registry: &'reg LocalRegistry,
+    media_type: MediaType,
+    bytes: &[u8],
+    annotations: HashMap<String, String>,
+) -> Result<StoredDescriptor<'reg>> {
+    let digest = registry.store_blob_bytes(bytes)?;
+    let descriptor = DescriptorBuilder::default()
+        .media_type(media_type)
+        .digest(digest)
+        .size(bytes.len() as u64)
+        .annotations(annotations)
+        .build()
+        .context("Failed to build layer descriptor")?;
+    Ok(StoredDescriptor {
+        registry,
+        descriptor,
+    })
+}

@@ -75,6 +75,7 @@ tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
 url = "2.5.8"
 uuid = { version = "1.23.1", features = ["v4"] }
+windows-sys = { version = "0.61.2", features = ["Win32_Storage_FileSystem"] }
 zip = "8.6.0"
 zstd = "0.13.3"
 

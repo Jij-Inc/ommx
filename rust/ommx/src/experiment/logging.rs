@@ -107,15 +107,20 @@ where
         annotations: HashMap<String, String>,
         compression: Compression,
     ) -> Result<()> {
-        log_attachment_reader(
-            self,
-            name,
-            media_type,
-            bytes.as_ref(),
-            annotations,
-            None,
-            compression,
-        )
+        match compression {
+            Compression::None => {
+                log_attachment_bytes(self, name, media_type, bytes.as_ref(), annotations, None)
+            }
+            Compression::Zstd => log_attachment_reader(
+                self,
+                name,
+                media_type,
+                bytes.as_ref(),
+                annotations,
+                None,
+                compression,
+            ),
+        }
     }
 
     fn log_attachment_from_reader(
@@ -246,7 +251,7 @@ fn ensure_attachment_name_available<T: AttachmentLoggerStorage>(
 }
 
 fn log_attachment_reader<T: AttachmentLoggerStorage>(
-    mut logger: T,
+    logger: T,
     name: &str,
     media_type: MediaType,
     reader: impl Read,
@@ -254,28 +259,77 @@ fn log_attachment_reader<T: AttachmentLoggerStorage>(
     filename: Option<String>,
     compression: Compression,
 ) -> Result<()> {
+    log_attachment_with_storage(
+        logger,
+        name,
+        media_type,
+        annotations,
+        filename,
+        compression,
+        |registry, stored_media_type, annotations| {
+            let descriptor = match compression {
+                Compression::None => attachment_storage::store_layer_reader(
+                    registry,
+                    stored_media_type,
+                    reader,
+                    annotations,
+                )?,
+                Compression::Zstd => {
+                    let encoder = zstd::stream::read::Encoder::new(reader, 0)?;
+                    attachment_storage::store_layer_reader(
+                        registry,
+                        stored_media_type,
+                        encoder,
+                        annotations,
+                    )?
+                }
+            };
+            Ok(Descriptor::from(descriptor))
+        },
+    )
+}
+
+fn log_attachment_bytes<T: AttachmentLoggerStorage>(
+    logger: T,
+    name: &str,
+    media_type: MediaType,
+    bytes: &[u8],
+    annotations: HashMap<String, String>,
+    filename: Option<String>,
+) -> Result<()> {
+    log_attachment_with_storage(
+        logger,
+        name,
+        media_type,
+        annotations,
+        filename,
+        Compression::None,
+        |registry, stored_media_type, annotations| {
+            let descriptor = attachment_storage::store_layer_bytes(
+                registry,
+                stored_media_type,
+                bytes,
+                annotations,
+            )?;
+            Ok(Descriptor::from(descriptor))
+        },
+    )
+}
+
+fn log_attachment_with_storage<T: AttachmentLoggerStorage>(
+    mut logger: T,
+    name: &str,
+    media_type: MediaType,
+    annotations: HashMap<String, String>,
+    filename: Option<String>,
+    compression: Compression,
+    store: impl FnOnce(&LocalRegistry, MediaType, HashMap<String, String>) -> Result<Descriptor>,
+) -> Result<()> {
     ensure_attachment_name_available(&mut logger, name)?;
     let (stored_media_type, annotations) =
         prepare_attachment_storage(compression, media_type, annotations)?;
     let descriptor = AttachmentLoggerStorage::with_local_registry(&logger, |registry| {
-        let descriptor = match compression {
-            Compression::None => attachment_storage::store_layer_reader(
-                registry,
-                stored_media_type,
-                reader,
-                annotations,
-            )?,
-            Compression::Zstd => {
-                let encoder = zstd::stream::read::Encoder::new(reader, 0)?;
-                attachment_storage::store_layer_reader(
-                    registry,
-                    stored_media_type,
-                    encoder,
-                    annotations,
-                )?
-            }
-        };
-        Ok(Descriptor::from(descriptor))
+        store(registry, stored_media_type, annotations)
     })?;
     let descriptor = logger.descriptor_for_attachment_table(descriptor)?;
     logger.with_attachment_table(|attachments| {

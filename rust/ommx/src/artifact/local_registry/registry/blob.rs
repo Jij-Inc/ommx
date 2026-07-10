@@ -12,6 +12,7 @@ use std::{
 };
 
 const BLOB_STORE_LOCK_FILE_NAME: &str = ".lock";
+const SHA256_ALGORITHM: &str = "sha256";
 
 #[derive(Debug, Clone)]
 pub struct BlobRecord {
@@ -56,38 +57,41 @@ impl FileBlobStore {
             }
         }
 
-        let mut temp_file = tempfile::NamedTempFile::new_in(&self.root).with_context(|| {
-            format!("Failed to create temporary blob in {}", self.root.display())
-        })?;
-        temp_file
+        let parent = path.parent().context("Blob path has no parent directory")?;
+        let mut temp_blob = create_temp_blob(parent)?;
+        temp_blob
+            .file
             .write_all(bytes)
             .context("Failed to write temporary blob")?;
-        temp_file
+        temp_blob
+            .file
             .as_file_mut()
             .sync_all()
             .context("Failed to sync temporary blob")?;
         let _lock = self.lock_store()?;
-        self.publish_temp_blob(temp_file.path(), &digest, bytes.len() as u64, &path)?;
+        self.publish_temp_blob(&mut temp_blob, &digest, bytes.len() as u64, &path)?;
         Ok(digest)
     }
 
     pub fn put_reader(&self, mut reader: impl Read) -> Result<(Digest, u64)> {
-        fs::create_dir_all(&self.root)
-            .with_context(|| format!("Failed to create blob store {}", self.root.display()))?;
-        let mut temp_file = tempfile::NamedTempFile::new_in(&self.root).with_context(|| {
-            format!("Failed to create temporary blob in {}", self.root.display())
-        })?;
+        let algorithm_dir = self.root.join(SHA256_ALGORITHM);
+        fs::create_dir_all(&algorithm_dir)
+            .with_context(|| format!("Failed to create {}", algorithm_dir.display()))?;
+        let mut temp_blob = create_temp_blob(&algorithm_dir)?;
         let mut hasher = Sha256::new();
         let mut size = 0_u64;
         let mut buffer = [0_u8; 64 * 1024];
         loop {
-            let read = reader
-                .read(&mut buffer)
-                .context("Failed to read blob input")?;
+            let read = match reader.read(&mut buffer) {
+                Ok(read) => read,
+                Err(error) if error.kind() == ErrorKind::Interrupted => continue,
+                Err(error) => return Err(error).context("Failed to read blob input"),
+            };
             if read == 0 {
                 break;
             }
-            temp_file
+            temp_blob
+                .file
                 .write_all(&buffer[..read])
                 .context("Failed to write temporary blob")?;
             hasher.update(&buffer[..read]);
@@ -95,20 +99,24 @@ impl FileBlobStore {
                 .checked_add(read as u64)
                 .context("Blob size exceeds u64")?;
         }
-        temp_file
+        temp_blob
+            .file
             .as_file_mut()
             .sync_all()
             .context("Failed to sync temporary blob")?;
 
-        let digest = Digest::from_str(&format!("sha256:{}", encode_hex(&hasher.finalize())))
-            .context("Failed to parse digest")?;
+        let digest = Digest::from_str(&format!(
+            "{SHA256_ALGORITHM}:{}",
+            encode_hex(&hasher.finalize())
+        ))
+        .context("Failed to parse digest")?;
         let path = self.path_for_digest(&digest)?;
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)
                 .with_context(|| format!("Failed to create {}", parent.display()))?;
         }
         let _lock = self.lock_store()?;
-        self.publish_temp_blob(temp_file.path(), &digest, size, &path)?;
+        self.publish_temp_blob(&mut temp_blob, &digest, size, &path)?;
         Ok((digest, size))
     }
 
@@ -235,13 +243,25 @@ impl FileBlobStore {
 
     fn publish_temp_blob(
         &self,
-        temp_path: &Path,
+        temp_blob: &mut TempBlob,
         digest: &Digest,
         size: u64,
         path: &Path,
     ) -> Result<()> {
-        match fs::hard_link(temp_path, path) {
-            Ok(()) => touch_existing_blob(path, digest.as_ref()),
+        if path.exists() {
+            verify_existing_blob(path, digest, size)?;
+            touch_existing_blob(path, digest.as_ref())?;
+            return Ok(());
+        }
+        match fs::hard_link(temp_blob.file.path(), path) {
+            Ok(()) => {
+                if let Err(error) = temp_blob.apply_publish_permissions(path) {
+                    let _ = fs::remove_file(path);
+                    temp_blob.restrict_permissions();
+                    return Err(error);
+                }
+                touch_existing_blob(path, digest.as_ref())
+            }
             Err(error) if error.kind() == ErrorKind::AlreadyExists => {
                 verify_existing_blob(path, digest, size)?;
                 touch_existing_blob(path, digest.as_ref())
@@ -250,7 +270,7 @@ impl FileBlobStore {
                 format!(
                     "Failed to publish blob {} from {} to {}",
                     digest.as_ref(),
-                    temp_path.display(),
+                    temp_blob.file.path().display(),
                     path.display()
                 )
             }),
@@ -318,6 +338,115 @@ fn verify_existing_blob(path: &Path, digest: &Digest, expected_size: u64) -> Res
     Ok(())
 }
 
+struct TempBlob {
+    file: tempfile::NamedTempFile,
+    #[cfg(unix)]
+    publish_permissions: fs::Permissions,
+}
+
+impl TempBlob {
+    fn apply_publish_permissions(&self, path: &Path) -> Result<()> {
+        #[cfg(unix)]
+        fs::set_permissions(path, self.publish_permissions.clone()).with_context(|| {
+            format!("Failed to set final blob permissions on {}", path.display())
+        })?;
+        #[cfg(windows)]
+        {
+            let _ = path;
+            clear_windows_temporary_attribute(self.file.as_file())?;
+        }
+        Ok(())
+    }
+
+    fn restrict_permissions(&self) {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = self
+                .file
+                .as_file()
+                .set_permissions(fs::Permissions::from_mode(0o600));
+        }
+    }
+}
+
+fn create_temp_blob(directory: &Path) -> Result<TempBlob> {
+    let file = tempfile::Builder::new()
+        .prefix(".blob-")
+        .suffix(".tmp")
+        .tempfile_in(directory)
+        .with_context(|| format!("Failed to create temporary blob in {}", directory.display()))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let permission_probe = tempfile::Builder::new()
+            .prefix(".blob-permission-")
+            .permissions(fs::Permissions::from_mode(0o666))
+            .tempfile_in(directory)
+            .with_context(|| {
+                format!(
+                    "Failed to create blob permission probe in {}",
+                    directory.display()
+                )
+            })?;
+        let publish_permissions = permission_probe
+            .as_file()
+            .metadata()
+            .context("Failed to inspect blob permission probe")?
+            .permissions();
+        drop(permission_probe);
+        Ok(TempBlob {
+            file,
+            publish_permissions,
+        })
+    }
+    #[cfg(not(unix))]
+    Ok(TempBlob { file })
+}
+
+#[cfg(windows)]
+fn clear_windows_temporary_attribute(file: &File) -> Result<()> {
+    use std::{mem::size_of, os::windows::io::AsRawHandle};
+    use windows_sys::Win32::Foundation::HANDLE;
+    use windows_sys::Win32::Storage::FileSystem::{
+        FileBasicInfo, GetFileInformationByHandleEx, SetFileInformationByHandle,
+        FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_TEMPORARY, FILE_BASIC_INFO,
+    };
+
+    let handle = file.as_raw_handle() as HANDLE;
+    let mut info = FILE_BASIC_INFO::default();
+    let size = size_of::<FILE_BASIC_INFO>() as u32;
+    let read = unsafe {
+        GetFileInformationByHandleEx(
+            handle,
+            FileBasicInfo,
+            (&mut info as *mut FILE_BASIC_INFO).cast(),
+            size,
+        )
+    };
+    if read == 0 {
+        return Err(std::io::Error::last_os_error())
+            .context("Failed to read Windows temporary blob attributes");
+    }
+    info.FileAttributes &= !FILE_ATTRIBUTE_TEMPORARY;
+    if info.FileAttributes == 0 {
+        info.FileAttributes = FILE_ATTRIBUTE_NORMAL;
+    }
+    let written = unsafe {
+        SetFileInformationByHandle(
+            handle,
+            FileBasicInfo,
+            (&info as *const FILE_BASIC_INFO).cast(),
+            size,
+        )
+    };
+    if written == 0 {
+        return Err(std::io::Error::last_os_error())
+            .context("Failed to clear the Windows temporary blob attribute by handle");
+    }
+    Ok(())
+}
+
 fn encode_hex(bytes: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut out = String::with_capacity(bytes.len() * 2);
@@ -333,11 +462,16 @@ fn touch_existing_blob(path: &Path, digest: &str) -> Result<()> {
         .with_context(|| format!("Failed to touch existing blob {digest}"))
 }
 
-#[cfg(all(test, unix))]
+#[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::{Cursor, Error};
+    #[cfg(unix)]
     use std::os::unix::fs::PermissionsExt;
+    #[cfg(unix)]
+    use std::{sync::mpsc, thread, time::Duration};
 
+    #[cfg(unix)]
     #[test]
     fn put_bytes_reuses_existing_blob_without_creating_temp_file() {
         let root = tempfile::tempdir().unwrap();
@@ -351,5 +485,168 @@ mod tests {
         fs::set_permissions(root.path(), original_permissions).unwrap();
 
         assert_eq!(result.unwrap(), expected);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn put_reader_preserves_blob_permissions_and_uses_algorithm_directory() {
+        let root = tempfile::tempdir().unwrap();
+        let store = FileBlobStore::new(root.path()).unwrap();
+        store
+            .put_bytes(b"create lock and algorithm directory")
+            .unwrap();
+
+        let algorithm_dir = root.path().join(SHA256_ALGORITHM);
+        let reference_path = algorithm_dir.join("reference-permissions");
+        drop(
+            OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&reference_path)
+                .unwrap(),
+        );
+        let expected_mode = fs::metadata(&reference_path).unwrap().permissions().mode() & 0o777;
+        fs::remove_file(&reference_path).unwrap();
+
+        let original_permissions = fs::metadata(root.path()).unwrap().permissions();
+        fs::set_permissions(root.path(), fs::Permissions::from_mode(0o555)).unwrap();
+        let payload = b"reader-backed payload";
+        let result = store.put_reader(Cursor::new(payload));
+        fs::set_permissions(root.path(), original_permissions).unwrap();
+
+        let (digest, size) = result.unwrap();
+        assert_eq!(size, payload.len() as u64);
+        let path = store.path_for_digest(&digest).unwrap();
+        let actual_mode = fs::metadata(path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(actual_mode, expected_mode);
+        assert_eq!(store.read_bytes(&digest).unwrap(), payload);
+    }
+
+    #[cfg(unix)]
+    struct FailingAfterBlockReader {
+        first_chunk: Option<&'static [u8]>,
+        blocked: mpsc::Sender<()>,
+        resume: mpsc::Receiver<()>,
+    }
+
+    #[cfg(unix)]
+    impl Read for FailingAfterBlockReader {
+        fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+            if let Some(bytes) = self.first_chunk.take() {
+                buffer[..bytes.len()].copy_from_slice(bytes);
+                return Ok(bytes.len());
+            }
+            self.blocked.send(()).unwrap();
+            self.resume.recv().unwrap();
+            Err(Error::other("reader failed after blocking"))
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn partial_reader_temp_blob_stays_private_and_is_removed_on_error() {
+        let root = tempfile::tempdir().unwrap();
+        let store = FileBlobStore::new(root.path()).unwrap();
+        let (blocked_tx, blocked_rx) = mpsc::channel();
+        let (resume_tx, resume_rx) = mpsc::channel();
+        let reader = FailingAfterBlockReader {
+            first_chunk: Some(b"private partial payload"),
+            blocked: blocked_tx,
+            resume: resume_rx,
+        };
+        let writer_store = store.clone();
+        let writer = thread::spawn(move || writer_store.put_reader(reader));
+
+        blocked_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("reader did not block after writing its first chunk");
+        let algorithm_dir = root.path().join(SHA256_ALGORITHM);
+        let temp_paths = fs::read_dir(&algorithm_dir)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .filter(|path| {
+                path.file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.starts_with(".blob-") && name.ends_with(".tmp"))
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(temp_paths.len(), 1);
+        let mode = fs::metadata(&temp_paths[0]).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+
+        resume_tx.send(()).unwrap();
+        let error = writer
+            .join()
+            .unwrap()
+            .expect_err("reader error must abort the blob write");
+        assert!(error.to_string().contains("Failed to read blob input"));
+        assert!(fs::read_dir(algorithm_dir).unwrap().all(|entry| !entry
+            .unwrap()
+            .file_name()
+            .to_str()
+            .is_some_and(|name| name.starts_with(".blob-") && name.ends_with(".tmp"))));
+    }
+
+    struct InterruptedOnce<R> {
+        inner: R,
+        interrupted: bool,
+    }
+
+    impl<R: Read> Read for InterruptedOnce<R> {
+        fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+            if !self.interrupted {
+                self.interrupted = true;
+                return Err(Error::from(ErrorKind::Interrupted));
+            }
+            self.inner.read(buffer)
+        }
+    }
+
+    #[test]
+    fn put_reader_retries_interrupted_reads() {
+        let root = tempfile::tempdir().unwrap();
+        let store = FileBlobStore::new(root.path()).unwrap();
+        let payload = b"payload after an interrupted read";
+        let reader = InterruptedOnce {
+            inner: Cursor::new(payload),
+            interrupted: false,
+        };
+
+        let (digest, size) = store.put_reader(reader).unwrap();
+
+        assert_eq!(size, payload.len() as u64);
+        assert_eq!(store.read_bytes(&digest).unwrap(), payload);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn published_reader_blob_is_not_marked_temporary_with_long_root() {
+        use std::{mem::size_of, os::windows::ffi::OsStrExt, os::windows::io::AsRawHandle};
+        use windows_sys::Win32::Foundation::HANDLE;
+        use windows_sys::Win32::Storage::FileSystem::{
+            FileBasicInfo, GetFileInformationByHandleEx, FILE_ATTRIBUTE_TEMPORARY, FILE_BASIC_INFO,
+        };
+
+        let temp = tempfile::tempdir().unwrap();
+        let mut root = temp.path().to_path_buf();
+        while root.as_os_str().encode_wide().count() <= 280 {
+            root.push("long-registry-component");
+        }
+        let store = FileBlobStore::new(&root).unwrap();
+        let (digest, _) = store.put_reader(Cursor::new(b"windows payload")).unwrap();
+        let path = store.path_for_digest(&digest).unwrap();
+        let file = File::open(path).unwrap();
+        let mut info = FILE_BASIC_INFO::default();
+        let read = unsafe {
+            GetFileInformationByHandleEx(
+                file.as_raw_handle() as HANDLE,
+                FileBasicInfo,
+                (&mut info as *mut FILE_BASIC_INFO).cast(),
+                size_of::<FILE_BASIC_INFO>() as u32,
+            )
+        };
+
+        assert_ne!(read, 0);
+        assert_eq!(info.FileAttributes & FILE_ATTRIBUTE_TEMPORARY, 0);
     }
 }

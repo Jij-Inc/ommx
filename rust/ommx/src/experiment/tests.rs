@@ -199,6 +199,45 @@ fn attachment_reader_streams_payload_into_registry() {
     });
 }
 
+#[cfg(unix)]
+#[test]
+fn uncompressed_byte_attachment_reuses_existing_cas_blob_without_temp_file() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let payload = b"shared attachment payload";
+    with_temp_experiment(|experiment| {
+        AttachmentLogger::log_attachment(
+            &experiment,
+            "first",
+            MediaType::from("application/octet-stream"),
+            payload,
+            HashMap::new(),
+        )?;
+
+        let blob_root = experiment.registry.root().join("blobs");
+        let algorithm_dir = blob_root.join("sha256");
+        let original_root_permissions = fs::metadata(&blob_root)?.permissions();
+        let original_algorithm_permissions = fs::metadata(&algorithm_dir)?.permissions();
+        fs::set_permissions(&blob_root, fs::Permissions::from_mode(0o555))?;
+        fs::set_permissions(&algorithm_dir, fs::Permissions::from_mode(0o555))?;
+        let result = AttachmentLogger::log_attachment(
+            &experiment,
+            "second",
+            MediaType::from("application/octet-stream"),
+            payload,
+            HashMap::new(),
+        );
+        fs::set_permissions(&algorithm_dir, original_algorithm_permissions)?;
+        fs::set_permissions(&blob_root, original_root_permissions)?;
+        result?;
+
+        let artifact = experiment.commit()?.into_artifact();
+        let loaded = SealedExperiment::from_artifact(artifact)?;
+        assert_eq!(loaded.attachment_blob("second")?, payload);
+        Ok(())
+    });
+}
+
 #[test]
 fn compressed_typed_attachment_preserves_typed_reader() {
     let expected = constant_instance(Sense::Minimize, 42.0);
