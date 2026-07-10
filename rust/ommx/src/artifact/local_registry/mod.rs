@@ -90,7 +90,7 @@ pub use registry::{
 };
 pub(crate) use types::{ArtifactManifestRecord, ExperimentManifestRecord};
 pub use types::{
-    ExperimentRefRecord, RefRecord, RefUpdate, OCI_IMAGE_REF_NAME_ANNOTATION,
+    ArtifactRefRecord, ExperimentRefRecord, RefRecord, RefUpdate, OCI_IMAGE_REF_NAME_ANNOTATION,
     SQLITE_INDEX_FILE_NAME,
 };
 

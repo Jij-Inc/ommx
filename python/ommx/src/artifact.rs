@@ -1,6 +1,9 @@
 use anyhow::{bail, Result};
 use ommx::artifact::media_types;
-use pyo3::{prelude::*, types::PyBytes};
+use pyo3::{
+    prelude::*,
+    types::{PyBytes, PyDict},
+};
 use std::{
     collections::HashMap,
     path::PathBuf,
@@ -8,6 +11,94 @@ use std::{
 };
 
 use crate::{PyArchiveDescriptor, PyDescriptor};
+
+/// A local-registry image reference and its cached OCI Manifest projection.
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
+#[pyclass]
+#[pyo3(module = "ommx._ommx_rust", name = "ArtifactRef")]
+#[derive(Debug, Clone)]
+pub struct PyArtifactRef {
+    image_name: String,
+    manifest_digest: String,
+    updated_at: String,
+    artifact_type: String,
+    config_digest: String,
+    annotations: HashMap<String, String>,
+    manifest: serde_json::Value,
+}
+
+impl From<ommx::artifact::local_registry::ArtifactRefRecord> for PyArtifactRef {
+    fn from(record: ommx::artifact::local_registry::ArtifactRefRecord) -> Self {
+        Self {
+            image_name: record.image_name.to_string(),
+            manifest_digest: record.manifest_digest.to_string(),
+            updated_at: record.updated_at,
+            artifact_type: record.artifact_type.to_string(),
+            config_digest: record.config_digest.to_string(),
+            annotations: record.annotations.into_iter().collect(),
+            manifest: record.manifest,
+        }
+    }
+}
+
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
+#[pymethods]
+impl PyArtifactRef {
+    /// Local registry image reference.
+    #[getter]
+    pub fn image_name(&self) -> &str {
+        &self.image_name
+    }
+
+    /// Immutable OCI Manifest digest for the Artifact.
+    #[getter]
+    pub fn manifest_digest(&self) -> &str {
+        &self.manifest_digest
+    }
+
+    /// RFC 3339 timestamp when this local ref was last updated.
+    #[getter]
+    pub fn updated_at(&self) -> &str {
+        &self.updated_at
+    }
+
+    /// OCI Manifest `artifactType` identifying the OMMX Artifact kind.
+    #[getter]
+    pub fn artifact_type(&self) -> &str {
+        &self.artifact_type
+    }
+
+    /// Immutable digest of the config blob referenced by the Manifest.
+    #[getter]
+    pub fn config_digest(&self) -> &str {
+        &self.config_digest
+    }
+
+    /// Manifest annotations stored on the Artifact.
+    #[getter]
+    pub fn annotations(&self) -> HashMap<String, String> {
+        self.annotations.clone()
+    }
+
+    /// Complete OCI Manifest JSON stored by `manifest_digest`.
+    #[getter]
+    #[gen_stub(override_return_type(
+        type_repr = "builtins.dict[builtins.str, typing.Any]",
+        imports = ("builtins", "typing")
+    ))]
+    pub fn manifest<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        Ok(serde_pyobject::to_pyobject(py, &self.manifest)
+            .map_err(|err| pyo3::exceptions::PyValueError::new_err(err.to_string()))?
+            .cast_into::<PyDict>()?)
+    }
+
+    pub fn __repr__(&self) -> String {
+        format!(
+            "ArtifactRef(image_name={:?}, artifact_type={:?}, manifest_digest={:?})",
+            self.image_name, self.artifact_type, self.manifest_digest
+        )
+    }
+}
 
 // ---------------------------------------------------------------------------
 // PyArtifact backing handle
@@ -1577,6 +1668,29 @@ fn build_annotations(
 // Module-level functions
 // ---------------------------------------------------------------------------
 
+/// List Artifact refs using the Local Registry's digest-addressed Manifest
+/// cache.
+///
+/// Missing Manifest rows are backfilled from the CAS before records are
+/// returned. If `prefix` is given, it is matched against the full image
+/// reference string.
+#[pyo3_stub_gen::derive::gen_stub_pyfunction]
+#[pyfunction]
+#[pyo3(signature = (prefix = None, *, root = None))]
+pub fn list_artifacts(
+    py: Python<'_>,
+    prefix: Option<&str>,
+    root: Option<PathBuf>,
+) -> Result<Vec<PyArtifactRef>> {
+    let _guard = crate::TRACING.attach_parent_context(py);
+    let registry = open_local_registry(root)?;
+    Ok(registry
+        .list_artifacts(prefix)?
+        .into_iter()
+        .map(PyArtifactRef::from)
+        .collect())
+}
+
 /// Report or delete anonymous Artifact refs in the Local Registry.
 ///
 /// This is the Python SDK equivalent of `ommx prune-anonymous`.
@@ -1599,7 +1713,7 @@ pub fn prune_anonymous(
     delete: bool,
 ) -> Result<PyPruneAnonymousReport> {
     let _guard = crate::TRACING.attach_parent_context(py);
-    let registry = open_cleanup_registry(root)?;
+    let registry = open_local_registry(root)?;
     let registry_root = registry.root().to_path_buf();
     let refs = if delete {
         registry.prune_anonymous_artifact_refs()?
@@ -1639,7 +1753,7 @@ pub fn gc(
     grace_period: &str,
 ) -> Result<PyGcReport> {
     let _guard = crate::TRACING.attach_parent_context(py);
-    let registry = open_cleanup_registry(root)?;
+    let registry = open_local_registry(root)?;
     let registry_root = registry.root().to_path_buf();
     let grace_period = ommx::artifact::local_registry::GcOptions::parse_grace_period(grace_period)
         .map_err(|error| anyhow::anyhow!(error))?;
@@ -1704,7 +1818,7 @@ pub fn get_images() -> Result<Vec<String>> {
     Ok(images.into_iter().map(|img| img.to_string()).collect())
 }
 
-fn open_cleanup_registry(
+fn open_local_registry(
     root: Option<PathBuf>,
 ) -> Result<ommx::artifact::local_registry::LocalRegistry> {
     match root {

@@ -148,6 +148,7 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<PyArchiveDescriptor>()?;
     m.add_class::<PyDescriptor>()?;
     m.add_class::<PyArtifact>()?;
+    m.add_class::<PyArtifactRef>()?;
     m.add_class::<PyArchiveManifest>()?;
     m.add_class::<PyArtifactDraft>()?;
     m.add_class::<PyGcBlob>()?;
@@ -169,6 +170,7 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(set_local_registry_root, m)?)?;
     m.add_function(wrap_pyfunction!(get_local_registry_root, m)?)?;
     m.add_function(wrap_pyfunction!(get_images, m)?)?;
+    m.add_function(wrap_pyfunction!(list_artifacts, m)?)?;
     m.add_function(wrap_pyfunction!(list_experiments, m)?)?;
 
     // OMMX Message
@@ -304,6 +306,7 @@ pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
 pyo3_stub_gen::reexport_module_members!("ommx.artifact" from "ommx._ommx_rust";
     "AnonymousArtifactRef",
     "Artifact",
+    "ArtifactRef",
     "ArchiveDescriptor",
     "ArchiveManifest",
     "ArtifactDraft",
@@ -316,6 +319,7 @@ pyo3_stub_gen::reexport_module_members!("ommx.artifact" from "ommx._ommx_rust";
     "PruneAnonymousReport",
     "gc",
     "get_local_registry_root",
+    "list_artifacts",
     "prune_anonymous",
     "set_local_registry_root",
     "get_images"

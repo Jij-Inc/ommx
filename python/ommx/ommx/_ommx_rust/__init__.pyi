@@ -24,6 +24,7 @@ __all__ = [
     "ArchiveManifest",
     "Artifact",
     "ArtifactDraft",
+    "ArtifactRef",
     "AttachedConstraint",
     "AttachedDecisionVariable",
     "AttachedIndicatorConstraint",
@@ -91,6 +92,7 @@ __all__ = [
     "get_default_atol",
     "get_images",
     "get_local_registry_root",
+    "list_artifacts",
     "list_experiments",
     "miplib2017_instance_annotations",
     "prune_anonymous",
@@ -685,6 +687,48 @@ class ArtifactDraft:
         r"""
         Commit the artifact draft.
         """
+
+@typing.final
+class ArtifactRef:
+    r"""
+    A local-registry image reference and its cached OCI Manifest projection.
+    """
+    @property
+    def image_name(self) -> builtins.str:
+        r"""
+        Local registry image reference.
+        """
+    @property
+    def manifest_digest(self) -> builtins.str:
+        r"""
+        Immutable OCI Manifest digest for the Artifact.
+        """
+    @property
+    def updated_at(self) -> builtins.str:
+        r"""
+        RFC 3339 timestamp when this local ref was last updated.
+        """
+    @property
+    def artifact_type(self) -> builtins.str:
+        r"""
+        OCI Manifest `artifactType` identifying the OMMX Artifact kind.
+        """
+    @property
+    def config_digest(self) -> builtins.str:
+        r"""
+        Immutable digest of the config blob referenced by the Manifest.
+        """
+    @property
+    def annotations(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Manifest annotations stored on the Artifact.
+        """
+    @property
+    def manifest(self) -> builtins.dict[builtins.str, typing.Any]:
+        r"""
+        Complete OCI Manifest JSON stored by `manifest_digest`.
+        """
+    def __repr__(self) -> builtins.str: ...
 
 @typing.final
 class AttachedConstraint:
@@ -7315,6 +7359,20 @@ def get_images() -> builtins.list[builtins.str]:
 def get_local_registry_root() -> pathlib.Path:
     r"""
     Get the current OMMX Local Registry root path.
+    """
+
+def list_artifacts(
+    prefix: typing.Optional[builtins.str] = None,
+    *,
+    root: typing.Optional[builtins.str | os.PathLike | pathlib.Path] = None,
+) -> builtins.list[ArtifactRef]:
+    r"""
+    List Artifact refs using the Local Registry's digest-addressed Manifest
+    cache.
+
+    Missing Manifest rows are backfilled from the CAS before records are
+    returned. If `prefix` is given, it is matched against the full image
+    reference string.
     """
 
 def list_experiments(

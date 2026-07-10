@@ -1,6 +1,6 @@
 use super::{
-    now_rfc3339, ArtifactManifestRecord, ExperimentManifestRecord, ExperimentRefRecord, RefRecord,
-    RefUpdate, SQLITE_INDEX_FILE_NAME,
+    now_rfc3339, ArtifactManifestRecord, ArtifactRefRecord, ExperimentManifestRecord,
+    ExperimentRefRecord, RefRecord, RefUpdate, SQLITE_INDEX_FILE_NAME,
 };
 use crate::artifact::digest::validate_digest;
 use crate::artifact::media_types;
@@ -12,7 +12,6 @@ use oci_spec::image::DescriptorBuilder;
 use oci_spec::image::{Descriptor, Digest, ImageManifest, MediaType};
 use rusqlite::{params, types::Type, Connection, OptionalExtension, TransactionBehavior};
 use std::{
-    collections::BTreeSet,
     fs,
     path::Path,
     str::FromStr,
@@ -585,18 +584,71 @@ impl SqliteIndexStore {
         Ok(out)
     }
 
-    pub fn list_cached_artifact_manifest_digests(
+    pub fn list_missing_artifact_manifest_digests(
         &self,
         name_prefix: Option<&str>,
-    ) -> Result<BTreeSet<String>> {
+    ) -> Result<Vec<Digest>> {
         let conn = self.lock();
-        let mut out = BTreeSet::new();
+        let mut out = Vec::new();
         if let Some(prefix) = name_prefix {
             let prefix_len = i64::try_from(prefix.chars().count())
                 .context("Ref prefix length does not fit in i64")?;
             let mut stmt = conn.prepare(
                 r#"
-                SELECT artifact_manifests.manifest_digest
+                SELECT DISTINCT refs.manifest_digest
+                FROM refs
+                LEFT JOIN artifact_manifests
+                  ON refs.manifest_digest = artifact_manifests.manifest_digest
+                WHERE artifact_manifests.manifest_digest IS NULL
+                  AND substr(
+                      refs.name ||
+                      CASE WHEN instr(refs.reference, ':') > 0 THEN '@' ELSE ':' END ||
+                      refs.reference,
+                      1,
+                      ?1
+                  ) = ?2
+                ORDER BY refs.manifest_digest
+                "#,
+            )?;
+            let rows = stmt.query_map(params![prefix_len, prefix], digest_from_row)?;
+            for row in rows {
+                out.push(row?);
+            }
+        } else {
+            let mut stmt = conn.prepare(
+                r#"
+                SELECT DISTINCT refs.manifest_digest
+                FROM refs
+                LEFT JOIN artifact_manifests
+                  ON refs.manifest_digest = artifact_manifests.manifest_digest
+                WHERE artifact_manifests.manifest_digest IS NULL
+                ORDER BY refs.manifest_digest
+                "#,
+            )?;
+            let rows = stmt.query_map([], digest_from_row)?;
+            for row in rows {
+                out.push(row?);
+            }
+        }
+        Ok(out)
+    }
+
+    pub fn list_artifact_refs(&self, name_prefix: Option<&str>) -> Result<Vec<ArtifactRefRecord>> {
+        let conn = self.lock();
+        let mut out = Vec::new();
+        if let Some(prefix) = name_prefix {
+            let prefix_len = i64::try_from(prefix.chars().count())
+                .context("Ref prefix length does not fit in i64")?;
+            let mut stmt = conn.prepare(
+                r#"
+                SELECT
+                    refs.name,
+                    refs.reference,
+                    refs.updated_at,
+                    artifact_manifests.manifest_digest,
+                    artifact_manifests.config_digest,
+                    artifact_manifests.artifact_type,
+                    artifact_manifests.manifest_json
                 FROM refs
                 JOIN artifact_manifests
                   ON refs.manifest_digest = artifact_manifests.manifest_digest
@@ -607,24 +659,33 @@ impl SqliteIndexStore {
                     1,
                     ?1
                 ) = ?2
+                ORDER BY refs.name, refs.reference
                 "#,
             )?;
-            let rows = stmt.query_map(params![prefix_len, prefix], string_from_row)?;
+            let rows = stmt.query_map(params![prefix_len, prefix], artifact_ref_from_row)?;
             for row in rows {
-                out.insert(row?);
+                out.push(row?);
             }
         } else {
             let mut stmt = conn.prepare(
                 r#"
-                SELECT artifact_manifests.manifest_digest
+                SELECT
+                    refs.name,
+                    refs.reference,
+                    refs.updated_at,
+                    artifact_manifests.manifest_digest,
+                    artifact_manifests.config_digest,
+                    artifact_manifests.artifact_type,
+                    artifact_manifests.manifest_json
                 FROM refs
                 JOIN artifact_manifests
                   ON refs.manifest_digest = artifact_manifests.manifest_digest
+                ORDER BY refs.name, refs.reference
                 "#,
             )?;
-            let rows = stmt.query_map([], string_from_row)?;
+            let rows = stmt.query_map([], artifact_ref_from_row)?;
             for row in rows {
-                out.insert(row?);
+                out.push(row?);
             }
         }
         Ok(out)
@@ -850,7 +911,12 @@ fn ref_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<RefRecord> {
     })
 }
 
-fn experiment_ref_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ExperimentRefRecord> {
+struct CachedArtifactRef {
+    record: ArtifactRefRecord,
+    manifest: ImageManifest,
+}
+
+fn cached_artifact_ref_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<CachedArtifactRef> {
     let name: String = row.get(0)?;
     let reference: String = row.get(1)?;
     let image_name = ImageRef::from_repository_and_reference(&name, &reference)
@@ -862,11 +928,12 @@ fn experiment_ref_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Experime
     let config_digest = Digest::from_str(&digest)
         .map_err(|err| rusqlite::Error::FromSqlConversionFailure(4, Type::Text, Box::new(err)))?;
     let artifact_type: String = row.get(5)?;
-    if artifact_type != media_types::V1_EXPERIMENT_MEDIA_TYPE {
+    let artifact_type = MediaType::from(artifact_type.as_str());
+    if !media_types::is_ommx_artifact_type(&artifact_type) {
         return Err(cache_conversion_failure(
             5,
             Type::Text,
-            format!("Unexpected cached Experiment artifact type: {artifact_type}"),
+            format!("Unexpected cached OMMX artifact type: {artifact_type}"),
         ));
     }
     let manifest_json: Vec<u8> = row.get(6)?;
@@ -877,14 +944,11 @@ fn experiment_ref_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Experime
             format!("Cached Manifest JSON does not match {manifest_digest}"),
         ));
     }
+    let manifest_value: serde_json::Value = serde_json::from_slice(&manifest_json)
+        .map_err(|err| rusqlite::Error::FromSqlConversionFailure(6, Type::Blob, Box::new(err)))?;
     let manifest: ImageManifest = serde_json::from_slice(&manifest_json)
         .map_err(|err| rusqlite::Error::FromSqlConversionFailure(6, Type::Blob, Box::new(err)))?;
-    if manifest
-        .artifact_type()
-        .as_ref()
-        .map(|media_type| media_type.as_ref())
-        != Some(artifact_type.as_str())
-    {
+    if manifest.artifact_type().as_ref() != Some(&artifact_type) {
         return Err(cache_conversion_failure(
             6,
             Type::Blob,
@@ -898,6 +962,42 @@ fn experiment_ref_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Experime
             format!("Cached Manifest config digest does not match {config_digest}"),
         ));
     }
+    let annotations = manifest
+        .annotations()
+        .clone()
+        .unwrap_or_default()
+        .into_iter()
+        .collect();
+    Ok(CachedArtifactRef {
+        record: ArtifactRefRecord {
+            image_name,
+            manifest_digest,
+            updated_at: row.get(2)?,
+            artifact_type,
+            config_digest,
+            annotations,
+            manifest: manifest_value,
+        },
+        manifest,
+    })
+}
+
+fn artifact_ref_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ArtifactRefRecord> {
+    Ok(cached_artifact_ref_from_row(row)?.record)
+}
+
+fn experiment_ref_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ExperimentRefRecord> {
+    let CachedArtifactRef { record, manifest } = cached_artifact_ref_from_row(row)?;
+    if record.artifact_type.as_ref() != media_types::V1_EXPERIMENT_MEDIA_TYPE {
+        return Err(cache_conversion_failure(
+            5,
+            Type::Text,
+            format!(
+                "Unexpected cached Experiment artifact type: {}",
+                record.artifact_type
+            ),
+        ));
+    }
     if manifest.config().media_type().as_ref() != crate::experiment::EXPERIMENT_CONFIG_MEDIA_TYPE {
         return Err(cache_conversion_failure(
             6,
@@ -908,18 +1008,15 @@ fn experiment_ref_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Experime
             ),
         ));
     }
-    let annotations = manifest
-        .annotations()
-        .clone()
-        .unwrap_or_default()
-        .into_iter()
-        .collect();
     let config_json: Vec<u8> = row.get(7)?;
-    if config_digest.as_ref() != sha256_digest(&config_json) {
+    if record.config_digest.as_ref() != sha256_digest(&config_json) {
         return Err(cache_conversion_failure(
             7,
             Type::Blob,
-            format!("Cached Experiment Config JSON does not match {config_digest}"),
+            format!(
+                "Cached Experiment Config JSON does not match {}",
+                record.config_digest
+            ),
         ));
     }
     let config: serde_json::Value = serde_json::from_slice(&config_json)
@@ -943,14 +1040,14 @@ fn experiment_ref_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Experime
         })
     })?;
     Ok(ExperimentRefRecord {
-        image_name,
-        manifest_digest,
-        config_digest,
-        updated_at: row.get(2)?,
+        image_name: record.image_name,
+        manifest_digest: record.manifest_digest,
+        config_digest: record.config_digest,
+        updated_at: record.updated_at,
         status: typed_config.status,
         run_count,
         solve_count,
-        annotations,
+        annotations: record.annotations,
         config,
     })
 }
@@ -965,10 +1062,6 @@ fn cache_conversion_failure(
         column_type,
         std::io::Error::new(std::io::ErrorKind::InvalidData, message.into()).into(),
     )
-}
-
-fn string_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<String> {
-    row.get(0)
 }
 
 fn digest_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Digest> {

@@ -1,5 +1,8 @@
 use super::index::SqliteIndexStore;
-use super::{ArtifactManifestRecord, ExperimentManifestRecord, ExperimentRefRecord, RefUpdate};
+use super::{
+    ArtifactManifestRecord, ArtifactRefRecord, ExperimentManifestRecord, ExperimentRefRecord,
+    RefUpdate,
+};
 use crate::artifact::{
     media_types::{self, RootPayloadVersion},
     sha256_digest, stable_json_bytes, ImageRef, LocalArtifact,
@@ -511,23 +514,21 @@ impl LocalRegistry {
             .collect()
     }
 
+    /// List OMMX Artifact refs stored in this registry, optionally filtered by
+    /// full image-reference prefix.
+    ///
+    /// Missing Manifest cache rows are backfilled from the content-addressed
+    /// blob store before the digest-validated SQLite projections are returned.
+    pub fn list_artifacts(&self, name_prefix: Option<&str>) -> Result<Vec<ArtifactRefRecord>> {
+        self.backfill_artifact_manifests(name_prefix)?;
+        self.index.list_artifact_refs(name_prefix)
+    }
+
     /// List Experiment refs stored in this registry, optionally filtered by
     /// full image-reference prefix.
     pub fn list_experiments(&self, name_prefix: Option<&str>) -> Result<Vec<ExperimentRefRecord>> {
-        let refs = self.index.list_refs(name_prefix)?;
         let checkpoint_repository_key = self.experiment_checkpoint_repository_key()?;
-        let cached_manifest_digests = self
-            .index
-            .list_cached_artifact_manifest_digests(name_prefix)?;
-        for r in refs {
-            if r.name == checkpoint_repository_key {
-                continue;
-            }
-            if cached_manifest_digests.contains(r.manifest_digest.as_ref()) {
-                continue;
-            }
-            self.backfill_artifact_manifest(&r.manifest_digest)?;
-        }
+        self.backfill_artifact_manifests(name_prefix)?;
         for (image_name, manifest_digest) in self
             .index
             .list_missing_experiment_config_refs(name_prefix)?
@@ -542,6 +543,16 @@ impl LocalRegistry {
             .into_iter()
             .filter(|r| r.image_name.repository_key() != checkpoint_repository_key)
             .collect())
+    }
+
+    fn backfill_artifact_manifests(&self, name_prefix: Option<&str>) -> Result<()> {
+        for manifest_digest in self
+            .index
+            .list_missing_artifact_manifest_digests(name_prefix)?
+        {
+            self.backfill_artifact_manifest(&manifest_digest)?;
+        }
+        Ok(())
     }
 
     fn backfill_artifact_manifest(&self, manifest_digest: &Digest) -> Result<()> {

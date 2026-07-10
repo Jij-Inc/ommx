@@ -7,6 +7,7 @@ from ommx._ommx_rust import (
     ArchiveManifest,
     Artifact,
     ArtifactDraft,
+    ArtifactRef,
     Descriptor,
     GcBlob,
     GcInvalidManifest,
@@ -17,6 +18,7 @@ from ommx._ommx_rust import (
     gc,
     get_images,
     get_local_registry_root,
+    list_artifacts,
     prune_anonymous,
     set_local_registry_root,
 )
@@ -27,6 +29,7 @@ __all__ = [
     "ArchiveManifest",
     "Artifact",
     "ArtifactDraft",
+    "ArtifactRef",
     "Descriptor",
     "GcBlob",
     "GcInvalidManifest",
@@ -37,6 +40,7 @@ __all__ = [
     "gc",
     "get_images",
     "get_local_registry_root",
+    "list_artifacts",
     "prune_anonymous",
     "set_local_registry_root",
 ]

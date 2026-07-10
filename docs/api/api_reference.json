@@ -26095,6 +26095,132 @@
         },
         {
           "kind": "Class",
+          "name": "ArtifactRef",
+          "doc": "A local-registry image reference and its cached OCI Manifest projection.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "annotations",
+              "doc": "Manifest annotations stored on the Artifact.",
+              "type_": {
+                "display": "dict[str, str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "artifact_type",
+              "doc": "OCI Manifest `artifactType` identifying the OMMX Artifact kind.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "config_digest",
+              "doc": "Immutable digest of the config blob referenced by the Manifest.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "image_name",
+              "doc": "Local registry image reference.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "manifest",
+              "doc": "Complete OCI Manifest JSON stored by `manifest_digest`.",
+              "type_": {
+                "display": "dict[str, Any]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "Any",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "manifest_digest",
+              "doc": "Immutable OCI Manifest digest for the Artifact.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "updated_at",
+              "doc": "RFC 3339 timestamp when this local ref was last updated.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
           "name": "Descriptor",
           "doc": "Descriptor of a blob stored in the local registry.\n\n`PyDescriptor` intentionally does not carry a `LocalRegistryHandle`.\nIt is a lightweight descriptor view returned by registry-owning\n`Artifact` objects. The blob can only be read\nby passing this value back to one of those owner objects, whose handle\nkeeps temporary registries alive. If a descriptor outlives every\nowner of its temporary registry, it is just inert metadata and cannot\nbe used to access bytes.",
           "bases": [],
@@ -27030,6 +27156,87 @@
                 "display": "Path",
                 "link_target": null,
                 "children": []
+              }
+            }
+          ],
+          "is_async": false,
+          "deprecated": null
+        },
+        {
+          "kind": "Function",
+          "name": "list_artifacts",
+          "doc": "List Artifact refs using the Local Registry's digest-addressed Manifest\ncache.\n\nMissing Manifest rows are backfilled from the CAS before records are\nreturned. If `prefix` is given, it is matched against the full image\nreference string.",
+          "signatures": [
+            {
+              "parameters": [
+                {
+                  "name": "prefix",
+                  "type_": {
+                    "display": "Optional[str]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  },
+                  "default": {
+                    "kind": "Simple",
+                    "value": "None"
+                  }
+                },
+                {
+                  "name": "root",
+                  "type_": {
+                    "display": "Optional[str | PathLike | Path]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "str | PathLike | Path",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "PathLike",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Path",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "default": {
+                    "kind": "Simple",
+                    "value": "None"
+                  }
+                }
+              ],
+              "return_type": {
+                "display": "list[_ommx_rust.ArtifactRef]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "ArtifactRef",
+                    "link_target": {
+                      "fqn": "ommx.artifact.ArtifactRef",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                ]
               }
             }
           ],
@@ -30327,6 +30534,7 @@
     "ommx.artifact.ArchiveManifest": "ommx.artifact",
     "ommx.artifact.Artifact": "ommx.artifact",
     "ommx.artifact.ArtifactDraft": "ommx.artifact",
+    "ommx.artifact.ArtifactRef": "ommx.artifact",
     "ommx.artifact.Descriptor": "ommx.artifact",
     "ommx.artifact.GcBlob": "ommx.artifact",
     "ommx.artifact.GcInvalidManifest": "ommx.artifact",
@@ -30337,6 +30545,7 @@
     "ommx.artifact.gc": "ommx.artifact",
     "ommx.artifact.get_images": "ommx.artifact",
     "ommx.artifact.get_local_registry_root": "ommx.artifact",
+    "ommx.artifact.list_artifacts": "ommx.artifact",
     "ommx.artifact.prune_anonymous": "ommx.artifact",
     "ommx.artifact.set_local_registry_root": "ommx.artifact",
     "ommx.experiment.Experiment": "ommx.experiment",

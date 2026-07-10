@@ -4,6 +4,32 @@
 
 This guide covers Local Registry workflows around committed and interrupted Experiments: finding a relevant Experiment by project-defined metadata, restoring checkpoints, and deciding which blobs cleanup can remove.
 
+## Inspect the Artifact Catalog without Opening Manifest Blobs
+
+{py:func}`ommx.artifact.list_artifacts` lists every matching OMMX Artifact ref,
+including generic Artifacts and Experiments. Each record contains the image
+name, Manifest and Config digests, update time, `artifactType`, Manifest
+annotations, and the complete OCI Manifest as a Python dictionary.
+
+```python
+from ommx.artifact import list_artifacts
+
+refs = list_artifacts("example.com/optimization")
+for ref in refs:
+    print(ref.image_name, ref.artifact_type, ref.annotations)
+```
+
+The Local Registry reads these records by joining its SQLite `refs` and
+digest-addressed Manifest cache. A missing Manifest row is validated and
+backfilled from the content-addressed blob store on the first listing. Later
+listings return the same immutable Manifest JSON from SQLite without opening
+the Manifest blob. Use the optional `prefix` to limit both backfill and returned
+records to a registry namespace or partial full image reference.
+
+Use {py:func}`~ommx.experiment.list_experiments` when the catalog should contain
+only Experiments and also needs Experiment status, run/solve counts, or the
+complete Experiment Config.
+
 ## Catalog and Filter Experiments with Annotations
 
 Suppose a team runs a continuing QAP solver comparison. Each committed
@@ -38,10 +64,11 @@ artifact. Values that vary between Runs, such as a seed or time limit in this
 example, belong in {py:meth}`~ommx.experiment.Run.log_parameter` instead.
 
 Later, list the registry namespace and project each project's annotation
-schema into ordinary DataFrame columns. {py:func}`~ommx.experiment.list_experiments`
-returns the image name, immutable manifest digest, update time, status,
-run/solve counts, manifest annotations, and the complete Experiment config for
-each matching Experiment ref.
+schema into ordinary DataFrame columns. Built on the same Manifest cache as
+`list_artifacts`, {py:func}`~ommx.experiment.list_experiments` also joins the
+Experiment Config cache. It returns the image name, immutable Manifest and
+Config digests, update time, status, run/solve counts, Manifest annotations,
+and the complete Experiment Config for each matching Experiment ref.
 
 ```python
 import pandas as pd

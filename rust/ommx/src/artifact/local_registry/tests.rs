@@ -977,6 +977,104 @@ fn sqlite_backfill_does_not_retain_unreferenced_cache_rows() -> Result<()> {
 }
 
 #[test]
+fn local_registry_lists_artifacts_from_manifest_cache() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let image_name = ImageRef::parse("example.com/catalog/artifact:latest")?;
+    let other_name = ImageRef::parse("example.com/other/artifact:latest")?;
+
+    let mut draft = ArtifactDraft::with_registry(&registry, image_name.clone());
+    draft.add_annotation("com.example.problem", "qap");
+    draft.add_layer_bytes(
+        MediaType::Other("application/json".to_string()),
+        br#"{"value":1}"#.to_vec(),
+        HashMap::new(),
+    )?;
+    let artifact = draft.commit()?;
+    build_test_local_artifact(&registry, &other_name, b"other")?;
+
+    let records = registry.list_artifacts(Some("example.com/catalog"))?;
+    assert_eq!(records.len(), 1);
+    let record = &records[0];
+    assert_eq!(record.image_name, image_name);
+    assert_eq!(&record.manifest_digest, artifact.manifest_digest());
+    assert_eq!(
+        record.artifact_type,
+        MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string())
+    );
+    assert_eq!(&record.config_digest, artifact.stored_config()?.digest());
+    assert_eq!(
+        record.annotations.get("com.example.problem"),
+        Some(&"qap".to_string())
+    );
+    assert_eq!(
+        record.manifest["artifactType"],
+        media_types::V1_ARTIFACT_MEDIA_TYPE
+    );
+    assert_eq!(record.manifest["layers"].as_array().unwrap().len(), 1);
+    assert!(record.updated_at.contains('T'));
+    Ok(())
+}
+
+#[test]
+fn missing_artifact_manifest_query_deduplicates_shared_digest() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let image_name = ImageRef::parse("example.com/catalog/original:latest")?;
+    let alias = ImageRef::parse("example.com/catalog/alias:latest")?;
+    let artifact = build_test_local_artifact(&registry, &image_name, b"shared")?;
+    artifact.tag_as(alias.clone())?;
+
+    let conn = rusqlite::Connection::open(registry.root().join(SQLITE_INDEX_FILE_NAME))?;
+    conn.execute(
+        "DELETE FROM artifact_manifests WHERE manifest_digest = ?1",
+        [artifact.manifest_digest().to_string()],
+    )?;
+
+    let index = open_test_index(&registry)?;
+    let missing = index.list_missing_artifact_manifest_digests(Some("example.com/catalog"))?;
+    assert_eq!(missing, vec![artifact.manifest_digest().clone()]);
+
+    let records = registry.list_artifacts(Some("example.com/catalog"))?;
+    assert_eq!(records.len(), 2);
+    assert_eq!(records[0].image_name, alias);
+    assert_eq!(records[1].image_name, image_name);
+    assert!(records
+        .iter()
+        .all(|record| &record.manifest_digest == artifact.manifest_digest()));
+    Ok(())
+}
+
+#[test]
+fn list_artifacts_rejects_manifest_json_that_does_not_match_digest() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let image_name = ImageRef::parse("example.com/catalog/integrity:latest")?;
+    let artifact = build_test_local_artifact(&registry, &image_name, b"payload")?;
+    let manifest_digest = artifact.manifest_digest().clone();
+    let original_manifest = registry.read_blob(&manifest_digest)?;
+    let mut changed_manifest: serde_json::Value = serde_json::from_slice(&original_manifest)?;
+    changed_manifest["annotations"] = serde_json::json!({ "com.example.changed": "true" });
+    let conn = rusqlite::Connection::open(registry.root().join(SQLITE_INDEX_FILE_NAME))?;
+    conn.execute(
+        "UPDATE artifact_manifests SET manifest_json = ?1 WHERE manifest_digest = ?2",
+        rusqlite::params![
+            stable_json_bytes(&changed_manifest)?,
+            manifest_digest.to_string()
+        ],
+    )?;
+
+    let error = registry
+        .list_artifacts(Some("example.com/catalog/integrity"))
+        .expect_err("changed Manifest JSON must not be returned under the original digest");
+    assert!(
+        format!("{error:#}").contains("Cached Manifest JSON does not match"),
+        "unexpected error: {error:#}"
+    );
+    Ok(())
+}
+
+#[test]
 fn local_registry_build_publish_skips_conflicting_manifest() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let registry = LocalRegistry::open(dir.path())?;

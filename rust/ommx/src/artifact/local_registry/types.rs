@@ -102,6 +102,32 @@ impl ExperimentManifestRecord {
     }
 }
 
+/// Local Registry listing record for an OMMX Artifact.
+///
+/// Values are reconstructed from a ref and the digest-addressed SQLite copy of
+/// its original OCI Manifest JSON. The Manifest bytes are verified against
+/// `manifest_digest` before this record is returned. Use `manifest_digest` as
+/// the immutable artifact identity; `image_name` is the mutable local registry
+/// alias that currently points to it.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArtifactRefRecord {
+    /// Full local registry image reference.
+    pub image_name: crate::artifact::ImageRef,
+    /// Immutable OCI manifest digest for the Artifact.
+    pub manifest_digest: Digest,
+    /// RFC 3339 timestamp when the local ref was last updated.
+    pub updated_at: String,
+    /// OCI Manifest `artifactType` identifying the OMMX Artifact kind.
+    pub artifact_type: MediaType,
+    /// Immutable digest of the config blob referenced by the Manifest.
+    pub config_digest: Digest,
+    /// Manifest annotations stored on the Artifact.
+    pub annotations: BTreeMap<String, String>,
+    /// Complete OCI Manifest JSON stored by `manifest_digest`.
+    pub manifest: serde_json::Value,
+}
+
 /// Local Registry listing record for an Experiment artifact.
 ///
 /// Values are reconstructed from digest-addressed SQLite copies of the

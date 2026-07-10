@@ -8,13 +8,17 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
-### 🆕 Experiment listing from the Local Registry ([#1029](https://github.com/Jij-Inc/ommx/pull/1029))
+### 🆕 Artifact and Experiment listing from the Local Registry ([#1029](https://github.com/Jij-Inc/ommx/pull/1029))
 
-`ommx.experiment.list_experiments()` now lists Experiment refs from the
-SQLite Local Registry. The returned `ExperimentRef` records include the image
-name, manifest and config digests, status, run/solve counts, update timestamp,
-manifest annotations, and the complete Experiment config as a Python `dict`.
-The optional `prefix` filter matches the full image reference string.
+`ommx.artifact.list_artifacts()` now lists every OMMX Artifact ref from the
+SQLite Local Registry. The returned `ArtifactRef` records include the image
+name, Manifest and Config digests, update timestamp, `artifactType`, Manifest
+annotations, and the complete OCI Manifest as a Python `dict`.
+
+`ommx.experiment.list_experiments()` provides the Experiment-specific view. Its
+`ExperimentRef` records additionally include status, run/solve counts, and the
+complete Experiment Config. Both functions accept an optional `prefix` filter
+matched against the full image reference string.
 
 Manifest and Experiment Config JSON are cached in SQLite under their content
 digests. A missing row is backfilled from the CAS on listing; subsequent
@@ -26,6 +30,7 @@ Experiments can also store caller-owned manifest annotations with
 `Experiment.set_annotation(...)`; OMMX-reserved annotation keys remain rejected.
 
 ```python
+from ommx.artifact import list_artifacts
 from ommx.experiment import Experiment, list_experiments
 
 with Experiment("example.com/team/experiments/demo:latest") as experiment:
@@ -34,6 +39,9 @@ with Experiment("example.com/team/experiments/demo:latest") as experiment:
 refs = list_experiments("example.com/team/experiments")
 assert refs[0].annotations["com.example.problem"] == "demo"
 assert refs[0].config["status"] == "finished"
+
+artifacts = list_artifacts("example.com/team")
+assert artifacts[0].manifest["artifactType"].startswith("application/org.ommx")
 ```
 
 Local Registry refs now store only their target manifest digest. Consequently,

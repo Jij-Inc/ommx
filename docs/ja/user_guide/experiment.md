@@ -4,6 +4,31 @@
 
 このページでは、commit 済みまたは中断された Experiment を Local Registry で扱う workflow を説明します。プロジェクト固有 metadata から目的の Experiment を検索する方法、checkpoint からの復帰、Local Registry cleanup が削除できる blob の判断を扱います。
 
+## Manifest blob を開かずに Artifact catalog を確認する
+
+{py:func}`ommx.artifact.list_artifacts` は、汎用 Artifact と Experiment を含む、
+一致したすべての OMMX Artifact ref を一覧します。各 record には image name、
+Manifest/Config digest、更新時刻、`artifactType`、Manifest annotation、完全な OCI
+Manifest が Python の dictionary として含まれます。
+
+```python
+from ommx.artifact import list_artifacts
+
+refs = list_artifacts("example.com/optimization")
+for ref in refs:
+    print(ref.image_name, ref.artifact_type, ref.annotations)
+```
+
+Local Registry は SQLite の `refs` と digest-addressed Manifest cache を JOIN して
+これらの record を読み出します。Manifest row がない場合、最初の一覧取得時に
+content-addressed blob store から読み出して検証し、cache を backfill します。以降の
+一覧取得では Manifest blob を開かず、同じ immutable な Manifest JSON を SQLite
+から返します。任意の `prefix` を指定すると、backfill と返却対象の両方を registry
+namespace または full image reference の途中までに限定できます。
+
+Experiment のみを対象にし、status、run/solve 数、完全な Experiment Config も必要な
+場合は {py:func}`~ommx.experiment.list_experiments` を使います。
+
 ## Annotation で Experiment を一覧・filter する
 
 継続的に QAP の solver comparison を行うチームを考えます。1 つの commit 済み
@@ -37,10 +62,10 @@ annotation は Artifact 全体で共有される Experiment-level の catalog fi
 {py:meth}`~ommx.experiment.Run.log_parameter` へ記録します。
 
 後から registry namespace を一覧し、プロジェクトが定義した annotation schema を
-通常の DataFrame column へ投影します。
-{py:func}`~ommx.experiment.list_experiments` は一致する各 Experiment ref について、
-image name、immutable な manifest digest、更新時刻、status、run/solve 数、manifest
-annotation、完全な Experiment config を返します。
+通常の DataFrame column へ投影します。`list_artifacts` と同じ Manifest cache を基礎に、
+{py:func}`~ommx.experiment.list_experiments` は Experiment Config cache も JOIN します。
+一致する各 Experiment ref について、image name、immutable な Manifest/Config digest、
+更新時刻、status、run/solve 数、Manifest annotation、完全な Experiment Config を返します。
 
 ```python
 import pandas as pd
