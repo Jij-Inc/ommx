@@ -586,7 +586,7 @@ fn handle_prune_anonymous(
             format_args!("{} anonymous artifact ref(s)", removed.len()),
         );
         for r in &removed {
-            print_anonymous_ref(&r.name, &r.reference, r.descriptor.digest(), show_digests);
+            print_anonymous_ref(&r.name, &r.reference, &r.manifest_digest, show_digests);
         }
     } else {
         print_status(
@@ -594,7 +594,7 @@ fn handle_prune_anonymous(
             format_args!("{} anonymous artifact ref(s)", to_remove.len()),
         );
         for r in &to_remove {
-            print_anonymous_ref(&r.name, &r.reference, r.descriptor.digest(), show_digests);
+            print_anonymous_ref(&r.name, &r.reference, &r.manifest_digest, show_digests);
         }
         print_status(
             "Dry Run".yellow().bold(),
