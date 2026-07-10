@@ -1,17 +1,46 @@
-// Benchmark Instance::log_encode's clone-backed rollback overhead.
+// Benchmark contracts for Instance::log_encode.
 //
-// log_encode clones the whole Instance once, encodes the requested integer
-// variable(s) on the clone, then commits the clone back on success. These
-// benchmarks hold the amount of real encoding work constant (one integer
-// variable log-encoded into a fixed number of bits) while growing unrelated
-// instance state, to show how much of the cost is attributable to the
-// whole-instance clone rather than the encoding itself.
+// Removed-constraint family
+// - Purpose: persistent scaling guardrail.
+// - Regression: atomic log encoding clones untouched removed state and becomes O(N).
+// - Origin: https://github.com/Jij-Inc/ommx/issues/1031 and
+//   https://github.com/Jij-Inc/ommx/issues/1045.
+// - Measured boundary: Rust SDK Instance::log_encode.
+// - Independent variable: removed regular constraint count N; the two decision
+//   variables and ten-bit encoding work stay fixed.
+// - Cost model/evidence: fixed validation, encoding, and substitution plan;
+//   removed rows are not inspected, so the CodSpeed simulation same-run
+//   cross-size exponent should be p ~= 0.
+//
+// Active-constraint family
+// - Purpose: persistent scaling guardrail for the necessary active-row scan.
+// - Regression: an extra owner clone adds avoidable work on top of that scan.
+// - Origin/boundary: the issues above; Rust SDK operation.
+// - Independent variable: active regular constraint count N; variable count,
+//   expression size, and ten-bit encoding work stay fixed.
+// - Cost model/evidence: inspect N active rows without rewriting them, so p ~= 1.
+//
+// Unrelated-named-function family
+// - Purpose: persistent fixed-input regression guardrail.
+// - Regression: routing through a generic atomic helper clones and rebuilds
+//   every unrelated named-function row.
+// - Origin: https://github.com/Jij-Inc/ommx/pull/1047.
+// - Measured boundary/input: Rust SDK Instance::log_encode with 32,000 fixed,
+//   deterministic named functions that do not reference the encoded variable.
+// - Cost model/evidence: inspect N functions for affected IDs plus fixed
+//   encoding work, without cloning their rows; compare the same URI across
+//   commits and use a profile only to diagnose a detected regression.
+//
+// Input rationale: 1,000/8,000/32,000 expose the dominant term while keeping
+// the largest measured case below a 25 ms simulation budget. Lifecycle/run
+// policy: retain on main; run automatically on main/releases and manually on
+// performance PRs through the benchmark workflow.
 use criterion::{
     criterion_group, criterion_main, AxisScale, BenchmarkId, Criterion, PlotConfiguration,
 };
 use ommx::{
     linear, ATol, Bound, Constraint, ConstraintID, DecisionVariable, Function, Instance, Kind,
-    RemovedReason, Sense, VariableID,
+    NamedFunction, NamedFunctionID, RemovedReason, Sense, VariableID,
 };
 use std::collections::BTreeMap;
 
@@ -22,21 +51,20 @@ const INTEGER_BOUND_WIDTH: f64 = 1023.0; // 10 log-encoding bits
 
 /// An instance with a single integer decision variable (id 0) to log-encode,
 /// plus `num_removed` unrelated removed regular constraints that log_encode
-/// must still pay to clone but never touches.
+/// must neither inspect nor rewrite.
 fn instance_with_removed_constraints(num_removed: usize) -> Instance {
-    let mut decision_variables = BTreeMap::new();
-    decision_variables.insert(
-        VariableID::from(0),
-        DecisionVariable::new(
-            Kind::Integer,
-            Bound::new(0.0, INTEGER_BOUND_WIDTH).unwrap(),
-            ATol::default(),
-        )
-        .unwrap(),
-    );
-    for id in 1..=num_removed as u64 {
-        decision_variables.insert(VariableID::from(id), DecisionVariable::continuous());
-    }
+    let decision_variables = BTreeMap::from([
+        (
+            VariableID::from(0),
+            DecisionVariable::new(
+                Kind::Integer,
+                Bound::new(0.0, INTEGER_BOUND_WIDTH).unwrap(),
+                ATol::default(),
+            )
+            .unwrap(),
+        ),
+        (VariableID::from(1), DecisionVariable::continuous()),
+    ]);
 
     let removed_reason = RemovedReason {
         reason: "ommx.bench.log_encode.removed_regular_constraints".to_string(),
@@ -47,7 +75,7 @@ fn instance_with_removed_constraints(num_removed: usize) -> Instance {
             (
                 ConstraintID::from(id),
                 (
-                    Constraint::equal_to_zero(Function::from(linear!(id))),
+                    Constraint::equal_to_zero(Function::from(linear!(1))),
                     removed_reason.clone(),
                 ),
             )
@@ -66,28 +94,27 @@ fn instance_with_removed_constraints(num_removed: usize) -> Instance {
 
 /// An instance with a single integer decision variable (id 0) to log-encode,
 /// plus `num_active` unrelated active regular constraints that don't
-/// reference the encoded variable at all, so log_encode clones them but
-/// leaves every one of them untouched.
+/// reference the encoded variable at all, so log_encode inspects but does not
+/// rewrite them.
 fn instance_with_active_constraints(num_active: usize) -> Instance {
-    let mut decision_variables = BTreeMap::new();
-    decision_variables.insert(
-        VariableID::from(0),
-        DecisionVariable::new(
-            Kind::Integer,
-            Bound::new(0.0, INTEGER_BOUND_WIDTH).unwrap(),
-            ATol::default(),
-        )
-        .unwrap(),
-    );
-    for id in 1..=num_active as u64 {
-        decision_variables.insert(VariableID::from(id), DecisionVariable::continuous());
-    }
+    let decision_variables = BTreeMap::from([
+        (
+            VariableID::from(0),
+            DecisionVariable::new(
+                Kind::Integer,
+                Bound::new(0.0, INTEGER_BOUND_WIDTH).unwrap(),
+                ATol::default(),
+            )
+            .unwrap(),
+        ),
+        (VariableID::from(1), DecisionVariable::continuous()),
+    ]);
 
     let constraints = (1..=num_active as u64)
         .map(|id| {
             (
                 ConstraintID::from(id),
-                Constraint::equal_to_zero(Function::from(linear!(id))),
+                Constraint::equal_to_zero(Function::from(linear!(1))),
             )
         })
         .collect();
@@ -97,6 +124,40 @@ fn instance_with_active_constraints(num_active: usize) -> Instance {
         .objective(Function::Zero)
         .decision_variables(decision_variables)
         .constraints(constraints)
+        .build()
+        .unwrap()
+}
+
+fn instance_with_unrelated_named_functions(num_named_functions: usize) -> Instance {
+    let decision_variables = BTreeMap::from([
+        (
+            VariableID::from(0),
+            DecisionVariable::new(
+                Kind::Integer,
+                Bound::new(0.0, INTEGER_BOUND_WIDTH).unwrap(),
+                ATol::default(),
+            )
+            .unwrap(),
+        ),
+        (VariableID::from(1), DecisionVariable::continuous()),
+    ]);
+    let named_functions = (0..num_named_functions as u64)
+        .map(|id| {
+            (
+                NamedFunctionID::from(id),
+                NamedFunction {
+                    function: Function::from(linear!(1)),
+                },
+            )
+        })
+        .collect();
+
+    Instance::builder()
+        .sense(Sense::Minimize)
+        .objective(Function::Zero)
+        .decision_variables(decision_variables)
+        .constraints(BTreeMap::new())
+        .named_functions(named_functions)
         .build()
         .unwrap()
 }
@@ -155,9 +216,26 @@ fn log_encode_active_constraints(c: &mut Criterion) {
     group.finish();
 }
 
+fn log_encode_unrelated_named_functions(c: &mut Criterion) {
+    const NUM_NAMED_FUNCTIONS: usize = 32_000;
+    let instance = instance_with_unrelated_named_functions(NUM_NAMED_FUNCTIONS);
+    c.bench_function("log-encode-unrelated-named-functions[32000]", |b| {
+        b.iter_batched_ref(
+            || instance.clone(),
+            |instance| {
+                instance
+                    .log_encode([VariableID::from(0)], ATol::default())
+                    .unwrap();
+            },
+            criterion::BatchSize::LargeInput,
+        )
+    });
+}
+
 criterion_group!(
     benches,
     log_encode_removed_constraints,
     log_encode_active_constraints,
+    log_encode_unrelated_named_functions,
 );
 criterion_main!(benches);

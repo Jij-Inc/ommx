@@ -1,11 +1,29 @@
-// Benchmark Instance::reduce_binary_power's clone-backed rollback overhead.
+// Benchmark contracts for Instance::reduce_binary_power.
 //
-// reduce_binary_power clones the whole Instance before rewriting the
-// objective and active regular constraints, even though only a handful of
-// binary-power terms actually change. These benchmarks hold the amount of
-// real rewrite work constant (one binary-squared term in the objective)
-// while growing unrelated instance state, to show how much of the cost is
-// attributable to the whole-instance clone rather than the rewrite itself.
+// Removed-constraint family
+// - Purpose: persistent scaling guardrail.
+// - Regression: whole-Instance rollback cloning makes untouched removed state O(N).
+// - Origin: https://github.com/Jij-Inc/ommx/issues/1031 and
+//   https://github.com/Jij-Inc/ommx/issues/1044.
+// - Measured boundary: Rust SDK Instance::reduce_binary_power.
+// - Independent variable: removed regular constraint count N; all other shape
+//   dimensions, including the two decision variables, stay fixed.
+// - Cost model/evidence: fixed binary-ID discovery plus one objective rewrite;
+//   removed rows are not inspected, so the CodSpeed simulation same-run
+//   cross-size exponent should be p ~= 0.
+//
+// Active-constraint family
+// - Purpose: persistent scaling guardrail for the necessary active-row scan.
+// - Regression: an extra owner clone adds avoidable work on top of that scan.
+// - Origin/boundary: the issues above; Rust SDK operation.
+// - Independent variable: active regular constraint count N; variable count,
+//   expression size, and the single objective rewrite stay fixed.
+// - Cost model/evidence: inspect N active rows without rewriting them, so p ~= 1.
+//
+// Input rationale: 1,000/8,000/32,000 expose the dominant term while keeping
+// the largest measured case below a 25 ms simulation budget. Lifecycle/run
+// policy: retain on main; run automatically on main/releases and manually on
+// performance PRs through the benchmark workflow.
 use criterion::{
     criterion_group, criterion_main, AxisScale, BenchmarkId, Criterion, PlotConfiguration,
 };
@@ -17,13 +35,12 @@ use std::collections::BTreeMap;
 
 /// An instance whose objective has a single binary-power term to reduce
 /// (`x0^2`), plus `num_removed` unrelated removed regular constraints that
-/// `reduce_binary_power` must still pay to clone but never rewrites.
+/// `reduce_binary_power` must neither inspect nor rewrite.
 fn instance_with_removed_constraints(num_removed: usize) -> Instance {
-    let mut decision_variables = BTreeMap::new();
-    decision_variables.insert(VariableID::from(0), DecisionVariable::binary());
-    for id in 1..=num_removed as u64 {
-        decision_variables.insert(VariableID::from(id), DecisionVariable::continuous());
-    }
+    let decision_variables = BTreeMap::from([
+        (VariableID::from(0), DecisionVariable::binary()),
+        (VariableID::from(1), DecisionVariable::continuous()),
+    ]);
 
     let objective = Function::Quadratic(quadratic!(0, 0).into());
 
@@ -36,7 +53,7 @@ fn instance_with_removed_constraints(num_removed: usize) -> Instance {
             (
                 ConstraintID::from(id),
                 (
-                    Constraint::equal_to_zero(Function::from(linear!(id))),
+                    Constraint::equal_to_zero(Function::from(linear!(1))),
                     removed_reason.clone(),
                 ),
             )
@@ -55,14 +72,13 @@ fn instance_with_removed_constraints(num_removed: usize) -> Instance {
 
 /// An instance whose objective has a single binary-power term to reduce
 /// (`x0^2`), plus `num_active` unrelated active regular constraints that
-/// don't reference `x0` at all, so `reduce_binary_power` clones them but
-/// leaves every one of them untouched.
+/// don't reference `x0` at all, so `reduce_binary_power` inspects but does not
+/// rewrite them.
 fn instance_with_active_constraints(num_active: usize) -> Instance {
-    let mut decision_variables = BTreeMap::new();
-    decision_variables.insert(VariableID::from(0), DecisionVariable::binary());
-    for id in 1..=num_active as u64 {
-        decision_variables.insert(VariableID::from(id), DecisionVariable::continuous());
-    }
+    let decision_variables = BTreeMap::from([
+        (VariableID::from(0), DecisionVariable::binary()),
+        (VariableID::from(1), DecisionVariable::continuous()),
+    ]);
 
     let objective = Function::Quadratic(quadratic!(0, 0).into());
 
@@ -70,7 +86,7 @@ fn instance_with_active_constraints(num_active: usize) -> Instance {
         .map(|id| {
             (
                 ConstraintID::from(id),
-                Constraint::equal_to_zero(Function::from(linear!(id))),
+                Constraint::equal_to_zero(Function::from(linear!(1))),
             )
         })
         .collect();

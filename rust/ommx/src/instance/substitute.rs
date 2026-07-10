@@ -1,119 +1,145 @@
 use super::*;
 use crate::{
-    substitute_acyclic, substitute_one_via_acyclic, Function, Substitute, SubstitutionError,
-    VariableID,
+    substitute_acyclic, substitute_one_via_acyclic, Function, IndicatorConstraintID,
+    NamedFunctionID, Substitute, SubstitutionError, VariableID,
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
+
+/// All fallible results of substituting an [`Instance`].
+///
+/// The root object prepares this plan without mutation, then commits only
+/// table-local replacements. This keeps substitution atomic without granting
+/// crate-wide access to a partially mutating `Instance` operation.
+pub(super) struct InstanceSubstitutionPlan {
+    objective: Option<Function>,
+    constraint_replacements: BTreeMap<ConstraintID, Constraint>,
+    indicator_replacements: BTreeMap<IndicatorConstraintID, IndicatorConstraint>,
+    named_function_replacements: BTreeMap<NamedFunctionID, NamedFunction>,
+    decision_variable_dependency: crate::AcyclicAssignments,
+}
 
 impl Instance {
-    /// In-place version of [`Substitute::substitute_acyclic`].
-    ///
-    /// Mutates `self` directly instead of consuming and returning an owned
-    /// `Instance`, so callers that already hold `&mut Instance` (such as
-    /// [`Instance::log_encode`](super::Instance::log_encode)) can substitute
-    /// without cloning the whole instance up front. Only the objective,
-    /// affected active constraints, affected special constraints, named
-    /// functions, and dependency table are touched; removed constraints and
-    /// other untouched state are left alone.
-    pub(crate) fn substitute_acyclic_mut(
-        &mut self,
+    /// Prepare every fallible rewrite required by an acyclic substitution.
+    pub(super) fn plan_substitution(
+        &self,
         acyclic: &crate::AcyclicAssignments,
-    ) -> Result<(), crate::SubstitutionError> {
-        if acyclic.is_empty() {
-            return Ok(());
-        }
-
-        // Get the set of variables being substituted
-        let substituted_variables: std::collections::BTreeSet<VariableID> =
+    ) -> Result<InstanceSubstitutionPlan, crate::SubstitutionError> {
+        debug_assert!(!acyclic.is_empty());
+        let substituted_variables: BTreeSet<VariableID> =
             acyclic.iter().map(|(var_id, _)| *var_id).collect();
 
-        // Identify constraint IDs that depend on substituted variables
-        let mut affected_constraint_ids = std::collections::BTreeSet::new();
-
-        // Check active constraints only.
-        // Removed constraints are not checked here; they will be substituted
-        // when restored via `restore_constraint`. Constraint hints for removed
-        // constraints are discarded when the constraint is removed.
-        for (constraint_id, constraint) in self.constraint_collection.active() {
-            let required_ids = constraint.required_ids();
-            if !required_ids.is_disjoint(&substituted_variables) {
-                affected_constraint_ids.insert(*constraint_id);
-            }
-        }
-
-        // Apply substitution to the objective function
-        substitute_acyclic(&mut self.objective, acyclic)?;
-
-        // Apply substitution only to affected active constraints.
-        // Removed constraints are not substituted here; they will be substituted
-        // when restored via `restore_constraint`.
-        let mut constraint_replacements = BTreeMap::new();
-        for (&constraint_id, constraint) in self.constraint_collection.active() {
-            if affected_constraint_ids.contains(&constraint_id) {
-                let mut constraint = constraint.clone();
-                substitute_acyclic(&mut constraint.stage.function, acyclic)?;
-                constraint_replacements.insert(constraint_id, constraint);
-            }
-        }
-        self.constraint_collection
-            .replace_active_rows(constraint_replacements)
-            .expect("replacement IDs were read from active constraints");
-
-        // Check that no indicator constraint's indicator_variable is being substituted.
-        // Substituting an indicator variable would change the constraint type
-        // (e.g. fixing it to 1 makes it a regular constraint, fixing to 0 removes it).
-        // This is not yet supported; fail explicitly rather than silently producing
-        // an inconsistent result.
-        for (&cid, ic) in self.indicator_constraint_collection.active().iter() {
-            if substituted_variables.contains(&ic.indicator_variable) {
+        // Structural special-constraint variables cannot be substituted. Check
+        // every family while the operation is still read-only.
+        for (&constraint_id, constraint) in self.indicator_constraint_collection.active() {
+            if substituted_variables.contains(&constraint.indicator_variable) {
                 return Err(SubstitutionError::IndicatorVariableSubstitution {
-                    indicator_variable: ic.indicator_variable,
-                    constraint_id: cid,
+                    indicator_variable: constraint.indicator_variable,
+                    constraint_id,
                 });
             }
         }
-
-        // Apply substitution to the function part of active indicator constraints
-        let mut indicator_replacements = BTreeMap::new();
-        for (&constraint_id, ic) in self.indicator_constraint_collection.active() {
-            let required_ids = ic.stage.function.required_ids();
-            if !required_ids.is_disjoint(&substituted_variables) {
-                let mut ic = ic.clone();
-                substitute_acyclic(&mut ic.stage.function, acyclic)?;
-                indicator_replacements.insert(constraint_id, ic);
-            }
-        }
-        self.indicator_constraint_collection
-            .replace_active_rows(indicator_replacements)
-            .expect("replacement IDs were read from active indicator constraints");
-
-        // Check that no one-hot or SOS1 variable is being substituted.
-        for (&cid, oh) in self.one_hot_constraint_collection.active().iter() {
-            for var_id in &oh.variables {
-                if substituted_variables.contains(var_id) {
+        for (&constraint_id, constraint) in self.one_hot_constraint_collection.active() {
+            for &variable in &constraint.variables {
+                if substituted_variables.contains(&variable) {
                     return Err(SubstitutionError::OneHotVariableSubstitution {
-                        variable: *var_id,
-                        constraint_id: cid,
+                        variable,
+                        constraint_id,
                     });
                 }
             }
         }
-        for (&cid, sos1) in self.sos1_constraint_collection.active().iter() {
-            for var_id in &sos1.variables {
-                if substituted_variables.contains(var_id) {
+        for (&constraint_id, constraint) in self.sos1_constraint_collection.active() {
+            for &variable in &constraint.variables {
+                if substituted_variables.contains(&variable) {
                     return Err(SubstitutionError::Sos1VariableSubstitution {
-                        variable: *var_id,
-                        constraint_id: cid,
+                        variable,
+                        constraint_id,
                     });
                 }
             }
         }
 
-        // Apply substitution to named functions and existing dependencies.
-        substitute_acyclic(&mut self.named_functions, acyclic)?;
-        substitute_acyclic(&mut self.decision_variable_dependency, acyclic)?;
+        let objective = if self
+            .objective
+            .required_ids()
+            .is_disjoint(&substituted_variables)
+        {
+            None
+        } else {
+            Some(self.objective.clone().substitute_acyclic(acyclic)?)
+        };
 
-        Ok(())
+        // Removed constraints are intentionally not rewritten here; they are
+        // normalized through `restore_constraint` when reactivated.
+        let mut constraint_replacements = BTreeMap::new();
+        for (&constraint_id, constraint) in self.constraint_collection.active() {
+            if !constraint
+                .required_ids()
+                .is_disjoint(&substituted_variables)
+            {
+                let mut replacement = constraint.clone();
+                replacement.stage.function =
+                    replacement.stage.function.substitute_acyclic(acyclic)?;
+                constraint_replacements.insert(constraint_id, replacement);
+            }
+        }
+
+        let mut indicator_replacements = BTreeMap::new();
+        for (&constraint_id, constraint) in self.indicator_constraint_collection.active() {
+            if !constraint
+                .stage
+                .function
+                .required_ids()
+                .is_disjoint(&substituted_variables)
+            {
+                let mut replacement = constraint.clone();
+                replacement.stage.function =
+                    replacement.stage.function.substitute_acyclic(acyclic)?;
+                indicator_replacements.insert(constraint_id, replacement);
+            }
+        }
+
+        let mut named_function_replacements = BTreeMap::new();
+        for (&id, named_function) in self.named_functions.iter() {
+            if !named_function
+                .function
+                .required_ids()
+                .is_disjoint(&substituted_variables)
+            {
+                named_function_replacements
+                    .insert(id, named_function.clone().substitute_acyclic(acyclic)?);
+            }
+        }
+
+        let decision_variable_dependency = self
+            .decision_variable_dependency
+            .clone()
+            .substitute_acyclic(acyclic)?;
+
+        Ok(InstanceSubstitutionPlan {
+            objective,
+            constraint_replacements,
+            indicator_replacements,
+            named_function_replacements,
+            decision_variable_dependency,
+        })
+    }
+
+    /// Commit a fully validated substitution plan using table-local effects.
+    pub(super) fn commit_substitution(&mut self, plan: InstanceSubstitutionPlan) {
+        if let Some(objective) = plan.objective {
+            self.objective = objective;
+        }
+        self.constraint_collection
+            .replace_active_rows(plan.constraint_replacements)
+            .expect("replacement IDs were read from active constraints");
+        self.indicator_constraint_collection
+            .replace_active_rows(plan.indicator_replacements)
+            .expect("replacement IDs were read from active indicator constraints");
+        self.named_functions
+            .replace_rows(plan.named_function_replacements)
+            .expect("replacement IDs were read from named functions");
+        self.decision_variable_dependency = plan.decision_variable_dependency;
     }
 }
 
@@ -124,7 +150,11 @@ impl Substitute for Instance {
         mut self,
         acyclic: &crate::AcyclicAssignments,
     ) -> Result<Self::Output, crate::SubstitutionError> {
-        self.substitute_acyclic_mut(acyclic)?;
+        if acyclic.is_empty() {
+            return Ok(self);
+        }
+        let plan = self.plan_substitution(acyclic)?;
+        self.commit_substitution(plan);
         Ok(self)
     }
 
