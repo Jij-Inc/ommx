@@ -28,11 +28,13 @@ use ommx::experiment::{
 pub struct PyExperimentRef {
     image_name: String,
     manifest_digest: String,
+    config_digest: String,
     updated_at: String,
     status: String,
     run_count: u64,
     solve_count: u64,
     annotations: HashMap<String, String>,
+    config: serde_json::Value,
 }
 
 impl PyExperimentRef {
@@ -40,11 +42,13 @@ impl PyExperimentRef {
         Self {
             image_name: record.image_name.to_string(),
             manifest_digest: record.manifest_digest.to_string(),
+            config_digest: record.config_digest.to_string(),
             updated_at: record.updated_at,
             status: record.status,
             run_count: record.run_count,
             solve_count: record.solve_count,
             annotations: record.annotations.into_iter().collect(),
+            config: record.config,
         }
     }
 }
@@ -62,6 +66,12 @@ impl PyExperimentRef {
     /// Immutable OCI manifest digest for the Experiment artifact.
     pub fn manifest_digest(&self) -> &str {
         &self.manifest_digest
+    }
+
+    #[getter]
+    /// Immutable digest of the Experiment config JSON.
+    pub fn config_digest(&self) -> &str {
+        &self.config_digest
     }
 
     #[getter]
@@ -92,6 +102,18 @@ impl PyExperimentRef {
     /// Manifest annotations stored on the Experiment artifact.
     pub fn annotations(&self) -> HashMap<String, String> {
         self.annotations.clone()
+    }
+
+    #[getter]
+    #[gen_stub(override_return_type(
+        type_repr = "builtins.dict[builtins.str, typing.Any]",
+        imports = ("builtins", "typing")
+    ))]
+    /// Complete Experiment config JSON stored by `config_digest`.
+    pub fn config<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        Ok(serde_pyobject::to_pyobject(py, &self.config)
+            .map_err(|err| pyo3::exceptions::PyValueError::new_err(err.to_string()))?
+            .cast_into::<PyDict>()?)
     }
 
     pub fn __repr__(&self) -> String {
@@ -707,9 +729,11 @@ impl PyExperiment {
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
 #[pyo3(signature = (prefix = None, *, root = None))]
-/// List Experiment refs in the Local Registry without opening each Experiment artifact.
+/// List Experiment refs using the Local Registry's digest-addressed JSON cache.
 ///
-/// If `prefix` is given, it is matched against the full image reference string.
+/// Missing Manifest or Config rows are backfilled from the CAS before records
+/// are returned. If `prefix` is given, it is matched against the full image
+/// reference string.
 pub fn list_experiments(
     py: Python<'_>,
     prefix: Option<&str>,

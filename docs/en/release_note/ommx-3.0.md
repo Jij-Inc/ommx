@@ -11,10 +11,16 @@ Changes merged after the most recent release will be appended here as they land,
 ### 🆕 Experiment listing from the Local Registry ([#1029](https://github.com/Jij-Inc/ommx/pull/1029))
 
 `ommx.experiment.list_experiments()` now lists Experiment refs from the
-SQLite Local Registry without opening each Experiment artifact. The returned
-`ExperimentRef` records include the image name, manifest digest, status,
-run/solve counts, update timestamp, and manifest annotations. The optional
-`prefix` filter matches the full image reference string.
+SQLite Local Registry. The returned `ExperimentRef` records include the image
+name, manifest and config digests, status, run/solve counts, update timestamp,
+manifest annotations, and the complete Experiment config as a Python `dict`.
+The optional `prefix` filter matches the full image reference string.
+
+Manifest and Experiment Config JSON are cached in SQLite under their content
+digests. A missing row is backfilled from the CAS on listing; subsequent
+listings do not need to construct each Experiment. Existing version 1 Local
+Registries are migrated to version 2 in place while preserving refs and the
+registry ID.
 
 Experiments can also store caller-owned manifest annotations with
 `Experiment.set_annotation(...)`; OMMX-reserved annotation keys remain rejected.
@@ -27,7 +33,12 @@ with Experiment("example.com/team/experiments/demo:latest") as experiment:
 
 refs = list_experiments("example.com/team/experiments")
 assert refs[0].annotations["com.example.problem"] == "demo"
+assert refs[0].config["status"] == "finished"
 ```
+
+Local Registry refs now store only their target manifest digest. Consequently,
+`AnonymousArtifactRef.size` and `AnonymousArtifactRef.media_type` are removed;
+descriptor fields are no longer part of the ref listing API.
 
 ### ⚠ Dedicated Experiment artifact type ([#1033](https://github.com/Jij-Inc/ommx/pull/1033))
 

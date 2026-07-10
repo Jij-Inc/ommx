@@ -537,15 +537,6 @@ impl LocalRegistry {
             }
             self.backfill_experiment_manifest(&image_name, &manifest_digest)?;
         }
-        for (image_name, manifest_digest) in self
-            .index
-            .list_invalid_experiment_config_refs(name_prefix)?
-        {
-            if image_name.repository_key() == checkpoint_repository_key {
-                continue;
-            }
-            self.backfill_experiment_manifest(&image_name, &manifest_digest)?;
-        }
         let records = self.index.list_experiment_refs(name_prefix)?;
         Ok(records
             .into_iter()

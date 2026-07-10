@@ -75,18 +75,12 @@ impl ArtifactManifestRecord {
 pub(crate) struct ExperimentManifestRecord {
     artifact: ArtifactManifestRecord,
     config_json: Vec<u8>,
-    status: String,
-    run_count: u64,
-    solve_count: u64,
 }
 
 impl ExperimentManifestRecord {
-    pub(crate) fn from_validated_summary(
+    pub(crate) fn from_validated_config(
         artifact: ArtifactManifestRecord,
         config_json: Vec<u8>,
-        status: String,
-        run_count: u64,
-        solve_count: u64,
     ) -> Result<Self> {
         ensure!(
             artifact.config_digest().as_ref() == sha256_digest(&config_json),
@@ -96,9 +90,6 @@ impl ExperimentManifestRecord {
         Ok(Self {
             artifact,
             config_json,
-            status,
-            run_count,
-            solve_count,
         })
     }
 
@@ -109,26 +100,14 @@ impl ExperimentManifestRecord {
     pub(crate) fn config_json(&self) -> &[u8] {
         &self.config_json
     }
-
-    pub(crate) fn status(&self) -> &str {
-        &self.status
-    }
-
-    pub(crate) fn run_count(&self) -> u64 {
-        self.run_count
-    }
-
-    pub(crate) fn solve_count(&self) -> u64 {
-        self.solve_count
-    }
 }
 
-/// Local Registry reference summary for an Experiment artifact.
+/// Local Registry listing record for an Experiment artifact.
 ///
-/// Values are reconstructed from SQLite manifest/config projections whose rows
-/// are written from validated local registry artifacts. Use the
-/// `manifest_digest` as the immutable artifact identity; `image_name` is the
-/// mutable local registry alias that currently points to it.
+/// Values are reconstructed from digest-addressed SQLite copies of the
+/// original Manifest and Config JSON. Use the `manifest_digest` as the
+/// immutable artifact identity; `image_name` is the mutable local registry
+/// alias that currently points to it.
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExperimentRefRecord {
@@ -136,6 +115,8 @@ pub struct ExperimentRefRecord {
     pub image_name: crate::artifact::ImageRef,
     /// Immutable OCI manifest digest for the Experiment artifact.
     pub manifest_digest: Digest,
+    /// Immutable digest of the Experiment config JSON.
+    pub config_digest: Digest,
     /// RFC 3339 timestamp when the local ref was last updated.
     pub updated_at: String,
     /// Experiment lifecycle status stored in the Experiment config.
@@ -146,6 +127,11 @@ pub struct ExperimentRefRecord {
     pub solve_count: u64,
     /// Manifest annotations stored on the Experiment artifact.
     pub annotations: BTreeMap<String, String>,
+    /// Complete Experiment config JSON stored by `config_digest`.
+    ///
+    /// The JSON value is returned without projecting project-specific or
+    /// adapter-specific fields into the Local Registry schema.
+    pub config: serde_json::Value,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

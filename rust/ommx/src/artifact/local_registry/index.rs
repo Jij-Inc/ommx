@@ -5,6 +5,7 @@ use super::{
 use crate::artifact::digest::validate_digest;
 use crate::artifact::media_types;
 use crate::artifact::{sha256_digest, ImageRef};
+use crate::experiment::config::ExperimentConfig;
 use anyhow::{bail, ensure, Context, Result};
 #[cfg(test)]
 use oci_spec::image::DescriptorBuilder;
@@ -20,9 +21,7 @@ use std::{
 };
 
 /// SQLite Local Registry schema version stored in `PRAGMA user_version`.
-/// The SQLite Local Registry has not been released yet, so incompatible
-/// development schemas fail fast instead of carrying in-place migrations.
-const SCHEMA_VERSION: i64 = 5;
+const SCHEMA_VERSION: i64 = 2;
 const SQLITE_BUSY_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// SQLite-backed index store for the v3 Local Registry.
@@ -30,9 +29,9 @@ const SQLITE_BUSY_TIMEOUT: Duration = Duration::from_secs(30);
 /// This store is the concurrency-safe equivalent of an OCI `index.json`:
 /// it stores refs and their target manifest digest. Content bytes live in
 /// the Local Registry content-addressed storage. The index also keeps
-/// digest-addressed manifest/config projections used for blob-free catalog
-/// listings; those rows are caches of CAS-addressed bytes, not a second
-/// editable source of truth.
+/// digest-addressed copies of the original Manifest and Experiment Config JSON
+/// used for blob-free catalog listings; those rows are caches of CAS-addressed
+/// bytes, not a second editable source of truth.
 ///
 /// `rusqlite::Connection` is `Send` but `!Sync`, so it lives behind a
 /// [`Mutex`] here. That makes [`SqliteIndexStore`] (and the enclosing
@@ -110,6 +109,7 @@ impl SqliteIndexStore {
         let mut conn = self.lock();
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let update = Self::replace_ref_in(&tx, name, reference, descriptor)?;
+        Self::prune_unreferenced_cache_in(&tx)?;
         tx.commit()?;
         Ok(update)
     }
@@ -152,6 +152,7 @@ impl SqliteIndexStore {
             descriptor,
         )?;
         Self::upsert_experiment_manifest_in(&tx, experiment)?;
+        Self::prune_unreferenced_cache_in(&tx)?;
         tx.commit()?;
         Ok(update)
     }
@@ -194,6 +195,7 @@ impl SqliteIndexStore {
             descriptor,
         )?;
         Self::upsert_artifact_manifest_in(&tx, artifact)?;
+        Self::prune_unreferenced_cache_in(&tx)?;
         tx.commit()?;
         Ok(update)
     }
@@ -202,6 +204,7 @@ impl SqliteIndexStore {
         let mut conn = self.lock();
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
         Self::upsert_experiment_manifest_in(&tx, experiment)?;
+        Self::prune_unreferenced_cache_in(&tx)?;
         tx.commit()?;
         Ok(())
     }
@@ -210,6 +213,7 @@ impl SqliteIndexStore {
         let mut conn = self.lock();
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
         Self::upsert_artifact_manifest_in(&tx, artifact)?;
+        Self::prune_unreferenced_cache_in(&tx)?;
         tx.commit()?;
         Ok(())
     }
@@ -272,26 +276,39 @@ impl SqliteIndexStore {
             r#"
             INSERT INTO experiment_configs (
                 config_digest,
-                config_json,
-                status,
-                run_count,
-                solve_count
+                config_json
             )
-            VALUES (?1, ?2, ?3, ?4, ?5)
+            VALUES (?1, ?2)
             ON CONFLICT(config_digest) DO UPDATE SET
-                config_json = excluded.config_json,
-                status = excluded.status,
-                run_count = excluded.run_count,
-                solve_count = excluded.solve_count
+                config_json = excluded.config_json
             "#,
-            params![
-                config_digest.to_string(),
-                experiment.config_json(),
-                experiment.status(),
-                i64::try_from(experiment.run_count()).context("Run count does not fit in i64")?,
-                i64::try_from(experiment.solve_count())
-                    .context("Solve count does not fit in i64")?,
-            ],
+            params![config_digest.to_string(), experiment.config_json(),],
+        )?;
+        Ok(())
+    }
+
+    fn prune_unreferenced_cache_in(conn: &Connection) -> Result<()> {
+        conn.execute(
+            r#"
+            DELETE FROM artifact_manifests
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM refs
+                WHERE refs.manifest_digest = artifact_manifests.manifest_digest
+            )
+            "#,
+            [],
+        )?;
+        conn.execute(
+            r#"
+            DELETE FROM experiment_configs
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM artifact_manifests
+                WHERE artifact_manifests.config_digest = experiment_configs.config_digest
+            )
+            "#,
+            [],
         )?;
         Ok(())
     }
@@ -515,6 +532,7 @@ impl SqliteIndexStore {
             r#"DELETE FROM refs WHERE name = ?1 AND reference = ?2"#,
             params![name, reference],
         )?;
+        Self::prune_unreferenced_cache_in(&tx)?;
         tx.commit()?;
         Ok(affected > 0)
     }
@@ -673,87 +691,6 @@ impl SqliteIndexStore {
         Ok(out)
     }
 
-    pub fn list_invalid_experiment_config_refs(
-        &self,
-        name_prefix: Option<&str>,
-    ) -> Result<Vec<(ImageRef, Digest)>> {
-        let conn = self.lock();
-        let valid_statuses = [
-            crate::experiment::ExperimentStatus::Finished.as_str(),
-            crate::experiment::ExperimentStatus::Draft.as_str(),
-            crate::experiment::ExperimentStatus::Failed.as_str(),
-            crate::experiment::ExperimentStatus::Interrupted.as_str(),
-        ];
-        let mut out = Vec::new();
-        if let Some(prefix) = name_prefix {
-            let prefix_len = i64::try_from(prefix.chars().count())
-                .context("Ref prefix length does not fit in i64")?;
-            let mut stmt = conn.prepare(
-                r#"
-                SELECT refs.name, refs.reference, artifact_manifests.manifest_digest
-                FROM refs
-                JOIN artifact_manifests
-                  ON refs.manifest_digest = artifact_manifests.manifest_digest
-                JOIN experiment_configs
-                  ON artifact_manifests.config_digest = experiment_configs.config_digest
-                WHERE artifact_manifests.artifact_type = ?3
-                  AND experiment_configs.status NOT IN (?4, ?5, ?6, ?7)
-                  AND substr(
-                    refs.name ||
-                    CASE WHEN instr(refs.reference, ':') > 0 THEN '@' ELSE ':' END ||
-                    refs.reference,
-                    1,
-                    ?1
-                ) = ?2
-                ORDER BY refs.name, refs.reference
-                "#,
-            )?;
-            let rows = stmt.query_map(
-                params![
-                    prefix_len,
-                    prefix,
-                    media_types::V1_EXPERIMENT_MEDIA_TYPE,
-                    valid_statuses[0],
-                    valid_statuses[1],
-                    valid_statuses[2],
-                    valid_statuses[3],
-                ],
-                image_ref_and_digest_from_row,
-            )?;
-            for row in rows {
-                out.push(row?);
-            }
-        } else {
-            let mut stmt = conn.prepare(
-                r#"
-                SELECT refs.name, refs.reference, artifact_manifests.manifest_digest
-                FROM refs
-                JOIN artifact_manifests
-                  ON refs.manifest_digest = artifact_manifests.manifest_digest
-                JOIN experiment_configs
-                  ON artifact_manifests.config_digest = experiment_configs.config_digest
-                WHERE artifact_manifests.artifact_type = ?1
-                  AND experiment_configs.status NOT IN (?2, ?3, ?4, ?5)
-                ORDER BY refs.name, refs.reference
-                "#,
-            )?;
-            let rows = stmt.query_map(
-                params![
-                    media_types::V1_EXPERIMENT_MEDIA_TYPE,
-                    valid_statuses[0],
-                    valid_statuses[1],
-                    valid_statuses[2],
-                    valid_statuses[3],
-                ],
-                image_ref_and_digest_from_row,
-            )?;
-            for row in rows {
-                out.push(row?);
-            }
-        }
-        Ok(out)
-    }
-
     pub fn list_experiment_refs(
         &self,
         name_prefix: Option<&str>,
@@ -770,10 +707,10 @@ impl SqliteIndexStore {
                     refs.reference,
                     refs.updated_at,
                     artifact_manifests.manifest_digest,
-                    experiment_configs.status,
-                    experiment_configs.run_count,
-                    experiment_configs.solve_count,
-                    artifact_manifests.manifest_json
+                    artifact_manifests.config_digest,
+                    artifact_manifests.artifact_type,
+                    artifact_manifests.manifest_json,
+                    experiment_configs.config_json
                 FROM refs
                 JOIN artifact_manifests
                   ON refs.manifest_digest = artifact_manifests.manifest_digest
@@ -805,10 +742,10 @@ impl SqliteIndexStore {
                     refs.reference,
                     refs.updated_at,
                     artifact_manifests.manifest_digest,
-                    experiment_configs.status,
-                    experiment_configs.run_count,
-                    experiment_configs.solve_count,
-                    artifact_manifests.manifest_json
+                    artifact_manifests.config_digest,
+                    artifact_manifests.artifact_type,
+                    artifact_manifests.manifest_json,
+                    experiment_configs.config_json
                 FROM refs
                 JOIN artifact_manifests
                   ON refs.manifest_digest = artifact_manifests.manifest_digest
@@ -830,73 +767,35 @@ impl SqliteIndexStore {
     }
 
     fn init_schema(&self) -> Result<()> {
-        let conn = self.lock();
+        let mut conn = self.lock();
         conn.execute_batch("PRAGMA foreign_keys = ON;")?;
-
-        let version = conn
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let version = tx
             .pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
             .context("Failed to read local registry schema version")?;
-        if version == 0 {
-            if has_user_tables(&conn)? {
+        match version {
+            0 => {
+                if has_user_tables(&tx)? {
+                    bail!(
+                        "Unsupported local registry schema version: 0. \
+                         Remove the development local registry and recreate it."
+                    );
+                }
+                create_schema(&tx)?;
+            }
+            SCHEMA_VERSION if has_current_schema(&tx)? => create_schema(&tx)?,
+            1 | SCHEMA_VERSION => migrate_legacy_schema_to_v2(&tx)
+                .context("Failed to migrate local registry schema to version 2")?,
+            _ => {
                 bail!(
-                    "Unsupported local registry schema version: 0. \
-                     Remove the development local registry and recreate it."
+                    "Unsupported local registry schema version: {version}; \
+                     expected version {SCHEMA_VERSION}"
                 );
             }
-            // Mark the fresh database before creating tables. Multiple
-            // processes may open a new registry concurrently; setting
-            // `user_version` first prevents another opener from
-            // observing newly-created tables while the version still
-            // reads as 0 and misclassifying the registry as an old
-            // development schema.
-            conn.pragma_update(None, "user_version", SCHEMA_VERSION)
-                .context("Failed to initialize local registry schema version")?;
-        } else {
-            ensure!(
-                version == SCHEMA_VERSION,
-                "Unsupported local registry schema version: {version}"
-            );
         }
-
-        conn.execute_batch(
-            r#"
-            CREATE TABLE IF NOT EXISTS ommx_local_registry_metadata (
-                key TEXT PRIMARY KEY,
-                value TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS refs (
-                name TEXT NOT NULL,
-                reference TEXT NOT NULL,
-                manifest_digest TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                PRIMARY KEY(name, reference)
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_refs_name ON refs(name);
-
-            CREATE TABLE IF NOT EXISTS artifact_manifests (
-                manifest_digest TEXT PRIMARY KEY,
-                manifest_json BLOB NOT NULL,
-                artifact_type TEXT NOT NULL,
-                config_digest TEXT NOT NULL
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_artifact_manifests_artifact_type
-                ON artifact_manifests(artifact_type);
-
-            CREATE TABLE IF NOT EXISTS experiment_configs (
-                config_digest TEXT PRIMARY KEY,
-                config_json BLOB NOT NULL,
-                status TEXT NOT NULL,
-                run_count INTEGER NOT NULL CHECK(run_count >= 0),
-                solve_count INTEGER NOT NULL CHECK(solve_count >= 0)
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_experiment_configs_status
-                ON experiment_configs(status);
-            "#,
-        )?;
+        tx.pragma_update(None, "user_version", SCHEMA_VERSION)
+            .context("Failed to update local registry schema version")?;
+        tx.commit()?;
         Ok(())
     }
 }
@@ -959,27 +858,113 @@ fn experiment_ref_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Experime
     let digest: String = row.get(3)?;
     let manifest_digest = Digest::from_str(&digest)
         .map_err(|err| rusqlite::Error::FromSqlConversionFailure(3, Type::Text, Box::new(err)))?;
-    let status: String = row.get(4)?;
-    crate::experiment::ExperimentStatus::from_config(&status)
-        .map_err(|err| rusqlite::Error::FromSqlConversionFailure(4, Type::Text, err.into()))?;
-    let manifest_json: Vec<u8> = row.get(7)?;
+    let digest: String = row.get(4)?;
+    let config_digest = Digest::from_str(&digest)
+        .map_err(|err| rusqlite::Error::FromSqlConversionFailure(4, Type::Text, Box::new(err)))?;
+    let artifact_type: String = row.get(5)?;
+    if artifact_type != media_types::V1_EXPERIMENT_MEDIA_TYPE {
+        return Err(cache_conversion_failure(
+            5,
+            Type::Text,
+            format!("Unexpected cached Experiment artifact type: {artifact_type}"),
+        ));
+    }
+    let manifest_json: Vec<u8> = row.get(6)?;
+    if manifest_digest.as_ref() != sha256_digest(&manifest_json) {
+        return Err(cache_conversion_failure(
+            6,
+            Type::Blob,
+            format!("Cached Manifest JSON does not match {manifest_digest}"),
+        ));
+    }
     let manifest: ImageManifest = serde_json::from_slice(&manifest_json)
-        .map_err(|err| rusqlite::Error::FromSqlConversionFailure(7, Type::Blob, Box::new(err)))?;
+        .map_err(|err| rusqlite::Error::FromSqlConversionFailure(6, Type::Blob, Box::new(err)))?;
+    if manifest
+        .artifact_type()
+        .as_ref()
+        .map(|media_type| media_type.as_ref())
+        != Some(artifact_type.as_str())
+    {
+        return Err(cache_conversion_failure(
+            6,
+            Type::Blob,
+            "Cached Manifest artifactType does not match its projection",
+        ));
+    }
+    if manifest.config().digest() != &config_digest {
+        return Err(cache_conversion_failure(
+            6,
+            Type::Blob,
+            format!("Cached Manifest config digest does not match {config_digest}"),
+        ));
+    }
+    if manifest.config().media_type().as_ref() != crate::experiment::EXPERIMENT_CONFIG_MEDIA_TYPE {
+        return Err(cache_conversion_failure(
+            6,
+            Type::Blob,
+            format!(
+                "Cached Experiment config media type is {}",
+                manifest.config().media_type()
+            ),
+        ));
+    }
     let annotations = manifest
         .annotations()
         .clone()
         .unwrap_or_default()
         .into_iter()
         .collect();
+    let config_json: Vec<u8> = row.get(7)?;
+    if config_digest.as_ref() != sha256_digest(&config_json) {
+        return Err(cache_conversion_failure(
+            7,
+            Type::Blob,
+            format!("Cached Experiment Config JSON does not match {config_digest}"),
+        ));
+    }
+    let config: serde_json::Value = serde_json::from_slice(&config_json)
+        .map_err(|err| rusqlite::Error::FromSqlConversionFailure(7, Type::Blob, Box::new(err)))?;
+    let typed_config: ExperimentConfig = serde_json::from_slice(&config_json)
+        .map_err(|err| rusqlite::Error::FromSqlConversionFailure(7, Type::Blob, Box::new(err)))?;
+    crate::experiment::ExperimentStatus::from_config(&typed_config.status)
+        .map_err(|err| rusqlite::Error::FromSqlConversionFailure(7, Type::Blob, err.into()))?;
+    let run_count = u64::try_from(typed_config.runs.len())
+        .map_err(|err| rusqlite::Error::FromSqlConversionFailure(7, Type::Blob, Box::new(err)))?;
+    let solve_count = typed_config.runs.iter().try_fold(0_u64, |total, run| {
+        let count = u64::try_from(run.solves.len()).map_err(|err| {
+            rusqlite::Error::FromSqlConversionFailure(7, Type::Blob, Box::new(err))
+        })?;
+        total.checked_add(count).ok_or_else(|| {
+            rusqlite::Error::FromSqlConversionFailure(
+                7,
+                Type::Blob,
+                std::io::Error::other("Experiment solve count overflow").into(),
+            )
+        })
+    })?;
     Ok(ExperimentRefRecord {
         image_name,
         manifest_digest,
+        config_digest,
         updated_at: row.get(2)?,
-        status,
-        run_count: read_u64(row, 5)?,
-        solve_count: read_u64(row, 6)?,
+        status: typed_config.status,
+        run_count,
+        solve_count,
         annotations,
+        config,
     })
+}
+
+fn cache_conversion_failure(
+    column: usize,
+    column_type: Type,
+    message: impl Into<String>,
+) -> rusqlite::Error {
+    rusqlite::Error::FromSqlConversionFailure(
+        column,
+        column_type,
+        std::io::Error::new(std::io::ErrorKind::InvalidData, message.into()).into(),
+    )
 }
 
 fn string_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<String> {
@@ -1001,6 +986,97 @@ fn image_ref_and_digest_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<(I
     let digest = Digest::from_str(&digest)
         .map_err(|err| rusqlite::Error::FromSqlConversionFailure(2, Type::Text, Box::new(err)))?;
     Ok((image_name, digest))
+}
+
+fn create_schema(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        r#"
+        CREATE TABLE IF NOT EXISTS ommx_local_registry_metadata (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS refs (
+            name TEXT NOT NULL,
+            reference TEXT NOT NULL,
+            manifest_digest TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY(name, reference)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_refs_manifest_digest
+            ON refs(manifest_digest);
+
+        CREATE TABLE IF NOT EXISTS artifact_manifests (
+            manifest_digest TEXT PRIMARY KEY,
+            manifest_json BLOB NOT NULL,
+            artifact_type TEXT NOT NULL,
+            config_digest TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_artifact_manifests_config_digest
+            ON artifact_manifests(config_digest);
+
+        CREATE TABLE IF NOT EXISTS experiment_configs (
+            config_digest TEXT PRIMARY KEY,
+            config_json BLOB NOT NULL
+        );
+        "#,
+    )?;
+    Ok(())
+}
+
+fn migrate_legacy_schema_to_v2(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        r#"
+        DROP TABLE IF EXISTS experiment_configs;
+        DROP TABLE IF EXISTS artifact_manifests;
+        DROP INDEX IF EXISTS idx_refs_name;
+        DROP INDEX IF EXISTS idx_refs_manifest_digest;
+        ALTER TABLE refs RENAME TO refs_legacy;
+        "#,
+    )?;
+    create_schema(conn)?;
+    conn.execute_batch(
+        r#"
+        INSERT INTO refs (name, reference, manifest_digest, updated_at)
+        SELECT name, reference, manifest_digest, updated_at
+        FROM refs_legacy;
+        DROP TABLE refs_legacy;
+        "#,
+    )?;
+    Ok(())
+}
+
+fn has_current_schema(conn: &Connection) -> Result<bool> {
+    Ok(table_has_columns(
+        conn,
+        "refs",
+        &["name", "reference", "manifest_digest", "updated_at"],
+    )? && table_has_columns(
+        conn,
+        "artifact_manifests",
+        &[
+            "manifest_digest",
+            "manifest_json",
+            "artifact_type",
+            "config_digest",
+        ],
+    )? && table_has_columns(
+        conn,
+        "experiment_configs",
+        &["config_digest", "config_json"],
+    )?)
+}
+
+fn table_has_columns(conn: &Connection, table: &str, expected: &[&str]) -> Result<bool> {
+    let mut stmt = conn.prepare("SELECT name FROM pragma_table_info(?1) ORDER BY cid")?;
+    let rows = stmt.query_map([table], |row| row.get::<_, String>(0))?;
+    let columns = rows.collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(columns
+        .iter()
+        .map(String::as_str)
+        .eq(expected.iter().copied()))
 }
 
 fn has_user_tables(conn: &Connection) -> Result<bool> {
@@ -1031,11 +1107,6 @@ fn descriptor_from_cached_manifest_row(row: &rusqlite::Row<'_>) -> rusqlite::Res
         .size(manifest_json.len() as u64)
         .build()
         .map_err(|err| rusqlite::Error::FromSqlConversionFailure(0, Type::Text, err.into()))
-}
-
-fn read_u64(row: &rusqlite::Row<'_>, idx: usize) -> rusqlite::Result<u64> {
-    let value: i64 = row.get(idx)?;
-    u64::try_from(value).map_err(|_| rusqlite::Error::IntegralValueOutOfRange(idx, value))
 }
 
 fn random_registry_id() -> String {

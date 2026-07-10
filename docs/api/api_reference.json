@@ -28584,6 +28584,39 @@
               "is_readonly": true
             },
             {
+              "name": "config",
+              "doc": "Complete Experiment config JSON stored by `config_digest`.",
+              "type_": {
+                "display": "dict[str, Any]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "Any",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "config_digest",
+              "doc": "Immutable digest of the Experiment config JSON.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "image_name",
               "doc": "Local registry image reference.",
               "type_": {
@@ -30161,7 +30194,7 @@
         {
           "kind": "Function",
           "name": "list_experiments",
-          "doc": "List Experiment refs in the Local Registry without opening each Experiment artifact.\n\nIf `prefix` is given, it is matched against the full image reference string.",
+          "doc": "List Experiment refs using the Local Registry's digest-addressed JSON cache.\n\nMissing Manifest or Config rows are backfilled from the CAS before records\nare returned. If `prefix` is given, it is matched against the full image\nreference string.",
           "signatures": [
             {
               "parameters": [

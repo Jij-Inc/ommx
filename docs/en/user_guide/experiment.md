@@ -40,7 +40,8 @@ example, belong in {py:meth}`~ommx.experiment.Run.log_parameter` instead.
 Later, list the registry namespace and project each project's annotation
 schema into ordinary DataFrame columns. {py:func}`~ommx.experiment.list_experiments`
 returns the image name, immutable manifest digest, update time, status,
-run/solve counts, and manifest annotations for each matching Experiment ref.
+run/solve counts, manifest annotations, and the complete Experiment config for
+each matching Experiment ref.
 
 ```python
 import pandas as pd
@@ -55,11 +56,13 @@ annotation_columns = {
     "git_revision": "com.example.git-revision",
 }
 
+refs = list_experiments("example.com/optimization/qap-experiments")
 rows = []
-for ref in list_experiments("example.com/optimization/qap-experiments"):
+for ref in refs:
     row = {
         "image_name": ref.image_name,
         "manifest_digest": ref.manifest_digest,
+        "config_digest": ref.config_digest,
         "updated_at": ref.updated_at,
         "status": ref.status,
         "run_count": ref.run_count,
@@ -78,6 +81,7 @@ catalog = pd.DataFrame.from_records(
     columns=[
         "image_name",
         "manifest_digest",
+        "config_digest",
         "updated_at",
         "status",
         "run_count",
@@ -106,6 +110,38 @@ after listing: each project owns its annotation vocabulary, column types, and
 missing-value policy, so it can adapt the DataFrame projection without changing
 the registry schema. Missing annotations appear as `None` in the example.
 
+The complete config is available as `ref.config`. It contains the Run and Solve
+structure, so consumers can build additional project-owned tables without
+adding columns to the Local Registry schema. For example, this projects one row
+per Solve for adapter and status analysis:
+
+```python
+import json
+
+solve_rows = []
+for ref in refs:
+    for run in ref.config["runs"]:
+        for solve in run.get("solves", []):
+            solve_rows.append(
+                {
+                    "manifest_digest": ref.manifest_digest,
+                    "run_id": run["run_id"],
+                    "solve_id": solve["solve_id"],
+                    "status": solve["status"],
+                    "adapter": solve["adapter"],
+                    "adapter_options": json.loads(solve["adapter_options"]),
+                }
+            )
+
+solves = pd.json_normalize(solve_rows)
+```
+
+The config contains references to payload layers, not the payload values
+themselves. In particular, scalar Run parameter values are stored in the Run
+parameter layer; load selected Experiments and use
+{py:meth}`~ommx.experiment.Experiment.run_parameters_df` when those values are
+needed.
+
 An image name is a mutable ref and may later point to another commit. Use
 `manifest_digest` as the immutable identity when deduplicating rows, recording
 which exact Experiment was analyzed, or comparing catalogs captured at
@@ -114,13 +150,21 @@ point to it.
 
 ## Storage Boundaries
 
-Experiment data is written in three layers.
+Experiment data is stored in the CAS, with refs and listing caches in SQLite.
 
 | Layer | Stored as | Role |
 |---|---|---|
 | Blob | Content-addressed files in the Local Registry | Payload bytes for attachments, Instances, Solutions, run parameters, configs, and manifests |
 | Manifest | An OCI Image Manifest blob | The list of blobs that make one immutable OMMX Artifact |
 | Ref | SQLite rows in the Local Registry index | The name or checkpoint pointer that makes a manifest reachable |
+| Listing cache | SQLite rows keyed by manifest or config digest | Original Manifest and Experiment Config JSON used by registry listings |
+
+The cache stores the original JSON bytes under their content digest and verifies
+that digest when reading them. A missing cache row is populated from the CAS on
+listing, so the first listing after a v1 Local Registry migration or an older
+write path may read Manifest and Config blobs. Once populated, listing reads
+those JSON values from SQLite without constructing each Experiment. Replacing
+or deleting refs removes cache rows that are no longer reachable from any ref.
 
 In this page, **publish** means updating a Local Registry ref so it points to
 an already-written manifest. This is a local SQLite operation. It does not mean

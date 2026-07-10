@@ -2115,6 +2115,11 @@ class ExperimentRef:
         Immutable OCI manifest digest for the Experiment artifact.
         """
     @property
+    def config_digest(self) -> builtins.str:
+        r"""
+        Immutable digest of the Experiment config JSON.
+        """
+    @property
     def updated_at(self) -> builtins.str:
         r"""
         RFC 3339 timestamp when this local ref was last updated.
@@ -2138,6 +2143,11 @@ class ExperimentRef:
     def annotations(self) -> builtins.dict[builtins.str, builtins.str]:
         r"""
         Manifest annotations stored on the Experiment artifact.
+        """
+    @property
+    def config(self) -> builtins.dict[builtins.str, typing.Any]:
+        r"""
+        Complete Experiment config JSON stored by `config_digest`.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -7313,9 +7323,11 @@ def list_experiments(
     root: typing.Optional[builtins.str | os.PathLike | pathlib.Path] = None,
 ) -> builtins.list[ExperimentRef]:
     r"""
-    List Experiment refs in the Local Registry without opening each Experiment artifact.
+    List Experiment refs using the Local Registry's digest-addressed JSON cache.
 
-    If `prefix` is given, it is matched against the full image reference string.
+    Missing Manifest or Config rows are backfilled from the CAS before records
+    are returned. If `prefix` is given, it is matched against the full image
+    reference string.
     """
 
 def miplib2017_instance_annotations() -> builtins.dict[

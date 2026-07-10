@@ -3,9 +3,9 @@
 //! The Local Registry stores artifact bytes in a filesystem-backed
 //! content-addressed store. Its SQLite index is the concurrency-safe
 //! equivalent of OCI `index.json`: it stores refs and their target
-//! manifest digests. It also stores digest-addressed manifest and
-//! Experiment-config projections for catalog queries; the filesystem CAS
-//! remains the source of truth for bytes.
+//! manifest digests. It also caches the original Manifest and Experiment
+//! Config JSON bytes under their content digests for catalog queries; the
+//! filesystem CAS remains the source of truth for bytes.
 //!
 //! Two distinct layers live here:
 //!

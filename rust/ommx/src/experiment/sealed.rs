@@ -188,7 +188,7 @@ pub(crate) fn experiment_manifest_record_from_artifact(
     }
     let manifest_json = artifact.read_blob_by_digest(artifact.manifest_digest())?;
     let config_json = artifact.get_blob_by_descriptor(&config_descriptor)?;
-    let sealed = SealedExperiment::from_artifact_with_allowed_statuses(
+    SealedExperiment::from_artifact_with_allowed_statuses(
         artifact.clone(),
         &[
             ExperimentStatus::Finished,
@@ -197,22 +197,14 @@ pub(crate) fn experiment_manifest_record_from_artifact(
             ExperimentStatus::Interrupted,
         ],
     )?;
-    let solve_count = sealed
-        .runs
-        .values()
-        .map(|run| run.solves.len() as u64)
-        .sum();
     let artifact_record = ArtifactManifestRecord::from_image_manifest(
         artifact.manifest_digest().clone(),
         manifest_json,
         manifest.as_image_manifest(),
     )?;
-    Ok(Some(ExperimentManifestRecord::from_validated_summary(
+    Ok(Some(ExperimentManifestRecord::from_validated_config(
         artifact_record,
         config_json,
-        sealed.status.as_str().to_string(),
-        sealed.runs.len() as u64,
-        solve_count,
     )?))
 }
 

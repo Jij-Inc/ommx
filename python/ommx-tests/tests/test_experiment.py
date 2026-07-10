@@ -99,6 +99,10 @@ def test_list_experiments_returns_cached_ref_records(tmp_path):
     assert ref.solve_count == 0
     assert ref.annotations["com.example.problem"] == "qap"
     assert "sha256:" in ref.manifest_digest
+    assert "sha256:" in ref.config_digest
+    assert ref.config["status"] == "finished"
+    assert len(ref.config["runs"]) == 1
+    assert ref.config["runs"][0]["solves"] == []
     assert "T" in ref.updated_at
     assert [ref.image_name for ref in list_experiments(f"{prefix}/case:lat")] == [
         image_name
