@@ -41,6 +41,7 @@ __all__ = [
     "EvaluatedDecisionVariable",
     "EvaluatedNamedFunction",
     "Experiment",
+    "ExperimentCheckpointRef",
     "ExperimentRef",
     "Function",
     "GcBlob",
@@ -93,6 +94,7 @@ __all__ = [
     "get_images",
     "get_local_registry_root",
     "list_artifacts",
+    "list_experiment_checkpoints",
     "list_experiments",
     "miplib2017_instance_annotations",
     "prune_anonymous",
@@ -1876,8 +1878,9 @@ class Experiment:
         checkpoint ref. This accepts checkpoint statuses such as `draft`,
         `failed`, or `interrupted`, and returns a new unsealed Experiment whose
         image name is the original requested Experiment image name recorded in
-        the checkpoint metadata. Checkpoint Artifact handles and checkpoint
-        image names are not part of the public API.
+        the checkpoint metadata. Use `list_experiment_checkpoints(...)` to
+        discover recovery points, but pass its `requested_image_name` here
+        rather than its internal `checkpoint_image_name`.
         """
     @staticmethod
     def import_archive(path: builtins.str | os.PathLike | pathlib.Path) -> Experiment:
@@ -2140,6 +2143,63 @@ class Experiment:
         Closed runs with no parameters are still present as index rows.
         Adapter options recorded by `Run.log_solve` are solve metadata and do
         not appear in this table.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class ExperimentCheckpointRef:
+    r"""
+    A Local Registry checkpoint that can restore an uncommitted Experiment.
+    """
+    @property
+    def checkpoint_image_name(self) -> builtins.str:
+        r"""
+        Internal Local Registry ref holding the checkpoint Artifact.
+        """
+    @property
+    def requested_image_name(self) -> builtins.str:
+        r"""
+        User-facing Experiment image name restored by this checkpoint.
+        """
+    @property
+    def manifest_digest(self) -> builtins.str:
+        r"""
+        Immutable OCI Manifest digest for the checkpoint Artifact.
+        """
+    @property
+    def config_digest(self) -> builtins.str:
+        r"""
+        Immutable digest of the checkpoint's Experiment Config JSON.
+        """
+    @property
+    def updated_at(self) -> builtins.str:
+        r"""
+        RFC 3339 timestamp when the checkpoint ref was last updated.
+        """
+    @property
+    def status(self) -> builtins.str:
+        r"""
+        Checkpoint lifecycle status: `draft`, `failed`, or `interrupted`.
+        """
+    @property
+    def run_count(self) -> builtins.int:
+        r"""
+        Number of closed Runs available at this recovery point.
+        """
+    @property
+    def solve_count(self) -> builtins.int:
+        r"""
+        Total number of Solves recorded across the checkpoint's closed Runs.
+        """
+    @property
+    def annotations(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Manifest annotations stored on the checkpoint Artifact.
+        """
+    @property
+    def config(self) -> builtins.dict[builtins.str, typing.Any]:
+        r"""
+        Complete Experiment Config JSON stored by `config_digest`.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -7365,6 +7425,8 @@ def list_artifacts(
     prefix: typing.Optional[builtins.str] = None,
     *,
     root: typing.Optional[builtins.str | os.PathLike | pathlib.Path] = None,
+    include_internal: builtins.bool = False,
+    strict: builtins.bool = False,
 ) -> builtins.list[ArtifactRef]:
     r"""
     List Artifact refs using the Local Registry's digest-addressed Manifest
@@ -7372,20 +7434,48 @@ def list_artifacts(
 
     Missing Manifest rows are backfilled from the CAS before records are
     returned. If `prefix` is given, it is matched against the full image
-    reference string.
+    reference string. Internal implementation refs, including Experiment
+    checkpoints, are hidden by default; pass `include_internal=True` for
+    registry diagnostics.
+
+    By default, an invalid cached record is repaired from the CAS when possible.
+    OMMX emits `RuntimeWarning` for repaired or skipped refs and returns the
+    remaining records. Pass `strict=True` to fail on the first invalid ref.
+    """
+
+def list_experiment_checkpoints(
+    prefix: typing.Optional[builtins.str] = None,
+    *,
+    statuses: typing.Optional[typing.Sequence[builtins.str]] = None,
+    root: typing.Optional[builtins.str | os.PathLike | pathlib.Path] = None,
+    strict: builtins.bool = False,
+) -> builtins.list[ExperimentCheckpointRef]:
+    r"""
+    List internal Experiment checkpoints by requested image name and lifecycle
+    status.
+
+    `statuses` accepts `draft`, `failed`, and `interrupted`. An omitted or empty
+    list returns every checkpoint status. The prefix is matched against the
+    user-facing requested image name, not the internal hashed checkpoint ref.
+    Invalid cache entries are repaired from the CAS when possible; repaired or
+    skipped refs emit `RuntimeWarning`. Pass `strict=True` to fail on the first
+    invalid ref.
     """
 
 def list_experiments(
     prefix: typing.Optional[builtins.str] = None,
     *,
     root: typing.Optional[builtins.str | os.PathLike | pathlib.Path] = None,
+    strict: builtins.bool = False,
 ) -> builtins.list[ExperimentRef]:
     r"""
     List Experiment refs using the Local Registry's digest-addressed JSON cache.
 
     Missing Manifest or Config rows are backfilled from the CAS before records
     are returned. If `prefix` is given, it is matched against the full image
-    reference string.
+    reference string. Invalid cache entries are repaired from the CAS when
+    possible; repaired or skipped refs emit `RuntimeWarning`. Pass `strict=True`
+    to fail on the first invalid ref.
     """
 
 def miplib2017_instance_annotations() -> builtins.dict[

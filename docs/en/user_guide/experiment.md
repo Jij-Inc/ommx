@@ -26,6 +26,19 @@ listings return the same immutable Manifest JSON from SQLite without opening
 the Manifest blob. Use the optional `prefix` to limit both backfill and returned
 records to a registry namespace or partial full image reference.
 
+Internal Local Registry refs, including rolling Experiment checkpoints, are
+excluded by default. `list_artifacts(..., include_internal=True)` is a
+diagnostic escape hatch for inspecting those refs; use the dedicated checkpoint
+API below for recovery workflows.
+
+The CAS remains the source of truth for the listing cache. If one cached
+Manifest is invalid, the default listing repairs it from the CAS and emits a
+`RuntimeWarning`. If its CAS blob is also unavailable, the listing warns, skips
+that ref, and returns the other records. Pass `strict=True` when a diagnostic or
+validation workflow should fail on the first invalid ref. Database-wide schema
+and query failures, and SQLite cache-write failures, always fail the whole
+listing.
+
 Use {py:func}`~ommx.experiment.list_experiments` when the catalog should contain
 only Experiments and also needs Experiment status, run/solve counts, or the
 complete Experiment Config.
@@ -261,14 +274,42 @@ ready to publish.
 
 ## Restoring a Checkpoint
 
-Restore with the original Experiment image name.
+Use {py:func}`~ommx.experiment.list_experiment_checkpoints` to find recoverable
+Experiments by their original requested image name. A `"draft"` checkpoint is
+the rolling autosave written after a Run closes and is also the recovery point
+after a hard process or notebook-kernel exit. `"failed"` and `"interrupted"`
+checkpoints record exceptions that OMMX observed while closing an Experiment.
 
 ```python
-from ommx.experiment import Experiment
+from ommx.experiment import list_experiment_checkpoints
 
-image_name = "ghcr.io/example/team/experiment:baseline"
+checkpoints = list_experiment_checkpoints(
+    "ghcr.io/example/team",
+    statuses=["draft", "failed", "interrupted"],
+)
+for checkpoint in checkpoints:
+    print(
+        checkpoint.requested_image_name,
+        checkpoint.status,
+        checkpoint.updated_at,
+    )
+```
 
-experiment = Experiment.restore_from_checkpoint(image_name)
+The `prefix` matches `requested_image_name`, rather than the hashed internal
+checkpoint ref. Omit `statuses` to include all three checkpoint statuses. As
+with the other catalog functions, individual cache failures warn and skip by
+default; pass `strict=True` to fail on the first invalid checkpoint.
+
+Restore by passing the selected checkpoint's original requested image name.
+
+```python
+from ommx.experiment import Experiment, list_experiment_checkpoints
+
+checkpoint = list_experiment_checkpoints(
+    "ghcr.io/example/team/experiment:baseline"
+)[0]
+
+experiment = Experiment.restore_from_checkpoint(checkpoint.requested_image_name)
 
 with experiment.run() as run:
     run.log_parameter("capacity", 64)
@@ -276,7 +317,10 @@ with experiment.run() as run:
 artifact = experiment.commit()
 ```
 
-Checkpoint refs are internal Local Registry refs derived from the original image name. They are intentionally not exposed as normal Artifact handles, so keep the original image name if you want to resume.
+Checkpoint refs are derived from the original image name and remain internal
+Local Registry implementation details. `checkpoint_image_name` is exposed on
+the listing record for registry diagnostics; recovery uses
+`requested_image_name`.
 
 Restoration returns an uncommitted Experiment, so it can be kept open across
 notebook cells just like a newly created Experiment. Calling `commit()` publishes

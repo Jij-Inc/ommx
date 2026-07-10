@@ -159,6 +159,7 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<PyAnonymousArtifactRef>()?;
     m.add_class::<PyPruneAnonymousReport>()?;
     m.add_class::<PyExperimentRef>()?;
+    m.add_class::<PyExperimentCheckpointRef>()?;
     m.add_class::<PyExperiment>()?;
     m.add_class::<PyRun>()?;
     m.add_class::<PyOpenSolve>()?;
@@ -172,6 +173,7 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(get_images, m)?)?;
     m.add_function(wrap_pyfunction!(list_artifacts, m)?)?;
     m.add_function(wrap_pyfunction!(list_experiments, m)?)?;
+    m.add_function(wrap_pyfunction!(list_experiment_checkpoints, m)?)?;
 
     // OMMX Message
     m.add_class::<Linear>()?;
@@ -361,7 +363,9 @@ update the local registry image reference before saving or pushing.
 
 pyo3_stub_gen::reexport_module_members!("ommx.experiment" from "ommx._ommx_rust";
     "Experiment",
+    "ExperimentCheckpointRef",
     "ExperimentRef",
+    "list_experiment_checkpoints",
     "list_experiments",
     "OpenSolve",
     "Run",

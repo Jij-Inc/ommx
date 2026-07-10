@@ -1,6 +1,7 @@
 use anyhow::{bail, Result};
 use ommx::artifact::media_types;
 use pyo3::{
+    exceptions::PyRuntimeWarning,
     prelude::*,
     types::{PyBytes, PyDict},
 };
@@ -1673,22 +1674,50 @@ fn build_annotations(
 ///
 /// Missing Manifest rows are backfilled from the CAS before records are
 /// returned. If `prefix` is given, it is matched against the full image
-/// reference string.
+/// reference string. Internal implementation refs, including Experiment
+/// checkpoints, are hidden by default; pass `include_internal=True` for
+/// registry diagnostics.
+///
+/// By default, an invalid cached record is repaired from the CAS when possible.
+/// OMMX emits `RuntimeWarning` for repaired or skipped refs and returns the
+/// remaining records. Pass `strict=True` to fail on the first invalid ref.
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
-#[pyo3(signature = (prefix = None, *, root = None))]
+#[pyo3(signature = (prefix = None, *, root = None, include_internal = false, strict = false))]
 pub fn list_artifacts(
     py: Python<'_>,
     prefix: Option<&str>,
     root: Option<PathBuf>,
+    include_internal: bool,
+    strict: bool,
 ) -> Result<Vec<PyArtifactRef>> {
     let _guard = crate::TRACING.attach_parent_context(py);
     let registry = open_local_registry(root)?;
-    Ok(registry
-        .list_artifacts(prefix)?
+    let report = registry.list_artifacts_with_options(
+        prefix,
+        &ommx::artifact::local_registry::ArtifactListOptions {
+            include_internal,
+            strict,
+        },
+    )?;
+    emit_registry_list_warnings(py, &report.warnings)?;
+    Ok(report
+        .records
         .into_iter()
         .map(PyArtifactRef::from)
         .collect())
+}
+
+pub(crate) fn emit_registry_list_warnings(
+    py: Python<'_>,
+    warnings: &[ommx::artifact::local_registry::RegistryListWarning],
+) -> PyResult<()> {
+    let warnings_module = py.import("warnings")?;
+    let warning_type = py.get_type::<PyRuntimeWarning>();
+    for warning in warnings {
+        warnings_module.call_method1("warn", (warning.to_string(), &warning_type, 2))?;
+    }
+    Ok(())
 }
 
 /// Report or delete anonymous Artifact refs in the Local Registry.

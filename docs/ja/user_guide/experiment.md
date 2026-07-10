@@ -26,6 +26,17 @@ content-addressed blob store から読み出して検証し、cache を backfill
 から返します。任意の `prefix` を指定すると、backfill と返却対象の両方を registry
 namespace または full image reference の途中までに限定できます。
 
+rolling Experiment checkpoint などの Local Registry 内部 ref は、default では一覧に
+含まれません。`list_artifacts(..., include_internal=True)` は内部 ref を調査するための
+diagnostic escape hatch です。復帰 workflow では、後述する checkpoint 専用 API を
+使います。
+
+一覧用 cache の source of truth は CAS です。cache 内の Manifest が不正な場合、default
+の一覧取得は CAS から修復し、`RuntimeWarning` を出します。CAS blob も利用できない
+場合は warning を出してその ref を除外し、残りの record を返します。診断や検証で
+最初の不正 ref を error にしたい場合は `strict=True` を指定します。database schema
+全体、query、SQLite cache write の failure は、常に一覧全体の error になります。
+
 Experiment のみを対象にし、status、run/solve 数、完全な Experiment Config も必要な
 場合は {py:func}`~ommx.experiment.list_experiments` を使います。
 
@@ -257,14 +268,42 @@ Experiment を公開できる状態になった時点で明示的に
 
 ## Checkpoint から復帰する
 
-checkpoint から復帰するには、元の Experiment image name を渡します。
+{py:func}`~ommx.experiment.list_experiment_checkpoints` を使うと、元の requested image
+name から復帰可能な Experiment を検索できます。`"draft"` は Run close 後に書かれる
+rolling autosave であり、process や notebook kernel が強制終了した場合の復帰地点でも
+あります。`"failed"` と `"interrupted"` は、OMMX が Experiment close 時に観測した
+例外を記録した checkpoint です。
 
 ```python
-from ommx.experiment import Experiment
+from ommx.experiment import list_experiment_checkpoints
 
-image_name = "ghcr.io/example/team/experiment:baseline"
+checkpoints = list_experiment_checkpoints(
+    "ghcr.io/example/team",
+    statuses=["draft", "failed", "interrupted"],
+)
+for checkpoint in checkpoints:
+    print(
+        checkpoint.requested_image_name,
+        checkpoint.status,
+        checkpoint.updated_at,
+    )
+```
 
-experiment = Experiment.restore_from_checkpoint(image_name)
+`prefix` は hashed internal checkpoint ref ではなく `requested_image_name` に一致します。
+`statuses` を省略すると 3 status すべてを対象にします。他の catalog function と同様、
+個別 cache の failure は default では warning として除外し、残りを返します。最初の
+不正 checkpoint を error にするには `strict=True` を指定します。
+
+選択した checkpoint の元の requested image name を渡して復帰します。
+
+```python
+from ommx.experiment import Experiment, list_experiment_checkpoints
+
+checkpoint = list_experiment_checkpoints(
+    "ghcr.io/example/team/experiment:baseline"
+)[0]
+
+experiment = Experiment.restore_from_checkpoint(checkpoint.requested_image_name)
 
 with experiment.run() as run:
     run.log_parameter("capacity", 64)
@@ -272,7 +311,9 @@ with experiment.run() as run:
 artifact = experiment.commit()
 ```
 
-checkpoint ref は元の image name から導出される internal Local Registry ref です。通常の Artifact handle としては公開されないため、復帰したい Experiment では元の image name を保持してください。
+checkpoint ref は元の image name から導出される Local Registry 内部実装です。
+`checkpoint_image_name` は registry 診断のため一覧 record に含まれますが、復帰には
+`requested_image_name` を使います。
 
 restore された Experiment は未 commit の Experiment なので、新しく作った
 Experiment と同じように notebook cell をまたいで開いておけます。`commit()` を

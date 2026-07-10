@@ -19,17 +19,27 @@ Pythonの`dict`としての完全なOCI Manifestが含まれます。
 `ExperimentRef`にはさらにstatus、run/solve数、完全なExperiment Configが含まれます。
 どちらの関数でも、任意の`prefix`をfull image reference文字列に対して指定できます。
 
+内部 Experiment checkpoint ref は、default の `list_artifacts()` では非表示です。
+`ommx.experiment.list_experiment_checkpoints()` は復帰用の view を提供し、元の
+requested image-name prefix と `draft`、`failed`、`interrupted` status の任意の組合せで
+filter できます。基礎となる registry ref の診断時に限り
+`list_artifacts(..., include_internal=True)` を使います。
+
 Manifest JSONとExperiment Config JSONはcontent digestをkeyとしてSQLiteにcache
 されます。cache rowがない場合は一覧取得時にCASからbackfillし、それ以降の一覧では
 各Experimentを構築する必要がありません。既存のversion 1 Local Registryは、refと
-registry IDを維持したままversion 2へin-place migrationされます。
+registry IDを維持したままversion 2へin-place migrationされます。ref ごとの cache
+entry が不正な場合、可能であれば CAS から修復し、修復できなければ `RuntimeWarning`
+とともにその ref を除外します。個別 ref identity が不正な場合も warning とともに
+除外します。`strict=True` はこれらの個別 failure を error にします。SQLite schema、
+query、cache write の failure は常に hard error です。
 
 Experiment には `Experiment.set_annotation(...)` で caller-owned な manifest
 annotation を保存できます。OMMX が予約している annotation key は引き続き拒否されます。
 
 ```python
 from ommx.artifact import list_artifacts
-from ommx.experiment import Experiment, list_experiments
+from ommx.experiment import Experiment, list_experiment_checkpoints, list_experiments
 
 with Experiment("example.com/team/experiments/demo:latest") as experiment:
     experiment.set_annotation("com.example.problem", "demo")
@@ -40,6 +50,11 @@ assert refs[0].config["status"] == "finished"
 
 artifacts = list_artifacts("example.com/team")
 assert artifacts[0].manifest["artifactType"].startswith("application/org.ommx")
+
+recoverable = list_experiment_checkpoints(
+    "example.com/team/experiments",
+    statuses=["draft", "failed", "interrupted"],
+)
 ```
 
 Local Registryのrefは、参照先のmanifest digestだけを保存するようになりました。

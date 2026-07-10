@@ -3,20 +3,24 @@
 
 from ommx._ommx_rust import (
     Experiment,
+    ExperimentCheckpointRef,
     ExperimentRef,
     OpenSolve,
     Run,
     SealedRun,
     Solve,
+    list_experiment_checkpoints,
     list_experiments,
 )
 
 __all__ = [
     "Experiment",
+    "ExperimentCheckpointRef",
     "ExperimentRef",
     "OpenSolve",
     "Run",
     "SealedRun",
     "Solve",
+    "list_experiment_checkpoints",
     "list_experiments",
 ]

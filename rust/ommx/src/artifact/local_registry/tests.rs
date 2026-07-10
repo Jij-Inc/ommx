@@ -7,6 +7,7 @@ use crate::artifact::{
 use anyhow::{Context, Result};
 use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, ImageManifestBuilder, MediaType};
 use std::collections::HashMap;
+use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -1017,7 +1018,7 @@ fn local_registry_lists_artifacts_from_manifest_cache() -> Result<()> {
 }
 
 #[test]
-fn missing_artifact_manifest_query_deduplicates_shared_digest() -> Result<()> {
+fn list_artifacts_backfills_shared_missing_manifest() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let registry = LocalRegistry::open(dir.path())?;
     let image_name = ImageRef::parse("example.com/catalog/original:latest")?;
@@ -1032,8 +1033,14 @@ fn missing_artifact_manifest_query_deduplicates_shared_digest() -> Result<()> {
     )?;
 
     let index = open_test_index(&registry)?;
-    let missing = index.list_missing_artifact_manifest_digests(Some("example.com/catalog"))?;
-    assert_eq!(missing, vec![artifact.manifest_digest().clone()]);
+    let missing = index.list_missing_artifact_manifest_refs(Some("example.com/catalog"))?;
+    assert_eq!(missing.len(), 2);
+    assert!(missing.iter().all(|identity| {
+        matches!(
+            &identity.parsed,
+            Ok((_, digest)) if digest == artifact.manifest_digest()
+        )
+    }));
 
     let records = registry.list_artifacts(Some("example.com/catalog"))?;
     assert_eq!(records.len(), 2);
@@ -1046,7 +1053,7 @@ fn missing_artifact_manifest_query_deduplicates_shared_digest() -> Result<()> {
 }
 
 #[test]
-fn list_artifacts_rejects_manifest_json_that_does_not_match_digest() -> Result<()> {
+fn list_artifacts_repairs_manifest_cache_from_cas() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let registry = LocalRegistry::open(dir.path())?;
     let image_name = ImageRef::parse("example.com/catalog/integrity:latest")?;
@@ -1064,13 +1071,215 @@ fn list_artifacts_rejects_manifest_json_that_does_not_match_digest() -> Result<(
         ],
     )?;
 
+    let report = registry.list_artifacts_with_options(
+        Some("example.com/catalog/integrity"),
+        &ArtifactListOptions::default(),
+    )?;
+    assert_eq!(report.records.len(), 1);
+    assert_eq!(report.records[0].image_name, image_name);
+    assert_eq!(report.warnings.len(), 1);
+    assert_eq!(
+        report.warnings[0].stage,
+        RegistryListWarningStage::ManifestCacheRepair
+    );
+    assert!(report.warnings[0].message.contains("repaired from CAS"));
+    let repaired: Vec<u8> = conn.query_row(
+        "SELECT manifest_json FROM artifact_manifests WHERE manifest_digest = ?1",
+        [manifest_digest.to_string()],
+        |row| row.get(0),
+    )?;
+    assert_eq!(repaired, original_manifest);
+
+    conn.execute(
+        "UPDATE artifact_manifests SET manifest_json = ?1 WHERE manifest_digest = ?2",
+        rusqlite::params![
+            stable_json_bytes(&changed_manifest)?,
+            manifest_digest.to_string()
+        ],
+    )?;
     let error = registry
-        .list_artifacts(Some("example.com/catalog/integrity"))
-        .expect_err("changed Manifest JSON must not be returned under the original digest");
+        .list_artifacts_with_options(
+            Some("example.com/catalog/integrity"),
+            &ArtifactListOptions {
+                include_internal: false,
+                strict: true,
+            },
+        )
+        .expect_err("strict listing must reject a corrupt Manifest cache row");
     assert!(
         format!("{error:#}").contains("Cached Manifest JSON does not match"),
         "unexpected error: {error:#}"
     );
+    Ok(())
+}
+
+#[test]
+fn list_artifacts_propagates_manifest_cache_write_failures() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let image_name = ImageRef::parse("example.com/catalog/write-failure:latest")?;
+    let artifact = build_test_local_artifact(&registry, &image_name, b"payload")?;
+    let manifest_digest = artifact.manifest_digest().clone();
+    let original_manifest = registry.read_blob(&manifest_digest)?;
+    let mut changed_manifest: serde_json::Value = serde_json::from_slice(&original_manifest)?;
+    changed_manifest["annotations"] = serde_json::json!({ "com.example.changed": "true" });
+    let conn = rusqlite::Connection::open(registry.root().join(SQLITE_INDEX_FILE_NAME))?;
+    conn.execute(
+        "UPDATE artifact_manifests SET manifest_json = ?1 WHERE manifest_digest = ?2",
+        rusqlite::params![
+            stable_json_bytes(&changed_manifest)?,
+            manifest_digest.to_string()
+        ],
+    )?;
+    conn.execute_batch(
+        r#"
+        CREATE TRIGGER reject_manifest_cache_repair
+        BEFORE UPDATE ON artifact_manifests
+        BEGIN
+            SELECT RAISE(ABORT, 'manifest cache writes disabled');
+        END;
+        "#,
+    )?;
+
+    let error = registry
+        .list_artifacts_with_options(
+            Some("example.com/catalog/write-failure"),
+            &ArtifactListOptions::default(),
+        )
+        .expect_err("SQLite cache write failures must abort the listing");
+    assert!(
+        format!("{error:#}").contains("manifest cache writes disabled"),
+        "unexpected error: {error:#}"
+    );
+    Ok(())
+}
+
+#[test]
+fn list_artifacts_warns_and_skips_malformed_ref_identity() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let good_name = ImageRef::parse("example.com/catalog/identity-good:latest")?;
+    let bad_name = ImageRef::parse("example.com/catalog/identity-bad-name:latest")?;
+    let bad_digest = ImageRef::parse("example.com/catalog/identity-bad-digest:latest")?;
+    let bad_type = ImageRef::parse("example.com/catalog/identity-bad-type:latest")?;
+    build_test_local_artifact(&registry, &good_name, b"good")?;
+    build_test_local_artifact(&registry, &bad_name, b"bad-name")?;
+    build_test_local_artifact(&registry, &bad_digest, b"bad-digest")?;
+    build_test_local_artifact(&registry, &bad_type, b"bad-type")?;
+
+    let invalid_repository = "example.com/catalog/invalid name";
+    let invalid_digest = "not-an-oci-digest";
+    let conn = rusqlite::Connection::open(registry.root().join(SQLITE_INDEX_FILE_NAME))?;
+    conn.execute(
+        "UPDATE refs SET name = ?1 WHERE name = ?2 AND reference = ?3",
+        rusqlite::params![
+            invalid_repository,
+            bad_name.repository_key(),
+            bad_name.reference()
+        ],
+    )?;
+    conn.execute(
+        "UPDATE refs SET manifest_digest = ?1 WHERE name = ?2 AND reference = ?3",
+        rusqlite::params![
+            invalid_digest,
+            bad_digest.repository_key(),
+            bad_digest.reference()
+        ],
+    )?;
+    conn.execute(
+        "UPDATE refs SET manifest_digest = ?1 WHERE name = ?2 AND reference = ?3",
+        rusqlite::params![
+            vec![0_u8, 1_u8, 2_u8],
+            bad_type.repository_key(),
+            bad_type.reference()
+        ],
+    )?;
+
+    let report = registry.list_artifacts_with_options(
+        Some("example.com/catalog"),
+        &ArtifactListOptions::default(),
+    )?;
+    assert_eq!(report.records.len(), 1);
+    assert_eq!(report.records[0].image_name, good_name);
+    assert_eq!(report.warnings.len(), 3);
+    assert!(report.warnings.iter().any(|warning| warning.image_name
+        == format!("{invalid_repository}:latest")
+        && warning.message.contains("Invalid Local Registry image ref")));
+    assert!(report.warnings.iter().any(|warning| {
+        warning.manifest_digest == invalid_digest
+            && warning
+                .message
+                .contains("Invalid Local Registry manifest digest")
+    }));
+    assert!(report.warnings.iter().any(|warning| {
+        warning.image_name == bad_type.to_string()
+            && warning
+                .message
+                .contains("Local Registry manifest digest must be TEXT, got BLOB")
+    }));
+
+    let error = registry
+        .list_artifacts_with_options(
+            Some("example.com/catalog"),
+            &ArtifactListOptions {
+                include_internal: false,
+                strict: true,
+            },
+        )
+        .expect_err("strict listing must reject malformed ref identity");
+    assert!(
+        format!("{error:#}").contains("Local Registry"),
+        "unexpected error: {error:#}"
+    );
+    Ok(())
+}
+
+#[test]
+fn list_artifacts_warns_and_skips_unrepairable_ref() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let good_name = ImageRef::parse("example.com/catalog/good:latest")?;
+    let bad_name = ImageRef::parse("example.com/catalog/bad:latest")?;
+    build_test_local_artifact(&registry, &good_name, b"good")?;
+    let bad = build_test_local_artifact(&registry, &bad_name, b"bad")?;
+    let bad_digest = bad.manifest_digest().clone();
+    let original_manifest = registry.read_blob(&bad_digest)?;
+    let mut changed_manifest: serde_json::Value = serde_json::from_slice(&original_manifest)?;
+    changed_manifest["annotations"] = serde_json::json!({ "com.example.changed": "true" });
+    let conn = rusqlite::Connection::open(registry.root().join(SQLITE_INDEX_FILE_NAME))?;
+    conn.execute(
+        "UPDATE artifact_manifests SET manifest_json = ?1 WHERE manifest_digest = ?2",
+        rusqlite::params![
+            stable_json_bytes(&changed_manifest)?,
+            bad_digest.to_string()
+        ],
+    )?;
+    let (algorithm, encoded) = bad_digest
+        .as_ref()
+        .split_once(':')
+        .context("test Manifest digest must contain an algorithm")?;
+    fs::remove_file(registry.root().join("blobs").join(algorithm).join(encoded))?;
+
+    let report = registry.list_artifacts_with_options(
+        Some("example.com/catalog"),
+        &ArtifactListOptions::default(),
+    )?;
+    assert_eq!(report.records.len(), 1);
+    assert_eq!(report.records[0].image_name, good_name);
+    assert_eq!(report.warnings.len(), 1);
+    assert_eq!(report.warnings[0].image_name, bad_name.to_string());
+    assert!(report.warnings[0].message.contains("CAS repair failed"));
+
+    let error = registry
+        .list_artifacts_with_options(
+            Some("example.com/catalog"),
+            &ArtifactListOptions {
+                include_internal: false,
+                strict: true,
+            },
+        )
+        .expect_err("strict listing must reject the corrupt ref");
+    assert!(format!("{error:#}").contains("Cached Manifest JSON does not match"));
     Ok(())
 }
 

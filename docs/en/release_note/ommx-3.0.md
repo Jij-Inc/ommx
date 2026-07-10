@@ -20,18 +20,29 @@ annotations, and the complete OCI Manifest as a Python `dict`.
 complete Experiment Config. Both functions accept an optional `prefix` filter
 matched against the full image reference string.
 
+Internal Experiment checkpoint refs are hidden from `list_artifacts()` by
+default. `ommx.experiment.list_experiment_checkpoints()` provides the recovery
+view, filtering by the original requested image-name prefix and any combination
+of `draft`, `failed`, and `interrupted` status. Pass
+`list_artifacts(..., include_internal=True)` only when diagnosing the underlying
+registry refs.
+
 Manifest and Experiment Config JSON are cached in SQLite under their content
 digests. A missing row is backfilled from the CAS on listing; subsequent
 listings do not need to construct each Experiment. Existing version 1 Local
 Registries are migrated to version 2 in place while preserving refs and the
-registry ID.
+registry ID. Invalid per-ref cache entries are repaired from the CAS when
+possible and otherwise skipped with `RuntimeWarning`. Malformed individual ref
+identities are also warned and skipped; `strict=True` turns these individual
+failures into errors. SQLite schema, query, and cache-write failures remain hard
+errors.
 
 Experiments can also store caller-owned manifest annotations with
 `Experiment.set_annotation(...)`; OMMX-reserved annotation keys remain rejected.
 
 ```python
 from ommx.artifact import list_artifacts
-from ommx.experiment import Experiment, list_experiments
+from ommx.experiment import Experiment, list_experiment_checkpoints, list_experiments
 
 with Experiment("example.com/team/experiments/demo:latest") as experiment:
     experiment.set_annotation("com.example.problem", "demo")
@@ -42,6 +53,11 @@ assert refs[0].config["status"] == "finished"
 
 artifacts = list_artifacts("example.com/team")
 assert artifacts[0].manifest["artifactType"].startswith("application/org.ommx")
+
+recoverable = list_experiment_checkpoints(
+    "example.com/team/experiments",
+    statuses=["draft", "failed", "interrupted"],
+)
 ```
 
 Local Registry refs now store only their target manifest digest. Consequently,

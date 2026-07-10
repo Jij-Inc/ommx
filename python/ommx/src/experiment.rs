@@ -15,7 +15,7 @@ use std::{
 
 use crate::pandas::{get_na, PyDataFrame};
 use crate::PyArtifact;
-use ommx::artifact::local_registry::ExperimentRefRecord;
+use ommx::artifact::local_registry::{ExperimentCheckpointRefRecord, ExperimentRefRecord};
 use ommx::artifact::AsArtifact;
 use ommx::experiment::{
     AttachmentLogger, FailedSolveRecord, FinishedSolveRecord, SolveDiagnosticPayload, SolveStatus,
@@ -120,6 +120,117 @@ impl PyExperimentRef {
         format!(
             "ExperimentRef(image_name='{}', status='{}', runs={}, solves={})",
             self.image_name, self.status, self.run_count, self.solve_count
+        )
+    }
+}
+
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
+#[pyclass]
+#[pyo3(module = "ommx._ommx_rust", name = "ExperimentCheckpointRef")]
+/// A Local Registry checkpoint that can restore an uncommitted Experiment.
+pub struct PyExperimentCheckpointRef {
+    checkpoint_image_name: String,
+    requested_image_name: String,
+    manifest_digest: String,
+    config_digest: String,
+    updated_at: String,
+    status: String,
+    run_count: u64,
+    solve_count: u64,
+    annotations: HashMap<String, String>,
+    config: serde_json::Value,
+}
+
+impl From<ExperimentCheckpointRefRecord> for PyExperimentCheckpointRef {
+    fn from(record: ExperimentCheckpointRefRecord) -> Self {
+        Self {
+            checkpoint_image_name: record.checkpoint_image_name.to_string(),
+            requested_image_name: record.requested_image_name.to_string(),
+            manifest_digest: record.manifest_digest.to_string(),
+            config_digest: record.config_digest.to_string(),
+            updated_at: record.updated_at,
+            status: record.status,
+            run_count: record.run_count,
+            solve_count: record.solve_count,
+            annotations: record.annotations.into_iter().collect(),
+            config: record.config,
+        }
+    }
+}
+
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
+#[pymethods]
+impl PyExperimentCheckpointRef {
+    /// Internal Local Registry ref holding the checkpoint Artifact.
+    #[getter]
+    pub fn checkpoint_image_name(&self) -> &str {
+        &self.checkpoint_image_name
+    }
+
+    /// User-facing Experiment image name restored by this checkpoint.
+    #[getter]
+    pub fn requested_image_name(&self) -> &str {
+        &self.requested_image_name
+    }
+
+    /// Immutable OCI Manifest digest for the checkpoint Artifact.
+    #[getter]
+    pub fn manifest_digest(&self) -> &str {
+        &self.manifest_digest
+    }
+
+    /// Immutable digest of the checkpoint's Experiment Config JSON.
+    #[getter]
+    pub fn config_digest(&self) -> &str {
+        &self.config_digest
+    }
+
+    /// RFC 3339 timestamp when the checkpoint ref was last updated.
+    #[getter]
+    pub fn updated_at(&self) -> &str {
+        &self.updated_at
+    }
+
+    /// Checkpoint lifecycle status: `draft`, `failed`, or `interrupted`.
+    #[getter]
+    pub fn status(&self) -> &str {
+        &self.status
+    }
+
+    /// Number of closed Runs available at this recovery point.
+    #[getter]
+    pub fn run_count(&self) -> u64 {
+        self.run_count
+    }
+
+    /// Total number of Solves recorded across the checkpoint's closed Runs.
+    #[getter]
+    pub fn solve_count(&self) -> u64 {
+        self.solve_count
+    }
+
+    /// Manifest annotations stored on the checkpoint Artifact.
+    #[getter]
+    pub fn annotations(&self) -> HashMap<String, String> {
+        self.annotations.clone()
+    }
+
+    /// Complete Experiment Config JSON stored by `config_digest`.
+    #[getter]
+    #[gen_stub(override_return_type(
+        type_repr = "builtins.dict[builtins.str, typing.Any]",
+        imports = ("builtins", "typing")
+    ))]
+    pub fn config<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        Ok(serde_pyobject::to_pyobject(py, &self.config)
+            .map_err(|err| pyo3::exceptions::PyValueError::new_err(err.to_string()))?
+            .cast_into::<PyDict>()?)
+    }
+
+    pub fn __repr__(&self) -> String {
+        format!(
+            "ExperimentCheckpointRef(requested_image_name='{}', status='{}', runs={}, solves={})",
+            self.requested_image_name, self.status, self.run_count, self.solve_count
         )
     }
 }
@@ -247,8 +358,9 @@ impl PyExperiment {
     /// checkpoint ref. This accepts checkpoint statuses such as `draft`,
     /// `failed`, or `interrupted`, and returns a new unsealed Experiment whose
     /// image name is the original requested Experiment image name recorded in
-    /// the checkpoint metadata. Checkpoint Artifact handles and checkpoint
-    /// image names are not part of the public API.
+    /// the checkpoint metadata. Use `list_experiment_checkpoints(...)` to
+    /// discover recovery points, but pass its `requested_image_name` here
+    /// rather than its internal `checkpoint_image_name`.
     #[staticmethod]
     pub fn restore_from_checkpoint(py: Python<'_>, image_name: &str) -> Result<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
@@ -728,24 +840,78 @@ impl PyExperiment {
 
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
-#[pyo3(signature = (prefix = None, *, root = None))]
+#[pyo3(signature = (prefix = None, *, root = None, strict = false))]
 /// List Experiment refs using the Local Registry's digest-addressed JSON cache.
 ///
 /// Missing Manifest or Config rows are backfilled from the CAS before records
 /// are returned. If `prefix` is given, it is matched against the full image
-/// reference string.
+/// reference string. Invalid cache entries are repaired from the CAS when
+/// possible; repaired or skipped refs emit `RuntimeWarning`. Pass `strict=True`
+/// to fail on the first invalid ref.
 pub fn list_experiments(
     py: Python<'_>,
     prefix: Option<&str>,
     root: Option<PathBuf>,
+    strict: bool,
 ) -> Result<Vec<PyExperimentRef>> {
     let _guard = crate::TRACING.attach_parent_context(py);
     let registry = open_experiment_registry(root)?;
-    registry
-        .list_experiments(prefix)?
+    let report = registry.list_experiments_with_options(
+        prefix,
+        &ommx::artifact::local_registry::ExperimentListOptions { strict },
+    )?;
+    crate::artifact::emit_registry_list_warnings(py, &report.warnings)?;
+    report
+        .records
         .into_iter()
         .map(|record| Ok(PyExperimentRef::from_record(record)))
         .collect()
+}
+
+#[pyo3_stub_gen::derive::gen_stub_pyfunction]
+#[pyfunction]
+#[pyo3(signature = (prefix = None, *, statuses = None, root = None, strict = false))]
+/// List internal Experiment checkpoints by requested image name and lifecycle
+/// status.
+///
+/// `statuses` accepts `draft`, `failed`, and `interrupted`. An omitted or empty
+/// list returns every checkpoint status. The prefix is matched against the
+/// user-facing requested image name, not the internal hashed checkpoint ref.
+/// Invalid cache entries are repaired from the CAS when possible; repaired or
+/// skipped refs emit `RuntimeWarning`. Pass `strict=True` to fail on the first
+/// invalid ref.
+pub fn list_experiment_checkpoints(
+    py: Python<'_>,
+    prefix: Option<&str>,
+    statuses: Option<Vec<String>>,
+    root: Option<PathBuf>,
+    strict: bool,
+) -> Result<Vec<PyExperimentCheckpointRef>> {
+    let _guard = crate::TRACING.attach_parent_context(py);
+    let registry = open_experiment_registry(root)?;
+    let statuses = statuses
+        .unwrap_or_default()
+        .into_iter()
+        .map(|status| match status.as_str() {
+            "draft" => Ok(ommx::experiment::ExperimentStatus::Draft),
+            "failed" => Ok(ommx::experiment::ExperimentStatus::Failed),
+            "interrupted" => Ok(ommx::experiment::ExperimentStatus::Interrupted),
+            _ => Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "Unknown Experiment checkpoint status `{status}`; expected `draft`, `failed`, or `interrupted`"
+            ))
+            .into()),
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let report = registry.list_experiment_checkpoints_with_options(
+        prefix,
+        &ommx::artifact::local_registry::ExperimentCheckpointListOptions { statuses, strict },
+    )?;
+    crate::artifact::emit_registry_list_warnings(py, &report.warnings)?;
+    Ok(report
+        .records
+        .into_iter()
+        .map(PyExperimentCheckpointRef::from)
+        .collect())
 }
 
 fn open_experiment_registry(

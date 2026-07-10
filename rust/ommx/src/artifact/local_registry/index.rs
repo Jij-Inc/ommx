@@ -42,6 +42,29 @@ pub struct SqliteIndexStore {
     conn: Mutex<Connection>,
 }
 
+pub struct CachedRefIdentity {
+    pub name: String,
+    pub reference: String,
+    pub manifest_digest: String,
+    pub parsed: std::result::Result<(ImageRef, Digest), String>,
+}
+
+impl CachedRefIdentity {
+    pub fn image_name(&self) -> String {
+        let separator = if self.reference.contains(':') {
+            '@'
+        } else {
+            ':'
+        };
+        format!("{}{separator}{}", self.name, self.reference)
+    }
+}
+
+pub struct CachedRefRead<T> {
+    pub identity: CachedRefIdentity,
+    pub record: std::result::Result<T, String>,
+}
+
 impl SqliteIndexStore {
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
@@ -584,10 +607,10 @@ impl SqliteIndexStore {
         Ok(out)
     }
 
-    pub fn list_missing_artifact_manifest_digests(
+    pub fn list_missing_artifact_manifest_refs(
         &self,
         name_prefix: Option<&str>,
-    ) -> Result<Vec<Digest>> {
+    ) -> Result<Vec<CachedRefIdentity>> {
         let conn = self.lock();
         let mut out = Vec::new();
         if let Some(prefix) = name_prefix {
@@ -595,7 +618,7 @@ impl SqliteIndexStore {
                 .context("Ref prefix length does not fit in i64")?;
             let mut stmt = conn.prepare(
                 r#"
-                SELECT DISTINCT refs.manifest_digest
+                SELECT refs.name, refs.reference, refs.manifest_digest
                 FROM refs
                 LEFT JOIN artifact_manifests
                   ON refs.manifest_digest = artifact_manifests.manifest_digest
@@ -607,25 +630,27 @@ impl SqliteIndexStore {
                       1,
                       ?1
                   ) = ?2
-                ORDER BY refs.manifest_digest
+                ORDER BY refs.name, refs.reference
                 "#,
             )?;
-            let rows = stmt.query_map(params![prefix_len, prefix], digest_from_row)?;
+            let rows = stmt.query_map(params![prefix_len, prefix], |row| {
+                cached_ref_identity_from_row(row, 2)
+            })?;
             for row in rows {
                 out.push(row?);
             }
         } else {
             let mut stmt = conn.prepare(
                 r#"
-                SELECT DISTINCT refs.manifest_digest
+                SELECT refs.name, refs.reference, refs.manifest_digest
                 FROM refs
                 LEFT JOIN artifact_manifests
                   ON refs.manifest_digest = artifact_manifests.manifest_digest
                 WHERE artifact_manifests.manifest_digest IS NULL
-                ORDER BY refs.manifest_digest
+                ORDER BY refs.name, refs.reference
                 "#,
             )?;
-            let rows = stmt.query_map([], digest_from_row)?;
+            let rows = stmt.query_map([], |row| cached_ref_identity_from_row(row, 2))?;
             for row in rows {
                 out.push(row?);
             }
@@ -633,7 +658,10 @@ impl SqliteIndexStore {
         Ok(out)
     }
 
-    pub fn list_artifact_refs(&self, name_prefix: Option<&str>) -> Result<Vec<ArtifactRefRecord>> {
+    pub fn list_artifact_ref_reads(
+        &self,
+        name_prefix: Option<&str>,
+    ) -> Result<Vec<CachedRefRead<ArtifactRefRecord>>> {
         let conn = self.lock();
         let mut out = Vec::new();
         if let Some(prefix) = name_prefix {
@@ -662,7 +690,7 @@ impl SqliteIndexStore {
                 ORDER BY refs.name, refs.reference
                 "#,
             )?;
-            let rows = stmt.query_map(params![prefix_len, prefix], artifact_ref_from_row)?;
+            let rows = stmt.query_map(params![prefix_len, prefix], artifact_ref_read_from_row)?;
             for row in rows {
                 out.push(row?);
             }
@@ -683,7 +711,7 @@ impl SqliteIndexStore {
                 ORDER BY refs.name, refs.reference
                 "#,
             )?;
-            let rows = stmt.query_map([], artifact_ref_from_row)?;
+            let rows = stmt.query_map([], artifact_ref_read_from_row)?;
             for row in rows {
                 out.push(row?);
             }
@@ -694,7 +722,7 @@ impl SqliteIndexStore {
     pub fn list_missing_experiment_config_refs(
         &self,
         name_prefix: Option<&str>,
-    ) -> Result<Vec<(ImageRef, Digest)>> {
+    ) -> Result<Vec<CachedRefIdentity>> {
         let conn = self.lock();
         let mut out = Vec::new();
         if let Some(prefix) = name_prefix {
@@ -722,7 +750,7 @@ impl SqliteIndexStore {
             )?;
             let rows = stmt.query_map(
                 params![prefix_len, prefix, media_types::V1_EXPERIMENT_MEDIA_TYPE],
-                image_ref_and_digest_from_row,
+                |row| cached_ref_identity_from_row(row, 2),
             )?;
             for row in rows {
                 out.push(row?);
@@ -741,10 +769,9 @@ impl SqliteIndexStore {
                 ORDER BY refs.name, refs.reference
                 "#,
             )?;
-            let rows = stmt.query_map(
-                params![media_types::V1_EXPERIMENT_MEDIA_TYPE],
-                image_ref_and_digest_from_row,
-            )?;
+            let rows = stmt.query_map(params![media_types::V1_EXPERIMENT_MEDIA_TYPE], |row| {
+                cached_ref_identity_from_row(row, 2)
+            })?;
             for row in rows {
                 out.push(row?);
             }
@@ -752,10 +779,10 @@ impl SqliteIndexStore {
         Ok(out)
     }
 
-    pub fn list_experiment_refs(
+    pub fn list_experiment_ref_reads(
         &self,
         name_prefix: Option<&str>,
-    ) -> Result<Vec<ExperimentRefRecord>> {
+    ) -> Result<Vec<CachedRefRead<ExperimentRefRecord>>> {
         let conn = self.lock();
         let mut out = Vec::new();
         if let Some(prefix) = name_prefix {
@@ -790,7 +817,7 @@ impl SqliteIndexStore {
             )?;
             let rows = stmt.query_map(
                 params![prefix_len, prefix, media_types::V1_EXPERIMENT_MEDIA_TYPE],
-                experiment_ref_from_row,
+                experiment_ref_read_from_row,
             )?;
             for row in rows {
                 out.push(row?);
@@ -818,7 +845,7 @@ impl SqliteIndexStore {
             )?;
             let rows = stmt.query_map(
                 params![media_types::V1_EXPERIMENT_MEDIA_TYPE],
-                experiment_ref_from_row,
+                experiment_ref_read_from_row,
             )?;
             for row in rows {
                 out.push(row?);
@@ -986,6 +1013,86 @@ fn artifact_ref_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ArtifactRe
     Ok(cached_artifact_ref_from_row(row)?.record)
 }
 
+fn cached_ref_identity_from_row(
+    row: &rusqlite::Row<'_>,
+    digest_column: usize,
+) -> rusqlite::Result<CachedRefIdentity> {
+    let (name, name_error) = identity_text_from_row(row, 0, "ref name")?;
+    let (reference, reference_error) = identity_text_from_row(row, 1, "ref reference")?;
+    let (manifest_digest, digest_error) =
+        identity_text_from_row(row, digest_column, "manifest digest")?;
+    let type_errors = [name_error, reference_error, digest_error]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
+    let parsed = if type_errors.is_empty() {
+        ImageRef::from_repository_and_reference(&name, &reference)
+            .map_err(|error| format!("Invalid Local Registry image ref: {error:#}"))
+            .and_then(|image_name| {
+                Digest::from_str(&manifest_digest)
+                    .map(|manifest_digest| (image_name, manifest_digest))
+                    .map_err(|error| format!("Invalid Local Registry manifest digest: {error}"))
+            })
+    } else {
+        Err(type_errors.join("; "))
+    };
+    Ok(CachedRefIdentity {
+        name,
+        reference,
+        manifest_digest,
+        parsed,
+    })
+}
+
+fn identity_text_from_row(
+    row: &rusqlite::Row<'_>,
+    column: usize,
+    field: &str,
+) -> rusqlite::Result<(String, Option<String>)> {
+    use rusqlite::types::ValueRef;
+
+    let value = row.get_ref(column)?;
+    let result = match value {
+        ValueRef::Text(bytes) => match std::str::from_utf8(bytes) {
+            Ok(value) => (value.to_string(), None),
+            Err(error) => (
+                format!("<invalid UTF-8: {} bytes>", bytes.len()),
+                Some(format!(
+                    "Local Registry {field} is not valid UTF-8: {error}"
+                )),
+            ),
+        },
+        ValueRef::Null => (
+            "<NULL>".to_string(),
+            Some(format!("Local Registry {field} must be TEXT, got NULL")),
+        ),
+        ValueRef::Integer(value) => (
+            value.to_string(),
+            Some(format!("Local Registry {field} must be TEXT, got INTEGER")),
+        ),
+        ValueRef::Real(value) => (
+            value.to_string(),
+            Some(format!("Local Registry {field} must be TEXT, got REAL")),
+        ),
+        ValueRef::Blob(bytes) => (
+            format!("<BLOB: {} bytes>", bytes.len()),
+            Some(format!("Local Registry {field} must be TEXT, got BLOB")),
+        ),
+    };
+    Ok(result)
+}
+
+fn artifact_ref_read_from_row(
+    row: &rusqlite::Row<'_>,
+) -> rusqlite::Result<CachedRefRead<ArtifactRefRecord>> {
+    let identity = cached_ref_identity_from_row(row, 3)?;
+    let record = match &identity.parsed {
+        Ok(_) => artifact_ref_from_row(row).map_err(|error| error.to_string()),
+        Err(error) => Err(error.clone()),
+    };
+    Ok(CachedRefRead { identity, record })
+}
+
 fn experiment_ref_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ExperimentRefRecord> {
     let CachedArtifactRef { record, manifest } = cached_artifact_ref_from_row(row)?;
     if record.artifact_type.as_ref() != media_types::V1_EXPERIMENT_MEDIA_TYPE {
@@ -1052,6 +1159,17 @@ fn experiment_ref_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Experime
     })
 }
 
+fn experiment_ref_read_from_row(
+    row: &rusqlite::Row<'_>,
+) -> rusqlite::Result<CachedRefRead<ExperimentRefRecord>> {
+    let identity = cached_ref_identity_from_row(row, 3)?;
+    let record = match &identity.parsed {
+        Ok(_) => experiment_ref_from_row(row).map_err(|error| error.to_string()),
+        Err(error) => Err(error.clone()),
+    };
+    Ok(CachedRefRead { identity, record })
+}
+
 fn cache_conversion_failure(
     column: usize,
     column_type: Type,
@@ -1068,17 +1186,6 @@ fn digest_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Digest> {
     let digest: String = row.get(0)?;
     Digest::from_str(&digest)
         .map_err(|err| rusqlite::Error::FromSqlConversionFailure(0, Type::Text, Box::new(err)))
-}
-
-fn image_ref_and_digest_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<(ImageRef, Digest)> {
-    let name: String = row.get(0)?;
-    let reference: String = row.get(1)?;
-    let image_name = ImageRef::from_repository_and_reference(&name, &reference)
-        .map_err(|err| rusqlite::Error::FromSqlConversionFailure(0, Type::Text, err.into()))?;
-    let digest: String = row.get(2)?;
-    let digest = Digest::from_str(&digest)
-        .map_err(|err| rusqlite::Error::FromSqlConversionFailure(2, Type::Text, Box::new(err)))?;
-    Ok((image_name, digest))
 }
 
 fn create_schema(conn: &Connection) -> Result<()> {

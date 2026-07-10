@@ -7,7 +7,9 @@ ommx.experiment
    :hidden:
 
    _items/ommx.experiment.Experiment
+   _items/ommx.experiment.ExperimentCheckpointRef
    _items/ommx.experiment.ExperimentRef
+   _items/ommx.experiment.list_experiment_checkpoints
    _items/ommx.experiment.list_experiments
    _items/ommx.experiment.OpenSolve
    _items/ommx.experiment.Run

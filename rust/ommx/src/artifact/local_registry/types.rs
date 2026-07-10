@@ -5,6 +5,7 @@ use crate::artifact::{media_types, sha256_digest};
 use anyhow::{ensure, Context, Result};
 use oci_spec::image::{Digest, ImageManifest, MediaType};
 use std::collections::BTreeMap;
+use std::fmt;
 
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -128,6 +129,106 @@ pub struct ArtifactRefRecord {
     pub manifest: serde_json::Value,
 }
 
+/// Controls generic Artifact catalog listing behavior.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ArtifactListOptions {
+    /// Include Local Registry implementation refs such as Experiment
+    /// checkpoints. These refs are hidden from the user-facing catalog by
+    /// default.
+    pub include_internal: bool,
+    /// Fail on the first unreadable Artifact instead of returning the other
+    /// records with structured warnings.
+    pub strict: bool,
+}
+
+/// Controls Experiment catalog listing behavior.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ExperimentListOptions {
+    /// Fail on the first unreadable Experiment instead of returning the other
+    /// records with structured warnings.
+    pub strict: bool,
+}
+
+/// Controls Experiment checkpoint listing behavior.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ExperimentCheckpointListOptions {
+    /// Included checkpoint lifecycle statuses. An empty vector includes all
+    /// checkpoint statuses (`draft`, `failed`, and `interrupted`).
+    pub statuses: Vec<crate::experiment::ExperimentStatus>,
+    /// Fail on the first unreadable checkpoint instead of returning the other
+    /// records with structured warnings.
+    pub strict: bool,
+}
+
+/// Stage at which an individual Local Registry listing record could not be
+/// materialized.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RegistryListWarningStage {
+    /// A missing Manifest cache row could not be populated from the CAS.
+    ManifestBackfill,
+    /// An invalid Manifest cache row was repaired or could not be repaired.
+    ManifestCacheRepair,
+    /// A missing Experiment Config cache row could not be populated from the CAS.
+    ExperimentConfigBackfill,
+    /// An invalid Experiment Config cache row was repaired or could not be repaired.
+    ExperimentConfigCacheRepair,
+    /// A cached Experiment could not be interpreted as a recoverable checkpoint.
+    CheckpointProjection,
+}
+
+impl RegistryListWarningStage {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::ManifestBackfill => "manifest backfill",
+            Self::ManifestCacheRepair => "manifest cache repair",
+            Self::ExperimentConfigBackfill => "Experiment Config backfill",
+            Self::ExperimentConfigCacheRepair => "Experiment Config cache repair",
+            Self::CheckpointProjection => "checkpoint projection",
+        }
+    }
+}
+
+impl fmt::Display for RegistryListWarningStage {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Structured warning for one Artifact ref omitted or repaired during a
+/// best-effort Local Registry listing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegistryListWarning {
+    /// Local Registry ref affected by the warning, preserved even when the
+    /// stored value is not a valid OCI image reference.
+    pub image_name: String,
+    /// Manifest identity targeted by the ref, preserved even when the stored
+    /// value is not a valid OCI digest.
+    pub manifest_digest: String,
+    /// Listing stage that repaired or omitted the ref.
+    pub stage: RegistryListWarningStage,
+    /// Human-readable validation or repair detail.
+    pub message: String,
+}
+
+impl fmt::Display for RegistryListWarning {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Local Registry listing issue for {} ({}) during {}: {}",
+            self.image_name, self.manifest_digest, self.stage, self.message
+        )
+    }
+}
+
+/// Best-effort Local Registry listing result.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegistryListReport<T> {
+    /// Successfully materialized listing records.
+    pub records: Vec<T>,
+    /// Individual refs repaired or omitted while producing `records`.
+    pub warnings: Vec<RegistryListWarning>,
+}
+
 /// Local Registry listing record for an Experiment artifact.
 ///
 /// Values are reconstructed from digest-addressed SQLite copies of the
@@ -157,6 +258,32 @@ pub struct ExperimentRefRecord {
     ///
     /// The JSON value is returned without projecting project-specific or
     /// adapter-specific fields into the Local Registry schema.
+    pub config: serde_json::Value,
+}
+
+/// Local Registry listing record for an internal Experiment checkpoint.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExperimentCheckpointRefRecord {
+    /// Internal Local Registry ref holding the rolling checkpoint Artifact.
+    pub checkpoint_image_name: crate::artifact::ImageRef,
+    /// User-facing Experiment image name that this checkpoint can restore.
+    pub requested_image_name: crate::artifact::ImageRef,
+    /// Immutable OCI manifest digest for the checkpoint Artifact.
+    pub manifest_digest: Digest,
+    /// Immutable digest of the checkpoint's Experiment Config JSON.
+    pub config_digest: Digest,
+    /// RFC 3339 timestamp when the internal checkpoint ref was last updated.
+    pub updated_at: String,
+    /// Checkpoint lifecycle status: `draft`, `failed`, or `interrupted`.
+    pub status: String,
+    /// Number of closed runs available at this recovery point.
+    pub run_count: u64,
+    /// Total number of solves recorded across the checkpoint's closed runs.
+    pub solve_count: u64,
+    /// Manifest annotations stored on the checkpoint Artifact.
+    pub annotations: BTreeMap<String, String>,
+    /// Complete Experiment Config JSON stored by `config_digest`.
     pub config: serde_json::Value,
 }
 
