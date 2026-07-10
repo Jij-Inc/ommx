@@ -8,6 +8,22 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🆕 Transparent attachment compression and streaming writes ([#1054](https://github.com/Jij-Inc/ommx/pull/1054))
+
+{class}`~ommx.experiment.Experiment` and {class}`~ommx.experiment.Run` attachment
+logging methods now accept `compression="zstd"`. OMMX stores the compressed
+layer with a `+zstd` media-type suffix, while `attachment_media_type`,
+`get_attachment`, typed getters, codecs, and file export expose the original
+media type and decompressed payload.
+
+```python
+experiment.log_json("trace", trace_values, compression="zstd")
+experiment.log_file("solver-log", log_path, compression="zstd")
+```
+
+`log_file` now streams the source file into the Local Registry instead of
+buffering the whole file before the content-addressed write.
+
 ### 🆕 Configurable Experiment autosave frequency ([#1052](https://github.com/Jij-Inc/ommx/pull/1052))
 
 {class}`~ommx.experiment.Experiment` can now batch, rate-limit, or disable the
