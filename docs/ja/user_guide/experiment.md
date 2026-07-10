@@ -212,8 +212,8 @@ v1 Local Registryからのmigration直後や、古いwrite pathで作られたAr
 
 `Run` は context manager として使ってください。Run は 1 つの試行であり、
 Run を close することが、その close 済み Run を親 Experiment の未 commit 状態へ
-追加する復帰境界になります。Run が close された後、OMMX はその親 Experiment の
-draft checkpoint を書き込み、checkpoint ref を publish します。
+追加する復帰境界になります。default では Run が close された後、OMMX はその親
+Experiment の draft checkpoint を書き込み、checkpoint ref を publish します。
 
 一方、Experiment は必ずしも context manager として使う必要はありません。
 notebook では、1 つの Experiment を複数 cell にまたがって開いたままにするのが
@@ -240,6 +240,28 @@ with experiment.run() as run:
 artifact = experiment.commit()
 ```
 
+短い Run を多数含む parameter sweep では、増え続ける Experiment を Run ごとに
+checkpoint すると、final commit までに置き換え済み config blob と run-parameter
+blob が多数作られます。unsealed session に autosave policy を設定して、復帰可能性と
+保存量の tradeoff を変更できます。
+
+```python
+from ommx.experiment import AutosavePolicy, Experiment
+
+experiment = Experiment(image_name)
+experiment.set_autosave_policy(AutosavePolicy.every_n_runs(25))
+```
+
+`every_n_runs(n)` は追加で `n` 個の Run が close されるたびに checkpoint します。
+`min_interval(seconds)` は次に close された最初の Run の checkpoint を試み、その後は
+指定 interval あたり最大 1 回に制限します。publish に失敗した attempt も、次の retry
+まで同じ interval を待ちます。`disabled()` は Run-close draft checkpoint を
+無効にし、`every_run_close()` は default に戻します。policy を変更すると、その時点の
+close 済み Run 数から新しい schedule が始まります。policy は現在の unsealed session
+だけに属し、checkpoint や commit 済み Experiment には保存されません。Experiment
+context が例外終了したときの failed / interrupted checkpoint は、この policy では
+無効になりません。
+
 すべての Run があらかじめ決まっている batch script では、
 `with Experiment(...)` は便利な書き方です。正常終了時には `commit()` を呼び、
 例外終了時には成功用の image reference を進めず failed または interrupted
@@ -247,12 +269,12 @@ checkpoint を publish します。
 
 | 操作または event | 保存される状態 |
 |---|---|
-| `Run` が正常終了する | close 済み Run が status `"finished"` として親 Experiment に追加され、その Experiment の best-effort draft checkpoint が publish されます。 |
-| `Run` が例外で終了する | close 済み Run が status `"failed"` または `"interrupted"` として親 Experiment に追加され、その Experiment の best-effort draft checkpoint が publish されます。例外はそのまま伝播します。 |
+| `Run` が正常終了する | close 済み Run が status `"finished"` として親 Experiment に追加されます。autosave policy の条件を満たす場合は best-effort draft checkpoint が publish されます。 |
+| `Run` が例外で終了する | close 済み Run が status `"failed"` または `"interrupted"` として親 Experiment に追加されます。autosave policy の条件を満たす場合は best-effort draft checkpoint が publish されます。例外はそのまま伝播します。 |
 | `experiment.commit()` が成功する | final Experiment が commit され、requested image reference が publish されます。その Experiment の local checkpoint があれば削除されます。 |
 | `with Experiment(...)` が正常終了する | block 末尾で `commit()` を呼ぶのと同じです。 |
 | `with Experiment(...)` が例外で終了する | 成功用の requested image reference は進みません。status `"failed"` または `"interrupted"` の checkpoint Experiment が publish されます。 |
-| Run close 後、`commit()` 前に notebook kernel または process が終了する | Run close 後に作られた最新の Experiment draft checkpoint から復帰します。 |
+| Run close 後、`commit()` 前に notebook kernel または process が終了する | autosave policy が許可した最新の Experiment draft checkpoint から復帰します。その checkpoint より後に close された Run は再実行が必要です。 |
 | open `Run` の exit 前に notebook kernel または process が終了する | その open Run が書いた payload blob は存在する可能性がありますが、復帰可能な Run state には含まれません。復帰地点は、その Run より前の最新 checkpoint です。 |
 
 `KeyboardInterrupt` は Run / Experiment ともに `"interrupted"` として記録されます。それ以外の例外は `"failed"` として記録されます。

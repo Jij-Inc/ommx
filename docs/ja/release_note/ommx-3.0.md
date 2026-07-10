@@ -35,6 +35,26 @@ restore_image("example.com/team/experiment:obsolete", "sha256:...")
 prune_anonymous(delete=True, experiments=True, older_than="7d")
 ```
 
+### 🆕 Experiment autosave 頻度の設定 ([#1052](https://github.com/Jij-Inc/ommx/pull/1052))
+
+{class}`~ommx.experiment.Experiment` で、Run close 後に書く rolling draft
+checkpoint をまとめたり、時間で制限したり、無効にしたりできるようになりました。
+default は従来どおり close 済み Run ごとに 1 checkpoint です。autosave policy は現在の
+unsealed session だけに属し、Experiment context が例外終了したときの failed / interrupted
+checkpoint は無効にしません。
+
+```python
+from ommx.experiment import AutosavePolicy, Experiment
+
+experiment = Experiment("example.com/team/sweep:latest")
+experiment.set_autosave_policy(AutosavePolicy.every_n_runs(25))
+```
+
+時間で頻度を制限する場合は `AutosavePolicy.min_interval(seconds)`、Run-close 時の
+復帰用 checkpoint が不要な場合は `AutosavePolicy.disabled()` を使います。復帰可能性と
+保存量の tradeoff は [Experiment の検索・復帰・cleanup](../user_guide/experiment.md) を
+参照してください。
+
 ### 🆕 Local Registry からの Artifact/Experiment 一覧 ([#1029](https://github.com/Jij-Inc/ommx/pull/1029))
 
 `ommx.artifact.list_artifacts()` で、SQLite Local Registry に保存されたすべての

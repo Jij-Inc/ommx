@@ -2,14 +2,14 @@
 
 use super::config::{ExperimentConfig, ExperimentConfigRun, ExperimentConfigSolve, LayerRef};
 use super::parameter::RunParameterTable;
-use super::UnsealedExperimentState;
 use super::{
-    AttachmentLogger, AttachmentTable, Experiment, ExperimentDyn, ExperimentStatus, Name,
-    ParameterValue, SealedExperiment, SolveDiagnosticPayload, SolveStatus, Trace,
+    AttachmentLogger, AttachmentTable, AutosavePolicy, Experiment, ExperimentDyn, ExperimentStatus,
+    Name, ParameterValue, SealedExperiment, SolveDiagnosticPayload, SolveStatus, Trace,
     EXPERIMENT_ARTIFACT_MEDIA_TYPE, EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_STATUS_DRAFT,
     EXPERIMENT_STATUS_FAILED, EXPERIMENT_STATUS_FINISHED, EXPERIMENT_STATUS_INTERRUPTED,
     RUN_PARAMETERS_MEDIA_TYPE, RUN_STATUS_FAILED, RUN_STATUS_FINISHED, RUN_STATUS_INTERRUPTED,
 };
+use super::{AutosaveController, UnsealedExperimentState};
 use crate::artifact::local_registry::{
     ArtifactListOptions, ExperimentCheckpointListOptions, ExperimentListOptions, LocalRegistry,
     RegistryListWarningStage, StoredDescriptor, UnsealedArtifact, SQLITE_INDEX_FILE_NAME,
@@ -22,7 +22,11 @@ use crate::{Coefficient, Evaluate, Function, Instance, Sense};
 use oci_spec::image::{Digest, MediaType};
 use serde_json::json;
 use std::collections::{BTreeMap, HashMap};
-use std::{fs, str::FromStr};
+use std::{
+    fs,
+    str::FromStr,
+    time::{Duration, Instant},
+};
 
 fn with_temp_experiment<T>(f: impl FnOnce(Experiment<'_>) -> anyhow::Result<T>) -> T {
     Experiment::with_temp_local_registry(Name::Anonymous, f).unwrap()
@@ -89,6 +93,24 @@ fn blob_path(root: &std::path::Path, digest: &Digest) -> std::path::PathBuf {
         .split_once(':')
         .expect("OCI digest should contain algorithm separator");
     root.join("blobs").join(algorithm).join(encoded)
+}
+
+fn registry_blob_count(registry: &LocalRegistry) -> usize {
+    let blob_root = registry.root().join("blobs");
+    let Ok(algorithm_entries) = fs::read_dir(blob_root) else {
+        return 0;
+    };
+    algorithm_entries
+        .map(|entry| entry.expect("blob algorithm entry"))
+        .filter(|entry| entry.path().is_dir())
+        .map(|algorithm_entry| {
+            fs::read_dir(algorithm_entry.path())
+                .expect("blob algorithm directory")
+                .map(|entry| entry.expect("blob entry"))
+                .filter(|entry| entry.path().is_file())
+                .count()
+        })
+        .sum()
 }
 
 fn empty_run_parameters_layer<'reg>(registry: &'reg LocalRegistry) -> StoredDescriptor<'reg> {
@@ -2496,6 +2518,210 @@ fn experiment_dyn_autosaves_on_run_close_and_recovers_with_requested_image_name(
     assert_eq!(child_runs.len(), 2);
     assert_eq!(child_runs[0].status().as_str(), RUN_STATUS_FINISHED);
     assert_eq!(child_runs[1].status().as_str(), RUN_STATUS_FINISHED);
+}
+
+#[test]
+fn experiment_dyn_autosaves_every_n_closed_runs() {
+    let registry_handle = LocalRegistryHandle::temp().unwrap();
+    let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:every-two").unwrap();
+    let experiment =
+        ExperimentDyn::with_registry_handle(registry_handle.clone(), image_name.clone()).unwrap();
+    experiment
+        .set_autosave_policy(AutosavePolicy::EveryNRuns(2))
+        .unwrap();
+    let checkpoint_image_name = registry_handle
+        .registry()
+        .experiment_checkpoint_image_name(&image_name)
+        .unwrap();
+    let baseline_blob_count = registry_blob_count(registry_handle.registry());
+
+    let mut run = experiment.run().unwrap();
+    run.log_parameter("seed", 0).unwrap();
+    run.finish().unwrap();
+    assert!(registry_handle
+        .registry()
+        .resolve_image_name(&checkpoint_image_name)
+        .unwrap()
+        .is_none());
+    assert_eq!(
+        registry_blob_count(registry_handle.registry()),
+        baseline_blob_count,
+        "a non-due Run close must not write checkpoint blobs"
+    );
+
+    let mut run = experiment.run().unwrap();
+    run.log_parameter("seed", 1).unwrap();
+    run.finish().unwrap();
+    let first_digest = registry_handle
+        .registry()
+        .resolve_image_name(&checkpoint_image_name)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        registry_blob_count(registry_handle.registry()),
+        baseline_blob_count + 3,
+        "one checkpoint writes a run-parameter table, config, and manifest"
+    );
+    let checkpoint = LocalArtifactDyn::open_in_registry_handle(
+        registry_handle.clone(),
+        checkpoint_image_name.clone(),
+    )
+    .unwrap();
+    assert_eq!(
+        experiment_config(&checkpoint.as_local_artifact())
+            .runs
+            .len(),
+        2
+    );
+
+    let mut run = experiment.run().unwrap();
+    run.log_parameter("seed", 2).unwrap();
+    run.finish().unwrap();
+    assert_eq!(
+        registry_handle
+            .registry()
+            .resolve_image_name(&checkpoint_image_name)
+            .unwrap()
+            .unwrap(),
+        first_digest,
+        "the third Run must not advance an every-two checkpoint"
+    );
+    assert_eq!(
+        registry_blob_count(registry_handle.registry()),
+        baseline_blob_count + 3,
+        "the third Run must not create orphan checkpoint blobs"
+    );
+
+    let mut run = experiment.run().unwrap();
+    run.log_parameter("seed", 3).unwrap();
+    run.finish().unwrap();
+    assert_eq!(
+        registry_blob_count(registry_handle.registry()),
+        baseline_blob_count + 6,
+        "four Runs with an every-two policy must write exactly two checkpoints"
+    );
+    let checkpoint =
+        LocalArtifactDyn::open_in_registry_handle(registry_handle, checkpoint_image_name).unwrap();
+    assert_eq!(
+        experiment_config(&checkpoint.as_local_artifact())
+            .runs
+            .len(),
+        4
+    );
+}
+
+#[test]
+fn disabled_run_close_autosave_does_not_disable_explicit_failed_checkpoint() {
+    let registry_handle = LocalRegistryHandle::temp().unwrap();
+    let image_name = ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:disabled").unwrap();
+    let experiment =
+        ExperimentDyn::with_registry_handle(registry_handle.clone(), image_name.clone()).unwrap();
+    experiment
+        .set_autosave_policy(AutosavePolicy::Disabled)
+        .unwrap();
+    let baseline_blob_count = registry_blob_count(registry_handle.registry());
+    experiment.run().unwrap().finish().unwrap();
+    let checkpoint_image_name = registry_handle
+        .registry()
+        .experiment_checkpoint_image_name(&image_name)
+        .unwrap();
+    assert!(registry_handle
+        .registry()
+        .resolve_image_name(&checkpoint_image_name)
+        .unwrap()
+        .is_none());
+    assert_eq!(
+        registry_blob_count(registry_handle.registry()),
+        baseline_blob_count,
+        "Disabled Run-close autosave must not write checkpoint blobs"
+    );
+
+    experiment
+        .commit_failed_checkpoint("RuntimeError: failed")
+        .unwrap();
+    let checkpoint =
+        LocalArtifactDyn::open_in_registry_handle(registry_handle, checkpoint_image_name).unwrap();
+    assert_eq!(
+        experiment_config(&checkpoint.as_local_artifact()).status,
+        EXPERIMENT_STATUS_FAILED
+    );
+}
+
+#[test]
+fn autosave_policy_rejects_zero_run_interval_without_changing_default() {
+    with_temp_experiment(|experiment| {
+        let error = experiment
+            .set_autosave_policy(AutosavePolicy::EveryNRuns(0))
+            .unwrap_err();
+        assert!(error.to_string().contains("non-zero Run count"));
+
+        experiment.run().unwrap().finish().unwrap();
+        let checkpoint_image_name = experiment
+            .registry
+            .experiment_checkpoint_image_name(&experiment.image_name())
+            .unwrap();
+        assert!(experiment
+            .registry
+            .resolve_image_name(&checkpoint_image_name)
+            .unwrap()
+            .is_some());
+        Ok(())
+    });
+}
+
+#[test]
+fn min_interval_autosave_controller_rate_limits_failed_attempts() {
+    let mut controller = AutosaveController::new(0);
+    controller
+        .set_policy(AutosavePolicy::MinInterval(Duration::from_secs(10)), 0)
+        .unwrap();
+    let first = Instant::now();
+    assert!(controller.begin_autosave_attempt(first, 1));
+    // Do not mark the first attempt successful: a failed publish still owns
+    // this interval and must not be retried on the next Run close.
+    assert!(!controller.begin_autosave_attempt(first + Duration::from_secs(9), 2));
+    assert!(controller.begin_autosave_attempt(first + Duration::from_secs(10), 3));
+}
+
+#[test]
+fn min_interval_does_not_rewrite_blobs_after_late_publish_failure() -> anyhow::Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let image_name = ImageRef::parse("example.com/experiments/min-interval-failure:latest")?;
+    let experiment = Experiment::with_registry(&registry, image_name.clone())?;
+    experiment.set_autosave_policy(AutosavePolicy::MinInterval(Duration::from_secs(3600)))?;
+    let checkpoint_image_name = registry.experiment_checkpoint_image_name(&image_name)?;
+
+    let conn = rusqlite::Connection::open(registry.root().join(SQLITE_INDEX_FILE_NAME))?;
+    conn.execute_batch(
+        r#"
+        CREATE TRIGGER reject_checkpoint_ref_publish
+        BEFORE INSERT ON refs
+        BEGIN
+            SELECT RAISE(ABORT, 'checkpoint ref publish disabled');
+        END;
+        "#,
+    )?;
+
+    let baseline_blob_count = registry_blob_count(&registry);
+    experiment.run()?.finish()?;
+    let failed_attempt_blob_count = registry_blob_count(&registry);
+    assert_eq!(
+        failed_attempt_blob_count,
+        baseline_blob_count + 3,
+        "the late ref failure occurs after checkpoint blobs are written"
+    );
+    assert!(registry
+        .resolve_image_name(&checkpoint_image_name)?
+        .is_none());
+
+    experiment.run()?.finish()?;
+    assert_eq!(
+        registry_blob_count(&registry),
+        failed_attempt_blob_count,
+        "MinInterval must rate-limit a failed publish attempt before more blobs are written"
+    );
+    Ok(())
 }
 
 #[test]

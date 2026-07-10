@@ -23,7 +23,9 @@
 //! operation remains commit.
 //!
 //! Closing a [`Run`] publishes a best-effort draft checkpoint for the
-//! parent Experiment. A successful [`Experiment::commit`] publishes the
+//! parent Experiment by default. [`Experiment::set_autosave_policy`] can
+//! batch, rate-limit, or disable these Run-close checkpoints for sessions
+//! with many Runs. A successful [`Experiment::commit`] publishes the
 //! requested Experiment image reference and removes the local checkpoint
 //! when present. Failed or interrupted Python context-manager exits are
 //! represented as checkpoint Experiments with `failed` or `interrupted`
@@ -94,6 +96,7 @@ use std::sync::{Mutex, MutexGuard};
 use std::{
     collections::{BTreeMap, HashMap},
     io::Cursor,
+    time::{Duration, Instant},
 };
 
 // --- Artifact mapping constants ---------------------------------------------
@@ -161,6 +164,101 @@ impl ExperimentStatus {
 impl std::fmt::Display for ExperimentStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.as_str())
+    }
+}
+
+/// Policy controlling rolling draft checkpoints after a [`Run`] closes.
+///
+/// The policy belongs to the mutable Experiment session. It is not persisted
+/// in Experiment artifacts or checkpoints, so new and restored sessions start
+/// with [`Self::EveryRunClose`]. Explicit failed or interrupted checkpoints
+/// are always published regardless of this policy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum AutosavePolicy {
+    /// Publish a rolling draft checkpoint after every Run closes.
+    #[default]
+    EveryRunClose,
+    /// Publish after this many additional Runs have closed since the policy
+    /// was set or the previous successful autosave.
+    ///
+    /// A value of zero is invalid and is rejected by
+    /// [`Experiment::set_autosave_policy`] and
+    /// [`ExperimentDyn::set_autosave_policy`].
+    EveryNRuns(u32),
+    /// Attempt to publish on the first Run close and then no more than once
+    /// per interval. A failed attempt also waits for the interval before retrying.
+    MinInterval(Duration),
+    /// Do not publish rolling draft checkpoints after Run close.
+    Disabled,
+}
+
+impl AutosavePolicy {
+    fn validate(self) -> Result<()> {
+        ensure!(
+            !matches!(self, Self::EveryNRuns(0)),
+            "AutosavePolicy::EveryNRuns requires a non-zero Run count"
+        );
+        Ok(())
+    }
+}
+
+/// Runtime-only scheduling state for Run-close autosaves.
+#[derive(Debug, Clone)]
+struct AutosaveController {
+    policy: AutosavePolicy,
+    last_autosaved_run_count: usize,
+    last_attempt_at: Option<Instant>,
+}
+
+impl AutosaveController {
+    fn new(current_run_count: usize) -> Self {
+        Self {
+            policy: AutosavePolicy::default(),
+            last_autosaved_run_count: current_run_count,
+            last_attempt_at: None,
+        }
+    }
+
+    fn set_policy(&mut self, policy: AutosavePolicy, current_run_count: usize) -> Result<()> {
+        policy.validate()?;
+        self.policy = policy;
+        self.last_autosaved_run_count = current_run_count;
+        self.last_attempt_at = None;
+        Ok(())
+    }
+
+    /// Reserve a Run-close autosave attempt before any registry I/O starts.
+    ///
+    /// `MinInterval` rate-limits attempts, including attempts that later fail.
+    /// Other policies continue to advance only after a successful checkpoint.
+    fn begin_autosave_attempt(&mut self, now: Instant, current_run_count: usize) -> bool {
+        let due = match self.policy {
+            AutosavePolicy::EveryRunClose => true,
+            AutosavePolicy::EveryNRuns(run_count) => {
+                current_run_count.saturating_sub(self.last_autosaved_run_count)
+                    >= run_count as usize
+            }
+            AutosavePolicy::MinInterval(interval) => self
+                .last_attempt_at
+                .is_none_or(|last| now.saturating_duration_since(last) >= interval),
+            AutosavePolicy::Disabled => false,
+        };
+        if due && matches!(self.policy, AutosavePolicy::MinInterval(_)) {
+            self.last_attempt_at = Some(now);
+        }
+        due
+    }
+
+    /// Record a policy-independent checkpoint attempt such as checkpoint
+    /// relocation after rename.
+    fn record_forced_attempt(&mut self, now: Instant) {
+        if matches!(self.policy, AutosavePolicy::MinInterval(_)) {
+            self.last_attempt_at = Some(now);
+        }
+    }
+
+    fn mark_autosaved(&mut self, current_run_count: usize) {
+        self.last_autosaved_run_count = current_run_count;
     }
 }
 
@@ -442,6 +540,25 @@ struct UnsealedExperimentState<'reg> {
     attachments: AttachmentTable<StoredDescriptor<'reg>>,
     runs: BTreeMap<u64, RunEntry<'reg>>,
     next_run_id: u64,
+    autosave: AutosaveController,
+}
+
+impl<'reg> UnsealedExperimentState<'reg> {
+    fn autosave_after_run_close(
+        &mut self,
+        registry: &'reg LocalRegistry,
+    ) -> Result<Option<LocalArtifact<'reg>>> {
+        let run_count = self.runs.len();
+        if !self
+            .autosave
+            .begin_autosave_attempt(Instant::now(), run_count)
+        {
+            return Ok(None);
+        }
+        let artifact = self.autosave_checkpoint(registry)?;
+        self.autosave.mark_autosaved(run_count);
+        Ok(Some(artifact))
+    }
 }
 
 impl Experiment<'static> {
@@ -484,6 +601,7 @@ impl<'reg> Experiment<'reg> {
                 attachments: AttachmentTable::new(),
                 runs: BTreeMap::new(),
                 next_run_id: 0,
+                autosave: AutosaveController::new(0),
             }),
         })
     }
@@ -503,6 +621,19 @@ impl<'reg> Experiment<'reg> {
         );
         self.lock_state().annotations.insert(key, value.into());
         Ok(())
+    }
+
+    /// Set the policy for rolling draft checkpoints after a Run closes.
+    ///
+    /// Changing the policy resets its schedule at the current closed-Run
+    /// count. [`AutosavePolicy::EveryNRuns`] therefore counts Runs closed
+    /// after this call. [`AutosavePolicy::MinInterval`] checkpoints the first
+    /// subsequently closed Run immediately. A zero `EveryNRuns` count is
+    /// rejected without changing the current policy.
+    pub fn set_autosave_policy(&self, policy: AutosavePolicy) -> Result<()> {
+        let mut state = self.lock_state();
+        let run_count = state.runs.len();
+        state.autosave.set_policy(policy, run_count)
     }
 
     /// Start a new [`Run`]. Each run gets a fresh 0-based `run_id`.
@@ -526,7 +657,7 @@ impl<'reg> Experiment<'reg> {
             crate::bail!("Run {} has already been registered", run.run_id);
         }
         state.runs.insert(run.run_id, run);
-        if let Err(error) = state.autosave_checkpoint(self.registry) {
+        if let Err(error) = state.autosave_after_run_close(self.registry) {
             tracing::warn!(
                 error = %error,
                 "Failed to publish Experiment autosave checkpoint after Run close"
@@ -645,6 +776,7 @@ impl<'reg> SealedExperiment<'reg> {
                 annotations: HashMap::new(),
                 attachments: self.attachments.clone(),
                 next_run_id: next_run_id(runs.keys().copied())?,
+                autosave: AutosaveController::new(runs.len()),
                 runs,
             }),
         })

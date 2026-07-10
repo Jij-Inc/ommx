@@ -160,6 +160,7 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<PyPruneAnonymousReport>()?;
     m.add_class::<PyExperimentRef>()?;
     m.add_class::<PyExperimentCheckpointRef>()?;
+    m.add_class::<PyAutosavePolicy>()?;
     m.add_class::<PyExperiment>()?;
     m.add_class::<PyRun>()?;
     m.add_class::<PyOpenSolve>()?;
@@ -357,7 +358,9 @@ Use `Run` as a context manager so closing the block records whether that trial
 finished, failed, or was interrupted. `Experiment` may also be used as a
 context manager for batch scripts, but interactive workflows often keep one
 Experiment open across notebook cells and call `commit()` explicitly after
-reviewing the closed runs. On exceptional `with Experiment(...)` exit, OMMX
+reviewing the closed runs. Run-close draft checkpoints are written after every
+Run by default; `AutosavePolicy` can batch, rate-limit, or disable them for
+large sweeps. On exceptional `with Experiment(...)` exit, OMMX
 publishes a checkpoint instead of advancing the success ref. A committed
 experiment is read-only. To add runs to a committed experiment, create a child
 session with `Experiment.fork(...)`. Use `Experiment.rename(...)` to choose or
@@ -366,6 +369,7 @@ update the local registry image reference before saving or pushing.
 );
 
 pyo3_stub_gen::reexport_module_members!("ommx.experiment" from "ommx._ommx_rust";
+    "AutosavePolicy",
     "Experiment",
     "ExperimentCheckpointRef",
     "ExperimentRef",

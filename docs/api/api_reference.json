@@ -27556,12 +27556,142 @@
     },
     "ommx.experiment": {
       "name": "ommx.experiment",
-      "doc": "`ommx.experiment` records an optimization experiment as one OMMX Artifact.\nUse it when a single source problem produces several runs, for example\ndifferent formulations, decomposition strategies, disabled constraints, or\nsolver settings, and you want the resulting Artifact to answer:\n\n- which shared dataset or baseline configuration was used,\n- which run-level parameters should be compared as a table,\n- which input `ommx.Instance` was actually solved, and\n- which output `ommx.Solution` and adapter options came from each solver call.\n\nAn `Experiment` is a mutable session until it is committed. Experiment-level\nattachments store shared context, while each `Run` stores scalar parameters,\nrun-level attachments, and zero or more `Solve` records. Use\n`Run.log_parameter(...)` for values that should become columns in\n`Experiment.run_parameters_df()`, and use attachment methods for payloads such\nas JSON, instances, solutions, sample sets, logs, or caller-defined media\ntypes. `Run.log_solve(...)` calls an `ommx.adapter.SolverAdapter`, stores the\noriginal input instance and returned solution, and records adapter keyword\narguments as solve metadata rather than run parameters.\n\nUse `Run` as a context manager so closing the block records whether that trial\nfinished, failed, or was interrupted. `Experiment` may also be used as a\ncontext manager for batch scripts, but interactive workflows often keep one\nExperiment open across notebook cells and call `commit()` explicitly after\nreviewing the closed runs. On exceptional `with Experiment(...)` exit, OMMX\npublishes a checkpoint instead of advancing the success ref. A committed\nexperiment is read-only. To add runs to a committed experiment, create a child\nsession with `Experiment.fork(...)`. Use `Experiment.rename(...)` to choose or\nupdate the local registry image reference before saving or pushing.",
+      "doc": "`ommx.experiment` records an optimization experiment as one OMMX Artifact.\nUse it when a single source problem produces several runs, for example\ndifferent formulations, decomposition strategies, disabled constraints, or\nsolver settings, and you want the resulting Artifact to answer:\n\n- which shared dataset or baseline configuration was used,\n- which run-level parameters should be compared as a table,\n- which input `ommx.Instance` was actually solved, and\n- which output `ommx.Solution` and adapter options came from each solver call.\n\nAn `Experiment` is a mutable session until it is committed. Experiment-level\nattachments store shared context, while each `Run` stores scalar parameters,\nrun-level attachments, and zero or more `Solve` records. Use\n`Run.log_parameter(...)` for values that should become columns in\n`Experiment.run_parameters_df()`, and use attachment methods for payloads such\nas JSON, instances, solutions, sample sets, logs, or caller-defined media\ntypes. `Run.log_solve(...)` calls an `ommx.adapter.SolverAdapter`, stores the\noriginal input instance and returned solution, and records adapter keyword\narguments as solve metadata rather than run parameters.\n\nUse `Run` as a context manager so closing the block records whether that trial\nfinished, failed, or was interrupted. `Experiment` may also be used as a\ncontext manager for batch scripts, but interactive workflows often keep one\nExperiment open across notebook cells and call `commit()` explicitly after\nreviewing the closed runs. Run-close draft checkpoints are written after every\nRun by default; `AutosavePolicy` can batch, rate-limit, or disable them for\nlarge sweeps. On exceptional `with Experiment(...)` exit, OMMX\npublishes a checkpoint instead of advancing the success ref. A committed\nexperiment is read-only. To add runs to a committed experiment, create a child\nsession with `Experiment.fork(...)`. Use `Experiment.rename(...)` to choose or\nupdate the local registry image reference before saving or pushing.",
       "items": [
         {
           "kind": "Class",
+          "name": "AutosavePolicy",
+          "doc": "Policy controlling rolling draft checkpoints after a `Run` closes.\n\nConstruct a policy with one of the static methods, then pass it to\n`Experiment.set_autosave_policy(...)`. The policy applies only to the\ncurrent unsealed session and is not stored in committed Experiments or\ncheckpoints.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "disabled",
+              "doc": "Disable rolling draft checkpoints after Run close.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "AutosavePolicy",
+                    "link_target": {
+                      "fqn": "ommx.experiment.AutosavePolicy",
+                      "doc_module": "ommx.experiment",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "every_n_runs",
+              "doc": "Checkpoint after `runs` additional Runs close.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "runs",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "AutosavePolicy",
+                    "link_target": {
+                      "fqn": "ommx.experiment.AutosavePolicy",
+                      "doc_module": "ommx.experiment",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "every_run_close",
+              "doc": "Checkpoint after every Run closes. This is the default.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "AutosavePolicy",
+                    "link_target": {
+                      "fqn": "ommx.experiment.AutosavePolicy",
+                      "doc_module": "ommx.experiment",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "min_interval",
+              "doc": "Attempt to checkpoint the first subsequently closed Run immediately,\nthen at most once per `seconds` interval. Failed attempts also wait for\nthe interval before retrying.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "seconds",
+                      "type_": {
+                        "display": "float",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "AutosavePolicy",
+                    "link_target": {
+                      "fqn": "ommx.experiment.AutosavePolicy",
+                      "doc_module": "ommx.experiment",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
           "name": "Experiment",
-          "doc": "A collection of optimization experiment records stored as one OMMX Artifact.\n\nAn `Experiment` owns experiment-level attachments and a sequence of\nclosed `Run` records. Each `Run` can store scalar run parameters,\nrun-level attachments, and zero or more `Solve` records.\n\nNewly created experiments are unsealed. Call `commit()` to write the\nexperiment into the local registry as an OMMX Artifact. After commit, the\nsame object can be used as a read-only view of the committed artifact.\n`with Experiment(...)` commits on normal exit if the experiment is still\nunsealed. On exception it does not advance the successful Experiment image\nreference; instead it tries to publish a local checkpoint with status\n`\"failed\"` or `\"interrupted\"`.\n\nLogging APIs store payload bytes in the Local Registry immediately. The\nfinal commit writes an Experiment config and manifest that make those\npayloads reachable as one immutable Artifact. A closed `Run` also publishes\na best-effort `\"draft\"` checkpoint so a later process can resume from the\nlatest closed Run with `Experiment.restore_from_checkpoint(...)`.\n\nUse experiment-level attachments for shared context such as dataset or\nsource-problem metadata. Use `Run.log_parameter(...)` for scalar values\nthat should appear in `run_parameters_df()`, and use run attachments or\n`Run.log_solve(...)` for payloads that belong to a specific run.\n\nExample:\n\n>>> from ommx.experiment import Experiment\n>>> with Experiment.with_temp_local_registry() as exp:\n...     exp.log_json(\"dataset\", {\"name\": \"demo\"})\n...     with exp.run() as run:\n...         run.log_parameter(\"capacity\", 10)\n...         run.log_json(\"scenario\", {\"capacity\": 10})\n>>> len(exp.runs)\n1\n>>> len(exp.attachment_names)\n1\n>>> exp.run_parameters_df().to_dict()\n{'capacity': {0: 10}}\n\nIf the experiment has only one run, open the experiment and the run in\none `with` statement. On normal exit, the run is finished first and then\nthe experiment is committed:\n\n>>> with Experiment() as exp, exp.run() as run:  # doctest: +SKIP\n...     solution = run.log_solve(adapter, instance, time_limit=10.0)\n>>> exp.rename(\"ghcr.io/container/name:latest\")  # doctest: +SKIP\n>>> exp.push()  # doctest: +SKIP",
+          "doc": "A collection of optimization experiment records stored as one OMMX Artifact.\n\nAn `Experiment` owns experiment-level attachments and a sequence of\nclosed `Run` records. Each `Run` can store scalar run parameters,\nrun-level attachments, and zero or more `Solve` records.\n\nNewly created experiments are unsealed. Call `commit()` to write the\nexperiment into the local registry as an OMMX Artifact. After commit, the\nsame object can be used as a read-only view of the committed artifact.\n`with Experiment(...)` commits on normal exit if the experiment is still\nunsealed. On exception it does not advance the successful Experiment image\nreference; instead it tries to publish a local checkpoint with status\n`\"failed\"` or `\"interrupted\"`.\n\nLogging APIs store payload bytes in the Local Registry immediately. The\nfinal commit writes an Experiment config and manifest that make those\npayloads reachable as one immutable Artifact. By default, a closed `Run`\nalso publishes a best-effort `\"draft\"` checkpoint so a later process can\nresume from the latest closed Run with\n`Experiment.restore_from_checkpoint(...)`. Use\n`set_autosave_policy(...)` to batch, rate-limit, or disable these\nRun-close checkpoints.\n\nUse experiment-level attachments for shared context such as dataset or\nsource-problem metadata. Use `Run.log_parameter(...)` for scalar values\nthat should appear in `run_parameters_df()`, and use run attachments or\n`Run.log_solve(...)` for payloads that belong to a specific run.\n\nExample:\n\n>>> from ommx.experiment import Experiment\n>>> with Experiment.with_temp_local_registry() as exp:\n...     exp.log_json(\"dataset\", {\"name\": \"demo\"})\n...     with exp.run() as run:\n...         run.log_parameter(\"capacity\", 10)\n...         run.log_json(\"scenario\", {\"capacity\": 10})\n>>> len(exp.runs)\n1\n>>> len(exp.attachment_names)\n1\n>>> exp.run_parameters_df().to_dict()\n{'capacity': {0: 10}}\n\nIf the experiment has only one run, open the experiment and the run in\none `with` statement. On normal exit, the run is finished first and then\nthe experiment is committed:\n\n>>> with Experiment() as exp, exp.run() as run:  # doctest: +SKIP\n...     solution = run.log_solve(adapter, instance, time_limit=10.0)\n>>> exp.rename(\"ghcr.io/container/name:latest\")  # doctest: +SKIP\n>>> exp.push()  # doctest: +SKIP",
           "bases": [],
           "methods": [
             {
@@ -28603,7 +28733,7 @@
             },
             {
               "name": "run",
-              "doc": "Start a new Run in this unsealed Experiment.\n\nThe returned `Run` must be closed before `commit()`. Use it as a\ncontext manager to close it automatically on normal or exceptional exit:\n\n```python\nwith experiment.run() as run:\n    run.log_parameter(\"capacity\", 47)\n```\n\nClosing a Run records its status as `\"finished\"`, `\"failed\"`, or\n`\"interrupted\"` and publishes a best-effort draft checkpoint for the\nparent Experiment. Payloads written by an open Run before it is closed\nare stored in the Local Registry but are not recoverable through a\ncheckpoint until the Run is closed.",
+              "doc": "Start a new Run in this unsealed Experiment.\n\nThe returned `Run` must be closed before `commit()`. Use it as a\ncontext manager to close it automatically on normal or exceptional exit:\n\n```python\nwith experiment.run() as run:\n    run.log_parameter(\"capacity\", 47)\n```\n\nClosing a Run records its status as `\"finished\"`, `\"failed\"`, or\n`\"interrupted\"`. It also publishes a best-effort draft checkpoint when\nthe Experiment's autosave policy is due. Payloads written by an open\nRun before it is closed are stored in the Local Registry but are not\nrecoverable through a checkpoint until a later checkpoint includes\nthat Run.",
               "signatures": [
                 {
                   "parameters": [],
@@ -28700,6 +28830,37 @@
                       "type_": {
                         "display": "str",
                         "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "set_autosave_policy",
+              "doc": "Set the rolling draft checkpoint policy for this unsealed Experiment.\n\nChanging the policy resets its schedule at the current closed-Run\ncount. The policy affects only draft autosaves after Run close;\nexception-driven failed or interrupted checkpoints are still written.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "policy",
+                      "type_": {
+                        "display": "AutosavePolicy",
+                        "link_target": {
+                          "fqn": "ommx.experiment.AutosavePolicy",
+                          "doc_module": "ommx.experiment",
+                          "kind": "Class",
+                          "attribute": null
+                        },
                         "children": []
                       },
                       "default": null
@@ -31034,6 +31195,7 @@
     "ommx.artifact.remove_image": "ommx.artifact",
     "ommx.artifact.restore_image": "ommx.artifact",
     "ommx.artifact.set_local_registry_root": "ommx.artifact",
+    "ommx.experiment.AutosavePolicy": "ommx.experiment",
     "ommx.experiment.Experiment": "ommx.experiment",
     "ommx.experiment.ExperimentCheckpointRef": "ommx.experiment",
     "ommx.experiment.ExperimentRef": "ommx.experiment",

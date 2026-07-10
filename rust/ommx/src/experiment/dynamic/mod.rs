@@ -18,8 +18,8 @@ use super::config::ExperimentConfig;
 use super::logging::AttachmentLoggerStorage;
 use super::{
     allocate_next_run_id, next_run_id, read_solve_diagnostic_payload, AttachmentTable,
-    ExperimentStatus, Name, RunEntry, RunParameterCell, RunStatus, SealedExperiment,
-    SolveDiagnosticPayload, SolveStatus, UnsealedExperimentState,
+    AutosaveController, AutosavePolicy, ExperimentStatus, Name, RunEntry, RunParameterCell,
+    RunStatus, SealedExperiment, SolveDiagnosticPayload, SolveStatus, UnsealedExperimentState,
 };
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
 use crate::artifact::{
@@ -154,6 +154,7 @@ struct UnsealedExperimentDynState {
     attachments: AttachmentTable<Descriptor>,
     runs: BTreeMap<u64, RunEntryDyn>,
     next_run_id: u64,
+    autosave: AutosaveController,
 }
 
 #[derive(Debug)]
@@ -415,6 +416,7 @@ impl ExperimentDyn {
                         attachments: AttachmentTable::new(),
                         runs: BTreeMap::new(),
                         next_run_id: 0,
+                        autosave: AutosaveController::new(0),
                     })),
                     open_runs: 0,
                 },
@@ -560,6 +562,22 @@ impl ExperimentDyn {
         Ok(())
     }
 
+    /// Set the policy for rolling draft checkpoints after a Run closes.
+    ///
+    /// The policy can only be changed while this Experiment is unsealed.
+    /// Changing it resets its schedule at the current closed-Run count.
+    pub fn set_autosave_policy(&self, policy: AutosavePolicy) -> Result<()> {
+        let mut dyn_state = lock_experiment_state(&self.state);
+        let ExperimentDynLifecycle::Unsealed { state, .. } = &mut dyn_state.lifecycle else {
+            return bail_non_unsealed(&dyn_state.lifecycle);
+        };
+        let state = state
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
+        let run_count = state.runs.len();
+        state.autosave.set_policy(policy, run_count)
+    }
+
     pub fn rename(&self, image_name: crate::artifact::ImageRef) -> Result<()> {
         let mut dyn_state = lock_experiment_state(&self.state);
         let registry_handle = dyn_state.registry_handle.clone();
@@ -578,11 +596,18 @@ impl ExperimentDyn {
                     .remove_image_ref(&old_checkpoint_image_name)
                 {
                     Ok(Some(_)) => {
-                        if let Err(error) = state.autosave_checkpoint(registry_handle.registry()) {
-                            tracing::warn!(
-                                error = %error,
-                                "Failed to publish Experiment autosave checkpoint after rename"
-                            );
+                        let run_count = state.runs.len();
+                        state
+                            .autosave
+                            .record_forced_attempt(std::time::Instant::now());
+                        match state.autosave_checkpoint(registry_handle.registry()) {
+                            Ok(_) => state.autosave.mark_autosaved(run_count),
+                            Err(error) => {
+                                tracing::warn!(
+                                    error = %error,
+                                    "Failed to publish Experiment autosave checkpoint after rename"
+                                );
+                            }
                         }
                     }
                     Ok(None) => {}
@@ -954,6 +979,22 @@ impl UnsealedExperimentDynState {
         state.autosave_checkpoint(registry)
     }
 
+    fn autosave_after_run_close<'reg>(
+        &mut self,
+        registry: &'reg LocalRegistry,
+    ) -> Result<Option<LocalArtifact<'reg>>> {
+        let run_count = self.runs.len();
+        if !self
+            .autosave
+            .begin_autosave_attempt(std::time::Instant::now(), run_count)
+        {
+            return Ok(None);
+        }
+        let artifact = self.autosave_checkpoint(registry)?;
+        self.autosave.mark_autosaved(run_count);
+        Ok(Some(artifact))
+    }
+
     fn as_unsealed_state<'reg>(
         &self,
         registry: &'reg LocalRegistry,
@@ -1016,6 +1057,7 @@ impl UnsealedExperimentDynState {
                 })
                 .collect::<Result<BTreeMap<_, _>>>()?,
             next_run_id: self.next_run_id,
+            autosave: self.autosave.clone(),
         })
     }
 
@@ -1077,6 +1119,7 @@ impl UnsealedExperimentDynState {
                 })
                 .collect::<Result<BTreeMap<_, _>>>()?,
             next_run_id: self.next_run_id,
+            autosave: self.autosave,
         })
     }
 }
@@ -1219,6 +1262,7 @@ impl SealedExperimentDynState {
             annotations,
             attachments: self.attachments.clone(),
             next_run_id: next_run_id(runs.keys().copied())?,
+            autosave: AutosaveController::new(runs.len()),
             runs,
         })
     }
