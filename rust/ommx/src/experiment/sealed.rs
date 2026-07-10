@@ -47,6 +47,8 @@ impl<'reg> SealedExperiment<'reg> {
         allowed_statuses: &[ExperimentStatus],
     ) -> Result<Self> {
         let config = ExperimentArtifactView::new(&artifact).config()?;
+        config.validate_format_version()?;
+        let supports_sample_set_solve_output = config.supports_sample_set_solve_output();
         let status = ExperimentStatus::from_config(&config.status)?;
         if !allowed_statuses.contains(&status) {
             let expected = allowed_statuses
@@ -68,7 +70,12 @@ impl<'reg> SealedExperiment<'reg> {
             let attachments =
                 decode_attachments(&layers, run.attachments, &format!("run {}", run.run_id))?;
             let trace = decode_trace(&layers, run.trace, run.run_id)?;
-            let solves = decode_solves(&layers, run.run_id, run.solves)?;
+            let solves = decode_solves(
+                &layers,
+                run.run_id,
+                run.solves,
+                supports_sample_set_solve_output,
+            )?;
             let status = RunStatus::from_config(&run.status)
                 .with_context(|| format!("Invalid Run {} status", run.run_id))?;
             if runs
@@ -351,11 +358,16 @@ impl<'reg> Solve<'reg> {
         self.input.registry().get_instance_layer(&self.input)
     }
 
-    pub fn output_solution(&self) -> Result<Option<Solution>> {
+    /// Decode the typed output returned by this Solve.
+    ///
+    /// Finished solver calls return [`super::SolveOutput::Solution`], finished
+    /// sampler calls return [`super::SolveOutput::SampleSet`], and failed or
+    /// interrupted calls return `None`.
+    pub fn output(&self) -> Result<Option<super::SolveOutput>> {
         let Some(output) = &self.output else {
             return Ok(None);
         };
-        Ok(Some(output.registry().get_solution_layer(output)?))
+        Ok(Some(super::decode_solve_output(output)?))
     }
 
     pub fn adapter(&self) -> &str {
@@ -404,6 +416,7 @@ fn decode_solves<'reg>(
     layers: &[StoredDescriptor<'reg>],
     run_id: u64,
     solves: Vec<ExperimentConfigSolve>,
+    supports_sample_set_output: bool,
 ) -> Result<Vec<Solve<'reg>>> {
     let mut decoded = Vec::new();
     let mut seen = std::collections::BTreeSet::new();
@@ -446,10 +459,11 @@ fn decode_solves<'reg>(
                         )
                     })?
                     .clone();
-                crate::artifact::media_types::solution_payload_version(descriptor.media_type())
-                    .with_context(|| {
-                        format!("Invalid Run {run_id} Solve {} output", solve.solve_id)
-                    })?;
+                super::validate_solve_output_media_type(
+                    descriptor.media_type(),
+                    supports_sample_set_output,
+                )
+                .with_context(|| format!("Invalid Run {run_id} Solve {} output", solve.solve_id))?;
                 Ok::<_, anyhow::Error>(descriptor)
             })
             .transpose()?;

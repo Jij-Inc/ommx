@@ -5995,6 +5995,29 @@ class Run:
         before the failure when `store_diagnostics=True`. Failed Solve entries
         have `output=None`.
         """
+    def log_sample(
+        self,
+        adapter: type[adapter.SamplerAdapter],
+        instance: Instance,
+        *,
+        store_diagnostics: builtins.bool = False,
+        **kwargs: typing.Any,
+    ) -> SampleSet:
+        r"""
+        Sample an Instance with an OMMX SamplerAdapter and log a Solve entry.
+
+        The original input is stored together with the returned `SampleSet`.
+        A successful sampler call is recorded as finished even when none of its
+        samples are feasible.
+
+        `adapter` must be a subclass of `ommx.adapter.SamplerAdapter`. Keyword
+        arguments are passed to `adapter.sample(...)` and recorded as
+        `Solve.adapter_options`.
+
+        Set `store_diagnostics=True` to pass a diagnostics sink to the adapter.
+        Diagnostics persistence is best-effort and does not change a successful
+        sampler call into a failed Solve.
+        """
     def open_solve(
         self,
         adapter: type[adapter.SolverAdapter],
@@ -7087,9 +7110,9 @@ class Solve:
     Immutable record of one solver call.
 
     A `Solve` always stores the input `Instance`, adapter class name, and
-    JSON-encoded adapter options for one `Run.log_solve` call. A finished Solve
-    stores the output `Solution`; failed and interrupted Solve records have no
-    output.
+    JSON-encoded adapter options for one adapter call. A finished Solve stores
+    either a `Solution` or `SampleSet`; failed and interrupted Solve records
+    have no output.
     """
     @property
     def solve_id(self) -> builtins.int:
@@ -7107,9 +7130,9 @@ class Solve:
         Input `Instance` passed to the solver.
         """
     @property
-    def output(self) -> typing.Optional[Solution]:
+    def output(self) -> typing.Optional[Solution | SampleSet]:
         r"""
-        Output `Solution` returned by the solver, or `None` if the solve failed before returning one.
+        Output returned by the adapter, or `None` if the call failed before returning one.
         """
     @property
     def adapter(self) -> builtins.str:

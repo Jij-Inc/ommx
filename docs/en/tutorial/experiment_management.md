@@ -27,7 +27,7 @@ In practical mathematical optimization, a workflow rarely ends by simply buildin
 * - {py:class}`~ommx.experiment.Run`
   - One trial within an experiment and the comparison unit. Since complex workflows often call solvers more than once, a Run can contain multiple solver calls (Solves). A Run can also have scalar parameters used as comparison axes, making it easy to compare Runs across the Experiment.
 * - {py:class}`~ommx.experiment.Solve`
-  - One solver call within a Run. It always stores the input {py:class}`~ommx.Instance`, the Adapter used, and the options passed to the solver call. A finished Solve also stores the output {py:class}`~ommx.Solution`; a failed or interrupted Solve has no output.
+  - One solver or sampler call within a Run. It always stores the input {py:class}`~ommx.Instance`, the Adapter used, and the options passed to the call. A finished Solve also stores the output {py:class}`~ommx.Solution` or {py:class}`~ommx.SampleSet`; a failed or interrupted Solve has no output.
 * - Attachment
   - An arbitrary payload attached to an Experiment or Run. It can store data types such as JSON, `numpy.ndarray`, {py:class}`~ommx.Instance`, and {py:class}`~ommx.Solution`, as well as arbitrary bytes with an explicit Media Type.
 ```
@@ -181,12 +181,14 @@ with Experiment() as experiment:
 All data stored during the experiment is saved in OMMX's *Local Registry*.
 
 - The OMMX Local Registry is storage for efficiently keeping OMMX Artifact components. You can change its location with the `OMMX_LOCAL_REGISTRY_ROOT` environment variable. APIs such as {py:meth}`~ommx.experiment.Experiment.with_temp_local_registry` can create and use a temporary Local Registry.
-- `log_json` and `log_solve` store data in the Local Registry immediately. They do not keep everything in memory and save it all at the end of the Experiment. Since storage paths are determined from the content of the data (SHA256 hash), identical data is stored only once per Local Registry.
+- `log_json`, `log_solve`, and `log_sample` store data in the Local Registry immediately. They do not keep everything in memory and save it all at the end of the Experiment. Since storage paths are determined from the content of the data (SHA256 hash), identical data is stored only once per Local Registry.
 - When the Experiment is finalized, OMMX stores JSON (the Artifact Manifest) that lists all data saved during the Experiment, and stores a tag in the Local Registry pointing to this Artifact Manifest under the Experiment name chosen at startup or generated automatically.
 
 ### When You Need Direct Solver Model Access
 
 Most runs should use {py:meth}`~ommx.experiment.Run.log_solve`, which calls the adapter's `solve` method and records the input, output, adapter name, and adapter options in one step. When you need advanced solver features that the Adapter API does not cover, open a manual Solve scope.
+
+For a {py:class}`~ommx.adapter.SamplerAdapter`, use {py:meth}`~ommx.experiment.Run.log_sample` instead. It calls the adapter's `sample` method and records the complete {py:class}`~ommx.SampleSet` as the Solve output. The call is still recorded as finished when sampling succeeds but the SampleSet contains no feasible sample.
 
 In a manual Solve scope, first get the backend solver model through `solver_input`, then operate on that model and run the optimization yourself. Finally, call `solve.decode(model)`: the adapter converts the backend result into an {py:class}`~ommx.Solution`, and that Solution becomes the output of the Solve recorded in the Experiment.
 

@@ -80,7 +80,7 @@ pub use attachment::{detect_file_media_type, AttachmentTable, DEFAULT_FILE_MEDIA
 pub use dynamic::{ExperimentDyn, RunDyn, SealedRunDyn, SolveDyn};
 pub use logging::AttachmentLogger;
 pub use parameter::{ParameterValue, RunParameterCell};
-pub use run::{FailedSolveRecord, FinishedSolveRecord};
+pub use run::{FailedSolveRecord, FinishedSampleRecord, FinishedSolveRecord};
 // Local Registry owns the SQLite projection, while Experiment owns validation
 // of Experiment manifests/configs before those projection rows are written.
 pub(crate) use sealed::experiment_manifest_record_from_artifact;
@@ -88,6 +88,7 @@ pub use sealed::{SealedRun, Solve};
 
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor, TempLocalRegistry};
 use crate::artifact::{media_types, ImageRef, LocalArtifact};
+use crate::{SampleSet, Solution};
 use anyhow::{ensure, Context, Result};
 use oci_spec::image::Descriptor;
 use parameter::ParameterSet;
@@ -306,11 +307,11 @@ impl std::fmt::Display for RunStatus {
 /// Lifecycle status of one solver call recorded in an Experiment.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SolveStatus {
-    /// The adapter returned a Solution.
+    /// The adapter returned a Solution or SampleSet.
     Finished,
-    /// The adapter raised an error before returning a Solution.
+    /// The adapter raised an error before returning an output.
     Failed,
-    /// The adapter call was interrupted before returning a Solution.
+    /// The adapter call was interrupted before returning an output.
     Interrupted,
 }
 
@@ -341,6 +342,53 @@ impl SolveStatus {
 impl std::fmt::Display for SolveStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.as_str())
+    }
+}
+
+/// Typed output of one finished solver or sampler call.
+///
+/// The persisted Solve owns exactly one output layer when its status is
+/// [`SolveStatus::Finished`]. The output layer's OMMX media type determines
+/// which variant is decoded; registry descriptors remain an implementation
+/// detail of the Experiment persistence boundary.
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub enum SolveOutput {
+    /// Output returned by an optimization solver adapter.
+    Solution(Solution),
+    /// Output returned by a sampler adapter.
+    SampleSet(SampleSet),
+}
+
+fn validate_solve_output_media_type(
+    media_type: &oci_spec::image::MediaType,
+    supports_sample_set_output: bool,
+) -> Result<()> {
+    if media_types::is_solution_payload_media_type(media_type) {
+        return Ok(());
+    }
+    if supports_sample_set_output && media_types::is_sample_set_payload_media_type(media_type) {
+        return Ok(());
+    }
+    if media_types::is_sample_set_payload_media_type(media_type) {
+        crate::bail!("SampleSet Solve outputs require Experiment config format version 2");
+    }
+    crate::bail!(
+        "Solve output media type is {}, expected an OMMX Solution or SampleSet payload",
+        media_type
+    )
+}
+
+fn decode_solve_output(descriptor: &StoredDescriptor<'_>) -> Result<SolveOutput> {
+    validate_solve_output_media_type(descriptor.media_type(), true)?;
+    if media_types::is_solution_payload_media_type(descriptor.media_type()) {
+        Ok(SolveOutput::Solution(
+            descriptor.registry().get_solution_layer(descriptor)?,
+        ))
+    } else {
+        Ok(SolveOutput::SampleSet(
+            descriptor.registry().get_sample_set_layer(descriptor)?,
+        ))
     }
 }
 

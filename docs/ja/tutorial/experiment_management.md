@@ -27,7 +27,7 @@ kernelspec:
 * - {py:class}`~ommx.experiment.Run`
   - 実験の中で行った一つの試行、比較の単位。複雑な問題を解く際に複数回のソルバー呼び出しを伴うことがよくあるため、Runは複数回のソルバー呼び出し（Solve）を持つことができる。加えてRun毎に比較の軸となるスカラー値のパラメータを付与でき、Experiment全体でのRunの比較を容易にする。
 * - {py:class}`~ommx.experiment.Solve`
-  - Runの中で行った一回のソルバー呼び出し。入力の {py:class}`~ommx.Instance`、使用した Adapter、ソルバー呼び出しに渡したオプションを常に記録する。finished Solve は出力の {py:class}`~ommx.Solution` も保存し、failed または interrupted Solve は output を持たない。
+  - Runの中で行った一回の solver または sampler 呼び出し。入力の {py:class}`~ommx.Instance`、使用した Adapter、呼び出しに渡した option を常に記録する。finished Solve は出力の {py:class}`~ommx.Solution` または {py:class}`~ommx.SampleSet` も保存し、failed または interrupted Solve は output を持たない。
 * - Attachment
   - ExperimentやRunに添付する任意のペイロード。JSON、`numpy.ndarray`、{py:class}`~ommx.Instance`、{py:class}`~ommx.Solution`などのデータ型に加えて、任意のbytesをMedia Typeを指定して保存できる。
 ```
@@ -181,12 +181,14 @@ with Experiment() as experiment:
 実験の途中で保存されたデータはすべてOMMXの *Local Registry* に保存されます。
 
 - OMMXのLocal RegistryはOMMX Artifactの構成要素を効率よく保存するためのストレージです。`OMMX_LOCAL_REGISTRY_ROOT` 環境変数で場所を変更できます。 {py:meth}`~ommx.experiment.Experiment.with_temp_local_registry` などの一時的なLocal Registryを生成して使うAPIもあります。
-- `log_json` や `log_solve` ではデータは随時Local Registryに保存されていきます。メモリ上に置いておいてExperimentの最後にまとめて保存するわけではありません。これはデータの内容（SHA256ハッシュ値）をもとに保存パスが決められるので、同じデータはLocal Registry単位で一度だけ保存されます。
+- `log_json`、`log_solve`、`log_sample` ではデータは随時Local Registryに保存されていきます。メモリ上に置いておいてExperimentの最後にまとめて保存するわけではありません。これはデータの内容（SHA256ハッシュ値）をもとに保存パスが決められるので、同じデータはLocal Registry単位で一度だけ保存されます。
 - Experimentの終了処理ではそのExperiment中に保存されたデータの一覧をまとめたJSON（Artifact Manifest）をLocal Registryに保存して、起動時に指定あるいは自動的に決めたExperimentの名前でこのArtifact Manifestを指すタグをLocal Registryに保存します。
 
 ### ソルバーのModelを直接操作する場合
 
 通常のRunでは {py:meth}`~ommx.experiment.Run.log_solve` を使います。これはadapterの `solve` メソッドを呼び出し、入力、出力、adapter名、adapter optionsをまとめて記録します。一方で、AdapterのAPIではサポートしきれていないソルバーの高度な機能を使う必要がある場合は、手動Solveスコープを開きます。
+
+{py:class}`~ommx.adapter.SamplerAdapter` では、代わりに {py:meth}`~ommx.experiment.Run.log_sample` を使います。adapter の `sample` メソッドを呼び出し、完全な {py:class}`~ommx.SampleSet` を Solve の出力として記録します。sampling 自体が成功していれば、SampleSet に feasible sample がなくても finished として記録されます。
 
 手動Solveスコープでは、まず `solver_input` でバックエンドソルバーのModelを受け取り、ユーザーがそのModelを直接操作して最適化を行います。最後に `solve.decode(model)` を呼ぶと、adapterがバックエンドの結果を {py:class}`~ommx.Solution` に変換し、そのSolutionがExperimentに記録されるSolveの出力になります。
 

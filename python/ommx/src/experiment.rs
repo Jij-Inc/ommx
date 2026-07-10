@@ -19,8 +19,8 @@ use crate::PyArtifact;
 use ommx::artifact::local_registry::{ExperimentCheckpointRefRecord, ExperimentRefRecord};
 use ommx::artifact::AsArtifact;
 use ommx::experiment::{
-    AttachmentLogger, AutosavePolicy, FailedSolveRecord, FinishedSolveRecord,
-    SolveDiagnosticPayload, SolveStatus,
+    AttachmentLogger, AutosavePolicy, FailedSolveRecord, FinishedSampleRecord, FinishedSolveRecord,
+    SolveDiagnosticPayload, SolveOutput, SolveStatus,
 };
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
@@ -1875,7 +1875,7 @@ impl PyRun {
     ) -> PyResult<crate::Solution> {
         let _guard = crate::TRACING.attach_parent_context(py);
         self.ensure_store_trace_context_started()?;
-        reject_reserved_log_solve_kwargs(kwargs)?;
+        reject_reserved_adapter_kwargs(kwargs, "Run.log_solve")?;
         let adapter = adapter.bind(py);
         let adapter_name = adapter.name()?;
         let adapter_options = dump_kwargs(py, kwargs)?;
@@ -1929,6 +1929,86 @@ impl PyRun {
             })?;
         tracing::info!(solve_id, "ommx.solve.recorded");
         Ok(solution)
+    }
+
+    /// Sample an Instance with an OMMX SamplerAdapter and log a Solve entry.
+    ///
+    /// The original input is stored together with the returned `SampleSet`.
+    /// A successful sampler call is recorded as finished even when none of its
+    /// samples are feasible.
+    ///
+    /// `adapter` must be a subclass of `ommx.adapter.SamplerAdapter`. Keyword
+    /// arguments are passed to `adapter.sample(...)` and recorded as
+    /// `Solve.adapter_options`.
+    ///
+    /// Set `store_diagnostics=True` to pass a diagnostics sink to the adapter.
+    /// Diagnostics persistence is best-effort and does not change a successful
+    /// sampler call into a failed Solve.
+    #[pyo3(signature = (adapter, instance, *, store_diagnostics = false, **kwargs))]
+    pub fn log_sample(
+        &mut self,
+        py: Python<'_>,
+        adapter: SamplerAdapterInput,
+        instance: &crate::Instance,
+        store_diagnostics: bool,
+        kwargs: Option<&Bound<PyDict>>,
+    ) -> PyResult<crate::SampleSet> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        self.ensure_store_trace_context_started()?;
+        reject_reserved_adapter_kwargs(kwargs, "Run.log_sample")?;
+        let adapter = adapter.bind(py);
+        let adapter_name = adapter.name()?;
+        let adapter_options = dump_kwargs(py, kwargs)?;
+        let diagnostics_collector = store_diagnostics
+            .then(|| Py::new(py, PyDiagnosticCollector::new_inner()))
+            .transpose()?;
+        let sample_set = match adapter.sample(instance, kwargs, diagnostics_collector.as_ref()) {
+            Ok(sample_set) => sample_set,
+            Err(error) => {
+                let status = if error.is_instance_of::<PyKeyboardInterrupt>(py) {
+                    SolveStatus::Interrupted
+                } else {
+                    SolveStatus::Failed
+                };
+                let diagnostics = pack_diagnostics_or_none(
+                    py,
+                    diagnostics_collector.as_ref(),
+                    "Failed to serialize failed Solve diagnostics; recording Solve without diagnostics",
+                );
+                let record_result = self.as_open_mut().and_then(|run| {
+                    run.log_failed_solve(FailedSolveRecord {
+                        input: &instance.inner,
+                        adapter: adapter_name,
+                        adapter_options,
+                        status,
+                        diagnostics,
+                    })
+                });
+                if let Err(record_error) = record_result {
+                    tracing::warn!(
+                        error = %record_error,
+                        "Failed to record failed sampler Solve attempt"
+                    );
+                }
+                return Err(error);
+            }
+        };
+        let diagnostics = pack_diagnostics_or_none(
+            py,
+            diagnostics_collector.as_ref(),
+            "Failed to serialize adapter diagnostics; recording Solve without diagnostics",
+        );
+        let solve_id = self
+            .as_open_mut()?
+            .log_finished_sample(FinishedSampleRecord {
+                input: &instance.inner,
+                output: &sample_set.inner,
+                adapter: adapter_name,
+                adapter_options,
+                diagnostics,
+            })?;
+        tracing::info!(solve_id, "ommx.solve.recorded");
+        Ok(sample_set)
     }
 
     /// Open a manual Solve scope for direct backend solver model access.
@@ -3166,6 +3246,16 @@ impl SolverAdapterInput {
     }
 }
 
+pub struct SamplerAdapterInput(Py<PyType>);
+
+impl SamplerAdapterInput {
+    fn bind<'py>(&'py self, py: Python<'py>) -> SolverAdapter<'py> {
+        SolverAdapter {
+            adapter: self.0.bind(py),
+        }
+    }
+}
+
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust", name = "DiagnosticCollector")]
@@ -3381,6 +3471,32 @@ impl<'py> SolverAdapter<'py> {
             .map_err(|_| PyTypeError::new_err("adapter.solve(...) must return ommx.Solution"))
     }
 
+    fn sample(
+        &self,
+        instance: &crate::Instance,
+        kwargs: Option<&Bound<'py, PyDict>>,
+        diagnostics: Option<&Py<PyDiagnosticCollector>>,
+    ) -> PyResult<crate::SampleSet> {
+        let py = self.py();
+        let adapter_instance = Py::new(py, instance.clone())?;
+        let call_kwargs = PyDict::new(py);
+        if let Some(kwargs) = kwargs {
+            for (key, value) in kwargs.iter() {
+                call_kwargs.set_item(key, value)?;
+            }
+        }
+        match diagnostics {
+            Some(diagnostics) => call_kwargs.set_item("diagnostics", diagnostics.bind(py))?,
+            None => call_kwargs.set_item("diagnostics", py.None())?,
+        }
+        let sample_set_object =
+            self.adapter
+                .call_method("sample", (adapter_instance,), Some(&call_kwargs))?;
+        sample_set_object
+            .extract::<crate::SampleSet>()
+            .map_err(|_| PyTypeError::new_err("adapter.sample(...) must return ommx.SampleSet"))
+    }
+
     fn name(&self) -> Result<String> {
         let module: String = self.adapter.module()?.extract()?;
         let qualname: String = self.adapter.qualname()?.extract()?;
@@ -3426,7 +3542,7 @@ fn dump_merged_kwargs(
     dump_kwargs(py, Some(&merged))
 }
 
-fn reject_reserved_log_solve_kwargs(kwargs: Option<&Bound<PyDict>>) -> Result<()> {
+fn reject_reserved_adapter_kwargs(kwargs: Option<&Bound<PyDict>>, operation: &str) -> Result<()> {
     let Some(kwargs) = kwargs else {
         return Ok(());
     };
@@ -3434,7 +3550,7 @@ fn reject_reserved_log_solve_kwargs(kwargs: Option<&Bound<PyDict>>) -> Result<()
         .call_method1("__contains__", ("diagnostics",))?
         .extract()?;
     if has_diagnostics {
-        anyhow::bail!("Run.log_solve owns the `diagnostics` adapter option");
+        anyhow::bail!("{operation} owns the `diagnostics` adapter option");
     }
     Ok(())
 }
@@ -3482,10 +3598,43 @@ impl<'py> FromPyObject<'_, 'py> for SolverAdapterInput {
     }
 }
 
+impl<'py> FromPyObject<'_, 'py> for SamplerAdapterInput {
+    type Error = PyErr;
+
+    fn extract(ob: pyo3::Borrowed<'_, 'py, PyAny>) -> PyResult<Self> {
+        let adapter = ob.extract::<Py<PyType>>().map_err(|_| {
+            PyTypeError::new_err("adapter must be a subclass of ommx.adapter.SamplerAdapter")
+        })?;
+        let adapter_bound = adapter.bind(ob.py());
+        let sampler_adapter = ob.py().import("ommx.adapter")?.getattr("SamplerAdapter")?;
+        if !adapter_bound.is_subclass(&sampler_adapter)? {
+            return Err(PyTypeError::new_err(
+                "adapter must be a subclass of ommx.adapter.SamplerAdapter",
+            ));
+        }
+        Ok(Self(adapter))
+    }
+}
+
 impl pyo3_stub_gen::PyStubType for SolverAdapterInput {
     fn type_input() -> pyo3_stub_gen::TypeInfo {
         pyo3_stub_gen::TypeInfo {
             name: "type[adapter.SolverAdapter]".to_string(),
+            source_module: None,
+            import: ["ommx.adapter".into()].into(),
+            type_refs: Default::default(),
+        }
+    }
+
+    fn type_output() -> pyo3_stub_gen::TypeInfo {
+        Self::type_input()
+    }
+}
+
+impl pyo3_stub_gen::PyStubType for SamplerAdapterInput {
+    fn type_input() -> pyo3_stub_gen::TypeInfo {
+        pyo3_stub_gen::TypeInfo {
+            name: "type[adapter.SamplerAdapter]".to_string(),
             source_module: None,
             import: ["ommx.adapter".into()].into(),
             type_refs: Default::default(),
@@ -3688,9 +3837,9 @@ impl PySealedRun {
 /// Immutable record of one solver call.
 ///
 /// A `Solve` always stores the input `Instance`, adapter class name, and
-/// JSON-encoded adapter options for one `Run.log_solve` call. A finished Solve
-/// stores the output `Solution`; failed and interrupted Solve records have no
-/// output.
+/// JSON-encoded adapter options for one adapter call. A finished Solve stores
+/// either a `Solution` or `SampleSet`; failed and interrupted Solve records
+/// have no output.
 pub struct PySolve(ommx::experiment::SolveDyn);
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
@@ -3716,12 +3865,25 @@ impl PySolve {
     }
 
     #[getter]
-    /// Output `Solution` returned by the solver, or `None` if the solve failed before returning one.
-    pub fn output(&self) -> Result<Option<crate::Solution>> {
-        let Some(inner) = self.0.output_solution()? else {
+    #[gen_stub(override_return_type(
+        type_repr = "typing.Optional[Solution | SampleSet]",
+        imports = ("typing")
+    ))]
+    /// Output returned by the adapter, or `None` if the call failed before returning one.
+    pub fn output<'py>(&self, py: Python<'py>) -> Result<Option<Bound<'py, PyAny>>> {
+        let Some(output) = self.0.output()? else {
             return Ok(None);
         };
-        Ok(Some(crate::Solution { inner }))
+        let output = match output {
+            SolveOutput::Solution(inner) => Py::new(py, crate::Solution { inner })?
+                .into_bound(py)
+                .into_any(),
+            SolveOutput::SampleSet(inner) => Py::new(py, crate::SampleSet { inner })?
+                .into_bound(py)
+                .into_any(),
+            _ => anyhow::bail!("Unsupported Solve output type"),
+        };
+        Ok(Some(output))
     }
 
     #[getter]

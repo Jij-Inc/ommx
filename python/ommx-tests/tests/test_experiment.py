@@ -8,7 +8,7 @@ import pytest
 from opentelemetry import trace as otel_trace
 from opentelemetry.proto.trace.v1.trace_pb2 import Status as ProtoStatus
 
-from ommx.adapter import SolverAdapter
+from ommx.adapter import DiagnosticsSink, SamplerAdapter, SolverAdapter
 from ommx.experiment import (
     AutosavePolicy,
     Experiment,
@@ -16,7 +16,7 @@ from ommx.experiment import (
     list_experiments,
 )
 from ommx.tracing import TraceResult, render_text_tree
-from ommx import Instance, Solution
+from ommx import DecisionVariable, Instance, SampleSet, Solution
 
 from conftest import get_test_exporter
 
@@ -895,6 +895,76 @@ def test_log_solve_logs_input_solution_and_adapter_options():
     # Adapter options are solve-scoped metadata, not Run parameters.
     df = loaded.run_parameters_df()
     assert df.shape == (1, 0)
+
+
+def test_log_sample_records_finished_sample_set_without_feasible_samples():
+    class DummySampler(SamplerAdapter):
+        seen_diagnostics: ClassVar[DiagnosticsSink | None]
+
+        @classmethod
+        def sample(
+            cls,
+            ommx_instance: Instance,
+            *,
+            diagnostics: DiagnosticsSink | None = None,
+            **kwargs: object,
+        ) -> SampleSet:
+            assert kwargs == {"num_reads": 1}
+            cls.seen_diagnostics = diagnostics
+            if diagnostics is not None:
+                diagnostics.record(DummyDiagnostic(status="sampled", bound=0.0))
+            return ommx_instance.evaluate_samples([{0: 0}])
+
+        @classmethod
+        def solve(
+            cls,
+            ommx_instance: Instance,
+            *,
+            diagnostics: DiagnosticsSink | None = None,
+        ) -> Solution:
+            raise NotImplementedError
+
+        @property
+        def solver_input(self) -> Any:
+            raise NotImplementedError
+
+        def decode(self, data: Any) -> Solution:
+            raise NotImplementedError
+
+        @property
+        def sampler_input(self) -> Any:
+            raise NotImplementedError
+
+        def decode_to_sampleset(self, data: Any) -> SampleSet:
+            raise NotImplementedError
+
+    x = DecisionVariable.binary(0)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        constraints={0: x == 1},
+        sense=Instance.MINIMIZE,
+    )
+    experiment = Experiment.with_temp_local_registry()
+
+    with experiment.run() as run:
+        sample_set = run.log_sample(
+            DummySampler,
+            instance,
+            store_diagnostics=True,
+            num_reads=1,
+        )
+        assert sample_set.feasible_ids() == set()
+        assert DummySampler.seen_diagnostics is not None
+
+    loaded = Experiment.from_artifact(experiment.commit())
+    solve = loaded.runs[0].solves[0]
+    assert solve.status == "finished"
+    assert isinstance(solve.input, Instance)
+    assert isinstance(solve.output, SampleSet)
+    assert solve.output.feasible_ids() == set()
+    assert solve.adapter_options == {"num_reads": 1}
+    assert solve.diagnostics == [{"status": "sampled", "bound": 0.0}]
 
 
 def test_open_solve_records_direct_solver_input_workflow():

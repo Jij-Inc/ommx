@@ -30100,6 +30100,68 @@
               "deprecated": null
             },
             {
+              "name": "log_sample",
+              "doc": "Sample an Instance with an OMMX SamplerAdapter and log a Solve entry.\n\nThe original input is stored together with the returned `SampleSet`.\nA successful sampler call is recorded as finished even when none of its\nsamples are feasible.\n\n`adapter` must be a subclass of `ommx.adapter.SamplerAdapter`. Keyword\narguments are passed to `adapter.sample(...)` and recorded as\n`Solve.adapter_options`.\n\nSet `store_diagnostics=True` to pass a diagnostics sink to the adapter.\nDiagnostics persistence is best-effort and does not change a successful\nsampler call into a failed Solve.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "adapter",
+                      "type_": {
+                        "display": "type[SamplerAdapter]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "SamplerAdapter",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "instance",
+                      "type_": {
+                        "display": "Instance",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "store_diagnostics",
+                      "type_": {
+                        "display": "bool",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "False"
+                      }
+                    },
+                    {
+                      "name": "kwargs",
+                      "type_": {
+                        "display": "Any",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "SampleSet",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "log_sample_set",
               "doc": "Attach a SampleSet in this run.",
               "signatures": [
@@ -30796,7 +30858,7 @@
         {
           "kind": "Class",
           "name": "Solve",
-          "doc": "Immutable record of one solver call.\n\nA `Solve` always stores the input `Instance`, adapter class name, and\nJSON-encoded adapter options for one `Run.log_solve` call. A finished Solve\nstores the output `Solution`; failed and interrupted Solve records have no\noutput.",
+          "doc": "Immutable record of one solver call.\n\nA `Solve` always stores the input `Instance`, adapter class name, and\nJSON-encoded adapter options for one adapter call. A finished Solve stores\neither a `Solution` or `SampleSet`; failed and interrupted Solve records\nhave no output.",
           "bases": [],
           "methods": [
             {
@@ -30880,15 +30942,26 @@
             },
             {
               "name": "output",
-              "doc": "Output `Solution` returned by the solver, or `None` if the solve failed before returning one.",
+              "doc": "Output returned by the adapter, or `None` if the call failed before returning one.",
               "type_": {
-                "display": "Optional[Solution]",
+                "display": "Optional[Solution | SampleSet]",
                 "link_target": null,
                 "children": [
                   {
-                    "display": "Solution",
+                    "display": "Solution | SampleSet",
                     "link_target": null,
-                    "children": []
+                    "children": [
+                      {
+                        "display": "Solution",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "SampleSet",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
                   }
                 ]
               },

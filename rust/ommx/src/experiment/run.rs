@@ -7,7 +7,7 @@ use super::{
 };
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
 use crate::artifact::media_types;
-use crate::{Instance, Solution};
+use crate::{Instance, SampleSet, Solution};
 use anyhow::{ensure, Result};
 use oci_spec::image::Descriptor;
 use std::collections::HashMap;
@@ -16,6 +16,15 @@ use std::collections::HashMap;
 pub struct FinishedSolveRecord<'a> {
     pub input: &'a Instance,
     pub output: &'a Solution,
+    pub adapter: String,
+    pub adapter_options: String,
+    pub diagnostics: Option<SolveDiagnosticPayload>,
+}
+
+/// Data needed to record a finished sampler call.
+pub struct FinishedSampleRecord<'a> {
+    pub input: &'a Instance,
+    pub output: &'a SampleSet,
     pub adapter: String,
     pub adapter_options: String,
     pub diagnostics: Option<SolveDiagnosticPayload>,
@@ -117,10 +126,70 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         Ok(solve_id)
     }
 
+    /// Log one already-finished sampler result with adapter diagnostics.
+    ///
+    /// The original input [`Instance`] and returned [`SampleSet`] are stored
+    /// as solve-scoped payloads. A successful sampling call remains finished
+    /// even when the SampleSet contains no feasible samples.
+    ///
+    /// Diagnostics are best-effort metadata. If the diagnostics payload cannot
+    /// be encoded or stored, the Solve entry is still recorded without
+    /// diagnostics.
+    pub fn log_finished_sample(&mut self, record: FinishedSampleRecord<'_>) -> Result<u64> {
+        let solve_id = self.reserve_solve_id();
+        self.log_finished_sample_with_id(solve_id, record)
+    }
+
+    /// Finalize a previously reserved Solve ID with a finished sampler result.
+    pub fn log_finished_sample_with_id(
+        &mut self,
+        solve_id: u64,
+        record: FinishedSampleRecord<'_>,
+    ) -> Result<u64> {
+        self.ensure_reserved_solve_id(solve_id)?;
+        let FinishedSampleRecord {
+            input,
+            output,
+            adapter,
+            adapter_options,
+            diagnostics,
+        } = record;
+        let input = self.experiment.registry.store_instance_layer(input)?;
+        let output = self.experiment.registry.store_sample_set_layer(output)?;
+        let diagnostics = diagnostics.and_then(|diagnostic| {
+            match diagnostic.to_msgpack_bytes().and_then(|bytes| {
+                self.experiment.registry.store_layer_blob(
+                    media_types::diagnostic_msgpack(),
+                    &bytes,
+                    HashMap::new(),
+                )
+            }) {
+                Ok(descriptor) => Some(descriptor),
+                Err(error) => {
+                    tracing::warn!(
+                        error = %error,
+                        "Failed to store Solve diagnostics; recording Solve without diagnostics"
+                    );
+                    None
+                }
+            }
+        });
+        self.insert_solve(SolveEntry {
+            solve_id,
+            status: SolveStatus::Finished,
+            input,
+            output: Some(output),
+            adapter,
+            adapter_options,
+            diagnostics,
+        })?;
+        Ok(solve_id)
+    }
+
     /// Log one failed solver call with adapter diagnostics.
     ///
     /// Failed solve attempts have an input, adapter metadata, and optional
-    /// diagnostics, but no output Solution.
+    /// diagnostics, but no output.
     pub fn log_failed_solve(&mut self, record: FailedSolveRecord<'_>) -> Result<u64> {
         ensure!(
             record.status != SolveStatus::Finished,

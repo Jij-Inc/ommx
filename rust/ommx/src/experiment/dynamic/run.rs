@@ -3,7 +3,8 @@
 use super::super::logging::AttachmentLoggerStorage;
 use super::super::parameter::ParameterSet;
 use super::super::{
-    AttachmentTable, FailedSolveRecord, FinishedSolveRecord, ParameterValue, RunStatus, SolveStatus,
+    AttachmentTable, FailedSolveRecord, FinishedSampleRecord, FinishedSolveRecord, ParameterValue,
+    RunStatus, SolveStatus,
 };
 use super::{
     bail_non_unsealed, ensure_unsealed_for_attachment_write, lock_experiment_state,
@@ -167,10 +168,73 @@ impl RunDyn {
         Ok(solve_id)
     }
 
+    /// Log one already-finished sampler result with adapter diagnostics.
+    ///
+    /// A successful sampling call remains finished even when the SampleSet
+    /// contains no feasible samples.
+    pub fn log_finished_sample(&mut self, record: FinishedSampleRecord<'_>) -> Result<u64> {
+        let solve_id = self.reserve_solve_id()?;
+        self.log_finished_sample_with_id(solve_id, record)
+    }
+
+    /// Finalize a previously reserved Solve ID with a finished sampler result.
+    pub fn log_finished_sample_with_id(
+        &mut self,
+        solve_id: u64,
+        record: FinishedSampleRecord<'_>,
+    ) -> Result<u64> {
+        ensure_reserved_solve_id(self.open()?, solve_id)?;
+        let FinishedSampleRecord {
+            input,
+            output,
+            adapter,
+            adapter_options,
+            diagnostics,
+        } = record;
+        let registry_handle = self.registry_handle_for_attachment_write()?;
+        let registry = registry_handle.registry();
+        let input = Descriptor::from(registry.store_instance_layer(input)?);
+        let output = Descriptor::from(registry.store_sample_set_layer(output)?);
+        let diagnostics = diagnostics.and_then(|diagnostic| {
+            match diagnostic.to_msgpack_bytes().and_then(|bytes| {
+                let registry_handle = self.registry_handle_for_attachment_write()?;
+                let descriptor = registry_handle.registry().store_layer_blob(
+                    media_types::diagnostic_msgpack(),
+                    &bytes,
+                    HashMap::new(),
+                )?;
+                Ok(Descriptor::from(descriptor))
+            }) {
+                Ok(descriptor) => Some(descriptor),
+                Err(error) => {
+                    tracing::warn!(
+                        error = %error,
+                        "Failed to store Solve diagnostics; recording Solve without diagnostics"
+                    );
+                    None
+                }
+            }
+        });
+        let state = self.open_mut()?;
+        insert_solve(
+            state,
+            SolveEntryDyn {
+                solve_id,
+                status: SolveStatus::Finished,
+                input,
+                output: Some(output),
+                adapter,
+                adapter_options,
+                diagnostics,
+            },
+        )?;
+        Ok(solve_id)
+    }
+
     /// Log one failed solver call with adapter diagnostics.
     ///
     /// Failed solve attempts have an input, adapter metadata, and optional
-    /// diagnostics, but no output Solution.
+    /// diagnostics, but no output.
     pub fn log_failed_solve(&mut self, record: FailedSolveRecord<'_>) -> Result<u64> {
         ensure!(
             record.status != SolveStatus::Finished,

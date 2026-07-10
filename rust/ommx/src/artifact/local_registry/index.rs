@@ -1179,6 +1179,9 @@ fn experiment_ref_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Experime
         .map_err(|err| rusqlite::Error::FromSqlConversionFailure(7, Type::Blob, Box::new(err)))?;
     let typed_config: ExperimentConfig = serde_json::from_slice(&config_json)
         .map_err(|err| rusqlite::Error::FromSqlConversionFailure(7, Type::Blob, Box::new(err)))?;
+    typed_config
+        .validate_format_version()
+        .map_err(|err| rusqlite::Error::FromSqlConversionFailure(7, Type::Blob, err.into()))?;
     crate::experiment::ExperimentStatus::from_config(&typed_config.status)
         .map_err(|err| rusqlite::Error::FromSqlConversionFailure(7, Type::Blob, err.into()))?;
     let run_count = u64::try_from(typed_config.runs.len())

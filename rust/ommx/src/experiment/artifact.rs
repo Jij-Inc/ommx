@@ -1,6 +1,9 @@
 //! Mapping an unsealed Experiment state to an immutable OMMX Artifact.
 
-use super::config::{ExperimentConfig, ExperimentConfigRun, ExperimentConfigSolve, LayerRef};
+use super::config::{
+    ExperimentConfig, ExperimentConfigRun, ExperimentConfigSolve, LayerRef,
+    CURRENT_EXPERIMENT_CONFIG_FORMAT_VERSION,
+};
 use super::parameter::RunParameterTable;
 use super::{experiment_manifest_record_from_artifact, UnsealedExperimentState};
 use super::{
@@ -233,6 +236,7 @@ impl<'reg> UnsealedExperimentState<'reg> {
         }
 
         Ok(ExperimentConfig {
+            format_version: CURRENT_EXPERIMENT_CONFIG_FORMAT_VERSION,
             status: status.to_string(),
             requested_image_name: requested_image_name.map(ToString::to_string),
             attachments,

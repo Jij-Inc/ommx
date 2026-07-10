@@ -343,17 +343,14 @@ impl SolveDyn {
             .transpose()
     }
 
-    pub fn output_solution(&self) -> Result<Option<Solution>> {
+    /// Decode the typed output returned by this Solve.
+    pub fn output(&self) -> Result<Option<super::SolveOutput>> {
         let Some(descriptor) = self.output_descriptor()? else {
             return Ok(None);
         };
-        media_types::solution_payload_version(descriptor.media_type())
-            .with_context(|| format!("Invalid Solve {} output", self.solve_id))?;
-        Ok(Some(
-            self.registry_handle
-                .registry()
-                .get_solution_layer(&descriptor)?,
-        ))
+        Ok(Some(super::decode_solve_output(&descriptor).with_context(
+            || format!("Invalid Solve {} output", self.solve_id),
+        )?))
     }
 
     /// Raw MessagePack bytes of the adapter diagnostics payload.

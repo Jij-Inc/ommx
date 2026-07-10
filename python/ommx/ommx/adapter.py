@@ -116,7 +116,18 @@ class SamplerAdapter(SolverAdapter):
 
     @classmethod
     @abstractmethod
-    def sample(cls, ommx_instance: Instance) -> SampleSet:
+    def sample(
+        cls,
+        ommx_instance: Instance,
+        *,
+        diagnostics: DiagnosticsSink | None = None,
+    ) -> SampleSet:
+        """Sample an OMMX instance.
+
+        ``Run.log_sample`` owns the reserved ``diagnostics`` keyword and uses
+        it the same way as ``Run.log_solve``. ``None`` means diagnostics are
+        disabled.
+        """
         pass
 
     @property

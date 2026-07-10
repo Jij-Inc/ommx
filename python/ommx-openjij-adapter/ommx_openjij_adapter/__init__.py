@@ -120,7 +120,9 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         uniform_penalty_weight: Optional[float] = None,
         penalty_weights: dict[int, float] = {},
         inequality_integer_slack_max_range: int = 32,
+        diagnostics: DiagnosticsSink | None = None,
     ) -> SampleSet:
+        _ = diagnostics
         with _tracer.start_as_current_span("sample") as span:
             span.set_attribute("adapter", f"{cls.__module__}.{cls.__qualname__}")
             sampler = cls(
@@ -178,6 +180,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
             uniform_penalty_weight=uniform_penalty_weight,
             penalty_weights=penalty_weights,
             inequality_integer_slack_max_range=inequality_integer_slack_max_range,
+            diagnostics=diagnostics,
         )
         return sample_set.best_feasible
 
