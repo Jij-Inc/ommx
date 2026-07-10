@@ -137,17 +137,13 @@ enum PartialEvaluatePlan {
 
 impl PartialEvaluatePlan {
     fn prepare(instance: &Instance, state: &v1::State, atol: ATol) -> Result<Option<Self>> {
-        let fixed_values_only = Self::supports_fixed_values_only_fast_path(instance);
-        if fixed_values_only {
-            if !Self::supports_regular_shape(instance) {
-                return Ok(None);
-            }
+        if Self::supports_fixed_values_only_fast_path(instance) {
             return Ok(Some(Self::FixedValuesOnly {
                 fixed_values: Self::prepare_fixed_values(instance, state, atol)?,
             }));
         }
 
-        if !Self::has_removed_regular_rows(instance) || !Self::supports_regular_shape(instance) {
+        if !Self::supports_regular_replacement_shape(instance) {
             return Ok(None);
         }
 
@@ -184,9 +180,7 @@ impl PartialEvaluatePlan {
         state: &v1::State,
         atol: ATol,
     ) -> Result<Option<Self>> {
-        if !Self::supports_regular_shape(instance)
-            || !Self::supports_fixed_values_only_fast_path(instance)
-        {
+        if !Self::supports_fixed_values_only_fast_path(instance) {
             return Ok(None);
         }
 
@@ -195,27 +189,30 @@ impl PartialEvaluatePlan {
         }))
     }
 
-    fn supports_regular_shape(instance: &Instance) -> bool {
+    fn has_no_active_special_constraints(instance: &Instance) -> bool {
         instance.indicator_constraint_collection.active().is_empty()
-            && instance
-                .indicator_constraint_collection
-                .removed()
-                .is_empty()
             && instance.one_hot_constraint_collection.active().is_empty()
-            && instance.one_hot_constraint_collection.removed().is_empty()
             && instance.sos1_constraint_collection.active().is_empty()
-            && instance.sos1_constraint_collection.removed().is_empty()
-            && instance.decision_variable_dependency.is_empty()
     }
 
     fn supports_fixed_values_only_fast_path(instance: &Instance) -> bool {
         instance.objective.required_ids().is_empty()
             && instance.constraint_collection.active().is_empty()
+            && Self::has_no_active_special_constraints(instance)
+            && instance.decision_variable_dependency.is_empty()
             && instance.named_functions.required_ids().is_empty()
     }
 
-    fn has_removed_regular_rows(instance: &Instance) -> bool {
-        !instance.constraint_collection.removed().is_empty()
+    fn supports_regular_replacement_shape(instance: &Instance) -> bool {
+        Self::has_no_active_special_constraints(instance)
+            && instance
+                .indicator_constraint_collection
+                .removed()
+                .is_empty()
+            && instance.one_hot_constraint_collection.removed().is_empty()
+            && instance.sos1_constraint_collection.removed().is_empty()
+            && instance.decision_variable_dependency.is_empty()
+            && !instance.constraint_collection.removed().is_empty()
     }
 
     fn prepare_fixed_values(
@@ -979,6 +976,51 @@ mod tests {
         assert_eq!(instance.removed_constraints(), &removed_before);
     }
 
+    #[test]
+    fn test_partial_evaluate_fixed_values_only_fast_path_allows_removed_special_rows() {
+        use crate::{DecisionVariable, OneHotConstraint, OneHotConstraintID};
+
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::from([
+                (VariableID::from(1), DecisionVariable::binary()),
+                (VariableID::from(2), DecisionVariable::binary()),
+                (VariableID::from(3), DecisionVariable::binary()),
+                (VariableID::from(4), DecisionVariable::continuous()),
+            ]))
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap();
+        instance
+            .one_hot_constraint_collection
+            .insert_active_with_context(
+                OneHotConstraintID::from(1),
+                OneHotConstraint::new([1, 2, 3].into_iter().map(VariableID::from).collect())
+                    .unwrap(),
+                crate::ConstraintContext::default(),
+            )
+            .unwrap();
+        instance
+            .partial_evaluate(&v1::State::from(HashMap::from([(2, 1.0)])), ATol::default())
+            .unwrap();
+
+        let removed_before = instance.removed_one_hot_constraints().clone();
+        let state = v1::State::from(HashMap::from([(4, 2.0)]));
+        assert!(matches!(
+            PartialEvaluatePlan::prepare(&instance, &state, ATol::default()).unwrap(),
+            Some(PartialEvaluatePlan::FixedValuesOnly { .. })
+        ));
+
+        instance.partial_evaluate(&state, ATol::default()).unwrap();
+
+        assert_eq!(
+            instance.fixed_decision_variable_value(VariableID::from(4)),
+            Some(2.0)
+        );
+        assert_eq!(instance.removed_one_hot_constraints(), &removed_before);
+    }
+
     fn regular_plan_instance() -> Instance {
         let named_function_id = crate::NamedFunctionID::from(1);
         let constraint_id = ConstraintID::from(1);
@@ -1031,11 +1073,10 @@ mod tests {
         let instance = regular_plan_instance();
         let state = v1::State::from(HashMap::from([(1, 2.0)]));
 
-        assert!(
-            PartialEvaluatePlan::prepare(&instance, &state, ATol::default())
-                .unwrap()
-                .is_some()
-        );
+        assert!(matches!(
+            PartialEvaluatePlan::prepare(&instance, &state, ATol::default()).unwrap(),
+            Some(PartialEvaluatePlan::RegularReplacement { .. })
+        ));
 
         let mut borrowed = instance.clone();
         borrowed.partial_evaluate(&state, ATol::default()).unwrap();
@@ -1091,6 +1132,10 @@ mod tests {
 
     #[test]
     fn test_partial_evaluate_regular_plan_error_leaves_original_unchanged() {
+        let removed_reason = RemovedReason {
+            reason: "test".to_string(),
+            parameters: Default::default(),
+        };
         let mut instance = Instance::builder()
             .sense(Sense::Minimize)
             .objective(Function::from((coeff!(f64::MAX) * linear!(1)).unwrap()))
@@ -1099,8 +1144,24 @@ mod tests {
                 crate::DecisionVariable::continuous(),
             )]))
             .constraints(BTreeMap::new())
+            .removed_constraints(BTreeMap::from([(
+                ConstraintID::from(1),
+                (
+                    Constraint::equal_to_zero(Function::from(linear!(1))),
+                    removed_reason,
+                ),
+            )]))
             .build()
             .unwrap();
+        assert!(matches!(
+            PartialEvaluatePlan::prepare(
+                &instance,
+                &v1::State::from(HashMap::from([(1, 1.0)])),
+                ATol::default(),
+            )
+            .unwrap(),
+            Some(PartialEvaluatePlan::RegularReplacement { .. })
+        ));
         let before = instance.clone();
 
         let err = instance
@@ -1121,6 +1182,10 @@ mod tests {
     fn test_partial_evaluate_active_special_constraint_stays_on_fallback_path() {
         use crate::{DecisionVariable, OneHotConstraint, OneHotConstraintID};
 
+        let removed_reason = RemovedReason {
+            reason: "test".to_string(),
+            parameters: Default::default(),
+        };
         let mut instance = Instance::builder()
             .sense(Sense::Minimize)
             .objective(Function::from(
@@ -1132,8 +1197,20 @@ mod tests {
                 (VariableID::from(3), DecisionVariable::binary()),
             ]))
             .constraints(BTreeMap::new())
+            .removed_constraints(BTreeMap::from([(
+                ConstraintID::from(10),
+                (
+                    Constraint::equal_to_zero(Function::from(linear!(1))),
+                    removed_reason,
+                ),
+            )]))
             .build()
             .unwrap();
+        let state = v1::State::from(HashMap::from([(2, 1.0)]));
+        assert!(matches!(
+            PartialEvaluatePlan::prepare(&instance, &state, ATol::default()).unwrap(),
+            Some(PartialEvaluatePlan::RegularReplacement { .. })
+        ));
         instance
             .one_hot_constraint_collection
             .insert_active_with_context(
@@ -1143,7 +1220,6 @@ mod tests {
                 crate::ConstraintContext::default(),
             )
             .unwrap();
-        let state = v1::State::from(HashMap::from([(2, 1.0)]));
 
         assert!(
             PartialEvaluatePlan::prepare(&instance, &state, ATol::default())
@@ -1225,11 +1301,22 @@ mod tests {
             (VariableID::from(1), crate::DecisionVariable::continuous()),
             (VariableID::from(10), crate::DecisionVariable::continuous()),
         ]);
+        let removed_reason = RemovedReason {
+            reason: "test".to_string(),
+            parameters: Default::default(),
+        };
         Instance::builder()
             .sense(Sense::Minimize)
             .objective(Function::from(linear!(1)))
             .decision_variables(decision_variables)
             .constraints(BTreeMap::new())
+            .removed_constraints(BTreeMap::from([(
+                ConstraintID::from(1),
+                (
+                    Constraint::equal_to_zero(Function::from(linear!(1))),
+                    removed_reason,
+                ),
+            )]))
             .decision_variable_dependency(crate::assign! {
                 10 <- coeff!(2.0) * linear!(1)
             })

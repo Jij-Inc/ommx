@@ -2,10 +2,11 @@
 //!
 //! Expression families vary total term count while assignment density is one,
 //! half, or all required IDs; each should traverse terms linearly. Instance
-//! families originate from issue #1027 and compare removed-only transaction
-//! overhead with active-constraint atomic and consuming paths. Each Instance
-//! family should remain O(C) in the constraint count C; the consuming path is
-//! expected to avoid the atomic path's whole-Instance clone constant.
+//! families originate from issue #1027. Removed-only and active families scale
+//! state or semantic work with the constraint count C and should remain O(C).
+//! The mixed-regular family holds state and active work fixed while C removed
+//! rows grow, so its Plan/Commit path should avoid O(C) removed-row traversal;
+//! O(C) growth would indicate that whole-Instance cloning returned.
 
 use criterion::{
     criterion_group, criterion_main, AxisScale, BenchmarkId, Criterion, PlotConfiguration,
@@ -80,7 +81,7 @@ fn active_constraint_instance(num_constraints: usize) -> (Instance, ommx::v1::St
     (instance, state)
 }
 
-fn regular_plan_mixed_instance(num_removed_constraints: usize) -> (Instance, ommx::v1::State) {
+fn mixed_regular_instance(num_removed_constraints: usize) -> (Instance, ommx::v1::State) {
     let active_var = VariableID::from(num_removed_constraints as u64);
     let objective_var = VariableID::from(num_removed_constraints as u64 + 1);
     let named_var = VariableID::from(num_removed_constraints as u64 + 2);
@@ -118,8 +119,9 @@ fn regular_plan_mixed_instance(num_removed_constraints: usize) -> (Instance, omm
             function: Function::from(linear!(named_var.into_inner())),
         },
     )]);
-    let state = (0..num_removed_constraints as u64 + 3)
-        .map(|id| (id, 0.0))
+    let state = [active_var, objective_var, named_var]
+        .into_iter()
+        .map(|id| (id.into_inner(), 0.0))
         .collect();
     let instance = Instance::builder()
         .sense(Sense::Minimize)
@@ -217,22 +219,27 @@ fn partial_evaluate_instance_active_constraints(c: &mut Criterion) {
     group.finish();
 }
 
-/// Substitute all decision variables in an Instance with a large removed
-/// regular-constraint table plus non-empty objective, active regular
-/// constraints, and named functions.
-fn partial_evaluate_instance_regular_plan_mixed(c: &mut Criterion) {
+/// Persistent scaling guardrail for issue #1027 and PR #1048.
+///
+/// The removed regular-constraint count is the only growing dimension. The
+/// state, objective, active regular constraints, and named functions stay fixed,
+/// so private Plan/Commit should avoid O(C) removed-table work; clone-backed
+/// fallback would add it. The measured boundary is borrowed atomic
+/// `Instance::partial_evaluate`; `iter_batched_ref` keeps fixture cloning outside
+/// that boundary. The existing three Instance scale points bound runner cost.
+fn partial_evaluate_instance_mixed_regular(c: &mut Criterion) {
     let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
-    let mut group = c.benchmark_group("partial-evaluate-instance-regular-plan-mixed");
+    let mut group = c.benchmark_group("partial-evaluate-instance-mixed-regular");
     group.plot_config(plot_config);
 
     for num_removed_constraints in [1_000, 8_000, 32_000] {
-        let (instance, state) = regular_plan_mixed_instance(num_removed_constraints);
+        let (instance, state) = mixed_regular_instance(num_removed_constraints);
         group.bench_with_input(
             BenchmarkId::new(
-                "partial-evaluate-instance-regular-plan-mixed-atomic",
+                "partial-evaluate-instance-mixed-regular-atomic",
                 num_removed_constraints.to_string(),
             ),
-            &(instance.clone(), state.clone()),
+            &(instance, state),
             |b, (instance, state)| {
                 b.iter_batched_ref(
                     || instance.clone(),
@@ -404,6 +411,6 @@ criterion_group!(
     partial_evaluate_polynomial_one,
     partial_evaluate_instance_removed_constraints,
     partial_evaluate_instance_active_constraints,
-    partial_evaluate_instance_regular_plan_mixed,
+    partial_evaluate_instance_mixed_regular,
 );
 criterion_main!(benches);
