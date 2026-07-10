@@ -54,12 +54,17 @@ __all__ = [
     "LinearLike",
     "NamedFunction",
     "OneHotConstraint",
+    "OneHotPromotionCertificate",
     "OpenSolve",
     "Optimality",
     "Parameter",
     "Parameters",
     "ParametricInstance",
     "Polynomial",
+    "PromotionAudit",
+    "PromotionPreview",
+    "PromotionReport",
+    "PromotionResult",
     "Provenance",
     "ProvenanceKind",
     "PruneAnonymousReport",
@@ -2875,6 +2880,53 @@ class Instance:
         Raises if any underlying Big-M conversion fails (e.g. a SOS1 variable
         with a non-finite bound).
         """
+    def check_promotion_certificate(
+        self,
+        certificate: OneHotPromotionCertificate,
+        allowed: builtins.set[AdditionalCapability],
+    ) -> PromotionPreview:
+        r"""
+        Check a detector-supplied one-hot promotion certificate without mutation.
+
+        ``allowed`` is the caller's capability boundary and must contain
+        :attr:`AdditionalCapability.OneHot`. The returned preview is
+        informational only; promotion methods re-validate the certificate
+        against the then-current instance.
+        """
+    def promote_with_certificate(
+        self,
+        certificate: OneHotPromotionCertificate,
+        allowed: builtins.set[AdditionalCapability],
+    ) -> PromotionResult:
+        r"""
+        Verify and atomically promote one regular constraint to one-hot form.
+
+        The source regular constraint is retained in ``removed_constraints``
+        with reserved ``promotion.*`` audit metadata, and its full context is
+        copied to the new active one-hot constraint. On error the instance is
+        unchanged.
+        """
+    def promote_with_certificates(
+        self,
+        certificates: typing.Sequence[OneHotPromotionCertificate],
+        allowed: builtins.set[AdditionalCapability],
+    ) -> PromotionReport:
+        r"""
+        Verify and atomically apply multiple one-hot promotion certificates.
+
+        Every certificate is checked against one pre-promotion snapshot.
+        Explicit target IDs are reserved before omitted IDs are allocated. Any
+        invalid or conflicting certificate leaves the instance unchanged.
+        """
+    def verify_promotion_history(
+        self, source_constraint_id: builtins.int
+    ) -> PromotionAudit:
+        r"""
+        Re-validate a retained one-hot promotion audit trail.
+
+        The removed regular source, reserved metadata, and active or removed
+        one-hot target are checked again without trusting the original detector.
+        """
     def to_v1_bytes(self) -> bytes: ...
     def to_v2_bytes(self) -> bytes: ...
     def __str__(self) -> builtins.str: ...
@@ -4623,6 +4675,49 @@ class OneHotConstraint:
     def __deepcopy__(self, _memo: typing.Any) -> OneHotConstraint: ...
 
 @typing.final
+class OneHotPromotionCertificate:
+    r"""
+    Detector-supplied witness for promoting a regular constraint to one-hot form.
+
+    Construction validates only the certificate's Python shape. Full semantic
+    validation is performed by :meth:`Instance.check_promotion_certificate` or
+    one of the promotion mutation methods against the current instance.
+    """
+    @property
+    def source_constraint_id(self) -> builtins.int:
+        r"""
+        Active regular constraint claimed to be one-hot.
+        """
+    @property
+    def variables(self) -> builtins.list[builtins.int]:
+        r"""
+        Claimed one-hot variable IDs in sorted order.
+        """
+    @property
+    def target_one_hot_constraint_id(self) -> typing.Optional[builtins.int]:
+        r"""
+        Requested target ID, or `None` when OMMX should allocate one.
+        """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __new__(
+        cls,
+        *,
+        source_constraint_id: builtins.int,
+        variables: typing.Sequence[builtins.int],
+        target_one_hot_constraint_id: typing.Optional[builtins.int] = None,
+    ) -> OneHotPromotionCertificate:
+        r"""
+        Create a one-hot promotion certificate.
+
+        **Args:**
+
+        - `source_constraint_id`: Active regular constraint claimed to be one-hot.
+        - `variables`: Claimed one-hot decision-variable IDs. Duplicates are rejected.
+        - `target_one_hot_constraint_id`: Optional requested target ID. Omit to allocate one.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class OpenSolve:
     r"""
     Context manager for a manually executed Solve inside a Run.
@@ -5313,6 +5408,66 @@ class Polynomial:
         r"""
         Create a greater-than-or-equal constraint: self >= other → Constraint
         """
+
+@typing.final
+class PromotionAudit:
+    r"""
+    Re-validated audit record for a previous one-hot promotion.
+    """
+    @property
+    def source_constraint_id(self) -> builtins.int: ...
+    @property
+    def variables(self) -> builtins.list[builtins.int]:
+        r"""
+        Original one-hot members reconstructed from the retained regular source.
+        """
+    @property
+    def target_one_hot_constraint_id(self) -> builtins.int: ...
+    @property
+    def target_is_active(self) -> builtins.bool:
+        r"""
+        Whether the target one-hot constraint is active rather than removed.
+        """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+
+@typing.final
+class PromotionPreview:
+    r"""
+    Informational result of checking a promotion certificate.
+
+    This object is not an applicable mutation plan. Promotion methods always
+    re-validate the original certificate against the current instance.
+    """
+    @property
+    def source_constraint_id(self) -> builtins.int: ...
+    @property
+    def variables(self) -> builtins.list[builtins.int]: ...
+    @property
+    def target_one_hot_constraint_id(self) -> builtins.int: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+
+@typing.final
+class PromotionReport:
+    r"""
+    Result of an all-or-nothing bulk promotion.
+    """
+    @property
+    def source_to_target(self) -> builtins.dict[builtins.int, builtins.int]:
+        r"""
+        Mapping from promoted regular constraint IDs to one-hot target IDs.
+        """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+
+@typing.final
+class PromotionResult:
+    r"""
+    Result of one successfully applied promotion.
+    """
+    @property
+    def source_constraint_id(self) -> builtins.int: ...
+    @property
+    def target_one_hot_constraint_id(self) -> builtins.int: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
 
 @typing.final
 class Provenance:

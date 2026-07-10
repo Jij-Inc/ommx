@@ -8,6 +8,39 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🆕 Verified one-hot promotion ([#1024](https://github.com/Jij-Inc/ommx/issues/1024))
+
+{class}`~ommx.OneHotPromotionCertificate` and the new
+{class}`~ommx.Instance` promotion methods let presolvers and other detectors
+promote an active regular equality such as `x1 + x2 + x3 = 1` to a first-class
+one-hot constraint. OMMX rechecks the witness exactly against the current
+instance: every member must be a binary decision variable, the complete
+function must be linear, and the coefficients and constant must form an exact
+nonzero scalar multiple of `sum(x) - 1`. Approximate and nonlinear matches are
+rejected.
+
+```python
+from ommx import AdditionalCapability, OneHotPromotionCertificate
+
+certificate = OneHotPromotionCertificate(
+    source_constraint_id=10,
+    variables=[1, 2, 3],
+)
+result = instance.promote_with_certificate(
+    certificate,
+    allowed={AdditionalCapability.OneHot},
+)
+```
+
+Use {meth}`~ommx.Instance.check_promotion_certificate` for a non-mutating
+preview and {meth}`~ommx.Instance.promote_with_certificates` for all-or-nothing
+bulk promotion. The original regular constraint is retained as removed with
+reserved `promotion.*` metadata, while
+{meth}`~ommx.Instance.verify_promotion_history` re-validates the retained
+source and active or removed target. Restoring the source is rejected while
+that target remains in either lifecycle state, including after
+{meth}`~ommx.Instance.reduce_capabilities` lowers the one-hot constraint again.
+
 ### ⚠ Dedicated Experiment artifact type ([#1033](https://github.com/Jij-Inc/ommx/pull/1033))
 
 Committed Experiment artifacts now write `application/org.ommx.v1.experiment`

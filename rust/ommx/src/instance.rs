@@ -18,6 +18,7 @@ mod parametric_builder;
 mod parse;
 mod pass;
 mod penalty;
+mod promotion;
 mod qubo;
 mod reduce_binary_power;
 mod serialize;
@@ -32,6 +33,10 @@ pub use analysis::*;
 pub use arbitrary::{InstanceParameters, InstanceSpace};
 pub use builder::*;
 pub use parametric_builder::*;
+pub use promotion::{
+    OneHotPromotionCertificate, PromotionAudit, PromotionCertificate, PromotionPreview,
+    PromotionReport, PromotionResult,
+};
 pub use stats::*;
 
 use crate::{
@@ -48,6 +53,56 @@ use crate::{
     VariableIDSet,
 };
 use std::collections::{BTreeMap, HashMap};
+
+const ONE_HOT_PROMOTION_REASON: &str = "ommx.Instance.promote_constraint_to_one_hot";
+const PROMOTION_KIND_PARAMETER: &str = "promotion.kind";
+const PROMOTION_TARGET_ID_PARAMETER: &str = "promotion.target_id";
+const PROMOTION_CERTIFICATE_VERSION_PARAMETER: &str = "promotion.certificate_version";
+const ONE_HOT_PROMOTION_KIND: &str = "one_hot";
+const PROMOTION_CERTIFICATE_VERSION: &str = "1";
+
+fn promoted_one_hot_target(
+    removed_reason: &RemovedReason,
+) -> crate::Result<Option<crate::OneHotConstraintID>> {
+    if removed_reason.reason != ONE_HOT_PROMOTION_REASON {
+        return Ok(None);
+    }
+
+    let kind = removed_reason
+        .parameters
+        .get(PROMOTION_KIND_PARAMETER)
+        .ok_or_else(|| {
+            crate::error!("Promotion metadata is missing parameter {PROMOTION_KIND_PARAMETER:?}")
+        })?;
+    if kind != ONE_HOT_PROMOTION_KIND {
+        crate::bail!("Unsupported promotion kind {kind:?} in removed-constraint metadata");
+    }
+
+    let version = removed_reason
+        .parameters
+        .get(PROMOTION_CERTIFICATE_VERSION_PARAMETER)
+        .ok_or_else(|| {
+            crate::error!(
+                "Promotion metadata is missing parameter {PROMOTION_CERTIFICATE_VERSION_PARAMETER:?}"
+            )
+        })?;
+    if version != PROMOTION_CERTIFICATE_VERSION {
+        crate::bail!("Unsupported promotion certificate version {version:?}");
+    }
+
+    let raw_target_id = removed_reason
+        .parameters
+        .get(PROMOTION_TARGET_ID_PARAMETER)
+        .ok_or_else(|| {
+            crate::error!(
+                "Promotion metadata is missing parameter {PROMOTION_TARGET_ID_PARAMETER:?}"
+            )
+        })?;
+    let target_id = raw_target_id.parse::<u64>().map_err(|error| {
+        crate::error!("Invalid one-hot promotion target ID {raw_target_id:?}: {error}")
+    })?;
+    Ok(Some(crate::OneHotConstraintID::from(target_id)))
+}
 
 /// A constraint type capability flag for non-standard constraint types.
 ///
@@ -126,8 +181,8 @@ pub enum Sense {
 /// - expression-algebra actions such as substitution, partial evaluation, and
 ///   binary-power reduction;
 /// - variable-space extensions such as slack-variable introduction;
-/// - constraint-family morphisms such as one-hot, indicator, and SOS1
-///   conversion into regular constraints;
+/// - constraint-family morphisms such as verified regular-to-one-hot promotion
+///   and one-hot, indicator, or SOS1 conversion into regular constraints;
 /// - lifecycle actions such as relax and restore;
 /// - unit propagation as a rewrite system over constraints plus assignment
 ///   state;
@@ -200,11 +255,11 @@ pub enum Sense {
 /// [`Self::add_constraint`] / [`Self::add_indicator_constraint`] /
 /// [`Self::add_one_hot_constraint`] / [`Self::add_sos1_constraint`], and the
 /// internal `relax_constraint` / `relax_indicator_constraint` /
-/// `convert_all_one_hots_to_constraints` / `convert_all_sos1_to_constraints`
-/// paths that populate the removed maps. Constraint-family storage is mutated
-/// through operation-level collection primitives so active/removed
-/// disjointness, removed reasons, and context sidecars remain attached to
-/// owned row IDs.
+/// `promote_with_certificate` / `convert_all_one_hots_to_constraints` /
+/// `convert_all_sos1_to_constraints` paths that populate the removed maps.
+/// Constraint-family storage is mutated through operation-level collection
+/// primitives so active/removed disjointness, removed reasons, and context
+/// sidecars remain attached to owned row IDs.
 ///
 #[derive(
     Debug,

@@ -21,6 +21,7 @@ impl Instance {
     }
 
     pub fn restore_constraint(&mut self, id: ConstraintID) -> Result<()> {
+        super::promotion::ensure_promoted_constraint_can_be_restored(self, id)?;
         let fixed_state = self.fixed_state();
         let dependency = self.decision_variable_dependency.clone();
         let mut constraint = self
