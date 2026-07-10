@@ -685,6 +685,38 @@ mod table_tests {
     }
 
     #[test]
+    fn replace_rows_preserves_labels_and_rejects_unknown_ids_atomically() {
+        let id = NamedFunctionID::from(0);
+        let row = NamedFunction {
+            function: Function::Zero,
+        };
+        let mut labels = NamedFunctionLabelStore::default();
+        labels.set_name(id, "cost");
+        let mut table = NamedFunctionTable::new(BTreeMap::from([(id, row)]), labels).unwrap();
+
+        let replacement = NamedFunction {
+            function: Function::from(crate::linear!(1)),
+        };
+        table
+            .replace_rows(BTreeMap::from([(id, replacement.clone())]))
+            .unwrap();
+        assert_eq!(table.get(&id), Some(&replacement));
+        assert_eq!(table.labels().name(id), Some("cost"));
+
+        let before = table.clone();
+        let err = table
+            .replace_rows(BTreeMap::from([(
+                NamedFunctionID::from(1),
+                NamedFunction {
+                    function: Function::Zero,
+                },
+            )]))
+            .unwrap_err();
+        assert!(err.to_string().contains("not found"));
+        assert_eq!(table, before);
+    }
+
+    #[test]
     fn parse_v2_evaluated_rejects_non_finite_value() {
         let proto = crate::v2::EvaluatedNamedFunction {
             evaluated_value: f64::INFINITY,

@@ -13,23 +13,32 @@ impl Instance {
         if binary_ids.is_empty() {
             return Ok(false);
         }
-        let mut changed = false;
-        let mut updated = self.clone();
-        changed |= updated.objective.reduce_binary_power(&binary_ids)?;
+
+        // Plan: compute the rewritten objective and active-constraint
+        // replacements on copies of only the touched fields, without cloning
+        // removed constraints, special constraints, named functions, or
+        // metadata. All fallible steps happen here, before `self` is
+        // mutated, so a `CoefficientError` never leaves `self` partially
+        // rewritten.
+        let mut new_objective = self.objective.clone();
+        let mut changed = new_objective.reduce_binary_power(&binary_ids)?;
         let mut replacements = BTreeMap::new();
-        for (&id, constraint) in updated.constraint_collection.active() {
+        for (&id, constraint) in self.constraint_collection.active() {
             let mut constraint = constraint.clone();
             if constraint.reduce_binary_power(&binary_ids)? {
                 changed = true;
                 replacements.insert(id, constraint);
             }
         }
-        updated
-            .constraint_collection
+
+        // Commit: only the touched fields are written, so this drops just
+        // the old objective and the old versions of the touched active
+        // constraints, not the whole instance.
+        self.objective = new_objective;
+        self.constraint_collection
             .replace_active_rows(replacements)
             .expect("replacement IDs were read from active constraints");
         // Note: We don't need to reduce in removed_constraints since they are not active
-        *self = updated;
         Ok(changed)
     }
 }
