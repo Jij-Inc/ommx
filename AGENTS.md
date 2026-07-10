@@ -123,6 +123,10 @@ Run `task -l` to see all available commands.
 - When a diff touches an `Arbitrary` implementation, a `*Parameters` strategy type, or what a default strategy generates, use `.agents/skills/proptest-arbitrary-review/SKILL.md`.
 - Enumerate every call site whose quantification domain changes, distinguish sampled dimensions from constant injected structure, and verify by running the affected proptest suites.
 
+### Benchmark Review
+- When reviewing, designing, or triaging benchmarks, CodSpeed results, flamegraphs, performance PRs/issues, or benchmark workload changes, use `.agents/skills/benchmark-review/SKILL.md`.
+- Treat each benchmark as a hypothesis-driven measurement: state the intended regression signal, cost model, expected scaling/flamegraph, and the layer where the benchmark belongs.
+
 ### Rust SDK Artifact API Boundaries
 - Treat new public Rust artifact APIs as SDK commitments, not just convenient access to registry or manifest internals.
 - Keep raw OCI `Descriptor` exposure limited to low-level manifest or registry escape hatches that genuinely need OCI identity.

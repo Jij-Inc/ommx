@@ -19,6 +19,8 @@ issue labels, implementation guesses, or stale memory.
   tags.
 - Inspect the actual diff against the PR base branch before deciding `rust`,
   `python`, `proto`, or `documentation`.
+- Apply `bug` and `breaking change` from the latest stable OMMX release user's
+  viewpoint, because these labels must make sense in user-facing release notes.
 - Apply all labels that are semantically true. Do not omit a true label just to
   force one release category unless the maintainer explicitly asks for that.
 - Do not use this skill for GitHub issue triage. Use `ommx-issue-triage` for
@@ -38,7 +40,7 @@ live file and explain the difference.
 | `proto` | `proto/` schema or the generated protobuf contract changes. Examples: message fields, enums, field numbers, wire-format compatibility, or Buf-published schema behavior. | The PR only documents protobuf concepts without changing the schema or generated protobuf contract. |
 | `documentation` | The PR is documentation-only: Sphinx pages, migration guides, tutorials, examples, rustdoc prose, release notes, or API reference wiring with no code/proto behavior change. | Docs accompany a Rust/Python/proto behavior change. In that case, label the changed surface instead of adding `documentation` merely because docs were updated. |
 | `bug` | The PR fixes behavior that was wrong in the latest stable OMMX release and should be reported to users as a bug fix. This may combine with `rust`, `python`, or `proto` when the stable-release bug affected those surfaces. | The PR only fixes behavior that existed on `main`, in a prerelease such as alpha, or after the latest stable release and was never shipped to stable-release users; the PR is cleanup, a feature, docs-only work, or preventive hardening without a stable-release-user-visible failure. |
-| `breaking change` | The PR intentionally breaks compatibility or requires user migration. Combine it with the affected surface labels. | The change is additive or internal, even if the implementation was large. |
+| `breaking change` | The PR intentionally breaks compatibility with the latest stable OMMX release or requires stable-release users to migrate. Combine it with the affected surface labels. | The change is additive or internal, only breaks unreleased work on `main`, only changes a prerelease or alpha artifact/API before the next stable release, or would not require migration for users coming from the latest stable release. |
 | `dependencies` | A dependency update PR should be excluded from release notes according to `.github/release.yml`. Leave Dependabot-owned labels alone unless the user asks. | Ordinary feature, bug-fix, docs, schema, or SDK work. |
 
 ## Workflow
@@ -61,18 +63,25 @@ live file and explain the difference.
      docs can confirm a public API change, but pure regeneration noise is not
      enough.
 
-3. Apply the `bug` label only from a stable-release-user viewpoint.
+3. Apply the `bug` and `breaking change` labels only from a
+   stable-release-user viewpoint.
    - Before adding `bug`, identify whether the bad behavior existed in the
      latest stable OMMX release for the affected surface. Check release notes,
      stable tags, or the PR/issue history when this is not obvious from the
      diff.
+   - Before adding `breaking change`, identify whether the PR breaks a contract
+     that existed in the latest stable OMMX release or requires users migrating
+     from that stable release to change code, data, artifacts, or workflows.
    - Use `bug` only when a user who stayed on the latest stable release could
      have hit the bad behavior and should see the PR summarized as a bug fix in
      GitHub Release notes.
-   - Do not use `bug` for corrections to unreleased work already on `main`,
-     prerelease-only regressions such as alpha-to-alpha fixes, follow-up fixes
-     before the next stable release, test-only failures, or internal consistency
-     fixes that no stable-release user could observe.
+   - Use `breaking change` only when a user coming from the latest stable
+     release needs a migration warning in GitHub Release notes.
+   - Do not use `bug` or `breaking change` for corrections to unreleased work
+     already on `main`, prerelease-only regressions or format changes such as
+     alpha-to-alpha fixes, follow-up fixes before the next stable release,
+     test-only failures, or internal consistency fixes that no stable-release
+     user could observe.
 
 4. Separate docs-only from docs-accompanying-code.
    - If the PR only changes docs, examples, migration text, release notes, or

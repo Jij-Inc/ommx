@@ -1,7 +1,22 @@
+"""Persistent Python scaling guardrails for ``Instance.to_qubo``.
+
+``to_qubo`` is a Python driver API that sequences several Rust transformations,
+so the public boundary is part of the measured operation. The pseudo-Boolean
+family originates from issue #404 and PR #495 and varies the number of terms to
+guard the expected output-sensitive cost: penalizing an N-term equality creates
+Theta(N^2) QUBO coefficients, so conversion should not grow beyond quadratic.
+The bounded 10/32/100 inputs retain that trend without restoring the 1,000-term
+profile that dominated the CodSpeed workflow. The defensive copy is included
+because the driver consumes mutable instance state.
+"""
+
 import pytest
 import random
 from copy import deepcopy
 from ommx import DecisionVariable, Instance
+
+
+pytestmark = pytest.mark.benchmark_guardrail
 
 
 @pytest.fixture
@@ -19,7 +34,7 @@ def small():
     return instance
 
 
-@pytest.fixture(params=[10, 100, 1000])
+@pytest.fixture(params=[10, 32, 100])
 def pseudo_boolean_inequality(request):
     num_terms: int = request.param
     x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(num_terms)]
@@ -54,9 +69,11 @@ def to_qubo(instance: Instance):
 
 @pytest.mark.benchmark
 def test_to_qubo_small(small: Instance):
+    """Track fixed boundary cost for a tiny integer-constrained model."""
     to_qubo(small)
 
 
 @pytest.mark.benchmark
 def test_to_qubo_pbi(pseudo_boolean_inequality: Instance):
+    """Track scaling with the pseudo-Boolean inequality term count."""
     to_qubo(pseudo_boolean_inequality)
