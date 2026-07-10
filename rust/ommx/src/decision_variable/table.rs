@@ -350,6 +350,33 @@ impl DecisionVariableTable<Created> {
         Ok(())
     }
 
+    /// Merge host-validated fixed values without overwriting existing values.
+    ///
+    /// Crate-internal: root objects such as [`crate::Instance`] use this when a
+    /// larger operation has already validated ID ownership, kind/bound
+    /// consistency, and overwrite conflicts for every entry.
+    pub(crate) fn merge_validated_fixed_values(
+        &mut self,
+        fixed_values: BTreeMap<VariableID, f64>,
+        atol: ATol,
+    ) {
+        for (&id, &value) in &fixed_values {
+            debug_assert!(self
+                .entries
+                .get(&id)
+                .is_some_and(|row| row.check_value_consistency(id, value, atol).is_ok()));
+            debug_assert!(self
+                .columns
+                .fixed_values
+                .get(&id)
+                .is_none_or(|previous| previous.is_finite() && (*previous - value).abs() <= *atol));
+        }
+
+        for (id, value) in fixed_values {
+            self.columns.fixed_values.entry(id).or_insert(value);
+        }
+    }
+
     /// Insert one fresh row, its label, and optionally its fixed value.
     pub fn insert(
         &mut self,
