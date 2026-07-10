@@ -8,6 +8,26 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🆕 Configurable Experiment autosave frequency ([#1052](https://github.com/Jij-Inc/ommx/pull/1052))
+
+{class}`~ommx.experiment.Experiment` can now batch, rate-limit, or disable the
+rolling draft checkpoints written after Runs close. The default remains one
+checkpoint per closed Run. Autosave policies belong to the current unsealed
+session and do not disable failed or interrupted checkpoints produced when an
+Experiment context exits exceptionally.
+
+```python
+from ommx.experiment import AutosavePolicy, Experiment
+
+experiment = Experiment("example.com/team/sweep:latest")
+experiment.set_autosave_policy(AutosavePolicy.every_n_runs(25))
+```
+
+Use `AutosavePolicy.min_interval(seconds)` for time-based rate limiting or
+`AutosavePolicy.disabled()` when Run-close recovery checkpoints are not needed.
+See [Experiment Discovery, Recovery, and Cleanup](../user_guide/experiment.md)
+for the recovery and storage tradeoffs.
+
 ### 🆕 Artifact and Experiment listing from the Local Registry ([#1029](https://github.com/Jij-Inc/ommx/pull/1029))
 
 `ommx.artifact.list_artifacts()` now lists every OMMX Artifact ref from the
