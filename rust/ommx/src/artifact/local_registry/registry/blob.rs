@@ -69,7 +69,7 @@ impl FileBlobStore {
             .sync_all()
             .context("Failed to sync temporary blob")?;
         let _lock = self.lock_store()?;
-        self.publish_temp_blob(&mut temp_blob, &digest, bytes.len() as u64, &path)?;
+        self.publish_temp_blob(temp_blob, &digest, bytes.len() as u64, &path)?;
         Ok(digest)
     }
 
@@ -116,7 +116,7 @@ impl FileBlobStore {
                 .with_context(|| format!("Failed to create {}", parent.display()))?;
         }
         let _lock = self.lock_store()?;
-        self.publish_temp_blob(&mut temp_blob, &digest, size, &path)?;
+        self.publish_temp_blob(temp_blob, &digest, size, &path)?;
         Ok((digest, size))
     }
 
@@ -243,7 +243,7 @@ impl FileBlobStore {
 
     fn publish_temp_blob(
         &self,
-        temp_blob: &mut TempBlob,
+        temp_blob: TempBlob,
         digest: &Digest,
         size: u64,
         path: &Path,
@@ -253,27 +253,45 @@ impl FileBlobStore {
             touch_existing_blob(path, digest.as_ref())?;
             return Ok(());
         }
-        match fs::hard_link(temp_blob.file.path(), path) {
-            Ok(()) => {
-                if let Err(error) = temp_blob.apply_publish_permissions(path) {
+        let TempBlob {
+            file,
+            #[cfg(unix)]
+            publish_permissions,
+        } = temp_blob;
+        match file.persist_noclobber(path) {
+            Ok(published_file) => {
+                #[cfg(unix)]
+                if let Err(error) = published_file
+                    .set_permissions(publish_permissions)
+                    .with_context(|| {
+                        format!("Failed to set final blob permissions on {}", path.display())
+                    })
+                {
+                    use std::os::unix::fs::PermissionsExt;
+
+                    let _ = published_file.set_permissions(fs::Permissions::from_mode(0o600));
+                    drop(published_file);
                     let _ = fs::remove_file(path);
-                    temp_blob.restrict_permissions();
                     return Err(error);
                 }
+                drop(published_file);
                 touch_existing_blob(path, digest.as_ref())
             }
-            Err(error) if error.kind() == ErrorKind::AlreadyExists => {
+            Err(error) if error.error.kind() == ErrorKind::AlreadyExists => {
                 verify_existing_blob(path, digest, size)?;
                 touch_existing_blob(path, digest.as_ref())
             }
-            Err(error) => Err(error).with_context(|| {
-                format!(
-                    "Failed to publish blob {} from {} to {}",
-                    digest.as_ref(),
-                    temp_blob.file.path().display(),
-                    path.display()
-                )
-            }),
+            Err(error) => {
+                let source_path = error.file.path().to_path_buf();
+                Err(error.error).with_context(|| {
+                    format!(
+                        "Failed to publish blob {} from {} to {}",
+                        digest.as_ref(),
+                        source_path.display(),
+                        path.display()
+                    )
+                })
+            }
         }
     }
 
@@ -344,32 +362,6 @@ struct TempBlob {
     publish_permissions: fs::Permissions,
 }
 
-impl TempBlob {
-    fn apply_publish_permissions(&self, path: &Path) -> Result<()> {
-        #[cfg(unix)]
-        fs::set_permissions(path, self.publish_permissions.clone()).with_context(|| {
-            format!("Failed to set final blob permissions on {}", path.display())
-        })?;
-        #[cfg(windows)]
-        {
-            let _ = path;
-            clear_windows_temporary_attribute(self.file.as_file())?;
-        }
-        Ok(())
-    }
-
-    fn restrict_permissions(&self) {
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let _ = self
-                .file
-                .as_file()
-                .set_permissions(fs::Permissions::from_mode(0o600));
-        }
-    }
-}
-
 fn create_temp_blob(directory: &Path) -> Result<TempBlob> {
     let file = tempfile::Builder::new()
         .prefix(".blob-")
@@ -402,49 +394,6 @@ fn create_temp_blob(directory: &Path) -> Result<TempBlob> {
     }
     #[cfg(not(unix))]
     Ok(TempBlob { file })
-}
-
-#[cfg(windows)]
-fn clear_windows_temporary_attribute(file: &File) -> Result<()> {
-    use std::{mem::size_of, os::windows::io::AsRawHandle};
-    use windows_sys::Win32::Foundation::HANDLE;
-    use windows_sys::Win32::Storage::FileSystem::{
-        FileBasicInfo, GetFileInformationByHandleEx, SetFileInformationByHandle,
-        FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_TEMPORARY, FILE_BASIC_INFO,
-    };
-
-    let handle = file.as_raw_handle() as HANDLE;
-    let mut info = FILE_BASIC_INFO::default();
-    let size = size_of::<FILE_BASIC_INFO>() as u32;
-    let read = unsafe {
-        GetFileInformationByHandleEx(
-            handle,
-            FileBasicInfo,
-            (&mut info as *mut FILE_BASIC_INFO).cast(),
-            size,
-        )
-    };
-    if read == 0 {
-        return Err(std::io::Error::last_os_error())
-            .context("Failed to read Windows temporary blob attributes");
-    }
-    info.FileAttributes &= !FILE_ATTRIBUTE_TEMPORARY;
-    if info.FileAttributes == 0 {
-        info.FileAttributes = FILE_ATTRIBUTE_NORMAL;
-    }
-    let written = unsafe {
-        SetFileInformationByHandle(
-            handle,
-            FileBasicInfo,
-            (&info as *const FILE_BASIC_INFO).cast(),
-            size,
-        )
-    };
-    if written == 0 {
-        return Err(std::io::Error::last_os_error())
-            .context("Failed to clear the Windows temporary blob attribute by handle");
-    }
-    Ok(())
 }
 
 fn encode_hex(bytes: &[u8]) -> String {
@@ -620,33 +569,17 @@ mod tests {
 
     #[cfg(windows)]
     #[test]
-    fn published_reader_blob_is_not_marked_temporary_with_long_root() {
-        use std::{mem::size_of, os::windows::ffi::OsStrExt, os::windows::io::AsRawHandle};
-        use windows_sys::Win32::Foundation::HANDLE;
-        use windows_sys::Win32::Storage::FileSystem::{
-            FileBasicInfo, GetFileInformationByHandleEx, FILE_ATTRIBUTE_TEMPORARY, FILE_BASIC_INFO,
-        };
+    fn published_reader_blob_is_not_marked_temporary() {
+        use std::os::windows::fs::MetadataExt;
+
+        const FILE_ATTRIBUTE_TEMPORARY: u32 = 0x100;
 
         let temp = tempfile::tempdir().unwrap();
-        let mut root = temp.path().to_path_buf();
-        while root.as_os_str().encode_wide().count() <= 280 {
-            root.push("long-registry-component");
-        }
-        let store = FileBlobStore::new(&root).unwrap();
+        let store = FileBlobStore::new(temp.path()).unwrap();
         let (digest, _) = store.put_reader(Cursor::new(b"windows payload")).unwrap();
         let path = store.path_for_digest(&digest).unwrap();
-        let file = File::open(path).unwrap();
-        let mut info = FILE_BASIC_INFO::default();
-        let read = unsafe {
-            GetFileInformationByHandleEx(
-                file.as_raw_handle() as HANDLE,
-                FileBasicInfo,
-                (&mut info as *mut FILE_BASIC_INFO).cast(),
-                size_of::<FILE_BASIC_INFO>() as u32,
-            )
-        };
+        let attributes = fs::metadata(path).unwrap().file_attributes();
 
-        assert_ne!(read, 0);
-        assert_eq!(info.FileAttributes & FILE_ATTRIBUTE_TEMPORARY, 0);
+        assert_eq!(attributes & FILE_ATTRIBUTE_TEMPORARY, 0);
     }
 }

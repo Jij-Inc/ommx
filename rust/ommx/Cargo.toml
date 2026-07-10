@@ -99,9 +99,6 @@ testcontainers-modules.workspace = true
 [build-dependencies]
 built = { workspace = true, optional = true }
 
-[target.'cfg(windows)'.dependencies]
-windows-sys.workspace = true
-
 [[bin]]
 name = "ommx"
 path = "src/bin/ommx.rs"
