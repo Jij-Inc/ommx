@@ -1130,13 +1130,14 @@ impl PyGcReport {
     }
 }
 
-/// Anonymous Artifact ref matched by {func}`prune_anonymous`.
+/// Anonymous Artifact or Experiment ref matched by {func}`prune_anonymous`.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust", name = "AnonymousArtifactRef")]
 #[derive(Debug, Clone)]
 pub struct PyAnonymousArtifactRef {
     image_name: String,
+    kind: String,
     name: String,
     reference: String,
     digest: String,
@@ -1146,8 +1147,14 @@ pub struct PyAnonymousArtifactRef {
 impl PyAnonymousArtifactRef {
     fn from_ref_record(record: ommx::artifact::local_registry::RefRecord) -> Result<Self> {
         let image_name = format!("{}:{}", record.name, record.reference);
+        let kind = if record.name.ends_with(".ommx.local/experiment") {
+            "experiment"
+        } else {
+            "artifact"
+        };
         Ok(Self {
             image_name,
+            kind: kind.to_string(),
             name: record.name,
             reference: record.reference,
             digest: record.manifest_digest.to_string(),
@@ -1162,6 +1169,12 @@ impl PyAnonymousArtifactRef {
     #[getter]
     pub fn image_name(&self) -> String {
         self.image_name.clone()
+    }
+
+    /// Synthetic ref kind: `"artifact"` or `"experiment"`.
+    #[getter]
+    pub fn kind(&self) -> String {
+        self.kind.clone()
     }
 
     #[getter]
@@ -1188,8 +1201,8 @@ impl PyAnonymousArtifactRef {
 
     pub fn __repr__(&self) -> String {
         format!(
-            "AnonymousArtifactRef(image_name={:?}, digest={:?})",
-            self.image_name, self.digest
+            "AnonymousArtifactRef(image_name={:?}, kind={:?}, digest={:?})",
+            self.image_name, self.kind, self.digest
         )
     }
 }
@@ -1720,11 +1733,28 @@ pub(crate) fn emit_registry_list_warnings(
     Ok(())
 }
 
-/// Report or delete anonymous Artifact refs in the Local Registry.
+/// Remove one image ref from the Local Registry.
+///
+/// This removes only the mutable local ref. Immutable manifest and payload
+/// blobs remain available to other refs and are reclaimed by {func}`gc` once
+/// unreachable. Returns `True` when the ref existed.
+#[pyo3_stub_gen::derive::gen_stub_pyfunction]
+#[pyfunction]
+#[pyo3(signature = (image_name, *, root = None))]
+pub fn remove_image(py: Python<'_>, image_name: &str, root: Option<PathBuf>) -> Result<bool> {
+    let _guard = crate::TRACING.attach_parent_context(py);
+    let registry = open_local_registry(root)?;
+    let image_name = ommx::artifact::ImageRef::parse(image_name)?;
+    registry.remove_image_ref(&image_name)
+}
+
+/// Report or delete anonymous Artifact and Experiment refs in the Local Registry.
 ///
 /// This is the Python SDK equivalent of `ommx prune-anonymous`.
 /// It only removes SQLite refs when `delete=True`; manifest and payload blobs
 /// are left for {func}`gc` to reclaim if they become unreachable.
+/// Anonymous Experiment refs are included only when `experiments=True`.
+/// `older_than` accepts the same `s`, `m`, `h`, and `d` suffixes as the CLI.
 ///
 /// ```python
 /// >>> from ommx.artifact import prune_anonymous
@@ -1735,19 +1765,28 @@ pub(crate) fn emit_registry_list_warnings(
 /// ```
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
-#[pyo3(signature = (*, root = None, delete = false))]
+#[pyo3(signature = (*, root = None, delete = false, experiments = false, older_than = None))]
 pub fn prune_anonymous(
     py: Python<'_>,
     root: Option<PathBuf>,
     delete: bool,
+    experiments: bool,
+    older_than: Option<&str>,
 ) -> Result<PyPruneAnonymousReport> {
     let _guard = crate::TRACING.attach_parent_context(py);
     let registry = open_local_registry(root)?;
     let registry_root = registry.root().to_path_buf();
+    let options = ommx::artifact::local_registry::AnonymousRefOptions {
+        include_experiments: experiments,
+        older_than: older_than
+            .map(ommx::artifact::local_registry::GcOptions::parse_grace_period)
+            .transpose()
+            .map_err(anyhow::Error::msg)?,
+    };
     let refs = if delete {
-        registry.prune_anonymous_artifact_refs()?
+        registry.prune_anonymous_refs(&options)?
     } else {
-        registry.list_anonymous_artifact_refs()?
+        registry.list_anonymous_refs(&options)?
     };
     Ok(PyPruneAnonymousReport {
         root: registry_root,

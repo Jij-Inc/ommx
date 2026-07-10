@@ -130,7 +130,7 @@ fn gc_report_walks_subject_chain_from_live_ref() -> Result<()> {
     let parent_manifest = parent.stored_manifest_descriptor()?;
     let parent_manifest_digest = parent.manifest_digest().clone();
     let parent_layer_digest = parent.layers()?[0].digest().clone();
-    registry.delete_manifest_ref(&parent_image)?;
+    registry.remove_image_ref(&parent_image)?;
 
     let child_image = ImageRef::parse("ghcr.io/jij-inc/ommx/demo:child")?;
     let mut child = ArtifactDraft::with_registry(&registry, child_image);
@@ -188,6 +188,104 @@ fn gc_deletes_only_orphan_candidates() -> Result<()> {
     assert!(blob_list_contains(&result.deleted_blobs, &orphan_digest));
     assert!(!registry.contains_blob(&orphan_digest)?);
     assert!(registry.contains_blob(&reachable_layer)?);
+    Ok(())
+}
+
+#[test]
+fn remove_image_ref_removes_only_the_mutable_ref() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let image_name = ImageRef::parse("example.com/ommx/remove-me:latest")?;
+    let artifact = build_test_local_artifact(&registry, &image_name, b"retained-layer")?;
+    let manifest_digest = artifact.manifest_digest().clone();
+    let layer_digest = artifact.layers()?[0].digest().clone();
+
+    assert!(registry.remove_image_ref(&image_name)?);
+    assert!(!registry.remove_image_ref(&image_name)?);
+    assert!(registry.resolve_image_name(&image_name)?.is_none());
+    assert!(registry.contains_blob(&manifest_digest)?);
+    assert!(registry.contains_blob(&layer_digest)?);
+
+    let report = registry.gc_report(&GcOptions {
+        grace_period: Duration::ZERO,
+        ..GcOptions::default()
+    })?;
+    assert!(blob_list_contains(
+        &report.orphan_candidates,
+        &manifest_digest
+    ));
+    assert!(blob_list_contains(&report.orphan_candidates, &layer_digest));
+    Ok(())
+}
+
+#[test]
+fn anonymous_ref_cleanup_can_include_experiments_and_filter_by_age() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let anonymous_artifact = ArtifactDraft::new_anonymous_in_registry(&registry)?.commit()?;
+    let anonymous_artifact_name = anonymous_artifact.image_name().clone();
+    let anonymous_experiment = crate::experiment::Experiment::with_registry(
+        &registry,
+        crate::experiment::Name::Anonymous,
+    )?
+    .commit()?
+    .into_artifact();
+    let anonymous_experiment_name = anonymous_experiment.image_name().clone();
+    let named_image = ImageRef::parse("example.com/ommx/named:latest")?;
+    build_test_local_artifact(&registry, &named_image, b"named")?;
+
+    let artifacts_only = registry.list_anonymous_refs(&AnonymousRefOptions::default())?;
+    assert_eq!(artifacts_only.len(), 1);
+    assert_eq!(
+        ImageRef::from_repository_and_reference(
+            &artifacts_only[0].name,
+            &artifacts_only[0].reference
+        )?,
+        anonymous_artifact_name
+    );
+
+    let all_anonymous = AnonymousRefOptions {
+        include_experiments: true,
+        older_than: None,
+    };
+    assert_eq!(registry.list_anonymous_refs(&all_anonymous)?.len(), 2);
+    assert!(registry
+        .list_anonymous_refs(&AnonymousRefOptions {
+            include_experiments: true,
+            older_than: Some(Duration::from_secs(365 * 24 * 60 * 60)),
+        })?
+        .is_empty());
+
+    let removed = registry.prune_anonymous_refs(&AnonymousRefOptions {
+        include_experiments: true,
+        older_than: Some(Duration::ZERO),
+    })?;
+    assert_eq!(removed.len(), 2);
+    assert!(registry
+        .resolve_image_name(&anonymous_artifact_name)?
+        .is_none());
+    assert!(registry
+        .resolve_image_name(&anonymous_experiment_name)?
+        .is_none());
+    assert!(registry.resolve_image_name(&named_image)?.is_some());
+    Ok(())
+}
+
+#[test]
+fn conditional_prune_does_not_delete_a_replaced_ref() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let store = SqliteIndexStore::open(dir.path().join(SQLITE_INDEX_FILE_NAME))?;
+    let first = test_manifest_descriptor(b"first")?;
+    store.replace_ref("example.com/ommx/anonymous", "latest", &first)?;
+    let candidate = store.list_refs(None)?;
+
+    let replacement = test_manifest_descriptor(b"replacement")?;
+    store.replace_ref("example.com/ommx/anonymous", "latest", &replacement)?;
+
+    assert!(store.delete_refs_if_unchanged(&candidate)?.is_empty());
+    let remaining = store.list_refs(None)?;
+    assert_eq!(remaining.len(), 1);
+    assert_eq!(remaining[0].manifest_digest, replacement.digest().clone());
     Ok(())
 }
 

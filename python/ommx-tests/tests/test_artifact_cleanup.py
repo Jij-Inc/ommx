@@ -1,6 +1,15 @@
 import uuid
 
-from ommx.artifact import ArtifactDraft, gc, prune_anonymous
+import pytest
+
+from ommx.artifact import (
+    ArtifactDraft,
+    gc,
+    list_artifacts,
+    prune_anonymous,
+    remove_image,
+)
+from ommx.experiment import Experiment
 
 
 def test_cleanup_accepts_explicit_empty_root(tmp_path):
@@ -57,3 +66,46 @@ def test_gc_reports_and_deletes_unreachable_blobs_after_prune():
 
     after = gc(grace_period="0s")
     assert descriptor.digest not in {blob.digest for blob in after.orphan_candidates}
+
+
+def test_remove_image_deletes_named_ref_but_leaves_blobs_for_gc():
+    image_name = f"example.com/ommx-tests/remove-{uuid.uuid4().hex}:latest"
+    draft = ArtifactDraft.new(image_name)
+    descriptor = draft.add_layer("application/octet-stream", b"remove-me", {})
+    draft.commit()
+
+    assert remove_image(image_name) is True
+    assert remove_image(image_name) is False
+    assert list_artifacts(image_name) == []
+    assert descriptor.digest in {
+        blob.digest for blob in gc(grace_period="0s").orphan_candidates
+    }
+
+
+def test_prune_anonymous_can_include_experiments_and_filter_by_age():
+    with Experiment() as experiment:
+        experiment.log_json("kind", "anonymous-experiment")
+    image_name = experiment.image_name
+
+    artifacts_only = prune_anonymous()
+    assert image_name not in {ref.image_name for ref in artifacts_only.refs}
+
+    recent_only = prune_anonymous(experiments=True, older_than="365d")
+    assert image_name not in {ref.image_name for ref in recent_only.refs}
+
+    candidates = prune_anonymous(experiments=True, older_than="0s")
+    matching = [ref for ref in candidates.refs if ref.image_name == image_name]
+    assert len(matching) == 1
+    assert matching[0].kind == "experiment"
+
+    deleted = prune_anonymous(
+        delete=True,
+        experiments=True,
+        older_than="0s",
+    )
+    assert image_name in {ref.image_name for ref in deleted.refs}
+
+
+def test_prune_anonymous_rejects_invalid_retention_duration():
+    with pytest.raises(RuntimeError, match="invalid duration suffix"):
+        prune_anonymous(older_than="last-week")

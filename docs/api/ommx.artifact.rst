@@ -23,5 +23,6 @@ ommx.artifact
    _items/ommx.artifact.get_local_registry_root
    _items/ommx.artifact.list_artifacts
    _items/ommx.artifact.prune_anonymous
+   _items/ommx.artifact.remove_image
    _items/ommx.artifact.set_local_registry_root
    _items/ommx.artifact.get_images

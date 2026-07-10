@@ -663,14 +663,7 @@ impl LocalRegistry {
     pub fn list_anonymous_artifact_refs(
         &self,
     ) -> Result<Vec<crate::artifact::local_registry::RefRecord>> {
-        let all = self.index.list_refs(None)?;
-        Ok(all
-            .into_iter()
-            .filter(|r| {
-                crate::artifact::is_anonymous_artifact_ref_name(&r.name)
-                    && crate::artifact::is_anonymous_artifact_tag(&r.reference)
-            })
-            .collect())
+        self.list_anonymous_refs(&crate::artifact::local_registry::AnonymousRefOptions::default())
     }
 
     /// Bulk-delete every SQLite ref produced by
@@ -685,11 +678,66 @@ impl LocalRegistry {
     pub fn prune_anonymous_artifact_refs(
         &self,
     ) -> Result<Vec<crate::artifact::local_registry::RefRecord>> {
-        let refs = self.list_anonymous_artifact_refs()?;
-        for r in &refs {
-            self.index.delete_ref(&r.name, &r.reference)?;
+        self.prune_anonymous_refs(&crate::artifact::local_registry::AnonymousRefOptions::default())
+    }
+
+    /// List synthetic anonymous refs eligible for cleanup.
+    ///
+    /// Anonymous Artifact refs are always included. Options can additionally
+    /// include anonymous Experiment refs and restrict results by ref age.
+    pub fn list_anonymous_refs(
+        &self,
+        options: &crate::artifact::local_registry::AnonymousRefOptions,
+    ) -> Result<Vec<crate::artifact::local_registry::RefRecord>> {
+        let cutoff = options
+            .older_than
+            .map(|age| {
+                let age = chrono::Duration::from_std(age)
+                    .context("Anonymous ref retention duration is too large")?;
+                chrono::Utc::now()
+                    .checked_sub_signed(age)
+                    .context("Anonymous ref retention cutoff is out of range")
+            })
+            .transpose()?;
+        let mut refs = Vec::new();
+        for record in self.index.list_refs(None)? {
+            let anonymous_artifact = crate::artifact::is_anonymous_artifact_ref_name(&record.name);
+            let anonymous_experiment = options.include_experiments
+                && crate::artifact::is_anonymous_experiment_ref_name(&record.name);
+            if !(anonymous_artifact || anonymous_experiment)
+                || !crate::artifact::is_anonymous_artifact_tag(&record.reference)
+            {
+                continue;
+            }
+            if let Some(cutoff) = cutoff {
+                let updated_at = chrono::DateTime::parse_from_rfc3339(&record.updated_at)
+                    .with_context(|| {
+                        format!(
+                            "Invalid Local Registry ref timestamp for {}:{}",
+                            record.name, record.reference
+                        )
+                    })?
+                    .with_timezone(&chrono::Utc);
+                if updated_at > cutoff {
+                    continue;
+                }
+            }
+            refs.push(record);
         }
         Ok(refs)
+    }
+
+    /// Delete synthetic anonymous refs selected by [`Self::list_anonymous_refs`].
+    ///
+    /// Only SQLite refs are removed. Immutable manifest and payload blobs stay
+    /// in the CAS until [`Self::gc`] reclaims them. Candidate rows are deleted
+    /// only if they have not changed since selection.
+    pub fn prune_anonymous_refs(
+        &self,
+        options: &crate::artifact::local_registry::AnonymousRefOptions,
+    ) -> Result<Vec<crate::artifact::local_registry::RefRecord>> {
+        let refs = self.list_anonymous_refs(options)?;
+        self.index.delete_refs_if_unchanged(&refs)
     }
 
     /// List every image ref stored in this registry.
@@ -1218,9 +1266,13 @@ impl LocalRegistry {
             .replace_experiment_ref(image_name, &sealed_artifact.0, experiment)
     }
 
-    /// Delete a local manifest ref. Content-addressed blobs are not removed.
-    /// Crate-visible for Experiment checkpoint cleanup; GC handles blob removal.
-    pub(crate) fn delete_manifest_ref(&self, image_name: &ImageRef) -> Result<bool> {
+    /// Remove a local image ref without deleting content-addressed blobs.
+    ///
+    /// The mutable `(name, reference) -> manifest digest` row is removed from
+    /// this Local Registry. The immutable manifest, config, and layer blobs are
+    /// reclaimed only when a later [`Self::gc`] pass finds them unreachable.
+    /// Returns `true` when the ref existed.
+    pub fn remove_image_ref(&self, image_name: &ImageRef) -> Result<bool> {
         self.index
             .delete_ref(&image_name.repository_key(), image_name.reference())
     }

@@ -484,7 +484,7 @@ fn experiment_cache_keeps_only_rows_reachable_from_refs() -> anyhow::Result<()> 
     }
     let sealed = experiment.commit()?;
     sealed.artifact().tag_as(alias.clone())?;
-    registry.delete_manifest_ref(&image_name)?;
+    registry.remove_image_ref(&image_name)?;
 
     let records = registry.list_experiments(Some("example.com/experiments/cache"))?;
     assert_eq!(records.len(), 1);
@@ -509,7 +509,7 @@ fn experiment_cache_keeps_only_rows_reachable_from_refs() -> anyhow::Result<()> 
         })?,
         1
     );
-    registry.delete_manifest_ref(&alias)?;
+    registry.remove_image_ref(&alias)?;
     assert_eq!(
         conn.query_row("SELECT COUNT(*) FROM artifact_manifests", [], |row| {
             row.get::<_, i64>(0)
@@ -2361,7 +2361,7 @@ fn experiment_dyn_publishes_failed_checkpoint() {
     assert!(format!("{error:#}").contains("does not match `requested_image_name`"));
     registry_handle
         .registry()
-        .delete_manifest_ref(&wrong_checkpoint_image_name)
+        .remove_image_ref(&wrong_checkpoint_image_name)
         .unwrap();
 
     let checkpoint_artifact = checkpoint.as_local_artifact();

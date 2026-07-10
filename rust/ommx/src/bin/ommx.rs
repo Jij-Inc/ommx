@@ -5,7 +5,8 @@ use oci_spec::image::ImageManifest;
 use ommx::artifact::{
     fetch_remote_manifest, get_local_registry_root,
     local_registry::{
-        ArchiveInspectView, GcBlob, GcDeleteReport, GcOptions, GcReport, LocalRegistry, OciDirRef,
+        AnonymousRefOptions, ArchiveInspectView, GcBlob, GcDeleteReport, GcOptions, GcReport,
+        LocalRegistry, OciDirRef,
     },
     ImageRef, LocalArtifact,
 };
@@ -59,6 +60,30 @@ enum Command {
         output: PathBuf,
     },
 
+    /// Remove one image ref from the Local Registry.
+    ///
+    /// Content-addressed blobs are left in place unless `--gc` is passed.
+    Rm {
+        /// Container image name to remove.
+        image_name: String,
+
+        /// Local registry root. Defaults to OMMX_LOCAL_REGISTRY_ROOT or the OS default data dir.
+        #[clap(long)]
+        root: Option<PathBuf>,
+
+        /// Run Local Registry garbage collection after removing the ref.
+        #[clap(long)]
+        gc: bool,
+
+        /// Keep unreachable blobs newer than this duration during `--gc`.
+        #[clap(
+            long,
+            default_value = "24h",
+            value_parser = GcOptions::parse_grace_period
+        )]
+        gc_grace_period: Duration,
+    },
+
     /// Import legacy path/tag OCI directories into the v3 local registry.
     ///
     /// Reformatting an Image Manifest as an Artifact Manifest is a separate explicit operation
@@ -73,7 +98,7 @@ enum Command {
         replace: bool,
     },
 
-    /// Report or delete SQLite refs produced by `ArtifactBuilder.new_anonymous`.
+    /// Report or delete synthetic anonymous Local Registry refs.
     ///
     /// Manifest / blob CAS records are left in place; `gc` reclaims them.
     PruneAnonymous {
@@ -88,6 +113,14 @@ enum Command {
         /// Delete anonymous refs instead of only reporting them.
         #[clap(long)]
         delete: bool,
+
+        /// Include refs produced by anonymous Experiment sessions.
+        #[clap(long)]
+        experiments: bool,
+
+        /// Include only refs at least this old. Accepts s, m, h, d suffixes.
+        #[clap(long, value_parser = GcOptions::parse_grace_period)]
+        older_than: Option<Duration>,
 
         /// Show manifest digest for each anonymous ref.
         #[clap(long)]
@@ -161,7 +194,7 @@ enum ArtifactCommand {
         replace: bool,
     },
 
-    /// Report or delete SQLite refs produced by `ArtifactBuilder.new_anonymous`.
+    /// Report or delete synthetic anonymous Local Registry refs.
     ///
     /// `new_anonymous` writes artifacts under the synthetic ref
     /// `<registry-id8>.ommx.local/anonymous:<local-timestamp>-<nonce>`
@@ -182,6 +215,14 @@ enum ArtifactCommand {
         /// Delete anonymous refs instead of only reporting them.
         #[clap(long)]
         delete: bool,
+
+        /// Include refs produced by anonymous Experiment sessions.
+        #[clap(long)]
+        experiments: bool,
+
+        /// Include only refs at least this old. Accepts s, m, h, d suffixes.
+        #[clap(long, value_parser = GcOptions::parse_grace_period)]
+        older_than: Option<Duration>,
 
         /// Show manifest digest for each anonymous ref.
         #[clap(long)]
@@ -371,6 +412,13 @@ fn main() -> Result<()> {
 
         Command::Export { image_name, output } => handle_export(image_name, output)?,
 
+        Command::Rm {
+            image_name,
+            root,
+            gc,
+            gc_grace_period,
+        } => handle_rm(image_name, root.as_ref(), *gc, *gc_grace_period)?,
+
         Command::List => {
             for image_name in ommx::artifact::get_images()? {
                 println!("{image_name}");
@@ -383,8 +431,17 @@ fn main() -> Result<()> {
             root,
             dry_run,
             delete,
+            experiments,
+            older_than,
             show_digests,
-        } => handle_prune_anonymous(root.as_ref(), *dry_run, *delete, *show_digests)?,
+        } => handle_prune_anonymous(
+            root.as_ref(),
+            *dry_run,
+            *delete,
+            *experiments,
+            *older_than,
+            *show_digests,
+        )?,
 
         Command::Gc {
             root,
@@ -422,13 +479,22 @@ fn main() -> Result<()> {
                 root,
                 dry_run,
                 delete,
+                experiments,
+                older_than,
                 show_digests,
             } => {
                 eprintln!(
                     "warning: `ommx artifact prune-anonymous` is deprecated; \
                      use `ommx prune-anonymous` instead"
                 );
-                handle_prune_anonymous(root.as_ref(), *dry_run, *delete, *show_digests)?;
+                handle_prune_anonymous(
+                    root.as_ref(),
+                    *dry_run,
+                    *delete,
+                    *experiments,
+                    *older_than,
+                    *show_digests,
+                )?;
             }
             ArtifactCommand::Gc {
                 root,
@@ -519,6 +585,30 @@ fn handle_export(image_name: &str, output: &Path) -> Result<()> {
     Ok(())
 }
 
+fn handle_rm(
+    image_name: &str,
+    root: Option<&PathBuf>,
+    run_gc: bool,
+    gc_grace_period: Duration,
+) -> Result<()> {
+    let image_name = ImageRef::parse(image_name)?;
+    let registry = open_registry(root)?;
+    if registry.remove_image_ref(&image_name)? {
+        print_status("Removed".red().bold(), image_name);
+    } else {
+        print_status("Not Found".yellow().bold(), image_name);
+        return Ok(());
+    }
+    if run_gc {
+        let result = registry.gc(&GcOptions {
+            grace_period: gc_grace_period,
+            ..GcOptions::default()
+        })?;
+        print_gc_delete_report(&registry, &result, false);
+    }
+    Ok(())
+}
+
 fn open_registry(root: Option<&PathBuf>) -> Result<LocalRegistry> {
     if let Some(root) = root {
         LocalRegistry::open(root)
@@ -570,20 +660,26 @@ fn handle_prune_anonymous(
     root: Option<&PathBuf>,
     dry_run: bool,
     delete: bool,
+    experiments: bool,
+    older_than: Option<Duration>,
     show_digests: bool,
 ) -> Result<()> {
     if dry_run && delete {
         bail!("--dry-run and --delete cannot be used together");
     }
     let registry = open_registry(root)?;
-    let to_remove = registry.list_anonymous_artifact_refs()?;
+    let options = AnonymousRefOptions {
+        include_experiments: experiments,
+        older_than,
+    };
+    let to_remove = registry.list_anonymous_refs(&options)?;
     if to_remove.is_empty() {
-        print_status("Clean".green().bold(), "no anonymous artifact refs found");
+        print_status("Clean".green().bold(), "no matching anonymous refs found");
     } else if delete {
-        let removed = registry.prune_anonymous_artifact_refs()?;
+        let removed = registry.prune_anonymous_refs(&options)?;
         print_status(
             "Removed".red().bold(),
-            format_args!("{} anonymous artifact ref(s)", removed.len()),
+            format_args!("{} anonymous ref(s)", removed.len()),
         );
         for r in &removed {
             print_anonymous_ref(&r.name, &r.reference, &r.manifest_digest, show_digests);
@@ -591,7 +687,7 @@ fn handle_prune_anonymous(
     } else {
         print_status(
             "Candidates".yellow().bold(),
-            format_args!("{} anonymous artifact ref(s)", to_remove.len()),
+            format_args!("{} anonymous ref(s)", to_remove.len()),
         );
         for r in &to_remove {
             print_anonymous_ref(&r.name, &r.reference, &r.manifest_digest, show_digests);

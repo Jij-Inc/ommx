@@ -20,6 +20,7 @@ from ommx._ommx_rust import (
     get_local_registry_root,
     list_artifacts,
     prune_anonymous,
+    remove_image,
     set_local_registry_root,
 )
 
@@ -42,5 +43,6 @@ __all__ = [
     "get_local_registry_root",
     "list_artifacts",
     "prune_anonymous",
+    "remove_image",
     "set_local_registry_root",
 ]

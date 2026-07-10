@@ -99,6 +99,7 @@ __all__ = [
     "miplib2017_instance_annotations",
     "prune_anonymous",
     "qplib_instance_annotations",
+    "remove_image",
     "set_default_atol",
     "set_local_registry_root",
 ]
@@ -134,10 +135,15 @@ ToState: TypeAlias = (
 @typing.final
 class AnonymousArtifactRef:
     r"""
-    Anonymous Artifact ref matched by {func}`prune_anonymous`.
+    Anonymous Artifact or Experiment ref matched by {func}`prune_anonymous`.
     """
     @property
     def image_name(self) -> builtins.str: ...
+    @property
+    def kind(self) -> builtins.str:
+        r"""
+        Synthetic ref kind: `"artifact"` or `"experiment"`.
+        """
     @property
     def name(self) -> builtins.str: ...
     @property
@@ -7485,13 +7491,17 @@ def prune_anonymous(
     *,
     root: typing.Optional[builtins.str | os.PathLike | pathlib.Path] = None,
     delete: builtins.bool = False,
+    experiments: builtins.bool = False,
+    older_than: typing.Optional[builtins.str] = None,
 ) -> PruneAnonymousReport:
     r"""
-    Report or delete anonymous Artifact refs in the Local Registry.
+    Report or delete anonymous Artifact and Experiment refs in the Local Registry.
 
     This is the Python SDK equivalent of `ommx prune-anonymous`.
     It only removes SQLite refs when `delete=True`; manifest and payload blobs
     are left for {func}`gc` to reclaim if they become unreachable.
+    Anonymous Experiment refs are included only when `experiments=True`.
+    `older_than` accepts the same `s`, `m`, `h`, and `d` suffixes as the CLI.
 
     ```python
     >>> from ommx.artifact import prune_anonymous
@@ -7505,6 +7515,19 @@ def prune_anonymous(
 def qplib_instance_annotations() -> builtins.dict[
     builtins.str, builtins.dict[builtins.str, builtins.str]
 ]: ...
+def remove_image(
+    image_name: builtins.str,
+    *,
+    root: typing.Optional[builtins.str | os.PathLike | pathlib.Path] = None,
+) -> builtins.bool:
+    r"""
+    Remove one image ref from the Local Registry.
+
+    This removes only the mutable local ref. Immutable manifest and payload
+    blobs remain available to other refs and are reclaimed by {func}`gc` once
+    unreachable. Returns `True` when the ref existed.
+    """
+
 def set_default_atol(value: builtins.float) -> None: ...
 def set_local_registry_root(path: builtins.str | os.PathLike | pathlib.Path) -> None:
     r"""

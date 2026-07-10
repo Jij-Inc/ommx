@@ -575,7 +575,7 @@ impl ExperimentDyn {
                 state.image_name = image_name;
                 match registry_handle
                     .registry()
-                    .delete_manifest_ref(&old_checkpoint_image_name)
+                    .remove_image_ref(&old_checkpoint_image_name)
                 {
                     Ok(true) => {
                         if let Err(error) = state.autosave_checkpoint(registry_handle.registry()) {
