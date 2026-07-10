@@ -3,9 +3,9 @@
 use super::config::{ExperimentConfig, ExperimentConfigRun, ExperimentConfigSolve, LayerRef};
 use super::parameter::RunParameterTable;
 use super::{
-    AttachmentLogger, AttachmentTable, AutosavePolicy, Experiment, ExperimentDyn, ExperimentStatus,
-    Name, ParameterValue, SealedExperiment, SolveDiagnosticPayload, SolveStatus, Trace,
-    EXPERIMENT_ARTIFACT_MEDIA_TYPE, EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_STATUS_DRAFT,
+    AttachmentLogger, AttachmentTable, AutosavePolicy, Compression, Experiment, ExperimentDyn,
+    ExperimentStatus, Name, ParameterValue, SealedExperiment, SolveDiagnosticPayload, SolveStatus,
+    Trace, EXPERIMENT_ARTIFACT_MEDIA_TYPE, EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_STATUS_DRAFT,
     EXPERIMENT_STATUS_FAILED, EXPERIMENT_STATUS_FINISHED, EXPERIMENT_STATUS_INTERRUPTED,
     RUN_PARAMETERS_MEDIA_TYPE, RUN_STATUS_FAILED, RUN_STATUS_FINISHED, RUN_STATUS_INTERRUPTED,
 };
@@ -24,6 +24,7 @@ use serde_json::json;
 use std::collections::{BTreeMap, HashMap};
 use std::{
     fs,
+    io::Cursor,
     str::FromStr,
     time::{Duration, Instant},
 };
@@ -61,6 +62,78 @@ fn file_attachment_infers_media_type_from_content() {
             config.attachments.filename("source-file"),
             Some("source.png")
         );
+        Ok(())
+    });
+}
+
+#[test]
+fn compressed_attachment_is_transparent_to_attachment_readers() {
+    let payload = br#"{"values":[1,1,1,1,1,1,1,1]}"#;
+    with_temp_experiment(|experiment| {
+        AttachmentLogger::log_attachment_compressed(
+            &experiment,
+            "trace",
+            MediaType::from("application/json"),
+            payload,
+            HashMap::new(),
+            Compression::Zstd,
+        )?;
+
+        let artifact = experiment.commit()?.into_artifact();
+        let layers = artifact.layers()?;
+        let config = experiment_config(&artifact);
+        let trace = layer_from_ref(&layers, *config.attachments.get("trace").unwrap());
+        assert_eq!(trace.media_type().as_ref(), "application/json+zstd");
+        assert_eq!(
+            zstd::stream::decode_all(blob_bytes(&artifact, trace).as_slice())?,
+            payload
+        );
+
+        let loaded = SealedExperiment::from_artifact(artifact)?;
+        assert_eq!(
+            loaded.attachment_media_type("trace")?,
+            MediaType::from("application/json")
+        );
+        assert_eq!(loaded.attachment_blob("trace")?, payload);
+        Ok(())
+    });
+}
+
+#[test]
+fn attachment_reader_streams_payload_into_registry() {
+    let payload = b"reader-backed attachment";
+    with_temp_experiment(|experiment| {
+        AttachmentLogger::log_attachment_from_reader(
+            &experiment,
+            "reader",
+            MediaType::from("application/octet-stream"),
+            Cursor::new(payload),
+            HashMap::new(),
+        )?;
+
+        let artifact = experiment.commit()?.into_artifact();
+        let loaded = SealedExperiment::from_artifact(artifact)?;
+        assert_eq!(loaded.attachment_blob("reader")?, payload);
+        Ok(())
+    });
+}
+
+#[test]
+fn compressed_typed_attachment_preserves_typed_reader() {
+    let expected = constant_instance(Sense::Minimize, 42.0);
+    with_temp_experiment(|experiment| {
+        AttachmentLogger::log_attachment_compressed(
+            &experiment,
+            "instance",
+            media_types::v2_instance(),
+            expected.to_v2_bytes(),
+            crate::FlatAnnotations::flat_annotations(&expected),
+            Compression::Zstd,
+        )?;
+
+        let artifact = experiment.commit()?.into_artifact();
+        let loaded = SealedExperiment::from_artifact(artifact)?;
+        assert_eq!(loaded.attachment_instance("instance")?, expected);
         Ok(())
     });
 }

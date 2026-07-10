@@ -71,7 +71,7 @@
 //!   unsealed state for a future commit, it is already stored.
 
 mod index;
-mod registry;
+pub(crate) mod registry;
 mod types;
 
 #[cfg(test)]

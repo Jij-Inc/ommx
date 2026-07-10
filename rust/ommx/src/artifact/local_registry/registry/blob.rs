@@ -2,14 +2,14 @@ use crate::artifact::digest::{sha256_digest, validate_digest};
 use anyhow::{ensure, Context, Result};
 use filetime::FileTime;
 use oci_spec::image::Digest;
+use sha2::{Digest as _, Sha256};
 use std::{
     fs::{self, File, OpenOptions},
-    io::{ErrorKind, Write},
+    io::{Cursor, ErrorKind, Read, Write},
     path::{Path, PathBuf},
     str::FromStr,
     time::SystemTime,
 };
-use uuid::Uuid;
 
 const BLOB_STORE_LOCK_FILE_NAME: &str = ".lock";
 
@@ -41,25 +41,54 @@ impl FileBlobStore {
     }
 
     pub fn put_bytes(&self, bytes: &[u8]) -> Result<Digest> {
-        let digest = Digest::from_str(&sha256_digest(bytes)).context("Failed to parse digest")?;
+        let (digest, size) = self.put_reader(Cursor::new(bytes))?;
+        ensure!(
+            size == bytes.len() as u64,
+            "Stored blob size mismatch for {digest}: expected={}, actual={size}",
+            bytes.len()
+        );
+        Ok(digest)
+    }
+
+    pub fn put_reader(&self, mut reader: impl Read) -> Result<(Digest, u64)> {
+        fs::create_dir_all(&self.root)
+            .with_context(|| format!("Failed to create blob store {}", self.root.display()))?;
+        let mut temp_file = tempfile::NamedTempFile::new_in(&self.root).with_context(|| {
+            format!("Failed to create temporary blob in {}", self.root.display())
+        })?;
+        let mut hasher = Sha256::new();
+        let mut size = 0_u64;
+        let mut buffer = [0_u8; 64 * 1024];
+        loop {
+            let read = reader
+                .read(&mut buffer)
+                .context("Failed to read blob input")?;
+            if read == 0 {
+                break;
+            }
+            temp_file
+                .write_all(&buffer[..read])
+                .context("Failed to write temporary blob")?;
+            hasher.update(&buffer[..read]);
+            size = size
+                .checked_add(read as u64)
+                .context("Blob size exceeds u64")?;
+        }
+        temp_file
+            .as_file_mut()
+            .sync_all()
+            .context("Failed to sync temporary blob")?;
+
+        let digest = Digest::from_str(&format!("sha256:{}", encode_hex(&hasher.finalize())))
+            .context("Failed to parse digest")?;
         let path = self.path_for_digest(&digest)?;
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)
                 .with_context(|| format!("Failed to create {}", parent.display()))?;
         }
-        if path.exists() {
-            let _lock = self.lock_store()?;
-            if path.exists() {
-                verify_existing_blob(&path, bytes, digest.as_ref())?;
-                touch_existing_blob(&path, digest.as_ref())?;
-                return Ok(digest);
-            }
-        }
-
-        let temp_path = self.write_temp_blob(bytes, &digest)?;
         let _lock = self.lock_store()?;
-        self.publish_temp_blob(&temp_path, bytes, &digest, &path)?;
-        Ok(digest)
+        self.publish_temp_blob(temp_file.path(), &digest, size, &path)?;
+        Ok((digest, size))
     }
 
     pub fn read_bytes(&self, digest: &Digest) -> Result<Vec<u8>> {
@@ -196,63 +225,28 @@ impl FileBlobStore {
             .join(digest.digest()))
     }
 
-    fn write_temp_blob(&self, bytes: &[u8], digest: &Digest) -> Result<PathBuf> {
-        let temp_path = self.temp_path_for_digest(digest)?;
-        let mut temp_file = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&temp_path)
-            .with_context(|| format!("Failed to create temporary blob {}", temp_path.display()))?;
-        temp_file
-            .write_all(bytes)
-            .with_context(|| format!("Failed to write temporary blob {}", temp_path.display()))?;
-        temp_file
-            .sync_all()
-            .with_context(|| format!("Failed to sync temporary blob {}", temp_path.display()))?;
-        drop(temp_file);
-        Ok(temp_path)
-    }
-
     fn publish_temp_blob(
         &self,
         temp_path: &Path,
-        bytes: &[u8],
         digest: &Digest,
+        size: u64,
         path: &Path,
     ) -> Result<()> {
         match fs::hard_link(temp_path, path) {
-            Ok(()) => {
-                let result = touch_existing_blob(path, digest.as_ref());
-                let _ = fs::remove_file(temp_path);
-                result
-            }
+            Ok(()) => touch_existing_blob(path, digest.as_ref()),
             Err(error) if error.kind() == ErrorKind::AlreadyExists => {
-                let result = verify_existing_blob(path, bytes, digest.as_ref())
-                    .and_then(|()| touch_existing_blob(path, digest.as_ref()));
-                let _ = fs::remove_file(temp_path);
-                result
+                verify_existing_blob(path, digest, size)?;
+                touch_existing_blob(path, digest.as_ref())
             }
-            Err(error) => {
-                let _ = fs::remove_file(temp_path);
-                Err(error).with_context(|| {
-                    format!(
-                        "Failed to publish blob {} from {} to {}",
-                        digest.as_ref(),
-                        temp_path.display(),
-                        path.display()
-                    )
-                })
-            }
+            Err(error) => Err(error).with_context(|| {
+                format!(
+                    "Failed to publish blob {} from {} to {}",
+                    digest.as_ref(),
+                    temp_path.display(),
+                    path.display()
+                )
+            }),
         }
-    }
-
-    fn temp_path_for_digest(&self, digest: &Digest) -> Result<PathBuf> {
-        let path = self.path_for_digest(digest)?;
-        let encoded = path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .context("Blob digest path has no file name")?;
-        Ok(path.with_file_name(format!(".{encoded}.{}.tmp", Uuid::new_v4())))
     }
 
     fn lock_store(&self) -> Result<FileBlobStoreLock> {
@@ -286,14 +280,44 @@ impl Drop for FileBlobStoreLock {
     }
 }
 
-fn verify_existing_blob(path: &Path, bytes: &[u8], digest: &str) -> Result<()> {
-    let existing = fs::read(path)
-        .with_context(|| format!("Failed to read existing blob {}", path.display()))?;
+fn verify_existing_blob(path: &Path, digest: &Digest, expected_size: u64) -> Result<()> {
+    let mut file = File::open(path)
+        .with_context(|| format!("Failed to open existing blob {}", path.display()))?;
+    let actual_size = file
+        .metadata()
+        .with_context(|| format!("Failed to inspect existing blob {}", path.display()))?
+        .len();
     ensure!(
-        existing == bytes,
-        "Existing blob has different bytes for digest {digest}"
+        actual_size == expected_size,
+        "Existing blob has wrong size for {digest}: expected={expected_size}, actual={actual_size}"
+    );
+    let mut hasher = Sha256::new();
+    let mut buffer = [0_u8; 64 * 1024];
+    loop {
+        let read = file
+            .read(&mut buffer)
+            .with_context(|| format!("Failed to hash existing blob {}", path.display()))?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+    let actual = format!("sha256:{}", encode_hex(&hasher.finalize()));
+    ensure!(
+        actual == digest.as_ref(),
+        "Existing blob digest mismatch for {digest}"
     );
     Ok(())
+}
+
+fn encode_hex(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        out.push(HEX[(byte >> 4) as usize] as char);
+        out.push(HEX[(byte & 0x0f) as usize] as char);
+    }
+    out
 }
 
 fn touch_existing_blob(path: &Path, digest: &str) -> Result<()> {

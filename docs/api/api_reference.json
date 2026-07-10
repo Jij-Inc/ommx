@@ -27684,7 +27684,7 @@
             },
             {
               "name": "attachment_media_type",
-              "doc": "OCI media type of an experiment-level attachment.",
+              "doc": "Original media type of an experiment-level attachment.\n\nStorage compression suffixes are hidden from this logical media type.",
               "signatures": [
                 {
                   "parameters": [
@@ -27845,7 +27845,7 @@
             },
             {
               "name": "get_blob",
-              "doc": "Read raw bytes of an experiment-level attachment by name.",
+              "doc": "Read decompressed bytes of an experiment-level attachment by name.",
               "signatures": [
                 {
                   "parameters": [
@@ -28126,7 +28126,7 @@
             },
             {
               "name": "log_attachment",
-              "doc": "Attach arbitrary bytes with an explicit OCI media type in the experiment space.\n\nThe `name` is stored as attachment metadata and is intended for\nhumans. The bytes are stored as a layer in the committed artifact.",
+              "doc": "Attach arbitrary bytes with an explicit OCI media type in the experiment space.\n\nThe `name` is stored as attachment metadata and is intended for\nhumans. The bytes are stored as a layer in the committed artifact.\nSet `compression=\"zstd\"` to compress the stored layer transparently.",
               "signatures": [
                 {
                   "parameters": [
@@ -28156,6 +28156,29 @@
                         "children": []
                       },
                       "default": null
+                    },
+                    {
+                      "name": "compression",
+                      "type_": {
+                        "display": "Literal[\"none\", \"zstd\"]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "\"none\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"zstd\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "'none'"
+                      }
                     }
                   ],
                   "return_type": {
@@ -28170,7 +28193,7 @@
             },
             {
               "name": "log_file",
-              "doc": "Attach an existing filesystem file in the experiment space.\n\nThe file bytes are copied into the Local Registry immediately. If\n`media_type` is omitted, the Rust SDK infers it from file contents and\nunknown types fall back to `application/octet-stream`. The original\nsource path is not stored; only a basename for later export is stored\nas attachment metadata.",
+              "doc": "Attach an existing filesystem file in the experiment space.\n\nThe file bytes are copied into the Local Registry immediately. If\n`media_type` is omitted, the Rust SDK infers it from file contents and\nunknown types fall back to `application/octet-stream`. The original\nsource path is not stored; only a basename for later export is stored\nas attachment metadata. The file is streamed into the Local Registry;\nset `compression=\"zstd\"` to compress the stored layer transparently.",
               "signatures": [
                 {
                   "parameters": [
@@ -28243,6 +28266,29 @@
                         "kind": "Simple",
                         "value": "None"
                       }
+                    },
+                    {
+                      "name": "compression",
+                      "type_": {
+                        "display": "Literal[\"none\", \"zstd\"]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "\"none\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"zstd\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "'none'"
+                      }
                     }
                   ],
                   "return_type": {
@@ -28292,7 +28338,7 @@
             },
             {
               "name": "log_json",
-              "doc": "Attach a JSON-serializable value in the experiment space.\n\nThe value is encoded with Python's `json.dumps` and stored with media\ntype `application/json`.",
+              "doc": "Attach a JSON-serializable value in the experiment space.\n\nThe value is encoded with Python's `json.dumps` and stored with media\ntype `application/json`. Set `compression=\"zstd\"` to compress the\nencoded JSON transparently.",
               "signatures": [
                 {
                   "parameters": [
@@ -28313,6 +28359,29 @@
                         "children": []
                       },
                       "default": null
+                    },
+                    {
+                      "name": "compression",
+                      "type_": {
+                        "display": "Literal[\"none\", \"zstd\"]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "\"none\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"zstd\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "'none'"
+                      }
                     }
                   ],
                   "return_type": {
@@ -28432,7 +28501,7 @@
             },
             {
               "name": "log_with_codec",
-              "doc": "Encode a Python object with an attachment codec and attach it in the experiment space.\n\nThe codec class must provide `media_type`, `encode(value) -> bytes`,\nand `decode(bytes) -> object`. OMMX owns only this protocol; concrete\ncodecs should live in the package that owns the payload type.",
+              "doc": "Encode a Python object with an attachment codec and attach it in the experiment space.\n\nThe codec class must provide `media_type`, `encode(value) -> bytes`,\nand `decode(bytes) -> object`. OMMX owns only this protocol; concrete\ncodecs should live in the package that owns the payload type. Set\n`compression=\"zstd\"` to compress the encoded bytes transparently.",
               "signatures": [
                 {
                   "parameters": [
@@ -28474,6 +28543,29 @@
                         "children": []
                       },
                       "default": null
+                    },
+                    {
+                      "name": "compression",
+                      "type_": {
+                        "display": "Literal[\"none\", \"zstd\"]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "\"none\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"zstd\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "'none'"
+                      }
                     }
                   ],
                   "return_type": {
@@ -28758,7 +28850,7 @@
             },
             {
               "name": "write_attachment",
-              "doc": "Write an experiment-level attachment to a filesystem path.\n\nIf `path` names an existing directory, the attachment filename stored\nby `log_file` is used inside that directory. Otherwise `path` is\ntreated as the destination file path.",
+              "doc": "Write an experiment-level attachment to a filesystem path.\n\nIf `path` names an existing directory, the attachment filename stored\nby `log_file` is used inside that directory. Otherwise `path` is\ntreated as the destination file path. Compressed attachments are\ndecompressed while exporting.",
               "signatures": [
                 {
                   "parameters": [
@@ -29631,7 +29723,7 @@
             },
             {
               "name": "log_attachment",
-              "doc": "Attach arbitrary bytes with an explicit OCI media type in this run.\n\nUse this for payloads that belong to this run but are not scalar run\nparameters, for example solver logs or derived files.",
+              "doc": "Attach arbitrary bytes with an explicit OCI media type in this run.\n\nUse this for payloads that belong to this run but are not scalar run\nparameters, for example solver logs or derived files. Set\n`compression=\"zstd\"` to compress the stored layer transparently.",
               "signatures": [
                 {
                   "parameters": [
@@ -29661,6 +29753,29 @@
                         "children": []
                       },
                       "default": null
+                    },
+                    {
+                      "name": "compression",
+                      "type_": {
+                        "display": "Literal[\"none\", \"zstd\"]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "\"none\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"zstd\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "'none'"
+                      }
                     }
                   ],
                   "return_type": {
@@ -29675,7 +29790,7 @@
             },
             {
               "name": "log_file",
-              "doc": "Attach an existing filesystem file in this run.\n\nThe file bytes are copied into the Local Registry immediately. If\n`media_type` is omitted, the Rust SDK infers it from file contents and\nunknown types fall back to `application/octet-stream`. The original\nsource path is not stored; only a basename for later export is stored\nas attachment metadata.",
+              "doc": "Attach an existing filesystem file in this run.\n\nThe file bytes are copied into the Local Registry immediately. If\n`media_type` is omitted, the Rust SDK infers it from file contents and\nunknown types fall back to `application/octet-stream`. The original\nsource path is not stored; only a basename for later export is stored\nas attachment metadata. The file is streamed into the Local Registry;\nset `compression=\"zstd\"` to compress the stored layer transparently.",
               "signatures": [
                 {
                   "parameters": [
@@ -29748,6 +29863,29 @@
                         "kind": "Simple",
                         "value": "None"
                       }
+                    },
+                    {
+                      "name": "compression",
+                      "type_": {
+                        "display": "Literal[\"none\", \"zstd\"]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "\"none\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"zstd\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "'none'"
+                      }
                     }
                   ],
                   "return_type": {
@@ -29797,7 +29935,7 @@
             },
             {
               "name": "log_json",
-              "doc": "Attach a JSON-serializable value in this run.\n\nThe value is encoded with Python's `json.dumps` and stored with media\ntype `application/json`.",
+              "doc": "Attach a JSON-serializable value in this run.\n\nThe value is encoded with Python's `json.dumps` and stored with media\ntype `application/json`. Set `compression=\"zstd\"` to compress the\nencoded JSON transparently.",
               "signatures": [
                 {
                   "parameters": [
@@ -29818,6 +29956,29 @@
                         "children": []
                       },
                       "default": null
+                    },
+                    {
+                      "name": "compression",
+                      "type_": {
+                        "display": "Literal[\"none\", \"zstd\"]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "\"none\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"zstd\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "'none'"
+                      }
                     }
                   ],
                   "return_type": {
@@ -30055,7 +30216,7 @@
             },
             {
               "name": "log_with_codec",
-              "doc": "Encode a Python object with an attachment codec and attach it in this run.\n\nThe codec class must provide `media_type`, `encode(value) -> bytes`,\nand `decode(bytes) -> object`. OMMX owns only this protocol; concrete\ncodecs should live in the package that owns the payload type.",
+              "doc": "Encode a Python object with an attachment codec and attach it in this run.\n\nThe codec class must provide `media_type`, `encode(value) -> bytes`,\nand `decode(bytes) -> object`. OMMX owns only this protocol; concrete\ncodecs should live in the package that owns the payload type. Set\n`compression=\"zstd\"` to compress the encoded bytes transparently.",
               "signatures": [
                 {
                   "parameters": [
@@ -30097,6 +30258,29 @@
                         "children": []
                       },
                       "default": null
+                    },
+                    {
+                      "name": "compression",
+                      "type_": {
+                        "display": "Literal[\"none\", \"zstd\"]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "\"none\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"zstd\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "'none'"
+                      }
                     }
                   ],
                   "return_type": {
@@ -30216,7 +30400,7 @@
             },
             {
               "name": "attachment_media_type",
-              "doc": "OCI media type of a run-level attachment.",
+              "doc": "Original media type of a run-level attachment.\n\nStorage compression suffixes are hidden from this logical media type.",
               "signatures": [
                 {
                   "parameters": [
@@ -30268,7 +30452,7 @@
             },
             {
               "name": "get_blob",
-              "doc": "Read raw bytes of a run-level attachment by name.",
+              "doc": "Read decompressed bytes of a run-level attachment by name.",
               "signatures": [
                 {
                   "parameters": [
@@ -30471,7 +30655,7 @@
             },
             {
               "name": "write_attachment",
-              "doc": "Write a run-level attachment to a filesystem path.\n\nIf `path` names an existing directory, the attachment filename stored\nby `log_file` is used inside that directory. Otherwise `path` is\ntreated as the destination file path.",
+              "doc": "Write a run-level attachment to a filesystem path.\n\nIf `path` names an existing directory, the attachment filename stored\nby `log_file` is used inside that directory. Otherwise `path` is\ntreated as the destination file path. Compressed attachments are\ndecompressed while exporting.",
               "signatures": [
                 {
                   "parameters": [

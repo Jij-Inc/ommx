@@ -12,11 +12,13 @@ use crate::artifact::{
 use anyhow::{bail, ensure, Context, Result};
 use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, ImageManifest, MediaType};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::io::{Cursor, Read};
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::OnceLock;
 
+pub mod attachment_storage;
 mod blob;
 mod gc;
 mod import;
@@ -1229,6 +1231,10 @@ impl LocalRegistry {
         self.blobs.put_bytes(bytes)
     }
 
+    fn store_blob_reader(&self, reader: impl Read) -> Result<(Digest, u64)> {
+        self.blobs.put_reader(reader)
+    }
+
     /// Read a raw blob by digest for crate-internal artifact materialization.
     ///
     /// Public callers read through [`LocalRegistry::get_blob`] with a
@@ -1363,16 +1369,7 @@ impl LocalRegistry {
         bytes: &[u8],
         annotations: HashMap<String, String>,
     ) -> Result<StoredDescriptor<'_>> {
-        let digest =
-            Digest::from_str(&sha256_digest(bytes)).context("Failed to parse layer blob digest")?;
-        let descriptor = DescriptorBuilder::default()
-            .media_type(media_type)
-            .digest(digest)
-            .size(bytes.len() as u64)
-            .annotations(annotations)
-            .build()
-            .context("Failed to build layer descriptor")?;
-        self.store_blob(descriptor, bytes)
+        attachment_storage::store_layer_reader(self, media_type, Cursor::new(bytes), annotations)
     }
 
     /// Serialize `value` as JSON and store it as a generic OCI blob
