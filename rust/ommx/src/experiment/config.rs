@@ -29,6 +29,8 @@ pub struct ExperimentConfigRun {
     pub trace: Option<LayerRef>,
     #[serde(default)]
     pub solves: Vec<ExperimentConfigSolve>,
+    #[serde(default)]
+    pub samplings: Vec<ExperimentConfigSampling>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -36,6 +38,22 @@ pub struct ExperimentConfigRun {
 pub struct ExperimentConfigSolve {
     pub solve_id: u64,
     #[serde(default = "default_solve_status")]
+    pub status: String,
+    pub input: LayerRef,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output: Option<LayerRef>,
+    pub adapter: String,
+    #[serde(default = "default_adapter_options")]
+    pub adapter_options: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub diagnostics: Option<LayerRef>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
+pub struct ExperimentConfigSampling {
+    pub sampling_id: u64,
+    #[serde(default = "default_sampling_status")]
     pub status: String,
     pub input: LayerRef,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -56,5 +74,9 @@ fn default_run_status() -> String {
 }
 
 fn default_solve_status() -> String {
+    "finished".to_string()
+}
+
+fn default_sampling_status() -> String {
     "finished".to_string()
 }

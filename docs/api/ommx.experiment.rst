@@ -16,3 +16,4 @@ ommx.experiment
    _items/ommx.experiment.Run
    _items/ommx.experiment.SealedRun
    _items/ommx.experiment.Solve
+   _items/ommx.experiment.Sampling

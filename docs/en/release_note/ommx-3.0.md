@@ -8,6 +8,32 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🆕 Experiment Sampling records ([#1055](https://github.com/Jij-Inc/ommx/pull/1055))
+
+{meth}`~ommx.experiment.Run.log_sample` calls a
+{class}`~ommx.adapter.SamplerAdapter` and records its complete
+{class}`~ommx.SampleSet` as a separate {class}`~ommx.experiment.Sampling`
+record. A successful sampling call remains `finished` even when the SampleSet
+contains no feasible samples. Solver calls remain {class}`~ommx.experiment.Solve`
+records whose output is `Solution | None`.
+
+```python
+from ommx import SampleSet
+from ommx.experiment import Experiment
+from ommx_openjij_adapter import OMMXOpenJijSAAdapter
+
+with Experiment() as experiment:
+    with experiment.run() as run:
+        sample_set = run.log_sample(OMMXOpenJijSAAdapter, instance, num_reads=100)
+
+output = experiment.runs[0].samplings[0].output
+assert isinstance(output, SampleSet)
+```
+
+`Run.log_sample(..., store_diagnostics=True)` uses the same adapter diagnostics
+channel as `Run.log_solve`. See the [Experiment management
+tutorial](../tutorial/experiment_management.md) for the Solve and Sampling recording model.
+
 ### ⚠ Legacy v1 `ConstraintHints` remain advisory ([#1058](https://github.com/Jij-Inc/ommx/pull/1058))
 
 When {meth}`Instance.from_v1_bytes <ommx.Instance.from_v1_bytes>` or {meth}`ParametricInstance.from_v1_bytes <ommx.ParametricInstance.from_v1_bytes>` reads a legacy v1 payload, it now ignores `ConstraintHints` and preserves the referenced regular constraints and their context. Even a structurally plausible hint is not automatically promoted to a first-class one-hot or SOS1 constraint, so unverified metadata cannot change the feasible set or required adapter capabilities. Imported instances can also be serialized back to v1 because no special constraint is introduced implicitly.
@@ -553,7 +579,7 @@ Adapter options are solve-scoped metadata, so they do not appear in {meth}`~ommx
 
 ### 🆕 Experiment fork and lineage ([#905](https://github.com/Jij-Inc/ommx/pull/905))
 
-{meth}`~ommx.experiment.Experiment.fork` starts a new uncommitted Experiment from a committed one. The child inherits the parent's attachments, Runs, Solves, and Run parameters, while the parent remains unchanged. When the child is committed after adding new Runs or attachments, the parent manifest descriptor is recorded as the OCI `subject`.
+{meth}`~ommx.experiment.Experiment.fork` starts a new uncommitted Experiment from a committed one. The child inherits the parent's attachments, Runs, Solves, Samplings, and Run parameters, while the parent remains unchanged. When the child is committed after adding new Runs or attachments, the parent manifest descriptor is recorded as the OCI `subject`.
 
 ```python
 from ommx.experiment import Experiment

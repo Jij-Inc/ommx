@@ -80,6 +80,7 @@ __all__ = [
     "SampledDecisionVariable",
     "SampledNamedFunction",
     "Samples",
+    "Sampling",
     "ScalarLike",
     "SealedRun",
     "Sense",
@@ -1784,7 +1785,7 @@ class Experiment:
 
     An `Experiment` owns experiment-level attachments and a sequence of
     closed `Run` records. Each `Run` can store scalar run parameters,
-    run-level attachments, and zero or more `Solve` records.
+    run-level attachments, and zero or more `Solve` and `Sampling` records.
 
     Newly created experiments are unsealed. Call `commit()` to write the
     experiment into the local registry as an OMMX Artifact. After commit, the
@@ -1806,7 +1807,8 @@ class Experiment:
     Use experiment-level attachments for shared context such as dataset or
     source-problem metadata. Use `Run.log_parameter(...)` for scalar values
     that should appear in `run_parameters_df()`, and use run attachments or
-    `Run.log_solve(...)` for payloads that belong to a specific run.
+    `Run.log_solve(...)` and `Run.log_sample(...)` for payloads that belong to
+    a specific run.
 
     Example:
 
@@ -1955,12 +1957,12 @@ class Experiment:
         Fork this committed Experiment into a new unsealed child Experiment.
 
         The parent Experiment is not modified. Existing Attachments, Runs,
-        Solves, and Run parameters are carried into the child Experiment.
+        Solves, Samplings, and Run parameters are carried into the child Experiment.
         When the child is committed, its Artifact manifest records the parent
         manifest descriptor as OCI `subject`. The child reuses payload blobs
         already present in the Local Registry; forking creates a new manifest
-        but does not duplicate unchanged Instance, Solution, or Attachment
-        bytes.
+        but does not duplicate unchanged Instance, Solution, SampleSet, or
+        Attachment bytes.
 
         If `image_name` is omitted, OMMX generates an anonymous local
         Experiment name for the child. The returned Experiment can be used as
@@ -2267,6 +2269,11 @@ class ExperimentCheckpointRef:
         Total number of Solves recorded across the checkpoint's closed Runs.
         """
     @property
+    def sampling_count(self) -> builtins.int:
+        r"""
+        Total number of Samplings recorded across the checkpoint's closed Runs.
+        """
+    @property
     def annotations(self) -> builtins.dict[builtins.str, builtins.str]:
         r"""
         Manifest annotations stored on the checkpoint Artifact.
@@ -2317,6 +2324,11 @@ class ExperimentRef:
     def solve_count(self) -> builtins.int:
         r"""
         Total number of solves recorded across all runs.
+        """
+    @property
+    def sampling_count(self) -> builtins.int:
+        r"""
+        Total number of samplings recorded across all runs.
         """
     @property
     def annotations(self) -> builtins.dict[builtins.str, builtins.str]:
@@ -6034,6 +6046,29 @@ class Run:
         before the failure when `store_diagnostics=True`. Failed Solve entries
         have `output=None`.
         """
+    def log_sample(
+        self,
+        adapter: type[adapter.SamplerAdapter],
+        instance: Instance,
+        *,
+        store_diagnostics: builtins.bool = False,
+        **kwargs: typing.Any,
+    ) -> SampleSet:
+        r"""
+        Sample an Instance with an OMMX SamplerAdapter and log a Sampling entry.
+
+        The original input is stored together with the returned `SampleSet`.
+        A successful sampler call is recorded as finished even when none of its
+        samples are feasible.
+
+        `adapter` must be a subclass of `ommx.adapter.SamplerAdapter`. Keyword
+        arguments are passed to `adapter.sample(...)` and recorded as
+        `Sampling.adapter_options`.
+
+        Set `store_diagnostics=True` to pass a diagnostics sink to the adapter.
+        Diagnostics persistence is best-effort and does not change a successful
+        sampler call into a failed Sampling.
+        """
     def open_solve(
         self,
         adapter: type[adapter.SolverAdapter],
@@ -6613,15 +6648,61 @@ class Samples:
         """
 
 @typing.final
+class Sampling:
+    r"""
+    Immutable record of one sampler call.
+
+    A finished Sampling stores a `SampleSet`; failed and interrupted Sampling
+    records have no output.
+    """
+    @property
+    def sampling_id(self) -> builtins.int:
+        r"""
+        Integer identifier of this sampling within its run.
+        """
+    @property
+    def status(self) -> builtins.str:
+        r"""
+        Sampling lifecycle status: `"finished"`, `"failed"`, or `"interrupted"`.
+        """
+    @property
+    def input(self) -> Instance:
+        r"""
+        Input `Instance` passed to the sampler.
+        """
+    @property
+    def output(self) -> typing.Optional[SampleSet]:
+        r"""
+        SampleSet returned by the adapter, or `None` if the call failed before returning one.
+        """
+    @property
+    def adapter(self) -> builtins.str:
+        r"""
+        SamplerAdapter class name used for this sampling.
+        """
+    @property
+    def adapter_options(self) -> builtins.dict[builtins.str, typing.Any]:
+        r"""
+        Keyword arguments passed to the SamplerAdapter.
+        """
+    @property
+    def diagnostics(self) -> builtins.list[typing.Any]:
+        r"""
+        Adapter-defined diagnostics recorded during this sampling.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class SealedRun:
     r"""
     Immutable view of a closed Run in an Experiment.
 
-    `SealedRun` exposes run-level attachments by name and the sequence of
-    `Solve` records created by `Run.log_solve`. The `status` property records
+    `SealedRun` exposes run-level attachments by name, `Solve` records created
+    by `Run.log_solve`, and `Sampling` records created by `Run.log_sample`.
+    The `status` property records
     how the Run scope was closed: `"finished"`, `"failed"`, or `"interrupted"`.
-    It is not an aggregate status of child `Solve` records, so a finished Run
-    may contain failed Solve attempts that were handled inside the Run.
+    It is not an aggregate status of child records, so a finished Run may
+    contain failed Solve or Sampling attempts handled inside the Run.
     """
     @property
     def run_id(self) -> builtins.int:
@@ -6651,6 +6732,11 @@ class SealedRun:
     def solves(self) -> builtins.list[Solve]:
         r"""
         Solve records logged in this run, ordered by `solve_id`.
+        """
+    @property
+    def samplings(self) -> builtins.list[Sampling]:
+        r"""
+        Sampling records logged in this run, ordered by `sampling_id`.
         """
     def attachment_media_type(self, name: builtins.str) -> builtins.str:
         r"""
@@ -7128,10 +7214,9 @@ class Solve:
     r"""
     Immutable record of one solver call.
 
-    A `Solve` always stores the input `Instance`, adapter class name, and
-    JSON-encoded adapter options for one `Run.log_solve` call. A finished Solve
-    stores the output `Solution`; failed and interrupted Solve records have no
-    output.
+    A `Solve` always stores the input `Instance`, SolverAdapter class name, and
+    JSON-encoded adapter options for one solver call. A finished Solve stores a
+    `Solution`; failed and interrupted Solve records have no output.
     """
     @property
     def solve_id(self) -> builtins.int:
@@ -7151,7 +7236,7 @@ class Solve:
     @property
     def output(self) -> typing.Optional[Solution]:
         r"""
-        Output `Solution` returned by the solver, or `None` if the solve failed before returning one.
+        Solution returned by the adapter, or `None` if the call failed before returning one.
         """
     @property
     def adapter(self) -> builtins.str:

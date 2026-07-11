@@ -216,6 +216,7 @@ fn experiment_checkpoint_ref_from_record(
         status: record.status,
         run_count: record.run_count,
         solve_count: record.solve_count,
+        sampling_count: record.sampling_count,
         annotations: record.annotations,
         config: record.config,
     })

@@ -8,7 +8,7 @@ import pytest
 from opentelemetry import trace as otel_trace
 from opentelemetry.proto.trace.v1.trace_pb2 import Status as ProtoStatus
 
-from ommx.adapter import SolverAdapter
+from ommx.adapter import DiagnosticsSink, SamplerAdapter, SolverAdapter
 from ommx.experiment import (
     AutosavePolicy,
     Experiment,
@@ -16,7 +16,7 @@ from ommx.experiment import (
     list_experiments,
 )
 from ommx.tracing import TraceResult, render_text_tree
-from ommx import Instance, Solution
+from ommx import DecisionVariable, Instance, SampleSet, Solution
 
 from conftest import get_test_exporter
 
@@ -102,12 +102,14 @@ def test_list_experiments_returns_cached_ref_records(tmp_path):
     assert ref.status == "finished"
     assert ref.run_count == 1
     assert ref.solve_count == 0
+    assert ref.sampling_count == 0
     assert ref.annotations["com.example.problem"] == "qap"
     assert "sha256:" in ref.manifest_digest
     assert "sha256:" in ref.config_digest
     assert ref.config["status"] == "finished"
     assert len(ref.config["runs"]) == 1
     assert ref.config["runs"][0]["solves"] == []
+    assert ref.config["runs"][0]["samplings"] == []
     assert "T" in ref.updated_at
     assert [ref.image_name for ref in list_experiments(f"{prefix}/case:lat")] == [
         image_name
@@ -895,6 +897,180 @@ def test_log_solve_logs_input_solution_and_adapter_options():
     # Adapter options are solve-scoped metadata, not Run parameters.
     df = loaded.run_parameters_df()
     assert df.shape == (1, 0)
+
+
+def test_log_sample_records_finished_sample_set_without_feasible_samples():
+    class DummySampler(SamplerAdapter):
+        seen_diagnostics: ClassVar[DiagnosticsSink | None]
+
+        @classmethod
+        def sample(
+            cls,
+            ommx_instance: Instance,
+            *,
+            diagnostics: DiagnosticsSink | None = None,
+            **kwargs: object,
+        ) -> SampleSet:
+            assert kwargs == {"num_reads": 1}
+            cls.seen_diagnostics = diagnostics
+            if diagnostics is not None:
+                diagnostics.record(DummyDiagnostic(status="sampled", bound=0.0))
+            return ommx_instance.evaluate_samples([{0: 0}])
+
+        @classmethod
+        def solve(
+            cls,
+            ommx_instance: Instance,
+            *,
+            diagnostics: DiagnosticsSink | None = None,
+        ) -> Solution:
+            raise NotImplementedError
+
+        @property
+        def solver_input(self) -> Any:
+            raise NotImplementedError
+
+        def decode(self, data: Any) -> Solution:
+            raise NotImplementedError
+
+        @property
+        def sampler_input(self) -> Any:
+            raise NotImplementedError
+
+        def decode_to_sampleset(self, data: Any) -> SampleSet:
+            raise NotImplementedError
+
+    x = DecisionVariable.binary(0)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        constraints={0: x == 1},
+        sense=Instance.MINIMIZE,
+    )
+    experiment = Experiment.with_temp_local_registry()
+
+    with experiment.run() as run:
+        sample_set = run.log_sample(
+            DummySampler,
+            instance,
+            store_diagnostics=True,
+            num_reads=1,
+        )
+        assert sample_set.feasible_ids() == set()
+        assert DummySampler.seen_diagnostics is not None
+
+    loaded = Experiment.from_artifact(experiment.commit())
+    run = loaded.runs[0]
+    assert run.solves == []
+    sampling = run.samplings[0]
+    assert sampling.sampling_id == 0
+    assert sampling.status == "finished"
+    assert isinstance(sampling.input, Instance)
+    assert isinstance(sampling.output, SampleSet)
+    assert sampling.output.feasible_ids() == set()
+    assert sampling.adapter_options == {"num_reads": 1}
+    assert sampling.diagnostics == [{"status": "sampled", "bound": 0.0}]
+
+
+def test_log_solve_and_sample_omit_disabled_diagnostics_keyword():
+    class LegacySolver(SolverAdapter):
+        @classmethod
+        def solve(  # type: ignore[override]
+            cls, ommx_instance: Instance
+        ) -> Solution:
+            return ommx_instance.evaluate({})
+
+        @property
+        def solver_input(self) -> Any:
+            raise NotImplementedError
+
+        def decode(self, data: Any) -> Solution:
+            raise NotImplementedError
+
+    class LegacySampler(SamplerAdapter):
+        @classmethod
+        def sample(  # type: ignore[override]
+            cls, ommx_instance: Instance
+        ) -> SampleSet:
+            return ommx_instance.evaluate_samples([{}])
+
+        @classmethod
+        def solve(  # type: ignore[override]
+            cls, ommx_instance: Instance
+        ) -> Solution:
+            raise NotImplementedError
+
+        @property
+        def solver_input(self) -> Any:
+            raise NotImplementedError
+
+        def decode(self, data: Any) -> Solution:
+            raise NotImplementedError
+
+        @property
+        def sampler_input(self) -> Any:
+            raise NotImplementedError
+
+        def decode_to_sampleset(self, data: Any) -> SampleSet:
+            raise NotImplementedError
+
+    instance = Instance.empty()
+    experiment = Experiment.with_temp_local_registry()
+
+    with experiment.run() as run:
+        solution = run.log_solve(LegacySolver, instance)
+        sample_set = run.log_sample(LegacySampler, instance)
+        assert solution.feasible
+        assert sample_set.feasible_ids() == {0}
+
+
+def test_log_sample_records_failed_sampling_separately_from_solves():
+    class FailingSampler(SamplerAdapter):
+        @classmethod
+        def sample(
+            cls,
+            ommx_instance: Instance,
+            *,
+            diagnostics: DiagnosticsSink | None = None,
+            **kwargs: object,
+        ) -> SampleSet:
+            raise RuntimeError("sampling failed")
+
+        @classmethod
+        def solve(
+            cls,
+            ommx_instance: Instance,
+            *,
+            diagnostics: DiagnosticsSink | None = None,
+        ) -> Solution:
+            raise NotImplementedError
+
+        @property
+        def solver_input(self) -> Any:
+            raise NotImplementedError
+
+        def decode(self, data: Any) -> Solution:
+            raise NotImplementedError
+
+        @property
+        def sampler_input(self) -> Any:
+            raise NotImplementedError
+
+        def decode_to_sampleset(self, data: Any) -> SampleSet:
+            raise NotImplementedError
+
+    experiment = Experiment.with_temp_local_registry()
+    with experiment.run() as run:
+        with pytest.raises(RuntimeError, match="sampling failed"):
+            run.log_sample(FailingSampler, Instance.empty())
+
+    loaded = Experiment.from_artifact(experiment.commit())
+    run = loaded.runs[0]
+    assert run.solves == []
+    assert len(run.samplings) == 1
+    sampling = run.samplings[0]
+    assert sampling.status == "failed"
+    assert sampling.output is None
 
 
 def test_open_solve_records_direct_solver_input_workflow():

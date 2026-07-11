@@ -481,7 +481,12 @@ PySCIPOptの時は `SolverAdapter` を継承しましたが、今回は `Sampler
 class SamplerAdapter(SolverAdapter):
     @classmethod
     @abstractmethod
-    def sample(cls, ommx_instance: Instance) -> SampleSet:
+    def sample(
+        cls,
+        ommx_instance: Instance,
+        *,
+        diagnostics: DiagnosticsSink | None = None,
+    ) -> SampleSet:
         pass
 
     @property
@@ -495,6 +500,8 @@ class SamplerAdapter(SolverAdapter):
 ```
 
 `SamplerAdapter` は `SolverAdapter` を継承しているので `solve` などの `@abstractmethod` も実装する必要と思うかもしれません。しかし、これらについては `sample` を使って最善のサンプルを返すという機能が `SamplerAdapter` に実装されているため、`sample` だけを実装すれば十分です。自分でより効率の良い実装を行いたい場合は `solve` をオーバーライドしてください。
+
+`solve` と同様に、予約済みの `diagnostics` keyword は `Run.log_sample` が管理します。sink が `None` でない場合、sampler は adapter 固有の report を記録できます。
 
 ```{code-cell} ipython3
 from ommx.adapter import DiagnosticsSink, SamplerAdapter
@@ -521,7 +528,13 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
 
     # サンプリングを行う共通のメソッド
     @classmethod
-    def sample(cls, ommx_instance: Instance) -> SampleSet:
+    def sample(
+        cls,
+        ommx_instance: Instance,
+        *,
+        diagnostics: DiagnosticsSink | None = None,
+    ) -> SampleSet:
+        _ = diagnostics
         adapter = cls(ommx_instance)
         response = adapter._sample()
         return adapter.decode_to_sampleset(response)

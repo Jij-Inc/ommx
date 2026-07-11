@@ -25,9 +25,11 @@ kernelspec:
 * - {py:class}`~ommx.experiment.Experiment`
   - 1つの実験全体。実験そのものに紐づいた Attachment に加えて複数のRunを持つことができる。共有の単位でありコンテナとしての名前が常に付与される。
 * - {py:class}`~ommx.experiment.Run`
-  - 実験の中で行った一つの試行、比較の単位。複雑な問題を解く際に複数回のソルバー呼び出しを伴うことがよくあるため、Runは複数回のソルバー呼び出し（Solve）を持つことができる。加えてRun毎に比較の軸となるスカラー値のパラメータを付与でき、Experiment全体でのRunの比較を容易にする。
+  - 実験の中で行った一つの試行、比較の単位。Runは複数回のソルバー呼び出し（Solve）とsampler呼び出し（Sampling）を持つことができる。加えてRun毎に比較の軸となるスカラー値のパラメータを付与でき、Experiment全体でのRunの比較を容易にする。
 * - {py:class}`~ommx.experiment.Solve`
-  - Runの中で行った一回のソルバー呼び出し。入力の {py:class}`~ommx.Instance`、使用した Adapter、ソルバー呼び出しに渡したオプションを常に記録する。finished Solve は出力の {py:class}`~ommx.Solution` も保存し、failed または interrupted Solve は output を持たない。
+  - Runの中で行った一回のsolver呼び出し。入力の {py:class}`~ommx.Instance`、SolverAdapterとそのoption、finished時の出力 {py:class}`~ommx.Solution` を記録する。
+* - {py:class}`~ommx.experiment.Sampling`
+  - Runの中で行った一回のsampler呼び出し。入力の {py:class}`~ommx.Instance`、SamplerAdapterとそのoption、finished時の完全な出力 {py:class}`~ommx.SampleSet` を記録する。
 * - Attachment
   - ExperimentやRunに添付する任意のペイロード。JSON、`numpy.ndarray`、{py:class}`~ommx.Instance`、{py:class}`~ommx.Solution`などのデータ型に加えて、任意のbytesをMedia Typeを指定して保存できる。
 ```
@@ -181,12 +183,14 @@ with Experiment() as experiment:
 実験の途中で保存されたデータはすべてOMMXの *Local Registry* に保存されます。
 
 - OMMXのLocal RegistryはOMMX Artifactの構成要素を効率よく保存するためのストレージです。`OMMX_LOCAL_REGISTRY_ROOT` 環境変数で場所を変更できます。 {py:meth}`~ommx.experiment.Experiment.with_temp_local_registry` などの一時的なLocal Registryを生成して使うAPIもあります。
-- `log_json` や `log_solve` ではデータは随時Local Registryに保存されていきます。メモリ上に置いておいてExperimentの最後にまとめて保存するわけではありません。これはデータの内容（SHA256ハッシュ値）をもとに保存パスが決められるので、同じデータはLocal Registry単位で一度だけ保存されます。
+- `log_json`、`log_solve`、`log_sample` ではデータは随時Local Registryに保存されていきます。メモリ上に置いておいてExperimentの最後にまとめて保存するわけではありません。これはデータの内容（SHA256ハッシュ値）をもとに保存パスが決められるので、同じデータはLocal Registry単位で一度だけ保存されます。
 - Experimentの終了処理ではそのExperiment中に保存されたデータの一覧をまとめたJSON（Artifact Manifest）をLocal Registryに保存して、起動時に指定あるいは自動的に決めたExperimentの名前でこのArtifact Manifestを指すタグをLocal Registryに保存します。
 
 ### ソルバーのModelを直接操作する場合
 
 通常のRunでは {py:meth}`~ommx.experiment.Run.log_solve` を使います。これはadapterの `solve` メソッドを呼び出し、入力、出力、adapter名、adapter optionsをまとめて記録します。一方で、AdapterのAPIではサポートしきれていないソルバーの高度な機能を使う必要がある場合は、手動Solveスコープを開きます。
+
+{py:class}`~ommx.adapter.SamplerAdapter` では、代わりに {py:meth}`~ommx.experiment.Run.log_sample` を使います。adapter の `sample` メソッドを呼び出し、完全な {py:class}`~ommx.SampleSet` を出力に持つ独立した {py:class}`~ommx.experiment.Sampling` として記録します。adapter呼び出し自体が成功していれば、SampleSet に feasible sample がなくてもSamplingはfinishedとして記録されます。読み込んだSampling recordは {py:attr}`~ommx.experiment.SealedRun.samplings` から取得できます。
 
 手動Solveスコープでは、まず `solver_input` でバックエンドソルバーのModelを受け取り、ユーザーがそのModelを直接操作して最適化を行います。最後に `solve.decode(model)` を呼ぶと、adapterがバックエンドの結果を {py:class}`~ommx.Solution` に変換し、そのSolutionがExperimentに記録されるSolveの出力になります。
 
@@ -324,9 +328,9 @@ restored_jij_problem = loaded_experiment.get_with_codec(
 assert restored_jij_problem.name == jij_problem.name
 ```
 
-### RunsとSolves
+### Run、Solve、Sampling
 
-Runの一覧は {py:attr}`~ommx.experiment.Experiment.runs` から確認できます。終了済みのRunが作成順に並び、それぞれのRunに紐づくAttachmentとSolveを確認できます。
+Runの一覧は {py:attr}`~ommx.experiment.Experiment.runs` から確認できます。終了済みのRunが作成順に並び、それぞれのRunに紐づくAttachment、Solve、Samplingを確認できます。
 
 trace storageを有効にして記録したRunでは、{py:attr}`~ommx.experiment.SealedRun.trace` から保存済みのRunトレースを取得できます。これは発展的な機能なので、詳細は {ref}`experiment-run-trace-storage` を参照してください。
 
@@ -393,6 +397,6 @@ forked_df = forked_experiment.run_parameters_df()
 assert forked_df.loc[2, "capacity"] == 64
 ```
 
-ForkされたExperimentはSolveやAttachmentのデータを引き継ぎますが、データはLocal Registryにデータの内容に基づいて保存されているので、Forkしてもデータが複製されるわけではありません。複製されるのはデータの一覧をまとめたArtifact Manifestだけで、Fork先のExperimentはFork元のExperimentと同じデータを指すようになります。
+ForkされたExperimentはSolve、Sampling、Attachmentのデータを引き継ぎますが、データはLocal Registryにデータの内容に基づいて保存されているので、Forkしてもデータが複製されるわけではありません。複製されるのはデータの一覧をまとめたArtifact Manifestだけで、Fork先のExperimentはFork元のExperimentと同じデータを指すようになります。
 
-ForkされたExperimentを {py:meth}`~ommx.experiment.Experiment.save` や {py:meth}`~ommx.experiment.Experiment.push` で共有すると、共有されるのはFork後のExperiment全体です。元のExperiment由来のAttachment、Run、SolveもFork先のArtifactの `layers` に含まれるため、Fork後のExperimentを読み出すだけであれば元のExperimentは必要ありません。
+ForkされたExperimentを {py:meth}`~ommx.experiment.Experiment.save` や {py:meth}`~ommx.experiment.Experiment.push` で共有すると、共有されるのはFork後のExperiment全体です。元のExperiment由来のAttachment、Run、Solve、SamplingもFork先のArtifactの `layers` に含まれるため、Fork後のExperimentを読み出すだけであれば元のExperimentは必要ありません。

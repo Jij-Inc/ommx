@@ -138,11 +138,13 @@ except UnboundedDetected:
 
 ## Experiment Integration
 
-When using {py:meth}`~ommx.experiment.Run.log_solve`, do not pass the
-`diagnostics` keyword yourself. `Run.log_solve` owns that reserved keyword,
+When using {py:meth}`~ommx.experiment.Run.log_solve` or
+{py:meth}`~ommx.experiment.Run.log_sample`, do not pass the `diagnostics`
+keyword yourself. The logging method owns that reserved keyword,
 and diagnostics collection is disabled by default. Set
 `store_diagnostics=True` to pass a diagnostics sink to the adapter and store
-recorded diagnostics with the Solve entry in the Experiment Artifact.
+recorded diagnostics with the corresponding Solve or Sampling entry in the
+Experiment Artifact.
 
 ```python
 from ommx.experiment import Experiment
@@ -174,8 +176,11 @@ If {meth}`~ommx.adapter.SolverAdapter.solve` raises before returning an OMMX
 Solution, `Run.log_solve` still records a failed Solve entry when possible. That
 entry has `status == "failed"` or `"interrupted"`, no output Solution, and any
 diagnostics collected before the failure when `store_diagnostics=True`.
+`Run.log_sample` records sampler failures separately as Sampling entries with
+no output SampleSet.
 
 See the API Reference for the adapter diagnostics contract:
 {class}`~ommx.adapter.DiagnosticsSink`,
 {class}`~ommx.adapter.DiagnosticCollector`, and
-{meth}`~ommx.adapter.SolverAdapter.solve`.
+{meth}`~ommx.adapter.SolverAdapter.solve` or
+{meth}`~ommx.adapter.SamplerAdapter.sample`.
