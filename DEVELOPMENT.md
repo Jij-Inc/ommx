@@ -15,6 +15,23 @@ You can get a list of available tasks by running `task -l` in the root directory
 Code Map
 ========
 
+[`lean/`](./lean/)
+-------------------
+
+The independent Lean project formalizes the Phase A mathematical semantics for
+proof-carrying presolve and special-constraint recovery. It does not depend on
+the OMMX Rust SDK or protobuf schema.
+
+Install Lean through `elan`, then run:
+
+```shell
+task lean:cache
+task lean:check
+```
+
+See [`lean/README.md`](./lean/README.md) for the formal contract, module map,
+scope, and non-goals.
+
 [`proto/`](./proto/)
 --------------------
 - OMMX Message schema is defined in `*.proto` files under this directory.

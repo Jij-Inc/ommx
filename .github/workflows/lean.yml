@@ -1,0 +1,43 @@
+name: Lean Proof
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "lean/**"
+      - ".github/workflows/lean.yml"
+      - "Taskfile.yml"
+  pull_request:
+    paths:
+      - "lean/**"
+      - ".github/workflows/lean.yml"
+      - "Taskfile.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lean-proof:
+    name: Lean proof
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Build and check Phase A formalization
+        uses: leanprover/lean-action@v1
+        with:
+          lake-package-directory: lean
+          build: true
+          build-args: "OMMXProof --wfail"
+          test: true
+          test-args: "--wfail"
+          lint: false
+          leanchecker: true
+          use-github-cache: false
+
+      - name: Check generated module coverage
+        working-directory: lean
+        run: lake exe mk_all --check
