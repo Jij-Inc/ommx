@@ -1,6 +1,6 @@
 use super::{
-    now_rfc3339, ArtifactManifestRecord, ArtifactRefRecord, ExperimentManifestRecord,
-    ExperimentRefRecord, RefRecord, RefUpdate, SQLITE_INDEX_FILE_NAME,
+    now_rfc3339, ArtifactManifestRecord, ExperimentManifestRecord, ExperimentRefRecord, RefRecord,
+    RefUpdate, SQLITE_INDEX_FILE_NAME,
 };
 use crate::artifact::digest::validate_digest;
 use crate::artifact::media_types;
@@ -12,6 +12,7 @@ use oci_spec::image::DescriptorBuilder;
 use oci_spec::image::{Descriptor, Digest, ImageManifest, MediaType};
 use rusqlite::{params, types::Type, Connection, OptionalExtension, TransactionBehavior};
 use std::{
+    collections::BTreeMap,
     fs,
     path::Path,
     str::FromStr,
@@ -22,6 +23,78 @@ use std::{
 /// SQLite Local Registry schema version stored in `PRAGMA user_version`.
 const SCHEMA_VERSION: i64 = 2;
 const SQLITE_BUSY_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Immutable Local Registry listing record for an OMMX Artifact.
+///
+/// Values are reconstructed only by the SQLite index from a ref and the
+/// digest-addressed copy of its original OCI Manifest JSON. The Manifest bytes
+/// are verified against `manifest_digest` before this record is returned. Use
+/// [`Self::manifest_digest`] as the immutable artifact identity;
+/// [`Self::image_name`] is the mutable Local Registry alias that pointed to it
+/// when the snapshot was read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArtifactRefRecord {
+    image_name: ImageRef,
+    manifest_digest: Digest,
+    updated_at: String,
+    manifest_size: u64,
+    manifest: ImageManifest,
+}
+
+impl ArtifactRefRecord {
+    /// Full Local Registry image reference.
+    pub fn image_name(&self) -> &ImageRef {
+        &self.image_name
+    }
+
+    /// Immutable OCI Manifest digest for the Artifact.
+    pub fn manifest_digest(&self) -> &Digest {
+        &self.manifest_digest
+    }
+
+    /// RFC 3339 timestamp when the Local Registry ref was last updated.
+    pub fn updated_at(&self) -> &str {
+        &self.updated_at
+    }
+
+    /// Byte length of the original OCI Manifest JSON.
+    pub fn manifest_size(&self) -> u64 {
+        self.manifest_size
+    }
+
+    /// Parsed OCI Image Manifest stored by [`Self::manifest_digest`].
+    pub fn manifest(&self) -> &ImageManifest {
+        &self.manifest
+    }
+
+    /// Sum of the sizes declared directly by this Artifact's OCI Manifest.
+    ///
+    /// This includes the original Manifest JSON bytes, its config descriptor,
+    /// and each unique layer digest. The OCI `subject` is intentionally excluded.
+    /// Blobs shared with other Artifact refs are counted for each ref, so values
+    /// from multiple records are not additive physical Local Registry usage.
+    pub fn referenced_blob_size(&self) -> Result<u64> {
+        let mut blob_sizes = BTreeMap::new();
+        for descriptor in std::iter::once(self.manifest.config()).chain(self.manifest.layers()) {
+            let digest = descriptor.digest().to_string();
+            if let Some(previous_size) = blob_sizes.insert(digest.clone(), descriptor.size()) {
+                ensure!(
+                    previous_size == descriptor.size(),
+                    "Manifest contains conflicting sizes for {digest}: {previous_size} and {}",
+                    descriptor.size()
+                );
+            }
+        }
+
+        blob_sizes
+            .into_values()
+            .try_fold(self.manifest_size, |total, size| {
+                total
+                    .checked_add(size)
+                    .context("Referenced blob size overflowed u64")
+            })
+    }
+}
 
 /// SQLite-backed index store for the v3 Local Registry.
 ///
@@ -1355,4 +1428,66 @@ fn descriptor_from_cached_manifest_row(row: &rusqlite::Row<'_>) -> rusqlite::Res
 
 fn random_registry_id() -> String {
     uuid::Uuid::new_v4().simple().to_string()
+}
+
+#[cfg(test)]
+mod artifact_ref_record_tests {
+    use super::*;
+    use oci_spec::image::ImageManifestBuilder;
+
+    const DIGEST: &str = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+    fn descriptor(size: u64) -> Result<Descriptor> {
+        DescriptorBuilder::default()
+            .media_type(MediaType::Other("application/octet-stream".to_string()))
+            .digest(Digest::from_str(DIGEST)?)
+            .size(size)
+            .build()
+            .context("Failed to build test descriptor")
+    }
+
+    fn record(
+        manifest_size: u64,
+        config_size: u64,
+        layer_sizes: &[u64],
+    ) -> Result<ArtifactRefRecord> {
+        let manifest = ImageManifestBuilder::default()
+            .schema_version(2_u32)
+            .config(descriptor(config_size)?)
+            .layers(
+                layer_sizes
+                    .iter()
+                    .copied()
+                    .map(descriptor)
+                    .collect::<Result<Vec<_>>>()?,
+            )
+            .build()?;
+        Ok(ArtifactRefRecord {
+            image_name: ImageRef::parse("example.com/ommx/size:test")?,
+            manifest_digest: Digest::from_str(DIGEST)?,
+            updated_at: "2026-07-11T00:00:00Z".to_string(),
+            manifest_size,
+            manifest,
+        })
+    }
+
+    #[test]
+    fn referenced_blob_size_rejects_conflicting_sizes_for_one_digest() -> Result<()> {
+        let record = record(0, 1, &[2])?;
+        let error = record
+            .referenced_blob_size()
+            .expect_err("one digest cannot declare conflicting sizes");
+        assert!(error.to_string().contains("conflicting sizes"));
+        Ok(())
+    }
+
+    #[test]
+    fn referenced_blob_size_rejects_u64_overflow() -> Result<()> {
+        let record = record(1, u64::MAX, &[])?;
+        let error = record
+            .referenced_blob_size()
+            .expect_err("the referenced size sum must not overflow");
+        assert!(error.to_string().contains("overflowed u64"));
+        Ok(())
+    }
 }

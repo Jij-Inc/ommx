@@ -31,22 +31,22 @@ pub struct PyArtifactRef {
 
 impl From<ommx::artifact::local_registry::ArtifactRefRecord> for PyArtifactRef {
     fn from(record: ommx::artifact::local_registry::ArtifactRefRecord) -> Self {
-        let artifact_type = record
-            .manifest
+        let manifest = record.manifest().clone();
+        let artifact_type = manifest
             .artifact_type()
             .as_ref()
             .expect("ArtifactRefRecord requires an OMMX artifactType")
             .to_string();
-        let config_digest = record.manifest.config().digest().to_string();
-        let annotations = record.manifest.annotations().clone().unwrap_or_default();
+        let config_digest = manifest.config().digest().to_string();
+        let annotations = manifest.annotations().clone().unwrap_or_default();
         Self {
-            image_name: record.image_name.to_string(),
-            manifest_digest: record.manifest_digest.to_string(),
-            updated_at: record.updated_at,
+            image_name: record.image_name().to_string(),
+            manifest_digest: record.manifest_digest().to_string(),
+            updated_at: record.updated_at().to_string(),
             artifact_type,
             config_digest,
             annotations,
-            manifest: record.manifest,
+            manifest,
         }
     }
 }

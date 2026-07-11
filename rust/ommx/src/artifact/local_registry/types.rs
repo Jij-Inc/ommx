@@ -118,58 +118,6 @@ impl ExperimentManifestRecord {
     }
 }
 
-/// Local Registry listing record for an OMMX Artifact.
-///
-/// Values are reconstructed from a ref and the digest-addressed SQLite copy of
-/// its original OCI Manifest JSON. The Manifest bytes are verified against
-/// `manifest_digest` before this record is returned. Use `manifest_digest` as
-/// the immutable artifact identity; `image_name` is the mutable local registry
-/// alias that currently points to it.
-#[non_exhaustive]
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ArtifactRefRecord {
-    /// Full local registry image reference.
-    pub image_name: crate::artifact::ImageRef,
-    /// Immutable OCI manifest digest for the Artifact.
-    pub manifest_digest: Digest,
-    /// RFC 3339 timestamp when the local ref was last updated.
-    pub updated_at: String,
-    /// Byte length of the original OCI Manifest JSON stored by `manifest_digest`.
-    pub manifest_size: u64,
-    /// Parsed OCI Image Manifest stored by `manifest_digest`.
-    pub manifest: ImageManifest,
-}
-
-impl ArtifactRefRecord {
-    /// Sum of the sizes declared directly by this Artifact's OCI Manifest.
-    ///
-    /// This includes the original Manifest JSON bytes, its config descriptor,
-    /// and each unique layer digest. The OCI `subject` is intentionally excluded.
-    /// Blobs shared with other Artifact refs are counted for each ref, so values
-    /// from multiple records are not additive physical Local Registry usage.
-    pub fn referenced_blob_size(&self) -> Result<u64> {
-        let mut blob_sizes = BTreeMap::new();
-        for descriptor in std::iter::once(self.manifest.config()).chain(self.manifest.layers()) {
-            let digest = descriptor.digest().to_string();
-            if let Some(previous_size) = blob_sizes.insert(digest.clone(), descriptor.size()) {
-                ensure!(
-                    previous_size == descriptor.size(),
-                    "Manifest contains conflicting sizes for {digest}: {previous_size} and {}",
-                    descriptor.size()
-                );
-            }
-        }
-
-        blob_sizes
-            .into_values()
-            .try_fold(self.manifest_size, |total, size| {
-                total
-                    .checked_add(size)
-                    .context("Referenced blob size overflowed u64")
-            })
-    }
-}
-
 /// Controls generic Artifact catalog listing behavior.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct ArtifactListOptions {

@@ -1272,21 +1272,21 @@ fn local_registry_lists_artifacts_from_manifest_cache() -> Result<()> {
     let records = registry.list_artifacts(Some("example.com/catalog"))?;
     assert_eq!(records.len(), 1);
     let record = &records[0];
-    assert_eq!(record.image_name, image_name);
-    assert_eq!(&record.manifest_digest, artifact.manifest_digest());
+    assert_eq!(record.image_name(), &image_name);
+    assert_eq!(record.manifest_digest(), artifact.manifest_digest());
     assert_eq!(
-        record.manifest.artifact_type(),
+        record.manifest().artifact_type(),
         &Some(MediaType::Other(
             media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()
         ))
     );
     assert_eq!(
-        record.manifest.config().digest(),
+        record.manifest().config().digest(),
         artifact.stored_config()?.digest()
     );
     assert_eq!(
         record
-            .manifest
+            .manifest()
             .annotations()
             .as_ref()
             .unwrap()
@@ -1294,11 +1294,11 @@ fn local_registry_lists_artifacts_from_manifest_cache() -> Result<()> {
         Some(&"qap".to_string())
     );
     assert_eq!(
-        record.manifest.artifact_type().as_ref().unwrap().as_ref(),
+        record.manifest().artifact_type().as_ref().unwrap().as_ref(),
         media_types::V1_ARTIFACT_MEDIA_TYPE,
     );
-    assert_eq!(record.manifest.layers().len(), 1);
-    assert!(record.updated_at.contains('T'));
+    assert_eq!(record.manifest().layers().len(), 1);
+    assert!(record.updated_at().contains('T'));
     Ok(())
 }
 
@@ -1329,11 +1329,11 @@ fn list_artifacts_backfills_shared_missing_manifest() -> Result<()> {
 
     let records = registry.list_artifacts(Some("example.com/catalog"))?;
     assert_eq!(records.len(), 2);
-    assert_eq!(records[0].image_name, alias);
-    assert_eq!(records[1].image_name, image_name);
+    assert_eq!(records[0].image_name(), &alias);
+    assert_eq!(records[1].image_name(), &image_name);
     assert!(records
         .iter()
-        .all(|record| &record.manifest_digest == artifact.manifest_digest()));
+        .all(|record| record.manifest_digest() == artifact.manifest_digest()));
     Ok(())
 }
 
@@ -1376,7 +1376,8 @@ fn artifact_ref_size_uses_manifest_cache_and_excludes_subjects() -> Result<()> {
     remove_test_blob(&registry, child.manifest_digest())?;
     let records = registry.list_artifacts(Some(&child_name.to_string()))?;
     assert_eq!(records.len(), 1);
-    assert_eq!(records[0].image_name, child_name);
+    assert_eq!(records[0].image_name(), &child_name);
+    assert_eq!(records[0].manifest_size(), child_manifest_size);
     assert_eq!(
         records[0].referenced_blob_size()?,
         child_manifest_size
@@ -1410,7 +1411,7 @@ fn list_artifacts_repairs_manifest_cache_from_cas() -> Result<()> {
         &ArtifactListOptions::default(),
     )?;
     assert_eq!(report.records.len(), 1);
-    assert_eq!(report.records[0].image_name, image_name);
+    assert_eq!(report.records[0].image_name(), &image_name);
     assert_eq!(report.warnings.len(), 1);
     assert_eq!(
         report.warnings[0].stage,
@@ -1534,7 +1535,7 @@ fn list_artifacts_warns_and_skips_malformed_ref_identity() -> Result<()> {
         &ArtifactListOptions::default(),
     )?;
     assert_eq!(report.records.len(), 1);
-    assert_eq!(report.records[0].image_name, good_name);
+    assert_eq!(report.records[0].image_name(), &good_name);
     assert_eq!(report.warnings.len(), 3);
     assert!(report.warnings.iter().any(|warning| warning.image_name
         == format!("{invalid_repository}:latest")
@@ -1599,7 +1600,7 @@ fn list_artifacts_warns_and_skips_unrepairable_ref() -> Result<()> {
         &ArtifactListOptions::default(),
     )?;
     assert_eq!(report.records.len(), 1);
-    assert_eq!(report.records[0].image_name, good_name);
+    assert_eq!(report.records[0].image_name(), &good_name);
     assert_eq!(report.warnings.len(), 1);
     assert_eq!(report.warnings[0].image_name, bad_name.to_string());
     assert!(report.warnings[0].message.contains("CAS repair failed"));
