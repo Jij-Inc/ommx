@@ -27562,7 +27562,7 @@
     },
     "ommx.experiment": {
       "name": "ommx.experiment",
-      "doc": "`ommx.experiment` records an optimization experiment as one OMMX Artifact.\nUse it when a single source problem produces several runs, for example\ndifferent formulations, decomposition strategies, disabled constraints, or\nsolver settings, and you want the resulting Artifact to answer:\n\n- which shared dataset or baseline configuration was used,\n- which run-level parameters should be compared as a table,\n- which input `ommx.Instance` was actually solved, and\n- which output `ommx.Solution` and adapter options came from each solver call.\n\nAn `Experiment` is a mutable session until it is committed. Experiment-level\nattachments store shared context, while each `Run` stores scalar parameters,\nrun-level attachments, and zero or more `Solve` records. Use\n`Run.log_parameter(...)` for values that should become columns in\n`Experiment.run_parameters_df()`, and use attachment methods for payloads such\nas JSON, instances, solutions, sample sets, logs, or caller-defined media\ntypes. `Run.log_solve(...)` calls an `ommx.adapter.SolverAdapter`, stores the\noriginal input instance and returned solution, and records adapter keyword\narguments as solve metadata rather than run parameters.\n\nUse `Run` as a context manager so closing the block records whether that trial\nfinished, failed, or was interrupted. `Experiment` may also be used as a\ncontext manager for batch scripts, but interactive workflows often keep one\nExperiment open across notebook cells and call `commit()` explicitly after\nreviewing the closed runs. Run-close draft checkpoints are written after every\nRun by default; `AutosavePolicy` can batch, rate-limit, or disable them for\nlarge sweeps. On exceptional `with Experiment(...)` exit, OMMX\npublishes a checkpoint instead of advancing the success ref. A committed\nexperiment is read-only. To add runs to a committed experiment, create a child\nsession with `Experiment.fork(...)`. Use `Experiment.rename(...)` to choose or\nupdate the local registry image reference before saving or pushing.",
+      "doc": "`ommx.experiment` records an optimization experiment as one OMMX Artifact.\nUse it when a single source problem produces several runs, for example\ndifferent formulations, decomposition strategies, disabled constraints, or\nsolver settings, and you want the resulting Artifact to answer:\n\n- which shared dataset or baseline configuration was used,\n- which run-level parameters should be compared as a table,\n- which input `ommx.Instance` was actually solved, and\n- which output `ommx.Solution` and adapter options came from each solver call.\n\nAn `Experiment` is a mutable session until it is committed. Experiment-level\nattachments store shared context, while each `Run` stores scalar parameters,\nrun-level attachments, and zero or more `Solve` records. Use\n`Run.log_parameter(...)` for values that should become columns in\n`Experiment.run_parameters_df()`, and use attachment methods for payloads such\nas JSON, instances, solutions, sample sets, logs, or caller-defined media\ntypes. `Run.log_solve(...)` calls an `ommx.adapter.SolverAdapter`, stores the\noriginal input instance and returned solution, and records adapter keyword\narguments as solve metadata rather than run parameters.\n`Run.log_sample(...)` similarly records a sampler call as a separate Sampling\nwhose output is the complete SampleSet.\n\nUse `Run` as a context manager so closing the block records whether that trial\nfinished, failed, or was interrupted. `Experiment` may also be used as a\ncontext manager for batch scripts, but interactive workflows often keep one\nExperiment open across notebook cells and call `commit()` explicitly after\nreviewing the closed runs. Run-close draft checkpoints are written after every\nRun by default; `AutosavePolicy` can batch, rate-limit, or disable them for\nlarge sweeps. On exceptional `with Experiment(...)` exit, OMMX\npublishes a checkpoint instead of advancing the success ref. A committed\nexperiment is read-only. To add runs to a committed experiment, create a child\nsession with `Experiment.fork(...)`. Use `Experiment.rename(...)` to choose or\nupdate the local registry image reference before saving or pushing.",
       "items": [
         {
           "kind": "Class",
@@ -27909,7 +27909,7 @@
             },
             {
               "name": "fork",
-              "doc": "Fork this committed Experiment into a new unsealed child Experiment.\n\nThe parent Experiment is not modified. Existing Attachments, Runs,\nSolves, and Run parameters are carried into the child Experiment.\nWhen the child is committed, its Artifact manifest records the parent\nmanifest descriptor as OCI `subject`. The child reuses payload blobs\nalready present in the Local Registry; forking creates a new manifest\nbut does not duplicate unchanged Instance, Solution, or Attachment\nbytes.\n\nIf `image_name` is omitted, OMMX generates an anonymous local\nExperiment name for the child. The returned Experiment can be used as\na context manager:\n\n```python\nwith parent.fork() as child:\n    with child.run() as run:\n        run.log_parameter(\"capacity\", 56)\n```\n\nRaises an error if this Experiment has not been committed yet.\n\nSet `store_trace=True` on the returned child to store traces for\n`Run` context managers created from it. The child Experiment itself\ndoes not need to be used as a context manager.",
+              "doc": "Fork this committed Experiment into a new unsealed child Experiment.\n\nThe parent Experiment is not modified. Existing Attachments, Runs,\nSolves, Samplings, and Run parameters are carried into the child Experiment.\nWhen the child is committed, its Artifact manifest records the parent\nmanifest descriptor as OCI `subject`. The child reuses payload blobs\nalready present in the Local Registry; forking creates a new manifest\nbut does not duplicate unchanged Instance, Solution, or Attachment\nbytes.\n\nIf `image_name` is omitted, OMMX generates an anonymous local\nExperiment name for the child. The returned Experiment can be used as\na context manager:\n\n```python\nwith parent.fork() as child:\n    with child.run() as run:\n        run.log_parameter(\"capacity\", 56)\n```\n\nRaises an error if this Experiment has not been committed yet.\n\nSet `store_trace=True` on the returned child to store traces for\n`Run` context managers created from it. The child Experiment itself\ndoes not need to be used as a context manager.",
               "signatures": [
                 {
                   "parameters": [
@@ -29231,6 +29231,17 @@
               "is_readonly": true
             },
             {
+              "name": "sampling_count",
+              "doc": "Total number of Samplings recorded across the checkpoint's closed Runs.",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "solve_count",
               "doc": "Total number of Solves recorded across the checkpoint's closed Runs.",
               "type_": {
@@ -29370,6 +29381,17 @@
             {
               "name": "run_count",
               "doc": "Number of closed runs recorded in the Experiment config.",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "sampling_count",
+              "doc": "Total number of samplings recorded across all runs.",
               "type_": {
                 "display": "int",
                 "link_target": null,
@@ -30101,7 +30123,7 @@
             },
             {
               "name": "log_sample",
-              "doc": "Sample an Instance with an OMMX SamplerAdapter and log a Solve entry.\n\nThe original input is stored together with the returned `SampleSet`.\nA successful sampler call is recorded as finished even when none of its\nsamples are feasible.\n\n`adapter` must be a subclass of `ommx.adapter.SamplerAdapter`. Keyword\narguments are passed to `adapter.sample(...)` and recorded as\n`Solve.adapter_options`.\n\nSet `store_diagnostics=True` to pass a diagnostics sink to the adapter.\nDiagnostics persistence is best-effort and does not change a successful\nsampler call into a failed Solve.",
+              "doc": "Sample an Instance with an OMMX SamplerAdapter and log a Sampling entry.\n\nThe original input is stored together with the returned `SampleSet`.\nA successful sampler call is recorded as finished even when none of its\nsamples are feasible.\n\n`adapter` must be a subclass of `ommx.adapter.SamplerAdapter`. Keyword\narguments are passed to `adapter.sample(...)` and recorded as\n`Sampling.adapter_options`.\n\nSet `store_diagnostics=True` to pass a diagnostics sink to the adapter.\nDiagnostics persistence is best-effort and does not change a successful\nsampler call into a failed Sampling.",
               "signatures": [
                 {
                   "parameters": [
@@ -30434,8 +30456,135 @@
         },
         {
           "kind": "Class",
+          "name": "Sampling",
+          "doc": "Immutable record of one sampler call.\n\nA finished Sampling stores a `SampleSet`; failed and interrupted Sampling\nrecords have no output.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "adapter",
+              "doc": "SamplerAdapter class name used for this sampling.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "adapter_options",
+              "doc": "Keyword arguments passed to the SamplerAdapter.",
+              "type_": {
+                "display": "dict[str, Any]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "Any",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "diagnostics",
+              "doc": "Adapter-defined diagnostics recorded during this sampling.",
+              "type_": {
+                "display": "list[Any]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "Any",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "input",
+              "doc": "Input `Instance` passed to the sampler.",
+              "type_": {
+                "display": "Instance",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "output",
+              "doc": "SampleSet returned by the adapter, or `None` if the call failed before returning one.",
+              "type_": {
+                "display": "Optional[SampleSet]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "SampleSet",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "sampling_id",
+              "doc": "Integer identifier of this sampling within its run.",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "status",
+              "doc": "Sampling lifecycle status: `\"finished\"`, `\"failed\"`, or `\"interrupted\"`.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
           "name": "SealedRun",
-          "doc": "Immutable view of a closed Run in an Experiment.\n\n`SealedRun` exposes run-level attachments by name and the sequence of\n`Solve` records created by `Run.log_solve`. The `status` property records\nhow the Run scope was closed: `\"finished\"`, `\"failed\"`, or `\"interrupted\"`.\nIt is not an aggregate status of child `Solve` records, so a finished Run\nmay contain failed Solve attempts that were handled inside the Run.",
+          "doc": "Immutable view of a closed Run in an Experiment.\n\n`SealedRun` exposes run-level attachments by name, `Solve` records created\nby `Run.log_solve`, and `Sampling` records created by `Run.log_sample`.\nThe `status` property records\nhow the Run scope was closed: `\"finished\"`, `\"failed\"`, or `\"interrupted\"`.\nIt is not an aggregate status of child records, so a finished Run may\ncontain failed Solve or Sampling attempts handled inside the Run.",
           "bases": [],
           "methods": [
             {
@@ -30803,6 +30952,28 @@
               "is_readonly": true
             },
             {
+              "name": "samplings",
+              "doc": "Sampling records logged in this run, ordered by `sampling_id`.",
+              "type_": {
+                "display": "list[_ommx_rust.Sampling]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "Sampling",
+                    "link_target": {
+                      "fqn": "ommx.experiment.Sampling",
+                      "doc_module": "ommx.experiment",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "solves",
               "doc": "Solve records logged in this run, ordered by `solve_id`.",
               "type_": {
@@ -30858,7 +31029,7 @@
         {
           "kind": "Class",
           "name": "Solve",
-          "doc": "Immutable record of one solver call.\n\nA `Solve` always stores the input `Instance`, adapter class name, and\nJSON-encoded adapter options for one adapter call. A finished Solve stores\neither a `Solution` or `SampleSet`; failed and interrupted Solve records\nhave no output.",
+          "doc": "Immutable record of one solver call.\n\nA `Solve` always stores the input `Instance`, adapter class name, and\nJSON-encoded adapter options for one adapter call. A finished Solve stores\na `Solution`; failed and interrupted Solve records have no output.",
           "bases": [],
           "methods": [
             {
@@ -30942,26 +31113,15 @@
             },
             {
               "name": "output",
-              "doc": "Output returned by the adapter, or `None` if the call failed before returning one.",
+              "doc": "Solution returned by the adapter, or `None` if the call failed before returning one.",
               "type_": {
-                "display": "Optional[Solution | SampleSet]",
+                "display": "Optional[Solution]",
                 "link_target": null,
                 "children": [
                   {
-                    "display": "Solution | SampleSet",
+                    "display": "Solution",
                     "link_target": null,
-                    "children": [
-                      {
-                        "display": "Solution",
-                        "link_target": null,
-                        "children": []
-                      },
-                      {
-                        "display": "SampleSet",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
+                    "children": []
                   }
                 ]
               },
@@ -31280,6 +31440,7 @@
     "ommx.experiment.ExperimentRef": "ommx.experiment",
     "ommx.experiment.OpenSolve": "ommx.experiment",
     "ommx.experiment.Run": "ommx.experiment",
+    "ommx.experiment.Sampling": "ommx.experiment",
     "ommx.experiment.SealedRun": "ommx.experiment",
     "ommx.experiment.Solve": "ommx.experiment",
     "ommx.experiment.list_experiment_checkpoints": "ommx.experiment",

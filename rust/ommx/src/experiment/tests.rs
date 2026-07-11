@@ -1,13 +1,17 @@
 //! Tests for the experiment session model.
 
-use super::config::{ExperimentConfig, ExperimentConfigRun, ExperimentConfigSolve, LayerRef};
+use super::config::{
+    ExperimentConfig, ExperimentConfigRun, ExperimentConfigSampling, ExperimentConfigSolve,
+    LayerRef,
+};
 use super::parameter::RunParameterTable;
 use super::{
-    AttachmentLogger, AttachmentTable, AutosavePolicy, Experiment, ExperimentDyn, ExperimentStatus,
-    Name, ParameterValue, SealedExperiment, SolveDiagnosticPayload, SolveOutput, SolveStatus,
-    Trace, EXPERIMENT_ARTIFACT_MEDIA_TYPE, EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_STATUS_DRAFT,
-    EXPERIMENT_STATUS_FAILED, EXPERIMENT_STATUS_FINISHED, EXPERIMENT_STATUS_INTERRUPTED,
-    RUN_PARAMETERS_MEDIA_TYPE, RUN_STATUS_FAILED, RUN_STATUS_FINISHED, RUN_STATUS_INTERRUPTED,
+    AdapterDiagnosticPayload, AttachmentLogger, AttachmentTable, AutosavePolicy, Experiment,
+    ExperimentDyn, ExperimentStatus, Name, ParameterValue, SamplingStatus, SealedExperiment,
+    SolveStatus, Trace, EXPERIMENT_ARTIFACT_MEDIA_TYPE, EXPERIMENT_CONFIG_MEDIA_TYPE,
+    EXPERIMENT_STATUS_DRAFT, EXPERIMENT_STATUS_FAILED, EXPERIMENT_STATUS_FINISHED,
+    EXPERIMENT_STATUS_INTERRUPTED, RUN_PARAMETERS_MEDIA_TYPE, RUN_STATUS_FAILED,
+    RUN_STATUS_FINISHED, RUN_STATUS_INTERRUPTED,
 };
 use super::{AutosaveController, UnsealedExperimentState};
 use crate::artifact::local_registry::{
@@ -185,7 +189,16 @@ fn local_registry_lists_committed_experiment_refs_from_projection() -> anyhow::R
 
     let experiment = Experiment::with_registry(&registry, image_name.clone())?;
     experiment.set_annotation("com.example.problem", "qap")?;
-    experiment.run()?.finish()?;
+    let (instance, sample_set) = no_feasible_sample_set();
+    let mut run = experiment.run()?;
+    run.log_finished_sample(super::FinishedSampleRecord {
+        input: &instance,
+        output: &sample_set,
+        adapter: "dummy.SamplerAdapter".to_string(),
+        adapter_options: "{}".to_string(),
+        diagnostics: None,
+    })?;
+    run.finish()?;
     let sealed = experiment.commit()?;
     let config_digest = sealed.artifact().stored_config()?.digest().clone();
 
@@ -207,6 +220,7 @@ fn local_registry_lists_committed_experiment_refs_from_projection() -> anyhow::R
     assert_eq!(record.status, EXPERIMENT_STATUS_FINISHED);
     assert_eq!(record.run_count, 1);
     assert_eq!(record.solve_count, 0);
+    assert_eq!(record.sampling_count, 1);
     assert_eq!(
         record.annotations.get("com.example.problem"),
         Some(&"qap".to_string())
@@ -1294,7 +1308,7 @@ fn log_finished_solve_materializes_solve_entry_with_layer_refs() {
                     output: &solution,
                     adapter: "dummy.Adapter".to_string(),
                     adapter_options: r#"{"time_limit":1.5}"#.to_string(),
-                    diagnostics: Some(SolveDiagnosticPayload::new(diagnostics.clone())?),
+                    diagnostics: Some(AdapterDiagnosticPayload::new(diagnostics.clone())?),
                 })
                 .unwrap();
             assert_eq!(solve_id, 0);
@@ -1349,9 +1363,7 @@ fn log_finished_solve_materializes_solve_entry_with_layer_refs() {
             solve.input_instance().unwrap().to_v2_bytes(),
             instance.to_v2_bytes()
         );
-        let Some(SolveOutput::Solution(output)) = solve.output().unwrap() else {
-            panic!("finished solver call must decode to SolveOutput::Solution");
-        };
+        let output = solve.output_solution().unwrap().unwrap();
         assert_eq!(output.to_v2_bytes(), solution.to_v2_bytes());
         assert_eq!(solve.adapter(), "dummy.Adapter");
         assert_eq!(solve.adapter_options(), r#"{"time_limit":1.5}"#);
@@ -1375,21 +1387,22 @@ fn log_finished_sample_preserves_sample_set_without_feasible_samples() {
 
         {
             let mut run = experiment.run().unwrap();
-            let solve_id = run.log_finished_sample(super::FinishedSampleRecord {
+            let sampling_id = run.log_finished_sample(super::FinishedSampleRecord {
                 input: &instance,
                 output: &sample_set,
                 adapter: "dummy.SamplerAdapter".to_string(),
                 adapter_options: r#"{"num_reads":1}"#.to_string(),
                 diagnostics: None,
             })?;
-            assert_eq!(solve_id, 0);
+            assert_eq!(sampling_id, 0);
             run.finish()?;
         }
 
         let sealed = experiment.commit()?;
         let artifact = sealed.artifact();
         let config = experiment_config(&artifact);
-        let output_ref = config.runs[0].solves[0]
+        assert!(config.runs[0].solves.is_empty());
+        let output_ref = config.runs[0].samplings[0]
             .output
             .expect("finished sampler call has an output");
         let layers = artifact.layers()?;
@@ -1398,13 +1411,47 @@ fn log_finished_sample_preserves_sample_set_without_feasible_samples() {
         ));
 
         let loaded = SealedExperiment::from_artifact(artifact)?;
-        let solve = &loaded.run(0).unwrap().solves()[0];
-        assert_eq!(solve.status(), &SolveStatus::Finished);
-        let Some(SolveOutput::SampleSet(output)) = solve.output()? else {
-            panic!("finished sampler call must decode to SolveOutput::SampleSet");
-        };
+        let run = loaded.run(0).unwrap();
+        assert!(run.solves().is_empty());
+        let sampling = &run.samplings()[0];
+        assert_eq!(sampling.sampling_id(), 0);
+        assert_eq!(sampling.status(), &SamplingStatus::Finished);
+        let output = sampling.output_sample_set()?.unwrap();
         assert!(output.best_feasible().is_err());
         assert_eq!(output.to_v2_bytes(), sample_set.to_v2_bytes());
+        Ok(())
+    });
+}
+
+#[test]
+fn log_failed_sample_records_sampling_without_output() {
+    with_temp_experiment(|experiment| {
+        let instance = Instance::new(
+            Sense::Minimize,
+            Function::Zero,
+            BTreeMap::new(),
+            BTreeMap::new(),
+        )?;
+        {
+            let mut run = experiment.run()?;
+            let sampling_id = run.log_failed_sample(super::FailedSampleRecord {
+                input: &instance,
+                adapter: "dummy.SamplerAdapter".to_string(),
+                adapter_options: "{}".to_string(),
+                status: SamplingStatus::Failed,
+                diagnostics: None,
+            })?;
+            assert_eq!(sampling_id, 0);
+            run.finish()?;
+        }
+
+        let loaded = experiment.commit()?;
+        let run = loaded.run(0).unwrap();
+        assert!(run.solves().is_empty());
+        let sampling = &run.samplings()[0];
+        assert_eq!(sampling.sampling_id(), 0);
+        assert_eq!(sampling.status(), &SamplingStatus::Failed);
+        assert!(sampling.output_sample_set()?.is_none());
         Ok(())
     });
 }
@@ -1442,6 +1489,7 @@ fn loaded_experiment_rejects_unknown_solve_output_media_type() {
                 adapter_options: "{}".to_string(),
                 diagnostics: None,
             }],
+            samplings: Vec::new(),
         }],
         run_parameters: LayerRef(2),
     };
@@ -1466,9 +1514,70 @@ fn loaded_experiment_rejects_unknown_solve_output_media_type() {
     );
 
     let err = SealedExperiment::from_artifact(artifact)
-        .expect_err("Solve output must be an OMMX Solution or SampleSet layer");
+        .expect_err("Solve output must be an OMMX Solution layer");
     assert!(
-        format!("{err:#}").contains("expected an OMMX Solution or SampleSet payload"),
+        format!("{err:#}").contains("expected an OMMX Solution payload"),
+        "{err:#}"
+    );
+}
+
+#[test]
+fn loaded_experiment_rejects_solution_as_sampling_output() {
+    let temp = crate::artifact::local_registry::TempLocalRegistry::new().unwrap();
+    let registry = temp.registry();
+    let input = registry
+        .store_layer_blob(media_types::v1_instance(), b"input", HashMap::new())
+        .unwrap();
+    let output = registry
+        .store_layer_blob(media_types::v1_solution(), b"output", HashMap::new())
+        .unwrap();
+    let run_parameters = empty_run_parameters_layer(registry);
+    let config = ExperimentConfig {
+        status: EXPERIMENT_STATUS_FINISHED.to_string(),
+        requested_image_name: None,
+        attachments: AttachmentTable::new(),
+        runs: vec![ExperimentConfigRun {
+            run_id: 0,
+            status: RUN_STATUS_FINISHED.to_string(),
+            attachments: AttachmentTable::new(),
+            trace: None,
+            solves: Vec::new(),
+            samplings: vec![ExperimentConfigSampling {
+                sampling_id: 0,
+                status: super::SAMPLING_STATUS_FINISHED.to_string(),
+                input: LayerRef(0),
+                output: Some(LayerRef(1)),
+                adapter: "dummy.SamplerAdapter".to_string(),
+                adapter_options: "{}".to_string(),
+                diagnostics: None,
+            }],
+        }],
+        run_parameters: LayerRef(2),
+    };
+    let config_descriptor = registry
+        .store_json_blob(
+            MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()),
+            &config,
+        )
+        .unwrap();
+    let unsealed = UnsealedArtifact::new(
+        MediaType::Other(EXPERIMENT_ARTIFACT_MEDIA_TYPE.to_string()),
+        config_descriptor,
+        vec![input, output, run_parameters],
+        None,
+        HashMap::new(),
+    );
+    let sealed_artifact = registry.seal_artifact(unsealed).unwrap();
+    let artifact = LocalArtifact::from_parts(
+        registry,
+        ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:solution-sampling-output").unwrap(),
+        sealed_artifact.digest().clone(),
+    );
+
+    let err = SealedExperiment::from_artifact(artifact)
+        .expect_err("Sampling output must be an OMMX SampleSet layer");
+    assert!(
+        format!("{err:#}").contains("expected an OMMX SampleSet payload"),
         "{err:#}"
     );
 }
@@ -1478,7 +1587,7 @@ fn log_finished_solve_with_id_validates_id_before_storing_payloads() {
     with_temp_experiment(|experiment| {
         let unreserved_instance = constant_instance(Sense::Minimize, 10.0);
         let unreserved_solution = empty_solution(&unreserved_instance);
-        let unreserved_diagnostics = SolveDiagnosticPayload::new(vec![0x91, 0x01])?;
+        let unreserved_diagnostics = AdapterDiagnosticPayload::new(vec![0x91, 0x01])?;
         let unreserved_input_bytes = unreserved_instance.to_v2_bytes();
         let unreserved_output_bytes = unreserved_solution.to_v2_bytes();
         let unreserved_diagnostic_bytes = unreserved_diagnostics.to_msgpack_bytes()?;
@@ -1508,7 +1617,7 @@ fn log_finished_solve_with_id_validates_id_before_storing_payloads() {
         let first_solution = empty_solution(&first_instance);
         let duplicate_instance = constant_instance(Sense::Maximize, 30.0);
         let duplicate_solution = empty_solution(&duplicate_instance);
-        let duplicate_diagnostics = SolveDiagnosticPayload::new(vec![0x91, 0x02])?;
+        let duplicate_diagnostics = AdapterDiagnosticPayload::new(vec![0x91, 0x02])?;
         let duplicate_input_bytes = duplicate_instance.to_v2_bytes();
         let duplicate_output_bytes = duplicate_solution.to_v2_bytes();
         let duplicate_diagnostic_bytes = duplicate_diagnostics.to_msgpack_bytes()?;
@@ -1556,7 +1665,7 @@ fn log_finished_solve_with_id_validates_id_before_storing_payloads() {
 fn log_failed_solve_with_id_validates_id_before_storing_payloads() {
     with_temp_experiment(|experiment| {
         let unreserved_instance = constant_instance(Sense::Minimize, 40.0);
-        let unreserved_diagnostics = SolveDiagnosticPayload::new(vec![0x91, 0x03])?;
+        let unreserved_diagnostics = AdapterDiagnosticPayload::new(vec![0x91, 0x03])?;
         let unreserved_input_bytes = unreserved_instance.to_v2_bytes();
         let unreserved_diagnostic_bytes = unreserved_diagnostics.to_msgpack_bytes()?;
 
@@ -1582,7 +1691,7 @@ fn log_failed_solve_with_id_validates_id_before_storing_payloads() {
 
         let first_instance = constant_instance(Sense::Minimize, 50.0);
         let duplicate_instance = constant_instance(Sense::Maximize, 60.0);
-        let duplicate_diagnostics = SolveDiagnosticPayload::new(vec![0x91, 0x04])?;
+        let duplicate_diagnostics = AdapterDiagnosticPayload::new(vec![0x91, 0x04])?;
         let duplicate_input_bytes = duplicate_instance.to_v2_bytes();
         let duplicate_diagnostic_bytes = duplicate_diagnostics.to_msgpack_bytes()?;
 
@@ -1625,18 +1734,18 @@ fn log_failed_solve_with_id_validates_id_before_storing_payloads() {
 }
 
 #[test]
-fn solve_diagnostic_payload_requires_messagepack_array() {
-    let err = SolveDiagnosticPayload::new(vec![0xc4, 0x01])
+fn adapter_diagnostic_payload_requires_messagepack_array() {
+    let err = AdapterDiagnosticPayload::new(vec![0xc4, 0x01])
         .expect_err("diagnostic payload must be valid MessagePack");
     assert!(err.to_string().contains("valid MessagePack"), "{err:#}");
 
     let map_payload = b"\x81\xa6status\xa7optimal".to_vec();
-    let err = SolveDiagnosticPayload::new(map_payload)
+    let err = AdapterDiagnosticPayload::new(map_payload)
         .expect_err("diagnostic payload must be a top-level array");
     assert!(err.to_string().contains("MessagePack array"), "{err:#}");
 
     let trailing_payload = b"\x90\x00".to_vec();
-    let err = SolveDiagnosticPayload::new(trailing_payload)
+    let err = AdapterDiagnosticPayload::new(trailing_payload)
         .expect_err("diagnostic payload must contain exactly one value");
     assert!(
         err.to_string().contains("exactly one MessagePack value"),
@@ -1680,6 +1789,7 @@ fn loaded_experiment_rejects_invalid_diagnostic_payload() {
                 adapter_options: "{}".to_string(),
                 diagnostics: Some(LayerRef(2)),
             }],
+            samplings: Vec::new(),
         }],
         run_parameters: LayerRef(3),
     };
@@ -1742,6 +1852,7 @@ fn loaded_experiment_rejects_failed_solve_with_output() {
                 adapter_options: "{}".to_string(),
                 diagnostics: None,
             }],
+            samplings: Vec::new(),
         }],
         run_parameters: LayerRef(2),
     };
@@ -1977,6 +2088,7 @@ fn loaded_experiment_rejects_config_run_attachment_not_listed_in_layers() {
             attachments: AttachmentTable::from_entries([("outside", LayerRef(1))]).unwrap(),
             trace: None,
             solves: Vec::new(),
+            samplings: Vec::new(),
         }],
         run_parameters: LayerRef(0),
     };

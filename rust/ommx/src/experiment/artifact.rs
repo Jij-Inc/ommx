@@ -1,6 +1,9 @@
 //! Mapping an unsealed Experiment state to an immutable OMMX Artifact.
 
-use super::config::{ExperimentConfig, ExperimentConfigRun, ExperimentConfigSolve, LayerRef};
+use super::config::{
+    ExperimentConfig, ExperimentConfigRun, ExperimentConfigSampling, ExperimentConfigSolve,
+    LayerRef,
+};
 use super::parameter::RunParameterTable;
 use super::{experiment_manifest_record_from_artifact, UnsealedExperimentState};
 use super::{
@@ -223,12 +226,33 @@ impl<'reg> UnsealedExperimentState<'reg> {
                         .transpose()?,
                 });
             }
+            let mut samplings = Vec::new();
+            for sampling in &run.samplings {
+                samplings.push(ExperimentConfigSampling {
+                    sampling_id: sampling.sampling_id,
+                    status: sampling.status.as_str().to_string(),
+                    input: layers.push(sampling.input.clone())?,
+                    output: sampling
+                        .output
+                        .clone()
+                        .map(|descriptor| layers.push(descriptor))
+                        .transpose()?,
+                    adapter: sampling.adapter.clone(),
+                    adapter_options: sampling.adapter_options.clone(),
+                    diagnostics: sampling
+                        .diagnostics
+                        .clone()
+                        .map(|descriptor| layers.push(descriptor))
+                        .transpose()?,
+                });
+            }
             runs.push(ExperimentConfigRun {
                 run_id: run.run_id,
                 status: run.status.as_str().to_string(),
                 attachments,
                 trace,
                 solves,
+                samplings,
             });
         }
 

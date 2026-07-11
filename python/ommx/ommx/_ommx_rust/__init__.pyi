@@ -80,6 +80,7 @@ __all__ = [
     "SampledDecisionVariable",
     "SampledNamedFunction",
     "Samples",
+    "Sampling",
     "ScalarLike",
     "SealedRun",
     "Sense",
@@ -1955,7 +1956,7 @@ class Experiment:
         Fork this committed Experiment into a new unsealed child Experiment.
 
         The parent Experiment is not modified. Existing Attachments, Runs,
-        Solves, and Run parameters are carried into the child Experiment.
+        Solves, Samplings, and Run parameters are carried into the child Experiment.
         When the child is committed, its Artifact manifest records the parent
         manifest descriptor as OCI `subject`. The child reuses payload blobs
         already present in the Local Registry; forking creates a new manifest
@@ -2246,6 +2247,11 @@ class ExperimentCheckpointRef:
         Total number of Solves recorded across the checkpoint's closed Runs.
         """
     @property
+    def sampling_count(self) -> builtins.int:
+        r"""
+        Total number of Samplings recorded across the checkpoint's closed Runs.
+        """
+    @property
     def annotations(self) -> builtins.dict[builtins.str, builtins.str]:
         r"""
         Manifest annotations stored on the checkpoint Artifact.
@@ -2296,6 +2302,11 @@ class ExperimentRef:
     def solve_count(self) -> builtins.int:
         r"""
         Total number of solves recorded across all runs.
+        """
+    @property
+    def sampling_count(self) -> builtins.int:
+        r"""
+        Total number of samplings recorded across all runs.
         """
     @property
     def annotations(self) -> builtins.dict[builtins.str, builtins.str]:
@@ -6004,7 +6015,7 @@ class Run:
         **kwargs: typing.Any,
     ) -> SampleSet:
         r"""
-        Sample an Instance with an OMMX SamplerAdapter and log a Solve entry.
+        Sample an Instance with an OMMX SamplerAdapter and log a Sampling entry.
 
         The original input is stored together with the returned `SampleSet`.
         A successful sampler call is recorded as finished even when none of its
@@ -6012,11 +6023,11 @@ class Run:
 
         `adapter` must be a subclass of `ommx.adapter.SamplerAdapter`. Keyword
         arguments are passed to `adapter.sample(...)` and recorded as
-        `Solve.adapter_options`.
+        `Sampling.adapter_options`.
 
         Set `store_diagnostics=True` to pass a diagnostics sink to the adapter.
         Diagnostics persistence is best-effort and does not change a successful
-        sampler call into a failed Solve.
+        sampler call into a failed Sampling.
         """
     def open_solve(
         self,
@@ -6597,15 +6608,61 @@ class Samples:
         """
 
 @typing.final
+class Sampling:
+    r"""
+    Immutable record of one sampler call.
+
+    A finished Sampling stores a `SampleSet`; failed and interrupted Sampling
+    records have no output.
+    """
+    @property
+    def sampling_id(self) -> builtins.int:
+        r"""
+        Integer identifier of this sampling within its run.
+        """
+    @property
+    def status(self) -> builtins.str:
+        r"""
+        Sampling lifecycle status: `"finished"`, `"failed"`, or `"interrupted"`.
+        """
+    @property
+    def input(self) -> Instance:
+        r"""
+        Input `Instance` passed to the sampler.
+        """
+    @property
+    def output(self) -> typing.Optional[SampleSet]:
+        r"""
+        SampleSet returned by the adapter, or `None` if the call failed before returning one.
+        """
+    @property
+    def adapter(self) -> builtins.str:
+        r"""
+        SamplerAdapter class name used for this sampling.
+        """
+    @property
+    def adapter_options(self) -> builtins.dict[builtins.str, typing.Any]:
+        r"""
+        Keyword arguments passed to the SamplerAdapter.
+        """
+    @property
+    def diagnostics(self) -> builtins.list[typing.Any]:
+        r"""
+        Adapter-defined diagnostics recorded during this sampling.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class SealedRun:
     r"""
     Immutable view of a closed Run in an Experiment.
 
-    `SealedRun` exposes run-level attachments by name and the sequence of
-    `Solve` records created by `Run.log_solve`. The `status` property records
+    `SealedRun` exposes run-level attachments by name, `Solve` records created
+    by `Run.log_solve`, and `Sampling` records created by `Run.log_sample`.
+    The `status` property records
     how the Run scope was closed: `"finished"`, `"failed"`, or `"interrupted"`.
-    It is not an aggregate status of child `Solve` records, so a finished Run
-    may contain failed Solve attempts that were handled inside the Run.
+    It is not an aggregate status of child records, so a finished Run may
+    contain failed Solve or Sampling attempts handled inside the Run.
     """
     @property
     def run_id(self) -> builtins.int:
@@ -6635,6 +6692,11 @@ class SealedRun:
     def solves(self) -> builtins.list[Solve]:
         r"""
         Solve records logged in this run, ordered by `solve_id`.
+        """
+    @property
+    def samplings(self) -> builtins.list[Sampling]:
+        r"""
+        Sampling records logged in this run, ordered by `sampling_id`.
         """
     def attachment_media_type(self, name: builtins.str) -> builtins.str:
         r"""
@@ -7111,8 +7173,7 @@ class Solve:
 
     A `Solve` always stores the input `Instance`, adapter class name, and
     JSON-encoded adapter options for one adapter call. A finished Solve stores
-    either a `Solution` or `SampleSet`; failed and interrupted Solve records
-    have no output.
+    a `Solution`; failed and interrupted Solve records have no output.
     """
     @property
     def solve_id(self) -> builtins.int:
@@ -7130,9 +7191,9 @@ class Solve:
         Input `Instance` passed to the solver.
         """
     @property
-    def output(self) -> typing.Optional[Solution | SampleSet]:
+    def output(self) -> typing.Optional[Solution]:
         r"""
-        Output returned by the adapter, or `None` if the call failed before returning one.
+        Solution returned by the adapter, or `None` if the call failed before returning one.
         """
     @property
     def adapter(self) -> builtins.str:

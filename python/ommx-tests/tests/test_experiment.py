@@ -102,12 +102,14 @@ def test_list_experiments_returns_cached_ref_records(tmp_path):
     assert ref.status == "finished"
     assert ref.run_count == 1
     assert ref.solve_count == 0
+    assert ref.sampling_count == 0
     assert ref.annotations["com.example.problem"] == "qap"
     assert "sha256:" in ref.manifest_digest
     assert "sha256:" in ref.config_digest
     assert ref.config["status"] == "finished"
     assert len(ref.config["runs"]) == 1
     assert ref.config["runs"][0]["solves"] == []
+    assert ref.config["runs"][0]["samplings"] == []
     assert "T" in ref.updated_at
     assert [ref.image_name for ref in list_experiments(f"{prefix}/case:lat")] == [
         image_name
@@ -958,13 +960,65 @@ def test_log_sample_records_finished_sample_set_without_feasible_samples():
         assert DummySampler.seen_diagnostics is not None
 
     loaded = Experiment.from_artifact(experiment.commit())
-    solve = loaded.runs[0].solves[0]
-    assert solve.status == "finished"
-    assert isinstance(solve.input, Instance)
-    assert isinstance(solve.output, SampleSet)
-    assert solve.output.feasible_ids() == set()
-    assert solve.adapter_options == {"num_reads": 1}
-    assert solve.diagnostics == [{"status": "sampled", "bound": 0.0}]
+    run = loaded.runs[0]
+    assert run.solves == []
+    sampling = run.samplings[0]
+    assert sampling.sampling_id == 0
+    assert sampling.status == "finished"
+    assert isinstance(sampling.input, Instance)
+    assert isinstance(sampling.output, SampleSet)
+    assert sampling.output.feasible_ids() == set()
+    assert sampling.adapter_options == {"num_reads": 1}
+    assert sampling.diagnostics == [{"status": "sampled", "bound": 0.0}]
+
+
+def test_log_sample_records_failed_sampling_separately_from_solves():
+    class FailingSampler(SamplerAdapter):
+        @classmethod
+        def sample(
+            cls,
+            ommx_instance: Instance,
+            *,
+            diagnostics: DiagnosticsSink | None = None,
+            **kwargs: object,
+        ) -> SampleSet:
+            raise RuntimeError("sampling failed")
+
+        @classmethod
+        def solve(
+            cls,
+            ommx_instance: Instance,
+            *,
+            diagnostics: DiagnosticsSink | None = None,
+        ) -> Solution:
+            raise NotImplementedError
+
+        @property
+        def solver_input(self) -> Any:
+            raise NotImplementedError
+
+        def decode(self, data: Any) -> Solution:
+            raise NotImplementedError
+
+        @property
+        def sampler_input(self) -> Any:
+            raise NotImplementedError
+
+        def decode_to_sampleset(self, data: Any) -> SampleSet:
+            raise NotImplementedError
+
+    experiment = Experiment.with_temp_local_registry()
+    with experiment.run() as run:
+        with pytest.raises(RuntimeError, match="sampling failed"):
+            run.log_sample(FailingSampler, Instance.empty())
+
+    loaded = Experiment.from_artifact(experiment.commit())
+    run = loaded.runs[0]
+    assert run.solves == []
+    assert len(run.samplings) == 1
+    sampling = run.samplings[0]
+    assert sampling.status == "failed"
+    assert sampling.output is None
 
 
 def test_open_solve_records_direct_solver_input_workflow():

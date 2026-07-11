@@ -102,6 +102,7 @@ for ref in refs:
         "status": ref.status,
         "run_count": ref.run_count,
         "solve_count": ref.solve_count,
+        "sampling_count": ref.sampling_count,
     }
     row.update(
         {
@@ -121,6 +122,7 @@ catalog = pd.DataFrame.from_records(
         "status",
         "run_count",
         "solve_count",
+        "sampling_count",
         *annotation_columns,
     ],
 )

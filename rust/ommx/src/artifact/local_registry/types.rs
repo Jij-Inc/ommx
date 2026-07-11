@@ -267,6 +267,8 @@ pub struct ExperimentRefRecord {
     pub run_count: u64,
     /// Total number of solves recorded across all runs.
     pub solve_count: u64,
+    /// Total number of samplings recorded across all runs.
+    pub sampling_count: u64,
     /// Manifest annotations stored on the Experiment artifact.
     pub annotations: BTreeMap<String, String>,
     /// Complete Experiment config JSON stored by `config_digest`.
@@ -296,6 +298,8 @@ pub struct ExperimentCheckpointRefRecord {
     pub run_count: u64,
     /// Total number of solves recorded across the checkpoint's closed runs.
     pub solve_count: u64,
+    /// Total number of samplings recorded across the checkpoint's closed runs.
+    pub sampling_count: u64,
     /// Manifest annotations stored on the checkpoint Artifact.
     pub annotations: BTreeMap<String, String>,
     /// Complete Experiment Config JSON stored by `config_digest`.

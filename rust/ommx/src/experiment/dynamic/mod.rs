@@ -17,9 +17,10 @@ use super::artifact::ExperimentArtifactView;
 use super::config::ExperimentConfig;
 use super::logging::AttachmentLoggerStorage;
 use super::{
-    allocate_next_run_id, next_run_id, read_solve_diagnostic_payload, AttachmentTable,
-    AutosaveController, AutosavePolicy, ExperimentStatus, Name, RunEntry, RunParameterCell,
-    RunStatus, SealedExperiment, SolveDiagnosticPayload, SolveStatus, UnsealedExperimentState,
+    allocate_next_run_id, next_run_id, read_adapter_diagnostic_payload, AdapterDiagnosticPayload,
+    AttachmentTable, AutosaveController, AutosavePolicy, ExperimentStatus, Name, RunEntry,
+    RunParameterCell, RunStatus, SamplingStatus, SealedExperiment, SolveStatus,
+    UnsealedExperimentState,
 };
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
 use crate::artifact::{
@@ -164,6 +165,7 @@ struct RunEntryDyn {
     attachments: AttachmentTable<Descriptor>,
     trace: Option<Descriptor>,
     solves: Vec<SolveEntryDyn>,
+    samplings: Vec<SamplingEntryDyn>,
     parameters: super::parameter::ParameterSet,
 }
 
@@ -171,6 +173,17 @@ struct RunEntryDyn {
 struct SolveEntryDyn {
     solve_id: u64,
     status: SolveStatus,
+    input: Descriptor,
+    output: Option<Descriptor>,
+    adapter: String,
+    adapter_options: String,
+    diagnostics: Option<Descriptor>,
+}
+
+#[derive(Debug)]
+struct SamplingEntryDyn {
+    sampling_id: u64,
+    status: SamplingStatus,
     input: Descriptor,
     output: Option<Descriptor>,
     adapter: String,
@@ -201,6 +214,7 @@ pub struct SealedRunDyn {
     attachments: AttachmentTable<Descriptor>,
     trace: Option<Descriptor>,
     solves: Vec<SolveDyn>,
+    samplings: Vec<SamplingDyn>,
 }
 
 /// Runtime-owned Solve view.
@@ -214,6 +228,19 @@ pub struct SolveDyn {
     registry_handle: LocalRegistryHandle,
     solve_id: u64,
     status: SolveStatus,
+    input: Descriptor,
+    output: Option<Descriptor>,
+    adapter: String,
+    adapter_options: String,
+    diagnostics: Option<Descriptor>,
+}
+
+/// Runtime-owned Sampling view.
+#[derive(Debug, Clone)]
+pub struct SamplingDyn {
+    registry_handle: LocalRegistryHandle,
+    sampling_id: u64,
+    status: SamplingStatus,
     input: Descriptor,
     output: Option<Descriptor>,
     adapter: String,
@@ -306,6 +333,10 @@ impl SealedRunDyn {
     pub fn solves(&self) -> &[SolveDyn] {
         &self.solves
     }
+
+    pub fn samplings(&self) -> &[SamplingDyn] {
+        &self.samplings
+    }
 }
 
 impl SolveDyn {
@@ -343,14 +374,17 @@ impl SolveDyn {
             .transpose()
     }
 
-    /// Decode the typed output returned by this Solve.
-    pub fn output(&self) -> Result<Option<super::SolveOutput>> {
+    /// Decode the Solution returned by this Solve.
+    pub fn output_solution(&self) -> Result<Option<Solution>> {
         let Some(descriptor) = self.output_descriptor()? else {
             return Ok(None);
         };
-        Ok(Some(super::decode_solve_output(&descriptor).with_context(
-            || format!("Invalid Solve {} output", self.solve_id),
-        )?))
+        Ok(Some(
+            self.registry_handle
+                .registry()
+                .get_solution_layer(&descriptor)
+                .with_context(|| format!("Invalid Solve {} output", self.solve_id))?,
+        ))
     }
 
     /// Raw MessagePack bytes of the adapter diagnostics payload.
@@ -362,12 +396,12 @@ impl SolveDyn {
             .registry_handle
             .registry()
             .stored_descriptor(descriptor.clone())?;
-        let (bytes, _) = read_solve_diagnostic_payload(self.solve_id, &descriptor)?;
+        let (bytes, _) = read_adapter_diagnostic_payload("Solve", self.solve_id, &descriptor)?;
         Ok(Some(bytes))
     }
 
     /// Decode the adapter diagnostics payload recorded for this solve.
-    pub fn diagnostic_payload(&self) -> Result<Option<SolveDiagnosticPayload>> {
+    pub fn diagnostic_payload(&self) -> Result<Option<AdapterDiagnosticPayload>> {
         let Some(descriptor) = &self.diagnostics else {
             return Ok(None);
         };
@@ -375,7 +409,89 @@ impl SolveDyn {
             .registry_handle
             .registry()
             .stored_descriptor(descriptor.clone())?;
-        let (_, payload) = read_solve_diagnostic_payload(self.solve_id, &descriptor)?;
+        let (_, payload) = read_adapter_diagnostic_payload("Solve", self.solve_id, &descriptor)?;
+        Ok(Some(payload))
+    }
+
+    pub fn adapter(&self) -> &str {
+        &self.adapter
+    }
+
+    pub fn adapter_options(&self) -> &str {
+        &self.adapter_options
+    }
+}
+
+impl SamplingDyn {
+    pub fn sampling_id(&self) -> u64 {
+        self.sampling_id
+    }
+
+    pub fn status(&self) -> &SamplingStatus {
+        &self.status
+    }
+
+    fn input_descriptor(&self) -> Result<StoredDescriptor<'_>> {
+        self.registry_handle
+            .registry()
+            .stored_descriptor(self.input.clone())
+    }
+
+    pub fn input_instance(&self) -> Result<Instance> {
+        let descriptor = self.input_descriptor()?;
+        media_types::instance_payload_version(descriptor.media_type())
+            .with_context(|| format!("Invalid Sampling {} input", self.sampling_id))?;
+        self.registry_handle
+            .registry()
+            .get_instance_layer(&descriptor)
+    }
+
+    fn output_descriptor(&self) -> Result<Option<StoredDescriptor<'_>>> {
+        self.output
+            .clone()
+            .map(|descriptor| {
+                self.registry_handle
+                    .registry()
+                    .stored_descriptor(descriptor)
+            })
+            .transpose()
+    }
+
+    pub fn output_sample_set(&self) -> Result<Option<SampleSet>> {
+        let Some(descriptor) = self.output_descriptor()? else {
+            return Ok(None);
+        };
+        Ok(Some(
+            self.registry_handle
+                .registry()
+                .get_sample_set_layer(&descriptor)
+                .with_context(|| format!("Invalid Sampling {} output", self.sampling_id))?,
+        ))
+    }
+
+    pub fn diagnostic_blob(&self) -> Result<Option<Vec<u8>>> {
+        let Some(descriptor) = &self.diagnostics else {
+            return Ok(None);
+        };
+        let descriptor = self
+            .registry_handle
+            .registry()
+            .stored_descriptor(descriptor.clone())?;
+        let (bytes, _) =
+            read_adapter_diagnostic_payload("Sampling", self.sampling_id, &descriptor)?;
+        Ok(Some(bytes))
+    }
+
+    pub fn diagnostic_payload(&self) -> Result<Option<AdapterDiagnosticPayload>> {
+        let Some(descriptor) = &self.diagnostics else {
+            return Ok(None);
+        };
+        let descriptor = self
+            .registry_handle
+            .registry()
+            .stored_descriptor(descriptor.clone())?;
+        let (_, payload) =
+            read_adapter_diagnostic_payload("Sampling", self.sampling_id, &descriptor)?;
         Ok(Some(payload))
     }
 
@@ -1048,6 +1164,34 @@ impl UnsealedExperimentDynState {
                                     })
                                 })
                                 .collect::<Result<Vec<_>>>()?,
+                            samplings: run
+                                .samplings
+                                .iter()
+                                .map(|sampling| {
+                                    Ok(super::SamplingEntry {
+                                        sampling_id: sampling.sampling_id,
+                                        status: sampling.status.clone(),
+                                        input: registry
+                                            .stored_descriptor(sampling.input.clone())?,
+                                        output: sampling
+                                            .output
+                                            .clone()
+                                            .map(|descriptor| {
+                                                registry.stored_descriptor(descriptor)
+                                            })
+                                            .transpose()?,
+                                        adapter: sampling.adapter.clone(),
+                                        adapter_options: sampling.adapter_options.clone(),
+                                        diagnostics: sampling
+                                            .diagnostics
+                                            .clone()
+                                            .map(|descriptor| {
+                                                registry.stored_descriptor(descriptor)
+                                            })
+                                            .transpose()?,
+                                    })
+                                })
+                                .collect::<Result<Vec<_>>>()?,
                             parameters: run.parameters.clone(),
                         },
                     ))
@@ -1102,6 +1246,31 @@ impl UnsealedExperimentDynState {
                                         adapter: solve.adapter,
                                         adapter_options: solve.adapter_options,
                                         diagnostics: solve
+                                            .diagnostics
+                                            .map(|descriptor| {
+                                                registry.stored_descriptor(descriptor)
+                                            })
+                                            .transpose()?,
+                                    })
+                                })
+                                .collect::<Result<Vec<_>>>()?,
+                            samplings: run
+                                .samplings
+                                .into_iter()
+                                .map(|sampling| {
+                                    Ok(super::SamplingEntry {
+                                        sampling_id: sampling.sampling_id,
+                                        status: sampling.status,
+                                        input: registry.stored_descriptor(sampling.input)?,
+                                        output: sampling
+                                            .output
+                                            .map(|descriptor| {
+                                                registry.stored_descriptor(descriptor)
+                                            })
+                                            .transpose()?,
+                                        adapter: sampling.adapter,
+                                        adapter_options: sampling.adapter_options,
+                                        diagnostics: sampling
                                             .diagnostics
                                             .map(|descriptor| {
                                                 registry.stored_descriptor(descriptor)
@@ -1175,6 +1344,26 @@ impl SealedExperimentDynState {
                                         .map(Descriptor::from),
                                 })
                                 .collect(),
+                            samplings: run
+                                .samplings()
+                                .iter()
+                                .map(|sampling| SamplingDyn {
+                                    registry_handle: registry_handle.clone(),
+                                    sampling_id: sampling.sampling_id(),
+                                    status: sampling.status().clone(),
+                                    input: Descriptor::from(sampling.input_descriptor().clone()),
+                                    output: sampling
+                                        .output_descriptor()
+                                        .cloned()
+                                        .map(Descriptor::from),
+                                    adapter: sampling.adapter().to_string(),
+                                    adapter_options: sampling.adapter_options().to_string(),
+                                    diagnostics: sampling
+                                        .diagnostic_descriptor()
+                                        .cloned()
+                                        .map(Descriptor::from),
+                                })
+                                .collect(),
                         },
                     )
                 })
@@ -1240,6 +1429,19 @@ impl SealedExperimentDynState {
                     diagnostics: solve.diagnostics.clone(),
                 })
                 .collect();
+            let samplings = run
+                .samplings
+                .iter()
+                .map(|sampling| SamplingEntryDyn {
+                    sampling_id: sampling.sampling_id,
+                    status: sampling.status.clone(),
+                    input: sampling.input.clone(),
+                    output: sampling.output.clone(),
+                    adapter: sampling.adapter.clone(),
+                    adapter_options: sampling.adapter_options.clone(),
+                    diagnostics: sampling.diagnostics.clone(),
+                })
+                .collect();
             runs.insert(
                 run.run_id,
                 RunEntryDyn {
@@ -1248,6 +1450,7 @@ impl SealedExperimentDynState {
                     attachments: run.attachments.clone(),
                     trace: run.trace.clone(),
                     solves,
+                    samplings,
                     parameters,
                 },
             );
@@ -1304,6 +1507,20 @@ fn unsealed_run_views<'a>(
                 adapter: solve.adapter.clone(),
                 adapter_options: solve.adapter_options.clone(),
                 diagnostics: solve.diagnostics.clone(),
+            })
+            .collect(),
+        samplings: run
+            .samplings
+            .iter()
+            .map(|sampling| SamplingDyn {
+                registry_handle: registry_handle.clone(),
+                sampling_id: sampling.sampling_id,
+                status: sampling.status.clone(),
+                input: sampling.input.clone(),
+                output: sampling.output.clone(),
+                adapter: sampling.adapter.clone(),
+                adapter_options: sampling.adapter_options.clone(),
+                diagnostics: sampling.diagnostics.clone(),
             })
             .collect(),
     })

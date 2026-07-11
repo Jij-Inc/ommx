@@ -166,6 +166,7 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<PyOpenSolve>()?;
     m.add_class::<PySealedRun>()?;
     m.add_class::<PySolve>()?;
+    m.add_class::<PySampling>()?;
     m.add_class::<PyDiagnosticCollector>()?;
     m.add_function(wrap_pyfunction!(prune_anonymous, m)?)?;
     m.add_function(wrap_pyfunction!(remove_image, m)?)?;
@@ -353,6 +354,8 @@ as JSON, instances, solutions, sample sets, logs, or caller-defined media
 types. `Run.log_solve(...)` calls an `ommx.adapter.SolverAdapter`, stores the
 original input instance and returned solution, and records adapter keyword
 arguments as solve metadata rather than run parameters.
+`Run.log_sample(...)` similarly records a sampler call as a separate Sampling
+whose output is the complete SampleSet.
 
 Use `Run` as a context manager so closing the block records whether that trial
 finished, failed, or was interrupted. `Experiment` may also be used as a
@@ -378,7 +381,8 @@ pyo3_stub_gen::reexport_module_members!("ommx.experiment" from "ommx._ommx_rust"
     "OpenSolve",
     "Run",
     "SealedRun",
-    "Solve"
+    "Solve",
+    "Sampling"
 );
 
 pyo3_stub_gen::define_stub_info_gatherer!(stub_info);

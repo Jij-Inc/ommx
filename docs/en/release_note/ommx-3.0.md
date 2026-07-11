@@ -8,14 +8,14 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
-### 🆕 Experiment Solve records support `SampleSet` outputs ([#1055](https://github.com/Jij-Inc/ommx/pull/1055))
+### 🆕 Experiment Sampling records ([#1055](https://github.com/Jij-Inc/ommx/pull/1055))
 
 {meth}`~ommx.experiment.Run.log_sample` calls a
 {class}`~ommx.adapter.SamplerAdapter` and records its complete
-{class}`~ommx.SampleSet` as the Experiment {class}`~ommx.experiment.Solve`
-output. A successful sampling call remains `finished` even when the SampleSet
-contains no feasible samples. {attr}`~ommx.experiment.Solve.output` now returns
-`Solution | SampleSet | None` according to the recorded adapter outcome.
+{class}`~ommx.SampleSet` as a separate {class}`~ommx.experiment.Sampling`
+record. A successful sampling call remains `finished` even when the SampleSet
+contains no feasible samples. Solver calls remain {class}`~ommx.experiment.Solve`
+records whose output is `Solution | None`.
 
 ```python
 from ommx import SampleSet
@@ -26,13 +26,13 @@ with Experiment() as experiment:
     with experiment.run() as run:
         sample_set = run.log_sample(OMMXOpenJijSAAdapter, instance, num_reads=100)
 
-output = experiment.runs[0].solves[0].output
+output = experiment.runs[0].samplings[0].output
 assert isinstance(output, SampleSet)
 ```
 
 `Run.log_sample(..., store_diagnostics=True)` uses the same adapter diagnostics
 channel as `Run.log_solve`. See the [Experiment management
-tutorial](../tutorial/experiment_management.md) for the Solve recording model.
+tutorial](../tutorial/experiment_management.md) for the Solve and Sampling recording model.
 
 ### 🆕 Local Registry ref deletion and Experiment retention ([#1053](https://github.com/Jij-Inc/ommx/pull/1053))
 

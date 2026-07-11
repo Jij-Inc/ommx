@@ -2,8 +2,8 @@
 
 use super::logging::AttachmentLoggerStorage;
 use super::{
-    AttachmentTable, ParameterValue, Run, RunEntry, RunStatus, SolveDiagnosticPayload, SolveEntry,
-    SolveStatus, Trace,
+    AdapterDiagnosticPayload, AttachmentTable, ParameterValue, Run, RunEntry, RunStatus,
+    SamplingEntry, SamplingStatus, SolveEntry, SolveStatus, Trace,
 };
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
 use crate::artifact::media_types;
@@ -18,7 +18,7 @@ pub struct FinishedSolveRecord<'a> {
     pub output: &'a Solution,
     pub adapter: String,
     pub adapter_options: String,
-    pub diagnostics: Option<SolveDiagnosticPayload>,
+    pub diagnostics: Option<AdapterDiagnosticPayload>,
 }
 
 /// Data needed to record a finished sampler call.
@@ -27,7 +27,7 @@ pub struct FinishedSampleRecord<'a> {
     pub output: &'a SampleSet,
     pub adapter: String,
     pub adapter_options: String,
-    pub diagnostics: Option<SolveDiagnosticPayload>,
+    pub diagnostics: Option<AdapterDiagnosticPayload>,
 }
 
 /// Data needed to record a failed or interrupted Solve.
@@ -36,7 +36,16 @@ pub struct FailedSolveRecord<'a> {
     pub adapter: String,
     pub adapter_options: String,
     pub status: SolveStatus,
-    pub diagnostics: Option<SolveDiagnosticPayload>,
+    pub diagnostics: Option<AdapterDiagnosticPayload>,
+}
+
+/// Data needed to record a failed or interrupted Sampling.
+pub struct FailedSampleRecord<'a> {
+    pub input: &'a Instance,
+    pub adapter: String,
+    pub adapter_options: String,
+    pub status: SamplingStatus,
+    pub diagnostics: Option<AdapterDiagnosticPayload>,
 }
 
 impl<'exp, 'reg> Run<'exp, 'reg> {
@@ -63,6 +72,13 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         let solve_id = self.next_solve_id;
         self.next_solve_id += 1;
         solve_id
+    }
+
+    /// Reserve a Sampling ID for a sampler attempt that will be finalized later.
+    pub fn reserve_sampling_id(&mut self) -> u64 {
+        let sampling_id = self.next_sampling_id;
+        self.next_sampling_id += 1;
+        sampling_id
     }
 
     /// Log one already-finished solver result with adapter diagnostics.
@@ -129,24 +145,24 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
     /// Log one already-finished sampler result with adapter diagnostics.
     ///
     /// The original input [`Instance`] and returned [`SampleSet`] are stored
-    /// as solve-scoped payloads. A successful sampling call remains finished
+    /// as Sampling-scoped payloads. A successful sampling call remains finished
     /// even when the SampleSet contains no feasible samples.
     ///
     /// Diagnostics are best-effort metadata. If the diagnostics payload cannot
-    /// be encoded or stored, the Solve entry is still recorded without
+    /// be encoded or stored, the Sampling entry is still recorded without
     /// diagnostics.
     pub fn log_finished_sample(&mut self, record: FinishedSampleRecord<'_>) -> Result<u64> {
-        let solve_id = self.reserve_solve_id();
-        self.log_finished_sample_with_id(solve_id, record)
+        let sampling_id = self.reserve_sampling_id();
+        self.log_finished_sample_with_id(sampling_id, record)
     }
 
-    /// Finalize a previously reserved Solve ID with a finished sampler result.
+    /// Finalize a previously reserved Sampling ID with a finished sampler result.
     pub fn log_finished_sample_with_id(
         &mut self,
-        solve_id: u64,
+        sampling_id: u64,
         record: FinishedSampleRecord<'_>,
     ) -> Result<u64> {
-        self.ensure_reserved_solve_id(solve_id)?;
+        self.ensure_reserved_sampling_id(sampling_id)?;
         let FinishedSampleRecord {
             input,
             output,
@@ -168,22 +184,81 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
                 Err(error) => {
                     tracing::warn!(
                         error = %error,
-                        "Failed to store Solve diagnostics; recording Solve without diagnostics"
+                        "Failed to store Sampling diagnostics; recording Sampling without diagnostics"
                     );
                     None
                 }
             }
         });
-        self.insert_solve(SolveEntry {
-            solve_id,
-            status: SolveStatus::Finished,
+        self.insert_sampling(SamplingEntry {
+            sampling_id,
+            status: SamplingStatus::Finished,
             input,
             output: Some(output),
             adapter,
             adapter_options,
             diagnostics,
         })?;
-        Ok(solve_id)
+        Ok(sampling_id)
+    }
+
+    /// Log one failed or interrupted sampler call with adapter diagnostics.
+    pub fn log_failed_sample(&mut self, record: FailedSampleRecord<'_>) -> Result<u64> {
+        ensure!(
+            record.status != SamplingStatus::Finished,
+            "failed sampler attempt status must not be finished"
+        );
+        let sampling_id = self.reserve_sampling_id();
+        self.log_failed_sample_with_id(sampling_id, record)
+    }
+
+    /// Finalize a previously reserved Sampling ID as failed or interrupted.
+    pub fn log_failed_sample_with_id(
+        &mut self,
+        sampling_id: u64,
+        record: FailedSampleRecord<'_>,
+    ) -> Result<u64> {
+        let FailedSampleRecord {
+            input,
+            adapter,
+            adapter_options,
+            status,
+            diagnostics,
+        } = record;
+        ensure!(
+            status != SamplingStatus::Finished,
+            "failed sampler attempt status must not be finished"
+        );
+        self.ensure_reserved_sampling_id(sampling_id)?;
+        let input = self.experiment.registry.store_instance_layer(input)?;
+        let diagnostics = diagnostics.and_then(|diagnostic| {
+            match diagnostic.to_msgpack_bytes().and_then(|bytes| {
+                self.experiment.registry.store_layer_blob(
+                    media_types::diagnostic_msgpack(),
+                    &bytes,
+                    HashMap::new(),
+                )
+            }) {
+                Ok(descriptor) => Some(descriptor),
+                Err(error) => {
+                    tracing::warn!(
+                        error = %error,
+                        "Failed to store failed Sampling diagnostics; recording Sampling without diagnostics"
+                    );
+                    None
+                }
+            }
+        });
+        self.insert_sampling(SamplingEntry {
+            sampling_id,
+            status,
+            input,
+            output: None,
+            adapter,
+            adapter_options,
+            diagnostics,
+        })?;
+        Ok(sampling_id)
     }
 
     /// Log one failed solver call with adapter diagnostics.
@@ -275,6 +350,33 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         Ok(())
     }
 
+    fn ensure_reserved_sampling_id(&self, sampling_id: u64) -> Result<()> {
+        ensure!(
+            sampling_id < self.next_sampling_id,
+            "Sampling ID {} has not been reserved",
+            sampling_id
+        );
+        ensure!(
+            !self
+                .samplings
+                .iter()
+                .any(|existing| existing.sampling_id == sampling_id),
+            "Run {} already contains Sampling {}",
+            self.run_id,
+            sampling_id
+        );
+        Ok(())
+    }
+
+    fn insert_sampling(&mut self, sampling: SamplingEntry<'reg>) -> Result<()> {
+        self.ensure_reserved_sampling_id(sampling.sampling_id)?;
+        let index = self
+            .samplings
+            .partition_point(|existing| existing.sampling_id < sampling.sampling_id);
+        self.samplings.insert(index, sampling);
+        Ok(())
+    }
+
     /// Store a trace for this Run.
     ///
     /// Traces are intentionally not Attachments: they record
@@ -305,8 +407,8 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
     /// Close the run as failed and append the partial run state to the
     /// parent experiment.
     ///
-    /// This preserves run-scoped payloads and completed solves that were
-    /// logged before the failure.
+    /// This preserves run-scoped payloads and completed solves or samplings
+    /// that were logged before the failure.
     pub fn finish_failed(self) -> Result<()> {
         self.close(RunStatus::Failed)
     }
@@ -328,6 +430,8 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
             trace,
             solves,
             next_solve_id: _,
+            samplings,
+            next_sampling_id: _,
             parameters,
         } = self;
         let run = RunEntry {
@@ -336,6 +440,7 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
             attachments,
             trace,
             solves,
+            samplings,
             parameters,
         };
         experiment.push_closed_run(run)?;

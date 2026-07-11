@@ -3,13 +3,13 @@
 use super::super::logging::AttachmentLoggerStorage;
 use super::super::parameter::ParameterSet;
 use super::super::{
-    AttachmentTable, FailedSolveRecord, FinishedSampleRecord, FinishedSolveRecord, ParameterValue,
-    RunStatus, SolveStatus,
+    AttachmentTable, FailedSampleRecord, FailedSolveRecord, FinishedSampleRecord,
+    FinishedSolveRecord, ParameterValue, RunStatus, SamplingStatus, SolveStatus,
 };
 use super::{
     bail_non_unsealed, ensure_unsealed_for_attachment_write, lock_experiment_state,
     store_trace_descriptor, ExperimentDyn, ExperimentDynLifecycle, ExperimentDynState, RunEntryDyn,
-    SolveEntryDyn,
+    SamplingEntryDyn, SolveEntryDyn,
 };
 use crate::artifact::local_registry::LocalRegistry;
 use crate::artifact::media_types;
@@ -26,7 +26,7 @@ use std::sync::{Arc, Mutex};
 ///
 /// Like the other dynamic experiment handles, `RunDyn` stores raw
 /// [`Descriptor`] values internally for registry-backed attachments and
-/// solve payloads. The parent `ExperimentDyn` owns the registry handle;
+/// solve and sampling payloads. The parent `ExperimentDyn` owns the registry handle;
 /// when the run is finished, those descriptors are promoted back to
 /// [`StoredDescriptor`](crate::artifact::local_registry::StoredDescriptor)
 /// values before entering the lifetime-based experiment model.
@@ -46,6 +46,8 @@ struct RunDynState {
     trace: Option<Descriptor>,
     solves: Vec<SolveEntryDyn>,
     next_solve_id: u64,
+    samplings: Vec<SamplingEntryDyn>,
+    next_sampling_id: u64,
     parameters: ParameterSet,
 }
 
@@ -77,6 +79,8 @@ impl RunDyn {
                 trace: None,
                 solves: Vec::new(),
                 next_solve_id: 0,
+                samplings: Vec::new(),
+                next_sampling_id: 0,
                 parameters: ParameterSet::new(),
             }),
             experiment_state,
@@ -102,6 +106,13 @@ impl RunDyn {
         let solve_id = state.next_solve_id;
         state.next_solve_id += 1;
         Ok(solve_id)
+    }
+
+    pub fn reserve_sampling_id(&mut self) -> Result<u64> {
+        let state = self.open_mut()?;
+        let sampling_id = state.next_sampling_id;
+        state.next_sampling_id += 1;
+        Ok(sampling_id)
     }
 
     /// Log one already-finished solver result with adapter diagnostics.
@@ -173,17 +184,17 @@ impl RunDyn {
     /// A successful sampling call remains finished even when the SampleSet
     /// contains no feasible samples.
     pub fn log_finished_sample(&mut self, record: FinishedSampleRecord<'_>) -> Result<u64> {
-        let solve_id = self.reserve_solve_id()?;
-        self.log_finished_sample_with_id(solve_id, record)
+        let sampling_id = self.reserve_sampling_id()?;
+        self.log_finished_sample_with_id(sampling_id, record)
     }
 
-    /// Finalize a previously reserved Solve ID with a finished sampler result.
+    /// Finalize a previously reserved Sampling ID with a finished sampler result.
     pub fn log_finished_sample_with_id(
         &mut self,
-        solve_id: u64,
+        sampling_id: u64,
         record: FinishedSampleRecord<'_>,
     ) -> Result<u64> {
-        ensure_reserved_solve_id(self.open()?, solve_id)?;
+        ensure_reserved_sampling_id(self.open()?, sampling_id)?;
         let FinishedSampleRecord {
             input,
             output,
@@ -209,18 +220,18 @@ impl RunDyn {
                 Err(error) => {
                     tracing::warn!(
                         error = %error,
-                        "Failed to store Solve diagnostics; recording Solve without diagnostics"
+                        "Failed to store Sampling diagnostics; recording Sampling without diagnostics"
                     );
                     None
                 }
             }
         });
         let state = self.open_mut()?;
-        insert_solve(
+        insert_sampling(
             state,
-            SolveEntryDyn {
-                solve_id,
-                status: SolveStatus::Finished,
+            SamplingEntryDyn {
+                sampling_id,
+                status: SamplingStatus::Finished,
                 input,
                 output: Some(output),
                 adapter,
@@ -228,7 +239,71 @@ impl RunDyn {
                 diagnostics,
             },
         )?;
-        Ok(solve_id)
+        Ok(sampling_id)
+    }
+
+    pub fn log_failed_sample(&mut self, record: FailedSampleRecord<'_>) -> Result<u64> {
+        ensure!(
+            record.status != SamplingStatus::Finished,
+            "failed sampler attempt status must not be finished"
+        );
+        let sampling_id = self.reserve_sampling_id()?;
+        self.log_failed_sample_with_id(sampling_id, record)
+    }
+
+    pub fn log_failed_sample_with_id(
+        &mut self,
+        sampling_id: u64,
+        record: FailedSampleRecord<'_>,
+    ) -> Result<u64> {
+        let FailedSampleRecord {
+            input,
+            adapter,
+            adapter_options,
+            status,
+            diagnostics,
+        } = record;
+        ensure!(
+            status != SamplingStatus::Finished,
+            "failed sampler attempt status must not be finished"
+        );
+        ensure_reserved_sampling_id(self.open()?, sampling_id)?;
+        let registry_handle = self.registry_handle_for_attachment_write()?;
+        let input = Descriptor::from(registry_handle.registry().store_instance_layer(input)?);
+        let diagnostics = diagnostics.and_then(|diagnostic| {
+            match diagnostic.to_msgpack_bytes().and_then(|bytes| {
+                let registry_handle = self.registry_handle_for_attachment_write()?;
+                let descriptor = registry_handle.registry().store_layer_blob(
+                    media_types::diagnostic_msgpack(),
+                    &bytes,
+                    HashMap::new(),
+                )?;
+                Ok(Descriptor::from(descriptor))
+            }) {
+                Ok(descriptor) => Some(descriptor),
+                Err(error) => {
+                    tracing::warn!(
+                        error = %error,
+                        "Failed to store failed Sampling diagnostics; recording Sampling without diagnostics"
+                    );
+                    None
+                }
+            }
+        });
+        let state = self.open_mut()?;
+        insert_sampling(
+            state,
+            SamplingEntryDyn {
+                sampling_id,
+                status,
+                input,
+                output: None,
+                adapter,
+                adapter_options,
+                diagnostics,
+            },
+        )?;
+        Ok(sampling_id)
     }
 
     /// Log one failed solver call with adapter diagnostics.
@@ -338,6 +413,7 @@ impl RunDyn {
                 attachments: run.attachments,
                 trace: run.trace,
                 solves: run.solves,
+                samplings: run.samplings,
                 parameters: run.parameters,
             },
         );
@@ -384,6 +460,7 @@ impl RunDyn {
                 attachments: run.attachments,
                 trace: run.trace,
                 solves: run.solves,
+                samplings: run.samplings,
                 parameters: run.parameters,
             },
         );
@@ -496,5 +573,29 @@ fn insert_solve(run: &mut RunDynState, solve: SolveEntryDyn) -> Result<()> {
         .solves
         .partition_point(|existing| existing.solve_id < solve.solve_id);
     run.solves.insert(index, solve);
+    Ok(())
+}
+
+fn ensure_reserved_sampling_id(run: &RunDynState, sampling_id: u64) -> Result<()> {
+    ensure!(
+        sampling_id < run.next_sampling_id,
+        "Sampling ID {sampling_id} has not been reserved"
+    );
+    ensure!(
+        !run.samplings
+            .iter()
+            .any(|existing| existing.sampling_id == sampling_id),
+        "Run {} already contains Sampling {sampling_id}",
+        run.run_id
+    );
+    Ok(())
+}
+
+fn insert_sampling(run: &mut RunDynState, sampling: SamplingEntryDyn) -> Result<()> {
+    ensure_reserved_sampling_id(run, sampling.sampling_id)?;
+    let index = run
+        .samplings
+        .partition_point(|existing| existing.sampling_id < sampling.sampling_id);
+    run.samplings.insert(index, sampling);
     Ok(())
 }
