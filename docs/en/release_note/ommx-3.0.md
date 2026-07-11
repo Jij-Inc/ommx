@@ -14,6 +14,24 @@ When {meth}`Instance.from_v1_bytes <ommx.Instance.from_v1_bytes>` or {meth}`Para
 
 Construct first-class special constraints from trusted modeling input rather than from a legacy hint alone. See the [Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md) for details.
 
+### 🆕 Transparent attachment compression and streaming writes ([#1054](https://github.com/Jij-Inc/ommx/pull/1054))
+
+{class}`~ommx.experiment.Experiment` and {class}`~ommx.experiment.Run` attachment
+logging methods now accept `compression="zstd"`. OMMX stores the compressed
+layer with a `+zstd` media-type suffix and a reserved compression annotation,
+while `attachment_media_type`, `get_attachment`, typed getters, codecs, and
+file export expose the original media type and decompressed payload. Readers
+only decompress marked layers, so logical media types ending in `+zstd` remain
+unambiguous.
+
+```python
+experiment.log_json("trace", trace_values, compression="zstd")
+experiment.log_file("solver-log", log_path, compression="zstd")
+```
+
+`log_file` now streams the source file into the Local Registry instead of
+buffering the whole file before the content-addressed write.
+
 ### 🆕 Local Registry ref deletion and Experiment retention ([#1053](https://github.com/Jij-Inc/ommx/pull/1053))
 
 `ommx.artifact.remove_image()` removes a named or anonymous image ref from the
