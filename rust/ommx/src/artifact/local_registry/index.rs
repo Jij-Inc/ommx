@@ -1031,19 +1031,10 @@ fn artifact_ref_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ArtifactRe
             format!("Cached Manifest config digest does not match {config_digest}"),
         ));
     }
-    let annotations = manifest
-        .annotations()
-        .clone()
-        .unwrap_or_default()
-        .into_iter()
-        .collect();
     Ok(ArtifactRefRecord {
         image_name,
         manifest_digest,
         updated_at: row.get(2)?,
-        artifact_type,
-        config_digest,
-        annotations,
         manifest_size: u64::try_from(manifest_json.len()).map_err(|error| {
             rusqlite::Error::FromSqlConversionFailure(6, Type::Blob, Box::new(error))
         })?,
@@ -1133,14 +1124,16 @@ fn artifact_ref_read_from_row(
 
 fn experiment_ref_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ExperimentRefRecord> {
     let record = artifact_ref_from_row(row)?;
-    if record.artifact_type.as_ref() != media_types::V1_EXPERIMENT_MEDIA_TYPE {
+    let artifact_type = record
+        .manifest
+        .artifact_type()
+        .as_ref()
+        .expect("artifact_ref_from_row requires an OMMX artifactType");
+    if artifact_type.as_ref() != media_types::V1_EXPERIMENT_MEDIA_TYPE {
         return Err(cache_conversion_failure(
             5,
             Type::Text,
-            format!(
-                "Unexpected cached Experiment artifact type: {}",
-                record.artifact_type
-            ),
+            format!("Unexpected cached Experiment artifact type: {artifact_type}"),
         ));
     }
     if record.manifest.config().media_type().as_ref()
@@ -1156,13 +1149,14 @@ fn experiment_ref_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Experime
         ));
     }
     let config_json: Vec<u8> = row.get(7)?;
-    if record.config_digest.as_ref() != sha256_digest(&config_json) {
+    let config_digest = record.manifest.config().digest();
+    if config_digest.as_ref() != sha256_digest(&config_json) {
         return Err(cache_conversion_failure(
             7,
             Type::Blob,
             format!(
                 "Cached Experiment Config JSON does not match {}",
-                record.config_digest
+                config_digest
             ),
         ));
     }
@@ -1189,12 +1183,18 @@ fn experiment_ref_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Experime
     Ok(ExperimentRefRecord {
         image_name: record.image_name,
         manifest_digest: record.manifest_digest,
-        config_digest: record.config_digest,
+        config_digest: config_digest.clone(),
         updated_at: record.updated_at,
         status: typed_config.status,
         run_count,
         solve_count,
-        annotations: record.annotations,
+        annotations: record
+            .manifest
+            .annotations()
+            .clone()
+            .unwrap_or_default()
+            .into_iter()
+            .collect(),
         config,
     })
 }

@@ -134,12 +134,6 @@ pub struct ArtifactRefRecord {
     pub manifest_digest: Digest,
     /// RFC 3339 timestamp when the local ref was last updated.
     pub updated_at: String,
-    /// OCI Manifest `artifactType` identifying the OMMX Artifact kind.
-    pub artifact_type: MediaType,
-    /// Immutable digest of the config blob referenced by the Manifest.
-    pub config_digest: Digest,
-    /// Manifest annotations stored on the Artifact.
-    pub annotations: BTreeMap<String, String>,
     /// Byte length of the original OCI Manifest JSON stored by `manifest_digest`.
     pub manifest_size: u64,
     /// Parsed OCI Image Manifest stored by `manifest_digest`.

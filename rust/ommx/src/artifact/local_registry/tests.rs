@@ -1275,12 +1275,22 @@ fn local_registry_lists_artifacts_from_manifest_cache() -> Result<()> {
     assert_eq!(record.image_name, image_name);
     assert_eq!(&record.manifest_digest, artifact.manifest_digest());
     assert_eq!(
-        record.artifact_type,
-        MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string())
+        record.manifest.artifact_type(),
+        &Some(MediaType::Other(
+            media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()
+        ))
     );
-    assert_eq!(&record.config_digest, artifact.stored_config()?.digest());
     assert_eq!(
-        record.annotations.get("com.example.problem"),
+        record.manifest.config().digest(),
+        artifact.stored_config()?.digest()
+    );
+    assert_eq!(
+        record
+            .manifest
+            .annotations()
+            .as_ref()
+            .unwrap()
+            .get("com.example.problem"),
         Some(&"qap".to_string())
     );
     assert_eq!(
