@@ -34,6 +34,24 @@ assert isinstance(output, SampleSet)
 diagnostics channel を利用できます。SolveとSamplingの記録モデルは
 [実験管理チュートリアル](../tutorial/experiment_management.md) を参照してください。
 
+### 🆕 Attachment の透過圧縮と streaming write ([#1054](https://github.com/Jij-Inc/ommx/pull/1054))
+
+{class}`~ommx.experiment.Experiment` と {class}`~ommx.experiment.Run` の
+attachment logging method に `compression="zstd"` を指定できるようになりました。
+OMMX は `+zstd` media-type suffix と予約済みの圧縮 annotation を付けた layer を
+保存しますが、`attachment_media_type`、`get_attachment`、型付き getter、codec、
+ファイル書き出しでは元の media type と展開済み payload を返します。展開するのは
+annotation で識別された layer だけなので、元から `+zstd` で終わる論理 media type
+も曖昧になりません。
+
+```python
+experiment.log_json("trace", trace_values, compression="zstd")
+experiment.log_file("solver-log", log_path, compression="zstd")
+```
+
+`log_file` はファイル全体を先に buffer せず、Local Registry の content-addressed
+write へ streaming するようになりました。
+
 ### 🆕 Local Registry ref の削除と Experiment retention ([#1053](https://github.com/Jij-Inc/ommx/pull/1053))
 
 `ommx.artifact.remove_image()` で、content-addressed blob を削除せずに named

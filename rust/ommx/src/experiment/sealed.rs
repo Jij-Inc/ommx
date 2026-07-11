@@ -1,7 +1,7 @@
 //! Read-only model reconstructed from a sealed Experiment Artifact.
 
 use super::artifact::ExperimentArtifactView;
-use super::attachment::AttachmentTable;
+use super::attachment::{validate_attachment_storage, AttachmentTable};
 use super::config::{ExperimentConfigSampling, ExperimentConfigSolve, LayerRef};
 use super::parameter::{RunParameterCell, RunParameterTable};
 use super::{
@@ -452,14 +452,18 @@ fn decode_attachments<'reg>(
     attachment_context: &str,
 ) -> Result<AttachmentTable<StoredDescriptor<'reg>>> {
     attachments.try_map(|name, layer_ref| {
-        Ok(resolve_layer(layers, *layer_ref)
+        let descriptor = resolve_layer(layers, *layer_ref)
             .with_context(|| {
                 format!(
                     "Failed to resolve {attachment_context} attachment `{name}` LayerRef {}",
                     layer_ref.0
                 )
             })?
-            .clone())
+            .clone();
+        validate_attachment_storage(&descriptor).with_context(|| {
+            format!("Invalid {attachment_context} attachment `{name}` storage format")
+        })?;
+        Ok(descriptor)
     })
 }
 

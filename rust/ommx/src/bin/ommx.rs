@@ -5,8 +5,9 @@ use oci_spec::image::{Digest, ImageManifest};
 use ommx::artifact::{
     fetch_remote_manifest, get_local_registry_root,
     local_registry::{
-        AnonymousRefOptions, ArchiveInspectView, GcBlob, GcDeleteReport, GcOptions, GcReport,
-        LocalRegistry, OciDirRef, RefUpdate,
+        AnonymousRefOptions, ArchiveInspectView, ArtifactListOptions, ArtifactRefRecord, GcBlob,
+        GcDeleteReport, GcOptions, GcReport, LocalRegistry, OciDirRef, RefUpdate,
+        RegistryListReport,
     },
     ImageRef, LocalArtifact,
 };
@@ -45,6 +46,13 @@ enum Command {
 
     /// List the images in the local registry
     List,
+
+    /// Show the Manifest JSON, config, and unique layer sizes for local image refs
+    Size {
+        /// One or more container image names stored in the Local Registry
+        #[clap(required = true)]
+        image_names: Vec<String>,
+    },
 
     /// Import an OCI archive or OCI Image Layout directory into the local registry
     Import {
@@ -427,6 +435,8 @@ fn main() -> Result<()> {
             }
         }
 
+        Command::Size { image_names } => handle_size(image_names)?,
+
         Command::ImportLegacy { root, replace } => handle_import_legacy(root.as_ref(), *replace)?,
 
         Command::PruneAnonymous {
@@ -585,6 +595,59 @@ fn handle_export(image_name: &str, output: &Path) -> Result<()> {
     let name = ImageRef::parse(image_name)?;
     LocalArtifact::open(name)?.save(output)?;
     Ok(())
+}
+
+fn handle_size(image_names: &[String]) -> Result<()> {
+    let registry = LocalRegistry::open_default()?;
+    let sizes = image_names
+        .iter()
+        .map(|image_name| {
+            let image_name = ImageRef::parse(image_name)?;
+            let prefix = image_name.to_string();
+            let report = registry.list_artifacts_with_options(
+                Some(&prefix),
+                &ArtifactListOptions {
+                    include_internal: true,
+                    strict: false,
+                },
+            )?;
+            for warning in &report.warnings {
+                tracing::warn!("{warning}");
+            }
+            let record = exact_artifact_record(report, &image_name)?;
+            Ok((image_name, record.referenced_blob_size()?))
+        })
+        .collect::<Result<Vec<_>>>()?;
+
+    for (image_name, size) in sizes {
+        print_status("Image".blue().bold(), image_name);
+        print_status(
+            "Size".green().bold(),
+            format_args!("{} ({size} bytes)", format_bytes(size)),
+        );
+    }
+    Ok(())
+}
+
+fn exact_artifact_record(
+    report: RegistryListReport<ArtifactRefRecord>,
+    image_name: &ImageRef,
+) -> Result<ArtifactRefRecord> {
+    if let Some(record) = report
+        .records
+        .into_iter()
+        .find(|record| record.image_name() == image_name)
+    {
+        return Ok(record);
+    }
+    if let Some(warning) = report
+        .warnings
+        .iter()
+        .find(|warning| warning.image_name == image_name.to_string())
+    {
+        bail!("{warning}");
+    }
+    bail!("Artifact not found in the Local Registry: {image_name}")
 }
 
 fn handle_rm(image_name: &str, root: Option<&PathBuf>) -> Result<()> {
@@ -924,6 +987,7 @@ fn format_bytes(bytes: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ommx::artifact::local_registry::{RegistryListWarning, RegistryListWarningStage};
 
     const DIGEST: &str = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
@@ -991,5 +1055,74 @@ mod tests {
             rm_storage_message(),
             "Unreferenced data remains until a later `ommx gc --delete` removes it after the grace period."
         );
+    }
+
+    #[test]
+    fn size_cli_accepts_multiple_images() {
+        let command = Command::try_parse_from([
+            "ommx",
+            "size",
+            "example.com/ommx/experiment:first",
+            "example.com/ommx/experiment:second",
+        ])
+        .unwrap();
+        let Command::Size { image_names } = command else {
+            panic!("expected size command");
+        };
+        assert_eq!(
+            image_names,
+            [
+                "example.com/ommx/experiment:first",
+                "example.com/ommx/experiment:second"
+            ]
+        );
+    }
+
+    #[test]
+    fn size_cli_requires_at_least_one_image() {
+        assert!(Command::try_parse_from(["ommx", "size"]).is_err());
+    }
+
+    #[test]
+    fn size_cli_uses_the_default_registry() {
+        assert!(Command::try_parse_from([
+            "ommx",
+            "size",
+            "example.com/ommx/experiment:latest",
+            "--root",
+            "/tmp/registry",
+        ])
+        .is_err());
+    }
+
+    #[test]
+    fn size_cli_help_names_the_counted_manifest_parts() {
+        let help = match Command::try_parse_from(["ommx", "size", "--help"]) {
+            Ok(_) => panic!("--help must stop argument parsing"),
+            Err(error) => error.to_string(),
+        };
+        assert!(help.contains("Manifest JSON, config, and unique layer sizes"));
+        assert!(!help.contains("reachable"));
+    }
+
+    #[test]
+    fn size_reports_target_corruption_instead_of_not_found() {
+        let image_name = ImageRef::parse("example.com/ommx/experiment:corrupt").unwrap();
+        let error = exact_artifact_record(
+            RegistryListReport {
+                records: Vec::new(),
+                warnings: vec![RegistryListWarning {
+                    image_name: image_name.to_string(),
+                    manifest_digest: DIGEST.to_string(),
+                    stage: RegistryListWarningStage::ManifestCacheRepair,
+                    message: "Invalid cached Manifest; CAS repair failed".to_string(),
+                }],
+            },
+            &image_name,
+        )
+        .expect_err("target corruption must be returned as an error");
+        let message = format!("{error:#}");
+        assert!(message.contains("CAS repair failed"));
+        assert!(!message.contains("Artifact not found"));
     }
 }

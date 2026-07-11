@@ -1,4 +1,5 @@
 use anyhow::{bail, Context, Result};
+use oci_spec::image::ImageManifest;
 use ommx::artifact::media_types;
 use pyo3::{
     exceptions::PyRuntimeWarning,
@@ -25,19 +26,27 @@ pub struct PyArtifactRef {
     artifact_type: String,
     config_digest: String,
     annotations: HashMap<String, String>,
-    manifest: serde_json::Value,
+    manifest: ImageManifest,
 }
 
 impl From<ommx::artifact::local_registry::ArtifactRefRecord> for PyArtifactRef {
     fn from(record: ommx::artifact::local_registry::ArtifactRefRecord) -> Self {
+        let manifest = record.manifest().clone();
+        let artifact_type = manifest
+            .artifact_type()
+            .as_ref()
+            .expect("ArtifactRefRecord requires an OMMX artifactType")
+            .to_string();
+        let config_digest = manifest.config().digest().to_string();
+        let annotations = manifest.annotations().clone().unwrap_or_default();
         Self {
-            image_name: record.image_name.to_string(),
-            manifest_digest: record.manifest_digest.to_string(),
-            updated_at: record.updated_at,
-            artifact_type: record.artifact_type.to_string(),
-            config_digest: record.config_digest.to_string(),
-            annotations: record.annotations.into_iter().collect(),
-            manifest: record.manifest,
+            image_name: record.image_name().to_string(),
+            manifest_digest: record.manifest_digest().to_string(),
+            updated_at: record.updated_at().to_string(),
+            artifact_type,
+            config_digest,
+            annotations,
+            manifest,
         }
     }
 }
@@ -81,7 +90,7 @@ impl PyArtifactRef {
         self.annotations.clone()
     }
 
-    /// Complete OCI Manifest JSON stored by `manifest_digest`.
+    /// Parsed OCI Manifest represented as a Python dictionary.
     #[getter]
     #[gen_stub(override_return_type(
         type_repr = "builtins.dict[builtins.str, typing.Any]",

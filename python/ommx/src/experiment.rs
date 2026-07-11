@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use oci_spec::image::MediaType;
 use pyo3::{
-    exceptions::{PyKeyboardInterrupt, PyTypeError},
+    exceptions::{PyKeyboardInterrupt, PyTypeError, PyValueError},
     prelude::*,
     types::{
         PyBool, PyBytes, PyDict, PyFloat, PyInt, PyList, PyModule, PyString, PyType, PyTypeMethods,
@@ -19,7 +19,7 @@ use crate::PyArtifact;
 use ommx::artifact::local_registry::{ExperimentCheckpointRefRecord, ExperimentRefRecord};
 use ommx::artifact::AsArtifact;
 use ommx::experiment::{
-    AdapterDiagnosticPayload, AttachmentLogger, AutosavePolicy, FailedSampleRecord,
+    AdapterDiagnosticPayload, AttachmentLogger, AutosavePolicy, Compression, FailedSampleRecord,
     FailedSolveRecord, FinishedSampleRecord, FinishedSolveRecord, SamplingStatus, SolveStatus,
 };
 
@@ -628,7 +628,9 @@ impl PyExperiment {
         self.inner.attachment_names()
     }
 
-    /// OCI media type of an experiment-level attachment.
+    /// Original media type of an experiment-level attachment.
+    ///
+    /// Storage compression suffixes are hidden from this logical media type.
     pub fn attachment_media_type(&self, name: &str) -> Result<String> {
         Ok(self.inner.attachment_media_type(name)?.to_string())
     }
@@ -687,7 +689,7 @@ impl PyExperiment {
         Ok(crate::SampleSet { inner })
     }
 
-    /// Read raw bytes of an experiment-level attachment by name.
+    /// Read decompressed bytes of an experiment-level attachment by name.
     pub fn get_blob<'py>(&self, py: Python<'py>, name: &str) -> Result<Bound<'py, PyBytes>> {
         let _guard = crate::TRACING.attach_parent_context(py);
         Ok(PyBytes::new(py, &self.inner.attachment_blob(name)?))
@@ -697,7 +699,8 @@ impl PyExperiment {
     ///
     /// If `path` names an existing directory, the attachment filename stored
     /// by `log_file` is used inside that directory. Otherwise `path` is
-    /// treated as the destination file path.
+    /// treated as the destination file path. Compressed attachments are
+    /// decompressed while exporting.
     #[pyo3(signature = (name, path, *, overwrite = false))]
     pub fn write_attachment(
         &self,
@@ -783,18 +786,22 @@ impl PyExperiment {
     ///
     /// The `name` is stored as attachment metadata and is intended for
     /// humans. The bytes are stored as a layer in the committed artifact.
+    /// Set `compression="zstd"` to compress the stored layer transparently.
+    #[pyo3(signature = (name, media_type, bytes, *, compression = AttachmentCompression::None))]
     pub fn log_attachment(
         &mut self,
         name: &str,
         media_type: &str,
         bytes: &Bound<pyo3::types::PyBytes>,
+        compression: AttachmentCompression,
     ) -> Result<()> {
-        AttachmentLogger::log_attachment(
+        AttachmentLogger::log_attachment_compressed(
             &self.inner,
             name,
             MediaType::from(media_type),
             bytes.as_bytes(),
             HashMap::new(),
+            compression.into(),
         )
     }
 
@@ -804,8 +811,9 @@ impl PyExperiment {
     /// `media_type` is omitted, the Rust SDK infers it from file contents and
     /// unknown types fall back to `application/octet-stream`. The original
     /// source path is not stored; only a basename for later export is stored
-    /// as attachment metadata.
-    #[pyo3(signature = (name, path, media_type = None, *, filename = None))]
+    /// as attachment metadata. The file is streamed into the Local Registry;
+    /// set `compression="zstd"` to compress the stored layer transparently.
+    #[pyo3(signature = (name, path, media_type = None, *, filename = None, compression = AttachmentCompression::None))]
     pub fn log_file(
         &mut self,
         py: Python<'_>,
@@ -813,14 +821,16 @@ impl PyExperiment {
         path: PathBuf,
         media_type: Option<&str>,
         filename: Option<&str>,
+        compression: AttachmentCompression,
     ) -> Result<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        AttachmentLogger::log_file(
+        AttachmentLogger::log_file_compressed(
             &self.inner,
             name,
             &path,
             media_type.map(MediaType::from),
             filename,
+            compression.into(),
         )
     }
 
@@ -828,38 +838,51 @@ impl PyExperiment {
     ///
     /// The codec class must provide `media_type`, `encode(value) -> bytes`,
     /// and `decode(bytes) -> object`. OMMX owns only this protocol; concrete
-    /// codecs should live in the package that owns the payload type.
+    /// codecs should live in the package that owns the payload type. Set
+    /// `compression="zstd"` to compress the encoded bytes transparently.
+    #[pyo3(signature = (codec, name, value, *, compression = AttachmentCompression::None))]
     pub fn log_with_codec(
         &mut self,
         py: Python<'_>,
         codec: AttachmentCodecInput,
         name: &str,
         value: AttachmentPayload,
+        compression: AttachmentCompression,
     ) -> Result<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let attachment = codec.encode(py, &value)?;
-        AttachmentLogger::log_attachment(
+        AttachmentLogger::log_attachment_compressed(
             &self.inner,
             name,
             attachment.media_type,
             attachment.bytes,
             HashMap::new(),
+            compression.into(),
         )
     }
 
     /// Attach a JSON-serializable value in the experiment space.
     ///
     /// The value is encoded with Python's `json.dumps` and stored with media
-    /// type `application/json`.
-    pub fn log_json(&mut self, py: Python<'_>, name: &str, value: &Bound<PyAny>) -> Result<()> {
+    /// type `application/json`. Set `compression="zstd"` to compress the
+    /// encoded JSON transparently.
+    #[pyo3(signature = (name, value, *, compression = AttachmentCompression::None))]
+    pub fn log_json(
+        &mut self,
+        py: Python<'_>,
+        name: &str,
+        value: &Bound<PyAny>,
+        compression: AttachmentCompression,
+    ) -> Result<()> {
         let json = py.import("json")?;
         let blob: String = json.call_method1("dumps", (value,))?.extract()?;
-        AttachmentLogger::log_attachment(
+        AttachmentLogger::log_attachment_compressed(
             &self.inner,
             name,
             MediaType::from("application/json"),
             blob,
             HashMap::new(),
+            compression.into(),
         )
     }
 
@@ -1738,20 +1761,24 @@ impl PyRun {
     /// Attach arbitrary bytes with an explicit OCI media type in this run.
     ///
     /// Use this for payloads that belong to this run but are not scalar run
-    /// parameters, for example solver logs or derived files.
+    /// parameters, for example solver logs or derived files. Set
+    /// `compression="zstd"` to compress the stored layer transparently.
+    #[pyo3(signature = (name, media_type, bytes, *, compression = AttachmentCompression::None))]
     pub fn log_attachment(
         &mut self,
         name: &str,
         media_type: &str,
         bytes: &Bound<pyo3::types::PyBytes>,
+        compression: AttachmentCompression,
     ) -> Result<()> {
         self.ensure_store_trace_context_started()?;
-        AttachmentLogger::log_attachment(
+        AttachmentLogger::log_attachment_compressed(
             self.as_open_mut()?,
             name,
             MediaType::from(media_type),
             bytes.as_bytes(),
             HashMap::new(),
+            compression.into(),
         )
     }
 
@@ -1761,8 +1788,9 @@ impl PyRun {
     /// `media_type` is omitted, the Rust SDK infers it from file contents and
     /// unknown types fall back to `application/octet-stream`. The original
     /// source path is not stored; only a basename for later export is stored
-    /// as attachment metadata.
-    #[pyo3(signature = (name, path, media_type = None, *, filename = None))]
+    /// as attachment metadata. The file is streamed into the Local Registry;
+    /// set `compression="zstd"` to compress the stored layer transparently.
+    #[pyo3(signature = (name, path, media_type = None, *, filename = None, compression = AttachmentCompression::None))]
     pub fn log_file(
         &mut self,
         py: Python<'_>,
@@ -1770,15 +1798,17 @@ impl PyRun {
         path: PathBuf,
         media_type: Option<&str>,
         filename: Option<&str>,
+        compression: AttachmentCompression,
     ) -> Result<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
         self.ensure_store_trace_context_started()?;
-        AttachmentLogger::log_file(
+        AttachmentLogger::log_file_compressed(
             self.as_open_mut()?,
             name,
             &path,
             media_type.map(MediaType::from),
             filename,
+            compression.into(),
         )
     }
 
@@ -1786,40 +1816,53 @@ impl PyRun {
     ///
     /// The codec class must provide `media_type`, `encode(value) -> bytes`,
     /// and `decode(bytes) -> object`. OMMX owns only this protocol; concrete
-    /// codecs should live in the package that owns the payload type.
+    /// codecs should live in the package that owns the payload type. Set
+    /// `compression="zstd"` to compress the encoded bytes transparently.
+    #[pyo3(signature = (codec, name, value, *, compression = AttachmentCompression::None))]
     pub fn log_with_codec(
         &mut self,
         py: Python<'_>,
         codec: AttachmentCodecInput,
         name: &str,
         value: AttachmentPayload,
+        compression: AttachmentCompression,
     ) -> Result<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
         self.ensure_store_trace_context_started()?;
         let attachment = codec.encode(py, &value)?;
-        AttachmentLogger::log_attachment(
+        AttachmentLogger::log_attachment_compressed(
             self.as_open_mut()?,
             name,
             attachment.media_type,
             attachment.bytes,
             HashMap::new(),
+            compression.into(),
         )
     }
 
     /// Attach a JSON-serializable value in this run.
     ///
     /// The value is encoded with Python's `json.dumps` and stored with media
-    /// type `application/json`.
-    pub fn log_json(&mut self, py: Python<'_>, name: &str, value: &Bound<PyAny>) -> Result<()> {
+    /// type `application/json`. Set `compression="zstd"` to compress the
+    /// encoded JSON transparently.
+    #[pyo3(signature = (name, value, *, compression = AttachmentCompression::None))]
+    pub fn log_json(
+        &mut self,
+        py: Python<'_>,
+        name: &str,
+        value: &Bound<PyAny>,
+        compression: AttachmentCompression,
+    ) -> Result<()> {
         self.ensure_store_trace_context_started()?;
         let json = py.import("json")?;
         let blob: String = json.call_method1("dumps", (value,))?.extract()?;
-        AttachmentLogger::log_attachment(
+        AttachmentLogger::log_attachment_compressed(
             self.as_open_mut()?,
             name,
             MediaType::from("application/json"),
             blob,
             HashMap::new(),
+            compression.into(),
         )
     }
 
@@ -3225,6 +3268,70 @@ fn parse_name(image_name: Option<&str>) -> Result<ommx::experiment::Name> {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[doc(hidden)]
+pub enum AttachmentCompression {
+    None,
+    Zstd,
+}
+
+impl AttachmentCompression {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Zstd => "zstd",
+        }
+    }
+}
+
+impl<'py> FromPyObject<'_, 'py> for AttachmentCompression {
+    type Error = PyErr;
+
+    fn extract(ob: pyo3::Borrowed<'_, 'py, PyAny>) -> PyResult<Self> {
+        match ob.extract::<&str>()? {
+            "none" => Ok(Self::None),
+            "zstd" => Ok(Self::Zstd),
+            compression => Err(PyValueError::new_err(format!(
+                "Unsupported attachment compression `{compression}`; expected `none` or `zstd`"
+            ))),
+        }
+    }
+}
+
+impl<'py> IntoPyObject<'py> for AttachmentCompression {
+    type Target = PyString;
+    type Output = Bound<'py, Self::Target>;
+    type Error = std::convert::Infallible;
+
+    fn into_pyobject(self, py: Python<'py>) -> std::result::Result<Self::Output, Self::Error> {
+        Ok(PyString::new(py, self.as_str()))
+    }
+}
+
+impl pyo3_stub_gen::PyStubType for AttachmentCompression {
+    fn type_input() -> pyo3_stub_gen::TypeInfo {
+        pyo3_stub_gen::TypeInfo {
+            name: r#"typing.Literal["none", "zstd"]"#.to_string(),
+            source_module: None,
+            import: ["typing".into()].into(),
+            type_refs: Default::default(),
+        }
+    }
+
+    fn type_output() -> pyo3_stub_gen::TypeInfo {
+        Self::type_input()
+    }
+}
+
+impl From<AttachmentCompression> for Compression {
+    fn from(compression: AttachmentCompression) -> Self {
+        match compression {
+            AttachmentCompression::None => Self::None,
+            AttachmentCompression::Zstd => Self::Zstd,
+        }
+    }
+}
+
 pub struct ParameterValueInput(ommx::experiment::ParameterValue);
 
 impl<'py> FromPyObject<'_, 'py> for ParameterValueInput {
@@ -3720,7 +3827,9 @@ impl PySealedRun {
         Ok(self.run.attachment_names())
     }
 
-    /// OCI media type of a run-level attachment.
+    /// Original media type of a run-level attachment.
+    ///
+    /// Storage compression suffixes are hidden from this logical media type.
     pub fn attachment_media_type(&self, name: &str) -> Result<String> {
         Ok(self.run.attachment_media_type(name)?.to_string())
     }
@@ -3773,7 +3882,7 @@ impl PySealedRun {
         Ok(crate::SampleSet { inner })
     }
 
-    /// Read raw bytes of a run-level attachment by name.
+    /// Read decompressed bytes of a run-level attachment by name.
     pub fn get_blob<'py>(&self, py: Python<'py>, name: &str) -> Result<Bound<'py, PyBytes>> {
         let _guard = crate::TRACING.attach_parent_context(py);
         Ok(PyBytes::new(py, &self.run.attachment_blob(name)?))
@@ -3783,7 +3892,8 @@ impl PySealedRun {
     ///
     /// If `path` names an existing directory, the attachment filename stored
     /// by `log_file` is used inside that directory. Otherwise `path` is
-    /// treated as the destination file path.
+    /// treated as the destination file path. Compressed attachments are
+    /// decompressed while exporting.
     #[pyo3(signature = (name, path, *, overwrite = false))]
     pub fn write_attachment(
         &self,

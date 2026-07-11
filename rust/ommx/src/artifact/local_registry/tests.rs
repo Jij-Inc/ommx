@@ -1272,23 +1272,33 @@ fn local_registry_lists_artifacts_from_manifest_cache() -> Result<()> {
     let records = registry.list_artifacts(Some("example.com/catalog"))?;
     assert_eq!(records.len(), 1);
     let record = &records[0];
-    assert_eq!(record.image_name, image_name);
-    assert_eq!(&record.manifest_digest, artifact.manifest_digest());
+    assert_eq!(record.image_name(), &image_name);
+    assert_eq!(record.manifest_digest(), artifact.manifest_digest());
     assert_eq!(
-        record.artifact_type,
-        MediaType::Other(media_types::V1_ARTIFACT_MEDIA_TYPE.to_string())
+        record.manifest().artifact_type(),
+        &Some(MediaType::Other(
+            media_types::V1_ARTIFACT_MEDIA_TYPE.to_string()
+        ))
     );
-    assert_eq!(&record.config_digest, artifact.stored_config()?.digest());
     assert_eq!(
-        record.annotations.get("com.example.problem"),
+        record.manifest().config().digest(),
+        artifact.stored_config()?.digest()
+    );
+    assert_eq!(
+        record
+            .manifest()
+            .annotations()
+            .as_ref()
+            .unwrap()
+            .get("com.example.problem"),
         Some(&"qap".to_string())
     );
     assert_eq!(
-        record.manifest["artifactType"],
-        media_types::V1_ARTIFACT_MEDIA_TYPE
+        record.manifest().artifact_type().as_ref().unwrap().as_ref(),
+        media_types::V1_ARTIFACT_MEDIA_TYPE,
     );
-    assert_eq!(record.manifest["layers"].as_array().unwrap().len(), 1);
-    assert!(record.updated_at.contains('T'));
+    assert_eq!(record.manifest().layers().len(), 1);
+    assert!(record.updated_at().contains('T'));
     Ok(())
 }
 
@@ -1319,11 +1329,61 @@ fn list_artifacts_backfills_shared_missing_manifest() -> Result<()> {
 
     let records = registry.list_artifacts(Some("example.com/catalog"))?;
     assert_eq!(records.len(), 2);
-    assert_eq!(records[0].image_name, alias);
-    assert_eq!(records[1].image_name, image_name);
+    assert_eq!(records[0].image_name(), &alias);
+    assert_eq!(records[1].image_name(), &image_name);
     assert!(records
         .iter()
-        .all(|record| &record.manifest_digest == artifact.manifest_digest()));
+        .all(|record| record.manifest_digest() == artifact.manifest_digest()));
+    Ok(())
+}
+
+#[test]
+fn artifact_ref_size_uses_manifest_cache_and_excludes_subjects() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let shared_bytes = b"shared-layer".to_vec();
+
+    let parent_name = ImageRef::parse("example.com/catalog/size:parent")?;
+    let mut parent_builder = ArtifactDraft::with_registry(&registry, parent_name);
+    parent_builder.add_layer_bytes(
+        MediaType::Other("application/octet-stream".to_string()),
+        shared_bytes.clone(),
+        HashMap::new(),
+    )?;
+    let parent = parent_builder.commit()?;
+    let parent_descriptor =
+        Descriptor::from(registry.stored_manifest_descriptor(parent.manifest_digest())?);
+
+    let child_name = ImageRef::parse("example.com/catalog/size:child")?;
+    let mut child_builder = ArtifactDraft::with_registry(&registry, child_name.clone());
+    child_builder.add_layer_bytes(
+        MediaType::Other("application/octet-stream".to_string()),
+        shared_bytes.clone(),
+        HashMap::new(),
+    )?;
+    child_builder.add_layer_bytes(
+        MediaType::Other("application/octet-stream".to_string()),
+        shared_bytes.clone(),
+        HashMap::new(),
+    )?;
+    child_builder.set_subject(parent_descriptor);
+    let child = child_builder.commit()?;
+    let child_manifest_size = registry.blob_size(child.manifest_digest())?;
+
+    // The catalog calculation must remain available from SQLite even when the
+    // root Manifest CAS file cannot be read. The parent subject closure and the
+    // duplicate layer descriptor are both excluded from the total.
+    remove_test_blob(&registry, child.manifest_digest())?;
+    let records = registry.list_artifacts(Some(&child_name.to_string()))?;
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].image_name(), &child_name);
+    assert_eq!(records[0].manifest_size(), child_manifest_size);
+    assert_eq!(
+        records[0].referenced_blob_size()?,
+        child_manifest_size
+            + media_types::OCI_EMPTY_CONFIG_BYTES.len() as u64
+            + shared_bytes.len() as u64
+    );
     Ok(())
 }
 
@@ -1351,7 +1411,7 @@ fn list_artifacts_repairs_manifest_cache_from_cas() -> Result<()> {
         &ArtifactListOptions::default(),
     )?;
     assert_eq!(report.records.len(), 1);
-    assert_eq!(report.records[0].image_name, image_name);
+    assert_eq!(report.records[0].image_name(), &image_name);
     assert_eq!(report.warnings.len(), 1);
     assert_eq!(
         report.warnings[0].stage,
@@ -1475,7 +1535,7 @@ fn list_artifacts_warns_and_skips_malformed_ref_identity() -> Result<()> {
         &ArtifactListOptions::default(),
     )?;
     assert_eq!(report.records.len(), 1);
-    assert_eq!(report.records[0].image_name, good_name);
+    assert_eq!(report.records[0].image_name(), &good_name);
     assert_eq!(report.warnings.len(), 3);
     assert!(report.warnings.iter().any(|warning| warning.image_name
         == format!("{invalid_repository}:latest")
@@ -1540,7 +1600,7 @@ fn list_artifacts_warns_and_skips_unrepairable_ref() -> Result<()> {
         &ArtifactListOptions::default(),
     )?;
     assert_eq!(report.records.len(), 1);
-    assert_eq!(report.records[0].image_name, good_name);
+    assert_eq!(report.records[0].image_name(), &good_name);
     assert_eq!(report.warnings.len(), 1);
     assert_eq!(report.warnings[0].image_name, bad_name.to_string());
     assert!(report.warnings[0].message.contains("CAS repair failed"));

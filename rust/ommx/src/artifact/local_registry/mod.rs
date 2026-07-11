@@ -71,7 +71,7 @@
 //!   unsealed state for a future commit, it is already stored.
 
 mod index;
-mod registry;
+pub(crate) mod registry;
 mod types;
 
 #[cfg(test)]
@@ -82,6 +82,7 @@ use chrono::Utc;
 pub use crate::artifact::digest::sha256_digest;
 // Crate-visible only because the top-level `artifact` and `experiment`
 // modules construct registry-owned manifests; it is not part of the public API.
+pub use index::ArtifactRefRecord;
 pub(crate) use registry::UnsealedArtifact;
 pub use registry::{
     ArchiveInspectView, GcBlob, GcDeleteReport, GcInvalidManifest, GcMissingBlob, GcOptions,
@@ -89,7 +90,7 @@ pub use registry::{
     StoredDescriptor, TempLocalRegistry,
 };
 pub use types::{
-    AnonymousRefOptions, ArtifactListOptions, ArtifactRefRecord, ExperimentCheckpointListOptions,
+    AnonymousRefOptions, ArtifactListOptions, ExperimentCheckpointListOptions,
     ExperimentCheckpointRefRecord, ExperimentListOptions, ExperimentRefRecord, RefRecord,
     RefUpdate, RegistryListReport, RegistryListWarning, RegistryListWarningStage,
     OCI_IMAGE_REF_NAME_ANNOTATION, SQLITE_INDEX_FILE_NAME,
