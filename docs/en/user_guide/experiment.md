@@ -208,11 +208,12 @@ ommx size \
   example.com/optimization/qap-experiments:tai20a-scip-20260710
 ```
 
-The reported value is the sum of unique CAS blobs reachable from that ref: its
-root manifest, config, layers, and recursive OCI `subject` chain. A blob is
-counted once within one ref even when the manifest contains the same digest
-more than once. Blobs shared by different refs are counted for every ref, so do
-not add these values to estimate the Local Registry's physical disk usage.
+The reported value is the original Manifest JSON byte length plus its config
+size and the sizes of its unique layer digests. It is calculated from the
+digest-validated SQLite Manifest cache without reading or statting payload CAS
+files. The OCI `subject` is not included. Blobs shared by different refs are
+counted for every ref, so do not add these values to estimate the Local
+Registry's physical disk usage.
 
 The cache stores the original JSON bytes under their content digest and verifies
 that digest when reading them. A missing cache row is populated from the CAS on

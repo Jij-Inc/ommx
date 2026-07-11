@@ -5,8 +5,8 @@ use oci_spec::image::{Digest, ImageManifest};
 use ommx::artifact::{
     fetch_remote_manifest, get_local_registry_root,
     local_registry::{
-        AnonymousRefOptions, ArchiveInspectView, GcBlob, GcDeleteReport, GcOptions, GcReport,
-        LocalRegistry, OciDirRef, RefUpdate,
+        AnonymousRefOptions, ArchiveInspectView, ArtifactListOptions, GcBlob, GcDeleteReport,
+        GcOptions, GcReport, LocalRegistry, OciDirRef, RefUpdate,
     },
     ImageRef, LocalArtifact,
 };
@@ -597,12 +597,30 @@ fn handle_export(image_name: &str, output: &Path) -> Result<()> {
 }
 
 fn handle_size(image_names: &[String]) -> Result<()> {
+    let registry = LocalRegistry::open_default()?;
     let sizes = image_names
         .iter()
         .map(|image_name| {
             let image_name = ImageRef::parse(image_name)?;
-            let artifact = LocalArtifact::open(image_name.clone())?;
-            Ok((image_name, artifact.referenced_blob_size()?))
+            let prefix = image_name.to_string();
+            let report = registry.list_artifacts_with_options(
+                Some(&prefix),
+                &ArtifactListOptions {
+                    include_internal: true,
+                    strict: false,
+                },
+            )?;
+            for warning in report.warnings {
+                tracing::warn!("{warning}");
+            }
+            let record = report
+                .records
+                .into_iter()
+                .find(|record| record.image_name == image_name)
+                .with_context(|| {
+                    format!("Artifact not found in the Local Registry: {image_name}")
+                })?;
+            Ok((image_name, record.referenced_blob_size()))
         })
         .collect::<Result<Vec<_>>>()?;
 

@@ -12,6 +12,7 @@ use oci_spec::image::DescriptorBuilder;
 use oci_spec::image::{Descriptor, Digest, ImageManifest, MediaType};
 use rusqlite::{params, types::Type, Connection, OptionalExtension, TransactionBehavior};
 use std::{
+    collections::BTreeMap,
     fs,
     path::Path,
     str::FromStr,
@@ -1038,6 +1039,7 @@ fn cached_artifact_ref_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Cac
             format!("Cached Manifest config digest does not match {config_digest}"),
         ));
     }
+    let referenced_blob_size = cached_manifest_referenced_blob_size(&manifest_json, &manifest)?;
     let annotations = manifest
         .annotations()
         .clone()
@@ -1053,9 +1055,43 @@ fn cached_artifact_ref_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Cac
             config_digest,
             annotations,
             manifest: manifest_value,
+            referenced_blob_size,
         },
         manifest,
     })
+}
+
+fn cached_manifest_referenced_blob_size(
+    manifest_json: &[u8],
+    manifest: &ImageManifest,
+) -> rusqlite::Result<u64> {
+    let mut blob_sizes = BTreeMap::new();
+    for descriptor in std::iter::once(manifest.config()).chain(manifest.layers()) {
+        let digest = descriptor.digest().to_string();
+        if let Some(previous_size) = blob_sizes.insert(digest.clone(), descriptor.size()) {
+            if previous_size != descriptor.size() {
+                return Err(cache_conversion_failure(
+                    6,
+                    Type::Blob,
+                    format!(
+                        "Cached Manifest contains conflicting sizes for {digest}: \
+                         {previous_size} and {}",
+                        descriptor.size()
+                    ),
+                ));
+            }
+        }
+    }
+
+    let mut total = u64::try_from(manifest_json.len()).map_err(|error| {
+        rusqlite::Error::FromSqlConversionFailure(6, Type::Blob, Box::new(error))
+    })?;
+    for size in blob_sizes.into_values() {
+        total = total.checked_add(size).ok_or_else(|| {
+            cache_conversion_failure(6, Type::Blob, "Referenced blob size overflowed u64")
+        })?;
+    }
+    Ok(total)
 }
 
 fn artifact_ref_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ArtifactRefRecord> {

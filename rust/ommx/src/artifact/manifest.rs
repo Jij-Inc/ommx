@@ -11,7 +11,7 @@ use anyhow::{bail, ensure, Context, Result};
 use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, ImageManifest, MediaType};
 use serde::Serialize;
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::HashMap,
     path::Path,
     str::FromStr,
     sync::{Arc, OnceLock},
@@ -397,21 +397,6 @@ impl<'reg> LocalArtifact<'reg> {
         Ok(self.get_manifest()?.subject())
     }
 
-    /// Sum the sizes of the unique blobs reachable from this image reference.
-    ///
-    /// The total includes this Artifact's root manifest, config, and layers,
-    /// plus the recursively reachable manifest closure of any OCI `subject`.
-    /// A digest is counted at most once within this Artifact's closure. Blobs
-    /// shared with other image references are still counted for each reference,
-    /// so totals from multiple Artifacts must not be added to estimate physical
-    /// Local Registry usage.
-    pub fn referenced_blob_size(&self) -> Result<u64> {
-        let manifest = self.get_manifest()?;
-        let mut traversal = ReferencedBlobSizeTraversal::new(self.registry);
-        traversal.add_root_manifest(self.manifest_digest(), manifest.as_image_manifest())?;
-        Ok(traversal.size)
-    }
-
     pub fn get_blob(&self, descriptor: &StoredDescriptor<'_>) -> Result<Vec<u8>> {
         ensure!(
             descriptor.is_stored_in(self.registry),
@@ -521,95 +506,6 @@ impl LocalManifest {
 
     pub fn subject(&self) -> Option<Descriptor> {
         self.0.subject().clone()
-    }
-}
-
-/// Read-only traversal owned by `LocalArtifact::referenced_blob_size`.
-///
-/// `counted_blobs` represents the CAS accounting invariant (one digest, one
-/// charge), while `visited_manifests` separately prevents subject cycles. They
-/// must remain separate because a digest can first appear as an ordinary layer
-/// and later as a subject manifest whose dependencies still need traversing.
-struct ReferencedBlobSizeTraversal<'reg> {
-    registry: &'reg LocalRegistry,
-    counted_blobs: BTreeSet<String>,
-    visited_manifests: BTreeSet<String>,
-    size: u64,
-}
-
-impl<'reg> ReferencedBlobSizeTraversal<'reg> {
-    fn new(registry: &'reg LocalRegistry) -> Self {
-        Self {
-            registry,
-            counted_blobs: BTreeSet::new(),
-            visited_manifests: BTreeSet::new(),
-            size: 0,
-        }
-    }
-
-    fn add_root_manifest(&mut self, digest: &Digest, manifest: &ImageManifest) -> Result<()> {
-        self.add_digest(digest, None)?;
-        self.visited_manifests.insert(digest.to_string());
-        self.add_manifest_dependencies(manifest)
-    }
-
-    fn add_manifest_dependencies(&mut self, manifest: &ImageManifest) -> Result<()> {
-        self.add_descriptor(manifest.config())?;
-        for layer in manifest.layers() {
-            self.add_descriptor(layer)?;
-        }
-        if let Some(subject) = manifest.subject() {
-            self.add_subject_manifest(subject)?;
-        }
-        Ok(())
-    }
-
-    fn add_subject_manifest(&mut self, descriptor: &Descriptor) -> Result<()> {
-        self.add_descriptor(descriptor)?;
-        if !self
-            .visited_manifests
-            .insert(descriptor.digest().to_string())
-        {
-            return Ok(());
-        }
-
-        let stored = self.registry.stored_descriptor(descriptor.clone())?;
-        let bytes = self.registry.get_blob(&stored)?;
-        let manifest: ImageManifest = serde_json::from_slice(&bytes).with_context(|| {
-            format!(
-                "Failed to parse subject OCI image manifest {}",
-                descriptor.digest()
-            )
-        })?;
-        self.add_manifest_dependencies(&manifest)
-    }
-
-    fn add_descriptor(&mut self, descriptor: &Descriptor) -> Result<()> {
-        // Promote every occurrence, even when the digest was already counted,
-        // so conflicting descriptor sizes cannot be hidden by de-duplication.
-        self.registry.stored_descriptor(descriptor.clone())?;
-        self.add_digest(descriptor.digest(), Some(descriptor.size()))
-    }
-
-    fn add_digest(&mut self, digest: &Digest, declared_size: Option<u64>) -> Result<()> {
-        let actual_size = self.registry.blob_size(digest)?;
-        if let Some(declared_size) = declared_size {
-            ensure!(
-                actual_size == declared_size,
-                "Descriptor size mismatch for {}: descriptor={}, actual={}",
-                digest,
-                declared_size,
-                actual_size
-            );
-        }
-        if !self.counted_blobs.insert(digest.to_string()) {
-            return Ok(());
-        }
-        self.size = self
-            .size
-            .checked_add(actual_size)
-            .context("Referenced blob size overflowed u64")?;
-        Ok(())
     }
 }
 
@@ -1519,49 +1415,6 @@ mod tests {
             .into_unsealed_artifact()?
             .into_oci_image_manifest()?;
         assert_eq!(manifest.subject(), &Some(subject));
-        Ok(())
-    }
-
-    #[test]
-    fn referenced_blob_size_deduplicates_and_follows_subjects() -> Result<()> {
-        let dir = tempfile::tempdir()?;
-        let registry = LocalRegistry::open(dir.path())?;
-        let shared_bytes = b"shared-layer".to_vec();
-
-        let mut parent_builder =
-            ArtifactDraft::with_registry(&registry, test_image_name("size-parent")?);
-        parent_builder.add_layer_bytes(
-            MediaType::Other("application/octet-stream".to_string()),
-            shared_bytes.clone(),
-            HashMap::new(),
-        )?;
-        let parent = parent_builder.commit()?;
-        let parent_descriptor =
-            Descriptor::from(registry.stored_manifest_descriptor(parent.manifest_digest())?);
-
-        let mut child_builder =
-            ArtifactDraft::with_registry(&registry, test_image_name("size-child")?);
-        child_builder.add_layer_bytes(
-            MediaType::Other("application/octet-stream".to_string()),
-            shared_bytes.clone(),
-            HashMap::new(),
-        )?;
-        child_builder.add_layer_bytes(
-            MediaType::Other("application/octet-stream".to_string()),
-            shared_bytes.clone(),
-            HashMap::new(),
-        )?;
-        child_builder.set_subject(parent_descriptor);
-        let child = child_builder.commit()?;
-
-        // Both manifests reference the same empty config and shared layer.
-        // Those CAS blobs are charged once, while both distinct root manifests
-        // are included in the child's recursive subject closure.
-        let expected = registry.blob_size(parent.manifest_digest())?
-            + registry.blob_size(child.manifest_digest())?
-            + OCI_EMPTY_CONFIG_BYTES.len() as u64
-            + shared_bytes.len() as u64;
-        assert_eq!(child.referenced_blob_size()?, expected);
         Ok(())
     }
 

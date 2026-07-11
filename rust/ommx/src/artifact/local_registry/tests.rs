@@ -1328,6 +1328,55 @@ fn list_artifacts_backfills_shared_missing_manifest() -> Result<()> {
 }
 
 #[test]
+fn artifact_ref_size_uses_manifest_cache_and_excludes_subjects() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let shared_bytes = b"shared-layer".to_vec();
+
+    let parent_name = ImageRef::parse("example.com/catalog/size:parent")?;
+    let mut parent_builder = ArtifactDraft::with_registry(&registry, parent_name);
+    parent_builder.add_layer_bytes(
+        MediaType::Other("application/octet-stream".to_string()),
+        shared_bytes.clone(),
+        HashMap::new(),
+    )?;
+    let parent = parent_builder.commit()?;
+    let parent_descriptor =
+        Descriptor::from(registry.stored_manifest_descriptor(parent.manifest_digest())?);
+
+    let child_name = ImageRef::parse("example.com/catalog/size:child")?;
+    let mut child_builder = ArtifactDraft::with_registry(&registry, child_name.clone());
+    child_builder.add_layer_bytes(
+        MediaType::Other("application/octet-stream".to_string()),
+        shared_bytes.clone(),
+        HashMap::new(),
+    )?;
+    child_builder.add_layer_bytes(
+        MediaType::Other("application/octet-stream".to_string()),
+        shared_bytes.clone(),
+        HashMap::new(),
+    )?;
+    child_builder.set_subject(parent_descriptor);
+    let child = child_builder.commit()?;
+    let child_manifest_size = registry.blob_size(child.manifest_digest())?;
+
+    // The catalog calculation must remain available from SQLite even when the
+    // root Manifest CAS file cannot be read. The parent subject closure and the
+    // duplicate layer descriptor are both excluded from the total.
+    remove_test_blob(&registry, child.manifest_digest())?;
+    let records = registry.list_artifacts(Some(&child_name.to_string()))?;
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].image_name, child_name);
+    assert_eq!(
+        records[0].referenced_blob_size(),
+        child_manifest_size
+            + media_types::OCI_EMPTY_CONFIG_BYTES.len() as u64
+            + shared_bytes.len() as u64
+    );
+    Ok(())
+}
+
+#[test]
 fn list_artifacts_repairs_manifest_cache_from_cas() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let registry = LocalRegistry::open(dir.path())?;

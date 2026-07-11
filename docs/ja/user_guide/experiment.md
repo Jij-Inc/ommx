@@ -201,11 +201,11 @@ ommx size \
   example.com/optimization/qap-experiments:tai20a-scip-20260710
 ```
 
-表示される値は、その ref から到達可能な一意な CAS blob、つまり root manifest、
-config、layers、再帰的な OCI `subject` chain のサイズの和です。同じ digest が 1 つの
-manifest に複数回現れても、その ref 内では一度だけ数えます。異なる ref 間で共有される
-blob はそれぞれの ref で数えるため、この値を複数 ref について足しても Local Registry
-の物理 disk 使用量にはなりません。
+表示される値は、元の Manifest JSON のbyte長、configのsize、一意なlayer digestの
+sizeの和です。digest検証済みのSQLite Manifest cacheから計算し、payloadのCAS fileは
+読み込みもstatもしません。OCI `subject` は含みません。異なるref間で共有されるblobは
+それぞれのrefで数えるため、この値を複数refについて足してもLocal Registryの物理disk
+使用量にはなりません。
 
 cacheには元のJSON bytesをcontent digestをkeyとして保存し、読み出すときにもdigestを
 検証します。cache rowがない場合は、一覧取得時にCASからbackfillします。そのため、

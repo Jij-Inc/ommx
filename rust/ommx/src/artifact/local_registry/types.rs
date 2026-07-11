@@ -142,6 +142,20 @@ pub struct ArtifactRefRecord {
     pub annotations: BTreeMap<String, String>,
     /// Complete OCI Manifest JSON stored by `manifest_digest`.
     pub manifest: serde_json::Value,
+    /// Cached sum of the Manifest JSON, config, and unique layer sizes.
+    pub(crate) referenced_blob_size: u64,
+}
+
+impl ArtifactRefRecord {
+    /// Sum of the sizes declared directly by this Artifact's OCI Manifest.
+    ///
+    /// This includes the original Manifest JSON bytes, its config descriptor,
+    /// and each unique layer digest. The OCI `subject` is intentionally excluded.
+    /// Blobs shared with other Artifact refs are counted for each ref, so values
+    /// from multiple records are not additive physical Local Registry usage.
+    pub fn referenced_blob_size(&self) -> u64 {
+        self.referenced_blob_size
+    }
 }
 
 /// Controls generic Artifact catalog listing behavior.
