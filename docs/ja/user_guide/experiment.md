@@ -205,8 +205,7 @@ ommx size \
 config、layers、再帰的な OCI `subject` chain のサイズの和です。同じ digest が 1 つの
 manifest に複数回現れても、その ref 内では一度だけ数えます。異なる ref 間で共有される
 blob はそれぞれの ref で数えるため、この値を複数 ref について足しても Local Registry
-の物理 disk 使用量にはなりません。default 以外の Local Registry を調べる場合は
-`--root <path>` を指定します。
+の物理 disk 使用量にはなりません。
 
 cacheには元のJSON bytesをcontent digestをkeyとして保存し、読み出すときにもdigestを
 検証します。cache rowがない場合は、一覧取得時にCASからbackfillします。そのため、

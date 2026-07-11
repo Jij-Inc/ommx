@@ -212,8 +212,7 @@ The reported value is the sum of unique CAS blobs reachable from that ref: its
 root manifest, config, layers, and recursive OCI `subject` chain. A blob is
 counted once within one ref even when the manifest contains the same digest
 more than once. Blobs shared by different refs are counted for every ref, so do
-not add these values to estimate the Local Registry's physical disk usage. Use
-`--root <path>` to inspect a non-default Local Registry.
+not add these values to estimate the Local Registry's physical disk usage.
 
 The cache stores the original JSON bytes under their content digest and verifies
 that digest when reading them. A missing cache row is populated from the CAS on
