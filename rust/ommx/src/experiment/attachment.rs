@@ -1,18 +1,64 @@
 //! Experiment and run scoped Attachment descriptor helpers.
 
-use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
+use crate::artifact::{
+    local_registry::StoredDescriptor,
+    media_types::{self, RootPayloadVersion},
+};
 use crate::{Instance, ParametricInstance, SampleSet, Solution};
 use anyhow::{ensure, Context, Result};
 use oci_spec::image::MediaType;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::BTreeMap,
-    fs,
+    collections::{BTreeMap, HashMap},
+    fs::{self, File},
+    io::{Read, Seek, SeekFrom},
     path::{Path, PathBuf},
 };
 
 /// Fallback media type when file content cannot be identified.
 pub const DEFAULT_FILE_MEDIA_TYPE: &str = "application/octet-stream";
+
+const ZSTD_MEDIA_TYPE_SUFFIX: &str = "+zstd";
+
+/// Compression applied to an Attachment's stored OCI layer.
+///
+/// Attachment readers use an OMMX storage annotation to identify compressed
+/// layers, remove the storage suffix, decompress the blob, and expose the
+/// original media type and payload bytes. Compression is therefore a storage
+/// detail rather than part of the attachment's logical type.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Compression {
+    /// Store the attachment bytes unchanged.
+    #[default]
+    None,
+    /// Store the attachment as a zstd stream.
+    Zstd,
+}
+
+pub fn prepare_attachment_storage(
+    compression: Compression,
+    media_type: MediaType,
+    mut annotations: HashMap<String, String>,
+) -> Result<(MediaType, HashMap<String, String>)> {
+    ensure!(
+        !annotations.contains_key(crate::annotation_keys::ATTACHMENT_COMPRESSION),
+        "Attachment annotation `{}` is reserved for OMMX storage metadata",
+        crate::annotation_keys::ATTACHMENT_COMPRESSION,
+    );
+    match compression {
+        Compression::None => Ok((media_type, annotations)),
+        Compression::Zstd => {
+            annotations.insert(
+                crate::annotation_keys::ATTACHMENT_COMPRESSION.to_string(),
+                "zstd".to_string(),
+            );
+            Ok((
+                MediaType::Other(format!("{media_type}{ZSTD_MEDIA_TYPE_SUFFIX}")),
+                annotations,
+            ))
+        }
+    }
+}
 
 /// Name-indexed attachment bindings for one Experiment or Run namespace.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -160,34 +206,56 @@ impl<'reg> AttachmentTable<StoredDescriptor<'reg>> {
     }
 
     pub(crate) fn media_type(&self, name: &str) -> Result<MediaType> {
-        Ok(self.attachment(name)?.media_type().clone())
+        Ok(attachment_storage_format(self.attachment(name)?)?.logical_media_type)
     }
 
     pub(crate) fn blob(&self, name: &str) -> Result<Vec<u8>> {
         let descriptor = self.attachment(name)?;
-        descriptor.registry().get_blob(descriptor)
+        attachment_blob(descriptor)
     }
 
     pub(crate) fn instance(&self, name: &str) -> Result<Instance> {
         let descriptor = self.attachment(name)?;
-        descriptor.registry().get_instance_layer(descriptor)
+        let (media_type, bytes) = attachment_payload(descriptor)?;
+        let mut instance = match media_types::instance_payload_version(&media_type)? {
+            RootPayloadVersion::V1 => Instance::from_v1_bytes(&bytes)?,
+            RootPayloadVersion::V2 => Instance::from_v2_bytes(&bytes)?,
+        };
+        merge_descriptor_annotations(descriptor, &mut instance);
+        Ok(instance)
     }
 
     pub(crate) fn parametric_instance(&self, name: &str) -> Result<ParametricInstance> {
         let descriptor = self.attachment(name)?;
-        descriptor
-            .registry()
-            .get_parametric_instance_layer(descriptor)
+        let (media_type, bytes) = attachment_payload(descriptor)?;
+        let mut instance = match media_types::parametric_instance_payload_version(&media_type)? {
+            RootPayloadVersion::V1 => ParametricInstance::from_v1_bytes(&bytes)?,
+            RootPayloadVersion::V2 => ParametricInstance::from_v2_bytes(&bytes)?,
+        };
+        merge_descriptor_annotations(descriptor, &mut instance);
+        Ok(instance)
     }
 
     pub(crate) fn solution(&self, name: &str) -> Result<Solution> {
         let descriptor = self.attachment(name)?;
-        descriptor.registry().get_solution_layer(descriptor)
+        let (media_type, bytes) = attachment_payload(descriptor)?;
+        let mut solution = match media_types::solution_payload_version(&media_type)? {
+            RootPayloadVersion::V1 => Solution::from_v1_bytes(&bytes)?,
+            RootPayloadVersion::V2 => Solution::from_v2_bytes(&bytes)?,
+        };
+        merge_descriptor_annotations(descriptor, &mut solution);
+        Ok(solution)
     }
 
     pub(crate) fn sample_set(&self, name: &str) -> Result<SampleSet> {
         let descriptor = self.attachment(name)?;
-        descriptor.registry().get_sample_set_layer(descriptor)
+        let (media_type, bytes) = attachment_payload(descriptor)?;
+        let mut sample_set = match media_types::sample_set_payload_version(&media_type)? {
+            RootPayloadVersion::V1 => SampleSet::from_v1_bytes(&bytes)?,
+            RootPayloadVersion::V2 => SampleSet::from_v2_bytes(&bytes)?,
+        };
+        merge_descriptor_annotations(descriptor, &mut sample_set);
+        Ok(sample_set)
     }
 
     pub(crate) fn write_attachment(
@@ -199,14 +267,7 @@ impl<'reg> AttachmentTable<StoredDescriptor<'reg>> {
         let descriptor = self
             .get(name)
             .ok_or_else(|| anyhow::anyhow!("Attachment `{name}` not found"))?;
-        write_attachment_descriptor(
-            descriptor.registry(),
-            descriptor,
-            name,
-            self.filename(name),
-            path,
-            overwrite,
-        )
+        write_attachment_descriptor(descriptor, name, self.filename(name), path, overwrite)
     }
 }
 
@@ -222,6 +283,85 @@ pub(crate) fn encode_json(name: &str, value: impl serde::Serialize) -> Result<Ve
         .map_err(|e| crate::error!("Failed to encode JSON attachment `{name}`: {e}"))
 }
 
+struct AttachmentStorageFormat {
+    logical_media_type: MediaType,
+    compression: Compression,
+}
+
+fn attachment_storage_format(descriptor: &StoredDescriptor<'_>) -> Result<AttachmentStorageFormat> {
+    let compression = descriptor
+        .annotations()
+        .as_ref()
+        .and_then(|annotations| annotations.get(crate::annotation_keys::ATTACHMENT_COMPRESSION));
+    match compression.map(String::as_str) {
+        None => Ok(AttachmentStorageFormat {
+            logical_media_type: descriptor.media_type().clone(),
+            compression: Compression::None,
+        }),
+        Some("zstd") => {
+            let media_type = descriptor
+                .media_type()
+                .as_ref()
+                .strip_suffix(ZSTD_MEDIA_TYPE_SUFFIX)
+                .filter(|media_type| !media_type.is_empty())
+                .with_context(|| {
+                    format!(
+                        "Attachment marked as zstd must have a media type ending in `{ZSTD_MEDIA_TYPE_SUFFIX}`, got `{}`",
+                        descriptor.media_type()
+                    )
+                })?;
+            Ok(AttachmentStorageFormat {
+                logical_media_type: MediaType::from(media_type),
+                compression: Compression::Zstd,
+            })
+        }
+        Some(value) => crate::bail!(
+            "Unsupported Attachment compression `{value}` in annotation `{}`",
+            crate::annotation_keys::ATTACHMENT_COMPRESSION,
+        ),
+    }
+}
+
+pub fn validate_attachment_storage(descriptor: &StoredDescriptor<'_>) -> Result<()> {
+    attachment_storage_format(descriptor)?;
+    Ok(())
+}
+
+fn attachment_payload(descriptor: &StoredDescriptor<'_>) -> Result<(MediaType, Vec<u8>)> {
+    let format = attachment_storage_format(descriptor)?;
+    let bytes = read_attachment_blob(descriptor, format.compression)?;
+    Ok((format.logical_media_type, bytes))
+}
+
+fn attachment_blob(descriptor: &StoredDescriptor<'_>) -> Result<Vec<u8>> {
+    let format = attachment_storage_format(descriptor)?;
+    read_attachment_blob(descriptor, format.compression)
+}
+
+fn read_attachment_blob(
+    descriptor: &StoredDescriptor<'_>,
+    compression: Compression,
+) -> Result<Vec<u8>> {
+    let bytes = descriptor.registry().get_blob(descriptor)?;
+    match compression {
+        Compression::None => Ok(bytes),
+        Compression::Zstd => zstd::stream::decode_all(bytes.as_slice())
+            .context("Failed to decompress zstd attachment"),
+    }
+}
+
+fn merge_descriptor_annotations<T: crate::FlatAnnotations>(
+    descriptor: &StoredDescriptor<'_>,
+    value: &mut T,
+) {
+    let annotations = descriptor
+        .annotations()
+        .as_ref()
+        .cloned()
+        .unwrap_or_default();
+    crate::FlatAnnotations::merge_annotations(value, &annotations);
+}
+
 /// Detect the media type of file contents using magic bytes.
 pub fn detect_file_media_type(bytes: &[u8]) -> MediaType {
     infer::get(bytes)
@@ -229,16 +369,37 @@ pub fn detect_file_media_type(bytes: &[u8]) -> MediaType {
         .unwrap_or_else(|| MediaType::from(DEFAULT_FILE_MEDIA_TYPE))
 }
 
-pub(crate) fn read_file_attachment(
+pub fn open_file_attachment(
     path: impl AsRef<Path>,
     media_type: Option<MediaType>,
     filename: Option<&str>,
-) -> Result<(MediaType, Vec<u8>, String)> {
+) -> Result<(MediaType, File, String)> {
     let path = path.as_ref();
-    let bytes = read_attachment_file(path)?;
-    let media_type = media_type.unwrap_or_else(|| detect_file_media_type(&bytes));
+    let mut file = File::open(path)
+        .with_context(|| format!("Failed to open attachment file `{}`", path.display()))?;
+    let metadata = file
+        .metadata()
+        .with_context(|| format!("Failed to inspect attachment file `{}`", path.display()))?;
+    ensure!(
+        metadata.is_file(),
+        "Attachment path `{}` is not a regular file",
+        path.display()
+    );
+    let media_type = match media_type {
+        Some(media_type) => media_type,
+        None => {
+            let mut prefix = [0_u8; 8192];
+            let read = file.read(&mut prefix).with_context(|| {
+                format!("Failed to inspect attachment file `{}`", path.display())
+            })?;
+            file.seek(SeekFrom::Start(0)).with_context(|| {
+                format!("Failed to rewind attachment file `{}`", path.display())
+            })?;
+            detect_file_media_type(&prefix[..read])
+        }
+    };
     let filename = file_attachment_filename(path, filename)?;
-    Ok((media_type, bytes, filename))
+    Ok((media_type, file, filename))
 }
 
 /// Write an attachment blob to a filesystem path.
@@ -247,7 +408,6 @@ pub(crate) fn read_file_attachment(
 /// used inside that directory. Otherwise `path` is treated as the destination
 /// file path.
 fn write_attachment_descriptor(
-    registry: &LocalRegistry,
     descriptor: &StoredDescriptor<'_>,
     name: &str,
     filename: Option<&str>,
@@ -262,21 +422,10 @@ fn write_attachment_descriptor(
         );
     }
 
-    let blob = registry.get_blob(descriptor)?;
+    let blob = attachment_blob(descriptor)?;
     fs::write(&output_path, blob)
         .with_context(|| format!("Failed to write attachment to `{}`", output_path.display()))?;
     Ok(output_path)
-}
-
-fn read_attachment_file(path: &Path) -> Result<Vec<u8>> {
-    let metadata = fs::metadata(path)
-        .with_context(|| format!("Failed to inspect attachment file `{}`", path.display()))?;
-    ensure!(
-        metadata.is_file(),
-        "Attachment path `{}` is not a regular file",
-        path.display()
-    );
-    fs::read(path).with_context(|| format!("Failed to read attachment file `{}`", path.display()))
 }
 
 fn file_attachment_filename(path: &Path, filename: Option<&str>) -> Result<String> {

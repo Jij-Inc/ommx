@@ -2031,7 +2031,9 @@ class Experiment:
         """
     def attachment_media_type(self, name: builtins.str) -> builtins.str:
         r"""
-        OCI media type of an experiment-level attachment.
+        Original media type of an experiment-level attachment.
+
+        Storage compression suffixes are hidden from this logical media type.
         """
     def get_attachment(self, name: builtins.str) -> typing.Any:
         r"""
@@ -2067,7 +2069,7 @@ class Experiment:
         """
     def get_blob(self, name: builtins.str) -> bytes:
         r"""
-        Read raw bytes of an experiment-level attachment by name.
+        Read decompressed bytes of an experiment-level attachment by name.
         """
     def write_attachment(
         self,
@@ -2081,7 +2083,8 @@ class Experiment:
 
         If `path` names an existing directory, the attachment filename stored
         by `log_file` is used inside that directory. Otherwise `path` is
-        treated as the destination file path.
+        treated as the destination file path. Compressed attachments are
+        decompressed while exporting.
         """
     def get_with_codec(
         self,
@@ -2115,13 +2118,19 @@ class Experiment:
         that Run.
         """
     def log_attachment(
-        self, name: builtins.str, media_type: builtins.str, bytes: bytes
+        self,
+        name: builtins.str,
+        media_type: builtins.str,
+        bytes: bytes,
+        *,
+        compression: typing.Literal["none", "zstd"] = "none",
     ) -> None:
         r"""
         Attach arbitrary bytes with an explicit OCI media type in the experiment space.
 
         The `name` is stored as attachment metadata and is intended for
         humans. The bytes are stored as a layer in the committed artifact.
+        Set `compression="zstd"` to compress the stored layer transparently.
         """
     def log_file(
         self,
@@ -2130,6 +2139,7 @@ class Experiment:
         media_type: typing.Optional[builtins.str] = None,
         *,
         filename: typing.Optional[builtins.str] = None,
+        compression: typing.Literal["none", "zstd"] = "none",
     ) -> None:
         r"""
         Attach an existing filesystem file in the experiment space.
@@ -2138,27 +2148,38 @@ class Experiment:
         `media_type` is omitted, the Rust SDK infers it from file contents and
         unknown types fall back to `application/octet-stream`. The original
         source path is not stored; only a basename for later export is stored
-        as attachment metadata.
+        as attachment metadata. The file is streamed into the Local Registry;
+        set `compression="zstd"` to compress the stored layer transparently.
         """
     def log_with_codec(
         self,
         codec: type[attachments.AttachmentCodec[attachments.T]],
         name: builtins.str,
         value: attachments.T,
+        *,
+        compression: typing.Literal["none", "zstd"] = "none",
     ) -> None:
         r"""
         Encode a Python object with an attachment codec and attach it in the experiment space.
 
         The codec class must provide `media_type`, `encode(value) -> bytes`,
         and `decode(bytes) -> object`. OMMX owns only this protocol; concrete
-        codecs should live in the package that owns the payload type.
+        codecs should live in the package that owns the payload type. Set
+        `compression="zstd"` to compress the encoded bytes transparently.
         """
-    def log_json(self, name: builtins.str, value: typing.Any) -> None:
+    def log_json(
+        self,
+        name: builtins.str,
+        value: typing.Any,
+        *,
+        compression: typing.Literal["none", "zstd"] = "none",
+    ) -> None:
         r"""
         Attach a JSON-serializable value in the experiment space.
 
         The value is encoded with Python's `json.dumps` and stored with media
-        type `application/json`.
+        type `application/json`. Set `compression="zstd"` to compress the
+        encoded JSON transparently.
         """
     def log_instance(self, name: builtins.str, instance: Instance) -> None:
         r"""
@@ -5888,13 +5909,19 @@ class Run:
         `Experiment.run_parameters_df()`.
         """
     def log_attachment(
-        self, name: builtins.str, media_type: builtins.str, bytes: bytes
+        self,
+        name: builtins.str,
+        media_type: builtins.str,
+        bytes: bytes,
+        *,
+        compression: typing.Literal["none", "zstd"] = "none",
     ) -> None:
         r"""
         Attach arbitrary bytes with an explicit OCI media type in this run.
 
         Use this for payloads that belong to this run but are not scalar run
-        parameters, for example solver logs or derived files.
+        parameters, for example solver logs or derived files. Set
+        `compression="zstd"` to compress the stored layer transparently.
         """
     def log_file(
         self,
@@ -5903,6 +5930,7 @@ class Run:
         media_type: typing.Optional[builtins.str] = None,
         *,
         filename: typing.Optional[builtins.str] = None,
+        compression: typing.Literal["none", "zstd"] = "none",
     ) -> None:
         r"""
         Attach an existing filesystem file in this run.
@@ -5911,27 +5939,38 @@ class Run:
         `media_type` is omitted, the Rust SDK infers it from file contents and
         unknown types fall back to `application/octet-stream`. The original
         source path is not stored; only a basename for later export is stored
-        as attachment metadata.
+        as attachment metadata. The file is streamed into the Local Registry;
+        set `compression="zstd"` to compress the stored layer transparently.
         """
     def log_with_codec(
         self,
         codec: type[attachments.AttachmentCodec[attachments.T]],
         name: builtins.str,
         value: attachments.T,
+        *,
+        compression: typing.Literal["none", "zstd"] = "none",
     ) -> None:
         r"""
         Encode a Python object with an attachment codec and attach it in this run.
 
         The codec class must provide `media_type`, `encode(value) -> bytes`,
         and `decode(bytes) -> object`. OMMX owns only this protocol; concrete
-        codecs should live in the package that owns the payload type.
+        codecs should live in the package that owns the payload type. Set
+        `compression="zstd"` to compress the encoded bytes transparently.
         """
-    def log_json(self, name: builtins.str, value: typing.Any) -> None:
+    def log_json(
+        self,
+        name: builtins.str,
+        value: typing.Any,
+        *,
+        compression: typing.Literal["none", "zstd"] = "none",
+    ) -> None:
         r"""
         Attach a JSON-serializable value in this run.
 
         The value is encoded with Python's `json.dumps` and stored with media
-        type `application/json`.
+        type `application/json`. Set `compression="zstd"` to compress the
+        encoded JSON transparently.
         """
     def log_instance(self, name: builtins.str, instance: Instance) -> None:
         r"""
@@ -6615,7 +6654,9 @@ class SealedRun:
         """
     def attachment_media_type(self, name: builtins.str) -> builtins.str:
         r"""
-        OCI media type of a run-level attachment.
+        Original media type of a run-level attachment.
+
+        Storage compression suffixes are hidden from this logical media type.
         """
     def get_attachment(self, name: builtins.str) -> typing.Any:
         r"""
@@ -6645,7 +6686,7 @@ class SealedRun:
         """
     def get_blob(self, name: builtins.str) -> bytes:
         r"""
-        Read raw bytes of a run-level attachment by name.
+        Read decompressed bytes of a run-level attachment by name.
         """
     def write_attachment(
         self,
@@ -6659,7 +6700,8 @@ class SealedRun:
 
         If `path` names an existing directory, the attachment filename stored
         by `log_file` is used inside that directory. Otherwise `path` is
-        treated as the destination file path.
+        treated as the destination file path. Compressed attachments are
+        decompressed while exporting.
         """
     def get_with_codec(
         self,

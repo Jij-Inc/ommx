@@ -1,7 +1,6 @@
 use crate::{
-    constraint::RemovedReason, polynomial_base::QuadraticParseError, BoundError, CoefficientError,
-    Constraint, ConstraintID, DecisionVariable, DecisionVariableError, SampleID, SampleSetError,
-    SolutionError, SubstitutionError, VariableID,
+    polynomial_base::QuadraticParseError, BoundError, CoefficientError, DecisionVariable,
+    DecisionVariableError, SampleID, SampleSetError, SolutionError, SubstitutionError, VariableID,
 };
 use prost::DecodeError;
 use std::{
@@ -180,21 +179,6 @@ pub(crate) fn validate_extension_annotations(
         }
     }
     Ok(())
-}
-
-pub(crate) fn as_constraint_id(
-    constraints: &BTreeMap<ConstraintID, Constraint>,
-    removed_constraints: &BTreeMap<ConstraintID, (Constraint, RemovedReason)>,
-    id: u64,
-) -> Result<ConstraintID, ParseError> {
-    let id = ConstraintID::from(id);
-    if !constraints.contains_key(&id) && !removed_constraints.contains_key(&id) {
-        return Err(RawParseError::InvalidInstance(format!(
-            "Undefined constraint ID is used: {id:?}"
-        ))
-        .into());
-    }
-    Ok(id)
 }
 
 pub(crate) fn as_variable_id(

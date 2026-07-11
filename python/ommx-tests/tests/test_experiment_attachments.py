@@ -68,6 +68,57 @@ def test_run_attachment_codec_round_trip():
     assert run.get_blob("typed-payload") == ToyPayloadCodec.encode(expected)
 
 
+def test_compressed_attachment_round_trip_is_transparent():
+    expected = {"values": [1] * 100}
+
+    with Experiment.with_temp_local_registry() as experiment:
+        experiment.log_json("experiment-trace", expected, compression="zstd")
+        with experiment.run() as run:
+            run.log_with_codec(
+                ToyPayloadCodec,
+                "run-payload",
+                ToyPayload(label="compressed", value=13),
+                compression="zstd",
+            )
+
+    loaded = Experiment.from_artifact(experiment.artifact)
+    assert loaded.attachment_media_type("experiment-trace") == "application/json"
+    assert loaded.get_attachment("experiment-trace") == expected
+    assert json.loads(loaded.get_blob("experiment-trace")) == expected
+
+    loaded_run = loaded.runs[0]
+    assert loaded_run.attachment_media_type("run-payload") == ToyPayloadCodec.media_type
+    assert loaded_run.get_with_codec(ToyPayloadCodec, "run-payload") == ToyPayload(
+        label="compressed", value=13
+    )
+
+
+@pytest.mark.parametrize("compression", ["none", "zstd"])
+def test_logical_zstd_media_type_suffix_round_trip(compression):
+    media_type = "application/vnd.ommx-tests.payload+zstd"
+    payload = b"payload"
+
+    with Experiment.with_temp_local_registry() as experiment:
+        experiment.log_attachment(
+            "suffix", media_type, payload, compression=compression
+        )
+
+    loaded = Experiment.from_artifact(experiment.artifact)
+    assert loaded.attachment_media_type("suffix") == media_type
+    assert loaded.get_blob("suffix") == payload
+
+
+def test_attachment_rejects_unknown_compression():
+    with Experiment.with_temp_local_registry() as experiment:
+        with pytest.raises(Exception, match="expected `none` or `zstd`"):
+            experiment.log_attachment(
+                "payload",
+                "application/octet-stream",
+                b"payload",
+                compression="gzip",  # pyright: ignore[reportArgumentType] - runtime rejection
+            )
+
+
 def test_experiment_attachment_codec_rejects_media_type_mismatch():
     with Experiment.with_temp_local_registry() as experiment:
         experiment.log_with_codec(
@@ -113,6 +164,24 @@ def test_experiment_file_attachment_round_trip(tmp_path):
     with pytest.raises(Exception, match="already exists"):
         loaded.write_attachment("source-file", output_dir)
     loaded.write_attachment("source-file", output_dir, overwrite=True)
+
+
+def test_compressed_file_attachment_round_trip(tmp_path):
+    source = tmp_path / "trace.json"
+    payload = b'{"values":[' + b"1," * 99 + b"1]}"
+    source.write_bytes(payload)
+
+    with Experiment.with_temp_local_registry() as experiment:
+        experiment.log_file(
+            "trace", source, media_type="application/json", compression="zstd"
+        )
+
+    loaded = Experiment.from_artifact(experiment.artifact)
+    assert loaded.attachment_media_type("trace") == "application/json"
+    assert loaded.get_blob("trace") == payload
+    output = tmp_path / "trace.copy.json"
+    loaded.write_attachment("trace", output)
+    assert output.read_bytes() == payload
 
 
 def test_run_file_attachment_round_trip(tmp_path):

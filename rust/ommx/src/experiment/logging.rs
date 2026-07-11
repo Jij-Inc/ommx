@@ -1,12 +1,15 @@
 //! Shared attachment logging APIs for experiment and run handles.
 
-use crate::artifact::local_registry::LocalRegistry;
+use crate::artifact::local_registry::{registry::attachment_storage, LocalRegistry};
 use crate::{Instance, ParametricInstance, SampleSet, Solution};
 use anyhow::{ensure, Result};
 use oci_spec::image::{Descriptor, MediaType};
-use std::{collections::HashMap, path::Path};
+use std::{collections::HashMap, io::Read, path::Path};
 
-use super::attachment::{encode_json, json_media_type, read_file_attachment, AttachmentTable};
+use super::attachment::{
+    encode_json, json_media_type, open_file_attachment, prepare_attachment_storage,
+    AttachmentTable, Compression,
+};
 
 /// A handle that can log attachment payloads into an Experiment space.
 ///
@@ -25,6 +28,25 @@ pub trait AttachmentLogger: Sized {
         annotations: HashMap<String, String>,
     ) -> Result<()>;
 
+    /// Attach arbitrary bytes and optionally compress their stored OCI layer.
+    fn log_attachment_compressed(
+        self,
+        name: &str,
+        media_type: MediaType,
+        bytes: impl AsRef<[u8]>,
+        annotations: HashMap<String, String>,
+        compression: Compression,
+    ) -> Result<()>;
+
+    /// Stream an attachment from a reader without buffering the full payload.
+    fn log_attachment_from_reader(
+        self,
+        name: &str,
+        media_type: MediaType,
+        reader: impl Read,
+        annotations: HashMap<String, String>,
+    ) -> Result<()>;
+
     /// Attach an existing filesystem file with export filename metadata.
     fn log_file(
         self,
@@ -32,6 +54,16 @@ pub trait AttachmentLogger: Sized {
         path: impl AsRef<Path>,
         media_type: Option<MediaType>,
         filename: Option<&str>,
+    ) -> Result<()>;
+
+    /// Attach a filesystem file and optionally compress its stored OCI layer.
+    fn log_file_compressed(
+        self,
+        name: &str,
+        path: impl AsRef<Path>,
+        media_type: Option<MediaType>,
+        filename: Option<&str>,
+        compression: Compression,
     ) -> Result<()>;
 
     /// Attach a JSON-serialisable value.
@@ -64,17 +96,49 @@ where
         bytes: impl AsRef<[u8]>,
         annotations: HashMap<String, String>,
     ) -> Result<()> {
-        let mut logger = self;
-        ensure_attachment_name_available(&mut logger, name)?;
-        let bytes = bytes.as_ref();
-        let descriptor = AttachmentLoggerStorage::with_local_registry(&logger, |registry| {
-            let descriptor = registry.store_layer_blob(media_type, bytes, annotations)?;
-            Ok(Descriptor::from(descriptor))
-        })?;
-        let descriptor = logger.descriptor_for_attachment_table(descriptor)?;
-        logger.with_attachment_table(|attachments| {
-            attachments.insert(name.to_string(), descriptor, None)
-        })
+        self.log_attachment_compressed(name, media_type, bytes, annotations, Compression::None)
+    }
+
+    fn log_attachment_compressed(
+        self,
+        name: &str,
+        media_type: MediaType,
+        bytes: impl AsRef<[u8]>,
+        annotations: HashMap<String, String>,
+        compression: Compression,
+    ) -> Result<()> {
+        match compression {
+            Compression::None => {
+                log_attachment_bytes(self, name, media_type, bytes.as_ref(), annotations, None)
+            }
+            Compression::Zstd => log_attachment_reader(
+                self,
+                name,
+                media_type,
+                bytes.as_ref(),
+                annotations,
+                None,
+                compression,
+            ),
+        }
+    }
+
+    fn log_attachment_from_reader(
+        self,
+        name: &str,
+        media_type: MediaType,
+        reader: impl Read,
+        annotations: HashMap<String, String>,
+    ) -> Result<()> {
+        log_attachment_reader(
+            self,
+            name,
+            media_type,
+            reader,
+            annotations,
+            None,
+            Compression::None,
+        )
     }
 
     fn log_file(
@@ -84,18 +148,27 @@ where
         media_type: Option<MediaType>,
         filename: Option<&str>,
     ) -> Result<()> {
-        let mut logger = self;
-        ensure_attachment_name_available(&mut logger, name)?;
-        let (media_type, bytes, filename) = read_file_attachment(path, media_type, filename)?;
-        let descriptor = AttachmentLoggerStorage::with_local_registry(&logger, |registry| {
-            let descriptor =
-                registry.store_layer_blob(media_type, bytes.as_ref(), HashMap::new())?;
-            Ok(Descriptor::from(descriptor))
-        })?;
-        let descriptor = logger.descriptor_for_attachment_table(descriptor)?;
-        logger.with_attachment_table(|attachments| {
-            attachments.insert(name.to_string(), descriptor, Some(filename))
-        })
+        self.log_file_compressed(name, path, media_type, filename, Compression::None)
+    }
+
+    fn log_file_compressed(
+        self,
+        name: &str,
+        path: impl AsRef<Path>,
+        media_type: Option<MediaType>,
+        filename: Option<&str>,
+        compression: Compression,
+    ) -> Result<()> {
+        let (media_type, file, filename) = open_file_attachment(path, media_type, filename)?;
+        log_attachment_reader(
+            self,
+            name,
+            media_type,
+            file,
+            HashMap::new(),
+            Some(filename),
+            compression,
+        )
     }
 
     fn log_instance(self, name: &str, instance: &Instance) -> Result<()> {
@@ -151,7 +224,7 @@ where
     }
 }
 
-pub(super) trait AttachmentLoggerStorage: Sized {
+pub trait AttachmentLoggerStorage: Sized {
     type Descriptor;
 
     fn with_local_registry<R>(&self, f: impl FnOnce(&LocalRegistry) -> Result<R>) -> Result<R>;
@@ -174,5 +247,92 @@ fn ensure_attachment_name_available<T: AttachmentLoggerStorage>(
             "Attachment `{name}` already exists"
         );
         Ok(())
+    })
+}
+
+fn log_attachment_reader<T: AttachmentLoggerStorage>(
+    logger: T,
+    name: &str,
+    media_type: MediaType,
+    reader: impl Read,
+    annotations: HashMap<String, String>,
+    filename: Option<String>,
+    compression: Compression,
+) -> Result<()> {
+    log_attachment_with_storage(
+        logger,
+        name,
+        media_type,
+        annotations,
+        filename,
+        compression,
+        |registry, stored_media_type, annotations| {
+            let descriptor = match compression {
+                Compression::None => attachment_storage::store_layer_reader(
+                    registry,
+                    stored_media_type,
+                    reader,
+                    annotations,
+                )?,
+                Compression::Zstd => {
+                    let encoder = zstd::stream::read::Encoder::new(reader, 0)?;
+                    attachment_storage::store_layer_reader(
+                        registry,
+                        stored_media_type,
+                        encoder,
+                        annotations,
+                    )?
+                }
+            };
+            Ok(Descriptor::from(descriptor))
+        },
+    )
+}
+
+fn log_attachment_bytes<T: AttachmentLoggerStorage>(
+    logger: T,
+    name: &str,
+    media_type: MediaType,
+    bytes: &[u8],
+    annotations: HashMap<String, String>,
+    filename: Option<String>,
+) -> Result<()> {
+    log_attachment_with_storage(
+        logger,
+        name,
+        media_type,
+        annotations,
+        filename,
+        Compression::None,
+        |registry, stored_media_type, annotations| {
+            let descriptor = attachment_storage::store_layer_bytes(
+                registry,
+                stored_media_type,
+                bytes,
+                annotations,
+            )?;
+            Ok(Descriptor::from(descriptor))
+        },
+    )
+}
+
+fn log_attachment_with_storage<T: AttachmentLoggerStorage>(
+    mut logger: T,
+    name: &str,
+    media_type: MediaType,
+    annotations: HashMap<String, String>,
+    filename: Option<String>,
+    compression: Compression,
+    store: impl FnOnce(&LocalRegistry, MediaType, HashMap<String, String>) -> Result<Descriptor>,
+) -> Result<()> {
+    ensure_attachment_name_available(&mut logger, name)?;
+    let (stored_media_type, annotations) =
+        prepare_attachment_storage(compression, media_type, annotations)?;
+    let descriptor = AttachmentLoggerStorage::with_local_registry(&logger, |registry| {
+        store(registry, stored_media_type, annotations)
+    })?;
+    let descriptor = logger.descriptor_for_attachment_table(descriptor)?;
+    logger.with_attachment_table(|attachments| {
+        attachments.insert(name.to_string(), descriptor, filename)
     })
 }

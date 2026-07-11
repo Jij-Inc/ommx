@@ -43,6 +43,8 @@ from ommx import Constraint, Equality, Function, Linear, State
 
 `ConstraintHints`、`OneHot`、`Sos1`、`Parameters` wrapper は export されなくなりました。
 
+legacy v1 の `ConstraintHints` は、v3 で読み込む際も advisory metadata として扱われます。`Instance.from_v1_bytes(...)` と `ParametricInstance.from_v1_bytes(...)` は hint を無視して通常制約を保持し、first-class 特殊制約へ自動昇格しません。特殊制約として扱う必要がある場合は、無視された hint だけを根拠にせず、信頼できる modeling input から対応する first-class constraint を構築してください。
+
 ```python
 # v2.5.1
 from ommx.v1 import OneHot, Sos1, ConstraintHints, Parameters
