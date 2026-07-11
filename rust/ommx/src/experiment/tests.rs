@@ -2560,8 +2560,8 @@ fn experiment_dyn_publishes_failed_checkpoint() {
         .unwrap();
     assert_eq!(internal_artifacts.records.len(), 1);
     assert_eq!(
-        internal_artifacts.records[0].image_name,
-        checkpoint_image_name
+        internal_artifacts.records[0].image_name(),
+        &checkpoint_image_name
     );
 
     let checkpoints = registry_handle

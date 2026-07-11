@@ -9,7 +9,7 @@ This guide covers Local Registry workflows around committed and interrupted Expe
 {py:func}`ommx.artifact.list_artifacts` lists every matching OMMX Artifact ref,
 including generic Artifacts and Experiments. Each record contains the image
 name, Manifest and Config digests, update time, `artifactType`, Manifest
-annotations, and the complete OCI Manifest as a Python dictionary.
+annotations, and the parsed OCI Manifest as a Python dictionary.
 
 ```python
 from ommx.artifact import list_artifacts
@@ -198,6 +198,22 @@ Experiment data is stored in the CAS, with refs and listing caches in SQLite.
 | Manifest | An OCI Image Manifest blob | The list of blobs that make one immutable OMMX Artifact |
 | Ref | SQLite rows in the Local Registry index | The name or checkpoint pointer that makes a manifest reachable |
 | Listing cache | SQLite rows keyed by manifest or config digest | Original Manifest and Experiment Config JSON used by registry listings |
+
+Use {command}`ommx size` to inspect the logical referenced size of one or more
+local Artifact or Experiment image refs:
+
+```console
+ommx size \
+  example.com/optimization/qap-experiments:tai20a-highs-20260710 \
+  example.com/optimization/qap-experiments:tai20a-scip-20260710
+```
+
+The reported value is the original Manifest JSON byte length plus its config
+size and the sizes of its unique layer digests. It is calculated from the
+digest-validated SQLite Manifest cache without reading or statting payload CAS
+files. The OCI `subject` is not included. Blobs shared by different refs are
+counted for every ref, so do not add these values to estimate the Local
+Registry's physical disk usage.
 
 The cache stores the original JSON bytes under their content digest and verifies
 that digest when reading them. A missing cache row is populated from the CAS on
