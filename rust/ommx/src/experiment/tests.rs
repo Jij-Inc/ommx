@@ -1457,6 +1457,88 @@ fn log_failed_sample_records_sampling_without_output() {
 }
 
 #[test]
+fn loaded_experiment_orders_solves_and_samplings_by_id() {
+    let temp = crate::artifact::local_registry::TempLocalRegistry::new().unwrap();
+    let registry = temp.registry();
+    let input = registry
+        .store_layer_blob(media_types::v1_instance(), b"input", HashMap::new())
+        .unwrap();
+    let run_parameters = empty_run_parameters_layer(registry);
+    let config = ExperimentConfig {
+        status: EXPERIMENT_STATUS_FINISHED.to_string(),
+        requested_image_name: None,
+        attachments: AttachmentTable::new(),
+        runs: vec![ExperimentConfigRun {
+            run_id: 0,
+            status: RUN_STATUS_FINISHED.to_string(),
+            attachments: AttachmentTable::new(),
+            trace: None,
+            solves: [2, 0, 1]
+                .into_iter()
+                .map(|solve_id| ExperimentConfigSolve {
+                    solve_id,
+                    status: SolveStatus::Failed.to_string(),
+                    input: LayerRef(0),
+                    output: None,
+                    adapter: "dummy.SolverAdapter".to_string(),
+                    adapter_options: "{}".to_string(),
+                    diagnostics: None,
+                })
+                .collect(),
+            samplings: [1, 2, 0]
+                .into_iter()
+                .map(|sampling_id| ExperimentConfigSampling {
+                    sampling_id,
+                    status: SamplingStatus::Failed.to_string(),
+                    input: LayerRef(0),
+                    output: None,
+                    adapter: "dummy.SamplerAdapter".to_string(),
+                    adapter_options: "{}".to_string(),
+                    diagnostics: None,
+                })
+                .collect(),
+        }],
+        run_parameters: LayerRef(1),
+    };
+    let config_descriptor = registry
+        .store_json_blob(
+            MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()),
+            &config,
+        )
+        .unwrap();
+    let unsealed = UnsealedArtifact::new(
+        MediaType::Other(EXPERIMENT_ARTIFACT_MEDIA_TYPE.to_string()),
+        config_descriptor,
+        vec![input, run_parameters],
+        None,
+        HashMap::new(),
+    );
+    let sealed_artifact = registry.seal_artifact(unsealed).unwrap();
+    let artifact = LocalArtifact::from_parts(
+        registry,
+        ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:ordered-records").unwrap(),
+        sealed_artifact.digest().clone(),
+    );
+
+    let loaded = SealedExperiment::from_artifact(artifact).unwrap();
+    let run = loaded.run(0).unwrap();
+    assert_eq!(
+        run.solves()
+            .iter()
+            .map(|solve| solve.solve_id())
+            .collect::<Vec<_>>(),
+        vec![0, 1, 2]
+    );
+    assert_eq!(
+        run.samplings()
+            .iter()
+            .map(|sampling| sampling.sampling_id())
+            .collect::<Vec<_>>(),
+        vec![0, 1, 2]
+    );
+}
+
+#[test]
 fn loaded_experiment_rejects_unknown_solve_output_media_type() {
     let temp = crate::artifact::local_registry::TempLocalRegistry::new().unwrap();
     let registry = temp.registry();

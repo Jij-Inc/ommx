@@ -342,12 +342,13 @@ solver settings, and you want the resulting Artifact to answer:
 
 - which shared dataset or baseline configuration was used,
 - which run-level parameters should be compared as a table,
-- which input `ommx.Instance` was actually solved, and
-- which output `ommx.Solution` and adapter options came from each solver call.
+- which input `ommx.Instance` was actually solved or sampled, and
+- which output `ommx.Solution` or `ommx.SampleSet` and adapter options came
+  from each solver or sampler call.
 
 An `Experiment` is a mutable session until it is committed. Experiment-level
 attachments store shared context, while each `Run` stores scalar parameters,
-run-level attachments, and zero or more `Solve` records. Use
+run-level attachments, and zero or more `Solve` and `Sampling` records. Use
 `Run.log_parameter(...)` for values that should become columns in
 `Experiment.run_parameters_df()`, and use attachment methods for payloads such
 as JSON, instances, solutions, sample sets, logs, or caller-defined media

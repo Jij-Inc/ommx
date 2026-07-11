@@ -1785,7 +1785,7 @@ class Experiment:
 
     An `Experiment` owns experiment-level attachments and a sequence of
     closed `Run` records. Each `Run` can store scalar run parameters,
-    run-level attachments, and zero or more `Solve` records.
+    run-level attachments, and zero or more `Solve` and `Sampling` records.
 
     Newly created experiments are unsealed. Call `commit()` to write the
     experiment into the local registry as an OMMX Artifact. After commit, the
@@ -1807,7 +1807,8 @@ class Experiment:
     Use experiment-level attachments for shared context such as dataset or
     source-problem metadata. Use `Run.log_parameter(...)` for scalar values
     that should appear in `run_parameters_df()`, and use run attachments or
-    `Run.log_solve(...)` for payloads that belong to a specific run.
+    `Run.log_solve(...)` and `Run.log_sample(...)` for payloads that belong to
+    a specific run.
 
     Example:
 
@@ -1960,8 +1961,8 @@ class Experiment:
         When the child is committed, its Artifact manifest records the parent
         manifest descriptor as OCI `subject`. The child reuses payload blobs
         already present in the Local Registry; forking creates a new manifest
-        but does not duplicate unchanged Instance, Solution, or Attachment
-        bytes.
+        but does not duplicate unchanged Instance, Solution, SampleSet, or
+        Attachment bytes.
 
         If `image_name` is omitted, OMMX generates an anonymous local
         Experiment name for the child. The returned Experiment can be used as
@@ -7171,9 +7172,9 @@ class Solve:
     r"""
     Immutable record of one solver call.
 
-    A `Solve` always stores the input `Instance`, adapter class name, and
-    JSON-encoded adapter options for one adapter call. A finished Solve stores
-    a `Solution`; failed and interrupted Solve records have no output.
+    A `Solve` always stores the input `Instance`, SolverAdapter class name, and
+    JSON-encoded adapter options for one solver call. A finished Solve stores a
+    `Solution`; failed and interrupted Solve records have no output.
     """
     @property
     def solve_id(self) -> builtins.int:

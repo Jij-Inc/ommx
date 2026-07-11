@@ -568,6 +568,7 @@ fn decode_solves<'reg>(
                 .transpose()?,
         });
     }
+    decoded.sort_by_key(Solve::solve_id);
     Ok(decoded)
 }
 
@@ -674,6 +675,7 @@ fn decode_samplings<'reg>(
                 .transpose()?,
         });
     }
+    decoded.sort_by_key(Sampling::sampling_id);
     Ok(decoded)
 }
 

@@ -287,8 +287,9 @@ reference.
 `KeyboardInterrupt` is recorded as `"interrupted"` for both Run and Experiment status. Other exceptions are recorded as `"failed"`.
 
 Run status records how the Run scope was closed. It is not an aggregate status
-of child Solve records, so a Run with status `"finished"` may still contain
-failed Solve attempts when the adapter errors were handled inside the Run.
+of child Solve or Sampling records, so a Run with status `"finished"` may still
+contain failed Solve or Sampling attempts when adapter errors were handled
+inside the Run.
 
 If you do not use Experiment as a context manager, exceptions outside a Run do
 not automatically publish a failed Experiment checkpoint. The usual interactive

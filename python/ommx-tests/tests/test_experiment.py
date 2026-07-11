@@ -972,6 +972,58 @@ def test_log_sample_records_finished_sample_set_without_feasible_samples():
     assert sampling.diagnostics == [{"status": "sampled", "bound": 0.0}]
 
 
+def test_log_solve_and_sample_omit_disabled_diagnostics_keyword():
+    class LegacySolver(SolverAdapter):
+        @classmethod
+        def solve(  # type: ignore[override]
+            cls, ommx_instance: Instance
+        ) -> Solution:
+            return ommx_instance.evaluate({})
+
+        @property
+        def solver_input(self) -> Any:
+            raise NotImplementedError
+
+        def decode(self, data: Any) -> Solution:
+            raise NotImplementedError
+
+    class LegacySampler(SamplerAdapter):
+        @classmethod
+        def sample(  # type: ignore[override]
+            cls, ommx_instance: Instance
+        ) -> SampleSet:
+            return ommx_instance.evaluate_samples([{}])
+
+        @classmethod
+        def solve(  # type: ignore[override]
+            cls, ommx_instance: Instance
+        ) -> Solution:
+            raise NotImplementedError
+
+        @property
+        def solver_input(self) -> Any:
+            raise NotImplementedError
+
+        def decode(self, data: Any) -> Solution:
+            raise NotImplementedError
+
+        @property
+        def sampler_input(self) -> Any:
+            raise NotImplementedError
+
+        def decode_to_sampleset(self, data: Any) -> SampleSet:
+            raise NotImplementedError
+
+    instance = Instance.empty()
+    experiment = Experiment.with_temp_local_registry()
+
+    with experiment.run() as run:
+        solution = run.log_solve(LegacySolver, instance)
+        sample_set = run.log_sample(LegacySampler, instance)
+        assert solution.feasible
+        assert sample_set.feasible_ids() == {0}
+
+
 def test_log_sample_records_failed_sampling_separately_from_solves():
     class FailingSampler(SamplerAdapter):
         @classmethod

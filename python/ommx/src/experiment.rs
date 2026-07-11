@@ -332,7 +332,7 @@ impl PyAutosavePolicy {
 ///
 /// An `Experiment` owns experiment-level attachments and a sequence of
 /// closed `Run` records. Each `Run` can store scalar run parameters,
-/// run-level attachments, and zero or more `Solve` records.
+/// run-level attachments, and zero or more `Solve` and `Sampling` records.
 ///
 /// Newly created experiments are unsealed. Call `commit()` to write the
 /// experiment into the local registry as an OMMX Artifact. After commit, the
@@ -354,7 +354,8 @@ impl PyAutosavePolicy {
 /// Use experiment-level attachments for shared context such as dataset or
 /// source-problem metadata. Use `Run.log_parameter(...)` for scalar values
 /// that should appear in `run_parameters_df()`, and use run attachments or
-/// `Run.log_solve(...)` for payloads that belong to a specific run.
+/// `Run.log_solve(...)` and `Run.log_sample(...)` for payloads that belong to
+/// a specific run.
 ///
 /// Example:
 ///
@@ -498,8 +499,8 @@ impl PyExperiment {
     /// When the child is committed, its Artifact manifest records the parent
     /// manifest descriptor as OCI `subject`. The child reuses payload blobs
     /// already present in the Local Registry; forking creates a new manifest
-    /// but does not duplicate unchanged Instance, Solution, or Attachment
-    /// bytes.
+    /// but does not duplicate unchanged Instance, Solution, SampleSet, or
+    /// Attachment bytes.
     ///
     /// If `image_name` is omitted, OMMX generates an anonymous local
     /// Experiment name for the child. The returned Experiment can be used as
@@ -3479,9 +3480,8 @@ impl<'py> SolverAdapter<'py> {
                 call_kwargs.set_item(key, value)?;
             }
         }
-        match diagnostics {
-            Some(diagnostics) => call_kwargs.set_item("diagnostics", diagnostics.bind(py))?,
-            None => call_kwargs.set_item("diagnostics", py.None())?,
+        if let Some(diagnostics) = diagnostics {
+            call_kwargs.set_item("diagnostics", diagnostics.bind(py))?;
         }
         let solution_object =
             self.adapter
@@ -3505,9 +3505,8 @@ impl<'py> SolverAdapter<'py> {
                 call_kwargs.set_item(key, value)?;
             }
         }
-        match diagnostics {
-            Some(diagnostics) => call_kwargs.set_item("diagnostics", diagnostics.bind(py))?,
-            None => call_kwargs.set_item("diagnostics", py.None())?,
+        if let Some(diagnostics) = diagnostics {
+            call_kwargs.set_item("diagnostics", diagnostics.bind(py))?;
         }
         let sample_set_object =
             self.adapter
@@ -3869,9 +3868,9 @@ impl PySealedRun {
 #[derive(Clone)]
 /// Immutable record of one solver call.
 ///
-/// A `Solve` always stores the input `Instance`, adapter class name, and
-/// JSON-encoded adapter options for one adapter call. A finished Solve stores
-/// a `Solution`; failed and interrupted Solve records have no output.
+/// A `Solve` always stores the input `Instance`, SolverAdapter class name, and
+/// JSON-encoded adapter options for one solver call. A finished Solve stores a
+/// `Solution`; failed and interrupted Solve records have no output.
 pub struct PySolve(ommx::experiment::SolveDyn);
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]

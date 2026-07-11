@@ -555,7 +555,7 @@ Adapter options are solve-scoped metadata, so they do not appear in {meth}`~ommx
 
 ### 🆕 Experiment fork and lineage ([#905](https://github.com/Jij-Inc/ommx/pull/905))
 
-{meth}`~ommx.experiment.Experiment.fork` starts a new uncommitted Experiment from a committed one. The child inherits the parent's attachments, Runs, Solves, and Run parameters, while the parent remains unchanged. When the child is committed after adding new Runs or attachments, the parent manifest descriptor is recorded as the OCI `subject`.
+{meth}`~ommx.experiment.Experiment.fork` starts a new uncommitted Experiment from a committed one. The child inherits the parent's attachments, Runs, Solves, Samplings, and Run parameters, while the parent remains unchanged. When the child is committed after adding new Runs or attachments, the parent manifest descriptor is recorded as the OCI `subject`.
 
 ```python
 from ommx.experiment import Experiment

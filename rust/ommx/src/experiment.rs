@@ -312,9 +312,9 @@ impl std::fmt::Display for RunStatus {
 pub enum SolveStatus {
     /// The adapter returned a Solution.
     Finished,
-    /// The adapter raised an error before returning an output.
+    /// The adapter raised an error before returning a Solution.
     Failed,
-    /// The adapter call was interrupted before returning an output.
+    /// The adapter call was interrupted before returning a Solution.
     Interrupted,
 }
 
