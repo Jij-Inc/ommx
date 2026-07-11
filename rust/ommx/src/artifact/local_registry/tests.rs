@@ -1284,10 +1284,10 @@ fn local_registry_lists_artifacts_from_manifest_cache() -> Result<()> {
         Some(&"qap".to_string())
     );
     assert_eq!(
-        record.manifest["artifactType"],
-        media_types::V1_ARTIFACT_MEDIA_TYPE
+        record.manifest.artifact_type().as_ref().unwrap().as_ref(),
+        media_types::V1_ARTIFACT_MEDIA_TYPE,
     );
-    assert_eq!(record.manifest["layers"].as_array().unwrap().len(), 1);
+    assert_eq!(record.manifest.layers().len(), 1);
     assert!(record.updated_at.contains('T'));
     Ok(())
 }
@@ -1368,7 +1368,7 @@ fn artifact_ref_size_uses_manifest_cache_and_excludes_subjects() -> Result<()> {
     assert_eq!(records.len(), 1);
     assert_eq!(records[0].image_name, child_name);
     assert_eq!(
-        records[0].referenced_blob_size(),
+        records[0].referenced_blob_size()?,
         child_manifest_size
             + media_types::OCI_EMPTY_CONFIG_BYTES.len() as u64
             + shared_bytes.len() as u64

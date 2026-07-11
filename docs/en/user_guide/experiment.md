@@ -9,7 +9,7 @@ This guide covers Local Registry workflows around committed and interrupted Expe
 {py:func}`ommx.artifact.list_artifacts` lists every matching OMMX Artifact ref,
 including generic Artifacts and Experiments. Each record contains the image
 name, Manifest and Config digests, update time, `artifactType`, Manifest
-annotations, and the complete OCI Manifest as a Python dictionary.
+annotations, and the parsed OCI Manifest as a Python dictionary.
 
 ```python
 from ommx.artifact import list_artifacts

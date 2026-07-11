@@ -8,8 +8,8 @@
 
 {py:func}`ommx.artifact.list_artifacts` は、汎用 Artifact と Experiment を含む、
 一致したすべての OMMX Artifact ref を一覧します。各 record には image name、
-Manifest/Config digest、更新時刻、`artifactType`、Manifest annotation、完全な OCI
-Manifest が Python の dictionary として含まれます。
+Manifest/Config digest、更新時刻、`artifactType`、Manifest annotation、parse済みの
+OCI Manifest が Python の dictionary として含まれます。
 
 ```python
 from ommx.artifact import list_artifacts

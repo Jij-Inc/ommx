@@ -620,7 +620,7 @@ fn handle_size(image_names: &[String]) -> Result<()> {
                 .with_context(|| {
                     format!("Artifact not found in the Local Registry: {image_name}")
                 })?;
-            Ok((image_name, record.referenced_blob_size()))
+            Ok((image_name, record.referenced_blob_size()?))
         })
         .collect::<Result<Vec<_>>>()?;
 

@@ -140,10 +140,10 @@ pub struct ArtifactRefRecord {
     pub config_digest: Digest,
     /// Manifest annotations stored on the Artifact.
     pub annotations: BTreeMap<String, String>,
-    /// Complete OCI Manifest JSON stored by `manifest_digest`.
-    pub manifest: serde_json::Value,
-    /// Cached sum of the Manifest JSON, config, and unique layer sizes.
-    pub(crate) referenced_blob_size: u64,
+    /// Byte length of the original OCI Manifest JSON stored by `manifest_digest`.
+    pub manifest_size: u64,
+    /// Parsed OCI Image Manifest stored by `manifest_digest`.
+    pub manifest: ImageManifest,
 }
 
 impl ArtifactRefRecord {
@@ -153,8 +153,26 @@ impl ArtifactRefRecord {
     /// and each unique layer digest. The OCI `subject` is intentionally excluded.
     /// Blobs shared with other Artifact refs are counted for each ref, so values
     /// from multiple records are not additive physical Local Registry usage.
-    pub fn referenced_blob_size(&self) -> u64 {
-        self.referenced_blob_size
+    pub fn referenced_blob_size(&self) -> Result<u64> {
+        let mut blob_sizes = BTreeMap::new();
+        for descriptor in std::iter::once(self.manifest.config()).chain(self.manifest.layers()) {
+            let digest = descriptor.digest().to_string();
+            if let Some(previous_size) = blob_sizes.insert(digest.clone(), descriptor.size()) {
+                ensure!(
+                    previous_size == descriptor.size(),
+                    "Manifest contains conflicting sizes for {digest}: {previous_size} and {}",
+                    descriptor.size()
+                );
+            }
+        }
+
+        blob_sizes
+            .into_values()
+            .try_fold(self.manifest_size, |total, size| {
+                total
+                    .checked_add(size)
+                    .context("Referenced blob size overflowed u64")
+            })
     }
 }
 

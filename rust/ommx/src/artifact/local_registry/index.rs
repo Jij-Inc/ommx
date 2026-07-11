@@ -12,7 +12,6 @@ use oci_spec::image::DescriptorBuilder;
 use oci_spec::image::{Descriptor, Digest, ImageManifest, MediaType};
 use rusqlite::{params, types::Type, Connection, OptionalExtension, TransactionBehavior};
 use std::{
-    collections::BTreeMap,
     fs,
     path::Path,
     str::FromStr,
@@ -988,12 +987,7 @@ fn ref_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<RefRecord> {
     })
 }
 
-struct CachedArtifactRef {
-    record: ArtifactRefRecord,
-    manifest: ImageManifest,
-}
-
-fn cached_artifact_ref_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<CachedArtifactRef> {
+fn artifact_ref_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ArtifactRefRecord> {
     let name: String = row.get(0)?;
     let reference: String = row.get(1)?;
     let image_name = ImageRef::from_repository_and_reference(&name, &reference)
@@ -1021,8 +1015,6 @@ fn cached_artifact_ref_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Cac
             format!("Cached Manifest JSON does not match {manifest_digest}"),
         ));
     }
-    let manifest_value: serde_json::Value = serde_json::from_slice(&manifest_json)
-        .map_err(|err| rusqlite::Error::FromSqlConversionFailure(6, Type::Blob, Box::new(err)))?;
     let manifest: ImageManifest = serde_json::from_slice(&manifest_json)
         .map_err(|err| rusqlite::Error::FromSqlConversionFailure(6, Type::Blob, Box::new(err)))?;
     if manifest.artifact_type().as_ref() != Some(&artifact_type) {
@@ -1039,63 +1031,24 @@ fn cached_artifact_ref_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Cac
             format!("Cached Manifest config digest does not match {config_digest}"),
         ));
     }
-    let referenced_blob_size = cached_manifest_referenced_blob_size(&manifest_json, &manifest)?;
     let annotations = manifest
         .annotations()
         .clone()
         .unwrap_or_default()
         .into_iter()
         .collect();
-    Ok(CachedArtifactRef {
-        record: ArtifactRefRecord {
-            image_name,
-            manifest_digest,
-            updated_at: row.get(2)?,
-            artifact_type,
-            config_digest,
-            annotations,
-            manifest: manifest_value,
-            referenced_blob_size,
-        },
+    Ok(ArtifactRefRecord {
+        image_name,
+        manifest_digest,
+        updated_at: row.get(2)?,
+        artifact_type,
+        config_digest,
+        annotations,
+        manifest_size: u64::try_from(manifest_json.len()).map_err(|error| {
+            rusqlite::Error::FromSqlConversionFailure(6, Type::Blob, Box::new(error))
+        })?,
         manifest,
     })
-}
-
-fn cached_manifest_referenced_blob_size(
-    manifest_json: &[u8],
-    manifest: &ImageManifest,
-) -> rusqlite::Result<u64> {
-    let mut blob_sizes = BTreeMap::new();
-    for descriptor in std::iter::once(manifest.config()).chain(manifest.layers()) {
-        let digest = descriptor.digest().to_string();
-        if let Some(previous_size) = blob_sizes.insert(digest.clone(), descriptor.size()) {
-            if previous_size != descriptor.size() {
-                return Err(cache_conversion_failure(
-                    6,
-                    Type::Blob,
-                    format!(
-                        "Cached Manifest contains conflicting sizes for {digest}: \
-                         {previous_size} and {}",
-                        descriptor.size()
-                    ),
-                ));
-            }
-        }
-    }
-
-    let mut total = u64::try_from(manifest_json.len()).map_err(|error| {
-        rusqlite::Error::FromSqlConversionFailure(6, Type::Blob, Box::new(error))
-    })?;
-    for size in blob_sizes.into_values() {
-        total = total.checked_add(size).ok_or_else(|| {
-            cache_conversion_failure(6, Type::Blob, "Referenced blob size overflowed u64")
-        })?;
-    }
-    Ok(total)
-}
-
-fn artifact_ref_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ArtifactRefRecord> {
-    Ok(cached_artifact_ref_from_row(row)?.record)
 }
 
 fn cached_ref_identity_from_row(
@@ -1179,7 +1132,7 @@ fn artifact_ref_read_from_row(
 }
 
 fn experiment_ref_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ExperimentRefRecord> {
-    let CachedArtifactRef { record, manifest } = cached_artifact_ref_from_row(row)?;
+    let record = artifact_ref_from_row(row)?;
     if record.artifact_type.as_ref() != media_types::V1_EXPERIMENT_MEDIA_TYPE {
         return Err(cache_conversion_failure(
             5,
@@ -1190,13 +1143,15 @@ fn experiment_ref_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Experime
             ),
         ));
     }
-    if manifest.config().media_type().as_ref() != crate::experiment::EXPERIMENT_CONFIG_MEDIA_TYPE {
+    if record.manifest.config().media_type().as_ref()
+        != crate::experiment::EXPERIMENT_CONFIG_MEDIA_TYPE
+    {
         return Err(cache_conversion_failure(
             6,
             Type::Blob,
             format!(
                 "Cached Experiment config media type is {}",
-                manifest.config().media_type()
+                record.manifest.config().media_type()
             ),
         ));
     }
