@@ -26185,7 +26185,7 @@
             },
             {
               "name": "manifest",
-              "doc": "Complete OCI Manifest JSON stored by `manifest_digest`.",
+              "doc": "Parsed OCI Manifest represented as a Python dictionary.",
               "type_": {
                 "display": "dict[str, Any]",
                 "link_target": null,
