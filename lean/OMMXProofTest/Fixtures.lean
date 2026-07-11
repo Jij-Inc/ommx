@@ -17,6 +17,14 @@ def oneVarAffine (coefficient constant : Rat) : Affine 1 where
   coeff := fun _ => coefficient
   constant := constant
 
+/-- Regression fixture for the affine denotation: the constant is added once,
+not once per coordinate. -/
+def constantOnlyAffine2 : Affine 2 where
+  coeff := fun _ => 0
+  constant := 1
+
+example : constantOnlyAffine2.eval (fun _ => 0) = 1 := by native_decide
+
 example (lhs rhs : Affine 1) (sense : ConstraintSense)
     (assignment : Assignment 1) :
     (LinearConstraint.normalize lhs rhs sense).Holds assignment ↔

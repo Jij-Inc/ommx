@@ -46,7 +46,14 @@ def scale (scalar : Rat) (expr : Affine n) : Affine n where
   constant := scalar * expr.constant
 
 def eval (expr : Affine n) (assignment : Assignment n) : Rat :=
-  ∑ i, expr.coeff i * assignment i + expr.constant
+  (∑ i, expr.coeff i * assignment i) + expr.constant
+
+/-- A coefficient-free affine expression evaluates to its constant exactly
+once, independently of the assignment-space dimension. -/
+theorem eval_eq_constant_of_coeff_eq_zero {expr : Affine n}
+    (hzero : ∀ i, expr.coeff i = 0) (assignment : Assignment n) :
+    eval expr assignment = expr.constant := by
+  simp [eval, hzero]
 
 /-- Executable extensional equality for a finite affine expression. -/
 def Same (lhs rhs : Affine n) : Prop :=
