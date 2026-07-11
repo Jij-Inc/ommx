@@ -1,7 +1,7 @@
 import OMMXProof
 
 /-!
-# Phase A trust audit
+# Independent semantics trust audit
 
 This command inspects the environment imported by the production `OMMXProof`
 aggregate rather than relying only on source text. Any axiom introduced by an

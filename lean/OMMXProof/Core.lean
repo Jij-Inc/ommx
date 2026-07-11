@@ -6,14 +6,14 @@ import Mathlib.Tactic.Ring
 /-!
 # Exact semantic core
 
-This module defines the versioned, implementation-independent Phase A input
-language. It deliberately has no OMMX Rust, protobuf, floating-point, lifecycle,
-or identifier semantics.
+This module defines the versioned input language for implementation-independent
+semantics. It deliberately has no OMMX Rust, protobuf, floating-point,
+lifecycle, or identifier semantics.
 -/
 
 namespace OMMXProof
 
-/-- Version of the complete Phase A research contract: input AST,
+/-- Version of the complete independent semantics research contract: input AST,
 normalization, denotation, preservation relations, witness schemas, and checker
 acceptance rules. A semantic or schema change must bump this value. This is not
 a public OMMX serialization version. -/
@@ -350,8 +350,9 @@ instance (constraint : SpecialConstraint n) (assignment : Assignment n) :
 
 end SpecialConstraint
 
-/-- Exact Phase A model. Stable IDs, lifecycle, and serialization are Phase B
-refinement concerns and intentionally absent. -/
+/-- Exact implementation-independent model. Stable IDs, lifecycle, and
+serialization belong to the future OMMX integration boundary and are
+intentionally absent. -/
 structure CoreModel (n : Nat) where
   domains : Fin n → VariableDomain
   linear : LinearSystem n

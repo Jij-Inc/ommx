@@ -1,19 +1,19 @@
 # OMMX proof-carrying reduction semantics
 
-This directory implements Phase A of
-[issue #1059](https://github.com/Jij-Inc/ommx/issues/1059): an independent Lean
-model for designing proof-carrying presolve and special-constraint recovery.
+This directory implements the independent Lean semantics described in
+[issue #1059](https://github.com/Jij-Inc/ommx/issues/1059) for designing
+proof-carrying presolve and special-constraint recovery.
 The parent runtime workstream is
 [issue #1057](https://github.com/Jij-Inc/ommx/issues/1057).
 
 The model is intentionally independent of the OMMX Rust SDK and protobuf
 schema. It consumes no OMMX runtime artifact and does not claim to formally
-verify the Rust implementation. A future Phase B will define and review the
-refinement bridge from committed OMMX snapshots and proof traces.
+verify the Rust implementation. Future integration work will define and review
+the refinement bridge from committed OMMX snapshots and proof traces.
 
 ## Scope
 
-Phase A defines exact rational semantics for:
+The independent formalization defines exact rational semantics for:
 
 - finite assignments, continuous/integer/binary domains, and finite bounds;
 - affine equalities and inequalities, objective value, and optimization sense;
@@ -39,11 +39,12 @@ Phase A defines exact rational semantics for:
 
 Detector completeness, floating-point tolerance, Rust mutation correctness,
 serialization, lifecycle/capability/audit state, and a complete integer proof
-system are outside Phase A.
+system are outside this independent model.
 
 ## Formal contract
 
-`formalContractVersion = 1` identifies the complete Phase A research contract:
+`formalContractVersion = 1` identifies the complete independent semantics
+research contract:
 input AST, normalization, denotation, preservation relations, witness schemas,
 and executable checker acceptance rules. A semantic or schema change must bump
 this value. It is not a stable OMMX wire-format or public SDK version.
@@ -101,14 +102,14 @@ by `OMMXProof` and are never premises of its soundness theorems. Printed `#eval`
 output is not a correctness gate. The stated production trust base still
 includes Lean's standard `propext`, `Classical.choice`, and `Quot.sound` axioms.
 
-## Milestone status
+## Implemented scope
 
-- [x] A0: semantic domains, denotation, and preservation relations
-- [x] A1: exact linear/Farkas checker and soundness
-- [x] A2: reduction composition and project/lift laws
-- [x] A3: OneHot and Indicator rules
-- [x] A4: SOS1 projection and compression
-- [x] A5: executable accept/reject fixtures and counterexamples
+- [x] Semantic domains, denotation, and preservation relations
+- [x] Exact linear/Farkas checker and soundness
+- [x] Reduction composition and project/lift laws
+- [x] OneHot and Indicator rules
+- [x] SOS1 projection and compression
+- [x] Executable accept/reject fixtures and counterexamples
 
-The Phase B bridge, trace vocabulary, and Rust proof-log producer remain
-intentionally unimplemented here.
+The canonical bridge, trace vocabulary, and Rust proof-log producer remain
+future integration work and are intentionally unimplemented here.

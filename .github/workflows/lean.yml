@@ -26,7 +26,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Build and check Phase A formalization
+      - name: Build and check independent semantics
         uses: leanprover/lean-action@v1
         with:
           lake-package-directory: lean

@@ -9,7 +9,7 @@ tasks:
       - lake exe cache get
 
   build:
-    desc: Build the Phase A Lean formalization with warnings as errors
+    desc: Build the independent Lean formalization with warnings as errors
     cmds:
       - lake build OMMXProof --wfail
 
@@ -29,7 +29,7 @@ tasks:
       - lake build OMMXProofTest.Trust --wfail
 
   check:
-    desc: Run all Lean Phase A checks
+    desc: Run all independent Lean semantics checks
     cmds:
       - task: imports
       - task: build

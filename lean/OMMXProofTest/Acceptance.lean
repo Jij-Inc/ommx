@@ -1,7 +1,7 @@
 import OMMXProofTest.Fixtures
 
 /-!
-# Phase A acceptance fixtures
+# Independent semantics acceptance fixtures
 
 `lake test` elaborates this test-only library. Executable checker fixtures use
 `native_decide`; no OMMX runtime artifact is consumed.

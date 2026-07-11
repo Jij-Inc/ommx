@@ -18,7 +18,7 @@ Code Map
 [`lean/`](./lean/)
 -------------------
 
-The independent Lean project formalizes the Phase A mathematical semantics for
+The independent Lean project formalizes the mathematical semantics for
 proof-carrying presolve and special-constraint recovery. It does not depend on
 the OMMX Rust SDK or protobuf schema.
 

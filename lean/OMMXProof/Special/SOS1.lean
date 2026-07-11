@@ -92,10 +92,10 @@ theorem checkBinaryCardinalitySOS1_sound
 /-! ## Executable selector-isolation contract
 
 Selector compression is sound only when the removed selectors are private to
-the selector gadget.  The following checker computes that fact from the exact
-Phase A `CoreModel` syntax.  A coordinate is considered used when its domain is
-restrictive, a linear/special constraint observes it, or the objective has a
-nonzero coefficient.
+the selector gadget. The following checker computes that fact from the exact
+independent `CoreModel` syntax. A coordinate is considered used when its domain
+is restrictive, a linear/special constraint observes it, or the objective has
+a nonzero coefficient.
 -/
 
 /-- Two assignments agree on every coordinate other than `privateSet`. -/
@@ -335,7 +335,7 @@ end SpecialConstraint
 
 namespace CoreModel
 
-/-- Exact semantic independence of one coordinate in the Phase A model AST. -/
+/-- Exact semantic independence of one coordinate in the independent model AST. -/
 def IndependentAt (model : CoreModel n) (index : Fin n) : Prop :=
   (model.domains index).Unrestricted ∧
     model.linear.IndependentAt index ∧
