@@ -266,8 +266,9 @@ pub struct Sos1 {
     #[prost(uint64, repeated, tag = "3")]
     pub decision_variables: ::prost::alloc::vec::Vec<u64>,
 }
-/// A constraint hint is an additional inforomation to be used by solver to gain performance.
-/// They are derived from one-or-more constraints in the instance and typically contains information of special types of constraints (e.g. one-hot, SOS, ...).
+/// Constraint hints are advisory information derived from one or more regular constraints
+/// and may be used by a solver to improve performance. Readers may ignore them. They do not
+/// replace the referenced constraints or certify mathematical equivalence to a special constraint.
 #[non_exhaustive]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
