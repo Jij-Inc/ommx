@@ -736,7 +736,7 @@ class ArtifactRef:
     @property
     def manifest(self) -> builtins.dict[builtins.str, typing.Any]:
         r"""
-        Complete OCI Manifest JSON stored by `manifest_digest`.
+        Parsed OCI Manifest represented as a Python dictionary.
         """
     def __repr__(self) -> builtins.str: ...
 
