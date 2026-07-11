@@ -45,6 +45,8 @@ The `.from_protobuf()` / `.to_protobuf()` bridge methods on `Constraint`, `Remov
 
 `ConstraintHints`, `OneHot`, `Sos1`, and the `Parameters` wrapper are no longer exported. They are superseded by the first-class constraint types (`OneHotConstraint`, `Sos1Constraint`, `IndicatorConstraint`) and plain `dict[int, float]` for parameter substitution.
 
+Legacy v1 `ConstraintHints` remain advisory metadata when read by v3. `Instance.from_v1_bytes(...)` and `ParametricInstance.from_v1_bytes(...)` ignore them and preserve the regular source constraints; they do not automatically promote hints to first-class special constraints. When that capability is required, construct the corresponding first-class constraints from trusted modeling input rather than from the ignored hint alone.
+
 **Before (v2.5.1)**:
 ```python
 from ommx.v1 import OneHot, Sos1, ConstraintHints, Parameters

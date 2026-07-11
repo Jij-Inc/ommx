@@ -34,6 +34,12 @@ assert isinstance(output, SampleSet)
 channel as `Run.log_solve`. See the [Experiment management
 tutorial](../tutorial/experiment_management.md) for the Solve and Sampling recording model.
 
+### ⚠ Legacy v1 `ConstraintHints` remain advisory ([#1058](https://github.com/Jij-Inc/ommx/pull/1058))
+
+When {meth}`Instance.from_v1_bytes <ommx.Instance.from_v1_bytes>` or {meth}`ParametricInstance.from_v1_bytes <ommx.ParametricInstance.from_v1_bytes>` reads a legacy v1 payload, it now ignores `ConstraintHints` and preserves the referenced regular constraints and their context. Even a structurally plausible hint is not automatically promoted to a first-class one-hot or SOS1 constraint, so unverified metadata cannot change the feasible set or required adapter capabilities. Imported instances can also be serialized back to v1 because no special constraint is introduced implicitly.
+
+Construct first-class special constraints from trusted modeling input rather than from a legacy hint alone. See the [Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md) for details.
+
 ### 🆕 Transparent attachment compression and streaming writes ([#1054](https://github.com/Jij-Inc/ommx/pull/1054))
 
 {class}`~ommx.experiment.Experiment` and {class}`~ommx.experiment.Run` attachment

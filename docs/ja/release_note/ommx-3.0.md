@@ -34,6 +34,12 @@ assert isinstance(output, SampleSet)
 diagnostics channel を利用できます。SolveとSamplingの記録モデルは
 [実験管理チュートリアル](../tutorial/experiment_management.md) を参照してください。
 
+### ⚠ legacy v1 `ConstraintHints` を advisory metadata として扱う ([#1058](https://github.com/Jij-Inc/ommx/pull/1058))
+
+{meth}`Instance.from_v1_bytes <ommx.Instance.from_v1_bytes>` または {meth}`ParametricInstance.from_v1_bytes <ommx.ParametricInstance.from_v1_bytes>` で legacy v1 payload を読み込む際、`ConstraintHints` を無視し、参照されている通常制約とその context を保持するようになりました。構造的に正しそうな hint であっても first-class one-hot / SOS1 制約へ自動昇格しないため、未検証の metadata が実行可能集合や adapter の required capability を変更することはありません。特殊制約を暗黙に追加しないため、読み込んだ instance は v1 へ再シリアライズできます。
+
+first-class 特殊制約が必要な場合は、legacy hint だけを根拠にせず、信頼できる modeling input から構築してください。詳細は [Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md) を参照してください。
+
 ### 🆕 Attachment の透過圧縮と streaming write ([#1054](https://github.com/Jij-Inc/ommx/pull/1054))
 
 {class}`~ommx.experiment.Experiment` と {class}`~ommx.experiment.Run` の
