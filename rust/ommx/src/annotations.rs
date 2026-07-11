@@ -8,6 +8,9 @@ const RESERVED_PREFIX: &str = "org.ommx.v1.";
 /// OCI descriptors and Python `annotations` views. Domain objects remain the
 /// source of truth for the corresponding metadata.
 pub mod annotation_keys {
+    /// Storage compression applied to an Experiment Attachment OCI layer.
+    pub const ATTACHMENT_COMPRESSION: &str = "org.ommx.v1.attachment.compression";
+
     pub const INSTANCE_NAMESPACE: &str = "org.ommx.v1.instance";
     pub const INSTANCE_TITLE: &str = "org.ommx.v1.instance.title";
     pub const INSTANCE_AUTHORS: &str = "org.ommx.v1.instance.authors";
