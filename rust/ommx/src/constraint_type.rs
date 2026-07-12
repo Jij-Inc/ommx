@@ -578,6 +578,32 @@ impl<T: ConstraintType> ConstraintCollection<T> {
         self.replace_and_remove_active_rows(BTreeMap::new(), removals)
     }
 
+    /// Permanently consume active rows and their context sidecars.
+    ///
+    /// The enclosing root object owns the semantic proof that the rows may be
+    /// deleted. This collection only applies the family-local storage effect.
+    /// Every ID is validated before mutation, so an unknown or non-active ID
+    /// leaves the collection unchanged. Consumed rows are deliberately not
+    /// moved to `removed`: a removed row remains part of evaluation and must
+    /// continue to reference registered decision variables.
+    #[allow(dead_code)] // Used by the stacked checked inverse-lowering implementations.
+    pub(crate) fn consume_active_rows(&mut self, ids: &BTreeSet<T::ID>) -> crate::Result<()> {
+        for id in ids {
+            if !self.active.contains_key(id) {
+                crate::bail!({ ?id }, "Active constraint with ID {id:?} not found");
+            }
+        }
+
+        for id in ids {
+            self.active
+                .remove(id)
+                .expect("active row was validated before consumption");
+            self.context.remove(*id);
+        }
+        debug_assert!(self.validate_context_ids().is_ok());
+        Ok(())
+    }
+
     /// Insert an active constraint along with its context in one step.
     ///
     /// `id` must not already be present in either the active or removed map.
@@ -1528,7 +1554,11 @@ fn sampled_constraint_to_v1(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{coeff, constraint::ConstraintID, linear, Equality, Function, ModelingLabel};
+    use crate::{
+        coeff,
+        constraint::{ConstraintID, Provenance},
+        linear, Equality, Function, IndicatorConstraintID, ModelingLabel,
+    };
 
     fn removed_reason() -> RemovedReason {
         RemovedReason {
@@ -1708,6 +1738,86 @@ mod tests {
         assert_eq!(collection.active().get(&id), Some(&original));
         assert!(collection.removed().is_empty());
         collection.validate_context_ids().unwrap();
+    }
+
+    #[test]
+    fn consume_active_rows_prunes_context_without_creating_removed_rows() {
+        let consumed_id = ConstraintID::from(1);
+        let retained_id = ConstraintID::from(2);
+        let removed_id = ConstraintID::from(3);
+        let mut context = ConstraintContextStore::default();
+        context.set_name(consumed_id, "consumed");
+        context.set_name(retained_id, "retained");
+        context.set_name(removed_id, "removed");
+        context.set_provenance(
+            consumed_id,
+            vec![Provenance::IndicatorConstraint(
+                IndicatorConstraintID::from(7),
+            )],
+        );
+        context.set_provenance(
+            retained_id,
+            vec![Provenance::IndicatorConstraint(
+                IndicatorConstraintID::from(8),
+            )],
+        );
+        let mut collection = ConstraintCollection::<Constraint>::with_context(
+            BTreeMap::from([
+                (consumed_id, Constraint::equal_to_zero(Function::Zero)),
+                (retained_id, Constraint::equal_to_zero(Function::Zero)),
+            ]),
+            BTreeMap::from([(
+                removed_id,
+                (Constraint::equal_to_zero(Function::Zero), removed_reason()),
+            )]),
+            context,
+        )
+        .unwrap();
+
+        collection
+            .consume_active_rows(&BTreeSet::from([consumed_id]))
+            .unwrap();
+
+        assert!(!collection.active().contains_key(&consumed_id));
+        assert!(collection.active().contains_key(&retained_id));
+        assert!(!collection.removed().contains_key(&consumed_id));
+        assert!(collection.removed().contains_key(&removed_id));
+        assert!(!collection.context().contains(consumed_id));
+        assert!(collection.context().provenance(consumed_id).is_empty());
+        assert_eq!(collection.context().name(retained_id), Some("retained"));
+        assert_eq!(
+            collection.context().provenance(retained_id),
+            [Provenance::IndicatorConstraint(
+                IndicatorConstraintID::from(8)
+            )]
+        );
+        assert_eq!(collection.context().name(removed_id), Some("removed"));
+        collection.validate_context_ids().unwrap();
+    }
+
+    #[test]
+    fn consume_active_rows_validates_the_whole_batch_before_mutation() {
+        let active_id = ConstraintID::from(1);
+        let unknown_id = ConstraintID::from(99);
+        let mut context = ConstraintContextStore::default();
+        context.set_name(active_id, "retained-on-error");
+        let mut collection = ConstraintCollection::<Constraint>::with_context(
+            BTreeMap::from([(active_id, Constraint::equal_to_zero(Function::Zero))]),
+            BTreeMap::new(),
+            context,
+        )
+        .unwrap();
+        let before = collection.clone();
+
+        let error = collection
+            .consume_active_rows(&BTreeSet::from([active_id, unknown_id]))
+            .unwrap_err();
+
+        assert!(
+            error.to_string().contains("ConstraintID(99)"),
+            "unexpected error: {error}"
+        );
+        assert_eq!(collection, before);
     }
 
     #[test]

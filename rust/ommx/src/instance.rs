@@ -20,6 +20,7 @@ mod pass;
 mod penalty;
 mod qubo;
 mod reduce_binary_power;
+mod reduction;
 mod serialize;
 mod setter;
 mod slack;
