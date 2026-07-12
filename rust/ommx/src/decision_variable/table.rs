@@ -439,6 +439,39 @@ impl DecisionVariableTable<Created> {
         }
         Ok(())
     }
+
+    /// Remove host-validated, unfixed rows and their modeling-label sidecars.
+    ///
+    /// The enclosing root object is responsible for proving that the rows are
+    /// private and unreferenced by every other component of the model. This
+    /// table checks only its local invariants. Every requested row must exist,
+    /// and none may have a fixed-value column. The complete batch is validated
+    /// before mutation.
+    #[allow(dead_code)] // Used by the stacked checked inverse-lowering implementations.
+    pub(crate) fn remove_unfixed_rows(&mut self, ids: &BTreeSet<VariableID>) -> crate::Result<()> {
+        for id in ids {
+            if !self.entries.contains_key(id) {
+                crate::bail!({ ?id }, "Decision variable with ID {id:?} not found");
+            }
+            if self.columns.fixed_values.contains_key(id) {
+                crate::bail!({ ?id }, "Decision variable with ID {id:?} is fixed");
+            }
+        }
+
+        for id in ids {
+            self.entries
+                .remove(id)
+                .expect("decision-variable row was validated before removal");
+            self.labels.remove(*id);
+        }
+        debug_assert!(Self::validate_labels(&self.entries, &self.labels).is_ok());
+        debug_assert!(self
+            .columns
+            .fixed_values
+            .keys()
+            .all(|id| self.entries.contains_key(id)));
+        Ok(())
+    }
 }
 
 impl EvaluatedDecisionVariableTable {
@@ -1002,6 +1035,63 @@ mod tests {
             "unexpected error: {err}"
         );
         assert_eq!(table.fixed_value(id), Some(1.0));
+    }
+
+    #[test]
+    fn remove_unfixed_rows_prunes_rows_and_labels() {
+        let removed_id = VariableID::from(1);
+        let retained_id = VariableID::from(2);
+        let mut labels = VariableLabelStore::default();
+        labels.set_name(removed_id, "selector");
+        labels.set_name(retained_id, "member");
+        let mut table = definition_table_without_fixed_values(
+            BTreeMap::from([
+                (removed_id, DecisionVariable::binary()),
+                (retained_id, DecisionVariable::continuous()),
+            ]),
+            labels,
+        )
+        .unwrap();
+
+        table
+            .remove_unfixed_rows(&BTreeSet::from([removed_id]))
+            .unwrap();
+
+        assert!(!table.contains_key(&removed_id));
+        assert!(!table.labels().contains(removed_id));
+        assert!(table.contains_key(&retained_id));
+        assert_eq!(table.labels().name(retained_id), Some("member"));
+    }
+
+    #[test]
+    fn remove_unfixed_rows_validates_the_whole_batch_before_mutation() {
+        let removable_id = VariableID::from(1);
+        let fixed_id = VariableID::from(2);
+        let unknown_id = VariableID::from(99);
+        let mut labels = VariableLabelStore::default();
+        labels.set_name(removable_id, "selector");
+        let table = DecisionVariableTable::with_fixed_values(
+            BTreeMap::from([
+                (removable_id, DecisionVariable::binary()),
+                (fixed_id, DecisionVariable::binary()),
+            ]),
+            labels,
+            BTreeMap::from([(fixed_id, 0.0)]),
+            ATol::default(),
+        )
+        .unwrap();
+
+        for rejected in [fixed_id, unknown_id] {
+            let mut actual = table.clone();
+            let error = actual
+                .remove_unfixed_rows(&BTreeSet::from([removable_id, rejected]))
+                .unwrap_err();
+            assert!(
+                error.to_string().contains(&format!("{rejected:?}")),
+                "unexpected error: {error}"
+            );
+            assert_eq!(actual, table);
+        }
     }
 
     #[test]
