@@ -9,6 +9,7 @@ mod encoding;
 mod evaluate;
 mod format_function;
 mod indicator;
+mod inverse_lowering;
 mod log_encode;
 mod logical_memory;
 mod named_function;
