@@ -117,6 +117,8 @@ enum InverseLoweringCandidateError {
     ProvenanceMismatch { id: ConstraintID },
     #[error("generated regular constraint {id:?} has a modeling label that would be discarded")]
     GeneratedConstraintHasModelingLabel { id: ConstraintID },
+    #[error("active regular constraint {id:?} claims the lowering provenance but is not recorded")]
+    UnrecordedGeneratedConstraint { id: ConstraintID },
     #[error(transparent)]
     LinearProof(#[from] LinearProofError),
 }
@@ -163,6 +165,7 @@ impl Instance {
         generated_rows: &[ConstraintID],
         expected_provenance: Provenance,
     ) -> Result<(), InverseLoweringCandidateError> {
+        let recorded = generated_rows.iter().copied().collect::<BTreeSet<_>>();
         for id in generated_rows {
             if !self.constraints().contains_key(id) {
                 return Err(InverseLoweringCandidateError::MissingGeneratedConstraint { id: *id });
@@ -173,6 +176,18 @@ impl Instance {
             if self.constraint_context().collect_for(*id).label != Default::default() {
                 return Err(
                     InverseLoweringCandidateError::GeneratedConstraintHasModelingLabel { id: *id },
+                );
+            }
+        }
+        for id in self.constraints().keys() {
+            if !recorded.contains(id)
+                && self
+                    .constraint_context()
+                    .provenance(*id)
+                    .contains(&expected_provenance)
+            {
+                return Err(
+                    InverseLoweringCandidateError::UnrecordedGeneratedConstraint { id: *id },
                 );
             }
         }
@@ -1262,6 +1277,30 @@ mod tests {
         assert!(matches!(
             labeled.indicator_big_m_candidate_v1(IndicatorConstraintID::from(7)),
             Err(InverseLoweringCandidateError::GeneratedConstraintHasModelingLabel { .. })
+        ));
+
+        let mut unrecorded = forged_indicator_history(
+            "10",
+            vec![Provenance::IndicatorConstraint(
+                IndicatorConstraintID::from(7),
+            )],
+            true,
+        );
+        let unrecorded_id = unrecorded
+            .add_constraint(
+                Constraint::less_than_or_equal_to_zero(Function::zero()),
+                crate::ConstraintContext {
+                    label: Default::default(),
+                    provenance: vec![Provenance::IndicatorConstraint(
+                        IndicatorConstraintID::from(7),
+                    )],
+                },
+            )
+            .unwrap();
+        assert!(matches!(
+            unrecorded.indicator_big_m_candidate_v1(IndicatorConstraintID::from(7)),
+            Err(InverseLoweringCandidateError::UnrecordedGeneratedConstraint { id })
+                if id == unrecorded_id
         ));
     }
 

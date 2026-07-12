@@ -20,13 +20,11 @@ struct IndicatorPlan {
 ///
 /// All fallible proof and storage work is applied to `staged`. Committing the
 /// plan is one infallible replacement of the root Instance.
-#[allow(dead_code)] // Used by the stacked public inverse-lowering facade.
 struct IndicatorInversePlan {
     staged: Instance,
     assignment_map: AssignmentMap,
 }
 
-#[allow(dead_code)] // Used by the stacked public inverse-lowering facade.
 impl IndicatorInversePlan {
     fn commit(self, target: &mut Instance) -> AssignmentMap {
         *target = self.staged;
@@ -43,7 +41,6 @@ impl Instance {
     /// `permitted_additions` is an explicit permission for the semantic
     /// capability introduced by this operation; it is not a declaration of
     /// every capability already present in the Instance.
-    #[allow(dead_code)] // Used by the stacked public inverse-lowering facade.
     pub(super) fn restore_indicator_from_lowering_checked(
         &mut self,
         id: IndicatorConstraintID,
@@ -53,7 +50,6 @@ impl Instance {
         Ok(plan.commit(self))
     }
 
-    #[allow(dead_code)] // Used by the checked inverse entry point above.
     fn plan_indicator_inverse(
         &self,
         id: IndicatorConstraintID,
