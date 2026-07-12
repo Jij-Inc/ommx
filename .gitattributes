@@ -2,6 +2,7 @@ rust/ommx/src/ommx.v1.rs linguist-generated=true
 rust/ommx/src/ommx.v2.rs linguist-generated=true
 python/ommx/**/*_pb2.py* linguist-generated=true
 requirements.txt linguist-generated=true
+lean/lake-manifest.json linguist-generated=true
 
 **/*.ipynb linguist-vendored
 

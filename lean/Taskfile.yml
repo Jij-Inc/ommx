@@ -1,0 +1,41 @@
+# https://taskfile.dev
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+version: "3"
+
+tasks:
+  cache:
+    desc: Download the Mathlib build cache
+    cmds:
+      - lake exe cache get
+
+  build:
+    desc: Build the independent Lean formalization with warnings as errors
+    cmds:
+      - lake build OMMXProof --wfail
+
+  test:
+    desc: Elaborate executable checker fixtures and counterexamples
+    cmds:
+      - lake test --wfail
+
+  imports:
+    desc: Check that generated umbrella imports cover every Lean module
+    cmds:
+      - lake exe mk_all --check
+
+  trust:
+    desc: Reject project-defined axioms in the elaborated Lean environment
+    cmds:
+      - lake build OMMXProofTest.Trust --wfail
+
+  check:
+    desc: Run all independent Lean semantics checks
+    cmds:
+      - task: imports
+      - task: build
+      - task: trust
+      - task: test
+
+  default:
+    cmds:
+      - task: check

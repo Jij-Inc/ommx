@@ -3,6 +3,9 @@
 version: "3"
 
 includes:
+  lean:
+    taskfile: lean/Taskfile.yml
+    dir: lean
   book_ja:
     taskfile: docs/ja/Taskfile.yml
     dir: docs/ja

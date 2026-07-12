@@ -18,6 +18,9 @@ changelog:
     - title: Rust SDK update
       labels:
         - rust
+    - title: Lean formalization update
+      labels:
+        - lean
     - title: Documentation update
       labels:
         - documentation
