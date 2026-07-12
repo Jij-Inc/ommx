@@ -1,14 +1,106 @@
-use super::Instance;
+use super::{
+    reduction::AssignmentMap, AdditionalCapability, Capabilities, Instance,
+    ONE_HOT_GENERATED_CONSTRAINT_ID_PARAMETER, ONE_HOT_LOWERING_REASON,
+};
 use crate::{
     coeff,
     constraint::{ConstraintID, Provenance, RemovedReason},
     linear,
     one_hot_constraint::OneHotConstraintID,
-    Constraint, Function, Linear,
+    Constraint, Function, Linear, VariableIDSet,
 };
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
+use std::collections::BTreeSet;
+
+/// Private one-shot plan for an exact checked inverse lowering.
+///
+/// OneHot lowering does not change the decision-variable space, so its
+/// assignment map is always the identity. All fallible proof and storage work
+/// is nevertheless applied to `staged`, matching the other family inverses.
+struct OneHotInversePlan {
+    staged: Instance,
+    assignment_map: AssignmentMap,
+}
+
+impl OneHotInversePlan {
+    fn commit(self, target: &mut Instance) -> AssignmentMap {
+        *target = self.staged;
+        self.assignment_map
+    }
+}
 
 impl Instance {
+    /// Restore one OneHot constraint that this Instance previously lowered,
+    /// after exact V1 content and context verification.
+    pub(super) fn restore_one_hot_from_lowering_checked(
+        &mut self,
+        id: OneHotConstraintID,
+        permitted_additions: &Capabilities,
+    ) -> Result<AssignmentMap> {
+        let plan = self.plan_one_hot_inverse(id, permitted_additions)?;
+        Ok(plan.commit(self))
+    }
+
+    fn plan_one_hot_inverse(
+        &self,
+        id: OneHotConstraintID,
+        permitted_additions: &Capabilities,
+    ) -> Result<OneHotInversePlan> {
+        if !permitted_additions.contains(&AdditionalCapability::OneHot) {
+            bail!(
+                "Restoring OneHot constraint {id:?} requires explicit OneHot capability permission"
+            );
+        }
+
+        let verified = crate::proof::verify_one_hot_v1(self, id)?;
+        debug_assert_eq!(verified.source_id(), id);
+        for &member in &verified.source().variables {
+            if !self.decision_variables.contains_key(&member) {
+                bail!(
+                    "Cannot restore OneHot constraint {id:?}: member {member:?} is not registered"
+                );
+            }
+            if self.decision_variable_dependency.get(&member).is_some() {
+                bail!(
+                    "Cannot restore OneHot constraint {id:?}: member {member:?} is a dependency target"
+                );
+            }
+            if self.fixed_decision_variable_values().contains_key(&member) {
+                bail!("Cannot restore OneHot constraint {id:?}: member {member:?} is fixed");
+            }
+        }
+
+        let generated_rows = BTreeSet::from([verified.generated_row()]);
+        let assignment_map =
+            AssignmentMap::identity(self.decision_variables.keys().copied().collect());
+        let mut staged = self.clone();
+        staged
+            .constraint_collection
+            .consume_active_rows(&generated_rows)?;
+        staged
+            .one_hot_constraint_collection
+            .restore_removed_row(id, verified.source().clone())?;
+        let staged_variable_ids = staged
+            .decision_variables
+            .keys()
+            .copied()
+            .collect::<VariableIDSet>();
+        debug_assert_eq!(&staged_variable_ids, assignment_map.target_ids());
+        debug_assert!(staged.constraint_collection.validate_context_ids().is_ok());
+        debug_assert!(staged
+            .one_hot_constraint_collection
+            .validate_context_ids()
+            .is_ok());
+        debug_assert!(staged
+            .required_capabilities()
+            .contains(&AdditionalCapability::OneHot));
+
+        Ok(OneHotInversePlan {
+            staged,
+            assignment_map,
+        })
+    }
+
     #[cfg_attr(doc, katexit::katexit)]
     /// Convert a one-hot constraint to a regular equality constraint.
     ///
@@ -58,11 +150,14 @@ impl Instance {
         )?;
 
         let mut parameters = fnv::FnvHashMap::default();
-        parameters.insert("constraint_id".to_string(), new_id.into_inner().to_string());
+        parameters.insert(
+            ONE_HOT_GENERATED_CONSTRAINT_ID_PARAMETER.to_string(),
+            new_id.into_inner().to_string(),
+        );
         self.one_hot_constraint_collection.relax(
             id,
             RemovedReason {
-                reason: "ommx.Instance.convert_one_hot_to_constraint".to_string(),
+                reason: ONE_HOT_LOWERING_REASON.to_string(),
                 parameters,
             },
         )?;
@@ -92,8 +187,8 @@ impl Instance {
 mod tests {
     use super::*;
     use crate::{
-        constraint::Equality, one_hot_constraint::OneHotConstraint, DecisionVariable, Sense,
-        VariableID,
+        constraint::Equality, one_hot_constraint::OneHotConstraint, DecisionVariable,
+        ModelingLabel, Sense, Sos1ConstraintID, VariableID,
     };
     use std::collections::{BTreeMap, BTreeSet};
 
@@ -208,5 +303,83 @@ mod tests {
         for id in new_ids {
             assert!(instance.constraints().contains_key(&id));
         }
+    }
+
+    #[test]
+    fn checked_inverse_restores_exact_one_hot_and_context() {
+        let id = OneHotConstraintID::from(7);
+        let mut instance = instance_with_one_one_hot();
+        instance
+            .set_one_hot_constraint_context(
+                id,
+                crate::ConstraintContext {
+                    label: ModelingLabel {
+                        name: Some("choose".to_string()),
+                        subscripts: vec![4],
+                        ..Default::default()
+                    },
+                    provenance: vec![Provenance::Sos1Constraint(Sos1ConstraintID::from(9))],
+                },
+            )
+            .unwrap();
+        let original = instance.clone();
+        let original_bytes = instance.to_v2_bytes();
+        instance.convert_one_hot_to_constraint(id).unwrap();
+        let lowered_ids = instance
+            .decision_variables()
+            .keys()
+            .copied()
+            .collect::<crate::VariableIDSet>();
+
+        let map = instance
+            .restore_one_hot_from_lowering_checked(
+                id,
+                &Capabilities::from([AdditionalCapability::OneHot]),
+            )
+            .unwrap();
+
+        assert_eq!(instance, original);
+        assert_eq!(instance.to_v2_bytes(), original_bytes);
+        assert_eq!(map.source_ids(), &lowered_ids);
+        assert_eq!(map.target_ids(), &lowered_ids);
+        let state = crate::v1::State::from_iter([(1, 1.0), (2, 0.0)]);
+        assert_eq!(map.project_state(&state).unwrap(), state);
+        assert_eq!(map.lift_state(&state).unwrap(), state);
+    }
+
+    #[test]
+    fn checked_inverse_requires_permission_and_is_atomic_on_changed_row() {
+        let id = OneHotConstraintID::from(7);
+        let mut instance = instance_with_one_one_hot();
+        let generated = instance.convert_one_hot_to_constraint(id).unwrap();
+        let lowered = instance.clone();
+
+        let error = instance
+            .restore_one_hot_from_lowering_checked(id, &Capabilities::new())
+            .unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("explicit OneHot capability permission"));
+        assert_eq!(instance, lowered);
+
+        instance
+            .insert_constraint(
+                generated,
+                Constraint::equal_to_zero(Function::from(
+                    ((linear!(1) + linear!(2)).unwrap() + coeff!(-2.0)).unwrap(),
+                )),
+            )
+            .unwrap();
+        let before = instance.clone();
+        let before_bytes = instance.to_v2_bytes();
+        let error = instance
+            .restore_one_hot_from_lowering_checked(
+                id,
+                &Capabilities::from([AdditionalCapability::OneHot]),
+            )
+            .unwrap_err();
+        assert!(error.to_string().contains("canonical V1 equality exactly"));
+        assert_eq!(instance, before);
+        assert_eq!(instance.to_v2_bytes(), before_bytes);
     }
 }

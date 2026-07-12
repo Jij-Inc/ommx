@@ -1,7 +1,7 @@
 //! Crate-private end-to-end coordination for checked inverse lowering.
 //!
 //! The generic SDK surface remains deliberately unfrozen. This module proves
-//! that the family-specific Indicator and SOS1 consumers compose at the root
+//! that the family-specific Indicator, OneHot, and SOS1 consumers compose at the root
 //! `Instance` boundary without making the result/map vocabulary public.
 //! General lifecycle reactivation such as `restore_indicator_constraint`
 //! remains a distinct, potentially semantics-changing operation and is not an
@@ -11,7 +11,7 @@
 
 use super::{
     reduction::AssignmentMap, AdditionalCapability, Capabilities, Instance,
-    INDICATOR_LOWERING_REASON, SOS1_LOWERING_REASON,
+    INDICATOR_LOWERING_REASON, ONE_HOT_LOWERING_REASON, SOS1_LOWERING_REASON,
 };
 use crate::{v1, VariableIDSet};
 
@@ -57,7 +57,7 @@ impl InverseLoweringResult {
 }
 
 impl Instance {
-    /// Restore every current OMMX V1 Indicator/SOS1 lowering history in the
+    /// Restore every current OMMX V1 Indicator/OneHot/SOS1 lowering history in the
     /// requested families, or leave the Instance entirely unchanged.
     ///
     /// `requested` is both a family filter and explicit permission to add that
@@ -66,22 +66,27 @@ impl Instance {
     /// malformed parameter, row, provenance, selector, or use is a hard error
     /// for the complete batch rather than a skipped candidate.
     ///
-    /// OneHot is intentionally unsupported by this private V1 integration and
-    /// is rejected before any work. Public generic naming, serialized receipts,
-    /// and Python bindings remain deferred.
+    /// Public generic naming, serialized receipts, and Python bindings remain
+    /// deferred.
     pub(super) fn restore_lowered_capabilities_checked(
         &mut self,
         requested: &Capabilities,
     ) -> crate::Result<InverseLoweringResult> {
-        if requested.contains(&AdditionalCapability::OneHot) {
-            crate::bail!("Checked inverse lowering does not yet support the OneHot capability");
-        }
-
         let mut indicator_ids = if requested.contains(&AdditionalCapability::Indicator) {
             self.removed_indicator_constraints()
                 .iter()
                 .filter_map(|(&id, (_, reason))| {
                     (reason.reason == INDICATOR_LOWERING_REASON).then_some(id)
+                })
+                .collect::<Vec<_>>()
+        } else {
+            Vec::new()
+        };
+        let mut one_hot_ids = if requested.contains(&AdditionalCapability::OneHot) {
+            self.removed_one_hot_constraints()
+                .iter()
+                .filter_map(|(&id, (_, reason))| {
+                    (reason.reason == ONE_HOT_LOWERING_REASON).then_some(id)
                 })
                 .collect::<Vec<_>>()
         } else {
@@ -100,18 +105,19 @@ impl Instance {
 
         let mut assignment_map =
             AssignmentMap::identity(self.decision_variables.keys().copied().collect());
-        if indicator_ids.is_empty() && sos1_ids.is_empty() {
+        if indicator_ids.is_empty() && one_hot_ids.is_empty() && sos1_ids.is_empty() {
             return Ok(InverseLoweringResult {
                 restored_capabilities: Capabilities::new(),
                 assignment_map,
             });
         }
 
-        // `reduce_capabilities` lowers Indicator before SOS1, and each family
-        // lowers IDs in ascending order. Undo that deterministic stack in
-        // reverse. Every family operation commits only to this staged clone;
-        // the caller-visible root is replaced once after the whole batch.
+        // `reduce_capabilities` lowers Indicator, then OneHot, then SOS1, and
+        // each family lowers IDs in ascending order. Undo that deterministic
+        // stack in reverse. Every family operation commits only to this staged
+        // clone; the caller-visible root is replaced once after the whole batch.
         indicator_ids.reverse();
+        one_hot_ids.reverse();
         sos1_ids.reverse();
         let mut staged = self.clone();
         let mut restored_capabilities = Capabilities::new();
@@ -120,6 +126,11 @@ impl Instance {
             let step = staged.restore_sos1_from_lowering_checked(id, requested)?;
             assignment_map = assignment_map.then(step)?;
             restored_capabilities.insert(AdditionalCapability::Sos1);
+        }
+        for id in one_hot_ids {
+            let step = staged.restore_one_hot_from_lowering_checked(id, requested)?;
+            assignment_map = assignment_map.then(step)?;
+            restored_capabilities.insert(AdditionalCapability::OneHot);
         }
         for id in indicator_ids {
             let step = staged.restore_indicator_from_lowering_checked(id, requested)?;
@@ -376,7 +387,7 @@ mod tests {
     }
 
     #[test]
-    fn empty_unmatched_and_unsupported_requests_are_atomic() {
+    fn empty_and_unmatched_requests_are_atomic() {
         let mut instance = combined_instance();
         let before = instance.clone();
         let before_bytes = instance.to_v2_bytes();
@@ -390,10 +401,140 @@ mod tests {
         assert_eq!(instance, before);
         assert_eq!(instance.to_v2_bytes(), before_bytes);
 
-        let error = instance
+        let unmatched = instance
             .restore_lowered_capabilities_checked(&requested([AdditionalCapability::OneHot]))
+            .unwrap();
+        assert!(unmatched.restored_capabilities().is_empty());
+        assert_eq!(instance, before);
+        assert_eq!(instance.to_v2_bytes(), before_bytes);
+    }
+
+    #[test]
+    fn restores_reduce_capabilities_one_hot_end_to_end() {
+        let id = crate::OneHotConstraintID::from(4);
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from((linear!(0) + linear!(1)).unwrap()))
+            .decision_variables(btreemap! {
+                VariableID::from(0) => DecisionVariable::binary(),
+                VariableID::from(1) => DecisionVariable::binary(),
+            })
+            .constraints(BTreeMap::new())
+            .one_hot_constraints(BTreeMap::from([(
+                id,
+                OneHotConstraint::new(BTreeSet::from([VariableID::from(0), VariableID::from(1)]))
+                    .unwrap(),
+            )]))
+            .build()
+            .unwrap();
+        instance
+            .set_one_hot_constraint_context(
+                id,
+                crate::ConstraintContext {
+                    label: crate::ModelingLabel {
+                        name: Some("choose".to_string()),
+                        ..Default::default()
+                    },
+                    provenance: vec![crate::Provenance::IndicatorConstraint(
+                        crate::IndicatorConstraintID::from(12),
+                    )],
+                },
+            )
+            .unwrap();
+        let original = instance.clone();
+        let original_bytes = instance.to_v2_bytes();
+        assert_eq!(
+            instance.reduce_capabilities(&Capabilities::new()).unwrap(),
+            requested([AdditionalCapability::OneHot])
+        );
+        let lowered = instance.clone();
+
+        let result = instance
+            .restore_lowered_capabilities_checked(&requested([AdditionalCapability::OneHot]))
+            .unwrap();
+
+        assert_eq!(instance, original);
+        assert_eq!(instance.to_v2_bytes(), original_bytes);
+        assert_eq!(
+            result.restored_capabilities(),
+            &requested([AdditionalCapability::OneHot])
+        );
+        assert_eq!(result.before_variable_ids(), result.after_variable_ids());
+        for state in [
+            v1::State::from_iter([(0, 1.0), (1, 0.0)]),
+            v1::State::from_iter([(0, 0.0), (1, 0.0)]),
+        ] {
+            let projected = result.project_state(&state).unwrap();
+            assert_eq!(projected, state);
+            assert_eq!(result.lift_state(&projected).unwrap(), state);
+            assert_eq!(
+                lowered
+                    .evaluate(&state, crate::ATol::default())
+                    .unwrap()
+                    .feasible(),
+                instance
+                    .evaluate(&projected, crate::ATol::default())
+                    .unwrap()
+                    .feasible()
+            );
+        }
+    }
+
+    #[test]
+    fn malformed_one_hot_rolls_back_an_earlier_sos1_restoration() {
+        let one_hot_id = crate::OneHotConstraintID::from(4);
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(
+                ((linear!(0) + linear!(1)).unwrap() + linear!(2)).unwrap(),
+            ))
+            .decision_variables(btreemap! {
+                VariableID::from(0) => DecisionVariable::binary(),
+                VariableID::from(1) => DecisionVariable::binary(),
+                VariableID::from(2) => DecisionVariable::new(
+                    Kind::Continuous,
+                    Bound::new(-1.0, 2.0).unwrap(),
+                    crate::ATol::default(),
+                ).unwrap(),
+            })
+            .constraints(BTreeMap::new())
+            .one_hot_constraints(BTreeMap::from([(
+                one_hot_id,
+                OneHotConstraint::new(BTreeSet::from([VariableID::from(0), VariableID::from(1)]))
+                    .unwrap(),
+            )]))
+            .sos1_constraints(BTreeMap::from([(
+                crate::Sos1ConstraintID::from(5),
+                Sos1Constraint::new(BTreeSet::from([VariableID::from(2)])).unwrap(),
+            )]))
+            .build()
+            .unwrap();
+        instance.reduce_capabilities(&Capabilities::new()).unwrap();
+        let (_, reason) = &instance.removed_one_hot_constraints()[&one_hot_id];
+        let row = crate::ConstraintID::from(
+            reason.parameters[super::super::ONE_HOT_GENERATED_CONSTRAINT_ID_PARAMETER]
+                .parse::<u64>()
+                .unwrap(),
+        );
+        instance
+            .insert_constraint(
+                row,
+                Constraint::equal_to_zero(Function::from(
+                    ((linear!(0) + linear!(1)).unwrap() + coeff!(-2.0)).unwrap(),
+                )),
+            )
+            .unwrap();
+        let before = instance.clone();
+        let before_bytes = instance.to_v2_bytes();
+
+        let error = instance
+            .restore_lowered_capabilities_checked(&requested([
+                AdditionalCapability::OneHot,
+                AdditionalCapability::Sos1,
+            ]))
             .unwrap_err();
-        assert!(error.to_string().contains("does not yet support"));
+
+        assert!(error.to_string().contains("canonical V1 equality exactly"));
         assert_eq!(instance, before);
         assert_eq!(instance.to_v2_bytes(), before_bytes);
     }
