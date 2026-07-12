@@ -4,6 +4,9 @@ use num::{BigInt, Signed};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
+mod activity;
+mod candidate;
+
 const FINGERPRINT_DOMAIN: &[u8] = b"org.ommx.proof.linear-relaxation\0";
 const FINGERPRINT_VERSION: u32 = 1;
 
