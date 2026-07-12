@@ -48,6 +48,7 @@ mod named_function;
 mod one_hot_constraint;
 mod parameter;
 mod polynomial_base;
+mod proof;
 mod sample_set;
 mod sampled;
 mod solution;
