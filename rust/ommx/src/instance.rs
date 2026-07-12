@@ -33,6 +33,9 @@ mod unary_encode;
 pub use analysis::*;
 pub use arbitrary::{InstanceParameters, InstanceSpace};
 pub use builder::*;
+pub use inverse_lowering::{
+    CapabilityRecovery, CapabilityReduction, LoweredConstraintID, SkippedLowering,
+};
 pub use parametric_builder::*;
 pub use stats::*;
 
@@ -52,6 +55,8 @@ use crate::{
 use std::collections::{BTreeMap, HashMap};
 
 pub(crate) const GENERATED_CONSTRAINT_IDS_PARAMETER: &str = "constraint_ids";
+pub(crate) const CAPABILITY_REDUCTION_BATCH_TOKEN_PARAMETER: &str =
+    "ommx.capability_reduction_batch_token";
 pub(crate) const INDICATOR_LOWERING_REASON: &str = "ommx.Instance.convert_indicator_to_constraint";
 pub(crate) const ONE_HOT_GENERATED_CONSTRAINT_ID_PARAMETER: &str = "constraint_id";
 pub(crate) const ONE_HOT_LOWERING_REASON: &str = "ommx.Instance.convert_one_hot_to_constraint";

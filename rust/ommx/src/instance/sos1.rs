@@ -1,4 +1,5 @@
 use super::{
+    inverse_lowering::InverseLoweringError,
     reduction::{AssignmentMap, SelectorRole},
     AdditionalCapability, Capabilities, Instance, GENERATED_CONSTRAINT_IDS_PARAMETER,
     SOS1_LOWERING_REASON,
@@ -52,7 +53,7 @@ impl Instance {
         &mut self,
         id: Sos1ConstraintID,
         permitted_additions: &Capabilities,
-    ) -> Result<AssignmentMap> {
+    ) -> std::result::Result<AssignmentMap, InverseLoweringError> {
         let plan = self.plan_sos1_inverse(id, permitted_additions)?;
         Ok(plan.commit(self))
     }
@@ -61,24 +62,31 @@ impl Instance {
         &self,
         id: Sos1ConstraintID,
         permitted_additions: &Capabilities,
-    ) -> Result<Sos1InversePlan> {
+    ) -> std::result::Result<Sos1InversePlan, InverseLoweringError> {
         if !permitted_additions.contains(&AdditionalCapability::Sos1) {
-            bail!("Restoring SOS1 constraint {id:?} requires explicit SOS1 capability permission");
+            return Err(InverseLoweringError::operation_message(format!(
+                "Restoring SOS1 constraint {id:?} requires explicit SOS1 capability permission"
+            )));
         }
 
-        let verified = crate::proof::verify_sos1_big_m_v1(self, id)?;
+        let verified = crate::proof::verify_sos1_big_m_v1(self, id)
+            .map_err(InverseLoweringError::not_recoverable)?;
         debug_assert_eq!(verified.source_id(), id);
         for &member in &verified.source().variables {
             if !self.decision_variables.contains_key(&member) {
-                bail!("Cannot restore SOS1 constraint {id:?}: member {member:?} is not registered");
+                return Err(InverseLoweringError::not_recoverable_message(format!(
+                    "Cannot restore SOS1 constraint {id:?}: member {member:?} is not registered"
+                )));
             }
             if self.decision_variable_dependency.get(&member).is_some() {
-                bail!(
+                return Err(InverseLoweringError::not_recoverable_message(format!(
                     "Cannot restore SOS1 constraint {id:?}: member {member:?} is a dependency target"
-                );
+                )));
             }
             if self.fixed_decision_variable_values().contains_key(&member) {
-                bail!("Cannot restore SOS1 constraint {id:?}: member {member:?} is fixed");
+                return Err(InverseLoweringError::not_recoverable_message(format!(
+                    "Cannot restore SOS1 constraint {id:?}: member {member:?} is fixed"
+                )));
             }
         }
 
@@ -107,23 +115,28 @@ impl Instance {
             .copied()
             .collect::<BTreeSet<_>>();
 
-        self.ensure_variables_isolated_for_removal(&fresh_selectors, &generated_rows)?;
+        self.ensure_variables_isolated_for_removal(&fresh_selectors, &generated_rows)
+            .map_err(InverseLoweringError::not_recoverable)?;
         let assignment_map = AssignmentMap::sos1_selectors(
             self.decision_variables.keys().copied().collect(),
             id,
             selector_roles,
-        )?;
+        )
+        .map_err(InverseLoweringError::operation)?;
 
         let mut staged = self.clone();
         staged
             .constraint_collection
-            .consume_active_rows(&generated_rows)?;
+            .consume_active_rows(&generated_rows)
+            .map_err(InverseLoweringError::operation)?;
         staged
             .decision_variables
-            .remove_unfixed_rows(&fresh_selectors)?;
+            .remove_unfixed_rows(&fresh_selectors)
+            .map_err(InverseLoweringError::operation)?;
         staged
             .sos1_constraint_collection
-            .restore_removed_row(id, verified.source().clone())?;
+            .restore_removed_row(id, verified.source().clone())
+            .map_err(InverseLoweringError::operation)?;
         let staged_variable_ids = staged
             .decision_variables
             .keys()

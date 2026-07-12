@@ -5,8 +5,9 @@ use super::{
 use crate::{
     constraint::{ConstraintContext, Provenance, RemovedReason},
     instance::{
-        GENERATED_CONSTRAINT_IDS_PARAMETER, INDICATOR_LOWERING_REASON,
-        ONE_HOT_GENERATED_CONSTRAINT_ID_PARAMETER, ONE_HOT_LOWERING_REASON, SOS1_LOWERING_REASON,
+        CAPABILITY_REDUCTION_BATCH_TOKEN_PARAMETER, GENERATED_CONSTRAINT_IDS_PARAMETER,
+        INDICATOR_LOWERING_REASON, ONE_HOT_GENERATED_CONSTRAINT_ID_PARAMETER,
+        ONE_HOT_LOWERING_REASON, SOS1_LOWERING_REASON,
     },
     proof::exact::from_f64,
     Bound, ConstraintID, Equality, IndicatorConstraint, IndicatorConstraintID, Instance, Kind,
@@ -151,6 +152,8 @@ enum InverseLoweringCandidateError {
     UnexpectedRemovalParameter { key: String },
     #[error("generated constraint ID token {token:?} is not canonical u64 text")]
     InvalidGeneratedConstraintId { token: String },
+    #[error("capability-reduction batch token {token:?} is not canonical UUID text")]
+    InvalidCapabilityReductionBatchToken { token: String },
     #[error("generated constraint ID {id:?} is listed more than once")]
     DuplicateGeneratedConstraintId { id: ConstraintID },
     #[error("generated regular constraint {id:?} is not active")]
@@ -314,8 +317,7 @@ pub(crate) fn verify_one_hot_v1(
     let candidate = instance.one_hot_candidate_v1(id)?;
     let snapshot = instance.certified_linear_relaxation()?;
     if candidate.representation != snapshot.fingerprint() {
-        crate::bail!(
-            { ?id },
+        anyhow::bail!(
             "OneHot inverse-lowering candidate {id:?} is bound to a stale representation"
         );
     }
@@ -325,20 +327,14 @@ pub(crate) fn verify_one_hot_v1(
         .get(&id)
         .expect("candidate lookup proved that the removed source exists");
     if source.variables.is_empty() {
-        crate::bail!({ ?id }, "Removed OneHot constraint {id:?} has no members");
+        anyhow::bail!("Removed OneHot constraint {id:?} has no members");
     }
     for &member in &source.variables {
         let Some(variable) = instance.decision_variables().get(&member) else {
-            crate::bail!(
-                { ?id, ?member },
-                "OneHot member {member:?} is not registered"
-            );
+            anyhow::bail!("OneHot member {member:?} is not registered");
         };
         if variable.kind() != Kind::Binary {
-            crate::bail!(
-                { ?id, ?member, kind = ?variable.kind() },
-                "OneHot member {member:?} is not binary"
-            );
+            anyhow::bail!("OneHot member {member:?} is not binary");
         }
     }
 
@@ -354,10 +350,7 @@ pub(crate) fn verify_one_hot_v1(
         constant: ExactRational::from_integer((-1).into()),
     };
     if actual != expected {
-        crate::bail!(
-            { ?id, row_id = ?candidate.generated_row },
-            "Generated OneHot row does not match the canonical V1 equality exactly"
-        );
+        anyhow::bail!("Generated OneHot row does not match the canonical V1 equality exactly");
     }
 
     Ok(VerifiedOneHotV1 {
@@ -382,8 +375,7 @@ pub(crate) fn verify_indicator_big_m_v1(
     let candidate = instance.indicator_big_m_candidate_v1(id)?;
     let snapshot = instance.certified_linear_relaxation()?;
     if candidate.representation != snapshot.fingerprint() {
-        crate::bail!(
-            { ?id },
+        anyhow::bail!(
             "Indicator inverse-lowering candidate {id:?} is bound to a stale representation"
         );
     }
@@ -394,23 +386,14 @@ pub(crate) fn verify_indicator_big_m_v1(
         .expect("candidate lookup proved that the removed source exists");
     let indicator_variable = source.indicator_variable;
     let Some(indicator) = instance.decision_variables().get(&indicator_variable) else {
-        crate::bail!(
-            { ?id, ?indicator_variable },
-            "Indicator variable {indicator_variable:?} is not registered"
-        );
+        anyhow::bail!("Indicator variable {indicator_variable:?} is not registered");
     };
     if indicator.kind() != Kind::Binary {
-        crate::bail!(
-            { ?id, ?indicator_variable },
-            "Indicator variable {indicator_variable:?} is not binary"
-        );
+        anyhow::bail!("Indicator variable {indicator_variable:?} is not binary");
     }
 
     let body = ExactAffine::from_function(source.function())?.ok_or_else(|| {
-        crate::error!(
-            { ?id },
-            "Removed Indicator constraint {id:?} has a nonlinear body"
-        )
+        anyhow::anyhow!("Removed Indicator constraint {id:?} has a nonlinear body")
     })?;
     let zero = ExactRational::from_integer(0.into());
     let one = ExactRational::from_integer(1.into());
@@ -422,8 +405,7 @@ pub(crate) fn verify_indicator_big_m_v1(
         let row = snapshot.inequality(InequalityRef::RegularConstraint(*row_id))?;
         let inactive = row.substitute(indicator_variable, &zero);
         if !snapshot.variable_facts_imply_nonpositive(&inactive)? {
-            crate::bail!(
-                { ?id, ?row_id },
+            anyhow::bail!(
                 "Generated Indicator row {row_id:?} is not redundant on the inactive branch"
             );
         }
@@ -435,36 +417,27 @@ pub(crate) fn verify_indicator_big_m_v1(
     match source.equality {
         Equality::LessThanOrEqualToZero => {
             if roles.len() > 1 {
-                crate::bail!(
-                    { ?id, generated_rows = roles.len() },
-                    "Inequality Indicator {id:?} has more than one generated row"
-                );
+                anyhow::bail!("Inequality Indicator {id:?} has more than one generated row");
             }
             if let Some((matches_upper, _)) = roles.first() {
                 if !matches_upper {
-                    crate::bail!(
-                        { ?id, row_id = ?candidate.generated_rows[0] },
+                    anyhow::bail!(
                         "Generated Indicator row does not equal the active upper side exactly"
                     );
                 }
             } else if !upper_implied {
-                crate::bail!(
-                    { ?id },
+                anyhow::bail!(
                     "Missing Indicator upper side is not implied by exact variable facts"
                 );
             }
         }
         Equality::EqualToZero => {
             if roles.len() > 2 {
-                crate::bail!(
-                    { ?id, generated_rows = roles.len() },
-                    "Equality Indicator {id:?} has more than two generated rows"
-                );
+                anyhow::bail!("Equality Indicator {id:?} has more than two generated rows");
             }
             let lower_implied = snapshot.variable_facts_imply_nonpositive(&active_lower)?;
             if !equality_roles_cover(&roles, upper_implied, lower_implied) {
-                crate::bail!(
-                    { ?id },
+                anyhow::bail!(
                     "Generated Indicator rows do not provide independent exact upper and lower active sides"
                 );
             }
@@ -502,10 +475,7 @@ pub(crate) fn verify_sos1_big_m_v1(
     let candidate = instance.sos1_big_m_candidate_v1(id)?;
     let snapshot = instance.certified_linear_relaxation()?;
     if candidate.representation != snapshot.fingerprint() {
-        crate::bail!(
-            { ?id },
-            "SOS1 inverse-lowering candidate {id:?} is bound to a stale representation"
-        );
+        anyhow::bail!("SOS1 inverse-lowering candidate {id:?} is bound to a stale representation");
     }
 
     let (source, _) = instance
@@ -517,26 +487,22 @@ pub(crate) fn verify_sos1_big_m_v1(
     let mut expected_row_count = 1usize; // The final cardinality row.
 
     for &member in &source.variables {
-        let variable = instance.decision_variables().get(&member).ok_or_else(|| {
-            crate::error!(
-                { ?id, ?member },
-                "SOS1 member {member:?} is not registered"
-            )
-        })?;
+        let variable = instance
+            .decision_variables()
+            .get(&member)
+            .ok_or_else(|| anyhow::anyhow!("SOS1 member {member:?} is not registered"))?;
         let bound = variable.bound();
         if variable.kind() == Kind::Binary && bound == Bound::of_binary() {
             selectors.insert(member, member);
             continue;
         }
         if matches!(variable.kind(), Kind::SemiContinuous | Kind::SemiInteger) {
-            crate::bail!(
-                { ?id, ?member, kind = ?variable.kind() },
+            anyhow::bail!(
                 "SOS1 member {member:?} has a semi-variable kind unsupported by V1 lowering"
             );
         }
         if !bound.is_finite() || bound.lower() > 0.0 || bound.upper() < 0.0 {
-            crate::bail!(
-                { ?id, ?member, ?bound },
+            anyhow::bail!(
                 "SOS1 member {member:?} does not have a finite V1 Big-M domain containing zero"
             );
         }
@@ -546,14 +512,7 @@ pub(crate) fn verify_sos1_big_m_v1(
     }
 
     if candidate.generated_rows.len() != expected_row_count {
-        crate::bail!(
-            {
-                ?id,
-                actual = candidate.generated_rows.len(),
-                expected = expected_row_count
-            },
-            "SOS1 lowering has an unexpected number of generated rows"
-        );
+        anyhow::bail!("SOS1 lowering has an unexpected number of generated rows");
     }
 
     // The V1 lowerer emits cardinality last. Read selector candidates only
@@ -573,18 +532,12 @@ pub(crate) fn verify_sos1_big_m_v1(
             .values()
             .any(|coefficient| coefficient != &one)
     {
-        crate::bail!(
-            { ?id, ?cardinality_id },
-            "Generated SOS1 cardinality row does not have canonical V1 shape"
-        );
+        anyhow::bail!("Generated SOS1 cardinality row does not have canonical V1 shape");
     }
     for (&member, &selector) in &selectors {
         debug_assert_eq!(member, selector);
         if !cardinality.coefficients().contains_key(&selector) {
-            crate::bail!(
-                { ?id, ?member, ?cardinality_id },
-                "Generated SOS1 cardinality row is missing reused member {member:?}"
-            );
+            anyhow::bail!("Generated SOS1 cardinality row is missing reused member {member:?}");
         }
     }
 
@@ -599,10 +552,7 @@ pub(crate) fn verify_sos1_big_m_v1(
             .iter()
             .any(|selector| source.variables.contains(selector))
     {
-        crate::bail!(
-            { ?id, ?cardinality_id },
-            "Generated SOS1 cardinality row has an invalid fresh-selector set"
-        );
+        anyhow::bail!("Generated SOS1 cardinality row has an invalid fresh-selector set");
     }
 
     for &member in fresh_member_bounds.keys() {
@@ -613,10 +563,7 @@ pub(crate) fn verify_sos1_big_m_v1(
             .filter(|selector| instance.variable_labels().collect_for(*selector) == expected_label)
             .collect::<Vec<_>>();
         let [selector] = matching_selectors.as_slice() else {
-            crate::bail!(
-                { ?id, ?member, matches = matching_selectors.len() },
-                "SOS1 member {member:?} does not have exactly one canonical V1 selector"
-            );
+            anyhow::bail!("SOS1 member {member:?} does not have exactly one canonical V1 selector");
         };
         let selector = *selector;
         let selector_variable = instance
@@ -626,16 +573,10 @@ pub(crate) fn verify_sos1_big_m_v1(
         if selector_variable.kind() != Kind::Binary
             || selector_variable.bound() != Bound::of_binary()
         {
-            crate::bail!(
-                { ?id, ?member, ?selector },
-                "SOS1 selector {selector:?} does not have the canonical binary domain"
-            );
+            anyhow::bail!("SOS1 selector {selector:?} does not have the canonical binary domain");
         }
         if selectors.values().any(|existing| *existing == selector) {
-            crate::bail!(
-                { ?id, ?member, ?selector },
-                "SOS1 selector {selector:?} is assigned to more than one member"
-            );
+            anyhow::bail!("SOS1 selector {selector:?} is assigned to more than one member");
         }
         selectors.insert(member, selector);
     }
@@ -682,9 +623,8 @@ pub(crate) fn verify_sos1_big_m_v1(
     {
         let actual = snapshot.inequality(InequalityRef::RegularConstraint(row_id))?;
         if actual != *expected {
-            crate::bail!(
-                { ?id, ?row_id, index },
-                "Generated SOS1 row {row_id:?} does not match the canonical V1 content exactly"
+            anyhow::bail!(
+                "Generated SOS1 row {row_id:?} at index {index} does not match the canonical V1 content exactly"
             );
         }
     }
@@ -745,11 +685,15 @@ fn parse_one_hot_constraint_id(
     if let Some(key) = reason
         .parameters
         .keys()
-        .filter(|key| key.as_str() != ONE_HOT_GENERATED_CONSTRAINT_ID_PARAMETER)
+        .filter(|key| {
+            key.as_str() != ONE_HOT_GENERATED_CONSTRAINT_ID_PARAMETER
+                && key.as_str() != CAPABILITY_REDUCTION_BATCH_TOKEN_PARAMETER
+        })
         .min()
     {
         return Err(InverseLoweringCandidateError::UnexpectedRemovalParameter { key: key.clone() });
     }
+    validate_optional_capability_reduction_batch_token(reason)?;
     let token = reason
         .parameters
         .get(ONE_HOT_GENERATED_CONSTRAINT_ID_PARAMETER)
@@ -782,11 +726,15 @@ fn parse_generated_constraint_ids(
     if let Some(key) = reason
         .parameters
         .keys()
-        .filter(|key| key.as_str() != GENERATED_CONSTRAINT_IDS_PARAMETER)
+        .filter(|key| {
+            key.as_str() != GENERATED_CONSTRAINT_IDS_PARAMETER
+                && key.as_str() != CAPABILITY_REDUCTION_BATCH_TOKEN_PARAMETER
+        })
         .min()
     {
         return Err(InverseLoweringCandidateError::UnexpectedRemovalParameter { key: key.clone() });
     }
+    validate_optional_capability_reduction_batch_token(reason)?;
     let raw = reason
         .parameters
         .get(GENERATED_CONSTRAINT_IDS_PARAMETER)
@@ -817,6 +765,30 @@ fn parse_generated_constraint_ids(
         ids.push(id);
     }
     Ok(ids)
+}
+
+fn validate_optional_capability_reduction_batch_token(
+    reason: &RemovedReason,
+) -> Result<(), InverseLoweringCandidateError> {
+    let Some(token) = reason
+        .parameters
+        .get(CAPABILITY_REDUCTION_BATCH_TOKEN_PARAMETER)
+    else {
+        return Ok(());
+    };
+    let value = uuid::Uuid::parse_str(token).map_err(|_| {
+        InverseLoweringCandidateError::InvalidCapabilityReductionBatchToken {
+            token: token.clone(),
+        }
+    })?;
+    if token != &value.hyphenated().to_string() {
+        return Err(
+            InverseLoweringCandidateError::InvalidCapabilityReductionBatchToken {
+                token: token.clone(),
+            },
+        );
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -1024,6 +996,24 @@ mod tests {
         assert!(matches!(
             parse_one_hot_constraint_id(&extra_parameter),
             Err(InverseLoweringCandidateError::UnexpectedRemovalParameter { .. })
+        ));
+
+        let malformed_batch = RemovedReason {
+            reason: ONE_HOT_LOWERING_REASON.to_string(),
+            parameters: FnvHashMap::from_iter([
+                (
+                    ONE_HOT_GENERATED_CONSTRAINT_ID_PARAMETER.to_string(),
+                    "1".to_string(),
+                ),
+                (
+                    CAPABILITY_REDUCTION_BATCH_TOKEN_PARAMETER.to_string(),
+                    "550E8400-E29B-41D4-A716-446655440000".to_string(),
+                ),
+            ]),
+        };
+        assert!(matches!(
+            parse_one_hot_constraint_id(&malformed_batch),
+            Err(InverseLoweringCandidateError::InvalidCapabilityReductionBatchToken { .. })
         ));
     }
 
@@ -1512,6 +1502,16 @@ mod tests {
             parse_generated_constraint_ids(&extra_parameter, INDICATOR_LOWERING_REASON),
             Err(InverseLoweringCandidateError::UnexpectedRemovalParameter { .. })
         ));
+
+        let mut malformed_batch = removed_reason(INDICATOR_LOWERING_REASON, "1");
+        malformed_batch.parameters.insert(
+            CAPABILITY_REDUCTION_BATCH_TOKEN_PARAMETER.to_string(),
+            "not-a-uuid".to_string(),
+        );
+        assert!(matches!(
+            parse_generated_constraint_ids(&malformed_batch, INDICATOR_LOWERING_REASON),
+            Err(InverseLoweringCandidateError::InvalidCapabilityReductionBatchToken { .. })
+        ));
     }
 
     fn forged_indicator_history(
@@ -1520,14 +1520,14 @@ mod tests {
         include_row: bool,
     ) -> Instance {
         let row_id = ConstraintID::from(10);
-        let constraints = include_row
-            .then(|| {
-                BTreeMap::from([(
-                    row_id,
-                    Constraint::less_than_or_equal_to_zero(Function::from(linear!(1))),
-                )])
-            })
-            .unwrap_or_default();
+        let constraints = if include_row {
+            BTreeMap::from([(
+                row_id,
+                Constraint::less_than_or_equal_to_zero(Function::from(linear!(1))),
+            )])
+        } else {
+            BTreeMap::new()
+        };
         let mut context = ConstraintContextStore::default();
         if include_row {
             context.set_provenance(row_id, provenance);

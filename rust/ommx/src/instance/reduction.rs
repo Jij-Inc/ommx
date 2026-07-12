@@ -251,12 +251,12 @@ impl Instance {
     ) -> crate::Result<()> {
         for id in private_ids {
             if !self.decision_variables.contains_key(id) {
-                crate::bail!({ ?id }, "Private decision variable {id:?} is not registered");
+                anyhow::bail!("Private decision variable {id:?} is not registered");
             }
         }
         for id in consumed_regular_rows {
             if !self.constraints().contains_key(id) {
-                crate::bail!({ ?id }, "Consumed regular constraint {id:?} is not active");
+                anyhow::bail!("Consumed regular constraint {id:?} is not active");
             }
         }
 
@@ -329,10 +329,7 @@ impl Instance {
         }
         for (id, function) in self.decision_variable_dependency().iter() {
             if private_ids.contains(id) {
-                crate::bail!(
-                    { ?id },
-                    "Private decision variable {id:?} is a dependency target"
-                );
+                anyhow::bail!("Private decision variable {id:?} is a dependency target");
             }
             reject_required_ids(
                 private_ids,
@@ -344,7 +341,7 @@ impl Instance {
             .iter()
             .find(|id| self.fixed_decision_variable_values().contains_key(id))
         {
-            crate::bail!({ ?id }, "Private decision variable {id:?} is fixed");
+            anyhow::bail!("Private decision variable {id:?} is fixed");
         }
         Ok(())
     }
@@ -356,7 +353,7 @@ fn reject_required_ids(
     location: &str,
 ) -> crate::Result<()> {
     if let Some(id) = private_ids.intersection(required_ids).next() {
-        crate::bail!({ ?id, location }, "Private decision variable {id:?} is used by {location}");
+        anyhow::bail!("Private decision variable {id:?} is used by {location}");
     }
     Ok(())
 }
@@ -507,17 +504,15 @@ mod tests {
             Err(AssignmentMapError::MissingFreshSelector { selector })
                 if selector == VariableID::from(99)
         ));
-        assert!(matches!(
-            AssignmentMap::sos1_selectors(
-                source.clone(),
-                Sos1ConstraintID::from(7),
-                BTreeMap::from([(
-                    VariableID::from(1),
-                    SelectorRole::Fresh(VariableID::from(2)),
-                )]),
-            ),
-            Ok(_)
-        ));
+        assert!(AssignmentMap::sos1_selectors(
+            source.clone(),
+            Sos1ConstraintID::from(7),
+            BTreeMap::from([(
+                VariableID::from(1),
+                SelectorRole::Fresh(VariableID::from(2)),
+            )]),
+        )
+        .is_ok());
         assert!(matches!(
             AssignmentMap::sos1_selectors(
                 source.clone(),

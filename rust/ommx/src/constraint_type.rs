@@ -417,6 +417,32 @@ impl<T: ConstraintType> ConstraintCollection<T> {
         &self.removed
     }
 
+    /// Add one parent-owned metadata parameter to an existing removal reason.
+    ///
+    /// This is a narrow storage operation for root-level transformations that
+    /// need to bind a just-removed row to runtime metadata. The collection
+    /// validates lifecycle membership and refuses to overwrite an existing
+    /// parameter; interpretation of the key and value remains the enclosing
+    /// root object's responsibility.
+    pub(crate) fn add_removed_reason_parameter(
+        &mut self,
+        id: T::ID,
+        key: &'static str,
+        value: String,
+    ) -> crate::Result<()> {
+        let Some((_, reason)) = self.removed.get_mut(&id) else {
+            crate::bail!({ ?id }, "Removed constraint with ID {id:?} not found");
+        };
+        if reason.parameters.contains_key(key) {
+            crate::bail!(
+                { ?id, key },
+                "Removal reason for constraint {id:?} already contains parameter {key:?}",
+            );
+        }
+        reason.parameters.insert(key.to_string(), value);
+        Ok(())
+    }
+
     /// Return whether `id` belongs to either active or removed constraints.
     fn contains_id(&self, id: T::ID) -> bool {
         self.active.contains_key(&id) || self.removed.contains_key(&id)
