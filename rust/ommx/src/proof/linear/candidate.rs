@@ -6,10 +6,11 @@ use crate::{
     instance::{
         GENERATED_CONSTRAINT_IDS_PARAMETER, INDICATOR_LOWERING_REASON, SOS1_LOWERING_REASON,
     },
-    ConstraintID, Equality, IndicatorConstraint, IndicatorConstraintID, Instance, Kind,
-    Sos1ConstraintID,
+    proof::exact::from_f64,
+    Bound, ConstraintID, Equality, IndicatorConstraint, IndicatorConstraintID, Instance, Kind,
+    ModelingLabel, Sos1Constraint, Sos1ConstraintID, VariableID,
 };
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Untrusted, versioned lookup result for one historical Indicator Big-M
 /// lowering. The generated rows have not yet been proven equivalent to the
@@ -55,6 +56,39 @@ impl VerifiedIndicatorBigMV1 {
 
     pub(crate) fn generated_rows(&self) -> &[ConstraintID] {
         &self.generated_rows
+    }
+}
+
+/// Exact, representation-bound fact that the recorded regular rows are the
+/// complete current V1 lowering of one retained removed SOS1 constraint.
+///
+/// `selectors` maps every source member to either itself (the binary-reuse
+/// case) or to one verified fresh binary selector. The root `Instance` still
+/// has to prove that every fresh selector is isolated before removing it.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct VerifiedSos1BigMV1 {
+    source_id: Sos1ConstraintID,
+    source: Sos1Constraint,
+    generated_rows: Vec<ConstraintID>,
+    selectors: BTreeMap<VariableID, VariableID>,
+    representation: LinearRelaxationFingerprint,
+}
+
+impl VerifiedSos1BigMV1 {
+    pub(crate) fn source_id(&self) -> Sos1ConstraintID {
+        self.source_id
+    }
+
+    pub(crate) fn source(&self) -> &Sos1Constraint {
+        &self.source
+    }
+
+    pub(crate) fn generated_rows(&self) -> &[ConstraintID] {
+        &self.generated_rows
+    }
+
+    pub(crate) fn selectors(&self) -> &BTreeMap<VariableID, VariableID> {
+        &self.selectors
     }
 }
 
@@ -257,6 +291,233 @@ pub(crate) fn verify_indicator_big_m_v1(
     })
 }
 
+/// Verify the complete current V1 SOS1 Big-M lowering exactly.
+///
+/// The V1 contract is intentionally strict: selector roles are reconstructed
+/// from the exact generated-variable label, every selector has the original
+/// binary domain, and generated rows must appear in the lowerer's canonical
+/// order with exact dyadic content. For fresh selectors this checks every
+/// nontrivial bound link and the final cardinality row; reused binary members
+/// contribute only to cardinality.
+///
+/// Together with the current member bounds, these rows prove both directions:
+/// projection of a feasible gadget satisfies SOS1, and the canonical lift
+/// `selector = 1 iff member != 0` satisfies the gadget for every feasible SOS1
+/// assignment. These are exact mathematical statements: tolerance-based
+/// classification of a tiny nonzero value by `Sos1Constraint::evaluate` is not
+/// an alternate zero test for the lift. Fresh-selector isolation is a separate
+/// root-owned obligation.
+pub(crate) fn verify_sos1_big_m_v1(
+    instance: &Instance,
+    id: Sos1ConstraintID,
+) -> crate::Result<VerifiedSos1BigMV1> {
+    let candidate = instance.sos1_big_m_candidate_v1(id)?;
+    let snapshot = instance.certified_linear_relaxation()?;
+    if candidate.representation != snapshot.fingerprint() {
+        crate::bail!(
+            { ?id },
+            "SOS1 inverse-lowering candidate {id:?} is bound to a stale representation"
+        );
+    }
+
+    let (source, _) = instance
+        .removed_sos1_constraints()
+        .get(&id)
+        .expect("candidate lookup proved that the removed source exists");
+    let mut selectors = BTreeMap::new();
+    let mut fresh_member_bounds = BTreeMap::new();
+    let mut expected_row_count = 1usize; // The final cardinality row.
+
+    for &member in &source.variables {
+        let variable = instance.decision_variables().get(&member).ok_or_else(|| {
+            crate::error!(
+                { ?id, ?member },
+                "SOS1 member {member:?} is not registered"
+            )
+        })?;
+        let bound = variable.bound();
+        if variable.kind() == Kind::Binary && bound == Bound::of_binary() {
+            selectors.insert(member, member);
+            continue;
+        }
+        if matches!(variable.kind(), Kind::SemiContinuous | Kind::SemiInteger) {
+            crate::bail!(
+                { ?id, ?member, kind = ?variable.kind() },
+                "SOS1 member {member:?} has a semi-variable kind unsupported by V1 lowering"
+            );
+        }
+        if !bound.is_finite() || bound.lower() > 0.0 || bound.upper() < 0.0 {
+            crate::bail!(
+                { ?id, ?member, ?bound },
+                "SOS1 member {member:?} does not have a finite V1 Big-M domain containing zero"
+            );
+        }
+        expected_row_count += usize::from(bound.upper() > 0.0);
+        expected_row_count += usize::from(bound.lower() < 0.0);
+        fresh_member_bounds.insert(member, bound);
+    }
+
+    if candidate.generated_rows.len() != expected_row_count {
+        crate::bail!(
+            {
+                ?id,
+                actual = candidate.generated_rows.len(),
+                expected = expected_row_count
+            },
+            "SOS1 lowering has an unexpected number of generated rows"
+        );
+    }
+
+    // The V1 lowerer emits cardinality last. Read selector candidates only
+    // from that exact row so an unrelated variable with the same generated
+    // label cannot make an otherwise valid lowering ambiguous.
+    let cardinality_id = *candidate
+        .generated_rows
+        .last()
+        .expect("a non-empty SOS1 V1 lowering always has a cardinality row");
+    let cardinality = snapshot.inequality(InequalityRef::RegularConstraint(cardinality_id))?;
+    let one = ExactRational::from_integer(1.into());
+    let minus_one = ExactRational::from_integer((-1).into());
+    if cardinality.constant() != &minus_one
+        || cardinality.coefficients().len() != source.variables.len()
+        || cardinality
+            .coefficients()
+            .values()
+            .any(|coefficient| coefficient != &one)
+    {
+        crate::bail!(
+            { ?id, ?cardinality_id },
+            "Generated SOS1 cardinality row does not have canonical V1 shape"
+        );
+    }
+    for (&member, &selector) in &selectors {
+        debug_assert_eq!(member, selector);
+        if !cardinality.coefficients().contains_key(&selector) {
+            crate::bail!(
+                { ?id, ?member, ?cardinality_id },
+                "Generated SOS1 cardinality row is missing reused member {member:?}"
+            );
+        }
+    }
+
+    let fresh_selector_candidates = cardinality
+        .coefficients()
+        .keys()
+        .copied()
+        .filter(|selector| !selectors.values().any(|reused| reused == selector))
+        .collect::<BTreeSet<_>>();
+    if fresh_selector_candidates.len() != fresh_member_bounds.len()
+        || fresh_selector_candidates
+            .iter()
+            .any(|selector| source.variables.contains(selector))
+    {
+        crate::bail!(
+            { ?id, ?cardinality_id },
+            "Generated SOS1 cardinality row has an invalid fresh-selector set"
+        );
+    }
+
+    for &member in fresh_member_bounds.keys() {
+        let expected_label = sos1_selector_label_v1(id, member);
+        let matching_selectors = fresh_selector_candidates
+            .iter()
+            .copied()
+            .filter(|selector| instance.variable_labels().collect_for(*selector) == expected_label)
+            .collect::<Vec<_>>();
+        let [selector] = matching_selectors.as_slice() else {
+            crate::bail!(
+                { ?id, ?member, matches = matching_selectors.len() },
+                "SOS1 member {member:?} does not have exactly one canonical V1 selector"
+            );
+        };
+        let selector = *selector;
+        let selector_variable = instance
+            .decision_variables()
+            .get(&selector)
+            .expect("selector ID was read from the decision-variable table");
+        if selector_variable.kind() != Kind::Binary
+            || selector_variable.bound() != Bound::of_binary()
+        {
+            crate::bail!(
+                { ?id, ?member, ?selector },
+                "SOS1 selector {selector:?} does not have the canonical binary domain"
+            );
+        }
+        if selectors.values().any(|existing| *existing == selector) {
+            crate::bail!(
+                { ?id, ?member, ?selector },
+                "SOS1 selector {selector:?} is assigned to more than one member"
+            );
+        }
+        selectors.insert(member, selector);
+    }
+
+    let mut expected_rows = Vec::with_capacity(expected_row_count);
+    for (&member, &bound) in &fresh_member_bounds {
+        let selector = selectors[&member];
+        if bound.upper() > 0.0 {
+            expected_rows.push(ExactAffine {
+                coefficients: BTreeMap::from([
+                    (member, ExactRational::from_integer(1.into())),
+                    (selector, -from_f64(bound.upper())?),
+                ]),
+                constant: ExactRational::from_integer(0.into()),
+            });
+        }
+        if bound.lower() < 0.0 {
+            expected_rows.push(ExactAffine {
+                coefficients: BTreeMap::from([
+                    (member, ExactRational::from_integer((-1).into())),
+                    (selector, from_f64(bound.lower())?),
+                ]),
+                constant: ExactRational::from_integer(0.into()),
+            });
+        }
+    }
+
+    let cardinality_coefficients = selectors
+        .values()
+        .copied()
+        .map(|selector| (selector, ExactRational::from_integer(1.into())))
+        .collect();
+    expected_rows.push(ExactAffine {
+        coefficients: cardinality_coefficients,
+        constant: ExactRational::from_integer((-1).into()),
+    });
+
+    debug_assert_eq!(expected_rows.len(), expected_row_count);
+    for (index, (&row_id, expected)) in candidate
+        .generated_rows
+        .iter()
+        .zip(&expected_rows)
+        .enumerate()
+    {
+        let actual = snapshot.inequality(InequalityRef::RegularConstraint(row_id))?;
+        if actual != *expected {
+            crate::bail!(
+                { ?id, ?row_id, index },
+                "Generated SOS1 row {row_id:?} does not match the canonical V1 content exactly"
+            );
+        }
+    }
+
+    Ok(VerifiedSos1BigMV1 {
+        source_id: candidate.source,
+        source: source.clone(),
+        generated_rows: candidate.generated_rows,
+        selectors,
+        representation: candidate.representation,
+    })
+}
+
+fn sos1_selector_label_v1(id: Sos1ConstraintID, member: VariableID) -> ModelingLabel {
+    ModelingLabel {
+        name: Some("ommx.sos1_indicator".to_string()),
+        subscripts: vec![id.into_inner() as i64, member.into_inner() as i64],
+        ..Default::default()
+    }
+}
+
 fn equality_roles_cover(roles: &[(bool, bool)], upper_implied: bool, lower_implied: bool) -> bool {
     for assignment in 0..(1usize << roles.len()) {
         let mut upper_used = false;
@@ -340,6 +601,7 @@ mod tests {
     use crate::{
         coeff, linear, Bound, Constraint, ConstraintContextStore, DecisionVariable, Equality,
         Function, IndicatorConstraint, Kind, ModelingLabel, Sense, Sos1Constraint, VariableID,
+        VariableLabelStore,
     };
     use fnv::FnvHashMap;
     use std::collections::{BTreeMap, BTreeSet};
@@ -718,20 +980,28 @@ mod tests {
     }
 
     #[test]
-    fn reads_current_sos1_lowering_without_inferring_selector_roles() {
+    fn reads_and_verifies_current_sos1_lowering() {
         let x = DecisionVariable::new(
             Kind::Continuous,
             Bound::new(-1.0, 2.0).unwrap(),
             crate::ATol::default(),
         )
         .unwrap();
+        let mut labels = VariableLabelStore::default();
+        labels.set_name(VariableID::from(50), "ommx.sos1_indicator");
+        labels.set_subscripts(VariableID::from(50), vec![9, 1]);
         let mut instance = Instance::builder()
             .sense(Sense::Minimize)
             .objective(Function::zero())
             .decision_variables(BTreeMap::from([
                 (VariableID::from(1), x),
                 (VariableID::from(2), DecisionVariable::binary()),
+                // A pre-existing exact label collision is legal. Selector
+                // reconstruction is scoped to the cardinality row, so this
+                // unrelated variable must not make the history ambiguous.
+                (VariableID::from(50), DecisionVariable::binary()),
             ]))
+            .variable_labels(labels)
             .constraints(BTreeMap::new())
             .sos1_constraints(BTreeMap::from([(
                 Sos1ConstraintID::from(9),
@@ -756,6 +1026,93 @@ mod tests {
                 .unwrap()
                 .fingerprint()
         );
+
+        let verified = verify_sos1_big_m_v1(&instance, Sos1ConstraintID::from(9)).unwrap();
+        assert_eq!(verified.source_id(), Sos1ConstraintID::from(9));
+        assert_eq!(verified.generated_rows(), generated);
+        assert_eq!(
+            verified.selectors(),
+            &BTreeMap::from([
+                (VariableID::from(1), VariableID::from(51)),
+                (VariableID::from(2), VariableID::from(2)),
+            ])
+        );
+    }
+
+    #[test]
+    fn verifies_all_current_sos1_omitted_side_shapes() {
+        let tiny = f64::from_bits(1);
+        for (kind, lower, upper, expected_rows) in [
+            (Kind::Integer, -2.0, 3.0, 3),
+            (Kind::Integer, 0.0, 3.0, 2),
+            (Kind::Integer, -2.0, 0.0, 2),
+            (Kind::Integer, 0.0, 0.0, 1),
+            // A restricted Binary is not the canonical [0, 1] reuse case.
+            (Kind::Binary, 0.0, 0.0, 1),
+            (Kind::Continuous, -f64::MAX, f64::MAX, 3),
+            (Kind::Continuous, -tiny, tiny, 3),
+        ] {
+            let variable = DecisionVariable::new(
+                kind,
+                Bound::new(lower, upper).unwrap(),
+                crate::ATol::default(),
+            )
+            .unwrap();
+            let mut instance = Instance::builder()
+                .sense(Sense::Minimize)
+                .objective(Function::zero())
+                .decision_variables(BTreeMap::from([(VariableID::from(0), variable)]))
+                .constraints(BTreeMap::new())
+                .sos1_constraints(BTreeMap::from([(
+                    Sos1ConstraintID::from(9),
+                    Sos1Constraint::new(BTreeSet::from([VariableID::from(0)])).unwrap(),
+                )]))
+                .build()
+                .unwrap();
+            let generated = instance
+                .convert_sos1_to_constraints(Sos1ConstraintID::from(9))
+                .unwrap();
+            assert_eq!(generated.len(), expected_rows);
+
+            let verified = verify_sos1_big_m_v1(&instance, Sos1ConstraintID::from(9)).unwrap();
+            assert_eq!(
+                verified.selectors()[&VariableID::from(0)],
+                VariableID::from(1)
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_sos1_history_after_member_bound_change() {
+        let variable = DecisionVariable::new(
+            Kind::Continuous,
+            Bound::new(-2.0, 3.0).unwrap(),
+            crate::ATol::default(),
+        )
+        .unwrap();
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::zero())
+            .decision_variables(BTreeMap::from([(VariableID::from(0), variable)]))
+            .constraints(BTreeMap::new())
+            .sos1_constraints(BTreeMap::from([(
+                Sos1ConstraintID::from(9),
+                Sos1Constraint::new(BTreeSet::from([VariableID::from(0)])).unwrap(),
+            )]))
+            .build()
+            .unwrap();
+        instance
+            .convert_sos1_to_constraints(Sos1ConstraintID::from(9))
+            .unwrap();
+        instance
+            .clip_bounds(
+                &crate::Bounds::from_iter([(VariableID::from(0), Bound::new(-2.0, 2.0).unwrap())]),
+                crate::ATol::default(),
+            )
+            .unwrap();
+
+        let error = verify_sos1_big_m_v1(&instance, Sos1ConstraintID::from(9)).unwrap_err();
+        assert!(error.to_string().contains("canonical V1 content exactly"));
     }
 
     #[test]

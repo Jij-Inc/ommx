@@ -1,4 +1,8 @@
-use super::{Instance, GENERATED_CONSTRAINT_IDS_PARAMETER, SOS1_LOWERING_REASON};
+use super::{
+    reduction::{AssignmentMap, SelectorRole},
+    AdditionalCapability, Capabilities, Instance, GENERATED_CONSTRAINT_IDS_PARAMETER,
+    SOS1_LOWERING_REASON,
+};
 use crate::{
     coeff,
     constraint::{ConstraintContext, ConstraintID, Provenance, RemovedReason},
@@ -7,7 +11,7 @@ use crate::{
     Bound, Coefficient, Constraint, Function, Kind, Linear, LinearMonomial, VariableID,
 };
 use anyhow::{bail, Context, Result};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Plan for each SOS1 variable: reuse it as its own indicator, or allocate a fresh one.
 #[derive(Debug)]
@@ -18,7 +22,133 @@ enum IndicatorPlan {
     Fresh { bound: Bound },
 }
 
+/// Private one-shot plan for an exact checked inverse lowering.
+///
+/// All fallible proof, isolation, assignment-map, and storage work is applied
+/// to `staged`. Committing the plan is one infallible replacement of the root
+/// Instance.
+#[allow(dead_code)] // Used by the stacked public inverse-lowering facade.
+struct Sos1InversePlan {
+    staged: Instance,
+    assignment_map: AssignmentMap,
+}
+
+#[allow(dead_code)] // Used by the stacked public inverse-lowering facade.
+impl Sos1InversePlan {
+    fn commit(self, target: &mut Instance) -> AssignmentMap {
+        *target = self.staged;
+        self.assignment_map
+    }
+}
+
 impl Instance {
+    /// Restore one SOS1 that this Instance previously lowered, after exact V1
+    /// content verification and complete isolation of fresh selectors.
+    ///
+    /// Private while the common reduction result and public capability request
+    /// API are still being exercised by the first family consumers.
+    /// `permitted_additions` is an explicit permission for the semantic
+    /// capability introduced by this operation; it is not a declaration of
+    /// every capability already present in the Instance.
+    #[allow(dead_code)] // Used by the stacked public inverse-lowering facade.
+    pub(super) fn restore_sos1_from_lowering_checked(
+        &mut self,
+        id: Sos1ConstraintID,
+        permitted_additions: &Capabilities,
+    ) -> Result<AssignmentMap> {
+        let plan = self.plan_sos1_inverse(id, permitted_additions)?;
+        Ok(plan.commit(self))
+    }
+
+    #[allow(dead_code)] // Used by the checked inverse entry point above.
+    fn plan_sos1_inverse(
+        &self,
+        id: Sos1ConstraintID,
+        permitted_additions: &Capabilities,
+    ) -> Result<Sos1InversePlan> {
+        if !permitted_additions.contains(&AdditionalCapability::Sos1) {
+            bail!("Restoring SOS1 constraint {id:?} requires explicit SOS1 capability permission");
+        }
+
+        let verified = crate::proof::verify_sos1_big_m_v1(self, id)?;
+        debug_assert_eq!(verified.source_id(), id);
+        for &member in &verified.source().variables {
+            if !self.decision_variables.contains_key(&member) {
+                bail!("Cannot restore SOS1 constraint {id:?}: member {member:?} is not registered");
+            }
+            if self.decision_variable_dependency.get(&member).is_some() {
+                bail!(
+                    "Cannot restore SOS1 constraint {id:?}: member {member:?} is a dependency target"
+                );
+            }
+            if self.fixed_decision_variable_values().contains_key(&member) {
+                bail!("Cannot restore SOS1 constraint {id:?}: member {member:?} is fixed");
+            }
+        }
+
+        let selector_roles = verified
+            .selectors()
+            .iter()
+            .map(|(&member, &selector)| {
+                let role = if member == selector {
+                    SelectorRole::Reused
+                } else {
+                    SelectorRole::Fresh(selector)
+                };
+                (member, role)
+            })
+            .collect::<BTreeMap<_, _>>();
+        let fresh_selectors = selector_roles
+            .values()
+            .filter_map(|role| match role {
+                SelectorRole::Reused => None,
+                SelectorRole::Fresh(selector) => Some(*selector),
+            })
+            .collect::<BTreeSet<_>>();
+        let generated_rows = verified
+            .generated_rows()
+            .iter()
+            .copied()
+            .collect::<BTreeSet<_>>();
+
+        self.ensure_variables_isolated_for_removal(&fresh_selectors, &generated_rows)?;
+        let assignment_map = AssignmentMap::sos1_selectors(
+            self.decision_variables.keys().copied().collect(),
+            id,
+            selector_roles,
+        )?;
+
+        let mut staged = self.clone();
+        staged
+            .constraint_collection
+            .consume_active_rows(&generated_rows)?;
+        staged
+            .decision_variables
+            .remove_unfixed_rows(&fresh_selectors)?;
+        staged
+            .sos1_constraint_collection
+            .restore_removed_row(id, verified.source().clone())?;
+        let staged_variable_ids = staged
+            .decision_variables
+            .keys()
+            .copied()
+            .collect::<crate::VariableIDSet>();
+        debug_assert_eq!(&staged_variable_ids, assignment_map.target_ids());
+        debug_assert!(staged.constraint_collection.validate_context_ids().is_ok());
+        debug_assert!(staged
+            .sos1_constraint_collection
+            .validate_context_ids()
+            .is_ok());
+        debug_assert!(staged
+            .required_capabilities()
+            .contains(&AdditionalCapability::Sos1));
+
+        Ok(Sos1InversePlan {
+            staged,
+            assignment_map,
+        })
+    }
+
     #[cfg_attr(doc, katexit::katexit)]
     /// Convert a SOS1 constraint to regular constraints using the Big-M method.
     ///
@@ -277,7 +407,10 @@ impl Instance {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{constraint::Equality, sos1_constraint::Sos1Constraint, DecisionVariable, Sense};
+    use crate::{
+        constraint::Equality, sos1_constraint::Sos1Constraint, DecisionVariable, Evaluate,
+        IndicatorConstraint, ModelingLabel, Sense, Substitute,
+    };
     use ::approx::assert_abs_diff_eq;
     use maplit::btreemap;
     use std::collections::{BTreeMap, BTreeSet};
@@ -319,6 +452,72 @@ mod tests {
             .sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(9), sos1)]))
             .build()
             .unwrap()
+    }
+
+    fn sos1_capability() -> Capabilities {
+        [AdditionalCapability::Sos1].into_iter().collect()
+    }
+
+    fn mixed_sos1_instance() -> Instance {
+        let integer = DecisionVariable::new(
+            Kind::Integer,
+            Bound::new(-2.0, 3.0).unwrap(),
+            crate::ATol::default(),
+        )
+        .unwrap();
+        Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from((linear!(0) + linear!(1)).unwrap()))
+            .decision_variables(btreemap! {
+                VariableID::from(0) => DecisionVariable::binary(),
+                VariableID::from(1) => integer,
+            })
+            .constraints(BTreeMap::new())
+            .sos1_constraints(BTreeMap::from([(
+                Sos1ConstraintID::from(9),
+                Sos1Constraint::new(BTreeSet::from([VariableID::from(0), VariableID::from(1)]))
+                    .unwrap(),
+            )]))
+            .build()
+            .unwrap()
+    }
+
+    fn generated_selector(
+        instance: &Instance,
+        sos1_id: Sos1ConstraintID,
+        member: VariableID,
+    ) -> VariableID {
+        instance
+            .decision_variables()
+            .keys()
+            .copied()
+            .find(|id| {
+                instance.variable_labels().collect_for(*id)
+                    == ModelingLabel {
+                        name: Some("ommx.sos1_indicator".to_string()),
+                        subscripts: vec![sos1_id.into_inner() as i64, member.into_inner() as i64],
+                        ..Default::default()
+                    }
+            })
+            .expect("current SOS1 lowerer generated the selector")
+    }
+
+    fn assert_checked_inverse_failure_unchanged(
+        instance: &mut Instance,
+        id: Sos1ConstraintID,
+        expected_message: &str,
+    ) {
+        let before = instance.clone();
+        let before_bytes = instance.to_v2_bytes();
+        let error = instance
+            .restore_sos1_from_lowering_checked(id, &sos1_capability())
+            .unwrap_err();
+        assert!(
+            error.to_string().contains(expected_message),
+            "expected {expected_message:?}, got {error:#}"
+        );
+        assert_eq!(instance, &before);
+        assert_eq!(instance.to_v2_bytes(), before_bytes);
     }
 
     #[test]
@@ -439,6 +638,318 @@ mod tests {
             new_ids.len(),
             2,
             "l=0 should skip lower Big-M and emit only upper + cardinality"
+        );
+    }
+
+    #[test]
+    fn checked_inverse_restores_mixed_sos1_and_removes_only_fresh_selectors() {
+        let mut instance = mixed_sos1_instance();
+        instance
+            .set_sos1_constraint_context(
+                Sos1ConstraintID::from(9),
+                ConstraintContext {
+                    label: ModelingLabel {
+                        name: Some("source-sos1".to_string()),
+                        ..Default::default()
+                    },
+                    provenance: Vec::new(),
+                },
+            )
+            .unwrap();
+        let original = instance.clone();
+        let original_bytes = instance.to_v2_bytes();
+        let generated = instance
+            .convert_sos1_to_constraints(Sos1ConstraintID::from(9))
+            .unwrap();
+        let selector =
+            generated_selector(&instance, Sos1ConstraintID::from(9), VariableID::from(1));
+        let lowered = instance.clone();
+
+        let map = instance
+            .restore_sos1_from_lowering_checked(Sos1ConstraintID::from(9), &sos1_capability())
+            .unwrap();
+
+        assert_eq!(instance, original);
+        assert_eq!(instance.to_v2_bytes(), original_bytes);
+        assert!(!instance.decision_variables().contains_key(&selector));
+        assert_eq!(
+            instance.variable_labels().collect_for(selector),
+            Default::default()
+        );
+        for id in generated {
+            assert!(!instance.constraints().contains_key(&id));
+            assert!(!instance.removed_constraints().contains_key(&id));
+            assert!(!instance.constraint_context().contains(id));
+        }
+        assert_eq!(
+            instance
+                .sos1_constraint_context()
+                .name(Sos1ConstraintID::from(9)),
+            Some("source-sos1")
+        );
+        assert_eq!(
+            instance.required_capabilities(),
+            [AdditionalCapability::Sos1].into_iter().collect()
+        );
+
+        let full = crate::v1::State::from_iter([(0, 0.0), (1, 2.0), (selector.into_inner(), 1.0)]);
+        let projected = map.project_state(&full).unwrap();
+        assert_eq!(projected, crate::v1::State::from_iter([(0, 0.0), (1, 2.0)]));
+        assert_eq!(map.lift_state(&projected).unwrap(), full);
+        assert!(lowered
+            .evaluate(&full, crate::ATol::default())
+            .unwrap()
+            .feasible());
+        assert!(instance
+            .evaluate(&projected, crate::ATol::default())
+            .unwrap()
+            .feasible());
+
+        // On values separated from every tolerance boundary, the checked
+        // exact correspondence also agrees with the runtime classifier and
+        // preserves the objective for both feasible and infeasible states.
+        for binary in [0.0, 1.0] {
+            for integer in -2..=3 {
+                let target = crate::v1::State::from_iter([(0, binary), (1, integer as f64)]);
+                let source = map.lift_state(&target).unwrap();
+                assert_eq!(map.project_state(&source).unwrap(), target);
+                let restored_solution = instance.evaluate(&target, crate::ATol::default()).unwrap();
+                let lowered_solution = lowered.evaluate(&source, crate::ATol::default()).unwrap();
+                assert_eq!(lowered_solution.feasible(), restored_solution.feasible());
+                assert_eq!(lowered_solution.objective(), restored_solution.objective());
+            }
+        }
+
+        // Lift uses mathematical exact zero, independently of evaluation
+        // tolerance: both signed zeros map to selector 0 and any finite
+        // nonzero value, including a subnormal, maps to 1.
+        for (member, expected_selector) in [
+            (0.0, 0.0),
+            (-0.0, 0.0),
+            (f64::from_bits(1), 1.0),
+            (-f64::from_bits(1), 1.0),
+        ] {
+            let target = crate::v1::State::from_iter([(0, 0.0), (1, member)]);
+            let lifted = map.lift_state(&target).unwrap();
+            assert_eq!(lifted.entries[&selector.into_inner()], expected_selector);
+            assert_eq!(map.project_state(&lifted).unwrap(), target);
+        }
+    }
+
+    #[test]
+    fn checked_inverse_all_reused_sos1_has_identity_map() {
+        let mut instance = binary_sos1_instance();
+        let original = instance.clone();
+        instance
+            .convert_sos1_to_constraints(Sos1ConstraintID::from(5))
+            .unwrap();
+
+        let map = instance
+            .restore_sos1_from_lowering_checked(Sos1ConstraintID::from(5), &sos1_capability())
+            .unwrap();
+
+        assert_eq!(instance, original);
+        let state = crate::v1::State::from_iter([(0, 1.0), (1, 0.0)]);
+        assert_eq!(map.project_state(&state).unwrap(), state);
+        assert_eq!(map.lift_state(&state).unwrap(), state);
+    }
+
+    #[test]
+    fn checked_inverse_requires_explicit_sos1_permission_only() {
+        let mut denied = mixed_sos1_instance();
+        denied
+            .convert_sos1_to_constraints(Sos1ConstraintID::from(9))
+            .unwrap();
+        let before = denied.clone();
+        let before_bytes = denied.to_v2_bytes();
+        let error = denied
+            .restore_sos1_from_lowering_checked(Sos1ConstraintID::from(9), &Capabilities::new())
+            .unwrap_err();
+        assert!(error.to_string().contains("explicit SOS1 capability"));
+        assert_eq!(denied, before);
+        assert_eq!(denied.to_v2_bytes(), before_bytes);
+
+        let mut allowed = before;
+        allowed
+            .add_indicator_constraint(
+                IndicatorConstraint::new(
+                    VariableID::from(0),
+                    Equality::LessThanOrEqualToZero,
+                    Function::zero(),
+                ),
+                Default::default(),
+            )
+            .unwrap();
+        allowed
+            .restore_sos1_from_lowering_checked(Sos1ConstraintID::from(9), &sos1_capability())
+            .unwrap();
+        assert_eq!(
+            allowed.required_capabilities(),
+            [AdditionalCapability::Indicator, AdditionalCapability::Sos1]
+                .into_iter()
+                .collect()
+        );
+    }
+
+    #[test]
+    fn checked_inverse_rejects_partial_evaluated_and_substituted_histories() {
+        let mut partial = mixed_sos1_instance();
+        partial
+            .convert_sos1_to_constraints(Sos1ConstraintID::from(9))
+            .unwrap();
+        partial
+            .partial_evaluate(
+                &crate::v1::State::from_iter([(1, 1.0)]),
+                crate::ATol::default(),
+            )
+            .unwrap();
+        assert_checked_inverse_failure_unchanged(
+            &mut partial,
+            Sos1ConstraintID::from(9),
+            "canonical V1 content exactly",
+        );
+
+        let mut substituted = mixed_sos1_instance();
+        substituted
+            .convert_sos1_to_constraints(Sos1ConstraintID::from(9))
+            .unwrap();
+        substituted = substituted
+            .substitute_one(VariableID::from(1), &Function::zero())
+            .unwrap();
+        assert_checked_inverse_failure_unchanged(
+            &mut substituted,
+            Sos1ConstraintID::from(9),
+            "canonical V1 content exactly",
+        );
+    }
+
+    #[test]
+    fn checked_inverse_rejects_ulp_modified_link_row_without_mutation() {
+        let mut instance = mixed_sos1_instance();
+        let generated = instance
+            .convert_sos1_to_constraints(Sos1ConstraintID::from(9))
+            .unwrap();
+        let selector =
+            generated_selector(&instance, Sos1ConstraintID::from(9), VariableID::from(1));
+        let altered_m = f64::from_bits((-3.0f64).to_bits() + 1);
+        let altered = Constraint::less_than_or_equal_to_zero(Function::from(
+            (Linear::single_term(LinearMonomial::Variable(VariableID::from(1)), coeff!(1.0))
+                + Linear::single_term(LinearMonomial::Variable(selector), coeff!(altered_m)))
+            .unwrap(),
+        ));
+        instance
+            .constraint_collection
+            .replace_active_rows(BTreeMap::from([(generated[0], altered)]))
+            .unwrap();
+
+        assert_checked_inverse_failure_unchanged(
+            &mut instance,
+            Sos1ConstraintID::from(9),
+            "canonical V1 content exactly",
+        );
+    }
+
+    #[test]
+    fn checked_inverse_rejects_modified_selector_domain_without_mutation() {
+        let mut instance = mixed_sos1_instance();
+        instance
+            .convert_sos1_to_constraints(Sos1ConstraintID::from(9))
+            .unwrap();
+        let selector =
+            generated_selector(&instance, Sos1ConstraintID::from(9), VariableID::from(1));
+        instance
+            .clip_bounds(
+                &crate::Bounds::from_iter([(selector, Bound::new(0.0, 0.0).unwrap())]),
+                crate::ATol::default(),
+            )
+            .unwrap();
+
+        assert_checked_inverse_failure_unchanged(
+            &mut instance,
+            Sos1ConstraintID::from(9),
+            "canonical binary domain",
+        );
+    }
+
+    #[test]
+    fn checked_inverse_rejects_fixed_or_dependent_members_without_mutation() {
+        let zero_bound_lowering = || {
+            let mut instance = integer_sos1_instance(0.0, 0.0);
+            assert_eq!(
+                instance
+                    .convert_sos1_to_constraints(Sos1ConstraintID::from(9))
+                    .unwrap()
+                    .len(),
+                1
+            );
+            instance
+        };
+
+        let mut fixed = zero_bound_lowering();
+        fixed
+            .partial_evaluate(
+                &crate::v1::State::from_iter([(0, 0.0)]),
+                crate::ATol::default(),
+            )
+            .unwrap();
+        assert_checked_inverse_failure_unchanged(&mut fixed, Sos1ConstraintID::from(9), "is fixed");
+
+        let mut dependent = zero_bound_lowering()
+            .substitute_one(VariableID::from(0), &Function::zero())
+            .unwrap();
+        assert_checked_inverse_failure_unchanged(
+            &mut dependent,
+            Sos1ConstraintID::from(9),
+            "dependency target",
+        );
+    }
+
+    #[test]
+    fn checked_inverse_rejects_nonisolated_or_relabelled_selector_without_mutation() {
+        let mut used = mixed_sos1_instance();
+        used.convert_sos1_to_constraints(Sos1ConstraintID::from(9))
+            .unwrap();
+        let selector = generated_selector(&used, Sos1ConstraintID::from(9), VariableID::from(1));
+        used.add_constraint(
+            Constraint::less_than_or_equal_to_zero(Function::from(linear!(selector.into_inner()))),
+            Default::default(),
+        )
+        .unwrap();
+        assert_checked_inverse_failure_unchanged(
+            &mut used,
+            Sos1ConstraintID::from(9),
+            "active regular constraint",
+        );
+
+        let mut relabelled = mixed_sos1_instance();
+        relabelled
+            .convert_sos1_to_constraints(Sos1ConstraintID::from(9))
+            .unwrap();
+        let selector =
+            generated_selector(&relabelled, Sos1ConstraintID::from(9), VariableID::from(1));
+        relabelled
+            .set_variable_label(selector, ModelingLabel::default())
+            .unwrap();
+        assert_checked_inverse_failure_unchanged(
+            &mut relabelled,
+            Sos1ConstraintID::from(9),
+            "exactly one canonical V1 selector",
+        );
+    }
+
+    #[test]
+    fn checked_inverse_rejects_removed_generated_row_without_mutation() {
+        let mut instance = mixed_sos1_instance();
+        let generated = instance
+            .convert_sos1_to_constraints(Sos1ConstraintID::from(9))
+            .unwrap();
+        instance
+            .relax_constraint(generated[0], "test preprocessing".to_string(), [])
+            .unwrap();
+        assert_checked_inverse_failure_unchanged(
+            &mut instance,
+            Sos1ConstraintID::from(9),
+            "is not active",
         );
     }
 
