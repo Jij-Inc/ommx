@@ -1,14 +1,17 @@
 use super::{
-    ExactAffine, ExactRational, InequalityRef, LinearProofError, LinearRelaxationFingerprint,
+    EqualityRef, ExactAffine, ExactRational, InequalityRef, LinearProofError,
+    LinearRelaxationFingerprint,
 };
 use crate::{
-    constraint::{Provenance, RemovedReason},
+    constraint::{ConstraintContext, Provenance, RemovedReason},
     instance::{
-        GENERATED_CONSTRAINT_IDS_PARAMETER, INDICATOR_LOWERING_REASON, SOS1_LOWERING_REASON,
+        GENERATED_CONSTRAINT_IDS_PARAMETER, INDICATOR_LOWERING_REASON,
+        ONE_HOT_GENERATED_CONSTRAINT_ID_PARAMETER, ONE_HOT_LOWERING_REASON, SOS1_LOWERING_REASON,
     },
     proof::exact::from_f64,
     Bound, ConstraintID, Equality, IndicatorConstraint, IndicatorConstraintID, Instance, Kind,
-    ModelingLabel, Sos1Constraint, Sos1ConstraintID, VariableID,
+    ModelingLabel, OneHotConstraint, OneHotConstraintID, Sos1Constraint, Sos1ConstraintID,
+    VariableID,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -19,6 +22,15 @@ use std::collections::{BTreeMap, BTreeSet};
 struct IndicatorBigMV1 {
     source: IndicatorConstraintID,
     generated_rows: Vec<ConstraintID>,
+    representation: LinearRelaxationFingerprint,
+}
+
+/// Untrusted, versioned lookup result for one historical OneHot lowering.
+/// The generated equality and transferred context remain to be verified.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct OneHotV1 {
+    source: OneHotConstraintID,
+    generated_row: ConstraintID,
     representation: LinearRelaxationFingerprint,
 }
 
@@ -59,6 +71,30 @@ impl VerifiedIndicatorBigMV1 {
     }
 }
 
+/// Exact, representation-bound fact that one retained removed OneHot
+/// constraint is represented by the current canonical V1 equality.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct VerifiedOneHotV1 {
+    source_id: OneHotConstraintID,
+    source: OneHotConstraint,
+    generated_row: ConstraintID,
+    representation: LinearRelaxationFingerprint,
+}
+
+impl VerifiedOneHotV1 {
+    pub(crate) fn source_id(&self) -> OneHotConstraintID {
+        self.source_id
+    }
+
+    pub(crate) fn source(&self) -> &OneHotConstraint {
+        &self.source
+    }
+
+    pub(crate) fn generated_row(&self) -> ConstraintID {
+        self.generated_row
+    }
+}
+
 /// Exact, representation-bound fact that the recorded regular rows are the
 /// complete current V1 lowering of one retained removed SOS1 constraint.
 ///
@@ -96,6 +132,8 @@ impl VerifiedSos1BigMV1 {
 enum InverseLoweringCandidateError {
     #[error("removed Indicator constraint {id:?} was not found")]
     MissingRemovedIndicator { id: IndicatorConstraintID },
+    #[error("removed OneHot constraint {id:?} was not found")]
+    MissingRemovedOneHot { id: OneHotConstraintID },
     #[error("removed SOS1 constraint {id:?} was not found")]
     MissingRemovedSos1 { id: Sos1ConstraintID },
     #[error("expected lowering reason {expected}, found {actual}")]
@@ -105,6 +143,10 @@ enum InverseLoweringCandidateError {
     },
     #[error("lowering reason is missing the {GENERATED_CONSTRAINT_IDS_PARAMETER} parameter")]
     MissingGeneratedConstraintIds,
+    #[error(
+        "lowering reason is missing the {ONE_HOT_GENERATED_CONSTRAINT_ID_PARAMETER} parameter"
+    )]
+    MissingOneHotGeneratedConstraintId,
     #[error("lowering reason contains unsupported V1 parameter {key:?}")]
     UnexpectedRemovalParameter { key: String },
     #[error("generated constraint ID token {token:?} is not canonical u64 text")]
@@ -117,6 +159,8 @@ enum InverseLoweringCandidateError {
     ProvenanceMismatch { id: ConstraintID },
     #[error("generated regular constraint {id:?} has a modeling label that would be discarded")]
     GeneratedConstraintHasModelingLabel { id: ConstraintID },
+    #[error("generated regular constraint {id:?} does not have the exact transferred context")]
+    GeneratedConstraintContextMismatch { id: ConstraintID },
     #[error("active regular constraint {id:?} claims the lowering provenance but is not recorded")]
     UnrecordedGeneratedConstraint { id: ConstraintID },
     #[error(transparent)]
@@ -138,6 +182,34 @@ impl Instance {
         Ok(IndicatorBigMV1 {
             source: id,
             generated_rows,
+            representation,
+        })
+    }
+
+    fn one_hot_candidate_v1(
+        &self,
+        id: OneHotConstraintID,
+    ) -> Result<OneHotV1, InverseLoweringCandidateError> {
+        let (_, reason) = self
+            .removed_one_hot_constraints()
+            .get(&id)
+            .ok_or(InverseLoweringCandidateError::MissingRemovedOneHot { id })?;
+        let generated_row = parse_one_hot_constraint_id(reason)?;
+
+        // OneHot lowering transfers the source's complete modeling context to
+        // the regular row and appends exactly one lineage step. Unlike the
+        // Indicator/SOS1 lowerers, a non-default generated label is expected.
+        let mut expected_context = self.one_hot_constraint_context().collect_for(id);
+        let expected_provenance = Provenance::OneHotConstraint(id);
+        expected_context
+            .provenance
+            .push(expected_provenance.clone());
+        self.validate_one_hot_candidate_row(generated_row, &expected_context, expected_provenance)?;
+
+        let representation = self.certified_linear_relaxation()?.fingerprint();
+        Ok(OneHotV1 {
+            source: id,
+            generated_row,
             representation,
         })
     }
@@ -193,6 +265,107 @@ impl Instance {
         }
         Ok(())
     }
+
+    fn validate_one_hot_candidate_row(
+        &self,
+        generated_row: ConstraintID,
+        expected_context: &ConstraintContext,
+        expected_provenance: Provenance,
+    ) -> Result<(), InverseLoweringCandidateError> {
+        if !self.constraints().contains_key(&generated_row) {
+            return Err(InverseLoweringCandidateError::MissingGeneratedConstraint {
+                id: generated_row,
+            });
+        }
+        if self.constraint_context().collect_for(generated_row) != *expected_context {
+            return Err(
+                InverseLoweringCandidateError::GeneratedConstraintContextMismatch {
+                    id: generated_row,
+                },
+            );
+        }
+        for id in self.constraints().keys() {
+            if *id != generated_row
+                && self
+                    .constraint_context()
+                    .provenance(*id)
+                    .contains(&expected_provenance)
+            {
+                return Err(
+                    InverseLoweringCandidateError::UnrecordedGeneratedConstraint { id: *id },
+                );
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Verify the complete current V1 OneHot lowering exactly.
+///
+/// The single generated row must be the canonical equality
+/// `sum(member) - 1 = 0`, every member must retain a binary domain, and the
+/// row's context must be the exact source context plus the lowering lineage
+/// step. Scalar multiples are deliberately rejected: this verifier consumes a
+/// current OMMX history rather than recognizing arbitrary flat models.
+pub(crate) fn verify_one_hot_v1(
+    instance: &Instance,
+    id: OneHotConstraintID,
+) -> crate::Result<VerifiedOneHotV1> {
+    let candidate = instance.one_hot_candidate_v1(id)?;
+    let snapshot = instance.certified_linear_relaxation()?;
+    if candidate.representation != snapshot.fingerprint() {
+        crate::bail!(
+            { ?id },
+            "OneHot inverse-lowering candidate {id:?} is bound to a stale representation"
+        );
+    }
+
+    let (source, _) = instance
+        .removed_one_hot_constraints()
+        .get(&id)
+        .expect("candidate lookup proved that the removed source exists");
+    if source.variables.is_empty() {
+        crate::bail!({ ?id }, "Removed OneHot constraint {id:?} has no members");
+    }
+    for &member in &source.variables {
+        let Some(variable) = instance.decision_variables().get(&member) else {
+            crate::bail!(
+                { ?id, ?member },
+                "OneHot member {member:?} is not registered"
+            );
+        };
+        if variable.kind() != Kind::Binary {
+            crate::bail!(
+                { ?id, ?member, kind = ?variable.kind() },
+                "OneHot member {member:?} is not binary"
+            );
+        }
+    }
+
+    let actual = snapshot.equality(EqualityRef::RegularConstraint(candidate.generated_row))?;
+    let one = ExactRational::from_integer(1.into());
+    let expected = ExactAffine {
+        coefficients: source
+            .variables
+            .iter()
+            .copied()
+            .map(|member| (member, one.clone()))
+            .collect(),
+        constant: ExactRational::from_integer((-1).into()),
+    };
+    if actual != expected {
+        crate::bail!(
+            { ?id, row_id = ?candidate.generated_row },
+            "Generated OneHot row does not match the canonical V1 equality exactly"
+        );
+    }
+
+    Ok(VerifiedOneHotV1 {
+        source_id: candidate.source,
+        source: source.clone(),
+        generated_row: candidate.generated_row,
+        representation: candidate.representation,
+    })
 }
 
 /// Verify the current V1 Indicator Big-M history exactly.
@@ -560,6 +733,42 @@ fn equality_roles_cover(roles: &[(bool, bool)], upper_implied: bool, lower_impli
     false
 }
 
+fn parse_one_hot_constraint_id(
+    reason: &RemovedReason,
+) -> Result<ConstraintID, InverseLoweringCandidateError> {
+    if reason.reason != ONE_HOT_LOWERING_REASON {
+        return Err(InverseLoweringCandidateError::UnexpectedRemovalReason {
+            expected: ONE_HOT_LOWERING_REASON,
+            actual: reason.reason.clone(),
+        });
+    }
+    if let Some(key) = reason
+        .parameters
+        .keys()
+        .filter(|key| key.as_str() != ONE_HOT_GENERATED_CONSTRAINT_ID_PARAMETER)
+        .min()
+    {
+        return Err(InverseLoweringCandidateError::UnexpectedRemovalParameter { key: key.clone() });
+    }
+    let token = reason
+        .parameters
+        .get(ONE_HOT_GENERATED_CONSTRAINT_ID_PARAMETER)
+        .ok_or(InverseLoweringCandidateError::MissingOneHotGeneratedConstraintId)?;
+    let value = token.parse::<u64>().map_err(|_| {
+        InverseLoweringCandidateError::InvalidGeneratedConstraintId {
+            token: token.clone(),
+        }
+    })?;
+    if token != &value.to_string() {
+        return Err(
+            InverseLoweringCandidateError::InvalidGeneratedConstraintId {
+                token: token.clone(),
+            },
+        );
+    }
+    Ok(ConstraintID::from(value))
+}
+
 fn parse_generated_constraint_ids(
     reason: &RemovedReason,
     expected_reason: &'static str,
@@ -615,8 +824,8 @@ mod tests {
     use super::*;
     use crate::{
         coeff, linear, Bound, Constraint, ConstraintContextStore, DecisionVariable, Equality,
-        Function, IndicatorConstraint, Kind, ModelingLabel, Sense, Sos1Constraint, VariableID,
-        VariableLabelStore,
+        Function, IndicatorConstraint, Kind, ModelingLabel, OneHotConstraint, Sense,
+        Sos1Constraint, VariableID, VariableLabelStore,
     };
     use fnv::FnvHashMap;
     use std::collections::{BTreeMap, BTreeSet};
@@ -683,6 +892,139 @@ mod tests {
             )]))
             .build()
             .unwrap()
+    }
+
+    fn current_one_hot_history() -> (Instance, ConstraintID) {
+        let one_hot_id = OneHotConstraintID::from(7);
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::zero())
+            .decision_variables(BTreeMap::from([
+                (VariableID::from(1), DecisionVariable::binary()),
+                (VariableID::from(2), DecisionVariable::binary()),
+            ]))
+            .constraints(BTreeMap::new())
+            .one_hot_constraints(BTreeMap::from([(
+                one_hot_id,
+                OneHotConstraint::new(BTreeSet::from([VariableID::from(1), VariableID::from(2)]))
+                    .unwrap(),
+            )]))
+            .build()
+            .unwrap();
+        instance
+            .set_one_hot_constraint_context(
+                one_hot_id,
+                ConstraintContext {
+                    label: ModelingLabel {
+                        name: Some("choose".to_string()),
+                        ..Default::default()
+                    },
+                    provenance: vec![Provenance::Sos1Constraint(Sos1ConstraintID::from(3))],
+                },
+            )
+            .unwrap();
+        let generated = instance.convert_one_hot_to_constraint(one_hot_id).unwrap();
+        (instance, generated)
+    }
+
+    #[test]
+    fn verifies_current_one_hot_lowering_with_exact_transferred_context() {
+        let (instance, generated) = current_one_hot_history();
+        let candidate = instance
+            .one_hot_candidate_v1(OneHotConstraintID::from(7))
+            .unwrap();
+        assert_eq!(candidate.source, OneHotConstraintID::from(7));
+        assert_eq!(candidate.generated_row, generated);
+
+        let verified = verify_one_hot_v1(&instance, OneHotConstraintID::from(7)).unwrap();
+        assert_eq!(verified.source_id(), OneHotConstraintID::from(7));
+        assert_eq!(verified.generated_row(), generated);
+        assert_eq!(
+            verified.source().variables,
+            BTreeSet::from([VariableID::from(1), VariableID::from(2)])
+        );
+    }
+
+    #[test]
+    fn rejects_one_hot_scalar_multiple_and_context_edits() {
+        let (instance, generated) = current_one_hot_history();
+
+        let mut scaled = instance.clone();
+        scaled
+            .insert_constraint(
+                generated,
+                Constraint::equal_to_zero(Function::from(
+                    (((coeff!(2.0) * linear!(1)).unwrap() + (coeff!(2.0) * linear!(2)).unwrap())
+                        .unwrap()
+                        + coeff!(-2.0))
+                    .unwrap(),
+                )),
+            )
+            .unwrap();
+        let error = verify_one_hot_v1(&scaled, OneHotConstraintID::from(7)).unwrap_err();
+        assert!(error.to_string().contains("canonical V1 equality exactly"));
+
+        let mut relabeled = instance;
+        let mut context = relabeled.constraint_context().collect_for(generated);
+        context.label.name = Some("presolver-edited".to_string());
+        relabeled
+            .set_constraint_context(generated, context)
+            .unwrap();
+        let error = verify_one_hot_v1(&relabeled, OneHotConstraintID::from(7)).unwrap_err();
+        assert!(error.to_string().contains("exact transferred context"));
+    }
+
+    #[test]
+    fn rejects_unrecorded_one_hot_provenance_and_malformed_parameters() {
+        let (mut instance, _) = current_one_hot_history();
+        let extra = instance
+            .add_constraint(
+                Constraint::equal_to_zero(Function::zero()),
+                ConstraintContext {
+                    label: Default::default(),
+                    provenance: vec![Provenance::OneHotConstraint(OneHotConstraintID::from(7))],
+                },
+            )
+            .unwrap();
+        let error = verify_one_hot_v1(&instance, OneHotConstraintID::from(7)).unwrap_err();
+        assert!(error.to_string().contains(&format!("{extra:?}")));
+        assert!(error.to_string().contains("not recorded"));
+
+        let missing = RemovedReason {
+            reason: ONE_HOT_LOWERING_REASON.to_string(),
+            parameters: FnvHashMap::default(),
+        };
+        assert!(matches!(
+            parse_one_hot_constraint_id(&missing),
+            Err(InverseLoweringCandidateError::MissingOneHotGeneratedConstraintId)
+        ));
+        for token in ["01", "1,2", "-1"] {
+            let reason = RemovedReason {
+                reason: ONE_HOT_LOWERING_REASON.to_string(),
+                parameters: FnvHashMap::from_iter([(
+                    ONE_HOT_GENERATED_CONSTRAINT_ID_PARAMETER.to_string(),
+                    token.to_string(),
+                )]),
+            };
+            assert!(matches!(
+                parse_one_hot_constraint_id(&reason),
+                Err(InverseLoweringCandidateError::InvalidGeneratedConstraintId { .. })
+            ));
+        }
+        let extra_parameter = RemovedReason {
+            reason: ONE_HOT_LOWERING_REASON.to_string(),
+            parameters: FnvHashMap::from_iter([
+                (
+                    ONE_HOT_GENERATED_CONSTRAINT_ID_PARAMETER.to_string(),
+                    "1".to_string(),
+                ),
+                ("future".to_string(), "value".to_string()),
+            ]),
+        };
+        assert!(matches!(
+            parse_one_hot_constraint_id(&extra_parameter),
+            Err(InverseLoweringCandidateError::UnexpectedRemovalParameter { .. })
+        ));
     }
 
     #[test]

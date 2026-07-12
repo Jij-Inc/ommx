@@ -53,6 +53,8 @@ use std::collections::{BTreeMap, HashMap};
 
 pub(crate) const GENERATED_CONSTRAINT_IDS_PARAMETER: &str = "constraint_ids";
 pub(crate) const INDICATOR_LOWERING_REASON: &str = "ommx.Instance.convert_indicator_to_constraint";
+pub(crate) const ONE_HOT_GENERATED_CONSTRAINT_ID_PARAMETER: &str = "constraint_id";
+pub(crate) const ONE_HOT_LOWERING_REASON: &str = "ommx.Instance.convert_one_hot_to_constraint";
 pub(crate) const SOS1_LOWERING_REASON: &str = "ommx.Instance.convert_sos1_to_constraints";
 
 /// A constraint type capability flag for non-standard constraint types.
