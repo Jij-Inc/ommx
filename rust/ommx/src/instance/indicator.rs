@@ -1,6 +1,6 @@
 use super::{
-    reduction::AssignmentMap, AdditionalCapability, Capabilities, Instance,
-    GENERATED_CONSTRAINT_IDS_PARAMETER, INDICATOR_LOWERING_REASON,
+    inverse_lowering::InverseLoweringError, reduction::AssignmentMap, AdditionalCapability,
+    Capabilities, Instance, GENERATED_CONSTRAINT_IDS_PARAMETER, INDICATOR_LOWERING_REASON,
 };
 use crate::{
     constraint::{ConstraintContext, ConstraintID, Equality, Provenance, RemovedReason},
@@ -45,7 +45,7 @@ impl Instance {
         &mut self,
         id: IndicatorConstraintID,
         permitted_additions: &Capabilities,
-    ) -> Result<AssignmentMap> {
+    ) -> std::result::Result<AssignmentMap, InverseLoweringError> {
         let plan = self.plan_indicator_inverse(id, permitted_additions)?;
         Ok(plan.commit(self))
     }
@@ -54,37 +54,38 @@ impl Instance {
         &self,
         id: IndicatorConstraintID,
         permitted_additions: &Capabilities,
-    ) -> Result<IndicatorInversePlan> {
+    ) -> std::result::Result<IndicatorInversePlan, InverseLoweringError> {
         if !permitted_additions.contains(&AdditionalCapability::Indicator) {
-            bail!(
+            return Err(InverseLoweringError::operation_message(format!(
                 "Restoring Indicator constraint {id:?} requires explicit Indicator capability permission"
-            );
+            )));
         }
 
-        let verified = crate::proof::verify_indicator_big_m_v1(self, id)?;
+        let verified = crate::proof::verify_indicator_big_m_v1(self, id)
+            .map_err(InverseLoweringError::not_recoverable)?;
         debug_assert_eq!(verified.source_id(), id);
         for variable_id in verified.source().required_ids() {
             if !self.decision_variables.contains_key(&variable_id) {
-                bail!(
+                return Err(InverseLoweringError::not_recoverable_message(format!(
                     "Cannot restore Indicator constraint {id:?}: variable {variable_id:?} is not registered"
-                );
+                )));
             }
             if self
                 .decision_variable_dependency
                 .get(&variable_id)
                 .is_some()
             {
-                bail!(
+                return Err(InverseLoweringError::not_recoverable_message(format!(
                     "Cannot restore Indicator constraint {id:?}: variable {variable_id:?} is a dependency target"
-                );
+                )));
             }
             if self
                 .fixed_decision_variable_values()
                 .contains_key(&variable_id)
             {
-                bail!(
+                return Err(InverseLoweringError::not_recoverable_message(format!(
                     "Cannot restore Indicator constraint {id:?}: variable {variable_id:?} is fixed"
-                );
+                )));
             }
         }
 
@@ -94,10 +95,12 @@ impl Instance {
         let mut staged = self.clone();
         staged
             .constraint_collection
-            .consume_active_rows(&generated_rows)?;
+            .consume_active_rows(&generated_rows)
+            .map_err(InverseLoweringError::operation)?;
         staged
             .indicator_constraint_collection
-            .restore_removed_row(id, verified.source().clone())?;
+            .restore_removed_row(id, verified.source().clone())
+            .map_err(InverseLoweringError::operation)?;
         debug_assert!(staged.constraint_collection.validate_context_ids().is_ok());
         debug_assert!(staged
             .indicator_constraint_collection

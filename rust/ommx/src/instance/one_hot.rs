@@ -1,6 +1,6 @@
 use super::{
-    reduction::AssignmentMap, AdditionalCapability, Capabilities, Instance,
-    ONE_HOT_GENERATED_CONSTRAINT_ID_PARAMETER, ONE_HOT_LOWERING_REASON,
+    inverse_lowering::InverseLoweringError, reduction::AssignmentMap, AdditionalCapability,
+    Capabilities, Instance, ONE_HOT_GENERATED_CONSTRAINT_ID_PARAMETER, ONE_HOT_LOWERING_REASON,
 };
 use crate::{
     coeff,
@@ -9,7 +9,7 @@ use crate::{
     one_hot_constraint::OneHotConstraintID,
     Constraint, Function, Linear, VariableIDSet,
 };
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use std::collections::BTreeSet;
 
 /// Private one-shot plan for an exact checked inverse lowering.
@@ -36,7 +36,7 @@ impl Instance {
         &mut self,
         id: OneHotConstraintID,
         permitted_additions: &Capabilities,
-    ) -> Result<AssignmentMap> {
+    ) -> std::result::Result<AssignmentMap, InverseLoweringError> {
         let plan = self.plan_one_hot_inverse(id, permitted_additions)?;
         Ok(plan.commit(self))
     }
@@ -45,28 +45,31 @@ impl Instance {
         &self,
         id: OneHotConstraintID,
         permitted_additions: &Capabilities,
-    ) -> Result<OneHotInversePlan> {
+    ) -> std::result::Result<OneHotInversePlan, InverseLoweringError> {
         if !permitted_additions.contains(&AdditionalCapability::OneHot) {
-            bail!(
+            return Err(InverseLoweringError::operation_message(format!(
                 "Restoring OneHot constraint {id:?} requires explicit OneHot capability permission"
-            );
+            )));
         }
 
-        let verified = crate::proof::verify_one_hot_v1(self, id)?;
+        let verified = crate::proof::verify_one_hot_v1(self, id)
+            .map_err(InverseLoweringError::not_recoverable)?;
         debug_assert_eq!(verified.source_id(), id);
         for &member in &verified.source().variables {
             if !self.decision_variables.contains_key(&member) {
-                bail!(
+                return Err(InverseLoweringError::not_recoverable_message(format!(
                     "Cannot restore OneHot constraint {id:?}: member {member:?} is not registered"
-                );
+                )));
             }
             if self.decision_variable_dependency.get(&member).is_some() {
-                bail!(
+                return Err(InverseLoweringError::not_recoverable_message(format!(
                     "Cannot restore OneHot constraint {id:?}: member {member:?} is a dependency target"
-                );
+                )));
             }
             if self.fixed_decision_variable_values().contains_key(&member) {
-                bail!("Cannot restore OneHot constraint {id:?}: member {member:?} is fixed");
+                return Err(InverseLoweringError::not_recoverable_message(format!(
+                    "Cannot restore OneHot constraint {id:?}: member {member:?} is fixed"
+                )));
             }
         }
 
@@ -76,10 +79,12 @@ impl Instance {
         let mut staged = self.clone();
         staged
             .constraint_collection
-            .consume_active_rows(&generated_rows)?;
+            .consume_active_rows(&generated_rows)
+            .map_err(InverseLoweringError::operation)?;
         staged
             .one_hot_constraint_collection
-            .restore_removed_row(id, verified.source().clone())?;
+            .restore_removed_row(id, verified.source().clone())
+            .map_err(InverseLoweringError::operation)?;
         let staged_variable_ids = staged
             .decision_variables
             .keys()
