@@ -16,7 +16,9 @@ use std::collections::{BTreeMap, BTreeSet};
 /// Projection steps run in reduction order. Lifting runs the same steps in
 /// reverse so eliminated private coordinates are reconstructed before an
 /// earlier step depends on them. This transforms raw, unevaluated states;
-/// callers must evaluate the result against the corresponding Instance.
+/// callers must evaluate the result against the corresponding Instance. SOS1
+/// lifting uses mathematical exact zero and does not claim equivalence between
+/// tolerance-based feasibility classifications for arbitrary `ATol` values.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct AssignmentMap {
     source_ids: VariableIDSet,
