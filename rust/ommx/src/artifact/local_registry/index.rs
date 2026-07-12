@@ -1253,6 +1253,18 @@ fn experiment_ref_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Experime
             )
         })
     })?;
+    let sampling_count = typed_config.runs.iter().try_fold(0_u64, |total, run| {
+        let count = u64::try_from(run.samplings.len()).map_err(|err| {
+            rusqlite::Error::FromSqlConversionFailure(7, Type::Blob, Box::new(err))
+        })?;
+        total.checked_add(count).ok_or_else(|| {
+            rusqlite::Error::FromSqlConversionFailure(
+                7,
+                Type::Blob,
+                std::io::Error::other("Experiment sampling count overflow").into(),
+            )
+        })
+    })?;
     Ok(ExperimentRefRecord {
         image_name: record.image_name,
         manifest_digest: record.manifest_digest,
@@ -1261,6 +1273,7 @@ fn experiment_ref_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Experime
         status: typed_config.status,
         run_count,
         solve_count,
+        sampling_count,
         annotations: record
             .manifest
             .annotations()

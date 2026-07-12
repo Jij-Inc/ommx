@@ -102,6 +102,7 @@ for ref in refs:
         "status": ref.status,
         "run_count": ref.run_count,
         "solve_count": ref.solve_count,
+        "sampling_count": ref.sampling_count,
     }
     row.update(
         {
@@ -121,6 +122,7 @@ catalog = pd.DataFrame.from_records(
         "status",
         "run_count",
         "solve_count",
+        "sampling_count",
         *annotation_columns,
     ],
 )
@@ -294,8 +296,8 @@ checkpoint を publish します。
 
 `KeyboardInterrupt` は Run / Experiment ともに `"interrupted"` として記録されます。それ以外の例外は `"failed"` として記録されます。
 
-Run status は Run scope がどう close されたかを表します。子 Solve record の集約 status ではないため、
-adapter error を Run 内で処理した場合、status `"finished"` の Run が failed Solve attempt を含むことがあります。
+Run status は Run scope がどう close されたかを表します。子 Solve / Sampling record の集約 status ではないため、
+adapter error を Run 内で処理した場合、status `"finished"` の Run が failed Solve / Sampling attempt を含むことがあります。
 
 Experiment を context manager として使わない場合、Run の外側で起きた例外は
 failed Experiment checkpoint を自動 publish しません。通常の interactive workflow

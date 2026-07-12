@@ -79,14 +79,14 @@ mod tests;
 pub use attachment::{
     detect_file_media_type, AttachmentTable, Compression, DEFAULT_FILE_MEDIA_TYPE,
 };
-pub use dynamic::{ExperimentDyn, RunDyn, SealedRunDyn, SolveDyn};
+pub use dynamic::{ExperimentDyn, RunDyn, SamplingDyn, SealedRunDyn, SolveDyn};
 pub use logging::AttachmentLogger;
 pub use parameter::{ParameterValue, RunParameterCell};
-pub use run::{FailedSolveRecord, FinishedSolveRecord};
+pub use run::{FailedSampleRecord, FailedSolveRecord, FinishedSampleRecord, FinishedSolveRecord};
 // Local Registry owns the SQLite projection, while Experiment owns validation
 // of Experiment manifests/configs before those projection rows are written.
 pub(crate) use sealed::experiment_manifest_record_from_artifact;
-pub use sealed::{SealedRun, Solve};
+pub use sealed::{Sampling, SealedRun, Solve};
 
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor, TempLocalRegistry};
 use crate::artifact::{media_types, ImageRef, LocalArtifact};
@@ -120,6 +120,10 @@ const RUN_STATUS_INTERRUPTED: &str = "interrupted";
 const SOLVE_STATUS_FINISHED: &str = "finished";
 const SOLVE_STATUS_FAILED: &str = "failed";
 const SOLVE_STATUS_INTERRUPTED: &str = "interrupted";
+
+const SAMPLING_STATUS_FINISHED: &str = "finished";
+const SAMPLING_STATUS_FAILED: &str = "failed";
+const SAMPLING_STATUS_INTERRUPTED: &str = "interrupted";
 
 /// Lifecycle status of a sealed Experiment Artifact.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -346,6 +350,47 @@ impl std::fmt::Display for SolveStatus {
     }
 }
 
+/// Lifecycle status of one sampler call recorded in an Experiment.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SamplingStatus {
+    /// The adapter returned a SampleSet.
+    Finished,
+    /// The adapter raised an error before returning a SampleSet.
+    Failed,
+    /// The adapter call was interrupted before returning a SampleSet.
+    Interrupted,
+}
+
+impl SamplingStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Finished => SAMPLING_STATUS_FINISHED,
+            Self::Failed => SAMPLING_STATUS_FAILED,
+            Self::Interrupted => SAMPLING_STATUS_INTERRUPTED,
+        }
+    }
+
+    fn from_config(status: &str) -> Result<Self> {
+        match status {
+            SAMPLING_STATUS_FINISHED => Ok(Self::Finished),
+            SAMPLING_STATUS_FAILED => Ok(Self::Failed),
+            SAMPLING_STATUS_INTERRUPTED => Ok(Self::Interrupted),
+            _ => {
+                crate::bail!(
+                    "Sampling status is {status}, expected {SAMPLING_STATUS_FINISHED}, \
+                     {SAMPLING_STATUS_FAILED}, or {SAMPLING_STATUS_INTERRUPTED}"
+                )
+            }
+        }
+    }
+}
+
+impl std::fmt::Display for SamplingStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 /// A mutable, unsealed experiment session. See the [module documentation](self).
 #[derive(Debug)]
 pub struct Experiment<'reg> {
@@ -441,6 +486,8 @@ pub struct Run<'exp, 'reg> {
     trace: Option<StoredDescriptor<'reg>>,
     solves: Vec<SolveEntry<'reg>>,
     next_solve_id: u64,
+    samplings: Vec<SamplingEntry<'reg>>,
+    next_sampling_id: u64,
     parameters: ParameterSet,
 }
 
@@ -458,6 +505,7 @@ struct RunEntry<'reg> {
     attachments: AttachmentTable<StoredDescriptor<'reg>>,
     trace: Option<StoredDescriptor<'reg>>,
     solves: Vec<SolveEntry<'reg>>,
+    samplings: Vec<SamplingEntry<'reg>>,
     parameters: ParameterSet,
 }
 
@@ -472,21 +520,32 @@ struct SolveEntry<'reg> {
     diagnostics: Option<StoredDescriptor<'reg>>,
 }
 
-/// Adapter diagnostics payload for one Solve.
 #[derive(Debug, Clone)]
-pub struct SolveDiagnosticPayload {
+struct SamplingEntry<'reg> {
+    sampling_id: u64,
+    status: SamplingStatus,
+    input: StoredDescriptor<'reg>,
+    output: Option<StoredDescriptor<'reg>>,
+    adapter: String,
+    adapter_options: String,
+    diagnostics: Option<StoredDescriptor<'reg>>,
+}
+
+/// Adapter diagnostics payload for one Solve or Sampling.
+#[derive(Debug, Clone)]
+pub struct AdapterDiagnosticPayload {
     value: MessagePackValue,
 }
 
-impl SolveDiagnosticPayload {
+impl AdapterDiagnosticPayload {
     /// Create a diagnostics payload from MessagePack bytes.
     pub fn new(bytes: Vec<u8>) -> Result<Self> {
         let mut cursor = Cursor::new(&bytes);
         let value = rmpv::decode::read_value(&mut cursor)
-            .context("Solve diagnostic payload must be valid MessagePack")?;
+            .context("Adapter diagnostic payload must be valid MessagePack")?;
         ensure!(
             cursor.position() == bytes.len() as u64,
-            "Solve diagnostic payload must contain exactly one MessagePack value",
+            "Adapter diagnostic payload must contain exactly one MessagePack value",
         );
         Self::from_value(value)
     }
@@ -495,7 +554,7 @@ impl SolveDiagnosticPayload {
     pub fn from_value(value: MessagePackValue) -> Result<Self> {
         ensure!(
             matches!(value, MessagePackValue::Array(_)),
-            "Solve diagnostic payload must decode to a MessagePack array",
+            "Adapter diagnostic payload must decode to a MessagePack array",
         );
         Ok(Self { value })
     }
@@ -508,19 +567,20 @@ impl SolveDiagnosticPayload {
     pub(crate) fn to_msgpack_bytes(&self) -> Result<Vec<u8>> {
         let mut bytes = Vec::new();
         rmpv::encode::write_value(&mut bytes, &self.value)
-            .context("Failed to encode Solve diagnostic payload as MessagePack")?;
+            .context("Failed to encode Adapter diagnostic payload as MessagePack")?;
         Ok(bytes)
     }
 }
 
-fn read_solve_diagnostic_payload(
-    solve_id: u64,
+fn read_adapter_diagnostic_payload(
+    record_kind: &str,
+    record_id: u64,
     descriptor: &StoredDescriptor<'_>,
-) -> Result<(Vec<u8>, SolveDiagnosticPayload)> {
+) -> Result<(Vec<u8>, AdapterDiagnosticPayload)> {
     descriptor.ensure_media_type(&media_types::diagnostic_msgpack())?;
     let bytes = descriptor.registry().get_blob(descriptor)?;
-    let payload = SolveDiagnosticPayload::new(bytes.clone())
-        .with_context(|| format!("Invalid Solve {solve_id} diagnostic payload"))?;
+    let payload = AdapterDiagnosticPayload::new(bytes.clone())
+        .with_context(|| format!("Invalid {record_kind} {record_id} diagnostic payload"))?;
     Ok((bytes, payload))
 }
 
@@ -649,6 +709,8 @@ impl<'reg> Experiment<'reg> {
             trace: None,
             solves: Vec::new(),
             next_solve_id: 0,
+            samplings: Vec::new(),
+            next_sampling_id: 0,
             parameters: ParameterSet::new(),
         })
     }
@@ -730,7 +792,7 @@ impl<'reg> SealedExperiment<'reg> {
     /// Fork this sealed Experiment into a new unsealed child Experiment.
     ///
     /// The parent Experiment is not modified. Existing experiment
-    /// attachments, runs, solves, and run parameters are carried into
+    /// attachments, runs, solves, samplings, and run parameters are carried into
     /// the child state, while the committed child Artifact records the
     /// parent manifest descriptor as its OCI `subject`.
     pub fn fork(&self, name: impl Into<Name>) -> Result<Experiment<'reg>> {
@@ -757,6 +819,19 @@ impl<'reg> SealedExperiment<'reg> {
                     diagnostics: solve.diagnostic_descriptor().cloned(),
                 })
                 .collect();
+            let samplings = run
+                .samplings()
+                .iter()
+                .map(|sampling| SamplingEntry {
+                    sampling_id: sampling.sampling_id(),
+                    status: sampling.status().clone(),
+                    input: sampling.input_descriptor().clone(),
+                    output: sampling.output_descriptor().cloned(),
+                    adapter: sampling.adapter().to_string(),
+                    adapter_options: sampling.adapter_options().to_string(),
+                    diagnostics: sampling.diagnostic_descriptor().cloned(),
+                })
+                .collect();
             runs.insert(
                 run.run_id(),
                 RunEntry {
@@ -765,6 +840,7 @@ impl<'reg> SealedExperiment<'reg> {
                     attachments: run.attachment_table().clone(),
                     trace: run.trace_descriptor().cloned(),
                     solves,
+                    samplings,
                     parameters,
                 },
             );

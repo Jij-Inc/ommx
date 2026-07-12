@@ -166,6 +166,7 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<PyOpenSolve>()?;
     m.add_class::<PySealedRun>()?;
     m.add_class::<PySolve>()?;
+    m.add_class::<PySampling>()?;
     m.add_class::<PyDiagnosticCollector>()?;
     m.add_function(wrap_pyfunction!(prune_anonymous, m)?)?;
     m.add_function(wrap_pyfunction!(remove_image, m)?)?;
@@ -341,18 +342,21 @@ solver settings, and you want the resulting Artifact to answer:
 
 - which shared dataset or baseline configuration was used,
 - which run-level parameters should be compared as a table,
-- which input `ommx.Instance` was actually solved, and
-- which output `ommx.Solution` and adapter options came from each solver call.
+- which input `ommx.Instance` was actually solved or sampled, and
+- which output `ommx.Solution` or `ommx.SampleSet` and adapter options came
+  from each solver or sampler call.
 
 An `Experiment` is a mutable session until it is committed. Experiment-level
 attachments store shared context, while each `Run` stores scalar parameters,
-run-level attachments, and zero or more `Solve` records. Use
+run-level attachments, and zero or more `Solve` and `Sampling` records. Use
 `Run.log_parameter(...)` for values that should become columns in
 `Experiment.run_parameters_df()`, and use attachment methods for payloads such
 as JSON, instances, solutions, sample sets, logs, or caller-defined media
 types. `Run.log_solve(...)` calls an `ommx.adapter.SolverAdapter`, stores the
 original input instance and returned solution, and records adapter keyword
 arguments as solve metadata rather than run parameters.
+`Run.log_sample(...)` similarly records a sampler call as a separate Sampling
+whose output is the complete SampleSet.
 
 Use `Run` as a context manager so closing the block records whether that trial
 finished, failed, or was interrupted. `Experiment` may also be used as a
@@ -378,7 +382,8 @@ pyo3_stub_gen::reexport_module_members!("ommx.experiment" from "ommx._ommx_rust"
     "OpenSolve",
     "Run",
     "SealedRun",
-    "Solve"
+    "Solve",
+    "Sampling"
 );
 
 pyo3_stub_gen::define_stub_info_gatherer!(stub_info);

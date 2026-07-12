@@ -19,8 +19,8 @@ use crate::PyArtifact;
 use ommx::artifact::local_registry::{ExperimentCheckpointRefRecord, ExperimentRefRecord};
 use ommx::artifact::AsArtifact;
 use ommx::experiment::{
-    AttachmentLogger, AutosavePolicy, Compression, FailedSolveRecord, FinishedSolveRecord,
-    SolveDiagnosticPayload, SolveStatus,
+    AdapterDiagnosticPayload, AttachmentLogger, AutosavePolicy, Compression, FailedSampleRecord,
+    FailedSolveRecord, FinishedSampleRecord, FinishedSolveRecord, SamplingStatus, SolveStatus,
 };
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
@@ -35,6 +35,7 @@ pub struct PyExperimentRef {
     status: String,
     run_count: u64,
     solve_count: u64,
+    sampling_count: u64,
     annotations: HashMap<String, String>,
     config: serde_json::Value,
 }
@@ -49,6 +50,7 @@ impl PyExperimentRef {
             status: record.status,
             run_count: record.run_count,
             solve_count: record.solve_count,
+            sampling_count: record.sampling_count,
             annotations: record.annotations.into_iter().collect(),
             config: record.config,
         }
@@ -101,6 +103,12 @@ impl PyExperimentRef {
     }
 
     #[getter]
+    /// Total number of samplings recorded across all runs.
+    pub fn sampling_count(&self) -> u64 {
+        self.sampling_count
+    }
+
+    #[getter]
     /// Manifest annotations stored on the Experiment artifact.
     pub fn annotations(&self) -> HashMap<String, String> {
         self.annotations.clone()
@@ -120,8 +128,8 @@ impl PyExperimentRef {
 
     pub fn __repr__(&self) -> String {
         format!(
-            "ExperimentRef(image_name='{}', status='{}', runs={}, solves={})",
-            self.image_name, self.status, self.run_count, self.solve_count
+            "ExperimentRef(image_name='{}', status='{}', runs={}, solves={}, samplings={})",
+            self.image_name, self.status, self.run_count, self.solve_count, self.sampling_count
         )
     }
 }
@@ -139,6 +147,7 @@ pub struct PyExperimentCheckpointRef {
     status: String,
     run_count: u64,
     solve_count: u64,
+    sampling_count: u64,
     annotations: HashMap<String, String>,
     config: serde_json::Value,
 }
@@ -154,6 +163,7 @@ impl From<ExperimentCheckpointRefRecord> for PyExperimentCheckpointRef {
             status: record.status,
             run_count: record.run_count,
             solve_count: record.solve_count,
+            sampling_count: record.sampling_count,
             annotations: record.annotations.into_iter().collect(),
             config: record.config,
         }
@@ -211,6 +221,12 @@ impl PyExperimentCheckpointRef {
         self.solve_count
     }
 
+    /// Total number of Samplings recorded across the checkpoint's closed Runs.
+    #[getter]
+    pub fn sampling_count(&self) -> u64 {
+        self.sampling_count
+    }
+
     /// Manifest annotations stored on the checkpoint Artifact.
     #[getter]
     pub fn annotations(&self) -> HashMap<String, String> {
@@ -231,8 +247,12 @@ impl PyExperimentCheckpointRef {
 
     pub fn __repr__(&self) -> String {
         format!(
-            "ExperimentCheckpointRef(requested_image_name='{}', status='{}', runs={}, solves={})",
-            self.requested_image_name, self.status, self.run_count, self.solve_count
+            "ExperimentCheckpointRef(requested_image_name='{}', status='{}', runs={}, solves={}, samplings={})",
+            self.requested_image_name,
+            self.status,
+            self.run_count,
+            self.solve_count,
+            self.sampling_count
         )
     }
 }
@@ -312,7 +332,7 @@ impl PyAutosavePolicy {
 ///
 /// An `Experiment` owns experiment-level attachments and a sequence of
 /// closed `Run` records. Each `Run` can store scalar run parameters,
-/// run-level attachments, and zero or more `Solve` records.
+/// run-level attachments, and zero or more `Solve` and `Sampling` records.
 ///
 /// Newly created experiments are unsealed. Call `commit()` to write the
 /// experiment into the local registry as an OMMX Artifact. After commit, the
@@ -334,7 +354,8 @@ impl PyAutosavePolicy {
 /// Use experiment-level attachments for shared context such as dataset or
 /// source-problem metadata. Use `Run.log_parameter(...)` for scalar values
 /// that should appear in `run_parameters_df()`, and use run attachments or
-/// `Run.log_solve(...)` for payloads that belong to a specific run.
+/// `Run.log_solve(...)` and `Run.log_sample(...)` for payloads that belong to
+/// a specific run.
 ///
 /// Example:
 ///
@@ -474,12 +495,12 @@ impl PyExperiment {
     /// Fork this committed Experiment into a new unsealed child Experiment.
     ///
     /// The parent Experiment is not modified. Existing Attachments, Runs,
-    /// Solves, and Run parameters are carried into the child Experiment.
+    /// Solves, Samplings, and Run parameters are carried into the child Experiment.
     /// When the child is committed, its Artifact manifest records the parent
     /// manifest descriptor as OCI `subject`. The child reuses payload blobs
     /// already present in the Local Registry; forking creates a new manifest
-    /// but does not duplicate unchanged Instance, Solution, or Attachment
-    /// bytes.
+    /// but does not duplicate unchanged Instance, Solution, SampleSet, or
+    /// Attachment bytes.
     ///
     /// If `image_name` is omitted, OMMX generates an anonymous local
     /// Experiment name for the child. The returned Experiment can be used as
@@ -1918,7 +1939,7 @@ impl PyRun {
     ) -> PyResult<crate::Solution> {
         let _guard = crate::TRACING.attach_parent_context(py);
         self.ensure_store_trace_context_started()?;
-        reject_reserved_log_solve_kwargs(kwargs)?;
+        reject_reserved_adapter_kwargs(kwargs, "Run.log_solve")?;
         let adapter = adapter.bind(py);
         let adapter_name = adapter.name()?;
         let adapter_options = dump_kwargs(py, kwargs)?;
@@ -1972,6 +1993,86 @@ impl PyRun {
             })?;
         tracing::info!(solve_id, "ommx.solve.recorded");
         Ok(solution)
+    }
+
+    /// Sample an Instance with an OMMX SamplerAdapter and log a Sampling entry.
+    ///
+    /// The original input is stored together with the returned `SampleSet`.
+    /// A successful sampler call is recorded as finished even when none of its
+    /// samples are feasible.
+    ///
+    /// `adapter` must be a subclass of `ommx.adapter.SamplerAdapter`. Keyword
+    /// arguments are passed to `adapter.sample(...)` and recorded as
+    /// `Sampling.adapter_options`.
+    ///
+    /// Set `store_diagnostics=True` to pass a diagnostics sink to the adapter.
+    /// Diagnostics persistence is best-effort and does not change a successful
+    /// sampler call into a failed Sampling.
+    #[pyo3(signature = (adapter, instance, *, store_diagnostics = false, **kwargs))]
+    pub fn log_sample(
+        &mut self,
+        py: Python<'_>,
+        adapter: SamplerAdapterInput,
+        instance: &crate::Instance,
+        store_diagnostics: bool,
+        kwargs: Option<&Bound<PyDict>>,
+    ) -> PyResult<crate::SampleSet> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        self.ensure_store_trace_context_started()?;
+        reject_reserved_adapter_kwargs(kwargs, "Run.log_sample")?;
+        let adapter = adapter.bind(py);
+        let adapter_name = adapter.name()?;
+        let adapter_options = dump_kwargs(py, kwargs)?;
+        let diagnostics_collector = store_diagnostics
+            .then(|| Py::new(py, PyDiagnosticCollector::new_inner()))
+            .transpose()?;
+        let sample_set = match adapter.sample(instance, kwargs, diagnostics_collector.as_ref()) {
+            Ok(sample_set) => sample_set,
+            Err(error) => {
+                let status = if error.is_instance_of::<PyKeyboardInterrupt>(py) {
+                    SamplingStatus::Interrupted
+                } else {
+                    SamplingStatus::Failed
+                };
+                let diagnostics = pack_diagnostics_or_none(
+                    py,
+                    diagnostics_collector.as_ref(),
+                    "Failed to serialize failed Sampling diagnostics; recording Sampling without diagnostics",
+                );
+                let record_result = self.as_open_mut().and_then(|run| {
+                    run.log_failed_sample(FailedSampleRecord {
+                        input: &instance.inner,
+                        adapter: adapter_name,
+                        adapter_options,
+                        status,
+                        diagnostics,
+                    })
+                });
+                if let Err(record_error) = record_result {
+                    tracing::warn!(
+                        error = %record_error,
+                        "Failed to record failed Sampling attempt"
+                    );
+                }
+                return Err(error);
+            }
+        };
+        let diagnostics = pack_diagnostics_or_none(
+            py,
+            diagnostics_collector.as_ref(),
+            "Failed to serialize adapter diagnostics; recording Sampling without diagnostics",
+        );
+        let sampling_id = self
+            .as_open_mut()?
+            .log_finished_sample(FinishedSampleRecord {
+                input: &instance.inner,
+                output: &sample_set.inner,
+                adapter: adapter_name,
+                adapter_options,
+                diagnostics,
+            })?;
+        tracing::info!(sampling_id, "ommx.sampling.recorded");
+        Ok(sample_set)
     }
 
     /// Open a manual Solve scope for direct backend solver model access.
@@ -3045,7 +3146,7 @@ impl PyOpenSolveDiagnosticsState {
         py: Python<'_>,
         warning_message: &'static str,
     ) -> (
-        Option<SolveDiagnosticPayload>,
+        Option<AdapterDiagnosticPayload>,
         PyOpenSolveDiagnosticsPackOutcome,
     ) {
         let collector = match self {
@@ -3273,6 +3374,16 @@ impl SolverAdapterInput {
     }
 }
 
+pub struct SamplerAdapterInput(Py<PyType>);
+
+impl SamplerAdapterInput {
+    fn bind<'py>(&'py self, py: Python<'py>) -> SolverAdapter<'py> {
+        SolverAdapter {
+            adapter: self.0.bind(py),
+        }
+    }
+}
+
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust", name = "DiagnosticCollector")]
@@ -3287,7 +3398,7 @@ impl PyDiagnosticCollector {
         }
     }
 
-    fn pack(&self, py: Python<'_>) -> Result<Option<SolveDiagnosticPayload>> {
+    fn pack(&self, py: Python<'_>) -> Result<Option<AdapterDiagnosticPayload>> {
         DiagnosticReport::pack_reports(py, &self.diagnostics)
     }
 }
@@ -3327,7 +3438,7 @@ fn pack_diagnostics_or_none(
     py: Python<'_>,
     diagnostics_collector: Option<&Py<PyDiagnosticCollector>>,
     warning_message: &'static str,
-) -> Option<SolveDiagnosticPayload> {
+) -> Option<AdapterDiagnosticPayload> {
     let diagnostics_collector = diagnostics_collector?;
     match diagnostics_collector.bind(py).borrow().pack(py) {
         Ok(diagnostics) => diagnostics,
@@ -3368,7 +3479,7 @@ impl DiagnosticReport {
     fn pack_reports(
         py: Python<'_>,
         reports: &[DiagnosticReport],
-    ) -> Result<Option<SolveDiagnosticPayload>> {
+    ) -> Result<Option<AdapterDiagnosticPayload>> {
         if reports.is_empty() {
             return Ok(None);
         }
@@ -3387,7 +3498,7 @@ impl DiagnosticReport {
         let bytes: Vec<u8> = msgpack
             .call_method("packb", (&diagnostics,), Some(&kwargs))?
             .extract()?;
-        Ok(Some(SolveDiagnosticPayload::new(bytes)?))
+        Ok(Some(AdapterDiagnosticPayload::new(bytes)?))
     }
 }
 
@@ -3476,9 +3587,8 @@ impl<'py> SolverAdapter<'py> {
                 call_kwargs.set_item(key, value)?;
             }
         }
-        match diagnostics {
-            Some(diagnostics) => call_kwargs.set_item("diagnostics", diagnostics.bind(py))?,
-            None => call_kwargs.set_item("diagnostics", py.None())?,
+        if let Some(diagnostics) = diagnostics {
+            call_kwargs.set_item("diagnostics", diagnostics.bind(py))?;
         }
         let solution_object =
             self.adapter
@@ -3486,6 +3596,31 @@ impl<'py> SolverAdapter<'py> {
         solution_object
             .extract::<crate::Solution>()
             .map_err(|_| PyTypeError::new_err("adapter.solve(...) must return ommx.Solution"))
+    }
+
+    fn sample(
+        &self,
+        instance: &crate::Instance,
+        kwargs: Option<&Bound<'py, PyDict>>,
+        diagnostics: Option<&Py<PyDiagnosticCollector>>,
+    ) -> PyResult<crate::SampleSet> {
+        let py = self.py();
+        let adapter_instance = Py::new(py, instance.clone())?;
+        let call_kwargs = PyDict::new(py);
+        if let Some(kwargs) = kwargs {
+            for (key, value) in kwargs.iter() {
+                call_kwargs.set_item(key, value)?;
+            }
+        }
+        if let Some(diagnostics) = diagnostics {
+            call_kwargs.set_item("diagnostics", diagnostics.bind(py))?;
+        }
+        let sample_set_object =
+            self.adapter
+                .call_method("sample", (adapter_instance,), Some(&call_kwargs))?;
+        sample_set_object
+            .extract::<crate::SampleSet>()
+            .map_err(|_| PyTypeError::new_err("adapter.sample(...) must return ommx.SampleSet"))
     }
 
     fn name(&self) -> Result<String> {
@@ -3533,7 +3668,7 @@ fn dump_merged_kwargs(
     dump_kwargs(py, Some(&merged))
 }
 
-fn reject_reserved_log_solve_kwargs(kwargs: Option<&Bound<PyDict>>) -> Result<()> {
+fn reject_reserved_adapter_kwargs(kwargs: Option<&Bound<PyDict>>, operation: &str) -> Result<()> {
     let Some(kwargs) = kwargs else {
         return Ok(());
     };
@@ -3541,7 +3676,7 @@ fn reject_reserved_log_solve_kwargs(kwargs: Option<&Bound<PyDict>>) -> Result<()
         .call_method1("__contains__", ("diagnostics",))?
         .extract()?;
     if has_diagnostics {
-        anyhow::bail!("Run.log_solve owns the `diagnostics` adapter option");
+        anyhow::bail!("{operation} owns the `diagnostics` adapter option");
     }
     Ok(())
 }
@@ -3589,10 +3724,43 @@ impl<'py> FromPyObject<'_, 'py> for SolverAdapterInput {
     }
 }
 
+impl<'py> FromPyObject<'_, 'py> for SamplerAdapterInput {
+    type Error = PyErr;
+
+    fn extract(ob: pyo3::Borrowed<'_, 'py, PyAny>) -> PyResult<Self> {
+        let adapter = ob.extract::<Py<PyType>>().map_err(|_| {
+            PyTypeError::new_err("adapter must be a subclass of ommx.adapter.SamplerAdapter")
+        })?;
+        let adapter_bound = adapter.bind(ob.py());
+        let sampler_adapter = ob.py().import("ommx.adapter")?.getattr("SamplerAdapter")?;
+        if !adapter_bound.is_subclass(&sampler_adapter)? {
+            return Err(PyTypeError::new_err(
+                "adapter must be a subclass of ommx.adapter.SamplerAdapter",
+            ));
+        }
+        Ok(Self(adapter))
+    }
+}
+
 impl pyo3_stub_gen::PyStubType for SolverAdapterInput {
     fn type_input() -> pyo3_stub_gen::TypeInfo {
         pyo3_stub_gen::TypeInfo {
             name: "type[adapter.SolverAdapter]".to_string(),
+            source_module: None,
+            import: ["ommx.adapter".into()].into(),
+            type_refs: Default::default(),
+        }
+    }
+
+    fn type_output() -> pyo3_stub_gen::TypeInfo {
+        Self::type_input()
+    }
+}
+
+impl pyo3_stub_gen::PyStubType for SamplerAdapterInput {
+    fn type_input() -> pyo3_stub_gen::TypeInfo {
+        pyo3_stub_gen::TypeInfo {
+            name: "type[adapter.SamplerAdapter]".to_string(),
             source_module: None,
             import: ["ommx.adapter".into()].into(),
             type_refs: Default::default(),
@@ -3624,11 +3792,12 @@ impl pyo3_stub_gen::PyStubType for ParameterValueInput {
 #[pyo3(module = "ommx._ommx_rust", name = "SealedRun")]
 /// Immutable view of a closed Run in an Experiment.
 ///
-/// `SealedRun` exposes run-level attachments by name and the sequence of
-/// `Solve` records created by `Run.log_solve`. The `status` property records
+/// `SealedRun` exposes run-level attachments by name, `Solve` records created
+/// by `Run.log_solve`, and `Sampling` records created by `Run.log_sample`.
+/// The `status` property records
 /// how the Run scope was closed: `"finished"`, `"failed"`, or `"interrupted"`.
-/// It is not an aggregate status of child `Solve` records, so a finished Run
-/// may contain failed Solve attempts that were handled inside the Run.
+/// It is not an aggregate status of child records, so a finished Run may
+/// contain failed Solve or Sampling attempts handled inside the Run.
 pub struct PySealedRun {
     run: ommx::experiment::SealedRunDyn,
 }
@@ -3780,13 +3949,25 @@ impl PySealedRun {
         self.run.solves().iter().cloned().map(PySolve).collect()
     }
 
+    #[getter]
+    /// Sampling records logged in this run, ordered by `sampling_id`.
+    pub fn samplings(&self) -> Vec<PySampling> {
+        self.run
+            .samplings()
+            .iter()
+            .cloned()
+            .map(PySampling)
+            .collect()
+    }
+
     pub fn __repr__(&self) -> String {
         format!(
-            "SealedRun(run_id={}, status='{}', attachments={}, solves={})",
+            "SealedRun(run_id={}, status='{}', attachments={}, solves={}, samplings={})",
             self.run_id(),
             self.status(),
             self.run.attachment_count(),
             self.run.solves().len(),
+            self.run.samplings().len(),
         )
     }
 }
@@ -3797,10 +3978,9 @@ impl PySealedRun {
 #[derive(Clone)]
 /// Immutable record of one solver call.
 ///
-/// A `Solve` always stores the input `Instance`, adapter class name, and
-/// JSON-encoded adapter options for one `Run.log_solve` call. A finished Solve
-/// stores the output `Solution`; failed and interrupted Solve records have no
-/// output.
+/// A `Solve` always stores the input `Instance`, SolverAdapter class name, and
+/// JSON-encoded adapter options for one solver call. A finished Solve stores a
+/// `Solution`; failed and interrupted Solve records have no output.
 pub struct PySolve(ommx::experiment::SolveDyn);
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
@@ -3826,12 +4006,12 @@ impl PySolve {
     }
 
     #[getter]
-    /// Output `Solution` returned by the solver, or `None` if the solve failed before returning one.
+    /// Solution returned by the adapter, or `None` if the call failed before returning one.
     pub fn output(&self) -> Result<Option<crate::Solution>> {
-        let Some(inner) = self.0.output_solution()? else {
-            return Ok(None);
-        };
-        Ok(Some(crate::Solution { inner }))
+        Ok(self
+            .0
+            .output_solution()?
+            .map(|inner| crate::Solution { inner }))
     }
 
     #[getter]
@@ -3867,7 +4047,7 @@ impl PySolve {
     ))]
     /// Adapter-defined diagnostics recorded during this solve.
     pub fn diagnostics_property<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyList>> {
-        unpack_diagnostics(py, &self.0)
+        unpack_diagnostics_blob(py, self.0.diagnostic_blob()?, "Solve")
     }
 
     pub fn __repr__(&self) -> String {
@@ -3879,11 +4059,95 @@ impl PySolve {
     }
 }
 
-fn unpack_diagnostics<'py>(
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
+#[pyclass]
+#[pyo3(module = "ommx._ommx_rust", name = "Sampling")]
+#[derive(Clone)]
+/// Immutable record of one sampler call.
+///
+/// A finished Sampling stores a `SampleSet`; failed and interrupted Sampling
+/// records have no output.
+pub struct PySampling(ommx::experiment::SamplingDyn);
+
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
+#[pymethods]
+impl PySampling {
+    #[getter]
+    /// Integer identifier of this sampling within its run.
+    pub fn sampling_id(&self) -> u64 {
+        self.0.sampling_id()
+    }
+
+    #[getter]
+    /// Sampling lifecycle status: `"finished"`, `"failed"`, or `"interrupted"`.
+    pub fn status(&self) -> String {
+        self.0.status().to_string()
+    }
+
+    #[getter]
+    /// Input `Instance` passed to the sampler.
+    pub fn input(&self) -> Result<crate::Instance> {
+        Ok(crate::Instance {
+            inner: self.0.input_instance()?,
+        })
+    }
+
+    #[getter]
+    /// SampleSet returned by the adapter, or `None` if the call failed before returning one.
+    pub fn output(&self) -> Result<Option<crate::SampleSet>> {
+        Ok(self
+            .0
+            .output_sample_set()?
+            .map(|inner| crate::SampleSet { inner }))
+    }
+
+    #[getter]
+    /// SamplerAdapter class name used for this sampling.
+    pub fn adapter(&self) -> String {
+        self.0.adapter().to_string()
+    }
+
+    #[getter]
+    #[gen_stub(override_return_type(
+        type_repr = "builtins.dict[builtins.str, typing.Any]",
+        imports = ("builtins", "typing")
+    ))]
+    /// Keyword arguments passed to the SamplerAdapter.
+    pub fn adapter_options<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDict>> {
+        let json = py.import("json")?;
+        Ok(json
+            .call_method1("loads", (self.0.adapter_options(),))?
+            .cast::<PyDict>()
+            .map_err(|_| anyhow::anyhow!("Sampling.adapter_options must decode to a JSON object"))?
+            .clone())
+    }
+
+    #[getter]
+    #[pyo3(name = "diagnostics")]
+    #[gen_stub(override_return_type(
+        type_repr = "builtins.list[typing.Any]",
+        imports = ("builtins", "typing")
+    ))]
+    /// Adapter-defined diagnostics recorded during this sampling.
+    pub fn diagnostics_property<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyList>> {
+        unpack_diagnostics_blob(py, self.0.diagnostic_blob()?, "Sampling")
+    }
+
+    pub fn __repr__(&self) -> String {
+        format!(
+            "Sampling(sampling_id={}, status='{}')",
+            self.sampling_id(),
+            self.status()
+        )
+    }
+}
+
+fn unpack_diagnostics_blob<'py>(
     py: Python<'py>,
-    solve: &ommx::experiment::SolveDyn,
+    blob: Option<Vec<u8>>,
+    record_type: &str,
 ) -> Result<Bound<'py, PyList>> {
-    let Some(blob) = solve.diagnostic_blob()? else {
+    let Some(blob) = blob else {
         return Ok(PyList::empty(py));
     };
     let msgpack = py.import("msgpack")?;
@@ -3893,6 +4157,6 @@ fn unpack_diagnostics<'py>(
     let decoded = msgpack.call_method("unpackb", (PyBytes::new(py, &blob),), Some(&kwargs))?;
     Ok(decoded
         .cast::<PyList>()
-        .map_err(|_| anyhow::anyhow!("Solve diagnostics payload must decode to a list"))?
+        .map_err(|_| anyhow::anyhow!("{record_type} diagnostics payload must decode to a list"))?
         .clone())
 }

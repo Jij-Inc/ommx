@@ -25,9 +25,11 @@ In practical mathematical optimization, a workflow rarely ends by simply buildin
 * - {py:class}`~ommx.experiment.Experiment`
   - The whole experiment. It can have experiment-level Attachments and multiple Runs. It is the sharing unit, and it always has a container-style name.
 * - {py:class}`~ommx.experiment.Run`
-  - One trial within an experiment and the comparison unit. Since complex workflows often call solvers more than once, a Run can contain multiple solver calls (Solves). A Run can also have scalar parameters used as comparison axes, making it easy to compare Runs across the Experiment.
+  - One trial within an experiment and the comparison unit. A Run can contain multiple solver calls (Solves) and sampler calls (Samplings). A Run can also have scalar parameters used as comparison axes, making it easy to compare Runs across the Experiment.
 * - {py:class}`~ommx.experiment.Solve`
-  - One solver call within a Run. It always stores the input {py:class}`~ommx.Instance`, the Adapter used, and the options passed to the solver call. A finished Solve also stores the output {py:class}`~ommx.Solution`; a failed or interrupted Solve has no output.
+  - One solver call within a Run. It stores the input {py:class}`~ommx.Instance`, the SolverAdapter and its options, and the output {py:class}`~ommx.Solution` when finished.
+* - {py:class}`~ommx.experiment.Sampling`
+  - One sampler call within a Run. It stores the input {py:class}`~ommx.Instance`, the SamplerAdapter and its options, and the complete output {py:class}`~ommx.SampleSet` when finished.
 * - Attachment
   - An arbitrary payload attached to an Experiment or Run. It can store data types such as JSON, `numpy.ndarray`, {py:class}`~ommx.Instance`, and {py:class}`~ommx.Solution`, as well as arbitrary bytes with an explicit Media Type.
 ```
@@ -181,12 +183,14 @@ with Experiment() as experiment:
 All data stored during the experiment is saved in OMMX's *Local Registry*.
 
 - The OMMX Local Registry is storage for efficiently keeping OMMX Artifact components. You can change its location with the `OMMX_LOCAL_REGISTRY_ROOT` environment variable. APIs such as {py:meth}`~ommx.experiment.Experiment.with_temp_local_registry` can create and use a temporary Local Registry.
-- `log_json` and `log_solve` store data in the Local Registry immediately. They do not keep everything in memory and save it all at the end of the Experiment. Since storage paths are determined from the content of the data (SHA256 hash), identical data is stored only once per Local Registry.
+- `log_json`, `log_solve`, and `log_sample` store data in the Local Registry immediately. They do not keep everything in memory and save it all at the end of the Experiment. Since storage paths are determined from the content of the data (SHA256 hash), identical data is stored only once per Local Registry.
 - When the Experiment is finalized, OMMX stores JSON (the Artifact Manifest) that lists all data saved during the Experiment, and stores a tag in the Local Registry pointing to this Artifact Manifest under the Experiment name chosen at startup or generated automatically.
 
 ### When You Need Direct Solver Model Access
 
 Most runs should use {py:meth}`~ommx.experiment.Run.log_solve`, which calls the adapter's `solve` method and records the input, output, adapter name, and adapter options in one step. When you need advanced solver features that the Adapter API does not cover, open a manual Solve scope.
+
+For a {py:class}`~ommx.adapter.SamplerAdapter`, use {py:meth}`~ommx.experiment.Run.log_sample` instead. It calls the adapter's `sample` method and records a separate {py:class}`~ommx.experiment.Sampling` whose output is the complete {py:class}`~ommx.SampleSet`. The Sampling is still recorded as finished when the adapter succeeds but the SampleSet contains no feasible sample. Loaded Sampling records are available through {py:attr}`~ommx.experiment.SealedRun.samplings`.
 
 In a manual Solve scope, first get the backend solver model through `solver_input`, then operate on that model and run the optimization yourself. Finally, call `solve.decode(model)`: the adapter converts the backend result into an {py:class}`~ommx.Solution`, and that Solution becomes the output of the Solve recorded in the Experiment.
 
@@ -324,9 +328,9 @@ restored_jij_problem = loaded_experiment.get_with_codec(
 assert restored_jij_problem.name == jij_problem.name
 ```
 
-### Runs and Solves
+### Runs, Solves, and Samplings
 
-The list of Runs is available from {py:attr}`~ommx.experiment.Experiment.runs`. Finished Runs are ordered by creation time, and each Run exposes its Attachments and Solves.
+The list of Runs is available from {py:attr}`~ommx.experiment.Experiment.runs`. Finished Runs are ordered by creation time, and each Run exposes its Attachments, Solves, and Samplings.
 
 If a Run was recorded with trace storage enabled, {py:attr}`~ommx.experiment.SealedRun.trace` returns the stored Run trace. Trace storage is an advanced feature; see {ref}`experiment-run-trace-storage` for details.
 
@@ -393,6 +397,6 @@ forked_df = forked_experiment.run_parameters_df()
 assert forked_df.loc[2, "capacity"] == 64
 ```
 
-A forked Experiment inherits Solve and Attachment data, but the data itself is stored in the Local Registry based on its content. Forking does not duplicate that data. Only the Artifact Manifest, which lists the stored data, is duplicated, and the forked Experiment points to the same data as the original Experiment.
+A forked Experiment inherits Solve, Sampling, and Attachment data, but the data itself is stored in the Local Registry based on its content. Forking does not duplicate that data. Only the Artifact Manifest, which lists the stored data, is duplicated, and the forked Experiment points to the same data as the original Experiment.
 
-When you share a forked Experiment with {py:meth}`~ommx.experiment.Experiment.save` or {py:meth}`~ommx.experiment.Experiment.push`, what you share is the entire forked Experiment. Attachments, Runs, and Solves inherited from the original Experiment are also included in the forked Artifact's `layers`, so reading the forked Experiment does not require the original Experiment.
+When you share a forked Experiment with {py:meth}`~ommx.experiment.Experiment.save` or {py:meth}`~ommx.experiment.Experiment.push`, what you share is the entire forked Experiment. Attachments, Runs, Solves, and Samplings inherited from the original Experiment are also included in the forked Artifact's `layers`, so reading the forked Experiment does not require the original Experiment.

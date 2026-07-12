@@ -487,7 +487,12 @@ In the case of PySCIPOpt, we inherited `SolverAdapter`, but this time we will in
 class SamplerAdapter(SolverAdapter):
     @classmethod
     @abstractmethod
-    def sample(cls, ommx_instance: Instance) -> SampleSet:
+    def sample(
+        cls,
+        ommx_instance: Instance,
+        *,
+        diagnostics: DiagnosticsSink | None = None,
+    ) -> SampleSet:
         pass
 
     @property
@@ -501,6 +506,8 @@ class SamplerAdapter(SolverAdapter):
 ```
 
 `SamplerAdapter` inherits from `SolverAdapter`, so you might think you need to implement `solve` and other `@abstractmethod`. However, since `SamplerAdapter` has a function to return the best sample using `sample`, it is sufficient to implement only `sample`. If you want to implement a more efficient implementation yourself, override `solve`.
+
+As with `solve`, the reserved `diagnostics` keyword is owned by `Run.log_sample`. A sampler may record adapter-defined reports into the sink when it is not `None`.
 
 ```{code-cell} ipython3
 from ommx.adapter import DiagnosticsSink, SamplerAdapter
@@ -527,7 +534,13 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
 
     # Common method for performing sampling
     @classmethod
-    def sample(cls, ommx_instance: Instance) -> SampleSet:
+    def sample(
+        cls,
+        ommx_instance: Instance,
+        *,
+        diagnostics: DiagnosticsSink | None = None,
+    ) -> SampleSet:
+        _ = diagnostics
         adapter = cls(ommx_instance)
         response = adapter._sample()
         return adapter.decode_to_sampleset(response)

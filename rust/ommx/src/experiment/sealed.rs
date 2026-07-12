@@ -2,11 +2,11 @@
 
 use super::artifact::ExperimentArtifactView;
 use super::attachment::{validate_attachment_storage, AttachmentTable};
-use super::config::{ExperimentConfigSolve, LayerRef};
+use super::config::{ExperimentConfigSampling, ExperimentConfigSolve, LayerRef};
 use super::parameter::{RunParameterCell, RunParameterTable};
 use super::{
-    read_solve_diagnostic_payload, ExperimentStatus, RunStatus, SealedExperiment,
-    SolveDiagnosticPayload, SolveStatus, Trace, EXPERIMENT_ARTIFACT_MEDIA_TYPE,
+    read_adapter_diagnostic_payload, AdapterDiagnosticPayload, ExperimentStatus, RunStatus,
+    SamplingStatus, SealedExperiment, SolveStatus, Trace, EXPERIMENT_ARTIFACT_MEDIA_TYPE,
     EXPERIMENT_CONFIG_MEDIA_TYPE, RUN_PARAMETERS_MEDIA_TYPE,
 };
 use crate::artifact::local_registry::{
@@ -69,6 +69,7 @@ impl<'reg> SealedExperiment<'reg> {
                 decode_attachments(&layers, run.attachments, &format!("run {}", run.run_id))?;
             let trace = decode_trace(&layers, run.trace, run.run_id)?;
             let solves = decode_solves(&layers, run.run_id, run.solves)?;
+            let samplings = decode_samplings(&layers, run.run_id, run.samplings)?;
             let status = RunStatus::from_config(&run.status)
                 .with_context(|| format!("Invalid Run {} status", run.run_id))?;
             if runs
@@ -80,6 +81,7 @@ impl<'reg> SealedExperiment<'reg> {
                         attachments,
                         trace,
                         solves,
+                        samplings,
                     },
                 )
                 .is_some()
@@ -216,6 +218,7 @@ pub struct SealedRun<'reg> {
     attachments: AttachmentTable<StoredDescriptor<'reg>>,
     trace: Option<StoredDescriptor<'reg>>,
     solves: Vec<Solve<'reg>>,
+    samplings: Vec<Sampling<'reg>>,
 }
 
 impl<'reg> SealedRun<'reg> {
@@ -291,6 +294,10 @@ impl<'reg> SealedRun<'reg> {
     pub fn solves(&self) -> &[Solve<'reg>] {
         &self.solves
     }
+
+    pub fn samplings(&self) -> &[Sampling<'reg>] {
+        &self.samplings
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -330,11 +337,11 @@ impl<'reg> Solve<'reg> {
     }
 
     /// Decode the adapter diagnostics payload recorded for this solve.
-    pub fn diagnostic_payload(&self) -> Result<Option<SolveDiagnosticPayload>> {
+    pub fn diagnostic_payload(&self) -> Result<Option<AdapterDiagnosticPayload>> {
         let Some(descriptor) = &self.diagnostics else {
             return Ok(None);
         };
-        let (_, payload) = read_solve_diagnostic_payload(self.solve_id, descriptor)?;
+        let (_, payload) = read_adapter_diagnostic_payload("Solve", self.solve_id, descriptor)?;
         Ok(Some(payload))
     }
 
@@ -343,7 +350,7 @@ impl<'reg> Solve<'reg> {
         let Some(descriptor) = &self.diagnostics else {
             return Ok(None);
         };
-        let (bytes, _) = read_solve_diagnostic_payload(self.solve_id, descriptor)?;
+        let (bytes, _) = read_adapter_diagnostic_payload("Solve", self.solve_id, descriptor)?;
         Ok(Some(bytes))
     }
 
@@ -351,11 +358,83 @@ impl<'reg> Solve<'reg> {
         self.input.registry().get_instance_layer(&self.input)
     }
 
+    /// Decode the Solution returned by this Solve.
     pub fn output_solution(&self) -> Result<Option<Solution>> {
         let Some(output) = &self.output else {
             return Ok(None);
         };
         Ok(Some(output.registry().get_solution_layer(output)?))
+    }
+
+    pub fn adapter(&self) -> &str {
+        &self.adapter
+    }
+
+    pub fn adapter_options(&self) -> &str {
+        &self.adapter_options
+    }
+}
+
+/// Read-only Sampling record reconstructed from a sealed Experiment config.
+#[derive(Debug, Clone)]
+pub struct Sampling<'reg> {
+    sampling_id: u64,
+    status: SamplingStatus,
+    input: StoredDescriptor<'reg>,
+    output: Option<StoredDescriptor<'reg>>,
+    adapter: String,
+    adapter_options: String,
+    diagnostics: Option<StoredDescriptor<'reg>>,
+}
+
+impl<'reg> Sampling<'reg> {
+    pub fn sampling_id(&self) -> u64 {
+        self.sampling_id
+    }
+
+    pub fn status(&self) -> &SamplingStatus {
+        &self.status
+    }
+
+    pub(crate) fn input_descriptor(&self) -> &StoredDescriptor<'reg> {
+        &self.input
+    }
+
+    pub(crate) fn output_descriptor(&self) -> Option<&StoredDescriptor<'reg>> {
+        self.output.as_ref()
+    }
+
+    pub(crate) fn diagnostic_descriptor(&self) -> Option<&StoredDescriptor<'reg>> {
+        self.diagnostics.as_ref()
+    }
+
+    pub fn diagnostic_payload(&self) -> Result<Option<AdapterDiagnosticPayload>> {
+        let Some(descriptor) = &self.diagnostics else {
+            return Ok(None);
+        };
+        let (_, payload) =
+            read_adapter_diagnostic_payload("Sampling", self.sampling_id, descriptor)?;
+        Ok(Some(payload))
+    }
+
+    pub fn diagnostic_blob(&self) -> Result<Option<Vec<u8>>> {
+        let Some(descriptor) = &self.diagnostics else {
+            return Ok(None);
+        };
+        let (bytes, _) = read_adapter_diagnostic_payload("Sampling", self.sampling_id, descriptor)?;
+        Ok(Some(bytes))
+    }
+
+    pub fn input_instance(&self) -> Result<Instance> {
+        self.input.registry().get_instance_layer(&self.input)
+    }
+
+    /// Decode the SampleSet returned by this Sampling.
+    pub fn output_sample_set(&self) -> Result<Option<SampleSet>> {
+        let Some(output) = &self.output else {
+            return Ok(None);
+        };
+        Ok(Some(output.registry().get_sample_set_layer(output)?))
     }
 
     pub fn adapter(&self) -> &str {
@@ -450,10 +529,12 @@ fn decode_solves<'reg>(
                         )
                     })?
                     .clone();
-                crate::artifact::media_types::solution_payload_version(descriptor.media_type())
-                    .with_context(|| {
-                        format!("Invalid Run {run_id} Solve {} output", solve.solve_id)
-                    })?;
+                anyhow::ensure!(
+                    media_types::is_solution_payload_media_type(descriptor.media_type()),
+                    "Invalid Run {run_id} Solve {} output media type: {}, expected an OMMX Solution payload",
+                    solve.solve_id,
+                    descriptor.media_type(),
+                );
                 Ok::<_, anyhow::Error>(descriptor)
             })
             .transpose()?;
@@ -480,7 +561,7 @@ fn decode_solves<'reg>(
                             format!("Invalid Run {run_id} Solve {} diagnostic", solve.solve_id)
                         })?;
                     let bytes = descriptor.registry().get_blob(&descriptor)?;
-                    SolveDiagnosticPayload::new(bytes).with_context(|| {
+                    AdapterDiagnosticPayload::new(bytes).with_context(|| {
                         format!(
                             "Invalid Run {run_id} Solve {} diagnostic payload",
                             solve.solve_id
@@ -491,6 +572,114 @@ fn decode_solves<'reg>(
                 .transpose()?,
         });
     }
+    decoded.sort_by_key(Solve::solve_id);
+    Ok(decoded)
+}
+
+fn decode_samplings<'reg>(
+    layers: &[StoredDescriptor<'reg>],
+    run_id: u64,
+    samplings: Vec<ExperimentConfigSampling>,
+) -> Result<Vec<Sampling<'reg>>> {
+    let mut decoded = Vec::new();
+    let mut seen = std::collections::BTreeSet::new();
+    for sampling in samplings {
+        if !seen.insert(sampling.sampling_id) {
+            crate::bail!(
+                "Run {run_id} contains duplicate Sampling {}",
+                sampling.sampling_id
+            );
+        }
+        let input = resolve_layer(layers, sampling.input)
+            .with_context(|| {
+                format!(
+                    "Failed to resolve Run {run_id} Sampling {} input LayerRef {}",
+                    sampling.sampling_id, sampling.input.0
+                )
+            })?
+            .clone();
+        media_types::instance_payload_version(input.media_type()).with_context(|| {
+            format!(
+                "Invalid Run {run_id} Sampling {} input",
+                sampling.sampling_id
+            )
+        })?;
+        let status = SamplingStatus::from_config(&sampling.status).with_context(|| {
+            format!(
+                "Invalid Run {run_id} Sampling {} status",
+                sampling.sampling_id
+            )
+        })?;
+        if status == SamplingStatus::Finished && sampling.output.is_none() {
+            crate::bail!(
+                "Run {run_id} Sampling {} is finished but has no output",
+                sampling.sampling_id
+            );
+        }
+        if status != SamplingStatus::Finished && sampling.output.is_some() {
+            crate::bail!(
+                "Run {run_id} Sampling {} has status {status} but has an output",
+                sampling.sampling_id
+            );
+        }
+        let output = sampling
+            .output
+            .map(|layer_ref| {
+                let descriptor = resolve_layer(layers, layer_ref)
+                    .with_context(|| {
+                        format!(
+                            "Failed to resolve Run {run_id} Sampling {} output LayerRef {}",
+                            sampling.sampling_id, layer_ref.0
+                        )
+                    })?
+                    .clone();
+                anyhow::ensure!(
+                    media_types::is_sample_set_payload_media_type(descriptor.media_type()),
+                    "Invalid Run {run_id} Sampling {} output media type: {}, expected an OMMX SampleSet payload",
+                    sampling.sampling_id,
+                    descriptor.media_type(),
+                );
+                Ok::<_, anyhow::Error>(descriptor)
+            })
+            .transpose()?;
+        decoded.push(Sampling {
+            sampling_id: sampling.sampling_id,
+            status,
+            input,
+            output,
+            adapter: sampling.adapter,
+            adapter_options: sampling.adapter_options,
+            diagnostics: sampling
+                .diagnostics
+                .map(|layer_ref| {
+                    let descriptor = resolve_layer(layers, layer_ref)
+                        .with_context(|| {
+                            format!(
+                                "Failed to resolve Run {run_id} Sampling {} diagnostic LayerRef {}",
+                                sampling.sampling_id, layer_ref.0
+                            )
+                        })?
+                        .clone();
+                    validate_layer_media_type(&descriptor, &media_types::diagnostic_msgpack())
+                        .with_context(|| {
+                            format!(
+                                "Invalid Run {run_id} Sampling {} diagnostic",
+                                sampling.sampling_id
+                            )
+                        })?;
+                    let bytes = descriptor.registry().get_blob(&descriptor)?;
+                    AdapterDiagnosticPayload::new(bytes).with_context(|| {
+                        format!(
+                            "Invalid Run {run_id} Sampling {} diagnostic payload",
+                            sampling.sampling_id
+                        )
+                    })?;
+                    Ok::<StoredDescriptor<'reg>, anyhow::Error>(descriptor)
+                })
+                .transpose()?,
+        });
+    }
+    decoded.sort_by_key(Sampling::sampling_id);
     Ok(decoded)
 }
 
