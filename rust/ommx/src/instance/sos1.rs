@@ -1,4 +1,4 @@
-use super::Instance;
+use super::{Instance, GENERATED_CONSTRAINT_IDS_PARAMETER, SOS1_LOWERING_REASON};
 use crate::{
     coeff,
     constraint::{ConstraintContext, ConstraintID, Provenance, RemovedReason},
@@ -240,12 +240,15 @@ impl Instance {
             .map(|id| id.into_inner().to_string())
             .collect::<Vec<_>>()
             .join(",");
-        parameters.insert("constraint_ids".to_string(), constraint_ids_str);
+        parameters.insert(
+            GENERATED_CONSTRAINT_IDS_PARAMETER.to_string(),
+            constraint_ids_str,
+        );
         self.sos1_constraint_collection
             .relax(
                 id,
                 RemovedReason {
-                    reason: "ommx.Instance.convert_sos1_to_constraints".to_string(),
+                    reason: SOS1_LOWERING_REASON.to_string(),
                     parameters,
                 },
             )
