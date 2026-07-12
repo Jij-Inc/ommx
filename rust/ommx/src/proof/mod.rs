@@ -12,3 +12,5 @@
 
 mod exact;
 mod linear;
+
+pub(crate) use linear::verify_indicator_big_m_v1;

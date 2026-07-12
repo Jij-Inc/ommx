@@ -1,4 +1,7 @@
-use super::Instance;
+use super::{
+    reduction::AssignmentMap, AdditionalCapability, Capabilities, Instance,
+    GENERATED_CONSTRAINT_IDS_PARAMETER, INDICATOR_LOWERING_REASON,
+};
 use crate::{
     constraint::{ConstraintContext, ConstraintID, Equality, Provenance, RemovedReason},
     indicator_constraint::IndicatorConstraintID,
@@ -13,7 +16,107 @@ struct IndicatorPlan {
     generated_constraints: Vec<Constraint>,
 }
 
+/// Private one-shot plan for an exact checked inverse lowering.
+///
+/// All fallible proof and storage work is applied to `staged`. Committing the
+/// plan is one infallible replacement of the root Instance.
+#[allow(dead_code)] // Used by the stacked public inverse-lowering facade.
+struct IndicatorInversePlan {
+    staged: Instance,
+    assignment_map: AssignmentMap,
+}
+
+#[allow(dead_code)] // Used by the stacked public inverse-lowering facade.
+impl IndicatorInversePlan {
+    fn commit(self, target: &mut Instance) -> AssignmentMap {
+        *target = self.staged;
+        self.assignment_map
+    }
+}
+
 impl Instance {
+    /// Restore one Indicator that this Instance previously lowered, after
+    /// exact branch verification of the complete current representation.
+    ///
+    /// Private while the common reduction result and public capability request
+    /// API are still being exercised by the first family consumers.
+    /// `permitted_additions` is an explicit permission for the semantic
+    /// capability introduced by this operation; it is not a declaration of
+    /// every capability already present in the Instance.
+    #[allow(dead_code)] // Used by the stacked public inverse-lowering facade.
+    pub(super) fn restore_indicator_from_lowering_checked(
+        &mut self,
+        id: IndicatorConstraintID,
+        permitted_additions: &Capabilities,
+    ) -> Result<AssignmentMap> {
+        let plan = self.plan_indicator_inverse(id, permitted_additions)?;
+        Ok(plan.commit(self))
+    }
+
+    #[allow(dead_code)] // Used by the checked inverse entry point above.
+    fn plan_indicator_inverse(
+        &self,
+        id: IndicatorConstraintID,
+        permitted_additions: &Capabilities,
+    ) -> Result<IndicatorInversePlan> {
+        if !permitted_additions.contains(&AdditionalCapability::Indicator) {
+            bail!(
+                "Restoring Indicator constraint {id:?} requires explicit Indicator capability permission"
+            );
+        }
+
+        let verified = crate::proof::verify_indicator_big_m_v1(self, id)?;
+        debug_assert_eq!(verified.source_id(), id);
+        for variable_id in verified.source().required_ids() {
+            if !self.decision_variables.contains_key(&variable_id) {
+                bail!(
+                    "Cannot restore Indicator constraint {id:?}: variable {variable_id:?} is not registered"
+                );
+            }
+            if self
+                .decision_variable_dependency
+                .get(&variable_id)
+                .is_some()
+            {
+                bail!(
+                    "Cannot restore Indicator constraint {id:?}: variable {variable_id:?} is a dependency target"
+                );
+            }
+            if self
+                .fixed_decision_variable_values()
+                .contains_key(&variable_id)
+            {
+                bail!(
+                    "Cannot restore Indicator constraint {id:?}: variable {variable_id:?} is fixed"
+                );
+            }
+        }
+
+        let generated_rows = verified.generated_rows().iter().copied().collect();
+        let assignment_map =
+            AssignmentMap::identity(self.decision_variables.keys().copied().collect());
+        let mut staged = self.clone();
+        staged
+            .constraint_collection
+            .consume_active_rows(&generated_rows)?;
+        staged
+            .indicator_constraint_collection
+            .restore_removed_row(id, verified.source().clone())?;
+        debug_assert!(staged.constraint_collection.validate_context_ids().is_ok());
+        debug_assert!(staged
+            .indicator_constraint_collection
+            .validate_context_ids()
+            .is_ok());
+        debug_assert!(staged
+            .required_capabilities()
+            .contains(&AdditionalCapability::Indicator));
+
+        Ok(IndicatorInversePlan {
+            staged,
+            assignment_map,
+        })
+    }
+
     #[cfg_attr(doc, katexit::katexit)]
     /// Convert an indicator constraint to regular constraints using the Big-M method.
     ///
@@ -227,12 +330,15 @@ impl Instance {
             .map(|id| id.into_inner().to_string())
             .collect::<Vec<_>>()
             .join(",");
-        parameters.insert("constraint_ids".to_string(), constraint_ids_str);
+        parameters.insert(
+            GENERATED_CONSTRAINT_IDS_PARAMETER.to_string(),
+            constraint_ids_str,
+        );
         self.indicator_constraint_collection
             .relax(
                 id,
                 RemovedReason {
-                    reason: "ommx.Instance.convert_indicator_to_constraint".to_string(),
+                    reason: INDICATOR_LOWERING_REASON.to_string(),
                     parameters,
                 },
             )
@@ -265,11 +371,15 @@ mod tests {
     use super::*;
     use crate::{
         coeff, indicator_constraint::IndicatorConstraint, linear, Bound, DecisionVariable,
-        Function, Kind, Sense, VariableID,
+        Function, Kind, ModelingLabel, Sense, Sos1Constraint, Substitute, VariableID,
     };
     use ::approx::assert_abs_diff_eq;
     use maplit::btreemap;
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, BTreeSet};
+
+    fn indicator_capability() -> Capabilities {
+        [AdditionalCapability::Indicator].into_iter().collect()
+    }
 
     /// Build an instance with one binary indicator `y` (id=10) and a continuous
     /// `x` (id=1) with the given bound, plus a single indicator constraint
@@ -560,6 +670,246 @@ mod tests {
 
         assert_eq!(instance.indicator_constraints(), &before_indicators);
         assert_eq!(instance.constraints(), &before_constraints);
+    }
+
+    #[test]
+    fn checked_inverse_restores_indicator_and_consumes_generated_rows_atomically() {
+        let mut instance = single_indicator_instance(
+            Bound::new(0.0, 5.0).unwrap(),
+            Equality::EqualToZero,
+            Function::from((linear!(1) + coeff!(-2.0)).unwrap()),
+        );
+        instance
+            .set_indicator_constraint_context(
+                IndicatorConstraintID::from(7),
+                ConstraintContext {
+                    label: ModelingLabel {
+                        name: Some("source-indicator".to_string()),
+                        ..Default::default()
+                    },
+                    provenance: Vec::new(),
+                },
+            )
+            .unwrap();
+        let generated = instance
+            .convert_indicator_to_constraint(IndicatorConstraintID::from(7))
+            .unwrap();
+        assert_eq!(generated.len(), 2);
+
+        let map = instance
+            .restore_indicator_from_lowering_checked(
+                IndicatorConstraintID::from(7),
+                &indicator_capability(),
+            )
+            .unwrap();
+
+        assert!(instance
+            .indicator_constraints()
+            .contains_key(&IndicatorConstraintID::from(7)));
+        assert!(!instance
+            .removed_indicator_constraints()
+            .contains_key(&IndicatorConstraintID::from(7)));
+        for id in generated {
+            assert!(!instance.constraints().contains_key(&id));
+            assert!(!instance.removed_constraints().contains_key(&id));
+            assert!(!instance.constraint_context().contains(id));
+        }
+        assert_eq!(
+            instance
+                .indicator_constraint_context()
+                .name(IndicatorConstraintID::from(7)),
+            Some("source-indicator")
+        );
+        assert!(instance
+            .required_capabilities()
+            .contains(&AdditionalCapability::Indicator));
+
+        let state = crate::v1::State::from(std::collections::HashMap::from([(1, 2.0), (10, 1.0)]));
+        assert_eq!(map.project_state(&state).unwrap(), state);
+        assert_eq!(map.lift_state(&state).unwrap(), state);
+
+        let round_trip = Instance::from_v2_bytes(&instance.to_v2_bytes()).unwrap();
+        assert_eq!(round_trip, instance);
+    }
+
+    #[test]
+    fn checked_inverse_requires_explicit_family_capability_without_requiring_others() {
+        let mut denied = single_indicator_instance(
+            Bound::new(0.0, 5.0).unwrap(),
+            Equality::LessThanOrEqualToZero,
+            Function::from((linear!(1) + coeff!(-2.0)).unwrap()),
+        );
+        denied
+            .convert_indicator_to_constraint(IndicatorConstraintID::from(7))
+            .unwrap();
+        let before = denied.clone();
+        let before_bytes = denied.to_v2_bytes();
+        let error = denied
+            .restore_indicator_from_lowering_checked(
+                IndicatorConstraintID::from(7),
+                &Capabilities::new(),
+            )
+            .unwrap_err();
+        assert!(error.to_string().contains("explicit Indicator capability"));
+        assert_eq!(denied, before);
+        assert_eq!(denied.to_v2_bytes(), before_bytes);
+
+        let mut allowed = before;
+        allowed
+            .add_sos1_constraint(
+                Sos1Constraint::new(BTreeSet::from([VariableID::from(1)])).unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        allowed
+            .restore_indicator_from_lowering_checked(
+                IndicatorConstraintID::from(7),
+                &indicator_capability(),
+            )
+            .unwrap();
+        assert_eq!(
+            allowed.required_capabilities(),
+            [AdditionalCapability::Indicator, AdditionalCapability::Sos1]
+                .into_iter()
+                .collect()
+        );
+    }
+
+    #[test]
+    fn checked_inverse_rejects_rounding_damaged_history_without_mutation() {
+        let mut instance = single_indicator_instance(
+            Bound::new(0.0, 1.0e20).unwrap(),
+            Equality::LessThanOrEqualToZero,
+            Function::from((linear!(1) + coeff!(1.0)).unwrap()),
+        );
+        instance
+            .convert_indicator_to_constraint(IndicatorConstraintID::from(7))
+            .unwrap();
+        let before = instance.clone();
+        let before_bytes = instance.to_v2_bytes();
+
+        let error = instance
+            .restore_indicator_from_lowering_checked(
+                IndicatorConstraintID::from(7),
+                &indicator_capability(),
+            )
+            .unwrap_err();
+
+        assert!(error.to_string().contains("active upper side exactly"));
+        assert_eq!(instance, before);
+        assert_eq!(instance.to_v2_bytes(), before_bytes);
+    }
+
+    #[test]
+    fn checked_inverse_rejects_partial_evaluated_history_without_mutation() {
+        let mut instance = single_indicator_instance(
+            Bound::new(0.0, 5.0).unwrap(),
+            Equality::LessThanOrEqualToZero,
+            Function::from((linear!(1) + coeff!(-2.0)).unwrap()),
+        );
+        instance
+            .convert_indicator_to_constraint(IndicatorConstraintID::from(7))
+            .unwrap();
+        instance
+            .partial_evaluate(
+                &crate::v1::State::from_iter([(1, 1.0)]),
+                crate::ATol::default(),
+            )
+            .unwrap();
+        let before = instance.clone();
+        let before_bytes = instance.to_v2_bytes();
+
+        let error = instance
+            .restore_indicator_from_lowering_checked(
+                IndicatorConstraintID::from(7),
+                &indicator_capability(),
+            )
+            .unwrap_err();
+
+        assert!(error.to_string().contains("active upper side exactly"));
+        assert_eq!(instance, before);
+        assert_eq!(instance.to_v2_bytes(), before_bytes);
+    }
+
+    #[test]
+    fn checked_inverse_rejects_substituted_history_without_mutation() {
+        let mut instance = single_indicator_instance(
+            Bound::new(0.0, 5.0).unwrap(),
+            Equality::LessThanOrEqualToZero,
+            Function::from((linear!(1) + coeff!(-2.0)).unwrap()),
+        );
+        instance
+            .convert_indicator_to_constraint(IndicatorConstraintID::from(7))
+            .unwrap();
+        instance = instance
+            .substitute_one(VariableID::from(1), &Function::zero())
+            .unwrap();
+        let before = instance.clone();
+        let before_bytes = instance.to_v2_bytes();
+
+        let error = instance
+            .restore_indicator_from_lowering_checked(
+                IndicatorConstraintID::from(7),
+                &indicator_capability(),
+            )
+            .unwrap_err();
+
+        assert!(error.to_string().contains("active upper side exactly"));
+        assert_eq!(instance, before);
+        assert_eq!(instance.to_v2_bytes(), before_bytes);
+    }
+
+    #[test]
+    fn checked_inverse_rejects_fixed_or_dependent_source_coordinates_without_mutation() {
+        // The source is already implied by x's bounds, so the lowerer emits no
+        // rows. This lets the proof succeed after owner-level transformations
+        // and exercises the explicit coordinate guards themselves.
+        let zero_row_instance = || {
+            let mut instance = single_indicator_instance(
+                Bound::new(0.0, 5.0).unwrap(),
+                Equality::LessThanOrEqualToZero,
+                Function::from((linear!(1) + coeff!(-10.0)).unwrap()),
+            );
+            assert!(instance
+                .convert_indicator_to_constraint(IndicatorConstraintID::from(7))
+                .unwrap()
+                .is_empty());
+            instance
+        };
+
+        let mut fixed = zero_row_instance();
+        fixed
+            .partial_evaluate(
+                &crate::v1::State::from_iter([(1, 1.0)]),
+                crate::ATol::default(),
+            )
+            .unwrap();
+        let before = fixed.clone();
+        let before_bytes = fixed.to_v2_bytes();
+        let error = fixed
+            .restore_indicator_from_lowering_checked(
+                IndicatorConstraintID::from(7),
+                &indicator_capability(),
+            )
+            .unwrap_err();
+        assert!(error.to_string().contains("is fixed"));
+        assert_eq!(fixed, before);
+        assert_eq!(fixed.to_v2_bytes(), before_bytes);
+
+        let mut dependency = zero_row_instance()
+            .substitute_one(VariableID::from(1), &Function::zero())
+            .unwrap();
+        let before = dependency.clone();
+        let before_bytes = dependency.to_v2_bytes();
+        let error = dependency
+            .restore_indicator_from_lowering_checked(
+                IndicatorConstraintID::from(7),
+                &indicator_capability(),
+            )
+            .unwrap_err();
+        assert!(error.to_string().contains("dependency target"));
+        assert_eq!(dependency, before);
+        assert_eq!(dependency.to_v2_bytes(), before_bytes);
     }
 
     #[test]

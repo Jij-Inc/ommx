@@ -7,6 +7,8 @@ use std::collections::BTreeMap;
 mod activity;
 mod candidate;
 
+pub(crate) use candidate::verify_indicator_big_m_v1;
+
 const FINGERPRINT_DOMAIN: &[u8] = b"org.ommx.proof.linear-relaxation\0";
 const FINGERPRINT_VERSION: u32 = 1;
 
