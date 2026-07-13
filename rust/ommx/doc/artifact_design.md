@@ -45,14 +45,16 @@ with off-the-shelf tools (`oras`, `crane`, `skopeo`).
 | Image reference | The name an Artifact is known by — `host[:port]/name(:tag\|@digest)`. Optional at commit time (§1.1) |
 | Manifest | Small JSON describing the Artifact: `artifactType`, `config`, an ordered list of layer descriptors, optional `subject` for lineage. An OCI Image Manifest, stored verbatim |
 | Descriptor | `{ mediaType, digest, size, annotations }` — a typed pointer to a content-addressed blob (OCI 1.1) |
-| Layer / blob | The actual payload bytes (a serialized [`v1::Instance`](crate::v1::Instance), a Parquet `DataFrame`, …). Identified by digest. OMMX-typed layers carry protobuf wire bytes under `crate::v1::*`; the semantic Rust wrappers (`crate::Instance`, etc.) are SDK conveniences, not what is written to disk |
+| Layer / blob | The actual payload bytes (a serialized [`Instance`](crate::Instance), a Parquet `DataFrame`, …), identified by digest. OMMX-typed root layers are written as `ommx.v2` protobuf bytes by default; typed readers accept both `ommx.v1` and `ommx.v2`. The semantic Rust wrappers are SDK views over those wire payloads, not what is written to disk |
 | Tag | Mutable alias for a digest (e.g. `:v1`, `:latest`) |
 | Digest | Immutable identifier (`sha256:…`); the primary key for an Artifact version. Content hash of the manifest |
 
-OMMX-specific Artifacts are identified by the manifest's top-level
-`artifactType` field set to `application/org.ommx.v1.artifact`. This
-is the OCI 1.1 pattern: an Image Manifest with `artifactType` plus an
-empty `config` descriptor.
+Generic OMMX Artifacts are identified by the manifest's top-level
+`artifactType` field set to `application/org.ommx.v1.artifact` and use an OCI
+empty config descriptor. Experiment Artifacts use the dedicated
+`application/org.ommx.v1.experiment` artifact type and a typed
+`application/org.ommx.v1.experiment.config+json` config. Both follow the OCI
+1.1 pattern of an Image Manifest with an `artifactType` discriminator.
 
 ## Where Artifacts live
 
@@ -228,13 +230,12 @@ directory) is **not** the Local Registry's internal format. It is an
 | Boundary | Direction | Format |
 |---|---|---|
 | `.ommx` archive | Import / export | Tar of OCI Image Layout |
-| Explicit directory export | Export | OCI Image Layout |
 | v2 OMMX local registry tree | Import (legacy) | OCI Image Layout per `(image_name, tag)` |
 | Remote OCI registry | Push / pull | OCI Distribution API over HTTP |
 | Standard OCI tools (`oras`, `crane`, `skopeo`) | Inspection / interop | OCI Image Layout |
 
-An OMMX Artifact materialised into an OCI Image Layout (whether
-inside a `.ommx` archive or as a directory tree) contains:
+An OMMX Artifact materialised inside a `.ommx` OCI Image Layout archive
+contains:
 
 - An `oci-layout` marker file with version `1.0.0`.
 - An `index.json` listing the artifact manifests being exported.
@@ -260,13 +261,15 @@ content addressing.
 
 ## 4. Registry compatibility
 
-OCI v1.1 `subject` and the Referrers API are not uniformly supported
-across registries. OMMX takes no implicit fallback:
+OCI v1.1 `subject` and the Referrers API are not uniformly supported across
+registries. OMMX also does not treat `subject` as an implicit request to copy
+an ancestry closure:
 
-- Archives and explicitly exported OCI Image Layout directories are
-  fully under OMMX's control, so `subject` is written into the
-  manifest verbatim. Lineage traversal over an exported tree always
-  works.
+- `.ommx` archives preserve the root manifest's `subject` descriptor verbatim,
+  but export only that root manifest, its config, and its layers. The subject
+  manifest and its payload closure are not bundled; lineage can be traversed
+  only when the subject is available separately in the destination Local or
+  remote registry.
 - For remote registries that reject a `subject`-bearing push, OMMX
   surfaces an explicit error rather than silently falling back to
   annotation-based encoding. A fallback shape will be designed when
