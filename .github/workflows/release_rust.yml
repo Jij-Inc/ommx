@@ -139,8 +139,19 @@ jobs:
 
       - name: Bump version
         run: |
-          cargo set-version --bump patch
-          echo "NEW_VERSION=$(cargo metadata --no-deps --format-version=1 | jq -r '.packages[0].version')" >> "$GITHUB_ENV"
+          CURRENT_VERSION=$(cargo metadata --no-deps --format-version=1 | jq -r '.packages[] | select(.name == "ommx") | .version')
+          if [[ "$CURRENT_VERSION" == *-* ]]; then
+            PRERELEASE=${CURRENT_VERSION#*-}
+            CHANNEL=${PRERELEASE%%.*}
+            case "$CHANNEL" in
+              alpha|beta|rc) ;;
+              *) echo "Unsupported prerelease channel: $CHANNEL" >&2; exit 1 ;;
+            esac
+            cargo set-version --bump "$CHANNEL"
+          else
+            cargo set-version --bump patch
+          fi
+          echo "NEW_VERSION=$(cargo metadata --no-deps --format-version=1 | jq -r '.packages[] | select(.name == "ommx") | .version')" >> "$GITHUB_ENV"
 
       - uses: actions/create-github-app-token@v3
         id: app-token
