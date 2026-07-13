@@ -8,6 +8,30 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+## 3.0.0 Beta 1
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b1-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b1)
+
+### ⚠ Legacy v1 `ConstraintHints` remain advisory ([#1058](https://github.com/Jij-Inc/ommx/pull/1058))
+
+When {meth}`Instance.from_v1_bytes <ommx.Instance.from_v1_bytes>` or {meth}`ParametricInstance.from_v1_bytes <ommx.ParametricInstance.from_v1_bytes>` reads a legacy v1 payload, it now ignores `ConstraintHints` and preserves the referenced regular constraints and their context. Even a structurally plausible hint is not automatically promoted to a first-class one-hot or SOS1 constraint, so unverified metadata cannot change the feasible set or required adapter capabilities. Imported instances can also be serialized back to v1 because no special constraint is introduced implicitly.
+
+Construct first-class special constraints from trusted modeling input rather than from a legacy hint alone. See the [Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md) for details.
+
+### ⚠ Dedicated Experiment artifact type ([#1033](https://github.com/Jij-Inc/ommx/pull/1033))
+
+Committed Experiment artifacts now write `application/org.ommx.v1.experiment`
+as the OCI Manifest `artifactType` instead of the generic
+`application/org.ommx.v1.artifact` type. Loading an Experiment validates this
+root artifact type before decoding the Experiment config, so a generic Artifact
+is not interpreted as an Experiment merely because its config descriptor uses
+the Experiment config media type.
+
+This intentionally does not preserve compatibility with Experiment artifacts
+created by earlier 3.0 alpha builds that wrote the generic
+`application/org.ommx.v1.artifact` `artifactType`. Those alpha artifacts must be
+recreated with a build that writes the dedicated Experiment artifact type.
+
 ### 🆕 Experiment Sampling records ([#1055](https://github.com/Jij-Inc/ommx/pull/1055))
 
 {meth}`~ommx.experiment.Run.log_sample` calls a
@@ -33,12 +57,6 @@ assert isinstance(output, SampleSet)
 `Run.log_sample(..., store_diagnostics=True)` uses the same adapter diagnostics
 channel as `Run.log_solve`. See the [Experiment management
 tutorial](../tutorial/experiment_management.md) for the Solve and Sampling recording model.
-
-### ⚠ Legacy v1 `ConstraintHints` remain advisory ([#1058](https://github.com/Jij-Inc/ommx/pull/1058))
-
-When {meth}`Instance.from_v1_bytes <ommx.Instance.from_v1_bytes>` or {meth}`ParametricInstance.from_v1_bytes <ommx.ParametricInstance.from_v1_bytes>` reads a legacy v1 payload, it now ignores `ConstraintHints` and preserves the referenced regular constraints and their context. Even a structurally plausible hint is not automatically promoted to a first-class one-hot or SOS1 constraint, so unverified metadata cannot change the feasible set or required adapter capabilities. Imported instances can also be serialized back to v1 because no special constraint is introduced implicitly.
-
-Construct first-class special constraints from trusted modeling input rather than from a legacy hint alone. See the [Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md) for details.
 
 ### 🆕 Transparent attachment compression and streaming writes ([#1054](https://github.com/Jij-Inc/ommx/pull/1054))
 
@@ -164,21 +182,7 @@ Local Registry refs now store only their target manifest digest. Consequently,
 `AnonymousArtifactRef.size` and `AnonymousArtifactRef.media_type` are removed;
 descriptor fields are no longer part of the ref listing API.
 
-### ⚠ Dedicated Experiment artifact type ([#1033](https://github.com/Jij-Inc/ommx/pull/1033))
-
-Committed Experiment artifacts now write `application/org.ommx.v1.experiment`
-as the OCI Manifest `artifactType` instead of the generic
-`application/org.ommx.v1.artifact` type. Loading an Experiment validates this
-root artifact type before decoding the Experiment config, so a generic Artifact
-is not interpreted as an Experiment merely because its config descriptor uses
-the Experiment config media type.
-
-This intentionally does not preserve compatibility with Experiment artifacts
-created by earlier 3.0 alpha builds that wrote the generic
-`application/org.ommx.v1.artifact` `artifactType`. Those alpha artifacts must be
-recreated with a build that writes the dedicated Experiment artifact type.
-
-### 🆕 Non-finite float Run parameters
+### 🆕 Non-finite float Run parameters ([#1043](https://github.com/Jij-Inc/ommx/pull/1043))
 
 {meth}`~ommx.experiment.Run.log_parameter` now accepts `float("inf")`,
 `-float("inf")`, and `float("nan")`. These values round-trip through committed
@@ -232,7 +236,7 @@ instance = Instance.from_components(
 instance.unary_encode({0})
 ```
 
-### 🆕 Context-aware function formatting ([#408](https://github.com/Jij-Inc/ommx/issues/408))
+### 🆕 Context-aware function formatting ([#1004](https://github.com/Jij-Inc/ommx/pull/1004), [#1011](https://github.com/Jij-Inc/ommx/pull/1011))
 
 {class}`~ommx.Instance` and {class}`~ommx.ParametricInstance` now provide
 {meth}`~ommx.Instance.format_function` / {meth}`~ommx.ParametricInstance.format_function`

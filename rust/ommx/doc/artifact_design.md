@@ -45,14 +45,16 @@ with off-the-shelf tools (`oras`, `crane`, `skopeo`).
 | Image reference | The name an Artifact is known by — `host[:port]/name(:tag\|@digest)`. Optional at commit time (§1.1) |
 | Manifest | Small JSON describing the Artifact: `artifactType`, `config`, an ordered list of layer descriptors, optional `subject` for lineage. An OCI Image Manifest, stored verbatim |
 | Descriptor | `{ mediaType, digest, size, annotations }` — a typed pointer to a content-addressed blob (OCI 1.1) |
-| Layer / blob | The actual payload bytes (a serialized [`v1::Instance`](crate::v1::Instance), a Parquet `DataFrame`, …). Identified by digest. OMMX-typed layers carry protobuf wire bytes under `crate::v1::*`; the semantic Rust wrappers (`crate::Instance`, etc.) are SDK conveniences, not what is written to disk |
+| Layer / blob | The actual payload bytes (a serialized [`Instance`](crate::Instance), a Parquet `DataFrame`, …), identified by digest. OMMX-typed root layers are written as `ommx.v2` protobuf bytes by default; typed readers accept both `ommx.v1` and `ommx.v2`. The semantic Rust wrappers are SDK views over those wire payloads, not what is written to disk |
 | Tag | Mutable alias for a digest (e.g. `:v1`, `:latest`) |
 | Digest | Immutable identifier (`sha256:…`); the primary key for an Artifact version. Content hash of the manifest |
 
-OMMX-specific Artifacts are identified by the manifest's top-level
-`artifactType` field set to `application/org.ommx.v1.artifact`. This
-is the OCI 1.1 pattern: an Image Manifest with `artifactType` plus an
-empty `config` descriptor.
+Generic OMMX Artifacts are identified by the manifest's top-level
+`artifactType` field set to `application/org.ommx.v1.artifact` and use an OCI
+empty config descriptor. Experiment Artifacts use the dedicated
+`application/org.ommx.v1.experiment` artifact type and a typed
+`application/org.ommx.v1.experiment.config+json` config. Both follow the OCI
+1.1 pattern of an Image Manifest with an `artifactType` discriminator.
 
 ## Where Artifacts live
 
@@ -135,28 +137,51 @@ parse time — readers must not accept it. Rationale:
 
 - **Spec status:** image-spec 1.1 formally removed it; the Artifact
   Manifest document is archived. The successor pattern is "Image
-  Manifest + `artifactType` + empty config".
+  Manifest + `artifactType` + config descriptor". Generic OMMX Artifacts use
+  the OCI empty config; Experiment Artifacts use their typed config.
 - **Registry reality:** `distribution/distribution` v2 (the upstream
   reference registry) rejects Artifact Manifest with
   `MANIFEST_INVALID` under default configuration.
 
 ### 2.1 Identification
 
-An OMMX Artifact is identified by the manifest's top-level
-`artifactType` field:
+An OMMX-owned Artifact is identified by the manifest's top-level
+`artifactType` field. Readers must accept both currently defined values:
 
 ```text
 artifactType = "application/org.ommx.v1.artifact"
+artifactType = "application/org.ommx.v1.experiment"
 ```
 
-This is the only field a reader must check to identify an OMMX
-Artifact. The `config` blob is not part of the identification — a
-legacy v2 OMMX manifest that carries
-`application/org.ommx.v1.config+json` in its `config` descriptor
-remains a valid OMMX Artifact under this spec, and readers must not
-reject it.
+The first value identifies a generic OMMX Artifact; the second identifies an
+Experiment Artifact. The `config` descriptor is not part of this initial
+family identification, but readers must validate it according to the selected
+artifact type as described in §2.2. In particular, a legacy v2 generic OMMX
+manifest that carries `application/org.ommx.v1.config+json` remains valid, while
+an Experiment Artifact requires its typed Experiment config.
 
 ### 2.2 Required fields
+
+All OMMX Artifact manifests share these requirements:
+
+- `schemaVersion`: integer `2`.
+- `artifactType`: one of the two values in §2.1.
+- `layers`: ordered list of layer descriptors. Each descriptor renders the
+  `annotations` field, including an empty object `{}` if no annotations apply.
+  Layer ordering is preserved across commit / import / pull / push round-trips
+  and forms part of the manifest digest.
+- `subject`: optional. If present, points at a parent OMMX manifest for lineage.
+  `mediaType` is fixed at `application/vnd.oci.image.manifest.v1+json`. Absence
+  means "no parent".
+- Top-level `mediaType`: intentionally **not emitted**. HTTP `Content-Type` is
+  supplied by the transport at push time.
+
+Other top-level fields defined by OCI Image Manifest (`annotations`) are
+permitted but not required.
+
+#### 2.2.1 Generic OMMX Artifact
+
+The canonical v3 writer emits the following shape:
 
 ```jsonc
 {
@@ -183,29 +208,54 @@ reject it.
 }
 ```
 
-Field-by-field:
+- `artifactType` must be `application/org.ommx.v1.artifact`.
+- The canonical config is the OCI 1.1 empty descriptor —
+  `mediaType: application/vnd.oci.empty.v1+json`, pointing at the 2-byte JSON
+  `{}` blob whose digest is `sha256:44136fa3…ff8a` and whose size is `2`. The
+  empty config has no annotations.
+- For compatibility, readers must also accept the legacy v2
+  `application/org.ommx.v1.config+json` descriptor for this generic artifact
+  type. Generic artifact identification remains based on `artifactType`.
 
-- `schemaVersion`: integer `2`.
-- `artifactType`: `application/org.ommx.v1.artifact`.
-- `config`: the OCI 1.1 empty descriptor —
-  `mediaType: application/vnd.oci.empty.v1+json`, pointing at the
-  2-byte JSON `{}` blob whose digest is
-  `sha256:44136fa3…ff8a` and whose size is `2`. The empty config has
-  no annotations.
-- `layers`: ordered list of layer descriptors. Each descriptor
-  renders the `annotations` field, including an empty object `{}` if
-  no annotations apply. Layer ordering is preserved across
-  commit / import / pull / push round-trips and forms part of the
-  manifest digest.
-- `subject`: optional. If present, points at a parent OMMX manifest
-  for lineage. `mediaType` is fixed at
-  `application/vnd.oci.image.manifest.v1+json`. Absence means "no
-  parent".
-- Top-level `mediaType`: intentionally **not emitted**. HTTP
-  `Content-Type` is supplied by the transport at push time.
+#### 2.2.2 Experiment Artifact
 
-Other top-level fields defined by OCI Image Manifest (`annotations`)
-are permitted but not required.
+An Experiment Artifact uses the same OCI Image Manifest envelope with a typed
+config descriptor:
+
+```jsonc
+{
+  "schemaVersion": 2,
+  "artifactType": "application/org.ommx.v1.experiment",
+  "config": {
+    "mediaType": "application/org.ommx.v1.experiment.config+json",
+    "digest": "sha256:...",
+    "size": 1234
+  },
+  "layers": [
+    {
+      "mediaType": "...",
+      "digest": "sha256:...",
+      "size": 1234,
+      "annotations": { "...": "..." }
+    }
+  ],
+  "subject": {
+    "mediaType": "application/vnd.oci.image.manifest.v1+json",
+    "digest": "sha256:...",
+    "size": 1234
+  }
+}
+```
+
+- `artifactType` must be `application/org.ommx.v1.experiment`.
+- `config.mediaType` must be
+  `application/org.ommx.v1.experiment.config+json`; a generic empty config is
+  invalid for this artifact type.
+- The config blob is the JSON representation of
+  [`ExperimentConfig`](crate::experiment::config::ExperimentConfig). Its layer
+  references are zero-based indices into the manifest's ordered `layers`
+  array. The config media type is the schema boundary; there is no separate
+  internal format-version field.
 
 ### 2.3 Byte-level reproducibility
 
@@ -215,7 +265,8 @@ same bytes and therefore the same manifest digest. This is a
 property of the canonical OMMX writer; readers should not assume
 alphabetical ordering on input. Manifests authored by other tools or
 by OMMX v2 (which used Rust struct declaration order) are valid as
-long as the JSON parses and the identification rule in §2.1 holds.
+long as the JSON parses and the artifact-type-specific rules in §2.1 and §2.2
+hold.
 
 ---
 
@@ -228,13 +279,12 @@ directory) is **not** the Local Registry's internal format. It is an
 | Boundary | Direction | Format |
 |---|---|---|
 | `.ommx` archive | Import / export | Tar of OCI Image Layout |
-| Explicit directory export | Export | OCI Image Layout |
 | v2 OMMX local registry tree | Import (legacy) | OCI Image Layout per `(image_name, tag)` |
 | Remote OCI registry | Push / pull | OCI Distribution API over HTTP |
 | Standard OCI tools (`oras`, `crane`, `skopeo`) | Inspection / interop | OCI Image Layout |
 
-An OMMX Artifact materialised into an OCI Image Layout (whether
-inside a `.ommx` archive or as a directory tree) contains:
+An OMMX Artifact materialised inside a `.ommx` OCI Image Layout archive
+contains:
 
 - An `oci-layout` marker file with version `1.0.0`.
 - An `index.json` listing the artifact manifests being exported.
@@ -260,13 +310,15 @@ content addressing.
 
 ## 4. Registry compatibility
 
-OCI v1.1 `subject` and the Referrers API are not uniformly supported
-across registries. OMMX takes no implicit fallback:
+OCI v1.1 `subject` and the Referrers API are not uniformly supported across
+registries. OMMX also does not treat `subject` as an implicit request to copy
+an ancestry closure:
 
-- Archives and explicitly exported OCI Image Layout directories are
-  fully under OMMX's control, so `subject` is written into the
-  manifest verbatim. Lineage traversal over an exported tree always
-  works.
+- `.ommx` archives preserve the root manifest's `subject` descriptor verbatim,
+  but export only that root manifest, its config, and its layers. The subject
+  manifest and its payload closure are not bundled; lineage can be traversed
+  only when the subject is available separately in the destination Local or
+  remote registry.
 - For remote registries that reject a `subject`-bearing push, OMMX
   surfaces an explicit error rather than silently falling back to
   annotation-based encoding. A fallback shape will be designed when
