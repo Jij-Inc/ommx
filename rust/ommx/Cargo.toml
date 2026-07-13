@@ -65,7 +65,7 @@ maplit.workspace = true
 num.workspace = true
 oci-client = { workspace = true, optional = true }
 oci-spec.workspace = true
-ommx-derive = { path = "../ommx-derive", version = "=3.0.0-beta.1" }
+ommx-derive = { path = "../ommx-derive", version = "=3.0.0-beta.2" }
 ordered-float.workspace = true
 petgraph.workspace = true
 proptest.workspace = true
