@@ -8,6 +8,34 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🆕 Native capability declarations for HiGHS and Python-MIP adapters ([#1085](https://github.com/Jij-Inc/ommx/pull/1085))
+
+`OMMXHighsAdapter` and `OMMXPythonMIPAdapter` now declare and enforce their
+complete native translator profiles: Binary, Integer, and Continuous variables;
+linear objectives; linear regular equality and inequality constraints; and both
+optimization senses. Unsupported variable kinds, nonlinear functions, and
+special constraints are reported through the structured
+{class}`~ommx.adapter.AdapterCompatibilityError` introduced in #1084.
+
+The migrated constructors no longer lower Indicator, OneHot, or SOS1
+constraints implicitly. A direct translation attempt rejects those families
+without mutating the input {class}`~ommx.Instance`; callers must perform any
+intended reformulation explicitly and recheck the prepared instance.
+
+### 🆕 Native capability declaration for the PySCIPOpt adapter ([#1086](https://github.com/Jij-Inc/ommx/pull/1086))
+
+`OMMXPySCIPOptAdapter` now declares and enforces a coherent native profile for
+Binary, Integer, and Continuous variables; quadratic objectives and regular
+constraints; linear Indicator bodies; native SOS1 constraints; and both
+optimization senses. The separate degree limits correctly report a quadratic
+Indicator body as unsupported even though quadratic regular constraints remain
+accepted.
+
+The adapter no longer lowers OneHot constraints implicitly. Unsupported
+OneHot, SemiInteger, SemiContinuous, cubic, and nonlinear-Indicator inputs are
+reported through {class}`~ommx.adapter.AdapterCompatibilityError` without
+mutating the input {class}`~ommx.Instance`.
+
 ### 🆕 Adapter capability profiles and compatibility reports ([#1084](https://github.com/Jij-Inc/ommx/pull/1084))
 
 {meth}`~ommx.Instance.solver_requirements` now derives the complete active
