@@ -59,6 +59,42 @@ def _make_indicator(name: str | None = "balance") -> IndicatorConstraint:
     )
 
 
+def test_indicator_constructor_accepts_variable_id_like():
+    instance = _empty_instance()
+    function = Function.from_linear(Linear({0: 1.0}, -1.0))
+
+    for indicator_variable in (1, instance.decision_variables[1]):
+        indicator = IndicatorConstraint(
+            indicator_variable=indicator_variable,
+            function=function,
+            equality=Equality.EqualToZero,
+        )
+        assert indicator.indicator_variable_id == 1
+
+
+def test_with_indicator_accepts_variable_id_like():
+    instance = _empty_instance()
+    body = instance.decision_variables[0] <= 1
+
+    for indicator_variable in (1, instance.decision_variables[1]):
+        indicator = body.with_indicator(indicator_variable)
+        assert indicator.indicator_variable_id == 1
+
+
+def test_indicator_input_rejects_bool_as_variable_id():
+    function = Function.from_linear(Linear({0: 1.0}, -1.0))
+    with pytest.raises(TypeError, match="Expected int, DecisionVariable"):
+        IndicatorConstraint(
+            indicator_variable=True,
+            function=function,
+            equality=Equality.EqualToZero,
+        )
+
+    body = DecisionVariable.binary(0) <= 1
+    with pytest.raises(TypeError, match="Expected int, DecisionVariable"):
+        body.with_indicator(True)
+
+
 def test_add_returns_attached_with_drained_context():
     """add_indicator_constraint returns AttachedIndicatorConstraint reading
     the staged context."""
@@ -294,7 +330,9 @@ def test_add_indicator_rejects_non_binary_indicator_variable():
         constraints={},
     )
     bad = IndicatorConstraint(
-        indicator_variable=DecisionVariable.integer(1, lower=0, upper=5),
+        # The reference object claims binary, but the enclosing instance's
+        # variable kind is the source of truth.
+        indicator_variable=DecisionVariable.binary(1),
         function=Function.from_linear(Linear({0: 1.0}, 0.0)),
         equality=Equality.EqualToZero,
     )

@@ -236,9 +236,12 @@ impl Constraint {
     /// Create an indicator constraint from this constraint.
     ///
     /// Returns an IndicatorConstraint where `indicator_variable = 1 → this constraint`.
-    pub fn with_indicator(
+    /// `indicator_variable` may be a variable ID or a decision-variable object.
+    /// Only its ID is stored; the enclosing host requires the referenced variable
+    /// to be binary when the constraint is inserted.
+    fn with_indicator(
         &self,
-        indicator_variable: &crate::DecisionVariable,
+        indicator_variable: crate::VariableIDInput,
     ) -> crate::IndicatorConstraint {
         let ic = ommx::IndicatorConstraint::new(
             indicator_variable.0,

@@ -31,7 +31,7 @@ PySCIPOpt Adapter は Indicator と SOS1 をサポート宣言しており、SCI
 
 **Indicator Constraint** はバイナリ変数 $z$ に対し、$z = 1$ のときのみ制約 $f(x) \leq 0$ あるいは $f(x) = 0$ を課す条件付き制約です。$z = 0$ のときはこの制約は無条件に満たされると見なされます。
 
-{class}`~ommx.IndicatorConstraint` は、既存の {class}`~ommx.Constraint` に対して {meth}`Constraint.with_indicator() <ommx.Constraint.with_indicator>` を呼ぶことで生成できます。
+{class}`~ommx.IndicatorConstraint` は、既存の {class}`~ommx.Constraint` に対して {meth}`Constraint.with_indicator() <ommx.Constraint.with_indicator>` を呼ぶことで生成できます。Indicator の引数には変数 ID、detached な {class}`~ommx.DecisionVariable`、または {class}`~ommx.AttachedDecisionVariable` を渡せます。
 
 ```{code-cell} ipython3
 from ommx import Instance, DecisionVariable, Equality
@@ -76,11 +76,11 @@ assert abs(solution.objective - 5.0) < 1e-6
 from ommx import OneHotConstraint
 
 xs = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
-oh = OneHotConstraint(variables=[0, 1, 2])
+oh = OneHotConstraint(variables=xs)
 assert oh.variables == [0, 1, 2]
 ```
 
-`variables` に渡す ID のバイナリ変数はインスタンス構築時の `decision_variables` に含まれている必要があります。数学的には通常の等式制約 $x_0 + x_1 + x_2 - 1 = 0$ と等価ですが、first-class の制約として保持することで、対応するソルバー（MIP系ソルバーの多くは one-hot 制約を直接受け付けます）に効率的に渡すことができます。
+`variables` の各要素には、変数 ID、detached な {class}`~ommx.DecisionVariable`、または {class}`~ommx.AttachedDecisionVariable` を渡せます。この入力は変数の identity だけを使うため、`VariableIDLike` type alias として公開されます。制約を host に追加するとき、enclosing instance は自身が保持する決定変数を source of truth として、参照 ID と制約固有の要件を検証します。OneHot で参照する変数は存在し、かつバイナリである必要があります。制約は各変数の ID を保持し、`oh.variables` から参照できます。数学的には通常の等式制約 $x_0 + x_1 + x_2 - 1 = 0$ と等価ですが、first-class の制約として保持することで、対応するソルバー（MIP系ソルバーの多くは one-hot 制約を直接受け付けます）に効率的に渡すことができます。
 
 ```{code-cell} ipython3
 values = [5.0, 10.0, 3.0]
@@ -122,9 +122,11 @@ assert set(instance_oh.removed_one_hot_constraints.keys()) == {0}
 from ommx import Sos1Constraint
 
 ys = [DecisionVariable.continuous(i, lower=0, upper=10, name="y", subscripts=[i]) for i in range(3, 6)]
-s1 = Sos1Constraint(variables=[3, 4, 5])
+s1 = Sos1Constraint(variables=ys)
 assert s1.variables == [3, 4, 5]
 ```
+
+`OneHotConstraint` と同様に、`variables` の各要素は `VariableIDLike`、すなわち変数 ID、detached な決定変数、または attached な決定変数を受け取ります。SOS1 制約は各変数の ID を保持し、`s1.variables` から参照できます。
 
 ```{code-cell} ipython3
 instance_s1 = Instance.from_components(
@@ -160,8 +162,8 @@ instance_mix = Instance.from_components(
     objective=x2,
     constraints={1: z2 == 1},                              # 通常制約 ID=1
     indicator_constraints={1: (x2 <= 5).with_indicator(z2)}, # Indicator ID=1
-    one_hot_constraints={1: OneHotConstraint(variables=[0, 1, 2])}, # OneHot ID=1
-    sos1_constraints={1: Sos1Constraint(variables=[3, 4, 5])},      # SOS1 ID=1
+    one_hot_constraints={1: OneHotConstraint(variables=xs)},        # OneHot ID=1
+    sos1_constraints={1: Sos1Constraint(variables=ys)},             # SOS1 ID=1
     sense=Instance.MAXIMIZE,
 )
 
