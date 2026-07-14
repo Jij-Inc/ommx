@@ -8,6 +8,32 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🆕 Typed remote Artifact lookup errors ([#1090](https://github.com/Jij-Inc/ommx/pull/1090))
+
+{meth}`~ommx.artifact.Artifact.load` now reports remote lookup failures through
+OMMX-owned exceptions instead of a generic `RuntimeError` containing the
+underlying OCI transport error. Catch
+{class}`~ommx.artifact.RemoteArtifactNotFoundError` to handle a missing exact
+ref without confusing it with authentication, authorization, registry
+transport, or invalid-Artifact failures. All remote lookup exceptions inherit
+from {class}`~ommx.artifact.RemoteArtifactError`.
+
+```python
+from ommx.artifact import Artifact, RemoteArtifactNotFoundError
+
+try:
+    artifact = Artifact.load("registry.example/team/model:latest")
+except RemoteArtifactNotFoundError:
+    artifact = None
+```
+
+The sibling exception classes are
+{class}`~ommx.artifact.RemoteArtifactAuthenticationError`,
+{class}`~ommx.artifact.RemoteArtifactAuthorizationError`,
+{class}`~ommx.artifact.RemoteArtifactTransportError`, and
+{class}`~ommx.artifact.InvalidRemoteArtifactError`. Their messages retain the
+original registry and transport context.
+
 ### 🆕 `VariableIDLike` inputs for structural constraints ([#1078](https://github.com/Jij-Inc/ommx/pull/1078))
 
 Structural-constraint construction now accepts `VariableIDLike`, defined as
