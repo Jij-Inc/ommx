@@ -2,7 +2,7 @@ use pyo3::{exceptions::PyKeyError, prelude::*};
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 use std::collections::{BTreeSet, HashMap};
 
-use crate::ConstraintHost;
+use crate::{ConstraintHost, VariableIDInput};
 
 /// A one-hot constraint: exactly one variable must be 1, the rest must be 0.
 ///
@@ -30,20 +30,22 @@ impl OneHotConstraint {
     ///
     /// **Args:**
     ///
-    /// - `variables`: List of binary decision variable IDs (exactly one must be 1)
+    /// - `variables`: Variable IDs or decision-variable objects (exactly one
+    ///   must be 1). Only their IDs are stored; the enclosing host requires
+    ///   the referenced variables to be binary when the constraint is inserted.
     /// - `name` / `subscripts` / `description` / `parameters`: Optional
     ///   context. Drained into the host's SoA store on insertion.
     #[new]
     #[pyo3(signature = (*, variables, name=None, subscripts=Vec::new(), description=None, parameters=HashMap::default()))]
-    pub fn new(
-        variables: Vec<u64>,
+    fn new(
+        variables: Vec<VariableIDInput>,
         name: Option<String>,
         subscripts: Vec<i64>,
         description: Option<String>,
         parameters: HashMap<String, String>,
     ) -> PyResult<Self> {
         let vars: BTreeSet<ommx::VariableID> =
-            variables.into_iter().map(ommx::VariableID::from).collect();
+            variables.into_iter().map(|variable| variable.0).collect();
         let context = ommx::ConstraintContext {
             label: ommx::ModelingLabel {
                 name,

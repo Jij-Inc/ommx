@@ -1,7 +1,11 @@
 use crate::{Constraint, Function, Linear, Polynomial, Quadratic, VariableBound};
 use anyhow::Result;
 use ommx::{v1, ATol, LinearMonomial, VariableID};
-use pyo3::{prelude::*, Bound, PyAny};
+use pyo3::{
+    prelude::*,
+    types::{PyBool, PyInt},
+    Bound, PyAny,
+};
 use std::collections::HashMap;
 
 /// Decision variable in an optimization problem.
@@ -558,6 +562,51 @@ pub struct AttachedDecisionVariable {
     pub(crate) host: crate::ConstraintHost,
     pub(crate) id: ommx::VariableID,
 }
+
+/// Input accepted wherever a structural constraint refers to a variable ID.
+///
+/// Raw IDs, standalone modeler variables, and variables attached to an existing
+/// host all identify the same OMMX variable. Structural constraints store that
+/// identity, not the Python wrapper, its kind, bounds, or host. This is
+/// crate-visible so structural-constraint binding modules can share one
+/// extraction boundary.
+pub(crate) struct VariableIDInput(pub(crate) ommx::VariableID);
+
+impl<'py> FromPyObject<'_, 'py> for VariableIDInput {
+    type Error = PyErr;
+
+    fn extract(ob: Borrowed<'_, 'py, PyAny>) -> PyResult<Self> {
+        if ob.is_instance_of::<PyInt>() && !ob.is_instance_of::<PyBool>() {
+            return Ok(Self(ob.extract::<u64>()?.into()));
+        }
+        if let Ok(variable) = ob.extract::<PyRef<DecisionVariable>>() {
+            return Ok(Self(variable.0));
+        }
+        if let Ok(variable) = ob.extract::<PyRef<AttachedDecisionVariable>>() {
+            return Ok(Self(variable.id));
+        }
+        Err(pyo3::exceptions::PyTypeError::new_err(format!(
+            "Expected int, DecisionVariable, or AttachedDecisionVariable, got {}",
+            ob.get_type().name()?
+        )))
+    }
+}
+
+impl pyo3_stub_gen::PyStubType for VariableIDInput {
+    fn type_input() -> pyo3_stub_gen::TypeInfo {
+        pyo3_stub_gen::TypeInfo::locally_defined("VariableIDLike", "ommx._ommx_rust".into())
+    }
+
+    fn type_output() -> pyo3_stub_gen::TypeInfo {
+        Self::type_input()
+    }
+}
+
+pyo3_stub_gen::type_alias!(
+    "ommx._ommx_rust",
+    VariableIDLike = u64 | DecisionVariable | AttachedDecisionVariable,
+    "A variable ID or decision-variable object. APIs using this type consume only the OMMX variable identity, not kind or bound metadata."
+);
 
 impl AttachedDecisionVariable {
     pub fn new(host: crate::ConstraintHost, id: ommx::VariableID) -> Self {

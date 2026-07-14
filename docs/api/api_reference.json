@@ -3832,15 +3832,20 @@
             },
             {
               "name": "with_indicator",
-              "doc": "Create an indicator constraint from this constraint.\n\nReturns an IndicatorConstraint where `indicator_variable = 1 → this constraint`.",
+              "doc": "Create an indicator constraint from this constraint.\n\nReturns an IndicatorConstraint where `indicator_variable = 1 → this constraint`.\n`indicator_variable` may be a variable ID or a decision-variable object.\nOnly its ID is stored; the enclosing host requires the referenced variable\nto be binary when the constraint is inserted.",
               "signatures": [
                 {
                   "parameters": [
                     {
                       "name": "indicator_variable",
                       "type_": {
-                        "display": "DecisionVariable",
-                        "link_target": null,
+                        "display": "VariableIDLike",
+                        "link_target": {
+                          "fqn": "ommx.VariableIDLike",
+                          "doc_module": "ommx",
+                          "kind": "Class",
+                          "attribute": null
+                        },
                         "children": []
                       },
                       "default": null
@@ -7619,15 +7624,20 @@
             },
             {
               "name": "__new__",
-              "doc": "Create a new indicator constraint.\n\nAn indicator constraint is: `indicator_variable = 1 → f(x) <= 0` (or `f(x) = 0`).\n\n**Args:**\n\n- `indicator_variable`: A binary decision variable that activates this constraint\n- `function`: The constraint function\n- `equality`: The equality type (EqualToZero or LessThanOrEqualToZero)\n- `name`: Optional name for the constraint\n- `subscripts`: Optional subscripts for indexing\n- `description`: Optional description\n- `parameters`: Optional key-value parameters",
+              "doc": "Create a new indicator constraint.\n\nAn indicator constraint is: `indicator_variable = 1 → f(x) <= 0` (or `f(x) = 0`).\n\n**Args:**\n\n- `indicator_variable`: A variable ID or decision-variable object that\n  activates this constraint. Only its ID is stored; the enclosing host\n  requires the referenced variable to be binary when the constraint is inserted.\n- `function`: The constraint function\n- `equality`: The equality type (EqualToZero or LessThanOrEqualToZero)\n- `name`: Optional name for the constraint\n- `subscripts`: Optional subscripts for indexing\n- `description`: Optional description\n- `parameters`: Optional key-value parameters",
               "signatures": [
                 {
                   "parameters": [
                     {
                       "name": "indicator_variable",
                       "type_": {
-                        "display": "DecisionVariable",
-                        "link_target": null,
+                        "display": "VariableIDLike",
+                        "link_target": {
+                          "fqn": "ommx.VariableIDLike",
+                          "doc_module": "ommx",
+                          "kind": "Class",
+                          "attribute": null
+                        },
                         "children": []
                       },
                       "default": null
@@ -8881,7 +8891,7 @@
             },
             {
               "name": "convert_all_one_hots_to_constraints",
-              "doc": "Convert every active one-hot constraint to a regular equality constraint.\n\nSee {meth}`~ommx.Instance.convert_one_hot_to_constraint` for the conversion rule.\nReturns the IDs of the newly created regular constraints.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable, OneHotConstraint\n>>> x = [DecisionVariable.binary(i) for i in range(4)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={},\n...     one_hot_constraints={\n...         1: OneHotConstraint(variables=[0, 1]),\n...         2: OneHotConstraint(variables=[2, 3]),\n...     },\n...     sense=Instance.MINIMIZE,\n... )\n>>> instance.convert_all_one_hots_to_constraints()\n[0, 1]\n>>> instance.one_hot_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + x1 - 1 == 0), 1: Constraint(x2 + x3 - 1 == 0)}\n```",
+              "doc": "Convert every active one-hot constraint to a regular equality constraint.\n\nSee {meth}`~ommx.Instance.convert_one_hot_to_constraint` for the conversion rule.\nReturns the IDs of the newly created regular constraints.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable, OneHotConstraint\n>>> x = [DecisionVariable.binary(i) for i in range(4)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={},\n...     one_hot_constraints={\n...         1: OneHotConstraint(variables=x[:2]),\n...         2: OneHotConstraint(variables=x[2:]),\n...     },\n...     sense=Instance.MINIMIZE,\n... )\n>>> instance.convert_all_one_hots_to_constraints()\n[0, 1]\n>>> instance.one_hot_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + x1 - 1 == 0), 1: Constraint(x2 + x3 - 1 == 0)}\n```",
               "signatures": [
                 {
                   "parameters": [],
@@ -8903,7 +8913,7 @@
             },
             {
               "name": "convert_all_sos1_to_constraints",
-              "doc": "Convert every active SOS1 constraint to regular constraints using Big-M.\n\nSee {meth}`~ommx.Instance.convert_sos1_to_constraints` for the conversion\nrule. Returns a dict mapping each original SOS1 ID to the list of regular\nconstraint IDs it produced.\n\nAtomic: every active SOS1 is validated up front, and only if every one is\nconvertible are the conversions applied. If any SOS1 fails validation\n(unsupported kind, non-finite bound, domain excludes 0, etc.), no mutation\nhappens and the instance is left untouched.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable, Sos1Constraint\n>>> x = [DecisionVariable.binary(i) for i in range(4)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={},\n...     sos1_constraints={\n...         1: Sos1Constraint(variables=[0, 1]),\n...         2: Sos1Constraint(variables=[2, 3]),\n...     },\n...     sense=Instance.MINIMIZE,\n... )\n>>> instance.convert_all_sos1_to_constraints()\n{1: [0], 2: [1]}\n>>> instance.sos1_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + x1 - 1 <= 0), 1: Constraint(x2 + x3 - 1 <= 0)}\n```",
+              "doc": "Convert every active SOS1 constraint to regular constraints using Big-M.\n\nSee {meth}`~ommx.Instance.convert_sos1_to_constraints` for the conversion\nrule. Returns a dict mapping each original SOS1 ID to the list of regular\nconstraint IDs it produced.\n\nAtomic: every active SOS1 is validated up front, and only if every one is\nconvertible are the conversions applied. If any SOS1 fails validation\n(unsupported kind, non-finite bound, domain excludes 0, etc.), no mutation\nhappens and the instance is left untouched.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable, Sos1Constraint\n>>> x = [DecisionVariable.binary(i) for i in range(4)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={},\n...     sos1_constraints={\n...         1: Sos1Constraint(variables=x[:2]),\n...         2: Sos1Constraint(variables=x[2:]),\n...     },\n...     sense=Instance.MINIMIZE,\n... )\n>>> instance.convert_all_sos1_to_constraints()\n{1: [0], 2: [1]}\n>>> instance.sos1_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + x1 - 1 <= 0), 1: Constraint(x2 + x3 - 1 <= 0)}\n```",
               "signatures": [
                 {
                   "parameters": [],
@@ -9003,7 +9013,7 @@
             },
             {
               "name": "convert_one_hot_to_constraint",
-              "doc": "Convert a one-hot constraint to a regular equality constraint.\n\nA one-hot constraint over ``{x_1, ..., x_n}`` is mathematically equivalent to the\nlinear equality ``x_1 + ... + x_n - 1 == 0``. This method inserts that equality\nas a new regular constraint and moves the one-hot constraint into\n{attr}`~ommx.Instance.removed_one_hot_constraints` with\n``reason=\"ommx.Instance.convert_one_hot_to_constraint\"`` and a\n``constraint_id`` parameter pointing to the new regular constraint.\n\nReturns the ID of the newly created regular constraint.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable, OneHotConstraint\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={},\n...     one_hot_constraints={1: OneHotConstraint(variables=[0, 1, 2])},\n...     sense=Instance.MINIMIZE,\n... )\n>>> new_id = instance.convert_one_hot_to_constraint(1)\n>>> instance.one_hot_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + x1 + x2 - 1 == 0)}\n>>> instance.removed_one_hot_constraints\n{1: RemovedOneHotConstraint(OneHotConstraint(exactly one of {x0, x1, x2} = 1), reason=ommx.Instance.convert_one_hot_to_constraint, constraint_id=0)}\n```",
+              "doc": "Convert a one-hot constraint to a regular equality constraint.\n\nA one-hot constraint over ``{x_1, ..., x_n}`` is mathematically equivalent to the\nlinear equality ``x_1 + ... + x_n - 1 == 0``. This method inserts that equality\nas a new regular constraint and moves the one-hot constraint into\n{attr}`~ommx.Instance.removed_one_hot_constraints` with\n``reason=\"ommx.Instance.convert_one_hot_to_constraint\"`` and a\n``constraint_id`` parameter pointing to the new regular constraint.\n\nReturns the ID of the newly created regular constraint.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable, OneHotConstraint\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={},\n...     one_hot_constraints={1: OneHotConstraint(variables=x)},\n...     sense=Instance.MINIMIZE,\n... )\n>>> new_id = instance.convert_one_hot_to_constraint(1)\n>>> instance.one_hot_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + x1 + x2 - 1 == 0)}\n>>> instance.removed_one_hot_constraints\n{1: RemovedOneHotConstraint(OneHotConstraint(exactly one of {x0, x1, x2} = 1), reason=ommx.Instance.convert_one_hot_to_constraint, constraint_id=0)}\n```",
               "signatures": [
                 {
                   "parameters": [
@@ -9029,7 +9039,7 @@
             },
             {
               "name": "convert_sos1_to_constraints",
-              "doc": "Convert a SOS1 constraint to regular constraints using the Big-M method.\n\nA SOS1 constraint over $\\{x_1, \\ldots, x_n\\}$ with each $x_i \\in [l_i, u_i]$\nasserts that at most one $x_i$ is non-zero. Per variable, a binary indicator\n$y_i$ is introduced with the Big-M pair\n\n$$\nx_i - u_i y_i \\leq 0, \\qquad l_i y_i - x_i \\leq 0\n$$\n\n(trivial sides $u_i = 0$ or $l_i = 0$ are skipped), together with the single\ncardinality constraint\n\n$$\n\\sum_i y_i - 1 \\leq 0.\n$$\n\nIf $x_i$ is already binary with bound $[0, 1]$, $x_i$ itself is reused as its\nindicator (no new variable, no Big-M pair).\n\nReturns the list of newly created regular constraint IDs in insertion order\n(Big-M upper/lower pairs per non-binary variable, followed by the cardinality\nsum).\n\nRaises if any $x_i$ has a non-binary bound that is not finite, if its domain\nexcludes $0$, or if its kind is semi-continuous / semi-integer (the split\ndomain $\\{0\\} \\cup [l, u]$ is not uniformly implemented across the codebase\nyet, so Big-M conversion of these kinds is not supported).\nThe instance is not mutated on error.\n\n# Examples\n\nAll-binary SOS1 reduces to ``sum(x_i) - 1 <= 0`` without extra variables:\n\n```python\n>>> from ommx import Instance, DecisionVariable, Sos1Constraint\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={},\n...     sos1_constraints={1: Sos1Constraint(variables=[0, 1, 2])},\n...     sense=Instance.MINIMIZE,\n... )\n>>> instance.convert_sos1_to_constraints(1)\n[0]\n>>> instance.sos1_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + x1 + x2 - 1 <= 0)}\n>>> instance.removed_sos1_constraints\n{1: RemovedSos1Constraint(Sos1Constraint(at most one of {x0, x1, x2} ≠ 0), reason=ommx.Instance.convert_sos1_to_constraints, constraint_ids=0)}\n```",
+              "doc": "Convert a SOS1 constraint to regular constraints using the Big-M method.\n\nA SOS1 constraint over $\\{x_1, \\ldots, x_n\\}$ with each $x_i \\in [l_i, u_i]$\nasserts that at most one $x_i$ is non-zero. Per variable, a binary indicator\n$y_i$ is introduced with the Big-M pair\n\n$$\nx_i - u_i y_i \\leq 0, \\qquad l_i y_i - x_i \\leq 0\n$$\n\n(trivial sides $u_i = 0$ or $l_i = 0$ are skipped), together with the single\ncardinality constraint\n\n$$\n\\sum_i y_i - 1 \\leq 0.\n$$\n\nIf $x_i$ is already binary with bound $[0, 1]$, $x_i$ itself is reused as its\nindicator (no new variable, no Big-M pair).\n\nReturns the list of newly created regular constraint IDs in insertion order\n(Big-M upper/lower pairs per non-binary variable, followed by the cardinality\nsum).\n\nRaises if any $x_i$ has a non-binary bound that is not finite, if its domain\nexcludes $0$, or if its kind is semi-continuous / semi-integer (the split\ndomain $\\{0\\} \\cup [l, u]$ is not uniformly implemented across the codebase\nyet, so Big-M conversion of these kinds is not supported).\nThe instance is not mutated on error.\n\n# Examples\n\nAll-binary SOS1 reduces to ``sum(x_i) - 1 <= 0`` without extra variables:\n\n```python\n>>> from ommx import Instance, DecisionVariable, Sos1Constraint\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={},\n...     sos1_constraints={1: Sos1Constraint(variables=x)},\n...     sense=Instance.MINIMIZE,\n... )\n>>> instance.convert_sos1_to_constraints(1)\n[0]\n>>> instance.sos1_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + x1 + x2 - 1 <= 0)}\n>>> instance.removed_sos1_constraints\n{1: RemovedSos1Constraint(Sos1Constraint(at most one of {x0, x1, x2} ≠ 0), reason=ommx.Instance.convert_sos1_to_constraints, constraint_ids=0)}\n```",
               "signatures": [
                 {
                   "parameters": [
@@ -13607,19 +13617,24 @@
             },
             {
               "name": "__new__",
-              "doc": "Create a new one-hot constraint.\n\n**Args:**\n\n- `variables`: List of binary decision variable IDs (exactly one must be 1)\n- `name` / `subscripts` / `description` / `parameters`: Optional\n  context. Drained into the host's SoA store on insertion.",
+              "doc": "Create a new one-hot constraint.\n\n**Args:**\n\n- `variables`: Variable IDs or decision-variable objects (exactly one\n  must be 1). Only their IDs are stored; the enclosing host requires\n  the referenced variables to be binary when the constraint is inserted.\n- `name` / `subscripts` / `description` / `parameters`: Optional\n  context. Drained into the host's SoA store on insertion.",
               "signatures": [
                 {
                   "parameters": [
                     {
                       "name": "variables",
                       "type_": {
-                        "display": "Sequence[int]",
+                        "display": "Sequence[_ommx_rust.VariableIDLike]",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "int",
-                            "link_target": null,
+                            "display": "VariableIDLike",
+                            "link_target": {
+                              "fqn": "ommx.VariableIDLike",
+                              "doc_module": "ommx",
+                              "kind": "Class",
+                              "attribute": null
+                            },
                             "children": []
                           }
                         ]
@@ -23814,19 +23829,24 @@
             },
             {
               "name": "__new__",
-              "doc": "Create a new SOS1 constraint.\n\n**Args:**\n\n- `variables`: List of decision variable IDs (at most one can be non-zero)\n- `name` / `subscripts` / `description` / `parameters`: Optional\n  context. Drained into the host's SoA store on insertion.",
+              "doc": "Create a new SOS1 constraint.\n\n**Args:**\n\n- `variables`: Variable IDs or decision-variable objects (at most one\n  can be non-zero). Only their IDs are stored; the enclosing host\n  validates that the referenced variables exist when the constraint is inserted.\n- `name` / `subscripts` / `description` / `parameters`: Optional\n  context. Drained into the host's SoA store on insertion.",
               "signatures": [
                 {
                   "parameters": [
                     {
                       "name": "variables",
                       "type_": {
-                        "display": "Sequence[int]",
+                        "display": "Sequence[_ommx_rust.VariableIDLike]",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "int",
-                            "link_target": null,
+                            "display": "VariableIDLike",
+                            "link_target": {
+                              "fqn": "ommx.VariableIDLike",
+                              "doc_module": "ommx",
+                              "kind": "Class",
+                              "attribute": null
+                            },
                             "children": []
                           }
                         ]
@@ -24695,6 +24715,32 @@
                     ]
                   }
                 ]
+              }
+            ]
+          }
+        },
+        {
+          "kind": "TypeAlias",
+          "name": "VariableIDLike",
+          "doc": "A variable ID or decision-variable object. APIs using this type consume only the OMMX variable identity, not kind or bound metadata.",
+          "definition": {
+            "display": "int | DecisionVariable | AttachedDecisionVariable",
+            "link_target": null,
+            "children": [
+              {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              {
+                "display": "DecisionVariable",
+                "link_target": null,
+                "children": []
+              },
+              {
+                "display": "AttachedDecisionVariable",
+                "link_target": null,
+                "children": []
               }
             ]
           }
@@ -31815,6 +31861,7 @@
     "ommx.State": "ommx",
     "ommx.ToSamples": "ommx",
     "ommx.ToState": "ommx",
+    "ommx.VariableIDLike": "ommx",
     "ommx.artifact.AnonymousArtifactRef": "ommx.artifact",
     "ommx.artifact.ArchiveDescriptor": "ommx.artifact",
     "ommx.artifact.ArchiveManifest": "ommx.artifact",

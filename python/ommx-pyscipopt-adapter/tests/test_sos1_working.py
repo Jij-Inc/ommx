@@ -21,7 +21,7 @@ def test_sos1_constraint_functionality():
     bigm2 = x[1] <= 1
 
     # Create SOS1 constraint as a first-class type
-    sos1 = Sos1Constraint(variables=[1, 2, 3])
+    sos1 = Sos1Constraint(variables=x)
 
     instance = Instance.from_components(
         decision_variables=x,
@@ -59,7 +59,7 @@ def test_sos1_constraint_naming():
     constraint1 = sum(x) == 1  # type: ignore
 
     # Create SOS1 constraint
-    sos1 = Sos1Constraint(variables=[1, 2])
+    sos1 = Sos1Constraint(variables=x)
 
     instance = Instance.from_components(
         decision_variables=x,
@@ -95,7 +95,7 @@ def test_sos1_constraint_naming_no_bigm():
     constraint1 = sum(x) <= 1  # type: ignore
 
     # SOS1 with no associated constraint IDs
-    sos1 = Sos1Constraint(variables=[1, 2])
+    sos1 = Sos1Constraint(variables=x)
 
     instance = Instance.from_components(
         decision_variables=x,

@@ -92,6 +92,7 @@ __all__ = [
     "ToFunction",
     "ToSamples",
     "ToState",
+    "VariableIDLike",
     "gc",
     "get_default_atol",
     "get_images",
@@ -135,6 +136,10 @@ ToState: TypeAlias = (
     | collections.abc.Mapping[int, float]
     | collections.abc.Iterable[tuple[int, float]]
 )
+VariableIDLike: TypeAlias = builtins.int | DecisionVariable | AttachedDecisionVariable
+r"""
+A variable ID or decision-variable object. APIs using this type consume only the OMMX variable identity, not kind or bound metadata.
+"""
 
 @typing.final
 class AnonymousArtifactRef:
@@ -1405,13 +1410,14 @@ class Constraint:
         Add a parameter to the constraint
         Returns self for method chaining
         """
-    def with_indicator(
-        self, indicator_variable: DecisionVariable
-    ) -> IndicatorConstraint:
+    def with_indicator(self, indicator_variable: VariableIDLike) -> IndicatorConstraint:
         r"""
         Create an indicator constraint from this constraint.
 
         Returns an IndicatorConstraint where `indicator_variable = 1 → this constraint`.
+        `indicator_variable` may be a variable ID or a decision-variable object.
+        Only its ID is stored; the enclosing host requires the referenced variable
+        to be binary when the constraint is inserted.
         """
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> Constraint: ...
@@ -2710,7 +2716,7 @@ class IndicatorConstraint:
     def __new__(
         cls,
         *,
-        indicator_variable: DecisionVariable,
+        indicator_variable: VariableIDLike,
         function: ToFunction,
         equality: Equality,
         name: typing.Optional[builtins.str] = None,
@@ -2725,7 +2731,9 @@ class IndicatorConstraint:
 
         **Args:**
 
-        - `indicator_variable`: A binary decision variable that activates this constraint
+        - `indicator_variable`: A variable ID or decision-variable object that
+          activates this constraint. Only its ID is stored; the enclosing host
+          requires the referenced variable to be binary when the constraint is inserted.
         - `function`: The constraint function
         - `equality`: The equality type (EqualToZero or LessThanOrEqualToZero)
         - `name`: Optional name for the constraint
@@ -3729,7 +3737,7 @@ class Instance:
         ...     decision_variables=x,
         ...     objective=sum(x),
         ...     constraints={},
-        ...     one_hot_constraints={1: OneHotConstraint(variables=[0, 1, 2])},
+        ...     one_hot_constraints={1: OneHotConstraint(variables=x)},
         ...     sense=Instance.MINIMIZE,
         ... )
         >>> new_id = instance.convert_one_hot_to_constraint(1)
@@ -3758,8 +3766,8 @@ class Instance:
         ...     objective=sum(x),
         ...     constraints={},
         ...     one_hot_constraints={
-        ...         1: OneHotConstraint(variables=[0, 1]),
-        ...         2: OneHotConstraint(variables=[2, 3]),
+        ...         1: OneHotConstraint(variables=x[:2]),
+        ...         2: OneHotConstraint(variables=x[2:]),
         ...     },
         ...     sense=Instance.MINIMIZE,
         ... )
@@ -3816,7 +3824,7 @@ class Instance:
         ...     decision_variables=x,
         ...     objective=sum(x),
         ...     constraints={},
-        ...     sos1_constraints={1: Sos1Constraint(variables=[0, 1, 2])},
+        ...     sos1_constraints={1: Sos1Constraint(variables=x)},
         ...     sense=Instance.MINIMIZE,
         ... )
         >>> instance.convert_sos1_to_constraints(1)
@@ -3854,8 +3862,8 @@ class Instance:
         ...     objective=sum(x),
         ...     constraints={},
         ...     sos1_constraints={
-        ...         1: Sos1Constraint(variables=[0, 1]),
-        ...         2: Sos1Constraint(variables=[2, 3]),
+        ...         1: Sos1Constraint(variables=x[:2]),
+        ...         2: Sos1Constraint(variables=x[2:]),
         ...     },
         ...     sense=Instance.MINIMIZE,
         ... )
@@ -4893,7 +4901,7 @@ class OneHotConstraint:
     def __new__(
         cls,
         *,
-        variables: typing.Sequence[builtins.int],
+        variables: typing.Sequence[VariableIDLike],
         name: typing.Optional[builtins.str] = None,
         subscripts: typing.Sequence[builtins.int] = [],
         description: typing.Optional[builtins.str] = None,
@@ -4904,7 +4912,9 @@ class OneHotConstraint:
 
         **Args:**
 
-        - `variables`: List of binary decision variable IDs (exactly one must be 1)
+        - `variables`: Variable IDs or decision-variable objects (exactly one
+          must be 1). Only their IDs are stored; the enclosing host requires
+          the referenced variables to be binary when the constraint is inserted.
         - `name` / `subscripts` / `description` / `parameters`: Optional
           context. Drained into the host's SoA store on insertion.
         """
@@ -7340,7 +7350,7 @@ class Sos1Constraint:
     def __new__(
         cls,
         *,
-        variables: typing.Sequence[builtins.int],
+        variables: typing.Sequence[VariableIDLike],
         name: typing.Optional[builtins.str] = None,
         subscripts: typing.Sequence[builtins.int] = [],
         description: typing.Optional[builtins.str] = None,
@@ -7351,7 +7361,9 @@ class Sos1Constraint:
 
         **Args:**
 
-        - `variables`: List of decision variable IDs (at most one can be non-zero)
+        - `variables`: Variable IDs or decision-variable objects (at most one
+          can be non-zero). Only their IDs are stored; the enclosing host
+          validates that the referenced variables exist when the constraint is inserted.
         - `name` / `subscripts` / `description` / `parameters`: Optional
           context. Drained into the host's SoA store on insertion.
         """
