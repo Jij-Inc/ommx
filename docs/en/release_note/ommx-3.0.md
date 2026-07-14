@@ -8,6 +8,25 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🆕 Decision-variable inputs for structural constraints ([#1078](https://github.com/Jij-Inc/ommx/pull/1078))
+
+{class}`~ommx.OneHotConstraint` and {class}`~ommx.Sos1Constraint` now accept
+{class}`~ommx.DecisionVariable` and {class}`~ommx.AttachedDecisionVariable`
+objects through their `variables` argument instead of raw variable IDs. The
+constraints still store OMMX variable IDs internally, and their `variables`
+properties continue to return those IDs.
+
+```python
+from ommx import DecisionVariable, OneHotConstraint, Sos1Constraint
+
+xs = [DecisionVariable.binary(i) for i in range(3)]
+one_hot = OneHotConstraint(variables=xs)
+sos1 = Sos1Constraint(variables=xs)
+```
+
+See [Special constraints](../user_guide/special_constraints.md) for the modeling
+workflow.
+
 ## 3.0.0 Beta 1
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b1-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b1)
