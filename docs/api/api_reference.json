@@ -7,6 +7,134 @@
       "items": [
         {
           "kind": "Class",
+          "name": "AdapterCapabilities",
+          "doc": "Validated alternative native capability profiles for an adapter.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__new__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "profiles",
+                      "type_": {
+                        "display": "Sequence[CapabilityProfile]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "CapabilityProfile",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "AdapterCapabilities",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "check_compatibility",
+              "doc": "Compare native profiles without mutating or preparing the input.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "requirements",
+                      "type_": {
+                        "display": "InstanceRequirements",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "PortableCompatibilityReport",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "profiles",
+              "doc": "",
+              "type_": {
+                "display": "list[CapabilityProfile]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "CapabilityProfile",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
           "name": "AdditionalCapability",
           "doc": "Constraint type capability flag for non-standard constraint types.\n\nStandard constraints are always supported. This enum lists capabilities\nthat adapters must explicitly opt in to.\n\nUse as a set: `{AdditionalCapability.Indicator}`",
           "bases": [],
@@ -3328,6 +3456,328 @@
         },
         {
           "kind": "Class",
+          "name": "CapabilityProfile",
+          "doc": "One coherent combination of native solver capabilities.\n\nThis describes direct translator input after any explicit preparation.\nExact reformulation, relaxation, and heuristic or finite-penalty conversion\nare preparation concerns rather than native capabilities.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__new__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "variable_kinds",
+                      "type_": {
+                        "display": "set[Kind]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Kind",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "objective_degree",
+                      "type_": {
+                        "display": "DegreeLimit",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "senses",
+                      "type_": {
+                        "display": "set[Sense]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Sense",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "regular_constraints",
+                      "type_": {
+                        "display": "Optional[Mapping[Equality, DegreeLimit]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Mapping[Equality, DegreeLimit]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "Equality",
+                                "link_target": null,
+                                "children": []
+                              },
+                              {
+                                "display": "DegreeLimit",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "indicator_constraints",
+                      "type_": {
+                        "display": "Optional[Mapping[Equality, DegreeLimit]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Mapping[Equality, DegreeLimit]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "Equality",
+                                "link_target": null,
+                                "children": []
+                              },
+                              {
+                                "display": "DegreeLimit",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "supports_one_hot",
+                      "type_": {
+                        "display": "bool",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "False"
+                      }
+                    },
+                    {
+                      "name": "supports_sos1",
+                      "type_": {
+                        "display": "bool",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "False"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "CapabilityProfile",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "indicator_constraints",
+              "doc": "",
+              "type_": {
+                "display": "dict[Equality, DegreeLimit]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "Equality",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "DegreeLimit",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "name",
+              "doc": "",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "objective_degree",
+              "doc": "",
+              "type_": {
+                "display": "DegreeLimit",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "regular_constraints",
+              "doc": "",
+              "type_": {
+                "display": "dict[Equality, DegreeLimit]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "Equality",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "DegreeLimit",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "senses",
+              "doc": "",
+              "type_": {
+                "display": "set[Sense]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "Sense",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "supports_one_hot",
+              "doc": "",
+              "type_": {
+                "display": "bool",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "supports_sos1",
+              "doc": "",
+              "type_": {
+                "display": "bool",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "variable_kinds",
+              "doc": "",
+              "type_": {
+                "display": "set[Kind]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "Kind",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
           "name": "Constraint",
           "doc": "Constraint wrapper for Python.\n\nCarries the inner Rust `Constraint<Created>` plus a snapshot of its\nauxiliary context. When this wrapper is read from an [`Instance`], the\nsnapshot is filled from the instance's `ConstraintContextStore`. When the\nwrapper is handed back to an instance (e.g. via `from_components`), the\nsnapshot is drained into that instance's context store. Mutations on a\nwrapper retrieved from an instance therefore do not propagate back; the\ncaller must re-add the constraint to apply changes.",
           "bases": [],
@@ -3994,6 +4444,81 @@
                     "children": []
                   }
                 ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "ConstraintRequirement",
+          "doc": "Relation and polynomial degree required by one active constraint.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "degree",
+              "doc": "",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "relation",
+              "doc": "",
+              "type_": {
+                "display": "Equality",
+                "link_target": null,
+                "children": []
               },
               "is_property": true,
               "is_readonly": true
@@ -5690,6 +6215,144 @@
               "name": "Used",
               "doc": "Used by the objective or active constraints passed to solvers",
               "type_": null
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "DegreeLimit",
+          "doc": "Cumulative polynomial-degree support in a capability profile.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "allows",
+              "doc": "Return whether ``actual_degree`` is accepted.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "actual_degree",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "any",
+              "doc": "Accept any polynomial degree representable by OMMX.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "DegreeLimit",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "at_most",
+              "doc": "Accept every degree up to and including ``maximum``.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "maximum",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DegreeLimit",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "maximum",
+              "doc": "Inclusive maximum degree, or ``None`` for :meth:`any`.",
+              "type_": {
+                "display": "Optional[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
             }
           ],
           "deprecated": null
@@ -10732,6 +11395,22 @@
               "deprecated": null
             },
             {
+              "name": "solver_requirements",
+              "doc": "Derive the portable shape of the complete active solver input.\n\nThe result is recomputed on every call. Fixed, dependent, irrelevant,\nremoved-constraint-only, and named-function-only variables are excluded.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "InstanceRequirements",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "stats",
               "doc": "Get statistics about the instance.\n\nReturns a dictionary containing counts of decision variables and constraints\ncategorized by kind, usage, and status.\n\n**Returns:**\nA dictionary with the following structure:\n\n```text\n{\n    \"decision_variables\": {\n        \"total\": int,\n        \"by_kind\": {\n            \"binary\": int,\n            \"integer\": int,\n            \"continuous\": int,\n            \"semi_integer\": int,\n            \"semi_continuous\": int\n        },\n        \"by_usage\": {\n            \"used_in_objective\": int,\n            \"used_in_constraints\": int,\n            \"used\": int,\n            \"fixed\": int,\n            \"dependent\": int,\n            \"irrelevant\": int\n        }\n    },\n    \"constraints\": {\n        \"total\": int,\n        \"active\": int,\n        \"removed\": int\n    }\n}\n```\n\n# Examples\n\n```python\n>>> from ommx import Instance\n>>> instance = Instance.minimize()\n>>> stats = instance.stats()\n>>> stats[\"decision_variables\"][\"total\"]\n0\n>>> stats[\"constraints\"][\"total\"]\n0\n```",
               "signatures": [
@@ -11594,6 +12273,204 @@
                     "display": "DecisionVariable",
                     "link_target": null,
                     "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "InstanceRequirements",
+          "doc": "Portable shape of an instance's complete active solver input.\n\nFixed, dependent, irrelevant, removed-constraint-only, and\nnamed-function-only variables are excluded.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "indicator_constraints",
+              "doc": "",
+              "type_": {
+                "display": "dict[int, ConstraintRequirement]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "ConstraintRequirement",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "objective_degree",
+              "doc": "",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "one_hot_constraint_ids",
+              "doc": "",
+              "type_": {
+                "display": "set[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "regular_constraints",
+              "doc": "",
+              "type_": {
+                "display": "dict[int, ConstraintRequirement]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "ConstraintRequirement",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "sense",
+              "doc": "",
+              "type_": {
+                "display": "Sense",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "sos1_constraint_ids",
+              "doc": "",
+              "type_": {
+                "display": "set[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "used_variable_ids",
+              "doc": "",
+              "type_": {
+                "display": "set[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "used_variables_by_kind",
+              "doc": "",
+              "type_": {
+                "display": "dict[Kind, set[int]]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "Kind",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "set[int]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
                   }
                 ]
               },
@@ -17983,6 +18860,221 @@
             }
           ],
           "attributes": [],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "PortableCapabilityMismatch",
+          "doc": "One structured incompatibility between requirements and a complete profile.",
+          "bases": [],
+          "methods": [],
+          "attributes": [],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "PortableCompatibilityReport",
+          "doc": "Side-effect-free portable compatibility report.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__str__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "compatible",
+              "doc": "",
+              "type_": {
+                "display": "bool",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "matching_profiles",
+              "doc": "",
+              "type_": {
+                "display": "list[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "profiles",
+              "doc": "",
+              "type_": {
+                "display": "list[ProfileCompatibilityReport]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "ProfileCompatibilityReport",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "ProfileCompatibilityReport",
+          "doc": "Portable compatibility result for one coherent profile.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "compatible",
+              "doc": "",
+              "type_": {
+                "display": "bool",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "mismatches",
+              "doc": "",
+              "type_": {
+                "display": "list[PortableCapabilityMismatch]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "PortableCapabilityMismatch",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "profile_name",
+              "doc": "",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
           "deprecated": null
         },
         {
@@ -31816,6 +32908,7 @@
     }
   },
   "export_map": {
+    "ommx.AdapterCapabilities": "ommx",
     "ommx.AdditionalCapability": "ommx",
     "ommx.AttachedConstraint": "ommx",
     "ommx.AttachedDecisionVariable": "ommx",
@@ -31823,9 +32916,12 @@
     "ommx.AttachedOneHotConstraint": "ommx",
     "ommx.AttachedSos1Constraint": "ommx",
     "ommx.Bound": "ommx",
+    "ommx.CapabilityProfile": "ommx",
     "ommx.Constraint": "ommx",
+    "ommx.ConstraintRequirement": "ommx",
     "ommx.DecisionVariable": "ommx",
     "ommx.DecisionVariableRole": "ommx",
+    "ommx.DegreeLimit": "ommx",
     "ommx.Equality": "ommx",
     "ommx.EvaluatedConstraint": "ommx",
     "ommx.EvaluatedDecisionVariable": "ommx",
@@ -31833,6 +32929,7 @@
     "ommx.Function": "ommx",
     "ommx.IndicatorConstraint": "ommx",
     "ommx.Instance": "ommx",
+    "ommx.InstanceRequirements": "ommx",
     "ommx.Kind": "ommx",
     "ommx.Linear": "ommx",
     "ommx.NamedFunction": "ommx",
@@ -31841,6 +32938,9 @@
     "ommx.Parameter": "ommx",
     "ommx.ParametricInstance": "ommx",
     "ommx.Polynomial": "ommx",
+    "ommx.PortableCapabilityMismatch": "ommx",
+    "ommx.PortableCompatibilityReport": "ommx",
+    "ommx.ProfileCompatibilityReport": "ommx",
     "ommx.Provenance": "ommx",
     "ommx.ProvenanceKind": "ommx",
     "ommx.Quadratic": "ommx",

@@ -99,8 +99,8 @@ impl From<AdditionalCapability> for ommx::AdditionalCapability {
 
 /// Sense of optimization (minimize or maximize)
 #[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
-#[pyclass(eq, eq_int)]
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[pyclass(eq, eq_int, hash, frozen)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Sense {
     /// Minimize the objective function
     Minimize = 1,
@@ -160,8 +160,8 @@ impl From<Sense> for ommx::Sense {
 
 /// Equality type for constraints
 #[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
-#[pyclass(eq, eq_int)]
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[pyclass(eq, eq_int, hash, frozen)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Equality {
     /// Equal to zero constraint (=)
     EqualToZero = 1,
@@ -224,8 +224,8 @@ impl From<Equality> for ommx::Equality {
 
 /// Kind of decision variable
 #[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
-#[pyclass(eq, eq_int)]
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[pyclass(eq, eq_int, hash, frozen)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Kind {
     /// Binary decision variable (0 or 1)
     Binary = 1,

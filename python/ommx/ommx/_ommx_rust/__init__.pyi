@@ -19,6 +19,7 @@ import typing_extensions
 from typing import TypeAlias
 
 __all__ = [
+    "AdapterCapabilities",
     "AdditionalCapability",
     "AnonymousArtifactRef",
     "ArchiveDescriptor",
@@ -33,9 +34,12 @@ __all__ = [
     "AttachedSos1Constraint",
     "AutosavePolicy",
     "Bound",
+    "CapabilityProfile",
     "Constraint",
+    "ConstraintRequirement",
     "DecisionVariable",
     "DecisionVariableRole",
+    "DegreeLimit",
     "Descriptor",
     "DiagnosticCollector",
     "Equality",
@@ -54,6 +58,7 @@ __all__ = [
     "IndicatorConstraint",
     "Instance",
     "InstanceDescription",
+    "InstanceRequirements",
     "Kind",
     "Linear",
     "LinearLike",
@@ -65,6 +70,9 @@ __all__ = [
     "Parameters",
     "ParametricInstance",
     "Polynomial",
+    "PortableCapabilityMismatch",
+    "PortableCompatibilityReport",
+    "ProfileCompatibilityReport",
     "Provenance",
     "ProvenanceKind",
     "PruneAnonymousReport",
@@ -140,6 +148,25 @@ VariableIDLike: TypeAlias = builtins.int | DecisionVariable | AttachedDecisionVa
 r"""
 A variable ID or decision-variable object. APIs using this type consume only the OMMX variable identity, not kind or bound metadata.
 """
+
+@typing.final
+class AdapterCapabilities:
+    r"""
+    Validated alternative native capability profiles for an adapter.
+    """
+    @property
+    def profiles(self) -> builtins.list[CapabilityProfile]: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __new__(
+        cls, profiles: typing.Sequence[CapabilityProfile]
+    ) -> AdapterCapabilities: ...
+    def check_compatibility(
+        self, requirements: InstanceRequirements
+    ) -> PortableCompatibilityReport:
+        r"""
+        Compare native profiles without mutating or preparing the input.
+        """
+    def __repr__(self) -> builtins.str: ...
 
 @typing.final
 class AnonymousArtifactRef:
@@ -1274,6 +1301,50 @@ class Bound:
     def __deepcopy__(self, _memo: typing.Any) -> Bound: ...
 
 @typing.final
+class CapabilityProfile:
+    r"""
+    One coherent combination of native solver capabilities.
+
+    This describes direct translator input after any explicit preparation.
+    Exact reformulation, relaxation, and heuristic or finite-penalty conversion
+    are preparation concerns rather than native capabilities.
+    """
+    @property
+    def name(self) -> builtins.str: ...
+    @property
+    def variable_kinds(self) -> builtins.set[Kind]: ...
+    @property
+    def objective_degree(self) -> DegreeLimit: ...
+    @property
+    def regular_constraints(self) -> builtins.dict[Equality, DegreeLimit]: ...
+    @property
+    def indicator_constraints(self) -> builtins.dict[Equality, DegreeLimit]: ...
+    @property
+    def supports_one_hot(self) -> builtins.bool: ...
+    @property
+    def supports_sos1(self) -> builtins.bool: ...
+    @property
+    def senses(self) -> builtins.set[Sense]: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __new__(
+        cls,
+        *,
+        name: builtins.str,
+        variable_kinds: builtins.set[Kind],
+        objective_degree: DegreeLimit,
+        senses: builtins.set[Sense],
+        regular_constraints: typing.Optional[
+            typing.Mapping[Equality, DegreeLimit]
+        ] = None,
+        indicator_constraints: typing.Optional[
+            typing.Mapping[Equality, DegreeLimit]
+        ] = None,
+        supports_one_hot: builtins.bool = False,
+        supports_sos1: builtins.bool = False,
+    ) -> CapabilityProfile: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class Constraint:
     r"""
     Constraint wrapper for Python.
@@ -1422,6 +1493,18 @@ class Constraint:
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> Constraint: ...
     def __deepcopy__(self, _memo: typing.Any) -> Constraint: ...
+
+@typing.final
+class ConstraintRequirement:
+    r"""
+    Relation and polynomial degree required by one active constraint.
+    """
+    @property
+    def relation(self) -> Equality: ...
+    @property
+    def degree(self) -> builtins.int: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __repr__(self) -> builtins.str: ...
 
 @typing.final
 class DecisionVariable:
@@ -1602,6 +1685,33 @@ class DecisionVariable:
         r"""
         Create a greater-than-or-equal constraint: self >= other → Constraint
         """
+
+@typing.final
+class DegreeLimit:
+    r"""
+    Cumulative polynomial-degree support in a capability profile.
+    """
+    @property
+    def maximum(self) -> typing.Optional[builtins.int]:
+        r"""
+        Inclusive maximum degree, or ``None`` for :meth:`any`.
+        """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    @staticmethod
+    def at_most(maximum: builtins.int) -> DegreeLimit:
+        r"""
+        Accept every degree up to and including ``maximum``.
+        """
+    @staticmethod
+    def any() -> DegreeLimit:
+        r"""
+        Accept any polynomial degree representable by OMMX.
+        """
+    def allows(self, actual_degree: builtins.int) -> builtins.bool:
+        r"""
+        Return whether ``actual_degree`` is accepted.
+        """
+    def __repr__(self) -> builtins.str: ...
 
 @typing.final
 class Descriptor:
@@ -3173,6 +3283,13 @@ class Instance:
         r"""
         Add a SOS1 constraint to this instance.
         """
+    def solver_requirements(self) -> InstanceRequirements:
+        r"""
+        Derive the portable shape of the complete active solver input.
+
+        The result is recomputed on every call. Fixed, dependent, irrelevant,
+        removed-constraint-only, and named-function-only variables are excluded.
+        """
     def reduce_capabilities(
         self, supported: builtins.set[AdditionalCapability]
     ) -> builtins.set[AdditionalCapability]:
@@ -4618,6 +4735,39 @@ class InstanceDescription:
     def __deepcopy__(self, _memo: typing.Any) -> InstanceDescription: ...
 
 @typing.final
+class InstanceRequirements:
+    r"""
+    Portable shape of an instance's complete active solver input.
+
+    Fixed, dependent, irrelevant, removed-constraint-only, and
+    named-function-only variables are excluded.
+    """
+    @property
+    def sense(self) -> Sense: ...
+    @property
+    def used_variables_by_kind(
+        self,
+    ) -> builtins.dict[Kind, builtins.set[builtins.int]]: ...
+    @property
+    def used_variable_ids(self) -> builtins.set[builtins.int]: ...
+    @property
+    def objective_degree(self) -> builtins.int: ...
+    @property
+    def regular_constraints(
+        self,
+    ) -> builtins.dict[builtins.int, ConstraintRequirement]: ...
+    @property
+    def indicator_constraints(
+        self,
+    ) -> builtins.dict[builtins.int, ConstraintRequirement]: ...
+    @property
+    def one_hot_constraint_ids(self) -> builtins.set[builtins.int]: ...
+    @property
+    def sos1_constraint_ids(self) -> builtins.set[builtins.int]: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class Linear:
     r"""
     Linear function of decision variables.
@@ -5633,6 +5783,205 @@ class Polynomial:
         r"""
         Create a greater-than-or-equal constraint: self >= other → Constraint
         """
+
+class PortableCapabilityMismatch:
+    r"""
+    One structured incompatibility between requirements and a complete profile.
+    """
+    @typing.final
+    class UnsupportedVariableKind(PortableCapabilityMismatch):
+        __match_args__ = (
+            "kind",
+            "used_variable_ids",
+            "supported_kinds",
+        )
+        @property
+        def kind(self) -> Kind: ...
+        @property
+        def used_variable_ids(self) -> builtins.set[builtins.int]: ...
+        @property
+        def supported_kinds(self) -> builtins.set[Kind]: ...
+        def __new__(
+            cls,
+            kind: Kind,
+            used_variable_ids: builtins.set[builtins.int],
+            supported_kinds: builtins.set[Kind],
+        ) -> PortableCapabilityMismatch.UnsupportedVariableKind: ...
+
+    @typing.final
+    class ObjectiveDegreeExceeded(PortableCapabilityMismatch):
+        __match_args__ = (
+            "actual_degree",
+            "limit",
+        )
+        @property
+        def actual_degree(self) -> builtins.int: ...
+        @property
+        def limit(self) -> DegreeLimit: ...
+        def __new__(
+            cls, actual_degree: builtins.int, limit: DegreeLimit
+        ) -> PortableCapabilityMismatch.ObjectiveDegreeExceeded: ...
+
+    @typing.final
+    class UnsupportedRegularConstraintRelation(PortableCapabilityMismatch):
+        __match_args__ = (
+            "relation",
+            "constraint_ids",
+            "supported_relations",
+        )
+        @property
+        def relation(self) -> Equality: ...
+        @property
+        def constraint_ids(self) -> builtins.set[builtins.int]: ...
+        @property
+        def supported_relations(self) -> builtins.set[Equality]: ...
+        def __new__(
+            cls,
+            relation: Equality,
+            constraint_ids: builtins.set[builtins.int],
+            supported_relations: builtins.set[Equality],
+        ) -> PortableCapabilityMismatch.UnsupportedRegularConstraintRelation: ...
+
+    @typing.final
+    class RegularConstraintDegreeExceeded(PortableCapabilityMismatch):
+        __match_args__ = (
+            "relation",
+            "actual_degrees",
+            "limit",
+        )
+        @property
+        def relation(self) -> Equality: ...
+        @property
+        def actual_degrees(self) -> builtins.dict[builtins.int, builtins.int]: ...
+        @property
+        def limit(self) -> DegreeLimit: ...
+        def __new__(
+            cls,
+            relation: Equality,
+            actual_degrees: typing.Mapping[builtins.int, builtins.int],
+            limit: DegreeLimit,
+        ) -> PortableCapabilityMismatch.RegularConstraintDegreeExceeded: ...
+
+    @typing.final
+    class UnsupportedIndicatorConstraints(PortableCapabilityMismatch):
+        __match_args__ = ("constraint_ids",)
+        @property
+        def constraint_ids(self) -> builtins.set[builtins.int]: ...
+        def __new__(
+            cls, constraint_ids: builtins.set[builtins.int]
+        ) -> PortableCapabilityMismatch.UnsupportedIndicatorConstraints: ...
+
+    @typing.final
+    class UnsupportedIndicatorConstraintRelation(PortableCapabilityMismatch):
+        __match_args__ = (
+            "relation",
+            "constraint_ids",
+            "supported_relations",
+        )
+        @property
+        def relation(self) -> Equality: ...
+        @property
+        def constraint_ids(self) -> builtins.set[builtins.int]: ...
+        @property
+        def supported_relations(self) -> builtins.set[Equality]: ...
+        def __new__(
+            cls,
+            relation: Equality,
+            constraint_ids: builtins.set[builtins.int],
+            supported_relations: builtins.set[Equality],
+        ) -> PortableCapabilityMismatch.UnsupportedIndicatorConstraintRelation: ...
+
+    @typing.final
+    class IndicatorBodyDegreeExceeded(PortableCapabilityMismatch):
+        __match_args__ = (
+            "relation",
+            "actual_degrees",
+            "limit",
+        )
+        @property
+        def relation(self) -> Equality: ...
+        @property
+        def actual_degrees(self) -> builtins.dict[builtins.int, builtins.int]: ...
+        @property
+        def limit(self) -> DegreeLimit: ...
+        def __new__(
+            cls,
+            relation: Equality,
+            actual_degrees: typing.Mapping[builtins.int, builtins.int],
+            limit: DegreeLimit,
+        ) -> PortableCapabilityMismatch.IndicatorBodyDegreeExceeded: ...
+
+    @typing.final
+    class UnsupportedOneHotConstraints(PortableCapabilityMismatch):
+        __match_args__ = ("constraint_ids",)
+        @property
+        def constraint_ids(self) -> builtins.set[builtins.int]: ...
+        def __new__(
+            cls, constraint_ids: builtins.set[builtins.int]
+        ) -> PortableCapabilityMismatch.UnsupportedOneHotConstraints: ...
+
+    @typing.final
+    class UnsupportedSos1Constraints(PortableCapabilityMismatch):
+        __match_args__ = ("constraint_ids",)
+        @property
+        def constraint_ids(self) -> builtins.set[builtins.int]: ...
+        def __new__(
+            cls, constraint_ids: builtins.set[builtins.int]
+        ) -> PortableCapabilityMismatch.UnsupportedSos1Constraints: ...
+
+    @typing.final
+    class UnsupportedSense(PortableCapabilityMismatch):
+        __match_args__ = (
+            "sense",
+            "supported_senses",
+        )
+        @property
+        def sense(self) -> Sense: ...
+        @property
+        def supported_senses(self) -> builtins.set[Sense]: ...
+        def __new__(
+            cls, sense: Sense, supported_senses: builtins.set[Sense]
+        ) -> PortableCapabilityMismatch.UnsupportedSense: ...
+
+    @typing.final
+    class Unknown(PortableCapabilityMismatch):
+        __match_args__ = ("message",)
+        @property
+        def message(self) -> builtins.str: ...
+        def __new__(
+            cls, message: builtins.str
+        ) -> PortableCapabilityMismatch.Unknown: ...
+
+    ...
+
+@typing.final
+class PortableCompatibilityReport:
+    r"""
+    Side-effect-free portable compatibility report.
+    """
+    @property
+    def profiles(self) -> builtins.list[ProfileCompatibilityReport]: ...
+    @property
+    def compatible(self) -> builtins.bool: ...
+    @property
+    def matching_profiles(self) -> builtins.list[builtins.str]: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __str__(self) -> builtins.str: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class ProfileCompatibilityReport:
+    r"""
+    Portable compatibility result for one coherent profile.
+    """
+    @property
+    def profile_name(self) -> builtins.str: ...
+    @property
+    def mismatches(self) -> builtins.list[PortableCapabilityMismatch]: ...
+    @property
+    def compatible(self) -> builtins.bool: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __repr__(self) -> builtins.str: ...
 
 @typing.final
 class Provenance:

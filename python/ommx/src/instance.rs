@@ -8,8 +8,9 @@ use crate::{
         apply_include_filter, constraint_id_col, constraint_kind_collection, entries_to_dataframe,
         raw_entries_to_dataframe, ConstraintKind, PyDataFrame, ToPandasEntry,
     },
-    Constraint, DecisionVariable, DecisionVariableRole, Function, NamedFunction,
-    ParametricInstance, RemovedConstraint, Rng, SampleSet, Samples, Sense, Solution, State,
+    Constraint, DecisionVariable, DecisionVariableRole, Function, InstanceRequirements,
+    NamedFunction, ParametricInstance, RemovedConstraint, Rng, SampleSet, Samples, Sense, Solution,
+    State,
 };
 use anyhow::Result;
 use ommx::{ConstraintID, Evaluate, NamedFunctionID, VariableID};
@@ -716,6 +717,14 @@ impl Instance {
                 )
             })
             .collect()
+    }
+
+    /// Derive the portable shape of the complete active solver input.
+    ///
+    /// The result is recomputed on every call. Fixed, dependent, irrelevant,
+    /// removed-constraint-only, and named-function-only variables are excluded.
+    pub fn solver_requirements(&self) -> InstanceRequirements {
+        InstanceRequirements(self.inner.solver_requirements())
     }
 
     /// The non-standard constraint capabilities this instance currently uses.

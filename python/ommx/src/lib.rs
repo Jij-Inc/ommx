@@ -2,6 +2,7 @@
 
 #[macro_use]
 mod annotations;
+mod adapter_capability;
 mod artifact;
 mod attached;
 mod bound;
@@ -39,6 +40,7 @@ mod solution;
 mod sos1_constraint;
 mod state;
 
+pub use adapter_capability::*;
 pub use artifact::*;
 // `attached.rs` is implementation detail — re-export only the host enum that
 // the kind-specific binding files reference. The metadata-method macros are
@@ -191,6 +193,14 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<AttachedDecisionVariable>()?;
     m.add_class::<Parameter>()?;
     m.add_class::<AdditionalCapability>()?;
+    m.add_class::<DegreeLimit>()?;
+    m.add_class::<ConstraintRequirement>()?;
+    m.add_class::<InstanceRequirements>()?;
+    m.add_class::<CapabilityProfile>()?;
+    m.add_class::<AdapterCapabilities>()?;
+    m.add_class::<PortableCapabilityMismatch>()?;
+    m.add_class::<ProfileCompatibilityReport>()?;
+    m.add_class::<PortableCompatibilityReport>()?;
     m.add_class::<Constraint>()?;
     m.add_class::<AttachedConstraint>()?;
     m.add_class::<IndicatorConstraint>()?;
@@ -273,6 +283,14 @@ pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
     "Parameter",
     // Constraint capability
     "AdditionalCapability",
+    "DegreeLimit",
+    "ConstraintRequirement",
+    "InstanceRequirements",
+    "CapabilityProfile",
+    "AdapterCapabilities",
+    "PortableCapabilityMismatch",
+    "ProfileCompatibilityReport",
+    "PortableCompatibilityReport",
     // Constraint and named function
     "Constraint",
     "AttachedConstraint",

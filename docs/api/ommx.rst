@@ -23,6 +23,14 @@ ommx
    _items/ommx.AttachedDecisionVariable
    _items/ommx.Parameter
    _items/ommx.AdditionalCapability
+   _items/ommx.DegreeLimit
+   _items/ommx.ConstraintRequirement
+   _items/ommx.InstanceRequirements
+   _items/ommx.CapabilityProfile
+   _items/ommx.AdapterCapabilities
+   _items/ommx.PortableCapabilityMismatch
+   _items/ommx.ProfileCompatibilityReport
+   _items/ommx.PortableCompatibilityReport
    _items/ommx.Constraint
    _items/ommx.AttachedConstraint
    _items/ommx.IndicatorConstraint
