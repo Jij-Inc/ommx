@@ -8,6 +8,20 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🆕 Native capability declarations for HiGHS and Python-MIP adapters ([#1085](https://github.com/Jij-Inc/ommx/pull/1085))
+
+`OMMXHighsAdapter` and `OMMXPythonMIPAdapter` now declare and enforce their
+complete native translator profiles: Binary, Integer, and Continuous variables;
+linear objectives; linear regular equality and inequality constraints; and both
+optimization senses. Unsupported variable kinds, nonlinear functions, and
+special constraints are reported through the structured
+{class}`~ommx.adapter.AdapterCompatibilityError` introduced in #1084.
+
+The migrated constructors no longer lower Indicator, OneHot, or SOS1
+constraints implicitly. A direct translation attempt rejects those families
+without mutating the input {class}`~ommx.Instance`; callers must perform any
+intended reformulation explicitly and recheck the prepared instance.
+
 ### 🆕 Native capability declaration for the PySCIPOpt adapter ([#1086](https://github.com/Jij-Inc/ommx/pull/1086))
 
 `OMMXPySCIPOptAdapter` now declares and enforces a coherent native profile for
