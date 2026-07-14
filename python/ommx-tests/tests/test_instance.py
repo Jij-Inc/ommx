@@ -10,6 +10,111 @@ import math
 import pytest
 
 
+def test_incremental_modeling_workflow():
+    instance = Instance.maximize()
+    x = instance.new_binary("x")
+    y = instance.new_binary("y")
+
+    instance.objective = x + y
+    constraint = instance.add_constraint(x - y == 1, "c1")
+
+    assert instance.sense == Instance.MAXIMIZE
+    assert (x.id, x.name) == (0, "x")
+    assert (y.id, y.name) == (1, "y")
+    assert instance.objective.almost_equal(Function(x + y))
+    assert constraint.constraint_id == 0
+    assert constraint.name == "c1"
+
+
+def test_minimize_creates_empty_minimization_instance():
+    instance = Instance.minimize()
+
+    assert instance.sense == Instance.MINIMIZE
+    assert instance.decision_variables == []
+    assert instance.constraints == {}
+    assert instance.objective.almost_equal(Function(0))
+
+
+def test_new_binary_accepts_full_modeling_label():
+    instance = Instance.minimize()
+    x = instance.new_binary(
+        "x",
+        subscripts=[1, 2],
+        parameters={"region": "east"},
+        description="dispatch decision",
+    )
+
+    reread = instance.attached_decision_variable(x.id)
+    assert reread.name == "x"
+    assert reread.subscripts == [1, 2]
+    assert reread.parameters == {"region": "east"}
+    assert reread.description == "dispatch decision"
+
+    unnamed = instance.new_binary()
+    assert unnamed.name == ""
+    assert unnamed.subscripts == []
+    assert unnamed.parameters == {}
+    assert unnamed.description == ""
+
+
+def test_new_binary_raises_value_error_when_automatic_id_overflows():
+    max_id = 2**64 - 1
+    instance = Instance.from_components(
+        decision_variables=[DecisionVariable.binary(max_id)],
+        objective=0,
+        constraints={},
+        sense=Instance.MINIMIZE,
+    )
+
+    with pytest.raises(ValueError, match="No available decision variable ID remains"):
+        instance.new_binary("x")
+
+    assert [variable.id for variable in instance.decision_variables] == [max_id]
+
+
+def test_add_constraint_optional_name_preserves_existing_usage():
+    instance = Instance.minimize()
+    x = instance.add_decision_variable(DecisionVariable.binary(42))
+    snapshot = (x == 1).set_name("existing")
+
+    preserved = instance.add_constraint(snapshot)
+    overridden = instance.add_constraint(snapshot, "override")
+
+    assert preserved.name == "existing"
+    assert overridden.name == "override"
+    assert snapshot.name == "existing"
+
+
+def test_add_constraint_accepts_full_modeling_label():
+    instance = Instance.minimize()
+    x = instance.new_binary("x")
+    snapshot = (
+        (x == 1)
+        .set_name("existing")
+        .set_subscripts([0])
+        .set_parameters({"source": "snapshot"})
+        .set_description("existing description")
+    )
+
+    attached = instance.add_constraint(
+        snapshot,
+        "balance",
+        subscripts=[3, 4],
+        parameters={"region": "east"},
+        description="regional balance",
+    )
+    reread = instance.constraints[attached.constraint_id]
+
+    assert reread.name == "balance"
+    assert reread.subscripts == [3, 4]
+    assert reread.parameters == {"region": "east"}
+    assert reread.description == "regional balance"
+    assert snapshot.name == "existing"
+    assert snapshot.subscripts == [0]
+    assert snapshot.parameters == {"source": "snapshot"}
+    assert snapshot.description == "existing description"
+
+
 def test_set_objective():
     x = [DecisionVariable.binary(i) for i in range(3)]
     instance = Instance.from_components(

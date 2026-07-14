@@ -33,7 +33,7 @@ def test_convert_one_hot_populates_provenance():
         decision_variables=x,
         objective=sum(x),
         constraints={},
-        one_hot_constraints={10: OneHotConstraint(variables=[1, 2, 3])},
+        one_hot_constraints={10: OneHotConstraint(variables=x)},
         sense=Instance.MINIMIZE,
     )
     new_id = instance.convert_one_hot_to_constraint(10)
@@ -50,7 +50,7 @@ def test_convert_sos1_populates_provenance_on_every_generated_constraint():
         decision_variables=x,
         objective=sum(x),
         constraints={},
-        sos1_constraints={7: Sos1Constraint(variables=[0, 1, 2])},
+        sos1_constraints={7: Sos1Constraint(variables=x)},
         sense=Instance.MINIMIZE,
     )
     new_ids = instance.convert_sos1_to_constraints(7)
@@ -99,7 +99,7 @@ def test_provenance_is_preserved_through_evaluate():
         decision_variables=x,
         objective=sum(x),
         constraints={},
-        one_hot_constraints={10: OneHotConstraint(variables=[1, 2, 3])},
+        one_hot_constraints={10: OneHotConstraint(variables=x)},
         sense=Instance.MINIMIZE,
     )
     new_id = instance.convert_one_hot_to_constraint(10)
@@ -118,7 +118,7 @@ def test_provenance_is_preserved_through_evaluate_samples():
         decision_variables=x,
         objective=sum(x),
         constraints={},
-        one_hot_constraints={10: OneHotConstraint(variables=[1, 2, 3])},
+        one_hot_constraints={10: OneHotConstraint(variables=x)},
         sense=Instance.MINIMIZE,
     )
     new_id = instance.convert_one_hot_to_constraint(10)
@@ -146,7 +146,7 @@ def test_provenance_equality_and_hash():
         decision_variables=x,
         objective=sum(x),
         constraints={},
-        one_hot_constraints={10: OneHotConstraint(variables=[1, 2, 3])},
+        one_hot_constraints={10: OneHotConstraint(variables=x)},
         sense=Instance.MINIMIZE,
     )
     new_id = instance.convert_one_hot_to_constraint(10)

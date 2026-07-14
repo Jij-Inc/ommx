@@ -8,6 +8,58 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🆕 `VariableIDLike` inputs for structural constraints ([#1078](https://github.com/Jij-Inc/ommx/pull/1078))
+
+Structural-constraint construction now accepts `VariableIDLike`, defined as
+`int | DecisionVariable | AttachedDecisionVariable`, wherever only a variable's
+identity is required. This applies to {class}`~ommx.OneHotConstraint`,
+{class}`~ommx.Sos1Constraint`, {class}`~ommx.IndicatorConstraint`, and
+{meth}`Constraint.with_indicator() <ommx.Constraint.with_indicator>`. The
+constraints still store OMMX variable IDs internally, and their ID getters
+continue to return integers.
+
+```python
+from ommx import DecisionVariable, OneHotConstraint, Sos1Constraint
+
+xs = [DecisionVariable.binary(i) for i in range(3)]
+one_hot = OneHotConstraint(variables=xs)
+sos1 = Sos1Constraint(variables=[x.id for x in xs])
+indicator = (xs[0] <= 1).with_indicator(xs[1])
+```
+
+APIs that are intrinsically ID collections or mappings, such as
+{meth}`~ommx.Instance.log_encode`, remain ID-based.
+
+See [Special constraints](../user_guide/special_constraints.md) for the modeling
+workflow.
+
+### 🆕 Incremental Instance modeling ([#1077](https://github.com/Jij-Inc/ommx/pull/1077))
+
+{class}`~ommx.Instance` can now own numeric ID assignment while a model is
+built incrementally. Start with {meth}`~ommx.Instance.maximize` or
+{meth}`~ommx.Instance.minimize`, create attached binary variables with
+{meth}`~ommx.Instance.new_binary`, then set the objective and add constraints
+directly. The existing {meth}`~ommx.Instance.from_components` workflow remains
+available when components already have explicit IDs.
+The ambiguous `Instance.empty()` compatibility alias is deprecated for static
+type checkers; use `Instance.minimize()` instead.
+
+```python
+from ommx import Instance
+
+instance = Instance.maximize()
+x = instance.new_binary("x")
+y = instance.new_binary("y")
+instance.objective = x + y
+instance.add_constraint(x - y == 1, "c1")
+```
+
+`new_binary` and `add_constraint` accept the complete modeling label: `name`,
+`subscripts`, `parameters`, and `description`. See the
+[Instance user guide](../user_guide/instance.md) for the complete workflow.
+If the maximum decision-variable ID is already `2**64 - 1`, `new_binary`
+raises `ValueError` instead of propagating a Rust panic.
+
 ## 3.0.0 Beta 1
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b1-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b1)
@@ -299,7 +351,7 @@ The `annotations` property is now a read-only `types.MappingProxyType[str, str]`
 ```python
 from ommx import Instance
 
-instance = Instance.empty()
+instance = Instance.minimize()
 instance.title = "portfolio"
 instance.add_user_annotation("owner", "analytics")
 

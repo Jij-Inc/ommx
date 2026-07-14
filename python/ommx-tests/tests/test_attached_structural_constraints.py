@@ -59,7 +59,7 @@ def _empty_parametric_instance() -> ParametricInstance:
 def test_one_hot_add_returns_attached_with_drained_context():
     instance = _empty_instance()
     snapshot = OneHotConstraint(
-        variables=[0, 1, 2],
+        variables=instance.decision_variables,
         name="pick_one",
         subscripts=[3],
         description="initial",
@@ -76,10 +76,20 @@ def test_one_hot_add_returns_attached_with_drained_context():
     assert attached.variables == [0, 1, 2]
 
 
+def test_incremental_modeling_accepts_attached_variables():
+    instance = Instance.minimize()
+    x = instance.new_binary("x")
+    y = instance.new_binary("y")
+
+    attached = instance.add_one_hot_constraint(OneHotConstraint(variables=[x, y]))
+
+    assert attached.variables == [x.id, y.id]
+
+
 def test_one_hot_setter_writes_through_to_instance():
     instance = _empty_instance()
     attached = instance.add_one_hot_constraint(
-        OneHotConstraint(variables=[0, 1, 2], name="pick_one")
+        OneHotConstraint(variables=instance.decision_variables, name="pick_one")
     )
     cid = attached.constraint_id
 
@@ -98,7 +108,7 @@ def test_one_hot_setter_writes_through_to_instance():
 def test_one_hot_two_handles_share_state():
     instance = _empty_instance()
     a = instance.add_one_hot_constraint(
-        OneHotConstraint(variables=[0, 1], name="pick_one")
+        OneHotConstraint(variables=instance.decision_variables[:2], name="pick_one")
     )
     b = instance.one_hot_constraints[a.constraint_id]
 
@@ -108,8 +118,13 @@ def test_one_hot_two_handles_share_state():
 
 def test_one_hot_constraints_getter_returns_attached():
     instance = _empty_instance()
-    a = instance.add_one_hot_constraint(OneHotConstraint(variables=[0, 1], name="c1"))
-    b = instance.add_one_hot_constraint(OneHotConstraint(variables=[1, 2], name="c2"))
+    variables = instance.decision_variables
+    a = instance.add_one_hot_constraint(
+        OneHotConstraint(variables=variables[:2], name="c1")
+    )
+    b = instance.add_one_hot_constraint(
+        OneHotConstraint(variables=variables[1:], name="c2")
+    )
 
     constraints = instance.one_hot_constraints
     assert set(constraints.keys()) == {a.constraint_id, b.constraint_id}
@@ -119,7 +134,7 @@ def test_one_hot_constraints_getter_returns_attached():
 def test_one_hot_detach_returns_independent_snapshot():
     instance = _empty_instance()
     attached = instance.add_one_hot_constraint(
-        OneHotConstraint(variables=[0, 1], name="pick_one")
+        OneHotConstraint(variables=instance.decision_variables[:2], name="pick_one")
     )
 
     snapshot = attached.detach()
@@ -130,7 +145,7 @@ def test_one_hot_detach_returns_independent_snapshot():
 def test_one_hot_keeps_instance_alive_after_del():
     instance = _empty_instance()
     attached = instance.add_one_hot_constraint(
-        OneHotConstraint(variables=[0, 1], name="pick_one")
+        OneHotConstraint(variables=instance.decision_variables[:2], name="pick_one")
     )
 
     del instance
@@ -142,7 +157,9 @@ def test_one_hot_keeps_instance_alive_after_del():
 
 def test_one_hot_add_rejects_undefined_variable():
     instance = _empty_instance()  # variables = [0, 1, 2]
-    bad = OneHotConstraint(variables=[0, 99])
+    bad = OneHotConstraint(
+        variables=[DecisionVariable.binary(0), DecisionVariable.binary(99)]
+    )
 
     with pytest.raises(Exception, match="99"):
         instance.add_one_hot_constraint(bad)
@@ -153,7 +170,7 @@ def test_one_hot_add_rejects_undefined_variable():
 def test_one_hot_copy_and_deepcopy_share_parent():
     instance = _empty_instance()
     attached = instance.add_one_hot_constraint(
-        OneHotConstraint(variables=[0, 1], name="pick_one")
+        OneHotConstraint(variables=instance.decision_variables[:2], name="pick_one")
     )
 
     shallow = copy.copy(attached)
@@ -168,7 +185,7 @@ def test_one_hot_copy_and_deepcopy_share_parent():
 def test_one_hot_on_parametric_host():
     parametric = _empty_parametric_instance()
     attached = parametric.add_one_hot_constraint(
-        OneHotConstraint(variables=[0, 1, 2], name="pick_one")
+        OneHotConstraint(variables=parametric.decision_variables, name="pick_one")
     )
 
     assert isinstance(attached, AttachedOneHotConstraint)
@@ -187,7 +204,7 @@ def test_one_hot_on_parametric_host():
 def test_sos1_add_returns_attached_with_drained_context():
     instance = _empty_instance()
     snapshot = Sos1Constraint(
-        variables=[0, 1, 2],
+        variables=instance.decision_variables,
         name="exclusive",
         subscripts=[5],
     )
@@ -203,7 +220,7 @@ def test_sos1_add_returns_attached_with_drained_context():
 def test_sos1_setter_writes_through_to_instance():
     instance = _empty_instance()
     attached = instance.add_sos1_constraint(
-        Sos1Constraint(variables=[0, 1, 2], name="exclusive")
+        Sos1Constraint(variables=instance.decision_variables, name="exclusive")
     )
     cid = attached.constraint_id
 
@@ -217,8 +234,9 @@ def test_sos1_setter_writes_through_to_instance():
 
 def test_sos1_constraints_getter_returns_attached():
     instance = _empty_instance()
-    instance.add_sos1_constraint(Sos1Constraint(variables=[0, 1], name="c1"))
-    instance.add_sos1_constraint(Sos1Constraint(variables=[1, 2], name="c2"))
+    variables = instance.decision_variables
+    instance.add_sos1_constraint(Sos1Constraint(variables=variables[:2], name="c1"))
+    instance.add_sos1_constraint(Sos1Constraint(variables=variables[1:], name="c2"))
 
     constraints = instance.sos1_constraints
     assert all(isinstance(c, AttachedSos1Constraint) for c in constraints.values())
@@ -227,7 +245,7 @@ def test_sos1_constraints_getter_returns_attached():
 def test_sos1_detach_returns_independent_snapshot():
     instance = _empty_instance()
     attached = instance.add_sos1_constraint(
-        Sos1Constraint(variables=[0, 1], name="exclusive")
+        Sos1Constraint(variables=instance.decision_variables[:2], name="exclusive")
     )
 
     snapshot = attached.detach()
@@ -237,7 +255,9 @@ def test_sos1_detach_returns_independent_snapshot():
 
 def test_sos1_add_rejects_undefined_variable():
     instance = _empty_instance()
-    bad = Sos1Constraint(variables=[0, 99])
+    bad = Sos1Constraint(
+        variables=[DecisionVariable.binary(0), DecisionVariable.binary(99)]
+    )
 
     with pytest.raises(Exception, match="99"):
         instance.add_sos1_constraint(bad)
@@ -246,7 +266,7 @@ def test_sos1_add_rejects_undefined_variable():
 def test_sos1_on_parametric_host():
     parametric = _empty_parametric_instance()
     attached = parametric.add_sos1_constraint(
-        Sos1Constraint(variables=[0, 1, 2], name="exclusive")
+        Sos1Constraint(variables=parametric.decision_variables, name="exclusive")
     )
 
     assert isinstance(attached, AttachedSos1Constraint)
@@ -266,7 +286,9 @@ def test_one_hot_on_parametric_rejects_parameter_id_in_variables():
     """OneHot's `variables` set is a structural position — substitution can't
     fill it later. A parameter id there must be rejected."""
     parametric = _empty_parametric_instance()  # parameters = [100]
-    bad = OneHotConstraint(variables=[0, 100])
+    bad = OneHotConstraint(
+        variables=[DecisionVariable.binary(0), DecisionVariable.binary(100)]
+    )
 
     with pytest.raises(Exception, match="(structural|parameter)"):
         parametric.add_one_hot_constraint(bad)
@@ -277,7 +299,9 @@ def test_one_hot_on_parametric_rejects_parameter_id_in_variables():
 def test_sos1_on_parametric_rejects_parameter_id_in_variables():
     """Same structural-position rule for SOS1."""
     parametric = _empty_parametric_instance()  # parameters = [100]
-    bad = Sos1Constraint(variables=[0, 100])
+    bad = Sos1Constraint(
+        variables=[DecisionVariable.binary(0), DecisionVariable.binary(100)]
+    )
 
     with pytest.raises(Exception, match="(structural|parameter)"):
         parametric.add_sos1_constraint(bad)
@@ -308,7 +332,7 @@ def test_one_hot_rejects_non_binary_variable():
     must enforce this even though the builder already does for
     from_components."""
     instance = _instance_with_mixed_kinds()
-    bad = OneHotConstraint(variables=[0, 1])  # var 1 is integer
+    bad = OneHotConstraint(variables=instance.decision_variables[:2])
 
     with pytest.raises(Exception, match="binary"):
         instance.add_one_hot_constraint(bad)
@@ -321,7 +345,7 @@ def test_sos1_accepts_non_binary_variable():
     continuous variables. Asserting the looser rule keeps us honest about
     the difference vs. one-hot."""
     instance = _instance_with_mixed_kinds()
-    ok = Sos1Constraint(variables=[1, 2], name="mixed_kinds")
+    ok = Sos1Constraint(variables=instance.decision_variables[1:], name="mixed_kinds")
 
     attached = instance.add_sos1_constraint(ok)
     assert attached.name == "mixed_kinds"
@@ -345,7 +369,7 @@ def test_one_hot_rejects_non_binary_on_parametric_host():
         constraints={},
         parameters=[Parameter(id=100, name="alpha")],
     )
-    bad = OneHotConstraint(variables=[0, 1])  # var 1 is integer
+    bad = OneHotConstraint(variables=parametric.decision_variables)
 
     with pytest.raises(Exception, match="binary"):
         parametric.add_one_hot_constraint(bad)

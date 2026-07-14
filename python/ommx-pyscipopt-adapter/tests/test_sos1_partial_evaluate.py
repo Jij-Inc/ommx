@@ -27,7 +27,7 @@ def sos1_instance_setup():
     # Independent constraint not related to SOS1
     independent_constraint = z >= 1
 
-    sos1 = Sos1Constraint(variables=[1, 2, 3])  # x0, x1, x2 (continuous variables)
+    sos1 = Sos1Constraint(variables=x)
 
     return Instance.from_components(
         decision_variables=x + y + [z],

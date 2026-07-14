@@ -61,8 +61,8 @@ def _instance_all_kinds() -> Instance:
                 equality=Equality.EqualToZero,
             )
         },
-        one_hot_constraints={30: OneHotConstraint(variables=[0, 1, 2])},
-        sos1_constraints={40: Sos1Constraint(variables=[0, 1, 2])},
+        one_hot_constraints={30: OneHotConstraint(variables=x)},
+        sos1_constraints={40: Sos1Constraint(variables=x)},
         sense=Instance.MAXIMIZE,
     )
 
@@ -235,8 +235,8 @@ def test_instance_constraints_df_one_hot_removed_true(snapshot):
         objective=sum(x),
         constraints={},
         one_hot_constraints={
-            5: OneHotConstraint(variables=[0, 1]),
-            7: OneHotConstraint(variables=[1, 2]),
+            5: OneHotConstraint(variables=x[:2]),
+            7: OneHotConstraint(variables=x[1:]),
         },
         sense=Instance.MAXIMIZE,
     )

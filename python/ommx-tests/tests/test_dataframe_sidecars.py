@@ -128,8 +128,8 @@ def _special_instance() -> Instance:
                 equality=Equality.EqualToZero,
             )
         },
-        one_hot_constraints={6: OneHotConstraint(variables=[1, 2, 3])},
-        sos1_constraints={7: Sos1Constraint(variables=[0, 1, 2, 3])},
+        one_hot_constraints={6: OneHotConstraint(variables=x[1:])},
+        sos1_constraints={7: Sos1Constraint(variables=x)},
         sense=Instance.MAXIMIZE,
     )
 
@@ -153,7 +153,7 @@ def test_provenance_after_one_hot_conversion(snapshot):
         decision_variables=x,
         objective=sum(x),
         constraints={},
-        one_hot_constraints={7: OneHotConstraint(variables=[0, 1, 2])},
+        one_hot_constraints={7: OneHotConstraint(variables=x)},
         sense=Instance.MINIMIZE,
     )
     instance.convert_one_hot_to_constraint(7)
@@ -181,7 +181,7 @@ def test_removed_reasons_df_with_parameters_after_one_hot_conversion(snapshot):
         decision_variables=x,
         objective=sum(x),
         constraints={},
-        one_hot_constraints={7: OneHotConstraint(variables=[0, 1, 2])},
+        one_hot_constraints={7: OneHotConstraint(variables=x)},
         sense=Instance.MINIMIZE,
     )
     instance.convert_one_hot_to_constraint(7)
