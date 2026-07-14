@@ -20,6 +20,7 @@ mod pass;
 mod penalty;
 mod qubo;
 mod reduce_binary_power;
+mod requirements;
 mod serialize;
 mod setter;
 mod slack;
@@ -32,6 +33,7 @@ pub use analysis::*;
 pub use arbitrary::{InstanceParameters, InstanceSpace};
 pub use builder::*;
 pub use parametric_builder::*;
+pub use requirements::*;
 pub use stats::*;
 
 use crate::{

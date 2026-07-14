@@ -28,6 +28,7 @@ pub mod qplib;
 pub mod random;
 
 // Internal modules
+mod adapter_capability;
 mod annotations;
 mod atol;
 mod bound;
@@ -54,6 +55,7 @@ mod solution;
 mod sos1_constraint;
 mod substitute;
 
+pub use adapter_capability::*;
 pub use annotations::*;
 pub use atol::*;
 pub use bound::*;
