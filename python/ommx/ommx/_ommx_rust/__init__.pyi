@@ -54,6 +54,7 @@ __all__ = [
     "IndicatorConstraint",
     "Instance",
     "InstanceDescription",
+    "InvalidRemoteArtifactError",
     "Kind",
     "Linear",
     "LinearLike",
@@ -70,6 +71,11 @@ __all__ = [
     "PruneAnonymousReport",
     "Quadratic",
     "Relaxation",
+    "RemoteArtifactAuthenticationError",
+    "RemoteArtifactAuthorizationError",
+    "RemoteArtifactError",
+    "RemoteArtifactNotFoundError",
+    "RemoteArtifactTransportError",
     "RemovedConstraint",
     "RemovedIndicatorConstraint",
     "RemovedOneHotConstraint",
@@ -4617,6 +4623,13 @@ class InstanceDescription:
     def __copy__(self) -> InstanceDescription: ...
     def __deepcopy__(self, _memo: typing.Any) -> InstanceDescription: ...
 
+class InvalidRemoteArtifactError(RemoteArtifactError):
+    r"""
+    The remote response is not a valid OMMX Artifact.
+    """
+
+    ...
+
 @typing.final
 class Linear:
     r"""
@@ -5810,6 +5823,41 @@ class Quadratic:
         r"""
         Create a greater-than-or-equal constraint: self >= other → Constraint
         """
+
+class RemoteArtifactAuthenticationError(RemoteArtifactError):
+    r"""
+    Authentication for the remote Artifact registry failed.
+    """
+
+    ...
+
+class RemoteArtifactAuthorizationError(RemoteArtifactError):
+    r"""
+    The caller is not authorized to read the remote Artifact.
+    """
+
+    ...
+
+class RemoteArtifactError(builtins.RuntimeError):
+    r"""
+    Base exception for failures while looking up a remote OMMX Artifact.
+    """
+
+    ...
+
+class RemoteArtifactNotFoundError(RemoteArtifactError):
+    r"""
+    The requested remote Artifact manifest does not exist.
+    """
+
+    ...
+
+class RemoteArtifactTransportError(RemoteArtifactError):
+    r"""
+    The remote Artifact registry could not be reached or failed.
+    """
+
+    ...
 
 @typing.final
 class RemovedConstraint:

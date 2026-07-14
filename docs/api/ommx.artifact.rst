@@ -12,6 +12,12 @@ ommx.artifact
    _items/ommx.artifact.ArchiveDescriptor
    _items/ommx.artifact.ArchiveManifest
    _items/ommx.artifact.ArtifactDraft
+   _items/ommx.artifact.RemoteArtifactError
+   _items/ommx.artifact.RemoteArtifactNotFoundError
+   _items/ommx.artifact.RemoteArtifactAuthenticationError
+   _items/ommx.artifact.RemoteArtifactAuthorizationError
+   _items/ommx.artifact.RemoteArtifactTransportError
+   _items/ommx.artifact.InvalidRemoteArtifactError
    _items/ommx.artifact.Descriptor
    _items/ommx.artifact.GcBlob
    _items/ommx.artifact.GcInvalidManifest

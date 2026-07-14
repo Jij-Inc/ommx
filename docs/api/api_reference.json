@@ -27236,6 +27236,26 @@
         },
         {
           "kind": "Class",
+          "name": "InvalidRemoteArtifactError",
+          "doc": "The remote response is not a valid OMMX Artifact.",
+          "bases": [
+            {
+              "display": "RemoteArtifactError",
+              "link_target": {
+                "fqn": "ommx.artifact.RemoteArtifactError",
+                "doc_module": "ommx.artifact",
+                "kind": "Class",
+                "attribute": null
+              },
+              "children": []
+            }
+          ],
+          "methods": [],
+          "attributes": [],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
           "name": "PruneAnonymousReport",
           "doc": "Report returned by {func}`prune_anonymous`.",
           "bases": [],
@@ -27314,6 +27334,101 @@
               "is_readonly": true
             }
           ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "RemoteArtifactAuthenticationError",
+          "doc": "Authentication for the remote Artifact registry failed.",
+          "bases": [
+            {
+              "display": "RemoteArtifactError",
+              "link_target": {
+                "fqn": "ommx.artifact.RemoteArtifactError",
+                "doc_module": "ommx.artifact",
+                "kind": "Class",
+                "attribute": null
+              },
+              "children": []
+            }
+          ],
+          "methods": [],
+          "attributes": [],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "RemoteArtifactAuthorizationError",
+          "doc": "The caller is not authorized to read the remote Artifact.",
+          "bases": [
+            {
+              "display": "RemoteArtifactError",
+              "link_target": {
+                "fqn": "ommx.artifact.RemoteArtifactError",
+                "doc_module": "ommx.artifact",
+                "kind": "Class",
+                "attribute": null
+              },
+              "children": []
+            }
+          ],
+          "methods": [],
+          "attributes": [],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "RemoteArtifactError",
+          "doc": "Base exception for failures while looking up a remote OMMX Artifact.",
+          "bases": [
+            {
+              "display": "RuntimeError",
+              "link_target": null,
+              "children": []
+            }
+          ],
+          "methods": [],
+          "attributes": [],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "RemoteArtifactNotFoundError",
+          "doc": "The requested remote Artifact manifest does not exist.",
+          "bases": [
+            {
+              "display": "RemoteArtifactError",
+              "link_target": {
+                "fqn": "ommx.artifact.RemoteArtifactError",
+                "doc_module": "ommx.artifact",
+                "kind": "Class",
+                "attribute": null
+              },
+              "children": []
+            }
+          ],
+          "methods": [],
+          "attributes": [],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "RemoteArtifactTransportError",
+          "doc": "The remote Artifact registry could not be reached or failed.",
+          "bases": [
+            {
+              "display": "RemoteArtifactError",
+              "link_target": {
+                "fqn": "ommx.artifact.RemoteArtifactError",
+                "doc_module": "ommx.artifact",
+                "kind": "Class",
+                "attribute": null
+              },
+              "children": []
+            }
+          ],
+          "methods": [],
+          "attributes": [],
           "deprecated": null
         },
         {
@@ -31874,7 +31989,13 @@
     "ommx.artifact.GcMissingBlob": "ommx.artifact",
     "ommx.artifact.GcReport": "ommx.artifact",
     "ommx.artifact.GcRoot": "ommx.artifact",
+    "ommx.artifact.InvalidRemoteArtifactError": "ommx.artifact",
     "ommx.artifact.PruneAnonymousReport": "ommx.artifact",
+    "ommx.artifact.RemoteArtifactAuthenticationError": "ommx.artifact",
+    "ommx.artifact.RemoteArtifactAuthorizationError": "ommx.artifact",
+    "ommx.artifact.RemoteArtifactError": "ommx.artifact",
+    "ommx.artifact.RemoteArtifactNotFoundError": "ommx.artifact",
+    "ommx.artifact.RemoteArtifactTransportError": "ommx.artifact",
     "ommx.artifact.gc": "ommx.artifact",
     "ommx.artifact.get_images": "ommx.artifact",
     "ommx.artifact.get_local_registry_root": "ommx.artifact",

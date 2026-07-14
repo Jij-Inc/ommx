@@ -58,6 +58,8 @@ pub mod media_types;
 #[cfg(feature = "remote-artifact")]
 mod push;
 #[cfg(feature = "remote-artifact")]
+mod remote_error;
+#[cfg(feature = "remote-artifact")]
 mod remote_transport;
 mod save;
 pub use config::*;
@@ -73,6 +75,8 @@ pub use manifest::{
     LocalArtifact, LocalArtifactDyn, LocalManifest, LocalRegistryHandle,
 };
 pub use media_types::OCI_IMAGE_MANIFEST_MEDIA_TYPE;
+#[cfg(feature = "remote-artifact")]
+pub use remote_error::RemoteArtifactError;
 
 use anyhow::{Context, Result};
 use oci_spec::image::ImageManifest;
@@ -167,13 +171,18 @@ pub fn ghcr(org: &str, repo: &str, name: &str, tag: &str) -> Result<ImageRef> {
 /// three-tier chain (env override → `~/.docker/config.json` →
 /// anonymous), matching every other network call on the SDK.
 #[cfg(feature = "remote-artifact")]
-pub fn fetch_remote_manifest(image_name: &ImageRef) -> Result<ImageManifest> {
-    let transport = RemoteTransport::new(image_name)?;
-    transport.auth_for(image_name, RegistryOperation::Pull)?;
-    let (manifest_bytes, _digest) =
-        transport.pull_manifest_raw(image_name, &[OCI_IMAGE_MANIFEST_MEDIA_TYPE])?;
-    serde_json::from_slice(&manifest_bytes)
-        .context("Failed to parse OCI image manifest from the remote registry")
+pub fn fetch_remote_manifest(
+    image_name: &ImageRef,
+) -> std::result::Result<ImageManifest, RemoteArtifactError> {
+    let fetch = || -> Result<ImageManifest> {
+        let transport = RemoteTransport::new(image_name)?;
+        transport.auth_for(image_name, RegistryOperation::Pull)?;
+        let (manifest_bytes, _digest) =
+            transport.pull_manifest_raw(image_name, &[OCI_IMAGE_MANIFEST_MEDIA_TYPE])?;
+        serde_json::from_slice(&manifest_bytes)
+            .context("Failed to parse OCI image manifest from the remote registry")
+    };
+    fetch().map_err(|source| RemoteArtifactError::classify(image_name, source))
 }
 
 /// Get all images stored in the local registry.

@@ -143,8 +143,29 @@ pub fn get_default_atol() -> f64 {
 /// We need `gil_used = false` to allow Python 3.13t
 /// See <https://pyo3.rs/main/free-threading#supporting-free-threaded-python-with-pyo3>.
 #[pymodule(gil_used = false)]
-fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
+fn _ommx_rust(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     // OMMX Artifact
+    m.add("RemoteArtifactError", py.get_type::<RemoteArtifactError>())?;
+    m.add(
+        "RemoteArtifactNotFoundError",
+        py.get_type::<RemoteArtifactNotFoundError>(),
+    )?;
+    m.add(
+        "RemoteArtifactAuthenticationError",
+        py.get_type::<RemoteArtifactAuthenticationError>(),
+    )?;
+    m.add(
+        "RemoteArtifactAuthorizationError",
+        py.get_type::<RemoteArtifactAuthorizationError>(),
+    )?;
+    m.add(
+        "RemoteArtifactTransportError",
+        py.get_type::<RemoteArtifactTransportError>(),
+    )?;
+    m.add(
+        "InvalidRemoteArtifactError",
+        py.get_type::<InvalidRemoteArtifactError>(),
+    )?;
     m.add_class::<PyArchiveDescriptor>()?;
     m.add_class::<PyDescriptor>()?;
     m.add_class::<PyArtifact>()?;
@@ -318,6 +339,12 @@ pyo3_stub_gen::reexport_module_members!("ommx.artifact" from "ommx._ommx_rust";
     "ArchiveDescriptor",
     "ArchiveManifest",
     "ArtifactDraft",
+    "RemoteArtifactError",
+    "RemoteArtifactNotFoundError",
+    "RemoteArtifactAuthenticationError",
+    "RemoteArtifactAuthorizationError",
+    "RemoteArtifactTransportError",
+    "InvalidRemoteArtifactError",
     "Descriptor",
     "GcBlob",
     "GcInvalidManifest",

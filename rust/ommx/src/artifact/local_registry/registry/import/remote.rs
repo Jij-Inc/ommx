@@ -39,7 +39,8 @@ use super::super::super::RefUpdate;
 use super::super::LocalRegistry;
 use super::oci_dir::OciDirImport;
 use crate::artifact::{
-    media_types, remote_transport::RemoteTransport, ImageRef, OCI_IMAGE_MANIFEST_MEDIA_TYPE,
+    media_types, remote_transport::RemoteTransport, ImageRef, RemoteArtifactError,
+    OCI_IMAGE_MANIFEST_MEDIA_TYPE,
 };
 use anyhow::{Context, Result};
 use oci_client::RegistryOperation;
@@ -58,7 +59,10 @@ impl LocalRegistry {
     /// `RemoteTransport` straight into the registry, and a SQLite transaction
     /// publishes the ref descriptor. There is no on-disk OCI Image Layout
     /// intermediate.
-    pub fn pull_image(&self, image_name: &ImageRef) -> Result<OciDirImport> {
+    pub fn pull_image(
+        &self,
+        image_name: &ImageRef,
+    ) -> std::result::Result<OciDirImport, RemoteArtifactError> {
         RemotePull::new(self, image_name).run()
     }
 }
@@ -76,7 +80,12 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
         }
     }
 
-    fn run(&self) -> Result<OciDirImport> {
+    fn run(&self) -> std::result::Result<OciDirImport, RemoteArtifactError> {
+        self.run_inner()
+            .map_err(|source| RemoteArtifactError::classify(self.image_name, source))
+    }
+
+    fn run_inner(&self) -> Result<OciDirImport> {
         if let Some(cached) = self.cached_ref()? {
             return Ok(cached);
         }
