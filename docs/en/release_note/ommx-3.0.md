@@ -39,6 +39,40 @@ they do not imply acceptance through relaxation or finite-penalty conversion.
 `ommx.v2.Feature` and `required_features` remain separate wire-format
 forward-compatibility concepts and are not adapter support declarations.
 
+### 🆕 OpenJij native capability and explicit preparation ([#1087](https://github.com/Jij-Inc/ommx/pull/1087))
+
+{class}`~ommx_openjij_adapter.OMMXOpenJijSAAdapter` now declares its native
+translator profile precisely: Binary variables, an arbitrary-degree polynomial
+objective, no active constraints, and minimization. Native
+`check_compatibility` no longer treats Integer encoding, constraint penalties,
+or sense conversion as solver support.
+
+Pass `preparation=True` to `sample` or `solve` when the source model needs
+explicit transformation. {meth}`~ommx_openjij_adapter.OMMXOpenJijSAAdapter.check_preparation`
+and {meth}`~ommx_openjij_adapter.OMMXOpenJijSAAdapter.prepare` expose an audit
+report whose steps distinguish exact rewrites, approximations, and finite
+penalties. The returned {class}`~ommx.SampleSet` is evaluated against the source
+model, and Experiment sampling continues to record that source `Instance`.
+
+```python
+check = OMMXOpenJijSAAdapter.check_preparation(
+    instance,
+    uniform_penalty_weight=20.0,
+)
+assert check.compatible
+sample_set = OMMXOpenJijSAAdapter.sample(
+    instance,
+    preparation=True,
+    uniform_penalty_weight=20.0,
+)
+```
+
+The 53-bit limit checked during Integer log encoding and other OpenJij-specific
+limits are adapter-owned preparation preconditions. They are neither native
+capabilities nor `ommx.v2.Feature` values; `Feature` remains solely a
+serialization forward-compatibility mechanism. Native Spin support will follow
+after OMMX adds a Spin variable kind in [#1082](https://github.com/Jij-Inc/ommx/issues/1082).
+
 ### 🆕 `VariableIDLike` inputs for structural constraints ([#1078](https://github.com/Jij-Inc/ommx/pull/1078))
 
 Structural-constraint construction now accepts `VariableIDLike`, defined as
