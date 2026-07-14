@@ -395,6 +395,46 @@ example : checkEqualityIndicatorReplace indicatorDomains indicatorEqualitySurviv
       oneSidedEqualityWitness = false := by
   native_decide
 
+/-! The forward SDK algorithm may omit the lower equality side when the exact
+lower bound is zero.  The remaining upper side plus the base bound still
+preserves the Indicator semantics. -/
+
+def sdkIndicatorBase (assignment : Assignment 2) : Prop :=
+  VariableDomain.KindHolds .binary (assignment 1) ∧
+    0 ≤ assignment 0 ∧ assignment 0 ≤ 3
+
+def sdkIndicatorBody (assignment : Assignment 2) : Rat := assignment 0
+
+def sdkIndicatorObjective (assignment : Assignment 2) : Rat := assignment 0
+
+def sdkIndicatorEqualityPreserves :
+    IdentityPreserves
+      (replaceProblem sdkIndicatorBase
+        (fun assignment =>
+          IndicatorBigM.UpperSide sdkIndicatorBody 1 3 assignment ∧
+            IndicatorBigM.LowerSide sdkIndicatorBody 1 0 assignment)
+        sdkIndicatorObjective .minimize)
+      (replaceProblem sdkIndicatorBase
+        (IndicatorPredicate 1 .activeOnOne
+          (fun assignment => sdkIndicatorBody assignment = 0))
+        sdkIndicatorObjective .minimize) :=
+  IndicatorBigM.equality_preserves sdkIndicatorBase sdkIndicatorBody 1 0 3
+    sdkIndicatorObjective .minimize
+    (by intro assignment hbase; exact hbase.1)
+    (by intro assignment hbase; exact ⟨hbase.2.1, hbase.2.2⟩)
+
+example (assignment : Assignment 2) :
+    (replaceProblem sdkIndicatorBase
+      (fun x =>
+        IndicatorBigM.UpperSide sdkIndicatorBody 1 3 x ∧
+          IndicatorBigM.LowerSide sdkIndicatorBody 1 0 x)
+      sdkIndicatorObjective .minimize).feasible assignment ↔
+    (replaceProblem sdkIndicatorBase
+      (IndicatorPredicate 1 .activeOnOne
+        (fun x => sdkIndicatorBody x = 0))
+      sdkIndicatorObjective .minimize).feasible assignment :=
+  sdkIndicatorEqualityPreserves.feasible_iff assignment
+
 def selectorBoundsExample : SelectorBounds (Fin 1) :=
   ⟨fun _ => -1, fun _ => 1⟩
 
@@ -494,5 +534,67 @@ def selectorCompressionExample :
       (sos1TargetProblem selectorBaseExample selectorObjectiveExample .minimize) :=
   selectorCompression selectorBoundsExample selectorBaseExample
     selectorObjectiveExample .minimize (by intro members h; exact h)
+
+/-! Mixed SDK plan: member 0 is reused as its own binary selector, while
+member 1 gets a fresh selector.  Its lower bound is zero, so the lower link is
+omitted exactly as in `Instance::convert_sos1_to_constraints`. -/
+
+def plannedReusedExample : Finset (Fin 2) := {0}
+
+def plannedBoundsExample : SelectorBounds (Fin 2) where
+  lower := fun _ => 0
+  upper := fun i => if i.val = 0 then 1 else 3
+
+def zeroExcludingFreshBoundsExample : SelectorBounds (Fin 2) where
+  lower := fun i => if i.val = 0 then 0 else 1
+  upper := fun i => if i.val = 0 then 1 else 3
+
+example : ¬FreshBoundsContainZero plannedReusedExample
+    zeroExcludingFreshBoundsExample := by
+  native_decide
+
+def plannedBaseExample (members : Fin 2 → Rat) : Prop :=
+  WithinSelectorBounds plannedBoundsExample members ∧
+    GenericBinaryOn plannedReusedExample members
+
+def plannedObjectiveExample (members : Fin 2 → Rat) : Rat :=
+  members 0 + members 1
+
+def plannedMembersExample : Fin 2 → Rat := fun i => if i.val = 0 then 0 else 2
+
+def plannedFreshSelectorsExample : Fin 2 → Rat := fun _ => 1
+
+example : PlannedSelectorGadget plannedReusedExample plannedBoundsExample
+    plannedMembersExample plannedFreshSelectorsExample := by
+  native_decide
+
+def invalidPlannedMembersExample : Fin 2 → Rat := fun i => if i.val = 0 then 1 else 2
+
+example : ¬PlannedSelectorGadget plannedReusedExample plannedBoundsExample
+    invalidPlannedMembersExample plannedFreshSelectorsExample := by
+  native_decide
+
+def plannedSelectorCompressionExample :
+    ProjectionPreserves
+      (plannedSelectorSourceProblem plannedReusedExample plannedBoundsExample
+        plannedBaseExample plannedObjectiveExample .minimize)
+      (sos1TargetProblem plannedBaseExample plannedObjectiveExample .minimize) :=
+  plannedSelectorCompression plannedReusedExample plannedBoundsExample
+    plannedBaseExample plannedObjectiveExample .minimize
+    { freshBoundsContainZero := by native_decide
+      baseBounds := by intro members hbase; exact hbase.1
+      baseReusedBinary := by intro members hbase; exact hbase.2 }
+
+def checkedPlannedSelectorCompressionExample :
+    ProjectionPreserves
+      (corePlannedSelectorSourceProblem selectorIsolationBase selectorPairEncoding
+        ∅ selectorBoundsExample)
+      (coreSOS1TargetProblem selectorIsolationBase selectorPairEncoding) :=
+  corePlannedSelectorCompression selectorIsolationBase selectorPairEncoding
+    ∅ selectorBoundsExample selectorIsolationWitness (by native_decide)
+    selectorPairEncoding_respectsIsolation
+    { freshBoundsContainZero := by native_decide
+      baseBounds := selectorIsolationBase_bounds
+      baseReusedBinary := by intro members _ i hi; simp at hi }
 
 end OMMXProof.Test.Fixtures

@@ -17,7 +17,7 @@ namespace OMMXProof
 normalization, denotation, preservation relations, witness schemas, and checker
 acceptance rules. A semantic or schema change must bump this value. This is not
 a public OMMX serialization version. -/
-def formalContractVersion : Nat := 1
+def formalContractVersion : Nat := 2
 
 abbrev Assignment (n : Nat) := Fin n → Rat
 

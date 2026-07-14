@@ -27,15 +27,19 @@ The independent formalization defines exact rational semantics for:
 - Indicator augmentation and replacement with exact active substitution and a
   surviving-system-only inactive proof; equality replacement carries two
   independent inactive-side witnesses over that same surviving system;
+- forward Indicator Big-M lowering for arbitrary exact function denotations,
+  including the SDK's independent upper/lower side emission and bound-justified
+  side omission rules;
 - binary-cardinality SOS1 recognition from a complete `≤` constraint with a
   strictly positive scale (the checker rejects an equality with the same affine
   expression);
 - executable selector-use/isolation checking over the finite `CoreModel` AST,
   including domains, linear/special constraints, and the objective;
-- all-fresh, full-link selector-gadget SOS1 projection, canonical lift,
-  objective isolation, and the counterexample to source-side retraction. The
-  checked isolation witness is consumed directly by a `ProjectionPreserves`
-  compression theorem.
+- mixed reused/fresh selector-gadget SOS1 projection with the SDK's zero-bound
+  link omission rules, canonical lift, objective isolation, and the
+  counterexample to source-side retraction. The checked isolation witness is
+  consumed directly by a `ProjectionPreserves` compression theorem; the
+  all-fresh, full-link formulation remains available as the simpler core case.
 
 Detector completeness, floating-point tolerance, Rust mutation correctness,
 serialization, lifecycle/capability/audit state, and a complete integer proof
@@ -43,7 +47,7 @@ system are outside this independent model.
 
 ## Formal contract
 
-`formalContractVersion = 1` identifies the complete independent semantics
+`formalContractVersion = 2` identifies the complete independent semantics
 research contract:
 input AST, normalization, denotation, preservation relations, witness schemas,
 and executable checker acceptance rules. A semantic or schema change must bump
@@ -71,8 +75,8 @@ noncanonical and unobservable.
 | `OMMXProof.Linear.Farkas` | Executable linear certificate checkers and soundness theorems |
 | `OMMXProof.Reduction` | Preservation relations and composition laws |
 | `OMMXProof.Special.OneHot` | Structural OneHot checker and replacement theorem |
-| `OMMXProof.Special.Indicator` | Active substitution, inactive proof, augment/replace semantics |
-| `OMMXProof.Special.SOS1` | Binary cardinality, selector-use isolation, and checked selector compression |
+| `OMMXProof.Special.Indicator` | Active substitution, inactive proof, augment/replace, and forward Big-M semantics |
+| `OMMXProof.Special.SOS1` | Binary cardinality, selector-use isolation, and full SDK-plan compression |
 | `OMMXProofTest.Fixtures` | Test-only accepted/rejected fixtures and counterexamples |
 | `OMMXProofTest.Acceptance` | `lake test` acceptance target |
 | `OMMXProofTest.Trust` | Elaborated-environment audit rejecting project-defined axioms |
@@ -107,8 +111,8 @@ includes Lean's standard `propext`, `Classical.choice`, and `Quot.sound` axioms.
 - [x] Semantic domains, denotation, and preservation relations
 - [x] Exact linear/Farkas checker and soundness
 - [x] Reduction composition and project/lift laws
-- [x] OneHot and Indicator rules
-- [x] SOS1 projection and compression
+- [x] OneHot, Indicator recovery, and Indicator Big-M lowering rules
+- [x] SOS1 projection and mixed reused/fresh SDK-plan compression
 - [x] Executable accept/reject fixtures and counterexamples
 
 The canonical bridge, trace vocabulary, and Rust proof-log producer remain
