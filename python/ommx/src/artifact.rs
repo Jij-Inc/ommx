@@ -1496,7 +1496,7 @@ impl PyArtifactDraft {
     ///
     /// ```python
     /// >>> from ommx import Instance
-    /// >>> instance = Instance.empty()
+    /// >>> instance = Instance.minimize()
     /// >>> instance.title = "test instance"
     /// >>> draft = ArtifactDraft.temp()
     /// >>> desc = draft.add_instance(instance)

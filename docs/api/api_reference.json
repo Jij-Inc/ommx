@@ -8088,7 +8088,7 @@
             },
             {
               "name": "add_constraint",
-              "doc": "Add a regular constraint to this instance.\n\nPicks an unused {class}`~ommx.ConstraintID`, drains the wrapper's\ncontext snapshot into this instance's SoA store, and returns an\n{class}`~ommx.AttachedConstraint` bound to the new id. The input\n{class}`~ommx.Constraint` is not mutated; subsequent writes that\nshould land in the instance must go through the returned handle.\n\nRaises {class}`ValueError` if the constraint references an undefined\ndecision variable or one currently used as a substitution-dependency\nkey, matching the validation performed by other constraint-insertion\npaths.",
+              "doc": "Add a regular constraint to this instance.\n\nPicks an unused {class}`~ommx.ConstraintID`, drains the wrapper's\ncontext snapshot into this instance's SoA store, and returns an\n{class}`~ommx.AttachedConstraint` bound to the new id. The input\n{class}`~ommx.Constraint` is not mutated; subsequent writes that\nshould land in the instance must go through the returned handle.\nWhen modeling-label fields are provided, they replace the corresponding\nfields stored on the inserted constraint without modifying the input\nsnapshot. Omitted fields preserve the snapshot's existing values.\n\n**Args:**\n- `constraint`: Constraint to add\n- `name`: Optional modeling name for the inserted constraint\n- `subscripts`: Optional integer indices for the inserted constraint\n- `parameters`: Optional string-valued indices for the inserted constraint\n- `description`: Optional description for the inserted constraint\n\nRaises {class}`ValueError` if the constraint references an undefined\ndecision variable or one currently used as a substitution-dependency\nkey, matching the validation performed by other constraint-insertion\npaths.",
               "signatures": [
                 {
                   "parameters": [
@@ -8100,6 +8100,95 @@
                         "children": []
                       },
                       "default": null
+                    },
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "subscripts",
+                      "type_": {
+                        "display": "Optional[Sequence[int]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Sequence[int]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "int",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "parameters",
+                      "type_": {
+                        "display": "Optional[Mapping[str, str]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Mapping[str, str]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "str",
+                                "link_target": null,
+                                "children": []
+                              },
+                              {
+                                "display": "str",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "description",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
                     }
                   ],
                   "return_type": {
@@ -9171,7 +9260,7 @@
             },
             {
               "name": "empty",
-              "doc": "Create trivial empty instance of minimization with zero objective, no constraints, and no decision variables.\n\n# Examples\n\n```python\n>>> from ommx import Instance\n>>> instance = Instance.empty()\n>>> instance.sense == Instance.MINIMIZE\nTrue\n```",
+              "doc": "Create trivial empty instance of minimization with zero objective, no constraints, and no decision variables.\n\n# Examples\n\n```python\n>>> from ommx import Instance\n>>> instance = Instance.minimize()\n>>> instance.sense == Instance.MINIMIZE\nTrue\n```",
               "signatures": [
                 {
                   "parameters": [],
@@ -9183,7 +9272,10 @@
                 }
               ],
               "is_async": false,
-              "deprecated": null
+              "deprecated": {
+                "since": null,
+                "note": "Use Instance.minimize() instead."
+              }
             },
             {
               "name": "evaluate",
@@ -9959,6 +10051,38 @@
               "deprecated": null
             },
             {
+              "name": "maximize",
+              "doc": "Create an empty maximization instance with a zero objective.\n\nDecision variables and constraints can be added incrementally with\n{meth}`new_binary` and {meth}`add_constraint`.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "Instance",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "minimize",
+              "doc": "Create an empty minimization instance with a zero objective.\n\nDecision variables and constraints can be added incrementally with\n{meth}`new_binary` and {meth}`add_constraint`.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "Instance",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "named_functions_df",
               "doc": "DataFrame of named functions",
               "signatures": [
@@ -9991,6 +10115,100 @@
                   ],
                   "return_type": {
                     "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "new_binary",
+              "doc": "Create and add a binary decision variable with an automatically assigned ID.\n\nReturns an {class}`~ommx.AttachedDecisionVariable` that can be used\ndirectly in expressions. The numeric ID remains available through its\n{attr}`~ommx.AttachedDecisionVariable.id` property.\n\n**Args:**\n- `name`: Optional human-readable modeling name. Names need not be unique.\n- `subscripts`: Optional integer indices from the source model.\n- `parameters`: Optional string-valued indices from the source model.\n- `description`: Optional human-readable description.\n\nRaises {class}`ValueError` if the maximum decision-variable ID is\n`2**64 - 1` and no larger automatic ID can be assigned.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "subscripts",
+                      "type_": {
+                        "display": "Sequence[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "[]"
+                      }
+                    },
+                    {
+                      "name": "parameters",
+                      "type_": {
+                        "display": "Mapping[str, str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "{}"
+                      }
+                    },
+                    {
+                      "name": "description",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "AttachedDecisionVariable",
                     "link_target": null,
                     "children": []
                   }
@@ -10515,7 +10733,7 @@
             },
             {
               "name": "stats",
-              "doc": "Get statistics about the instance.\n\nReturns a dictionary containing counts of decision variables and constraints\ncategorized by kind, usage, and status.\n\n**Returns:**\nA dictionary with the following structure:\n\n```text\n{\n    \"decision_variables\": {\n        \"total\": int,\n        \"by_kind\": {\n            \"binary\": int,\n            \"integer\": int,\n            \"continuous\": int,\n            \"semi_integer\": int,\n            \"semi_continuous\": int\n        },\n        \"by_usage\": {\n            \"used_in_objective\": int,\n            \"used_in_constraints\": int,\n            \"used\": int,\n            \"fixed\": int,\n            \"dependent\": int,\n            \"irrelevant\": int\n        }\n    },\n    \"constraints\": {\n        \"total\": int,\n        \"active\": int,\n        \"removed\": int\n    }\n}\n```\n\n# Examples\n\n```python\n>>> from ommx import Instance\n>>> instance = Instance.empty()\n>>> stats = instance.stats()\n>>> stats[\"decision_variables\"][\"total\"]\n0\n>>> stats[\"constraints\"][\"total\"]\n0\n```",
+              "doc": "Get statistics about the instance.\n\nReturns a dictionary containing counts of decision variables and constraints\ncategorized by kind, usage, and status.\n\n**Returns:**\nA dictionary with the following structure:\n\n```text\n{\n    \"decision_variables\": {\n        \"total\": int,\n        \"by_kind\": {\n            \"binary\": int,\n            \"integer\": int,\n            \"continuous\": int,\n            \"semi_integer\": int,\n            \"semi_continuous\": int\n        },\n        \"by_usage\": {\n            \"used_in_objective\": int,\n            \"used_in_constraints\": int,\n            \"used\": int,\n            \"fixed\": int,\n            \"dependent\": int,\n            \"irrelevant\": int\n        }\n    },\n    \"constraints\": {\n        \"total\": int,\n        \"active\": int,\n        \"removed\": int\n    }\n}\n```\n\n# Examples\n\n```python\n>>> from ommx import Instance\n>>> instance = Instance.minimize()\n>>> stats = instance.stats()\n>>> stats[\"decision_variables\"][\"total\"]\n0\n>>> stats[\"constraints\"][\"total\"]\n0\n```",
               "signatures": [
                 {
                   "parameters": [],
@@ -25705,7 +25923,7 @@
             },
             {
               "name": "add_instance",
-              "doc": "Add an {class}`~ommx.Instance` to the artifact with annotations.\n\n```python\n>>> from ommx import Instance\n>>> instance = Instance.empty()\n>>> instance.title = \"test instance\"\n>>> draft = ArtifactDraft.temp()\n>>> desc = draft.add_instance(instance)\n>>> print(desc.annotations['org.ommx.v1.instance.title'])\ntest instance\n\n```",
+              "doc": "Add an {class}`~ommx.Instance` to the artifact with annotations.\n\n```python\n>>> from ommx import Instance\n>>> instance = Instance.minimize()\n>>> instance.title = \"test instance\"\n>>> draft = ArtifactDraft.temp()\n>>> desc = draft.add_instance(instance)\n>>> print(desc.annotations['org.ommx.v1.instance.title'])\ntest instance\n\n```",
               "signatures": [
                 {
                   "parameters": [
