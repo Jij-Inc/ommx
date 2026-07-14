@@ -4,7 +4,21 @@ from ommx import DecisionVariable, Instance
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
 
-def test_sample_emits_convert_sample_decode_spans():
+def _single_span(result, name):
+    spans = [span for span in result.spans if span.name == name]
+    assert len(spans) == 1
+    return spans[0]
+
+
+def _assert_sample_span_tree(result):
+    root = _single_span(result, "ommx_trace_block")
+    sample = _single_span(result, "sample")
+    assert sample.parent_span_id == root.span_id
+    for name in ("convert", "call", "decode"):
+        assert _single_span(result, name).parent_span_id == sample.span_id
+
+
+def test_native_sample_emits_convert_call_decode_spans():
     x0 = DecisionVariable.binary(0)
     x1 = DecisionVariable.binary(1)
     instance = Instance.from_components(
@@ -17,14 +31,36 @@ def test_sample_emits_convert_sample_decode_spans():
     with capture_trace() as result:
         OMMXOpenJijSAAdapter.sample(instance, num_reads=1, seed=0)
 
-    names = [span.name for span in result.spans]
-    assert "sample" in names
-    assert "convert" in names
-    assert "call" in names
-    assert "decode" in names
+    _assert_sample_span_tree(result)
+    assert not [span for span in result.spans if span.name == "prepare"]
 
 
-def test_solve_emits_convert_sample_decode_spans():
+def test_sample_with_explicit_preparation_emits_nested_prepare_span():
+    x = DecisionVariable.integer(0, lower=0, upper=3)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        constraints={},
+        sense=Instance.MAXIMIZE,
+    )
+    source = instance.to_v2_bytes()
+
+    with capture_trace() as result:
+        OMMXOpenJijSAAdapter.sample(
+            instance,
+            preparation=True,
+            num_reads=1,
+            seed=0,
+        )
+
+    prepare = _single_span(result, "prepare")
+    sample = _single_span(result, "sample")
+    assert prepare.parent_span_id == sample.span_id
+    _assert_sample_span_tree(result)
+    assert instance.to_v2_bytes() == source
+
+
+def test_solve_delegates_to_sample_trace():
     x0 = DecisionVariable.binary(0)
     x1 = DecisionVariable.binary(1)
     instance = Instance.from_components(
@@ -37,8 +73,5 @@ def test_solve_emits_convert_sample_decode_spans():
     with capture_trace() as result:
         OMMXOpenJijSAAdapter.solve(instance, num_reads=1, seed=0)
 
-    names = [span.name for span in result.spans]
-    assert "sample" in names
-    assert "convert" in names
-    assert "call" in names
-    assert "decode" in names
+    _assert_sample_span_tree(result)
+    assert not [span for span in result.spans if span.name == "prepare"]

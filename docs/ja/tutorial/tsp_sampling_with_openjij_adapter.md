@@ -140,16 +140,91 @@ instance = Instance.from_components(
 
 ## OpenJijによるサンプリング
 
-`ommx.Instance` で記述されたQUBOをOpenJijを使ってサンプリングするには `ommx-openjij-adapter` を使います。
+`ommx-openjij-adapter` のOpenJijへのネイティブ変換が受け付けるのは、
+任意次数の多項式目的関数を持つバイナリ変数のみの制約なし最小化問題です。
+上で作成したTSPインスタンスには制約があるため、有限のペナルティ重みを指定して
+事前に検査し、sampler callで `preparation=True` を指定して明示的に準備します。
+変換元の `Instance` をsampler入力のままにするため、Experimentには元の制約付き
+モデルが記録されます。
 
 ```{code-cell} ipython3
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
-sample_set = OMMXOpenJijSAAdapter.sample(instance, num_reads=16, uniform_penalty_weight=20.0)
+preparation_check = OMMXOpenJijSAAdapter.check_preparation(
+    instance,
+    uniform_penalty_weight=20.0,
+)
+assert preparation_check.compatible
+
+sample_set = OMMXOpenJijSAAdapter.sample(
+    instance,
+    preparation=True,
+    uniform_penalty_weight=20.0,
+    num_reads=16,
+)
 sample_set.summary
 ```
 
-[`OMMXOpenJijSAAdapter.solve`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx_openjij_adapter/index.html#ommx_openjij_adapter.OMMXOpenJijSAAdapter.sample) は [`ommx.SampleSet`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.SampleSet) を返し、これはサンプルの値に加えて、目的関数の値や制約条件の破れを計算した値を保持しています。`SampleSet.summary` プロパティはこれらの要約情報を表示するためのものです。`feasible` はQUBOに変換する前の、**元の問題に対する実行可能性**を示しています。これは `qubo` インスタンスの `removed_constraints` に格納されている情報を使って計算されます。
+{py:meth}`~ommx_openjij_adapter.OMMXOpenJijSAAdapter.sample` は
+{py:class}`~ommx.SampleSet` を返します。これは決定変数のサンプル値に加えて、
+評価した目的関数値と制約違反を保持します。`SampleSet.summary` はこの情報の要約を
+表示します。その `feasible` 列が示すのはOpenJijに渡した制約なしモデルだけでなく、
+変換元の制約付き問題に対する実行可能性です。
+
+`sample` 経由で渡すペナルティ重みはOpenJij backend samplerのパラメータではなく、
+明示的な準備に対する指定です。有限ペナルティは実行可能なサンプルを得やすく
+しますが、すべてのサンプルが変換元の問題に対して実行可能になることを
+保証しません。
+
+### 準備内容の確認
+
+`check_preparation` はインスタンスを変更せずに、変換元モデルと準備オプションを
+検査します。`prepare` は検査した変換を実行し、監査用レポートを
+`prepared.report` に保存します。
+
+```{code-cell} ipython3
+prepared = OMMXOpenJijSAAdapter.prepare(
+    instance,
+    uniform_penalty_weight=20.0,
+)
+report = prepared.report
+{
+    "source_compatibility": report.source_compatibility.compatible,
+    "encoding_compatibility": report.encoding_compatibility.compatible,
+    "steps": [
+        (step.operation, step.semantics.value)
+        for step in report.steps
+    ],
+    "final_compatibility": report.final_compatibility.compatible,
+}
+```
+
+レポートは次の4つの問いを区別します。
+
+- `source_compatibility` は、変換元モデルと指定したオプションが明示的な準備の
+  契約を満たすかを示します。
+- `encoding_compatibility` は、中間モデルが残りのInteger-to-Binaryエンコード条件を
+  満たすかを示します。
+- `steps` は、各変換とその意味上の効果を記録します。
+- `final_compatibility` は、準備済みsolver modelがAdapterのnative capabilityと
+  Adapter固有の前提条件を満たすかを示します。
+
+各stepは、厳密な書き換えなら `Exact`、厳密な変換ができず離散的な不等式slack
+などの近似を使う場合は `Approximate`、制約を有限の目的関数ペナルティで置き換える
+場合は `FinitePenalty` です。`FinitePenalty` は制約をnativeに、または厳密に
+サポートしているという意味ではありません。
+
+変数boundから不等式が実行不可能だと証明できた場合、`check_preparation`、
+`prepare`、および `preparation=True` のsamplingは
+{py:class}`~ommx.adapter.InfeasibleDetected` を送出します。これはモデル自体の
+性質であり、Adapter Capabilityの不一致ではありません。
+
+使用されるInteger変数ごとに最大53個の補助bitという条件を検査しますが、これは
+OMMXのInteger-to-Binary log encodingの前提条件です。OpenJij backendのnative
+capabilityではなく、serialized semanticsをforward compatibilityのためにreaderが
+安全に解釈できるかを管理する `ommx.v2.Feature` とも別物です。OpenJijのnative
+Spin入力を含むSpin変数のサポートは
+[OMMX issue #1082](https://github.com/Jij-Inc/ommx/issues/1082) で別途管理しています。
 
 各制約条件毎のfeasibilityを見るには `summary_with_constraints` プロパティを使います。
 

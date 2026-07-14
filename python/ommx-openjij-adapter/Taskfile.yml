@@ -12,6 +12,7 @@ tasks:
     cmds:
       - task: pytest
       - task: pyright
+      - task: markdown-code-runner
       - task: lint
 
   pytest:
@@ -23,6 +24,11 @@ tasks:
     desc: Run pyright type checking
     cmds:
       - uv run pyright
+
+  markdown-code-runner:
+    desc: Run markdown code runner
+    cmds:
+      - uv run markdown-code-runner --verbose README.md
 
   lint:
     desc: Lint by ruff check
