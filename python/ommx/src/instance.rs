@@ -1,3 +1,8 @@
+#![expect(
+    deprecated,
+    reason = "PyO3 and pyo3-stub-gen wrappers reference Instance::empty"
+)]
+
 use crate::{
     pandas::{
         apply_include_filter, constraint_id_col, constraint_kind_collection, entries_to_dataframe,
@@ -247,6 +252,7 @@ impl Instance {
     /// >>> instance.sense == Instance.MINIMIZE
     /// True
     /// ```
+    #[deprecated(note = "Use Instance.minimize() instead.")]
     #[staticmethod]
     pub fn empty() -> Result<Self> {
         Self::empty_with_sense(Sense::Minimize)

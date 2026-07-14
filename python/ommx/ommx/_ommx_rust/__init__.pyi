@@ -15,6 +15,7 @@ import pandas
 import pathlib
 import types
 import typing
+import typing_extensions
 from typing import TypeAlias
 
 __all__ = [
@@ -3024,6 +3025,7 @@ class Instance:
         **Returns:**
         A new Instance
         """
+    @typing_extensions.deprecated("Use Instance.minimize() instead.")
     @staticmethod
     def empty() -> Instance:
         r"""

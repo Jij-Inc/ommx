@@ -16,6 +16,8 @@ built incrementally. Start with {meth}`~ommx.Instance.maximize` or
 {meth}`~ommx.Instance.new_binary`, then set the objective and add constraints
 directly. The existing {meth}`~ommx.Instance.from_components` workflow remains
 available when components already have explicit IDs.
+The ambiguous `Instance.empty()` compatibility alias is deprecated for static
+type checkers; use `Instance.minimize()` instead.
 
 ```python
 from ommx import Instance
