@@ -1453,7 +1453,7 @@ impl Instance {
     /// ...     decision_variables=x,
     /// ...     objective=sum(x),
     /// ...     constraints={},
-    /// ...     one_hot_constraints={1: OneHotConstraint(variables=[0, 1, 2])},
+    /// ...     one_hot_constraints={1: OneHotConstraint(variables=x)},
     /// ...     sense=Instance.MINIMIZE,
     /// ... )
     /// >>> new_id = instance.convert_one_hot_to_constraint(1)
@@ -1486,8 +1486,8 @@ impl Instance {
     /// ...     objective=sum(x),
     /// ...     constraints={},
     /// ...     one_hot_constraints={
-    /// ...         1: OneHotConstraint(variables=[0, 1]),
-    /// ...         2: OneHotConstraint(variables=[2, 3]),
+    /// ...         1: OneHotConstraint(variables=x[:2]),
+    /// ...         2: OneHotConstraint(variables=x[2:]),
     /// ...     },
     /// ...     sense=Instance.MINIMIZE,
     /// ... )
@@ -1544,7 +1544,7 @@ impl Instance {
     /// ...     decision_variables=x,
     /// ...     objective=sum(x),
     /// ...     constraints={},
-    /// ...     sos1_constraints={1: Sos1Constraint(variables=[0, 1, 2])},
+    /// ...     sos1_constraints={1: Sos1Constraint(variables=x)},
     /// ...     sense=Instance.MINIMIZE,
     /// ... )
     /// >>> instance.convert_sos1_to_constraints(1)
@@ -1582,8 +1582,8 @@ impl Instance {
     /// ...     objective=sum(x),
     /// ...     constraints={},
     /// ...     sos1_constraints={
-    /// ...         1: Sos1Constraint(variables=[0, 1]),
-    /// ...         2: Sos1Constraint(variables=[2, 3]),
+    /// ...         1: Sos1Constraint(variables=x[:2]),
+    /// ...         2: Sos1Constraint(variables=x[2:]),
     /// ...     },
     /// ...     sense=Instance.MINIMIZE,
     /// ... )

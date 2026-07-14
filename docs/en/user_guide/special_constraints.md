@@ -76,11 +76,11 @@ A **one-hot constraint** over a set of binary variables $\{x_1, \ldots, x_n\}$ r
 from ommx import OneHotConstraint
 
 xs = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
-oh = OneHotConstraint(variables=[0, 1, 2])
+oh = OneHotConstraint(variables=xs)
 assert oh.variables == [0, 1, 2]
 ```
 
-The IDs passed to `variables` must correspond to binary variables that are in the instance's `decision_variables`. Mathematically the constraint is equivalent to the linear equality $x_0 + x_1 + x_2 - 1 = 0$, but holding it as a first-class constraint lets supporting solvers (many MIP solvers accept one-hot natively) handle it efficiently.
+The decision variables passed to `variables` must be binary and must be included in the instance's `decision_variables`. The constraint stores their IDs, which are available through `oh.variables`. Mathematically the constraint is equivalent to the linear equality $x_0 + x_1 + x_2 - 1 = 0$, but holding it as a first-class constraint lets supporting solvers (many MIP solvers accept one-hot natively) handle it efficiently.
 
 ```{code-cell} ipython3
 values = [5.0, 10.0, 3.0]
@@ -122,9 +122,11 @@ An **SOS1 (Special Ordered Set type 1)** constraint over a set of variables $\{x
 from ommx import Sos1Constraint
 
 ys = [DecisionVariable.continuous(i, lower=0, upper=10, name="y", subscripts=[i]) for i in range(3, 6)]
-s1 = Sos1Constraint(variables=[3, 4, 5])
+s1 = Sos1Constraint(variables=ys)
 assert s1.variables == [3, 4, 5]
 ```
+
+As with `OneHotConstraint`, pass decision-variable objects to `variables`. The SOS1 constraint stores their IDs, which are available through `s1.variables`.
 
 ```{code-cell} ipython3
 instance_s1 = Instance.from_components(
@@ -160,8 +162,8 @@ instance_mix = Instance.from_components(
     objective=x2,
     constraints={1: z2 == 1},                                        # regular ID=1
     indicator_constraints={1: (x2 <= 5).with_indicator(z2)},         # Indicator ID=1
-    one_hot_constraints={1: OneHotConstraint(variables=[0, 1, 2])},  # OneHot ID=1
-    sos1_constraints={1: Sos1Constraint(variables=[3, 4, 5])},       # SOS1 ID=1
+    one_hot_constraints={1: OneHotConstraint(variables=xs)},         # OneHot ID=1
+    sos1_constraints={1: Sos1Constraint(variables=ys)},              # SOS1 ID=1
     sense=Instance.MAXIMIZE,
 )
 

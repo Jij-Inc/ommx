@@ -298,7 +298,7 @@ def build_sos1(input: Input) -> Instance:
     sid = 0
     for group in (_west_indices(input), _east_indices(input)):
         if len(group) >= 2:
-            sos1_constraints[sid] = Sos1Constraint(variables=[c[i].id for i in group])
+            sos1_constraints[sid] = Sos1Constraint(variables=[c[i] for i in group])
             sid += 1
 
     return Instance.from_components(
@@ -350,15 +350,13 @@ def _build_with_delta(
     if with_sos1_on_c:
         for group in (_west_indices(input), _east_indices(input)):
             if len(group) >= 2:
-                sos1_constraints[sid] = Sos1Constraint(
-                    variables=[c[i].id for i in group]
-                )
+                sos1_constraints[sid] = Sos1Constraint(variables=[c[i] for i in group])
                 sid += 1
     if with_sos1_on_delta:
         for group in (_west_indices(input), _east_indices(input)):
             if len(group) >= 2:
                 sos1_constraints[sid] = Sos1Constraint(
-                    variables=[delta[i].id for i in group]
+                    variables=[delta[i] for i in group]
                 )
                 sid += 1
 

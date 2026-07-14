@@ -140,7 +140,7 @@ def test_instance_print_uses_modeling_labels(snapshot):
         equality=Constraint.LESS_THAN_OR_EQUAL_TO_ZERO,
         name="active",
     )
-    one_hot = OneHotConstraint(variables=[0, 1], name="choose")
+    one_hot = OneHotConstraint(variables=x[:2], name="choose")
     score = NamedFunction(id=5, function=2 * x[2] + 3, name="score")
     instance = Instance.from_components(
         decision_variables=x,
@@ -198,7 +198,7 @@ def test_parametric_instance_print_disambiguates_parameter_and_structural_variab
     """Test parameter labels share the summary namespace with structural variables."""
     x = DecisionVariable.binary(0, name="shared")
     p = Parameter(100, name="shared")
-    one_hot = OneHotConstraint(variables=[0], name="choose")
+    one_hot = OneHotConstraint(variables=[x], name="choose")
     instance = ParametricInstance.from_components(
         decision_variables=[x],
         objective=p,
@@ -242,7 +242,7 @@ def test_instance_print_limits_structural_variable_sets(snapshot):
     variables = [
         DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(25)
     ]
-    one_hot = OneHotConstraint(variables=list(range(25)), name="choose")
+    one_hot = OneHotConstraint(variables=variables, name="choose")
     instance = Instance.from_components(
         decision_variables=variables,
         objective=variables[0],

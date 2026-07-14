@@ -44,7 +44,7 @@ instance = Instance.from_components(
     decision_variables=xs,
     objective=sum(xs),
     constraints={},
-    one_hot_constraints={0: OneHotConstraint(variables=[0, 1, 2])},
+    one_hot_constraints={0: OneHotConstraint(variables=xs)},
     sense=Instance.MAXIMIZE,
 )
 assert instance.required_capabilities == {AdditionalCapability.OneHot}
@@ -96,7 +96,7 @@ instance2 = Instance.from_components(
     decision_variables=xs,
     objective=sum(xs),
     constraints={},
-    one_hot_constraints={1: OneHotConstraint(variables=[0, 1, 2])},
+    one_hot_constraints={1: OneHotConstraint(variables=xs)},
     sense=Instance.MAXIMIZE,
 )
 new_id = instance2.convert_one_hot_to_constraint(1)
@@ -123,7 +123,7 @@ instance3 = Instance.from_components(
     decision_variables=ys,
     objective=sum(ys),
     constraints={},
-    sos1_constraints={1: Sos1Constraint(variables=[0, 1, 2])},
+    sos1_constraints={1: Sos1Constraint(variables=ys)},
     sense=Instance.MAXIMIZE,
 )
 new_ids = instance3.convert_sos1_to_constraints(1)

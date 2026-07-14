@@ -113,8 +113,9 @@ s1 = Sos1Constraint(id=11, variables=[0, 1])
 **After (v3)**:
 ```python
 c  = Constraint(function=x + y, equality=Constraint.EQUAL_TO_ZERO, name="cap")
-oh = OneHotConstraint(variables=[0, 1, 2])
-s1 = Sos1Constraint(variables=[0, 1])
+xs = [DecisionVariable.binary(i) for i in range(3)]
+oh = OneHotConstraint(variables=xs)
+s1 = Sos1Constraint(variables=xs[:2])
 
 # IDs are assigned by the enclosing Instance:
 instance = Instance.from_components(
@@ -126,6 +127,8 @@ instance = Instance.from_components(
     sos1_constraints={11: s1},
 )
 ```
+
+`OneHotConstraint.variables` and `Sos1Constraint.variables` now take `DecisionVariable` objects rather than raw variable IDs. Include those same objects in the host's `decision_variables`.
 
 ### 3.2 Comparison operators return a detached `Constraint` (`3.0.0a2`, [#806](https://github.com/Jij-Inc/ommx/pull/806))
 

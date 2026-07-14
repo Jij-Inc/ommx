@@ -559,6 +559,46 @@ pub struct AttachedDecisionVariable {
     pub(crate) id: ommx::VariableID,
 }
 
+/// Input accepted wherever a structural constraint refers to a decision variable.
+///
+/// Both standalone modeler variables and variables attached to an existing host
+/// carry the same OMMX identity. Structural constraints store that identity, not
+/// the Python wrapper or its host. This is crate-visible so structural-constraint
+/// binding modules can share one extraction boundary.
+pub(crate) struct DecisionVariableInput(pub(crate) ommx::VariableID);
+
+impl<'py> FromPyObject<'_, 'py> for DecisionVariableInput {
+    type Error = PyErr;
+
+    fn extract(ob: Borrowed<'_, 'py, PyAny>) -> PyResult<Self> {
+        if let Ok(variable) = ob.extract::<PyRef<DecisionVariable>>() {
+            return Ok(Self(variable.0));
+        }
+        if let Ok(variable) = ob.extract::<PyRef<AttachedDecisionVariable>>() {
+            return Ok(Self(variable.id));
+        }
+        Err(pyo3::exceptions::PyTypeError::new_err(format!(
+            "Expected DecisionVariable or AttachedDecisionVariable, got {}",
+            ob.get_type().name()?
+        )))
+    }
+}
+
+impl pyo3_stub_gen::PyStubType for DecisionVariableInput {
+    fn type_input() -> pyo3_stub_gen::TypeInfo {
+        pyo3_stub_gen::TypeInfo::locally_defined("DecisionVariableLike", "ommx._ommx_rust".into())
+    }
+
+    fn type_output() -> pyo3_stub_gen::TypeInfo {
+        Self::type_input()
+    }
+}
+
+pyo3_stub_gen::type_alias!(
+    "ommx._ommx_rust",
+    DecisionVariableLike = DecisionVariable | AttachedDecisionVariable
+);
+
 impl AttachedDecisionVariable {
     pub fn new(host: crate::ConstraintHost, id: ommx::VariableID) -> Self {
         Self { host, id }

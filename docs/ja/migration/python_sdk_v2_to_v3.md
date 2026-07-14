@@ -104,6 +104,14 @@ instance = Instance.from_components(
 )
 ```
 
+`OneHotConstraint.variables` と `Sos1Constraint.variables` には、変数 ID ではなく `DecisionVariable` オブジェクトを渡します。同じオブジェクトを host の `decision_variables` にも含めてください。
+
+```python
+xs = [DecisionVariable.binary(i) for i in range(3)]
+oh = OneHotConstraint(variables=xs)
+s1 = Sos1Constraint(variables=xs[:2])
+```
+
 ### 3.2 比較演算子は detached な `Constraint` を返す
 
 `==`、`<=`、`>=` は引き続き `Constraint` を作りますが、その時点では ID を持ちません。

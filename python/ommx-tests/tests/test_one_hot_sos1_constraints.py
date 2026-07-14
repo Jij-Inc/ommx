@@ -15,7 +15,7 @@ def test_one_hot_constraint_from_components():
     x = [DecisionVariable.binary(i) for i in range(1, 4)]
     objective = sum(x)
 
-    oh = OneHotConstraint(variables=[1, 2, 3])
+    oh = OneHotConstraint(variables=x)
 
     instance = Instance.from_components(
         decision_variables=x,
@@ -30,12 +30,18 @@ def test_one_hot_constraint_from_components():
     assert instance.one_hot_constraints[10].variables == [1, 2, 3]
 
 
+def test_one_hot_constraint_rejects_variable_ids():
+    """The modeler API accepts decision-variable objects, not raw IDs."""
+    with pytest.raises(TypeError, match="DecisionVariable"):
+        OneHotConstraint(variables=[1, 2, 3])
+
+
 def test_sos1_constraint_from_components():
     """Test creating an instance with Sos1Constraint via from_components."""
     x = [DecisionVariable.continuous(i, lower=0, upper=10) for i in range(1, 4)]
     objective = sum(x)
 
-    sos1 = Sos1Constraint(variables=[1, 2, 3])
+    sos1 = Sos1Constraint(variables=x)
 
     instance = Instance.from_components(
         decision_variables=x,
@@ -50,12 +56,20 @@ def test_sos1_constraint_from_components():
     assert instance.sos1_constraints[20].variables == [1, 2, 3]
 
 
+def test_sos1_constraint_rejects_variable_ids():
+    """The modeler API accepts decision-variable objects, not raw IDs."""
+    with pytest.raises(TypeError, match="DecisionVariable"):
+        Sos1Constraint(variables=[1, 2, 3])
+
+
 def test_one_hot_variable_not_defined():
     """Test that OneHotConstraint with undefined variable ID fails."""
     x = [DecisionVariable.binary(1)]
     objective = x[0]
 
-    oh = OneHotConstraint(variables=[1, 999])  # 999 doesn't exist
+    oh = OneHotConstraint(
+        variables=[x[0], DecisionVariable.binary(999)]
+    )  # 999 doesn't exist
 
     with pytest.raises(RuntimeError):
         Instance.from_components(
@@ -72,7 +86,9 @@ def test_sos1_variable_not_defined():
     x = [DecisionVariable.continuous(1, lower=0, upper=10)]
     objective = x[0]
 
-    sos1 = Sos1Constraint(variables=[1, 999])  # 999 doesn't exist
+    sos1 = Sos1Constraint(
+        variables=[x[0], DecisionVariable.continuous(999, lower=0, upper=10)]
+    )  # 999 doesn't exist
 
     with pytest.raises(RuntimeError):
         Instance.from_components(
@@ -92,7 +108,7 @@ def test_one_hot_variable_not_binary():
     ]
     objective = sum(x)
 
-    oh = OneHotConstraint(variables=[1, 2])
+    oh = OneHotConstraint(variables=x)
 
     with pytest.raises(RuntimeError, match="One-hot variable.*must be binary"):
         Instance.from_components(
@@ -113,7 +129,7 @@ def test_serialize_not_yet_supported():
         decision_variables=x,
         objective=objective,
         constraints={},
-        one_hot_constraints={10: OneHotConstraint(variables=[1, 2, 3])},
+        one_hot_constraints={10: OneHotConstraint(variables=x)},
         sense=Instance.MINIMIZE,
     )
 
@@ -126,8 +142,8 @@ def test_both_one_hot_and_sos1():
     x = [DecisionVariable.binary(i) for i in range(1, 6)]
     objective = sum(x)
 
-    oh = OneHotConstraint(variables=[1, 2, 3])
-    sos1 = Sos1Constraint(variables=[3, 4, 5])
+    oh = OneHotConstraint(variables=x[:3])
+    sos1 = Sos1Constraint(variables=x[2:])
 
     instance = Instance.from_components(
         decision_variables=x,
@@ -149,7 +165,7 @@ def test_evaluate_with_one_hot_feasible():
     x = [DecisionVariable.binary(i) for i in range(1, 4)]
     objective = sum(x)
 
-    oh = OneHotConstraint(variables=[1, 2, 3])
+    oh = OneHotConstraint(variables=x)
 
     instance = Instance.from_components(
         decision_variables=x,
@@ -172,7 +188,7 @@ def test_evaluate_with_one_hot_infeasible():
     x = [DecisionVariable.binary(i) for i in range(1, 4)]
     objective = sum(x)
 
-    oh = OneHotConstraint(variables=[1, 2, 3])
+    oh = OneHotConstraint(variables=x)
 
     instance = Instance.from_components(
         decision_variables=x,
@@ -195,7 +211,7 @@ def test_evaluate_with_sos1_feasible():
     x = [DecisionVariable.continuous(i, lower=0, upper=10) for i in range(1, 4)]
     objective = sum(x)
 
-    sos1 = Sos1Constraint(variables=[1, 2, 3])
+    sos1 = Sos1Constraint(variables=x)
 
     instance = Instance.from_components(
         decision_variables=x,
@@ -223,7 +239,7 @@ def test_convert_sos1_with_integer_variables_emits_bigm_pair():
         decision_variables=x,
         objective=sum(x),
         constraints={},
-        sos1_constraints={10: Sos1Constraint(variables=[1, 2])},
+        sos1_constraints={10: Sos1Constraint(variables=x)},
         sense=Instance.MINIMIZE,
     )
 
@@ -254,7 +270,7 @@ def test_convert_sos1_rejects_domain_excluding_zero():
         decision_variables=x,
         objective=x[0],
         constraints={},
-        sos1_constraints={10: Sos1Constraint(variables=[1])},
+        sos1_constraints={10: Sos1Constraint(variables=x)},
         sense=Instance.MINIMIZE,
     )
     before_var_ids = {dv.id for dv in instance.decision_variables}
@@ -275,7 +291,7 @@ def test_sos1_constraints_df_roundtrips_removed_context(snapshot):
         decision_variables=x,
         objective=sum(x),
         constraints={},
-        sos1_constraints={7: Sos1Constraint(variables=[0, 1, 2])},
+        sos1_constraints={7: Sos1Constraint(variables=x)},
         sense=Instance.MINIMIZE,
     )
     instance.convert_sos1_to_constraints(7)
@@ -291,7 +307,7 @@ def test_evaluate_with_sos1_infeasible():
     x = [DecisionVariable.continuous(i, lower=0, upper=10) for i in range(1, 4)]
     objective = sum(x)
 
-    sos1 = Sos1Constraint(variables=[1, 2, 3])
+    sos1 = Sos1Constraint(variables=x)
 
     instance = Instance.from_components(
         decision_variables=x,
@@ -315,7 +331,7 @@ def _solution_one_hot_feasible():
         decision_variables=x,
         objective=sum(x),
         constraints={},
-        one_hot_constraints={10: OneHotConstraint(variables=[1, 2, 3])},
+        one_hot_constraints={10: OneHotConstraint(variables=x)},
         sense=Instance.MAXIMIZE,
     )
     return instance.evaluate({1: 0.0, 2: 1.0, 3: 0.0})
@@ -329,7 +345,7 @@ def _solution_one_hot_infeasible():
         decision_variables=x,
         objective=sum(x),
         constraints={},
-        one_hot_constraints={10: OneHotConstraint(variables=[1, 2, 3])},
+        one_hot_constraints={10: OneHotConstraint(variables=x)},
         sense=Instance.MAXIMIZE,
     )
     return instance.evaluate({1: 1.0, 2: 1.0, 3: 0.0})
@@ -362,7 +378,7 @@ def _solution_sos1_one_active():
         decision_variables=x,
         objective=sum(x),
         constraints={},
-        sos1_constraints={20: Sos1Constraint(variables=[1, 2, 3])},
+        sos1_constraints={20: Sos1Constraint(variables=x)},
         sense=Instance.MINIMIZE,
     )
     return instance.evaluate({1: 0.0, 2: 5.0, 3: 0.0})
@@ -376,7 +392,7 @@ def _solution_sos1_all_zero():
         decision_variables=x,
         objective=sum(x),
         constraints={},
-        sos1_constraints={20: Sos1Constraint(variables=[1, 2, 3])},
+        sos1_constraints={20: Sos1Constraint(variables=x)},
         sense=Instance.MINIMIZE,
     )
     return instance.evaluate({1: 0.0, 2: 0.0, 3: 0.0})
@@ -402,7 +418,7 @@ def test_solution_one_hot_removed_reasons_df_after_conversion(snapshot):
         decision_variables=x,
         objective=sum(x),
         constraints={},
-        one_hot_constraints={7: OneHotConstraint(variables=[0, 1, 2])},
+        one_hot_constraints={7: OneHotConstraint(variables=x)},
         sense=Instance.MINIMIZE,
     )
     instance.convert_one_hot_to_constraint(7)
@@ -424,7 +440,7 @@ def test_solution_sos1_removed_reasons_df_after_conversion(snapshot):
         decision_variables=x,
         objective=sum(x),
         constraints={},
-        sos1_constraints={7: Sos1Constraint(variables=[0, 1, 2])},
+        sos1_constraints={7: Sos1Constraint(variables=x)},
         sense=Instance.MINIMIZE,
     )
     instance.convert_sos1_to_constraints(7)
@@ -443,7 +459,7 @@ def _sample_set_one_hot():
         decision_variables=x,
         objective=sum(x),
         constraints={},
-        one_hot_constraints={10: OneHotConstraint(variables=[1, 2, 3])},
+        one_hot_constraints={10: OneHotConstraint(variables=x)},
         sense=Instance.MAXIMIZE,
     )
     return instance.evaluate_samples(
@@ -470,7 +486,7 @@ def _sample_set_sos1():
         decision_variables=x,
         objective=sum(x),
         constraints={},
-        sos1_constraints={20: Sos1Constraint(variables=[1, 2, 3])},
+        sos1_constraints={20: Sos1Constraint(variables=x)},
         sense=Instance.MINIMIZE,
     )
     return instance.evaluate_samples(
@@ -496,7 +512,7 @@ def test_sample_set_one_hot_removed_reasons_df_after_conversion(snapshot):
         decision_variables=x,
         objective=sum(x),
         constraints={},
-        one_hot_constraints={7: OneHotConstraint(variables=[0, 1, 2])},
+        one_hot_constraints={7: OneHotConstraint(variables=x)},
         sense=Instance.MINIMIZE,
     )
     instance.convert_one_hot_to_constraint(7)

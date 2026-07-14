@@ -118,7 +118,7 @@ def test_instance_annotations_do_not_serialize_structural_constraints():
         decision_variables=x,
         objective=x[0],
         constraints={},
-        one_hot_constraints={10: OneHotConstraint(variables=[0, 1])},
+        one_hot_constraints={10: OneHotConstraint(variables=x)},
         sense=Instance.MINIMIZE,
     )
 
@@ -216,7 +216,7 @@ def test_solution_annotations_preserve_structural_constraint_evaluations():
         decision_variables=x,
         objective=sum(x),
         constraints={},
-        one_hot_constraints={10: OneHotConstraint(variables=[1, 2, 3])},
+        one_hot_constraints={10: OneHotConstraint(variables=x)},
         sense=Instance.MAXIMIZE,
     )
     solution = instance.evaluate({1: 0.0, 2: 1.0, 3: 0.0})
@@ -326,7 +326,7 @@ def test_sample_set_annotations_preserve_structural_constraint_samples():
         decision_variables=x,
         objective=sum(x),
         constraints={},
-        one_hot_constraints={10: OneHotConstraint(variables=[1, 2, 3])},
+        one_hot_constraints={10: OneHotConstraint(variables=x)},
         sense=Instance.MAXIMIZE,
     )
     sample_set = instance.evaluate_samples(

@@ -34,6 +34,7 @@ __all__ = [
     "Bound",
     "Constraint",
     "DecisionVariable",
+    "DecisionVariableLike",
     "DecisionVariableRole",
     "Descriptor",
     "DiagnosticCollector",
@@ -107,6 +108,7 @@ __all__ = [
     "set_local_registry_root",
 ]
 
+DecisionVariableLike: TypeAlias = DecisionVariable | AttachedDecisionVariable
 LinearLike: TypeAlias = Linear | DecisionVariable | AttachedDecisionVariable
 ScalarLike: TypeAlias = builtins.int | builtins.float | numpy.integer | numpy.floating
 ToFunction: TypeAlias = (
@@ -3669,7 +3671,7 @@ class Instance:
         ...     decision_variables=x,
         ...     objective=sum(x),
         ...     constraints={},
-        ...     one_hot_constraints={1: OneHotConstraint(variables=[0, 1, 2])},
+        ...     one_hot_constraints={1: OneHotConstraint(variables=x)},
         ...     sense=Instance.MINIMIZE,
         ... )
         >>> new_id = instance.convert_one_hot_to_constraint(1)
@@ -3698,8 +3700,8 @@ class Instance:
         ...     objective=sum(x),
         ...     constraints={},
         ...     one_hot_constraints={
-        ...         1: OneHotConstraint(variables=[0, 1]),
-        ...         2: OneHotConstraint(variables=[2, 3]),
+        ...         1: OneHotConstraint(variables=x[:2]),
+        ...         2: OneHotConstraint(variables=x[2:]),
         ...     },
         ...     sense=Instance.MINIMIZE,
         ... )
@@ -3756,7 +3758,7 @@ class Instance:
         ...     decision_variables=x,
         ...     objective=sum(x),
         ...     constraints={},
-        ...     sos1_constraints={1: Sos1Constraint(variables=[0, 1, 2])},
+        ...     sos1_constraints={1: Sos1Constraint(variables=x)},
         ...     sense=Instance.MINIMIZE,
         ... )
         >>> instance.convert_sos1_to_constraints(1)
@@ -3794,8 +3796,8 @@ class Instance:
         ...     objective=sum(x),
         ...     constraints={},
         ...     sos1_constraints={
-        ...         1: Sos1Constraint(variables=[0, 1]),
-        ...         2: Sos1Constraint(variables=[2, 3]),
+        ...         1: Sos1Constraint(variables=x[:2]),
+        ...         2: Sos1Constraint(variables=x[2:]),
         ...     },
         ...     sense=Instance.MINIMIZE,
         ... )
@@ -4833,7 +4835,7 @@ class OneHotConstraint:
     def __new__(
         cls,
         *,
-        variables: typing.Sequence[builtins.int],
+        variables: typing.Sequence[DecisionVariableLike],
         name: typing.Optional[builtins.str] = None,
         subscripts: typing.Sequence[builtins.int] = [],
         description: typing.Optional[builtins.str] = None,
@@ -4844,7 +4846,7 @@ class OneHotConstraint:
 
         **Args:**
 
-        - `variables`: List of binary decision variable IDs (exactly one must be 1)
+        - `variables`: Binary decision variables (exactly one must be 1)
         - `name` / `subscripts` / `description` / `parameters`: Optional
           context. Drained into the host's SoA store on insertion.
         """
@@ -7280,7 +7282,7 @@ class Sos1Constraint:
     def __new__(
         cls,
         *,
-        variables: typing.Sequence[builtins.int],
+        variables: typing.Sequence[DecisionVariableLike],
         name: typing.Optional[builtins.str] = None,
         subscripts: typing.Sequence[builtins.int] = [],
         description: typing.Optional[builtins.str] = None,
@@ -7291,7 +7293,7 @@ class Sos1Constraint:
 
         **Args:**
 
-        - `variables`: List of decision variable IDs (at most one can be non-zero)
+        - `variables`: Decision variables (at most one can be non-zero)
         - `name` / `subscripts` / `description` / `parameters`: Optional
           context. Drained into the host's SoA store on insertion.
         """
