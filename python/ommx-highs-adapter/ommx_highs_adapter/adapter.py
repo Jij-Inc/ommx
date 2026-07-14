@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, fields
-from typing import Any, Callable, Iterable, Mapping, cast
+from typing import Any, Callable, ClassVar, Iterable, Mapping, cast
 
 import highspy
 import numpy as np
@@ -9,7 +9,20 @@ import numpy as np
 from highspy.highs import highs_linear_expression
 from opentelemetry import trace
 
-from ommx import Instance, DecisionVariable, Solution, Constraint, State, Function
+from ommx import (
+    AdapterCapabilities,
+    CapabilityProfile,
+    Constraint,
+    DecisionVariable,
+    DegreeLimit,
+    Equality,
+    Function,
+    Instance,
+    Kind,
+    Sense,
+    Solution,
+    State,
+)
 from ommx.adapter import (
     DiagnosticsSink,
     SolverAdapter,
@@ -20,6 +33,11 @@ from ommx.adapter import (
 from .exception import OMMXHighsAdapterError
 
 _tracer = trace.get_tracer("ommx.adapter.highs")
+
+_LINEAR_CONSTRAINTS = {
+    Equality.EqualToZero: DegreeLimit.at_most(1),
+    Equality.LessThanOrEqualToZero: DegreeLimit.at_most(1),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -439,7 +457,8 @@ class OMMXHighsAdapter(SolverAdapter):
          - \\-
 
     **Note**: Semi-integer and semi-continuous variables are planned for future support but are
-    currently unsupported. Using these variable types will raise an ``OMMXHighsAdapterError``.
+    currently unsupported. Using these variable types will raise an
+    ``AdapterCompatibilityError`` with an ``UnsupportedVariableKind`` mismatch.
 
     Constraints
     -----------
@@ -555,6 +574,18 @@ class OMMXHighsAdapter(SolverAdapter):
 
     """
 
+    CAPABILITIES: ClassVar[AdapterCapabilities | None] = AdapterCapabilities(
+        [
+            CapabilityProfile(
+                name="highs-linear-mip",
+                variable_kinds={Kind.Binary, Kind.Integer, Kind.Continuous},
+                objective_degree=DegreeLimit.at_most(1),
+                regular_constraints=_LINEAR_CONSTRAINTS,
+                senses={Sense.Minimize, Sense.Maximize},
+            )
+        ]
+    )
+
     def __init__(self, ommx_instance: Instance, *, verbose: bool = False):
         """
         Initialize the adapter with an OMMX instance.
@@ -567,7 +598,7 @@ class OMMXHighsAdapter(SolverAdapter):
             If True, enable HiGHS's console logging
         """
         with _tracer.start_as_current_span("convert"):
-            super().__init__(ommx_instance)
+            self.require_compatible(ommx_instance)
             self.instance = ommx_instance
             self.model = highspy.Highs()
 
@@ -627,8 +658,10 @@ class OMMXHighsAdapter(SolverAdapter):
             When the optimization problem has no feasible solution
         UnboundedDetected
             When the optimization problem is unbounded
+        AdapterCompatibilityError
+            When the input does not match the adapter's declared native capability profile
         OMMXHighsAdapterError
-            When the problem contains unsupported features or HiGHS encounters an error
+            When translation or HiGHS encounters an adapter-specific error
 
         Examples
         --------
