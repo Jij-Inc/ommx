@@ -2,7 +2,7 @@ use pyo3::{exceptions::PyKeyError, prelude::*};
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 use std::collections::{BTreeSet, HashMap};
 
-use crate::{ConstraintHost, DecisionVariableInput};
+use crate::{ConstraintHost, VariableIDInput};
 
 /// A SOS1 (Special Ordered Set type 1) constraint: at most one variable can be non-zero.
 ///
@@ -30,13 +30,14 @@ impl Sos1Constraint {
     ///
     /// **Args:**
     ///
-    /// - `variables`: Decision variables (at most one can be non-zero)
+    /// - `variables`: Variable IDs or decision-variable objects
+    ///   (at most one can be non-zero)
     /// - `name` / `subscripts` / `description` / `parameters`: Optional
     ///   context. Drained into the host's SoA store on insertion.
     #[new]
     #[pyo3(signature = (*, variables, name=None, subscripts=Vec::new(), description=None, parameters=HashMap::default()))]
     fn new(
-        variables: Vec<DecisionVariableInput>,
+        variables: Vec<VariableIDInput>,
         name: Option<String>,
         subscripts: Vec<i64>,
         description: Option<String>,

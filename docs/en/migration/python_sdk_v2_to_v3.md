@@ -128,7 +128,7 @@ instance = Instance.from_components(
 )
 ```
 
-`OneHotConstraint.variables` and `Sos1Constraint.variables` now take `DecisionVariable` objects rather than raw variable IDs. Include those same objects in the host's `decision_variables`.
+`OneHotConstraint.variables` and `Sos1Constraint.variables` accept `VariableIDLike`: a raw variable ID, a standalone `DecisionVariable`, or an `AttachedDecisionVariable`. Only the variable identity is consumed. The referenced variables must still be included in the host's `decision_variables`.
 
 ### 3.2 Comparison operators return a detached `Constraint` (`3.0.0a2`, [#806](https://github.com/Jij-Inc/ommx/pull/806))
 

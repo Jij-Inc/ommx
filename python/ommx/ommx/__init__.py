@@ -47,6 +47,7 @@ from ommx._ommx_rust import (
     State,
     ToSamples,
     ToState,
+    VariableIDLike,
     get_default_atol,
     set_default_atol,
 )
@@ -97,6 +98,7 @@ __all__ = [
     "State",
     "ToSamples",
     "ToState",
+    "VariableIDLike",
     "get_default_atol",
     "set_default_atol",
 ]

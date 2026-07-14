@@ -2,7 +2,7 @@ use pyo3::{exceptions::PyKeyError, prelude::*};
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 use std::collections::HashMap;
 
-use crate::{ConstraintHost, DecisionVariable, Equality, Function};
+use crate::{ConstraintHost, Equality, Function, VariableIDInput};
 
 #[gen_stub_pyclass]
 #[pyclass]
@@ -28,7 +28,8 @@ impl IndicatorConstraint {
     ///
     /// **Args:**
     ///
-    /// - `indicator_variable`: A binary decision variable that activates this constraint
+    /// - `indicator_variable`: A binary variable ID or decision-variable object
+    ///   that activates this constraint
     /// - `function`: The constraint function
     /// - `equality`: The equality type (EqualToZero or LessThanOrEqualToZero)
     /// - `name`: Optional name for the constraint
@@ -37,8 +38,8 @@ impl IndicatorConstraint {
     /// - `parameters`: Optional key-value parameters
     #[new]
     #[pyo3(signature = (*, indicator_variable, function, equality, name=None, subscripts=Vec::new(), description=None, parameters=HashMap::default()))]
-    pub fn new(
-        indicator_variable: &DecisionVariable,
+    fn new(
+        indicator_variable: VariableIDInput,
         function: Function,
         equality: Equality,
         name: Option<String>,

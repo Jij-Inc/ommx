@@ -34,7 +34,6 @@ __all__ = [
     "Bound",
     "Constraint",
     "DecisionVariable",
-    "DecisionVariableLike",
     "DecisionVariableRole",
     "Descriptor",
     "DiagnosticCollector",
@@ -92,6 +91,7 @@ __all__ = [
     "ToFunction",
     "ToSamples",
     "ToState",
+    "VariableIDLike",
     "gc",
     "get_default_atol",
     "get_images",
@@ -108,7 +108,6 @@ __all__ = [
     "set_local_registry_root",
 ]
 
-DecisionVariableLike: TypeAlias = DecisionVariable | AttachedDecisionVariable
 LinearLike: TypeAlias = Linear | DecisionVariable | AttachedDecisionVariable
 ScalarLike: TypeAlias = builtins.int | builtins.float | numpy.integer | numpy.floating
 ToFunction: TypeAlias = (
@@ -136,6 +135,10 @@ ToState: TypeAlias = (
     | collections.abc.Mapping[int, float]
     | collections.abc.Iterable[tuple[int, float]]
 )
+VariableIDLike: TypeAlias = builtins.int | DecisionVariable | AttachedDecisionVariable
+r"""
+A variable ID or decision-variable object. APIs using this type consume only the OMMX variable identity, not kind or bound metadata.
+"""
 
 @typing.final
 class AnonymousArtifactRef:
@@ -1406,13 +1409,12 @@ class Constraint:
         Add a parameter to the constraint
         Returns self for method chaining
         """
-    def with_indicator(
-        self, indicator_variable: DecisionVariable
-    ) -> IndicatorConstraint:
+    def with_indicator(self, indicator_variable: VariableIDLike) -> IndicatorConstraint:
         r"""
         Create an indicator constraint from this constraint.
 
         Returns an IndicatorConstraint where `indicator_variable = 1 → this constraint`.
+        `indicator_variable` may be a variable ID or a decision-variable object.
         """
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> Constraint: ...
@@ -2711,7 +2713,7 @@ class IndicatorConstraint:
     def __new__(
         cls,
         *,
-        indicator_variable: DecisionVariable,
+        indicator_variable: VariableIDLike,
         function: ToFunction,
         equality: Equality,
         name: typing.Optional[builtins.str] = None,
@@ -2726,7 +2728,8 @@ class IndicatorConstraint:
 
         **Args:**
 
-        - `indicator_variable`: A binary decision variable that activates this constraint
+        - `indicator_variable`: A binary variable ID or decision-variable object
+          that activates this constraint
         - `function`: The constraint function
         - `equality`: The equality type (EqualToZero or LessThanOrEqualToZero)
         - `name`: Optional name for the constraint
@@ -4835,7 +4838,7 @@ class OneHotConstraint:
     def __new__(
         cls,
         *,
-        variables: typing.Sequence[DecisionVariableLike],
+        variables: typing.Sequence[VariableIDLike],
         name: typing.Optional[builtins.str] = None,
         subscripts: typing.Sequence[builtins.int] = [],
         description: typing.Optional[builtins.str] = None,
@@ -4846,7 +4849,8 @@ class OneHotConstraint:
 
         **Args:**
 
-        - `variables`: Binary decision variables (exactly one must be 1)
+        - `variables`: Binary variable IDs or decision-variable objects
+          (exactly one must be 1)
         - `name` / `subscripts` / `description` / `parameters`: Optional
           context. Drained into the host's SoA store on insertion.
         """
@@ -7282,7 +7286,7 @@ class Sos1Constraint:
     def __new__(
         cls,
         *,
-        variables: typing.Sequence[DecisionVariableLike],
+        variables: typing.Sequence[VariableIDLike],
         name: typing.Optional[builtins.str] = None,
         subscripts: typing.Sequence[builtins.int] = [],
         description: typing.Optional[builtins.str] = None,
@@ -7293,7 +7297,8 @@ class Sos1Constraint:
 
         **Args:**
 
-        - `variables`: Decision variables (at most one can be non-zero)
+        - `variables`: Variable IDs or decision-variable objects
+          (at most one can be non-zero)
         - `name` / `subscripts` / `description` / `parameters`: Optional
           context. Drained into the host's SoA store on insertion.
         """

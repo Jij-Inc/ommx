@@ -31,7 +31,7 @@ The PySCIPOpt Adapter declares support for Indicator and SOS1 constraints and pa
 
 An **indicator constraint** enforces a constraint $f(x) \leq 0$ (or $f(x) = 0$) only when a binary variable $z = 1$. When $z = 0$, the constraint is unconditionally satisfied.
 
-Create an {class}`~ommx.IndicatorConstraint` from an existing {class}`~ommx.Constraint` by calling {meth}`Constraint.with_indicator() <ommx.Constraint.with_indicator>`.
+Create an {class}`~ommx.IndicatorConstraint` from an existing {class}`~ommx.Constraint` by calling {meth}`Constraint.with_indicator() <ommx.Constraint.with_indicator>`. The indicator argument accepts a variable ID, a standalone {class}`~ommx.DecisionVariable`, or an {class}`~ommx.AttachedDecisionVariable`.
 
 ```{code-cell} ipython3
 from ommx import Instance, DecisionVariable, Equality
@@ -80,7 +80,7 @@ oh = OneHotConstraint(variables=xs)
 assert oh.variables == [0, 1, 2]
 ```
 
-The decision variables passed to `variables` must be binary and must be included in the instance's `decision_variables`. The constraint stores their IDs, which are available through `oh.variables`. Mathematically the constraint is equivalent to the linear equality $x_0 + x_1 + x_2 - 1 = 0$, but holding it as a first-class constraint lets supporting solvers (many MIP solvers accept one-hot natively) handle it efficiently.
+Each entry passed to `variables` may be a variable ID, a standalone {class}`~ommx.DecisionVariable`, or an {class}`~ommx.AttachedDecisionVariable`. This input is exposed as the `VariableIDLike` type alias because only the variable identity is consumed; kind and bound metadata are validated against the enclosing instance when the constraint is inserted. For OneHot, the referenced variables must be binary and included in the instance's `decision_variables`. The constraint stores their IDs, which are available through `oh.variables`. Mathematically the constraint is equivalent to the linear equality $x_0 + x_1 + x_2 - 1 = 0$, but holding it as a first-class constraint lets supporting solvers (many MIP solvers accept one-hot natively) handle it efficiently.
 
 ```{code-cell} ipython3
 values = [5.0, 10.0, 3.0]
@@ -126,7 +126,7 @@ s1 = Sos1Constraint(variables=ys)
 assert s1.variables == [3, 4, 5]
 ```
 
-As with `OneHotConstraint`, pass decision-variable objects to `variables`. The SOS1 constraint stores their IDs, which are available through `s1.variables`.
+As with `OneHotConstraint`, each `variables` entry accepts `VariableIDLike`: a variable ID, a standalone decision variable, or an attached decision variable. The SOS1 constraint stores their IDs, which are available through `s1.variables`.
 
 ```{code-cell} ipython3
 instance_s1 = Instance.from_components(

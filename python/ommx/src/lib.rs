@@ -213,7 +213,7 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<Samples>()?;
     m.add_class::<State>()?;
     m.add_type_alias::<ToState>()?;
-    m.add_type_alias::<DecisionVariableLike>()?;
+    m.add_type_alias::<VariableIDLike>()?;
     m.add_type_alias::<ScalarLike>()?;
     m.add_type_alias::<LinearLike>()?;
     m.add_type_alias::<ToFunction>()?;
@@ -306,6 +306,7 @@ pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
     "get_default_atol",
     "set_default_atol",
     // Type aliases
+    "VariableIDLike",
     "ToState",
     "ToSamples"
 );

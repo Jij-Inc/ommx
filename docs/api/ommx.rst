@@ -51,5 +51,6 @@ ommx
    _items/ommx.Rng
    _items/ommx.get_default_atol
    _items/ommx.set_default_atol
+   _items/ommx.VariableIDLike
    _items/ommx.ToState
    _items/ommx.ToSamples

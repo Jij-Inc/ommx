@@ -2,7 +2,7 @@ use pyo3::{exceptions::PyKeyError, prelude::*};
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 use std::collections::{BTreeSet, HashMap};
 
-use crate::{ConstraintHost, DecisionVariableInput};
+use crate::{ConstraintHost, VariableIDInput};
 
 /// A one-hot constraint: exactly one variable must be 1, the rest must be 0.
 ///
@@ -30,13 +30,14 @@ impl OneHotConstraint {
     ///
     /// **Args:**
     ///
-    /// - `variables`: Binary decision variables (exactly one must be 1)
+    /// - `variables`: Binary variable IDs or decision-variable objects
+    ///   (exactly one must be 1)
     /// - `name` / `subscripts` / `description` / `parameters`: Optional
     ///   context. Drained into the host's SoA store on insertion.
     #[new]
     #[pyo3(signature = (*, variables, name=None, subscripts=Vec::new(), description=None, parameters=HashMap::default()))]
     fn new(
-        variables: Vec<DecisionVariableInput>,
+        variables: Vec<VariableIDInput>,
         name: Option<String>,
         subscripts: Vec<i64>,
         description: Option<String>,

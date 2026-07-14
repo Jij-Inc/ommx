@@ -3832,15 +3832,20 @@
             },
             {
               "name": "with_indicator",
-              "doc": "Create an indicator constraint from this constraint.\n\nReturns an IndicatorConstraint where `indicator_variable = 1 → this constraint`.",
+              "doc": "Create an indicator constraint from this constraint.\n\nReturns an IndicatorConstraint where `indicator_variable = 1 → this constraint`.\n`indicator_variable` may be a variable ID or a decision-variable object.",
               "signatures": [
                 {
                   "parameters": [
                     {
                       "name": "indicator_variable",
                       "type_": {
-                        "display": "DecisionVariable",
-                        "link_target": null,
+                        "display": "VariableIDLike",
+                        "link_target": {
+                          "fqn": "ommx.VariableIDLike",
+                          "doc_module": "ommx",
+                          "kind": "Class",
+                          "attribute": null
+                        },
                         "children": []
                       },
                       "default": null
@@ -7619,15 +7624,20 @@
             },
             {
               "name": "__new__",
-              "doc": "Create a new indicator constraint.\n\nAn indicator constraint is: `indicator_variable = 1 → f(x) <= 0` (or `f(x) = 0`).\n\n**Args:**\n\n- `indicator_variable`: A binary decision variable that activates this constraint\n- `function`: The constraint function\n- `equality`: The equality type (EqualToZero or LessThanOrEqualToZero)\n- `name`: Optional name for the constraint\n- `subscripts`: Optional subscripts for indexing\n- `description`: Optional description\n- `parameters`: Optional key-value parameters",
+              "doc": "Create a new indicator constraint.\n\nAn indicator constraint is: `indicator_variable = 1 → f(x) <= 0` (or `f(x) = 0`).\n\n**Args:**\n\n- `indicator_variable`: A binary variable ID or decision-variable object\n  that activates this constraint\n- `function`: The constraint function\n- `equality`: The equality type (EqualToZero or LessThanOrEqualToZero)\n- `name`: Optional name for the constraint\n- `subscripts`: Optional subscripts for indexing\n- `description`: Optional description\n- `parameters`: Optional key-value parameters",
               "signatures": [
                 {
                   "parameters": [
                     {
                       "name": "indicator_variable",
                       "type_": {
-                        "display": "DecisionVariable",
-                        "link_target": null,
+                        "display": "VariableIDLike",
+                        "link_target": {
+                          "fqn": "ommx.VariableIDLike",
+                          "doc_module": "ommx",
+                          "kind": "Class",
+                          "attribute": null
+                        },
                         "children": []
                       },
                       "default": null
@@ -13389,21 +13399,21 @@
             },
             {
               "name": "__new__",
-              "doc": "Create a new one-hot constraint.\n\n**Args:**\n\n- `variables`: Binary decision variables (exactly one must be 1)\n- `name` / `subscripts` / `description` / `parameters`: Optional\n  context. Drained into the host's SoA store on insertion.",
+              "doc": "Create a new one-hot constraint.\n\n**Args:**\n\n- `variables`: Binary variable IDs or decision-variable objects\n  (exactly one must be 1)\n- `name` / `subscripts` / `description` / `parameters`: Optional\n  context. Drained into the host's SoA store on insertion.",
               "signatures": [
                 {
                   "parameters": [
                     {
                       "name": "variables",
                       "type_": {
-                        "display": "Sequence[_ommx_rust.DecisionVariableLike]",
+                        "display": "Sequence[_ommx_rust.VariableIDLike]",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "DecisionVariableLike",
+                            "display": "VariableIDLike",
                             "link_target": {
-                              "fqn": "ommx._ommx_rust.DecisionVariableLike",
-                              "doc_module": "ommx._ommx_rust",
+                              "fqn": "ommx.VariableIDLike",
+                              "doc_module": "ommx",
                               "kind": "Class",
                               "attribute": null
                             },
@@ -23601,21 +23611,21 @@
             },
             {
               "name": "__new__",
-              "doc": "Create a new SOS1 constraint.\n\n**Args:**\n\n- `variables`: Decision variables (at most one can be non-zero)\n- `name` / `subscripts` / `description` / `parameters`: Optional\n  context. Drained into the host's SoA store on insertion.",
+              "doc": "Create a new SOS1 constraint.\n\n**Args:**\n\n- `variables`: Variable IDs or decision-variable objects\n  (at most one can be non-zero)\n- `name` / `subscripts` / `description` / `parameters`: Optional\n  context. Drained into the host's SoA store on insertion.",
               "signatures": [
                 {
                   "parameters": [
                     {
                       "name": "variables",
                       "type_": {
-                        "display": "Sequence[_ommx_rust.DecisionVariableLike]",
+                        "display": "Sequence[_ommx_rust.VariableIDLike]",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "DecisionVariableLike",
+                            "display": "VariableIDLike",
                             "link_target": {
-                              "fqn": "ommx._ommx_rust.DecisionVariableLike",
-                              "doc_module": "ommx._ommx_rust",
+                              "fqn": "ommx.VariableIDLike",
+                              "doc_module": "ommx",
                               "kind": "Class",
                               "attribute": null
                             },
@@ -24487,6 +24497,32 @@
                     ]
                   }
                 ]
+              }
+            ]
+          }
+        },
+        {
+          "kind": "TypeAlias",
+          "name": "VariableIDLike",
+          "doc": "A variable ID or decision-variable object. APIs using this type consume only the OMMX variable identity, not kind or bound metadata.",
+          "definition": {
+            "display": "int | DecisionVariable | AttachedDecisionVariable",
+            "link_target": null,
+            "children": [
+              {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              {
+                "display": "DecisionVariable",
+                "link_target": null,
+                "children": []
+              },
+              {
+                "display": "AttachedDecisionVariable",
+                "link_target": null,
+                "children": []
               }
             ]
           }
@@ -31607,6 +31643,7 @@
     "ommx.State": "ommx",
     "ommx.ToSamples": "ommx",
     "ommx.ToState": "ommx",
+    "ommx.VariableIDLike": "ommx",
     "ommx.artifact.AnonymousArtifactRef": "ommx.artifact",
     "ommx.artifact.ArchiveDescriptor": "ommx.artifact",
     "ommx.artifact.ArchiveManifest": "ommx.artifact",

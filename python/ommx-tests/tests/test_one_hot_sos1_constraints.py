@@ -1,13 +1,30 @@
 """Tests for OneHotConstraint and Sos1Constraint as first-class constraint types."""
 
+from typing import get_args
+
 import pandas as pd
 import pytest
-from ommx import Instance, DecisionVariable, OneHotConstraint, Sos1Constraint
+from ommx import (
+    AttachedDecisionVariable,
+    DecisionVariable,
+    Instance,
+    OneHotConstraint,
+    Sos1Constraint,
+    VariableIDLike,
+)
 
 
 def _df_snap(df: pd.DataFrame) -> str:
     """Deterministic, snapshot-friendly rendering of a DataFrame."""
     return df.to_string(na_rep="<NA>")
+
+
+def test_variable_id_like_is_a_public_type_alias():
+    assert set(get_args(VariableIDLike)) == {
+        int,
+        DecisionVariable,
+        AttachedDecisionVariable,
+    }
 
 
 def test_one_hot_constraint_from_components():
@@ -30,10 +47,16 @@ def test_one_hot_constraint_from_components():
     assert instance.one_hot_constraints[10].variables == [1, 2, 3]
 
 
-def test_one_hot_constraint_rejects_variable_ids():
-    """The modeler API accepts decision-variable objects, not raw IDs."""
-    with pytest.raises(TypeError, match="DecisionVariable"):
-        OneHotConstraint(variables=[1, 2, 3])  # type: ignore[arg-type]
+def test_one_hot_constraint_accepts_variable_ids():
+    """Structural constraints accept raw IDs when no variable metadata is needed."""
+    one_hot = OneHotConstraint(variables=[1, 2, 3])
+
+    assert one_hot.variables == [1, 2, 3]
+
+
+def test_one_hot_constraint_rejects_bool_as_variable_id():
+    with pytest.raises(TypeError, match="Expected int, DecisionVariable"):
+        OneHotConstraint(variables=[True])
 
 
 def test_sos1_constraint_from_components():
@@ -56,10 +79,16 @@ def test_sos1_constraint_from_components():
     assert instance.sos1_constraints[20].variables == [1, 2, 3]
 
 
-def test_sos1_constraint_rejects_variable_ids():
-    """The modeler API accepts decision-variable objects, not raw IDs."""
-    with pytest.raises(TypeError, match="DecisionVariable"):
-        Sos1Constraint(variables=[1, 2, 3])  # type: ignore[arg-type]
+def test_sos1_constraint_accepts_variable_ids():
+    """Structural constraints accept raw IDs when no variable metadata is needed."""
+    sos1 = Sos1Constraint(variables=[1, 2, 3])
+
+    assert sos1.variables == [1, 2, 3]
+
+
+def test_sos1_constraint_rejects_bool_as_variable_id():
+    with pytest.raises(TypeError, match="Expected int, DecisionVariable"):
+        Sos1Constraint(variables=[True])
 
 
 def test_one_hot_variable_not_defined():

@@ -104,7 +104,7 @@ instance = Instance.from_components(
 )
 ```
 
-`OneHotConstraint.variables` と `Sos1Constraint.variables` には、変数 ID ではなく `DecisionVariable` オブジェクトを渡します。同じオブジェクトを host の `decision_variables` にも含めてください。
+`OneHotConstraint.variables` と `Sos1Constraint.variables` は `VariableIDLike`、すなわち変数 ID、detached な `DecisionVariable`、または `AttachedDecisionVariable` を受け取ります。ここでは変数の identity だけが使われます。参照する変数は引き続き host の `decision_variables` に含まれている必要があります。
 
 ```python
 xs = [DecisionVariable.binary(i) for i in range(3)]
