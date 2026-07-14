@@ -23,6 +23,7 @@ instance.add_constraint(x - y == 1, "c1")
 ```
 
 `new_binary` と `add_constraint` には、`name`、`subscripts`、`parameters`、`description` からなる ModelingLabel 全体を指定できます。詳しい workflow は [Instance の User Guide](../user_guide/instance.md) を参照してください。
+決定変数 ID の最大値がすでに `2**64 - 1` の場合、`new_binary` は Rust の panic を伝播せず `ValueError` を送出します。
 
 ## 3.0.0 Beta 1
 

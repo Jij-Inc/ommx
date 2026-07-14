@@ -57,6 +57,21 @@ def test_new_binary_accepts_full_modeling_label():
     assert unnamed.description == ""
 
 
+def test_new_binary_raises_value_error_when_automatic_id_overflows():
+    max_id = 2**64 - 1
+    instance = Instance.from_components(
+        decision_variables=[DecisionVariable.binary(max_id)],
+        objective=0,
+        constraints={},
+        sense=Instance.MINIMIZE,
+    )
+
+    with pytest.raises(ValueError, match="No available decision variable ID remains"):
+        instance.new_binary("x")
+
+    assert [variable.id for variable in instance.decision_variables] == [max_id]
+
+
 def test_add_constraint_optional_name_preserves_existing_usage():
     instance = Instance.minimize()
     x = instance.add_decision_variable(DecisionVariable.binary(42))

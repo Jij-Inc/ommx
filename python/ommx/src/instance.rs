@@ -14,7 +14,7 @@ use crate::{
 use anyhow::Result;
 use ommx::{ConstraintID, Evaluate, NamedFunctionID, VariableID};
 use pyo3::{
-    exceptions::PyKeyError,
+    exceptions::{PyKeyError, PyValueError},
     prelude::*,
     types::{PyBytes, PyDict},
     Bound, PyAny,
@@ -384,6 +384,9 @@ impl Instance {
     /// - `subscripts`: Optional integer indices from the source model.
     /// - `parameters`: Optional string-valued indices from the source model.
     /// - `description`: Optional human-readable description.
+    ///
+    /// Raises {class}`ValueError` if the maximum decision-variable ID is
+    /// `2**64 - 1` and no larger automatic ID can be assigned.
     #[pyo3(signature = (name=None, *, subscripts=Vec::new(), parameters=HashMap::default(), description=None))]
     pub fn new_binary(
         slf: Bound<'_, Self>,
@@ -391,17 +394,22 @@ impl Instance {
         subscripts: Vec<i64>,
         parameters: HashMap<String, String>,
         description: Option<String>,
-    ) -> Result<crate::AttachedDecisionVariable> {
+    ) -> PyResult<crate::AttachedDecisionVariable> {
+        let label = ommx::DecisionVariableLabel {
+            name,
+            subscripts,
+            parameters: parameters.into_iter().collect(),
+            description,
+        };
         let id = {
             let mut inst = slf.borrow_mut();
-            let id = inst.inner.new_binary();
-            let label = ommx::DecisionVariableLabel {
-                name,
-                subscripts,
-                parameters: parameters.into_iter().collect(),
-                description,
-            };
-            inst.inner.set_variable_label(id, label)?;
+            let id = inst
+                .inner
+                .next_variable_id()
+                .map_err(|error| PyValueError::new_err(error.to_string()))?;
+            inst.inner
+                .add_decision_variable(id, ommx::DecisionVariable::binary(), label)
+                .map_err(|error| PyValueError::new_err(error.to_string()))?;
             id
         };
         Ok(crate::AttachedDecisionVariable::from_instance(

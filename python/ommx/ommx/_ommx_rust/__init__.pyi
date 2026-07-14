@@ -3090,6 +3090,9 @@ class Instance:
         - `subscripts`: Optional integer indices from the source model.
         - `parameters`: Optional string-valued indices from the source model.
         - `description`: Optional human-readable description.
+
+        Raises {class}`ValueError` if the maximum decision-variable ID is
+        `2**64 - 1` and no larger automatic ID can be assigned.
         """
     def attached_decision_variable(
         self, variable_id: builtins.int

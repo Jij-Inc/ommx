@@ -32,6 +32,8 @@ instance.add_constraint(x - y == 1, "c1")
 `new_binary` and `add_constraint` accept the complete modeling label: `name`,
 `subscripts`, `parameters`, and `description`. See the
 [Instance user guide](../user_guide/instance.md) for the complete workflow.
+If the maximum decision-variable ID is already `2**64 - 1`, `new_binary`
+raises `ValueError` instead of propagating a Rust panic.
 
 ## 3.0.0 Beta 1
 
