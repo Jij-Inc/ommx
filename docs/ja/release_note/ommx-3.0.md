@@ -32,6 +32,7 @@ API は従来どおり ID ベースです。
 
 modeling workflow については [特殊制約](../user_guide/special_constraints.md) を
 参照してください。
+
 ### 🆕 Instance の incremental modeling ([#1077](https://github.com/Jij-Inc/ommx/pull/1077))
 
 {class}`~ommx.Instance` が数値 ID の割り当てを担い、モデルを段階的に構築できるようになりました。{meth}`~ommx.Instance.maximize` または {meth}`~ommx.Instance.minimize` で開始し、{meth}`~ommx.Instance.new_binary` で attached binary 変数を作成した後、目的関数の設定と制約条件の追加を直接行えます。明示的な ID を持つコンポーネントを組み立てる既存の {meth}`~ommx.Instance.from_components` も引き続き利用できます。曖昧な名前を持つ互換 alias `Instance.empty()` は static type checker 上で deprecated になりました。代わりに `Instance.minimize()` を使用してください。

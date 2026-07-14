@@ -80,7 +80,7 @@ oh = OneHotConstraint(variables=xs)
 assert oh.variables == [0, 1, 2]
 ```
 
-`variables` の各要素には、変数 ID、detached な {class}`~ommx.DecisionVariable`、または {class}`~ommx.AttachedDecisionVariable` を渡せます。この入力は変数の identity だけを使うため、`VariableIDLike` type alias として公開されます。kind や bound は制約を host に追加するときに、その instance が保持する変数に対して検証されます。OneHot で参照する変数はバイナリで、インスタンス構築時の `decision_variables` に含まれている必要があります。制約は各変数の ID を保持し、`oh.variables` から参照できます。数学的には通常の等式制約 $x_0 + x_1 + x_2 - 1 = 0$ と等価ですが、first-class の制約として保持することで、対応するソルバー（MIP系ソルバーの多くは one-hot 制約を直接受け付けます）に効率的に渡すことができます。
+`variables` の各要素には、変数 ID、detached な {class}`~ommx.DecisionVariable`、または {class}`~ommx.AttachedDecisionVariable` を渡せます。この入力は変数の identity だけを使うため、`VariableIDLike` type alias として公開されます。制約を host に追加するとき、enclosing instance は自身が保持する決定変数を source of truth として、参照 ID と制約固有の要件を検証します。OneHot で参照する変数は存在し、かつバイナリである必要があります。制約は各変数の ID を保持し、`oh.variables` から参照できます。数学的には通常の等式制約 $x_0 + x_1 + x_2 - 1 = 0$ と等価ですが、first-class の制約として保持することで、対応するソルバー（MIP系ソルバーの多くは one-hot 制約を直接受け付けます）に効率的に渡すことができます。
 
 ```{code-cell} ipython3
 values = [5.0, 10.0, 3.0]

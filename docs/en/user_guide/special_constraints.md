@@ -80,7 +80,7 @@ oh = OneHotConstraint(variables=xs)
 assert oh.variables == [0, 1, 2]
 ```
 
-Each entry passed to `variables` may be a variable ID, a standalone {class}`~ommx.DecisionVariable`, or an {class}`~ommx.AttachedDecisionVariable`. This input is exposed as the `VariableIDLike` type alias because only the variable identity is consumed; kind and bound metadata are validated against the enclosing instance when the constraint is inserted. For OneHot, the referenced variables must be binary and included in the instance's `decision_variables`. The constraint stores their IDs, which are available through `oh.variables`. Mathematically the constraint is equivalent to the linear equality $x_0 + x_1 + x_2 - 1 = 0$, but holding it as a first-class constraint lets supporting solvers (many MIP solvers accept one-hot natively) handle it efficiently.
+Each entry passed to `variables` may be a variable ID, a standalone {class}`~ommx.DecisionVariable`, or an {class}`~ommx.AttachedDecisionVariable`. This input is exposed as the `VariableIDLike` type alias because only the variable identity is consumed. When the constraint is inserted, the enclosing instance validates the referenced IDs and any constraint-specific requirement against its own decision variables. For OneHot, the referenced variables must exist and be binary. The constraint stores their IDs, which are available through `oh.variables`. Mathematically the constraint is equivalent to the linear equality $x_0 + x_1 + x_2 - 1 = 0$, but holding it as a first-class constraint lets supporting solvers (many MIP solvers accept one-hot natively) handle it efficiently.
 
 ```{code-cell} ipython3
 values = [5.0, 10.0, 3.0]

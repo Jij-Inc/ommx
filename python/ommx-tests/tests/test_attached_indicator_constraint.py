@@ -330,7 +330,9 @@ def test_add_indicator_rejects_non_binary_indicator_variable():
         constraints={},
     )
     bad = IndicatorConstraint(
-        indicator_variable=DecisionVariable.integer(1, lower=0, upper=5),
+        # The reference object claims binary, but the enclosing instance's
+        # variable kind is the source of truth.
+        indicator_variable=DecisionVariable.binary(1),
         function=Function.from_linear(Linear({0: 1.0}, 0.0)),
         equality=Equality.EqualToZero,
     )

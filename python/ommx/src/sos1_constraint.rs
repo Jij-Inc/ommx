@@ -30,8 +30,9 @@ impl Sos1Constraint {
     ///
     /// **Args:**
     ///
-    /// - `variables`: Variable IDs or decision-variable objects
-    ///   (at most one can be non-zero)
+    /// - `variables`: Variable IDs or decision-variable objects (at most one
+    ///   can be non-zero). Only their IDs are stored; the enclosing host
+    ///   validates that the referenced variables exist when the constraint is inserted.
     /// - `name` / `subscripts` / `description` / `parameters`: Optional
     ///   context. Drained into the host's SoA store on insertion.
     #[new]

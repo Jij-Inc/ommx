@@ -30,8 +30,9 @@ impl OneHotConstraint {
     ///
     /// **Args:**
     ///
-    /// - `variables`: Binary variable IDs or decision-variable objects
-    ///   (exactly one must be 1)
+    /// - `variables`: Variable IDs or decision-variable objects (exactly one
+    ///   must be 1). Only their IDs are stored; the enclosing host requires
+    ///   the referenced variables to be binary when the constraint is inserted.
     /// - `name` / `subscripts` / `description` / `parameters`: Optional
     ///   context. Drained into the host's SoA store on insertion.
     #[new]

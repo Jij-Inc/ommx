@@ -76,6 +76,16 @@ def test_one_hot_add_returns_attached_with_drained_context():
     assert attached.variables == [0, 1, 2]
 
 
+def test_incremental_modeling_accepts_attached_variables():
+    instance = Instance.minimize()
+    x = instance.new_binary("x")
+    y = instance.new_binary("y")
+
+    attached = instance.add_one_hot_constraint(OneHotConstraint(variables=[x, y]))
+
+    assert attached.variables == [x.id, y.id]
+
+
 def test_one_hot_setter_writes_through_to_instance():
     instance = _empty_instance()
     attached = instance.add_one_hot_constraint(

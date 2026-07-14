@@ -1,6 +1,6 @@
 """Tests for OneHotConstraint and Sos1Constraint as first-class constraint types."""
 
-from typing import get_args
+from typing import cast, get_args
 
 import pandas as pd
 import pytest
@@ -9,6 +9,7 @@ from ommx import (
     DecisionVariable,
     Instance,
     OneHotConstraint,
+    Parameter,
     Sos1Constraint,
     VariableIDLike,
 )
@@ -57,6 +58,13 @@ def test_one_hot_constraint_accepts_variable_ids():
 def test_one_hot_constraint_rejects_bool_as_variable_id():
     with pytest.raises(TypeError, match="Expected int, DecisionVariable"):
         OneHotConstraint(variables=[True])
+
+
+def test_variable_id_like_rejects_other_id_bearing_objects():
+    parameter = Parameter(id=1)
+
+    with pytest.raises(TypeError, match="Expected int, DecisionVariable"):
+        OneHotConstraint(variables=[cast(VariableIDLike, parameter)])
 
 
 def test_sos1_constraint_from_components():
@@ -130,14 +138,16 @@ def test_sos1_variable_not_defined():
 
 
 def test_one_hot_variable_not_binary():
-    """Test that OneHotConstraint with non-binary variable fails."""
+    """The enclosing instance, not the input object, owns variable kind."""
     x = [
         DecisionVariable.binary(1),
         DecisionVariable.continuous(2, lower=0, upper=1),  # not binary
     ]
     objective = sum(x)
 
-    oh = OneHotConstraint(variables=x)
+    oh = OneHotConstraint(
+        variables=[DecisionVariable.binary(1), DecisionVariable.binary(2)]
+    )
 
     with pytest.raises(RuntimeError, match="One-hot variable.*must be binary"):
         Instance.from_components(
@@ -147,6 +157,22 @@ def test_one_hot_variable_not_binary():
             one_hot_constraints={10: oh},
             sense=Instance.MINIMIZE,
         )
+
+
+def test_one_hot_uses_enclosing_instance_variable_kind():
+    """Input object metadata is ignored when the enclosing variable is binary."""
+    x = DecisionVariable.binary(1)
+    reference = DecisionVariable.continuous(1, lower=0, upper=1)
+
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        constraints={},
+        one_hot_constraints={10: OneHotConstraint(variables=[reference])},
+        sense=Instance.MINIMIZE,
+    )
+
+    assert instance.one_hot_constraints[10].variables == [1]
 
 
 def test_serialize_not_yet_supported():

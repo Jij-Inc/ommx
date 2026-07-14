@@ -3832,7 +3832,7 @@
             },
             {
               "name": "with_indicator",
-              "doc": "Create an indicator constraint from this constraint.\n\nReturns an IndicatorConstraint where `indicator_variable = 1 → this constraint`.\n`indicator_variable` may be a variable ID or a decision-variable object.",
+              "doc": "Create an indicator constraint from this constraint.\n\nReturns an IndicatorConstraint where `indicator_variable = 1 → this constraint`.\n`indicator_variable` may be a variable ID or a decision-variable object.\nOnly its ID is stored; the enclosing host requires the referenced variable\nto be binary when the constraint is inserted.",
               "signatures": [
                 {
                   "parameters": [
@@ -7624,7 +7624,7 @@
             },
             {
               "name": "__new__",
-              "doc": "Create a new indicator constraint.\n\nAn indicator constraint is: `indicator_variable = 1 → f(x) <= 0` (or `f(x) = 0`).\n\n**Args:**\n\n- `indicator_variable`: A binary variable ID or decision-variable object\n  that activates this constraint\n- `function`: The constraint function\n- `equality`: The equality type (EqualToZero or LessThanOrEqualToZero)\n- `name`: Optional name for the constraint\n- `subscripts`: Optional subscripts for indexing\n- `description`: Optional description\n- `parameters`: Optional key-value parameters",
+              "doc": "Create a new indicator constraint.\n\nAn indicator constraint is: `indicator_variable = 1 → f(x) <= 0` (or `f(x) = 0`).\n\n**Args:**\n\n- `indicator_variable`: A variable ID or decision-variable object that\n  activates this constraint. Only its ID is stored; the enclosing host\n  requires the referenced variable to be binary when the constraint is inserted.\n- `function`: The constraint function\n- `equality`: The equality type (EqualToZero or LessThanOrEqualToZero)\n- `name`: Optional name for the constraint\n- `subscripts`: Optional subscripts for indexing\n- `description`: Optional description\n- `parameters`: Optional key-value parameters",
               "signatures": [
                 {
                   "parameters": [
@@ -13617,7 +13617,7 @@
             },
             {
               "name": "__new__",
-              "doc": "Create a new one-hot constraint.\n\n**Args:**\n\n- `variables`: Binary variable IDs or decision-variable objects\n  (exactly one must be 1)\n- `name` / `subscripts` / `description` / `parameters`: Optional\n  context. Drained into the host's SoA store on insertion.",
+              "doc": "Create a new one-hot constraint.\n\n**Args:**\n\n- `variables`: Variable IDs or decision-variable objects (exactly one\n  must be 1). Only their IDs are stored; the enclosing host requires\n  the referenced variables to be binary when the constraint is inserted.\n- `name` / `subscripts` / `description` / `parameters`: Optional\n  context. Drained into the host's SoA store on insertion.",
               "signatures": [
                 {
                   "parameters": [
@@ -23829,7 +23829,7 @@
             },
             {
               "name": "__new__",
-              "doc": "Create a new SOS1 constraint.\n\n**Args:**\n\n- `variables`: Variable IDs or decision-variable objects\n  (at most one can be non-zero)\n- `name` / `subscripts` / `description` / `parameters`: Optional\n  context. Drained into the host's SoA store on insertion.",
+              "doc": "Create a new SOS1 constraint.\n\n**Args:**\n\n- `variables`: Variable IDs or decision-variable objects (at most one\n  can be non-zero). Only their IDs are stored; the enclosing host\n  validates that the referenced variables exist when the constraint is inserted.\n- `name` / `subscripts` / `description` / `parameters`: Optional\n  context. Drained into the host's SoA store on insertion.",
               "signatures": [
                 {
                   "parameters": [

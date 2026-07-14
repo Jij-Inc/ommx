@@ -28,8 +28,9 @@ impl IndicatorConstraint {
     ///
     /// **Args:**
     ///
-    /// - `indicator_variable`: A binary variable ID or decision-variable object
-    ///   that activates this constraint
+    /// - `indicator_variable`: A variable ID or decision-variable object that
+    ///   activates this constraint. Only its ID is stored; the enclosing host
+    ///   requires the referenced variable to be binary when the constraint is inserted.
     /// - `function`: The constraint function
     /// - `equality`: The equality type (EqualToZero or LessThanOrEqualToZero)
     /// - `name`: Optional name for the constraint

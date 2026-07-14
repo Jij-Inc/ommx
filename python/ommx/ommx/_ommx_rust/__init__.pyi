@@ -1416,6 +1416,8 @@ class Constraint:
 
         Returns an IndicatorConstraint where `indicator_variable = 1 → this constraint`.
         `indicator_variable` may be a variable ID or a decision-variable object.
+        Only its ID is stored; the enclosing host requires the referenced variable
+        to be binary when the constraint is inserted.
         """
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> Constraint: ...
@@ -2729,8 +2731,9 @@ class IndicatorConstraint:
 
         **Args:**
 
-        - `indicator_variable`: A binary variable ID or decision-variable object
-          that activates this constraint
+        - `indicator_variable`: A variable ID or decision-variable object that
+          activates this constraint. Only its ID is stored; the enclosing host
+          requires the referenced variable to be binary when the constraint is inserted.
         - `function`: The constraint function
         - `equality`: The equality type (EqualToZero or LessThanOrEqualToZero)
         - `name`: Optional name for the constraint
@@ -4909,8 +4912,9 @@ class OneHotConstraint:
 
         **Args:**
 
-        - `variables`: Binary variable IDs or decision-variable objects
-          (exactly one must be 1)
+        - `variables`: Variable IDs or decision-variable objects (exactly one
+          must be 1). Only their IDs are stored; the enclosing host requires
+          the referenced variables to be binary when the constraint is inserted.
         - `name` / `subscripts` / `description` / `parameters`: Optional
           context. Drained into the host's SoA store on insertion.
         """
@@ -7357,8 +7361,9 @@ class Sos1Constraint:
 
         **Args:**
 
-        - `variables`: Variable IDs or decision-variable objects
-          (at most one can be non-zero)
+        - `variables`: Variable IDs or decision-variable objects (at most one
+          can be non-zero). Only their IDs are stored; the enclosing host
+          validates that the referenced variables exist when the constraint is inserted.
         - `name` / `subscripts` / `description` / `parameters`: Optional
           context. Drained into the host's SoA store on insertion.
         """

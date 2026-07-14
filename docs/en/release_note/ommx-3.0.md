@@ -32,6 +32,7 @@ APIs that are intrinsically ID collections or mappings, such as
 
 See [Special constraints](../user_guide/special_constraints.md) for the modeling
 workflow.
+
 ### 🆕 Incremental Instance modeling ([#1077](https://github.com/Jij-Inc/ommx/pull/1077))
 
 {class}`~ommx.Instance` can now own numeric ID assignment while a model is
