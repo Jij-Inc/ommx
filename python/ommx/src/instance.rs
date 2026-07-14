@@ -70,6 +70,22 @@ pub struct Instance {
 
 impl_instance_annotations!(Instance);
 
+impl Instance {
+    fn empty_with_sense(sense: Sense) -> Result<Self> {
+        Self::from_components(
+            sense,
+            Function(ommx::Function::Zero),
+            Vec::new(),
+            BTreeMap::new(),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+    }
+}
+
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Instance {
@@ -233,17 +249,25 @@ impl Instance {
     /// ```
     #[staticmethod]
     pub fn empty() -> Result<Self> {
-        Self::from_components(
-            Sense::Minimize,
-            Function(ommx::Function::Zero),
-            Vec::new(),
-            BTreeMap::new(),
-            None,
-            None,
-            None,
-            None,
-            None,
-        )
+        Self::empty_with_sense(Sense::Minimize)
+    }
+
+    /// Create an empty minimization instance with a zero objective.
+    ///
+    /// Decision variables and constraints can be added incrementally with
+    /// {meth}`new_binary` and {meth}`add_constraint`.
+    #[staticmethod]
+    pub fn minimize() -> Result<Self> {
+        Self::empty_with_sense(Sense::Minimize)
+    }
+
+    /// Create an empty maximization instance with a zero objective.
+    ///
+    /// Decision variables and constraints can be added incrementally with
+    /// {meth}`new_binary` and {meth}`add_constraint`.
+    #[staticmethod]
+    pub fn maximize() -> Result<Self> {
+        Self::empty_with_sense(Sense::Maximize)
     }
 
     #[classattr]
@@ -343,6 +367,43 @@ impl Instance {
         ))
     }
 
+    /// Create and add a binary decision variable with an automatically assigned ID.
+    ///
+    /// Returns an {class}`~ommx.AttachedDecisionVariable` that can be used
+    /// directly in expressions. The numeric ID remains available through its
+    /// {attr}`~ommx.AttachedDecisionVariable.id` property.
+    ///
+    /// **Args:**
+    /// - `name`: Optional human-readable modeling name. Names need not be unique.
+    /// - `subscripts`: Optional integer indices from the source model.
+    /// - `parameters`: Optional string-valued indices from the source model.
+    /// - `description`: Optional human-readable description.
+    #[pyo3(signature = (name=None, *, subscripts=Vec::new(), parameters=HashMap::default(), description=None))]
+    pub fn new_binary(
+        slf: Bound<'_, Self>,
+        name: Option<String>,
+        subscripts: Vec<i64>,
+        parameters: HashMap<String, String>,
+        description: Option<String>,
+    ) -> Result<crate::AttachedDecisionVariable> {
+        let id = {
+            let mut inst = slf.borrow_mut();
+            let id = inst.inner.new_binary();
+            let label = ommx::DecisionVariableLabel {
+                name,
+                subscripts,
+                parameters: parameters.into_iter().collect(),
+                description,
+            };
+            inst.inner.set_variable_label(id, label)?;
+            id
+        };
+        Ok(crate::AttachedDecisionVariable::from_instance(
+            slf.unbind(),
+            id,
+        ))
+    }
+
     /// Return an {class}`~ommx.AttachedDecisionVariable` bound to the
     /// given id — a write-through handle whose label setters update
     /// this instance's SoA store. The handle also participates in
@@ -396,15 +457,42 @@ impl Instance {
     /// {class}`~ommx.AttachedConstraint` bound to the new id. The input
     /// {class}`~ommx.Constraint` is not mutated; subsequent writes that
     /// should land in the instance must go through the returned handle.
+    /// When modeling-label fields are provided, they replace the corresponding
+    /// fields stored on the inserted constraint without modifying the input
+    /// snapshot. Omitted fields preserve the snapshot's existing values.
+    ///
+    /// **Args:**
+    /// - `constraint`: Constraint to add
+    /// - `name`: Optional modeling name for the inserted constraint
+    /// - `subscripts`: Optional integer indices for the inserted constraint
+    /// - `parameters`: Optional string-valued indices for the inserted constraint
+    /// - `description`: Optional description for the inserted constraint
     ///
     /// Raises {class}`ValueError` if the constraint references an undefined
     /// decision variable or one currently used as a substitution-dependency
     /// key, matching the validation performed by other constraint-insertion
     /// paths.
+    #[pyo3(signature = (constraint, name=None, *, subscripts=None, parameters=None, description=None))]
     pub fn add_constraint(
         slf: Bound<'_, Self>,
-        constraint: Constraint,
+        mut constraint: Constraint,
+        name: Option<String>,
+        subscripts: Option<Vec<i64>>,
+        parameters: Option<HashMap<String, String>>,
+        description: Option<String>,
     ) -> Result<crate::AttachedConstraint> {
+        if let Some(name) = name {
+            constraint.1.label.name = Some(name);
+        }
+        if let Some(subscripts) = subscripts {
+            constraint.1.label.subscripts = subscripts;
+        }
+        if let Some(parameters) = parameters {
+            constraint.1.label.parameters = parameters.into_iter().collect();
+        }
+        if let Some(description) = description {
+            constraint.1.label.description = Some(description);
+        }
         let id = {
             let mut inst = slf.borrow_mut();
             inst.inner.add_constraint(constraint.0, constraint.1)?

@@ -3038,6 +3038,22 @@ class Instance:
         True
         ```
         """
+    @staticmethod
+    def minimize() -> Instance:
+        r"""
+        Create an empty minimization instance with a zero objective.
+
+        Decision variables and constraints can be added incrementally with
+        {meth}`new_binary` and {meth}`add_constraint`.
+        """
+    @staticmethod
+    def maximize() -> Instance:
+        r"""
+        Create an empty maximization instance with a zero objective.
+
+        Decision variables and constraints can be added incrementally with
+        {meth}`new_binary` and {meth}`add_constraint`.
+        """
     def add_decision_variable(
         self, variable: DecisionVariable
     ) -> AttachedDecisionVariable:
@@ -3052,6 +3068,27 @@ class Instance:
         Raises {class}`ValueError` if the variable's id collides with an
         existing variable, parameter, or substitution-dependency key.
         """
+    def new_binary(
+        self,
+        name: typing.Optional[builtins.str] = None,
+        *,
+        subscripts: typing.Sequence[builtins.int] = [],
+        parameters: typing.Mapping[builtins.str, builtins.str] = {},
+        description: typing.Optional[builtins.str] = None,
+    ) -> AttachedDecisionVariable:
+        r"""
+        Create and add a binary decision variable with an automatically assigned ID.
+
+        Returns an {class}`~ommx.AttachedDecisionVariable` that can be used
+        directly in expressions. The numeric ID remains available through its
+        {attr}`~ommx.AttachedDecisionVariable.id` property.
+
+        **Args:**
+        - `name`: Optional human-readable modeling name. Names need not be unique.
+        - `subscripts`: Optional integer indices from the source model.
+        - `parameters`: Optional string-valued indices from the source model.
+        - `description`: Optional human-readable description.
+        """
     def attached_decision_variable(
         self, variable_id: builtins.int
     ) -> AttachedDecisionVariable:
@@ -3065,7 +3102,15 @@ class Instance:
 
         Raises {class}`KeyError` if no variable with `variable_id` exists.
         """
-    def add_constraint(self, constraint: Constraint) -> AttachedConstraint:
+    def add_constraint(
+        self,
+        constraint: Constraint,
+        name: typing.Optional[builtins.str] = None,
+        *,
+        subscripts: typing.Optional[typing.Sequence[builtins.int]] = None,
+        parameters: typing.Optional[typing.Mapping[builtins.str, builtins.str]] = None,
+        description: typing.Optional[builtins.str] = None,
+    ) -> AttachedConstraint:
         r"""
         Add a regular constraint to this instance.
 
@@ -3074,6 +3119,16 @@ class Instance:
         {class}`~ommx.AttachedConstraint` bound to the new id. The input
         {class}`~ommx.Constraint` is not mutated; subsequent writes that
         should land in the instance must go through the returned handle.
+        When modeling-label fields are provided, they replace the corresponding
+        fields stored on the inserted constraint without modifying the input
+        snapshot. Omitted fields preserve the snapshot's existing values.
+
+        **Args:**
+        - `constraint`: Constraint to add
+        - `name`: Optional modeling name for the inserted constraint
+        - `subscripts`: Optional integer indices for the inserted constraint
+        - `parameters`: Optional string-valued indices for the inserted constraint
+        - `description`: Optional description for the inserted constraint
 
         Raises {class}`ValueError` if the constraint references an undefined
         decision variable or one currently used as a substitution-dependency
