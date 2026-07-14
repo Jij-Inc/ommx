@@ -324,7 +324,7 @@ The `annotations` property is now a read-only `types.MappingProxyType[str, str]`
 ```python
 from ommx import Instance
 
-instance = Instance.empty()
+instance = Instance.minimize()
 instance.title = "portfolio"
 instance.add_user_annotation("owner", "analytics")
 

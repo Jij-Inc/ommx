@@ -248,7 +248,7 @@ impl Instance {
     ///
     /// ```python
     /// >>> from ommx import Instance
-    /// >>> instance = Instance.empty()
+    /// >>> instance = Instance.minimize()
     /// >>> instance.sense == Instance.MINIMIZE
     /// True
     /// ```
@@ -2213,7 +2213,7 @@ impl Instance {
     ///
     /// ```python
     /// >>> from ommx import Instance
-    /// >>> instance = Instance.empty()
+    /// >>> instance = Instance.minimize()
     /// >>> stats = instance.stats()
     /// >>> stats["decision_variables"]["total"]
     /// 0

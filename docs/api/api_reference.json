@@ -9250,7 +9250,7 @@
             },
             {
               "name": "empty",
-              "doc": "Create trivial empty instance of minimization with zero objective, no constraints, and no decision variables.\n\n# Examples\n\n```python\n>>> from ommx import Instance\n>>> instance = Instance.empty()\n>>> instance.sense == Instance.MINIMIZE\nTrue\n```",
+              "doc": "Create trivial empty instance of minimization with zero objective, no constraints, and no decision variables.\n\n# Examples\n\n```python\n>>> from ommx import Instance\n>>> instance = Instance.minimize()\n>>> instance.sense == Instance.MINIMIZE\nTrue\n```",
               "signatures": [
                 {
                   "parameters": [],
@@ -10723,7 +10723,7 @@
             },
             {
               "name": "stats",
-              "doc": "Get statistics about the instance.\n\nReturns a dictionary containing counts of decision variables and constraints\ncategorized by kind, usage, and status.\n\n**Returns:**\nA dictionary with the following structure:\n\n```text\n{\n    \"decision_variables\": {\n        \"total\": int,\n        \"by_kind\": {\n            \"binary\": int,\n            \"integer\": int,\n            \"continuous\": int,\n            \"semi_integer\": int,\n            \"semi_continuous\": int\n        },\n        \"by_usage\": {\n            \"used_in_objective\": int,\n            \"used_in_constraints\": int,\n            \"used\": int,\n            \"fixed\": int,\n            \"dependent\": int,\n            \"irrelevant\": int\n        }\n    },\n    \"constraints\": {\n        \"total\": int,\n        \"active\": int,\n        \"removed\": int\n    }\n}\n```\n\n# Examples\n\n```python\n>>> from ommx import Instance\n>>> instance = Instance.empty()\n>>> stats = instance.stats()\n>>> stats[\"decision_variables\"][\"total\"]\n0\n>>> stats[\"constraints\"][\"total\"]\n0\n```",
+              "doc": "Get statistics about the instance.\n\nReturns a dictionary containing counts of decision variables and constraints\ncategorized by kind, usage, and status.\n\n**Returns:**\nA dictionary with the following structure:\n\n```text\n{\n    \"decision_variables\": {\n        \"total\": int,\n        \"by_kind\": {\n            \"binary\": int,\n            \"integer\": int,\n            \"continuous\": int,\n            \"semi_integer\": int,\n            \"semi_continuous\": int\n        },\n        \"by_usage\": {\n            \"used_in_objective\": int,\n            \"used_in_constraints\": int,\n            \"used\": int,\n            \"fixed\": int,\n            \"dependent\": int,\n            \"irrelevant\": int\n        }\n    },\n    \"constraints\": {\n        \"total\": int,\n        \"active\": int,\n        \"removed\": int\n    }\n}\n```\n\n# Examples\n\n```python\n>>> from ommx import Instance\n>>> instance = Instance.minimize()\n>>> stats = instance.stats()\n>>> stats[\"decision_variables\"][\"total\"]\n0\n>>> stats[\"constraints\"][\"total\"]\n0\n```",
               "signatures": [
                 {
                   "parameters": [],
@@ -25877,7 +25877,7 @@
             },
             {
               "name": "add_instance",
-              "doc": "Add an {class}`~ommx.Instance` to the artifact with annotations.\n\n```python\n>>> from ommx import Instance\n>>> instance = Instance.empty()\n>>> instance.title = \"test instance\"\n>>> draft = ArtifactDraft.temp()\n>>> desc = draft.add_instance(instance)\n>>> print(desc.annotations['org.ommx.v1.instance.title'])\ntest instance\n\n```",
+              "doc": "Add an {class}`~ommx.Instance` to the artifact with annotations.\n\n```python\n>>> from ommx import Instance\n>>> instance = Instance.minimize()\n>>> instance.title = \"test instance\"\n>>> draft = ArtifactDraft.temp()\n>>> desc = draft.add_instance(instance)\n>>> print(desc.annotations['org.ommx.v1.instance.title'])\ntest instance\n\n```",
               "signatures": [
                 {
                   "parameters": [

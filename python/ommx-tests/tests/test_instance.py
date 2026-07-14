@@ -58,7 +58,7 @@ def test_new_binary_accepts_full_modeling_label():
 
 
 def test_add_constraint_optional_name_preserves_existing_usage():
-    instance = Instance.empty()
+    instance = Instance.minimize()
     x = instance.add_decision_variable(DecisionVariable.binary(42))
     snapshot = (x == 1).set_name("existing")
 
