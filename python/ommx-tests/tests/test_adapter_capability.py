@@ -18,6 +18,7 @@ from ommx import (
     PortableCompatibilityReport,
     Sense,
     Sos1Constraint,
+    SpecialConstraintKind,
 )
 from ommx.adapter import (
     AdapterCompatibilityError,
@@ -142,6 +143,43 @@ def test_requirements_cover_every_active_solver_input_family() -> None:
     assert requirements.indicator_constraints[20].degree == 1
     assert requirements.one_hot_constraint_ids == {30}
     assert requirements.sos1_constraint_ids == {40}
+
+
+def test_special_constraint_lowering_uses_direct_kind_selection() -> None:
+    x = DecisionVariable.continuous(1, lower=0, upper=5)
+    y = DecisionVariable.binary(2)
+    z = DecisionVariable.binary(3)
+    instance = Instance.from_components(
+        sense=Sense.Minimize,
+        objective=x,
+        decision_variables=[x, y, z],
+        constraints={},
+        indicator_constraints={
+            20: IndicatorConstraint(
+                indicator_variable=y,
+                function=x - 1,
+                equality=Equality.LessThanOrEqualToZero,
+            )
+        },
+        one_hot_constraints={30: OneHotConstraint(variables=[y, z])},
+        sos1_constraints={40: Sos1Constraint(variables=[x, z])},
+    )
+
+    assert instance.active_special_constraint_kinds == {
+        SpecialConstraintKind.Indicator,
+        SpecialConstraintKind.OneHot,
+        SpecialConstraintKind.Sos1,
+    }
+    assert instance.lower_special_constraints(set()) == set()
+
+    assert instance.lower_special_constraints({SpecialConstraintKind.OneHot}) == {
+        SpecialConstraintKind.OneHot
+    }
+    assert instance.active_special_constraint_kinds == {
+        SpecialConstraintKind.Indicator,
+        SpecialConstraintKind.Sos1,
+    }
+    assert instance.lower_special_constraints({SpecialConstraintKind.OneHot}) == set()
 
 
 def test_complete_profiles_do_not_cross_combine_into_miqp_support() -> None:
@@ -401,7 +439,7 @@ def test_precondition_hook_is_isolated_and_validated() -> None:
             ommx_instance: Instance,
             portable_report: PortableCompatibilityReport,
         ) -> tuple[AdapterPreconditionViolation, ...]:
-            ommx_instance.reduce_capabilities(set())
+            ommx_instance.lower_special_constraints({SpecialConstraintKind.OneHot})
             return ()
 
     assert MutatingHook.check_compatibility(instance).compatible

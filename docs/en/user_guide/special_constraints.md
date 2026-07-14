@@ -25,7 +25,7 @@ The examples below use the PySCIPOpt Adapter, as in [Solving optimization proble
 pip install ommx-pyscipopt-adapter
 ```
 
-The PySCIPOpt Adapter declares support for Indicator and SOS1 constraints and passes them through to SCIP's `addConsIndicator` / `addConsSOS1` (equality indicators are split into two inequality indicators). OneHot is not declared as supported, so the adapter automatically converts it into a regular equality constraint before handing it to SCIP. For more on adapter capability declarations and conversions, see [Adapter Capability Model and Conversions](./capability_model.md).
+The PySCIPOpt Adapter's native capability profile accepts Indicator and SOS1 constraints and passes them through to SCIP's `addConsIndicator` / `addConsSOS1` (equality indicators are split into two inequality indicators). It does not accept OneHot directly. Lowering OneHot to a regular equality is an explicit preparation step rather than an adapter capability. For the distinction between native profiles, preparation, and serialization features, see [Adapter Capability Model and Explicit Preparation](./capability_model.md).
 
 ## IndicatorConstraint
 
@@ -58,7 +58,7 @@ instance = Instance.from_components(
 assert set(instance.indicator_constraints.keys()) == {0}
 ```
 
-The PySCIPOpt Adapter declares support for indicator constraints, so we can solve this directly.
+The PySCIPOpt Adapter's native profile accepts this linear Indicator constraint, so we can solve it directly.
 
 ```{code-cell} ipython3
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
@@ -73,7 +73,7 @@ assert abs(solution.objective - 5.0) < 1e-6
 A **one-hot constraint** over a set of binary variables $\{x_1, \ldots, x_n\}$ requires $\sum_i x_i = 1$ — i.e. exactly one of them is 1.
 
 ```{code-cell} ipython3
-from ommx import OneHotConstraint
+from ommx import OneHotConstraint, SpecialConstraintKind
 
 xs = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
 oh = OneHotConstraint(variables=xs)
@@ -94,15 +94,27 @@ instance_oh = Instance.from_components(
 assert set(instance_oh.one_hot_constraints.keys()) == {0}
 ```
 
-The PySCIPOpt Adapter does not declare OneHot support, so inside `solve` the constraint is automatically converted to the regular equality $x_0 + x_1 + x_2 - 1 = 0$ before being handed to SCIP.
+The PySCIPOpt Adapter does not accept OneHot in its direct translator input. A compatibility check reports that mismatch without changing `instance_oh`.
 
 ```{code-cell} ipython3
+report = OMMXPySCIPOptAdapter.check_compatibility(instance_oh)
+assert not report.compatible
+assert instance_oh.active_special_constraint_kinds == {SpecialConstraintKind.OneHot}
+```
+
+If lowering is intended, select OneHot explicitly, then recheck the prepared model. The exact lowering produces the regular equality $x_0 + x_1 + x_2 - 1 = 0$.
+
+```{code-cell} ipython3
+lowered = instance_oh.lower_special_constraints({SpecialConstraintKind.OneHot})
+assert lowered == {SpecialConstraintKind.OneHot}
+OMMXPySCIPOptAdapter.require_compatible(instance_oh)
+
 solution = OMMXPySCIPOptAdapter.solve(instance_oh)
 # Exactly one of the three is chosen, so x_1 with the largest value 10 is selected
 assert abs(solution.objective - 10.0) < 1e-6
 ```
 
-`instance_oh` is mutated in place by `solve`, so after the call the OneHot constraint is removed and a record of the conversion remains in `removed_one_hot_constraints`.
+`lower_special_constraints` mutates the selected preparation workspace in place. The subsequent compatibility check and `solve` do not perform this lowering. A record of the explicit conversion remains in `removed_one_hot_constraints`.
 
 ```{code-cell} ipython3
 assert instance_oh.one_hot_constraints == {}
@@ -139,7 +151,7 @@ instance_s1 = Instance.from_components(
 assert set(instance_s1.sos1_constraints.keys()) == {0}
 ```
 
-The PySCIPOpt Adapter declares support for SOS1, so we can solve this directly.
+The PySCIPOpt Adapter's native profile accepts SOS1, so we can solve this directly.
 
 ```{code-cell} ipython3
 solution = OMMXPySCIPOptAdapter.solve(instance_s1)
@@ -174,7 +186,7 @@ assert set(instance_mix.one_hot_constraints.keys()) == {1}
 assert set(instance_mix.sos1_constraints.keys()) == {1}
 ```
 
-When a special constraint is converted to a regular constraint (see [Capability Model and Conversions](./capability_model.md)), the generated regular constraint is allocated from the `Constraint` ID space. Only regular constraint IDs can collide after conversion.
+When a special constraint is converted to a regular constraint (see [Capability Model and Explicit Preparation](./capability_model.md)), the generated regular constraint is allocated from the `Constraint` ID space. Only regular constraint IDs can collide after conversion.
 
 ## Accessing evaluation results
 
@@ -216,4 +228,4 @@ The same applies to Indicator, OneHot, and SOS1: pass the corresponding `kind=` 
 - {meth}`Instance.relax_indicator_constraint() <ommx.Instance.relax_indicator_constraint>`: relax (deactivate) an indicator constraint and record a reason string. The relaxed constraint is moved into `removed_indicator_constraints`.
 - {meth}`Instance.restore_indicator_constraint() <ommx.Instance.restore_indicator_constraint>`: restore a previously relaxed indicator constraint. Fails if the indicator variable has already been substituted or fixed.
 
-For OneHot and SOS1, movement into `removed_one_hot_constraints` / `removed_sos1_constraints` happens via the conversion APIs covered in [Capability Model and Conversions](./capability_model.md).
+For OneHot and SOS1, movement into `removed_one_hot_constraints` / `removed_sos1_constraints` happens via the explicit lowering and conversion APIs covered in [Capability Model and Explicit Preparation](./capability_model.md).

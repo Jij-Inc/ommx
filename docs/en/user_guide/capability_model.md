@@ -11,35 +11,49 @@ kernelspec:
   name: python3
 ---
 
-# Adapter Capability Model and Conversions
+# Adapter Capability Model and Explicit Preparation
 
-OMMX treats [special constraints](./special_constraints.md) — `IndicatorConstraint`, `OneHotConstraint`, `Sos1Constraint` — as first-class citizens, but not every solver accepts them directly. To handle the differences uniformly, OMMX provides an **Adapter Capability Model**.
+An adapter capability answers one question: **which complete model shapes can
+this adapter translate directly to its backend solver?** It includes the kinds
+of variables actually used by the solver input, polynomial-degree limits for
+the objective and each constraint family, supported constraint relations, and
+the optimization sense. Regular constraints are therefore not assumed to be
+universally supported.
 
-This page covers:
+Three related APIs have deliberately separate responsibilities:
 
-- {class}`~ommx.AdditionalCapability` and {attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>` for describing what an instance requires
-- How an adapter declares its supported capabilities via `ADDITIONAL_CAPABILITIES`
-- {meth}`Instance.reduce_capabilities() <ommx.Instance.reduce_capabilities>` for automatic conversion
-- Manual conversion APIs per constraint type
-- Auditing conversion results
-
-## AdditionalCapability and required_capabilities
-
-{class}`~ommx.AdditionalCapability` is the enumeration of "extra constraint types" beyond regular constraints.
-
-| Capability | Constraint type |
+| API | Responsibility |
 |---|---|
-| `AdditionalCapability.Indicator` | {class}`~ommx.IndicatorConstraint` |
-| `AdditionalCapability.OneHot` | {class}`~ommx.OneHotConstraint` |
-| `AdditionalCapability.Sos1` | {class}`~ommx.Sos1Constraint` |
+| {class}`~ommx.AdapterCapabilities` / {class}`~ommx.CapabilityProfile` | Declare native adapter input and compare it with a model |
+| {class}`~ommx.SpecialConstraintKind` / {meth}`~ommx.Instance.lower_special_constraints` | Select an explicit special-constraint lowering operation |
+| `ommx.v2.Feature` / `required_features` | Decide whether serialized semantics are safe for a reader to deserialize |
 
-{attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>` returns the set of `AdditionalCapability` values corresponding to the **special constraints the instance currently holds**. When the instance uses only regular constraints the set is empty.
+Lowering a constraint, encoding an Integer as Binary variables, reversing a
+sense, or adding finite penalties may make a model acceptable, but those are
+preparation steps rather than native capabilities. Likewise,
+`ommx.v2.Feature` is a wire-format forward-compatibility mechanism; it does not
+say whether a solver can optimize the deserialized model.
+
+## Deriving the complete model requirements
+
+{meth}`Instance.solver_requirements() <ommx.Instance.solver_requirements>`
+derives the active solver-facing shape of an instance. It includes:
+
+- used variable IDs grouped by {class}`~ommx.Kind`;
+- the objective degree and optimization {class}`~ommx.Sense`;
+- every active regular constraint's relation and degree;
+- every active Indicator constraint's relation and body degree; and
+- the active OneHot and SOS1 constraint IDs.
+
+Fixed, dependent, irrelevant, removed-constraint-only, and
+named-function-only variables do not restrict an adapter profile. Requirements
+are derived again on every call, so they reflect an explicit preparation that
+mutated a working copy.
 
 ```{code-cell} ipython3
-from ommx import Instance, DecisionVariable, OneHotConstraint, AdditionalCapability
+from ommx import DecisionVariable, Instance, OneHotConstraint
 
 xs = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
-
 instance = Instance.from_components(
     decision_variables=xs,
     objective=sum(xs),
@@ -47,45 +61,114 @@ instance = Instance.from_components(
     one_hot_constraints={0: OneHotConstraint(variables=xs)},
     sense=Instance.MAXIMIZE,
 )
-assert instance.required_capabilities == {AdditionalCapability.OneHot}
+
+requirements = instance.solver_requirements()
+assert requirements.used_variable_ids == {0, 1, 2}
+assert requirements.objective_degree == 1
+assert requirements.one_hot_constraint_ids == {0}
 ```
 
-## Adapter-side declaration
+## Declaring coherent native profiles
 
-Each OMMX Adapter declares which capabilities it supports via the `ADDITIONAL_CAPABILITIES` class attribute.
+An adapter declares `CAPABILITIES` as one or more complete
+{class}`~ommx.CapabilityProfile` values. Every field in one profile is a
+conjunction. Multiple profiles are alternatives, not fields that are unioned
+together; for example, separate continuous-QP and MILP profiles do not
+accidentally claim MIQP support.
 
-```python
-from ommx import AdditionalCapability
+```{code-cell} ipython3
+from ommx import (
+    AdapterCapabilities,
+    CapabilityProfile,
+    DegreeLimit,
+    Equality,
+    Kind,
+    Sense,
+)
 from ommx.adapter import SolverAdapter
 
-class MySolverAdapter(SolverAdapter):
-    ADDITIONAL_CAPABILITIES = frozenset({AdditionalCapability.Indicator})
+linear_profile = CapabilityProfile(
+    name="binary-linear",
+    variable_kinds={Kind.Binary},
+    objective_degree=DegreeLimit.at_most(1),
+    regular_constraints={
+        Equality.EqualToZero: DegreeLimit.at_most(1),
+        Equality.LessThanOrEqualToZero: DegreeLimit.at_most(1),
+    },
+    senses={Sense.Minimize, Sense.Maximize},
+)
+
+class MyLinearAdapter(SolverAdapter):
+    CAPABILITIES = AdapterCapabilities([linear_profile])
 ```
 
-When the adapter's constructor calls `super().__init__(instance)`, **any constraint type not in `ADDITIONAL_CAPABILITIES` is automatically converted into regular constraints.** In other words, the adapter author only needs to handle the types declared plus regular constraints; any instance can be accepted.
+Omitting a constraint family means that the profile supports no active
+constraint of that family. `DegreeLimit.at_most(n)` is cumulative and accepts
+degrees from 0 through `n`; `DegreeLimit.any()` accepts every polynomial degree
+representable by OMMX. An adapter-specific numerical restriction that cannot be
+expressed portably belongs in the adapter's `_check_preconditions` hook, not in
+the profile.
 
-By default `ADDITIONAL_CAPABILITIES = frozenset()`, so every special constraint type is auto-converted. Adapters may also declare full support (for example, the PySCIPOpt Adapter currently declares Indicator and SOS1 support).
+## Side-effect-free compatibility checks
 
-## Automatic conversion via reduce_capabilities
-
-Inside `super().__init__`, {meth}`Instance.reduce_capabilities() <ommx.Instance.reduce_capabilities>` is called. For each capability in `required_capabilities` that is not in `supported`, the corresponding conversion API (see below) is invoked to turn that special constraint into regular constraints.
+{meth}`~ommx.adapter.SolverAdapter.check_compatibility` compares the complete
+requirements against each native profile and then checks adapter-specific
+preconditions. It does not lower, encode, relax, or otherwise mutate the input.
+{meth}`~ommx.adapter.SolverAdapter.require_compatible` returns the same report
+on success and raises {class}`~ommx.adapter.AdapterCompatibilityError` on
+failure.
 
 ```{code-cell} ipython3
-converted = instance.reduce_capabilities(supported=set())
-assert converted == {AdditionalCapability.OneHot}
+from ommx import SpecialConstraintKind
+
+report = MyLinearAdapter.check_compatibility(instance)
+assert not report.compatible
+assert instance.active_special_constraint_kinds == {SpecialConstraintKind.OneHot}
 ```
+
+This instance fails because the profile does not claim native OneHot support.
+The check leaves the source instance unchanged.
+
+## Explicit special-constraint lowering and recheck
+
+{attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>`
+is an inventory of active special-constraint families. It is not an adapter
+support declaration. To lower selected families, prepare a working copy and
+pass those {class}`~ommx.SpecialConstraintKind` values to
+{meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>`.
 
 ```{code-cell} ipython3
-assert instance.required_capabilities == set()
-assert instance.one_hot_constraints == {}
-assert len(instance.constraints) == 1
+import copy
+
+prepared = copy.deepcopy(instance)
+lowered = prepared.lower_special_constraints({SpecialConstraintKind.OneHot})
+assert lowered == {SpecialConstraintKind.OneHot}
+assert prepared.active_special_constraint_kinds == set()
+assert len(prepared.constraints) == 1
+
+# Preparation changed the model shape, so derive requirements and check again.
+MyLinearAdapter.require_compatible(prepared)
+
+# The source model was not used as transformation workspace.
+assert instance.active_special_constraint_kinds == {SpecialConstraintKind.OneHot}
 ```
 
-The OneHot constraint has been removed and a regular equality $x_0 + x_1 + x_2 - 1 = 0$ has been added in its place. `reduce_capabilities` mutates the instance in place. On success, `required_capabilities` becomes a subset of `supported`. The method returns an empty set when no conversion was needed.
+`lower_special_constraints` mutates the selected instance in place and returns
+the families it actually lowered. Direct selection avoids interpreting the set
+as a declaration of what some adapter supports. The operation composes the
+per-family conversion APIs below and preserves the removed constraints and
+provenance for audit.
 
-## Manual conversion APIs
+More general preparation can include exact reformulation, approximation,
+relaxation, or finite-penalty conversion. Such a workflow should record its
+semantics explicitly and must check the resulting solver model against the
+native profile again. Adapter-owned conditions such as a backend integer-width
+limit are checked in addition to the portable profile; they are not new OMMX
+capability fields and are unrelated to `ommx.v2.Feature`.
 
-`reduce_capabilities` is implemented by composing the per-type conversion APIs below. You can call these directly as well.
+## Per-family conversion APIs
+
+You can also call the individual conversion APIs directly.
 
 ### One-hot → equality constraint
 
@@ -189,8 +272,11 @@ for cid, c in instance2.constraints.items():
 
 | What you want to do | API |
 |---|---|
-| Inspect which capabilities an instance requires | {attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>` |
-| Declare supported capabilities on an adapter | The `ADDITIONAL_CAPABILITIES` class attribute |
-| Auto-convert every unsupported special constraint | {meth}`Instance.reduce_capabilities <ommx.Instance.reduce_capabilities>` |
+| Derive the active solver-facing model shape | {meth}`Instance.solver_requirements <ommx.Instance.solver_requirements>` |
+| Declare direct translator support | `SolverAdapter.CAPABILITIES` with {class}`~ommx.AdapterCapabilities` |
+| Check without mutating the input | `check_compatibility` / `require_compatible` |
+| Inspect active special-constraint families | {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` |
+| Explicitly lower selected special constraints | {meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>` |
 | Convert individually to regular constraints | `convert_*_to_constraint(s)` / `convert_all_*_to_constraints` |
 | Audit conversion history | `instance.constraints_df(kind=..., removed=True)` / `solution.constraints_df(kind=..., include=("...","removed_reason"))` |
+| Check serialized forward compatibility | `ommx.v2.Feature` / `required_features` |

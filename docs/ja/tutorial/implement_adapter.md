@@ -278,11 +278,14 @@ def decode_to_state(model: pyscipopt.Model, instance: Instance) -> State:
 
 ```python
 class SolverAdapter(ABC):
-    ADDITIONAL_CAPABILITIES: set[AdditionalCapability] = set()
+    CAPABILITIES: ClassVar[AdapterCapabilities | None] = None
 
-    def __init__(self, ommx_instance: Instance):
-        """サポート外の制約タイプを通常制約に変換する。サブクラスは super().__init__() を呼ぶ必要がある。"""
-        ommx_instance.reduce_capabilities(self.ADDITIONAL_CAPABILITIES)
+    @classmethod
+    def require_compatible(
+        cls, ommx_instance: Instance
+    ) -> AdapterCompatibilityReport:
+        """入力を変更せず、native profile 全体との互換性を検査する。"""
+        ...
 
     @classmethod
     @abstractmethod
@@ -311,35 +314,58 @@ class SolverAdapter(ABC):
 
 具体的な adapter の `solve` クラスメソッドは、adapter 固有の keyword option を追加で定義できます。予約済みの `diagnostics` keyword は `Run.log_solve` が管理します。`Run.log_solve(..., store_diagnostics=True)` を使う場合、adapter はその sink に adapter 定義の diagnostic report を記録できます。`None` の場合、diagnostics は無効です。
 
-#### 制約タイプの Capability 宣言
+#### Native Capability の宣言
 
-各アダプターは `ADDITIONAL_CAPABILITIES` クラス属性で、サポートする制約タイプを宣言します。基底クラスは `super().__init__()` の呼び出し時に、宣言されていない制約タイプを通常の制約へ自動的に変換します（indicator/SOS1 は Big-M、one-hot は線形等式）。変換が行われた capability は `INFO` レベルでログ出力されます。利用可能な capability は以下の通りです：
+各 Adapter は `CAPABILITIES` に1つ以上の完全な
+{class}`~ommx.CapabilityProfile` を宣言します。Profile は direct translator 入力の
+すべての次元、すなわち used variable kind、目的関数の次数、通常制約と特殊制約の
+support（必要な family では次数上限も含む）、最適化 sense をまとめて表します。
+通常制約が常にサポートされるとは仮定しません。複数の profile は択一的な
+model shape であり、backend が持たない capability へ意図せず合成されることはありません。
 
-- `AdditionalCapability.Indicator`: インジケーター制約 (`binvar = 1 → f(x) <= 0`)
-- `AdditionalCapability.OneHot`: バイナリ変数集合のうち丁度1つが1
-- `AdditionalCapability.Sos1`: 変数集合のうち高々1つが非ゼロ
+Translator へ渡す前に {meth}`~ommx.adapter.SolverAdapter.require_compatible` を呼び出します。
+このメソッドは portable な不一致と adapter 固有の前提条件を報告し、入力を変更しません。
+基底クラスは非対応の制約を暗黙に lower しません。Adapter が preparation を提供する場合は、
+その操作と semantics を明示し、作成した solver model を再検査してください。
 
-`ADDITIONAL_CAPABILITIES` をオーバーライドしない場合、デフォルトでは通常の制約のみが維持され、特殊制約は全て自動変換されます。`Instance` が現在保持している特殊制約を調べるには {attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>` を使用してください。
-
-```{important}
-サブクラスは `__init__` メソッドで **必ず** `super().__init__(ommx_instance)` を呼び出してください。これにより、制約の自動変換が有効になります。`Instance` はこの呼び出しで in-place に書き換えられる点に注意してください。
-```
+{class}`~ommx.SpecialConstraintKind` と {meth}`~ommx.Instance.lower_special_constraints` は、
+明示的な lowering 操作の対象を選択する API であり、Adapter support の宣言ではありません。
+`ommx.v2.Feature` も別物です。これは Forward Compatibility を保って deserialize するための
+仕組みであり、backend solver が model を受理するかは表しません。
 
 ここまでで用意した関数を使って次のように実装することができます：
 
 ```{code-cell} ipython3
 from ommx.adapter import DiagnosticsSink, SolverAdapter
-from ommx import AdditionalCapability
+from ommx import (
+    AdapterCapabilities,
+    CapabilityProfile,
+    DegreeLimit,
+    Equality,
+    Kind,
+    Sense,
+)
 
 class OMMXPySCIPOptAdapter(SolverAdapter):
-    # PySCIPOptは通常の制約とインジケーター制約の両方をサポート
-    ADDITIONAL_CAPABILITIES = {AdditionalCapability.Indicator}
+    # この tutorial translator が直接扱う model shape を完全に宣言する
+    CAPABILITIES = AdapterCapabilities([
+        CapabilityProfile(
+            name="tutorial-pyscipopt-quadratic",
+            variable_kinds={Kind.Binary, Kind.Integer, Kind.Continuous},
+            objective_degree=DegreeLimit.at_most(2),
+            regular_constraints={
+                Equality.EqualToZero: DegreeLimit.at_most(2),
+                Equality.LessThanOrEqualToZero: DegreeLimit.at_most(2),
+            },
+            senses={Sense.Minimize, Sense.Maximize},
+        )
+    ])
 
     def __init__(
         self,
         ommx_instance: Instance,
     ):
-        super().__init__(ommx_instance)  # サポート外の制約タイプを自動変換
+        self.require_compatible(ommx_instance)
         self.instance = ommx_instance
         self.model = pyscipopt.Model()
         self.model.hideOutput()
@@ -513,9 +539,18 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
 
     # SampleSetに変換する必要があるので、Instanceを保持
     ommx_instance: Instance
+
+    CAPABILITIES = AdapterCapabilities([
+        CapabilityProfile(
+            name="tutorial-openjij-qubo",
+            variable_kinds={Kind.Binary},
+            objective_degree=DegreeLimit.at_most(2),
+            senses={Sense.Minimize},
+        )
+    ])
     
     def __init__(self, ommx_instance: Instance):
-        super().__init__(ommx_instance)  # サポート外の制約タイプを自動変換
+        self.require_compatible(ommx_instance)
         self.ommx_instance = ommx_instance
 
     # サンプリングを行う
@@ -575,13 +610,12 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
 
 ### Sampler Adapterを使って簡単なサンプリングを行う
 
-動作確認のため、これを使って次の最適化問題からサンプリングを行ってみましょう
+動作確認のため、これを使って次の native QUBO 入力からサンプリングを行ってみましょう。
 
 $$
 \begin{aligned}
-\max & \quad x_0 + x_1 \\
-\text{s.t.} & \quad x_0 \cdot x_1 = 1 \\
-& \quad x_0, x_1 \in \{0, 1\}
+\min & \quad -x_0 - x_1 + 2 x_0 x_1 \\
+\text{s.t.} & \quad x_0, x_1 \in \{0, 1\}
 \end{aligned}
 $$
 
@@ -589,27 +623,34 @@ $$
 x = [DecisionVariable.binary(id, name="x", subscripts=[id]) for id in range(2)]
 instance = Instance.from_components(
     decision_variables=x,
-    objective=x[0] + x[1],
-    constraints={0: x[0] * x[1] == 1},
-    sense=Instance.MAXIMIZE,
+    objective=-x[0] - x[1] + 2 * x[0] * x[1],
+    constraints={},
+    sense=Instance.MINIMIZE,
 )
 
 sample_set = OMMXOpenJijSAAdapter.sample(instance)
 sample_set.summary
 ```
 
+この簡潔な tutorial adapter が受理するのは direct QUBO 入力だけです。
+Production adapter は Integer 変数、制約、逆向きの sense を持つ source model に対して
+明示的な preparation を提供できますが、それらの変換を native capability として
+宣言してはいけません。OpenJij の完全な workflow は
+[OMMX Adapterを使ってQUBOをサンプリング](../tutorial/tsp_sampling_with_openjij_adapter) を参照してください。
+
 ## まとめ
 
 このチュートリアルでは、PySCIPOptと接続するSolver Adapterの実装とOpenJijと接続するSampler Adapterの実装を通して、OMMX Adapterの実装方法について学びました。以下がOMMX Adapterを実装する際の重要なポイントです：
 
 1. OMMX Adapterは `SolverAdapter` または `SamplerAdapter` の抽象基底クラスを継承することで実装します
-2. `ADDITIONAL_CAPABILITIES` でサポートする制約タイプを宣言し、`super().__init__()` を呼び出して自動的な capability チェックを有効にします
+2. `CAPABILITIES` で native translator 入力全体を宣言し、変換前に `require_compatible()` を呼び出して source model を変更せず検査します
 3. 実装の主なステップは以下の通りです：
    - `ommx.Instance` をバックエンドソルバーが理解できる形式に変換する
    - バックエンドソルバーを実行して解を取得する
    - バックエンドソルバーの出力を `ommx.Solution` や `ommx.SampleSet` に変換する
-4. 各バックエンドソルバーの特性や制限を理解し、適切に処理する必要があります
-4. IDの管理や変数の対応付けなど、バックエンドソルバーとOMMXの橋渡しに注意を払う必要があります
+4. 明示的な preparation や特殊制約 lowering を native capability の宣言と分け、prepared solver model を再検査します
+5. 各バックエンドソルバーの特性や制限を理解し、適切に処理する必要があります
+6. IDの管理や変数の対応付けなど、バックエンドソルバーとOMMXの橋渡しに注意を払う必要があります
 
 独自のバックエンドソルバーをOMMXと接続したい場合は、このチュートリアルを参考に実装すると良いでしょう。このチュートリアルに従ってOMMX Adapterを実装することで、様々なバックエンドソルバーでの最適化を共通化されたAPIで利用できるようになります。
 

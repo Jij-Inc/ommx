@@ -135,31 +135,6 @@
         },
         {
           "kind": "Class",
-          "name": "AdditionalCapability",
-          "doc": "Constraint type capability flag for non-standard constraint types.\n\nStandard constraints are always supported. This enum lists capabilities\nthat adapters must explicitly opt in to.\n\nUse as a set: `{AdditionalCapability.Indicator}`",
-          "bases": [],
-          "methods": [],
-          "attributes": [
-            {
-              "name": "Indicator",
-              "doc": "Indicator constraints: binvar = 1 → f(x) <= 0",
-              "type_": null
-            },
-            {
-              "name": "OneHot",
-              "doc": "One-hot constraints: exactly one of a set of binary variables must be 1",
-              "type_": null
-            },
-            {
-              "name": "Sos1",
-              "doc": "SOS1 constraints: at most one of a set of variables can be non-zero",
-              "type_": null
-            }
-          ],
-          "deprecated": null
-        },
-        {
-          "kind": "Class",
           "name": "AttachedConstraint",
           "doc": "Attached constraint — a write-through handle bound to a host\n({class}`~ommx.Instance` or {class}`~ommx.ParametricInstance`).\n\n`AttachedConstraint` is returned by `Instance.add_constraint` /\n`ParametricInstance.add_constraint` and by their `constraints[id]`\ngetters. Unlike {class}`~ommx.Constraint`, which is a snapshot, reads\npull live data from the parent host and context setters write through\nto its SoA context store. Two `AttachedConstraint` instances pointing\nat the same id on the same host observe the same state.\n\nThe handle keeps the parent host alive through a refcount; drop the\nwrapper to release the back-reference.",
           "bases": [],
@@ -10714,6 +10689,44 @@
               "deprecated": null
             },
             {
+              "name": "lower_special_constraints",
+              "doc": "Lower selected active special constraint kinds into regular constraints.\n\nFor every kind in ``kinds_to_lower``, the corresponding bulk conversion\nis invoked\n(:meth:`convert_all_indicators_to_constraints`,\n:meth:`convert_all_one_hots_to_constraints`, or\n:meth:`convert_all_sos1_to_constraints`). The instance is mutated in\nplace. Kinds omitted from ``kinds_to_lower`` remain active, and an empty\nset is a no-op.\n\nReturns the set of :class:`SpecialConstraintKind` values that were\nrequested and active, and therefore actually lowered. Empty when no\nrequested kind was active.\n\nKinds are processed in ``Indicator``, ``OneHot``, ``Sos1`` order. Each\nindividual family conversion is atomic, but the whole operation is not:\nan error in a later family does not roll back families already lowered.\n\nRaises if any underlying Big-M conversion fails (e.g. a SOS1 variable\nwith a non-finite bound).",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "kinds_to_lower",
+                      "type_": {
+                        "display": "set[SpecialConstraintKind]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "SpecialConstraintKind",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "set[SpecialConstraintKind]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "SpecialConstraintKind",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "maximize",
               "doc": "Create an empty maximization instance with a zero objective.\n\nDecision variables and constraints can be added incrementally with\n{meth}`new_binary` and {meth}`add_constraint`.",
               "signatures": [
@@ -11113,44 +11126,6 @@
                     "display": "bool",
                     "link_target": null,
                     "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "reduce_capabilities",
-              "doc": "Convert constraint types not in `supported` into regular constraints.\n\nFor every capability in :attr:`required_capabilities` not in\n``supported``, the corresponding bulk conversion is invoked\n(:meth:`convert_all_indicators_to_constraints`,\n:meth:`convert_all_one_hots_to_constraints`, or\n:meth:`convert_all_sos1_to_constraints`). The instance is mutated in\nplace and :attr:`required_capabilities` becomes a subset of\n``supported`` on success.\n\nReturns the set of :class:`AdditionalCapability` values that were\nactually converted. Empty when nothing needed conversion.\n\nRaises if any underlying Big-M conversion fails (e.g. a SOS1 variable\nwith a non-finite bound).",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "supported",
-                      "type_": {
-                        "display": "set[AdditionalCapability]",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "AdditionalCapability",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "set[AdditionalCapability]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "AdditionalCapability",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
                   }
                 }
               ],
@@ -11823,6 +11798,23 @@
               }
             },
             {
+              "name": "active_special_constraint_kinds",
+              "doc": "The kinds of active special constraints this instance currently uses.\n\nReturns the set of :class:`SpecialConstraintKind` values corresponding\nto non-empty active (non-removed) special constraint collections. An\nempty set means the instance has no active special constraints.",
+              "type_": {
+                "display": "set[SpecialConstraintKind]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "SpecialConstraintKind",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "annotations",
               "doc": "Returns a read-only mapping of flat annotations.\n\nUse {meth}`add_user_annotation`, metadata properties, or\n{meth}`replace_annotations` to modify annotations.",
               "type_": {
@@ -12188,23 +12180,6 @@
                   },
                   {
                     "display": "RemovedSos1Constraint",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "required_capabilities",
-              "doc": "The non-standard constraint capabilities this instance currently uses.\n\nReturns the set of :class:`AdditionalCapability` values corresponding to\nthe active (non-removed) constraint collections the instance contains.\nAn empty set means the instance only uses regular constraints.\n\nCallers can diff this against an adapter's\n``ADDITIONAL_CAPABILITIES`` to see what would be converted, or use\n:meth:`reduce_capabilities` to perform the conversion.",
-              "type_": {
-                "display": "set[AdditionalCapability]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "AdditionalCapability",
                     "link_target": null,
                     "children": []
                   }
@@ -19080,7 +19055,7 @@
         {
           "kind": "Class",
           "name": "Provenance",
-          "doc": "One step in a regular constraint's transformation history.\n\nWhen a special constraint (indicator / one-hot / SOS1) is converted into a\nregular {class}`~ommx.Constraint` — for example via\n`Instance.convert_one_hot_to_constraint` or `Instance.reduce_capabilities` —\nthe generated constraint records a {class}`Provenance` entry naming the\noriginal special constraint. This lets callers trace a regular constraint\nback to the special constraint it was derived from.",
+          "doc": "One step in a regular constraint's transformation history.\n\nWhen a special constraint (indicator / one-hot / SOS1) is converted into a\nregular {class}`~ommx.Constraint` — for example via\n{meth}`~ommx.Instance.convert_one_hot_to_constraint` or\n{meth}`~ommx.Instance.lower_special_constraints` —\nthe generated constraint records a {class}`Provenance` entry naming the\noriginal special constraint. This lets callers trace a regular constraint\nback to the special constraint it was derived from.",
           "bases": [],
           "methods": [
             {
@@ -25261,6 +25236,31 @@
               },
               "is_property": true,
               "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "SpecialConstraintKind",
+          "doc": "Kind of active special constraint in an instance.\n\nUse these values with\n{meth}`~ommx.Instance.active_special_constraint_kinds` to inspect an\ninstance and {meth}`~ommx.Instance.lower_special_constraints` to select\nspecial constraint families for explicit lowering to regular constraints.\nThis is a transformation selector, not an adapter capability declaration\nor an ``ommx.v2.Feature`` wire-format requirement.",
+          "bases": [],
+          "methods": [],
+          "attributes": [
+            {
+              "name": "Indicator",
+              "doc": "Indicator constraints: binvar = 1 → f(x) <= 0",
+              "type_": null
+            },
+            {
+              "name": "OneHot",
+              "doc": "One-hot constraints: exactly one of a set of binary variables must be 1",
+              "type_": null
+            },
+            {
+              "name": "Sos1",
+              "doc": "SOS1 constraints: at most one of a set of variables can be non-zero",
+              "type_": null
             }
           ],
           "deprecated": null
@@ -32909,7 +32909,6 @@
   },
   "export_map": {
     "ommx.AdapterCapabilities": "ommx",
-    "ommx.AdditionalCapability": "ommx",
     "ommx.AttachedConstraint": "ommx",
     "ommx.AttachedDecisionVariable": "ommx",
     "ommx.AttachedIndicatorConstraint": "ommx",
@@ -32958,6 +32957,7 @@
     "ommx.Sense": "ommx",
     "ommx.Solution": "ommx",
     "ommx.Sos1Constraint": "ommx",
+    "ommx.SpecialConstraintKind": "ommx",
     "ommx.State": "ommx",
     "ommx.ToSamples": "ommx",
     "ommx.ToState": "ommx",

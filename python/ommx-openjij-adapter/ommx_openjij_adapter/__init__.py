@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from ommx import (
-    AdditionalCapability,
     AdapterCapabilities,
     CapabilityProfile,
     DegreeLimit,
@@ -12,6 +11,7 @@ from ommx import (
     State,
     Samples,
     SampleSet,
+    SpecialConstraintKind,
     Solution,
 )
 from ommx.adapter import (
@@ -34,6 +34,14 @@ from typing import ClassVar
 import copy
 
 _tracer = trace.get_tracer("ommx.adapter.openjij")
+
+_ALL_SPECIAL_CONSTRAINT_KINDS = frozenset(
+    {
+        SpecialConstraintKind.Indicator,
+        SpecialConstraintKind.OneHot,
+        SpecialConstraintKind.Sos1,
+    }
+)
 
 
 class OpenJijPreparationSemantics(str, Enum):
@@ -273,7 +281,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     ) -> tuple[AdapterPreconditionViolation, ...]:
         encoding_input = copy.deepcopy(ommx_instance)
         try:
-            encoding_input.reduce_capabilities(set())
+            encoding_input.lower_special_constraints(set(_ALL_SPECIAL_CONSTRAINT_KINDS))
         except Exception:
             # Full preparation materialization reports special-constraint
             # lowering failures with their source constraint references.
@@ -755,45 +763,47 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         steps: list[OpenJijPreparationStep] = []
 
         special_refs = {
-            AdditionalCapability.Indicator: frozenset(
+            SpecialConstraintKind.Indicator: frozenset(
                 ConstraintRef("indicator", id) for id in working.indicator_constraints
             ),
-            AdditionalCapability.OneHot: frozenset(
+            SpecialConstraintKind.OneHot: frozenset(
                 ConstraintRef("one_hot", id) for id in working.one_hot_constraints
             ),
-            AdditionalCapability.Sos1: frozenset(
+            SpecialConstraintKind.Sos1: frozenset(
                 ConstraintRef("sos1", id) for id in working.sos1_constraints
             ),
         }
-        converted_specials = working.reduce_capabilities(set())
+        lowered_specials = working.lower_special_constraints(
+            set(_ALL_SPECIAL_CONSTRAINT_KINDS)
+        )
         special_step_details = {
-            AdditionalCapability.Indicator: (
+            SpecialConstraintKind.Indicator: (
                 "indicator_lowering",
                 "Lowered Indicator constraints exactly with validated Big-M bounds.",
             ),
-            AdditionalCapability.OneHot: (
+            SpecialConstraintKind.OneHot: (
                 "one_hot_lowering",
                 "Lowered OneHot constraints exactly to regular equalities.",
             ),
-            AdditionalCapability.Sos1: (
+            SpecialConstraintKind.Sos1: (
                 "sos1_lowering",
                 "Lowered SOS1 constraints exactly with validated Big-M bounds.",
             ),
         }
-        for capability in (
-            AdditionalCapability.Indicator,
-            AdditionalCapability.OneHot,
-            AdditionalCapability.Sos1,
+        for kind in (
+            SpecialConstraintKind.Indicator,
+            SpecialConstraintKind.OneHot,
+            SpecialConstraintKind.Sos1,
         ):
-            if capability not in converted_specials:
+            if kind not in lowered_specials:
                 continue
-            operation, description = special_step_details[capability]
+            operation, description = special_step_details[kind]
             steps.append(
                 OpenJijPreparationStep(
                     operation=operation,
                     semantics=OpenJijPreparationSemantics.Exact,
                     description=description,
-                    constraint_refs=special_refs[capability],
+                    constraint_refs=special_refs[kind],
                 )
             )
 

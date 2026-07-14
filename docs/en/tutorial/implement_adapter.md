@@ -282,11 +282,14 @@ Finally, create a class that inherits `ommx.adapter.SolverAdapter` to standardiz
 
 ```python
 class SolverAdapter(ABC):
-    ADDITIONAL_CAPABILITIES: set[AdditionalCapability] = set()
+    CAPABILITIES: ClassVar[AdapterCapabilities | None] = None
 
-    def __init__(self, ommx_instance: Instance):
-        """Reduce the instance to supported capabilities. Subclasses must call super().__init__()."""
-        ommx_instance.reduce_capabilities(self.ADDITIONAL_CAPABILITIES)
+    @classmethod
+    def require_compatible(
+        cls, ommx_instance: Instance
+    ) -> AdapterCompatibilityReport:
+        """Check the complete native profile without mutating the input."""
+        ...
 
     @classmethod
     @abstractmethod
@@ -315,35 +318,62 @@ This abstract base class assumes the following two use cases:
 
 The `solve` class method may define additional adapter-specific keyword options in concrete adapters. The reserved `diagnostics` keyword is owned by `Run.log_solve`. When `Run.log_solve(..., store_diagnostics=True)` is used, adapters may record adapter-defined diagnostic reports into that sink; `None` means diagnostics are disabled.
 
-#### Constraint Capability Declaration
+#### Native Capability Declaration
 
-Each adapter must declare which constraint types it supports via the `ADDITIONAL_CAPABILITIES` class attribute. The base class automatically converts any constraint type **not** in that set into regular constraints when `super().__init__()` is called (Big-M for indicator / SOS1, linear equality for one-hot), and logs each conversion at `INFO` level. Available capabilities are:
+Each adapter must declare `CAPABILITIES` as one or more complete native
+{class}`~ommx.CapabilityProfile` values. A profile covers all direct translator
+input dimensions together: used variable kinds, objective degree, regular and
+special constraint support with degree limits where applicable, and
+optimization senses. Do not assume regular constraints are universally
+supported. Multiple profiles are alternatives, so separate model families do
+not accidentally combine into a capability the backend lacks.
 
-- `AdditionalCapability.Indicator`: Indicator constraints (`binvar = 1 → f(x) <= 0`)
-- `AdditionalCapability.OneHot`: Exactly one of a set of binary variables is 1
-- `AdditionalCapability.Sos1`: At most one of a set of variables is non-zero
+Before translation, call
+{meth}`~ommx.adapter.SolverAdapter.require_compatible`. It reports every
+portable mismatch and any adapter-specific precondition, and it does not
+mutate the input. The base class does not lower unsupported constraints. If an
+adapter exposes preparation, make that operation explicit, preserve its
+semantic effect, and recheck the resulting solver model.
 
-If the adapter does not override `ADDITIONAL_CAPABILITIES`, only regular constraints are kept and every special constraint type is converted automatically. Use {attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>` to inspect which special constraints an instance currently holds.
-
-```{important}
-Subclasses **must** call `super().__init__(ommx_instance)` in their `__init__` method to enable the automatic constraint conversion. The instance is mutated in place.
-```
+{class}`~ommx.SpecialConstraintKind` and
+{meth}`~ommx.Instance.lower_special_constraints` select explicit lowering
+operations; they are not adapter support declarations. `ommx.v2.Feature` is
+also separate: it protects forward-compatible deserialization and says nothing
+about whether a backend solver accepts the model.
 
 Using the functions prepared so far, you can implement it as follows:
 
 ```{code-cell} ipython3
 from ommx.adapter import DiagnosticsSink, SolverAdapter
-from ommx import AdditionalCapability
+from ommx import (
+    AdapterCapabilities,
+    CapabilityProfile,
+    DegreeLimit,
+    Equality,
+    Kind,
+    Sense,
+)
 
 class OMMXPySCIPOptAdapter(SolverAdapter):
-    # PySCIPOpt supports both standard and indicator constraints
-    ADDITIONAL_CAPABILITIES = {AdditionalCapability.Indicator}
+    # This tutorial translator handles exactly these complete model shapes.
+    CAPABILITIES = AdapterCapabilities([
+        CapabilityProfile(
+            name="tutorial-pyscipopt-quadratic",
+            variable_kinds={Kind.Binary, Kind.Integer, Kind.Continuous},
+            objective_degree=DegreeLimit.at_most(2),
+            regular_constraints={
+                Equality.EqualToZero: DegreeLimit.at_most(2),
+                Equality.LessThanOrEqualToZero: DegreeLimit.at_most(2),
+            },
+            senses={Sense.Minimize, Sense.Maximize},
+        )
+    ])
 
     def __init__(
         self,
         ommx_instance: Instance,
     ):
-        super().__init__(ommx_instance)  # Auto-convert unsupported capabilities
+        self.require_compatible(ommx_instance)
         self.instance = ommx_instance
         self.model = pyscipopt.Model()
         self.model.hideOutput()
@@ -519,9 +549,18 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
 
     # Retain the Instance because it is required to convert to SampleSet
     ommx_instance: Instance
+
+    CAPABILITIES = AdapterCapabilities([
+        CapabilityProfile(
+            name="tutorial-openjij-qubo",
+            variable_kinds={Kind.Binary},
+            objective_degree=DegreeLimit.at_most(2),
+            senses={Sense.Minimize},
+        )
+    ])
     
     def __init__(self, ommx_instance: Instance):
-        super().__init__(ommx_instance)  # Auto-convert unsupported capabilities
+        self.require_compatible(ommx_instance)
         self.ommx_instance = ommx_instance
 
     # Perform sampling
@@ -581,13 +620,12 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
 
 ### Sampling using our Adapter
 
-Let's sample from the following optimization problem using our Adapter:
+Let's sample from the following native QUBO input using our Adapter:
 
 $$
 \begin{aligned}
-\max & \quad x_0 + x_1 \\
-\text{s.t.} & \quad x_0 \cdot x_1 = 1 \\
-& \quad x_0, x_1 \in \{0, 1\}
+\min & \quad -x_0 - x_1 + 2 x_0 x_1 \\
+\text{s.t.} & \quad x_0, x_1 \in \{0, 1\}
 \end{aligned}
 $$
 
@@ -595,27 +633,35 @@ $$
 x = [DecisionVariable.binary(id, name="x", subscripts=[id]) for id in range(2)]
 instance = Instance.from_components(
     decision_variables=x,
-    objective=x[0] + x[1],
-    constraints={0: x[0] * x[1] == 1},
-    sense=Instance.MAXIMIZE,
+    objective=-x[0] - x[1] + 2 * x[0] * x[1],
+    constraints={},
+    sense=Instance.MINIMIZE,
 )
 
 sample_set = OMMXOpenJijSAAdapter.sample(instance)
 sample_set.summary
 ```
 
+This compact tutorial adapter deliberately accepts only direct QUBO input. A
+production adapter may expose explicit preparation for source models with
+Integer variables, constraints, or the opposite sense, but those transformations
+must not be declared as native capabilities. See [Sampling from QUBO with OMMX
+Adapter](../tutorial/tsp_sampling_with_openjij_adapter) for the full OpenJij
+workflow.
+
 ## Summary
 
 In this tutorial, we learned how to implement an OMMX Adapter by connecting to PySCIPOpt as a Solver Adapter and OpenJij as a Sampler Adapter. Here are the key points when implementing an OMMX Adapter:
 
 1. Implement an OMMX Adapter by inheriting the abstract base class `SolverAdapter` or `SamplerAdapter`.
-2. Declare supported constraint types via `ADDITIONAL_CAPABILITIES` and call `super().__init__()` to enable automatic capability checking.
+2. Declare the complete native translator shape via `CAPABILITIES`, then call `require_compatible()` before conversion without mutating the source model.
 3. The main steps of the implementation are as follows:
    - Convert `ommx.Instance` into a format that the backend solver can understand.
    - Run the backend solver to obtain a solution.
    - Convert the backend solver's output into `ommx.Solution` or `ommx.SampleSet`.
-4. Understand the characteristics and limitations of each backend solver and handle them appropriately.
-5. Pay attention to managing IDs and mapping variables to bridge the backend solver and OMMX.
+4. Keep explicit preparation and special-constraint lowering separate from native capability declarations, and recheck the prepared solver model.
+5. Understand the characteristics and limitations of each backend solver and handle them appropriately.
+6. Pay attention to managing IDs and mapping variables to bridge the backend solver and OMMX.
 
 If you want to connect your own backend solver to OMMX, refer to this tutorial for implementation. By implementing an OMMX Adapter following this tutorial, you can use optimization with various backend solvers through a common API.
 

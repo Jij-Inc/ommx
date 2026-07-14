@@ -22,7 +22,7 @@ ommx
    _items/ommx.DecisionVariable
    _items/ommx.AttachedDecisionVariable
    _items/ommx.Parameter
-   _items/ommx.AdditionalCapability
+   _items/ommx.SpecialConstraintKind
    _items/ommx.DegreeLimit
    _items/ommx.ConstraintRequirement
    _items/ommx.InstanceRequirements

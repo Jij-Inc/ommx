@@ -20,7 +20,6 @@ from typing import TypeAlias
 
 __all__ = [
     "AdapterCapabilities",
-    "AdditionalCapability",
     "AnonymousArtifactRef",
     "ArchiveDescriptor",
     "ArchiveManifest",
@@ -96,6 +95,7 @@ __all__ = [
     "Solution",
     "Solve",
     "Sos1Constraint",
+    "SpecialConstraintKind",
     "State",
     "ToFunction",
     "ToSamples",
@@ -3055,17 +3055,13 @@ class Instance:
         Dict of all removed SOS1 constraints in the instance keyed by their IDs.
         """
     @property
-    def required_capabilities(self) -> builtins.set[AdditionalCapability]:
+    def active_special_constraint_kinds(self) -> builtins.set[SpecialConstraintKind]:
         r"""
-        The non-standard constraint capabilities this instance currently uses.
+        The kinds of active special constraints this instance currently uses.
 
-        Returns the set of :class:`AdditionalCapability` values corresponding to
-        the active (non-removed) constraint collections the instance contains.
-        An empty set means the instance only uses regular constraints.
-
-        Callers can diff this against an adapter's
-        ``ADDITIONAL_CAPABILITIES`` to see what would be converted, or use
-        :meth:`reduce_capabilities` to perform the conversion.
+        Returns the set of :class:`SpecialConstraintKind` values corresponding
+        to non-empty active (non-removed) special constraint collections. An
+        empty set means the instance has no active special constraints.
         """
     @property
     def removed_constraints(self) -> builtins.dict[builtins.int, RemovedConstraint]:
@@ -3290,22 +3286,27 @@ class Instance:
         The result is recomputed on every call. Fixed, dependent, irrelevant,
         removed-constraint-only, and named-function-only variables are excluded.
         """
-    def reduce_capabilities(
-        self, supported: builtins.set[AdditionalCapability]
-    ) -> builtins.set[AdditionalCapability]:
+    def lower_special_constraints(
+        self, kinds_to_lower: builtins.set[SpecialConstraintKind]
+    ) -> builtins.set[SpecialConstraintKind]:
         r"""
-        Convert constraint types not in `supported` into regular constraints.
+        Lower selected active special constraint kinds into regular constraints.
 
-        For every capability in :attr:`required_capabilities` not in
-        ``supported``, the corresponding bulk conversion is invoked
+        For every kind in ``kinds_to_lower``, the corresponding bulk conversion
+        is invoked
         (:meth:`convert_all_indicators_to_constraints`,
         :meth:`convert_all_one_hots_to_constraints`, or
         :meth:`convert_all_sos1_to_constraints`). The instance is mutated in
-        place and :attr:`required_capabilities` becomes a subset of
-        ``supported`` on success.
+        place. Kinds omitted from ``kinds_to_lower`` remain active, and an empty
+        set is a no-op.
 
-        Returns the set of :class:`AdditionalCapability` values that were
-        actually converted. Empty when nothing needed conversion.
+        Returns the set of :class:`SpecialConstraintKind` values that were
+        requested and active, and therefore actually lowered. Empty when no
+        requested kind was active.
+
+        Kinds are processed in ``Indicator``, ``OneHot``, ``Sos1`` order. Each
+        individual family conversion is atomic, but the whole operation is not:
+        an error in a later family does not roll back families already lowered.
 
         Raises if any underlying Big-M conversion fails (e.g. a SOS1 variable
         with a non-finite bound).
@@ -5990,7 +5991,8 @@ class Provenance:
 
     When a special constraint (indicator / one-hot / SOS1) is converted into a
     regular {class}`~ommx.Constraint` — for example via
-    `Instance.convert_one_hot_to_constraint` or `Instance.reduce_capabilities` —
+    {meth}`~ommx.Instance.convert_one_hot_to_constraint` or
+    {meth}`~ommx.Instance.lower_special_constraints` —
     the generated constraint records a {class}`Provenance` entry naming the
     original special constraint. This lets callers trace a regular constraint
     back to the special constraint it was derived from.
@@ -7765,30 +7767,6 @@ class State:
     def __deepcopy__(self, _memo: typing.Any) -> State: ...
 
 @typing.final
-class AdditionalCapability(enum.Enum):
-    r"""
-    Constraint type capability flag for non-standard constraint types.
-
-    Standard constraints are always supported. This enum lists capabilities
-    that adapters must explicitly opt in to.
-
-    Use as a set: `{AdditionalCapability.Indicator}`
-    """
-
-    Indicator = ...
-    r"""
-    Indicator constraints: binvar = 1 → f(x) <= 0
-    """
-    OneHot = ...
-    r"""
-    One-hot constraints: exactly one of a set of binary variables must be 1
-    """
-    Sos1 = ...
-    r"""
-    SOS1 constraints: at most one of a set of variables can be non-zero
-    """
-
-@typing.final
 class DecisionVariableRole(enum.Enum):
     r"""
     Decision variable role in an instance.
@@ -7987,6 +7965,32 @@ class Sense(enum.Enum):
         """
     def __repr__(self) -> builtins.str: ...
     def __str__(self) -> builtins.str: ...
+
+@typing.final
+class SpecialConstraintKind(enum.Enum):
+    r"""
+    Kind of active special constraint in an instance.
+
+    Use these values with
+    {meth}`~ommx.Instance.active_special_constraint_kinds` to inspect an
+    instance and {meth}`~ommx.Instance.lower_special_constraints` to select
+    special constraint families for explicit lowering to regular constraints.
+    This is a transformation selector, not an adapter capability declaration
+    or an ``ommx.v2.Feature`` wire-format requirement.
+    """
+
+    Indicator = ...
+    r"""
+    Indicator constraints: binvar = 1 → f(x) <= 0
+    """
+    OneHot = ...
+    r"""
+    One-hot constraints: exactly one of a set of binary variables must be 1
+    """
+    Sos1 = ...
+    r"""
+    SOS1 constraints: at most one of a set of variables can be non-zero
+    """
 
 def gc(
     *,

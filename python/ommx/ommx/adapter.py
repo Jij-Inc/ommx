@@ -9,7 +9,6 @@ from typing import Any, ClassVar, Protocol, runtime_checkable
 from ommx._ommx_rust import DiagnosticCollector as DiagnosticCollector
 from ommx import (
     AdapterCapabilities,
-    AdditionalCapability,
     Instance,
     PortableCompatibilityReport,
     SampleSet,
@@ -125,36 +124,12 @@ class SolverAdapter(ABC):
     does not mutate the input instance and combines that portable comparison
     with the adapter's ``_check_preconditions`` hook.
 
-    ``ADDITIONAL_CAPABILITIES`` and the base constructor remain temporarily for
-    adapters that still use the legacy in-place special-constraint lowering path.
-    It is independent of ``CAPABILITIES`` and is not used as a fallback.
-
-    Legacy special-constraint flags:
-
-    - ``AdditionalCapability.Indicator``: binvar = 1 → f(x) <= 0
-    - ``AdditionalCapability.OneHot``: exactly one of a set of binary variables is 1
-    - ``AdditionalCapability.Sos1``: at most one of a set of variables is non-zero
-
-    Legacy subclasses must call ``super().__init__(ommx_instance)`` so that any
-    constraint types the adapter does not support are automatically converted
-    into regular constraints (Big-M for indicator / SOS1, linear equality for
-    one-hot). Conversions mutate ``ommx_instance`` in place and are emitted
-    at ``INFO`` level as ``tracing`` events from the Rust SDK; configure a
-    Python OpenTelemetry ``TracerProvider`` before the first call to observe
-    them via ``pyo3-tracing-opentelemetry``.
+    Any transformation needed before translation is an explicit,
+    adapter-owned preparation operation. The base adapter never mutates the
+    input instance.
     """
 
     CAPABILITIES: ClassVar[AdapterCapabilities | None] = None
-    ADDITIONAL_CAPABILITIES: ClassVar[frozenset[AdditionalCapability]] = frozenset()
-
-    def __init__(self, ommx_instance: Instance):
-        """Reduce the instance to the adapter's supported capabilities.
-
-        Subclasses must call ``super().__init__()``. Any constraint type not in
-        ``ADDITIONAL_CAPABILITIES`` is converted to regular constraints in place
-        on ``ommx_instance``.
-        """
-        ommx_instance.reduce_capabilities(set(self.ADDITIONAL_CAPABILITIES))
 
     @classmethod
     def check_compatibility(cls, ommx_instance: Instance) -> AdapterCompatibilityReport:

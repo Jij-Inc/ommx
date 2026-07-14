@@ -727,48 +727,52 @@ impl Instance {
         InstanceRequirements(self.inner.solver_requirements())
     }
 
-    /// The non-standard constraint capabilities this instance currently uses.
+    /// The kinds of active special constraints this instance currently uses.
     ///
-    /// Returns the set of :class:`AdditionalCapability` values corresponding to
-    /// the active (non-removed) constraint collections the instance contains.
-    /// An empty set means the instance only uses regular constraints.
-    ///
-    /// Callers can diff this against an adapter's
-    /// ``ADDITIONAL_CAPABILITIES`` to see what would be converted, or use
-    /// :meth:`reduce_capabilities` to perform the conversion.
+    /// Returns the set of :class:`SpecialConstraintKind` values corresponding
+    /// to non-empty active (non-removed) special constraint collections. An
+    /// empty set means the instance has no active special constraints.
     #[getter]
-    pub fn required_capabilities(&self) -> std::collections::HashSet<crate::AdditionalCapability> {
+    pub fn active_special_constraint_kinds(
+        &self,
+    ) -> std::collections::HashSet<crate::SpecialConstraintKind> {
         self.inner
-            .required_capabilities()
+            .active_special_constraint_kinds()
             .into_iter()
-            .map(|c| c.into())
+            .map(|kind| kind.into())
             .collect()
     }
 
-    /// Convert constraint types not in `supported` into regular constraints.
+    /// Lower selected active special constraint kinds into regular constraints.
     ///
-    /// For every capability in :attr:`required_capabilities` not in
-    /// ``supported``, the corresponding bulk conversion is invoked
+    /// For every kind in ``kinds_to_lower``, the corresponding bulk conversion
+    /// is invoked
     /// (:meth:`convert_all_indicators_to_constraints`,
     /// :meth:`convert_all_one_hots_to_constraints`, or
     /// :meth:`convert_all_sos1_to_constraints`). The instance is mutated in
-    /// place and :attr:`required_capabilities` becomes a subset of
-    /// ``supported`` on success.
+    /// place. Kinds omitted from ``kinds_to_lower`` remain active, and an empty
+    /// set is a no-op.
     ///
-    /// Returns the set of :class:`AdditionalCapability` values that were
-    /// actually converted. Empty when nothing needed conversion.
+    /// Returns the set of :class:`SpecialConstraintKind` values that were
+    /// requested and active, and therefore actually lowered. Empty when no
+    /// requested kind was active.
+    ///
+    /// Kinds are processed in ``Indicator``, ``OneHot``, ``Sos1`` order. Each
+    /// individual family conversion is atomic, but the whole operation is not:
+    /// an error in a later family does not roll back families already lowered.
     ///
     /// Raises if any underlying Big-M conversion fails (e.g. a SOS1 variable
     /// with a non-finite bound).
-    pub fn reduce_capabilities(
+    pub fn lower_special_constraints(
         &mut self,
         py: Python<'_>,
-        supported: std::collections::HashSet<crate::AdditionalCapability>,
-    ) -> anyhow::Result<std::collections::HashSet<crate::AdditionalCapability>> {
+        kinds_to_lower: std::collections::HashSet<crate::SpecialConstraintKind>,
+    ) -> anyhow::Result<std::collections::HashSet<crate::SpecialConstraintKind>> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let rust_supported: ommx::Capabilities = supported.into_iter().map(|c| c.into()).collect();
-        let converted = self.inner.reduce_capabilities(&rust_supported)?;
-        Ok(converted.into_iter().map(|c| c.into()).collect())
+        let rust_kinds_to_lower: ommx::SpecialConstraintKinds =
+            kinds_to_lower.into_iter().map(|kind| kind.into()).collect();
+        let lowered = self.inner.lower_special_constraints(&rust_kinds_to_lower)?;
+        Ok(lowered.into_iter().map(|kind| kind.into()).collect())
     }
 
     /// Dict of all removed constraints in the instance keyed by their IDs.

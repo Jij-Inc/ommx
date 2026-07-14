@@ -67,6 +67,15 @@ they do not imply acceptance through relaxation or finite-penalty conversion.
 `ommx.v2.Feature` and `required_features` remain separate wire-format
 forward-compatibility concepts and are not adapter support declarations.
 
+The legacy `AdditionalCapability`, `ADDITIONAL_CAPABILITIES`,
+`required_capabilities`, and `reduce_capabilities` APIs have been removed.
+{class}`~ommx.SpecialConstraintKind`,
+{attr}`~ommx.Instance.active_special_constraint_kinds`, and
+{meth}`~ommx.Instance.lower_special_constraints` now express explicit,
+direct-selection special-constraint lowering without presenting a
+transformation selector as adapter support. Adapters must recheck the lowered
+model against their native profile.
+
 ### 🆕 OpenJij native capability and explicit preparation ([#1087](https://github.com/Jij-Inc/ommx/pull/1087))
 
 {class}`~ommx_openjij_adapter.OMMXOpenJijSAAdapter` now declares its native
@@ -159,7 +168,7 @@ raises `ValueError` instead of propagating a Rust panic.
 
 ### ⚠ Legacy v1 `ConstraintHints` remain advisory ([#1058](https://github.com/Jij-Inc/ommx/pull/1058))
 
-When {meth}`Instance.from_v1_bytes <ommx.Instance.from_v1_bytes>` or {meth}`ParametricInstance.from_v1_bytes <ommx.ParametricInstance.from_v1_bytes>` reads a legacy v1 payload, it now ignores `ConstraintHints` and preserves the referenced regular constraints and their context. Even a structurally plausible hint is not automatically promoted to a first-class one-hot or SOS1 constraint, so unverified metadata cannot change the feasible set or required adapter capabilities. Imported instances can also be serialized back to v1 because no special constraint is introduced implicitly.
+When {meth}`Instance.from_v1_bytes <ommx.Instance.from_v1_bytes>` or {meth}`ParametricInstance.from_v1_bytes <ommx.ParametricInstance.from_v1_bytes>` reads a legacy v1 payload, it now ignores `ConstraintHints` and preserves the referenced regular constraints and their context. Even a structurally plausible hint is not automatically promoted to a first-class one-hot or SOS1 constraint, so unverified metadata cannot change the feasible set or active solver requirements. Imported instances can also be serialized back to v1 because no special constraint is introduced implicitly.
 
 Construct first-class special constraints from trusted modeling input rather than from a legacy hint alone. See the [Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md) for details.
 
@@ -933,13 +942,26 @@ For concrete usage, evaluation-result access, and the Indicator relax / restore 
 
 Accordingly, the legacy `ConstraintHints` / `OneHot` / `Sos1` classes, the `Instance.constraint_hints` property, and the PySCIPOpt Adapter's `use_sos1` flag are removed.
 
-### 🆕 Adapter Capability Model ([#790](https://github.com/Jij-Inc/ommx/pull/790), [#805](https://github.com/Jij-Inc/ommx/pull/805), [#810](https://github.com/Jij-Inc/ommx/pull/810), [#811](https://github.com/Jij-Inc/ommx/pull/811), [#814](https://github.com/Jij-Inc/ommx/pull/814))
+### 🆕 Legacy `ADDITIONAL_CAPABILITIES` lowering API (superseded) ([#790](https://github.com/Jij-Inc/ommx/pull/790), [#805](https://github.com/Jij-Inc/ommx/pull/805), [#810](https://github.com/Jij-Inc/ommx/pull/810), [#811](https://github.com/Jij-Inc/ommx/pull/811), [#814](https://github.com/Jij-Inc/ommx/pull/814))
 
-Alongside the special constraint types, adapters now declare their own supported capabilities via an `ADDITIONAL_CAPABILITIES` class attribute. When `super().__init__(instance)` is called, any undeclared special constraint is automatically converted to regular constraints (Big-M for Indicator / SOS1, linear equality for OneHot) before the instance reaches the solver.
+This subsection records the API introduced in 3.0.0 Alpha 2. That API was
+superseded before the current release: `AdditionalCapability`,
+`ADDITIONAL_CAPABILITIES`, and constructor-driven automatic lowering are not
+the current Adapter Capability model.
 
-**Existing OMMX Adapters must be updated for Python SDK 3.0.0 to call `super().__init__(instance)`.** Currently the PySCIPOpt Adapter declares support for Indicator and SOS1.
+At Alpha 2, adapters selected special-constraint families through an
+`ADDITIONAL_CAPABILITIES` class attribute. Calling `super().__init__(instance)`
+converted every unselected special constraint to regular constraints (Big-M
+for Indicator / SOS1, linear equality for OneHot) before the instance reached
+the solver. Existing adapters at that point had to add that constructor call.
 
-For details and the manual conversion APIs, see [Adapter Capability Model and Conversions](../user_guide/capability_model.md).
+Current adapters instead declare complete native translator profiles through
+`CAPABILITIES` and reject incompatible inputs without mutation. Explicit
+special-constraint lowering uses {class}`~ommx.SpecialConstraintKind` and
+{meth}`~ommx.Instance.lower_special_constraints`, followed by another native
+compatibility check. These transformation selectors are also unrelated to
+`ommx.v2.Feature`, which only governs serialization forward compatibility. See
+[Adapter Capability Model and Explicit Preparation](../user_guide/capability_model.md).
 
 ### 🔄 numpy scalar support ([#794](https://github.com/Jij-Inc/ommx/pull/794))
 
