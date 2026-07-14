@@ -33,18 +33,25 @@ $$
 The corresponding `ommx.Instance` is as follows.
 
 ```{code-cell} ipython3
-from ommx import Instance, DecisionVariable
+from ommx import Instance
 
-x = DecisionVariable.binary(1, name='x')
-y = DecisionVariable.binary(2, name='y')
-
-instance = Instance.from_components(
-    decision_variables=[x, y],
-    objective=x + y,
-    constraints={0: x * y == 0},
-    sense=Instance.MAXIMIZE
-)
+instance = Instance.maximize()
+x = instance.new_binary("x")
+y = instance.new_binary("y")
+instance.objective = x + y
+instance.add_constraint(x * y == 0, "exclusive")
 ```
+
+`Instance` assigns the numeric decision-variable and constraint IDs as the
+model is built. These IDs remain available through `x.id` and the handle
+returned by `add_constraint`. Use {meth}`~ommx.Instance.from_components` when
+you already have components with explicit IDs and want to assemble them in one
+operation.
+
+Both `new_binary` and `add_constraint` accept the complete modeling label:
+`name`, `subscripts`, `parameters`, and `description`. The last three fields
+are keyword-only. For `add_constraint`, omitted fields preserve labels already
+stored on the input constraint.
 
 Each of these components has a corresponding property. The objective function is converted into the form of {class}`~ommx.Function`, as explained in the previous section.
 
@@ -52,7 +59,9 @@ Each of these components has a corresponding property. The objective function is
 instance.objective
 ```
 
-`sense` is set to `Instance.MAXIMIZE` for maximization problems or `Instance.MINIMIZE` for minimization problems.
+Use {meth}`~ommx.Instance.maximize` for maximization problems and
+{meth}`~ommx.Instance.minimize` for minimization problems. The resulting
+`sense` is `Instance.MAXIMIZE` or `Instance.MINIMIZE`, respectively.
 
 ```{code-cell} ipython3
 instance.sense == Instance.MAXIMIZE

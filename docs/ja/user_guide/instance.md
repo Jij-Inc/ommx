@@ -33,18 +33,18 @@ $$
 これに対応する `ommx.Instance` は次のようになります。
 
 ```{code-cell} ipython3
-from ommx import Instance, DecisionVariable
+from ommx import Instance
 
-x = DecisionVariable.binary(1, name='x')
-y = DecisionVariable.binary(2, name='y')
-
-instance = Instance.from_components(
-    decision_variables=[x, y],
-    objective=x + y,
-    constraints={0: x * y == 0},
-    sense=Instance.MAXIMIZE
-)
+instance = Instance.maximize()
+x = instance.new_binary("x")
+y = instance.new_binary("y")
+instance.objective = x + y
+instance.add_constraint(x * y == 0, "exclusive")
 ```
+
+`Instance` はモデルの構築時に決定変数と制約条件の数値 ID を自動的に割り当てます。割り当てられた ID は `x.id` や `add_constraint` が返すハンドルから確認できます。明示的な ID を持つコンポーネントを一度に組み立てる場合は、引き続き {meth}`~ommx.Instance.from_components` を使用できます。
+
+`new_binary` と `add_constraint` は、`name`、`subscripts`、`parameters`、`description` からなる ModelingLabel 全体を受け取れます。後ろの 3 フィールドはキーワード専用です。`add_constraint` では、省略したフィールドについて入力 Constraint が持つ既存ラベルを保持します。
 
 これらのコンポーネントはそれぞれに対応するプロパティが用意されています。目的関数については前節で説明した {class}`~ommx.Function` の形に変換されます。
 
@@ -52,7 +52,7 @@ instance = Instance.from_components(
 instance.objective
 ```
 
-`sense` は最大化問題を表す `Instance.MAXIMIZE` または最小化問題を表す `Instance.MINIMIZE` が設定されます。
+最大化問題には {meth}`~ommx.Instance.maximize`、最小化問題には {meth}`~ommx.Instance.minimize` を使用します。作成された Instance の `sense` には、それぞれ `Instance.MAXIMIZE` または `Instance.MINIMIZE` が設定されます。
 
 ```{code-cell} ipython3
 instance.sense == Instance.MAXIMIZE
