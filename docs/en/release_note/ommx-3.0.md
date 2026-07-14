@@ -8,6 +8,37 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🆕 Adapter capability profiles and compatibility reports ([#1084](https://github.com/Jij-Inc/ommx/pull/1084))
+
+{meth}`~ommx.Instance.solver_requirements` now derives the complete active
+solver-facing shape of an instance, including used variable kinds, objective
+and constraint degrees, constraint relations and families, and optimization
+sense. {class}`~ommx.CapabilityProfile` and
+{class}`~ommx.AdapterCapabilities` describe coherent native translator
+profiles and return structured {class}`~ommx.PortableCompatibilityReport`
+values.
+
+```python
+from ommx import AdapterCapabilities, CapabilityProfile, DegreeLimit, Kind, Sense
+
+binary_linear = CapabilityProfile(
+    name="binary-linear",
+    variable_kinds={Kind.Binary},
+    objective_degree=DegreeLimit.at_most(1),
+    senses={Sense.Minimize},
+)
+capabilities = AdapterCapabilities([binary_linear])
+report = capabilities.check_compatibility(instance.solver_requirements())
+```
+
+{class}`~ommx.adapter.SolverAdapter` subclasses can declare `CAPABILITIES` and
+use `check_compatibility` or `require_compatible` to combine the portable
+comparison with adapter-specific preconditions without mutating the input
+instance. Profiles describe direct translator input after explicit preparation;
+they do not imply acceptance through relaxation or finite-penalty conversion.
+`ommx.v2.Feature` and `required_features` remain separate wire-format
+forward-compatibility concepts and are not adapter support declarations.
+
 ### 🆕 `VariableIDLike` inputs for structural constraints ([#1078](https://github.com/Jij-Inc/ommx/pull/1078))
 
 Structural-constraint construction now accepts `VariableIDLike`, defined as
