@@ -39,7 +39,7 @@ use super::super::super::RefUpdate;
 use super::super::LocalRegistry;
 use super::oci_dir::OciDirImport;
 use crate::artifact::{
-    media_types, remote_transport::RemoteTransport, ImageRef, RemoteArtifactError,
+    media_types, remote_transport::RemoteTransport, sha256_digest, ImageRef, RemoteArtifactError,
     OCI_IMAGE_MANIFEST_MEDIA_TYPE,
 };
 use anyhow::{Context, Result};
@@ -59,10 +59,12 @@ impl LocalRegistry {
     /// `RemoteTransport` straight into the registry, and a SQLite transaction
     /// publishes the ref descriptor. There is no on-disk OCI Image Layout
     /// intermediate.
-    pub fn pull_image(
-        &self,
-        image_name: &ImageRef,
-    ) -> std::result::Result<OciDirImport, RemoteArtifactError> {
+    ///
+    /// Remote access and remote-response validation failures retain a
+    /// [`RemoteArtifactError`] signal in the returned [`crate::Error`] chain.
+    /// Local Registry storage and index failures remain ordinary
+    /// [`crate::Error`] values and are not misclassified as remote failures.
+    pub fn pull_image(&self, image_name: &ImageRef) -> Result<OciDirImport> {
         RemotePull::new(self, image_name).run()
     }
 }
@@ -80,39 +82,40 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
         }
     }
 
-    fn run(&self) -> std::result::Result<OciDirImport, RemoteArtifactError> {
-        self.run_inner()
-            .map_err(|source| RemoteArtifactError::classify(self.image_name, source))
-    }
-
-    fn run_inner(&self) -> Result<OciDirImport> {
+    fn run(&self) -> Result<OciDirImport> {
         if let Some(cached) = self.cached_ref()? {
             return Ok(cached);
         }
 
-        let transport = RemoteTransport::new(self.image_name)?;
-        transport.auth_for(self.image_name, RegistryOperation::Pull)?;
+        let transport = self.remote_result(RemoteTransport::new(self.image_name))?;
+        self.remote_result(transport.auth_for(self.image_name, RegistryOperation::Pull))?;
 
         tracing::info!("Pulling {} into the v3 Local Registry", self.image_name);
-        let (manifest_bytes, manifest_digest) = transport.pull_manifest_raw(
+        let (manifest_bytes, manifest_digest) = self.remote_result(transport.pull_manifest_raw(
             self.image_name,
             &[
                 OCI_IMAGE_MANIFEST_MEDIA_TYPE,
                 "application/vnd.oci.image.index.v1+json",
             ],
+        ))?;
+        let manifest: ImageManifest = self.invalid_remote_result(
+            serde_json::from_slice(&manifest_bytes)
+                .context("Failed to parse OCI image manifest pulled from the remote registry"),
         )?;
-        let manifest: ImageManifest = serde_json::from_slice(&manifest_bytes)
-            .context("Failed to parse OCI image manifest pulled from the remote registry")?;
-        Self::ensure_ommx_image_manifest(&manifest)?;
+        self.invalid_remote_result(Self::ensure_ommx_image_manifest(&manifest))?;
 
-        let manifest_digest = Digest::from_str(&manifest_digest)
-            .with_context(|| format!("Invalid remote manifest digest: {manifest_digest}"))?;
-        let manifest_descriptor = DescriptorBuilder::default()
-            .media_type(MediaType::ImageManifest)
-            .digest(manifest_digest.clone())
-            .size(manifest_bytes.len() as u64)
-            .build()
-            .context("Failed to build remote manifest descriptor")?;
+        let manifest_digest = self.invalid_remote_result(
+            Digest::from_str(&manifest_digest)
+                .with_context(|| format!("Invalid remote manifest digest: {manifest_digest}")),
+        )?;
+        let manifest_descriptor = self.invalid_remote_result(
+            DescriptorBuilder::default()
+                .media_type(MediaType::ImageManifest)
+                .digest(manifest_digest.clone())
+                .size(manifest_bytes.len() as u64)
+                .build()
+                .context("Failed to build remote manifest descriptor"),
+        )?;
 
         self.pull_descriptor_blob(&transport, manifest.config())?;
 
@@ -146,6 +149,40 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
             image_name: self.image_name.clone(),
             ref_update,
         })
+    }
+
+    fn remote_result<T>(&self, result: Result<T>) -> Result<T> {
+        result
+            .map_err(|source| crate::error!(RemoteArtifactError::classify(self.image_name, source)))
+    }
+
+    fn invalid_remote_result<T>(&self, result: Result<T>) -> Result<T> {
+        result.map_err(|source| {
+            crate::error!(RemoteArtifactError::invalid_artifact(
+                self.image_name,
+                source,
+            ))
+        })
+    }
+
+    fn validate_remote_digest(
+        &self,
+        bytes: &[u8],
+        expected_digest: &Digest,
+        blob_kind: &str,
+    ) -> Result<()> {
+        let actual_digest = sha256_digest(bytes);
+        if actual_digest != expected_digest.as_ref() {
+            let source = crate::error!(
+                "{blob_kind} digest mismatch: registry declared {expected_digest}, \
+                 downloaded bytes have {actual_digest}"
+            );
+            return Err(crate::error!(RemoteArtifactError::invalid_artifact(
+                self.image_name,
+                source,
+            )));
+        }
+        Ok(())
     }
 
     fn cached_ref(&self) -> Result<Option<OciDirImport>> {
@@ -241,13 +278,23 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
         // transport's pull helper allocates from this value (not from the
         // registry-reported `Content-Length`) and aborts the chunk loop if
         // the registry serves more bytes than declared.
-        let bytes = transport.pull_blob_to_vec(self.image_name, &digest, descriptor.size())?;
-        anyhow::ensure!(
-            bytes.len() as u64 == descriptor.size(),
-            "Blob size mismatch for {digest}: descriptor={}, actual={}",
+        let bytes = self.remote_result(transport.pull_blob_to_vec(
+            self.image_name,
+            &digest,
             descriptor.size(),
-            bytes.len()
-        );
+        ))?;
+        if bytes.len() as u64 != descriptor.size() {
+            let source = crate::error!(
+                "Blob size mismatch for {digest}: descriptor={}, actual={}",
+                descriptor.size(),
+                bytes.len()
+            );
+            return Err(crate::error!(RemoteArtifactError::invalid_artifact(
+                self.image_name,
+                source,
+            )));
+        }
+        self.validate_remote_digest(&bytes, descriptor.digest(), "Blob")?;
         self.registry.store_blob(descriptor.clone(), &bytes)?;
         Ok(())
     }
@@ -264,12 +311,7 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
         manifest_bytes: &[u8],
         expected_digest: &Digest,
     ) -> Result<()> {
-        anyhow::ensure!(
-            descriptor.digest() == expected_digest,
-            "Manifest descriptor digest mismatch: descriptor={}, registry reported {}",
-            descriptor.digest(),
-            expected_digest
-        );
+        self.validate_remote_digest(manifest_bytes, expected_digest, "Manifest")?;
         self.registry
             .store_blob(descriptor.clone(), manifest_bytes)?;
         Ok(())
@@ -297,6 +339,29 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
                 self.image_name
             );
         }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn remote_digest_mismatch_is_an_invalid_artifact_signal() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let registry = LocalRegistry::open(dir.path())?;
+        let image_name = ImageRef::parse("registry.example/ommx/test:latest")?;
+        let pull = RemotePull::new(&registry, &image_name);
+        let expected_digest = Digest::from_str(&sha256_digest(b"expected"))?;
+
+        let error = pull
+            .validate_remote_digest(b"actual", &expected_digest, "Blob")
+            .expect_err("digest mismatch must fail");
+        assert!(matches!(
+            error.downcast_ref::<RemoteArtifactError>(),
+            Some(RemoteArtifactError::InvalidArtifact { .. })
+        ));
         Ok(())
     }
 }

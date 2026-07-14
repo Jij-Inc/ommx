@@ -10,9 +10,10 @@ Changes merged after the most recent release will be appended here as they land,
 
 ### 🆕 Typed remote Artifact lookup errors ([#1090](https://github.com/Jij-Inc/ommx/pull/1090))
 
-{meth}`~ommx.artifact.Artifact.load` now reports remote lookup failures through
-OMMX-owned exceptions instead of a generic `RuntimeError` containing the
-underlying OCI transport error. Catch
+{meth}`~ommx.artifact.Artifact.load` and
+{meth}`~ommx.experiment.Experiment.load` now report remote lookup failures
+through OMMX-owned exceptions instead of a generic `RuntimeError` containing
+the underlying OCI transport error. Catch
 {class}`~ommx.artifact.RemoteArtifactNotFoundError` to handle a missing exact
 ref without confusing it with authentication, authorization, registry
 transport, or invalid-Artifact failures. All remote lookup exceptions inherit
@@ -32,7 +33,8 @@ The sibling exception classes are
 {class}`~ommx.artifact.RemoteArtifactAuthorizationError`,
 {class}`~ommx.artifact.RemoteArtifactTransportError`, and
 {class}`~ommx.artifact.InvalidRemoteArtifactError`. Their messages retain the
-original registry and transport context.
+original registry and transport context. Both load entry points use the same
+PyO3 error-conversion boundary.
 
 ### 🆕 `VariableIDLike` inputs for structural constraints ([#1078](https://github.com/Jij-Inc/ommx/pull/1078))
 

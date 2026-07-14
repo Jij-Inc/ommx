@@ -2,7 +2,7 @@ use anyhow::{bail, Context, Result};
 use oci_spec::image::ImageManifest;
 use ommx::artifact::media_types;
 use pyo3::{
-    exceptions::{PyRuntimeError, PyRuntimeWarning},
+    exceptions::PyRuntimeWarning,
     prelude::*,
     types::{PyBytes, PyDict},
 };
@@ -12,92 +12,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use crate::{PyArchiveDescriptor, PyDescriptor};
-
-pyo3::create_exception!(
-    ommx._ommx_rust,
-    RemoteArtifactError,
-    PyRuntimeError,
-    "Base exception for failures while looking up a remote OMMX Artifact."
-);
-impl pyo3_stub_gen::PyStubType for RemoteArtifactError {
-    fn type_output() -> pyo3_stub_gen::TypeInfo {
-        pyo3_stub_gen::TypeInfo::locally_defined("RemoteArtifactError", "ommx._ommx_rust".into())
-    }
-}
-pyo3_stub_gen::impl_py_runtime_type!(RemoteArtifactError);
-pyo3_stub_gen::inventory::submit! {
-    pyo3_stub_gen::type_info::PyClassInfo {
-        pyclass_name: "RemoteArtifactError",
-        struct_id: std::any::TypeId::of::<RemoteArtifactError>,
-        getters: &[],
-        setters: &[],
-        module: Some("ommx._ommx_rust"),
-        doc: "Base exception for failures while looking up a remote OMMX Artifact.",
-        bases: &[|| <PyRuntimeError as pyo3_stub_gen::PyStubType>::type_output()],
-        has_eq: false,
-        has_ord: false,
-        has_hash: false,
-        has_str: false,
-        subclass: true,
-    }
-}
-pyo3_stub_gen::create_exception!(
-    ommx._ommx_rust,
-    RemoteArtifactNotFoundError,
-    RemoteArtifactError,
-    "The requested remote Artifact manifest does not exist."
-);
-pyo3_stub_gen::create_exception!(
-    ommx._ommx_rust,
-    RemoteArtifactAuthenticationError,
-    RemoteArtifactError,
-    "Authentication for the remote Artifact registry failed."
-);
-pyo3_stub_gen::create_exception!(
-    ommx._ommx_rust,
-    RemoteArtifactAuthorizationError,
-    RemoteArtifactError,
-    "The caller is not authorized to read the remote Artifact."
-);
-pyo3_stub_gen::create_exception!(
-    ommx._ommx_rust,
-    RemoteArtifactTransportError,
-    RemoteArtifactError,
-    "The remote Artifact registry could not be reached or failed."
-);
-pyo3_stub_gen::create_exception!(
-    ommx._ommx_rust,
-    InvalidRemoteArtifactError,
-    RemoteArtifactError,
-    "The remote response is not a valid OMMX Artifact."
-);
-
-fn remote_artifact_error_to_pyerr(error: anyhow::Error) -> PyErr {
-    let message = format!("{error:#}");
-    let Some(remote_error) = error.downcast_ref::<ommx::artifact::RemoteArtifactError>() else {
-        return PyRuntimeError::new_err(message);
-    };
-    match remote_error {
-        ommx::artifact::RemoteArtifactError::ManifestNotFound { .. } => {
-            RemoteArtifactNotFoundError::new_err(message)
-        }
-        ommx::artifact::RemoteArtifactError::Authentication { .. } => {
-            RemoteArtifactAuthenticationError::new_err(message)
-        }
-        ommx::artifact::RemoteArtifactError::Authorization { .. } => {
-            RemoteArtifactAuthorizationError::new_err(message)
-        }
-        ommx::artifact::RemoteArtifactError::Transport { .. } => {
-            RemoteArtifactTransportError::new_err(message)
-        }
-        ommx::artifact::RemoteArtifactError::InvalidArtifact { .. } => {
-            InvalidRemoteArtifactError::new_err(message)
-        }
-        ommx::artifact::RemoteArtifactError::Other { .. } => RemoteArtifactError::new_err(message),
-        _ => RemoteArtifactError::new_err(message),
-    }
-}
+use crate::{error::OmmxPyResult, PyArchiveDescriptor, PyDescriptor};
 
 /// A local-registry image reference and its cached OCI Manifest projection.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
@@ -349,13 +264,16 @@ impl PyArtifact {
     /// ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f
     ///
     /// ```
+    ///
+    /// Raises {class}`~ommx.artifact.RemoteArtifactNotFoundError` when the
+    /// exact remote reference does not exist. Other remote access failures
+    /// raise subclasses of {class}`~ommx.artifact.RemoteArtifactError`.
     #[cfg(feature = "remote-artifact")]
     #[staticmethod]
-    pub fn load(py: Python<'_>, image_name: &str) -> PyResult<Self> {
+    pub(crate) fn load(py: Python<'_>, image_name: &str) -> OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let image_name = ommx::artifact::ImageRef::parse(image_name)?;
-        let inner = ommx::artifact::LocalArtifactDyn::load(image_name)
-            .map_err(remote_artifact_error_to_pyerr)?;
+        let inner = ommx::artifact::LocalArtifactDyn::load(image_name)?;
         Ok(Self::new(inner))
     }
 

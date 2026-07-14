@@ -402,6 +402,10 @@ class Artifact:
         ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f
 
         ```
+
+        Raises {class}`~ommx.artifact.RemoteArtifactNotFoundError` when the
+        exact remote reference does not exist. Other remote access failures
+        raise subclasses of {class}`~ommx.artifact.RemoteArtifactError`.
         """
     def push(self) -> None:
         r"""
@@ -1928,6 +1932,10 @@ class Experiment:
         pull it from the remote registry, matching {meth}`Artifact.load`.
         The loaded artifact must contain an Experiment config. Use
         `Experiment(...)` to create a new unsealed experiment.
+
+        Raises {class}`~ommx.artifact.RemoteArtifactNotFoundError` when the
+        exact remote reference does not exist. Other remote access failures
+        raise subclasses of {class}`~ommx.artifact.RemoteArtifactError`.
         """
     @staticmethod
     def restore_from_checkpoint(image_name: builtins.str) -> Experiment:
@@ -5840,7 +5848,7 @@ class RemoteArtifactAuthorizationError(RemoteArtifactError):
 
 class RemoteArtifactError(builtins.RuntimeError):
     r"""
-    Base exception for failures while looking up a remote OMMX Artifact.
+    Base exception for failures while accessing a remote OMMX Artifact.
     """
 
     ...

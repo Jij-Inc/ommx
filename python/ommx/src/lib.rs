@@ -12,6 +12,7 @@ mod decision_variable;
 mod descriptor;
 mod display;
 mod enums;
+mod error;
 mod evaluated_constraint;
 mod evaluated_decision_variable;
 mod evaluated_named_function;
@@ -145,27 +146,7 @@ pub fn get_default_atol() -> f64 {
 #[pymodule(gil_used = false)]
 fn _ommx_rust(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     // OMMX Artifact
-    m.add("RemoteArtifactError", py.get_type::<RemoteArtifactError>())?;
-    m.add(
-        "RemoteArtifactNotFoundError",
-        py.get_type::<RemoteArtifactNotFoundError>(),
-    )?;
-    m.add(
-        "RemoteArtifactAuthenticationError",
-        py.get_type::<RemoteArtifactAuthenticationError>(),
-    )?;
-    m.add(
-        "RemoteArtifactAuthorizationError",
-        py.get_type::<RemoteArtifactAuthorizationError>(),
-    )?;
-    m.add(
-        "RemoteArtifactTransportError",
-        py.get_type::<RemoteArtifactTransportError>(),
-    )?;
-    m.add(
-        "InvalidRemoteArtifactError",
-        py.get_type::<InvalidRemoteArtifactError>(),
-    )?;
+    error::register_exceptions(py, m)?;
     m.add_class::<PyArchiveDescriptor>()?;
     m.add_class::<PyDescriptor>()?;
     m.add_class::<PyArtifact>()?;

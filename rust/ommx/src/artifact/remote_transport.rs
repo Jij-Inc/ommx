@@ -39,10 +39,11 @@ use futures_util::TryStreamExt;
 use http::HeaderValue;
 use oci_client::{
     client::{ClientConfig, ClientProtocol},
+    errors::DigestError,
     secrets::RegistryAuth,
     Client, Reference, RegistryOperation,
 };
-use std::env;
+use std::{env, io};
 use tokio::runtime::{Builder as RuntimeBuilder, Runtime};
 
 /// Sync wrapper around [`oci_client::Client`].
@@ -50,6 +51,107 @@ pub(crate) struct RemoteTransport {
     runtime: Runtime,
     client: Client,
     auth: RegistryAuth,
+}
+
+/// Invalid explicit credentials supplied through the OMMX environment override.
+///
+/// This marker stays private to the remote implementation. The Artifact error
+/// boundary recognizes it by type and exposes it as
+/// `RemoteArtifactError::Authentication` without matching its message.
+#[derive(Debug, thiserror::Error)]
+#[error(
+    "OMMX_BASIC_AUTH_DOMAIN={domain} is set (matches target {domain}), \
+     but OMMX_BASIC_AUTH_USERNAME={username_state} and \
+     OMMX_BASIC_AUTH_PASSWORD={password_state}. Both variables are required \
+     for the env-var auth override; unset OMMX_BASIC_AUTH_DOMAIN to fall back \
+     to ~/.docker/config.json instead."
+)]
+pub(super) struct InvalidAuthenticationConfiguration {
+    domain: String,
+    username_state: &'static str,
+    password_state: &'static str,
+}
+
+/// A registry response that contradicts the pulled Artifact manifest.
+///
+/// Transport errors from `oci-client` remain separate. This marker lets the
+/// Artifact boundary classify response-shape violations as an invalid remote
+/// Artifact without relying on rendered error text.
+#[derive(Debug, thiserror::Error)]
+pub(super) enum InvalidRemoteResponse {
+    #[error(
+        "Registry reported Content-Length {content_length} for blob {digest}, \
+         but the manifest descriptor declares size {expected_size}"
+    )]
+    ContentLengthMismatch {
+        digest: String,
+        content_length: u64,
+        expected_size: u64,
+    },
+    #[error("Pulled blob size overflowed u64 for {digest}")]
+    SizeOverflow { digest: String },
+    #[error(
+        "Pulled blob bytes for {digest} exceed declared size {expected_size}; \
+         the registry served {actual_size} bytes"
+    )]
+    BlobTooLarge {
+        digest: String,
+        expected_size: u64,
+        actual_size: u64,
+    },
+    #[error("Blob digest verification failed for {digest}")]
+    BlobDigestMismatch {
+        digest: String,
+        #[source]
+        source: io::Error,
+    },
+}
+
+/// I/O failure while consuming a response body from the remote registry.
+///
+/// This marker is distinct from local registry I/O. The Artifact error
+/// boundary recognizes it by type and exposes it as
+/// `RemoteArtifactError::Transport`.
+#[derive(Debug, thiserror::Error)]
+#[error("Remote blob stream failed for {digest}")]
+pub(super) struct RemoteTransportFailure {
+    digest: String,
+    #[source]
+    source: io::Error,
+}
+
+fn blob_stream_error(digest: &str, source: io::Error) -> crate::Error {
+    let is_digest_error = error_contains_digest_error(&source);
+
+    if is_digest_error {
+        crate::error!(InvalidRemoteResponse::BlobDigestMismatch {
+            digest: digest.to_owned(),
+            source,
+        })
+    } else {
+        crate::error!(RemoteTransportFailure {
+            digest: digest.to_owned(),
+            source,
+        })
+    }
+}
+
+fn error_contains_digest_error(error: &(dyn std::error::Error + 'static)) -> bool {
+    if error.downcast_ref::<DigestError>().is_some() {
+        return true;
+    }
+    if let Some(io_error) = error.downcast_ref::<io::Error>() {
+        // `std::io::Error::source()` delegates to the wrapped error's source,
+        // so a `DigestError` passed to `io::Error::other` must be inspected via
+        // `get_ref()` to retain the wrapper itself in this type-based check.
+        if io_error
+            .get_ref()
+            .is_some_and(|inner| error_contains_digest_error(inner))
+        {
+            return true;
+        }
+    }
+    error.source().is_some_and(error_contains_digest_error)
 }
 
 impl RemoteTransport {
@@ -201,14 +303,12 @@ impl RemoteTransport {
     /// genuinely produces that many bytes (legitimate large blobs
     /// just pay an extra realloc).
     ///
-    /// `oci_client::Client::pull_blob_stream` skips the digest
-    /// verification that `pull_blob` does on the streaming reader; the
-    /// caller writes the bytes into the Local Registry,
-    /// which re-derives sha256 during `put_bytes` and then asserts the
-    /// result matches the
-    /// expected digest, so the registry-side digest is enforced exactly
-    /// once at the storage boundary rather than twice in network and
-    /// store layers.
+    /// `oci_client::Client::pull_blob_stream` verifies the digest while the
+    /// response body is consumed. Digest-verification I/O errors are marked as
+    /// invalid remote responses, while other stream I/O errors are marked as
+    /// transport failures. The caller independently verifies the collected
+    /// bytes before local persistence, and the Local Registry preserves its
+    /// own CAS invariant.
     pub(crate) fn pull_blob_to_vec(
         &self,
         image_name: &crate::artifact::ImageRef,
@@ -221,11 +321,15 @@ impl RemoteTransport {
             .block_on(async {
                 let resp = self.client.pull_blob_stream(reference, digest).await?;
                 if let Some(content_length) = resp.content_length {
-                    anyhow::ensure!(
-                        content_length == expected_size,
-                        "Registry reported Content-Length {content_length} for blob {digest}, \
-                         but the manifest descriptor declares size {expected_size}",
-                    );
+                    if content_length != expected_size {
+                        return Err(crate::error!(
+                            InvalidRemoteResponse::ContentLengthMismatch {
+                                digest: digest.to_owned(),
+                                content_length,
+                                expected_size,
+                            }
+                        ));
+                    }
                 }
                 // Cap preallocation. A malicious manifest claiming
                 // `size = u64::MAX` would otherwise be reduced to
@@ -237,15 +341,23 @@ impl RemoteTransport {
                 let mut buf = Vec::with_capacity(prealloc);
                 let mut accumulated: u64 = 0;
                 let mut stream = resp.stream;
-                while let Some(chunk) = stream.try_next().await? {
-                    accumulated = accumulated
-                        .checked_add(chunk.len() as u64)
-                        .context("Pulled blob size overflowed u64")?;
-                    anyhow::ensure!(
-                        accumulated <= expected_size,
-                        "Pulled blob bytes for {digest} exceed declared size {expected_size}; \
-                         the registry served more data than the manifest descriptor allows",
-                    );
+                while let Some(chunk) = stream
+                    .try_next()
+                    .await
+                    .map_err(|source| blob_stream_error(digest, source))?
+                {
+                    accumulated = accumulated.checked_add(chunk.len() as u64).ok_or_else(|| {
+                        crate::error!(InvalidRemoteResponse::SizeOverflow {
+                            digest: digest.to_owned(),
+                        })
+                    })?;
+                    if accumulated > expected_size {
+                        return Err(crate::error!(InvalidRemoteResponse::BlobTooLarge {
+                            digest: digest.to_owned(),
+                            expected_size,
+                            actual_size: accumulated,
+                        }));
+                    }
                     buf.extend_from_slice(&chunk);
                 }
                 Ok::<_, anyhow::Error>(buf)
@@ -376,13 +488,11 @@ fn classify_env_credentials(
         (u, p) => {
             let username_state = if u.is_some() { "set" } else { "unset" };
             let password_state = if p.is_some() { "set" } else { "unset" };
-            crate::bail!(
-                "OMMX_BASIC_AUTH_DOMAIN={domain} is set (matches target {registry_key}), \
-                 but OMMX_BASIC_AUTH_USERNAME={username_state} and \
-                 OMMX_BASIC_AUTH_PASSWORD={password_state}. Both variables are required \
-                 for the env-var auth override; unset OMMX_BASIC_AUTH_DOMAIN to fall back \
-                 to ~/.docker/config.json instead."
-            )
+            Err(crate::error!(InvalidAuthenticationConfiguration {
+                domain,
+                username_state,
+                password_state,
+            }))
         }
     }
 }
@@ -438,7 +548,7 @@ fn classify_docker_credential(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::artifact::ImageRef;
+    use crate::artifact::{ImageRef, RemoteArtifactError};
 
     fn assert_basic(auth: Option<RegistryAuth>, expected_user: &str, expected_pass: &str) {
         match auth {
@@ -603,6 +713,7 @@ mod tests {
     /// through to anonymous.
     #[test]
     fn env_creds_partial_override_errors() {
+        let image = ImageRef::parse("ghcr.io/jij-inc/ommx:latest").unwrap();
         for (u, p) in [(Some("alice"), None), (None, Some("secret")), (None, None)] {
             let err = classify_env_credentials("ghcr.io", env(Some("ghcr.io"), u, p))
                 .expect_err("partial OMMX_BASIC_AUTH_* should be an error");
@@ -610,6 +721,37 @@ mod tests {
             assert!(msg.contains("OMMX_BASIC_AUTH_DOMAIN=ghcr.io"));
             assert!(msg.contains("USERNAME="));
             assert!(msg.contains("PASSWORD="));
+            assert!(matches!(
+                RemoteArtifactError::classify(&image, err),
+                RemoteArtifactError::Authentication { .. }
+            ));
         }
+    }
+
+    #[test]
+    fn invalid_remote_response_is_classified_without_message_matching() {
+        let image = ImageRef::parse("ghcr.io/jij-inc/ommx:latest").unwrap();
+        let source = crate::error!(InvalidRemoteResponse::ContentLengthMismatch {
+            digest: "sha256:deadbeef".to_string(),
+            content_length: 2,
+            expected_size: 1,
+        });
+        assert!(matches!(
+            RemoteArtifactError::classify(&image, source),
+            RemoteArtifactError::InvalidArtifact { .. }
+        ));
+    }
+
+    #[test]
+    fn blob_stream_io_is_classified_as_transport() {
+        let image = ImageRef::parse("ghcr.io/jij-inc/ommx:latest").unwrap();
+        let source = blob_stream_error(
+            "sha256:deadbeef",
+            io::Error::new(io::ErrorKind::ConnectionReset, "connection reset"),
+        );
+        assert!(matches!(
+            RemoteArtifactError::classify(&image, source),
+            RemoteArtifactError::Transport { .. }
+        ));
     }
 }

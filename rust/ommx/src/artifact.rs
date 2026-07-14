@@ -170,10 +170,11 @@ pub fn ghcr(org: &str, repo: &str, name: &str, tag: &str) -> Result<ImageRef> {
 /// Credentials are resolved by `remote_transport::RemoteTransport`'s
 /// three-tier chain (env override → `~/.docker/config.json` →
 /// anonymous), matching every other network call on the SDK.
+///
+/// Registry, transport, and remote-response validation failures retain a
+/// [`RemoteArtifactError`] signal in the returned [`crate::Error`] chain.
 #[cfg(feature = "remote-artifact")]
-pub fn fetch_remote_manifest(
-    image_name: &ImageRef,
-) -> std::result::Result<ImageManifest, RemoteArtifactError> {
+pub fn fetch_remote_manifest(image_name: &ImageRef) -> Result<ImageManifest> {
     let fetch = || -> Result<ImageManifest> {
         let transport = RemoteTransport::new(image_name)?;
         transport.auth_for(image_name, RegistryOperation::Pull)?;
@@ -182,7 +183,7 @@ pub fn fetch_remote_manifest(
         serde_json::from_slice(&manifest_bytes)
             .context("Failed to parse OCI image manifest from the remote registry")
     };
-    fetch().map_err(|source| RemoteArtifactError::classify(image_name, source))
+    fetch().map_err(|source| crate::error!(RemoteArtifactError::classify(image_name, source)))
 }
 
 /// Get all images stored in the local registry.

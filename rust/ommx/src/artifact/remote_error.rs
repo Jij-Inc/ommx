@@ -1,13 +1,19 @@
 //! Stable OMMX-owned errors for remote Artifact lookup.
 
+use super::remote_transport::{
+    InvalidAuthenticationConfiguration, InvalidRemoteResponse, RemoteTransportFailure,
+};
 use super::ImageRef;
 use oci_client::errors::{OciDistributionError, OciErrorCode};
 
 /// Failure while looking up or importing an Artifact from a remote registry.
 ///
-/// This is the public Artifact boundary for remote lookup failures. The source
-/// chain retains registry and transport details, while callers can match the
-/// OMMX-owned variants without depending on the OCI transport implementation.
+/// Remote Artifact APIs keep returning [`crate::Result`]. This signal is
+/// stored in the returned [`crate::Error`] chain, so callers that need to
+/// recover from a specific remote failure can use
+/// [`crate::Error::downcast_ref`] without depending on the OCI transport
+/// implementation. The source chain retains the original registry and
+/// transport details.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum RemoteArtifactError {
@@ -69,21 +75,44 @@ pub enum RemoteArtifactError {
 
 impl RemoteArtifactError {
     pub(crate) fn classify(image: &ImageRef, source: crate::Error) -> Self {
-        let category = source
+        let category = if source.chain().any(|cause| {
+            cause
+                .downcast_ref::<InvalidAuthenticationConfiguration>()
+                .is_some()
+        }) {
+            Category::Authentication
+        } else if source
+            .chain()
+            .any(|cause| cause.downcast_ref::<InvalidRemoteResponse>().is_some())
+        {
+            Category::InvalidArtifact
+        } else if source
+            .chain()
+            .any(|cause| cause.downcast_ref::<RemoteTransportFailure>().is_some())
+        {
+            Category::Transport
+        } else if let Some(error) = source
             .chain()
             .find_map(|cause| cause.downcast_ref::<OciDistributionError>())
-            .map(classify_oci_error)
-            .unwrap_or_else(|| {
-                if source
-                    .chain()
-                    .any(|cause| cause.downcast_ref::<serde_json::Error>().is_some())
-                {
-                    Category::InvalidArtifact
-                } else {
-                    Category::Other
-                }
-            });
+        {
+            classify_oci_error(error)
+        } else if source
+            .chain()
+            .any(|cause| cause.downcast_ref::<serde_json::Error>().is_some())
+        {
+            Category::InvalidArtifact
+        } else {
+            Category::Other
+        };
 
+        Self::from_category(image, source, category)
+    }
+
+    pub(crate) fn invalid_artifact(image: &ImageRef, source: crate::Error) -> Self {
+        Self::from_category(image, source, Category::InvalidArtifact)
+    }
+
+    fn from_category(image: &ImageRef, source: crate::Error, category: Category) -> Self {
         let image = Box::new(image.clone());
         match category {
             Category::ManifestNotFound => Self::ManifestNotFound { image, source },

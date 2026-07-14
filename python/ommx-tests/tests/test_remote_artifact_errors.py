@@ -1,5 +1,6 @@
 import subprocess
 import sys
+from collections.abc import Callable
 
 import pytest
 
@@ -12,6 +13,7 @@ from ommx.artifact import (
     RemoteArtifactNotFoundError,
     RemoteArtifactTransportError,
 )
+from ommx.experiment import Experiment
 
 
 _MOCK_REGISTRY = r"""
@@ -57,7 +59,14 @@ while True:
 """
 
 
-def assert_load_raises(status: int, body: str, exception: type[Exception]):
+def assert_load_raises(
+    loader: Callable[[str], object],
+    status: int,
+    body: str,
+    exception: type[Exception],
+    *,
+    match: str | None = None,
+):
     server = subprocess.Popen(
         [sys.executable, "-c", _MOCK_REGISTRY, str(status), body],
         stdout=subprocess.PIPE,
@@ -66,8 +75,8 @@ def assert_load_raises(status: int, body: str, exception: type[Exception]):
     assert server.stdout is not None
     port = int(server.stdout.readline())
     try:
-        with pytest.raises(exception):
-            Artifact.load(f"127.0.0.1:{port}/test/artifact:tag")
+        with pytest.raises(exception, match=match):
+            loader(f"127.0.0.1:{port}/test/artifact:tag")
     finally:
         server.wait(timeout=10)
 
@@ -83,15 +92,27 @@ def test_remote_artifact_exception_hierarchy():
 
 def test_artifact_load_reports_manifest_not_found():
     assert_load_raises(
+        Artifact.load,
         404,
         '{"errors":[{"code":"MANIFEST_UNKNOWN","message":"manifest unknown"}]}',
         RemoteArtifactNotFoundError,
+        match="manifest unknown",
     )
 
 
 def test_artifact_load_keeps_authentication_distinct_from_absence():
     assert_load_raises(
+        Artifact.load,
         401,
         "authentication required",
         RemoteArtifactAuthenticationError,
+    )
+
+
+def test_experiment_load_uses_the_shared_remote_exception_mapping():
+    assert_load_raises(
+        Experiment.load,
+        404,
+        '{"errors":[{"code":"MANIFEST_UNKNOWN","message":"manifest unknown"}]}',
+        RemoteArtifactNotFoundError,
     )
