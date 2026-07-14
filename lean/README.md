@@ -72,7 +72,7 @@ noncanonical and unobservable.
 
 | Module | Responsibility |
 | --- | --- |
-| `OMMXProof.Core` | Versioned input AST and exact denotation |
+| `OMMXProof.Core` | Input AST and exact denotation |
 | `OMMXProof.Linear.Farkas` | Executable linear certificate checkers and soundness theorems |
 | `OMMXProof.Reduction` | Preservation relations and composition laws |
 | `OMMXProof.Special.OneHot` | Structural OneHot checker and replacement theorem |

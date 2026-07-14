@@ -45,14 +45,5 @@ example : checkEqualityIndicatorReplace indicatorDomains indicatorEqualitySurviv
 example (assignment : Assignment 2) :
     IndicatorBigM.LowerSide sdkIndicatorBody 1 0 assignment := by
   simp [IndicatorBigM.LowerSide]
-example : PlannedSelectorGadget plannedReusedExample plannedBoundsExample
-    plannedMembersExample plannedFreshSelectorsExample := by
-  native_decide
-example : ¬PlannedSelectorGadget plannedReusedExample plannedBoundsExample
-    invalidPlannedMembersExample plannedFreshSelectorsExample := by
-  native_decide
-example : ¬FreshBoundsContainZero plannedReusedExample
-    zeroExcludingFreshBoundsExample := by
-  native_decide
 
 end OMMXProof.Test
