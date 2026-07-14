@@ -67,7 +67,9 @@ they do not imply acceptance through relaxation or finite-penalty conversion.
 `ommx.v2.Feature` and `required_features` remain separate wire-format
 forward-compatibility concepts and are not adapter support declarations.
 
-The legacy `AdditionalCapability`, `ADDITIONAL_CAPABILITIES`,
+### ⚠ Legacy adapter capability vocabulary removed ([#1088](https://github.com/Jij-Inc/ommx/pull/1088))
+
+The legacy `AdditionalCapability`, `Capabilities`, `ADDITIONAL_CAPABILITIES`,
 `required_capabilities`, and `reduce_capabilities` APIs have been removed.
 {class}`~ommx.SpecialConstraintKind`,
 {attr}`~ommx.Instance.active_special_constraint_kinds`, and
