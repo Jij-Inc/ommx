@@ -33,7 +33,7 @@ def test_one_hot_constraint_from_components():
 def test_one_hot_constraint_rejects_variable_ids():
     """The modeler API accepts decision-variable objects, not raw IDs."""
     with pytest.raises(TypeError, match="DecisionVariable"):
-        OneHotConstraint(variables=[1, 2, 3])
+        OneHotConstraint(variables=[1, 2, 3])  # type: ignore[arg-type]
 
 
 def test_sos1_constraint_from_components():
@@ -59,7 +59,7 @@ def test_sos1_constraint_from_components():
 def test_sos1_constraint_rejects_variable_ids():
     """The modeler API accepts decision-variable objects, not raw IDs."""
     with pytest.raises(TypeError, match="DecisionVariable"):
-        Sos1Constraint(variables=[1, 2, 3])
+        Sos1Constraint(variables=[1, 2, 3])  # type: ignore[arg-type]
 
 
 def test_one_hot_variable_not_defined():
