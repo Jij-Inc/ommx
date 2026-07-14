@@ -11,7 +11,6 @@ namespace OMMXProof.Test
 
 open Fixtures
 
-example : formalContractVersion = 2 := rfl
 example : constantOnlyAffine2.eval (fun _ => 0) = 1 := by native_decide
 example : twiceUpperWitness.checkImplication twiceUpper = true := by native_decide
 example : twiceUpperWitness.checkImplication tooStrongTarget = false := by native_decide

@@ -47,11 +47,12 @@ system are outside this independent model.
 
 ## Formal contract
 
-`formalContractVersion = 2` identifies the complete independent semantics
-research contract:
-input AST, normalization, denotation, preservation relations, witness schemas,
-and executable checker acceptance rules. A semantic or schema change must bump
-this value. It is not a stable OMMX wire-format or public SDK version.
+The independent semantics research contract consists of the input AST,
+normalization, denotation, preservation relations, witness schemas, and
+executable checker acceptance rules. It is not a stable OMMX wire-format or
+public SDK version. A version identifier will be introduced with the canonical
+bridge when an external proof trace or decoder needs to select a compatible
+contract.
 
 `LinearConstraint.normalize lhs rhs sense` specifies the version-1 rule of
 moving the right-hand side to the left. Rows are then represented as
