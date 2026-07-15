@@ -13,7 +13,7 @@ impl<M: Monomial> Evaluate for PolynomialBase<M> {
                 out *= state
                     .entries
                     .get(&id.into_inner())
-                    .ok_or_else(|| crate::error!("Missing entry for id: {}", id.into_inner()))?;
+                    .ok_or(crate::EvaluationError::MissingStateEntry { id })?;
             }
             result += coefficient.into_inner() * out;
         }
@@ -37,10 +37,8 @@ impl<M: Monomial> Evaluate for PolynomialBase<M> {
                     continue;
                 }
                 Err(e) => {
-                    return Err(crate::error!(
-                        "Partial evaluation yields non-finite coefficient: {}",
-                        e
-                    ));
+                    return Err(crate::Error::new(e)
+                        .context("Partial evaluation yields non-finite coefficient"));
                 }
             }
         }
@@ -70,6 +68,33 @@ mod tests {
     use crate::random::*;
     use ::approx::{assert_abs_diff_eq, AbsDiffEq};
     use proptest::prelude::*;
+
+    #[test]
+    fn missing_state_entry_preserves_evaluation_signal() {
+        let linear = crate::Linear::from(crate::linear!(1));
+
+        let error = linear
+            .evaluate(&State::default(), crate::ATol::default())
+            .unwrap_err();
+
+        assert!(error.is::<crate::EvaluationError>());
+        assert!(matches!(
+            error.downcast_ref::<crate::EvaluationError>(),
+            Some(crate::EvaluationError::MissingStateEntry { id }) if *id == 1.into()
+        ));
+    }
+
+    #[test]
+    fn partial_evaluate_preserves_coefficient_error_source() {
+        let mut linear = (crate::coeff!(f64::MAX) * crate::linear!(1)).unwrap();
+        let state = State::from(std::collections::HashMap::from([(1, f64::MAX)]));
+
+        let error = linear
+            .partial_evaluate(&state, crate::ATol::default())
+            .unwrap_err();
+
+        assert!(error.is::<crate::CoefficientError>());
+    }
 
     fn polynomial_and_state<M: Monomial>() -> impl Strategy<Value = (PolynomialBase<M>, State)> {
         PolynomialBase::arbitrary().prop_flat_map(|p| {

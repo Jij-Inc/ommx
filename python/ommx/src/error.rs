@@ -117,6 +117,7 @@ impl_from_ommx_signal!(
     ommx::BoundError,
     ommx::CoefficientError,
     ommx::DecisionVariableError,
+    ommx::EvaluationError,
     ommx::artifact::ImageRefParseError,
     ommx::experiment::AttachmentNotFound,
     ommx::ParseError,
@@ -179,6 +180,7 @@ fn ommx_error_to_pyerr(error: ommx::Error) -> PyErr {
     if error.downcast_ref::<ommx::CoefficientError>().is_some()
         || error.downcast_ref::<ommx::AtolError>().is_some()
         || error.downcast_ref::<ommx::BoundError>().is_some()
+        || error.downcast_ref::<ommx::EvaluationError>().is_some()
     {
         return PyValueError::new_err(message);
     }

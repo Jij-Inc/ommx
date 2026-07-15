@@ -154,10 +154,7 @@ impl Constraint {
             Some(value) => ommx::ATol::new(value)?,
             None => ommx::ATol::default(),
         };
-        let evaluated = self
-            .0
-            .evaluate(&state.0, atol)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        let evaluated = self.0.evaluate(&state.0, atol)?;
         Ok(EvaluatedConstraint::from_parts(evaluated, self.1.clone()))
     }
 
@@ -181,9 +178,7 @@ impl Constraint {
             Some(value) => ommx::ATol::new(value)?,
             None => ommx::ATol::default(),
         };
-        self.0
-            .partial_evaluate(&state.0, atol)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        self.0.partial_evaluate(&state.0, atol)?;
         Ok(self.clone())
     }
 
@@ -583,9 +578,8 @@ impl AttachedConstraint {
         match &self.host {
             ConstraintHost::Instance(p) => {
                 let inst = p.borrow(py);
-                let evaluated = lookup_constraint(&inst.inner, self.id)?
-                    .evaluate(&state.0, atol)
-                    .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+                let evaluated =
+                    lookup_constraint(&inst.inner, self.id)?.evaluate(&state.0, atol)?;
                 let context = inst.inner.constraint_context().collect_for(self.id);
                 Ok(EvaluatedConstraint::from_parts(evaluated, context))
             }
