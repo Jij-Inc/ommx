@@ -79,18 +79,22 @@ pub fn unique_integers(min_id: u64, max_id: u64, size: usize) -> BoxedStrategy<V
         min_id <= max_id,
         "min_id({min_id}) must be less than or equal to max_id({max_id}) to ensure a valid range"
     );
-    if size as u64 == max_id - min_id + 1 {
+    let requested = size as u128;
+    let capacity = u128::from(max_id) - u128::from(min_id) + 1;
+    if requested == capacity {
         // Only one possible vector
         return Just((min_id..=max_id).collect::<Vec<u64>>()).boxed();
     }
     assert!(
-        size <= (max_id - min_id) as usize + 1,
+        requested <= capacity,
         "size({size}) must be less than or equal to max_id({max_id}) - min_id({min_id}) + 1 to ensure unique ids"
     );
     if size == 0 {
         return Just(Vec::new()).boxed();
     }
-    (min_id..=(max_id - size as u64 + 1))
+    let max_head = u64::try_from(u128::from(max_id) - (requested - 1))
+        .expect("validated sample size keeps the first ID in u64 range");
+    (min_id..=max_head)
         .prop_flat_map(move |head| {
             if size == 1 {
                 return Just(vec![head]).boxed();
@@ -251,16 +255,24 @@ pub fn arbitrary_state_within_bounds(bounds: &Bounds, max_abs: f64) -> BoxedStra
 /// For example, if `sum = 5` and `n = 3`, it can generate:
 /// `[1, 1, 3]`, `[1, 2, 2]`, `[2, 1, 2]`, `[3, 1, 1]`, `[2, 2, 1]`, etc.
 pub fn arbitrary_integer_partition(sum: usize, n: usize) -> BoxedStrategy<Vec<usize>> {
+    if n == 0 {
+        assert!(
+            sum == 0,
+            "sum({sum}) cannot be split into zero positive parts"
+        );
+        return Just(Vec::new()).boxed();
+    }
+    assert!(
+        sum >= n,
+        "sum({sum}) cannot be split into {n} positive parts"
+    );
     if n == 1 {
         return Just(vec![sum]).boxed();
     }
     if sum == n {
         return Just(vec![1; n]).boxed();
     }
-    if sum < n {
-        panic!("sum({sum}) cannot be split into {n} positive parts");
-    }
-    (1..(sum - n))
+    (1..=(sum - n + 1))
         .prop_flat_map(move |x| {
             arbitrary_integer_partition(sum - x, n - 1).prop_map(move |mut sub| {
                 sub.push(x);
@@ -305,6 +317,38 @@ mod tests {
             .expect("Failed to create a new tree");
         let ids = tree.current();
         println!("{ids:?}");
+    }
+
+    #[test]
+    fn test_unique_integers_empty_full_u64_range() {
+        let ids = sample_deterministic(unique_integers(0, u64::MAX, 0));
+        assert!(ids.is_empty());
+    }
+
+    #[test]
+    fn test_unique_integers_samples_full_u64_range() {
+        let ids = sample_deterministic(unique_integers(0, u64::MAX, 1));
+        assert_eq!(ids.len(), 1);
+    }
+
+    #[test]
+    fn test_arbitrary_integer_partition_empty() {
+        let partition = sample_deterministic(arbitrary_integer_partition(0, 0));
+        assert!(partition.is_empty());
+    }
+
+    #[test]
+    fn test_arbitrary_integer_partition_minimal_slack() {
+        let partition = sample_deterministic(arbitrary_integer_partition(3, 2));
+        assert_eq!(partition.len(), 2);
+        assert_eq!(partition.iter().sum::<usize>(), 3);
+        assert!(partition.iter().all(|&part| part > 0));
+    }
+
+    #[test]
+    #[should_panic(expected = "zero positive parts")]
+    fn test_arbitrary_integer_partition_rejects_nonzero_sum_without_parts() {
+        let _ = arbitrary_integer_partition(1, 0);
     }
 
     #[test]

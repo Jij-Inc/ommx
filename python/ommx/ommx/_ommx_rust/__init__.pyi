@@ -3698,6 +3698,10 @@ class Instance:
         **Returns:**
         Samples object
 
+        Raises {class}`ValueError` if the requested state groups cannot
+        partition the samples or the inclusive sample-ID range is too small.
+        `num_different_samples=0` is valid only when `num_samples=0`.
+
         # Examples
 
         Generate samples for a simple instance:
@@ -6853,7 +6857,11 @@ class Samples:
         """
     def append(self, sample_ids: typing.Sequence[builtins.int], state: ToState) -> None:
         r"""
-        Append a sample with the given sample IDs and state
+        Append a sample with the given sample IDs and state.
+
+        Raises {class}`ValueError` if an ID already exists in this collection
+        or occurs more than once in `sample_ids`. The collection is unchanged
+        when validation fails.
         """
 
 @typing.final
