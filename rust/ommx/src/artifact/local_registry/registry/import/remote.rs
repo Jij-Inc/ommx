@@ -39,7 +39,7 @@ use super::super::super::RefUpdate;
 use super::super::LocalRegistry;
 use super::oci_dir::OciDirImport;
 use crate::artifact::{
-    media_types, remote_error, remote_transport::RemoteTransport, sha256_digest, ImageRef,
+    media_types, remote_error, remote_transport::RemoteTransport, ImageRef,
     OCI_IMAGE_MANIFEST_MEDIA_TYPE,
 };
 use anyhow::{Context, Result};
@@ -88,17 +88,18 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
             return Ok(cached);
         }
 
-        let transport = self.remote_result(RemoteTransport::new(self.image_name))?;
-        self.remote_result(transport.auth_for(self.image_name, RegistryOperation::Pull))?;
+        let transport = self.remote_manifest_result(RemoteTransport::new(self.image_name))?;
+        self.remote_manifest_result(transport.auth_for(self.image_name, RegistryOperation::Pull))?;
 
         tracing::info!("Pulling {} into the v3 Local Registry", self.image_name);
-        let (manifest_bytes, manifest_digest) = self.remote_result(transport.pull_manifest_raw(
-            self.image_name,
-            &[
-                OCI_IMAGE_MANIFEST_MEDIA_TYPE,
-                "application/vnd.oci.image.index.v1+json",
-            ],
-        ))?;
+        let (manifest_bytes, manifest_digest) =
+            self.remote_manifest_result(transport.pull_manifest_raw(
+                self.image_name,
+                &[
+                    OCI_IMAGE_MANIFEST_MEDIA_TYPE,
+                    "application/vnd.oci.image.index.v1+json",
+                ],
+            ))?;
         let manifest: ImageManifest = self.invalid_remote_result(
             serde_json::from_slice(&manifest_bytes)
                 .context("Failed to parse OCI image manifest pulled from the remote registry"),
@@ -124,7 +125,7 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
             self.pull_descriptor_blob(&transport, layer)?;
         }
 
-        self.store_manifest_blob(&manifest_descriptor, &manifest_bytes, &manifest_digest)?;
+        self.store_manifest_blob(&manifest_descriptor, &manifest_bytes)?;
 
         let experiment_record = self
             .registry
@@ -152,34 +153,20 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
         })
     }
 
-    fn remote_result<T>(&self, result: Result<T>) -> Result<T> {
-        result.map_err(|source| crate::error!(remote_error::classify(self.image_name, source)))
+    fn remote_manifest_result<T>(&self, result: Result<T>) -> Result<T> {
+        result.map_err(|source| {
+            crate::error!(remote_error::classify_manifest(self.image_name, source))
+        })
+    }
+
+    fn remote_blob_result<T>(&self, result: Result<T>) -> Result<T> {
+        result.map_err(|source| crate::error!(remote_error::classify_blob(self.image_name, source)))
     }
 
     fn invalid_remote_result<T>(&self, result: Result<T>) -> Result<T> {
         result.map_err(|source| {
             crate::error!(remote_error::invalid_artifact(self.image_name, source))
         })
-    }
-
-    fn validate_remote_digest(
-        &self,
-        bytes: &[u8],
-        expected_digest: &Digest,
-        blob_kind: &str,
-    ) -> Result<()> {
-        let actual_digest = sha256_digest(bytes);
-        if actual_digest != expected_digest.as_ref() {
-            let source = crate::error!(
-                "{blob_kind} digest mismatch: registry declared {expected_digest}, \
-                 downloaded bytes have {actual_digest}"
-            );
-            return Err(crate::error!(remote_error::invalid_artifact(
-                self.image_name,
-                source,
-            )));
-        }
-        Ok(())
     }
 
     fn cached_ref(&self) -> Result<Option<OciDirImport>> {
@@ -275,7 +262,7 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
         // transport's pull helper allocates from this value (not from the
         // registry-reported `Content-Length`) and aborts the chunk loop if
         // the registry serves more bytes than declared.
-        let bytes = self.remote_result(transport.pull_blob_to_vec(
+        let bytes = self.remote_blob_result(transport.pull_blob_to_vec(
             self.image_name,
             &digest,
             descriptor.size(),
@@ -291,24 +278,15 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
                 source,
             )));
         }
-        self.validate_remote_digest(&bytes, descriptor.digest(), "Blob")?;
+        // RemoteTransport verifies the downloaded bytes against the remote
+        // digest. LocalRegistry then hashes them once for its own CAS invariant.
         self.registry.store_blob(descriptor.clone(), &bytes)?;
         Ok(())
     }
 
-    /// Store the manifest bytes into the registry under their
-    /// registry-reported digest. The check that local sha256 matches the
-    /// registry-reported digest doubles as an integrity probe on the
-    /// manifest body: an upstream proxy that rewrote the manifest would
-    /// surface here instead of producing an artifact whose published ref
-    /// points at a manifest blob the registry does not actually serve.
-    fn store_manifest_blob(
-        &self,
-        descriptor: &Descriptor,
-        manifest_bytes: &[u8],
-        expected_digest: &Digest,
-    ) -> Result<()> {
-        self.validate_remote_digest(manifest_bytes, expected_digest, "Manifest")?;
+    /// Store transport-verified manifest bytes under their remote digest.
+    /// LocalRegistry hashes the bytes once for its own CAS invariant.
+    fn store_manifest_blob(&self, descriptor: &Descriptor, manifest_bytes: &[u8]) -> Result<()> {
         self.registry
             .store_blob(descriptor.clone(), manifest_bytes)?;
         Ok(())
@@ -336,30 +314,6 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
                 self.image_name
             );
         }
-        Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::artifact::RemoteArtifactError;
-
-    #[test]
-    fn remote_digest_mismatch_is_an_invalid_artifact_signal() -> Result<()> {
-        let dir = tempfile::tempdir()?;
-        let registry = LocalRegistry::open(dir.path())?;
-        let image_name = ImageRef::parse("registry.example/ommx/test:latest")?;
-        let pull = RemotePull::new(&registry, &image_name);
-        let expected_digest = Digest::from_str(&sha256_digest(b"expected"))?;
-
-        let error = pull
-            .validate_remote_digest(b"actual", &expected_digest, "Blob")
-            .expect_err("digest mismatch must fail");
-        assert!(matches!(
-            error.downcast_ref::<RemoteArtifactError>(),
-            Some(RemoteArtifactError::InvalidArtifact { .. })
-        ));
         Ok(())
     }
 }

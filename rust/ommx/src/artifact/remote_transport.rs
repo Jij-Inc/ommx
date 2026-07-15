@@ -721,7 +721,7 @@ mod tests {
             assert!(msg.contains("USERNAME="));
             assert!(msg.contains("PASSWORD="));
             assert!(matches!(
-                remote_error::classify(&image, err),
+                remote_error::classify_manifest(&image, err),
                 RemoteArtifactError::Authentication { .. }
             ));
         }
@@ -736,7 +736,7 @@ mod tests {
             expected_size: 1,
         });
         assert!(matches!(
-            remote_error::classify(&image, source),
+            remote_error::classify_manifest(&image, source),
             RemoteArtifactError::InvalidArtifact { .. }
         ));
     }
@@ -749,7 +749,7 @@ mod tests {
             io::Error::new(io::ErrorKind::ConnectionReset, "connection reset"),
         );
         assert!(matches!(
-            remote_error::classify(&image, source),
+            remote_error::classify_blob(&image, source),
             RemoteArtifactError::Transport { .. }
         ));
     }

@@ -183,7 +183,7 @@ pub fn fetch_remote_manifest(image_name: &ImageRef) -> Result<ImageManifest> {
         serde_json::from_slice(&manifest_bytes)
             .context("Failed to parse OCI image manifest from the remote registry")
     };
-    fetch().map_err(|source| crate::error!(remote_error::classify(image_name, source)))
+    fetch().map_err(|source| crate::error!(remote_error::classify_manifest(image_name, source)))
 }
 
 /// Get all images stored in the local registry.

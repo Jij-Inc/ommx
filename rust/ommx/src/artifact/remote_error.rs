@@ -73,8 +73,21 @@ pub enum RemoteArtifactError {
     },
 }
 
-/// Classify an SDK error at the private remote Artifact boundary.
-pub fn classify(image: &ImageRef, source: crate::Error) -> RemoteArtifactError {
+/// Classify an SDK error while looking up a remote manifest.
+pub fn classify_manifest(image: &ImageRef, source: crate::Error) -> RemoteArtifactError {
+    classify(image, source, RemoteOperation::ManifestLookup)
+}
+
+/// Classify an SDK error while fetching a blob referenced by a remote manifest.
+pub fn classify_blob(image: &ImageRef, source: crate::Error) -> RemoteArtifactError {
+    classify(image, source, RemoteOperation::BlobFetch)
+}
+
+fn classify(
+    image: &ImageRef,
+    source: crate::Error,
+    operation: RemoteOperation,
+) -> RemoteArtifactError {
     let category = if source.chain().any(|cause| {
         cause
             .downcast_ref::<InvalidAuthenticationConfiguration>()
@@ -95,7 +108,7 @@ pub fn classify(image: &ImageRef, source: crate::Error) -> RemoteArtifactError {
         .chain()
         .find_map(|cause| cause.downcast_ref::<OciDistributionError>())
     {
-        classify_oci_error(error)
+        classify_oci_error(error, operation)
     } else if source
         .chain()
         .any(|cause| cause.downcast_ref::<serde_json::Error>().is_some())
@@ -149,22 +162,30 @@ enum Category {
     Other,
 }
 
-fn classify_oci_error(error: &OciDistributionError) -> Category {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RemoteOperation {
+    ManifestLookup,
+    BlobFetch,
+}
+
+fn classify_oci_error(error: &OciDistributionError, operation: RemoteOperation) -> Category {
     match error {
-        OciDistributionError::ImageManifestNotFoundError(_) => Category::ManifestNotFound,
+        OciDistributionError::ImageManifestNotFoundError(_) => absence_category(operation),
         OciDistributionError::AuthenticationFailure(_)
         | OciDistributionError::ConfigConversionError(_)
         | OciDistributionError::RegistryTokenDecodeError(_)
         | OciDistributionError::UnauthorizedError { .. } => Category::Authentication,
         OciDistributionError::RegistryError { envelope, .. } => {
-            classify_registry_codes(envelope.errors.iter().map(|error| &error.code))
+            classify_registry_codes(envelope.errors.iter().map(|error| &error.code), operation)
         }
-        OciDistributionError::RequestError(_) | OciDistributionError::IoError(_) => {
-            Category::Transport
-        }
+        OciDistributionError::RequestError(error) => error
+            .status()
+            .map(|status| classify_http_status(status.as_u16(), operation))
+            .unwrap_or(Category::Transport),
+        OciDistributionError::IoError(_) => Category::Transport,
         OciDistributionError::ServerError { code: 401, .. } => Category::Authentication,
         OciDistributionError::ServerError { code: 403, .. } => Category::Authorization,
-        OciDistributionError::ServerError { code: 404, .. } => Category::ManifestNotFound,
+        OciDistributionError::ServerError { code: 404, .. } => absence_category(operation),
         OciDistributionError::ServerError { code, .. } if *code >= 500 => Category::Transport,
         OciDistributionError::DigestError(_)
         | OciDistributionError::HeaderValueError(_)
@@ -188,7 +209,26 @@ fn classify_oci_error(error: &OciDistributionError) -> Category {
     }
 }
 
-fn classify_registry_codes<'a>(codes: impl Iterator<Item = &'a OciErrorCode>) -> Category {
+fn classify_http_status(status: u16, operation: RemoteOperation) -> Category {
+    match status {
+        401 => Category::Authentication,
+        403 => Category::Authorization,
+        404 => absence_category(operation),
+        _ => Category::Transport,
+    }
+}
+
+fn absence_category(operation: RemoteOperation) -> Category {
+    match operation {
+        RemoteOperation::ManifestLookup => Category::ManifestNotFound,
+        RemoteOperation::BlobFetch => Category::InvalidArtifact,
+    }
+}
+
+fn classify_registry_codes<'a>(
+    codes: impl Iterator<Item = &'a OciErrorCode>,
+    operation: RemoteOperation,
+) -> Category {
     let codes: Vec<_> = codes.collect();
     if codes
         .iter()
@@ -210,12 +250,13 @@ fn classify_registry_codes<'a>(codes: impl Iterator<Item = &'a OciErrorCode>) ->
             )
         })
     {
-        return Category::ManifestNotFound;
+        return absence_category(operation);
     }
     if codes.iter().any(|code| {
         matches!(
             code,
-            OciErrorCode::DigestInvalid
+            OciErrorCode::BlobUnknown
+                | OciErrorCode::DigestInvalid
                 | OciErrorCode::ManifestBlobUnknown
                 | OciErrorCode::ManifestInvalid
                 | OciErrorCode::ManifestUnverified
@@ -253,26 +294,53 @@ mod tests {
     #[test]
     fn classifies_manifest_absence_without_string_matching() {
         assert_eq!(
-            classify_oci_error(&registry_error([OciErrorCode::ManifestUnknown])),
+            classify_oci_error(
+                &registry_error([OciErrorCode::ManifestUnknown]),
+                RemoteOperation::ManifestLookup,
+            ),
             Category::ManifestNotFound
         );
         assert_eq!(
-            classify_oci_error(&registry_error([OciErrorCode::NameUnknown])),
+            classify_oci_error(
+                &registry_error([OciErrorCode::NameUnknown]),
+                RemoteOperation::ManifestLookup,
+            ),
             Category::ManifestNotFound
+        );
+    }
+
+    #[test]
+    fn classifies_missing_referenced_blob_as_invalid_artifact() {
+        assert_eq!(
+            classify_oci_error(
+                &registry_error([OciErrorCode::NotFound]),
+                RemoteOperation::BlobFetch,
+            ),
+            Category::InvalidArtifact
+        );
+        assert_eq!(
+            classify_oci_error(
+                &registry_error([OciErrorCode::BlobUnknown]),
+                RemoteOperation::BlobFetch,
+            ),
+            Category::InvalidArtifact
         );
     }
 
     #[test]
     fn authentication_and_authorization_take_priority_over_absence() {
         assert_eq!(
-            classify_oci_error(&registry_error([
-                OciErrorCode::ManifestUnknown,
-                OciErrorCode::Unauthorized,
-            ])),
+            classify_oci_error(
+                &registry_error([OciErrorCode::ManifestUnknown, OciErrorCode::Unauthorized,]),
+                RemoteOperation::BlobFetch,
+            ),
             Category::Authentication
         );
         assert_eq!(
-            classify_oci_error(&registry_error([OciErrorCode::Denied])),
+            classify_oci_error(
+                &registry_error([OciErrorCode::Denied]),
+                RemoteOperation::BlobFetch,
+            ),
             Category::Authorization
         );
     }
@@ -280,11 +348,14 @@ mod tests {
     #[test]
     fn classifies_registry_server_failure_as_transport() {
         assert_eq!(
-            classify_oci_error(&OciDistributionError::ServerError {
-                code: 503,
-                url: "https://registry.example/v2/".to_string(),
-                message: "unavailable".to_string(),
-            }),
+            classify_oci_error(
+                &OciDistributionError::ServerError {
+                    code: 503,
+                    url: "https://registry.example/v2/".to_string(),
+                    message: "unavailable".to_string(),
+                },
+                RemoteOperation::ManifestLookup,
+            ),
             Category::Transport
         );
     }

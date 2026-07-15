@@ -60,9 +60,20 @@ impl MockRegistry {
     }
 
     fn serving_corrupt_config_blob() -> Self {
-        const EXPECTED_BLOB: &[u8] = b"expected";
         const CORRUPT_BLOB: &[u8] = b"corrupt!";
-        assert_eq!(EXPECTED_BLOB.len(), CORRUPT_BLOB.len());
+        Self::serving_config_blob(200, "OK", CORRUPT_BLOB)
+    }
+
+    fn serving_missing_config_blob() -> Self {
+        Self::serving_config_blob(404, "Not Found", b"missing")
+    }
+
+    fn serving_config_blob(
+        status: u16,
+        reason: &'static str,
+        response_blob: &'static [u8],
+    ) -> Self {
+        const EXPECTED_BLOB: &[u8] = b"expected";
 
         let config_digest =
             Digest::from_str(&sha256_digest(EXPECTED_BLOB)).expect("parse config digest");
@@ -114,10 +125,10 @@ impl MockRegistry {
                             path if path == blob_path => {
                                 write_bytes_response(
                                     &mut stream,
-                                    200,
-                                    "OK",
+                                    status,
+                                    reason,
                                     "application/octet-stream",
-                                    CORRUPT_BLOB,
+                                    response_blob,
                                 );
                                 return;
                             }
@@ -127,7 +138,7 @@ impl MockRegistry {
                     Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                         assert!(
                             Instant::now() < deadline,
-                            "timed out waiting for corrupt blob request"
+                            "timed out waiting for config blob request"
                         );
                         thread::sleep(Duration::from_millis(10));
                     }
@@ -257,5 +268,23 @@ fn pull_image_classifies_corrupt_blob_stream_as_invalid_artifact() {
             .and_then(|source| source.downcast_ref::<DigestError>())
             .is_some()
     }));
+    registry.join();
+}
+
+#[test]
+fn pull_image_classifies_missing_referenced_blob_as_invalid_artifact() {
+    let registry = MockRegistry::serving_missing_config_blob();
+    let root = tempfile::tempdir().expect("temporary Local Registry");
+    let local = LocalRegistry::open(root.path()).expect("open Local Registry");
+    let error = local
+        .pull_image(&registry.image)
+        .expect_err("missing referenced blob must invalidate the remote artifact");
+    assert!(
+        matches!(
+            remote_artifact_error(&error),
+            RemoteArtifactError::InvalidArtifact { .. }
+        ),
+        "unexpected remote error category: {error:#?}"
+    );
     registry.join();
 }
