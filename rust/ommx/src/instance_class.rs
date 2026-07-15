@@ -1,15 +1,16 @@
-//! Instance classes for adapter boundaries.
+//! Instance classes for adapter inputs.
 //!
-//! An [`InstanceClass`] is a set of [`crate::Instance`] values. Adapters use
-//! one instance class to describe, in OMMX-defined structural terms, the
-//! instances they can translate directly. An [`InstanceClassClause`] is one
-//! conjunctive clause in the representation; an instance class is the finite
-//! union of its clauses.
+//! An adapter input is an [`crate::Instance`] value passed to an adapter. An
+//! [`InstanceClass`] is a set of [`crate::Instance`] values defined by OMMX
+//! structural conditions. An adapter input is classified by membership in
+//! that set. An [`InstanceClassClause`] is one conjunctive clause in the
+//! representation; an instance class is the finite union of its clauses.
 //!
-//! Membership does not include preparation or lowering, adapter-specific
-//! preconditions, wire-format `ommx.v2.Feature` handling, or successful
-//! backend execution. Preparation produces another instance whose membership
-//! must be checked again.
+//! Membership describes only the input's OMMX-defined structure. It does not
+//! include preparation or lowering, adapter-specific preconditions,
+//! wire-format `ommx.v2.Feature` handling, or whether the adapter returns an
+//! output successfully. If preparation produces another instance to use as
+//! input, membership must be checked on that value.
 
 mod instance_facts;
 
