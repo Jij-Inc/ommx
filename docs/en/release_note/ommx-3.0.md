@@ -8,6 +8,18 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🛠 Model errors use the shared Python boundary ([#1105](https://github.com/Jij-Inc/ommx/pull/1105))
+
+Decision-variable insertion and substitution, `Function.content_factor`, and
+OneHot/SOS1 construction now propagate Rust SDK failures with direct `?`
+through the shared PyO3 error boundary. Duplicate decision-variable and
+parameter IDs, invalid substitutions, unrepresentable content factors, and
+empty structural constraints consistently raise `ValueError`.
+
+The Rust SDK signal owner remains visible through the boundary: duplicate rows
+retain `DecisionVariableError`, while cross-table parameter collisions and
+model-specific validation use their corresponding downcastable signals.
+
 ### 🛠 Evaluation errors use the shared Python boundary ([#1104](https://github.com/Jij-Inc/ommx/pull/1104))
 
 Function, polynomial, constraint, named-function, and `Instance` evaluation
