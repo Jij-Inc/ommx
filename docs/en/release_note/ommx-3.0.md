@@ -8,6 +8,21 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🛠 Artifact and Local Registry errors use consistent exceptions ([#1100](https://github.com/Jij-Inc/ommx/pull/1100))
+
+Artifact and Local Registry bindings now propagate Rust SDK failures through
+the shared PyO3 error boundary instead of converting them separately at each
+entry point. Invalid image references, malformed digests, unsupported or
+incorrect layer media types, missing typed layers, and malformed OMMX payloads
+raise `ValueError`. Looking up an absent layer by a valid digest raises
+`KeyError`.
+
+Registry, archive, and content-addressed storage failures continue to fall back
+to `RuntimeError`, including an invalid image ref already persisted in the
+Local Registry. Exceptions raised by Python-backed JSON, NumPy, and pandas
+codecs pass through unchanged. Descriptor objects remain metadata-only; blob
+reads are owned by the Artifact that supplies the registry context.
+
 ### 🛠 Parse failures consistently raise `ValueError` ([#1099](https://github.com/Jij-Inc/ommx/pull/1099))
 
 Malformed protobuf payloads passed to the Python byte-decoding entry points now
