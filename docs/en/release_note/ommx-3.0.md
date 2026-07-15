@@ -8,6 +8,20 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🛠 Structured SDK errors use consistent Python exceptions ([#1097](https://github.com/Jij-Inc/ommx/pull/1097))
+
+Python bindings now route stable `DecisionVariableError`, `SolutionError`, and
+`SampleSetError` signals through the shared PyO3 error boundary. Missing names,
+sample IDs, and constraint IDs in structured result access raise `KeyError`.
+Invalid decision-variable bounds, duplicate subscripts, parameterized
+constraint extraction, and requests for a best sample when none is feasible
+raise `ValueError` consistently.
+
+An unknown integer kind passed to the `DecisionVariable` constructor is also
+reported as Python-owned `ValueError` validation. Python-native failures remain
+intact, and unclassified Rust SDK errors continue to fall back to
+`RuntimeError`.
+
 ### 🛠 Numeric SDK errors consistently raise `ValueError` ([#1096](https://github.com/Jij-Inc/ommx/pull/1096))
 
 Python bindings now translate direct Rust SDK `CoefficientError`, `AtolError`,
