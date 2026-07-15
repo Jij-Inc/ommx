@@ -115,44 +115,46 @@ pyo3_stub_gen::inventory::submit! {
 impl Linear {
     #[new]
     #[pyo3(signature = (terms, constant=0.0))]
-    pub fn new(terms: BTreeMap<u64, f64>, constant: f64) -> Result<Self> {
-        let mut linear = ommx::Linear::default();
-        for (id, coefficient) in terms {
-            // Drop coefficients below f64::EPSILON to preserve the previous
-            // v1::Linear::new numerical-noise filter.
-            if coefficient.abs() <= f64::EPSILON {
-                continue;
+    pub fn new(terms: BTreeMap<u64, f64>, constant: f64) -> PyResult<Self> {
+        crate::error::map_ommx_error(|| {
+            let mut linear = ommx::Linear::default();
+            for (id, coefficient) in terms {
+                // Drop coefficients below f64::EPSILON to preserve the previous
+                // v1::Linear::new numerical-noise filter.
+                if coefficient.abs() <= f64::EPSILON {
+                    continue;
+                }
+                let coeff = Coefficient::try_from(coefficient)?;
+                linear.add_term(LinearMonomial::Variable(id.into()), coeff)?;
             }
-            let coeff = Coefficient::try_from(coefficient)?;
-            linear.add_term(LinearMonomial::Variable(id.into()), coeff)?;
-        }
-        match Coefficient::try_from(constant) {
-            Ok(coeff) => linear.add_term(LinearMonomial::Constant, coeff)?,
-            Err(CoefficientError::Zero) => {}
-            Err(e) => return Err(e.into()),
-        }
-        Ok(Self(linear))
+            match Coefficient::try_from(constant) {
+                Ok(coeff) => linear.add_term(LinearMonomial::Constant, coeff)?,
+                Err(CoefficientError::Zero) => {}
+                Err(e) => return Err(e.into()),
+            }
+            Ok(Self(linear))
+        })
     }
 
     #[staticmethod]
-    pub fn single_term(id: u64, coefficient: f64) -> Result<Self> {
-        match TryInto::<Coefficient>::try_into(coefficient) {
+    pub fn single_term(id: u64, coefficient: f64) -> PyResult<Self> {
+        crate::error::map_ommx_error(|| match TryInto::<Coefficient>::try_into(coefficient) {
             Ok(coeff) => Ok(Self(ommx::Linear::single_term(id.into(), coeff))),
             Err(CoefficientError::Zero) => Ok(Self(ommx::Linear::default())),
             Err(e) => Err(e.into()),
-        }
+        })
     }
 
     #[staticmethod]
-    pub fn constant(constant: f64) -> Result<Self> {
-        match TryInto::<Coefficient>::try_into(constant) {
+    pub fn constant(constant: f64) -> PyResult<Self> {
+        crate::error::map_ommx_error(|| match TryInto::<Coefficient>::try_into(constant) {
             Ok(coeff) => Ok(Self(ommx::Linear::single_term(
                 LinearMonomial::Constant,
                 coeff,
             ))),
             Err(CoefficientError::Zero) => Ok(Self(ommx::Linear::default())), // Return zero if constant is zero
             Err(e) => Err(e.into()), // Return error for NaN or infinite
-        }
+        })
     }
 
     #[staticmethod]
@@ -190,8 +192,8 @@ impl Linear {
     }
 
     #[pyo3(signature = (other, atol=ATol::default().into_inner()))]
-    pub fn almost_equal(&self, other: &Linear, atol: f64) -> Result<bool> {
-        Ok(self.0.abs_diff_eq(&other.0, ommx::ATol::new(atol)?))
+    pub fn almost_equal(&self, other: &Linear, atol: f64) -> PyResult<bool> {
+        crate::error::map_ommx_error(|| Ok(self.0.abs_diff_eq(&other.0, ommx::ATol::new(atol)?)))
     }
 
     pub fn __repr__(&self) -> String {
@@ -214,33 +216,30 @@ impl Linear {
                 .into_any()
                 .unbind(),
             crate::FunctionInput::Scalar(Some(c)) => {
-                Linear((&self.0 + c).map_err(crate::coefficient_error_to_pyerr)?)
+                Linear(crate::error::map_coefficient(&self.0 + c)?)
                     .into_pyobject(py)?
                     .into_any()
                     .unbind()
             }
-            crate::FunctionInput::Linear(l) => {
-                Linear((&self.0 + &l).map_err(crate::coefficient_error_to_pyerr)?)
-                    .into_pyobject(py)?
-                    .into_any()
-                    .unbind()
-            }
+            crate::FunctionInput::Linear(l) => Linear(crate::error::map_coefficient(&self.0 + &l)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
             crate::FunctionInput::Quadratic(q) => {
-                Quadratic((&q + &self.0).map_err(crate::coefficient_error_to_pyerr)?)
+                Quadratic(crate::error::map_coefficient(&q + &self.0)?)
                     .into_pyobject(py)?
                     .into_any()
                     .unbind()
             }
             crate::FunctionInput::Polynomial(p) => {
-                Polynomial((&p + &self.0).map_err(crate::coefficient_error_to_pyerr)?)
+                Polynomial(crate::error::map_coefficient(&p + &self.0)?)
                     .into_pyobject(py)?
                     .into_any()
                     .unbind()
             }
-            crate::FunctionInput::Function(f) => Function(
-                (ommx::Function::from(self.0.clone()) + f)
-                    .map_err(crate::coefficient_error_to_pyerr)?,
-            )
+            crate::FunctionInput::Function(f) => Function(crate::error::map_coefficient(
+                ommx::Function::from(self.0.clone()) + f,
+            )?)
             .into_pyobject(py)?
             .into_any()
             .unbind(),
@@ -263,33 +262,30 @@ impl Linear {
                 .into_any()
                 .unbind(),
             crate::FunctionInput::Scalar(Some(c)) => {
-                Linear((&self.0 - c).map_err(crate::coefficient_error_to_pyerr)?)
+                Linear(crate::error::map_coefficient(&self.0 - c)?)
                     .into_pyobject(py)?
                     .into_any()
                     .unbind()
             }
-            crate::FunctionInput::Linear(l) => {
-                Linear((&self.0 - &l).map_err(crate::coefficient_error_to_pyerr)?)
-                    .into_pyobject(py)?
-                    .into_any()
-                    .unbind()
-            }
+            crate::FunctionInput::Linear(l) => Linear(crate::error::map_coefficient(&self.0 - &l)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
             crate::FunctionInput::Quadratic(q) => {
-                Quadratic((-q + &self.0).map_err(crate::coefficient_error_to_pyerr)?)
+                Quadratic(crate::error::map_coefficient(-q + &self.0)?)
                     .into_pyobject(py)?
                     .into_any()
                     .unbind()
             }
             crate::FunctionInput::Polynomial(p) => {
-                Polynomial((-p + &self.0).map_err(crate::coefficient_error_to_pyerr)?)
+                Polynomial(crate::error::map_coefficient(-p + &self.0)?)
                     .into_pyobject(py)?
                     .into_any()
                     .unbind()
             }
-            crate::FunctionInput::Function(f) => Function(
-                (ommx::Function::from(self.0.clone()) - f)
-                    .map_err(crate::coefficient_error_to_pyerr)?,
-            )
+            crate::FunctionInput::Function(f) => Function(crate::error::map_coefficient(
+                ommx::Function::from(self.0.clone()) - f,
+            )?)
             .into_pyobject(py)?
             .into_any()
             .unbind(),
@@ -314,33 +310,32 @@ impl Linear {
                 .into_any()
                 .unbind(),
             crate::FunctionInput::Scalar(Some(c)) => {
-                Linear((self.0.clone() * c).map_err(crate::coefficient_error_to_pyerr)?)
+                Linear(crate::error::map_coefficient(self.0.clone() * c)?)
                     .into_pyobject(py)?
                     .into_any()
                     .unbind()
             }
             crate::FunctionInput::Linear(l) => {
-                Quadratic((&self.0 * &l).map_err(crate::coefficient_error_to_pyerr)?)
+                Quadratic(crate::error::map_coefficient(&self.0 * &l)?)
                     .into_pyobject(py)?
                     .into_any()
                     .unbind()
             }
             crate::FunctionInput::Quadratic(q) => {
-                Polynomial((&self.0 * &q).map_err(crate::coefficient_error_to_pyerr)?)
+                Polynomial(crate::error::map_coefficient(&self.0 * &q)?)
                     .into_pyobject(py)?
                     .into_any()
                     .unbind()
             }
             crate::FunctionInput::Polynomial(p) => {
-                Polynomial((&self.0 * &p).map_err(crate::coefficient_error_to_pyerr)?)
+                Polynomial(crate::error::map_coefficient(&self.0 * &p)?)
                     .into_pyobject(py)?
                     .into_any()
                     .unbind()
             }
-            crate::FunctionInput::Function(f) => Function(
-                (ommx::Function::from(self.0.clone()) * f)
-                    .map_err(crate::coefficient_error_to_pyerr)?,
-            )
+            crate::FunctionInput::Function(f) => Function(crate::error::map_coefficient(
+                ommx::Function::from(self.0.clone()) * f,
+            )?)
             .into_pyobject(py)?
             .into_any()
             .unbind(),
@@ -353,8 +348,8 @@ impl Linear {
         self.py_mul(py, lhs) // Multiplication is commutative
     }
 
-    pub fn add_assign(&mut self, rhs: &Linear) -> Result<()> {
-        self.0.try_add_assign_in_place(&rhs.0)?;
+    pub fn add_assign(&mut self, rhs: &Linear) -> PyResult<()> {
+        crate::error::map_coefficient(self.0.try_add_assign_in_place(&rhs.0))?;
         Ok(())
     }
 
@@ -363,23 +358,25 @@ impl Linear {
     /// PyO3's in-place operator wrapper returns the mutated self object to Python
     /// when this Rust callback succeeds.
     #[gen_stub(skip)]
-    pub fn __iadd__(&mut self, rhs: &Linear) -> Result<()> {
+    pub fn __iadd__(&mut self, rhs: &Linear) -> PyResult<()> {
         self.add_assign(rhs)
     }
 
-    pub fn add_scalar(&self, scalar: f64) -> Result<Linear> {
+    pub fn add_scalar(&self, scalar: f64) -> PyResult<Linear> {
         match TryInto::<Coefficient>::try_into(scalar) {
-            Ok(coeff) => Ok(Linear((&self.0 + coeff)?)),
+            Ok(coeff) => Ok(Linear(crate::error::map_coefficient(&self.0 + coeff)?)),
             Err(CoefficientError::Zero) => Ok(Linear(self.0.clone())), // Return unchanged if scalar is zero
-            Err(e) => Err(e.into()), // Return error for NaN or infinite
+            Err(e) => crate::error::map_coefficient(Err(e)), // Return error for NaN or infinite
         }
     }
 
-    pub fn mul_scalar(&self, scalar: f64) -> Result<Linear> {
+    pub fn mul_scalar(&self, scalar: f64) -> PyResult<Linear> {
         match TryInto::<Coefficient>::try_into(scalar) {
-            Ok(coeff) => Ok(Linear((self.0.clone() * coeff)?)),
+            Ok(coeff) => Ok(Linear(crate::error::map_coefficient(
+                self.0.clone() * coeff,
+            )?)),
             Err(CoefficientError::Zero) => Ok(Linear(ommx::Linear::default())), // Return zero if scalar is zero
-            Err(e) => Err(e.into()), // Return error for NaN or infinite
+            Err(e) => crate::error::map_coefficient(Err(e)), // Return error for NaN or infinite
         }
     }
 
@@ -392,8 +389,7 @@ impl Linear {
     pub fn evaluate(&self, state: State, atol: Option<f64>) -> PyResult<f64> {
         use ommx::Evaluate;
         let atol = match atol {
-            Some(value) => ommx::ATol::new(value)
-                .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?,
+            Some(value) => crate::error::map_ommx_error(|| ommx::ATol::new(value))?,
             None => ommx::ATol::default(),
         };
         self.0
@@ -404,8 +400,7 @@ impl Linear {
     #[pyo3(signature = (state, *, atol=None))]
     pub fn partial_evaluate(&self, state: State, atol: Option<f64>) -> PyResult<Linear> {
         let atol = match atol {
-            Some(value) => ommx::ATol::new(value)
-                .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?,
+            Some(value) => crate::error::map_ommx_error(|| ommx::ATol::new(value))?,
             None => ommx::ATol::default(),
         };
         let mut inner = self.0.clone();

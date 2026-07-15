@@ -1219,8 +1219,7 @@ impl Instance {
     pub fn evaluate(&self, py: Python<'_>, state: State, atol: Option<f64>) -> PyResult<Solution> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let atol = match atol {
-            Some(value) => ommx::ATol::new(value)
-                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?,
+            Some(value) => crate::error::map_ommx_error(|| ommx::ATol::new(value))?,
             None => ommx::ATol::default(),
         };
         let solution = self
@@ -1244,8 +1243,7 @@ impl Instance {
     ) -> PyResult<State> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let atol = match atol {
-            Some(value) => ommx::ATol::new(value)
-                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?,
+            Some(value) => crate::error::map_ommx_error(|| ommx::ATol::new(value))?,
             None => ommx::ATol::default(),
         };
         let state = self
@@ -1307,8 +1305,7 @@ impl Instance {
     ) -> PyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let atol = match atol {
-            Some(value) => ommx::ATol::new(value)
-                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?,
+            Some(value) => crate::error::map_ommx_error(|| ommx::ATol::new(value))?,
             None => ommx::ATol::default(),
         };
         let mut new_inner = self.inner.clone();
@@ -1324,15 +1321,14 @@ impl Instance {
         py: Python<'_>,
         samples: Samples,
         atol: Option<f64>,
-    ) -> Result<SampleSet> {
+    ) -> PyResult<SampleSet> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let atol = match atol {
-            Some(value) => ommx::ATol::new(value)?,
+            Some(value) => crate::error::map_ommx_error(|| ommx::ATol::new(value))?,
             None => ommx::ATol::default(),
         };
-        Ok(SampleSet {
-            inner: self.inner.evaluate_samples(&samples.0, atol)?,
-        })
+        let inner = crate::error::map_ommx_error(|| self.inner.evaluate_samples(&samples.0, atol))?;
+        Ok(SampleSet { inner })
     }
 
     /// Generate a random state for this instance using the provided random number generator.
@@ -1861,10 +1857,10 @@ impl Instance {
         py: Python<'_>,
         decision_variable_ids: BTreeSet<u64>,
         atol: Option<f64>,
-    ) -> Result<()> {
+    ) -> PyResult<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let atol = match atol {
-            Some(value) => ommx::ATol::new(value)?,
+            Some(value) => crate::error::map_ommx_error(|| ommx::ATol::new(value))?,
             None => ommx::ATol::default(),
         };
         let ids: BTreeSet<u64> = if decision_variable_ids.is_empty() {
@@ -1882,8 +1878,10 @@ impl Instance {
         } else {
             decision_variable_ids
         };
-        self.inner
-            .log_encode(ids.iter().map(|id| (*id).into()), atol)?;
+        crate::error::map_ommx_error(|| {
+            self.inner
+                .log_encode(ids.iter().map(|id| (*id).into()), atol)
+        })?;
         Ok(())
     }
 
@@ -1930,10 +1928,10 @@ impl Instance {
         decision_variable_ids: BTreeSet<u64>,
         max_range: usize,
         atol: Option<f64>,
-    ) -> Result<()> {
+    ) -> PyResult<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let atol = match atol {
-            Some(value) => ommx::ATol::new(value)?,
+            Some(value) => crate::error::map_ommx_error(|| ommx::ATol::new(value))?,
             None => ommx::ATol::default(),
         };
         let ids: BTreeSet<u64> = if decision_variable_ids.is_empty() {
@@ -1950,8 +1948,10 @@ impl Instance {
         } else {
             decision_variable_ids
         };
-        self.inner
-            .unary_encode(ids.iter().map(|id| (*id).into()), max_range, atol)?;
+        crate::error::map_ommx_error(|| {
+            self.inner
+                .unary_encode(ids.iter().map(|id| (*id).into()), max_range, atol)
+        })?;
         Ok(())
     }
 
@@ -2756,8 +2756,8 @@ impl Instance {
     /// >>> changed
     /// False
     /// ```
-    pub fn reduce_binary_power(&mut self) -> Result<bool> {
-        Ok(self.inner.reduce_binary_power()?)
+    pub fn reduce_binary_power(&mut self) -> PyResult<bool> {
+        crate::error::map_ommx_error(|| Ok(self.inner.reduce_binary_power()?))
     }
 
     #[staticmethod]

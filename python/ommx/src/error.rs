@@ -4,7 +4,10 @@
 //! route those operations through [`map_ommx_error`], which converts the
 //! erased `ommx::Error` with this module's single type-based classifier.
 
-use pyo3::{exceptions::PyRuntimeError, prelude::*};
+use pyo3::{
+    exceptions::{PyRuntimeError, PyValueError},
+    prelude::*,
+};
 
 pyo3::create_exception!(
     ommx._ommx_rust,
@@ -87,6 +90,13 @@ impl From<OmmxPyError> for PyErr {
 fn ommx_error_to_pyerr(error: ommx::Error) -> PyErr {
     let message = format!("{error:#}");
 
+    if error.downcast_ref::<ommx::CoefficientError>().is_some()
+        || error.downcast_ref::<ommx::AtolError>().is_some()
+        || error.downcast_ref::<ommx::BoundError>().is_some()
+    {
+        return PyValueError::new_err(message);
+    }
+
     #[cfg(feature = "remote-artifact")]
     if let Some(remote_error) = error.downcast_ref::<ommx::artifact::RemoteArtifactError>() {
         return match remote_error {
@@ -123,6 +133,11 @@ fn ommx_error_to_pyerr(error: ommx::Error) -> PyErr {
 pub fn map_ommx_error<T>(operation: impl FnOnce() -> ommx::Result<T>) -> PyResult<T> {
     let result: OmmxPyResult<T> = operation().map_err(Into::into);
     result.map_err(Into::into)
+}
+
+/// Route a typed coefficient result through the shared SDK error classifier.
+pub fn map_coefficient<T>(result: std::result::Result<T, ommx::CoefficientError>) -> PyResult<T> {
+    map_ommx_error(|| Ok(result?))
 }
 
 /// Register the Python exception hierarchy owned by this conversion boundary.

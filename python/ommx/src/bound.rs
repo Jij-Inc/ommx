@@ -1,4 +1,3 @@
-use anyhow::Result;
 use pyo3::prelude::*;
 
 /// Variable bound wrapper for Python
@@ -14,8 +13,8 @@ pub struct VariableBound(pub ommx::Bound);
 #[pymethods]
 impl VariableBound {
     #[new]
-    pub fn new(lower: f64, upper: f64) -> Result<Self> {
-        Ok(Self(ommx::Bound::new(lower, upper)?))
+    pub fn new(lower: f64, upper: f64) -> PyResult<Self> {
+        crate::error::map_ommx_error(|| Ok(Self(ommx::Bound::new(lower, upper)?)))
     }
 
     #[staticmethod]
@@ -56,8 +55,11 @@ impl VariableBound {
         self.0.is_finite()
     }
 
-    pub fn contains(&self, value: f64, atol: f64) -> Result<bool> {
-        Ok(self.0.contains(value, ommx::ATol::new(atol)?))
+    pub fn contains(&self, value: f64, atol: f64) -> PyResult<bool> {
+        crate::error::map_ommx_error(|| {
+            let atol = ommx::ATol::new(atol)?;
+            Ok(self.0.contains(value, atol))
+        })
     }
 
     pub fn nearest_to_zero(&self) -> f64 {

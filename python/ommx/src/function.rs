@@ -278,12 +278,12 @@ impl Function {
     }
 
     #[staticmethod]
-    pub fn from_scalar(scalar: f64) -> Result<Self> {
-        match TryInto::<Coefficient>::try_into(scalar) {
+    pub fn from_scalar(scalar: f64) -> PyResult<Self> {
+        crate::error::map_ommx_error(|| match TryInto::<Coefficient>::try_into(scalar) {
             Ok(coeff) => Ok(Self(ommx::Function::from(coeff))),
             Err(CoefficientError::Zero) => Ok(Self(ommx::Function::default())), // Return zero function if scalar is zero
             Err(e) => Err(e.into()), // Return error for NaN or infinite
-        }
+        })
     }
 
     #[staticmethod]
@@ -340,8 +340,8 @@ impl Function {
     }
 
     #[pyo3(signature = (other, atol=ATol::default().into_inner()))]
-    pub fn almost_equal(&self, other: &Function, atol: f64) -> bool {
-        self.0.abs_diff_eq(&other.0, ommx::ATol::new(atol).unwrap())
+    pub fn almost_equal(&self, other: &Function, atol: f64) -> PyResult<bool> {
+        crate::error::map_ommx_error(|| Ok(self.0.abs_diff_eq(&other.0, ommx::ATol::new(atol)?)))
     }
 
     pub fn __repr__(&self) -> String {
@@ -355,36 +355,26 @@ impl Function {
 
     /// Addition
     pub fn __add__(&self, rhs: Function) -> PyResult<Function> {
-        Ok(Function(
-            (&self.0 + &rhs.0).map_err(crate::coefficient_error_to_pyerr)?,
-        ))
+        Ok(Function(crate::error::map_coefficient(&self.0 + &rhs.0)?))
     }
 
     /// Reverse addition (lhs + self)
     pub fn __radd__(&self, lhs: Function) -> PyResult<Function> {
-        Ok(Function(
-            (&self.0 + &lhs.0).map_err(crate::coefficient_error_to_pyerr)?,
-        ))
+        Ok(Function(crate::error::map_coefficient(&self.0 + &lhs.0)?))
     }
 
     /// Subtraction
     pub fn __sub__(&self, rhs: Function) -> PyResult<Function> {
-        Ok(Function(
-            (&self.0 - &rhs.0).map_err(crate::coefficient_error_to_pyerr)?,
-        ))
+        Ok(Function(crate::error::map_coefficient(&self.0 - &rhs.0)?))
     }
 
     /// Reverse subtraction (lhs - self)
     pub fn __rsub__(&self, lhs: Function) -> PyResult<Function> {
-        Ok(Function(
-            (&lhs.0 - &self.0).map_err(crate::coefficient_error_to_pyerr)?,
-        ))
+        Ok(Function(crate::error::map_coefficient(&lhs.0 - &self.0)?))
     }
 
     pub fn add_assign(&mut self, rhs: &Function) -> PyResult<()> {
-        self.0
-            .try_add_assign_in_place(rhs.0.clone())
-            .map_err(crate::coefficient_error_to_pyerr)?;
+        crate::error::map_coefficient(self.0.try_add_assign_in_place(rhs.0.clone()))?;
         Ok(())
     }
 
@@ -399,72 +389,64 @@ impl Function {
 
     /// Multiplication
     pub fn __mul__(&self, rhs: Function) -> PyResult<Function> {
-        Ok(Function(
-            (&self.0 * &rhs.0).map_err(crate::coefficient_error_to_pyerr)?,
-        ))
+        Ok(Function(crate::error::map_coefficient(&self.0 * &rhs.0)?))
     }
 
     /// Reverse multiplication (lhs * self)
     pub fn __rmul__(&self, lhs: Function) -> PyResult<Function> {
-        Ok(Function(
-            (&self.0 * &lhs.0).map_err(crate::coefficient_error_to_pyerr)?,
-        ))
+        Ok(Function(crate::error::map_coefficient(&self.0 * &lhs.0)?))
     }
 
     pub fn add_scalar(&self, scalar: f64) -> PyResult<Function> {
         match TryInto::<Coefficient>::try_into(scalar) {
-            Ok(coeff) => Ok(Function(
-                (&self.0 + coeff).map_err(crate::coefficient_error_to_pyerr)?,
-            )),
+            Ok(coeff) => Ok(Function(crate::error::map_coefficient(&self.0 + coeff)?)),
             Err(CoefficientError::Zero) => Ok(Function(self.0.clone())), // Return unchanged if scalar is zero
-            Err(e) => Err(crate::coefficient_error_to_pyerr(e)), // Return error for NaN or infinite
+            Err(e) => crate::error::map_coefficient(Err(e)), // Return error for NaN or infinite
         }
     }
 
     pub fn add_linear(&self, linear: &Linear) -> PyResult<Function> {
-        Ok(Function(
-            (&self.0 + &linear.0).map_err(crate::coefficient_error_to_pyerr)?,
-        ))
+        Ok(Function(crate::error::map_coefficient(
+            &self.0 + &linear.0,
+        )?))
     }
 
     pub fn add_quadratic(&self, quadratic: &Quadratic) -> PyResult<Function> {
-        Ok(Function(
-            (&self.0 + &quadratic.0).map_err(crate::coefficient_error_to_pyerr)?,
-        ))
+        Ok(Function(crate::error::map_coefficient(
+            &self.0 + &quadratic.0,
+        )?))
     }
 
     pub fn add_polynomial(&self, polynomial: &Polynomial) -> PyResult<Function> {
-        Ok(Function(
-            (&self.0 + &polynomial.0).map_err(crate::coefficient_error_to_pyerr)?,
-        ))
+        Ok(Function(crate::error::map_coefficient(
+            &self.0 + &polynomial.0,
+        )?))
     }
 
     pub fn mul_scalar(&self, scalar: f64) -> PyResult<Function> {
         match TryInto::<Coefficient>::try_into(scalar) {
-            Ok(coeff) => Ok(Function(
-                (&self.0 * coeff).map_err(crate::coefficient_error_to_pyerr)?,
-            )),
+            Ok(coeff) => Ok(Function(crate::error::map_coefficient(&self.0 * coeff)?)),
             Err(CoefficientError::Zero) => Ok(Function(ommx::Function::default())), // Return zero if scalar is zero
-            Err(e) => Err(crate::coefficient_error_to_pyerr(e)), // Return error for NaN or infinite
+            Err(e) => crate::error::map_coefficient(Err(e)), // Return error for NaN or infinite
         }
     }
 
     pub fn mul_linear(&self, linear: &Linear) -> PyResult<Function> {
-        Ok(Function(
-            (&self.0 * &linear.0).map_err(crate::coefficient_error_to_pyerr)?,
-        ))
+        Ok(Function(crate::error::map_coefficient(
+            &self.0 * &linear.0,
+        )?))
     }
 
     pub fn mul_quadratic(&self, quadratic: &Quadratic) -> PyResult<Function> {
-        Ok(Function(
-            (&self.0 * &quadratic.0).map_err(crate::coefficient_error_to_pyerr)?,
-        ))
+        Ok(Function(crate::error::map_coefficient(
+            &self.0 * &quadratic.0,
+        )?))
     }
 
     pub fn mul_polynomial(&self, polynomial: &Polynomial) -> PyResult<Function> {
-        Ok(Function(
-            (&self.0 * &polynomial.0).map_err(crate::coefficient_error_to_pyerr)?,
-        ))
+        Ok(Function(crate::error::map_coefficient(
+            &self.0 * &polynomial.0,
+        )?))
     }
 
     pub fn content_factor(&self) -> PyResult<f64> {
@@ -548,8 +530,7 @@ impl Function {
     pub fn evaluate(&self, state: State, atol: Option<f64>) -> PyResult<f64> {
         use ommx::Evaluate;
         let atol = match atol {
-            Some(value) => ommx::ATol::new(value)
-                .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?,
+            Some(value) => crate::error::map_ommx_error(|| ommx::ATol::new(value))?,
             None => ommx::ATol::default(),
         };
         self.0
@@ -560,8 +541,7 @@ impl Function {
     #[pyo3(signature = (state, *, atol=None))]
     pub fn partial_evaluate(&self, state: State, atol: Option<f64>) -> PyResult<Function> {
         let atol = match atol {
-            Some(value) => ommx::ATol::new(value)
-                .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?,
+            Some(value) => crate::error::map_ommx_error(|| ommx::ATol::new(value))?,
             None => ommx::ATol::default(),
         };
         let mut inner = self.0.clone();
@@ -637,10 +617,10 @@ impl Function {
     /// - `binary_ids`: Set of binary variable IDs to reduce powers for
     ///
     /// **Returns:** `True` if any reduction was performed, `False` otherwise
-    pub fn reduce_binary_power(&mut self, binary_ids: BTreeSet<u64>) -> Result<bool> {
+    pub fn reduce_binary_power(&mut self, binary_ids: BTreeSet<u64>) -> PyResult<bool> {
         let variable_id_set: ommx::VariableIDSet =
             binary_ids.into_iter().map(ommx::VariableID::from).collect();
-        Ok(self.0.reduce_binary_power(&variable_id_set)?)
+        crate::error::map_ommx_error(|| Ok(self.0.reduce_binary_power(&variable_id_set)?))
     }
 
     /// Create an equality constraint: self == other → Constraint with EqualToZero

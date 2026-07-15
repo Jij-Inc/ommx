@@ -102,8 +102,7 @@ impl NamedFunction {
     #[pyo3(signature = (state, *, atol=None))]
     pub fn evaluate(&self, state: State, atol: Option<f64>) -> PyResult<EvaluatedNamedFunction> {
         let atol = match atol {
-            Some(value) => ommx::ATol::new(value)
-                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?,
+            Some(value) => crate::error::map_ommx_error(|| ommx::ATol::new(value))?,
             None => ommx::ATol::default(),
         };
         let evaluated = self
@@ -128,8 +127,7 @@ impl NamedFunction {
     #[pyo3(signature = (state, *, atol=None))]
     pub fn partial_evaluate(&mut self, state: State, atol: Option<f64>) -> PyResult<Self> {
         let atol = match atol {
-            Some(value) => ommx::ATol::new(value)
-                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?,
+            Some(value) => crate::error::map_ommx_error(|| ommx::ATol::new(value))?,
             None => ommx::ATol::default(),
         };
         self.1
@@ -157,9 +155,9 @@ impl NamedFunction {
 
     /// Reverse subtraction: returns other - self.function
     pub fn __rsub__(&self, other: Function) -> PyResult<Function> {
-        Ok(Function(
-            (&other.0 - &self.1.function).map_err(crate::coefficient_error_to_pyerr)?,
-        ))
+        Ok(Function(crate::error::map_coefficient(
+            &other.0 - &self.1.function,
+        )?))
     }
 
     /// Multiplication: returns self.function * other
