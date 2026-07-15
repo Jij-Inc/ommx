@@ -1,7 +1,6 @@
-use anyhow::Result;
 use oci_spec::image::Descriptor;
-use ommx::artifact::{local_registry::StoredDescriptor, LocalArtifactDyn};
-use pyo3::{prelude::*, types::PyDict};
+use ommx::artifact::local_registry::StoredDescriptor;
+use pyo3::{exceptions::PyRuntimeError, prelude::*, types::PyDict};
 use std::collections::HashMap;
 
 /// Descriptor of a blob stored in the local registry.
@@ -19,14 +18,9 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, PartialEq)]
 pub struct PyDescriptor(Descriptor);
 
-impl PyDescriptor {
-    pub(crate) fn as_descriptor(&self) -> &Descriptor {
-        &self.0
-    }
-
-    pub(crate) fn read_blob_from(&self, artifact: &LocalArtifactDyn) -> Result<Vec<u8>> {
-        artifact.get_blob(&self.0)
-    }
+/// Borrow the OCI descriptor inside the private binding module graph.
+pub fn as_descriptor(descriptor: &PyDescriptor) -> &Descriptor {
+    &descriptor.0
 }
 
 impl From<StoredDescriptor<'_>> for PyDescriptor {
@@ -51,17 +45,18 @@ impl From<Descriptor> for PyArchiveDescriptor {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl PyDescriptor {
-    pub fn to_dict<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDict>> {
+    pub fn to_dict<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let any = serde_pyobject::to_pyobject(py, &self.0)?;
-        any.extract().map_err(|e| anyhow::anyhow!("{}", e))
+        Ok(any.extract()?)
     }
 
-    pub fn to_json(&self) -> Result<String> {
-        Ok(serde_json::to_string(&self.0)?)
+    pub fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(&self.0).map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
-    pub fn __str__(&self) -> Result<String> {
-        Ok(serde_json::to_string_pretty(&self.0)?)
+    pub fn __str__(&self) -> PyResult<String> {
+        serde_json::to_string_pretty(&self.0)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
     pub fn __eq__(&self, rhs: &Bound<PyAny>) -> bool {
@@ -115,17 +110,18 @@ impl PyDescriptor {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl PyArchiveDescriptor {
-    pub fn to_dict<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDict>> {
+    pub fn to_dict<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let any = serde_pyobject::to_pyobject(py, &self.0)?;
-        any.extract().map_err(|e| anyhow::anyhow!("{}", e))
+        Ok(any.extract()?)
     }
 
-    pub fn to_json(&self) -> Result<String> {
-        Ok(serde_json::to_string(&self.0)?)
+    pub fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(&self.0).map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
-    pub fn __str__(&self) -> Result<String> {
-        Ok(serde_json::to_string_pretty(&self.0)?)
+    pub fn __str__(&self) -> PyResult<String> {
+        serde_json::to_string_pretty(&self.0)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
     pub fn __eq__(&self, rhs: &Bound<PyAny>) -> bool {

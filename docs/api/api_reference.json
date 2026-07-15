@@ -25135,7 +25135,7 @@
           "methods": [
             {
               "name": "get_blob",
-              "doc": "Get raw bytes of a blob by Descriptor.",
+              "doc": "Get raw bytes of a blob by Descriptor.\n\nRegistry and storage failures, including a missing CAS blob referenced\nby the Descriptor, raise {class}`RuntimeError`.",
               "signatures": [
                 {
                   "parameters": [
@@ -25166,7 +25166,7 @@
             },
             {
               "name": "get_dataframe",
-              "doc": "Get a pandas DataFrame from an artifact layer stored by {meth}`~ommx.artifact.ArtifactDraft.add_dataframe`.",
+              "doc": "Get a pandas DataFrame from an artifact layer stored by {meth}`~ommx.artifact.ArtifactDraft.add_dataframe`.\n\nA mismatched media type raises {class}`ValueError`; registry and storage\nfailures raise {class}`RuntimeError`. pandas exceptions are preserved.",
               "signatures": [
                 {
                   "parameters": [
@@ -25197,7 +25197,7 @@
             },
             {
               "name": "get_instance",
-              "doc": "Get an instance from the artifact.\n\n- If `descriptor` is `None`, returns the first instance layer.\n- If `descriptor` is given, returns the instance for that specific layer.\n\nRaises `ValueError` if no instance layer is found.",
+              "doc": "Get an instance from the artifact.\n\n- If `descriptor` is `None`, returns the first instance layer.\n- If `descriptor` is given, returns the instance for that specific layer.\n\nRaises {class}`ValueError` if no instance layer is found, if the\nDescriptor has the wrong media type, or if the payload is malformed.\nRegistry and storage failures raise {class}`RuntimeError`.",
               "signatures": [
                 {
                   "parameters": [
@@ -25237,7 +25237,7 @@
             },
             {
               "name": "get_json",
-              "doc": "Get a JSON object from an artifact layer stored by {meth}`~ommx.artifact.ArtifactDraft.add_json`.",
+              "doc": "Get a JSON object from an artifact layer stored by {meth}`~ommx.artifact.ArtifactDraft.add_json`.\n\nA mismatched media type raises {class}`ValueError`; registry and storage\nfailures raise {class}`RuntimeError`. JSON decoder exceptions are\npreserved.",
               "signatures": [
                 {
                   "parameters": [
@@ -25268,7 +25268,7 @@
             },
             {
               "name": "get_layer",
-              "doc": "Get the layer object corresponding to the descriptor.\n\nDynamically dispatched based on {attr}`~ommx.artifact.Descriptor.media_type`:\n- OMMX instance payloads return {class}`~ommx.Instance`\n- OMMX parametric instance payloads return {class}`~ommx.ParametricInstance`\n- OMMX solution payloads return {class}`~ommx.Solution`\n- OMMX sample-set payloads return {class}`~ommx.SampleSet`\n- `application/vnd.numpy` returns a numpy array",
+              "doc": "Get the layer object corresponding to the descriptor.\n\nDynamically dispatched based on {attr}`~ommx.artifact.Descriptor.media_type`:\n- OMMX instance payloads return {class}`~ommx.Instance`\n- OMMX parametric instance payloads return {class}`~ommx.ParametricInstance`\n- OMMX solution payloads return {class}`~ommx.Solution`\n- OMMX sample-set payloads return {class}`~ommx.SampleSet`\n- `application/vnd.numpy` returns a numpy array\n\nRaises {class}`ValueError` for an unsupported media type. Registry and\nstorage failures raise {class}`RuntimeError`; exceptions raised by\nPython-backed decoders are preserved.",
               "signatures": [
                 {
                   "parameters": [
@@ -25299,7 +25299,7 @@
             },
             {
               "name": "get_layer_descriptor",
-              "doc": "Look up a layer descriptor by digest.",
+              "doc": "Look up a layer descriptor by digest.\n\nRaises {class}`ValueError` when `digest` is malformed and\n{class}`KeyError` when the digest is valid but is not present in the\nArtifact manifest.",
               "signatures": [
                 {
                   "parameters": [
@@ -25330,7 +25330,7 @@
             },
             {
               "name": "get_ndarray",
-              "doc": "Get a numpy array from an artifact layer stored by {meth}`~ommx.artifact.ArtifactDraft.add_ndarray`.",
+              "doc": "Get a numpy array from an artifact layer stored by {meth}`~ommx.artifact.ArtifactDraft.add_ndarray`.\n\nA mismatched media type raises {class}`ValueError`; registry and storage\nfailures raise {class}`RuntimeError`. NumPy exceptions are preserved.",
               "signatures": [
                 {
                   "parameters": [
@@ -25361,7 +25361,7 @@
             },
             {
               "name": "get_parametric_instance",
-              "doc": "Get a parametric instance from the artifact.\n\n- If `descriptor` is `None`, returns the first parametric instance layer.\n- If `descriptor` is given, returns the parametric instance for that specific layer.\n\nRaises `ValueError` if no parametric instance layer is found.",
+              "doc": "Get a parametric instance from the artifact.\n\n- If `descriptor` is `None`, returns the first parametric instance layer.\n- If `descriptor` is given, returns the parametric instance for that specific layer.\n\nRaises {class}`ValueError` if no parametric instance layer is found, if\nthe Descriptor has the wrong media type, or if the payload is\nmalformed. Registry and storage failures raise {class}`RuntimeError`.",
               "signatures": [
                 {
                   "parameters": [
@@ -25401,7 +25401,7 @@
             },
             {
               "name": "get_sample_set",
-              "doc": "Get a sample set from the artifact.\n\n- If `descriptor` is `None`, returns the first sample set layer.\n- If `descriptor` is given, returns the sample set for that specific layer.\n\nRaises `ValueError` if no sample set layer is found.",
+              "doc": "Get a sample set from the artifact.\n\n- If `descriptor` is `None`, returns the first sample set layer.\n- If `descriptor` is given, returns the sample set for that specific layer.\n\nRaises {class}`ValueError` if no sample set layer is found, if the\nDescriptor has the wrong media type, or if the payload is malformed.\nRegistry and storage failures raise {class}`RuntimeError`.",
               "signatures": [
                 {
                   "parameters": [
@@ -25441,7 +25441,7 @@
             },
             {
               "name": "get_solution",
-              "doc": "Get a solution from the artifact.\n\n- If `descriptor` is `None`, returns the first solution layer.\n- If `descriptor` is given, returns the solution for that specific layer.\n\nRaises `ValueError` if no solution layer is found.",
+              "doc": "Get a solution from the artifact.\n\n- If `descriptor` is `None`, returns the first solution layer.\n- If `descriptor` is given, returns the solution for that specific layer.\n\nRaises {class}`ValueError` if no solution layer is found, if the\nDescriptor has the wrong media type, or if the payload is malformed.\nRegistry and storage failures raise {class}`RuntimeError`.",
               "signatures": [
                 {
                   "parameters": [
@@ -25575,7 +25575,7 @@
             },
             {
               "name": "load",
-              "doc": "Load an artifact stored as a container image in local or remote registry.\n\nIf the image is not found in local registry, it will try to pull from remote registry.\n\n```python\n>>> artifact = Artifact.load(\"ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f\")\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/random_lp_instance:4303c7f\n\n```\n\nRaises {class}`~ommx.artifact.RemoteArtifactNotFoundError` when the\nexact remote reference does not exist. Other remote access failures\nraise subclasses of {class}`~ommx.artifact.RemoteArtifactError`.",
+              "doc": "Load an artifact stored as a container image in local or remote registry.\n\nIf the image is not found in local registry, it will try to pull from remote registry.\n\n```python\n>>> artifact = Artifact.load(\"ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f\")\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/random_lp_instance:4303c7f\n\n```\n\nRaises {class}`~ommx.artifact.RemoteArtifactNotFoundError` when the\nexact remote reference does not exist. Other remote access failures\nraise subclasses of {class}`~ommx.artifact.RemoteArtifactError`.\nAn invalid image reference raises {class}`ValueError` before any remote\naccess is attempted.",
               "signatures": [
                 {
                   "parameters": [
@@ -26214,7 +26214,7 @@
             },
             {
               "name": "commit",
-              "doc": "Commit the artifact draft.",
+              "doc": "Commit the artifact draft.\n\nRaises {class}`RuntimeError` for registry or storage failures and when\nthe draft has already been committed.",
               "signatures": [
                 {
                   "parameters": [],
@@ -26293,7 +26293,7 @@
             },
             {
               "name": "new",
-              "doc": "Create a new artifact draft with an explicit image name. The\nartifact is published into the user's persistent SQLite Local\nRegistry on `commit()`; call {meth}`Artifact.save(path)` on the\nreturned handle if you also want a `.ommx` archive file for\nsharing.\n\n```python\n>>> from ommx.testing import SingleFeasibleLPGenerator, DataType\n>>> generator = SingleFeasibleLPGenerator(3, DataType.INT)\n>>> instance = generator.get_v1_instance()\n>>> import uuid\n>>> image_name = f\"ghcr.io/jij-inc/ommx/single_feasible_lp:{uuid.uuid4()}\"\n>>> draft = ArtifactDraft.new(image_name)\n>>> _desc = draft.add_instance(instance)\n>>> artifact = draft.commit()\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/single_feasible_lp:...\n\n```",
+              "doc": "Create a new artifact draft with an explicit image name. The\nartifact is published into the user's persistent SQLite Local\nRegistry on `commit()`; call {meth}`Artifact.save(path)` on the\nreturned handle if you also want a `.ommx` archive file for\nsharing.\n\n```python\n>>> from ommx.testing import SingleFeasibleLPGenerator, DataType\n>>> generator = SingleFeasibleLPGenerator(3, DataType.INT)\n>>> instance = generator.get_v1_instance()\n>>> import uuid\n>>> image_name = f\"ghcr.io/jij-inc/ommx/single_feasible_lp:{uuid.uuid4()}\"\n>>> draft = ArtifactDraft.new(image_name)\n>>> _desc = draft.add_instance(instance)\n>>> artifact = draft.commit()\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/single_feasible_lp:...\n\n```\n\nRaises {class}`ValueError` when `image_name` is not a valid OCI image\nreference. Registry and storage failures raise {class}`RuntimeError`.",
               "signatures": [
                 {
                   "parameters": [
@@ -27434,7 +27434,7 @@
         {
           "kind": "Function",
           "name": "gc",
-          "doc": "Report or delete Local Registry blobs unreachable from SQLite refs.\n\nThis is the Python SDK equivalent of `ommx gc`. It is a dry-run by\ndefault. Pass `delete=True` to unlink orphan candidates. The `grace_period`\nstring accepts the same `s`, `m`, `h`, and `d` suffixes as the CLI.\n\n```python\n>>> from ommx.artifact import gc\n>>> report = gc()\n>>> report.delete_applied\nFalse\n\n```",
+          "doc": "Report or delete Local Registry blobs unreachable from SQLite refs.\n\nThis is the Python SDK equivalent of `ommx gc`. It is a dry-run by\ndefault. Pass `delete=True` to unlink orphan candidates. The `grace_period`\nstring accepts the same `s`, `m`, `h`, and `d` suffixes as the CLI.\nAn invalid duration raises {class}`ValueError`; registry and storage failures\nraise {class}`RuntimeError`.\n\n```python\n>>> from ommx.artifact import gc\n>>> report = gc()\n>>> report.delete_applied\nFalse\n\n```",
           "signatures": [
             {
               "parameters": [
@@ -27515,7 +27515,7 @@
         {
           "kind": "Function",
           "name": "get_images",
-          "doc": "Get all image names stored in the local registry.\n\nReturns a list of image names (as strings) found in the local registry.",
+          "doc": "Get all image names stored in the local registry.\n\nReturns a list of image names (as strings) found in the local registry.\nCorrupted persisted refs and other registry failures raise\n{class}`RuntimeError`.",
           "signatures": [
             {
               "parameters": [],
@@ -27555,7 +27555,7 @@
         {
           "kind": "Function",
           "name": "list_artifacts",
-          "doc": "List Artifact refs using the Local Registry's digest-addressed Manifest\ncache.\n\nMissing Manifest rows are backfilled from the CAS before records are\nreturned. If `prefix` is given, it is matched against the full image\nreference string. Internal implementation refs, including Experiment\ncheckpoints, are hidden by default; pass `include_internal=True` for\nregistry diagnostics.\n\nBy default, an invalid cached record is repaired from the CAS when possible.\nOMMX emits `RuntimeWarning` for repaired or skipped refs and returns the\nremaining records. Pass `strict=True` to fail on the first invalid ref.",
+          "doc": "List Artifact refs using the Local Registry's digest-addressed Manifest\ncache.\n\nMissing Manifest rows are backfilled from the CAS before records are\nreturned. If `prefix` is given, it is matched against the full image\nreference string. Internal implementation refs, including Experiment\ncheckpoints, are hidden by default; pass `include_internal=True` for\nregistry diagnostics.\n\nBy default, an invalid cached record is repaired from the CAS when possible.\nOMMX emits `RuntimeWarning` for repaired or skipped refs and returns the\nremaining records. Pass `strict=True` to fail on the first invalid ref.\nRegistry, manifest, and storage failures raise {class}`RuntimeError`.",
           "signatures": [
             {
               "parameters": [
@@ -27660,7 +27660,7 @@
         {
           "kind": "Function",
           "name": "prune_anonymous",
-          "doc": "Report or delete anonymous Artifact and Experiment refs in the Local Registry.\n\nThis is the Python SDK equivalent of `ommx prune-anonymous`.\nIt only removes SQLite refs when `delete=True`; manifest and payload blobs\nare left for {func}`gc` to reclaim if they become unreachable.\nAnonymous Experiment refs are included only when `experiments=True`.\n`older_than` accepts the same `s`, `m`, `h`, and `d` suffixes as the CLI.\n\n```python\n>>> from ommx.artifact import prune_anonymous\n>>> report = prune_anonymous()\n>>> report.delete_applied\nFalse\n\n```",
+          "doc": "Report or delete anonymous Artifact and Experiment refs in the Local Registry.\n\nThis is the Python SDK equivalent of `ommx prune-anonymous`.\nIt only removes SQLite refs when `delete=True`; manifest and payload blobs\nare left for {func}`gc` to reclaim if they become unreachable.\nAnonymous Experiment refs are included only when `experiments=True`.\n`older_than` accepts the same `s`, `m`, `h`, and `d` suffixes as the CLI.\nAn invalid duration raises {class}`ValueError`; registry and storage failures\nraise {class}`RuntimeError`.\n\n```python\n>>> from ommx.artifact import prune_anonymous\n>>> report = prune_anonymous()\n>>> report.delete_applied\nFalse\n\n```",
           "signatures": [
             {
               "parameters": [
@@ -27759,7 +27759,7 @@
         {
           "kind": "Function",
           "name": "remove_image",
-          "doc": "Remove one image ref from the Local Registry.\n\nThis removes only the mutable local ref. Immutable manifest and payload\nblobs remain available to other refs and are reclaimed by {func}`gc` once\nunreachable. Returns the atomically removed Manifest digest, or `None` when\nthe ref did not exist. Pass that digest to {func}`restore_image` to roll back\nthis exact deletion.",
+          "doc": "Remove one image ref from the Local Registry.\n\nThis removes only the mutable local ref. Immutable manifest and payload\nblobs remain available to other refs and are reclaimed by {func}`gc` once\nunreachable. Returns the atomically removed Manifest digest, or `None` when\nthe ref did not exist. Pass that digest to {func}`restore_image` to roll back\nthis exact deletion.\n\nAn invalid image reference raises {class}`ValueError`. Registry and storage\nfailures raise {class}`RuntimeError`.",
           "signatures": [
             {
               "parameters": [
@@ -27826,7 +27826,7 @@
         {
           "kind": "Function",
           "name": "restore_image",
-          "doc": "Restore a removed Local Registry image ref from its manifest digest.\n\nThe digest is printed as part of the CLI rollback command after `ommx rm`\nand `ommx prune-anonymous --delete`. The manifest and its complete\nconfig/layer/subject closure must still be present and valid in the Local\nRegistry CAS. Restore is serialized against deleting GC passes. Returns\n`True` when the ref is inserted and `False` when it already points to the\nrequested digest. A different existing target is reported as a conflict and\nis never replaced.",
+          "doc": "Restore a removed Local Registry image ref from its manifest digest.\n\nThe digest is printed as part of the CLI rollback command after `ommx rm`\nand `ommx prune-anonymous --delete`. The manifest and its complete\nconfig/layer/subject closure must still be present and valid in the Local\nRegistry CAS. Restore is serialized against deleting GC passes. Returns\n`True` when the ref is inserted and `False` when it already points to the\nrequested digest. A different existing target is reported as a conflict and\nis never replaced.\n\nInvalid image references and malformed Manifest digests raise\n{class}`ValueError`. Registry, storage, and ref-conflict failures raise\n{class}`RuntimeError`.",
           "signatures": [
             {
               "parameters": [

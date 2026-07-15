@@ -108,6 +108,7 @@ impl_from_ommx_signal!(
     ommx::BoundError,
     ommx::CoefficientError,
     ommx::DecisionVariableError,
+    ommx::artifact::ImageRefParseError,
     ommx::ParseError,
     ommx::SampleSetError,
     ommx::SolutionError,
@@ -135,6 +136,21 @@ fn ommx_error_to_pyerr(error: ommx::Error) -> PyErr {
     // domain errors. Its Display already renders the complete parse traceback.
     if let Some(parse_error) = error.downcast_ref::<ommx::ParseError>() {
         return PyValueError::new_err(parse_error.to_string());
+    }
+
+    // A nested ImageRefParseError describes corrupted persisted state here,
+    // not the caller's current input. Preserve the Local Registry owner before
+    // classifying the underlying parser signal.
+    if let Some(registry_error) =
+        error.downcast_ref::<ommx::artifact::local_registry::InvalidLocalRegistryImageRef>()
+    {
+        return PyRuntimeError::new_err(registry_error.to_string());
+    }
+
+    // ImageRefParseError's Display already includes its source. Rendering the
+    // complete anyhow chain would repeat the OCI parser message.
+    if let Some(image_ref_error) = error.downcast_ref::<ommx::artifact::ImageRefParseError>() {
+        return PyValueError::new_err(image_ref_error.to_string());
     }
 
     let message = format!("{error:#}");

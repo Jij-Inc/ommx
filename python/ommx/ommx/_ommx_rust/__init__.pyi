@@ -406,6 +406,8 @@ class Artifact:
         Raises {class}`~ommx.artifact.RemoteArtifactNotFoundError` when the
         exact remote reference does not exist. Other remote access failures
         raise subclasses of {class}`~ommx.artifact.RemoteArtifactError`.
+        An invalid image reference raises {class}`ValueError` before any remote
+        access is attempted.
         """
     def push(self) -> None:
         r"""
@@ -425,10 +427,17 @@ class Artifact:
     def get_layer_descriptor(self, digest: builtins.str) -> Descriptor:
         r"""
         Look up a layer descriptor by digest.
+
+        Raises {class}`ValueError` when `digest` is malformed and
+        {class}`KeyError` when the digest is valid but is not present in the
+        Artifact manifest.
         """
     def get_blob(self, descriptor: Descriptor) -> bytes:
         r"""
         Get raw bytes of a blob by Descriptor.
+
+        Registry and storage failures, including a missing CAS blob referenced
+        by the Descriptor, raise {class}`RuntimeError`.
         """
     def get_layer(self, descriptor: Descriptor) -> typing.Any:
         r"""
@@ -440,6 +449,10 @@ class Artifact:
         - OMMX solution payloads return {class}`~ommx.Solution`
         - OMMX sample-set payloads return {class}`~ommx.SampleSet`
         - `application/vnd.numpy` returns a numpy array
+
+        Raises {class}`ValueError` for an unsupported media type. Registry and
+        storage failures raise {class}`RuntimeError`; exceptions raised by
+        Python-backed decoders are preserved.
         """
     def get_instance(self, descriptor: typing.Optional[Descriptor] = None) -> Instance:
         r"""
@@ -448,7 +461,9 @@ class Artifact:
         - If `descriptor` is `None`, returns the first instance layer.
         - If `descriptor` is given, returns the instance for that specific layer.
 
-        Raises `ValueError` if no instance layer is found.
+        Raises {class}`ValueError` if no instance layer is found, if the
+        Descriptor has the wrong media type, or if the payload is malformed.
+        Registry and storage failures raise {class}`RuntimeError`.
         """
     def get_solution(self, descriptor: typing.Optional[Descriptor] = None) -> Solution:
         r"""
@@ -457,7 +472,9 @@ class Artifact:
         - If `descriptor` is `None`, returns the first solution layer.
         - If `descriptor` is given, returns the solution for that specific layer.
 
-        Raises `ValueError` if no solution layer is found.
+        Raises {class}`ValueError` if no solution layer is found, if the
+        Descriptor has the wrong media type, or if the payload is malformed.
+        Registry and storage failures raise {class}`RuntimeError`.
         """
     def get_parametric_instance(
         self, descriptor: typing.Optional[Descriptor] = None
@@ -468,7 +485,9 @@ class Artifact:
         - If `descriptor` is `None`, returns the first parametric instance layer.
         - If `descriptor` is given, returns the parametric instance for that specific layer.
 
-        Raises `ValueError` if no parametric instance layer is found.
+        Raises {class}`ValueError` if no parametric instance layer is found, if
+        the Descriptor has the wrong media type, or if the payload is
+        malformed. Registry and storage failures raise {class}`RuntimeError`.
         """
     def get_sample_set(
         self, descriptor: typing.Optional[Descriptor] = None
@@ -479,19 +498,31 @@ class Artifact:
         - If `descriptor` is `None`, returns the first sample set layer.
         - If `descriptor` is given, returns the sample set for that specific layer.
 
-        Raises `ValueError` if no sample set layer is found.
+        Raises {class}`ValueError` if no sample set layer is found, if the
+        Descriptor has the wrong media type, or if the payload is malformed.
+        Registry and storage failures raise {class}`RuntimeError`.
         """
     def get_ndarray(self, descriptor: Descriptor) -> typing.Any:
         r"""
         Get a numpy array from an artifact layer stored by {meth}`~ommx.artifact.ArtifactDraft.add_ndarray`.
+
+        A mismatched media type raises {class}`ValueError`; registry and storage
+        failures raise {class}`RuntimeError`. NumPy exceptions are preserved.
         """
     def get_dataframe(self, descriptor: Descriptor) -> typing.Any:
         r"""
         Get a pandas DataFrame from an artifact layer stored by {meth}`~ommx.artifact.ArtifactDraft.add_dataframe`.
+
+        A mismatched media type raises {class}`ValueError`; registry and storage
+        failures raise {class}`RuntimeError`. pandas exceptions are preserved.
         """
     def get_json(self, descriptor: Descriptor) -> typing.Any:
         r"""
         Get a JSON object from an artifact layer stored by {meth}`~ommx.artifact.ArtifactDraft.add_json`.
+
+        A mismatched media type raises {class}`ValueError`; registry and storage
+        failures raise {class}`RuntimeError`. JSON decoder exceptions are
+        preserved.
         """
 
 @typing.final
@@ -529,6 +560,9 @@ class ArtifactDraft:
         ghcr.io/jij-inc/ommx/single_feasible_lp:...
 
         ```
+
+        Raises {class}`ValueError` when `image_name` is not a valid OCI image
+        reference. Registry and storage failures raise {class}`RuntimeError`.
         """
     @staticmethod
     def new_anonymous() -> ArtifactDraft:
@@ -713,6 +747,9 @@ class ArtifactDraft:
     def commit(self) -> Artifact:
         r"""
         Commit the artifact draft.
+
+        Raises {class}`RuntimeError` for registry or storage failures and when
+        the draft has already been committed.
         """
 
 @typing.final
@@ -7753,6 +7790,8 @@ def gc(
     This is the Python SDK equivalent of `ommx gc`. It is a dry-run by
     default. Pass `delete=True` to unlink orphan candidates. The `grace_period`
     string accepts the same `s`, `m`, `h`, and `d` suffixes as the CLI.
+    An invalid duration raises {class}`ValueError`; registry and storage failures
+    raise {class}`RuntimeError`.
 
     ```python
     >>> from ommx.artifact import gc
@@ -7769,6 +7808,8 @@ def get_images() -> builtins.list[builtins.str]:
     Get all image names stored in the local registry.
 
     Returns a list of image names (as strings) found in the local registry.
+    Corrupted persisted refs and other registry failures raise
+    {class}`RuntimeError`.
     """
 
 def get_local_registry_root() -> pathlib.Path:
@@ -7796,6 +7837,7 @@ def list_artifacts(
     By default, an invalid cached record is repaired from the CAS when possible.
     OMMX emits `RuntimeWarning` for repaired or skipped refs and returns the
     remaining records. Pass `strict=True` to fail on the first invalid ref.
+    Registry, manifest, and storage failures raise {class}`RuntimeError`.
     """
 
 def list_experiment_checkpoints(
@@ -7851,6 +7893,8 @@ def prune_anonymous(
     are left for {func}`gc` to reclaim if they become unreachable.
     Anonymous Experiment refs are included only when `experiments=True`.
     `older_than` accepts the same `s`, `m`, `h`, and `d` suffixes as the CLI.
+    An invalid duration raises {class}`ValueError`; registry and storage failures
+    raise {class}`RuntimeError`.
 
     ```python
     >>> from ommx.artifact import prune_anonymous
@@ -7877,6 +7921,9 @@ def remove_image(
     unreachable. Returns the atomically removed Manifest digest, or `None` when
     the ref did not exist. Pass that digest to {func}`restore_image` to roll back
     this exact deletion.
+
+    An invalid image reference raises {class}`ValueError`. Registry and storage
+    failures raise {class}`RuntimeError`.
     """
 
 def restore_image(
@@ -7895,6 +7942,10 @@ def restore_image(
     `True` when the ref is inserted and `False` when it already points to the
     requested digest. A different existing target is reported as a conflict and
     is never replaced.
+
+    Invalid image references and malformed Manifest digests raise
+    {class}`ValueError`. Registry, storage, and ref-conflict failures raise
+    {class}`RuntimeError`.
     """
 
 def set_default_atol(value: builtins.float) -> None: ...
