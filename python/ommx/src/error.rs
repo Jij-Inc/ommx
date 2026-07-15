@@ -113,11 +113,16 @@ macro_rules! impl_from_ommx_signal {
 }
 
 impl_from_ommx_signal!(
+    ommx::AddDecisionVariableError,
     ommx::AtolError,
     ommx::BoundError,
     ommx::CoefficientError,
+    ommx::ContentFactorError,
     ommx::DecisionVariableError,
     ommx::EvaluationError,
+    ommx::OneHotConstraintError,
+    ommx::Sos1ConstraintError,
+    ommx::SubstitutionError,
     ommx::artifact::ImageRefParseError,
     ommx::experiment::AttachmentNotFound,
     ommx::ParseError,
@@ -178,9 +183,18 @@ fn ommx_error_to_pyerr(error: ommx::Error) -> PyErr {
     }
 
     if error.downcast_ref::<ommx::CoefficientError>().is_some()
+        || error
+            .downcast_ref::<ommx::AddDecisionVariableError>()
+            .is_some()
         || error.downcast_ref::<ommx::AtolError>().is_some()
         || error.downcast_ref::<ommx::BoundError>().is_some()
+        || error.downcast_ref::<ommx::ContentFactorError>().is_some()
         || error.downcast_ref::<ommx::EvaluationError>().is_some()
+        || error
+            .downcast_ref::<ommx::OneHotConstraintError>()
+            .is_some()
+        || error.downcast_ref::<ommx::Sos1ConstraintError>().is_some()
+        || error.downcast_ref::<ommx::SubstitutionError>().is_some()
     {
         return PyValueError::new_err(message);
     }

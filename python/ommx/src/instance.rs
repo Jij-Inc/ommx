@@ -365,7 +365,8 @@ impl Instance {
     /// label updates. The original wrapper is not modified.
     ///
     /// Raises {class}`ValueError` if the variable's id collides with an
-    /// existing variable, parameter, or substitution-dependency key.
+    /// existing decision variable. Substituted variables retain their ids and
+    /// therefore also count as existing decision variables.
     pub fn add_decision_variable(
         slf: Bound<'_, Self>,
         variable: DecisionVariable,
@@ -413,8 +414,7 @@ impl Instance {
             let mut inst = slf.borrow_mut();
             let id = inst.inner.next_variable_id()?;
             inst.inner
-                .add_decision_variable(id, ommx::DecisionVariable::binary(), label)
-                .map_err(|error| PyValueError::new_err(error.to_string()))?;
+                .add_decision_variable(id, ommx::DecisionVariable::binary(), label)?;
             id
         };
         Ok(crate::AttachedDecisionVariable::from_instance(
@@ -2006,13 +2006,12 @@ impl Instance {
         &mut self,
         py: Python<'_>,
         assignments: HashMap<u64, Function>,
-    ) -> PyResult<()> {
+    ) -> OmmxPyResult<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let iter = assignments
             .into_iter()
             .map(|(id, f)| (VariableID::from(id), f.0));
-        ommx::substitute(&mut self.inner, iter)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        ommx::substitute(&mut self.inner, iter)?;
         Ok(())
     }
 

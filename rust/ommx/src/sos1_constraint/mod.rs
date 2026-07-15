@@ -10,6 +10,15 @@ use crate::{
 use derive_more::{Deref, From};
 use std::collections::{BTreeMap, BTreeSet};
 
+/// Validation failures for SOS1 constraints.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum Sos1ConstraintError {
+    /// A SOS1 constraint has no variables to constrain.
+    #[error("SOS1 constraints must contain at least one variable")]
+    EmptyVariables,
+}
+
 /// ID for SOS1 constraints, independent from regular [`ConstraintID`](crate::ConstraintID).
 #[derive(
     Clone,
@@ -182,11 +191,10 @@ impl Sos1Constraint<Created> {
     ///
     /// # Errors
     ///
-    /// Returns an error if `variables` is empty.
+    /// The error chain contains [`Sos1ConstraintError::EmptyVariables`] if
+    /// `variables` is empty.
     pub fn new(variables: BTreeSet<VariableID>) -> crate::Result<Self> {
-        if variables.is_empty() {
-            crate::bail!("SOS1 constraints must contain at least one variable");
-        }
+        crate::ensure!(!variables.is_empty(), Sos1ConstraintError::EmptyVariables);
         Ok(Self {
             variables,
             stage: Sos1CreatedData,
@@ -403,7 +411,10 @@ mod tests {
     #[test]
     fn sos1_constraint_rejects_empty_variable_set() {
         let err = Sos1Constraint::new(BTreeSet::new()).unwrap_err();
-        assert!(err.to_string().contains("at least one variable"));
+        assert!(matches!(
+            err.downcast_ref::<Sos1ConstraintError>(),
+            Some(Sos1ConstraintError::EmptyVariables)
+        ));
     }
 
     #[test]

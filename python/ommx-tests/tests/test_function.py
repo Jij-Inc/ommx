@@ -223,6 +223,13 @@ def test_function_arithmetic_raises_on_coefficient_overflow():
         _ = f * f
 
 
+def test_content_factor_raises_value_error_for_unrepresentable_coefficient():
+    f = Function(Linear(terms={1: sys.float_info.max}))
+
+    with pytest.raises(ValueError, match="Cannot approximate coefficient"):
+        f.content_factor()
+
+
 def test_comparison_raises_value_error_on_coefficient_overflow():
     huge = sys.float_info.max
     lhs = Function(Linear(terms={1: huge}))

@@ -593,6 +593,10 @@ mod tests {
             .build()
             .unwrap_err();
         let msg = err.to_string();
+        assert!(matches!(
+            err.downcast_ref::<crate::Sos1ConstraintError>(),
+            Some(crate::Sos1ConstraintError::EmptyVariables)
+        ));
         assert!(
             msg.contains("no variables") && msg.contains("42"),
             "expected EmptySos1Constraint error mentioning the id, got: {msg}"
