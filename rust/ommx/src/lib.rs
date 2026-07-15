@@ -43,6 +43,7 @@ mod indicator_constraint;
 mod infeasible_detected;
 mod instance;
 mod macros;
+mod message_io;
 mod modeling_label;
 mod named_function;
 mod one_hot_constraint;
