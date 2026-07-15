@@ -1,4 +1,5 @@
 use crate::{
+    error::OmmxPyResult,
     pandas::{
         constraint_id_col, constraint_kind_collection, entries_to_dataframe,
         sorted_entries_to_dataframe, ConstraintKind, PyDataFrame, ToPandasEntry, WithSampleIds,
@@ -172,39 +173,35 @@ impl SampleSet {
 
     #[getter]
     /// Raises ValueError if there is no feasible sample.
-    pub fn best_feasible_id(&self) -> PyResult<u64> {
-        crate::error::map_ommx_error(|| Ok(self.inner.best_feasible_id()?.into_inner()))
+    pub fn best_feasible_id(&self) -> OmmxPyResult<u64> {
+        Ok(self.inner.best_feasible_id()?.into_inner())
     }
 
     #[getter]
     /// Raises ValueError if there is no feasible sample in the relaxed problem.
-    pub fn best_feasible_relaxed_id(&self) -> PyResult<u64> {
-        crate::error::map_ommx_error(|| Ok(self.inner.best_feasible_relaxed_id()?.into_inner()))
+    pub fn best_feasible_relaxed_id(&self) -> OmmxPyResult<u64> {
+        Ok(self.inner.best_feasible_relaxed_id()?.into_inner())
     }
 
     #[getter]
     /// Raises ValueError if there is no feasible sample.
-    pub fn best_feasible(&self) -> PyResult<Solution> {
-        crate::error::map_ommx_error(|| {
-            Ok(Solution {
-                inner: self.inner.best_feasible()?,
-            })
+    pub fn best_feasible(&self) -> OmmxPyResult<Solution> {
+        Ok(Solution {
+            inner: self.inner.best_feasible()?,
         })
     }
 
     #[getter]
     /// Raises ValueError if there is no feasible sample in the relaxed problem.
-    pub fn best_feasible_relaxed(&self) -> PyResult<Solution> {
-        crate::error::map_ommx_error(|| {
-            Ok(Solution {
-                inner: self.inner.best_feasible_relaxed()?,
-            })
+    pub fn best_feasible_relaxed(&self) -> OmmxPyResult<Solution> {
+        Ok(Solution {
+            inner: self.inner.best_feasible_relaxed()?,
         })
     }
 
     #[getter]
     /// Raises ValueError if there is no feasible sample.
-    pub fn best_feasible_unrelaxed(&self) -> PyResult<Solution> {
+    pub fn best_feasible_unrelaxed(&self) -> OmmxPyResult<Solution> {
         // Exactly the same as best_feasible
         self.best_feasible()
     }
@@ -345,11 +342,9 @@ impl SampleSet {
         py: Python<'py>,
         name: &str,
         sample_id: u64,
-    ) -> PyResult<Bound<'py, PyDict>> {
+    ) -> OmmxPyResult<Bound<'py, PyDict>> {
         let sample_id = ommx::SampleID::from(sample_id);
-        let extracted = crate::error::map_ommx_error(|| {
-            Ok(self.inner.extract_decision_variables(name, sample_id)?)
-        })?;
+        let extracted = self.inner.extract_decision_variables(name, sample_id)?;
         let dict = PyDict::new(py);
         for (subscripts, value) in extracted {
             // Convert Vec<i64> to tuple for use as dict key
@@ -391,11 +386,9 @@ impl SampleSet {
         &self,
         py: Python<'py>,
         sample_id: u64,
-    ) -> PyResult<Bound<'py, PyDict>> {
+    ) -> OmmxPyResult<Bound<'py, PyDict>> {
         let sample_id = ommx::SampleID::from(sample_id);
-        let extracted = crate::error::map_ommx_error(|| {
-            Ok(self.inner.extract_all_decision_variables(sample_id)?)
-        })?;
+        let extracted = self.inner.extract_all_decision_variables(sample_id)?;
         let result_dict = PyDict::new(py);
         for (name, variables) in extracted {
             let var_dict = PyDict::new(py);
@@ -418,11 +411,9 @@ impl SampleSet {
         py: Python<'py>,
         name: &str,
         sample_id: u64,
-    ) -> PyResult<Bound<'py, PyDict>> {
+    ) -> OmmxPyResult<Bound<'py, PyDict>> {
         let sample_id = ommx::SampleID::from(sample_id);
-        let extracted = crate::error::map_ommx_error(|| {
-            Ok(self.inner.extract_constraints(name, sample_id)?)
-        })?;
+        let extracted = self.inner.extract_constraints(name, sample_id)?;
         let dict = PyDict::new(py);
         for (subscripts, value) in extracted {
             let key = PyTuple::new(py, &subscripts)?;
@@ -440,11 +431,9 @@ impl SampleSet {
         py: Python<'py>,
         name: &str,
         sample_id: u64,
-    ) -> PyResult<Bound<'py, PyDict>> {
+    ) -> OmmxPyResult<Bound<'py, PyDict>> {
         let sample_id = ommx::SampleID::from(sample_id);
-        let extracted = crate::error::map_ommx_error(|| {
-            Ok(self.inner.extract_named_functions(name, sample_id)?)
-        })?;
+        let extracted = self.inner.extract_named_functions(name, sample_id)?;
         let dict = PyDict::new(py);
         for (subscripts, value) in extracted {
             let key = PyTuple::new(py, &subscripts)?;
@@ -461,11 +450,9 @@ impl SampleSet {
         &self,
         py: Python<'py>,
         sample_id: u64,
-    ) -> PyResult<Bound<'py, PyDict>> {
+    ) -> OmmxPyResult<Bound<'py, PyDict>> {
         let sample_id = ommx::SampleID::from(sample_id);
-        let extracted = crate::error::map_ommx_error(|| {
-            Ok(self.inner.extract_all_named_functions(sample_id)?)
-        })?;
+        let extracted = self.inner.extract_all_named_functions(sample_id)?;
         let result_dict = PyDict::new(py);
         for (name, functions) in extracted {
             let func_dict = PyDict::new(py);

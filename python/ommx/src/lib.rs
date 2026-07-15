@@ -84,8 +84,8 @@ use pyo3_stub_gen::runtime::PyModuleTypeAliasExt;
 pub(crate) fn comparison_constraint(
     function: std::result::Result<ommx::Function, ommx::CoefficientError>,
     equality: ommx::Equality,
-) -> PyResult<Constraint> {
-    let function = error::map_coefficient(function)?;
+) -> error::OmmxPyResult<Constraint> {
+    let function = function?;
     Ok(Constraint(
         ommx::Constraint {
             equality,
@@ -127,8 +127,8 @@ pub(crate) const TRACING: TracingBridge = TracingBridge::new("ommx");
 
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
-pub fn set_default_atol(value: f64) -> PyResult<()> {
-    error::map_ommx_error(|| ommx::ATol::set_default(value))
+pub fn set_default_atol(value: f64) -> error::OmmxPyResult<()> {
+    Ok(ommx::ATol::set_default(value)?)
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]

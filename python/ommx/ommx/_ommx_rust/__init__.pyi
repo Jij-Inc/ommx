@@ -1441,8 +1441,8 @@ class DecisionVariable:
     This class represents a variable that will be optimized in a mathematical programming problem.
     It supports various types (binary, integer, continuous, semi-integer, semi-continuous) and
     can be used in arithmetic expressions to build objective functions and constraints.
-    Construction raises ValueError when the requested bound cannot be
-    normalized for the selected variable kind.
+    Construction raises ValueError when the kind discriminator is unknown or
+    the requested bound cannot be normalized for the selected variable kind.
 
     Note that this object overloads `==` for creating a constraint, not for equality comparison.
 

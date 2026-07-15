@@ -1,6 +1,9 @@
-use crate::pandas::{
-    constraint_id_col, constraint_kind_collection, entries_to_dataframe, ConstraintKind,
-    PyDataFrame, ToPandasEntry,
+use crate::{
+    error::OmmxPyResult,
+    pandas::{
+        constraint_id_col, constraint_kind_collection, entries_to_dataframe, ConstraintKind,
+        PyDataFrame, ToPandasEntry,
+    },
 };
 use anyhow::Result;
 use pyo3::{
@@ -276,9 +279,8 @@ impl Solution {
         &self,
         py: Python<'py>,
         name: &str,
-    ) -> PyResult<Bound<'py, PyDict>> {
-        let extracted =
-            crate::error::map_ommx_error(|| Ok(self.inner.extract_decision_variables(name)?))?;
+    ) -> OmmxPyResult<Bound<'py, PyDict>> {
+        let extracted = self.inner.extract_decision_variables(name)?;
         let dict = PyDict::new(py);
         for (subscripts, value) in extracted {
             let key_tuple = PyTuple::new(py, &subscripts)?;
@@ -318,9 +320,8 @@ impl Solution {
     pub fn extract_all_decision_variables<'py>(
         &self,
         py: Python<'py>,
-    ) -> PyResult<Bound<'py, PyDict>> {
-        let extracted =
-            crate::error::map_ommx_error(|| Ok(self.inner.extract_all_decision_variables()?))?;
+    ) -> OmmxPyResult<Bound<'py, PyDict>> {
+        let extracted = self.inner.extract_all_decision_variables()?;
         let result_dict = PyDict::new(py);
         for (name, variables) in extracted {
             let var_dict = PyDict::new(py);
@@ -360,9 +361,8 @@ impl Solution {
         &self,
         py: Python<'py>,
         name: &str,
-    ) -> PyResult<Bound<'py, PyDict>> {
-        let extracted =
-            crate::error::map_ommx_error(|| Ok(self.inner.extract_constraints(name)?))?;
+    ) -> OmmxPyResult<Bound<'py, PyDict>> {
+        let extracted = self.inner.extract_constraints(name)?;
         let dict = PyDict::new(py);
         for (subscripts, value) in extracted {
             let key_tuple = PyTuple::new(py, &subscripts)?;
@@ -379,9 +379,8 @@ impl Solution {
         &self,
         py: Python<'py>,
         name: &str,
-    ) -> PyResult<Bound<'py, PyDict>> {
-        let extracted =
-            crate::error::map_ommx_error(|| Ok(self.inner.extract_named_functions(name)?))?;
+    ) -> OmmxPyResult<Bound<'py, PyDict>> {
+        let extracted = self.inner.extract_named_functions(name)?;
         let dict = PyDict::new(py);
         for (subscripts, value) in extracted {
             let key_tuple = PyTuple::new(py, &subscripts)?;
@@ -397,9 +396,8 @@ impl Solution {
     pub fn extract_all_named_functions<'py>(
         &self,
         py: Python<'py>,
-    ) -> PyResult<Bound<'py, PyDict>> {
-        let extracted =
-            crate::error::map_ommx_error(|| Ok(self.inner.extract_all_named_functions()?))?;
+    ) -> OmmxPyResult<Bound<'py, PyDict>> {
+        let extracted = self.inner.extract_all_named_functions()?;
         let result_dict = PyDict::new(py);
         for (name, functions) in extracted {
             let func_dict = PyDict::new(py);
@@ -415,9 +413,14 @@ impl Solution {
     /// Set the dual variable value for a specific constraint by ID.
     ///
     /// Raises KeyError if the constraint ID does not exist.
-    pub fn set_dual_variable(&mut self, constraint_id: u64, value: Option<f64>) -> PyResult<()> {
+    pub fn set_dual_variable(
+        &mut self,
+        constraint_id: u64,
+        value: Option<f64>,
+    ) -> OmmxPyResult<()> {
         let constraint_id = ommx::ConstraintID::from(constraint_id);
-        crate::error::map_ommx_error(|| Ok(self.inner.set_dual_variable(constraint_id, value)?))
+        self.inner.set_dual_variable(constraint_id, value)?;
+        Ok(())
     }
 
     /// Get a specific evaluated decision variable by ID
@@ -443,33 +446,15 @@ impl Solution {
     }
 
     /// Get the evaluated value of a specific constraint by ID
-    pub fn get_constraint_value(&self, constraint_id: u64) -> PyResult<f64> {
+    pub fn get_constraint_value(&self, constraint_id: u64) -> OmmxPyResult<f64> {
         let constraint_id = ommx::ConstraintID::from(constraint_id);
-        self.inner
-            .evaluated_constraints()
-            .get(&constraint_id)
-            .map(|ec| ec.stage.evaluated_value)
-            .ok_or_else(|| {
-                PyKeyError::new_err(format!(
-                    "Unknown constraint ID: {}",
-                    constraint_id.into_inner()
-                ))
-            })
+        Ok(self.inner.get_constraint_value(constraint_id)?)
     }
 
     /// Get the dual variable value for a specific constraint by ID
-    pub fn get_dual_variable(&self, constraint_id: u64) -> PyResult<Option<f64>> {
+    pub fn get_dual_variable(&self, constraint_id: u64) -> OmmxPyResult<Option<f64>> {
         let constraint_id = ommx::ConstraintID::from(constraint_id);
-        self.inner
-            .evaluated_constraints()
-            .get(&constraint_id)
-            .map(|ec| ec.stage.dual_variable)
-            .ok_or_else(|| {
-                PyKeyError::new_err(format!(
-                    "Unknown constraint ID: {}",
-                    constraint_id.into_inner()
-                ))
-            })
+        Ok(self.inner.get_dual_variable(constraint_id)?)
     }
 
     /// Get a specific evaluated constraint by ID

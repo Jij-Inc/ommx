@@ -23,6 +23,8 @@ def _evaluated_results() -> tuple[ommx.Solution, ommx.SampleSet]:
         lambda solution, _sample_set: solution.extract_decision_variables("missing"),
         lambda solution, _sample_set: solution.extract_constraints("missing"),
         lambda solution, _sample_set: solution.extract_named_functions("missing"),
+        lambda solution, _sample_set: solution.get_constraint_value(999),
+        lambda solution, _sample_set: solution.get_dual_variable(999),
         lambda solution, _sample_set: solution.set_dual_variable(999, None),
         lambda _solution, sample_set: sample_set.get(999),
         lambda _solution, sample_set: sample_set.get_sample_by_id(999),
@@ -53,6 +55,12 @@ def test_lookup_failures_raise_key_error(operation) -> None:
 def test_decision_variable_kind_bound_mismatch_raises_value_error(operation) -> None:
     with pytest.raises(ValueError, match="Bound is inconsistent to kind"):
         operation()
+
+
+@pytest.mark.parametrize("kind", [0, 99])
+def test_unknown_decision_variable_kind_raises_value_error(kind: int) -> None:
+    with pytest.raises(ValueError, match=f"Unknown decision variable kind: {kind}"):
+        ommx.DecisionVariable(0, kind, ommx.Bound(0, 1))
 
 
 def test_duplicate_variable_subscripts_raise_value_error() -> None:
