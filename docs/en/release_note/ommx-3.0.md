@@ -8,6 +8,18 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🛠 Parse failures consistently raise `ValueError` ([#1099](https://github.com/Jij-Inc/ommx/pull/1099))
+
+Malformed protobuf payloads passed to the Python byte-decoding entry points now
+raise `ValueError`, with the OMMX message and field context preserved. Semantic
+protobuf parse failures and invalid QPLIB syntax use the same exception through
+the shared PyO3 error boundary.
+
+Python argument-extraction failures remain `TypeError`. File-open failures and
+MPS parser failures, which do not yet have a stable OMMX-owned parse signal,
+continue to fall back to `RuntimeError` instead of being classified from an
+implementation error type or rendered message.
+
 ### 🛠 Structured SDK errors use consistent Python exceptions ([#1097](https://github.com/Jij-Inc/ommx/pull/1097))
 
 Python bindings now route stable `DecisionVariableError`, `SolutionError`, and
