@@ -8,6 +8,20 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🛠 Numeric SDK errors consistently raise `ValueError` ([#1096](https://github.com/Jij-Inc/ommx/pull/1096))
+
+Python bindings now translate direct Rust SDK `CoefficientError`, `AtolError`,
+and `BoundError` signals through the shared PyO3 error boundary. Invalid
+coefficients in constructors, arithmetic, and binary-power reduction,
+non-positive tolerance values, and invalid bounds therefore raise
+`ValueError` consistently instead of depending on the entry point's previous
+panic, `RuntimeError`, or hand-written conversion path.
+
+Zero coefficients continue to be normalized as a successful operation.
+Python-owned type and argument-shape validation also keeps its native exception
+behavior, while unclassified Rust SDK failures continue to fall back to
+`RuntimeError`.
+
 ### 🆕 Typed remote Artifact lookup errors ([#1090](https://github.com/Jij-Inc/ommx/pull/1090))
 
 {meth}`~ommx.artifact.Artifact.load` and
