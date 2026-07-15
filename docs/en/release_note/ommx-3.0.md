@@ -8,6 +8,18 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🛠 Sample errors use the shared Python boundary ([#1107](https://github.com/Jij-Inc/ommx/pull/1107))
+
+`Samples.append` now propagates duplicate sample IDs with direct `?` through
+the shared PyO3 error boundary and raises `ValueError`. All incoming IDs are
+validated before mutation, so a failed append leaves the collection unchanged.
+
+`Instance.random_samples` reports inconsistent state-group counts and an
+undersized inclusive sample-ID range as `ValueError`. Full `u64` ID ranges and
+valid partitions such as two states across three samples are generated without
+integer overflow or a strategy panic; zero state groups remain valid only for
+zero samples.
+
 ### 🛠 Model errors use the shared Python boundary ([#1105](https://github.com/Jij-Inc/ommx/pull/1105))
 
 Decision-variable insertion and substitution, `Function.content_factor`, and
