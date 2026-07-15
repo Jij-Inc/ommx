@@ -29,6 +29,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::{
     fs,
     io::Cursor,
+    panic::{catch_unwind, AssertUnwindSafe},
     str::FromStr,
     time::{Duration, Instant},
 };
@@ -2773,6 +2774,270 @@ fn experiment_dyn_drops_unfinished_run_as_abandoned() {
 
     experiment.commit().unwrap();
     assert!(experiment.run_parameter_cells().unwrap().is_empty());
+}
+
+#[test]
+fn experiment_dyn_scopes_commit_successful_runs() {
+    let registry_handle = LocalRegistryHandle::temp().unwrap();
+    let image_name = ImageRef::parse("example.com/ommx/scoped:success").unwrap();
+
+    let artifact = ExperimentDyn::scoped_with_registry_handle(
+        registry_handle,
+        image_name.clone(),
+        |experiment| {
+            experiment.scoped_run(|run| {
+                run.log_parameter("seed", 1_i64)?;
+                run.log_json("partial", json!({"step": 1}))?;
+                Ok(())
+            })?;
+            Ok(())
+        },
+    )
+    .unwrap();
+
+    assert_eq!(artifact.image_name(), &image_name);
+    let experiment = ExperimentDyn::from_artifact(artifact).unwrap();
+    assert_eq!(
+        experiment.experiment_status(),
+        Some(ExperimentStatus::Finished)
+    );
+    let runs = experiment.runs().unwrap();
+    assert_eq!(runs.len(), 1);
+    assert_eq!(runs[0].status().as_str(), RUN_STATUS_FINISHED);
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&runs[0].attachment_blob("partial").unwrap())
+            .unwrap(),
+        json!({"step": 1})
+    );
+    assert_eq!(
+        experiment.run_parameter_cells().unwrap()[0].value,
+        ParameterValue::Int(1)
+    );
+}
+
+#[test]
+fn experiment_dyn_scopes_preserve_callback_error_and_failed_run_state() {
+    let registry_handle = LocalRegistryHandle::temp().unwrap();
+    let image_name = ImageRef::parse("example.com/ommx/scoped:failed").unwrap();
+
+    let error = ExperimentDyn::scoped_with_registry_handle(
+        registry_handle.clone(),
+        image_name.clone(),
+        |experiment| {
+            experiment.scoped_run(|run| -> anyhow::Result<()> {
+                run.log_parameter("seed", 2_i64)?;
+                run.log_json("partial", json!({"step": 2}))?;
+                anyhow::bail!("callback sentinel")
+            })?;
+            Ok(())
+        },
+    )
+    .expect_err("callback failure must be returned");
+    assert_eq!(error.to_string(), "callback sentinel");
+
+    let recovered =
+        ExperimentDyn::restore_from_checkpoint_in_registry_handle(registry_handle, image_name)
+            .unwrap();
+    let runs = recovered.runs().unwrap();
+    assert_eq!(runs.len(), 1);
+    assert_eq!(runs[0].status().as_str(), RUN_STATUS_FAILED);
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&runs[0].attachment_blob("partial").unwrap())
+            .unwrap(),
+        json!({"step": 2})
+    );
+    assert_eq!(
+        recovered.run_parameter_cells().unwrap()[0].value,
+        ParameterValue::Int(2)
+    );
+}
+
+#[test]
+fn experiment_dyn_sessions_support_explicit_interruption() {
+    let registry_handle = LocalRegistryHandle::temp().unwrap();
+    let image_name = ImageRef::parse("example.com/ommx/session:interrupted").unwrap();
+    let experiment =
+        ExperimentDyn::with_registry_handle(registry_handle.clone(), image_name.clone()).unwrap();
+
+    let mut run = experiment.run().unwrap().into_session();
+    run.run_mut().log_parameter("seed", 3_i64).unwrap();
+    run.run_mut()
+        .log_json("partial", json!({"step": 3}))
+        .unwrap();
+    run.interrupt().unwrap();
+    experiment
+        .session()
+        .interrupt("caller cancellation")
+        .unwrap();
+
+    let recovered =
+        ExperimentDyn::restore_from_checkpoint_in_registry_handle(registry_handle, image_name)
+            .unwrap();
+    let runs = recovered.runs().unwrap();
+    assert_eq!(runs.len(), 1);
+    assert_eq!(runs[0].status().as_str(), RUN_STATUS_INTERRUPTED);
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&runs[0].attachment_blob("partial").unwrap())
+            .unwrap(),
+        json!({"step": 3})
+    );
+}
+
+#[test]
+fn experiment_dyn_scope_panic_checkpoints_interrupted_partial_run() {
+    let registry_handle = LocalRegistryHandle::temp().unwrap();
+    let image_name = ImageRef::parse("example.com/ommx/scoped:panic").unwrap();
+
+    let panic_result = catch_unwind(AssertUnwindSafe({
+        let registry_handle = registry_handle.clone();
+        let image_name = image_name.clone();
+        move || {
+            let _ = ExperimentDyn::scoped_with_registry_handle(
+                registry_handle,
+                image_name,
+                |experiment| {
+                    experiment.scoped_run(|run| -> anyhow::Result<()> {
+                        run.log_parameter("seed", 4_i64)?;
+                        run.log_json("partial", json!({"step": 4}))?;
+                        panic!("panic sentinel")
+                    })?;
+                    Ok(())
+                },
+            );
+        }
+    }));
+    assert!(panic_result.is_err());
+
+    let checkpoint_image_name = registry_handle
+        .registry()
+        .experiment_checkpoint_image_name(&image_name)
+        .unwrap();
+    let checkpoint =
+        LocalArtifactDyn::open_in_registry_handle(registry_handle.clone(), checkpoint_image_name)
+            .unwrap();
+    let config = experiment_config(&checkpoint.as_local_artifact());
+    assert_eq!(config.status, EXPERIMENT_STATUS_INTERRUPTED);
+    assert_eq!(config.runs[0].status, RUN_STATUS_INTERRUPTED);
+
+    let recovered =
+        ExperimentDyn::restore_from_checkpoint_in_registry_handle(registry_handle, image_name)
+            .unwrap();
+    assert_eq!(
+        recovered.run_parameter_cells().unwrap()[0].value,
+        ParameterValue::Int(4)
+    );
+}
+
+#[test]
+fn experiment_dyn_session_explicit_commit_error_suppresses_drop_checkpoint() {
+    let registry_handle = LocalRegistryHandle::temp().unwrap();
+    let image_name = ImageRef::parse("example.com/ommx/session:open-run").unwrap();
+    let experiment =
+        ExperimentDyn::with_registry_handle(registry_handle.clone(), image_name.clone()).unwrap();
+    let run = experiment.run().unwrap();
+
+    let error = experiment
+        .session()
+        .interrupt_on_drop("fallback must be suppressed")
+        .commit()
+        .expect_err("an open Run must block commit");
+    assert!(error.to_string().contains("Run handle"));
+    let checkpoint_image_name = registry_handle
+        .registry()
+        .experiment_checkpoint_image_name(&image_name)
+        .unwrap();
+    assert!(registry_handle
+        .registry()
+        .resolve_image_name(&checkpoint_image_name)
+        .unwrap()
+        .is_none());
+
+    run.abandon();
+    experiment.commit().unwrap();
+}
+
+#[test]
+fn experiment_dyn_session_drop_fallback_is_opt_in() {
+    let registry_handle = LocalRegistryHandle::temp().unwrap();
+    let image_name = ImageRef::parse("example.com/ommx/session:no-drop-fallback").unwrap();
+    let experiment =
+        ExperimentDyn::with_registry_handle(registry_handle.clone(), image_name.clone()).unwrap();
+
+    drop(experiment.session());
+    assert!(experiment.is_unsealed());
+    let checkpoint_image_name = registry_handle
+        .registry()
+        .experiment_checkpoint_image_name(&image_name)
+        .unwrap();
+    assert!(registry_handle
+        .registry()
+        .resolve_image_name(&checkpoint_image_name)
+        .unwrap()
+        .is_none());
+    experiment.commit().unwrap();
+}
+
+#[test]
+fn experiment_dyn_scope_preserves_callback_error_when_checkpoint_fails() -> anyhow::Result<()> {
+    let registry_handle = LocalRegistryHandle::temp()?;
+    let image_name = ImageRef::parse("example.com/ommx/scoped:checkpoint-failure")?;
+    let conn = rusqlite::Connection::open(
+        registry_handle
+            .registry()
+            .root()
+            .join(SQLITE_INDEX_FILE_NAME),
+    )?;
+    conn.execute_batch(
+        r#"
+        CREATE TRIGGER reject_scope_checkpoint_ref_publish
+        BEFORE INSERT ON refs
+        BEGIN
+            SELECT RAISE(ABORT, 'scope checkpoint ref publish disabled');
+        END;
+        "#,
+    )?;
+
+    let error =
+        ExperimentDyn::scoped_with_registry_handle(registry_handle, image_name, |_experiment| {
+            anyhow::bail!("original callback error")
+        })
+        .expect_err("callback error must be returned even if checkpointing fails");
+    assert_eq!(error.to_string(), "original callback error");
+    Ok(())
+}
+
+#[test]
+fn experiment_dyn_session_drop_checkpoint_failure_is_best_effort() -> anyhow::Result<()> {
+    let registry_handle = LocalRegistryHandle::temp()?;
+    let image_name = ImageRef::parse("example.com/ommx/session:drop-failure")?;
+    let experiment =
+        ExperimentDyn::with_registry_handle(registry_handle.clone(), image_name).unwrap();
+    let session = experiment
+        .session()
+        .interrupt_on_drop("drop checkpoint failure");
+    let conn = rusqlite::Connection::open(
+        registry_handle
+            .registry()
+            .root()
+            .join(SQLITE_INDEX_FILE_NAME),
+    )?;
+    conn.execute_batch(
+        r#"
+        CREATE TRIGGER reject_session_checkpoint_ref_publish
+        BEFORE INSERT ON refs
+        BEGIN
+            SELECT RAISE(ABORT, 'session checkpoint ref publish disabled');
+        END;
+        "#,
+    )?;
+
+    let drop_result = catch_unwind(AssertUnwindSafe(|| drop(session)));
+    assert!(
+        drop_result.is_ok(),
+        "Drop must not propagate checkpoint errors"
+    );
+    assert_eq!(experiment.state_name(), "failed");
+    Ok(())
 }
 
 #[test]

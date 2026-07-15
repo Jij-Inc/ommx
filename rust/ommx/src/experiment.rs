@@ -32,6 +32,12 @@
 //! status; callers resume through the original requested image name
 //! rather than through a checkpoint Artifact handle.
 //!
+//! Rust callers can use [`ExperimentDyn::scoped`] and
+//! [`ExperimentDyn::scoped_run`] for the same success / failure / interruption
+//! transitions. [`ExperimentSession`] and [`RunSession`] expose the transitions
+//! explicitly when callback scopes are not a good fit. Their drop fallback is
+//! opt-in and best-effort, and never pushes an Artifact to a remote registry.
+//!
 //! Forking a sealed Experiment creates a new unsealed child Experiment.
 //! The child manifest records the parent manifest as its OCI `subject`,
 //! while existing payload blobs remain shared through the Local
@@ -54,6 +60,21 @@
 //! run.finish()?;
 //!
 //! let artifact = exp.commit()?.into_artifact();
+//! ```
+//!
+//! A lifecycle-safe dynamic scope keeps the caller error while checkpointing
+//! partial state:
+//!
+//! ```ignore
+//! use ommx::experiment::{ExperimentDyn, Name};
+//!
+//! let artifact = ExperimentDyn::scoped(Name::Anonymous, |experiment| {
+//!     experiment.scoped_run(|run| {
+//!         run.log_parameter("seed", 1_i64)?;
+//!         Ok(())
+//!     })?;
+//!     Ok(())
+//! })?;
 //! ```
 //!
 //! The module is split by data terms: `run` contains `Run` lifecycle
@@ -79,7 +100,9 @@ mod tests;
 pub use attachment::{
     detect_file_media_type, AttachmentTable, Compression, DEFAULT_FILE_MEDIA_TYPE,
 };
-pub use dynamic::{ExperimentDyn, RunDyn, SamplingDyn, SealedRunDyn, SolveDyn};
+pub use dynamic::{
+    ExperimentDyn, ExperimentSession, RunDyn, RunSession, SamplingDyn, SealedRunDyn, SolveDyn,
+};
 pub use logging::AttachmentLogger;
 pub use parameter::{ParameterValue, RunParameterCell};
 pub use run::{FailedSampleRecord, FailedSolveRecord, FinishedSampleRecord, FinishedSolveRecord};

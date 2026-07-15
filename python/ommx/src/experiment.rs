@@ -545,10 +545,11 @@ impl PyExperiment {
     ) -> Result<bool> {
         if exc_type.is_some() && self.inner.is_unsealed() {
             let reason = python_exception_reason(exc_type, exc_value);
+            let session = self.inner.session();
             let checkpoint = if is_keyboard_interrupt(py, exc_type)? {
-                self.inner.commit_interrupted_checkpoint(reason)
+                session.interrupt(reason)
             } else {
-                self.inner.commit_failed_checkpoint(reason)
+                session.fail(reason)
             };
             if let Err(error) = checkpoint {
                 tracing::warn!(
@@ -967,7 +968,7 @@ impl PyExperiment {
 impl PyExperiment {
     fn commit_inner(&mut self, py: Python<'_>) -> Result<PyArtifact> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        Ok(PyArtifact::new(self.inner.commit()?))
+        Ok(PyArtifact::new(self.inner.session().commit()?))
     }
 }
 
@@ -1715,10 +1716,11 @@ impl PyRun {
                             );
                         }
                     }
+                    let session = run.into_session();
                     let finish_result = if is_keyboard_interrupt(py, exc_type)? {
-                        run.finish_interrupted()
+                        session.interrupt()
                     } else {
-                        run.finish_failed()
+                        session.fail()
                     };
                     if let Err(error) = finish_result {
                         tracing::warn!(
@@ -1734,7 +1736,7 @@ impl PyRun {
                         return Err(error);
                     }
                 }
-                run.finish()?;
+                run.into_session().finish()?;
                 Ok(false)
             }
         }
