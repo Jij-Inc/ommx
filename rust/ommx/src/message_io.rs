@@ -11,6 +11,7 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{ParseError, RawParseError};
+    use std::error::Error as _;
 
     #[test]
     fn sdk_byte_decoders_preserve_the_parse_error_signal() {
@@ -98,6 +99,15 @@ mod tests {
             assert_eq!(parse_error.context.len(), 1);
             assert_eq!(parse_error.context[0].message, message);
             assert_eq!(parse_error.context[0].field, "bytes");
+
+            let raw_source = parse_error
+                .source()
+                .expect("ParseError must expose its RawParseError source");
+            assert!(raw_source.downcast_ref::<RawParseError>().is_some());
+            let decode_source = raw_source
+                .source()
+                .expect("RawParseError::DecodeError must expose the protobuf source");
+            assert!(decode_source.downcast_ref::<prost::DecodeError>().is_some());
         }
     }
 }
