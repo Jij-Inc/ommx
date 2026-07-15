@@ -3,9 +3,11 @@ resolver = "2"
 members = [
     "rust/ommx",
     "rust/ommx-derive",
+    "rust/ommx-pyo3-bridge",
     "rust/protogen",
     "rust/dataset",
     "python/ommx",
+    "tests/pyo3-bridge-fixture",
 ]
 
 [workspace.package]

@@ -1,0 +1,25 @@
+[package]
+name = "ommx-pyo3-bridge-fixture"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[lib]
+name = "ommx_pyo3_bridge_fixture"
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "stub_gen"
+path = "src/stub_gen.rs"
+doc = false
+
+[dependencies]
+ommx = { path = "../../rust/ommx", default-features = false }
+ommx-pyo3-bridge = { path = "../../rust/ommx-pyo3-bridge" }
+pyo3.workspace = true
+pyo3-stub-gen.workspace = true

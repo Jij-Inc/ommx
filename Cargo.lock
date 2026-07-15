@@ -2518,6 +2518,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "ommx-pyo3-bridge"
+version = "3.0.0-beta.2"
+dependencies = [
+ "ommx",
+ "pyo3",
+ "pyo3-stub-gen",
+]
+
+[[package]]
+name = "ommx-pyo3-bridge-fixture"
+version = "3.0.0-beta.2"
+dependencies = [
+ "ommx",
+ "ommx-pyo3-bridge",
+ "pyo3",
+ "pyo3-stub-gen",
+]
+
+[[package]]
 name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"

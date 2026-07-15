@@ -54,6 +54,7 @@ task proto
 | Directory | crates.io | Description |
 |:----------|:---------:|:------------|
 | [`rust/ommx/`](./rust/ommx/) | [![ommx](https://img.shields.io/crates/v/ommx)](https://crates.io/crates/ommx) | OMMX Rust SDK |
+| [`rust/ommx-pyo3-bridge/`](./rust/ommx-pyo3-bridge/) | [![ommx-pyo3-bridge](https://img.shields.io/crates/v/ommx-pyo3-bridge)](https://crates.io/crates/ommx-pyo3-bridge) | Typed conversion from Rust OMMX values to canonical Python OMMX classes |
 | [`rust/protogen/`](./rust/protogen/) | Not for release | Rust code generator from `*.proto` |
 | [`rust/dataset/`](./rust/dataset/) | Not for release | CLI tool for creating and uploading OMMX Artifact for dataset, e.g. MIPLIB2017 |
 
@@ -77,7 +78,9 @@ Note that this only tests the Rust SDK, not the Rust codes in Python SDK.
 
 ### Versioning
 
-The version of Rust SDK is [semantic versioning](https://semver.org/).
+The published Rust SDK crates use the same workspace version and follow
+[semantic versioning](https://semver.org/). This includes `ommx`,
+`ommx-derive`, and `ommx-pyo3-bridge`.
 Note that the version of Rust SDK is independent from the schema version `ommx.v1` and that of Python SDK.
 
 ```shell

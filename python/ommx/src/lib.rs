@@ -29,6 +29,7 @@ mod parameters;
 mod parametric_instance;
 mod polynomial;
 mod provenance;
+mod pyo3_bridge;
 mod quadratic;
 mod random;
 mod sample_set;
@@ -248,6 +249,10 @@ fn _ommx_rust(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     // ATol functions
     m.add_function(wrap_pyfunction!(set_default_atol, m)?)?;
     m.add_function(wrap_pyfunction!(get_default_atol, m)?)?;
+
+    // Private reconstruction endpoints for independently built PyO3 modules.
+    // They deliberately stay out of the generated public Python API.
+    pyo3_bridge::register(m)?;
 
     Ok(())
 }
