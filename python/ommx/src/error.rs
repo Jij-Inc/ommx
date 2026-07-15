@@ -108,8 +108,10 @@ impl_from_ommx_signal!(
     ommx::BoundError,
     ommx::CoefficientError,
     ommx::DecisionVariableError,
+    ommx::ParseError,
     ommx::SampleSetError,
     ommx::SolutionError,
+    ommx::qplib::QplibParseError,
 );
 
 impl From<PyErr> for OmmxPyError {
@@ -128,7 +130,21 @@ impl From<OmmxPyError> for PyErr {
 }
 
 fn ommx_error_to_pyerr(error: ommx::Error) -> PyErr {
+    // ParseError may contain another mapped signal as its source. Parsing is
+    // the Python-visible operation, so classify it before inspecting nested
+    // domain errors. Its Display already renders the complete parse traceback.
+    if let Some(parse_error) = error.downcast_ref::<ommx::ParseError>() {
+        return PyValueError::new_err(parse_error.to_string());
+    }
+
     let message = format!("{error:#}");
+
+    if error
+        .downcast_ref::<ommx::qplib::QplibParseError>()
+        .is_some()
+    {
+        return PyValueError::new_err(message);
+    }
 
     if error.downcast_ref::<ommx::CoefficientError>().is_some()
         || error.downcast_ref::<ommx::AtolError>().is_some()
