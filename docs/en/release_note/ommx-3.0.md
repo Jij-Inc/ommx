@@ -8,6 +8,18 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🛠 Evaluation errors use the shared Python boundary ([#1104](https://github.com/Jij-Inc/ommx/pull/1104))
+
+Function, polynomial, constraint, named-function, and `Instance` evaluation
+APIs now propagate Rust SDK failures with direct `?` through the shared PyO3
+error boundary. Invalid caller-provided states consistently raise `ValueError`,
+including when special-constraint propagation is required, while internal
+propagation failures continue to fall back to `RuntimeError`.
+
+Partial evaluation also preserves the underlying coefficient error in the Rust
+error chain, so it retains its `ValueError` classification without a local
+Python conversion.
+
 ### 🛠 Remaining Python bindings use the shared error boundary ([#1102](https://github.com/Jij-Inc/ommx/pull/1102))
 
 The remaining `Instance`, `ParametricInstance`, attached metadata, random
