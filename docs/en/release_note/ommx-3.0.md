@@ -8,6 +8,19 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🛠 Remaining Python bindings use the shared error boundary ([#1102](https://github.com/Jij-Inc/ommx/pull/1102))
+
+The remaining `Instance`, `ParametricInstance`, attached metadata, random
+generator, `Solution`, `Samples`, and Artifact registry bindings now propagate
+Rust SDK failures with direct `?` through the shared PyO3 error boundary. This
+applies the existing typed exception classification consistently; unclassified
+SDK failures continue to fall back to `RuntimeError`.
+
+Exceptions originating in Python remain unchanged, including the same exception
+object raised by solver and sampler adapters through `Run.log_solve` and
+`Run.log_sample`. Binding-owned duplicate component IDs and missing penalty
+weights are reported as `ValueError`.
+
 ### 🛠 Experiment errors use the shared Python boundary ([#1101](https://github.com/Jij-Inc/ommx/pull/1101))
 
 Experiment, Run, Solve, Sampling, and local-listing bindings now propagate Rust
