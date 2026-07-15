@@ -30,6 +30,10 @@ returns the typed error directly):
 - [`DecisionVariableError`](crate::DecisionVariableError), [`SubstitutionError`](crate::SubstitutionError), [`SolutionError`](crate::SolutionError),
   [`SampleSetError`](crate::SampleSetError) — domain-specific structured errors consumed by
   in-crate tests and downstream code that wants to react programmatically.
+- [`artifact::ImageRefParseError`](crate::artifact::ImageRefParseError) and
+  [`experiment::AttachmentNotFound`](crate::experiment::AttachmentNotFound) —
+  recoverable Artifact / Experiment lookup input signals while the owning SDK
+  APIs retain the common `ommx::Result<T>` surface.
 
 Recover them with [`Error::downcast_ref`](crate::Error::downcast_ref) / [`Error::is`](crate::Error::is):
 

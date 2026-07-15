@@ -6,7 +6,7 @@ use crate::artifact::{
 };
 use crate::{Instance, ParametricInstance, SampleSet, Solution};
 use anyhow::{ensure, Context, Result};
-use oci_spec::image::MediaType;
+use oci_spec::image::{Descriptor, MediaType};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashMap},
@@ -19,6 +19,25 @@ use std::{
 pub const DEFAULT_FILE_MEDIA_TYPE: &str = "application/octet-stream";
 
 const ZSTD_MEDIA_TYPE_SUFFIX: &str = "+zstd";
+
+/// OMMX-owned signal that an Attachment name is absent from its Experiment or
+/// Run namespace.
+///
+/// Attachment read APIs keep returning [`crate::Result`]. Callers that treat
+/// the name lookup as recoverable control flow can downcast the returned error
+/// to this signal.
+#[derive(Debug, thiserror::Error)]
+#[error("Attachment {name:?} not found")]
+pub struct AttachmentNotFound {
+    name: String,
+}
+
+impl AttachmentNotFound {
+    /// Missing Attachment name requested by the caller.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+}
 
 /// Compression applied to an Attachment's stored OCI layer.
 ///
@@ -118,6 +137,14 @@ impl<D> AttachmentTable<D> {
         self.entries.get(name)
     }
 
+    fn attachment(&self, name: &str) -> Result<&D> {
+        self.get(name).ok_or_else(|| {
+            crate::error!(AttachmentNotFound {
+                name: name.to_string(),
+            })
+        })
+    }
+
     pub fn filename(&self, name: &str) -> Option<&str> {
         self.filenames.get(name).map(String::as_str)
     }
@@ -200,11 +227,6 @@ where
 }
 
 impl<'reg> AttachmentTable<StoredDescriptor<'reg>> {
-    fn attachment(&self, name: &str) -> Result<&StoredDescriptor<'reg>> {
-        self.get(name)
-            .ok_or_else(|| anyhow::anyhow!("Attachment `{name}` not found"))
-    }
-
     pub(crate) fn media_type(&self, name: &str) -> Result<MediaType> {
         Ok(attachment_storage_format(self.attachment(name)?)?.logical_media_type)
     }
@@ -264,11 +286,21 @@ impl<'reg> AttachmentTable<StoredDescriptor<'reg>> {
         path: impl AsRef<Path>,
         overwrite: bool,
     ) -> Result<PathBuf> {
-        let descriptor = self
-            .get(name)
-            .ok_or_else(|| anyhow::anyhow!("Attachment `{name}` not found"))?;
+        let descriptor = self.attachment(name)?;
         write_attachment_descriptor(descriptor, name, self.filename(name), path, overwrite)
     }
+}
+
+/// Read an Attachment's logical media type from its OCI descriptor metadata.
+///
+/// This helper lives in the private Attachment owner module so dynamic handles
+/// can validate Python codec types without first reading or verifying payload
+/// bytes in the Local Registry.
+pub fn descriptor_attachment_media_type(
+    attachments: &AttachmentTable<Descriptor>,
+    name: &str,
+) -> Result<MediaType> {
+    Ok(attachment_storage_format(attachments.attachment(name)?)?.logical_media_type)
 }
 
 /// OCI layer media type for JSON attachment payloads.
@@ -288,7 +320,7 @@ struct AttachmentStorageFormat {
     compression: Compression,
 }
 
-fn attachment_storage_format(descriptor: &StoredDescriptor<'_>) -> Result<AttachmentStorageFormat> {
+fn attachment_storage_format(descriptor: &Descriptor) -> Result<AttachmentStorageFormat> {
     let compression = descriptor
         .annotations()
         .as_ref()

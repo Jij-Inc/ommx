@@ -6,9 +6,9 @@ use super::config::{
 };
 use super::parameter::RunParameterTable;
 use super::{
-    AdapterDiagnosticPayload, AttachmentLogger, AttachmentTable, AutosavePolicy, Compression,
-    Experiment, ExperimentDyn, ExperimentStatus, Name, ParameterValue, SamplingStatus,
-    SealedExperiment, SolveStatus, Trace, EXPERIMENT_ARTIFACT_MEDIA_TYPE,
+    AdapterDiagnosticPayload, AttachmentLogger, AttachmentNotFound, AttachmentTable,
+    AutosavePolicy, Compression, Experiment, ExperimentDyn, ExperimentStatus, Name, ParameterValue,
+    SamplingStatus, SealedExperiment, SolveStatus, Trace, EXPERIMENT_ARTIFACT_MEDIA_TYPE,
     EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_STATUS_DRAFT, EXPERIMENT_STATUS_FAILED,
     EXPERIMENT_STATUS_FINISHED, EXPERIMENT_STATUS_INTERRUPTED, RUN_PARAMETERS_MEDIA_TYPE,
     RUN_STATUS_FAILED, RUN_STATUS_FINISHED, RUN_STATUS_INTERRUPTED,
@@ -199,6 +199,22 @@ fn attachment_reader_streams_payload_into_registry() {
         let artifact = experiment.commit()?.into_artifact();
         let loaded = SealedExperiment::from_artifact(artifact)?;
         assert_eq!(loaded.attachment_blob("reader")?, payload);
+        Ok(())
+    });
+}
+
+#[test]
+fn missing_attachment_preserves_lookup_signal() {
+    with_temp_experiment(|experiment| {
+        let artifact = experiment.commit()?.into_artifact();
+        let loaded = SealedExperiment::from_artifact(artifact)?;
+        let error = loaded
+            .attachment_blob("missing")
+            .expect_err("missing Attachment must fail");
+        let signal = error
+            .downcast_ref::<AttachmentNotFound>()
+            .expect("missing Attachment must preserve AttachmentNotFound");
+        assert_eq!(signal.name(), "missing");
         Ok(())
     });
 }

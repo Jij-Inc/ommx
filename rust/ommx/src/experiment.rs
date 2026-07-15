@@ -77,7 +77,8 @@ mod sealed;
 mod tests;
 
 pub use attachment::{
-    detect_file_media_type, AttachmentTable, Compression, DEFAULT_FILE_MEDIA_TYPE,
+    detect_file_media_type, AttachmentNotFound, AttachmentTable, Compression,
+    DEFAULT_FILE_MEDIA_TYPE,
 };
 pub use dynamic::{ExperimentDyn, RunDyn, SamplingDyn, SealedRunDyn, SolveDyn};
 pub use logging::AttachmentLogger;

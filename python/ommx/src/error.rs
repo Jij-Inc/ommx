@@ -82,6 +82,15 @@ enum OmmxPyErrorKind {
 #[derive(Debug)]
 pub struct OmmxPyError(OmmxPyErrorKind);
 
+impl std::fmt::Display for OmmxPyError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.0 {
+            OmmxPyErrorKind::Sdk(error) => write!(formatter, "{error:#}"),
+            OmmxPyErrorKind::Python(error) => error.fmt(formatter),
+        }
+    }
+}
+
 /// Result type for Rust SDK failures crossing the private binding boundary.
 pub type OmmxPyResult<T> = std::result::Result<T, OmmxPyError>;
 
@@ -109,6 +118,7 @@ impl_from_ommx_signal!(
     ommx::CoefficientError,
     ommx::DecisionVariableError,
     ommx::artifact::ImageRefParseError,
+    ommx::experiment::AttachmentNotFound,
     ommx::ParseError,
     ommx::SampleSetError,
     ommx::SolutionError,
@@ -151,6 +161,10 @@ fn ommx_error_to_pyerr(error: ommx::Error) -> PyErr {
     // complete anyhow chain would repeat the OCI parser message.
     if let Some(image_ref_error) = error.downcast_ref::<ommx::artifact::ImageRefParseError>() {
         return PyValueError::new_err(image_ref_error.to_string());
+    }
+
+    if let Some(attachment_error) = error.downcast_ref::<ommx::experiment::AttachmentNotFound>() {
+        return PyKeyError::new_err(attachment_error.name().to_string());
     }
 
     let message = format!("{error:#}");

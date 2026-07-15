@@ -3,6 +3,7 @@ from dataclasses import dataclass
 
 import pytest
 
+from ommx.artifact import get_local_registry_root
 from ommx.experiment import Experiment
 
 
@@ -38,6 +39,96 @@ class WrongMediaTypeCodec:
         return ToyPayloadCodec.decode(data)
 
 
+class SentinelError(Exception):
+    pass
+
+
+class EncodeRaisesCodec:
+    media_type = ToyPayloadCodec.media_type
+
+    @staticmethod
+    def encode(value: ToyPayload) -> bytes:
+        raise SentinelError(f"encode failed for {value.label}")
+
+    @staticmethod
+    def decode(data: bytes) -> ToyPayload:
+        return ToyPayloadCodec.decode(data)
+
+
+class DecodeRaisesCodec:
+    media_type = ToyPayloadCodec.media_type
+
+    @staticmethod
+    def encode(value: ToyPayload) -> bytes:
+        return ToyPayloadCodec.encode(value)
+
+    @staticmethod
+    def decode(data: bytes) -> ToyPayload:
+        raise SentinelError(f"decode failed for {len(data)} bytes")
+
+
+class RaisingMediaTypeMeta(type):
+    @property
+    def media_type(cls) -> str:  # noqa: N805
+        raise SentinelError("media_type lookup failed")
+
+
+class RaisingMediaTypeCodec(metaclass=RaisingMediaTypeMeta):
+    @staticmethod
+    def encode(value: ToyPayload) -> bytes:
+        return ToyPayloadCodec.encode(value)
+
+    @staticmethod
+    def decode(data: bytes) -> ToyPayload:
+        return ToyPayloadCodec.decode(data)
+
+
+class AttributeErrorMediaTypeMeta(type):
+    @property
+    def media_type(cls) -> str:  # noqa: N805
+        raise AttributeError("media_type descriptor failed")
+
+
+class AttributeErrorMediaTypeCodec(metaclass=AttributeErrorMediaTypeMeta):
+    @staticmethod
+    def encode(value: ToyPayload) -> bytes:
+        return ToyPayloadCodec.encode(value)
+
+    @staticmethod
+    def decode(data: bytes) -> ToyPayload:
+        return ToyPayloadCodec.decode(data)
+
+
+class MissingMediaTypeCodec:
+    @staticmethod
+    def encode(value: ToyPayload) -> bytes:
+        return ToyPayloadCodec.encode(value)
+
+
+class NonStringMediaTypeCodec:
+    media_type = 42
+
+    @staticmethod
+    def encode(value: ToyPayload) -> bytes:
+        return ToyPayloadCodec.encode(value)
+
+
+class NonBytesEncodeCodec:
+    media_type = ToyPayloadCodec.media_type
+
+    @staticmethod
+    def encode(value: ToyPayload) -> str:
+        return value.label
+
+
+class ListEncodeCodec:
+    media_type = ToyPayloadCodec.media_type
+
+    @staticmethod
+    def encode(value: ToyPayload) -> list[int]:
+        return list(ToyPayloadCodec.encode(value))
+
+
 def test_experiment_attachment_codec_round_trip():
     expected = ToyPayload(label="experiment", value=7)
 
@@ -66,6 +157,51 @@ def test_run_attachment_codec_round_trip():
     assert run.attachment_names == ["typed-payload"]
     assert run.attachment_media_type("typed-payload") == ToyPayloadCodec.media_type
     assert run.get_blob("typed-payload") == ToyPayloadCodec.encode(expected)
+
+
+def test_attachment_codec_callback_exceptions_are_preserved():
+    value = ToyPayload(label="sentinel", value=17)
+    experiment = Experiment.with_temp_local_registry()
+
+    with pytest.raises(SentinelError, match="encode failed for sentinel"):
+        experiment.log_with_codec(EncodeRaisesCodec, "encode", value)
+    with pytest.raises(SentinelError, match="media_type lookup failed"):
+        experiment.log_with_codec(
+            RaisingMediaTypeCodec,  # pyright: ignore[reportArgumentType]
+            "media-type",
+            value,
+        )
+    with pytest.raises(AttributeError, match="media_type descriptor failed"):
+        experiment.log_with_codec(
+            AttributeErrorMediaTypeCodec,  # pyright: ignore[reportArgumentType]
+            "attribute-error-media-type",
+            value,
+        )
+
+    experiment.log_with_codec(ToyPayloadCodec, "decode", value)
+    experiment.commit()
+    loaded = Experiment.from_artifact(experiment.artifact)
+    with pytest.raises(SentinelError, match="decode failed"):
+        loaded.get_with_codec(DecodeRaisesCodec, "decode")
+
+
+@pytest.mark.parametrize(
+    "codec",
+    [
+        MissingMediaTypeCodec,
+        NonStringMediaTypeCodec,
+        NonBytesEncodeCodec,
+        ListEncodeCodec,
+    ],
+)
+def test_attachment_codec_protocol_failures_raise_type_error(codec):
+    experiment = Experiment.with_temp_local_registry()
+    with pytest.raises(TypeError):
+        experiment.log_with_codec(
+            codec,  # pyright: ignore[reportArgumentType]
+            "invalid",
+            ToyPayload(label="invalid", value=0),
+        )
 
 
 def test_compressed_attachment_round_trip_is_transparent():
@@ -110,7 +246,7 @@ def test_logical_zstd_media_type_suffix_round_trip(compression):
 
 def test_attachment_rejects_unknown_compression():
     with Experiment.with_temp_local_registry() as experiment:
-        with pytest.raises(Exception, match="expected `none` or `zstd`"):
+        with pytest.raises(ValueError, match="expected `none` or `zstd`"):
             experiment.log_attachment(
                 "payload",
                 "application/octet-stream",
@@ -126,7 +262,7 @@ def test_experiment_attachment_codec_rejects_media_type_mismatch():
         )
 
     loaded = Experiment.from_artifact(experiment.artifact)
-    with pytest.raises(Exception, match="Expected media type"):
+    with pytest.raises(ValueError, match="Expected media type"):
         loaded.get_with_codec(WrongMediaTypeCodec, "typed-payload")
 
 
@@ -138,8 +274,45 @@ def test_run_attachment_codec_rejects_media_type_mismatch():
             )
 
     loaded = Experiment.from_artifact(experiment.artifact)
-    with pytest.raises(Exception, match="Expected media type"):
+    with pytest.raises(ValueError, match="Expected media type"):
         loaded.runs[0].get_with_codec(WrongMediaTypeCodec, "typed-payload")
+
+
+def test_codec_media_type_mismatch_precedes_blob_read():
+    experiment = Experiment()
+    experiment.log_with_codec(
+        ToyPayloadCodec, "experiment-payload", ToyPayload(label="experiment", value=7)
+    )
+    with experiment.run() as run:
+        run.log_with_codec(
+            ToyPayloadCodec, "run-payload", ToyPayload(label="run", value=11)
+        )
+    artifact = experiment.commit()
+    loaded = Experiment.from_artifact(artifact)
+
+    payload_layers = [
+        layer
+        for layer in artifact.layers
+        if layer.media_type == ToyPayloadCodec.media_type
+    ]
+    assert len(payload_layers) == 2
+    blobs = {}
+    for layer in payload_layers:
+        algorithm, encoded = layer.digest.split(":", maxsplit=1)
+        path = get_local_registry_root() / "blobs" / algorithm / encoded
+        blobs[path] = path.read_bytes()
+        path.unlink()
+
+    try:
+        with pytest.raises(ValueError, match="Expected media type"):
+            loaded.get_with_codec(WrongMediaTypeCodec, "experiment-payload")
+        with pytest.raises(ValueError, match="Expected media type"):
+            loaded.runs[0].get_with_codec(WrongMediaTypeCodec, "run-payload")
+        with pytest.raises(RuntimeError, match="Failed to read blob"):
+            loaded.get_with_codec(ToyPayloadCodec, "experiment-payload")
+    finally:
+        for path, blob in blobs.items():
+            path.write_bytes(blob)
 
 
 def test_experiment_file_attachment_round_trip(tmp_path):
@@ -161,7 +334,7 @@ def test_experiment_file_attachment_round_trip(tmp_path):
     assert output_path == output_dir / "source.png"
     assert output_path.read_bytes() == payload
 
-    with pytest.raises(Exception, match="already exists"):
+    with pytest.raises(RuntimeError, match="already exists"):
         loaded.write_attachment("source-file", output_dir)
     loaded.write_attachment("source-file", output_dir, overwrite=True)
 
