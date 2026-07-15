@@ -8,6 +8,21 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🛠 Experiment errors use the shared Python boundary ([#1101](https://github.com/Jij-Inc/ommx/pull/1101))
+
+Experiment, Run, Solve, Sampling, and local-listing bindings now propagate Rust
+SDK failures through the shared PyO3 error boundary with direct `?`
+propagation. Missing Experiment or Run attachments raise `KeyError`. Invalid
+image references, autosave values, attachment media types, and JSON input raise
+`ValueError`, while registry, archive, storage, and lifecycle failures fall
+back to `RuntimeError`.
+
+Exceptions raised by Python codecs, JSON callbacks, adapters, tracing hooks,
+and data libraries pass through unchanged. Attachment codecs validate their
+declared media type before reading the CAS blob and must return Python `bytes`.
+If a Run body and tracing cleanup both fail, the original body exception is
+preserved and the Run is still closed with failed or interrupted status.
+
 ### 🛠 Artifact and Local Registry errors use consistent exceptions ([#1100](https://github.com/Jij-Inc/ommx/pull/1100))
 
 Artifact and Local Registry bindings now propagate Rust SDK failures through
