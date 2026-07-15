@@ -1,9 +1,8 @@
 use crate::{Constraint, Function, Linear, Polynomial, Rng, State};
 
-use anyhow::{anyhow, Result};
 use approx::AbsDiffEq;
 use ommx::{ATol, Coefficient, CoefficientError, Evaluate, VariableIDPair};
-use pyo3::{prelude::*, types::PyDict, Bound, PyAny};
+use pyo3::{exceptions::PyRuntimeError, prelude::*, types::PyDict, Bound, PyAny};
 use std::collections::BTreeMap;
 
 /// Quadratic function of decision variables.
@@ -371,8 +370,10 @@ impl Quadratic {
         num_terms=ommx::QuadraticParameters::default().num_terms(),
         max_id=ommx::QuadraticParameters::default().max_id().into_inner()
     ))]
-    pub fn random(rng: &Rng, num_terms: usize, max_id: u64) -> Result<Self> {
-        let mut rng = rng.lock().map_err(|_| anyhow!("Cannot get lock for RNG"))?;
+    pub fn random(rng: &Rng, num_terms: usize, max_id: u64) -> crate::error::OmmxPyResult<Self> {
+        let mut rng = rng
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("Cannot get lock for RNG"))?;
         let inner: ommx::Quadratic = ommx::random::random(
             &mut rng,
             ommx::QuadraticParameters::new(num_terms, max_id.into())?,

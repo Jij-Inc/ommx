@@ -1,4 +1,3 @@
-use anyhow::Result;
 use oci_spec::image::ImageManifest;
 use ommx::artifact::media_types;
 use pyo3::{
@@ -1986,11 +1985,12 @@ pub fn get_images() -> OmmxPyResult<Vec<String>> {
 
 fn open_local_registry(
     root: Option<PathBuf>,
-) -> Result<ommx::artifact::local_registry::LocalRegistry> {
-    match root {
-        Some(root) => ommx::artifact::local_registry::LocalRegistry::open(root),
-        None => ommx::artifact::local_registry::LocalRegistry::open_default(),
-    }
+) -> OmmxPyResult<ommx::artifact::local_registry::LocalRegistry> {
+    let registry = match root {
+        Some(root) => ommx::artifact::local_registry::LocalRegistry::open(root)?,
+        None => ommx::artifact::local_registry::LocalRegistry::open_default()?,
+    };
+    Ok(registry)
 }
 
 fn parse_gc_duration(input: &str) -> PyResult<std::time::Duration> {

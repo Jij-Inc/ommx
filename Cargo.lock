@@ -6,7 +6,6 @@ version = 4
 name = "_ommx_rust"
 version = "3.0.0-beta.2"
 dependencies = [
- "anyhow",
  "approx",
  "derive_more",
  "fnv",

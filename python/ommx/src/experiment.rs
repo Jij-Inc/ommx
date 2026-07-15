@@ -1727,7 +1727,7 @@ enum PyRunState {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl PyRun {
-    pub fn __enter__(slf: Bound<'_, Self>) -> PyResult<Py<PyRun>> {
+    pub fn __enter__(slf: Bound<'_, Self>) -> OmmxPyResult<Py<PyRun>> {
         {
             let py = slf.py();
             let mut this = slf.borrow_mut();
@@ -1735,12 +1735,12 @@ impl PyRun {
                 PyRunState::Open { run } => run,
                 state @ PyRunState::Entered { .. } => {
                     this.state = state;
-                    return Err(PyRuntimeError::new_err(
-                        "Run context has already been entered",
-                    ));
+                    return Err(
+                        PyRuntimeError::new_err("Run context has already been entered").into(),
+                    );
                 }
                 PyRunState::Closed => {
-                    return Err(PyRuntimeError::new_err("Run has already been finished"));
+                    return Err(PyRuntimeError::new_err("Run has already been finished").into());
                 }
             };
             let run_id = match run.run_id() {
@@ -2074,7 +2074,7 @@ impl PyRun {
         instance: &crate::Instance,
         store_diagnostics: bool,
         kwargs: Option<&Bound<PyDict>>,
-    ) -> PyResult<crate::Solution> {
+    ) -> OmmxPyResult<crate::Solution> {
         let _guard = crate::TRACING.attach_parent_context(py);
         self.ensure_store_trace_context_started()?;
         reject_reserved_adapter_kwargs(kwargs, "Run.log_solve")?;
@@ -2112,7 +2112,7 @@ impl PyRun {
                         "Failed to record failed Solve attempt"
                     );
                 }
-                return Err(error);
+                return Err(error.into());
             }
         };
         let diagnostics = pack_diagnostics_or_none(
@@ -2154,7 +2154,7 @@ impl PyRun {
         instance: &crate::Instance,
         store_diagnostics: bool,
         kwargs: Option<&Bound<PyDict>>,
-    ) -> PyResult<crate::SampleSet> {
+    ) -> OmmxPyResult<crate::SampleSet> {
         let _guard = crate::TRACING.attach_parent_context(py);
         self.ensure_store_trace_context_started()?;
         reject_reserved_adapter_kwargs(kwargs, "Run.log_sample")?;
@@ -2192,7 +2192,7 @@ impl PyRun {
                         "Failed to record failed Sampling attempt"
                     );
                 }
-                return Err(error);
+                return Err(error.into());
             }
         };
         let diagnostics = pack_diagnostics_or_none(

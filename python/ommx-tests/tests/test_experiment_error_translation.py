@@ -6,6 +6,8 @@ from typing import NoReturn
 
 import pytest
 
+from ommx import Instance, SampleSet, Solution
+from ommx.adapter import SamplerAdapter, SolverAdapter
 from ommx.experiment import Experiment, list_experiment_checkpoints
 
 
@@ -115,3 +117,32 @@ def test_json_decode_exceptions_are_preserved(monkeypatch: pytest.MonkeyPatch):
             loaded.get_json("experiment")
         with pytest.raises(SentinelError, match="sentinel Python callback error"):
             loaded_run.get_json("run")
+
+
+def test_log_adapter_exceptions_are_preserved():
+    solver_error = SentinelError("sentinel solver error")
+    sampler_error = SentinelError("sentinel sampler error")
+
+    class FailingSolver(SolverAdapter):
+        @classmethod
+        def solve(cls, ommx_instance: Instance, **kwargs: object) -> Solution:  # noqa: ARG003
+            raise solver_error
+
+    class FailingSampler(SamplerAdapter):
+        @classmethod
+        def sample(
+            cls,
+            ommx_instance: Instance,
+            **kwargs: object,  # noqa: ARG003
+        ) -> SampleSet:
+            raise sampler_error
+
+    experiment = Experiment.with_temp_local_registry()
+    with experiment.run() as run:
+        with pytest.raises(SentinelError, match="sentinel solver error") as solver:
+            run.log_solve(FailingSolver, Instance.minimize())
+        assert solver.value is solver_error
+
+        with pytest.raises(SentinelError, match="sentinel sampler error") as sampler:
+            run.log_sample(FailingSampler, Instance.minimize())
+        assert sampler.value is sampler_error
