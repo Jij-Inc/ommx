@@ -47,7 +47,7 @@ use std::{env, io};
 use tokio::runtime::{Builder as RuntimeBuilder, Runtime};
 
 /// Sync wrapper around [`oci_client::Client`].
-pub(crate) struct RemoteTransport {
+pub struct RemoteTransport {
     runtime: Runtime,
     client: Client,
     auth: RegistryAuth,
@@ -66,7 +66,7 @@ pub(crate) struct RemoteTransport {
      for the env-var auth override; unset OMMX_BASIC_AUTH_DOMAIN to fall back \
      to ~/.docker/config.json instead."
 )]
-pub(super) struct InvalidAuthenticationConfiguration {
+pub struct InvalidAuthenticationConfiguration {
     domain: String,
     username_state: &'static str,
     password_state: &'static str,
@@ -78,7 +78,7 @@ pub(super) struct InvalidAuthenticationConfiguration {
 /// Artifact boundary classify response-shape violations as an invalid remote
 /// Artifact without relying on rendered error text.
 #[derive(Debug, thiserror::Error)]
-pub(super) enum InvalidRemoteResponse {
+pub enum InvalidRemoteResponse {
     #[error(
         "Registry reported Content-Length {content_length} for blob {digest}, \
          but the manifest descriptor declares size {expected_size}"
@@ -114,7 +114,7 @@ pub(super) enum InvalidRemoteResponse {
 /// `RemoteArtifactError::Transport`.
 #[derive(Debug, thiserror::Error)]
 #[error("Remote blob stream failed for {digest}")]
-pub(super) struct RemoteTransportFailure {
+pub struct RemoteTransportFailure {
     digest: String,
     #[source]
     source: io::Error,
@@ -162,7 +162,7 @@ impl RemoteTransport {
     /// anonymous as a final fallback. Anonymous is sufficient for
     /// unauthenticated public reads but will fail at push time on
     /// registries that require auth.
-    pub(crate) fn new(image_name: &crate::artifact::ImageRef) -> crate::Result<Self> {
+    pub fn new(image_name: &crate::artifact::ImageRef) -> crate::Result<Self> {
         let runtime = RuntimeBuilder::new_current_thread()
             .enable_all()
             .build()
@@ -189,7 +189,7 @@ impl RemoteTransport {
     /// them rather than buried inside a blob transfer. Pass the
     /// [`RegistryOperation`] matching the next call (`Push` vs `Pull`);
     /// registries scope bearer tokens by operation.
-    pub(crate) fn auth_for(
+    pub fn auth_for(
         &self,
         image_name: &crate::artifact::ImageRef,
         operation: RegistryOperation,
@@ -203,19 +203,18 @@ impl RemoteTransport {
 
     /// Convenience: authenticate for a `Push` request. Most existing
     /// call sites push; the explicit form is [`Self::auth_for`].
-    pub(crate) fn auth(&self, image_name: &crate::artifact::ImageRef) -> crate::Result<()> {
+    pub fn auth(&self, image_name: &crate::artifact::ImageRef) -> crate::Result<()> {
         self.auth_for(image_name, RegistryOperation::Push)
     }
 
     /// Check whether a blob already exists in the destination repository.
     ///
-    /// Crate-visible because `LocalArtifact::push` decides whether to read a
-    /// local blob before uploading it, while this transport remains the owner
-    /// of raw OCI Distribution requests and auth behavior. The underlying
-    /// `oci-client` call performs the registry blob `HEAD` check: `404`
-    /// returns `Ok(false)`, and any other registry / transport error is
-    /// propagated.
-    pub(crate) fn blob_exists(
+    /// Sibling Artifact code decides whether to read a local blob before
+    /// uploading it, while this private module remains the owner of raw OCI
+    /// Distribution requests and auth behavior. The underlying `oci-client`
+    /// call performs the registry blob `HEAD` check: `404` returns `Ok(false)`,
+    /// and any other registry / transport error is propagated.
+    pub fn blob_exists(
         &self,
         image_name: &crate::artifact::ImageRef,
         digest: &str,
@@ -232,7 +231,7 @@ impl RemoteTransport {
     /// validated without re-hashing. `bytes` is moved into
     /// `oci_client::Client::push_blob` (which takes `Vec<u8>` by
     /// value) so blobs the caller already owns don't get cloned.
-    pub(crate) fn push_blob(
+    pub fn push_blob(
         &self,
         image_name: &crate::artifact::ImageRef,
         digest: &str,
@@ -251,7 +250,7 @@ impl RemoteTransport {
     /// and the digest the registry computes agree byte-for-byte.
     /// `manifest_bytes` is moved through into `push_manifest_raw` to
     /// avoid cloning a manifest the caller already owns.
-    pub(crate) fn push_manifest_bytes(
+    pub fn push_manifest_bytes(
         &self,
         image_name: &crate::artifact::ImageRef,
         manifest_bytes: Vec<u8>,
@@ -276,7 +275,7 @@ impl RemoteTransport {
     /// reported by the registry. `accepted_media_types` is forwarded
     /// to the `Accept` header — pass the OMMX image-manifest media
     /// type for a manifest pull.
-    pub(crate) fn pull_manifest_raw(
+    pub fn pull_manifest_raw(
         &self,
         image_name: &crate::artifact::ImageRef,
         accepted_media_types: &[&str],
@@ -309,7 +308,7 @@ impl RemoteTransport {
     /// transport failures. The caller independently verifies the collected
     /// bytes before local persistence, and the Local Registry preserves its
     /// own CAS invariant.
-    pub(crate) fn pull_blob_to_vec(
+    pub fn pull_blob_to_vec(
         &self,
         image_name: &crate::artifact::ImageRef,
         digest: &str,
@@ -548,7 +547,7 @@ fn classify_docker_credential(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::artifact::{ImageRef, RemoteArtifactError};
+    use crate::artifact::{remote_error, ImageRef, RemoteArtifactError};
 
     fn assert_basic(auth: Option<RegistryAuth>, expected_user: &str, expected_pass: &str) {
         match auth {
@@ -722,7 +721,7 @@ mod tests {
             assert!(msg.contains("USERNAME="));
             assert!(msg.contains("PASSWORD="));
             assert!(matches!(
-                RemoteArtifactError::classify(&image, err),
+                remote_error::classify(&image, err),
                 RemoteArtifactError::Authentication { .. }
             ));
         }
@@ -737,7 +736,7 @@ mod tests {
             expected_size: 1,
         });
         assert!(matches!(
-            RemoteArtifactError::classify(&image, source),
+            remote_error::classify(&image, source),
             RemoteArtifactError::InvalidArtifact { .. }
         ));
     }
@@ -750,7 +749,7 @@ mod tests {
             io::Error::new(io::ErrorKind::ConnectionReset, "connection reset"),
         );
         assert!(matches!(
-            RemoteArtifactError::classify(&image, source),
+            remote_error::classify(&image, source),
             RemoteArtifactError::Transport { .. }
         ));
     }

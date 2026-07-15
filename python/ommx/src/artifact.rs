@@ -12,7 +12,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use crate::{error::OmmxPyResult, PyArchiveDescriptor, PyDescriptor};
+use crate::{PyArchiveDescriptor, PyDescriptor};
 
 /// A local-registry image reference and its cached OCI Manifest projection.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
@@ -270,11 +270,13 @@ impl PyArtifact {
     /// raise subclasses of {class}`~ommx.artifact.RemoteArtifactError`.
     #[cfg(feature = "remote-artifact")]
     #[staticmethod]
-    pub(crate) fn load(py: Python<'_>, image_name: &str) -> OmmxPyResult<Self> {
+    pub fn load(py: Python<'_>, image_name: &str) -> PyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let image_name = ommx::artifact::ImageRef::parse(image_name)?;
-        let inner = ommx::artifact::LocalArtifactDyn::load(image_name)?;
-        Ok(Self::new(inner))
+        crate::error::map_ommx_error(|| {
+            let image_name = ommx::artifact::ImageRef::parse(image_name)?;
+            let inner = ommx::artifact::LocalArtifactDyn::load(image_name)?;
+            Ok(Self::new(inner))
+        })
     }
 
     /// Push the artifact to remote registry.

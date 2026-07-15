@@ -441,12 +441,14 @@ impl PyExperiment {
     /// exact remote reference does not exist. Other remote access failures
     /// raise subclasses of {class}`~ommx.artifact.RemoteArtifactError`.
     #[staticmethod]
-    pub(crate) fn load(py: Python<'_>, image_name: &str) -> crate::error::OmmxPyResult<Self> {
+    pub fn load(py: Python<'_>, image_name: &str) -> PyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let image_name = ommx::artifact::ImageRef::parse(image_name)?;
-        Ok(Self {
-            inner: ommx::experiment::ExperimentDyn::load(image_name)?,
-            store_trace: false,
+        crate::error::map_ommx_error(|| {
+            let image_name = ommx::artifact::ImageRef::parse(image_name)?;
+            Ok(Self {
+                inner: ommx::experiment::ExperimentDyn::load(image_name)?,
+                store_trace: false,
+            })
         })
     }
 

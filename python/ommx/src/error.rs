@@ -1,8 +1,8 @@
 //! Translation from Rust SDK errors to Python exceptions.
 //!
 //! Rust SDK methods keep returning `ommx::Result<T>`. Binding entry points
-//! that opt into this boundary return [`OmmxPyResult<T>`], which routes the
-//! erased `ommx::Error` through this module's single type-based classifier.
+//! route those operations through [`map_ommx_error`], which converts the
+//! erased `ommx::Error` with this module's single type-based classifier.
 
 use pyo3::{exceptions::PyRuntimeError, prelude::*};
 
@@ -67,10 +67,10 @@ pyo3_stub_gen::create_exception!(
 
 /// Binding-internal wrapper that gives PyO3 a local error conversion point.
 #[derive(Debug)]
-pub(crate) struct OmmxPyError(ommx::Error);
+struct OmmxPyError(ommx::Error);
 
-/// Result for Python entry points that propagate only Rust SDK errors.
-pub(crate) type OmmxPyResult<T> = std::result::Result<T, OmmxPyError>;
+/// Intermediate result kept private inside the binding error boundary.
+type OmmxPyResult<T> = std::result::Result<T, OmmxPyError>;
 
 impl From<ommx::Error> for OmmxPyError {
     fn from(error: ommx::Error) -> Self {
@@ -115,8 +115,18 @@ fn ommx_error_to_pyerr(error: ommx::Error) -> PyErr {
     PyRuntimeError::new_err(message)
 }
 
+/// Run a Rust SDK operation through the binding-owned Python error mapper.
+///
+/// This function is public only inside the private `error` module boundary so
+/// sibling binding modules can share the conversion without exposing its
+/// wrapper type in their public PyO3 method signatures.
+pub fn map_ommx_error<T>(operation: impl FnOnce() -> ommx::Result<T>) -> PyResult<T> {
+    let result: OmmxPyResult<T> = operation().map_err(Into::into);
+    result.map_err(Into::into)
+}
+
 /// Register the Python exception hierarchy owned by this conversion boundary.
-pub(crate) fn register_exceptions(py: Python<'_>, module: &Bound<'_, PyModule>) -> PyResult<()> {
+pub fn register_exceptions(py: Python<'_>, module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add("RemoteArtifactError", py.get_type::<RemoteArtifactError>())?;
     module.add(
         "RemoteArtifactNotFoundError",

@@ -73,45 +73,47 @@ pub enum RemoteArtifactError {
     },
 }
 
+/// Classify an SDK error at the private remote Artifact boundary.
+pub fn classify(image: &ImageRef, source: crate::Error) -> RemoteArtifactError {
+    let category = if source.chain().any(|cause| {
+        cause
+            .downcast_ref::<InvalidAuthenticationConfiguration>()
+            .is_some()
+    }) {
+        Category::Authentication
+    } else if source
+        .chain()
+        .any(|cause| cause.downcast_ref::<InvalidRemoteResponse>().is_some())
+    {
+        Category::InvalidArtifact
+    } else if source
+        .chain()
+        .any(|cause| cause.downcast_ref::<RemoteTransportFailure>().is_some())
+    {
+        Category::Transport
+    } else if let Some(error) = source
+        .chain()
+        .find_map(|cause| cause.downcast_ref::<OciDistributionError>())
+    {
+        classify_oci_error(error)
+    } else if source
+        .chain()
+        .any(|cause| cause.downcast_ref::<serde_json::Error>().is_some())
+    {
+        Category::InvalidArtifact
+    } else {
+        Category::Other
+    };
+
+    RemoteArtifactError::from_category(image, source, category)
+}
+
+/// Mark a failure as invalid remote Artifact data at the private boundary.
+pub fn invalid_artifact(image: &ImageRef, source: crate::Error) -> RemoteArtifactError {
+    RemoteArtifactError::from_category(image, source, Category::InvalidArtifact)
+}
+
 impl RemoteArtifactError {
-    pub(crate) fn classify(image: &ImageRef, source: crate::Error) -> Self {
-        let category = if source.chain().any(|cause| {
-            cause
-                .downcast_ref::<InvalidAuthenticationConfiguration>()
-                .is_some()
-        }) {
-            Category::Authentication
-        } else if source
-            .chain()
-            .any(|cause| cause.downcast_ref::<InvalidRemoteResponse>().is_some())
-        {
-            Category::InvalidArtifact
-        } else if source
-            .chain()
-            .any(|cause| cause.downcast_ref::<RemoteTransportFailure>().is_some())
-        {
-            Category::Transport
-        } else if let Some(error) = source
-            .chain()
-            .find_map(|cause| cause.downcast_ref::<OciDistributionError>())
-        {
-            classify_oci_error(error)
-        } else if source
-            .chain()
-            .any(|cause| cause.downcast_ref::<serde_json::Error>().is_some())
-        {
-            Category::InvalidArtifact
-        } else {
-            Category::Other
-        };
-
-        Self::from_category(image, source, category)
-    }
-
-    pub(crate) fn invalid_artifact(image: &ImageRef, source: crate::Error) -> Self {
-        Self::from_category(image, source, Category::InvalidArtifact)
-    }
-
     fn from_category(image: &ImageRef, source: crate::Error, category: Category) -> Self {
         let image = Box::new(image.clone());
         match category {

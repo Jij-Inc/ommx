@@ -39,7 +39,7 @@ use super::super::super::RefUpdate;
 use super::super::LocalRegistry;
 use super::oci_dir::OciDirImport;
 use crate::artifact::{
-    media_types, remote_transport::RemoteTransport, sha256_digest, ImageRef, RemoteArtifactError,
+    media_types, remote_error, remote_transport::RemoteTransport, sha256_digest, ImageRef,
     OCI_IMAGE_MANIFEST_MEDIA_TYPE,
 };
 use anyhow::{Context, Result};
@@ -61,7 +61,8 @@ impl LocalRegistry {
     /// intermediate.
     ///
     /// Remote access and remote-response validation failures retain a
-    /// [`RemoteArtifactError`] signal in the returned [`crate::Error`] chain.
+    /// [`crate::artifact::RemoteArtifactError`] signal in the returned
+    /// [`crate::Error`] chain.
     /// Local Registry storage and index failures remain ordinary
     /// [`crate::Error`] values and are not misclassified as remote failures.
     pub fn pull_image(&self, image_name: &ImageRef) -> Result<OciDirImport> {
@@ -152,16 +153,12 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
     }
 
     fn remote_result<T>(&self, result: Result<T>) -> Result<T> {
-        result
-            .map_err(|source| crate::error!(RemoteArtifactError::classify(self.image_name, source)))
+        result.map_err(|source| crate::error!(remote_error::classify(self.image_name, source)))
     }
 
     fn invalid_remote_result<T>(&self, result: Result<T>) -> Result<T> {
         result.map_err(|source| {
-            crate::error!(RemoteArtifactError::invalid_artifact(
-                self.image_name,
-                source,
-            ))
+            crate::error!(remote_error::invalid_artifact(self.image_name, source))
         })
     }
 
@@ -177,7 +174,7 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
                 "{blob_kind} digest mismatch: registry declared {expected_digest}, \
                  downloaded bytes have {actual_digest}"
             );
-            return Err(crate::error!(RemoteArtifactError::invalid_artifact(
+            return Err(crate::error!(remote_error::invalid_artifact(
                 self.image_name,
                 source,
             )));
@@ -289,7 +286,7 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
                 descriptor.size(),
                 bytes.len()
             );
-            return Err(crate::error!(RemoteArtifactError::invalid_artifact(
+            return Err(crate::error!(remote_error::invalid_artifact(
                 self.image_name,
                 source,
             )));
@@ -346,6 +343,7 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::artifact::RemoteArtifactError;
 
     #[test]
     fn remote_digest_mismatch_is_an_invalid_artifact_signal() -> Result<()> {
