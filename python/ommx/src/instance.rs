@@ -4,6 +4,7 @@
 )]
 
 use crate::{
+    error::OmmxPyResult,
     pandas::{
         apply_include_filter, constraint_id_col, constraint_kind_collection, entries_to_dataframe,
         raw_entries_to_dataframe, ConstraintKind, PyDataFrame, ToPandasEntry,
@@ -980,7 +981,7 @@ impl Instance {
         uniform_penalty_weight: Option<f64>,
         penalty_weights: Option<HashMap<u64, f64>>,
         inequality_integer_slack_max_range: u64,
-    ) -> Result<(Bound<'py, PyDict>, f64)> {
+    ) -> OmmxPyResult<(Bound<'py, PyDict>, f64)> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let is_converted = self.as_minimization_problem();
         self.check_no_continuous_variables("QUBO")?;
@@ -1029,7 +1030,7 @@ impl Instance {
         uniform_penalty_weight: Option<f64>,
         penalty_weights: Option<HashMap<u64, f64>>,
         inequality_integer_slack_max_range: u64,
-    ) -> Result<(Bound<'py, PyDict>, f64)> {
+    ) -> OmmxPyResult<(Bound<'py, PyDict>, f64)> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let is_converted = self.as_minimization_problem();
         self.check_no_continuous_variables("HUBO")?;
@@ -1216,10 +1217,15 @@ impl Instance {
     ///     ...
     /// ValueError: The state does not contain some required IDs: {VariableID(2)}
     #[pyo3(signature = (state, *, atol=None))]
-    pub fn evaluate(&self, py: Python<'_>, state: State, atol: Option<f64>) -> PyResult<Solution> {
+    pub fn evaluate(
+        &self,
+        py: Python<'_>,
+        state: State,
+        atol: Option<f64>,
+    ) -> OmmxPyResult<Solution> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let atol = match atol {
-            Some(value) => crate::error::map_ommx_error(|| ommx::ATol::new(value))?,
+            Some(value) => ommx::ATol::new(value)?,
             None => ommx::ATol::default(),
         };
         let solution = self
@@ -1240,10 +1246,10 @@ impl Instance {
         py: Python<'_>,
         state: State,
         atol: Option<f64>,
-    ) -> PyResult<State> {
+    ) -> OmmxPyResult<State> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let atol = match atol {
-            Some(value) => crate::error::map_ommx_error(|| ommx::ATol::new(value))?,
+            Some(value) => ommx::ATol::new(value)?,
             None => ommx::ATol::default(),
         };
         let state = self
@@ -1302,10 +1308,10 @@ impl Instance {
         py: Python<'_>,
         state: State,
         atol: Option<f64>,
-    ) -> PyResult<Self> {
+    ) -> OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let atol = match atol {
-            Some(value) => crate::error::map_ommx_error(|| ommx::ATol::new(value))?,
+            Some(value) => ommx::ATol::new(value)?,
             None => ommx::ATol::default(),
         };
         let mut new_inner = self.inner.clone();
@@ -1321,13 +1327,13 @@ impl Instance {
         py: Python<'_>,
         samples: Samples,
         atol: Option<f64>,
-    ) -> PyResult<SampleSet> {
+    ) -> OmmxPyResult<SampleSet> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let atol = match atol {
-            Some(value) => crate::error::map_ommx_error(|| ommx::ATol::new(value))?,
+            Some(value) => ommx::ATol::new(value)?,
             None => ommx::ATol::default(),
         };
-        let inner = crate::error::map_ommx_error(|| self.inner.evaluate_samples(&samples.0, atol))?;
+        let inner = self.inner.evaluate_samples(&samples.0, atol)?;
         Ok(SampleSet { inner })
     }
 
@@ -1857,10 +1863,10 @@ impl Instance {
         py: Python<'_>,
         decision_variable_ids: BTreeSet<u64>,
         atol: Option<f64>,
-    ) -> PyResult<()> {
+    ) -> OmmxPyResult<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let atol = match atol {
-            Some(value) => crate::error::map_ommx_error(|| ommx::ATol::new(value))?,
+            Some(value) => ommx::ATol::new(value)?,
             None => ommx::ATol::default(),
         };
         let ids: BTreeSet<u64> = if decision_variable_ids.is_empty() {
@@ -1878,10 +1884,8 @@ impl Instance {
         } else {
             decision_variable_ids
         };
-        crate::error::map_ommx_error(|| {
-            self.inner
-                .log_encode(ids.iter().map(|id| (*id).into()), atol)
-        })?;
+        self.inner
+            .log_encode(ids.iter().map(|id| (*id).into()), atol)?;
         Ok(())
     }
 
@@ -1928,10 +1932,10 @@ impl Instance {
         decision_variable_ids: BTreeSet<u64>,
         max_range: usize,
         atol: Option<f64>,
-    ) -> PyResult<()> {
+    ) -> OmmxPyResult<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let atol = match atol {
-            Some(value) => crate::error::map_ommx_error(|| ommx::ATol::new(value))?,
+            Some(value) => ommx::ATol::new(value)?,
             None => ommx::ATol::default(),
         };
         let ids: BTreeSet<u64> = if decision_variable_ids.is_empty() {
@@ -1948,10 +1952,8 @@ impl Instance {
         } else {
             decision_variable_ids
         };
-        crate::error::map_ommx_error(|| {
-            self.inner
-                .unary_encode(ids.iter().map(|id| (*id).into()), max_range, atol)
-        })?;
+        self.inner
+            .unary_encode(ids.iter().map(|id| (*id).into()), max_range, atol)?;
         Ok(())
     }
 
@@ -2756,8 +2758,8 @@ impl Instance {
     /// >>> changed
     /// False
     /// ```
-    pub fn reduce_binary_power(&mut self) -> PyResult<bool> {
-        crate::error::map_ommx_error(|| Ok(self.inner.reduce_binary_power()?))
+    pub fn reduce_binary_power(&mut self) -> OmmxPyResult<bool> {
+        Ok(self.inner.reduce_binary_power()?)
     }
 
     #[staticmethod]
@@ -2820,7 +2822,7 @@ impl Instance {
 }
 
 impl Instance {
-    pub(crate) fn check_no_continuous_variables(&self, format_name: &str) -> Result<()> {
+    fn check_no_continuous_variables(&self, format_name: &str) -> OmmxPyResult<()> {
         let continuous_ids: Vec<u64> = self
             .inner
             .decision_variable_usage()
@@ -2840,12 +2842,12 @@ impl Instance {
 
     /// Shared pipeline for to_qubo/to_hubo: handle inequality constraints, apply penalty method.
     #[tracing::instrument(skip_all)]
-    pub(crate) fn qubo_hubo_pipeline(
+    fn qubo_hubo_pipeline(
         &mut self,
         uniform_penalty_weight: Option<f64>,
         penalty_weights: Option<HashMap<u64, f64>>,
         inequality_integer_slack_max_range: u64,
-    ) -> Result<()> {
+    ) -> OmmxPyResult<()> {
         // Prepare inequality constraints
         let ineq_ids: Vec<ConstraintID> = self
             .inner

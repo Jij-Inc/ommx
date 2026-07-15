@@ -1,8 +1,9 @@
 //! Translation from Rust SDK errors to Python exceptions.
 //!
 //! Rust SDK methods keep returning `ommx::Result<T>`. Binding entry points
-//! route those operations through [`map_ommx_error`], which converts the
-//! erased `ommx::Error` with this module's single type-based classifier.
+//! return [`OmmxPyResult`] so `?` converts SDK errors into the local
+//! [`OmmxPyError`] wrapper before PyO3 invokes this module's single type-based
+//! classifier.
 
 use pyo3::{
     exceptions::{PyRuntimeError, PyValueError},
@@ -68,22 +69,54 @@ pyo3_stub_gen::create_exception!(
     "The remote response is not a valid OMMX Artifact."
 );
 
-/// Binding-internal wrapper that gives PyO3 a local error conversion point.
 #[derive(Debug)]
-struct OmmxPyError(ommx::Error);
+enum OmmxPyErrorKind {
+    Sdk(ommx::Error),
+    Python(PyErr),
+}
 
-/// Intermediate result kept private inside the binding error boundary.
-type OmmxPyResult<T> = std::result::Result<T, OmmxPyError>;
+/// Binding-internal wrapper that gives PyO3 a local error conversion point.
+///
+/// Rust SDK errors are classified below, while Python-owned errors pass
+/// through unchanged.
+#[derive(Debug)]
+pub struct OmmxPyError(OmmxPyErrorKind);
+
+/// Result type for Rust SDK failures crossing the private binding boundary.
+pub type OmmxPyResult<T> = std::result::Result<T, OmmxPyError>;
 
 impl From<ommx::Error> for OmmxPyError {
     fn from(error: ommx::Error) -> Self {
-        Self(error)
+        Self(OmmxPyErrorKind::Sdk(error))
+    }
+}
+
+macro_rules! impl_from_ommx_signal {
+    ($($error:ty),+ $(,)?) => {
+        $(
+            impl From<$error> for OmmxPyError {
+                fn from(error: $error) -> Self {
+                    Self::from(ommx::Error::from(error))
+                }
+            }
+        )+
+    };
+}
+
+impl_from_ommx_signal!(ommx::AtolError, ommx::BoundError, ommx::CoefficientError,);
+
+impl From<PyErr> for OmmxPyError {
+    fn from(error: PyErr) -> Self {
+        Self(OmmxPyErrorKind::Python(error))
     }
 }
 
 impl From<OmmxPyError> for PyErr {
     fn from(OmmxPyError(error): OmmxPyError) -> Self {
-        ommx_error_to_pyerr(error)
+        match error {
+            OmmxPyErrorKind::Sdk(error) => ommx_error_to_pyerr(error),
+            OmmxPyErrorKind::Python(error) => error,
+        }
     }
 }
 
@@ -123,21 +156,6 @@ fn ommx_error_to_pyerr(error: ommx::Error) -> PyErr {
     }
 
     PyRuntimeError::new_err(message)
-}
-
-/// Run a Rust SDK operation through the binding-owned Python error mapper.
-///
-/// This function is public only inside the private `error` module boundary so
-/// sibling binding modules can share the conversion without exposing its
-/// wrapper type in their public PyO3 method signatures.
-pub fn map_ommx_error<T>(operation: impl FnOnce() -> ommx::Result<T>) -> PyResult<T> {
-    let result: OmmxPyResult<T> = operation().map_err(Into::into);
-    result.map_err(Into::into)
-}
-
-/// Route a typed coefficient result through the shared SDK error classifier.
-pub fn map_coefficient<T>(result: std::result::Result<T, ommx::CoefficientError>) -> PyResult<T> {
-    map_ommx_error(|| Ok(result?))
 }
 
 /// Register the Python exception hierarchy owned by this conversion boundary.
