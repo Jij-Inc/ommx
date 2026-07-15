@@ -403,10 +403,7 @@ impl Instance {
         };
         let id = {
             let mut inst = slf.borrow_mut();
-            let id = inst
-                .inner
-                .next_variable_id()
-                .map_err(|error| PyValueError::new_err(error.to_string()))?;
+            let id = crate::error::map_ommx_error(|| Ok(inst.inner.next_variable_id()?))?;
             inst.inner
                 .add_decision_variable(id, ommx::DecisionVariable::binary(), label)
                 .map_err(|error| PyValueError::new_err(error.to_string()))?;

@@ -1,5 +1,4 @@
 use crate::{Constraint, Function, Linear, Polynomial, Quadratic, VariableBound};
-use anyhow::Result;
 use ommx::{v1, ATol, LinearMonomial, VariableID};
 use pyo3::{
     prelude::*,
@@ -13,6 +12,8 @@ use std::collections::HashMap;
 /// This class represents a variable that will be optimized in a mathematical programming problem.
 /// It supports various types (binary, integer, continuous, semi-integer, semi-continuous) and
 /// can be used in arithmetic expressions to build objective functions and constraints.
+/// Construction raises ValueError when the requested bound cannot be
+/// normalized for the selected variable kind.
 ///
 /// Note that this object overloads `==` for creating a constraint, not for equality comparison.
 ///
@@ -44,6 +45,30 @@ impl DecisionVariable {
     /// Helper to create a Linear term from this decision variable with coefficient 1
     fn as_linear(&self) -> ommx::Linear {
         ommx::Linear::single_term(LinearMonomial::Variable(self.0), ommx::coeff!(1.0))
+    }
+
+    fn try_new(
+        id: u64,
+        kind: i32,
+        bound: VariableBound,
+        name: Option<String>,
+        subscripts: Vec<i64>,
+        parameters: HashMap<String, String>,
+        description: Option<String>,
+    ) -> ommx::Result<Self> {
+        let variable_id = VariableID::from(id);
+        let kind = v1::decision_variable::Kind::try_from(kind)?.try_into()?;
+
+        let decision_variable = ommx::DecisionVariable::new(kind, bound.0, ATol::default())?;
+
+        let label = ommx::DecisionVariableLabel {
+            name,
+            subscripts,
+            parameters: parameters.into_iter().collect(),
+            description,
+        };
+
+        Ok(Self(variable_id, decision_variable, label))
     }
 
     pub fn from_parts(
@@ -131,20 +156,10 @@ impl DecisionVariable {
         subscripts: Vec<i64>,
         parameters: HashMap<String, String>,
         description: Option<String>,
-    ) -> Result<Self> {
-        let variable_id = VariableID::from(id);
-        let kind = v1::decision_variable::Kind::try_from(kind)?.try_into()?;
-
-        let decision_variable = ommx::DecisionVariable::new(kind, bound.0, ATol::default())?;
-
-        let label = ommx::DecisionVariableLabel {
-            name,
-            subscripts,
-            parameters: parameters.into_iter().collect(),
-            description,
-        };
-
-        Ok(Self(variable_id, decision_variable, label))
+    ) -> PyResult<Self> {
+        crate::error::map_ommx_error(|| {
+            Self::try_new(id, kind, bound, name, subscripts, parameters, description)
+        })
     }
 
     #[getter]
@@ -195,16 +210,18 @@ impl DecisionVariable {
         subscripts: Vec<i64>,
         parameters: HashMap<String, String>,
         description: Option<String>,
-    ) -> Result<Self> {
-        Self::new(
-            id,
-            1, // KIND_BINARY
-            VariableBound(ommx::Bound::of_binary()),
-            name,
-            subscripts,
-            parameters,
-            description,
-        )
+    ) -> PyResult<Self> {
+        crate::error::map_ommx_error(|| {
+            Self::try_new(
+                id,
+                1, // KIND_BINARY
+                VariableBound(ommx::Bound::of_binary()),
+                name,
+                subscripts,
+                parameters,
+                description,
+            )
+        })
     }
 
     #[staticmethod]
@@ -219,7 +236,7 @@ impl DecisionVariable {
         description: Option<String>,
     ) -> PyResult<Self> {
         crate::error::map_ommx_error(|| {
-            Self::new(
+            Self::try_new(
                 id,
                 2, // KIND_INTEGER
                 VariableBound(ommx::Bound::new(lower, upper)?),
@@ -243,7 +260,7 @@ impl DecisionVariable {
         description: Option<String>,
     ) -> PyResult<Self> {
         crate::error::map_ommx_error(|| {
-            Self::new(
+            Self::try_new(
                 id,
                 3, // KIND_CONTINUOUS
                 VariableBound(ommx::Bound::new(lower, upper)?),
@@ -267,7 +284,7 @@ impl DecisionVariable {
         description: Option<String>,
     ) -> PyResult<Self> {
         crate::error::map_ommx_error(|| {
-            Self::new(
+            Self::try_new(
                 id,
                 4, // KIND_SEMI_INTEGER
                 VariableBound(ommx::Bound::new(lower, upper)?),
@@ -291,7 +308,7 @@ impl DecisionVariable {
         description: Option<String>,
     ) -> PyResult<Self> {
         crate::error::map_ommx_error(|| {
-            Self::new(
+            Self::try_new(
                 id,
                 5, // KIND_SEMI_CONTINUOUS
                 VariableBound(ommx::Bound::new(lower, upper)?),

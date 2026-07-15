@@ -5,7 +5,7 @@
 //! erased `ommx::Error` with this module's single type-based classifier.
 
 use pyo3::{
-    exceptions::{PyRuntimeError, PyValueError},
+    exceptions::{PyKeyError, PyRuntimeError, PyValueError},
     prelude::*,
 };
 
@@ -95,6 +95,55 @@ fn ommx_error_to_pyerr(error: ommx::Error) -> PyErr {
         || error.downcast_ref::<ommx::BoundError>().is_some()
     {
         return PyValueError::new_err(message);
+    }
+
+    if let Some(error) = error.downcast_ref::<ommx::DecisionVariableError>() {
+        if matches!(
+            error,
+            ommx::DecisionVariableError::BoundInconsistentToKind { .. }
+                | ommx::DecisionVariableError::DuplicateID { .. }
+                | ommx::DecisionVariableError::NoAvailableID
+                | ommx::DecisionVariableError::NonFiniteValue { .. }
+                | ommx::DecisionVariableError::SubstitutedValueOverwrite { .. }
+                | ommx::DecisionVariableError::SubstitutedValueInconsistent { .. }
+                | ommx::DecisionVariableError::EmptyBoundIntersection { .. }
+        ) {
+            return PyValueError::new_err(message);
+        }
+    }
+
+    if let Some(error) = error.downcast_ref::<ommx::SolutionError>() {
+        match error {
+            ommx::SolutionError::UnknownConstraintID { .. }
+            | ommx::SolutionError::UnknownVariableName { .. }
+            | ommx::SolutionError::UnknownConstraintName { .. }
+            | ommx::SolutionError::UnknownNamedFunctionName { .. } => {
+                return PyKeyError::new_err(message);
+            }
+            ommx::SolutionError::ParameterizedConstraint
+            | ommx::SolutionError::DuplicateSubscript { .. } => {
+                return PyValueError::new_err(message);
+            }
+            _ => {}
+        }
+    }
+
+    if let Some(error) = error.downcast_ref::<ommx::SampleSetError>() {
+        match error {
+            ommx::SampleSetError::UnknownVariableName { .. }
+            | ommx::SampleSetError::UnknownConstraintName { .. }
+            | ommx::SampleSetError::UnknownSampleID { .. }
+            | ommx::SampleSetError::UnknownNamedFunctionName { .. } => {
+                return PyKeyError::new_err(message);
+            }
+            ommx::SampleSetError::DuplicateSubscripts { .. }
+            | ommx::SampleSetError::ParameterizedConstraint
+            | ommx::SampleSetError::NoFeasibleSolution
+            | ommx::SampleSetError::NoFeasibleSolutionRelaxed => {
+                return PyValueError::new_err(message);
+            }
+            _ => {}
+        }
     }
 
     #[cfg(feature = "remote-artifact")]
