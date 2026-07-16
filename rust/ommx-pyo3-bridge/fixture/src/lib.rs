@@ -1,3 +1,5 @@
+//! Downstream PyO3 extension used to exercise the bridge across a DSO boundary.
+
 use ommx_pyo3_bridge::{PyConstraint, PyDecisionVariable, PyFunction, PyInstance};
 use pyo3::prelude::*;
 use std::collections::BTreeMap;

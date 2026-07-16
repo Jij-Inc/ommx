@@ -1,3 +1,5 @@
+"""End-to-end tests for the bridge's independently built consumer fixture."""
+
 import importlib
 import importlib.machinery
 from pathlib import Path

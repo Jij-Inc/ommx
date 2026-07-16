@@ -39,16 +39,16 @@ tasks:
       VIRTUAL_ENV: "{{.ROOT_DIR}}/.venv"
     cmds:
       - cargo run -p ommx-pyo3-bridge-fixture --bin stub_gen
-      - git diff --exit-code -- tests/pyo3-bridge-fixture/ommx_pyo3_bridge_fixture.pyi
-      - uv run --no-sync pyright --project tests/pyo3-bridge-fixture/pyrightconfig.json
+      - git diff --exit-code -- rust/ommx-pyo3-bridge/fixture/ommx_pyo3_bridge_fixture.pyi
+      - uv run --no-sync pyright --project rust/ommx-pyo3-bridge/fixture/pyrightconfig.json
 
   pyo3-bridge:runtime-test:
     desc: Test conversion across independent PyO3 extension modules
     env:
       VIRTUAL_ENV: "{{.ROOT_DIR}}/.venv"
     cmds:
-      - uvx --from "maturin>=1.12.2,<2" maturin develop --manifest-path tests/pyo3-bridge-fixture/Cargo.toml
-      - uv run --no-sync pytest -vv tests/pyo3-bridge-fixture/tests/test_bridge.py
+      - uvx --from "maturin>=1.12.2,<2" maturin develop --manifest-path rust/ommx-pyo3-bridge/fixture/Cargo.toml
+      - uv run --no-sync pytest -vv rust/ommx-pyo3-bridge/fixture/tests/test_bridge.py
 
   pyo3-bridge:test:
     desc: Run all PyO3 bridge integration checks

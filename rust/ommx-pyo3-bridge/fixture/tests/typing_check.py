@@ -1,3 +1,5 @@
+"""Static return-type assertions for the downstream bridge consumer."""
+
 import ommx
 from ommx_pyo3_bridge_fixture import (
     constraint,
