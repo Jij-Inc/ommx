@@ -88,7 +88,7 @@
 //!
 //! | Type | Role | Why it is separate |
 //! | --- | --- | --- |
-//! | [`Experiment`] | Mutable Experiment borrowing a [`LocalRegistry`](crate::artifact::local_registry::LocalRegistry) | Its registry lifetime and consuming [`Experiment::commit`] make ownership and sealing explicit at compile time. |
+//! | [`Experiment`] | Mutable Experiment borrowing a [`LocalRegistry`] | Its registry lifetime and consuming [`Experiment::commit`] make ownership and sealing explicit at compile time. |
 //! | [`SealedExperiment`] | Immutable committed Experiment borrowing its registry | It cannot expose mutable Experiment operations; [`SealedExperiment::fork`] creates a new mutable child. |
 //! | [`Run`] | Mutable Run borrowing its parent [`Experiment`] | The parent cannot be consumed while a Run borrow is live, and [`Run::finish`] writes the closed Run back to that parent. |
 //! | [`SealedRun`] | Immutable closed Run reconstructed from an Artifact | It reads persisted attachments, Solve records, Sampling records, and trace data without a mutable parent. |
@@ -101,7 +101,7 @@
 //!
 //! The borrowed and runtime-owned families model the same Experiment / Run
 //! semantics, but intentionally use different representations:
-//! [`StoredDescriptor`](crate::artifact::local_registry::StoredDescriptor)
+//! [`StoredDescriptor`]
 //! values carry a borrowed registry proof, while dynamic handles retain a
 //! registry owner and validate raw OCI descriptors at runtime.
 //! [`ExperimentStatus`], [`RunStatus`], [`SolveStatus`], and
