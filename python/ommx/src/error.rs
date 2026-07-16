@@ -176,6 +176,7 @@ fn solution_error_to_pyerr(error: &ommx::SolutionError, message: String) -> PyEr
         ommx::SolutionError::UnknownConstraintID { .. }
         | ommx::SolutionError::UnknownVariableName { .. }
         | ommx::SolutionError::UnknownConstraintName { .. }
+        | ommx::SolutionError::UnknownNamedFunctionID { .. }
         | ommx::SolutionError::UnknownNamedFunctionName { .. } => PyKeyError::new_err(message),
         ommx::SolutionError::ParameterizedConstraint
         | ommx::SolutionError::DuplicateSubscript { .. } => PyValueError::new_err(message),
@@ -246,4 +247,58 @@ pub fn register_exceptions(py: Python<'_>, module: &Bound<'_, PyModule>) -> PyRe
         py.get_type::<InvalidRemoteArtifactError>(),
     )?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pyo3::type_object::PyTypeInfo;
+
+    fn assert_exception<T>(error: OmmxPyError)
+    where
+        T: PyTypeInfo,
+    {
+        Python::initialize();
+        Python::attach(|py| {
+            let error: PyErr = error.into();
+            assert!(error.is_instance_of::<T>(py), "{error}");
+        });
+    }
+
+    #[test]
+    fn solution_error_mapping_is_shared_by_direct_and_erased_conversions() {
+        assert_exception::<PyKeyError>(
+            ommx::SolutionError::UnknownNamedFunctionID {
+                id: ommx::NamedFunctionID::from(1),
+            }
+            .into(),
+        );
+        assert_exception::<PyKeyError>(
+            ommx::Error::from(ommx::SolutionError::UnknownNamedFunctionID {
+                id: ommx::NamedFunctionID::from(1),
+            })
+            .into(),
+        );
+
+        assert_exception::<PyValueError>(
+            ommx::SolutionError::DuplicateSubscript {
+                subscripts: vec![1],
+            }
+            .into(),
+        );
+        assert_exception::<PyValueError>(
+            ommx::Error::from(ommx::SolutionError::DuplicateSubscript {
+                subscripts: vec![1],
+            })
+            .into(),
+        );
+
+        assert_exception::<PyRuntimeError>(
+            ommx::SolutionError::MissingRequiredField { field: "objective" }.into(),
+        );
+        assert_exception::<PyRuntimeError>(
+            ommx::Error::from(ommx::SolutionError::MissingRequiredField { field: "objective" })
+                .into(),
+        );
+    }
 }

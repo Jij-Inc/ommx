@@ -20,74 +20,62 @@ mod tests {
             (
                 "ommx.v1.Function",
                 crate::Function::from_bytes(&invalid_wire)
-                    .err()
-                    .expect("invalid Function wire data must fail"),
+                    .expect_err("invalid Function wire data must fail"),
             ),
             (
                 "ommx.v1.Linear",
                 crate::Linear::from_bytes(&invalid_wire)
-                    .err()
-                    .expect("invalid Linear wire data must fail"),
+                    .expect_err("invalid Linear wire data must fail"),
             ),
             (
                 "ommx.v1.Quadratic",
                 crate::Quadratic::from_bytes(&invalid_wire)
-                    .err()
-                    .expect("invalid Quadratic wire data must fail"),
+                    .expect_err("invalid Quadratic wire data must fail"),
             ),
             (
                 "ommx.v1.Polynomial",
                 crate::Polynomial::from_bytes(&invalid_wire)
-                    .err()
-                    .expect("invalid Polynomial wire data must fail"),
+                    .expect_err("invalid Polynomial wire data must fail"),
             ),
             (
                 "ommx.v1.Instance",
                 crate::Instance::from_v1_bytes(&invalid_wire)
-                    .err()
-                    .expect("invalid v1 Instance wire data must fail"),
+                    .expect_err("invalid v1 Instance wire data must fail"),
             ),
             (
                 "ommx.v2.Instance",
                 crate::Instance::from_v2_bytes(&invalid_wire)
-                    .err()
-                    .expect("invalid v2 Instance wire data must fail"),
+                    .expect_err("invalid v2 Instance wire data must fail"),
             ),
             (
                 "ommx.v1.ParametricInstance",
                 crate::ParametricInstance::from_v1_bytes(&invalid_wire)
-                    .err()
-                    .expect("invalid v1 ParametricInstance wire data must fail"),
+                    .expect_err("invalid v1 ParametricInstance wire data must fail"),
             ),
             (
                 "ommx.v2.ParametricInstance",
                 crate::ParametricInstance::from_v2_bytes(&invalid_wire)
-                    .err()
-                    .expect("invalid v2 ParametricInstance wire data must fail"),
+                    .expect_err("invalid v2 ParametricInstance wire data must fail"),
             ),
             (
                 "ommx.v1.Solution",
                 crate::Solution::from_v1_bytes(&invalid_wire)
-                    .err()
-                    .expect("invalid v1 Solution wire data must fail"),
+                    .expect_err("invalid v1 Solution wire data must fail"),
             ),
             (
                 "ommx.v2.Solution",
                 crate::Solution::from_v2_bytes(&invalid_wire)
-                    .err()
-                    .expect("invalid v2 Solution wire data must fail"),
+                    .expect_err("invalid v2 Solution wire data must fail"),
             ),
             (
                 "ommx.v1.SampleSet",
                 crate::SampleSet::from_v1_bytes(&invalid_wire)
-                    .err()
-                    .expect("invalid v1 SampleSet wire data must fail"),
+                    .expect_err("invalid v1 SampleSet wire data must fail"),
             ),
             (
                 "ommx.v2.SampleSet",
                 crate::SampleSet::from_v2_bytes(&invalid_wire)
-                    .err()
-                    .expect("invalid v2 SampleSet wire data must fail"),
+                    .expect_err("invalid v2 SampleSet wire data must fail"),
             ),
         ];
 

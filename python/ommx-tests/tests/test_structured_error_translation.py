@@ -168,3 +168,23 @@ def test_missing_feasible_sample_raises_value_error_for_all_aliases() -> None:
     ):
         with pytest.raises(ValueError, match="No feasible solution"):
             getattr(sample_set, attribute)
+
+
+def test_all_extractors_validate_sample_id_before_skipping_unnamed_entries() -> None:
+    x = ommx.DecisionVariable.binary(0)
+    instance = ommx.Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        constraints={},
+        sense=ommx.Instance.MINIMIZE,
+        named_functions=[ommx.NamedFunction(id=0, function=x)],
+    )
+    sample_set = instance.evaluate_samples({7: {0: 1}})
+
+    assert sample_set.extract_all_decision_variables(7) == {}
+    assert sample_set.extract_all_named_functions(7) == {}
+
+    with pytest.raises(KeyError):
+        sample_set.extract_all_decision_variables(999)
+    with pytest.raises(KeyError):
+        sample_set.extract_all_named_functions(999)

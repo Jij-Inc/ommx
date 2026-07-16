@@ -23,6 +23,12 @@ ommx
    _items/ommx.AttachedDecisionVariable
    _items/ommx.Parameter
    _items/ommx.AdditionalCapability
+   _items/ommx.DegreeBound
+   _items/ommx.InstanceClassClause
+   _items/ommx.InstanceClass
+   _items/ommx.InstanceClassMismatch
+   _items/ommx.InstanceClassClauseReport
+   _items/ommx.InstanceClassMembershipReport
    _items/ommx.Constraint
    _items/ommx.AttachedConstraint
    _items/ommx.IndicatorConstraint

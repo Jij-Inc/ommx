@@ -86,7 +86,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         penalty_weights: dict[int, float] = {},
         inequality_integer_slack_max_range: int = 32,
     ):
-        super().__init__(ommx_instance)
+        ommx_instance.reduce_capabilities(set())
         self.ommx_instance = copy.deepcopy(ommx_instance)
         self.beta_min = beta_min
         self.beta_max = beta_max
