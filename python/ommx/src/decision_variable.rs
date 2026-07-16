@@ -1,7 +1,6 @@
 use crate::{
     error::OmmxPyResult, Constraint, Function, Linear, Polynomial, Quadratic, VariableBound,
 };
-use anyhow::Result;
 use ommx::{v1, ATol, LinearMonomial, VariableID};
 use pyo3::{
     prelude::*,
@@ -15,6 +14,8 @@ use std::collections::HashMap;
 /// This class represents a variable that will be optimized in a mathematical programming problem.
 /// It supports various types (binary, integer, continuous, semi-integer, semi-continuous) and
 /// can be used in arithmetic expressions to build objective functions and constraints.
+/// Construction raises ValueError when the kind discriminator is unknown or
+/// the requested bound cannot be normalized for the selected variable kind.
 ///
 /// Note that this object overloads `==` for creating a constraint, not for equality comparison.
 ///
@@ -46,6 +47,41 @@ impl DecisionVariable {
     /// Helper to create a Linear term from this decision variable with coefficient 1
     fn as_linear(&self) -> ommx::Linear {
         ommx::Linear::single_term(LinearMonomial::Variable(self.0), ommx::coeff!(1.0))
+    }
+
+    fn try_new(
+        id: u64,
+        kind: ommx::Kind,
+        bound: VariableBound,
+        name: Option<String>,
+        subscripts: Vec<i64>,
+        parameters: HashMap<String, String>,
+        description: Option<String>,
+    ) -> OmmxPyResult<Self> {
+        let variable_id = VariableID::from(id);
+        let decision_variable = ommx::DecisionVariable::new(kind, bound.0, ATol::default())?;
+
+        let label = ommx::DecisionVariableLabel {
+            name,
+            subscripts,
+            parameters: parameters.into_iter().collect(),
+            description,
+        };
+
+        Ok(Self(variable_id, decision_variable, label))
+    }
+
+    fn parse_kind(kind: i32) -> PyResult<ommx::Kind> {
+        match kind {
+            1 => Ok(ommx::Kind::Binary),
+            2 => Ok(ommx::Kind::Integer),
+            3 => Ok(ommx::Kind::Continuous),
+            4 => Ok(ommx::Kind::SemiInteger),
+            5 => Ok(ommx::Kind::SemiContinuous),
+            _ => Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "Unknown decision variable kind: {kind}"
+            ))),
+        }
     }
 
     pub fn from_parts(
@@ -133,20 +169,16 @@ impl DecisionVariable {
         subscripts: Vec<i64>,
         parameters: HashMap<String, String>,
         description: Option<String>,
-    ) -> Result<Self> {
-        let variable_id = VariableID::from(id);
-        let kind = v1::decision_variable::Kind::try_from(kind)?.try_into()?;
-
-        let decision_variable = ommx::DecisionVariable::new(kind, bound.0, ATol::default())?;
-
-        let label = ommx::DecisionVariableLabel {
+    ) -> OmmxPyResult<Self> {
+        Self::try_new(
+            id,
+            Self::parse_kind(kind)?,
+            bound,
             name,
             subscripts,
-            parameters: parameters.into_iter().collect(),
+            parameters,
             description,
-        };
-
-        Ok(Self(variable_id, decision_variable, label))
+        )
     }
 
     #[getter]
@@ -197,10 +229,10 @@ impl DecisionVariable {
         subscripts: Vec<i64>,
         parameters: HashMap<String, String>,
         description: Option<String>,
-    ) -> Result<Self> {
-        Self::new(
+    ) -> OmmxPyResult<Self> {
+        Self::try_new(
             id,
-            1, // KIND_BINARY
+            ommx::Kind::Binary,
             VariableBound(ommx::Bound::of_binary()),
             name,
             subscripts,
@@ -220,15 +252,15 @@ impl DecisionVariable {
         parameters: HashMap<String, String>,
         description: Option<String>,
     ) -> OmmxPyResult<Self> {
-        Ok(Self::new(
+        Self::try_new(
             id,
-            2, // KIND_INTEGER
+            ommx::Kind::Integer,
             VariableBound(ommx::Bound::new(lower, upper)?),
             name,
             subscripts,
             parameters,
             description,
-        )?)
+        )
     }
 
     #[staticmethod]
@@ -242,15 +274,15 @@ impl DecisionVariable {
         parameters: HashMap<String, String>,
         description: Option<String>,
     ) -> OmmxPyResult<Self> {
-        Ok(Self::new(
+        Self::try_new(
             id,
-            3, // KIND_CONTINUOUS
+            ommx::Kind::Continuous,
             VariableBound(ommx::Bound::new(lower, upper)?),
             name,
             subscripts,
             parameters,
             description,
-        )?)
+        )
     }
 
     #[staticmethod]
@@ -264,15 +296,15 @@ impl DecisionVariable {
         parameters: HashMap<String, String>,
         description: Option<String>,
     ) -> OmmxPyResult<Self> {
-        Ok(Self::new(
+        Self::try_new(
             id,
-            4, // KIND_SEMI_INTEGER
+            ommx::Kind::SemiInteger,
             VariableBound(ommx::Bound::new(lower, upper)?),
             name,
             subscripts,
             parameters,
             description,
-        )?)
+        )
     }
 
     #[staticmethod]
@@ -286,15 +318,15 @@ impl DecisionVariable {
         parameters: HashMap<String, String>,
         description: Option<String>,
     ) -> OmmxPyResult<Self> {
-        Ok(Self::new(
+        Self::try_new(
             id,
-            5, // KIND_SEMI_CONTINUOUS
+            ommx::Kind::SemiContinuous,
             VariableBound(ommx::Bound::new(lower, upper)?),
             name,
             subscripts,
             parameters,
             description,
-        )?)
+        )
     }
 
     pub fn __repr__(&self) -> String {

@@ -1,6 +1,9 @@
-use crate::pandas::{
-    constraint_id_col, constraint_kind_collection, entries_to_dataframe, ConstraintKind,
-    PyDataFrame, ToPandasEntry,
+use crate::{
+    error::OmmxPyResult,
+    pandas::{
+        constraint_id_col, constraint_kind_collection, entries_to_dataframe, ConstraintKind,
+        PyDataFrame, ToPandasEntry,
+    },
 };
 use anyhow::Result;
 use pyo3::{
@@ -254,7 +257,8 @@ impl Solution {
 
     /// Extract the values of decision variables based on the `name` with `subscripts` key.
     ///
-    /// Raises ValueError if a decision variable with parameters is found, or if the same subscript is found.
+    /// Raises KeyError if no decision variable has the requested name, and
+    /// ValueError if the same subscript is found more than once.
     ///
     /// # Examples
     ///
@@ -275,9 +279,10 @@ impl Solution {
         &self,
         py: Python<'py>,
         name: &str,
-    ) -> Result<Bound<'py, PyDict>> {
+    ) -> OmmxPyResult<Bound<'py, PyDict>> {
+        let extracted = self.inner.extract_decision_variables(name)?;
         let dict = PyDict::new(py);
-        for (subscripts, value) in self.inner.extract_decision_variables(name)? {
+        for (subscripts, value) in extracted {
             let key_tuple = PyTuple::new(py, &subscripts)?;
             dict.set_item(key_tuple, value)?;
         }
@@ -290,8 +295,8 @@ impl Solution {
     /// This is useful for extracting all variables at once in a structured format.
     /// Variables without names are not included in the result.
     ///
-    /// Raises ValueError if a decision variable with parameters is found, or if the same
-    /// name and subscript combination is found multiple times.
+    /// Raises ValueError if the same name and subscript combination is found
+    /// multiple times.
     ///
     /// # Examples
     ///
@@ -315,9 +320,10 @@ impl Solution {
     pub fn extract_all_decision_variables<'py>(
         &self,
         py: Python<'py>,
-    ) -> Result<Bound<'py, PyDict>> {
+    ) -> OmmxPyResult<Bound<'py, PyDict>> {
+        let extracted = self.inner.extract_all_decision_variables()?;
         let result_dict = PyDict::new(py);
-        for (name, variables) in self.inner.extract_all_decision_variables()? {
+        for (name, variables) in extracted {
             let var_dict = PyDict::new(py);
             for (subscripts, value) in variables {
                 let key_tuple = PyTuple::new(py, &subscripts)?;
@@ -330,7 +336,9 @@ impl Solution {
 
     /// Extract the values of constraints based on the `name` with `subscripts` key.
     ///
-    /// Raises ValueError if the constraint with parameters is found, or if the same subscript is found.
+    /// Raises KeyError if no constraint has the requested name. Raises
+    /// ValueError if a matching constraint has parameters or if the same
+    /// subscript is found more than once.
     ///
     /// # Examples
     ///
@@ -353,33 +361,45 @@ impl Solution {
         &self,
         py: Python<'py>,
         name: &str,
-    ) -> Result<Bound<'py, PyDict>> {
+    ) -> OmmxPyResult<Bound<'py, PyDict>> {
+        let extracted = self.inner.extract_constraints(name)?;
         let dict = PyDict::new(py);
-        for (subscripts, value) in self.inner.extract_constraints(name)? {
+        for (subscripts, value) in extracted {
             let key_tuple = PyTuple::new(py, &subscripts)?;
             dict.set_item(key_tuple, value)?;
         }
         Ok(dict)
     }
 
-    /// Extract named functions by name with subscripts as key (returns a Python dict)
+    /// Extract named functions by name with subscripts as key (returns a Python dict).
+    ///
+    /// Raises KeyError if no named function has the requested name, and
+    /// ValueError if the same subscript is found more than once.
     pub fn extract_named_functions<'py>(
         &self,
         py: Python<'py>,
         name: &str,
-    ) -> Result<Bound<'py, PyDict>> {
+    ) -> OmmxPyResult<Bound<'py, PyDict>> {
+        let extracted = self.inner.extract_named_functions(name)?;
         let dict = PyDict::new(py);
-        for (subscripts, value) in self.inner.extract_named_functions(name)? {
+        for (subscripts, value) in extracted {
             let key_tuple = PyTuple::new(py, &subscripts)?;
             dict.set_item(key_tuple, value)?;
         }
         Ok(dict)
     }
 
-    /// Extract all named functions grouped by name (returns a Python dict)
-    pub fn extract_all_named_functions<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDict>> {
+    /// Extract all named functions grouped by name (returns a Python dict).
+    ///
+    /// Raises ValueError if the same name and subscript combination is found
+    /// multiple times.
+    pub fn extract_all_named_functions<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> OmmxPyResult<Bound<'py, PyDict>> {
+        let extracted = self.inner.extract_all_named_functions()?;
         let result_dict = PyDict::new(py);
-        for (name, functions) in self.inner.extract_all_named_functions()? {
+        for (name, functions) in extracted {
             let func_dict = PyDict::new(py);
             for (subscripts, value) in functions {
                 let key_tuple = PyTuple::new(py, &subscripts)?;
@@ -390,12 +410,17 @@ impl Solution {
         Ok(result_dict)
     }
 
-    /// Set the dual variable value for a specific constraint by ID
-    pub fn set_dual_variable(&mut self, constraint_id: u64, value: Option<f64>) -> PyResult<()> {
+    /// Set the dual variable value for a specific constraint by ID.
+    ///
+    /// Raises KeyError if the constraint ID does not exist.
+    pub fn set_dual_variable(
+        &mut self,
+        constraint_id: u64,
+        value: Option<f64>,
+    ) -> OmmxPyResult<()> {
         let constraint_id = ommx::ConstraintID::from(constraint_id);
-        self.inner
-            .set_dual_variable(constraint_id, value)
-            .map_err(|e| PyKeyError::new_err(e.to_string()))
+        self.inner.set_dual_variable(constraint_id, value)?;
+        Ok(())
     }
 
     /// Get a specific evaluated decision variable by ID
@@ -421,33 +446,15 @@ impl Solution {
     }
 
     /// Get the evaluated value of a specific constraint by ID
-    pub fn get_constraint_value(&self, constraint_id: u64) -> PyResult<f64> {
+    pub fn get_constraint_value(&self, constraint_id: u64) -> OmmxPyResult<f64> {
         let constraint_id = ommx::ConstraintID::from(constraint_id);
-        self.inner
-            .evaluated_constraints()
-            .get(&constraint_id)
-            .map(|ec| ec.stage.evaluated_value)
-            .ok_or_else(|| {
-                PyKeyError::new_err(format!(
-                    "Unknown constraint ID: {}",
-                    constraint_id.into_inner()
-                ))
-            })
+        Ok(self.inner.get_constraint_value(constraint_id)?)
     }
 
     /// Get the dual variable value for a specific constraint by ID
-    pub fn get_dual_variable(&self, constraint_id: u64) -> PyResult<Option<f64>> {
+    pub fn get_dual_variable(&self, constraint_id: u64) -> OmmxPyResult<Option<f64>> {
         let constraint_id = ommx::ConstraintID::from(constraint_id);
-        self.inner
-            .evaluated_constraints()
-            .get(&constraint_id)
-            .map(|ec| ec.stage.dual_variable)
-            .ok_or_else(|| {
-                PyKeyError::new_err(format!(
-                    "Unknown constraint ID: {}",
-                    constraint_id.into_inner()
-                ))
-            })
+        Ok(self.inner.get_dual_variable(constraint_id)?)
     }
 
     /// Get a specific evaluated constraint by ID

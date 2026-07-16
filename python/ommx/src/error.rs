@@ -6,7 +6,7 @@
 //! receives the local [`OmmxPyError`] wrapper.
 
 use pyo3::{
-    exceptions::{PyRuntimeError, PyValueError},
+    exceptions::{PyKeyError, PyRuntimeError, PyValueError},
     prelude::*,
 };
 
@@ -148,7 +148,54 @@ macro_rules! define_ommx_error_mappings {
     };
 }
 
+fn decision_variable_error_to_pyerr(error: &ommx::DecisionVariableError, message: String) -> PyErr {
+    if matches!(
+        error,
+        ommx::DecisionVariableError::BoundInconsistentToKind { .. }
+            | ommx::DecisionVariableError::DuplicateID { .. }
+            | ommx::DecisionVariableError::NoAvailableID
+            | ommx::DecisionVariableError::NonFiniteValue { .. }
+            | ommx::DecisionVariableError::SubstitutedValueOverwrite { .. }
+            | ommx::DecisionVariableError::SubstitutedValueInconsistent { .. }
+            | ommx::DecisionVariableError::EmptyBoundIntersection { .. }
+    ) {
+        PyValueError::new_err(message)
+    } else {
+        PyRuntimeError::new_err(message)
+    }
+}
+
+fn solution_error_to_pyerr(error: &ommx::SolutionError, message: String) -> PyErr {
+    match error {
+        ommx::SolutionError::UnknownConstraintID { .. }
+        | ommx::SolutionError::UnknownVariableName { .. }
+        | ommx::SolutionError::UnknownConstraintName { .. }
+        | ommx::SolutionError::UnknownNamedFunctionID { .. }
+        | ommx::SolutionError::UnknownNamedFunctionName { .. } => PyKeyError::new_err(message),
+        ommx::SolutionError::ParameterizedConstraint
+        | ommx::SolutionError::DuplicateSubscript { .. } => PyValueError::new_err(message),
+        _ => PyRuntimeError::new_err(message),
+    }
+}
+
+fn sample_set_error_to_pyerr(error: &ommx::SampleSetError, message: String) -> PyErr {
+    match error {
+        ommx::SampleSetError::UnknownVariableName { .. }
+        | ommx::SampleSetError::UnknownConstraintName { .. }
+        | ommx::SampleSetError::UnknownSampleID { .. }
+        | ommx::SampleSetError::UnknownNamedFunctionName { .. } => PyKeyError::new_err(message),
+        ommx::SampleSetError::DuplicateSubscripts { .. }
+        | ommx::SampleSetError::ParameterizedConstraint
+        | ommx::SampleSetError::NoFeasibleSolution
+        | ommx::SampleSetError::NoFeasibleSolutionRelaxed => PyValueError::new_err(message),
+        _ => PyRuntimeError::new_err(message),
+    }
+}
+
 define_ommx_error_mappings!(
+    ommx::DecisionVariableError => decision_variable_error_to_pyerr,
+    ommx::SolutionError => solution_error_to_pyerr,
+    ommx::SampleSetError => sample_set_error_to_pyerr,
     #[cfg(feature = "remote-artifact")]
     ommx::artifact::RemoteArtifactError => remote_artifact_error_to_pyerr,
     ommx::AtolError => value_error,
@@ -192,4 +239,58 @@ pub fn register_exceptions(py: Python<'_>, module: &Bound<'_, PyModule>) -> PyRe
         py.get_type::<InvalidRemoteArtifactError>(),
     )?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pyo3::type_object::PyTypeInfo;
+
+    fn assert_exception<T>(error: OmmxPyError)
+    where
+        T: PyTypeInfo,
+    {
+        Python::initialize();
+        Python::attach(|py| {
+            let error: PyErr = error.into();
+            assert!(error.is_instance_of::<T>(py), "{error}");
+        });
+    }
+
+    #[test]
+    fn solution_error_mapping_is_shared_by_direct_and_erased_conversions() {
+        assert_exception::<PyKeyError>(
+            ommx::SolutionError::UnknownNamedFunctionID {
+                id: ommx::NamedFunctionID::from(1),
+            }
+            .into(),
+        );
+        assert_exception::<PyKeyError>(
+            ommx::Error::from(ommx::SolutionError::UnknownNamedFunctionID {
+                id: ommx::NamedFunctionID::from(1),
+            })
+            .into(),
+        );
+
+        assert_exception::<PyValueError>(
+            ommx::SolutionError::DuplicateSubscript {
+                subscripts: vec![1],
+            }
+            .into(),
+        );
+        assert_exception::<PyValueError>(
+            ommx::Error::from(ommx::SolutionError::DuplicateSubscript {
+                subscripts: vec![1],
+            })
+            .into(),
+        );
+
+        assert_exception::<PyRuntimeError>(
+            ommx::SolutionError::MissingRequiredField { field: "objective" }.into(),
+        );
+        assert_exception::<PyRuntimeError>(
+            ommx::Error::from(ommx::SolutionError::MissingRequiredField { field: "objective" })
+                .into(),
+        );
+    }
 }
