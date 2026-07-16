@@ -33,6 +33,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
 
+mod lifecycle;
 mod run;
 
 pub use run::RunDyn;
@@ -48,16 +49,30 @@ pub use run::RunDyn;
 /// registry-backed payloads. `ExperimentDyn` also keeps the
 /// [`LocalRegistryHandle`] needed to promote those descriptors back to
 /// [`StoredDescriptor`] values when accessors return them.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ExperimentDyn {
     registry_handle: LocalRegistryHandle,
     state: Arc<Mutex<ExperimentDynState>>,
+    interrupted_reason_on_drop: Mutex<Option<String>>,
+}
+
+impl Clone for ExperimentDyn {
+    fn clone(&self) -> Self {
+        Self {
+            registry_handle: self.registry_handle.clone(),
+            state: Arc::clone(&self.state),
+            // Drop behavior belongs to one handle and must never be inherited
+            // by an ordinary clone of the shared Experiment state.
+            interrupted_reason_on_drop: Mutex::new(None),
+        }
+    }
 }
 
 #[derive(Debug)]
 struct ExperimentDynState {
     lifecycle: ExperimentDynLifecycle,
     registry_handle: LocalRegistryHandle,
+    pending_interrupted_checkpoint: Option<String>,
 }
 
 #[derive(Debug)]
@@ -534,7 +549,9 @@ impl ExperimentDyn {
                     open_runs: 0,
                 },
                 registry_handle,
+                pending_interrupted_checkpoint: None,
             })),
+            interrupted_reason_on_drop: Mutex::new(None),
         })
     }
 
@@ -590,7 +607,9 @@ impl ExperimentDyn {
             state: Arc::new(Mutex::new(ExperimentDynState {
                 lifecycle: ExperimentDynLifecycle::Sealed(sealed),
                 registry_handle,
+                pending_interrupted_checkpoint: None,
             })),
+            interrupted_reason_on_drop: Mutex::new(None),
         })
     }
 
@@ -608,7 +627,9 @@ impl ExperimentDyn {
                     open_runs: 0,
                 },
                 registry_handle,
+                pending_interrupted_checkpoint: None,
             })),
+            interrupted_reason_on_drop: Mutex::new(None),
         })
     }
 
@@ -630,7 +651,9 @@ impl ExperimentDyn {
                     open_runs: 0,
                 },
                 registry_handle,
+                pending_interrupted_checkpoint: None,
             })),
+            interrupted_reason_on_drop: Mutex::new(None),
         })
     }
 
@@ -747,6 +770,14 @@ impl ExperimentDyn {
         }
     }
 
+    #[cfg(test)]
+    pub(super) fn failure_reason_for_test(&self) -> Option<String> {
+        match &lock_experiment_state(&self.state).lifecycle {
+            ExperimentDynLifecycle::Failed { reason, .. } => Some(reason.clone()),
+            _ => None,
+        }
+    }
+
     pub fn experiment_status(&self) -> Option<ExperimentStatus> {
         match &lock_experiment_state(&self.state).lifecycle {
             ExperimentDynLifecycle::Sealed(sealed) => Some(sealed.status),
@@ -820,7 +851,9 @@ impl AttachmentLoggerStorage for &ExperimentDyn {
 
 impl ExperimentDyn {
     pub fn commit(&self) -> Result<LocalArtifactDyn> {
+        self.suppress_interrupted_on_drop();
         let mut dyn_state = lock_experiment_state(&self.state);
+        dyn_state.pending_interrupted_checkpoint = None;
         let (state, open_runs) = match &mut dyn_state.lifecycle {
             ExperimentDynLifecycle::Unsealed { state, open_runs } => (state, open_runs),
             lifecycle => return bail_non_unsealed(lifecycle),
@@ -868,16 +901,19 @@ impl ExperimentDyn {
     }
 
     pub fn commit_failed_checkpoint(&self, reason: impl Into<String>) -> Result<()> {
+        self.suppress_interrupted_on_drop();
         self.commit_checkpoint(reason, super::EXPERIMENT_STATUS_FAILED)
     }
 
     pub fn commit_interrupted_checkpoint(&self, reason: impl Into<String>) -> Result<()> {
+        self.suppress_interrupted_on_drop();
         self.commit_checkpoint(reason, super::EXPERIMENT_STATUS_INTERRUPTED)
     }
 
     fn commit_checkpoint(&self, reason: impl Into<String>, status: &'static str) -> Result<()> {
         let reason = reason.into();
         let mut dyn_state = lock_experiment_state(&self.state);
+        dyn_state.pending_interrupted_checkpoint = None;
         let registry_handle = dyn_state.registry_handle.clone();
         let (state, open_runs) = match &mut dyn_state.lifecycle {
             ExperimentDynLifecycle::Unsealed { state, open_runs } => (state, open_runs),
@@ -1541,6 +1577,24 @@ fn unsealed_run_parameter_cells<'a>(
             .collect::<Vec<_>>()
     })
     .collect()
+}
+
+fn publish_pending_interrupted_checkpoint(
+    registry_handle: LocalRegistryHandle,
+    state: Arc<Mutex<ExperimentDynState>>,
+    reason: String,
+) {
+    let experiment = ExperimentDyn {
+        registry_handle,
+        state,
+        interrupted_reason_on_drop: Mutex::new(None),
+    };
+    if let Err(error) = experiment.commit_interrupted_checkpoint(reason) {
+        tracing::warn!(
+            error = %error,
+            "Failed to publish deferred interrupted Experiment checkpoint after Run close"
+        );
+    }
 }
 
 fn lock_experiment_state(state: &Mutex<ExperimentDynState>) -> MutexGuard<'_, ExperimentDynState> {
