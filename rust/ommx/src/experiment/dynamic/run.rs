@@ -8,8 +8,8 @@ use super::super::{
 };
 use super::{
     bail_non_unsealed, ensure_unsealed_for_attachment_write, lock_experiment_state,
-    store_trace_descriptor, ExperimentDyn, ExperimentDynLifecycle, ExperimentDynState, RunEntryDyn,
-    SamplingEntryDyn, SolveEntryDyn,
+    publish_pending_interrupted_checkpoint, store_trace_descriptor, ExperimentDyn,
+    ExperimentDynLifecycle, ExperimentDynState, RunEntryDyn, SamplingEntryDyn, SolveEntryDyn,
 };
 use crate::artifact::local_registry::LocalRegistry;
 use crate::artifact::media_types;
@@ -21,8 +21,9 @@ use std::sync::{Arc, Mutex};
 /// Runtime-owned Run handle.
 ///
 /// Dropping a live `RunDyn` abandons the run and releases the open-run
-/// guard. Call [`Self::finish`] to append the run to the parent
-/// experiment before dropping it.
+/// guard by default. Call [`Self::finish`] to append the run to the parent
+/// experiment, or [`Self::interrupt_on_drop`] to opt into best-effort
+/// interrupted finalization during drop.
 ///
 /// Like the other dynamic experiment handles, `RunDyn` stores raw
 /// [`Descriptor`] values internally for registry-backed attachments and
@@ -37,6 +38,7 @@ pub struct RunDyn {
     // handle.
     run_state: Option<RunDynState>,
     experiment_state: Arc<Mutex<ExperimentDynState>>,
+    interrupt_on_drop: bool,
 }
 
 #[derive(Debug)]
@@ -55,6 +57,11 @@ impl ExperimentDyn {
     pub fn run(&self) -> Result<RunDyn> {
         let run_id = {
             let mut dyn_state = lock_experiment_state(&self.state);
+            if dyn_state.pending_interrupted_checkpoint.is_some() {
+                crate::bail!(
+                    "Cannot open a Run while an interrupted Experiment checkpoint is pending"
+                );
+            }
             let ExperimentDynLifecycle::Unsealed { state, open_runs } = &mut dyn_state.lifecycle
             else {
                 return bail_non_unsealed(&dyn_state.lifecycle);
@@ -84,7 +91,19 @@ impl RunDyn {
                 parameters: ParameterSet::new(),
             }),
             experiment_state,
+            interrupt_on_drop: false,
         }
+    }
+
+    /// Opt into best-effort interrupted finalization if this Run is dropped
+    /// before an explicit finish operation.
+    ///
+    /// Drop failures are reported through tracing because [`Drop`] cannot
+    /// return them. Ordinary `RunDyn` handles continue to abandon their local
+    /// state on unresolved drop.
+    pub fn interrupt_on_drop(mut self) -> Self {
+        self.interrupt_on_drop = true;
+        self
     }
 
     pub fn run_id(&self) -> Result<u64> {
@@ -389,42 +408,8 @@ impl RunDyn {
     }
 
     pub fn finish(mut self) -> Result<()> {
-        let mut dyn_state = lock_experiment_state(&self.experiment_state);
-        let registry_handle = dyn_state.registry_handle.clone();
-        let ExperimentDynLifecycle::Unsealed { state, open_runs } = &mut dyn_state.lifecycle else {
-            return bail_non_unsealed(&dyn_state.lifecycle);
-        };
-        let state = state
-            .as_mut()
-            .ok_or_else(|| anyhow::anyhow!("Parent Experiment has already been committed"))?;
-        let run = self
-            .run_state
-            .take()
-            .ok_or_else(|| anyhow::anyhow!("Run has already been finished"))?;
-        if state.runs.contains_key(&run.run_id) {
-            decrement_open_runs(open_runs);
-            crate::bail!("Run {} has already been registered", run.run_id);
-        }
-        state.runs.insert(
-            run.run_id,
-            RunEntryDyn {
-                run_id: run.run_id,
-                status: RunStatus::Finished,
-                attachments: run.attachments,
-                trace: run.trace,
-                solves: run.solves,
-                samplings: run.samplings,
-                parameters: run.parameters,
-            },
-        );
-        decrement_open_runs(open_runs);
-        if let Err(error) = state.autosave_after_run_close(registry_handle.registry()) {
-            tracing::warn!(
-                error = %error,
-                "Failed to publish Experiment autosave checkpoint after Run close"
-            );
-        }
-        Ok(())
+        self.interrupt_on_drop = false;
+        self.close_with_status(RunStatus::Finished)
     }
 
     pub fn finish_failed(self) -> Result<()> {
@@ -436,6 +421,11 @@ impl RunDyn {
     }
 
     fn finish_with_status(mut self, status: RunStatus) -> Result<()> {
+        self.interrupt_on_drop = false;
+        self.close_with_status(status)
+    }
+
+    fn close_with_status(&mut self, status: RunStatus) -> Result<()> {
         let mut dyn_state = lock_experiment_state(&self.experiment_state);
         let registry_handle = dyn_state.registry_handle.clone();
         let ExperimentDynLifecycle::Unsealed { state, open_runs } = &mut dyn_state.lifecycle else {
@@ -469,6 +459,19 @@ impl RunDyn {
             tracing::warn!(
                 error = %error,
                 "Failed to publish Experiment autosave checkpoint after Run close"
+            );
+        }
+        let pending_interrupted_checkpoint = if *open_runs == 0 {
+            dyn_state.pending_interrupted_checkpoint.clone()
+        } else {
+            None
+        };
+        drop(dyn_state);
+        if let Some(reason) = pending_interrupted_checkpoint {
+            publish_pending_interrupted_checkpoint(
+                registry_handle,
+                Arc::clone(&self.experiment_state),
+                reason,
             );
         }
         Ok(())
@@ -529,19 +532,39 @@ impl AttachmentLoggerStorage for &mut RunDyn {
 
 impl Drop for RunDyn {
     fn drop(&mut self) {
-        if self.run_state.take().is_some() {
+        if self.run_state.is_none() {
+            return;
+        }
+        if self.interrupt_on_drop {
+            if let Err(error) = self.close_with_status(RunStatus::Interrupted) {
+                tracing::warn!(
+                    error = %error,
+                    "Failed to finish interrupted Run during drop"
+                );
+            }
+        } else if self.run_state.take().is_some() {
             decrement_parent_open_runs(&self.experiment_state);
         }
     }
 }
 
-fn decrement_parent_open_runs(state: &Mutex<ExperimentDynState>) {
-    let mut state = lock_experiment_state(state);
-    let ExperimentDynLifecycle::Unsealed { open_runs, .. } = &mut state.lifecycle else {
+fn decrement_parent_open_runs(state: &Arc<Mutex<ExperimentDynState>>) {
+    let mut experiment = lock_experiment_state(state);
+    let registry_handle = experiment.registry_handle.clone();
+    let ExperimentDynLifecycle::Unsealed { open_runs, .. } = &mut experiment.lifecycle else {
         tracing::warn!("RunDyn closed after parent ExperimentDyn was sealed");
         return;
     };
     decrement_open_runs(open_runs);
+    let pending_interrupted_checkpoint = if *open_runs == 0 {
+        experiment.pending_interrupted_checkpoint.clone()
+    } else {
+        None
+    };
+    drop(experiment);
+    if let Some(reason) = pending_interrupted_checkpoint {
+        publish_pending_interrupted_checkpoint(registry_handle, Arc::clone(state), reason);
+    }
 }
 
 fn decrement_open_runs(open_runs: &mut usize) {

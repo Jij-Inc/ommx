@@ -2,17 +2,19 @@
 
 use super::super::logging::AttachmentLoggerStorage;
 use super::super::{AttachmentTable, AutosavePolicy, Name};
-use super::{ExperimentDyn, RunDyn};
+use super::{lock_experiment_state, ExperimentDyn, ExperimentDynLifecycle, RunDyn};
 use crate::artifact::local_registry::LocalRegistry;
 use crate::artifact::{ImageRef, LocalArtifactDyn, LocalRegistryHandle};
 use anyhow::Result;
 use oci_spec::image::Descriptor;
+use std::sync::Mutex;
 
 const EXPERIMENT_SCOPE_DROP_REASON: &str = "Experiment scope dropped before lifecycle completion";
 
 /// Restricted Experiment view used by [`ExperimentDyn::scoped`].
 ///
-/// The scope exposes Experiment-space logging and configuration together with
+/// This is a capability view over an [`ExperimentDyn`], not another Experiment
+/// state. It exposes Experiment-space logging and configuration together with
 /// [`scoped_run`](Self::scoped_run), but deliberately does not expose
 /// [`ExperimentDyn::run`]. Every Run created through this view is therefore
 /// finalized before the callback can return or unwind, so a terminal
@@ -108,175 +110,29 @@ impl AttachmentLoggerStorage for &ExperimentScope<'_> {
     }
 }
 
-/// Lifecycle owner for an [`ExperimentDyn`].
-///
-/// Explicit [`commit`](Self::commit), [`fail`](Self::fail), or
-/// [`interrupt`](Self::interrupt) consumes the session and suppresses any
-/// fallback transition. Dropping an unresolved session does nothing by
-/// default. Call [`interrupt_on_drop`](Self::interrupt_on_drop) to opt into a
-/// best-effort interrupted checkpoint; failures are reported through tracing
-/// because [`Drop`] cannot return them.
-///
-/// `ExperimentDyn` is a shared runtime handle. Completing this session changes
-/// the lifecycle observed by every clone of the same handle.
-#[derive(Debug)]
-pub struct ExperimentSession {
-    experiment: ExperimentDyn,
-    interrupted_reason_on_drop: Option<String>,
-    resolved: bool,
-}
-
-impl ExperimentSession {
-    fn new(experiment: ExperimentDyn) -> Self {
-        Self {
-            experiment,
-            interrupted_reason_on_drop: None,
-            resolved: false,
-        }
-    }
-
-    /// Opt into a best-effort interrupted checkpoint if this session is
-    /// dropped before an explicit lifecycle transition.
-    pub fn interrupt_on_drop(mut self, reason: impl Into<String>) -> Self {
-        self.interrupted_reason_on_drop = Some(reason.into());
-        self
-    }
-
-    /// Access the lifecycle-owned Experiment handle.
-    pub fn experiment(&self) -> &ExperimentDyn {
-        &self.experiment
-    }
-
-    /// Commit the Experiment successfully.
-    pub fn commit(mut self) -> Result<LocalArtifactDyn> {
-        self.resolved = true;
-        self.experiment.commit()
-    }
-
-    /// Publish a failed checkpoint while preserving closed Runs.
-    pub fn fail(mut self, reason: impl Into<String>) -> Result<()> {
-        self.resolved = true;
-        self.experiment.commit_failed_checkpoint(reason)
-    }
-
-    /// Publish an interrupted checkpoint while preserving closed Runs.
-    pub fn interrupt(mut self, reason: impl Into<String>) -> Result<()> {
-        self.resolved = true;
-        self.experiment.commit_interrupted_checkpoint(reason)
-    }
-}
-
-impl Drop for ExperimentSession {
-    fn drop(&mut self) {
-        if self.resolved || !self.experiment.is_unsealed() {
-            return;
-        }
-        let Some(reason) = self.interrupted_reason_on_drop.take() else {
-            return;
-        };
-        self.resolved = true;
-        if let Err(error) = self.experiment.commit_interrupted_checkpoint(reason) {
-            tracing::warn!(
-                error = %error,
-                "Failed to publish interrupted Experiment checkpoint during session drop"
-            );
-        }
-    }
-}
-
-/// Lifecycle owner for a [`RunDyn`].
-///
-/// Explicit [`finish`](Self::finish), [`fail`](Self::fail), or
-/// [`interrupt`](Self::interrupt) consumes the session and appends the Run's
-/// partial state to its parent Experiment. Dropping an unresolved session
-/// abandons the Run by default. Call [`interrupt_on_drop`](Self::interrupt_on_drop)
-/// to opt into best-effort interrupted finalization; failures are reported
-/// through tracing because [`Drop`] cannot return them.
-#[derive(Debug)]
-pub struct RunSession {
-    run: Option<RunDyn>,
-    interrupt_on_drop: bool,
-}
-
-impl RunSession {
-    fn new(run: RunDyn) -> Self {
-        Self {
-            run: Some(run),
-            interrupt_on_drop: false,
-        }
-    }
-
-    /// Opt into best-effort interrupted finalization if this session is
-    /// dropped before an explicit lifecycle transition.
-    pub fn interrupt_on_drop(mut self) -> Self {
-        self.interrupt_on_drop = true;
-        self
-    }
-
-    /// Access the open Run handle.
-    pub fn run(&self) -> &RunDyn {
-        self.run
-            .as_ref()
-            .expect("an unresolved RunSession always owns its RunDyn")
-    }
-
-    /// Mutably access the open Run handle.
-    pub fn run_mut(&mut self) -> &mut RunDyn {
-        self.run
-            .as_mut()
-            .expect("an unresolved RunSession always owns its RunDyn")
-    }
-
-    /// Finish the Run successfully.
-    pub fn finish(mut self) -> Result<()> {
-        self.run
-            .take()
-            .expect("an unresolved RunSession always owns its RunDyn")
-            .finish()
-    }
-
-    /// Finish the Run as failed while preserving its partial state.
-    pub fn fail(mut self) -> Result<()> {
-        self.run
-            .take()
-            .expect("an unresolved RunSession always owns its RunDyn")
-            .finish_failed()
-    }
-
-    /// Finish the Run as interrupted while preserving its partial state.
-    pub fn interrupt(mut self) -> Result<()> {
-        self.run
-            .take()
-            .expect("an unresolved RunSession always owns its RunDyn")
-            .finish_interrupted()
-    }
-}
-
-impl Drop for RunSession {
-    fn drop(&mut self) {
-        let Some(run) = self.run.take() else {
-            return;
-        };
-        if !self.interrupt_on_drop {
-            run.abandon();
-            return;
-        }
-        if let Err(error) = run.finish_interrupted() {
-            tracing::warn!(
-                error = %error,
-                "Failed to finish interrupted Run during session drop"
-            );
-        }
-    }
-}
-
 impl ExperimentDyn {
-    /// Wrap this dynamic Experiment in an explicit lifecycle session.
+    /// Opt into a best-effort interrupted checkpoint when this handle is
+    /// dropped while the shared Experiment is still unsealed.
     ///
-    /// The returned session does not perform a fallback transition on drop
-    /// unless the caller opts in with [`ExperimentSession::interrupt_on_drop`].
-    pub fn session(&self) -> ExperimentSession {
-        ExperimentSession::new(self.clone())
+    /// Ordinary `ExperimentDyn` handles do nothing on drop. The configured
+    /// behavior belongs only to this handle and is not inherited by clones.
+    /// If Runs are still open, checkpoint publication is deferred until the
+    /// final Run is closed or abandoned, and no new Run can be opened while
+    /// that terminal checkpoint is pending.
+    /// Explicit commit or checkpoint methods suppress the fallback even when
+    /// the explicit operation returns an error. Drop failures are reported
+    /// through tracing because [`Drop`] cannot return them.
+    pub fn interrupt_on_drop(mut self, reason: impl Into<String>) -> Self {
+        self.interrupted_reason_on_drop = Mutex::new(Some(reason.into()));
+        self
+    }
+
+    pub(super) fn suppress_interrupted_on_drop(&self) {
+        let mut reason = self
+            .interrupted_reason_on_drop
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        reason.take();
     }
 
     /// Create and run a lifecycle-safe Experiment in the default Local Registry.
@@ -289,7 +145,7 @@ impl ExperimentDyn {
         name: impl Into<Name>,
         f: impl FnOnce(&ExperimentScope<'_>) -> Result<()>,
     ) -> Result<LocalArtifactDyn> {
-        let experiment = Self::new(name)?;
+        let experiment = Self::new(name)?.interrupt_on_drop(EXPERIMENT_SCOPE_DROP_REASON);
         Self::run_scope(experiment, f)
     }
 
@@ -302,7 +158,8 @@ impl ExperimentDyn {
         name: impl Into<Name>,
         f: impl FnOnce(&ExperimentScope<'_>) -> Result<()>,
     ) -> Result<LocalArtifactDyn> {
-        let experiment = Self::with_registry_handle(registry_handle, name)?;
+        let experiment = Self::with_registry_handle(registry_handle, name)?
+            .interrupt_on_drop(EXPERIMENT_SCOPE_DROP_REASON);
         Self::run_scope(experiment, f)
     }
 
@@ -310,17 +167,14 @@ impl ExperimentDyn {
         experiment: ExperimentDyn,
         f: impl FnOnce(&ExperimentScope<'_>) -> Result<()>,
     ) -> Result<LocalArtifactDyn> {
-        let session = experiment
-            .session()
-            .interrupt_on_drop(EXPERIMENT_SCOPE_DROP_REASON);
         let scope = ExperimentScope {
-            experiment: session.experiment(),
+            experiment: &experiment,
         };
         match f(&scope) {
-            Ok(()) => session.commit(),
+            Ok(()) => experiment.commit(),
             Err(error) => {
                 let reason = format!("{error:#}");
-                if let Err(checkpoint_error) = session.fail(reason) {
+                if let Err(checkpoint_error) = experiment.commit_failed_checkpoint(reason) {
                     tracing::warn!(
                         error = %checkpoint_error,
                         "Failed to publish failed Experiment checkpoint after callback error"
@@ -339,14 +193,14 @@ impl ExperimentDyn {
     /// preserved in all failed and interrupted paths that can reach the parent
     /// Experiment.
     pub fn scoped_run<T>(&self, f: impl FnOnce(&mut RunDyn) -> Result<T>) -> Result<T> {
-        let mut session = self.run()?.into_session().interrupt_on_drop();
-        match f(session.run_mut()) {
+        let mut run = self.run()?.interrupt_on_drop();
+        match f(&mut run) {
             Ok(value) => {
-                session.finish()?;
+                run.finish()?;
                 Ok(value)
             }
             Err(error) => {
-                if let Err(finish_error) = session.fail() {
+                if let Err(finish_error) = run.finish_failed() {
                     tracing::warn!(
                         error = %finish_error,
                         "Failed to finish failed Run after callback error"
@@ -358,12 +212,59 @@ impl ExperimentDyn {
     }
 }
 
-impl RunDyn {
-    /// Convert this Run into an explicit lifecycle session.
-    ///
-    /// The returned session abandons the Run on drop unless the caller opts in
-    /// with [`RunSession::interrupt_on_drop`].
-    pub fn into_session(self) -> RunSession {
-        RunSession::new(self)
+impl Drop for ExperimentDyn {
+    fn drop(&mut self) {
+        let reason = self
+            .interrupted_reason_on_drop
+            .get_mut()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .take();
+        let Some(reason) = reason else {
+            return;
+        };
+        let reason_to_publish = {
+            let mut state = lock_experiment_state(&self.state);
+            select_interrupted_checkpoint_reason(&mut state, reason)
+        };
+        if let Some(reason) = reason_to_publish {
+            if let Err(error) = self.commit_interrupted_checkpoint(reason) {
+                tracing::warn!(
+                    error = %error,
+                    "Failed to publish interrupted Experiment checkpoint during drop"
+                );
+            }
+        }
+    }
+}
+
+fn select_interrupted_checkpoint_reason(
+    state: &mut super::ExperimentDynState,
+    reason: String,
+) -> Option<String> {
+    let open_run_count = match &state.lifecycle {
+        ExperimentDynLifecycle::Unsealed { open_runs, .. } => *open_runs,
+        _ => return None,
+    };
+    let selected_reason = state
+        .pending_interrupted_checkpoint
+        .get_or_insert(reason)
+        .clone();
+    (open_run_count == 0).then_some(selected_reason)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn zero_open_run_publication_uses_first_pending_reason() {
+        let experiment = ExperimentDyn::new(Name::Anonymous).unwrap();
+        let selected_reason = {
+            let mut state = lock_experiment_state(&experiment.state);
+            state.pending_interrupted_checkpoint = Some("first terminal reason".to_owned());
+            select_interrupted_checkpoint_reason(&mut state, "second terminal reason".to_owned())
+        };
+
+        assert_eq!(selected_reason.as_deref(), Some("first terminal reason"));
     }
 }

@@ -34,9 +34,10 @@
 //!
 //! Rust callers can use [`ExperimentDyn::scoped`] and
 //! [`ExperimentDyn::scoped_run`] for the same success / failure / interruption
-//! transitions. [`ExperimentSession`] and [`RunSession`] expose the transitions
-//! explicitly when callback scopes are not a good fit. Their drop fallback is
-//! opt-in and best-effort, and never pushes an Artifact to a remote registry.
+//! transitions. [`ExperimentDyn::interrupt_on_drop`] and
+//! [`RunDyn::interrupt_on_drop`] provide an opt-in, best-effort fallback for
+//! manually managed handles. These operations never push an Artifact to a
+//! remote registry.
 //!
 //! Forking a sealed Experiment creates a new unsealed child Experiment.
 //! The child manifest records the parent manifest as its OCI `subject`,
@@ -77,6 +78,37 @@
 //! })?;
 //! ```
 //!
+//! # Choosing an Experiment or Run type
+//!
+//! The API has two independent axes: whether Rust borrows the Local Registry
+//! through lifetimes or owns it through a runtime handle, and whether the
+//! domain object is still mutable or has been sealed. The types are separate
+//! so Rust callers can choose compile-time ownership guarantees without making
+//! dynamic runtimes such as Python model Rust lifetimes.
+//!
+//! | Type | Role | Why it is separate |
+//! | --- | --- | --- |
+//! | [`Experiment`] | Mutable Experiment borrowing a [`LocalRegistry`](crate::artifact::local_registry::LocalRegistry) | Its registry lifetime and consuming [`Experiment::commit`] make ownership and sealing explicit at compile time. |
+//! | [`SealedExperiment`] | Immutable committed Experiment borrowing its registry | It cannot expose mutable Experiment operations; [`SealedExperiment::fork`] creates a new mutable child. |
+//! | [`Run`] | Mutable Run borrowing its parent [`Experiment`] | The parent cannot be consumed while a Run borrow is live, and [`Run::finish`] writes the closed Run back to that parent. |
+//! | [`SealedRun`] | Immutable closed Run reconstructed from an Artifact | It reads persisted attachments, Solve records, Sampling records, and trace data without a mutable parent. |
+//! | [`Solve`] / [`Sampling`] | Immutable Solve or Sampling record borrowing its registry | Child records use the same registry lifetime as the [`SealedRun`] that owns them. |
+//! | [`ExperimentDyn`] | Runtime-owned Experiment used when Rust lifetimes cannot cross the caller boundary | One handle transitions from unsealed to sealed or failed in place, so there is intentionally no `SealedExperimentDyn`. |
+//! | [`RunDyn`] | Runtime-owned mutable Run | It keeps the parent Experiment state alive at runtime and consumes itself on `finish*`. |
+//! | [`SealedRunDyn`] | Runtime-owned immutable closed Run view | A closed Run has no write-back authority and may outlive the call that returned it. |
+//! | [`SolveDyn`] / [`SamplingDyn`] | Runtime-owned immutable Solve or Sampling record | Child records retain the registry owner needed to decode their input, output, and diagnostics. |
+//! | [`ExperimentScope`] | Restricted capability passed to [`ExperimentDyn::scoped`] | It is not another Experiment state; it omits raw [`ExperimentDyn::run`] so a live Run cannot escape the lifecycle-safe callback. |
+//!
+//! The borrowed and runtime-owned families model the same Experiment / Run
+//! semantics, but intentionally use different representations:
+//! [`StoredDescriptor`](crate::artifact::local_registry::StoredDescriptor)
+//! values carry a borrowed registry proof, while dynamic handles retain a
+//! registry owner and validate raw OCI descriptors at runtime.
+//! [`ExperimentStatus`], [`RunStatus`], [`SolveStatus`], and
+//! [`SamplingStatus`] are lifecycle values rather than alternative handles.
+//! The [`config`] types describe the serialized Artifact schema and are not
+//! runtime Experiment / Run objects.
+//!
 //! The module is split by data terms: `run` contains `Run` lifecycle
 //! operations, `attachment` contains Attachment descriptor helpers,
 //! `parameter` contains parameter values, run-local parameter sets,
@@ -100,10 +132,7 @@ mod tests;
 pub use attachment::{
     detect_file_media_type, AttachmentTable, Compression, DEFAULT_FILE_MEDIA_TYPE,
 };
-pub use dynamic::{
-    ExperimentDyn, ExperimentScope, ExperimentSession, RunDyn, RunSession, SamplingDyn,
-    SealedRunDyn, SolveDyn,
-};
+pub use dynamic::{ExperimentDyn, ExperimentScope, RunDyn, SamplingDyn, SealedRunDyn, SolveDyn};
 pub use logging::AttachmentLogger;
 pub use parameter::{ParameterValue, RunParameterCell};
 pub use run::{FailedSampleRecord, FailedSolveRecord, FinishedSampleRecord, FinishedSolveRecord};
