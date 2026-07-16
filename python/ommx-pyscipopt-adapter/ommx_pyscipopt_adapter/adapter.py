@@ -1,7 +1,7 @@
 from __future__ import annotations
 import math
 from dataclasses import asdict, dataclass, fields
-from typing import TYPE_CHECKING, Any, Iterable, Mapping, Optional, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Iterable, Mapping, Optional, cast
 
 import pyscipopt
 from pyscipopt.scip import PY_SCIP_EVENTTYPE as SCIP_EVENTTYPE
@@ -16,12 +16,17 @@ from ommx.adapter import (
     NoSolutionReturned,
 )
 from ommx import (
-    Instance,
-    Solution,
-    DecisionVariable,
-    Function,
     Constraint,
-    AdditionalCapability,
+    DecisionVariable,
+    DegreeBound,
+    Equality,
+    Function,
+    Instance,
+    InstanceClass,
+    InstanceClassClause,
+    Kind,
+    Sense,
+    Solution,
     State,
     ToState,
 )
@@ -33,6 +38,15 @@ if TYPE_CHECKING:
 
 _tracer = trace.get_tracer("ommx.adapter.pyscipopt")
 _SCIP_TERMINATION_EVENT = "TERMINATION"
+
+_QUADRATIC_REGULAR_CONSTRAINT_DEGREE_BOUNDS = {
+    Equality.EqualToZero: DegreeBound.at_most(2),
+    Equality.LessThanOrEqualToZero: DegreeBound.at_most(2),
+}
+_LINEAR_INDICATOR_CONSTRAINT_DEGREE_BOUNDS = {
+    Equality.EqualToZero: DegreeBound.at_most(1),
+    Equality.LessThanOrEqualToZero: DegreeBound.at_most(1),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -486,6 +500,24 @@ def _dataframe(
 
 
 class OMMXPySCIPOptAdapter(SolverAdapter):
+    INPUT_CLASS: ClassVar[InstanceClass | None] = InstanceClass(
+        [
+            InstanceClassClause(
+                label="pyscipopt-quadratic-mip",
+                allowed_variable_kinds={Kind.Binary, Kind.Integer, Kind.Continuous},
+                objective_degree_bound=DegreeBound.at_most(2),
+                regular_constraint_degree_bounds=(
+                    _QUADRATIC_REGULAR_CONSTRAINT_DEGREE_BOUNDS
+                ),
+                indicator_constraint_degree_bounds=(
+                    _LINEAR_INDICATOR_CONSTRAINT_DEGREE_BOUNDS
+                ),
+                allows_sos1=True,
+                allowed_senses={Sense.Minimize, Sense.Maximize},
+            )
+        ]
+    )
+
     def __init__(
         self,
         ommx_instance: Instance,
@@ -497,12 +529,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         :param initial_state: Optional initial solution state.
         """
         with _tracer.start_as_current_span("convert"):
-            ommx_instance.reduce_capabilities(
-                {
-                    AdditionalCapability.Indicator,
-                    AdditionalCapability.Sos1,
-                }
-            )
+            self.require_applicable(ommx_instance)
             self.instance = ommx_instance
             self.model = pyscipopt.Model()
             self.model.hideOutput()
@@ -776,7 +803,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
         # Check if objective is quadratic to add auxiliary variable
         degree = self.instance.objective.degree()
-        if degree > 3:
+        if degree > 2:
             raise OMMXPySCIPOptAdapterError(
                 f"Objective function degree {degree} is not supported. "
                 "Only constant, linear, and quadratic objectives are supported."

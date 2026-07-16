@@ -1,3 +1,5 @@
+import copy
+
 from ommx import (
     AdditionalCapability,
     DecisionVariable,
@@ -9,7 +11,7 @@ from ommx import (
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
 
-def test_adapter_lowers_only_unsupported_special_constraint_families() -> None:
+def test_adapter_accepts_an_explicitly_prepared_input() -> None:
     indicator = DecisionVariable.binary(0)
     x = [DecisionVariable.binary(i) for i in range(1, 3)]
     value = DecisionVariable.continuous(3, lower=0, upper=2)
@@ -23,24 +25,36 @@ def test_adapter_lowers_only_unsupported_special_constraint_families() -> None:
         sense=Instance.MAXIMIZE,
     )
 
-    adapter = OMMXPySCIPOptAdapter(instance)
+    prepared = copy.copy(instance)
+    prepared.reduce_capabilities(
+        {
+            AdditionalCapability.Indicator,
+            AdditionalCapability.Sos1,
+        }
+    )
 
-    assert adapter.instance.required_capabilities == {
+    assert set(instance.one_hot_constraints) == {10}
+    assert prepared.required_capabilities == {
         AdditionalCapability.Indicator,
         AdditionalCapability.Sos1,
     }
-    assert adapter.instance.one_hot_constraints == {}
-    assert set(adapter.instance.indicator_constraints) == {30}
-    assert set(adapter.instance.sos1_constraints) == {20}
+    assert prepared.one_hot_constraints == {}
+    assert set(prepared.indicator_constraints) == {30}
+    assert set(prepared.sos1_constraints) == {20}
 
     lowered = [
         constraint
-        for constraint in adapter.instance.constraints.values()
+        for constraint in prepared.constraints.values()
         if constraint.provenance
         and constraint.provenance[-1].kind == ProvenanceKind.OneHotConstraint
     ]
     assert len(lowered) == 1
     assert lowered[0].provenance[-1].original_id == 10
+
+    report = OMMXPySCIPOptAdapter.check_applicability(prepared)
+    assert report.is_applicable
+    adapter = OMMXPySCIPOptAdapter(prepared)
+    assert adapter.instance is prepared
 
     constraint_names = {constraint.name for constraint in adapter.model.getConss()}
     assert "ind_30" in constraint_names
