@@ -8,64 +8,153 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
-### 🆕 Native capability declarations for HiGHS and Python-MIP adapters ([#1085](https://github.com/Jij-Inc/ommx/pull/1085))
+### ⚠ Input class for the PySCIPOpt adapter ([#1086](https://github.com/Jij-Inc/ommx/pull/1086))
 
-`OMMXHighsAdapter` and `OMMXPythonMIPAdapter` now declare and enforce their
-complete native translator profiles: Binary, Integer, and Continuous variables;
-linear objectives; linear regular equality and inequality constraints; and both
-optimization senses. Unsupported variable kinds, nonlinear functions, and
-special constraints are reported through the structured
-{class}`~ommx.adapter.AdapterCompatibilityError` introduced in #1084.
+`OMMXPySCIPOptAdapter` now declares `INPUT_CLASS` for the exact inputs accepted
+before direct backend construction: Binary, Integer, and Continuous variables
+used by the active mathematical content; objectives and regular equality or
+inequality constraints of degree at most two; Indicator equality or inequality
+bodies of degree at most one; SOS1 constraints; and both optimization senses.
+OneHot constraints are not lowered implicitly. An input outside this class is
+rejected without mutation through
+{class}`~ommx.adapter.AdapterNotApplicableError`, which carries structured
+clause mismatches. Any explicitly prepared {class}`~ommx.Instance` is a
+different input whose applicability must be checked again.
 
-The migrated constructors no longer lower Indicator, OneHot, or SOS1
-constraints implicitly. A direct translation attempt rejects those families
-without mutating the input {class}`~ommx.Instance`; callers must perform any
-intended reformulation explicitly and recheck the prepared instance.
+This is a breaking change to the public exception contract from stable Python
+SDK 2.6.1. Unsupported cubic objectives or regular constraints and used
+SemiInteger or SemiContinuous variables previously raised
+`OMMXPySCIPOptAdapterError`; they now raise
+{class}`~ommx.adapter.AdapterNotApplicableError` before backend construction.
+Code that caught the adapter-specific exception for constructor-time input
+rejection must catch `AdapterNotApplicableError` instead, or call
+`check_applicability()` before construction. The stable variable-kind and
+polynomial-degree acceptance boundary is unchanged, and
+`OMMXPySCIPOptAdapterError` remains in use for conversion and backend failures.
 
-### 🆕 Native capability declaration for the PySCIPOpt adapter ([#1086](https://github.com/Jij-Inc/ommx/pull/1086))
+The removal of implicit OneHot lowering and the applicability rules for v3
+first-class Indicator and SOS1 constraints change Python SDK 3.0 prerelease
+behavior; they are not compatibility changes from stable 2.6.1.
 
-`OMMXPySCIPOptAdapter` now declares and enforces a coherent native profile for
-Binary, Integer, and Continuous variables; quadratic objectives and regular
-constraints; linear Indicator bodies; native SOS1 constraints; and both
-optimization senses. The separate degree limits correctly report a quadratic
-Indicator body as unsupported even though quadratic regular constraints remain
-accepted.
+### ⚠ Input classes for HiGHS and Python-MIP adapters ([#1085](https://github.com/Jij-Inc/ommx/pull/1085))
 
-The adapter no longer lowers OneHot constraints implicitly. Unsupported
-OneHot, SemiInteger, SemiContinuous, cubic, and nonlinear-Indicator inputs are
-reported through {class}`~ommx.adapter.AdapterCompatibilityError` without
-mutating the input {class}`~ommx.Instance`.
+`OMMXHighsAdapter` and `OMMXPythonMIPAdapter` now declare `INPUT_CLASS` for
+the exact inputs accepted by their direct backend construction: Binary,
+Integer, and Continuous variables used by the active mathematical content;
+linear objectives; linear regular equality and inequality constraints; and
+both optimization senses. Inputs outside that class are rejected before
+backend construction through {class}`~ommx.adapter.AdapterNotApplicableError`,
+which carries the structured membership report.
 
-### 🆕 Adapter capability profiles and compatibility reports ([#1084](https://github.com/Jij-Inc/ommx/pull/1084))
+This is a breaking change to the public exception contract from stable Python
+SDK 2.6.1. Unsupported nonlinear objectives or regular constraints and used
+SemiInteger or SemiContinuous variables previously raised
+`OMMXHighsAdapterError` or `OMMXPythonMIPAdapterError`; they now raise
+{class}`~ommx.adapter.AdapterNotApplicableError`. Code that caught an
+adapter-specific exception for constructor-time input rejection must catch
+`AdapterNotApplicableError` instead, or call `check_applicability()` before
+construction. The accepted linear Binary, Integer, and Continuous input
+boundary and behavior for applicable inputs are unchanged. Adapter-specific
+exceptions remain in use for backend and conversion errors.
 
-{meth}`~ommx.Instance.solver_requirements` now derives the complete active
-solver-facing shape of an instance, including used variable kinds, objective
-and constraint degrees, constraint relations and families, and optimization
-sense. {class}`~ommx.CapabilityProfile` and
-{class}`~ommx.AdapterCapabilities` describe coherent native translator
-profiles and return structured {class}`~ommx.PortableCompatibilityReport`
-values.
+Indicator, OneHot, and SOS1 constraints are not lowered implicitly. An
+unsupported input is rejected without mutation; any explicitly prepared
+{class}`~ommx.Instance` is a different input whose applicability must be
+checked again. This changes Python SDK 3.0 prerelease behavior, not stable 2.6.1
+compatibility: first-class special constraints and their implicit lowering were
+introduced during 3.0 prerelease development.
+
+### 🆕 Instance classes and adapter applicability ([#1084](https://github.com/Jij-Inc/ommx/pull/1084))
+
+The Python SDK now exposes {class}`~ommx.InstanceClass` as a set of OMMX
+{class}`~ommx.Instance` values. Each {class}`~ommx.InstanceClassClause` is one
+conjunctive structural description, and the containing class is their finite
+union. Membership is evaluated from the exact input value and reported through
+{class}`~ommx.InstanceClassMembershipReport` with structured per-clause
+mismatches.
 
 ```python
-from ommx import AdapterCapabilities, CapabilityProfile, DegreeLimit, Kind, Sense
+from ommx import DegreeBound, InstanceClass, InstanceClassClause, Kind, Sense
 
-binary_linear = CapabilityProfile(
-    name="binary-linear",
-    variable_kinds={Kind.Binary},
-    objective_degree=DegreeLimit.at_most(1),
-    senses={Sense.Minimize},
+binary_linear = InstanceClass(
+    [
+        InstanceClassClause(
+            label="binary-linear",
+            allowed_variable_kinds={Kind.Binary},
+            objective_degree_bound=DegreeBound.at_most(1),
+            allowed_senses={Sense.Minimize},
+        )
+    ]
 )
-capabilities = AdapterCapabilities([binary_linear])
-report = capabilities.check_compatibility(instance.solver_requirements())
+report = binary_linear.check_membership(instance)
 ```
 
-{class}`~ommx.adapter.SolverAdapter` subclasses can declare `CAPABILITIES` and
-use `check_compatibility` or `require_compatible` to combine the portable
-comparison with adapter-specific preconditions without mutating the input
-instance. Profiles describe direct translator input after explicit preparation;
-they do not imply acceptance through relaxation or finite-penalty conversion.
-`ommx.v2.Feature` and `required_features` remain separate wire-format
-forward-compatibility concepts and are not adapter support declarations.
+{class}`~ommx.adapter.SolverAdapter` subclasses declare `INPUT_CLASS` and use
+`check_applicability` or `require_applicable` to layer adapter-owned
+preconditions on top of input-class membership without mutating the caller's
+instance. Explicit preparation must be followed by a new membership check on
+the prepared input. Explicit special-constraint lowering through
+{meth}`~ommx.Instance.reduce_capabilities` and `ommx.v2.Feature` wire
+reconstruction remain separate concepts. The lowering method's keyword argument
+is renamed from `supported` to `preserved` to describe the families left
+unchanged by that explicit operation.
+
+### 🛠 Structured SDK errors use consistent Python exceptions ([#1097](https://github.com/Jij-Inc/ommx/pull/1097))
+
+Python bindings now route stable `DecisionVariableError`, `SolutionError`, and
+`SampleSetError` signals through the shared PyO3 error boundary. Missing names,
+sample IDs, and constraint IDs in structured result access raise `KeyError`.
+Invalid decision-variable bounds, duplicate subscripts, parameterized
+constraint extraction, and requests for a best sample when none is feasible
+raise `ValueError` consistently.
+
+An unknown integer kind passed to the `DecisionVariable` constructor is also
+reported as Python-owned `ValueError` validation. Python-native failures remain
+intact, and unclassified Rust SDK errors continue to fall back to
+`RuntimeError`.
+
+### 🛠 Numeric SDK errors consistently raise `ValueError` ([#1096](https://github.com/Jij-Inc/ommx/pull/1096))
+
+Python bindings now translate direct Rust SDK `CoefficientError`, `AtolError`,
+and `BoundError` signals through the shared PyO3 error boundary. Invalid
+coefficients in constructors, arithmetic, and binary-power reduction,
+non-positive tolerance values, and invalid bounds therefore raise
+`ValueError` consistently instead of depending on the entry point's previous
+panic, `RuntimeError`, or hand-written conversion path.
+
+Zero coefficients continue to be normalized as a successful operation.
+Failed in-place additions leave the original numeric object unchanged.
+Python-owned type and argument-shape validation also keeps its native exception
+behavior, while unclassified Rust SDK failures continue to fall back to
+`RuntimeError`.
+
+### 🆕 Typed remote Artifact lookup errors ([#1090](https://github.com/Jij-Inc/ommx/pull/1090))
+
+{meth}`~ommx.artifact.Artifact.load` and
+{meth}`~ommx.experiment.Experiment.load` now report remote lookup failures
+through OMMX-owned exceptions instead of a generic `RuntimeError` containing
+the underlying OCI transport error. Catch
+{class}`~ommx.artifact.RemoteArtifactNotFoundError` to handle a missing exact
+ref without confusing it with authentication, authorization, registry
+transport, or invalid-Artifact failures. All remote lookup exceptions inherit
+from {class}`~ommx.artifact.RemoteArtifactError`.
+
+```python
+from ommx.artifact import Artifact, RemoteArtifactNotFoundError
+
+try:
+    artifact = Artifact.load("registry.example/team/model:latest")
+except RemoteArtifactNotFoundError:
+    artifact = None
+```
+
+The sibling exception classes are
+{class}`~ommx.artifact.RemoteArtifactAuthenticationError`,
+{class}`~ommx.artifact.RemoteArtifactAuthorizationError`,
+{class}`~ommx.artifact.RemoteArtifactTransportError`, and
+{class}`~ommx.artifact.InvalidRemoteArtifactError`. Their messages retain the
+original registry and transport context. Both load entry points use the same
+PyO3 error-conversion boundary.
 
 ### 🆕 `VariableIDLike` inputs for structural constraints ([#1078](https://github.com/Jij-Inc/ommx/pull/1078))
 
@@ -898,14 +987,6 @@ In addition to regular constraints, the following three special constraint types
 For concrete usage, evaluation-result access, and the Indicator relax / restore workflow, see [Special Constraints](../user_guide/special_constraints.md).
 
 Accordingly, the legacy `ConstraintHints` / `OneHot` / `Sos1` classes, the `Instance.constraint_hints` property, and the PySCIPOpt Adapter's `use_sos1` flag are removed.
-
-### 🆕 Adapter Capability Model ([#790](https://github.com/Jij-Inc/ommx/pull/790), [#805](https://github.com/Jij-Inc/ommx/pull/805), [#810](https://github.com/Jij-Inc/ommx/pull/810), [#811](https://github.com/Jij-Inc/ommx/pull/811), [#814](https://github.com/Jij-Inc/ommx/pull/814))
-
-Alongside the special constraint types, adapters now declare their own supported capabilities via an `ADDITIONAL_CAPABILITIES` class attribute. When `super().__init__(instance)` is called, any undeclared special constraint is automatically converted to regular constraints (Big-M for Indicator / SOS1, linear equality for OneHot) before the instance reaches the solver.
-
-**Existing OMMX Adapters must be updated for Python SDK 3.0.0 to call `super().__init__(instance)`.** Currently the PySCIPOpt Adapter declares support for Indicator and SOS1.
-
-For details and the manual conversion APIs, see [Adapter Capability Model and Conversions](../user_guide/capability_model.md).
 
 ### 🔄 numpy scalar support ([#794](https://github.com/Jij-Inc/ommx/pull/794))
 

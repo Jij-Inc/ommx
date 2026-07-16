@@ -692,9 +692,9 @@ def test_encoding_methods_validate_atol():
         sense=Instance.MAXIMIZE,
     )
 
-    with pytest.raises(RuntimeError, match="ATol must be positive"):
+    with pytest.raises(ValueError, match="ATol must be positive"):
         log_instance.log_encode(atol=0.0)
-    with pytest.raises(RuntimeError, match="ATol must be positive"):
+    with pytest.raises(ValueError, match="ATol must be positive"):
         unary_instance.unary_encode(atol=0.0)
 
 

@@ -2,7 +2,6 @@
 
 #[macro_use]
 mod annotations;
-mod adapter_capability;
 mod artifact;
 mod attached;
 mod bound;
@@ -13,13 +12,16 @@ mod decision_variable;
 mod descriptor;
 mod display;
 mod enums;
+mod error;
 mod evaluated_constraint;
 mod evaluated_decision_variable;
 mod evaluated_named_function;
 mod experiment;
 mod function;
+mod in_place_add;
 mod indicator_constraint;
 mod instance;
+mod instance_class;
 mod linear;
 mod named_function;
 mod one_hot_constraint;
@@ -29,6 +31,7 @@ mod parameters;
 mod parametric_instance;
 mod polynomial;
 mod provenance;
+mod pyo3_bridge;
 mod quadratic;
 mod random;
 mod sample_set;
@@ -40,7 +43,6 @@ mod solution;
 mod sos1_constraint;
 mod state;
 
-pub use adapter_capability::*;
 pub use artifact::*;
 // `attached.rs` is implementation detail — re-export only the host enum that
 // the kind-specific binding files reference. The metadata-method macros are
@@ -60,6 +62,7 @@ pub use experiment::*;
 pub use function::*;
 pub use indicator_constraint::*;
 pub use instance::*;
+pub use instance_class::*;
 pub use linear::*;
 pub use named_function::*;
 pub use one_hot_constraint::*;
@@ -82,15 +85,11 @@ pub use state::*;
 use pyo3::prelude::*;
 use pyo3_stub_gen::runtime::PyModuleTypeAliasExt;
 
-pub(crate) fn coefficient_error_to_pyerr(error: ommx::CoefficientError) -> PyErr {
-    pyo3::exceptions::PyValueError::new_err(error.to_string())
-}
-
 pub(crate) fn comparison_constraint(
     function: std::result::Result<ommx::Function, ommx::CoefficientError>,
     equality: ommx::Equality,
-) -> PyResult<Constraint> {
-    let function = function.map_err(coefficient_error_to_pyerr)?;
+) -> error::OmmxPyResult<Constraint> {
+    let function = function?;
     Ok(Constraint(
         ommx::Constraint {
             equality,
@@ -132,8 +131,8 @@ pub(crate) const TRACING: TracingBridge = TracingBridge::new("ommx");
 
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
-pub fn set_default_atol(value: f64) -> anyhow::Result<()> {
-    ommx::ATol::set_default(value)
+pub fn set_default_atol(value: f64) -> error::OmmxPyResult<()> {
+    Ok(ommx::ATol::set_default(value)?)
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
@@ -145,8 +144,9 @@ pub fn get_default_atol() -> f64 {
 /// We need `gil_used = false` to allow Python 3.13t
 /// See <https://pyo3.rs/main/free-threading#supporting-free-threaded-python-with-pyo3>.
 #[pymodule(gil_used = false)]
-fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
+fn _ommx_rust(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     // OMMX Artifact
+    error::register_exceptions(py, m)?;
     m.add_class::<PyArchiveDescriptor>()?;
     m.add_class::<PyDescriptor>()?;
     m.add_class::<PyArtifact>()?;
@@ -193,14 +193,12 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<AttachedDecisionVariable>()?;
     m.add_class::<Parameter>()?;
     m.add_class::<AdditionalCapability>()?;
-    m.add_class::<DegreeLimit>()?;
-    m.add_class::<ConstraintRequirement>()?;
-    m.add_class::<InstanceRequirements>()?;
-    m.add_class::<CapabilityProfile>()?;
-    m.add_class::<AdapterCapabilities>()?;
-    m.add_class::<PortableCapabilityMismatch>()?;
-    m.add_class::<ProfileCompatibilityReport>()?;
-    m.add_class::<PortableCompatibilityReport>()?;
+    m.add_class::<DegreeBound>()?;
+    m.add_class::<InstanceClassClause>()?;
+    m.add_class::<InstanceClass>()?;
+    m.add_class::<InstanceClassMismatch>()?;
+    m.add_class::<InstanceClassClauseReport>()?;
+    m.add_class::<InstanceClassMembershipReport>()?;
     m.add_class::<Constraint>()?;
     m.add_class::<AttachedConstraint>()?;
     m.add_class::<IndicatorConstraint>()?;
@@ -257,6 +255,11 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(set_default_atol, m)?)?;
     m.add_function(wrap_pyfunction!(get_default_atol, m)?)?;
 
+    // Versioned production runtime receivers consumed by the published
+    // `ommx-pyo3-bridge` crate. They stay binding-private because only this
+    // extension owns construction of the canonical Python classes.
+    pyo3_bridge::register(m)?;
+
     Ok(())
 }
 
@@ -281,16 +284,14 @@ pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
     "DecisionVariable",
     "AttachedDecisionVariable",
     "Parameter",
-    // Constraint capability
+    // Instance classes and explicit special-constraint lowering
     "AdditionalCapability",
-    "DegreeLimit",
-    "ConstraintRequirement",
-    "InstanceRequirements",
-    "CapabilityProfile",
-    "AdapterCapabilities",
-    "PortableCapabilityMismatch",
-    "ProfileCompatibilityReport",
-    "PortableCompatibilityReport",
+    "DegreeBound",
+    "InstanceClassClause",
+    "InstanceClass",
+    "InstanceClassMismatch",
+    "InstanceClassClauseReport",
+    "InstanceClassMembershipReport",
     // Constraint and named function
     "Constraint",
     "AttachedConstraint",
@@ -336,6 +337,12 @@ pyo3_stub_gen::reexport_module_members!("ommx.artifact" from "ommx._ommx_rust";
     "ArchiveDescriptor",
     "ArchiveManifest",
     "ArtifactDraft",
+    "RemoteArtifactError",
+    "RemoteArtifactNotFoundError",
+    "RemoteArtifactAuthenticationError",
+    "RemoteArtifactAuthorizationError",
+    "RemoteArtifactTransportError",
+    "InvalidRemoteArtifactError",
     "Descriptor",
     "GcBlob",
     "GcInvalidManifest",

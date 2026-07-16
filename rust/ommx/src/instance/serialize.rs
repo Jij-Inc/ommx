@@ -1,5 +1,5 @@
 use super::*;
-use crate::{v1, v2, ConstraintType, Message, Parse};
+use crate::{message_io, v1, v2, ConstraintType, Message, Parse};
 use anyhow::Result;
 
 impl Instance {
@@ -14,12 +14,12 @@ impl Instance {
     }
 
     pub fn from_v1_bytes(bytes: &[u8]) -> Result<Self> {
-        let inner = v1::Instance::decode(bytes)?;
+        let inner = message_io::decode::<v1::Instance>(bytes, "ommx.v1.Instance")?;
         Ok(Parse::parse(inner, &())?)
     }
 
     pub fn from_v2_bytes(bytes: &[u8]) -> Result<Self> {
-        let inner = v2::Instance::decode(bytes)?;
+        let inner = message_io::decode::<v2::Instance>(bytes, "ommx.v2.Instance")?;
         Ok(Parse::parse(inner, &())?)
     }
 }
@@ -36,12 +36,14 @@ impl ParametricInstance {
     }
 
     pub fn from_v1_bytes(bytes: &[u8]) -> Result<Self> {
-        let inner = v1::ParametricInstance::decode(bytes)?;
+        let inner =
+            message_io::decode::<v1::ParametricInstance>(bytes, "ommx.v1.ParametricInstance")?;
         Ok(Parse::parse(inner, &())?)
     }
 
     pub fn from_v2_bytes(bytes: &[u8]) -> Result<Self> {
-        let inner = v2::ParametricInstance::decode(bytes)?;
+        let inner =
+            message_io::decode::<v2::ParametricInstance>(bytes, "ommx.v2.ParametricInstance")?;
         Ok(Parse::parse(inner, &())?)
     }
 }

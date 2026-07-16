@@ -1,18 +1,17 @@
-use super::{Instance, Sense};
 use crate::{
-    ConstraintID, Degree, Equality, IndicatorConstraintID, Kind, OneHotConstraintID,
-    Sos1ConstraintID, VariableIDSet,
+    ConstraintID, Degree, Equality, IndicatorConstraintID, Instance, Kind, OneHotConstraintID,
+    Sense, Sos1ConstraintID, VariableIDSet,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
-/// Function shape required by one active regular or indicator constraint.
+/// Membership-relevant facts for one active regular or indicator constraint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ConstraintRequirement {
+pub struct ConstraintFacts {
     relation: Equality,
     degree: Degree,
 }
 
-impl ConstraintRequirement {
+impl ConstraintFacts {
     pub fn relation(&self) -> Equality {
         self.relation
     }
@@ -22,28 +21,25 @@ impl ConstraintRequirement {
     }
 }
 
-/// Portable shape of the active solver input owned by an [`Instance`].
+/// Facts derived from the active mathematical content of an [`Instance`].
 ///
-/// This is derived data, not another mutable source of truth. It includes the
-/// objective and every active constraint family, and groups only solver-used
-/// decision variables by [`Kind`]. Fixed, dependent, irrelevant,
-/// removed-constraint-only, and named-function-only variables are excluded.
-///
-/// Serialization features are intentionally excluded. Wire-level
-/// `ommx.v2.Feature` requirements and solver compatibility are separate domain
-/// boundaries.
+/// This private value is diagnostic evidence for instance-class membership,
+/// not another mutable source of truth. It includes the objective and every
+/// active constraint family, and groups only used decision variables by
+/// [`Kind`]. Fixed, dependent, irrelevant, removed-constraint-only, and
+/// named-function-only variables are excluded.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct InstanceRequirements {
+pub struct InstanceFacts {
     sense: Sense,
     used_variables_by_kind: BTreeMap<Kind, VariableIDSet>,
     objective_degree: Degree,
-    regular_constraints: BTreeMap<ConstraintID, ConstraintRequirement>,
-    indicator_constraints: BTreeMap<IndicatorConstraintID, ConstraintRequirement>,
+    regular_constraints: BTreeMap<ConstraintID, ConstraintFacts>,
+    indicator_constraints: BTreeMap<IndicatorConstraintID, ConstraintFacts>,
     one_hot_constraint_ids: BTreeSet<OneHotConstraintID>,
     sos1_constraint_ids: BTreeSet<Sos1ConstraintID>,
 }
 
-impl InstanceRequirements {
+impl InstanceFacts {
     pub fn sense(&self) -> Sense {
         self.sense
     }
@@ -52,6 +48,7 @@ impl InstanceRequirements {
         &self.used_variables_by_kind
     }
 
+    #[cfg(test)]
     pub fn used_variable_ids(&self) -> VariableIDSet {
         self.used_variables_by_kind
             .values()
@@ -63,11 +60,11 @@ impl InstanceRequirements {
         self.objective_degree
     }
 
-    pub fn regular_constraints(&self) -> &BTreeMap<ConstraintID, ConstraintRequirement> {
+    pub fn regular_constraints(&self) -> &BTreeMap<ConstraintID, ConstraintFacts> {
         &self.regular_constraints
     }
 
-    pub fn indicator_constraints(&self) -> &BTreeMap<IndicatorConstraintID, ConstraintRequirement> {
+    pub fn indicator_constraints(&self) -> &BTreeMap<IndicatorConstraintID, ConstraintFacts> {
         &self.indicator_constraints
     }
 
@@ -80,7 +77,7 @@ impl InstanceRequirements {
     }
 }
 
-impl From<&Instance> for InstanceRequirements {
+impl From<&Instance> for InstanceFacts {
     fn from(instance: &Instance) -> Self {
         let mut used_variables_by_kind = BTreeMap::<Kind, VariableIDSet>::new();
         for (id, variable) in instance.used_decision_variables() {
@@ -100,7 +97,7 @@ impl From<&Instance> for InstanceRequirements {
                 .map(|(id, constraint)| {
                     (
                         *id,
-                        ConstraintRequirement {
+                        ConstraintFacts {
                             relation: constraint.equality,
                             degree: constraint.function().degree(),
                         },
@@ -113,7 +110,7 @@ impl From<&Instance> for InstanceRequirements {
                 .map(|(id, constraint)| {
                     (
                         *id,
-                        ConstraintRequirement {
+                        ConstraintFacts {
                             relation: constraint.equality,
                             degree: constraint.function().degree(),
                         },
@@ -123,16 +120,6 @@ impl From<&Instance> for InstanceRequirements {
             one_hot_constraint_ids: instance.one_hot_constraints().keys().copied().collect(),
             sos1_constraint_ids: instance.sos1_constraints().keys().copied().collect(),
         }
-    }
-}
-
-impl Instance {
-    /// Derive the portable requirements of this instance's active solver input.
-    ///
-    /// The result is recomputed on every call so an explicit preparation or
-    /// lowering step is always reflected by the next compatibility check.
-    pub fn solver_requirements(&self) -> InstanceRequirements {
-        self.into()
     }
 }
 
@@ -147,57 +134,54 @@ mod tests {
 
     proptest! {
         #[test]
-        fn requirements_match_every_active_solver_input_component(
+        fn facts_match_every_active_instance_component(
             instance in any_with::<Instance>(InstanceParameters::full_v3())
         ) {
-            let requirements = instance.solver_requirements();
+            let facts = InstanceFacts::from(&instance);
 
-            prop_assert_eq!(requirements.sense(), instance.sense());
-            prop_assert_eq!(requirements.objective_degree(), instance.objective().degree());
-            prop_assert_eq!(
-                requirements.used_variable_ids(),
-                instance.used_decision_variable_ids()
-            );
+            prop_assert_eq!(facts.sense(), instance.sense());
+            prop_assert_eq!(facts.objective_degree(), instance.objective().degree());
+            prop_assert_eq!(facts.used_variable_ids(), instance.used_decision_variable_ids());
             for (id, variable) in instance.used_decision_variables() {
-                prop_assert!(requirements
+                prop_assert!(facts
                     .used_variables_by_kind()
                     .get(&variable.kind())
                     .is_some_and(|ids| ids.contains(&id)));
             }
 
             prop_assert_eq!(
-                requirements.regular_constraints().keys().copied().collect::<BTreeSet<_>>(),
+                facts.regular_constraints().keys().copied().collect::<BTreeSet<_>>(),
                 instance.constraints().keys().copied().collect::<BTreeSet<_>>()
             );
             for (id, constraint) in instance.constraints() {
-                let requirement = requirements.regular_constraints().get(id).unwrap();
-                prop_assert_eq!(requirement.relation(), constraint.equality);
-                prop_assert_eq!(requirement.degree(), constraint.function().degree());
+                let fact = facts.regular_constraints().get(id).unwrap();
+                prop_assert_eq!(fact.relation(), constraint.equality);
+                prop_assert_eq!(fact.degree(), constraint.function().degree());
             }
 
             prop_assert_eq!(
-                requirements.indicator_constraints().keys().copied().collect::<BTreeSet<_>>(),
+                facts.indicator_constraints().keys().copied().collect::<BTreeSet<_>>(),
                 instance.indicator_constraints().keys().copied().collect::<BTreeSet<_>>()
             );
             for (id, constraint) in instance.indicator_constraints() {
-                let requirement = requirements.indicator_constraints().get(id).unwrap();
-                prop_assert_eq!(requirement.relation(), constraint.equality);
-                prop_assert_eq!(requirement.degree(), constraint.function().degree());
+                let fact = facts.indicator_constraints().get(id).unwrap();
+                prop_assert_eq!(fact.relation(), constraint.equality);
+                prop_assert_eq!(fact.degree(), constraint.function().degree());
             }
 
             prop_assert_eq!(
-                requirements.one_hot_constraint_ids(),
+                facts.one_hot_constraint_ids(),
                 &instance.one_hot_constraints().keys().copied().collect()
             );
             prop_assert_eq!(
-                requirements.sos1_constraint_ids(),
+                facts.sos1_constraint_ids(),
                 &instance.sos1_constraints().keys().copied().collect()
             );
         }
     }
 
     #[test]
-    fn requirements_are_recomputed_after_explicit_lowering() {
+    fn facts_are_recomputed_after_explicit_lowering() {
         let x = VariableID::from(1);
         let y = VariableID::from(2);
         let one_hot_id = OneHotConstraintID::from(7);
@@ -205,8 +189,8 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::from((linear!(x) + linear!(y)).unwrap()))
             .decision_variables(BTreeMap::from([
-                (x, crate::DecisionVariable::binary()),
-                (y, crate::DecisionVariable::binary()),
+                (x, DecisionVariable::binary()),
+                (y, DecisionVariable::binary()),
             ]))
             .constraints(BTreeMap::new())
             .one_hot_constraints(BTreeMap::from([(
@@ -216,7 +200,7 @@ mod tests {
             .build()
             .unwrap();
 
-        let before = instance.solver_requirements();
+        let before = InstanceFacts::from(&instance);
         assert_eq!(
             before.one_hot_constraint_ids(),
             &BTreeSet::from([one_hot_id])
@@ -224,11 +208,11 @@ mod tests {
         assert!(before.regular_constraints().is_empty());
 
         let regular_id = instance.convert_one_hot_to_constraint(one_hot_id).unwrap();
-        let after = instance.solver_requirements();
+        let after = InstanceFacts::from(&instance);
         assert!(after.one_hot_constraint_ids().is_empty());
         assert_eq!(
             after.regular_constraints().get(&regular_id),
-            Some(&ConstraintRequirement {
+            Some(&ConstraintFacts {
                 relation: Equality::EqualToZero,
                 degree: 1.into(),
             })
@@ -237,7 +221,7 @@ mod tests {
     }
 
     #[test]
-    fn only_active_solver_input_variables_constrain_supported_kinds() {
+    fn only_active_instance_variables_are_observed() {
         let used = VariableID::from(1);
         let fixed = VariableID::from(2);
         let dependent = VariableID::from(3);
@@ -284,24 +268,12 @@ mod tests {
             .build()
             .unwrap();
 
-        let requirements = instance.solver_requirements();
-        assert_eq!(requirements.used_variable_ids(), BTreeSet::from([used]));
+        let facts = InstanceFacts::from(&instance);
+        assert_eq!(facts.used_variable_ids(), BTreeSet::from([used]));
         assert_eq!(
-            requirements.used_variables_by_kind(),
+            facts.used_variables_by_kind(),
             &BTreeMap::from([(Kind::Binary, BTreeSet::from([used]))])
         );
-        assert!(requirements.regular_constraints().is_empty());
-
-        let binary_only = crate::CapabilityProfile::new(
-            "binary-only",
-            BTreeSet::from([Kind::Binary]),
-            crate::DegreeLimit::Any,
-            BTreeSet::from([Sense::Minimize]),
-        )
-        .unwrap();
-        let report = crate::AdapterCapabilities::new(vec![binary_only])
-            .unwrap()
-            .check_compatibility(&requirements);
-        assert!(report.is_compatible(), "{report}");
+        assert!(facts.regular_constraints().is_empty());
     }
 }

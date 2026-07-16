@@ -6,18 +6,12 @@ import Mathlib.Tactic.Ring
 /-!
 # Exact semantic core
 
-This module defines the versioned input language for implementation-independent
+This module defines the input language for implementation-independent
 semantics. It deliberately has no OMMX Rust, protobuf, floating-point,
 lifecycle, or identifier semantics.
 -/
 
 namespace OMMXProof
-
-/-- Version of the complete independent semantics research contract: input AST,
-normalization, denotation, preservation relations, witness schemas, and checker
-acceptance rules. A semantic or schema change must bump this value. This is not
-a public OMMX serialization version. -/
-def formalContractVersion : Nat := 1
 
 abbrev Assignment (n : Nat) := Fin n → Rat
 

@@ -436,8 +436,12 @@ impl PyExperiment {
     /// pull it from the remote registry, matching {meth}`Artifact.load`.
     /// The loaded artifact must contain an Experiment config. Use
     /// `Experiment(...)` to create a new unsealed experiment.
+    ///
+    /// Raises {class}`~ommx.artifact.RemoteArtifactNotFoundError` when the
+    /// exact remote reference does not exist. Other remote access failures
+    /// raise subclasses of {class}`~ommx.artifact.RemoteArtifactError`.
     #[staticmethod]
-    pub fn load(py: Python<'_>, image_name: &str) -> Result<Self> {
+    pub fn load(py: Python<'_>, image_name: &str) -> crate::error::OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let image_name = ommx::artifact::ImageRef::parse(image_name)?;
         Ok(Self {

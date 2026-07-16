@@ -43,6 +43,7 @@ See [DEVELOPMENT.md](./DEVELOPMENT.md) about developing this project.
 | SDK | Package | API Reference |
 |:----|:--------|:--------------|
 | Rust | [![crates.io](https://img.shields.io/crates/v/ommx)](https://crates.io/crates/ommx) | [![docs.rs](https://docs.rs/ommx/badge.svg)](https://docs.rs/ommx) |
+| Rust-to-Python PyO3 bridge | [![crates.io](https://img.shields.io/crates/v/ommx-pyo3-bridge)](https://crates.io/crates/ommx-pyo3-bridge) | [![docs.rs](https://docs.rs/ommx-pyo3-bridge/badge.svg)](https://docs.rs/ommx-pyo3-bridge) |
 | Python | [![PyPI](https://img.shields.io/pypi/v/ommx)](https://pypi.org/project/ommx/) | [![Docs](https://img.shields.io/badge/API_Reference-main-blue)](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/api/index.html) |
 
 See [Supported Adapters](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/user_guide/supported_ommx_adapters.html) about a complete list of supported adapters for each solver/sampler.

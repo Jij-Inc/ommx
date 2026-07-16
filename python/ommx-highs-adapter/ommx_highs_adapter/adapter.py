@@ -10,14 +10,14 @@ from highspy.highs import highs_linear_expression
 from opentelemetry import trace
 
 from ommx import (
-    AdapterCapabilities,
-    CapabilityProfile,
     Constraint,
     DecisionVariable,
-    DegreeLimit,
+    DegreeBound,
     Equality,
     Function,
     Instance,
+    InstanceClass,
+    InstanceClassClause,
     Kind,
     Sense,
     Solution,
@@ -34,9 +34,9 @@ from .exception import OMMXHighsAdapterError
 
 _tracer = trace.get_tracer("ommx.adapter.highs")
 
-_LINEAR_CONSTRAINTS = {
-    Equality.EqualToZero: DegreeLimit.at_most(1),
-    Equality.LessThanOrEqualToZero: DegreeLimit.at_most(1),
+_LINEAR_CONSTRAINT_DEGREE_BOUNDS = {
+    Equality.EqualToZero: DegreeBound.at_most(1),
+    Equality.LessThanOrEqualToZero: DegreeBound.at_most(1),
 }
 
 
@@ -458,7 +458,7 @@ class OMMXHighsAdapter(SolverAdapter):
 
     **Note**: Semi-integer and semi-continuous variables are planned for future support but are
     currently unsupported. Using these variable types will raise an
-    ``AdapterCompatibilityError`` with an ``UnsupportedVariableKind`` mismatch.
+    ``AdapterNotApplicableError`` with a ``VariableKindNotAllowed`` mismatch.
 
     Constraints
     -----------
@@ -574,14 +574,14 @@ class OMMXHighsAdapter(SolverAdapter):
 
     """
 
-    CAPABILITIES: ClassVar[AdapterCapabilities | None] = AdapterCapabilities(
+    INPUT_CLASS: ClassVar[InstanceClass | None] = InstanceClass(
         [
-            CapabilityProfile(
-                name="highs-linear-mip",
-                variable_kinds={Kind.Binary, Kind.Integer, Kind.Continuous},
-                objective_degree=DegreeLimit.at_most(1),
-                regular_constraints=_LINEAR_CONSTRAINTS,
-                senses={Sense.Minimize, Sense.Maximize},
+            InstanceClassClause(
+                label="highs-linear-mip",
+                allowed_variable_kinds={Kind.Binary, Kind.Integer, Kind.Continuous},
+                objective_degree_bound=DegreeBound.at_most(1),
+                regular_constraint_degree_bounds=_LINEAR_CONSTRAINT_DEGREE_BOUNDS,
+                allowed_senses={Sense.Minimize, Sense.Maximize},
             )
         ]
     )
@@ -598,7 +598,7 @@ class OMMXHighsAdapter(SolverAdapter):
             If True, enable HiGHS's console logging
         """
         with _tracer.start_as_current_span("convert"):
-            self.require_compatible(ommx_instance)
+            self.require_applicable(ommx_instance)
             self.instance = ommx_instance
             self.model = highspy.Highs()
 
@@ -658,10 +658,10 @@ class OMMXHighsAdapter(SolverAdapter):
             When the optimization problem has no feasible solution
         UnboundedDetected
             When the optimization problem is unbounded
-        AdapterCompatibilityError
-            When the input does not match the adapter's declared native capability profile
+        AdapterNotApplicableError
+            When the input does not belong to the adapter's declared input class
         OMMXHighsAdapterError
-            When translation or HiGHS encounters an adapter-specific error
+            When conversion or HiGHS encounters an adapter-specific error
 
         Examples
         --------
