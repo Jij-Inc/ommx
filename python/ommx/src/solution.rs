@@ -32,7 +32,7 @@ impl_solution_annotations!(Solution);
 #[pymethods]
 impl Solution {
     #[staticmethod]
-    pub fn from_v1_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
+    pub fn from_v1_bytes(bytes: &Bound<PyBytes>) -> OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(bytes.py());
         Ok(Self {
             inner: ommx::Solution::from_v1_bytes(bytes.as_bytes())?,
@@ -40,7 +40,7 @@ impl Solution {
     }
 
     #[staticmethod]
-    pub fn from_v2_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
+    pub fn from_v2_bytes(bytes: &Bound<PyBytes>) -> OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(bytes.py());
         Ok(Self {
             inner: ommx::Solution::from_v2_bytes(bytes.as_bytes())?,

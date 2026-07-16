@@ -96,7 +96,7 @@ impl Instance {
 #[pymethods]
 impl Instance {
     #[staticmethod]
-    pub fn from_v1_bytes(py: Python<'_>, bytes: &Bound<PyBytes>) -> Result<Self> {
+    pub fn from_v1_bytes(py: Python<'_>, bytes: &Bound<PyBytes>) -> OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
         Ok(Self {
             inner: ommx::Instance::from_v1_bytes(bytes.as_bytes())?,
@@ -104,7 +104,7 @@ impl Instance {
     }
 
     #[staticmethod]
-    pub fn from_v2_bytes(py: Python<'_>, bytes: &Bound<PyBytes>) -> Result<Self> {
+    pub fn from_v2_bytes(py: Python<'_>, bytes: &Bound<PyBytes>) -> OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
         Ok(Self {
             inner: ommx::Instance::from_v2_bytes(bytes.as_bytes())?,
@@ -2758,7 +2758,7 @@ impl Instance {
     }
 
     #[staticmethod]
-    pub fn load_mps(py: Python<'_>, path: String) -> Result<Self> {
+    pub fn load_mps(py: Python<'_>, path: String) -> OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let instance = ommx::mps::load(path)?;
         Ok(Self { inner: instance })
@@ -2772,7 +2772,7 @@ impl Instance {
     }
 
     #[staticmethod]
-    pub fn load_qplib(py: Python<'_>, path: String) -> Result<Self> {
+    pub fn load_qplib(py: Python<'_>, path: String) -> OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let instance = ommx::qplib::load(path)?;
         Ok(Self { inner: instance })

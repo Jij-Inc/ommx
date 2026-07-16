@@ -148,6 +148,12 @@ macro_rules! define_ommx_error_mappings {
     };
 }
 
+fn parse_error_to_pyerr(error: &ommx::ParseError, _message: String) -> PyErr {
+    // ParseError's Display already renders its complete traceback. Reusing the
+    // anyhow chain would repeat the protobuf parser source.
+    PyValueError::new_err(error.to_string())
+}
+
 fn decision_variable_error_to_pyerr(error: &ommx::DecisionVariableError, message: String) -> PyErr {
     if matches!(
         error,
@@ -193,6 +199,7 @@ fn sample_set_error_to_pyerr(error: &ommx::SampleSetError, message: String) -> P
 }
 
 define_ommx_error_mappings!(
+    ommx::ParseError => parse_error_to_pyerr,
     ommx::DecisionVariableError => decision_variable_error_to_pyerr,
     ommx::SolutionError => solution_error_to_pyerr,
     ommx::SampleSetError => sample_set_error_to_pyerr,
@@ -201,6 +208,7 @@ define_ommx_error_mappings!(
     ommx::AtolError => value_error,
     ommx::BoundError => value_error,
     ommx::CoefficientError => value_error,
+    ommx::qplib::QplibParseError => value_error,
 );
 
 impl From<PyErr> for OmmxPyError {

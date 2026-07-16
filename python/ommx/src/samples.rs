@@ -1,3 +1,4 @@
+use crate::error::OmmxPyResult;
 use anyhow::Result;
 use ommx::{Message, Parse, SampleID};
 use pyo3::{
@@ -219,8 +220,9 @@ impl Samples {
     }
 
     #[staticmethod]
-    pub fn from_v1_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
-        let v1_inner = ommx::v1::Samples::decode(bytes.as_bytes())?;
+    pub fn from_v1_bytes(bytes: &Bound<PyBytes>) -> OmmxPyResult<Self> {
+        let v1_inner: ommx::v1::Samples =
+            crate::message_io::decode(bytes.as_bytes(), "ommx.v1.Samples")?;
         let inner = v1_inner.parse(&())?;
         Ok(Self(inner))
     }
