@@ -1,0 +1,26 @@
+[package]
+name = "ommx-pyo3-bridge"
+
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+readme = "README.md"
+exclude = ["fixture"]
+
+description = "Typed PyO3 conversions from Rust OMMX values to Python OMMX objects."
+documentation = "https://docs.rs/ommx-pyo3-bridge/"
+repository = "https://github.com/Jij-Inc/ommx"
+keywords = ["optimization", "ommx", "python", "pyo3"]
+categories = ["api-bindings", "mathematics", "science"]
+
+[lints]
+workspace = true
+
+[dependencies]
+ommx = { path = "../ommx", version = "=3.0.0-beta.2", default-features = false }
+pyo3 = ">=0.27.2, <0.30"
+pyo3-stub-gen.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true

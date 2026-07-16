@@ -30,6 +30,10 @@ returns the typed error directly):
 - [`DecisionVariableError`](crate::DecisionVariableError), [`SubstitutionError`](crate::SubstitutionError), [`SolutionError`](crate::SolutionError),
   [`SampleSetError`](crate::SampleSetError) — domain-specific structured errors consumed by
   in-crate tests and downstream code that wants to react programmatically.
+- [`ImageRefParseError`](crate::artifact::ImageRefParseError) and
+  [`InvalidLocalRegistryImageRef`](crate::artifact::local_registry::InvalidLocalRegistryImageRef) —
+  distinguish invalid image-reference input from an invalid name/reference pair
+  already persisted in the Local Registry.
 
 Recover them with [`Error::downcast_ref`](crate::Error::downcast_ref) / [`Error::is`](crate::Error::is):
 
@@ -41,11 +45,14 @@ match instance.propagate(&state, atol) {
 }
 ```
 
-The [`Parse`](crate::Parse) trait is an intentional exception. It keeps its own
-[`ParseError`](crate::ParseError) type because the structured
-[`Vec<ParseContext>`](crate::parse::ParseContext) breadcrumb carries useful
-proto-tree metadata. [`ParseError`](crate::ParseError) implements [`std::error::Error`], so
-it flows into [`Result<T>`](crate::Result) via `?` at the crate boundary.
+Protobuf wire decoding and the [`Parse`](crate::Parse) trait share the
+[`ParseError`](crate::ParseError) signal. Public byte decoders preserve wire
+failures as `ParseError` in their [`Result<T>`](crate::Result) error chain,
+while semantic parsing adds structured
+[`Vec<ParseContext>`](crate::parse::ParseContext) breadcrumbs with useful
+proto-tree metadata. [`ParseError`](crate::ParseError) implements
+[`std::error::Error`], so callers can downcast the SDK error or propagate it
+with `?`.
 
 ## Fail-site macros
 
