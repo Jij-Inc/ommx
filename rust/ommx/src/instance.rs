@@ -49,11 +49,12 @@ use crate::{
 };
 use std::collections::{BTreeMap, HashMap};
 
-/// A constraint type capability flag for non-standard constraint types.
+/// A legacy selector for lowering non-standard constraint families.
 ///
-/// Standard constraints (`f(x) = 0` or `f(x) <= 0`) are always supported by all adapters
-/// and do not need a capability flag. This enum only lists capabilities that adapters
-/// must explicitly opt in to.
+/// This enum identifies families accepted by [`Instance::reduce_capabilities`]
+/// during the staged adapter migration. It does not describe an
+/// [`crate::InstanceClass`] or adapter applicability. Regular constraints are
+/// outside this lowering selector.
 ///
 /// The [`PartialOrd`] / [`Ord`] derives follow variant declaration order
 /// (`Indicator < OneHot < Sos1`), which is also the order in which
@@ -68,7 +69,7 @@ pub enum AdditionalCapability {
     Sos1,
 }
 
-/// A set of [`AdditionalCapability`] flags.
+/// A set of legacy [`AdditionalCapability`] lowering selectors.
 ///
 /// Always represented as a [`std::collections::BTreeSet`] so iteration,
 /// formatting, and comparison are deterministic and sorted by variant order.
@@ -108,10 +109,11 @@ pub enum Sense {
 /// are distinct and do not conflict. Uniqueness is only required within the same type
 /// (i.e. active and removed constraints of the same type must have disjoint IDs).
 ///
-/// Adapter compatibility is expressed via [`AdditionalCapability`]. Callers can read
-/// [`Instance::required_capabilities`] to see which non-standard types the instance
-/// carries, and use [`Instance::reduce_capabilities`] to convert unsupported types
-/// into regular constraints.
+/// [`AdditionalCapability`], [`Instance::required_capabilities`], and
+/// [`Instance::reduce_capabilities`] are legacy explicit lowering APIs. They do
+/// not define membership in an [`crate::InstanceClass`]. After any explicit
+/// preparation, use [`crate::InstanceClass::check_membership`] on the resulting
+/// instance.
 ///
 /// # Mathematical operations
 ///
@@ -443,11 +445,11 @@ impl Instance {
             .set_context_for_owner(id, context, "SOS1 constraint")
     }
 
-    /// Returns the set of non-standard constraint capabilities required by this instance.
+    /// Return legacy selectors for the active non-standard constraint families.
     ///
-    /// Only **active** constraints are considered. Removed (relaxed) constraints are excluded
-    /// because they are not passed to solver adapters — adapters only need to handle
-    /// constraint types that are actively part of the problem.
+    /// Only active constraints are considered; removed constraints are
+    /// excluded. Despite the legacy method name, the result does not describe
+    /// an [`crate::InstanceClass`] or establish adapter applicability.
     pub fn required_capabilities(&self) -> Capabilities {
         let mut caps = Capabilities::new();
         if !self.indicator_constraint_collection.active().is_empty() {
@@ -462,13 +464,16 @@ impl Instance {
         caps
     }
 
-    /// Convert constraint types not in `supported` into regular constraints.
+    /// Convert active non-standard constraint families not in `preserved` into
+    /// regular constraints.
     ///
-    /// For every capability in `required_capabilities() - supported`, call the
+    /// For every selector in `required_capabilities() - preserved`, call the
     /// corresponding bulk conversion (`convert_all_indicators_to_constraints`,
     /// `convert_all_one_hots_to_constraints`, or `convert_all_sos1_to_constraints`).
     /// After this call, the instance's [`Self::required_capabilities`] is a
-    /// subset of `supported`.
+    /// subset of `preserved`. This lowering operation does not establish
+    /// membership in an [`crate::InstanceClass`]; check the resulting instance
+    /// separately.
     ///
     /// Returns the set of capabilities that were actually converted. Iteration
     /// order follows [`Capabilities`]'s sorted order (`Indicator`, `OneHot`,
@@ -483,7 +488,7 @@ impl Instance {
     /// if a later one fails. Callers that need cross-type atomicity should
     /// validate / clone up front.
     #[tracing::instrument(skip_all)]
-    pub fn reduce_capabilities(&mut self, supported: &Capabilities) -> crate::Result<Capabilities> {
+    pub fn reduce_capabilities(&mut self, preserved: &Capabilities) -> crate::Result<Capabilities> {
         let mut converted = Capabilities::new();
         // Iterate in a fixed order so logs / callers see deterministic output.
         for cap in [
@@ -491,7 +496,7 @@ impl Instance {
             AdditionalCapability::OneHot,
             AdditionalCapability::Sos1,
         ] {
-            if supported.contains(&cap) {
+            if preserved.contains(&cap) {
                 continue;
             }
             let converted_any = match cap {
@@ -522,7 +527,7 @@ impl Instance {
             };
             if converted_any {
                 tracing::info!(
-                    "reduce_capabilities: {cap:?} is not in supported capabilities; converted to regular constraints"
+                    "reduce_capabilities: {cap:?} is not preserved; converted to regular constraints"
                 );
                 converted.insert(cap);
             }
