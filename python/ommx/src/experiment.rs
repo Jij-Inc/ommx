@@ -1452,19 +1452,11 @@ pub struct AttachmentCodecInput(Py<PyType>);
 
 impl AttachmentCodecInput {
     fn media_type(&self, py: Python<'_>) -> OmmxPyResult<MediaType> {
-        let media_type = match self.0.bind(py).getattr("media_type") {
-            Ok(media_type) => media_type,
-            Err(error)
-                if error.is_instance_of::<PyAttributeError>(py)
-                    && !type_hierarchy_defines_attribute(self.0.bind(py), "media_type")? =>
-            {
-                return Err(PyTypeError::new_err(
-                    "Attachment codec class must define string `media_type`",
-                )
-                .into());
-            }
-            Err(error) => return Err(error.into()),
-        };
+        let media_type = required_codec_attribute(
+            self.0.bind(py),
+            "media_type",
+            "Attachment codec class must define string `media_type`",
+        )?;
         let media_type: String = media_type
             .extract()
             .map_err(|_| PyTypeError::new_err("Attachment codec `media_type` must be a string"))?;
@@ -1474,7 +1466,12 @@ impl AttachmentCodecInput {
     fn encode(&self, py: Python<'_>, value: &AttachmentPayload) -> OmmxPyResult<EncodedAttachment> {
         let media_type = self.media_type(py)?;
         let value = value.0.bind(py);
-        let encoded = self.0.bind(py).call_method1("encode", (value,))?;
+        let encoded = required_codec_attribute(
+            self.0.bind(py),
+            "encode",
+            "Attachment codec class must define callable `encode`",
+        )?
+        .call1((value,))?;
         let bytes = encoded
             .cast::<PyBytes>()
             .map_err(|_| PyTypeError::new_err("Attachment codec `encode` must return bytes"))?
@@ -1484,16 +1481,35 @@ impl AttachmentCodecInput {
     }
 
     fn decode(&self, py: Python<'_>, blob: &[u8]) -> OmmxPyResult<AttachmentPayload> {
-        let value = self
-            .0
-            .bind(py)
-            .call_method1("decode", (PyBytes::new(py, blob),))?;
+        let value = required_codec_attribute(
+            self.0.bind(py),
+            "decode",
+            "Attachment codec class must define callable `decode`",
+        )?
+        .call1((PyBytes::new(py, blob),))?;
         Ok(AttachmentPayload(value.unbind()))
     }
 
     fn validate_media_type(&self, py: Python<'_>, media_type: &MediaType) -> OmmxPyResult<()> {
         let expected = self.media_type(py)?;
         ensure_media_type(media_type, &expected)
+    }
+}
+
+fn required_codec_attribute<'py>(
+    class: &Bound<'py, PyType>,
+    name: &str,
+    missing_message: &'static str,
+) -> OmmxPyResult<Bound<'py, PyAny>> {
+    match class.getattr(name) {
+        Ok(attribute) => Ok(attribute),
+        Err(error)
+            if error.is_instance_of::<PyAttributeError>(class.py())
+                && !type_hierarchy_defines_attribute(class, name)? =>
+        {
+            Err(PyTypeError::new_err(missing_message).into())
+        }
+        Err(error) => Err(error.into()),
     }
 }
 

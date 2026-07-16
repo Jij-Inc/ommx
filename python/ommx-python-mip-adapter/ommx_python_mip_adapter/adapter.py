@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import ClassVar, Optional
 
 import mip
 from opentelemetry import trace
@@ -12,14 +12,44 @@ from ommx.adapter import (
     UnboundedDetected,
     NoSolutionReturned,
 )
-from ommx import Instance, Constraint, DecisionVariable, Solution, State, Function
+from ommx import (
+    Constraint,
+    DecisionVariable,
+    DegreeBound,
+    Equality,
+    Function,
+    Instance,
+    InstanceClass,
+    InstanceClassClause,
+    Kind,
+    Sense,
+    Solution,
+    State,
+)
 
 from .exception import OMMXPythonMIPAdapterError
 
 _tracer = trace.get_tracer("ommx.adapter.python_mip")
 
+_LINEAR_CONSTRAINT_DEGREE_BOUNDS = {
+    Equality.EqualToZero: DegreeBound.at_most(1),
+    Equality.LessThanOrEqualToZero: DegreeBound.at_most(1),
+}
+
 
 class OMMXPythonMIPAdapter(SolverAdapter):
+    INPUT_CLASS: ClassVar[InstanceClass | None] = InstanceClass(
+        [
+            InstanceClassClause(
+                label="python-mip-linear-mip",
+                allowed_variable_kinds={Kind.Binary, Kind.Integer, Kind.Continuous},
+                objective_degree_bound=DegreeBound.at_most(1),
+                regular_constraint_degree_bounds=_LINEAR_CONSTRAINT_DEGREE_BOUNDS,
+                allowed_senses={Sense.Minimize, Sense.Maximize},
+            )
+        ]
+    )
+
     def __init__(
         self,
         ommx_instance: Instance,
@@ -37,7 +67,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         :param verbose: If True, enable Python-MIP's verbose mode
         """
         with _tracer.start_as_current_span("convert"):
-            super().__init__(ommx_instance)
+            self.require_applicable(ommx_instance)
             if ommx_instance.sense == Instance.MAXIMIZE:
                 sense = mip.MAXIMIZE
             elif ommx_instance.sense == Instance.MINIMIZE:

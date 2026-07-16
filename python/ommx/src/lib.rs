@@ -21,6 +21,7 @@ mod function;
 mod in_place_add;
 mod indicator_constraint;
 mod instance;
+mod instance_class;
 mod linear;
 mod message_io;
 mod named_function;
@@ -31,6 +32,7 @@ mod parameters;
 mod parametric_instance;
 mod polynomial;
 mod provenance;
+mod pyo3_bridge;
 mod quadratic;
 mod random;
 mod sample_set;
@@ -61,6 +63,7 @@ pub use experiment::*;
 pub use function::*;
 pub use indicator_constraint::*;
 pub use instance::*;
+pub use instance_class::*;
 pub use linear::*;
 pub use named_function::*;
 pub use one_hot_constraint::*;
@@ -191,6 +194,12 @@ fn _ommx_rust(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<AttachedDecisionVariable>()?;
     m.add_class::<Parameter>()?;
     m.add_class::<AdditionalCapability>()?;
+    m.add_class::<DegreeBound>()?;
+    m.add_class::<InstanceClassClause>()?;
+    m.add_class::<InstanceClass>()?;
+    m.add_class::<InstanceClassMismatch>()?;
+    m.add_class::<InstanceClassClauseReport>()?;
+    m.add_class::<InstanceClassMembershipReport>()?;
     m.add_class::<Constraint>()?;
     m.add_class::<AttachedConstraint>()?;
     m.add_class::<IndicatorConstraint>()?;
@@ -247,6 +256,11 @@ fn _ommx_rust(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(set_default_atol, m)?)?;
     m.add_function(wrap_pyfunction!(get_default_atol, m)?)?;
 
+    // Versioned production runtime receivers consumed by the published
+    // `ommx-pyo3-bridge` crate. They stay binding-private because only this
+    // extension owns construction of the canonical Python classes.
+    pyo3_bridge::register(m)?;
+
     Ok(())
 }
 
@@ -271,8 +285,14 @@ pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
     "DecisionVariable",
     "AttachedDecisionVariable",
     "Parameter",
-    // Constraint capability
+    // Instance classes and explicit special-constraint lowering
     "AdditionalCapability",
+    "DegreeBound",
+    "InstanceClassClause",
+    "InstanceClass",
+    "InstanceClassMismatch",
+    "InstanceClassClauseReport",
+    "InstanceClassMembershipReport",
     // Constraint and named function
     "Constraint",
     "AttachedConstraint",
