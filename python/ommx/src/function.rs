@@ -374,6 +374,7 @@ impl Function {
     }
 
     pub fn add_assign(&mut self, rhs: &Function) -> crate::error::OmmxPyResult<()> {
+        crate::in_place_add::preflight_function(&self.0, &rhs.0)?;
         self.0.try_add_assign_in_place(rhs.0.clone())?;
         Ok(())
     }
