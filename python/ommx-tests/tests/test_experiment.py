@@ -308,7 +308,7 @@ def test_temp_registry_lives_with_artifact_after_experiment_drop():
     assert df.loc[0, "solver"] == "scip"
 
 
-def test_experiment_context_restores_failed_checkpoint_on_exception():
+def test_experiment_context_restores_failed_checkpoint_on_exception(tmp_path):
     image_name = _image_name("exception-checkpoint")
     experiments: list[Experiment] = []
     with pytest.raises(ValueError):
@@ -320,11 +320,19 @@ def test_experiment_context_restores_failed_checkpoint_on_exception():
             raise ValueError("failed")
 
     experiment = experiments[0]
-    with pytest.raises(RuntimeError, match="commit has failed"):
-        experiment.artifact
+    assert experiment.status == "failed"
+    assert experiment.lifecycle_reason == "ValueError: failed"
+    failed_artifact = experiment.artifact
+    archive_path = tmp_path / "failed-experiment.ommx"
+    experiment.save(archive_path)
+    imported = Experiment.import_archive(archive_path)
+    assert imported.status == "failed"
+    assert imported.lifecycle_reason == "ValueError: failed"
+    assert imported.artifact.image_name == failed_artifact.image_name
 
     resumed = Experiment.restore_from_checkpoint(image_name)
     assert resumed.status is None
+    assert resumed.lifecycle_reason is None
     assert resumed.image_name == image_name
     assert resumed.annotations["com.example.problem"] == "qap"
     with resumed:
@@ -349,6 +357,7 @@ def test_checkpoint_keeps_failed_run_and_can_be_restored():
     assert resumed.status is None
     assert resumed.image_name == image_name
     assert resumed.runs[0].get_json("before-failure") == {"step": 1}
+    assert resumed.runs[0].lifecycle_reason == "RuntimeError: solve failed"
     assert resumed.run_parameters_df().loc[0, "solver"] == "scip"
     with resumed:
         with resumed.run() as run:
@@ -357,6 +366,7 @@ def test_checkpoint_keeps_failed_run_and_can_be_restored():
 
     assert resumed.status == "finished"
     assert [run.status for run in resumed.runs] == ["failed", "finished"]
+    assert resumed.runs[0].lifecycle_reason == "RuntimeError: solve failed"
     assert resumed.runs[0].get_json("before-failure") == {"step": 1}
     assert resumed.run_parameters_df().loc[0, "solver"] == "scip"
     assert list(resumed.run_parameters_df().index) == [0, 1]
@@ -417,6 +427,7 @@ def test_keyboard_interrupt_records_interrupted_run_and_checkpoint():
     with resumed:
         pass
     assert [run.status for run in resumed.runs] == ["interrupted"]
+    assert resumed.runs[0].lifecycle_reason == "KeyboardInterrupt"
     assert resumed.run_parameters_df().loc[0, "solver"] == "scip"
 
 
@@ -792,6 +803,7 @@ def test_run_context_records_failed_run_on_exception():
 
     assert len(loaded.runs) == 1
     assert loaded.runs[0].status == "failed"
+    assert loaded.runs[0].lifecycle_reason == "ValueError: failed"
     assert df.loc[0, "solver"] == "scip"
 
 

@@ -2,7 +2,7 @@
 
 use super::artifact::ExperimentArtifactView;
 use super::attachment::{validate_attachment_storage, AttachmentTable};
-use super::config::{ExperimentConfigSampling, ExperimentConfigSolve, LayerRef};
+use super::config::{ExperimentConfigSampling, ExperimentConfigSolve, LayerRef, LifecycleOutcome};
 use super::parameter::{RunParameterCell, RunParameterTable};
 use super::{
     read_adapter_diagnostic_payload, AdapterDiagnosticPayload, ExperimentStatus, RunStatus,
@@ -21,10 +21,44 @@ use std::{
     path::{Path, PathBuf},
 };
 
+fn experiment_lifecycle_reason(
+    status: &ExperimentStatus,
+    outcome: Option<LifecycleOutcome>,
+) -> Result<Option<String>> {
+    let reason = outcome.and_then(|outcome| outcome.reason);
+    if reason.is_some()
+        && !matches!(
+            status,
+            ExperimentStatus::Failed | ExperimentStatus::Interrupted
+        )
+    {
+        crate::bail!("Experiment status {status} cannot have a lifecycle reason");
+    }
+    Ok(reason)
+}
+
+fn run_lifecycle_reason(
+    status: &RunStatus,
+    outcome: Option<LifecycleOutcome>,
+) -> Result<Option<String>> {
+    let reason = outcome.and_then(|outcome| outcome.reason);
+    if reason.is_some() && !matches!(status, RunStatus::Failed | RunStatus::Interrupted) {
+        crate::bail!("Run status {status} cannot have a lifecycle reason");
+    }
+    Ok(reason)
+}
+
 impl<'reg> SealedExperiment<'reg> {
-    /// Reconstruct a sealed Experiment from a committed Experiment Artifact.
+    /// Reconstruct a finished, failed, or interrupted Experiment Artifact.
     pub fn from_artifact(artifact: LocalArtifact<'reg>) -> Result<Self> {
-        Self::from_artifact_with_allowed_statuses(artifact, &[ExperimentStatus::Finished])
+        Self::from_artifact_with_allowed_statuses(
+            artifact,
+            &[
+                ExperimentStatus::Finished,
+                ExperimentStatus::Failed,
+                ExperimentStatus::Interrupted,
+            ],
+        )
     }
 
     /// Reconstruct a checkpoint Experiment from a committed Artifact.
@@ -48,6 +82,7 @@ impl<'reg> SealedExperiment<'reg> {
     ) -> Result<Self> {
         let config = ExperimentArtifactView::new(&artifact).config()?;
         let status = ExperimentStatus::from_config(&config.status)?;
+        let reason = experiment_lifecycle_reason(&status, config.outcome)?;
         if !allowed_statuses.contains(&status) {
             let expected = allowed_statuses
                 .iter()
@@ -72,12 +107,15 @@ impl<'reg> SealedExperiment<'reg> {
             let samplings = decode_samplings(&layers, run.run_id, run.samplings)?;
             let status = RunStatus::from_config(&run.status)
                 .with_context(|| format!("Invalid Run {} status", run.run_id))?;
+            let reason = run_lifecycle_reason(&status, run.outcome)
+                .with_context(|| format!("Invalid Run {} outcome", run.run_id))?;
             if runs
                 .insert(
                     run.run_id,
                     SealedRun {
                         run_id: run.run_id,
                         status,
+                        reason,
                         attachments,
                         trace,
                         solves,
@@ -94,6 +132,7 @@ impl<'reg> SealedExperiment<'reg> {
 
         Ok(Self {
             status,
+            reason,
             artifact,
             attachments,
             runs,
@@ -107,6 +146,11 @@ impl<'reg> SealedExperiment<'reg> {
 
     pub fn status(&self) -> &ExperimentStatus {
         &self.status
+    }
+
+    /// Concise caller-provided reason for a failed or interrupted Experiment.
+    pub fn lifecycle_reason(&self) -> Option<&str> {
+        self.reason.as_deref()
     }
 
     /// Internal descriptor table used when sealed state is forked or converted
@@ -215,6 +259,7 @@ pub(crate) fn experiment_manifest_record_from_artifact(
 pub struct SealedRun<'reg> {
     run_id: u64,
     status: RunStatus,
+    reason: Option<String>,
     attachments: AttachmentTable<StoredDescriptor<'reg>>,
     trace: Option<StoredDescriptor<'reg>>,
     solves: Vec<Solve<'reg>>,
@@ -228,6 +273,11 @@ impl<'reg> SealedRun<'reg> {
 
     pub fn status(&self) -> &RunStatus {
         &self.status
+    }
+
+    /// Concise caller-provided reason for a failed or interrupted Run.
+    pub fn lifecycle_reason(&self) -> Option<&str> {
+        self.reason.as_deref()
     }
 
     /// Internal descriptor table used when sealed state is forked or converted

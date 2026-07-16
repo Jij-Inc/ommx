@@ -84,6 +84,7 @@ enum ExperimentDynLifecycle {
     Sealed(SealedExperimentDynState),
     Failed {
         image_name: ImageRef,
+        status: Option<ExperimentStatus>,
         reason: String,
         checkpoint_artifact: Option<LocalArtifactDyn>,
     },
@@ -177,6 +178,7 @@ struct UnsealedExperimentDynState {
 struct RunEntryDyn {
     run_id: u64,
     status: RunStatus,
+    reason: Option<String>,
     attachments: AttachmentTable<Descriptor>,
     trace: Option<Descriptor>,
     solves: Vec<SolveEntryDyn>,
@@ -209,6 +211,7 @@ struct SamplingEntryDyn {
 #[derive(Debug, Clone)]
 struct SealedExperimentDynState {
     status: ExperimentStatus,
+    reason: Option<String>,
     artifact: LocalArtifactDyn,
     attachments: AttachmentTable<Descriptor>,
     runs: BTreeMap<u64, SealedRunDyn>,
@@ -226,6 +229,7 @@ pub struct SealedRunDyn {
     registry_handle: LocalRegistryHandle,
     run_id: u64,
     status: RunStatus,
+    reason: Option<String>,
     attachments: AttachmentTable<Descriptor>,
     trace: Option<Descriptor>,
     solves: Vec<SolveDyn>,
@@ -270,6 +274,11 @@ impl SealedRunDyn {
 
     pub fn status(&self) -> &RunStatus {
         &self.status
+    }
+
+    /// Concise caller-provided reason for a failed or interrupted Run.
+    pub fn lifecycle_reason(&self) -> Option<&str> {
+        self.reason.as_deref()
     }
 
     pub fn registry_handle(&self) -> LocalRegistryHandle {
@@ -758,6 +767,15 @@ impl ExperimentDyn {
                 Ok(())
             }
             ExperimentDynLifecycle::Sealed(sealed) => sealed.rename(image_name),
+            ExperimentDynLifecycle::Failed {
+                image_name: failed_image_name,
+                checkpoint_artifact: Some(artifact),
+                ..
+            } => {
+                *artifact = artifact.tag_as(image_name.clone())?;
+                *failed_image_name = image_name;
+                Ok(())
+            }
             lifecycle @ ExperimentDynLifecycle::Failed { .. } => bail_non_unsealed(lifecycle),
         }
     }
@@ -781,7 +799,20 @@ impl ExperimentDyn {
     pub fn experiment_status(&self) -> Option<ExperimentStatus> {
         match &lock_experiment_state(&self.state).lifecycle {
             ExperimentDynLifecycle::Sealed(sealed) => Some(sealed.status),
-            ExperimentDynLifecycle::Unsealed { .. } | ExperimentDynLifecycle::Failed { .. } => None,
+            ExperimentDynLifecycle::Failed { status, .. } => *status,
+            ExperimentDynLifecycle::Unsealed { .. } => None,
+        }
+    }
+
+    /// Concise caller-provided reason for a failed or interrupted Experiment.
+    ///
+    /// This is lifecycle metadata, not solver diagnostics. Callers should not
+    /// include secrets, tracebacks, local variables, or environment values.
+    pub fn lifecycle_reason(&self) -> Option<String> {
+        match &lock_experiment_state(&self.state).lifecycle {
+            ExperimentDynLifecycle::Sealed(sealed) => sealed.reason.clone(),
+            ExperimentDynLifecycle::Failed { reason, .. } => Some(reason.clone()),
+            ExperimentDynLifecycle::Unsealed { .. } => None,
         }
     }
 
@@ -878,6 +909,7 @@ impl ExperimentDyn {
                 let reason = error.to_string();
                 dyn_state.lifecycle = ExperimentDynLifecycle::Failed {
                     image_name,
+                    status: None,
                     reason,
                     checkpoint_artifact: None,
                 };
@@ -890,6 +922,7 @@ impl ExperimentDyn {
                 let reason = error.to_string();
                 dyn_state.lifecycle = ExperimentDynLifecycle::Failed {
                     image_name,
+                    status: None,
                     reason,
                     checkpoint_artifact: None,
                 };
@@ -930,7 +963,7 @@ impl ExperimentDyn {
             .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
         let image_name = state.image_name.clone();
         let artifact = match state
-            .commit_checkpoint(registry_handle.registry(), status)
+            .commit_checkpoint(registry_handle.registry(), status, Some(reason.clone()))
             .and_then(|artifact| {
                 LocalArtifactDyn::open_in_registry_handle(
                     registry_handle.clone(),
@@ -942,6 +975,7 @@ impl ExperimentDyn {
                 let checkpoint_error = error.to_string();
                 dyn_state.lifecycle = ExperimentDynLifecycle::Failed {
                     image_name,
+                    status: None,
                     reason: format!("{reason}; failed to publish checkpoint: {checkpoint_error}"),
                     checkpoint_artifact: None,
                 };
@@ -950,6 +984,7 @@ impl ExperimentDyn {
         };
         dyn_state.lifecycle = ExperimentDynLifecycle::Failed {
             image_name,
+            status: Some(ExperimentStatus::from_config(status)?),
             reason,
             checkpoint_artifact: Some(artifact),
         };
@@ -958,10 +993,14 @@ impl ExperimentDyn {
 
     pub fn artifact(&self) -> Result<LocalArtifactDyn> {
         let dyn_state = lock_experiment_state(&self.state);
-        let ExperimentDynLifecycle::Sealed(sealed) = &dyn_state.lifecycle else {
-            return bail_not_sealed(&dyn_state.lifecycle);
-        };
-        Ok(sealed.artifact.clone())
+        match &dyn_state.lifecycle {
+            ExperimentDynLifecycle::Sealed(sealed) => Ok(sealed.artifact.clone()),
+            ExperimentDynLifecycle::Failed {
+                checkpoint_artifact: Some(artifact),
+                ..
+            } => Ok(artifact.clone()),
+            lifecycle => bail_not_sealed(lifecycle),
+        }
     }
 
     fn experiment_attachment_table(&self) -> Result<AttachmentTable<StoredDescriptor<'_>>> {
@@ -1090,12 +1129,17 @@ impl<'reg> AsArtifact<'reg> for ExperimentDyn {
     fn as_artifact(&'reg self) -> Result<LocalArtifact<'reg>> {
         let (image_name, manifest_digest) = {
             let dyn_state = lock_experiment_state(&self.state);
-            let ExperimentDynLifecycle::Sealed(sealed) = &dyn_state.lifecycle else {
-                return bail_not_sealed(&dyn_state.lifecycle);
+            let artifact = match &dyn_state.lifecycle {
+                ExperimentDynLifecycle::Sealed(sealed) => &sealed.artifact,
+                ExperimentDynLifecycle::Failed {
+                    checkpoint_artifact: Some(artifact),
+                    ..
+                } => artifact,
+                lifecycle => return bail_not_sealed(lifecycle),
             };
             (
-                sealed.artifact.image_name().clone(),
-                sealed.artifact.manifest_digest().clone(),
+                artifact.image_name().clone(),
+                artifact.manifest_digest().clone(),
             )
         };
         Ok(LocalArtifact::from_parts(
@@ -1115,9 +1159,10 @@ impl UnsealedExperimentDynState {
         self,
         registry: &'reg LocalRegistry,
         status: &'static str,
+        reason: Option<String>,
     ) -> Result<LocalArtifact<'reg>> {
         self.into_unsealed_state(registry)?
-            .commit_checkpoint(registry, status)
+            .commit_checkpoint(registry, status, reason)
     }
 
     fn autosave_checkpoint<'reg>(
@@ -1165,6 +1210,7 @@ impl UnsealedExperimentDynState {
                         RunEntry {
                             run_id: run.run_id,
                             status: run.status.clone(),
+                            reason: run.reason.clone(),
                             attachments: run.attachments.clone().try_map_owned(|descriptor| {
                                 registry.stored_descriptor(descriptor)
                             })?,
@@ -1258,6 +1304,7 @@ impl UnsealedExperimentDynState {
                         RunEntry {
                             run_id: run.run_id,
                             status: run.status,
+                            reason: run.reason,
                             attachments: run.attachments.try_map_owned(|descriptor| {
                                 registry.stored_descriptor(descriptor)
                             })?,
@@ -1347,6 +1394,7 @@ impl SealedExperimentDynState {
     ) -> Result<Self> {
         let registry_handle = artifact.registry_handle();
         let status = *sealed.status();
+        let reason = sealed.lifecycle_reason().map(ToOwned::to_owned);
         let (attachments, runs, run_parameters) = {
             let attachments = descriptor_attachment_table(sealed.attachment_table());
             let runs = sealed
@@ -1358,6 +1406,7 @@ impl SealedExperimentDynState {
                             registry_handle: registry_handle.clone(),
                             run_id: run.run_id(),
                             status: run.status().clone(),
+                            reason: run.lifecycle_reason().map(ToOwned::to_owned),
                             attachments: descriptor_attachment_table(run.attachment_table()),
                             trace: run.trace_descriptor().cloned().map(Descriptor::from),
                             solves: run
@@ -1409,6 +1458,7 @@ impl SealedExperimentDynState {
         };
         Ok(Self {
             status,
+            reason,
             artifact,
             attachments,
             runs,
@@ -1483,6 +1533,7 @@ impl SealedExperimentDynState {
                 RunEntryDyn {
                     run_id: run.run_id,
                     status: run.status.clone(),
+                    reason: run.reason.clone(),
                     attachments: run.attachments.clone(),
                     trace: run.trace.clone(),
                     solves,
@@ -1529,6 +1580,7 @@ fn unsealed_run_views<'a>(
         registry_handle: registry_handle.clone(),
         run_id: run.run_id,
         status: run.status.clone(),
+        reason: run.reason.clone(),
         attachments: run.attachments.clone(),
         trace: run.trace.clone(),
         solves: run

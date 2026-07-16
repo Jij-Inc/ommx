@@ -462,6 +462,7 @@ pub struct Experiment<'reg> {
 #[derive(Debug, Clone)]
 pub struct SealedExperiment<'reg> {
     status: ExperimentStatus,
+    reason: Option<String>,
     artifact: LocalArtifact<'reg>,
     attachments: AttachmentTable<StoredDescriptor<'reg>>,
     runs: BTreeMap<u64, sealed::SealedRun<'reg>>,
@@ -592,7 +593,10 @@ impl Drop for ScopedExperimentGuard<'_> {
         let Some(experiment) = self.experiment.take() else {
             return;
         };
-        if let Err(error) = experiment.commit_checkpoint(EXPERIMENT_STATUS_INTERRUPTED) {
+        if let Err(error) = experiment.commit_checkpoint(
+            EXPERIMENT_STATUS_INTERRUPTED,
+            Some("Experiment scope unwound".to_string()),
+        ) {
             tracing::warn!(
                 error = %error,
                 "Failed to publish interrupted Experiment checkpoint during scoped unwind"
@@ -612,6 +616,7 @@ impl Drop for ScopedExperimentGuard<'_> {
 struct RunEntry<'reg> {
     run_id: u64,
     status: RunStatus,
+    reason: Option<String>,
     attachments: AttachmentTable<StoredDescriptor<'reg>>,
     trace: Option<StoredDescriptor<'reg>>,
     solves: Vec<SolveEntry<'reg>>,
@@ -794,8 +799,9 @@ impl<'reg> Experiment<'reg> {
         match f(guard.experiment()) {
             Ok(()) => guard.take().commit(),
             Err(error) => {
-                if let Err(checkpoint_error) =
-                    guard.take().commit_checkpoint(EXPERIMENT_STATUS_FAILED)
+                if let Err(checkpoint_error) = guard
+                    .take()
+                    .commit_checkpoint(EXPERIMENT_STATUS_FAILED, Some(error.to_string()))
                 {
                     tracing::warn!(
                         error = %checkpoint_error,
@@ -913,7 +919,7 @@ impl<'reg> Experiment<'reg> {
                 Ok(value)
             }
             Err(error) => {
-                if let Err(finish_error) = run.finish_failed() {
+                if let Err(finish_error) = run.finish_failed_with_reason(error.to_string()) {
                     tracing::warn!(
                         error = %finish_error,
                         "Failed to finish failed Run after callback error"
@@ -960,9 +966,13 @@ impl<'reg> Experiment<'reg> {
         SealedExperiment::from_artifact(artifact)
     }
 
-    fn commit_checkpoint(self, status: &'static str) -> Result<LocalArtifact<'reg>> {
+    fn commit_checkpoint(
+        self,
+        status: &'static str,
+        reason: Option<String>,
+    ) -> Result<LocalArtifact<'reg>> {
         let (registry, state) = self.into_parts();
-        state.commit_checkpoint(registry, status)
+        state.commit_checkpoint(registry, status, reason)
     }
 
     fn into_parts(self) -> (&'reg LocalRegistry, UnsealedExperimentState<'reg>) {
@@ -1061,6 +1071,7 @@ impl<'reg> SealedExperiment<'reg> {
                 RunEntry {
                     run_id: run.run_id(),
                     status: run.status().clone(),
+                    reason: run.lifecycle_reason().map(ToOwned::to_owned),
                     attachments: run.attachment_table().clone(),
                     trace: run.trace_descriptor().cloned(),
                     solves,

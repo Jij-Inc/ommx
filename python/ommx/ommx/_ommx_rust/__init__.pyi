@@ -1914,9 +1914,17 @@ class Experiment:
         Returns `None` for an unsealed Experiment.
         """
     @property
+    def lifecycle_reason(self) -> typing.Optional[builtins.str]:
+        r"""
+        Concise exception type and message for a failed or interrupted Experiment.
+
+        This is lifecycle metadata, not solver diagnostics. It is `None` when
+        no reason was recorded.
+        """
+    @property
     def artifact(self) -> Artifact:
         r"""
-        Committed OMMX Artifact for this Experiment.
+        Immutable OMMX Artifact for this finished, failed, or interrupted Experiment.
 
         Raises an error if the Experiment has not been committed yet.
         """
@@ -1988,8 +1996,8 @@ class Experiment:
     @staticmethod
     def import_archive(path: builtins.str | os.PathLike | pathlib.Path) -> Experiment:
         r"""
-        Import an Experiment Artifact from a `.ommx` OCI archive file (or an OCI
-        Image Layout directory).
+        Import a finished, failed, or interrupted Experiment Artifact from a
+        `.ommx` OCI archive file (or an OCI Image Layout directory).
 
         The archive is imported into the default Local Registry, matching
         {meth}`Artifact.import_archive`, and then interpreted as an
@@ -1998,7 +2006,7 @@ class Experiment:
     @staticmethod
     def from_artifact(artifact: Artifact) -> Experiment:
         r"""
-        Interpret an already-open Artifact as a committed Experiment.
+        Interpret an already-open Artifact as a finished, failed, or interrupted Experiment.
 
         This is the usual entry point after importing or receiving an OMMX
         Artifact handle. The artifact must contain an Experiment config.
@@ -2069,7 +2077,7 @@ class Experiment:
         """
     def save(self, path: builtins.str | os.PathLike | pathlib.Path) -> None:
         r"""
-        Save this committed Experiment Artifact as a `.ommx` OCI archive file at `path`.
+        Save this finished, failed, or interrupted Experiment Artifact as a `.ommx` archive.
 
         The archive is an exchange-format export of the registry-resident
         Experiment Artifact. Loading the archive back via
@@ -2080,7 +2088,7 @@ class Experiment:
         """
     def push(self) -> None:
         r"""
-        Push this committed Experiment Artifact to its remote registry.
+        Push this finished, failed, or interrupted Experiment Artifact remotely.
 
         Use `rename(...)` first when an anonymous or local-only experiment
         should be published under a remote container image reference.
@@ -7185,6 +7193,11 @@ class SealedRun:
         This records how the Run scope was closed, not whether every child
         `Solve` record finished successfully. A finished Run may contain failed
         Solve attempts if those adapter errors were handled inside the Run.
+        """
+    @property
+    def lifecycle_reason(self) -> typing.Optional[builtins.str]:
+        r"""
+        Concise exception type and message for a failed or interrupted Run.
         """
     @property
     def attachment_names(self) -> builtins.list[builtins.str]:

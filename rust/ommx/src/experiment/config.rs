@@ -12,6 +12,8 @@ pub struct LayerRef(pub u32);
 pub struct ExperimentConfig {
     pub status: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outcome: Option<LifecycleOutcome>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub requested_image_name: Option<String>,
     pub attachments: AttachmentTable<LayerRef>,
     pub runs: Vec<ExperimentConfigRun>,
@@ -24,6 +26,8 @@ pub struct ExperimentConfigRun {
     pub run_id: u64,
     #[serde(default = "default_run_status")]
     pub status: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outcome: Option<LifecycleOutcome>,
     pub attachments: AttachmentTable<LayerRef>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub trace: Option<LayerRef>,
@@ -31,6 +35,27 @@ pub struct ExperimentConfigRun {
     pub solves: Vec<ExperimentConfigSolve>,
     #[serde(default)]
     pub samplings: Vec<ExperimentConfigSampling>,
+}
+
+/// Optional detail about why an Experiment or Run reached a terminal status.
+///
+/// Reasons are caller-provided lifecycle metadata. They should be concise and
+/// must not contain secrets, tracebacks, local variables, or environment
+/// values. Solver diagnostics belong in the Solve or Sampling diagnostic
+/// payload instead.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
+pub struct LifecycleOutcome {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
+impl LifecycleOutcome {
+    pub(crate) fn from_reason(reason: impl Into<String>) -> Self {
+        Self {
+            reason: Some(reason.into()),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
