@@ -8,17 +8,35 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
-### 🛠 Parse failures consistently raise `ValueError` ([#1099](https://github.com/Jij-Inc/ommx/pull/1099))
+### 🛠 Rust SDK errors use consistent Python exceptions
 
-Malformed protobuf payloads passed to the Python byte-decoding entry points now
-raise `ValueError`, with the OMMX message and field context preserved. Semantic
-protobuf parse failures and invalid QPLIB syntax use the same exception through
-the shared PyO3 error boundary.
+Python bindings now translate OMMX-owned Rust SDK signal types at a shared PyO3
+error boundary instead of selecting exception classes separately at each entry
+point. The mapping follows the owner and meaning of the failure:
 
-Python argument-extraction failures remain `TypeError`. File-open failures and
-MPS parser failures, which do not yet have a stable OMMX-owned parse signal,
-continue to fall back to `RuntimeError` instead of being classified from an
-implementation error type or rendered message.
+- invalid input, malformed OMMX protobuf or QPLIB data, and domain operations
+  with invalid or unsatisfied preconditions raise `ValueError`;
+- missing variables, constraints, samples, or named functions raise `KeyError`;
+- unclassified SDK and infrastructure failures continue to fall back to
+  `RuntimeError`.
+
+Python argument-extraction failures remain `TypeError`, and exceptions raised
+by Python code pass through unchanged. Error messages retain OMMX field and
+source context. `ValueError` cases include invalid bounds or tolerances,
+duplicate subscripts, parameterized-constraint extraction, and requesting a
+best sample when no feasible sample exists.
+
+The mapped signals currently include `CoefficientError`, `AtolError`,
+`BoundError`, stable control-flow cases from `DecisionVariableError`,
+`SolutionError`, and `SampleSetError`, and the `ParseError` and
+`QplibParseError` parser signals. Zero coefficients remain normalized as a
+successful operation, and a failed in-place numeric addition leaves the
+original object unchanged. MPS parsing and file-open failures remain on the
+`RuntimeError` fallback until they have stable OMMX-owned signals.
+
+Related PRs: [#1096](https://github.com/Jij-Inc/ommx/pull/1096),
+[#1097](https://github.com/Jij-Inc/ommx/pull/1097),
+[#1099](https://github.com/Jij-Inc/ommx/pull/1099).
 
 ### 🆕 Instance classes and adapter applicability ([#1084](https://github.com/Jij-Inc/ommx/pull/1084))
 
@@ -54,35 +72,6 @@ the prepared input. Explicit special-constraint lowering through
 reconstruction remain separate concepts. The lowering method's keyword argument
 is renamed from `supported` to `preserved` to describe the families left
 unchanged by that explicit operation.
-
-### 🛠 Structured SDK errors use consistent Python exceptions ([#1097](https://github.com/Jij-Inc/ommx/pull/1097))
-
-Python bindings now route stable `DecisionVariableError`, `SolutionError`, and
-`SampleSetError` signals through the shared PyO3 error boundary. Missing names,
-sample IDs, and constraint IDs in structured result access raise `KeyError`.
-Invalid decision-variable bounds, duplicate subscripts, parameterized
-constraint extraction, and requests for a best sample when none is feasible
-raise `ValueError` consistently.
-
-An unknown integer kind passed to the `DecisionVariable` constructor is also
-reported as Python-owned `ValueError` validation. Python-native failures remain
-intact, and unclassified Rust SDK errors continue to fall back to
-`RuntimeError`.
-
-### 🛠 Numeric SDK errors consistently raise `ValueError` ([#1096](https://github.com/Jij-Inc/ommx/pull/1096))
-
-Python bindings now translate direct Rust SDK `CoefficientError`, `AtolError`,
-and `BoundError` signals through the shared PyO3 error boundary. Invalid
-coefficients in constructors, arithmetic, and binary-power reduction,
-non-positive tolerance values, and invalid bounds therefore raise
-`ValueError` consistently instead of depending on the entry point's previous
-panic, `RuntimeError`, or hand-written conversion path.
-
-Zero coefficients continue to be normalized as a successful operation.
-Failed in-place additions leave the original numeric object unchanged.
-Python-owned type and argument-shape validation also keeps its native exception
-behavior, while unclassified Rust SDK failures continue to fall back to
-`RuntimeError`.
 
 ### 🆕 Typed remote Artifact lookup errors ([#1090](https://github.com/Jij-Inc/ommx/pull/1090))
 
