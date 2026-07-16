@@ -249,6 +249,7 @@ impl Quadratic {
     }
 
     pub fn add_assign(&mut self, rhs: &Quadratic) -> crate::error::OmmxPyResult<()> {
+        crate::in_place_add::preflight_polynomial(&self.0, &rhs.0)?;
         self.0.try_add_assign_in_place(&rhs.0)?;
         Ok(())
     }
