@@ -45,7 +45,8 @@ point. The mapping follows the owner and meaning of the failure:
 
 - invalid input, malformed OMMX protobuf or QPLIB data, and domain operations
   with invalid or unsatisfied preconditions raise `ValueError`;
-- missing variables, constraints, samples, or named functions raise `KeyError`;
+- missing variables, constraints, samples, named functions, or Artifact layers
+  raise `KeyError`;
 - unclassified SDK and infrastructure failures continue to fall back to
   `RuntimeError`.
 
@@ -53,19 +54,30 @@ Python argument-extraction failures remain `TypeError`, and exceptions raised
 by Python code pass through unchanged. Error messages retain OMMX field and
 source context. `ValueError` cases include invalid bounds or tolerances,
 duplicate subscripts, parameterized-constraint extraction, and requesting a
-best sample when no feasible sample exists.
+best sample when no feasible sample exists. Artifact operations use the same
+classification for invalid image references, malformed digests, unsupported or
+incorrect layer media types, missing typed layers, and malformed OMMX payloads.
 
 The mapped signals currently include `CoefficientError`, `AtolError`,
 `BoundError`, stable control-flow cases from `DecisionVariableError`,
 `SolutionError`, and `SampleSetError`, and the `ParseError` and
-`QplibParseError` parser signals. Zero coefficients remain normalized as a
-successful operation, and a failed in-place numeric addition leaves the
-original object unchanged. MPS parsing and file-open failures remain on the
-`RuntimeError` fallback until they have stable OMMX-owned signals.
+`QplibParseError` parser signals. Invalid caller-provided image references keep
+an `ImageRefParseError`, while a corrupted image ref already persisted in the
+Local Registry keeps an `InvalidLocalRegistryImageRef` and falls back to
+`RuntimeError`. Registry, archive, and content-addressed storage failures also
+remain on that fallback. Exceptions from Python-backed JSON, NumPy, and pandas
+codecs pass through unchanged.
+
+Zero coefficients remain normalized as a successful operation, and a failed
+in-place numeric addition leaves the original object unchanged. MPS parsing and
+file-open failures remain on the `RuntimeError` fallback until they have stable
+OMMX-owned signals. Descriptor objects remain metadata-only; blob reads are
+owned by the Artifact that supplies the registry context.
 
 Related PRs: [#1096](https://github.com/Jij-Inc/ommx/pull/1096),
 [#1097](https://github.com/Jij-Inc/ommx/pull/1097),
-[#1099](https://github.com/Jij-Inc/ommx/pull/1099).
+[#1099](https://github.com/Jij-Inc/ommx/pull/1099),
+[#1100](https://github.com/Jij-Inc/ommx/pull/1100).
 
 ### 🆕 Instance classes and adapter applicability ([#1084](https://github.com/Jij-Inc/ommx/pull/1084))
 

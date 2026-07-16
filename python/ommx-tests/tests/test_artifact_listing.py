@@ -127,5 +127,5 @@ def test_list_artifacts_warns_on_repair_and_strict_rejects_corruption(tmp_path):
             "UPDATE artifact_manifests SET manifest_json = ? WHERE manifest_digest = ?",
             (changed_bytes, manifest_digest),
         )
-    with pytest.raises(Exception, match="Cached Manifest JSON does not match"):
+    with pytest.raises(RuntimeError, match="Cached Manifest JSON does not match"):
         list_artifacts(prefix, root=root, strict=True)

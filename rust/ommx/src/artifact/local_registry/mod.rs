@@ -86,8 +86,8 @@ pub use index::ArtifactRefRecord;
 pub(crate) use registry::UnsealedArtifact;
 pub use registry::{
     ArchiveInspectView, GcBlob, GcDeleteReport, GcInvalidManifest, GcMissingBlob, GcOptions,
-    GcReferenceKind, GcReport, GcRoot, LegacyImportReport, LocalRegistry, OciDirImport, OciDirRef,
-    StoredDescriptor, TempLocalRegistry,
+    GcReferenceKind, GcReport, GcRoot, InvalidLocalRegistryImageRef, LegacyImportReport,
+    LocalRegistry, OciDirImport, OciDirRef, StoredDescriptor, TempLocalRegistry,
 };
 pub use types::{
     AnonymousRefOptions, ArtifactListOptions, ExperimentCheckpointListOptions,
