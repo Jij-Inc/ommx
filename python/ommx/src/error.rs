@@ -3,7 +3,8 @@
 //! Binding entry points return [`OmmxPyResult`] so `?` classifies concrete Rust
 //! SDK signals through the declarative mapping table below. Signals already
 //! erased into `ommx::Error` are recovered through the same table before PyO3
-//! receives the local [`OmmxPyError`] wrapper.
+//! receives the local [`OmmxPyError`] wrapper. Binding-owned Rust errors that
+//! are not SDK signals use direct `From` implementations beside that table.
 
 use pyo3::{
     exceptions::{PyKeyError, PyRuntimeError, PyValueError},
@@ -76,7 +77,7 @@ pyo3_stub_gen::create_exception!(
 #[derive(Debug)]
 pub struct OmmxPyError(PyErr);
 
-/// Result type for Rust SDK failures crossing the private binding boundary.
+/// Result type for Rust-owned failures crossing the private binding boundary.
 pub type OmmxPyResult<T> = std::result::Result<T, OmmxPyError>;
 
 fn value_error<T>(_: &T, message: String) -> PyErr {
@@ -236,6 +237,14 @@ impl From<PyErr> for OmmxPyError {
     }
 }
 
+impl From<serde_json::Error> for OmmxPyError {
+    fn from(error: serde_json::Error) -> Self {
+        // Raw serde_json failures default to RuntimeError. Boundaries parsing
+        // caller-provided JSON must override this with ValueError explicitly.
+        Self(PyRuntimeError::new_err(error.to_string()))
+    }
+}
+
 impl From<OmmxPyError> for PyErr {
     fn from(OmmxPyError(error): OmmxPyError) -> Self {
         error
@@ -319,5 +328,12 @@ mod tests {
             ommx::Error::from(ommx::SolutionError::MissingRequiredField { field: "objective" })
                 .into(),
         );
+    }
+
+    #[test]
+    fn serde_json_serialization_errors_map_to_runtime_error() {
+        let value = std::collections::BTreeMap::from([(vec![1_u64], 1_u64)]);
+        let error = serde_json::to_string(&value).expect_err("non-string JSON object key");
+        assert_exception::<PyRuntimeError>(error.into());
     }
 }
