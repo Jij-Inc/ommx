@@ -99,6 +99,7 @@ non-positive tolerance values, and invalid bounds therefore raise
 panic, `RuntimeError`, or hand-written conversion path.
 
 Zero coefficients continue to be normalized as a successful operation.
+Failed in-place additions leave the original numeric object unchanged.
 Python-owned type and argument-shape validation also keeps its native exception
 behavior, while unclassified Rust SDK failures continue to fall back to
 `RuntimeError`.
