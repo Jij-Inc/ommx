@@ -6490,7 +6490,9 @@ class SampleSet:
         """
     def get_sample_by_id(self, sample_id: builtins.int) -> Solution:
         r"""
-        Get sample by ID (alias for get method)
+        Get sample by ID (alias for get method).
+
+        Raises KeyError if the sample ID does not exist.
         """
     def num_samples(self) -> builtins.int: ...
     def sample_ids(self) -> builtins.set[builtins.int]: ...
