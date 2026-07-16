@@ -182,7 +182,6 @@ impl InstanceClassClause {
 
     /// Human-readable diagnostic label. Labels do not affect membership and
     /// need not be unique.
-    /// Return the diagnostic label.
     pub fn label(&self) -> &str {
         &self.label
     }
