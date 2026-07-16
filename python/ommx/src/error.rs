@@ -217,12 +217,12 @@ fn sample_set_error_to_pyerr(error: &ommx::SampleSetError, message: String) -> P
 define_ommx_error_mappings!(
     ommx::ParseError => parse_error_to_pyerr,
     ommx::artifact::local_registry::InvalidLocalRegistryImageRef => invalid_local_registry_image_ref_to_pyerr,
-    #[cfg(feature = "remote-artifact")]
-    ommx::artifact::RemoteArtifactError => remote_artifact_error_to_pyerr,
-    ommx::artifact::ImageRefParseError => image_ref_parse_error_to_pyerr,
     ommx::DecisionVariableError => decision_variable_error_to_pyerr,
     ommx::SolutionError => solution_error_to_pyerr,
     ommx::SampleSetError => sample_set_error_to_pyerr,
+    #[cfg(feature = "remote-artifact")]
+    ommx::artifact::RemoteArtifactError => remote_artifact_error_to_pyerr,
+    ommx::artifact::ImageRefParseError => image_ref_parse_error_to_pyerr,
     ommx::AtolError => value_error,
     ommx::BoundError => value_error,
     ommx::CoefficientError => value_error,
