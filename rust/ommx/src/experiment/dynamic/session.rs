@@ -30,6 +30,21 @@ const EXPERIMENT_SCOPE_DROP_REASON: &str = "Experiment scope dropped before life
 ///     anyhow::bail!("stop")
 /// });
 /// ```
+///
+/// The mutable Run reference passed to `scoped_run` cannot escape either:
+///
+/// ```compile_fail
+/// use ommx::experiment::{ExperimentDyn, Name};
+///
+/// let mut escaped_run = None;
+/// let _ = ExperimentDyn::scoped(Name::Anonymous, |scope| {
+///     scope.scoped_run(|run| -> anyhow::Result<()> {
+///         escaped_run = Some(run);
+///         anyhow::bail!("stop")
+///     })?;
+///     Ok(())
+/// });
+/// ```
 #[derive(Debug)]
 pub struct ExperimentScope<'exp> {
     experiment: &'exp ExperimentDyn,
