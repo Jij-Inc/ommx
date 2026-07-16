@@ -25,7 +25,7 @@ The examples below use the PySCIPOpt Adapter, as in [Solving optimization proble
 pip install ommx-pyscipopt-adapter
 ```
 
-The PySCIPOpt Adapter passes Indicator and SOS1 constraints through to SCIP's `addConsIndicator` / `addConsSOS1` (equality indicators are split into two inequality indicators). It explicitly lowers OneHot to a regular equality before handing the input to SCIP. This internal handling is separate from `INPUT_CLASS` membership and adapter applicability; see [Adapter Input Classes and Explicit Constraint Lowering](./capability_model.md).
+The PySCIPOpt Adapter passes Indicator and SOS1 constraints through to SCIP's `addConsIndicator` / `addConsSOS1` (equality indicators are split into two inequality indicators). It does not accept OneHot directly, so callers must explicitly lower OneHot to a regular equality before passing the resulting input to the adapter. This preparation is separate from `INPUT_CLASS` membership and adapter applicability; see [Adapter Input Classes and Explicit Constraint Lowering](./capability_model.md).
 
 ## IndicatorConstraint
 
@@ -94,15 +94,17 @@ instance_oh = Instance.from_components(
 assert set(instance_oh.one_hot_constraints.keys()) == {0}
 ```
 
-The PySCIPOpt Adapter explicitly lowers OneHot inside `solve`, so the constraint is converted to the regular equality $x_0 + x_1 + x_2 - 1 = 0$ before being handed to SCIP.
+Explicitly lower OneHot before passing the instance to the PySCIPOpt Adapter. The conversion rewrites the constraint as the regular equality $x_0 + x_1 + x_2 - 1 = 0$. Because this produces a different input value, check its applicability before solving.
 
 ```{code-cell} ipython3
+instance_oh.convert_all_one_hots_to_constraints()
+assert OMMXPySCIPOptAdapter.check_applicability(instance_oh).is_applicable
 solution = OMMXPySCIPOptAdapter.solve(instance_oh)
 # Exactly one of the three is chosen, so x_1 with the largest value 10 is selected
 assert abs(solution.objective - 10.0) < 1e-6
 ```
 
-`instance_oh` is mutated in place by `solve`, so after the call the OneHot constraint is removed and a record of the conversion remains in `removed_one_hot_constraints`.
+`convert_all_one_hots_to_constraints()` mutates `instance_oh` in place, so after the explicit preparation the OneHot constraint is removed and a record of the conversion remains in `removed_one_hot_constraints`. Solving does not perform this conversion.
 
 ```{code-cell} ipython3
 assert instance_oh.one_hot_constraints == {}

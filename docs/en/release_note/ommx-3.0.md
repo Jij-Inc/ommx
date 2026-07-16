@@ -8,32 +8,33 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
-### ⚠ Input class for the PySCIPOpt adapter ([#1086](https://github.com/Jij-Inc/ommx/pull/1086))
+### ⚠ Input classes for HiGHS, Python-MIP, and PySCIPOpt adapters ([#1085](https://github.com/Jij-Inc/ommx/pull/1085), [#1086](https://github.com/Jij-Inc/ommx/pull/1086))
 
-`OMMXPySCIPOptAdapter` now declares `INPUT_CLASS` for the exact inputs accepted
-before direct backend construction: Binary, Integer, and Continuous variables
-used by the active mathematical content; objectives and regular equality or
-inequality constraints of degree at most two; Indicator equality or inequality
-bodies of degree at most one; SOS1 constraints; and both optimization senses.
-OneHot constraints are not lowered implicitly. An input outside this class is
-rejected without mutation through
-{class}`~ommx.adapter.AdapterNotApplicableError`, which carries structured
-clause mismatches. Any explicitly prepared {class}`~ommx.Instance` is a
-different input whose applicability must be checked again.
+`OMMXHighsAdapter`, `OMMXPythonMIPAdapter`, and `OMMXPySCIPOptAdapter` now
+declare `INPUT_CLASS` for the exact inputs accepted before direct backend
+construction. All three accept Binary, Integer, and Continuous variables used
+by the active mathematical content and both optimization senses. HiGHS and
+Python-MIP accept linear objectives and linear regular equality or inequality
+constraints. PySCIPOpt accepts objectives and regular constraints of degree at
+most two, Indicator equality or inequality bodies of degree at most one, and
+SOS1 constraints. An input outside the declared class is rejected without
+mutation through {class}`~ommx.adapter.AdapterNotApplicableError`, which carries
+structured clause mismatches. Any explicitly prepared {class}`~ommx.Instance`
+is a different input whose applicability must be checked again.
 
 This is a breaking change to the public exception contract from stable Python
-SDK 2.6.1. Unsupported cubic objectives or regular constraints and used
-SemiInteger or SemiContinuous variables previously raised
-`OMMXPySCIPOptAdapterError`; they now raise
-{class}`~ommx.adapter.AdapterNotApplicableError` before backend construction.
-Code that caught the adapter-specific exception for constructor-time input
-rejection must catch `AdapterNotApplicableError` instead, or call
-`check_applicability()` before construction. The stable variable-kind and
-polynomial-degree acceptance boundary is unchanged, and
-`OMMXPySCIPOptAdapterError` remains in use for conversion and backend failures.
+SDK 2.6.1. Unsupported objectives, regular constraints, or used variable kinds
+previously raised `OMMXHighsAdapterError`, `OMMXPythonMIPAdapterError`, or
+`OMMXPySCIPOptAdapterError`; they now raise `AdapterNotApplicableError` before
+backend construction. Code that caught an adapter-specific exception for
+constructor-time input rejection must catch `AdapterNotApplicableError`
+instead, or call `check_applicability()` before construction. The stable input
+boundaries are unchanged, and adapter-specific exceptions remain in use for
+conversion and backend failures.
 
-The removal of implicit OneHot lowering and the applicability rules for v3
-first-class Indicator and SOS1 constraints change Python SDK 3.0 prerelease
+Indicator, OneHot, and SOS1 constraints are not lowered implicitly for HiGHS or
+Python-MIP, and PySCIPOpt no longer lowers OneHot implicitly. These changes to
+first-class special-constraint handling affect Python SDK 3.0 prerelease
 behavior; they are not compatibility changes from stable 2.6.1.
 
 ### 🛠 Rust SDK errors use consistent Python exceptions
@@ -65,34 +66,6 @@ original object unchanged. MPS parsing and file-open failures remain on the
 Related PRs: [#1096](https://github.com/Jij-Inc/ommx/pull/1096),
 [#1097](https://github.com/Jij-Inc/ommx/pull/1097),
 [#1099](https://github.com/Jij-Inc/ommx/pull/1099).
-
-### ⚠ Input classes for HiGHS and Python-MIP adapters ([#1085](https://github.com/Jij-Inc/ommx/pull/1085))
-
-`OMMXHighsAdapter` and `OMMXPythonMIPAdapter` now declare `INPUT_CLASS` for
-the exact inputs accepted by their direct backend construction: Binary,
-Integer, and Continuous variables used by the active mathematical content;
-linear objectives; linear regular equality and inequality constraints; and
-both optimization senses. Inputs outside that class are rejected before
-backend construction through {class}`~ommx.adapter.AdapterNotApplicableError`,
-which carries the structured membership report.
-
-This is a breaking change to the public exception contract from stable Python
-SDK 2.6.1. Unsupported nonlinear objectives or regular constraints and used
-SemiInteger or SemiContinuous variables previously raised
-`OMMXHighsAdapterError` or `OMMXPythonMIPAdapterError`; they now raise
-{class}`~ommx.adapter.AdapterNotApplicableError`. Code that caught an
-adapter-specific exception for constructor-time input rejection must catch
-`AdapterNotApplicableError` instead, or call `check_applicability()` before
-construction. The accepted linear Binary, Integer, and Continuous input
-boundary and behavior for applicable inputs are unchanged. Adapter-specific
-exceptions remain in use for backend and conversion errors.
-
-Indicator, OneHot, and SOS1 constraints are not lowered implicitly. An
-unsupported input is rejected without mutation; any explicitly prepared
-{class}`~ommx.Instance` is a different input whose applicability must be
-checked again. This changes Python SDK 3.0 prerelease behavior, not stable 2.6.1
-compatibility: first-class special constraints and their implicit lowering were
-introduced during 3.0 prerelease development.
 
 ### 🆕 Instance classes and adapter applicability ([#1084](https://github.com/Jij-Inc/ommx/pull/1084))
 
