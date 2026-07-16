@@ -1,4 +1,5 @@
 use crate::{
+    error::OmmxPyResult,
     pandas::{
         constraint_id_col, constraint_kind_collection, entries_to_dataframe, ConstraintKind,
         PyDataFrame, ToPandasEntry,
@@ -24,7 +25,7 @@ impl_instance_annotations!(ParametricInstance);
 #[pymethods]
 impl ParametricInstance {
     #[staticmethod]
-    pub fn from_v1_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
+    pub fn from_v1_bytes(bytes: &Bound<PyBytes>) -> OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(bytes.py());
         Ok(Self {
             inner: ommx::ParametricInstance::from_v1_bytes(bytes.as_bytes())?,
@@ -32,7 +33,7 @@ impl ParametricInstance {
     }
 
     #[staticmethod]
-    pub fn from_v2_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
+    pub fn from_v2_bytes(bytes: &Bound<PyBytes>) -> OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(bytes.py());
         Ok(Self {
             inner: ommx::ParametricInstance::from_v2_bytes(bytes.as_bytes())?,

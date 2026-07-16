@@ -1,4 +1,4 @@
-use anyhow::Result;
+use crate::error::OmmxPyResult;
 use ommx::Message;
 use pyo3::{exceptions::PyTypeError, prelude::*, types::PyBytes, Bound, PyAny};
 use pyo3_stub_gen::runtime::PyRuntimeType;
@@ -140,8 +140,8 @@ impl State {
     }
 
     #[staticmethod]
-    pub fn from_v1_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
-        let inner = ommx::v1::State::decode(bytes.as_bytes())?;
+    pub fn from_v1_bytes(bytes: &Bound<PyBytes>) -> OmmxPyResult<Self> {
+        let inner = crate::message_io::decode(bytes.as_bytes(), "ommx.v1.State")?;
         Ok(Self(inner))
     }
 

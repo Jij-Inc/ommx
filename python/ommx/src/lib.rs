@@ -23,6 +23,7 @@ mod indicator_constraint;
 mod instance;
 mod instance_class;
 mod linear;
+mod message_io;
 mod named_function;
 mod one_hot_constraint;
 mod pandas;
