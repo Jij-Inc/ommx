@@ -360,4 +360,142 @@ theorem checkEqualityIndicatorReplace_sound
       linarith
     simpa [LinearConstraint.Holds, hsenses.1] using heq
 
+/-! ## Big-M lowering semantics
+
+The executable replacement checkers above recover an Indicator from candidate
+rows.  The following exact semantic layer specifies the forward algorithm used
+by the SDK: emit the upper side only for a positive upper bound, emit the lower
+side only for a negative lower bound, and otherwise rely on the corresponding
+bound implication.  The denotation is generic in `body`, so the theorem is not
+limited to the affine syntax of `CoreModel`.
+-/
+
+namespace IndicatorBigM
+
+/-- The upper Big-M side `f(x) + u y - u ≤ 0`, omitted when `u ≤ 0`. -/
+def UpperSide (body : Assignment n → Rat) (trigger : Fin n) (upper : Rat)
+    (assignment : Assignment n) : Prop :=
+  if 0 < upper then
+    body assignment + upper * assignment trigger - upper ≤ 0
+  else
+    True
+
+/-- The lower Big-M side `-f(x) - l y + l ≤ 0`, omitted when `l ≥ 0`. -/
+def LowerSide (body : Assignment n → Rat) (trigger : Fin n) (lower : Rat)
+    (assignment : Assignment n) : Prop :=
+  if lower < 0 then
+    -body assignment - lower * assignment trigger + lower ≤ 0
+  else
+    True
+
+theorem upperSide_iff_indicator {body : Assignment n → Rat} {trigger : Fin n}
+    {upper : Rat} {assignment : Assignment n}
+    (hbinary : VariableDomain.KindHolds .binary (assignment trigger))
+    (hbound : body assignment ≤ upper) :
+    UpperSide body trigger upper assignment ↔
+      IndicatorPredicate trigger .activeOnOne
+        (fun x => body x ≤ 0) assignment := by
+  rcases hbinary with hzero | hone
+  · by_cases hupper : 0 < upper
+    · simp [UpperSide, hupper, IndicatorPredicate, IndicatorPolarity.Active,
+        IndicatorPolarity.activeValue, hzero]
+      linarith
+    · simp [UpperSide, hupper, IndicatorPredicate, IndicatorPolarity.Active,
+        IndicatorPolarity.activeValue, hzero]
+  · by_cases hupper : 0 < upper
+    · simp [UpperSide, hupper, IndicatorPredicate, IndicatorPolarity.Active,
+        IndicatorPolarity.activeValue, hone]
+    · have hnonpos : upper ≤ 0 := le_of_not_gt hupper
+      have hbody : body assignment ≤ 0 := le_trans hbound hnonpos
+      simp [UpperSide, hupper, IndicatorPredicate, IndicatorPolarity.Active,
+        IndicatorPolarity.activeValue, hone, hbody]
+
+theorem lowerSide_iff_indicator {body : Assignment n → Rat} {trigger : Fin n}
+    {lower : Rat} {assignment : Assignment n}
+    (hbinary : VariableDomain.KindHolds .binary (assignment trigger))
+    (hbound : lower ≤ body assignment) :
+    LowerSide body trigger lower assignment ↔
+      IndicatorPredicate trigger .activeOnOne
+        (fun x => 0 ≤ body x) assignment := by
+  rcases hbinary with hzero | hone
+  · by_cases hlower : lower < 0
+    · simp [LowerSide, hlower, IndicatorPredicate, IndicatorPolarity.Active,
+        IndicatorPolarity.activeValue, hzero]
+      linarith
+    · simp [LowerSide, hlower, IndicatorPredicate, IndicatorPolarity.Active,
+        IndicatorPolarity.activeValue, hzero]
+  · by_cases hlower : lower < 0
+    · simp [LowerSide, hlower, IndicatorPredicate, IndicatorPolarity.Active,
+        IndicatorPolarity.activeValue, hone]
+    · have hnonneg : 0 ≤ lower := le_of_not_gt hlower
+      have hbody : 0 ≤ body assignment := le_trans hnonneg hbound
+      simp [LowerSide, hlower, IndicatorPredicate, IndicatorPolarity.Active,
+        IndicatorPolarity.activeValue, hone, hbody]
+
+theorem equalitySides_iff_indicator {body : Assignment n → Rat}
+    {trigger : Fin n} {lower upper : Rat} {assignment : Assignment n}
+    (hbinary : VariableDomain.KindHolds .binary (assignment trigger))
+    (hlower : lower ≤ body assignment) (hupper : body assignment ≤ upper) :
+    UpperSide body trigger upper assignment ∧
+        LowerSide body trigger lower assignment ↔
+      IndicatorPredicate trigger .activeOnOne
+        (fun x => body x = 0) assignment := by
+  rw [upperSide_iff_indicator hbinary hupper,
+    lowerSide_iff_indicator hbinary hlower]
+  unfold IndicatorPredicate
+  constructor
+  · rintro ⟨hupperSide, hlowerSide⟩ hactive
+    exact le_antisymm (hupperSide hactive) (hlowerSide hactive)
+  · intro hequal
+    constructor
+    · intro hactive
+      exact le_of_eq (hequal hactive)
+    · intro hactive
+      exact le_of_eq (hequal hactive).symm
+
+/-- The SDK's one-sided Indicator Big-M algorithm preserves the exact feasible
+set when the claimed upper bound holds on the surviving base. -/
+theorem inequality_preserves
+    (base : Assignment n → Prop) (body : Assignment n → Rat)
+    (trigger : Fin n) (upper : Rat) (objective : Assignment n → Rat)
+    (sense : OptimizationSense)
+    (binaryOnBase : ∀ {assignment}, base assignment →
+      VariableDomain.KindHolds .binary (assignment trigger))
+    (upperBoundOnBase : ∀ {assignment}, base assignment →
+      body assignment ≤ upper) :
+    IdentityPreserves
+      (replaceProblem base (UpperSide body trigger upper) objective sense)
+      (replaceProblem base
+        (IndicatorPredicate trigger .activeOnOne (fun x => body x ≤ 0))
+        objective sense) := by
+  apply replace_preserves
+  intro assignment hbase
+  exact upperSide_iff_indicator (binaryOnBase hbase) (upperBoundOnBase hbase)
+
+/-- The SDK's two-sided equality Indicator Big-M algorithm preserves the exact
+feasible set, including the cases where either bound makes one side redundant. -/
+theorem equality_preserves
+    (base : Assignment n → Prop) (body : Assignment n → Rat)
+    (trigger : Fin n) (lower upper : Rat) (objective : Assignment n → Rat)
+    (sense : OptimizationSense)
+    (binaryOnBase : ∀ {assignment}, base assignment →
+      VariableDomain.KindHolds .binary (assignment trigger))
+    (boundsOnBase : ∀ {assignment}, base assignment →
+      lower ≤ body assignment ∧ body assignment ≤ upper) :
+    IdentityPreserves
+      (replaceProblem base
+        (fun assignment =>
+          UpperSide body trigger upper assignment ∧
+            LowerSide body trigger lower assignment)
+        objective sense)
+      (replaceProblem base
+        (IndicatorPredicate trigger .activeOnOne (fun x => body x = 0))
+        objective sense) := by
+  apply replace_preserves
+  intro assignment hbase
+  have hbounds := boundsOnBase hbase
+  exact equalitySides_iff_indicator (binaryOnBase hbase) hbounds.1 hbounds.2
+
+end IndicatorBigM
+
 end OMMXProof
