@@ -1,46 +1,9 @@
 #![doc = include_str!("../README.md")]
 
-use ommx::Message as _;
-use pyo3::{
-    exceptions::PyImportError,
-    prelude::*,
-    types::{PyAny, PyBytes},
-};
+mod protocol;
+
+use pyo3::{prelude::*, types::PyAny};
 use pyo3_stub_gen::{PyStubType, TypeInfo};
-
-const FUNCTION_ENDPOINT: &str = "_pyo3_bridge_function_from_bytes";
-const CONSTRAINT_ENDPOINT: &str = "_pyo3_bridge_constraint_from_bytes";
-const DECISION_VARIABLE_ENDPOINT: &str = "_pyo3_bridge_decision_variable_from_bytes";
-
-fn incompatible_python_ommx(capability: &str, source: PyErr) -> PyErr {
-    PyImportError::new_err(format!(
-        "the installed Python OMMX package does not provide the required bridge capability \
-         `{capability}`; install a Python OMMX release compatible with this \
-         `ommx-pyo3-bridge` crate ({source})"
-    ))
-}
-
-fn bridge_endpoint<'py>(py: Python<'py>, endpoint: &str) -> PyResult<Bound<'py, PyAny>> {
-    let module = py
-        .import("ommx._ommx_rust")
-        .map_err(|error| incompatible_python_ommx(endpoint, error))?;
-    module
-        .getattr(endpoint)
-        .map_err(|error| incompatible_python_ommx(endpoint, error))
-}
-
-fn instance_from_v2_bytes<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-    let capability = "ommx.Instance.from_v2_bytes";
-    let module = py
-        .import("ommx")
-        .map_err(|error| incompatible_python_ommx(capability, error))?;
-    let instance = module
-        .getattr("Instance")
-        .map_err(|error| incompatible_python_ommx(capability, error))?;
-    instance
-        .getattr("from_v2_bytes")
-        .map_err(|error| incompatible_python_ommx(capability, error))
-}
 
 /// Output wrapper converting a Rust [`ommx::Function`] into `ommx.Function`.
 ///
@@ -67,8 +30,7 @@ impl<'py> IntoPyObject<'py> for PyFunction {
     type Error = PyErr;
 
     fn into_pyobject(self, py: Python<'py>) -> PyResult<Self::Output> {
-        let bytes = self.0.to_bytes();
-        bridge_endpoint(py, FUNCTION_ENDPOINT)?.call1((PyBytes::new(py, &bytes),))
+        protocol::v0::function_into_py(self.0, py)
     }
 }
 
@@ -111,10 +73,7 @@ impl<'py> IntoPyObject<'py> for PyConstraint {
     type Error = PyErr;
 
     fn into_pyobject(self, py: Python<'py>) -> PyResult<Self::Output> {
-        let constraint = ommx::v2::RegularConstraint::from(self.constraint).encode_to_vec();
-        let context = ommx::v2::ConstraintContext::from(self.context).encode_to_vec();
-        bridge_endpoint(py, CONSTRAINT_ENDPOINT)?
-            .call1((PyBytes::new(py, &constraint), PyBytes::new(py, &context)))
+        protocol::v0::constraint_into_py(self.constraint, self.context, py)
     }
 }
 
@@ -176,15 +135,7 @@ impl<'py> IntoPyObject<'py> for PyDecisionVariable {
     type Error = PyErr;
 
     fn into_pyobject(self, py: Python<'py>) -> PyResult<Self::Output> {
-        let id: u64 = self.id.into();
-        let decision_variable =
-            ommx::v2::DecisionVariable::from(self.decision_variable).encode_to_vec();
-        let label = ommx::v2::ModelingLabel::from(self.label).encode_to_vec();
-        bridge_endpoint(py, DECISION_VARIABLE_ENDPOINT)?.call1((
-            id,
-            PyBytes::new(py, &decision_variable),
-            PyBytes::new(py, &label),
-        ))
+        protocol::v0::decision_variable_into_py(self.id, self.decision_variable, self.label, py)
     }
 }
 
@@ -221,8 +172,7 @@ impl<'py> IntoPyObject<'py> for PyInstance {
     type Error = PyErr;
 
     fn into_pyobject(self, py: Python<'py>) -> PyResult<Self::Output> {
-        let bytes = self.0.to_v2_bytes();
-        instance_from_v2_bytes(py)?.call1((PyBytes::new(py, &bytes),))
+        protocol::v0::instance_into_py(self.0, py)
     }
 }
 

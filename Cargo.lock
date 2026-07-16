@@ -2522,6 +2522,7 @@ name = "ommx-pyo3-bridge"
 version = "3.0.0-beta.2"
 dependencies = [
  "ommx",
+ "proptest",
  "pyo3",
  "pyo3-stub-gen",
 ]

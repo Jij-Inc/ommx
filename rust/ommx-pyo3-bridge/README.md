@@ -38,8 +38,17 @@ The installed Python SDK owns the binding-private reconstruction endpoints
 because it owns the canonical Python classes. These endpoints are production
 bridge capabilities, not user-facing component serialization APIs.
 
-The initial bridge has no payload version, version negotiation, or cross-version
-compatibility guarantee. Rust and Python OMMX releases remain independently
-versioned; callers must install a Python OMMX release that provides the bridge
-endpoints expected by this crate. A missing endpoint produces an `ImportError`
-with the required capability name.
+This release uses internal bridge protocol v0 to identify the required endpoint
+signatures and payload interpretations. Protocol v0 is not a new persistence
+format, and the bridge performs no protocol negotiation. Rust and Python OMMX
+releases remain independently versioned, with no guarantee that arbitrary
+release pairs are compatible. Callers must install a Python OMMX release that
+provides the exact v0 capabilities expected by this crate. A missing endpoint
+produces an `ImportError` with the required capability name.
+
+When a Python SDK exposes a v0 capability, its endpoint signature and payload
+interpretation have the fixed meaning recorded in
+`tests/data/protocol_v0.json`. An incompatible change must add a new protocol
+version instead of reinterpreting v0. This does not require every future Python
+SDK release to retain v0, and there is no negotiation or fallback between
+protocol versions.
