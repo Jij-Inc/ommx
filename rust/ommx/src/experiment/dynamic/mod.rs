@@ -33,11 +33,10 @@ use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
 
+mod lifecycle;
 mod run;
-mod scope;
 
 pub use run::RunDyn;
-pub use scope::ExperimentScope;
 
 /// Runtime-owned Experiment handle.
 ///

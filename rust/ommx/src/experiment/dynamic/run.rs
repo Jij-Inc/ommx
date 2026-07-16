@@ -75,6 +75,31 @@ impl ExperimentDyn {
         };
         Ok(RunDyn::from_open_run(run_id, Arc::clone(&self.state)))
     }
+
+    /// Run one lifecycle-safe callback against a new runtime-owned Run.
+    ///
+    /// A successful callback finishes the Run. A returned error finishes it as
+    /// failed and returns the original callback error. Panic unwind or another
+    /// unresolved drop finishes it as interrupted. Partial parameters and
+    /// attachments are preserved on failed and interrupted paths.
+    pub fn scoped_run<T>(&self, f: impl FnOnce(&mut RunDyn) -> Result<T>) -> Result<T> {
+        let mut run = self.run()?.interrupt_on_drop();
+        match f(&mut run) {
+            Ok(value) => {
+                run.finish()?;
+                Ok(value)
+            }
+            Err(error) => {
+                if let Err(finish_error) = run.finish_failed() {
+                    tracing::warn!(
+                        error = %finish_error,
+                        "Failed to finish failed Run after callback error"
+                    );
+                }
+                Err(error)
+            }
+        }
+    }
 }
 
 impl RunDyn {
