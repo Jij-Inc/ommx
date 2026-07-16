@@ -1,3 +1,10 @@
+//! Python SDK-owned production receivers for `ommx-pyo3-bridge`.
+//!
+//! Independently built extension modules pass protobuf bytes to these
+//! binding-private functions so the extension that owns the canonical OMMX
+//! Python classes also reconstructs them. These are runtime bridge
+//! capabilities, not test hooks or user-facing component serialization APIs.
+
 use crate::{Constraint, DecisionVariable, Function};
 use ommx::{Message as _, Parse as _};
 use pyo3::{prelude::*, types::PyBytes};

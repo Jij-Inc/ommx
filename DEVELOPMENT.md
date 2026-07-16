@@ -98,16 +98,16 @@ trusted publishing can only be configured after a crate's first release. After
 the first Rust tag workflow publishes the same-version `ommx` crate, publish
 `ommx-pyo3-bridge` manually from that tag with a regular crates.io token. Then
 configure `.github/workflows/release_rust.yml` as its trusted publisher and add
-the bridge back to the workflow's `publish` job. The Rust semver job and its
-required status check are temporarily disabled until this first published
-bridge version provides a registry baseline.
+the bridge back to the workflow's `publish` job. Until this first published
+bridge version provides a registry baseline, the required Rust semver job
+checks `ommx` only. Add `ommx-pyo3-bridge` to that job after the bootstrap.
 
 Two mechanisms normally keep the version on the `main` branch current:
 
 - When Rust SDK is released, the patch version is automatically bumped up via a Pull Request.
-- After the bridge bootstrap above, restore `cargo-semver-check`. A pull request
-  containing a breaking change should then be merged together with the required
-  version bump.
+- The required `cargo-semver-checks` job checks published Rust crates. A pull
+  request containing a breaking change should be merged together with the
+  required version bump.
 
 [`python/`](./python/)
 ----------------------

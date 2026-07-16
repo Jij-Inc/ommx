@@ -111,7 +111,6 @@ tasks:
     desc: Generate stubs files for Rust extension
     cmds:
       - cargo run -p _ommx_rust --bin stub_gen
-      - cargo run -p ommx-pyo3-bridge-fixture --bin stub_gen
 
   ipython:
     desc: Start an IPython shell

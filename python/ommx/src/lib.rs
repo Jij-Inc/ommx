@@ -250,8 +250,9 @@ fn _ommx_rust(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(set_default_atol, m)?)?;
     m.add_function(wrap_pyfunction!(get_default_atol, m)?)?;
 
-    // Private reconstruction endpoints for independently built PyO3 modules.
-    // They deliberately stay out of the generated public Python API.
+    // Production runtime receivers consumed by the published
+    // `ommx-pyo3-bridge` crate. They stay binding-private because only this
+    // extension owns construction of the canonical Python classes.
     pyo3_bridge::register(m)?;
 
     Ok(())

@@ -37,8 +37,16 @@ jobs:
           github_token: ${{ github.token }}
           clippy_flags: --all-targets -- -Dwarnings
 
-  # Re-enable cargo-semver-checks after ommx-pyo3-bridge has its first
-  # published crates.io baseline.
+  semver:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check semver
+        uses: obi1kenobi/cargo-semver-checks-action@v2
+        with:
+          # Add ommx-pyo3-bridge after its first crates.io publication.
+          package: ommx
+
   test:
     runs-on: ubuntu-latest
     steps:

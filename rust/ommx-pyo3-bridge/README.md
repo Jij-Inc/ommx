@@ -34,6 +34,10 @@ the Python/PyO3 ABI, and asks the installed Python OMMX package to reconstruct
 its canonical class. These payloads are an ephemeral implementation detail of
 the bridge, not new persistence roots for component values.
 
+The installed Python SDK owns the binding-private reconstruction endpoints
+because it owns the canonical Python classes. These endpoints are production
+bridge capabilities, not user-facing component serialization APIs.
+
 The initial bridge has no payload version, version negotiation, or cross-version
 compatibility guarantee. Rust and Python OMMX releases remain independently
 versioned; callers must install a Python OMMX release that provides the bridge
