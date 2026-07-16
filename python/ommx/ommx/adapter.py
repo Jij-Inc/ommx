@@ -8,7 +8,6 @@ from typing import Any, ClassVar, Protocol, runtime_checkable
 
 from ommx._ommx_rust import DiagnosticCollector as DiagnosticCollector
 from ommx import (
-    AdditionalCapability,
     Instance,
     InstanceClass,
     InstanceClassMembershipReport,
@@ -135,38 +134,12 @@ class SolverAdapter(ABC):
     the input and combines class membership with the adapter's
     ``_check_preconditions`` hook.
 
-    ``ADDITIONAL_CAPABILITIES`` and the base constructor remain temporarily for
-    adapters that still use the legacy in-place special-constraint lowering path.
-    It is independent of ``INPUT_CLASS`` and is not used as a fallback.
-
-    Legacy special-constraint flags:
-
-    - ``AdditionalCapability.Indicator``: binvar = 1 → f(x) <= 0
-    - ``AdditionalCapability.OneHot``: exactly one of a set of binary variables is 1
-    - ``AdditionalCapability.Sos1``: at most one of a set of variables is non-zero
-
-    Legacy subclasses must call ``super().__init__(ommx_instance)`` so that any
-    special-constraint family not preserved by the lowering selector is
-    converted into regular constraints (Big-M for indicator / SOS1, linear
-    equality for one-hot). This operation does not establish ``INPUT_CLASS``
-    membership or adapter applicability. Conversions mutate ``ommx_instance``
-    in place and are emitted at ``INFO`` level as ``tracing`` events from the
-    Rust SDK; configure a Python OpenTelemetry ``TracerProvider`` before the
-    first call to observe them via ``pyo3-tracing-opentelemetry``.
+    ``INPUT_CLASS`` describes only which exact inputs an adapter accepts; it does
+    not prescribe how the subclass processes them. The base class never lowers
+    or otherwise mutates the input instance.
     """
 
     INPUT_CLASS: ClassVar[InstanceClass | None] = None
-    ADDITIONAL_CAPABILITIES: ClassVar[frozenset[AdditionalCapability]] = frozenset()
-
-    def __init__(self, ommx_instance: Instance):
-        """Apply the legacy special-constraint lowering selector.
-
-        Subclasses using this legacy path must call ``super().__init__()``. Any
-        active special-constraint family not in ``ADDITIONAL_CAPABILITIES`` is
-        converted to regular constraints in place on ``ommx_instance``. The
-        resulting input must still be checked against ``INPUT_CLASS``.
-        """
-        ommx_instance.reduce_capabilities(set(self.ADDITIONAL_CAPABILITIES))
 
     @classmethod
     def check_applicability(cls, ommx_instance: Instance) -> AdapterApplicabilityReport:
@@ -174,8 +147,8 @@ class SolverAdapter(ABC):
 
         Adapter-specific preconditions run only after at least one complete
         input-class clause contains the instance. The hook receives an isolated
-        copy so it cannot mutate the caller's instance. Preparation belongs to
-        a separate explicit operation followed by another membership check.
+        copy so it cannot mutate the caller's instance. Any explicitly
+        transformed value is a different input and must be checked separately.
         """
         input_class = cls.INPUT_CLASS
         if input_class is None:

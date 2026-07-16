@@ -37,10 +37,11 @@ report = binary_linear.check_membership(instance)
 `check_applicability` or `require_applicable` to layer adapter-owned
 preconditions on top of input-class membership without mutating the caller's
 instance. Explicit preparation must be followed by a new membership check on
-the prepared input. Legacy special-constraint lowering and `ommx.v2.Feature`
-wire reconstruction remain separate concepts. The keyword argument of
-{meth}`~ommx.Instance.reduce_capabilities` is renamed from `supported` to
-`preserved` to describe its legacy lowering-selector semantics.
+the prepared input. Explicit special-constraint lowering through
+{meth}`~ommx.Instance.reduce_capabilities` and `ommx.v2.Feature` wire
+reconstruction remain separate concepts. The lowering method's keyword argument
+is renamed from `supported` to `preserved` to describe the families left
+unchanged by that explicit operation.
 
 ### 🆕 Typed remote Artifact lookup errors ([#1090](https://github.com/Jij-Inc/ommx/pull/1090))
 
@@ -901,14 +902,6 @@ In addition to regular constraints, the following three special constraint types
 For concrete usage, evaluation-result access, and the Indicator relax / restore workflow, see [Special Constraints](../user_guide/special_constraints.md).
 
 Accordingly, the legacy `ConstraintHints` / `OneHot` / `Sos1` classes, the `Instance.constraint_hints` property, and the PySCIPOpt Adapter's `use_sos1` flag are removed.
-
-### 🆕 Adapter Capability Model ([#790](https://github.com/Jij-Inc/ommx/pull/790), [#805](https://github.com/Jij-Inc/ommx/pull/805), [#810](https://github.com/Jij-Inc/ommx/pull/810), [#811](https://github.com/Jij-Inc/ommx/pull/811), [#814](https://github.com/Jij-Inc/ommx/pull/814))
-
-Alongside the special constraint types, adapters now declare their own supported capabilities via an `ADDITIONAL_CAPABILITIES` class attribute. When `super().__init__(instance)` is called, any undeclared special constraint is automatically converted to regular constraints (Big-M for Indicator / SOS1, linear equality for OneHot) before the instance reaches the solver.
-
-**Existing OMMX Adapters must be updated for Python SDK 3.0.0 to call `super().__init__(instance)`.** Currently the PySCIPOpt Adapter declares support for Indicator and SOS1.
-
-For details and the manual conversion APIs, see [Adapter Capability Model and Conversions](../user_guide/capability_model.md).
 
 ### 🔄 numpy scalar support ([#794](https://github.com/Jij-Inc/ommx/pull/794))
 

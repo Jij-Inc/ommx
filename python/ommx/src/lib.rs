@@ -281,7 +281,7 @@ pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
     "DecisionVariable",
     "AttachedDecisionVariable",
     "Parameter",
-    // Instance classes and legacy special-constraint lowering
+    // Instance classes and explicit special-constraint lowering
     "AdditionalCapability",
     "DegreeBound",
     "InstanceClassClause",

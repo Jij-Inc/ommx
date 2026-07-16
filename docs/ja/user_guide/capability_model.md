@@ -11,17 +11,17 @@ kernelspec:
   name: python3
 ---
 
-# Adapter の入力 class と legacy な特殊制約 lowering
+# Adapter の入力 class と明示的な特殊制約 lowering
 
 OMMX では、従来 Adapter Capability として一緒に説明されていた次の2つの概念を分けて扱います。
 
 - {class}`~ommx.InstanceClass` は、具体的な `Instance` 値の集合です。Adapter は構造的な入力条件を `INPUT_CLASS` で宣言し、その後に Adapter 固有の precondition を評価して applicability を判定します。
-- legacy な `AdditionalCapability` API は、明示的な lowering で維持する特殊制約 family を選びます。入力 class の宣言でも、Adapter applicability の証明でもありません。
+- {meth}`Instance.reduce_capabilities() <ommx.Instance.reduce_capabilities>` は、Instance 上で維持対象に選ばれなかった特殊制約 family を明示的に lowering します。入力 class の宣言でも、Adapter applicability の証明でもありません。
 
 本ページでは以下を説明します。
 
 - `InstanceClass` の membership と Adapter applicability
-- legacy な特殊制約 family selector としての {class}`~ommx.AdditionalCapability` と {attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>`
+- 特殊制約 family selector としての {class}`~ommx.AdditionalCapability` と {attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>`
 - {meth}`Instance.reduce_capabilities() <ommx.Instance.reduce_capabilities>` による明示的な lowering
 - 手動で通常制約に変換するための API
 - 変換結果の監査
@@ -76,25 +76,9 @@ assert instance.required_capabilities == {AdditionalCapability.OneHot}
 assert binary_linear_with_one_hot.contains(instance)
 ```
 
-## Adapter の legacy lowering selector
-
-legacy な基底 class の lowering path を使う Adapter は、維持する active な特殊制約 family を `ADDITIONAL_CAPABILITIES` で選びます。
-
-```python
-from ommx import AdditionalCapability
-from ommx.adapter import SolverAdapter
-
-class LegacyLoweringAdapter(SolverAdapter):
-    ADDITIONAL_CAPABILITIES = frozenset({AdditionalCapability.Indicator})
-```
-
-Adapter のコンストラクタで `super().__init__(instance)` が呼ばれると、`ADDITIONAL_CAPABILITIES` に含まれない active な特殊制約 family は通常制約へ変換されます。この mutating operation は lowering にすぎず、変換後の instance が `INPUT_CLASS` に属することや Adapter 固有の precondition を満たすことは保証しません。
-
-デフォルトでは `ADDITIONAL_CAPABILITIES = frozenset()` なので、active な特殊制約 family はすべて lowering されます。既存 Adapter は、backend path が直接扱う family を維持する場合があります。
-
 ## reduce_capabilities による明示的な lowering
 
-`super().__init__` の内部で呼ばれているのが {meth}`Instance.reduce_capabilities() <ommx.Instance.reduce_capabilities>` です。このメソッドは `preserved` として渡された集合に含まれない特殊制約 family を、対応する変換 API（後述）を使って通常制約に変換します。
+{meth}`Instance.reduce_capabilities() <ommx.Instance.reduce_capabilities>` は、明示的に呼び出す mutating operation です。このメソッドは `preserved` として渡された集合に含まれない特殊制約 family を、対応する変換 API（後述）を使って通常制約に変換します。
 
 ```{code-cell} ipython3
 converted = instance.reduce_capabilities(preserved=set())
@@ -218,7 +202,7 @@ for cid, c in instance2.constraints.items():
 | Adapter 入力の構造的な集合を記述する | {class}`~ommx.InstanceClass` |
 | Adapter applicability の最初の条件を宣言する | `INPUT_CLASS` |
 | membership と Adapter 固有の precondition を検査する | `check_applicability()` / `require_applicable()` |
-| active な legacy 特殊制約 family を調べる | {attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>` |
+| active な特殊制約 family を調べる | {attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>` |
 | 維持しない特殊制約を明示的に lowering する | {meth}`Instance.reduce_capabilities <ommx.Instance.reduce_capabilities>` |
 | 個別に通常制約に変換する | `convert_*_to_constraint(s)` / `convert_all_*_to_constraints` |
 | 変換履歴を確認する | `instance.constraints_df(kind=..., removed=True)` / `solution.constraints_df(kind=..., include=("...","removed_reason"))` |

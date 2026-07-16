@@ -2994,12 +2994,12 @@ class Instance:
     @property
     def required_capabilities(self) -> builtins.set[AdditionalCapability]:
         r"""
-        Legacy selectors for active non-standard constraint families.
+        Selectors for active non-standard constraint families.
 
-        Only active constraints are considered. Despite the legacy names, this
-        value does not describe an :class:`InstanceClass` or establish adapter
-        applicability. Use :meth:`reduce_capabilities` only as an explicit
-        special-constraint lowering operation.
+        Only active constraints are considered. This value does not describe an
+        :class:`InstanceClass` or establish adapter applicability. Use
+        :meth:`reduce_capabilities` only as an explicit special-constraint
+        lowering operation.
         """
     @property
     def removed_constraints(self) -> builtins.dict[builtins.int, RemovedConstraint]:
@@ -7779,12 +7779,12 @@ class State:
 @typing.final
 class AdditionalCapability(enum.Enum):
     r"""
-    Constraint type capability flag for non-standard constraint types.
+    Selector for a non-standard constraint family.
 
-    Standard constraints are always supported. This enum lists capabilities
-    that adapters must explicitly opt in to.
-
-    Use as a set: `{AdditionalCapability.Indicator}`
+    :attr:`Instance.required_capabilities` reports these selectors for active
+    special constraints. :meth:`Instance.reduce_capabilities` uses them to
+    choose which families are preserved during explicit lowering. Regular
+    constraints are outside this selector.
     """
 
     Indicator = ...

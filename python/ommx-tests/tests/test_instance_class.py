@@ -323,6 +323,10 @@ def test_membership_is_recomputed_after_explicit_lowering() -> None:
     assert prepared_input_class.contains(instance)
 
 
+def test_solver_adapter_has_no_implicit_input_transformation_hook() -> None:
+    assert "__init__" not in SolverAdapter.__dict__
+
+
 def test_solver_adapter_layers_preconditions_and_preserves_the_caller() -> None:
     x = DecisionVariable.binary(1)
     instance = instance_with_objective(x, x)

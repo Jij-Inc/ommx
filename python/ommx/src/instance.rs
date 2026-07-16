@@ -718,12 +718,12 @@ impl Instance {
             .collect()
     }
 
-    /// Legacy selectors for active non-standard constraint families.
+    /// Selectors for active non-standard constraint families.
     ///
-    /// Only active constraints are considered. Despite the legacy names, this
-    /// value does not describe an :class:`InstanceClass` or establish adapter
-    /// applicability. Use :meth:`reduce_capabilities` only as an explicit
-    /// special-constraint lowering operation.
+    /// Only active constraints are considered. This value does not describe an
+    /// :class:`InstanceClass` or establish adapter applicability. Use
+    /// :meth:`reduce_capabilities` only as an explicit special-constraint
+    /// lowering operation.
     #[getter]
     pub fn required_capabilities(&self) -> std::collections::HashSet<crate::AdditionalCapability> {
         self.inner

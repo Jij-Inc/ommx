@@ -11,17 +11,17 @@ kernelspec:
   name: python3
 ---
 
-# Adapter Input Classes and Legacy Constraint Lowering
+# Adapter Input Classes and Explicit Constraint Lowering
 
 OMMX separates two concepts that were previously described together as adapter capabilities:
 
 - An {class}`~ommx.InstanceClass` describes a set of exact `Instance` values. An adapter declares its structural input condition with `INPUT_CLASS`, then evaluates adapter-owned preconditions to determine applicability.
-- The legacy `AdditionalCapability` APIs select which special-constraint families are preserved when an instance is explicitly lowered. They do not declare an input class or establish adapter applicability.
+- {meth}`Instance.reduce_capabilities() <ommx.Instance.reduce_capabilities>` explicitly lowers every special-constraint family not selected for preservation on an instance. It does not declare an input class or establish adapter applicability.
 
 This page covers:
 
 - `InstanceClass` membership and adapter applicability
-- {class}`~ommx.AdditionalCapability` and {attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>` as legacy special-constraint family selectors
+- {class}`~ommx.AdditionalCapability` and {attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>` as special-constraint family selectors
 - {meth}`Instance.reduce_capabilities() <ommx.Instance.reduce_capabilities>` for explicit lowering
 - Manual conversion APIs per constraint type
 - Auditing conversion results
@@ -76,25 +76,9 @@ assert instance.required_capabilities == {AdditionalCapability.OneHot}
 assert binary_linear_with_one_hot.contains(instance)
 ```
 
-## Legacy lowering selector on adapters
-
-Adapters that still use the legacy base-class lowering path select which active special-constraint families are preserved via `ADDITIONAL_CAPABILITIES`.
-
-```python
-from ommx import AdditionalCapability
-from ommx.adapter import SolverAdapter
-
-class LegacyLoweringAdapter(SolverAdapter):
-    ADDITIONAL_CAPABILITIES = frozenset({AdditionalCapability.Indicator})
-```
-
-When the adapter's constructor calls `super().__init__(instance)`, any active special-constraint family not in `ADDITIONAL_CAPABILITIES` is converted into regular constraints. This mutating operation is only lowering; it does not prove that the resulting instance belongs to `INPUT_CLASS` or satisfies adapter-owned preconditions.
-
-By default `ADDITIONAL_CAPABILITIES = frozenset()`, so every active special-constraint family is lowered. Existing adapters may preserve families that their backend path consumes directly.
-
 ## Explicit lowering via reduce_capabilities
 
-Inside `super().__init__`, {meth}`Instance.reduce_capabilities() <ommx.Instance.reduce_capabilities>` is called. For each family in `required_capabilities` that is not in `preserved`, the corresponding conversion API (see below) is invoked to turn that special constraint into regular constraints.
+{meth}`Instance.reduce_capabilities() <ommx.Instance.reduce_capabilities>` is an explicit, mutating operation. For each family in `required_capabilities` that is not in `preserved`, the corresponding conversion API (see below) is invoked to turn that special constraint into regular constraints.
 
 ```{code-cell} ipython3
 converted = instance.reduce_capabilities(preserved=set())
@@ -218,7 +202,7 @@ for cid, c in instance2.constraints.items():
 | Describe a structural set of adapter inputs | {class}`~ommx.InstanceClass` |
 | Declare the first adapter applicability condition | `INPUT_CLASS` |
 | Check membership plus adapter-owned preconditions | `check_applicability()` / `require_applicable()` |
-| Inspect active legacy special-constraint families | {attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>` |
+| Inspect active special-constraint families | {attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>` |
 | Explicitly lower every non-preserved special constraint | {meth}`Instance.reduce_capabilities <ommx.Instance.reduce_capabilities>` |
 | Convert individually to regular constraints | `convert_*_to_constraint(s)` / `convert_all_*_to_constraints` |
 | Audit conversion history | `instance.constraints_df(kind=..., removed=True)` / `solution.constraints_df(kind=..., include=("...","removed_reason"))` |

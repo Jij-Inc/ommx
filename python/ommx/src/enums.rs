@@ -1,11 +1,11 @@
 use pyo3::prelude::*;
 
-/// Constraint type capability flag for non-standard constraint types.
+/// Selector for a non-standard constraint family.
 ///
-/// Standard constraints are always supported. This enum lists capabilities
-/// that adapters must explicitly opt in to.
-///
-/// Use as a set: `{AdditionalCapability.Indicator}`
+/// :attr:`Instance.required_capabilities` reports these selectors for active
+/// special constraints. :meth:`Instance.reduce_capabilities` uses them to
+/// choose which families are preserved during explicit lowering. Regular
+/// constraints are outside this selector.
 #[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
 #[pyclass(eq, eq_int, frozen)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

@@ -37,7 +37,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         :param verbose: If True, enable Python-MIP's verbose mode
         """
         with _tracer.start_as_current_span("convert"):
-            super().__init__(ommx_instance)
+            ommx_instance.reduce_capabilities(set())
             if ommx_instance.sense == Instance.MAXIMIZE:
                 sense = mip.MAXIMIZE
             elif ommx_instance.sense == Instance.MINIMIZE:

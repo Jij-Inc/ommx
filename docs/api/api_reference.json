@@ -8,7 +8,7 @@
         {
           "kind": "Class",
           "name": "AdditionalCapability",
-          "doc": "Constraint type capability flag for non-standard constraint types.\n\nStandard constraints are always supported. This enum lists capabilities\nthat adapters must explicitly opt in to.\n\nUse as a set: `{AdditionalCapability.Indicator}`",
+          "doc": "Selector for a non-standard constraint family.\n\n:attr:`Instance.required_capabilities` reports these selectors for active\nspecial constraints. :meth:`Instance.reduce_capabilities` uses them to\nchoose which families are preserved during explicit lowering. Regular\nconstraints are outside this selector.",
           "bases": [],
           "methods": [],
           "attributes": [
@@ -11657,7 +11657,7 @@
             },
             {
               "name": "required_capabilities",
-              "doc": "Legacy selectors for active non-standard constraint families.\n\nOnly active constraints are considered. Despite the legacy names, this\nvalue does not describe an :class:`InstanceClass` or establish adapter\napplicability. Use :meth:`reduce_capabilities` only as an explicit\nspecial-constraint lowering operation.",
+              "doc": "Selectors for active non-standard constraint families.\n\nOnly active constraints are considered. This value does not describe an\n:class:`InstanceClass` or establish adapter applicability. Use\n:meth:`reduce_capabilities` only as an explicit special-constraint\nlowering operation.",
               "type_": {
                 "display": "set[AdditionalCapability]",
                 "link_target": null,

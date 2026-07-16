@@ -37,9 +37,10 @@ report = binary_linear.check_membership(instance)
 `check_applicability` または `require_applicable` で、入力classへのmembershipに
 adapter固有のpreconditionを重ねて評価します。この処理は呼び出し元のinstanceを
 変更しません。明示的なpreparation後には、得られた入力でmembershipを再評価します。
-legacyな特殊制約loweringと `ommx.v2.Feature` のwire reconstructionは別概念です。
-{meth}`~ommx.Instance.reduce_capabilities` のkeyword argumentは、このlegacyな
-lowering selectorとしての意味を表すため、`supported` から `preserved` に変更されました。
+{meth}`~ommx.Instance.reduce_capabilities` による明示的な特殊制約loweringと
+`ommx.v2.Feature` のwire reconstructionは別概念です。このlowering methodの
+keyword argumentは、明示的な操作で維持するfamilyを表すため、`supported` から
+`preserved` に変更されました。
 
 ### 🆕 remote Artifact lookup の型付き error ([#1090](https://github.com/Jij-Inc/ommx/pull/1090))
 
@@ -884,14 +885,6 @@ Instance.from_components(..., constraints={5: c}, ...)
 具体的な使い方、評価結果の参照、Indicator 制約の relax / restore ワークフローについては [特殊制約型](../user_guide/special_constraints.md) を参照してください。
 
 これに伴い旧 API である `ConstraintHints` / `OneHot` / `Sos1` クラス、`Instance.constraint_hints` プロパティ、PySCIPOpt Adapter の `use_sos1` フラグは削除されています。
-
-### 🆕 Adapter Capability モデル ([#790](https://github.com/Jij-Inc/ommx/pull/790), [#805](https://github.com/Jij-Inc/ommx/pull/805), [#810](https://github.com/Jij-Inc/ommx/pull/810), [#811](https://github.com/Jij-Inc/ommx/pull/811), [#814](https://github.com/Jij-Inc/ommx/pull/814))
-
-特殊制約の追加に伴い、Adapter が自身のサポートする制約型を `ADDITIONAL_CAPABILITIES` クラス属性で宣言する仕組みを導入しました。`super().__init__(instance)` が呼ばれると、未宣言の特殊制約は自動的に通常の制約へ変換（indicator/SOS1 は Big-M、one-hot は線形等式）されてから solver に渡されます。
-
-**既存の OMMX Adapter は Python SDK 3.0.0 に対応するため `super().__init__(instance)` を呼ぶよう変更する必要があります。** 現在 PySCIPOpt Adapter は Indicator 制約と SOS1 をサポート宣言しています。
-
-詳細および手動での変換 API については [Adapter Capability モデルと制約変換](../user_guide/capability_model.md) を参照してください。
 
 ### 🔄 numpy スカラ型のサポート ([#794](https://github.com/Jij-Inc/ommx/pull/794))
 
