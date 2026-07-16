@@ -15,7 +15,7 @@ use crate::{
 use anyhow::Result;
 use ommx::{ConstraintID, Evaluate, NamedFunctionID, VariableID};
 use pyo3::{
-    exceptions::{PyKeyError, PyValueError},
+    exceptions::PyKeyError,
     prelude::*,
     types::{PyBytes, PyDict},
     Bound, PyAny,
@@ -406,8 +406,7 @@ impl Instance {
             let mut inst = slf.borrow_mut();
             let id = inst.inner.next_variable_id()?;
             inst.inner
-                .add_decision_variable(id, ommx::DecisionVariable::binary(), label)
-                .map_err(|error| PyValueError::new_err(error.to_string()))?;
+                .add_decision_variable(id, ommx::DecisionVariable::binary(), label)?;
             id
         };
         Ok(crate::AttachedDecisionVariable::from_instance(
