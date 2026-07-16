@@ -126,8 +126,8 @@ display(sample_set_infeasible.summary)
 
 try:
     sample_set_infeasible.best_feasible
-    assert False # best_feasible should raise RuntimeError
-except RuntimeError as e:
+    assert False # best_feasible should raise ValueError
+except ValueError as e:
     print(e)
 ```
 

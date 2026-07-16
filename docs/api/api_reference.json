@@ -4004,7 +4004,7 @@
         {
           "kind": "Class",
           "name": "DecisionVariable",
-          "doc": "Decision variable in an optimization problem.\n\nThis class represents a variable that will be optimized in a mathematical programming problem.\nIt supports various types (binary, integer, continuous, semi-integer, semi-continuous) and\ncan be used in arithmetic expressions to build objective functions and constraints.\n\nNote that this object overloads `==` for creating a constraint, not for equality comparison.\n\n# Examples\n\n```python\n>>> x = DecisionVariable.integer(1)\n>>> x == 1  # Returns Constraint, not bool\nConstraint(...)\n```\n\nFor object equality comparison, use the ``equals_to()`` method or compare IDs:\n\n```python\n>>> y = DecisionVariable.integer(2)\n>>> x.id == y.id\nFalse\n```",
+          "doc": "Decision variable in an optimization problem.\n\nThis class represents a variable that will be optimized in a mathematical programming problem.\nIt supports various types (binary, integer, continuous, semi-integer, semi-continuous) and\ncan be used in arithmetic expressions to build objective functions and constraints.\nConstruction raises ValueError when the kind discriminator is unknown or\nthe requested bound cannot be normalized for the selected variable kind.\n\nNote that this object overloads `==` for creating a constraint, not for equality comparison.\n\n# Examples\n\n```python\n>>> x = DecisionVariable.integer(1)\n>>> x == 1  # Returns Constraint, not bool\nConstraint(...)\n```\n\nFor object equality comparison, use the ``equals_to()`` method or compare IDs:\n\n```python\n>>> y = DecisionVariable.integer(2)\n>>> x.id == y.id\nFalse\n```",
           "bases": [],
           "methods": [
             {
@@ -20513,7 +20513,7 @@
             },
             {
               "name": "extract_all_decision_variables",
-              "doc": "Extract all decision variables grouped by name for a given sample ID.\n\nReturns a mapping from variable name to a mapping from subscripts to values.\nThis is useful for extracting all variables at once in a structured format.\nVariables without names are not included in the result.\n\nRaises ValueError if a decision variable with parameters is found, or if the same\nname and subscript combination is found multiple times, or if the sample ID is invalid.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i, name=\"x\", subscripts=[i]) for i in range(3)]\n>>> y = [DecisionVariable.binary(i+3, name=\"y\", subscripts=[i]) for i in range(2)]\n>>> instance = Instance.from_components(\n...     decision_variables=x + y,\n...     objective=sum(x) + sum(y),\n...     constraints=[],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> sample_set = instance.evaluate_samples({0: {i: 1 for i in range(5)}})\n>>> all_vars = sample_set.extract_all_decision_variables(0)\n>>> all_vars[\"x\"]\n{(0,): 1.0, (1,): 1.0, (2,): 1.0}\n>>> all_vars[\"y\"]\n{(0,): 1.0, (1,): 1.0}\n```",
+              "doc": "Extract all decision variables grouped by name for a given sample ID.\n\nReturns a mapping from variable name to a mapping from subscripts to values.\nThis is useful for extracting all variables at once in a structured format.\nVariables without names are not included in the result.\n\nRaises KeyError if the sample ID does not exist, and ValueError if the\nsame name and subscript combination is found multiple times.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i, name=\"x\", subscripts=[i]) for i in range(3)]\n>>> y = [DecisionVariable.binary(i+3, name=\"y\", subscripts=[i]) for i in range(2)]\n>>> instance = Instance.from_components(\n...     decision_variables=x + y,\n...     objective=sum(x) + sum(y),\n...     constraints=[],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> sample_set = instance.evaluate_samples({0: {i: 1 for i in range(5)}})\n>>> all_vars = sample_set.extract_all_decision_variables(0)\n>>> all_vars[\"x\"]\n{(0,): 1.0, (1,): 1.0, (2,): 1.0}\n>>> all_vars[\"y\"]\n{(0,): 1.0, (1,): 1.0}\n```",
               "signatures": [
                 {
                   "parameters": [
@@ -20539,7 +20539,7 @@
             },
             {
               "name": "extract_all_named_functions",
-              "doc": "Extract all named function values grouped by name for a given sample ID",
+              "doc": "Extract all named function values grouped by name for a given sample ID.\n\nRaises KeyError if the sample ID does not exist, and ValueError if the\nsame name and subscript combination is found multiple times.",
               "signatures": [
                 {
                   "parameters": [
@@ -20565,7 +20565,7 @@
             },
             {
               "name": "extract_constraints",
-              "doc": "Extract constraint values for a given name and sample ID",
+              "doc": "Extract constraint values for a given name and sample ID.\n\nRaises KeyError if the name or sample ID does not exist. Raises\nValueError if a matching constraint has parameters or if the same\nsubscript is found more than once.",
               "signatures": [
                 {
                   "parameters": [
@@ -20600,7 +20600,7 @@
             },
             {
               "name": "extract_decision_variables",
-              "doc": "Extract decision variable values for a given name and sample ID",
+              "doc": "Extract decision variable values for a given name and sample ID.\n\nRaises KeyError if the name or sample ID does not exist, and ValueError\nif the same subscript is found more than once.",
               "signatures": [
                 {
                   "parameters": [
@@ -20635,7 +20635,7 @@
             },
             {
               "name": "extract_named_functions",
-              "doc": "Extract named function values for a given name and sample ID",
+              "doc": "Extract named function values for a given name and sample ID.\n\nRaises KeyError if the name or sample ID does not exist, and ValueError\nif the same subscript is found more than once.",
               "signatures": [
                 {
                   "parameters": [
@@ -20788,7 +20788,7 @@
             },
             {
               "name": "get",
-              "doc": "",
+              "doc": "Return one sample as a Solution.\n\nRaises KeyError if the sample ID does not exist.",
               "signatures": [
                 {
                   "parameters": [
@@ -20892,7 +20892,7 @@
             },
             {
               "name": "get_sample_by_id",
-              "doc": "Get sample by ID (alias for get method)",
+              "doc": "Get sample by ID (alias for get method).\n\nRaises KeyError if the sample ID does not exist.",
               "signatures": [
                 {
                   "parameters": [
@@ -21200,7 +21200,7 @@
             },
             {
               "name": "best_feasible",
-              "doc": "",
+              "doc": "Raises ValueError if there is no feasible sample.",
               "type_": {
                 "display": "Solution",
                 "link_target": null,
@@ -21211,7 +21211,7 @@
             },
             {
               "name": "best_feasible_id",
-              "doc": "",
+              "doc": "Raises ValueError if there is no feasible sample.",
               "type_": {
                 "display": "int",
                 "link_target": null,
@@ -21222,7 +21222,7 @@
             },
             {
               "name": "best_feasible_relaxed",
-              "doc": "",
+              "doc": "Raises ValueError if there is no feasible sample in the relaxed problem.",
               "type_": {
                 "display": "Solution",
                 "link_target": null,
@@ -21233,7 +21233,7 @@
             },
             {
               "name": "best_feasible_relaxed_id",
-              "doc": "",
+              "doc": "Raises ValueError if there is no feasible sample in the relaxed problem.",
               "type_": {
                 "display": "int",
                 "link_target": null,
@@ -21244,7 +21244,7 @@
             },
             {
               "name": "best_feasible_unrelaxed",
-              "doc": "",
+              "doc": "Raises ValueError if there is no feasible sample.",
               "type_": {
                 "display": "Solution",
                 "link_target": null,
@@ -22776,7 +22776,7 @@
             },
             {
               "name": "extract_all_decision_variables",
-              "doc": "Extract all decision variables grouped by name.\n\nReturns a mapping from variable name to a mapping from subscripts to values.\nThis is useful for extracting all variables at once in a structured format.\nVariables without names are not included in the result.\n\nRaises ValueError if a decision variable with parameters is found, or if the same\nname and subscript combination is found multiple times.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i, name=\"x\", subscripts=[i]) for i in range(3)]\n>>> y = [DecisionVariable.binary(i+3, name=\"y\", subscripts=[i]) for i in range(2)]\n>>> instance = Instance.from_components(\n...     decision_variables=x + y,\n...     objective=sum(x) + sum(y),\n...     constraints=[],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> solution = instance.evaluate({i: 1 for i in range(5)})\n>>> all_vars = solution.extract_all_decision_variables()\n>>> all_vars[\"x\"]\n{(0,): 1.0, (1,): 1.0, (2,): 1.0}\n>>> all_vars[\"y\"]\n{(0,): 1.0, (1,): 1.0}\n```",
+              "doc": "Extract all decision variables grouped by name.\n\nReturns a mapping from variable name to a mapping from subscripts to values.\nThis is useful for extracting all variables at once in a structured format.\nVariables without names are not included in the result.\n\nRaises ValueError if the same name and subscript combination is found\nmultiple times.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i, name=\"x\", subscripts=[i]) for i in range(3)]\n>>> y = [DecisionVariable.binary(i+3, name=\"y\", subscripts=[i]) for i in range(2)]\n>>> instance = Instance.from_components(\n...     decision_variables=x + y,\n...     objective=sum(x) + sum(y),\n...     constraints=[],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> solution = instance.evaluate({i: 1 for i in range(5)})\n>>> all_vars = solution.extract_all_decision_variables()\n>>> all_vars[\"x\"]\n{(0,): 1.0, (1,): 1.0, (2,): 1.0}\n>>> all_vars[\"y\"]\n{(0,): 1.0, (1,): 1.0}\n```",
               "signatures": [
                 {
                   "parameters": [],
@@ -22792,7 +22792,7 @@
             },
             {
               "name": "extract_all_named_functions",
-              "doc": "Extract all named functions grouped by name (returns a Python dict)",
+              "doc": "Extract all named functions grouped by name (returns a Python dict).\n\nRaises ValueError if the same name and subscript combination is found\nmultiple times.",
               "signatures": [
                 {
                   "parameters": [],
@@ -22808,7 +22808,7 @@
             },
             {
               "name": "extract_constraints",
-              "doc": "Extract the values of constraints based on the `name` with `subscripts` key.\n\nRaises ValueError if the constraint with parameters is found, or if the same subscript is found.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> c0 = (x[0] + x[1] == 1).set_name(\"c\").add_subscripts([0])\n>>> c1 = (x[1] + x[2] == 1).set_name(\"c\").add_subscripts([1])\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[c0, c1],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> solution = instance.evaluate({0: 1, 1: 0, 2: 1})\n>>> solution.extract_constraints(\"c\")\n{(0,): 0.0, (1,): 0.0}\n```",
+              "doc": "Extract the values of constraints based on the `name` with `subscripts` key.\n\nRaises KeyError if no constraint has the requested name. Raises\nValueError if a matching constraint has parameters or if the same\nsubscript is found more than once.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> c0 = (x[0] + x[1] == 1).set_name(\"c\").add_subscripts([0])\n>>> c1 = (x[1] + x[2] == 1).set_name(\"c\").add_subscripts([1])\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[c0, c1],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> solution = instance.evaluate({0: 1, 1: 0, 2: 1})\n>>> solution.extract_constraints(\"c\")\n{(0,): 0.0, (1,): 0.0}\n```",
               "signatures": [
                 {
                   "parameters": [
@@ -22834,7 +22834,7 @@
             },
             {
               "name": "extract_decision_variables",
-              "doc": "Extract the values of decision variables based on the `name` with `subscripts` key.\n\nRaises ValueError if a decision variable with parameters is found, or if the same subscript is found.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i, name=\"x\", subscripts=[i]) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[sum(x) == 1],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> solution = instance.evaluate({i: 1 for i in range(3)})\n>>> solution.extract_decision_variables(\"x\")\n{(0,): 1.0, (1,): 1.0, (2,): 1.0}\n```",
+              "doc": "Extract the values of decision variables based on the `name` with `subscripts` key.\n\nRaises KeyError if no decision variable has the requested name, and\nValueError if the same subscript is found more than once.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i, name=\"x\", subscripts=[i]) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[sum(x) == 1],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> solution = instance.evaluate({i: 1 for i in range(3)})\n>>> solution.extract_decision_variables(\"x\")\n{(0,): 1.0, (1,): 1.0, (2,): 1.0}\n```",
               "signatures": [
                 {
                   "parameters": [
@@ -22860,7 +22860,7 @@
             },
             {
               "name": "extract_named_functions",
-              "doc": "Extract named functions by name with subscripts as key (returns a Python dict)",
+              "doc": "Extract named functions by name with subscripts as key (returns a Python dict).\n\nRaises KeyError if no named function has the requested name, and\nValueError if the same subscript is found more than once.",
               "signatures": [
                 {
                   "parameters": [
@@ -23230,7 +23230,7 @@
             },
             {
               "name": "set_dual_variable",
-              "doc": "Set the dual variable value for a specific constraint by ID",
+              "doc": "Set the dual variable value for a specific constraint by ID.\n\nRaises KeyError if the constraint ID does not exist.",
               "signatures": [
                 {
                   "parameters": [
