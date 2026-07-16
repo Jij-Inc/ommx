@@ -1,0 +1,14 @@
+# Python packaging metadata for the downstream bridge consumer fixture.
+[build-system]
+requires = ["maturin>=1.12.2,<2"]
+build-backend = "maturin"
+
+[project]
+name = "ommx-pyo3-bridge-fixture"
+dynamic = ["version"]
+requires-python = ">=3.10"
+dependencies = ["ommx"]
+
+[tool.maturin]
+module-name = "ommx_pyo3_bridge_fixture"
+features = ["pyo3/extension-module"]

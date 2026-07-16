@@ -31,6 +31,7 @@ mod parameters;
 mod parametric_instance;
 mod polynomial;
 mod provenance;
+mod pyo3_bridge;
 mod quadratic;
 mod random;
 mod sample_set;
@@ -253,6 +254,11 @@ fn _ommx_rust(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     // ATol functions
     m.add_function(wrap_pyfunction!(set_default_atol, m)?)?;
     m.add_function(wrap_pyfunction!(get_default_atol, m)?)?;
+
+    // Versioned production runtime receivers consumed by the published
+    // `ommx-pyo3-bridge` crate. They stay binding-private because only this
+    // extension owns construction of the canonical Python classes.
+    pyo3_bridge::register(m)?;
 
     Ok(())
 }

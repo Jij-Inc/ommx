@@ -6,24 +6,24 @@ tasks:
   doc:
     desc: Generate and Open documentation for Rust SDK
     cmds:
-      - cargo doc --no-deps -p ommx {{.CLI_ARGS}}
+      - cargo doc --no-deps -p ommx -p ommx-pyo3-bridge {{.CLI_ARGS}}
 
   doc:check:
     desc: Run cargo doc with warnings-as-errors (CI gate against broken rustdoc)
     env:
       RUSTDOCFLAGS: -D warnings
     cmds:
-      - cargo doc --no-deps -p ommx
+      - cargo doc --no-deps -p ommx -p ommx-pyo3-bridge
 
   test:
     desc: Run tests for Rust SDK
     cmds:
-      - cargo test -p ommx {{.CLI_ARGS}}
+      - cargo test -p ommx -p ommx-pyo3-bridge {{.CLI_ARGS}}
 
   check:
     desc: Run check for Rust SDK
     cmds:
-      - cargo check -p ommx {{.CLI_ARGS}}
+      - cargo check -p ommx -p ommx-pyo3-bridge {{.CLI_ARGS}}
 
   clippy:
     desc: Run clippy for Rust SDK
