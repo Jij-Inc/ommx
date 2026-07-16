@@ -1,5 +1,5 @@
 use super::*;
-use crate::{v1, Message, Parse};
+use crate::{message_io, v1, Message, Parse};
 use anyhow::Result;
 
 impl Linear {
@@ -9,7 +9,7 @@ impl Linear {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
-        let inner = v1::Linear::decode(bytes)?;
+        let inner = message_io::decode::<v1::Linear>(bytes, "ommx.v1.Linear")?;
         Ok(Parse::parse(inner, &())?)
     }
 }
@@ -21,7 +21,7 @@ impl Quadratic {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
-        let inner = v1::Quadratic::decode(bytes)?;
+        let inner = message_io::decode::<v1::Quadratic>(bytes, "ommx.v1.Quadratic")?;
         Ok(Parse::parse(inner, &())?)
     }
 }
@@ -33,7 +33,7 @@ impl Polynomial {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
-        let inner = v1::Polynomial::decode(bytes)?;
+        let inner = message_io::decode::<v1::Polynomial>(bytes, "ommx.v1.Polynomial")?;
         Ok(Parse::parse(inner, &())?)
     }
 }
