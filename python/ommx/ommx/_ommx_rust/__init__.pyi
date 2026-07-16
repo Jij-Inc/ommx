@@ -1447,6 +1447,8 @@ class DecisionVariable:
     This class represents a variable that will be optimized in a mathematical programming problem.
     It supports various types (binary, integer, continuous, semi-integer, semi-continuous) and
     can be used in arithmetic expressions to build objective functions and constraints.
+    Construction raises ValueError when the kind discriminator is unknown or
+    the requested bound cannot be normalized for the selected variable kind.
 
     Note that this object overloads `==` for creating a constraint, not for equality comparison.
 
@@ -6644,15 +6646,30 @@ class SampleSet:
     @parameters.setter
     def parameters(self, value: typing.Any) -> None: ...
     @property
-    def best_feasible_id(self) -> builtins.int: ...
+    def best_feasible_id(self) -> builtins.int:
+        r"""
+        Raises ValueError if there is no feasible sample.
+        """
     @property
-    def best_feasible_relaxed_id(self) -> builtins.int: ...
+    def best_feasible_relaxed_id(self) -> builtins.int:
+        r"""
+        Raises ValueError if there is no feasible sample in the relaxed problem.
+        """
     @property
-    def best_feasible(self) -> Solution: ...
+    def best_feasible(self) -> Solution:
+        r"""
+        Raises ValueError if there is no feasible sample.
+        """
     @property
-    def best_feasible_relaxed(self) -> Solution: ...
+    def best_feasible_relaxed(self) -> Solution:
+        r"""
+        Raises ValueError if there is no feasible sample in the relaxed problem.
+        """
     @property
-    def best_feasible_unrelaxed(self) -> Solution: ...
+    def best_feasible_unrelaxed(self) -> Solution:
+        r"""
+        Raises ValueError if there is no feasible sample.
+        """
     @property
     def objectives(self) -> builtins.dict[builtins.int, builtins.float]:
         r"""
@@ -6770,10 +6787,17 @@ class SampleSet:
     def from_v2_bytes(bytes: bytes) -> SampleSet: ...
     def to_v1_bytes(self) -> bytes: ...
     def to_v2_bytes(self) -> bytes: ...
-    def get(self, sample_id: builtins.int) -> Solution: ...
+    def get(self, sample_id: builtins.int) -> Solution:
+        r"""
+        Return one sample as a Solution.
+
+        Raises KeyError if the sample ID does not exist.
+        """
     def get_sample_by_id(self, sample_id: builtins.int) -> Solution:
         r"""
-        Get sample by ID (alias for get method)
+        Get sample by ID (alias for get method).
+
+        Raises KeyError if the sample ID does not exist.
         """
     def num_samples(self) -> builtins.int: ...
     def sample_ids(self) -> builtins.set[builtins.int]: ...
@@ -6784,7 +6808,10 @@ class SampleSet:
         self, name: builtins.str, sample_id: builtins.int
     ) -> dict:
         r"""
-        Extract decision variable values for a given name and sample ID
+        Extract decision variable values for a given name and sample ID.
+
+        Raises KeyError if the name or sample ID does not exist, and ValueError
+        if the same subscript is found more than once.
         """
     def extract_all_decision_variables(self, sample_id: builtins.int) -> dict:
         r"""
@@ -6794,8 +6821,8 @@ class SampleSet:
         This is useful for extracting all variables at once in a structured format.
         Variables without names are not included in the result.
 
-        Raises ValueError if a decision variable with parameters is found, or if the same
-        name and subscript combination is found multiple times, or if the sample ID is invalid.
+        Raises KeyError if the sample ID does not exist, and ValueError if the
+        same name and subscript combination is found multiple times.
 
         # Examples
 
@@ -6819,17 +6846,27 @@ class SampleSet:
         """
     def extract_constraints(self, name: builtins.str, sample_id: builtins.int) -> dict:
         r"""
-        Extract constraint values for a given name and sample ID
+        Extract constraint values for a given name and sample ID.
+
+        Raises KeyError if the name or sample ID does not exist. Raises
+        ValueError if a matching constraint has parameters or if the same
+        subscript is found more than once.
         """
     def extract_named_functions(
         self, name: builtins.str, sample_id: builtins.int
     ) -> dict:
         r"""
-        Extract named function values for a given name and sample ID
+        Extract named function values for a given name and sample ID.
+
+        Raises KeyError if the name or sample ID does not exist, and ValueError
+        if the same subscript is found more than once.
         """
     def extract_all_named_functions(self, sample_id: builtins.int) -> dict:
         r"""
-        Extract all named function values grouped by name for a given sample ID
+        Extract all named function values grouped by name for a given sample ID.
+
+        Raises KeyError if the sample ID does not exist, and ValueError if the
+        same name and subscript combination is found multiple times.
         """
     def get_decision_variable_by_id(
         self, variable_id: builtins.int
@@ -7438,7 +7475,8 @@ class Solution:
         r"""
         Extract the values of decision variables based on the `name` with `subscripts` key.
 
-        Raises ValueError if a decision variable with parameters is found, or if the same subscript is found.
+        Raises KeyError if no decision variable has the requested name, and
+        ValueError if the same subscript is found more than once.
 
         # Examples
 
@@ -7464,8 +7502,8 @@ class Solution:
         This is useful for extracting all variables at once in a structured format.
         Variables without names are not included in the result.
 
-        Raises ValueError if a decision variable with parameters is found, or if the same
-        name and subscript combination is found multiple times.
+        Raises ValueError if the same name and subscript combination is found
+        multiple times.
 
         # Examples
 
@@ -7491,7 +7529,9 @@ class Solution:
         r"""
         Extract the values of constraints based on the `name` with `subscripts` key.
 
-        Raises ValueError if the constraint with parameters is found, or if the same subscript is found.
+        Raises KeyError if no constraint has the requested name. Raises
+        ValueError if a matching constraint has parameters or if the same
+        subscript is found more than once.
 
         # Examples
 
@@ -7513,17 +7553,25 @@ class Solution:
         """
     def extract_named_functions(self, name: builtins.str) -> dict:
         r"""
-        Extract named functions by name with subscripts as key (returns a Python dict)
+        Extract named functions by name with subscripts as key (returns a Python dict).
+
+        Raises KeyError if no named function has the requested name, and
+        ValueError if the same subscript is found more than once.
         """
     def extract_all_named_functions(self) -> dict:
         r"""
-        Extract all named functions grouped by name (returns a Python dict)
+        Extract all named functions grouped by name (returns a Python dict).
+
+        Raises ValueError if the same name and subscript combination is found
+        multiple times.
         """
     def set_dual_variable(
         self, constraint_id: builtins.int, value: typing.Optional[builtins.float]
     ) -> None:
         r"""
-        Set the dual variable value for a specific constraint by ID
+        Set the dual variable value for a specific constraint by ID.
+
+        Raises KeyError if the constraint ID does not exist.
         """
     def get_decision_variable_by_id(
         self, variable_id: builtins.int

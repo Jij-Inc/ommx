@@ -86,11 +86,11 @@ def test_set_default_atol_validation():
     assert ommx.get_default_atol() == 1e-3
 
     # Should reject zero
-    with pytest.raises(Exception):  # Should raise an error for non-positive values
+    with pytest.raises(ValueError, match="ATol must be positive"):
         ommx.set_default_atol(0.0)
 
     # Should reject negative values
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError, match="ATol must be positive"):
         ommx.set_default_atol(-1e-6)
 
     # Reset for other tests

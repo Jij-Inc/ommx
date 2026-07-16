@@ -100,10 +100,13 @@ impl NamedFunction {
     ///
     /// **Returns:** {class}`~ommx.EvaluatedNamedFunction` containing the evaluated value
     #[pyo3(signature = (state, *, atol=None))]
-    pub fn evaluate(&self, state: State, atol: Option<f64>) -> PyResult<EvaluatedNamedFunction> {
+    pub fn evaluate(
+        &self,
+        state: State,
+        atol: Option<f64>,
+    ) -> crate::error::OmmxPyResult<EvaluatedNamedFunction> {
         let atol = match atol {
-            Some(value) => ommx::ATol::new(value)
-                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?,
+            Some(value) => ommx::ATol::new(value)?,
             None => ommx::ATol::default(),
         };
         let evaluated = self
@@ -126,10 +129,13 @@ impl NamedFunction {
     ///
     /// **Returns:** Self (modified in-place) for method chaining
     #[pyo3(signature = (state, *, atol=None))]
-    pub fn partial_evaluate(&mut self, state: State, atol: Option<f64>) -> PyResult<Self> {
+    pub fn partial_evaluate(
+        &mut self,
+        state: State,
+        atol: Option<f64>,
+    ) -> crate::error::OmmxPyResult<Self> {
         let atol = match atol {
-            Some(value) => ommx::ATol::new(value)
-                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?,
+            Some(value) => ommx::ATol::new(value)?,
             None => ommx::ATol::default(),
         };
         self.1
@@ -141,34 +147,32 @@ impl NamedFunction {
     // Arithmetic operators - delegate to the inner function
 
     /// Addition: returns self.function + other
-    pub fn __add__(&self, other: Function) -> PyResult<Function> {
+    pub fn __add__(&self, other: Function) -> crate::error::OmmxPyResult<Function> {
         self.function().__add__(other)
     }
 
     /// Reverse addition: returns other + self.function
-    pub fn __radd__(&self, other: Function) -> PyResult<Function> {
+    pub fn __radd__(&self, other: Function) -> crate::error::OmmxPyResult<Function> {
         self.function().__add__(other)
     }
 
     /// Subtraction: returns self.function - other
-    pub fn __sub__(&self, other: Function) -> PyResult<Function> {
+    pub fn __sub__(&self, other: Function) -> crate::error::OmmxPyResult<Function> {
         self.function().__sub__(other)
     }
 
     /// Reverse subtraction: returns other - self.function
-    pub fn __rsub__(&self, other: Function) -> PyResult<Function> {
-        Ok(Function(
-            (&other.0 - &self.1.function).map_err(crate::coefficient_error_to_pyerr)?,
-        ))
+    pub fn __rsub__(&self, other: Function) -> crate::error::OmmxPyResult<Function> {
+        Ok(Function((&other.0 - &self.1.function)?))
     }
 
     /// Multiplication: returns self.function * other
-    pub fn __mul__(&self, other: Function) -> PyResult<Function> {
+    pub fn __mul__(&self, other: Function) -> crate::error::OmmxPyResult<Function> {
         self.function().__mul__(other)
     }
 
     /// Reverse multiplication: returns other * self.function
-    pub fn __rmul__(&self, other: Function) -> PyResult<Function> {
+    pub fn __rmul__(&self, other: Function) -> crate::error::OmmxPyResult<Function> {
         self.function().__mul__(other)
     }
 
@@ -186,7 +190,7 @@ impl NamedFunction {
     /// Note: This does NOT return bool, it creates a Constraint object.
     #[gen_stub(type_ignore = ["override"])]
     #[pyo3(name = "__eq__")]
-    pub fn py_eq(&self, other: Function) -> PyResult<Constraint> {
+    pub fn py_eq(&self, other: Function) -> crate::error::OmmxPyResult<Constraint> {
         crate::comparison_constraint(-other.0 + &self.1.function, ommx::Equality::EqualToZero)
     }
 
@@ -194,7 +198,7 @@ impl NamedFunction {
     ///
     /// Returns a Constraint where (self.function - other) <= 0.
     #[pyo3(name = "__le__")]
-    pub fn py_le(&self, other: Function) -> PyResult<Constraint> {
+    pub fn py_le(&self, other: Function) -> crate::error::OmmxPyResult<Constraint> {
         crate::comparison_constraint(
             -other.0 + &self.1.function,
             ommx::Equality::LessThanOrEqualToZero,
@@ -205,7 +209,7 @@ impl NamedFunction {
     ///
     /// Returns a Constraint where (other - self.function) <= 0.
     #[pyo3(name = "__ge__")]
-    pub fn py_ge(&self, other: Function) -> PyResult<Constraint> {
+    pub fn py_ge(&self, other: Function) -> crate::error::OmmxPyResult<Constraint> {
         crate::comparison_constraint(
             other.0 - &self.1.function,
             ommx::Equality::LessThanOrEqualToZero,

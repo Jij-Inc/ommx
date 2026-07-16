@@ -446,11 +446,11 @@ impl Instance {
             .set_context_for_owner(id, context, "SOS1 constraint")
     }
 
-    /// Return legacy selectors for the active non-standard constraint families.
+    /// Return selectors for the active non-standard constraint families.
     ///
     /// Only active constraints are considered; removed constraints are
-    /// excluded. Despite the legacy method name, the result does not describe
-    /// an [`crate::InstanceClass`] or establish adapter applicability.
+    /// excluded. The result does not describe an [`crate::InstanceClass`] or
+    /// establish adapter applicability.
     pub fn required_capabilities(&self) -> Capabilities {
         let mut caps = Capabilities::new();
         if !self.indicator_constraint_collection.active().is_empty() {

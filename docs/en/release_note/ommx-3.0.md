@@ -43,6 +43,35 @@ reconstruction remain separate concepts. The lowering method's keyword argument
 is renamed from `supported` to `preserved` to describe the families left
 unchanged by that explicit operation.
 
+### 🛠 Structured SDK errors use consistent Python exceptions ([#1097](https://github.com/Jij-Inc/ommx/pull/1097))
+
+Python bindings now route stable `DecisionVariableError`, `SolutionError`, and
+`SampleSetError` signals through the shared PyO3 error boundary. Missing names,
+sample IDs, and constraint IDs in structured result access raise `KeyError`.
+Invalid decision-variable bounds, duplicate subscripts, parameterized
+constraint extraction, and requests for a best sample when none is feasible
+raise `ValueError` consistently.
+
+An unknown integer kind passed to the `DecisionVariable` constructor is also
+reported as Python-owned `ValueError` validation. Python-native failures remain
+intact, and unclassified Rust SDK errors continue to fall back to
+`RuntimeError`.
+
+### 🛠 Numeric SDK errors consistently raise `ValueError` ([#1096](https://github.com/Jij-Inc/ommx/pull/1096))
+
+Python bindings now translate direct Rust SDK `CoefficientError`, `AtolError`,
+and `BoundError` signals through the shared PyO3 error boundary. Invalid
+coefficients in constructors, arithmetic, and binary-power reduction,
+non-positive tolerance values, and invalid bounds therefore raise
+`ValueError` consistently instead of depending on the entry point's previous
+panic, `RuntimeError`, or hand-written conversion path.
+
+Zero coefficients continue to be normalized as a successful operation.
+Failed in-place additions leave the original numeric object unchanged.
+Python-owned type and argument-shape validation also keeps its native exception
+behavior, while unclassified Rust SDK failures continue to fall back to
+`RuntimeError`.
+
 ### 🆕 Typed remote Artifact lookup errors ([#1090](https://github.com/Jij-Inc/ommx/pull/1090))
 
 {meth}`~ommx.artifact.Artifact.load` and
