@@ -11,17 +11,42 @@ kernelspec:
   name: python3
 ---
 
-# Adapter Capability モデルと制約変換
+# Adapter の入力 class と legacy な特殊制約 lowering
 
-OMMX は [特殊制約型](./special_constraints.md) として IndicatorConstraint, OneHotConstraint, Sos1Constraint を第一級で扱いますが、すべてのソルバーがこれらを直接受け付けるわけではありません。ソルバー毎の対応状況の違いを統一的に扱うため、OMMX は **Adapter Capability モデル** を提供しています。
+OMMX では、従来 Adapter Capability として一緒に説明されていた次の2つの概念を分けて扱います。
+
+- {class}`~ommx.InstanceClass` は、具体的な `Instance` 値の集合です。Adapter は構造的な入力条件を `INPUT_CLASS` で宣言し、その後に Adapter 固有の precondition を評価して applicability を判定します。
+- legacy な `AdditionalCapability` API は、明示的な lowering で維持する特殊制約 family を選びます。入力 class の宣言でも、Adapter applicability の証明でもありません。
 
 本ページでは以下を説明します。
 
-- {class}`~ommx.AdditionalCapability` と {attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>` による必要機能の表現
-- Adapter が `ADDITIONAL_CAPABILITIES` でサポート機能を宣言する仕組み
-- {meth}`Instance.reduce_capabilities() <ommx.Instance.reduce_capabilities>` による自動変換
+- `InstanceClass` の membership と Adapter applicability
+- legacy な特殊制約 family selector としての {class}`~ommx.AdditionalCapability` と {attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>`
+- {meth}`Instance.reduce_capabilities() <ommx.Instance.reduce_capabilities>` による明示的な lowering
 - 手動で通常制約に変換するための API
 - 変換結果の監査
+
+## Instance class と Adapter applicability
+
+`InstanceClass` は、条件を論理積でまとめた完全な {class}`~ommx.InstanceClassClause` の有限和です。membership は入力値そのものに対して評価され、入力の変更や preparation は行いません。
+
+```{code-cell} ipython3
+from ommx import DegreeBound, InstanceClass, InstanceClassClause, Kind, Sense
+
+binary_linear_with_one_hot = InstanceClass(
+    [
+        InstanceClassClause(
+            label="binary-linear-with-one-hot",
+            allowed_variable_kinds={Kind.Binary},
+            objective_degree_bound=DegreeBound.at_most(1),
+            allowed_senses={Sense.Maximize},
+            allows_one_hot=True,
+        )
+    ]
+)
+```
+
+Adapter は applicability の最初の条件を `INPUT_CLASS` として宣言します。構造化された結果を得るには `check_applicability()`、membership または Adapter 固有の precondition が満たされない場合に例外を送出するには `require_applicable()` を使います。明示的な preparation で別の入力値を作った場合は、その値で applicability を再評価します。
 
 ## AdditionalCapability と required_capabilities
 
@@ -48,30 +73,31 @@ instance = Instance.from_components(
     sense=Instance.MAXIMIZE,
 )
 assert instance.required_capabilities == {AdditionalCapability.OneHot}
+assert binary_linear_with_one_hot.contains(instance)
 ```
 
-## Adapter 側の宣言
+## Adapter の legacy lowering selector
 
-各 OMMX Adapter は、サポートする Capability を `ADDITIONAL_CAPABILITIES` クラス属性で宣言します。
+legacy な基底 class の lowering path を使う Adapter は、維持する active な特殊制約 family を `ADDITIONAL_CAPABILITIES` で選びます。
 
 ```python
 from ommx import AdditionalCapability
 from ommx.adapter import SolverAdapter
 
-class MySolverAdapter(SolverAdapter):
+class LegacyLoweringAdapter(SolverAdapter):
     ADDITIONAL_CAPABILITIES = frozenset({AdditionalCapability.Indicator})
 ```
 
-このとき、Adapter のコンストラクタで `super().__init__(instance)` が呼ばれると、**`ADDITIONAL_CAPABILITIES` に含まれない制約型は自動的に通常制約へ変換** されます。つまり Adapter の実装者は、`ADDITIONAL_CAPABILITIES` で宣言した制約型と通常制約さえ扱えれば、どんなインスタンスも受け付けられるようになります。
+Adapter のコンストラクタで `super().__init__(instance)` が呼ばれると、`ADDITIONAL_CAPABILITIES` に含まれない active な特殊制約 family は通常制約へ変換されます。この mutating operation は lowering にすぎず、変換後の instance が `INPUT_CLASS` に属することや Adapter 固有の precondition を満たすことは保証しません。
 
-デフォルトでは `ADDITIONAL_CAPABILITIES = frozenset()` なので、全ての特殊制約型が自動変換されます。逆に全てサポートを宣言することもできます（例えば PySCIPOpt Adapter は現在 Indicator と SOS1 をサポート宣言しています）。
+デフォルトでは `ADDITIONAL_CAPABILITIES = frozenset()` なので、active な特殊制約 family はすべて lowering されます。既存 Adapter は、backend path が直接扱う family を維持する場合があります。
 
-## reduce_capabilities による自動変換
+## reduce_capabilities による明示的な lowering
 
-`super().__init__` の内部で呼ばれているのが {meth}`Instance.reduce_capabilities() <ommx.Instance.reduce_capabilities>` です。このメソッドは `supported` として渡された Capability 集合に含まれない制約型を、対応する変換 API（後述）を使って通常制約に変換します。
+`super().__init__` の内部で呼ばれているのが {meth}`Instance.reduce_capabilities() <ommx.Instance.reduce_capabilities>` です。このメソッドは `preserved` として渡された集合に含まれない特殊制約 family を、対応する変換 API（後述）を使って通常制約に変換します。
 
 ```{code-cell} ipython3
-converted = instance.reduce_capabilities(supported=set())
+converted = instance.reduce_capabilities(preserved=set())
 assert converted == {AdditionalCapability.OneHot}
 ```
 
@@ -81,7 +107,7 @@ assert instance.one_hot_constraints == {}
 assert len(instance.constraints) == 1
 ```
 
-One-hot 制約が除去され、その代わりに通常の等式制約 $x_0 + x_1 + x_2 - 1 = 0$ が1つ追加されたことが分かります。`reduce_capabilities` はインスタンスを in-place に変更します。成功時、`required_capabilities` は `supported` の部分集合になります。変換が必要なかった場合は空集合を返します。
+One-hot 制約が除去され、その代わりに通常の等式制約 $x_0 + x_1 + x_2 - 1 = 0$ が1つ追加されたことが分かります。`reduce_capabilities` はインスタンスを in-place に変更します。成功時、`required_capabilities` は `preserved` の部分集合になります。変換が必要なかった場合は空集合を返します。得られた値に対して `INPUT_CLASS` の membership または Adapter applicability を再評価してください。
 
 ## 手動変換 API
 
@@ -189,8 +215,10 @@ for cid, c in instance2.constraints.items():
 
 | やりたいこと | 使う API |
 |---|---|
-| インスタンスが必要とする機能を調べる | {attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>` |
-| Adapter でサポート機能を宣言する | `ADDITIONAL_CAPABILITIES` クラス属性 |
-| 未サポートの特殊制約を一括で通常制約に変換する | {meth}`Instance.reduce_capabilities <ommx.Instance.reduce_capabilities>` |
+| Adapter 入力の構造的な集合を記述する | {class}`~ommx.InstanceClass` |
+| Adapter applicability の最初の条件を宣言する | `INPUT_CLASS` |
+| membership と Adapter 固有の precondition を検査する | `check_applicability()` / `require_applicable()` |
+| active な legacy 特殊制約 family を調べる | {attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>` |
+| 維持しない特殊制約を明示的に lowering する | {meth}`Instance.reduce_capabilities <ommx.Instance.reduce_capabilities>` |
 | 個別に通常制約に変換する | `convert_*_to_constraint(s)` / `convert_all_*_to_constraints` |
 | 変換履歴を確認する | `instance.constraints_df(kind=..., removed=True)` / `solution.constraints_df(kind=..., include=("...","removed_reason"))` |

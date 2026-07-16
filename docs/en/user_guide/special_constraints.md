@@ -25,7 +25,7 @@ The examples below use the PySCIPOpt Adapter, as in [Solving optimization proble
 pip install ommx-pyscipopt-adapter
 ```
 
-The PySCIPOpt Adapter declares support for Indicator and SOS1 constraints and passes them through to SCIP's `addConsIndicator` / `addConsSOS1` (equality indicators are split into two inequality indicators). OneHot is not declared as supported, so the adapter automatically converts it into a regular equality constraint before handing it to SCIP. For more on adapter capability declarations and conversions, see [Adapter Capability Model and Conversions](./capability_model.md).
+The PySCIPOpt Adapter currently preserves Indicator and SOS1 constraints in its legacy lowering selector and passes them through to SCIP's `addConsIndicator` / `addConsSOS1` (equality indicators are split into two inequality indicators). OneHot is not preserved, so it is lowered to a regular equality constraint before being handed to SCIP. This selector is separate from `INPUT_CLASS` membership and adapter applicability; see [Adapter Input Classes and Legacy Constraint Lowering](./capability_model.md).
 
 ## IndicatorConstraint
 
@@ -58,7 +58,7 @@ instance = Instance.from_components(
 assert set(instance.indicator_constraints.keys()) == {0}
 ```
 
-The PySCIPOpt Adapter declares support for indicator constraints, so we can solve this directly.
+The PySCIPOpt Adapter preserves indicator constraints from legacy lowering and passes them directly to SCIP.
 
 ```{code-cell} ipython3
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
@@ -94,7 +94,7 @@ instance_oh = Instance.from_components(
 assert set(instance_oh.one_hot_constraints.keys()) == {0}
 ```
 
-The PySCIPOpt Adapter does not declare OneHot support, so inside `solve` the constraint is automatically converted to the regular equality $x_0 + x_1 + x_2 - 1 = 0$ before being handed to SCIP.
+The PySCIPOpt Adapter does not preserve OneHot from legacy lowering, so inside `solve` the constraint is converted to the regular equality $x_0 + x_1 + x_2 - 1 = 0$ before being handed to SCIP.
 
 ```{code-cell} ipython3
 solution = OMMXPySCIPOptAdapter.solve(instance_oh)
@@ -139,7 +139,7 @@ instance_s1 = Instance.from_components(
 assert set(instance_s1.sos1_constraints.keys()) == {0}
 ```
 
-The PySCIPOpt Adapter declares support for SOS1, so we can solve this directly.
+The PySCIPOpt Adapter preserves SOS1 from legacy lowering and passes it directly to SCIP.
 
 ```{code-cell} ipython3
 solution = OMMXPySCIPOptAdapter.solve(instance_s1)
@@ -174,7 +174,7 @@ assert set(instance_mix.one_hot_constraints.keys()) == {1}
 assert set(instance_mix.sos1_constraints.keys()) == {1}
 ```
 
-When a special constraint is converted to a regular constraint (see [Capability Model and Conversions](./capability_model.md)), the generated regular constraint is allocated from the `Constraint` ID space. Only regular constraint IDs can collide after conversion.
+When a special constraint is converted to a regular constraint (see [Legacy Constraint Lowering](./capability_model.md)), the generated regular constraint is allocated from the `Constraint` ID space. Only regular constraint IDs can collide after conversion.
 
 ## Accessing evaluation results
 
@@ -216,4 +216,4 @@ The same applies to Indicator, OneHot, and SOS1: pass the corresponding `kind=` 
 - {meth}`Instance.relax_indicator_constraint() <ommx.Instance.relax_indicator_constraint>`: relax (deactivate) an indicator constraint and record a reason string. The relaxed constraint is moved into `removed_indicator_constraints`.
 - {meth}`Instance.restore_indicator_constraint() <ommx.Instance.restore_indicator_constraint>`: restore a previously relaxed indicator constraint. Fails if the indicator variable has already been substituted or fixed.
 
-For OneHot and SOS1, movement into `removed_one_hot_constraints` / `removed_sos1_constraints` happens via the conversion APIs covered in [Capability Model and Conversions](./capability_model.md).
+For OneHot and SOS1, movement into `removed_one_hot_constraints` / `removed_sos1_constraints` happens via the conversion APIs covered in [Legacy Constraint Lowering](./capability_model.md).

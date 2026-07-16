@@ -7,134 +7,6 @@
       "items": [
         {
           "kind": "Class",
-          "name": "AdapterCapabilities",
-          "doc": "Validated alternative native capability profiles for an adapter.",
-          "bases": [],
-          "methods": [
-            {
-              "name": "__eq__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "other",
-                      "type_": {
-                        "display": "object",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "bool",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "__new__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "profiles",
-                      "type_": {
-                        "display": "Sequence[CapabilityProfile]",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "CapabilityProfile",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "AdapterCapabilities",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "__repr__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "str",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "check_compatibility",
-              "doc": "Compare native profiles without mutating or preparing the input.",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "requirements",
-                      "type_": {
-                        "display": "InstanceRequirements",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "PortableCompatibilityReport",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            }
-          ],
-          "attributes": [
-            {
-              "name": "profiles",
-              "doc": "",
-              "type_": {
-                "display": "list[CapabilityProfile]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "CapabilityProfile",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            }
-          ],
-          "deprecated": null
-        },
-        {
-          "kind": "Class",
           "name": "AdditionalCapability",
           "doc": "Constraint type capability flag for non-standard constraint types.\n\nStandard constraints are always supported. This enum lists capabilities\nthat adapters must explicitly opt in to.\n\nUse as a set: `{AdditionalCapability.Indicator}`",
           "bases": [],
@@ -3456,328 +3328,6 @@
         },
         {
           "kind": "Class",
-          "name": "CapabilityProfile",
-          "doc": "One coherent combination of native solver capabilities.\n\nThis describes direct translator input after any explicit preparation.\nExact reformulation, relaxation, and heuristic or finite-penalty conversion\nare preparation concerns rather than native capabilities.",
-          "bases": [],
-          "methods": [
-            {
-              "name": "__eq__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "other",
-                      "type_": {
-                        "display": "object",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "bool",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "__new__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "name",
-                      "type_": {
-                        "display": "str",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    },
-                    {
-                      "name": "variable_kinds",
-                      "type_": {
-                        "display": "set[Kind]",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "Kind",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      },
-                      "default": null
-                    },
-                    {
-                      "name": "objective_degree",
-                      "type_": {
-                        "display": "DegreeLimit",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    },
-                    {
-                      "name": "senses",
-                      "type_": {
-                        "display": "set[Sense]",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "Sense",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      },
-                      "default": null
-                    },
-                    {
-                      "name": "regular_constraints",
-                      "type_": {
-                        "display": "Optional[Mapping[Equality, DegreeLimit]]",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "Mapping[Equality, DegreeLimit]",
-                            "link_target": null,
-                            "children": [
-                              {
-                                "display": "Equality",
-                                "link_target": null,
-                                "children": []
-                              },
-                              {
-                                "display": "DegreeLimit",
-                                "link_target": null,
-                                "children": []
-                              }
-                            ]
-                          }
-                        ]
-                      },
-                      "default": {
-                        "kind": "Simple",
-                        "value": "None"
-                      }
-                    },
-                    {
-                      "name": "indicator_constraints",
-                      "type_": {
-                        "display": "Optional[Mapping[Equality, DegreeLimit]]",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "Mapping[Equality, DegreeLimit]",
-                            "link_target": null,
-                            "children": [
-                              {
-                                "display": "Equality",
-                                "link_target": null,
-                                "children": []
-                              },
-                              {
-                                "display": "DegreeLimit",
-                                "link_target": null,
-                                "children": []
-                              }
-                            ]
-                          }
-                        ]
-                      },
-                      "default": {
-                        "kind": "Simple",
-                        "value": "None"
-                      }
-                    },
-                    {
-                      "name": "supports_one_hot",
-                      "type_": {
-                        "display": "bool",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": {
-                        "kind": "Simple",
-                        "value": "False"
-                      }
-                    },
-                    {
-                      "name": "supports_sos1",
-                      "type_": {
-                        "display": "bool",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": {
-                        "kind": "Simple",
-                        "value": "False"
-                      }
-                    }
-                  ],
-                  "return_type": {
-                    "display": "CapabilityProfile",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "__repr__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "str",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            }
-          ],
-          "attributes": [
-            {
-              "name": "indicator_constraints",
-              "doc": "",
-              "type_": {
-                "display": "dict[Equality, DegreeLimit]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "Equality",
-                    "link_target": null,
-                    "children": []
-                  },
-                  {
-                    "display": "DegreeLimit",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "name",
-              "doc": "",
-              "type_": {
-                "display": "str",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "objective_degree",
-              "doc": "",
-              "type_": {
-                "display": "DegreeLimit",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "regular_constraints",
-              "doc": "",
-              "type_": {
-                "display": "dict[Equality, DegreeLimit]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "Equality",
-                    "link_target": null,
-                    "children": []
-                  },
-                  {
-                    "display": "DegreeLimit",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "senses",
-              "doc": "",
-              "type_": {
-                "display": "set[Sense]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "Sense",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "supports_one_hot",
-              "doc": "",
-              "type_": {
-                "display": "bool",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "supports_sos1",
-              "doc": "",
-              "type_": {
-                "display": "bool",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "variable_kinds",
-              "doc": "",
-              "type_": {
-                "display": "set[Kind]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "Kind",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            }
-          ],
-          "deprecated": null
-        },
-        {
-          "kind": "Class",
           "name": "Constraint",
           "doc": "Constraint wrapper for Python.\n\nCarries the inner Rust `Constraint<Created>` plus a snapshot of its\nauxiliary context. When this wrapper is read from an [`Instance`], the\nsnapshot is filled from the instance's `ConstraintContextStore`. When the\nwrapper is handed back to an instance (e.g. via `from_components`), the\nsnapshot is drained into that instance's context store. Mutations on a\nwrapper retrieved from an instance therefore do not propagate back; the\ncaller must re-add the constraint to apply changes.",
           "bases": [],
@@ -4444,81 +3994,6 @@
                     "children": []
                   }
                 ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            }
-          ],
-          "deprecated": null
-        },
-        {
-          "kind": "Class",
-          "name": "ConstraintRequirement",
-          "doc": "Relation and polynomial degree required by one active constraint.",
-          "bases": [],
-          "methods": [
-            {
-              "name": "__eq__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "other",
-                      "type_": {
-                        "display": "object",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "bool",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "__repr__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "str",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            }
-          ],
-          "attributes": [
-            {
-              "name": "degree",
-              "doc": "",
-              "type_": {
-                "display": "int",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "relation",
-              "doc": "",
-              "type_": {
-                "display": "Equality",
-                "link_target": null,
-                "children": []
               },
               "is_property": true,
               "is_readonly": true
@@ -6221,8 +5696,8 @@
         },
         {
           "kind": "Class",
-          "name": "DegreeLimit",
-          "doc": "Cumulative polynomial-degree support in a capability profile.",
+          "name": "DegreeBound",
+          "doc": "Cumulative polynomial-degree bound in an :class:`InstanceClassClause`.",
           "bases": [],
           "methods": [
             {
@@ -6268,8 +5743,34 @@
               "deprecated": null
             },
             {
-              "name": "allows",
-              "doc": "Return whether ``actual_degree`` is accepted.",
+              "name": "at_most",
+              "doc": "Include every degree up to and including ``maximum``.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "maximum",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DegreeBound",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "includes",
+              "doc": "Return whether ``actual_degree`` satisfies this bound.",
               "signatures": [
                 {
                   "parameters": [
@@ -6294,39 +5795,13 @@
               "deprecated": null
             },
             {
-              "name": "any",
-              "doc": "Accept any polynomial degree representable by OMMX.",
+              "name": "unbounded",
+              "doc": "Include every polynomial degree representable by OMMX.",
               "signatures": [
                 {
                   "parameters": [],
                   "return_type": {
-                    "display": "DegreeLimit",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "at_most",
-              "doc": "Accept every degree up to and including ``maximum``.",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "maximum",
-                      "type_": {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "DegreeLimit",
+                    "display": "DegreeBound",
                     "link_target": null,
                     "children": []
                   }
@@ -6339,7 +5814,7 @@
           "attributes": [
             {
               "name": "maximum",
-              "doc": "Inclusive maximum degree, or ``None`` for :meth:`any`.",
+              "doc": "Inclusive maximum degree, or ``None`` when unbounded.",
               "type_": {
                 "display": "Optional[int]",
                 "link_target": null,
@@ -11121,12 +10596,12 @@
             },
             {
               "name": "reduce_capabilities",
-              "doc": "Convert constraint types not in `supported` into regular constraints.\n\nFor every capability in :attr:`required_capabilities` not in\n``supported``, the corresponding bulk conversion is invoked\n(:meth:`convert_all_indicators_to_constraints`,\n:meth:`convert_all_one_hots_to_constraints`, or\n:meth:`convert_all_sos1_to_constraints`). The instance is mutated in\nplace and :attr:`required_capabilities` becomes a subset of\n``supported`` on success.\n\nReturns the set of :class:`AdditionalCapability` values that were\nactually converted. Empty when nothing needed conversion.\n\nRaises if any underlying Big-M conversion fails (e.g. a SOS1 variable\nwith a non-finite bound).",
+              "doc": "Convert active non-standard constraint families not in ``preserved``\ninto regular constraints.\n\nFor every selector in :attr:`required_capabilities` not in\n``preserved``, the corresponding bulk conversion is invoked\n(:meth:`convert_all_indicators_to_constraints`,\n:meth:`convert_all_one_hots_to_constraints`, or\n:meth:`convert_all_sos1_to_constraints`). The instance is mutated in\nplace and :attr:`required_capabilities` becomes a subset of\n``preserved`` on success. This does not establish\n:class:`InstanceClass` membership; check the resulting input separately.\n\nReturns the set of :class:`AdditionalCapability` values that were\nactually converted. Empty when nothing needed conversion.\n\nRaises if any underlying Big-M conversion fails (e.g. a SOS1 variable\nwith a non-finite bound).",
               "signatures": [
                 {
                   "parameters": [
                     {
-                      "name": "supported",
+                      "name": "preserved",
                       "type_": {
                         "display": "set[AdditionalCapability]",
                         "link_target": null,
@@ -11386,22 +10861,6 @@
                   ],
                   "return_type": {
                     "display": "None",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "solver_requirements",
-              "doc": "Derive the portable shape of the complete active solver input.\n\nThe result is recomputed on every call. Fixed, dependent, irrelevant,\nremoved-constraint-only, and named-function-only variables are excluded.",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "InstanceRequirements",
                     "link_target": null,
                     "children": []
                   }
@@ -12198,7 +11657,7 @@
             },
             {
               "name": "required_capabilities",
-              "doc": "The non-standard constraint capabilities this instance currently uses.\n\nReturns the set of :class:`AdditionalCapability` values corresponding to\nthe active (non-removed) constraint collections the instance contains.\nAn empty set means the instance only uses regular constraints.\n\nCallers can diff this against an adapter's\n``ADDITIONAL_CAPABILITIES`` to see what would be converted, or use\n:meth:`reduce_capabilities` to perform the conversion.",
+              "doc": "Legacy selectors for active non-standard constraint families.\n\nOnly active constraints are considered. Despite the legacy names, this\nvalue does not describe an :class:`InstanceClass` or establish adapter\napplicability. Use :meth:`reduce_capabilities` only as an explicit\nspecial-constraint lowering operation.",
               "type_": {
                 "display": "set[AdditionalCapability]",
                 "link_target": null,
@@ -12284,8 +11743,458 @@
         },
         {
           "kind": "Class",
-          "name": "InstanceRequirements",
-          "doc": "Portable shape of an instance's complete active solver input.\n\nFixed, dependent, irrelevant, removed-constraint-only, and\nnamed-function-only variables are excluded.",
+          "name": "InstanceClass",
+          "doc": "A set of :class:`Instance` values represented as a finite union of clauses.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__new__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "clauses",
+                      "type_": {
+                        "display": "Sequence[InstanceClassClause]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "InstanceClassClause",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "InstanceClass",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "check_membership",
+              "doc": "Evaluate membership without mutating or preparing ``instance``.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "instance",
+                      "type_": {
+                        "display": "Instance",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "InstanceClassMembershipReport",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "contains",
+              "doc": "Return whether ``instance`` belongs to this class.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "instance",
+                      "type_": {
+                        "display": "Instance",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "union",
+              "doc": "Return the finite union of two instance classes.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "InstanceClass",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "InstanceClass",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "clauses",
+              "doc": "",
+              "type_": {
+                "display": "list[InstanceClassClause]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "InstanceClassClause",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "InstanceClassClause",
+          "doc": "One conjunctive clause in an :class:`InstanceClass`.\n\nEvery condition in a clause must hold. The containing instance class is\nthe finite union of its clauses, so alternatives are not combined across\nclause boundaries.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__new__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "label",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "allowed_variable_kinds",
+                      "type_": {
+                        "display": "set[Kind]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Kind",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "objective_degree_bound",
+                      "type_": {
+                        "display": "DegreeBound",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "allowed_senses",
+                      "type_": {
+                        "display": "set[Sense]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Sense",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "regular_constraint_degree_bounds",
+                      "type_": {
+                        "display": "Optional[Mapping[Equality, DegreeBound]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Mapping[Equality, DegreeBound]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "Equality",
+                                "link_target": null,
+                                "children": []
+                              },
+                              {
+                                "display": "DegreeBound",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "indicator_constraint_degree_bounds",
+                      "type_": {
+                        "display": "Optional[Mapping[Equality, DegreeBound]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Mapping[Equality, DegreeBound]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "Equality",
+                                "link_target": null,
+                                "children": []
+                              },
+                              {
+                                "display": "DegreeBound",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "allows_one_hot",
+                      "type_": {
+                        "display": "bool",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "False"
+                      }
+                    },
+                    {
+                      "name": "allows_sos1",
+                      "type_": {
+                        "display": "bool",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "False"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "InstanceClassClause",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "allowed_senses",
+              "doc": "",
+              "type_": {
+                "display": "set[Sense]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "Sense",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "allowed_variable_kinds",
+              "doc": "",
+              "type_": {
+                "display": "set[Kind]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "Kind",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "allows_one_hot",
+              "doc": "",
+              "type_": {
+                "display": "bool",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "allows_sos1",
+              "doc": "",
+              "type_": {
+                "display": "bool",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "indicator_constraint_degree_bounds",
+              "doc": "",
+              "type_": {
+                "display": "dict[Equality, DegreeBound]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "Equality",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "DegreeBound",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "label",
+              "doc": "Human-readable diagnostic label. It does not affect membership.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "objective_degree_bound",
+              "doc": "",
+              "type_": {
+                "display": "DegreeBound",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "regular_constraint_degree_bounds",
+              "doc": "",
+              "type_": {
+                "display": "dict[Equality, DegreeBound]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "Equality",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "DegreeBound",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "InstanceClassClauseReport",
+          "doc": "Membership result for one conjunctive instance-class clause.",
           "bases": [],
           "methods": [
             {
@@ -12333,29 +12242,7 @@
           ],
           "attributes": [
             {
-              "name": "indicator_constraints",
-              "doc": "",
-              "type_": {
-                "display": "dict[int, ConstraintRequirement]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "int",
-                    "link_target": null,
-                    "children": []
-                  },
-                  {
-                    "display": "ConstraintRequirement",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "objective_degree",
+              "name": "clause_index",
               "doc": "",
               "type_": {
                 "display": "int",
@@ -12366,49 +12253,10 @@
               "is_readonly": true
             },
             {
-              "name": "one_hot_constraint_ids",
+              "name": "clause_label",
               "doc": "",
               "type_": {
-                "display": "set[int]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "int",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "regular_constraints",
-              "doc": "",
-              "type_": {
-                "display": "dict[int, ConstraintRequirement]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "int",
-                    "link_target": null,
-                    "children": []
-                  },
-                  {
-                    "display": "ConstraintRequirement",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "sense",
-              "doc": "",
-              "type_": {
-                "display": "Sense",
+                "display": "str",
                 "link_target": null,
                 "children": []
               },
@@ -12416,14 +12264,111 @@
               "is_readonly": true
             },
             {
-              "name": "sos1_constraint_ids",
+              "name": "is_member",
               "doc": "",
               "type_": {
-                "display": "set[int]",
+                "display": "bool",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "mismatches",
+              "doc": "",
+              "type_": {
+                "display": "list[InstanceClassMismatch]",
                 "link_target": null,
                 "children": [
                   {
-                    "display": "int",
+                    "display": "InstanceClassMismatch",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "InstanceClassMembershipReport",
+          "doc": "Side-effect-free membership report for an :class:`InstanceClass`.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__str__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "clause_reports",
+              "doc": "",
+              "type_": {
+                "display": "list[InstanceClassClauseReport]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "InstanceClassClauseReport",
                     "link_target": null,
                     "children": []
                   }
@@ -12433,40 +12378,34 @@
               "is_readonly": true
             },
             {
-              "name": "used_variable_ids",
+              "name": "is_member",
               "doc": "",
               "type_": {
-                "display": "set[int]",
+                "display": "bool",
                 "link_target": null,
-                "children": [
-                  {
-                    "display": "int",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
+                "children": []
               },
               "is_property": true,
               "is_readonly": true
             },
             {
-              "name": "used_variables_by_kind",
+              "name": "matching_clauses",
               "doc": "",
               "type_": {
-                "display": "dict[Kind, set[int]]",
+                "display": "list[tuple[int, str]]",
                 "link_target": null,
                 "children": [
                   {
-                    "display": "Kind",
-                    "link_target": null,
-                    "children": []
-                  },
-                  {
-                    "display": "set[int]",
+                    "display": "tuple[int, str]",
                     "link_target": null,
                     "children": [
                       {
                         "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "str",
                         "link_target": null,
                         "children": []
                       }
@@ -12478,6 +12417,15 @@
               "is_readonly": true
             }
           ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "InstanceClassMismatch",
+          "doc": "One structured reason an instance is outside a complete clause.",
+          "bases": [],
+          "methods": [],
+          "attributes": [],
           "deprecated": null
         },
         {
@@ -18860,221 +18808,6 @@
             }
           ],
           "attributes": [],
-          "deprecated": null
-        },
-        {
-          "kind": "Class",
-          "name": "PortableCapabilityMismatch",
-          "doc": "One structured incompatibility between requirements and a complete profile.",
-          "bases": [],
-          "methods": [],
-          "attributes": [],
-          "deprecated": null
-        },
-        {
-          "kind": "Class",
-          "name": "PortableCompatibilityReport",
-          "doc": "Side-effect-free portable compatibility report.",
-          "bases": [],
-          "methods": [
-            {
-              "name": "__eq__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "other",
-                      "type_": {
-                        "display": "object",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "bool",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "__repr__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "str",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "__str__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "str",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            }
-          ],
-          "attributes": [
-            {
-              "name": "compatible",
-              "doc": "",
-              "type_": {
-                "display": "bool",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "matching_profiles",
-              "doc": "",
-              "type_": {
-                "display": "list[str]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "str",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "profiles",
-              "doc": "",
-              "type_": {
-                "display": "list[ProfileCompatibilityReport]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "ProfileCompatibilityReport",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            }
-          ],
-          "deprecated": null
-        },
-        {
-          "kind": "Class",
-          "name": "ProfileCompatibilityReport",
-          "doc": "Portable compatibility result for one coherent profile.",
-          "bases": [],
-          "methods": [
-            {
-              "name": "__eq__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "other",
-                      "type_": {
-                        "display": "object",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "bool",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "__repr__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "str",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            }
-          ],
-          "attributes": [
-            {
-              "name": "compatible",
-              "doc": "",
-              "type_": {
-                "display": "bool",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "mismatches",
-              "doc": "",
-              "type_": {
-                "display": "list[PortableCapabilityMismatch]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "PortableCapabilityMismatch",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "profile_name",
-              "doc": "",
-              "type_": {
-                "display": "str",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            }
-          ],
           "deprecated": null
         },
         {
@@ -26667,7 +26400,7 @@
             },
             {
               "name": "load",
-              "doc": "Load an artifact stored as a container image in local or remote registry.\n\nIf the image is not found in local registry, it will try to pull from remote registry.\n\n```python\n>>> artifact = Artifact.load(\"ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f\")\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/random_lp_instance:4303c7f\n\n```",
+              "doc": "Load an artifact stored as a container image in local or remote registry.\n\nIf the image is not found in local registry, it will try to pull from remote registry.\n\n```python\n>>> artifact = Artifact.load(\"ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f\")\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/random_lp_instance:4303c7f\n\n```\n\nRaises {class}`~ommx.artifact.RemoteArtifactNotFoundError` when the\nexact remote reference does not exist. Other remote access failures\nraise subclasses of {class}`~ommx.artifact.RemoteArtifactError`.",
               "signatures": [
                 {
                   "parameters": [
@@ -28328,6 +28061,26 @@
         },
         {
           "kind": "Class",
+          "name": "InvalidRemoteArtifactError",
+          "doc": "The remote response is not a valid OMMX Artifact.",
+          "bases": [
+            {
+              "display": "RemoteArtifactError",
+              "link_target": {
+                "fqn": "ommx.artifact.RemoteArtifactError",
+                "doc_module": "ommx.artifact",
+                "kind": "Class",
+                "attribute": null
+              },
+              "children": []
+            }
+          ],
+          "methods": [],
+          "attributes": [],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
           "name": "PruneAnonymousReport",
           "doc": "Report returned by {func}`prune_anonymous`.",
           "bases": [],
@@ -28406,6 +28159,101 @@
               "is_readonly": true
             }
           ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "RemoteArtifactAuthenticationError",
+          "doc": "Authentication for the remote Artifact registry failed.",
+          "bases": [
+            {
+              "display": "RemoteArtifactError",
+              "link_target": {
+                "fqn": "ommx.artifact.RemoteArtifactError",
+                "doc_module": "ommx.artifact",
+                "kind": "Class",
+                "attribute": null
+              },
+              "children": []
+            }
+          ],
+          "methods": [],
+          "attributes": [],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "RemoteArtifactAuthorizationError",
+          "doc": "The caller is not authorized to read the remote Artifact.",
+          "bases": [
+            {
+              "display": "RemoteArtifactError",
+              "link_target": {
+                "fqn": "ommx.artifact.RemoteArtifactError",
+                "doc_module": "ommx.artifact",
+                "kind": "Class",
+                "attribute": null
+              },
+              "children": []
+            }
+          ],
+          "methods": [],
+          "attributes": [],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "RemoteArtifactError",
+          "doc": "Base exception for failures while accessing a remote OMMX Artifact.",
+          "bases": [
+            {
+              "display": "RuntimeError",
+              "link_target": null,
+              "children": []
+            }
+          ],
+          "methods": [],
+          "attributes": [],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "RemoteArtifactNotFoundError",
+          "doc": "The requested remote Artifact manifest does not exist.",
+          "bases": [
+            {
+              "display": "RemoteArtifactError",
+              "link_target": {
+                "fqn": "ommx.artifact.RemoteArtifactError",
+                "doc_module": "ommx.artifact",
+                "kind": "Class",
+                "attribute": null
+              },
+              "children": []
+            }
+          ],
+          "methods": [],
+          "attributes": [],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "RemoteArtifactTransportError",
+          "doc": "The remote Artifact registry could not be reached or failed.",
+          "bases": [
+            {
+              "display": "RemoteArtifactError",
+              "link_target": {
+                "fqn": "ommx.artifact.RemoteArtifactError",
+                "doc_module": "ommx.artifact",
+                "kind": "Class",
+                "attribute": null
+              },
+              "children": []
+            }
+          ],
+          "methods": [],
+          "attributes": [],
           "deprecated": null
         },
         {
@@ -29629,7 +29477,7 @@
             },
             {
               "name": "load",
-              "doc": "Load a committed Experiment Artifact by image reference.\n\nIf the image is not found in the default Local Registry, OMMX tries to\npull it from the remote registry, matching {meth}`Artifact.load`.\nThe loaded artifact must contain an Experiment config. Use\n`Experiment(...)` to create a new unsealed experiment.",
+              "doc": "Load a committed Experiment Artifact by image reference.\n\nIf the image is not found in the default Local Registry, OMMX tries to\npull it from the remote registry, matching {meth}`Artifact.load`.\nThe loaded artifact must contain an Experiment config. Use\n`Experiment(...)` to create a new unsealed experiment.\n\nRaises {class}`~ommx.artifact.RemoteArtifactNotFoundError` when the\nexact remote reference does not exist. Other remote access failures\nraise subclasses of {class}`~ommx.artifact.RemoteArtifactError`.",
               "signatures": [
                 {
                   "parameters": [
@@ -32908,7 +32756,6 @@
     }
   },
   "export_map": {
-    "ommx.AdapterCapabilities": "ommx",
     "ommx.AdditionalCapability": "ommx",
     "ommx.AttachedConstraint": "ommx",
     "ommx.AttachedDecisionVariable": "ommx",
@@ -32916,12 +32763,10 @@
     "ommx.AttachedOneHotConstraint": "ommx",
     "ommx.AttachedSos1Constraint": "ommx",
     "ommx.Bound": "ommx",
-    "ommx.CapabilityProfile": "ommx",
     "ommx.Constraint": "ommx",
-    "ommx.ConstraintRequirement": "ommx",
     "ommx.DecisionVariable": "ommx",
     "ommx.DecisionVariableRole": "ommx",
-    "ommx.DegreeLimit": "ommx",
+    "ommx.DegreeBound": "ommx",
     "ommx.Equality": "ommx",
     "ommx.EvaluatedConstraint": "ommx",
     "ommx.EvaluatedDecisionVariable": "ommx",
@@ -32929,7 +32774,11 @@
     "ommx.Function": "ommx",
     "ommx.IndicatorConstraint": "ommx",
     "ommx.Instance": "ommx",
-    "ommx.InstanceRequirements": "ommx",
+    "ommx.InstanceClass": "ommx",
+    "ommx.InstanceClassClause": "ommx",
+    "ommx.InstanceClassClauseReport": "ommx",
+    "ommx.InstanceClassMembershipReport": "ommx",
+    "ommx.InstanceClassMismatch": "ommx",
     "ommx.Kind": "ommx",
     "ommx.Linear": "ommx",
     "ommx.NamedFunction": "ommx",
@@ -32938,9 +32787,6 @@
     "ommx.Parameter": "ommx",
     "ommx.ParametricInstance": "ommx",
     "ommx.Polynomial": "ommx",
-    "ommx.PortableCapabilityMismatch": "ommx",
-    "ommx.PortableCompatibilityReport": "ommx",
-    "ommx.ProfileCompatibilityReport": "ommx",
     "ommx.Provenance": "ommx",
     "ommx.ProvenanceKind": "ommx",
     "ommx.Quadratic": "ommx",
@@ -32974,7 +32820,13 @@
     "ommx.artifact.GcMissingBlob": "ommx.artifact",
     "ommx.artifact.GcReport": "ommx.artifact",
     "ommx.artifact.GcRoot": "ommx.artifact",
+    "ommx.artifact.InvalidRemoteArtifactError": "ommx.artifact",
     "ommx.artifact.PruneAnonymousReport": "ommx.artifact",
+    "ommx.artifact.RemoteArtifactAuthenticationError": "ommx.artifact",
+    "ommx.artifact.RemoteArtifactAuthorizationError": "ommx.artifact",
+    "ommx.artifact.RemoteArtifactError": "ommx.artifact",
+    "ommx.artifact.RemoteArtifactNotFoundError": "ommx.artifact",
+    "ommx.artifact.RemoteArtifactTransportError": "ommx.artifact",
     "ommx.artifact.gc": "ommx.artifact",
     "ommx.artifact.get_images": "ommx.artifact",
     "ommx.artifact.get_local_registry_root": "ommx.artifact",

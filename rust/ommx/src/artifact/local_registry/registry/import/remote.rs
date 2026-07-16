@@ -39,7 +39,8 @@ use super::super::super::RefUpdate;
 use super::super::LocalRegistry;
 use super::oci_dir::OciDirImport;
 use crate::artifact::{
-    media_types, remote_transport::RemoteTransport, ImageRef, OCI_IMAGE_MANIFEST_MEDIA_TYPE,
+    media_types, remote_error, remote_transport::RemoteTransport, ImageRef,
+    OCI_IMAGE_MANIFEST_MEDIA_TYPE,
 };
 use anyhow::{Context, Result};
 use oci_client::RegistryOperation;
@@ -58,6 +59,12 @@ impl LocalRegistry {
     /// `RemoteTransport` straight into the registry, and a SQLite transaction
     /// publishes the ref descriptor. There is no on-disk OCI Image Layout
     /// intermediate.
+    ///
+    /// Remote access and remote-response validation failures retain a
+    /// [`crate::artifact::RemoteArtifactError`] signal in the returned
+    /// [`crate::Error`] chain.
+    /// Local Registry storage and index failures remain ordinary
+    /// [`crate::Error`] values and are not misclassified as remote failures.
     pub fn pull_image(&self, image_name: &ImageRef) -> Result<OciDirImport> {
         RemotePull::new(self, image_name).run()
     }
@@ -81,29 +88,36 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
             return Ok(cached);
         }
 
-        let transport = RemoteTransport::new(self.image_name)?;
-        transport.auth_for(self.image_name, RegistryOperation::Pull)?;
+        let transport = self.remote_manifest_result(RemoteTransport::new(self.image_name))?;
+        self.remote_manifest_result(transport.auth_for(self.image_name, RegistryOperation::Pull))?;
 
         tracing::info!("Pulling {} into the v3 Local Registry", self.image_name);
-        let (manifest_bytes, manifest_digest) = transport.pull_manifest_raw(
-            self.image_name,
-            &[
-                OCI_IMAGE_MANIFEST_MEDIA_TYPE,
-                "application/vnd.oci.image.index.v1+json",
-            ],
+        let (manifest_bytes, manifest_digest) =
+            self.remote_manifest_result(transport.pull_manifest_raw(
+                self.image_name,
+                &[
+                    OCI_IMAGE_MANIFEST_MEDIA_TYPE,
+                    "application/vnd.oci.image.index.v1+json",
+                ],
+            ))?;
+        let manifest: ImageManifest = self.invalid_remote_result(
+            serde_json::from_slice(&manifest_bytes)
+                .context("Failed to parse OCI image manifest pulled from the remote registry"),
         )?;
-        let manifest: ImageManifest = serde_json::from_slice(&manifest_bytes)
-            .context("Failed to parse OCI image manifest pulled from the remote registry")?;
-        Self::ensure_ommx_image_manifest(&manifest)?;
+        self.invalid_remote_result(Self::ensure_ommx_image_manifest(&manifest))?;
 
-        let manifest_digest = Digest::from_str(&manifest_digest)
-            .with_context(|| format!("Invalid remote manifest digest: {manifest_digest}"))?;
-        let manifest_descriptor = DescriptorBuilder::default()
-            .media_type(MediaType::ImageManifest)
-            .digest(manifest_digest.clone())
-            .size(manifest_bytes.len() as u64)
-            .build()
-            .context("Failed to build remote manifest descriptor")?;
+        let manifest_digest = self.invalid_remote_result(
+            Digest::from_str(&manifest_digest)
+                .with_context(|| format!("Invalid remote manifest digest: {manifest_digest}")),
+        )?;
+        let manifest_descriptor = self.invalid_remote_result(
+            DescriptorBuilder::default()
+                .media_type(MediaType::ImageManifest)
+                .digest(manifest_digest.clone())
+                .size(manifest_bytes.len() as u64)
+                .build()
+                .context("Failed to build remote manifest descriptor"),
+        )?;
 
         self.pull_descriptor_blob(&transport, manifest.config())?;
 
@@ -111,7 +125,7 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
             self.pull_descriptor_blob(&transport, layer)?;
         }
 
-        self.store_manifest_blob(&manifest_descriptor, &manifest_bytes, &manifest_digest)?;
+        self.store_manifest_blob(&manifest_descriptor, &manifest_bytes)?;
 
         let experiment_record = self
             .registry
@@ -136,6 +150,22 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
             manifest_digest,
             image_name: self.image_name.clone(),
             ref_update,
+        })
+    }
+
+    fn remote_manifest_result<T>(&self, result: Result<T>) -> Result<T> {
+        result.map_err(|source| {
+            crate::error!(remote_error::classify_manifest(self.image_name, source))
+        })
+    }
+
+    fn remote_blob_result<T>(&self, result: Result<T>) -> Result<T> {
+        result.map_err(|source| crate::error!(remote_error::classify_blob(self.image_name, source)))
+    }
+
+    fn invalid_remote_result<T>(&self, result: Result<T>) -> Result<T> {
+        result.map_err(|source| {
+            crate::error!(remote_error::invalid_artifact(self.image_name, source))
         })
     }
 
@@ -232,35 +262,31 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
         // transport's pull helper allocates from this value (not from the
         // registry-reported `Content-Length`) and aborts the chunk loop if
         // the registry serves more bytes than declared.
-        let bytes = transport.pull_blob_to_vec(self.image_name, &digest, descriptor.size())?;
-        anyhow::ensure!(
-            bytes.len() as u64 == descriptor.size(),
-            "Blob size mismatch for {digest}: descriptor={}, actual={}",
+        let bytes = self.remote_blob_result(transport.pull_blob_to_vec(
+            self.image_name,
+            &digest,
             descriptor.size(),
-            bytes.len()
-        );
+        ))?;
+        if bytes.len() as u64 != descriptor.size() {
+            let source = crate::error!(
+                "Blob size mismatch for {digest}: descriptor={}, actual={}",
+                descriptor.size(),
+                bytes.len()
+            );
+            return Err(crate::error!(remote_error::invalid_artifact(
+                self.image_name,
+                source,
+            )));
+        }
+        // RemoteTransport verifies the downloaded bytes against the remote
+        // digest. LocalRegistry then hashes them once for its own CAS invariant.
         self.registry.store_blob(descriptor.clone(), &bytes)?;
         Ok(())
     }
 
-    /// Store the manifest bytes into the registry under their
-    /// registry-reported digest. The check that local sha256 matches the
-    /// registry-reported digest doubles as an integrity probe on the
-    /// manifest body: an upstream proxy that rewrote the manifest would
-    /// surface here instead of producing an artifact whose published ref
-    /// points at a manifest blob the registry does not actually serve.
-    fn store_manifest_blob(
-        &self,
-        descriptor: &Descriptor,
-        manifest_bytes: &[u8],
-        expected_digest: &Digest,
-    ) -> Result<()> {
-        anyhow::ensure!(
-            descriptor.digest() == expected_digest,
-            "Manifest descriptor digest mismatch: descriptor={}, registry reported {}",
-            descriptor.digest(),
-            expected_digest
-        );
+    /// Store transport-verified manifest bytes under their remote digest.
+    /// LocalRegistry hashes the bytes once for its own CAS invariant.
+    fn store_manifest_blob(&self, descriptor: &Descriptor, manifest_bytes: &[u8]) -> Result<()> {
         self.registry
             .store_blob(descriptor.clone(), manifest_bytes)?;
         Ok(())

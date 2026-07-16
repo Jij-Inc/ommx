@@ -8,36 +8,67 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
-### 🆕 Adapter capability profiles and compatibility reports ([#1084](https://github.com/Jij-Inc/ommx/pull/1084))
+### 🆕 Instance classes and adapter applicability ([#1084](https://github.com/Jij-Inc/ommx/pull/1084))
 
-{meth}`~ommx.Instance.solver_requirements` now derives the complete active
-solver-facing shape of an instance, including used variable kinds, objective
-and constraint degrees, constraint relations and families, and optimization
-sense. {class}`~ommx.CapabilityProfile` and
-{class}`~ommx.AdapterCapabilities` describe coherent native translator
-profiles and return structured {class}`~ommx.PortableCompatibilityReport`
-values.
+The Python SDK now exposes {class}`~ommx.InstanceClass` as a set of OMMX
+{class}`~ommx.Instance` values. Each {class}`~ommx.InstanceClassClause` is one
+conjunctive structural description, and the containing class is their finite
+union. Membership is evaluated from the exact input value and reported through
+{class}`~ommx.InstanceClassMembershipReport` with structured per-clause
+mismatches.
 
 ```python
-from ommx import AdapterCapabilities, CapabilityProfile, DegreeLimit, Kind, Sense
+from ommx import DegreeBound, InstanceClass, InstanceClassClause, Kind, Sense
 
-binary_linear = CapabilityProfile(
-    name="binary-linear",
-    variable_kinds={Kind.Binary},
-    objective_degree=DegreeLimit.at_most(1),
-    senses={Sense.Minimize},
+binary_linear = InstanceClass(
+    [
+        InstanceClassClause(
+            label="binary-linear",
+            allowed_variable_kinds={Kind.Binary},
+            objective_degree_bound=DegreeBound.at_most(1),
+            allowed_senses={Sense.Minimize},
+        )
+    ]
 )
-capabilities = AdapterCapabilities([binary_linear])
-report = capabilities.check_compatibility(instance.solver_requirements())
+report = binary_linear.check_membership(instance)
 ```
 
-{class}`~ommx.adapter.SolverAdapter` subclasses can declare `CAPABILITIES` and
-use `check_compatibility` or `require_compatible` to combine the portable
-comparison with adapter-specific preconditions without mutating the input
-instance. Profiles describe direct translator input after explicit preparation;
-they do not imply acceptance through relaxation or finite-penalty conversion.
-`ommx.v2.Feature` and `required_features` remain separate wire-format
-forward-compatibility concepts and are not adapter support declarations.
+{class}`~ommx.adapter.SolverAdapter` subclasses declare `INPUT_CLASS` and use
+`check_applicability` or `require_applicable` to layer adapter-owned
+preconditions on top of input-class membership without mutating the caller's
+instance. Explicit preparation must be followed by a new membership check on
+the prepared input. Legacy special-constraint lowering and `ommx.v2.Feature`
+wire reconstruction remain separate concepts. The keyword argument of
+{meth}`~ommx.Instance.reduce_capabilities` is renamed from `supported` to
+`preserved` to describe its legacy lowering-selector semantics.
+
+### 🆕 Typed remote Artifact lookup errors ([#1090](https://github.com/Jij-Inc/ommx/pull/1090))
+
+{meth}`~ommx.artifact.Artifact.load` and
+{meth}`~ommx.experiment.Experiment.load` now report remote lookup failures
+through OMMX-owned exceptions instead of a generic `RuntimeError` containing
+the underlying OCI transport error. Catch
+{class}`~ommx.artifact.RemoteArtifactNotFoundError` to handle a missing exact
+ref without confusing it with authentication, authorization, registry
+transport, or invalid-Artifact failures. All remote lookup exceptions inherit
+from {class}`~ommx.artifact.RemoteArtifactError`.
+
+```python
+from ommx.artifact import Artifact, RemoteArtifactNotFoundError
+
+try:
+    artifact = Artifact.load("registry.example/team/model:latest")
+except RemoteArtifactNotFoundError:
+    artifact = None
+```
+
+The sibling exception classes are
+{class}`~ommx.artifact.RemoteArtifactAuthenticationError`,
+{class}`~ommx.artifact.RemoteArtifactAuthorizationError`,
+{class}`~ommx.artifact.RemoteArtifactTransportError`, and
+{class}`~ommx.artifact.InvalidRemoteArtifactError`. Their messages retain the
+original registry and transport context. Both load entry points use the same
+PyO3 error-conversion boundary.
 
 ### 🆕 `VariableIDLike` inputs for structural constraints ([#1078](https://github.com/Jij-Inc/ommx/pull/1078))
 

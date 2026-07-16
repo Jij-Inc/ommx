@@ -8,9 +8,8 @@ use crate::{
         apply_include_filter, constraint_id_col, constraint_kind_collection, entries_to_dataframe,
         raw_entries_to_dataframe, ConstraintKind, PyDataFrame, ToPandasEntry,
     },
-    Constraint, DecisionVariable, DecisionVariableRole, Function, InstanceRequirements,
-    NamedFunction, ParametricInstance, RemovedConstraint, Rng, SampleSet, Samples, Sense, Solution,
-    State,
+    Constraint, DecisionVariable, DecisionVariableRole, Function, NamedFunction,
+    ParametricInstance, RemovedConstraint, Rng, SampleSet, Samples, Sense, Solution, State,
 };
 use anyhow::Result;
 use ommx::{ConstraintID, Evaluate, NamedFunctionID, VariableID};
@@ -719,23 +718,12 @@ impl Instance {
             .collect()
     }
 
-    /// Derive the portable shape of the complete active solver input.
+    /// Legacy selectors for active non-standard constraint families.
     ///
-    /// The result is recomputed on every call. Fixed, dependent, irrelevant,
-    /// removed-constraint-only, and named-function-only variables are excluded.
-    pub fn solver_requirements(&self) -> InstanceRequirements {
-        InstanceRequirements(self.inner.solver_requirements())
-    }
-
-    /// The non-standard constraint capabilities this instance currently uses.
-    ///
-    /// Returns the set of :class:`AdditionalCapability` values corresponding to
-    /// the active (non-removed) constraint collections the instance contains.
-    /// An empty set means the instance only uses regular constraints.
-    ///
-    /// Callers can diff this against an adapter's
-    /// ``ADDITIONAL_CAPABILITIES`` to see what would be converted, or use
-    /// :meth:`reduce_capabilities` to perform the conversion.
+    /// Only active constraints are considered. Despite the legacy names, this
+    /// value does not describe an :class:`InstanceClass` or establish adapter
+    /// applicability. Use :meth:`reduce_capabilities` only as an explicit
+    /// special-constraint lowering operation.
     #[getter]
     pub fn required_capabilities(&self) -> std::collections::HashSet<crate::AdditionalCapability> {
         self.inner
@@ -745,15 +733,17 @@ impl Instance {
             .collect()
     }
 
-    /// Convert constraint types not in `supported` into regular constraints.
+    /// Convert active non-standard constraint families not in ``preserved``
+    /// into regular constraints.
     ///
-    /// For every capability in :attr:`required_capabilities` not in
-    /// ``supported``, the corresponding bulk conversion is invoked
+    /// For every selector in :attr:`required_capabilities` not in
+    /// ``preserved``, the corresponding bulk conversion is invoked
     /// (:meth:`convert_all_indicators_to_constraints`,
     /// :meth:`convert_all_one_hots_to_constraints`, or
     /// :meth:`convert_all_sos1_to_constraints`). The instance is mutated in
     /// place and :attr:`required_capabilities` becomes a subset of
-    /// ``supported`` on success.
+    /// ``preserved`` on success. This does not establish
+    /// :class:`InstanceClass` membership; check the resulting input separately.
     ///
     /// Returns the set of :class:`AdditionalCapability` values that were
     /// actually converted. Empty when nothing needed conversion.
@@ -763,11 +753,11 @@ impl Instance {
     pub fn reduce_capabilities(
         &mut self,
         py: Python<'_>,
-        supported: std::collections::HashSet<crate::AdditionalCapability>,
+        preserved: std::collections::HashSet<crate::AdditionalCapability>,
     ) -> anyhow::Result<std::collections::HashSet<crate::AdditionalCapability>> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let rust_supported: ommx::Capabilities = supported.into_iter().map(|c| c.into()).collect();
-        let converted = self.inner.reduce_capabilities(&rust_supported)?;
+        let rust_preserved: ommx::Capabilities = preserved.into_iter().map(|c| c.into()).collect();
+        let converted = self.inner.reduce_capabilities(&rust_preserved)?;
         Ok(converted.into_iter().map(|c| c.into()).collect())
     }
 
