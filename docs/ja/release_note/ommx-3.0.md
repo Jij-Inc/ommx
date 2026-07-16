@@ -36,6 +36,30 @@ best sample の要求などが含まれます。
 関連 PR: [#1096](https://github.com/Jij-Inc/ommx/pull/1096)、
 [#1097](https://github.com/Jij-Inc/ommx/pull/1097)、
 [#1099](https://github.com/Jij-Inc/ommx/pull/1099)。
+### ⚠ HiGHS / Python-MIP Adapter の Input Class ([#1085](https://github.com/Jij-Inc/ommx/pull/1085))
+
+`OMMXHighsAdapter` と `OMMXPythonMIPAdapter` は、backend modelを直接構築
+できる入力を `INPUT_CLASS` として宣言するようになりました。activeな数理内容で
+使われるBinary、Integer、Continuous変数、線形目的関数、線形の通常等式・不等式
+制約、および両方の最適化senseを受け入れます。class外の入力はbackend構築前に
+{class}`~ommx.adapter.AdapterNotApplicableError` として拒否され、このexception
+には構造化されたmembership reportが含まれます。
+
+これはstable Python SDK 2.6.1からの公開exception契約の破壊的変更です。非線形の
+目的関数・通常制約や、使用中のSemiInteger・SemiContinuous変数は、従来
+`OMMXHighsAdapterError` または `OMMXPythonMIPAdapterError` として拒否されて
+いましたが、今後は {class}`~ommx.adapter.AdapterNotApplicableError` が送出され
+ます。constructorでの非対応入力の拒否をAdapter固有exceptionで捕捉していたコード
+は、`AdapterNotApplicableError`を捕捉するか、構築前に`check_applicability()`を
+呼び出してください。対応済みの線形Binary、Integer、Continuous入力の範囲と、
+適用可能な入力に対する挙動は変わりません。Adapter固有exceptionはbackend・変換
+errorでは引き続き使用されます。
+
+Indicator、OneHot、SOS1制約は暗黙にlowerされません。非対応の入力は変更せずに
+拒否されます。明示的にprepareした {class}`~ommx.Instance` は別の入力であり、
+その値についてapplicabilityを再評価する必要があります。これはPython SDK 3.0の
+prerelease内の挙動変更であり、stable 2.6.1に対する破壊的変更ではありません。
+first-class特殊制約とその暗黙loweringは3.0 prerelease中に導入されたものです。
 
 ### 🆕 Instance Class と Adapter Applicability ([#1084](https://github.com/Jij-Inc/ommx/pull/1084))
 
