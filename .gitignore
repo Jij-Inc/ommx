@@ -7,7 +7,6 @@
 
 # Rust
 target/
-tests/pyo3-bridge-pyo3-029-compat/Cargo.lock
 
 # Insta snapshots (pending review)
 *.snap.new

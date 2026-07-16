@@ -103,7 +103,7 @@ jobs:
       - name: Test PyO3 bridge fixture runtime
         run: task pyo3-bridge:runtime-test
 
-      - name: Check PyO3 bridge compatibility and typing
+      - name: Check PyO3 bridge stubs and typing
         if: matrix.python-version == '3.10'
         run: task pyo3-bridge:check
 
