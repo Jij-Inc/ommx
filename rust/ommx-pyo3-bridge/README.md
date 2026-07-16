@@ -23,6 +23,10 @@ At runtime this return value is an `ommx.Function`. `pyo3-stub-gen` also emits
 detached constraints, detached decision variables, and instances through
 `PyConstraint`, `PyDecisionVariable`, and `PyInstance`.
 
+The consuming extension and the bridge must resolve a compatible PyO3 version.
+This release accepts PyO3 0.27.2 through the 0.29 release line and uses
+`pyo3-stub-gen` 0.23.
+
 ## Transfer boundary
 
 The bridge serializes each value to protobuf bytes, passes those bytes through

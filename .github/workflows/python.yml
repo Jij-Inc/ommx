@@ -100,9 +100,12 @@ jobs:
       - name: Test
         run: task python:test-ci
 
-      - name: Test PyO3 bridge fixture
+      - name: Test PyO3 bridge fixture runtime
+        run: task pyo3-bridge:runtime-test
+
+      - name: Check PyO3 bridge compatibility and typing
         if: matrix.python-version == '3.10'
-        run: task pyo3-bridge:test
+        run: task pyo3-bridge:check
 
   # Test Sphinx documentation with code execution
   test-book:

@@ -93,10 +93,21 @@ Note that this requires [cargo-edit](https://github.com/killercup/cargo-edit).
 
 The Rust SDK is released to [crates.io](https://crates.io/) from the [GitHub Actions workflow](https://github.com/Jij-Inc/ommx/actions/workflows/release_rust.yml). What you have to do is just to push a tag in a format `rust-x.y.z`. Be sure that actual version is determined by `Cargo.toml` not by the tag name.
 
-There are two mechanism to keep the version of `main` branch is kept latest:
+`ommx-pyo3-bridge` requires a one-time release bootstrap because crates.io
+trusted publishing can only be configured after a crate's first release. After
+the first Rust tag workflow publishes the same-version `ommx` crate, publish
+`ommx-pyo3-bridge` manually from that tag with a regular crates.io token. Then
+configure `.github/workflows/release_rust.yml` as its trusted publisher and add
+the bridge back to the workflow's `publish` job. The Rust semver job and its
+required status check are temporarily disabled until this first published
+bridge version provides a registry baseline.
+
+Two mechanisms normally keep the version on the `main` branch current:
 
 - When Rust SDK is released, the patch version is automatically bumped up via a Pull Request.
-- When a pull request contains breaking change, `cargo-semver-check` on GitHub Action will fail. So, this pull request should be merged with bumping up the version.
+- After the bridge bootstrap above, restore `cargo-semver-check`. A pull request
+  containing a breaking change should then be merged together with the required
+  version bump.
 
 [`python/`](./python/)
 ----------------------

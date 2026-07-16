@@ -33,16 +33,30 @@ tasks:
     cmds:
       - gh run list --workflow=bench.yml
 
-  pyo3-bridge:test:
-    desc: Test Rust-to-Python conversion across independent PyO3 extensions
+  pyo3-bridge:check:
+    desc: Check PyO3 compatibility, generated stubs, and fixture typing
     env:
       VIRTUAL_ENV: "{{.ROOT_DIR}}/.venv"
     cmds:
+      - cargo fmt --manifest-path tests/pyo3-bridge-pyo3-029-compat/Cargo.toml -- --check
+      - cargo check --manifest-path tests/pyo3-bridge-pyo3-029-compat/Cargo.toml
       - cargo run -p ommx-pyo3-bridge-fixture --bin stub_gen
       - git diff --exit-code -- tests/pyo3-bridge-fixture/ommx_pyo3_bridge_fixture.pyi
+      - uv run --no-sync pyright --project tests/pyo3-bridge-fixture/pyrightconfig.json
+
+  pyo3-bridge:runtime-test:
+    desc: Test conversion across independent PyO3 extension modules
+    env:
+      VIRTUAL_ENV: "{{.ROOT_DIR}}/.venv"
+    cmds:
       - uvx --from "maturin>=1.12.2,<2" maturin develop --manifest-path tests/pyo3-bridge-fixture/Cargo.toml
       - uv run --no-sync pytest -vv tests/pyo3-bridge-fixture/tests/test_bridge.py
-      - uv run --no-sync pyright --project tests/pyo3-bridge-fixture/pyrightconfig.json
+
+  pyo3-bridge:test:
+    desc: Run all PyO3 bridge integration checks
+    cmds:
+      - task: pyo3-bridge:check
+      - task: pyo3-bridge:runtime-test
 
   format:
     desc: Format all code

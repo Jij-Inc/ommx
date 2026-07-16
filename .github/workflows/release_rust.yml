@@ -121,10 +121,8 @@ jobs:
       - run: cargo publish -p ommx
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
-      # The bridge has a strict dependency on the same-version `ommx` crate.
-      - run: cargo publish -p ommx-pyo3-bridge
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+      # A new crate cannot configure crates.io trusted publishing before its
+      # first manual release. Add ommx-pyo3-bridge here after that bootstrap.
 
   next_version:
     runs-on: ubuntu-latest
