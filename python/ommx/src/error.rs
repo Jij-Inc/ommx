@@ -1,9 +1,9 @@
 //! Translation from Rust SDK errors to Python exceptions.
 //!
-//! Rust SDK methods keep returning `ommx::Result<T>`. Binding entry points
-//! return [`OmmxPyResult`] so `?` converts SDK errors into the local
-//! [`OmmxPyError`] wrapper before PyO3 invokes this module's single type-based
-//! classifier.
+//! Binding entry points return [`OmmxPyResult`] so `?` classifies concrete Rust
+//! SDK signals through the declarative mapping table below. Signals already
+//! erased into `ommx::Error` are recovered through the same table before PyO3
+//! receives the local [`OmmxPyError`] wrapper.
 
 use pyo3::{
     exceptions::{PyKeyError, PyRuntimeError, PyValueError},
@@ -69,211 +69,196 @@ pyo3_stub_gen::create_exception!(
     "The remote response is not a valid OMMX Artifact."
 );
 
-#[derive(Debug)]
-enum OmmxPyErrorKind {
-    Sdk(ommx::Error),
-    Python(PyErr),
-}
-
-/// Binding-internal wrapper that gives PyO3 a local error conversion point.
+/// Binding-internal wrapper around an already classified Python exception.
 ///
-/// Rust SDK errors are classified below, while Python-owned errors pass
-/// through unchanged.
+/// Each Rust SDK signal declares its Python mapping below. Python-owned errors
+/// pass through unchanged.
 #[derive(Debug)]
-pub struct OmmxPyError(OmmxPyErrorKind);
+pub struct OmmxPyError(PyErr);
 
 impl std::fmt::Display for OmmxPyError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self.0 {
-            OmmxPyErrorKind::Sdk(error) => write!(formatter, "{error:#}"),
-            OmmxPyErrorKind::Python(error) => error.fmt(formatter),
-        }
+        self.0.fmt(formatter)
     }
 }
 
 /// Result type for Rust SDK failures crossing the private binding boundary.
 pub type OmmxPyResult<T> = std::result::Result<T, OmmxPyError>;
 
-impl From<ommx::Error> for OmmxPyError {
-    fn from(error: ommx::Error) -> Self {
-        Self(OmmxPyErrorKind::Sdk(error))
+fn value_error<T>(_: &T, message: String) -> PyErr {
+    PyValueError::new_err(message)
+}
+
+#[cfg(feature = "remote-artifact")]
+fn remote_artifact_error_to_pyerr(
+    error: &ommx::artifact::RemoteArtifactError,
+    message: String,
+) -> PyErr {
+    match error {
+        ommx::artifact::RemoteArtifactError::ManifestNotFound { .. } => {
+            RemoteArtifactNotFoundError::new_err(message)
+        }
+        ommx::artifact::RemoteArtifactError::Authentication { .. } => {
+            RemoteArtifactAuthenticationError::new_err(message)
+        }
+        ommx::artifact::RemoteArtifactError::Authorization { .. } => {
+            RemoteArtifactAuthorizationError::new_err(message)
+        }
+        ommx::artifact::RemoteArtifactError::Transport { .. } => {
+            RemoteArtifactTransportError::new_err(message)
+        }
+        ommx::artifact::RemoteArtifactError::InvalidArtifact { .. } => {
+            InvalidRemoteArtifactError::new_err(message)
+        }
+        ommx::artifact::RemoteArtifactError::Other { .. } => RemoteArtifactError::new_err(message),
+        _ => RemoteArtifactError::new_err(message),
     }
 }
 
-macro_rules! impl_from_ommx_signal {
-    ($($error:ty),+ $(,)?) => {
+/// Declare both the direct typed conversion and the fallback dispatch used
+/// after a Rust SDK signal has already been erased into `ommx::Error`.
+///
+/// Declaration order is significant when an `anyhow::Error` can be downcast to
+/// multiple mapped signals: the Python-visible owner must appear first.
+macro_rules! define_ommx_error_mappings {
+    (
         $(
-            impl From<$error> for OmmxPyError {
-                fn from(error: $error) -> Self {
-                    Self::from(ommx::Error::from(error))
+            $(#[$attribute:meta])*
+            $signal:ty => $mapper:path
+        ),+ $(,)?
+    ) => {
+        $(
+            $(#[$attribute])*
+            impl From<$signal> for OmmxPyError {
+                fn from(error: $signal) -> Self {
+                    let message = error.to_string();
+                    Self($mapper(&error, message))
                 }
             }
         )+
+
+        impl From<ommx::Error> for OmmxPyError {
+            fn from(error: ommx::Error) -> Self {
+                let message = format!("{error:#}");
+
+                $(
+                    $(#[$attribute])*
+                    if let Some(signal) = error.downcast_ref::<$signal>() {
+                        return Self($mapper(signal, message));
+                    }
+                )+
+
+                Self(PyRuntimeError::new_err(message))
+            }
+        }
     };
 }
 
-impl_from_ommx_signal!(
-    ommx::AddDecisionVariableError,
-    ommx::AtolError,
-    ommx::BoundError,
-    ommx::CoefficientError,
-    ommx::ContentFactorError,
-    ommx::DecisionVariableError,
-    ommx::EvaluationError,
-    ommx::OneHotConstraintError,
-    ommx::Sos1ConstraintError,
-    ommx::SubstitutionError,
-    ommx::artifact::ImageRefParseError,
-    ommx::experiment::AttachmentNotFound,
-    ommx::ParseError,
-    ommx::SampleSetError,
-    ommx::SolutionError,
-    ommx::qplib::QplibParseError,
+fn attachment_not_found_to_pyerr(
+    error: &ommx::experiment::AttachmentNotFound,
+    _message: String,
+) -> PyErr {
+    PyKeyError::new_err(error.name().to_string())
+}
+
+fn invalid_local_registry_image_ref_to_pyerr(
+    error: &ommx::artifact::local_registry::InvalidLocalRegistryImageRef,
+    _message: String,
+) -> PyErr {
+    // This owner describes corrupted persisted registry state, even though its
+    // source is an ImageRefParseError caused by the stored value.
+    PyRuntimeError::new_err(error.to_string())
+}
+
+fn image_ref_parse_error_to_pyerr(
+    error: &ommx::artifact::ImageRefParseError,
+    _message: String,
+) -> PyErr {
+    // ImageRefParseError's Display already includes the OCI parser source.
+    PyValueError::new_err(error.to_string())
+}
+
+fn parse_error_to_pyerr(error: &ommx::ParseError, _message: String) -> PyErr {
+    // ParseError's Display already renders its complete traceback. Reusing the
+    // anyhow chain would repeat the protobuf parser source.
+    PyValueError::new_err(error.to_string())
+}
+
+fn decision_variable_error_to_pyerr(error: &ommx::DecisionVariableError, message: String) -> PyErr {
+    if matches!(
+        error,
+        ommx::DecisionVariableError::BoundInconsistentToKind { .. }
+            | ommx::DecisionVariableError::DuplicateID { .. }
+            | ommx::DecisionVariableError::NoAvailableID
+            | ommx::DecisionVariableError::NonFiniteValue { .. }
+            | ommx::DecisionVariableError::SubstitutedValueOverwrite { .. }
+            | ommx::DecisionVariableError::SubstitutedValueInconsistent { .. }
+            | ommx::DecisionVariableError::EmptyBoundIntersection { .. }
+    ) {
+        PyValueError::new_err(message)
+    } else {
+        PyRuntimeError::new_err(message)
+    }
+}
+
+fn solution_error_to_pyerr(error: &ommx::SolutionError, message: String) -> PyErr {
+    match error {
+        ommx::SolutionError::UnknownConstraintID { .. }
+        | ommx::SolutionError::UnknownVariableName { .. }
+        | ommx::SolutionError::UnknownConstraintName { .. }
+        | ommx::SolutionError::UnknownNamedFunctionName { .. } => PyKeyError::new_err(message),
+        ommx::SolutionError::ParameterizedConstraint
+        | ommx::SolutionError::DuplicateSubscript { .. } => PyValueError::new_err(message),
+        _ => PyRuntimeError::new_err(message),
+    }
+}
+
+fn sample_set_error_to_pyerr(error: &ommx::SampleSetError, message: String) -> PyErr {
+    match error {
+        ommx::SampleSetError::UnknownVariableName { .. }
+        | ommx::SampleSetError::UnknownConstraintName { .. }
+        | ommx::SampleSetError::UnknownSampleID { .. }
+        | ommx::SampleSetError::UnknownNamedFunctionName { .. } => PyKeyError::new_err(message),
+        ommx::SampleSetError::DuplicateSubscripts { .. }
+        | ommx::SampleSetError::ParameterizedConstraint
+        | ommx::SampleSetError::NoFeasibleSolution
+        | ommx::SampleSetError::NoFeasibleSolutionRelaxed => PyValueError::new_err(message),
+        _ => PyRuntimeError::new_err(message),
+    }
+}
+
+define_ommx_error_mappings!(
+    ommx::ParseError => parse_error_to_pyerr,
+    ommx::artifact::local_registry::InvalidLocalRegistryImageRef => invalid_local_registry_image_ref_to_pyerr,
+    ommx::experiment::AttachmentNotFound => attachment_not_found_to_pyerr,
+    ommx::DecisionVariableError => decision_variable_error_to_pyerr,
+    ommx::SolutionError => solution_error_to_pyerr,
+    ommx::SampleSetError => sample_set_error_to_pyerr,
+    #[cfg(feature = "remote-artifact")]
+    ommx::artifact::RemoteArtifactError => remote_artifact_error_to_pyerr,
+    ommx::artifact::ImageRefParseError => image_ref_parse_error_to_pyerr,
+    ommx::AddDecisionVariableError => value_error,
+    ommx::AtolError => value_error,
+    ommx::BoundError => value_error,
+    ommx::CoefficientError => value_error,
+    ommx::ContentFactorError => value_error,
+    ommx::EvaluationError => value_error,
+    ommx::OneHotConstraintError => value_error,
+    ommx::Sos1ConstraintError => value_error,
+    ommx::SubstitutionError => value_error,
+    ommx::qplib::QplibParseError => value_error,
 );
 
 impl From<PyErr> for OmmxPyError {
     fn from(error: PyErr) -> Self {
-        Self(OmmxPyErrorKind::Python(error))
+        Self(error)
     }
 }
 
 impl From<OmmxPyError> for PyErr {
     fn from(OmmxPyError(error): OmmxPyError) -> Self {
-        match error {
-            OmmxPyErrorKind::Sdk(error) => ommx_error_to_pyerr(error),
-            OmmxPyErrorKind::Python(error) => error,
-        }
+        error
     }
-}
-
-fn ommx_error_to_pyerr(error: ommx::Error) -> PyErr {
-    // ParseError may contain another mapped signal as its source. Parsing is
-    // the Python-visible operation, so classify it before inspecting nested
-    // domain errors. Its Display already renders the complete parse traceback.
-    if let Some(parse_error) = error.downcast_ref::<ommx::ParseError>() {
-        return PyValueError::new_err(parse_error.to_string());
-    }
-
-    // A nested ImageRefParseError describes corrupted persisted state here,
-    // not the caller's current input. Preserve the Local Registry owner before
-    // classifying the underlying parser signal.
-    if let Some(registry_error) =
-        error.downcast_ref::<ommx::artifact::local_registry::InvalidLocalRegistryImageRef>()
-    {
-        return PyRuntimeError::new_err(registry_error.to_string());
-    }
-
-    // ImageRefParseError's Display already includes its source. Rendering the
-    // complete anyhow chain would repeat the OCI parser message.
-    if let Some(image_ref_error) = error.downcast_ref::<ommx::artifact::ImageRefParseError>() {
-        return PyValueError::new_err(image_ref_error.to_string());
-    }
-
-    if let Some(attachment_error) = error.downcast_ref::<ommx::experiment::AttachmentNotFound>() {
-        return PyKeyError::new_err(attachment_error.name().to_string());
-    }
-
-    let message = format!("{error:#}");
-
-    if error
-        .downcast_ref::<ommx::qplib::QplibParseError>()
-        .is_some()
-    {
-        return PyValueError::new_err(message);
-    }
-
-    if error.downcast_ref::<ommx::CoefficientError>().is_some()
-        || error
-            .downcast_ref::<ommx::AddDecisionVariableError>()
-            .is_some()
-        || error.downcast_ref::<ommx::AtolError>().is_some()
-        || error.downcast_ref::<ommx::BoundError>().is_some()
-        || error.downcast_ref::<ommx::ContentFactorError>().is_some()
-        || error.downcast_ref::<ommx::EvaluationError>().is_some()
-        || error
-            .downcast_ref::<ommx::OneHotConstraintError>()
-            .is_some()
-        || error.downcast_ref::<ommx::Sos1ConstraintError>().is_some()
-        || error.downcast_ref::<ommx::SubstitutionError>().is_some()
-    {
-        return PyValueError::new_err(message);
-    }
-
-    if let Some(error) = error.downcast_ref::<ommx::DecisionVariableError>() {
-        if matches!(
-            error,
-            ommx::DecisionVariableError::BoundInconsistentToKind { .. }
-                | ommx::DecisionVariableError::DuplicateID { .. }
-                | ommx::DecisionVariableError::NoAvailableID
-                | ommx::DecisionVariableError::NonFiniteValue { .. }
-                | ommx::DecisionVariableError::SubstitutedValueOverwrite { .. }
-                | ommx::DecisionVariableError::SubstitutedValueInconsistent { .. }
-                | ommx::DecisionVariableError::EmptyBoundIntersection { .. }
-        ) {
-            return PyValueError::new_err(message);
-        }
-    }
-
-    if let Some(error) = error.downcast_ref::<ommx::SolutionError>() {
-        match error {
-            ommx::SolutionError::UnknownConstraintID { .. }
-            | ommx::SolutionError::UnknownVariableName { .. }
-            | ommx::SolutionError::UnknownConstraintName { .. }
-            | ommx::SolutionError::UnknownNamedFunctionName { .. } => {
-                return PyKeyError::new_err(message);
-            }
-            ommx::SolutionError::ParameterizedConstraint
-            | ommx::SolutionError::DuplicateSubscript { .. } => {
-                return PyValueError::new_err(message);
-            }
-            _ => {}
-        }
-    }
-
-    if let Some(error) = error.downcast_ref::<ommx::SampleSetError>() {
-        match error {
-            ommx::SampleSetError::UnknownVariableName { .. }
-            | ommx::SampleSetError::UnknownConstraintName { .. }
-            | ommx::SampleSetError::UnknownSampleID { .. }
-            | ommx::SampleSetError::UnknownNamedFunctionName { .. } => {
-                return PyKeyError::new_err(message);
-            }
-            ommx::SampleSetError::DuplicateSubscripts { .. }
-            | ommx::SampleSetError::ParameterizedConstraint
-            | ommx::SampleSetError::NoFeasibleSolution
-            | ommx::SampleSetError::NoFeasibleSolutionRelaxed => {
-                return PyValueError::new_err(message);
-            }
-            _ => {}
-        }
-    }
-
-    #[cfg(feature = "remote-artifact")]
-    if let Some(remote_error) = error.downcast_ref::<ommx::artifact::RemoteArtifactError>() {
-        return match remote_error {
-            ommx::artifact::RemoteArtifactError::ManifestNotFound { .. } => {
-                RemoteArtifactNotFoundError::new_err(message)
-            }
-            ommx::artifact::RemoteArtifactError::Authentication { .. } => {
-                RemoteArtifactAuthenticationError::new_err(message)
-            }
-            ommx::artifact::RemoteArtifactError::Authorization { .. } => {
-                RemoteArtifactAuthorizationError::new_err(message)
-            }
-            ommx::artifact::RemoteArtifactError::Transport { .. } => {
-                RemoteArtifactTransportError::new_err(message)
-            }
-            ommx::artifact::RemoteArtifactError::InvalidArtifact { .. } => {
-                InvalidRemoteArtifactError::new_err(message)
-            }
-            ommx::artifact::RemoteArtifactError::Other { .. } => {
-                RemoteArtifactError::new_err(message)
-            }
-            _ => RemoteArtifactError::new_err(message),
-        };
-    }
-
-    PyRuntimeError::new_err(message)
 }
 
 /// Register the Python exception hierarchy owned by this conversion boundary.
