@@ -7800,6 +7800,8 @@ class AdditionalCapability(enum.Enum):
     SOS1 constraints: at most one of a set of variables can be non-zero
     """
 
+    def __hash__(self) -> builtins.int: ...
+
 @typing.final
 class DecisionVariableRole(enum.Enum):
     r"""
@@ -7823,6 +7825,7 @@ class DecisionVariableRole(enum.Enum):
     Not used, fixed, or dependent
     """
 
+    def __hash__(self) -> builtins.int: ...
     def __repr__(self) -> builtins.str: ...
     def __str__(self) -> builtins.str: ...
 
@@ -7841,6 +7844,7 @@ class Equality(enum.Enum):
     Less than or equal to zero constraint (<=)
     """
 
+    def __hash__(self) -> builtins.int: ...
     @staticmethod
     def from_pb(value: builtins.int) -> Equality:
         r"""
@@ -7880,6 +7884,7 @@ class Kind(enum.Enum):
     Semi-continuous decision variable (continuous in range or zero)
     """
 
+    def __hash__(self) -> builtins.int: ...
     @staticmethod
     def from_pb(value: builtins.int) -> Kind:
         r"""
@@ -7944,6 +7949,7 @@ class ProvenanceKind(enum.Enum):
     The regular constraint was generated from a SOS1 constraint.
     """
 
+    def __hash__(self) -> builtins.int: ...
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -7988,6 +7994,7 @@ class Sense(enum.Enum):
     Maximize the objective function
     """
 
+    def __hash__(self) -> builtins.int: ...
     @staticmethod
     def from_pb(value: builtins.int) -> Sense:
         r"""
