@@ -567,7 +567,7 @@ class OMMXHighsAdapter(SolverAdapter):
             If True, enable HiGHS's console logging
         """
         with _tracer.start_as_current_span("convert"):
-            super().__init__(ommx_instance)
+            ommx_instance.reduce_capabilities(set())
             self.instance = ommx_instance
             self.model = highspy.Highs()
 
