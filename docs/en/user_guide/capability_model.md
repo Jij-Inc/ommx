@@ -11,17 +11,42 @@ kernelspec:
   name: python3
 ---
 
-# Adapter Capability Model and Conversions
+# Adapter Input Classes and Explicit Constraint Lowering
 
-OMMX treats [special constraints](./special_constraints.md) — `IndicatorConstraint`, `OneHotConstraint`, `Sos1Constraint` — as first-class citizens, but not every solver accepts them directly. To handle the differences uniformly, OMMX provides an **Adapter Capability Model**.
+OMMX separates two concepts that were previously described together as adapter capabilities:
+
+- An {class}`~ommx.InstanceClass` describes a set of exact `Instance` values. An adapter declares its structural input condition with `INPUT_CLASS`, then evaluates adapter-owned preconditions to determine applicability.
+- {meth}`Instance.reduce_capabilities() <ommx.Instance.reduce_capabilities>` explicitly lowers every special-constraint family not selected for preservation on an instance. It does not declare an input class or establish adapter applicability.
 
 This page covers:
 
-- {class}`~ommx.AdditionalCapability` and {attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>` for describing what an instance requires
-- How an adapter declares its supported capabilities via `ADDITIONAL_CAPABILITIES`
-- {meth}`Instance.reduce_capabilities() <ommx.Instance.reduce_capabilities>` for automatic conversion
+- `InstanceClass` membership and adapter applicability
+- {class}`~ommx.AdditionalCapability` and {attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>` as special-constraint family selectors
+- {meth}`Instance.reduce_capabilities() <ommx.Instance.reduce_capabilities>` for explicit lowering
 - Manual conversion APIs per constraint type
 - Auditing conversion results
+
+## Instance classes and adapter applicability
+
+An `InstanceClass` is a finite union of complete, conjunctive {class}`~ommx.InstanceClassClause` values. Membership is evaluated against the exact input without mutating or preparing it.
+
+```{code-cell} ipython3
+from ommx import DegreeBound, InstanceClass, InstanceClassClause, Kind, Sense
+
+binary_linear_with_one_hot = InstanceClass(
+    [
+        InstanceClassClause(
+            label="binary-linear-with-one-hot",
+            allowed_variable_kinds={Kind.Binary},
+            objective_degree_bound=DegreeBound.at_most(1),
+            allowed_senses={Sense.Maximize},
+            allows_one_hot=True,
+        )
+    ]
+)
+```
+
+Adapters declare this first applicability condition as `INPUT_CLASS`. Use `check_applicability()` for a structured result or `require_applicable()` to raise when membership or an adapter-owned precondition fails. Explicit preparation produces another input value, whose applicability must be checked again.
 
 ## AdditionalCapability and required_capabilities
 
@@ -48,30 +73,15 @@ instance = Instance.from_components(
     sense=Instance.MAXIMIZE,
 )
 assert instance.required_capabilities == {AdditionalCapability.OneHot}
+assert binary_linear_with_one_hot.contains(instance)
 ```
 
-## Adapter-side declaration
+## Explicit lowering via reduce_capabilities
 
-Each OMMX Adapter declares which capabilities it supports via the `ADDITIONAL_CAPABILITIES` class attribute.
-
-```python
-from ommx import AdditionalCapability
-from ommx.adapter import SolverAdapter
-
-class MySolverAdapter(SolverAdapter):
-    ADDITIONAL_CAPABILITIES = frozenset({AdditionalCapability.Indicator})
-```
-
-When the adapter's constructor calls `super().__init__(instance)`, **any constraint type not in `ADDITIONAL_CAPABILITIES` is automatically converted into regular constraints.** In other words, the adapter author only needs to handle the types declared plus regular constraints; any instance can be accepted.
-
-By default `ADDITIONAL_CAPABILITIES = frozenset()`, so every special constraint type is auto-converted. Adapters may also declare full support (for example, the PySCIPOpt Adapter currently declares Indicator and SOS1 support).
-
-## Automatic conversion via reduce_capabilities
-
-Inside `super().__init__`, {meth}`Instance.reduce_capabilities() <ommx.Instance.reduce_capabilities>` is called. For each capability in `required_capabilities` that is not in `supported`, the corresponding conversion API (see below) is invoked to turn that special constraint into regular constraints.
+{meth}`Instance.reduce_capabilities() <ommx.Instance.reduce_capabilities>` is an explicit, mutating operation. For each family in `required_capabilities` that is not in `preserved`, the corresponding conversion API (see below) is invoked to turn that special constraint into regular constraints.
 
 ```{code-cell} ipython3
-converted = instance.reduce_capabilities(supported=set())
+converted = instance.reduce_capabilities(preserved=set())
 assert converted == {AdditionalCapability.OneHot}
 ```
 
@@ -81,7 +91,7 @@ assert instance.one_hot_constraints == {}
 assert len(instance.constraints) == 1
 ```
 
-The OneHot constraint has been removed and a regular equality $x_0 + x_1 + x_2 - 1 = 0$ has been added in its place. `reduce_capabilities` mutates the instance in place. On success, `required_capabilities` becomes a subset of `supported`. The method returns an empty set when no conversion was needed.
+The OneHot constraint has been removed and a regular equality $x_0 + x_1 + x_2 - 1 = 0$ has been added in its place. `reduce_capabilities` mutates the instance in place. On success, `required_capabilities` becomes a subset of `preserved`. The method returns an empty set when no conversion was needed. Recheck `INPUT_CLASS` membership or adapter applicability on this resulting value.
 
 ## Manual conversion APIs
 
@@ -189,8 +199,10 @@ for cid, c in instance2.constraints.items():
 
 | What you want to do | API |
 |---|---|
-| Inspect which capabilities an instance requires | {attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>` |
-| Declare supported capabilities on an adapter | The `ADDITIONAL_CAPABILITIES` class attribute |
-| Auto-convert every unsupported special constraint | {meth}`Instance.reduce_capabilities <ommx.Instance.reduce_capabilities>` |
+| Describe a structural set of adapter inputs | {class}`~ommx.InstanceClass` |
+| Declare the first adapter applicability condition | `INPUT_CLASS` |
+| Check membership plus adapter-owned preconditions | `check_applicability()` / `require_applicable()` |
+| Inspect active special-constraint families | {attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>` |
+| Explicitly lower every non-preserved special constraint | {meth}`Instance.reduce_capabilities <ommx.Instance.reduce_capabilities>` |
 | Convert individually to regular constraints | `convert_*_to_constraint(s)` / `convert_all_*_to_constraints` |
 | Audit conversion history | `instance.constraints_df(kind=..., removed=True)` / `solution.constraints_df(kind=..., include=("...","removed_reason"))` |

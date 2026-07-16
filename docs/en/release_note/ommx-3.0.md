@@ -8,6 +8,41 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🆕 Instance classes and adapter applicability ([#1084](https://github.com/Jij-Inc/ommx/pull/1084))
+
+The Python SDK now exposes {class}`~ommx.InstanceClass` as a set of OMMX
+{class}`~ommx.Instance` values. Each {class}`~ommx.InstanceClassClause` is one
+conjunctive structural description, and the containing class is their finite
+union. Membership is evaluated from the exact input value and reported through
+{class}`~ommx.InstanceClassMembershipReport` with structured per-clause
+mismatches.
+
+```python
+from ommx import DegreeBound, InstanceClass, InstanceClassClause, Kind, Sense
+
+binary_linear = InstanceClass(
+    [
+        InstanceClassClause(
+            label="binary-linear",
+            allowed_variable_kinds={Kind.Binary},
+            objective_degree_bound=DegreeBound.at_most(1),
+            allowed_senses={Sense.Minimize},
+        )
+    ]
+)
+report = binary_linear.check_membership(instance)
+```
+
+{class}`~ommx.adapter.SolverAdapter` subclasses declare `INPUT_CLASS` and use
+`check_applicability` or `require_applicable` to layer adapter-owned
+preconditions on top of input-class membership without mutating the caller's
+instance. Explicit preparation must be followed by a new membership check on
+the prepared input. Explicit special-constraint lowering through
+{meth}`~ommx.Instance.reduce_capabilities` and `ommx.v2.Feature` wire
+reconstruction remain separate concepts. The lowering method's keyword argument
+is renamed from `supported` to `preserved` to describe the families left
+unchanged by that explicit operation.
+
 ### 🛠 Structured SDK errors use consistent Python exceptions ([#1097](https://github.com/Jij-Inc/ommx/pull/1097))
 
 Python bindings now route stable `DecisionVariableError`, `SolutionError`, and
@@ -896,14 +931,6 @@ In addition to regular constraints, the following three special constraint types
 For concrete usage, evaluation-result access, and the Indicator relax / restore workflow, see [Special Constraints](../user_guide/special_constraints.md).
 
 Accordingly, the legacy `ConstraintHints` / `OneHot` / `Sos1` classes, the `Instance.constraint_hints` property, and the PySCIPOpt Adapter's `use_sos1` flag are removed.
-
-### 🆕 Adapter Capability Model ([#790](https://github.com/Jij-Inc/ommx/pull/790), [#805](https://github.com/Jij-Inc/ommx/pull/805), [#810](https://github.com/Jij-Inc/ommx/pull/810), [#811](https://github.com/Jij-Inc/ommx/pull/811), [#814](https://github.com/Jij-Inc/ommx/pull/814))
-
-Alongside the special constraint types, adapters now declare their own supported capabilities via an `ADDITIONAL_CAPABILITIES` class attribute. When `super().__init__(instance)` is called, any undeclared special constraint is automatically converted to regular constraints (Big-M for Indicator / SOS1, linear equality for OneHot) before the instance reaches the solver.
-
-**Existing OMMX Adapters must be updated for Python SDK 3.0.0 to call `super().__init__(instance)`.** Currently the PySCIPOpt Adapter declares support for Indicator and SOS1.
-
-For details and the manual conversion APIs, see [Adapter Capability Model and Conversions](../user_guide/capability_model.md).
 
 ### 🔄 numpy scalar support ([#794](https://github.com/Jij-Inc/ommx/pull/794))
 

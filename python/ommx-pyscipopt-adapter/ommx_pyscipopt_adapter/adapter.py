@@ -486,13 +486,6 @@ def _dataframe(
 
 
 class OMMXPySCIPOptAdapter(SolverAdapter):
-    ADDITIONAL_CAPABILITIES = frozenset(
-        {
-            AdditionalCapability.Indicator,
-            AdditionalCapability.Sos1,
-        }
-    )
-
     def __init__(
         self,
         ommx_instance: Instance,
@@ -504,7 +497,12 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         :param initial_state: Optional initial solution state.
         """
         with _tracer.start_as_current_span("convert"):
-            super().__init__(ommx_instance)
+            ommx_instance.reduce_capabilities(
+                {
+                    AdditionalCapability.Indicator,
+                    AdditionalCapability.Sos1,
+                }
+            )
             self.instance = ommx_instance
             self.model = pyscipopt.Model()
             self.model.hideOutput()

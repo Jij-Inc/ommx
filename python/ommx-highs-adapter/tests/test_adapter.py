@@ -1,9 +1,28 @@
 import pytest
 
-from ommx import Instance, DecisionVariable, Solution
+from ommx import Instance, DecisionVariable, OneHotConstraint, Solution
 from ommx.testing import SingleFeasibleLPGenerator, DataType
 
 from ommx_highs_adapter import OMMXHighsAdapter
+
+
+def test_constructor_lowers_one_hot_constraint():
+    x = [DecisionVariable.binary(i) for i in range(2)]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=sum(x),
+        constraints={},
+        one_hot_constraints={7: OneHotConstraint(variables=x)},
+        sense=Instance.MINIMIZE,
+    )
+
+    adapter = OMMXHighsAdapter(instance)
+
+    assert adapter.instance is instance
+    assert instance.one_hot_constraints == {}
+    assert set(instance.removed_one_hot_constraints) == {7}
+    assert len(instance.constraints) == 1
+    assert adapter.solver_input.getNumRow() == 1
 
 
 def test_integration_lp():
