@@ -13,14 +13,14 @@ from ommx.adapter import (
     NoSolutionReturned,
 )
 from ommx import (
-    AdapterCapabilities,
-    CapabilityProfile,
     Constraint,
     DecisionVariable,
-    DegreeLimit,
+    DegreeBound,
     Equality,
     Function,
     Instance,
+    InstanceClass,
+    InstanceClassClause,
     Kind,
     Sense,
     Solution,
@@ -31,21 +31,21 @@ from .exception import OMMXPythonMIPAdapterError
 
 _tracer = trace.get_tracer("ommx.adapter.python_mip")
 
-_LINEAR_CONSTRAINTS = {
-    Equality.EqualToZero: DegreeLimit.at_most(1),
-    Equality.LessThanOrEqualToZero: DegreeLimit.at_most(1),
+_LINEAR_CONSTRAINT_DEGREE_BOUNDS = {
+    Equality.EqualToZero: DegreeBound.at_most(1),
+    Equality.LessThanOrEqualToZero: DegreeBound.at_most(1),
 }
 
 
 class OMMXPythonMIPAdapter(SolverAdapter):
-    CAPABILITIES: ClassVar[AdapterCapabilities | None] = AdapterCapabilities(
+    INPUT_CLASS: ClassVar[InstanceClass | None] = InstanceClass(
         [
-            CapabilityProfile(
-                name="python-mip-linear-mip",
-                variable_kinds={Kind.Binary, Kind.Integer, Kind.Continuous},
-                objective_degree=DegreeLimit.at_most(1),
-                regular_constraints=_LINEAR_CONSTRAINTS,
-                senses={Sense.Minimize, Sense.Maximize},
+            InstanceClassClause(
+                label="python-mip-linear-mip",
+                allowed_variable_kinds={Kind.Binary, Kind.Integer, Kind.Continuous},
+                objective_degree_bound=DegreeBound.at_most(1),
+                regular_constraint_degree_bounds=_LINEAR_CONSTRAINT_DEGREE_BOUNDS,
+                allowed_senses={Sense.Minimize, Sense.Maximize},
             )
         ]
     )
@@ -67,7 +67,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         :param verbose: If True, enable Python-MIP's verbose mode
         """
         with _tracer.start_as_current_span("convert"):
-            self.require_compatible(ommx_instance)
+            self.require_applicable(ommx_instance)
             if ommx_instance.sense == Instance.MAXIMIZE:
                 sense = mip.MAXIMIZE
             elif ommx_instance.sense == Instance.MINIMIZE:

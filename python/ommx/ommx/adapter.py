@@ -8,10 +8,9 @@ from typing import Any, ClassVar, Protocol, runtime_checkable
 
 from ommx._ommx_rust import DiagnosticCollector as DiagnosticCollector
 from ommx import (
-    AdapterCapabilities,
-    AdditionalCapability,
     Instance,
-    PortableCompatibilityReport,
+    InstanceClass,
+    InstanceClassMembershipReport,
     SampleSet,
     Solution,
 )
@@ -65,7 +64,7 @@ PreconditionValue = str | int | float | bool | None
 
 @dataclass(frozen=True, slots=True)
 class AdapterPreconditionViolation:
-    """One adapter-owned condition that the portable profile cannot express."""
+    """One adapter-owned condition that an OMMX input class cannot express."""
 
     condition: str
     description: str
@@ -76,40 +75,50 @@ class AdapterPreconditionViolation:
 
 
 @dataclass(frozen=True, slots=True)
-class AdapterCompatibilityReport:
-    """Combined portable and adapter-specific compatibility result."""
+class AdapterApplicabilityReport:
+    """Combined input-class and adapter-specific applicability result."""
 
     adapter: str
-    portable_report: PortableCompatibilityReport
+    input_membership: InstanceClassMembershipReport
     preconditions_checked: bool
     precondition_violations: tuple[AdapterPreconditionViolation, ...]
 
+    def __post_init__(self) -> None:
+        if self.preconditions_checked != self.input_membership.is_member:
+            raise ValueError(
+                "preconditions_checked must be true exactly when input membership holds"
+            )
+        if not self.preconditions_checked and self.precondition_violations:
+            raise ValueError(
+                "precondition violations require adapter preconditions to be checked"
+            )
+
     @property
-    def compatible(self) -> bool:
+    def is_applicable(self) -> bool:
         return (
-            self.portable_report.compatible
+            self.input_membership.is_member
             and self.preconditions_checked
             and not self.precondition_violations
         )
 
     def __str__(self) -> str:
-        if not self.portable_report.compatible:
-            return f"{self.adapter} is incompatible:\n{self.portable_report}"
+        if not self.input_membership.is_member:
+            return f"{self.adapter} is not applicable:\n{self.input_membership}"
         if self.precondition_violations:
             details = "\n".join(
                 f"- {violation.condition}: {violation.description}"
                 for violation in self.precondition_violations
             )
             return f"{self.adapter} preconditions failed:\n{details}"
-        return f"{self.adapter} is compatible"
+        return f"{self.adapter} is applicable"
 
 
-class AdapterCompatibilityError(ValueError):
-    """Raised when an instance is incompatible with an adapter."""
+class AdapterNotApplicableError(ValueError):
+    """Raised when an instance is not applicable to an adapter."""
 
-    report: AdapterCompatibilityReport
+    report: AdapterApplicabilityReport
 
-    def __init__(self, report: AdapterCompatibilityReport):
+    def __init__(self, report: AdapterApplicabilityReport):
         self.report = report
         super().__init__(str(report))
 
@@ -120,71 +129,45 @@ class SolverAdapter(ABC):
 
     See the `implementation guide <https://jij-inc-ommx.readthedocs-hosted.com/en/latest/tutorial/implement_adapter.html>`_ for more details.
 
-    Subclasses using the portable compatibility API declare ``CAPABILITIES`` as
-    one or more complete native translator profiles. ``check_compatibility``
-    does not mutate the input instance and combines that portable comparison
-    with the adapter's ``_check_preconditions`` hook.
+    Subclasses declare ``INPUT_CLASS`` as the OMMX-defined structural class used
+    by the first applicability condition. ``check_applicability`` does not mutate
+    the input and combines class membership with the adapter's
+    ``_check_preconditions`` hook.
 
-    ``ADDITIONAL_CAPABILITIES`` and the base constructor remain temporarily for
-    adapters that still use the legacy in-place special-constraint lowering path.
-    It is independent of ``CAPABILITIES`` and is not used as a fallback.
-
-    Legacy special-constraint flags:
-
-    - ``AdditionalCapability.Indicator``: binvar = 1 → f(x) <= 0
-    - ``AdditionalCapability.OneHot``: exactly one of a set of binary variables is 1
-    - ``AdditionalCapability.Sos1``: at most one of a set of variables is non-zero
-
-    Legacy subclasses must call ``super().__init__(ommx_instance)`` so that any
-    constraint types the adapter does not support are automatically converted
-    into regular constraints (Big-M for indicator / SOS1, linear equality for
-    one-hot). Conversions mutate ``ommx_instance`` in place and are emitted
-    at ``INFO`` level as ``tracing`` events from the Rust SDK; configure a
-    Python OpenTelemetry ``TracerProvider`` before the first call to observe
-    them via ``pyo3-tracing-opentelemetry``.
+    ``INPUT_CLASS`` describes only which exact inputs an adapter accepts; it does
+    not prescribe how the subclass processes them. The base class never lowers
+    or otherwise mutates the input instance.
     """
 
-    CAPABILITIES: ClassVar[AdapterCapabilities | None] = None
-    ADDITIONAL_CAPABILITIES: ClassVar[frozenset[AdditionalCapability]] = frozenset()
-
-    def __init__(self, ommx_instance: Instance):
-        """Reduce the instance to the adapter's supported capabilities.
-
-        Subclasses must call ``super().__init__()``. Any constraint type not in
-        ``ADDITIONAL_CAPABILITIES`` is converted to regular constraints in place
-        on ``ommx_instance``.
-        """
-        ommx_instance.reduce_capabilities(set(self.ADDITIONAL_CAPABILITIES))
+    INPUT_CLASS: ClassVar[InstanceClass | None] = None
 
     @classmethod
-    def check_compatibility(cls, ommx_instance: Instance) -> AdapterCompatibilityReport:
-        """Inspect compatibility without mutating or preparing ``ommx_instance``.
+    def check_applicability(cls, ommx_instance: Instance) -> AdapterApplicabilityReport:
+        """Inspect applicability without mutating or preparing ``ommx_instance``.
 
         Adapter-specific preconditions run only after at least one complete
-        portable profile matches. The hook receives an isolated copy so it
-        cannot mutate the caller's instance. Preparation belongs to a separate
-        explicit operation followed by another check.
+        input-class clause contains the instance. The hook receives an isolated
+        copy so it cannot mutate the caller's instance. Any explicitly
+        transformed value is a different input and must be checked separately.
         """
-        capabilities = cls.CAPABILITIES
-        if capabilities is None:
+        input_class = cls.INPUT_CLASS
+        if input_class is None:
             raise TypeError(
-                f"{cls.__module__}.{cls.__qualname__} must declare CAPABILITIES"
+                f"{cls.__module__}.{cls.__qualname__} must declare INPUT_CLASS"
             )
 
-        portable_report = capabilities.check_compatibility(
-            ommx_instance.solver_requirements()
-        )
+        input_membership = input_class.check_membership(ommx_instance)
         adapter = f"{cls.__module__}.{cls.__qualname__}"
-        if not portable_report.compatible:
-            return AdapterCompatibilityReport(
+        if not input_membership.is_member:
+            return AdapterApplicabilityReport(
                 adapter=adapter,
-                portable_report=portable_report,
+                input_membership=input_membership,
                 preconditions_checked=False,
                 precondition_violations=(),
             )
 
         violations = tuple(
-            cls._check_preconditions(copy.copy(ommx_instance), portable_report)
+            cls._check_preconditions(copy.copy(ommx_instance), input_membership)
         )
         if not all(
             isinstance(violation, AdapterPreconditionViolation)
@@ -194,28 +177,28 @@ class SolverAdapter(ABC):
                 f"{adapter}._check_preconditions() must return "
                 "AdapterPreconditionViolation values"
             )
-        return AdapterCompatibilityReport(
+        return AdapterApplicabilityReport(
             adapter=adapter,
-            portable_report=portable_report,
+            input_membership=input_membership,
             preconditions_checked=True,
             precondition_violations=violations,
         )
 
     @classmethod
-    def require_compatible(cls, ommx_instance: Instance) -> AdapterCompatibilityReport:
-        """Return the compatibility report or raise ``AdapterCompatibilityError``."""
-        report = cls.check_compatibility(ommx_instance)
-        if not report.compatible:
-            raise AdapterCompatibilityError(report)
+    def require_applicable(cls, ommx_instance: Instance) -> AdapterApplicabilityReport:
+        """Return the report or raise :class:`AdapterNotApplicableError`."""
+        report = cls.check_applicability(ommx_instance)
+        if not report.is_applicable:
+            raise AdapterNotApplicableError(report)
         return report
 
     @classmethod
     def _check_preconditions(
         cls,
         ommx_instance: Instance,
-        portable_report: PortableCompatibilityReport,
+        input_membership: InstanceClassMembershipReport,
     ) -> Iterable[AdapterPreconditionViolation]:
-        """Return adapter-owned violations after a portable profile matches."""
+        """Return adapter-owned violations after input-class membership holds."""
         return ()
 
     @classmethod

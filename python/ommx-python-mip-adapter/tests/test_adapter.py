@@ -1,39 +1,45 @@
 import pytest
+
 from ommx import (
     DecisionVariable,
-    DegreeLimit,
+    DegreeBound,
     Equality,
     IndicatorConstraint,
     Instance,
+    InstanceClassMismatch,
     Kind,
     OneHotConstraint,
-    PortableCapabilityMismatch,
     Sense,
     Sos1Constraint,
 )
-from ommx.adapter import AdapterCompatibilityError
+from ommx.adapter import AdapterNotApplicableError
 from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 
 
-def test_declares_native_linear_mip_capability_profile():
-    capabilities = OMMXPythonMIPAdapter.CAPABILITIES
-    assert capabilities is not None
-    [profile] = capabilities.profiles
-    assert profile.name == "python-mip-linear-mip"
-    assert profile.variable_kinds == {Kind.Binary, Kind.Integer, Kind.Continuous}
-    assert profile.objective_degree == DegreeLimit.at_most(1)
-    assert profile.regular_constraints == {
-        Equality.EqualToZero: DegreeLimit.at_most(1),
-        Equality.LessThanOrEqualToZero: DegreeLimit.at_most(1),
+def test_declares_linear_mip_input_class() -> None:
+    input_class = OMMXPythonMIPAdapter.INPUT_CLASS
+    assert input_class is not None
+    [clause] = input_class.clauses
+
+    assert clause.label == "python-mip-linear-mip"
+    assert clause.allowed_variable_kinds == {
+        Kind.Binary,
+        Kind.Integer,
+        Kind.Continuous,
     }
-    assert profile.indicator_constraints == {}
-    assert not profile.supports_one_hot
-    assert not profile.supports_sos1
-    assert profile.senses == {Sense.Minimize, Sense.Maximize}
+    assert clause.objective_degree_bound == DegreeBound.at_most(1)
+    assert clause.regular_constraint_degree_bounds == {
+        Equality.EqualToZero: DegreeBound.at_most(1),
+        Equality.LessThanOrEqualToZero: DegreeBound.at_most(1),
+    }
+    assert clause.indicator_constraint_degree_bounds == {}
+    assert not clause.allows_one_hot
+    assert not clause.allows_sos1
+    assert clause.allowed_senses == {Sense.Minimize, Sense.Maximize}
 
 
 @pytest.mark.parametrize("sense", [Sense.Minimize, Sense.Maximize])
-def test_capability_profile_accepts_complete_linear_mip_boundary(sense):
+def test_input_class_accepts_complete_linear_mip_boundary(sense: Sense) -> None:
     x = DecisionVariable.binary(0)
     y = DecisionVariable.integer(1)
     z = DecisionVariable.continuous(2)
@@ -44,9 +50,12 @@ def test_capability_profile_accepts_complete_linear_mip_boundary(sense):
         sense=sense,
     )
 
-    report = OMMXPythonMIPAdapter.check_compatibility(instance)
-    assert report.compatible
-    assert report.portable_report.matching_profiles == ["python-mip-linear-mip"]
+    report = OMMXPythonMIPAdapter.check_applicability(instance)
+
+    assert report.is_applicable
+    assert report.input_membership.matching_clauses == [(0, "python-mip-linear-mip")]
+    assert report.preconditions_checked
+    assert report.precondition_violations == ()
 
 
 def test_error_nonlinear_objective():
@@ -59,11 +68,11 @@ def test_error_nonlinear_objective():
         sense=Instance.MINIMIZE,
     )
 
-    with pytest.raises(AdapterCompatibilityError) as e:
+    with pytest.raises(AdapterNotApplicableError) as e:
         OMMXPythonMIPAdapter(ommx_instance)
     assert isinstance(
-        e.value.report.portable_report.profiles[0].mismatches[0],
-        PortableCapabilityMismatch.ObjectiveDegreeExceeded,
+        e.value.report.input_membership.clause_reports[0].mismatches[0],
+        InstanceClassMismatch.ObjectiveDegreeExceedsBound,
     )
 
 
@@ -78,11 +87,11 @@ def test_error_nonlinear_constraint():
         sense=Instance.MINIMIZE,
     )
 
-    with pytest.raises(AdapterCompatibilityError) as e:
+    with pytest.raises(AdapterNotApplicableError) as e:
         OMMXPythonMIPAdapter(ommx_instance)
     assert isinstance(
-        e.value.report.portable_report.profiles[0].mismatches[0],
-        PortableCapabilityMismatch.RegularConstraintDegreeExceeded,
+        e.value.report.input_membership.clause_reports[0].mismatches[0],
+        InstanceClassMismatch.RegularConstraintDegreeExceedsBound,
     )
 
 
@@ -96,7 +105,9 @@ def test_error_nonlinear_constraint():
         ),
     ],
 )
-def test_rejects_unsupported_variable_kinds(variable, kind):
+def test_rejects_used_unsupported_variable_kinds(
+    variable: DecisionVariable, kind: Kind
+) -> None:
     instance = Instance.from_components(
         decision_variables=[variable],
         objective=variable,
@@ -104,15 +115,34 @@ def test_rejects_unsupported_variable_kinds(variable, kind):
         sense=Sense.Minimize,
     )
 
-    with pytest.raises(AdapterCompatibilityError) as e:
+    with pytest.raises(AdapterNotApplicableError) as e:
         OMMXPythonMIPAdapter(instance)
-    mismatch = e.value.report.portable_report.profiles[0].mismatches[0]
-    assert isinstance(mismatch, PortableCapabilityMismatch.UnsupportedVariableKind)
+
+    mismatch = e.value.report.input_membership.clause_reports[0].mismatches[0]
+    assert isinstance(mismatch, InstanceClassMismatch.VariableKindNotAllowed)
     assert mismatch.kind == kind
-    assert mismatch.used_variable_ids == {0}
+    assert mismatch.variable_ids == {0}
 
 
-def test_rejects_special_constraints_without_mutating_input():
+def test_ignores_unused_unsupported_variable_kind() -> None:
+    used = DecisionVariable.continuous(0)
+    unused = DecisionVariable.semi_integer(1, lower=1, upper=3)
+    instance = Instance.from_components(
+        decision_variables=[used, unused],
+        objective=used,
+        constraints={},
+        sense=Sense.Minimize,
+    )
+
+    report = OMMXPythonMIPAdapter.check_applicability(instance)
+    adapter = OMMXPythonMIPAdapter(instance)
+
+    assert report.is_applicable
+    assert adapter.instance is instance
+    assert [variable.name for variable in adapter.solver_input.vars] == ["0"]
+
+
+def test_rejects_special_constraints_without_mutating_input() -> None:
     x = DecisionVariable.binary(0)
     y = DecisionVariable.continuous(1)
     instance = Instance.from_components(
@@ -132,14 +162,12 @@ def test_rejects_special_constraints_without_mutating_input():
     )
     before = instance.to_v2_bytes()
 
-    with pytest.raises(AdapterCompatibilityError) as e:
+    with pytest.raises(AdapterNotApplicableError) as e:
         OMMXPythonMIPAdapter(instance)
 
-    mismatch_types = {
-        type(mismatch)
-        for mismatch in e.value.report.portable_report.profiles[0].mismatches
-    }
-    assert PortableCapabilityMismatch.UnsupportedIndicatorConstraints in mismatch_types
-    assert PortableCapabilityMismatch.UnsupportedOneHotConstraints in mismatch_types
-    assert PortableCapabilityMismatch.UnsupportedSos1Constraints in mismatch_types
+    mismatches = e.value.report.input_membership.clause_reports[0].mismatches
+    mismatch_types = {type(mismatch) for mismatch in mismatches}
+    assert InstanceClassMismatch.IndicatorConstraintsNotAllowed in mismatch_types
+    assert InstanceClassMismatch.OneHotConstraintsNotAllowed in mismatch_types
+    assert InstanceClassMismatch.Sos1ConstraintsNotAllowed in mismatch_types
     assert instance.to_v2_bytes() == before
