@@ -2,16 +2,16 @@
 
 use super::config::{
     ExperimentConfig, ExperimentConfigRun, ExperimentConfigSampling, ExperimentConfigSolve,
-    LayerRef, LifecycleOutcome,
+    LayerRef,
 };
 use super::parameter::RunParameterTable;
 use super::{
     AdapterDiagnosticPayload, AttachmentLogger, AttachmentTable, AutosavePolicy, Compression,
-    Experiment, ExperimentDyn, ExperimentStatus, Name, ParameterValue, SamplingStatus,
-    SealedExperiment, SolveStatus, Trace, EXPERIMENT_ARTIFACT_MEDIA_TYPE,
-    EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_STATUS_DRAFT, EXPERIMENT_STATUS_FAILED,
-    EXPERIMENT_STATUS_FINISHED, EXPERIMENT_STATUS_INTERRUPTED, RUN_PARAMETERS_MEDIA_TYPE,
-    RUN_STATUS_FAILED, RUN_STATUS_FINISHED, RUN_STATUS_INTERRUPTED,
+    Experiment, ExperimentDyn, ExperimentLifecycle, ExperimentStatus, Name, ParameterValue,
+    RunLifecycle, SamplingStatus, SealedExperiment, SolveStatus, Trace,
+    EXPERIMENT_ARTIFACT_MEDIA_TYPE, EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_STATUS_DRAFT,
+    EXPERIMENT_STATUS_FAILED, EXPERIMENT_STATUS_FINISHED, EXPERIMENT_STATUS_INTERRUPTED,
+    RUN_PARAMETERS_MEDIA_TYPE, RUN_STATUS_FAILED, RUN_STATUS_FINISHED, RUN_STATUS_INTERRUPTED,
 };
 use super::{AutosaveController, UnsealedExperimentState};
 use crate::artifact::local_registry::{
@@ -58,6 +58,12 @@ fn borrowed_run_lifecycle_reason_survives_commit() {
         let run = sealed.run(0).unwrap();
         assert_eq!(run.status(), &super::RunStatus::Failed);
         assert_eq!(run.lifecycle_reason(), Some("solver process exited"));
+        assert_eq!(
+            run.lifecycle(),
+            &RunLifecycle::Failed {
+                reason: Some("solver process exited".to_string()),
+            }
+        );
         Ok(())
     });
 }
@@ -291,33 +297,6 @@ fn layer_from_ref<'a, 'reg>(
 fn experiment_config(artifact: &LocalArtifact<'_>) -> ExperimentConfig {
     let config = artifact.stored_config().unwrap();
     serde_json::from_slice(&blob_bytes(artifact, &config)).unwrap()
-}
-
-fn experiment_artifact_from_config<'reg>(
-    registry: &'reg LocalRegistry,
-    image_name: &str,
-    config: &ExperimentConfig,
-    layers: Vec<StoredDescriptor<'reg>>,
-) -> LocalArtifact<'reg> {
-    let config_descriptor = registry
-        .store_json_blob(
-            MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()),
-            config,
-        )
-        .unwrap();
-    let unsealed = UnsealedArtifact::new(
-        MediaType::Other(EXPERIMENT_ARTIFACT_MEDIA_TYPE.to_string()),
-        config_descriptor,
-        layers,
-        None,
-        HashMap::new(),
-    );
-    let sealed = registry.seal_artifact(unsealed).unwrap();
-    LocalArtifact::from_parts(
-        registry,
-        ImageRef::parse(image_name).unwrap(),
-        sealed.digest().clone(),
-    )
 }
 
 fn blob_bytes(artifact: &LocalArtifact<'_>, descriptor: &StoredDescriptor<'_>) -> Vec<u8> {
@@ -841,8 +820,7 @@ fn list_experiments_caches_non_experiment_manifests_as_negative_results() -> any
 
     let run_parameters = empty_run_parameters_layer(&registry);
     let config = ExperimentConfig {
-        status: EXPERIMENT_STATUS_FINISHED.to_string(),
-        outcome: None,
+        lifecycle: ExperimentLifecycle::Finished,
         requested_image_name: Some(generic_with_experiment_config_name.to_string()),
         attachments: AttachmentTable::new(),
         runs: Vec::new(),
@@ -1281,8 +1259,7 @@ fn generic_artifact_with_experiment_config_is_not_an_experiment() {
     let registry = temp.registry();
     let run_parameters = empty_run_parameters_layer(registry);
     let config = ExperimentConfig {
-        status: EXPERIMENT_STATUS_FINISHED.to_string(),
-        outcome: None,
+        lifecycle: ExperimentLifecycle::Finished,
         requested_image_name: None,
         attachments: AttachmentTable::new(),
         runs: Vec::new(),
@@ -1704,14 +1681,12 @@ fn loaded_experiment_orders_solves_and_samplings_by_id() {
         .unwrap();
     let run_parameters = empty_run_parameters_layer(registry);
     let config = ExperimentConfig {
-        status: EXPERIMENT_STATUS_FINISHED.to_string(),
-        outcome: None,
+        lifecycle: ExperimentLifecycle::Finished,
         requested_image_name: None,
         attachments: AttachmentTable::new(),
         runs: vec![ExperimentConfigRun {
             run_id: 0,
-            status: RUN_STATUS_FINISHED.to_string(),
-            outcome: None,
+            lifecycle: RunLifecycle::Finished,
             attachments: AttachmentTable::new(),
             trace: None,
             solves: [2, 0, 1]
@@ -1795,14 +1770,12 @@ fn loaded_experiment_rejects_unknown_solve_output_media_type() {
         .unwrap();
     let run_parameters = empty_run_parameters_layer(registry);
     let config = ExperimentConfig {
-        status: EXPERIMENT_STATUS_FINISHED.to_string(),
-        outcome: None,
+        lifecycle: ExperimentLifecycle::Finished,
         requested_image_name: None,
         attachments: AttachmentTable::new(),
         runs: vec![ExperimentConfigRun {
             run_id: 0,
-            status: RUN_STATUS_FINISHED.to_string(),
-            outcome: None,
+            lifecycle: RunLifecycle::Finished,
             attachments: AttachmentTable::new(),
             trace: None,
             solves: vec![ExperimentConfigSolve {
@@ -1858,14 +1831,12 @@ fn loaded_experiment_rejects_solution_as_sampling_output() {
         .unwrap();
     let run_parameters = empty_run_parameters_layer(registry);
     let config = ExperimentConfig {
-        status: EXPERIMENT_STATUS_FINISHED.to_string(),
-        outcome: None,
+        lifecycle: ExperimentLifecycle::Finished,
         requested_image_name: None,
         attachments: AttachmentTable::new(),
         runs: vec![ExperimentConfigRun {
             run_id: 0,
-            status: RUN_STATUS_FINISHED.to_string(),
-            outcome: None,
+            lifecycle: RunLifecycle::Finished,
             attachments: AttachmentTable::new(),
             trace: None,
             solves: Vec::new(),
@@ -2099,14 +2070,12 @@ fn loaded_experiment_rejects_invalid_diagnostic_payload() {
         .unwrap();
     let run_parameters = empty_run_parameters_layer(registry);
     let config = ExperimentConfig {
-        status: EXPERIMENT_STATUS_FINISHED.to_string(),
-        outcome: None,
+        lifecycle: ExperimentLifecycle::Finished,
         requested_image_name: None,
         attachments: AttachmentTable::new(),
         runs: vec![ExperimentConfigRun {
             run_id: 0,
-            status: RUN_STATUS_FINISHED.to_string(),
-            outcome: None,
+            lifecycle: RunLifecycle::Finished,
             attachments: AttachmentTable::new(),
             trace: None,
             solves: vec![ExperimentConfigSolve {
@@ -2164,14 +2133,12 @@ fn loaded_experiment_rejects_failed_solve_with_output() {
         .unwrap();
     let run_parameters = empty_run_parameters_layer(registry);
     let config = ExperimentConfig {
-        status: EXPERIMENT_STATUS_FINISHED.to_string(),
-        outcome: None,
+        lifecycle: ExperimentLifecycle::Finished,
         requested_image_name: None,
         attachments: AttachmentTable::new(),
         runs: vec![ExperimentConfigRun {
             run_id: 0,
-            status: RUN_STATUS_FINISHED.to_string(),
-            outcome: None,
+            lifecycle: RunLifecycle::Finished,
             attachments: AttachmentTable::new(),
             trace: None,
             solves: vec![ExperimentConfigSolve {
@@ -2219,13 +2186,14 @@ fn loaded_experiment_rejects_non_finished_status() {
     let registry = temp.registry();
     let run_parameters = empty_run_parameters_layer(registry);
     let config = ExperimentConfig {
-        status: "crashed".to_string(),
-        outcome: None,
+        lifecycle: ExperimentLifecycle::Finished,
         requested_image_name: None,
         attachments: AttachmentTable::new(),
         runs: Vec::new(),
         run_parameters: LayerRef(0),
     };
+    let mut config = serde_json::to_value(config).unwrap();
+    config["status"] = serde_json::Value::String("crashed".to_string());
     let config_descriptor = registry
         .store_json_blob(
             MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()),
@@ -2246,15 +2214,16 @@ fn loaded_experiment_rejects_non_finished_status() {
 
     let err = SealedExperiment::from_artifact(artifact)
         .expect_err("non-finished experiment configs must not load as sealed experiments");
-    assert!(err.to_string().contains("status is crashed"));
-    assert!(err.to_string().contains(EXPERIMENT_STATUS_FINISHED));
+    assert!(
+        format!("{err:#}").contains("unknown Experiment status crashed"),
+        "{err:#}"
+    );
 }
 
 #[test]
-fn experiment_config_without_outcome_deserializes_with_none() {
+fn experiment_config_without_outcome_deserializes_as_finished() {
     let config = ExperimentConfig {
-        status: EXPERIMENT_STATUS_FINISHED.to_string(),
-        outcome: None,
+        lifecycle: ExperimentLifecycle::Finished,
         requested_image_name: None,
         attachments: AttachmentTable::new(),
         runs: Vec::new(),
@@ -2264,49 +2233,18 @@ fn experiment_config_without_outcome_deserializes_with_none() {
     value.as_object_mut().unwrap().remove("outcome");
 
     let decoded: ExperimentConfig = serde_json::from_value(value).unwrap();
-    assert_eq!(decoded.outcome, None);
+    assert_eq!(decoded.lifecycle, ExperimentLifecycle::Finished);
 }
 
 #[test]
-fn loaded_experiment_rejects_lifecycle_reason_for_finished_status() {
-    let temp = TempLocalRegistry::new().unwrap();
-    let registry = temp.registry();
-    let run_parameters = empty_run_parameters_layer(registry);
+fn experiment_config_run_without_status_defaults_to_finished() {
     let config = ExperimentConfig {
-        status: EXPERIMENT_STATUS_FINISHED.to_string(),
-        outcome: Some(LifecycleOutcome::from_reason("unexpected reason")),
-        requested_image_name: None,
-        attachments: AttachmentTable::new(),
-        runs: Vec::new(),
-        run_parameters: LayerRef(0),
-    };
-    let artifact = experiment_artifact_from_config(
-        registry,
-        "example.com/ommx/invalid-outcome:experiment",
-        &config,
-        vec![run_parameters],
-    );
-
-    let error = SealedExperiment::from_artifact(artifact).unwrap_err();
-    assert!(error
-        .to_string()
-        .contains("Experiment status finished cannot have a lifecycle reason"));
-}
-
-#[test]
-fn loaded_experiment_rejects_lifecycle_reason_for_finished_run() {
-    let temp = TempLocalRegistry::new().unwrap();
-    let registry = temp.registry();
-    let run_parameters = empty_run_parameters_layer(registry);
-    let config = ExperimentConfig {
-        status: EXPERIMENT_STATUS_FINISHED.to_string(),
-        outcome: None,
+        lifecycle: ExperimentLifecycle::Finished,
         requested_image_name: None,
         attachments: AttachmentTable::new(),
         runs: vec![ExperimentConfigRun {
             run_id: 0,
-            status: RUN_STATUS_FINISHED.to_string(),
-            outcome: Some(LifecycleOutcome::from_reason("unexpected reason")),
+            lifecycle: RunLifecycle::Finished,
             attachments: AttachmentTable::new(),
             trace: None,
             solves: Vec::new(),
@@ -2314,15 +2252,60 @@ fn loaded_experiment_rejects_lifecycle_reason_for_finished_run() {
         }],
         run_parameters: LayerRef(0),
     };
-    let artifact = experiment_artifact_from_config(
-        registry,
-        "example.com/ommx/invalid-outcome:run",
-        &config,
-        vec![run_parameters],
-    );
+    let mut value = serde_json::to_value(config).unwrap();
+    value["runs"][0].as_object_mut().unwrap().remove("status");
 
-    let error = SealedExperiment::from_artifact(artifact).unwrap_err();
-    assert!(format!("{error:#}").contains("Run status finished cannot have a lifecycle reason"));
+    let decoded: ExperimentConfig = serde_json::from_value(value).unwrap();
+    assert_eq!(decoded.runs[0].lifecycle, RunLifecycle::Finished);
+}
+
+#[test]
+fn experiment_config_rejects_lifecycle_outcome_for_finished_status() {
+    let config = ExperimentConfig {
+        lifecycle: ExperimentLifecycle::Finished,
+        requested_image_name: None,
+        attachments: AttachmentTable::new(),
+        runs: Vec::new(),
+        run_parameters: LayerRef(0),
+    };
+    let mut value = serde_json::to_value(config).unwrap();
+    value["outcome"] = json!({"reason": "unexpected reason"});
+
+    let error = serde_json::from_value::<ExperimentConfig>(value).unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("Experiment status finished cannot have a lifecycle outcome"),
+        "{error}"
+    );
+}
+
+#[test]
+fn experiment_config_rejects_lifecycle_outcome_for_finished_run() {
+    let config = ExperimentConfig {
+        lifecycle: ExperimentLifecycle::Finished,
+        requested_image_name: None,
+        attachments: AttachmentTable::new(),
+        runs: vec![ExperimentConfigRun {
+            run_id: 0,
+            lifecycle: RunLifecycle::Finished,
+            attachments: AttachmentTable::new(),
+            trace: None,
+            solves: Vec::new(),
+            samplings: Vec::new(),
+        }],
+        run_parameters: LayerRef(0),
+    };
+    let mut value = serde_json::to_value(config).unwrap();
+    value["runs"][0]["outcome"] = json!({"reason": "unexpected reason"});
+
+    let error = serde_json::from_value::<ExperimentConfig>(value).unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("finished Run cannot have a lifecycle outcome"),
+        "{error}"
+    );
 }
 
 #[test]
@@ -2338,8 +2321,7 @@ fn loaded_experiment_rejects_config_attachment_not_listed_in_layers() {
         .unwrap();
     let run_parameters = empty_run_parameters_layer(registry);
     let config = ExperimentConfig {
-        status: EXPERIMENT_STATUS_FINISHED.to_string(),
-        outcome: None,
+        lifecycle: ExperimentLifecycle::Finished,
         requested_image_name: None,
         attachments: AttachmentTable::from_entries([("outside", LayerRef(1))]).unwrap(),
         runs: Vec::new(),
@@ -2401,8 +2383,7 @@ fn loaded_experiment_rejects_invalid_attachment_storage_format() {
             .unwrap();
         let run_parameters = empty_run_parameters_layer(registry);
         let config = ExperimentConfig {
-            status: EXPERIMENT_STATUS_FINISHED.to_string(),
-            outcome: None,
+            lifecycle: ExperimentLifecycle::Finished,
             requested_image_name: None,
             attachments: AttachmentTable::from_entries([("invalid", LayerRef(0))]).unwrap(),
             runs: Vec::new(),
@@ -2460,8 +2441,7 @@ fn loaded_experiment_uses_config_table_for_attachment_names() {
 
     let run_parameters = empty_run_parameters_layer(registry);
     let config = ExperimentConfig {
-        status: EXPERIMENT_STATUS_FINISHED.to_string(),
-        outcome: None,
+        lifecycle: ExperimentLifecycle::Finished,
         requested_image_name: None,
         attachments: AttachmentTable::from_entries([("config-name", LayerRef(0))]).unwrap(),
         runs: Vec::new(),
@@ -2558,14 +2538,12 @@ fn loaded_experiment_rejects_config_run_attachment_not_listed_in_layers() {
         .unwrap();
     let run_parameters = empty_run_parameters_layer(registry);
     let config = ExperimentConfig {
-        status: EXPERIMENT_STATUS_FINISHED.to_string(),
-        outcome: None,
+        lifecycle: ExperimentLifecycle::Finished,
         requested_image_name: None,
         attachments: AttachmentTable::new(),
         runs: vec![ExperimentConfigRun {
             run_id: 0,
-            status: RUN_STATUS_FINISHED.to_string(),
-            outcome: None,
+            lifecycle: RunLifecycle::Finished,
             attachments: AttachmentTable::from_entries([("outside", LayerRef(1))]).unwrap(),
             trace: None,
             solves: Vec::new(),
@@ -2605,8 +2583,7 @@ fn loaded_experiment_rejects_run_parameters_not_listed_in_layers() {
     let registry = temp.registry();
     let _run_parameters = empty_run_parameters_layer(registry);
     let config = ExperimentConfig {
-        status: EXPERIMENT_STATUS_FINISHED.to_string(),
-        outcome: None,
+        lifecycle: ExperimentLifecycle::Finished,
         requested_image_name: None,
         attachments: AttachmentTable::new(),
         runs: Vec::new(),
@@ -2987,6 +2964,12 @@ fn experiment_scopes_preserve_callback_error_and_failed_run_state() {
         LocalArtifact::open_in_registry(registry.registry(), checkpoint_image_name).unwrap();
     let recovered = SealedExperiment::from_checkpoint_artifact(checkpoint).unwrap();
     assert_eq!(recovered.status(), &ExperimentStatus::Failed);
+    assert_eq!(
+        recovered.lifecycle(),
+        &ExperimentLifecycle::Failed {
+            reason: Some("callback sentinel".to_string()),
+        }
+    );
     let runs = recovered.runs().collect::<Vec<_>>();
     assert_eq!(runs.len(), 1);
     assert_eq!(runs[0].status().as_str(), RUN_STATUS_FAILED);
@@ -3238,8 +3221,14 @@ fn experiment_scope_panic_checkpoints_interrupted_partial_run() {
     let checkpoint =
         LocalArtifact::open_in_registry(registry.registry(), checkpoint_image_name).unwrap();
     let config = experiment_config(&checkpoint);
-    assert_eq!(config.status, EXPERIMENT_STATUS_INTERRUPTED);
-    assert_eq!(config.runs[0].status, RUN_STATUS_INTERRUPTED);
+    assert_eq!(
+        config.lifecycle.status().as_str(),
+        EXPERIMENT_STATUS_INTERRUPTED
+    );
+    assert_eq!(
+        config.runs[0].lifecycle.status().as_str(),
+        RUN_STATUS_INTERRUPTED
+    );
 
     let recovered = SealedExperiment::from_checkpoint_artifact(checkpoint).unwrap();
     assert_eq!(
@@ -3586,13 +3575,8 @@ fn experiment_dyn_publishes_failed_checkpoint() {
 
     let checkpoint_artifact = checkpoint.as_local_artifact();
     let config = experiment_config(&checkpoint_artifact);
-    assert_eq!(config.status, EXPERIMENT_STATUS_FAILED);
-    assert_eq!(
-        config.outcome,
-        Some(LifecycleOutcome {
-            reason: Some("ValueError: failed".to_string()),
-        })
-    );
+    assert_eq!(config.lifecycle.status().as_str(), EXPERIMENT_STATUS_FAILED);
+    assert_eq!(config.lifecycle.reason(), Some("ValueError: failed"));
     assert_eq!(config.requested_image_name, Some(image_name.to_string()));
     let sealed = SealedExperiment::from_artifact(checkpoint_artifact).unwrap();
     assert_eq!(sealed.status(), &ExperimentStatus::Failed);
@@ -3717,10 +3701,13 @@ fn experiment_dyn_autosaves_on_run_close_and_recovers_with_requested_image_name(
     assert!(autosave.annotations().unwrap().is_empty());
 
     let config = experiment_config(&autosave.as_local_artifact());
-    assert_eq!(config.status, EXPERIMENT_STATUS_DRAFT);
+    assert_eq!(config.lifecycle.status().as_str(), EXPERIMENT_STATUS_DRAFT);
     assert_eq!(config.requested_image_name, Some(image_name.to_string()));
     assert_eq!(config.runs.len(), 1);
-    assert_eq!(config.runs[0].status, RUN_STATUS_FINISHED);
+    assert_eq!(
+        config.runs[0].lifecycle.status().as_str(),
+        RUN_STATUS_FINISHED
+    );
     assert_eq!(experiment.runs().unwrap().len(), 1);
     assert_eq!(experiment.run_parameter_cells().unwrap().len(), 1);
     let err = SealedExperiment::from_artifact(autosave.as_local_artifact())
@@ -3871,7 +3858,10 @@ fn disabled_run_close_autosave_does_not_disable_explicit_failed_checkpoint() {
     let checkpoint =
         LocalArtifactDyn::open_in_registry_handle(registry_handle, checkpoint_image_name).unwrap();
     assert_eq!(
-        experiment_config(&checkpoint.as_local_artifact()).status,
+        experiment_config(&checkpoint.as_local_artifact())
+            .lifecycle
+            .status()
+            .as_str(),
         EXPERIMENT_STATUS_FAILED
     );
 }
@@ -3976,8 +3966,14 @@ fn experiment_dyn_marks_keyboard_interrupt_checkpoint_separately() {
     )
     .unwrap();
     let autosave_config = experiment_config(&autosave.as_local_artifact());
-    assert_eq!(autosave_config.status, EXPERIMENT_STATUS_DRAFT);
-    assert_eq!(autosave_config.runs[0].status, RUN_STATUS_INTERRUPTED);
+    assert_eq!(
+        autosave_config.lifecycle.status().as_str(),
+        EXPERIMENT_STATUS_DRAFT
+    );
+    assert_eq!(
+        autosave_config.runs[0].lifecycle.status().as_str(),
+        RUN_STATUS_INTERRUPTED
+    );
 
     experiment
         .commit_interrupted_checkpoint("KeyboardInterrupt")
@@ -3991,20 +3987,17 @@ fn experiment_dyn_marks_keyboard_interrupt_checkpoint_separately() {
             .unwrap();
     assert!(checkpoint.annotations().unwrap().is_empty());
     let config = experiment_config(&checkpoint.as_local_artifact());
-    assert_eq!(config.status, EXPERIMENT_STATUS_INTERRUPTED);
     assert_eq!(
-        config.outcome.and_then(|outcome| outcome.reason).as_deref(),
-        Some("KeyboardInterrupt")
+        config.lifecycle.status().as_str(),
+        EXPERIMENT_STATUS_INTERRUPTED
     );
+    assert_eq!(config.lifecycle.reason(), Some("KeyboardInterrupt"));
     assert_eq!(config.requested_image_name, Some(image_name.to_string()));
-    assert_eq!(config.runs[0].status, RUN_STATUS_INTERRUPTED);
     assert_eq!(
-        config.runs[0]
-            .outcome
-            .as_ref()
-            .and_then(|outcome| outcome.reason.as_deref()),
-        Some("KeyboardInterrupt")
+        config.runs[0].lifecycle.status().as_str(),
+        RUN_STATUS_INTERRUPTED
     );
+    assert_eq!(config.runs[0].lifecycle.reason(), Some("KeyboardInterrupt"));
 }
 
 #[test]

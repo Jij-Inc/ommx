@@ -18,9 +18,9 @@ use super::config::ExperimentConfig;
 use super::logging::AttachmentLoggerStorage;
 use super::{
     allocate_next_run_id, next_run_id, read_adapter_diagnostic_payload, AdapterDiagnosticPayload,
-    AttachmentTable, AutosaveController, AutosavePolicy, ExperimentStatus, Name, RunEntry,
-    RunParameterCell, RunStatus, SamplingStatus, SealedExperiment, SolveStatus,
-    UnsealedExperimentState,
+    AttachmentTable, AutosaveController, AutosavePolicy, ExperimentLifecycle, ExperimentStatus,
+    Name, RunEntry, RunLifecycle, RunParameterCell, RunStatus, SamplingStatus, SealedExperiment,
+    SolveStatus, UnsealedExperimentState,
 };
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
 use crate::artifact::{
@@ -82,11 +82,13 @@ enum ExperimentDynLifecycle {
         open_runs: usize,
     },
     Sealed(SealedExperimentDynState),
-    Failed {
+    Checkpoint {
         image_name: ImageRef,
-        status: Option<ExperimentStatus>,
+        sealed: SealedExperimentDynState,
+    },
+    CommitFailed {
+        image_name: ImageRef,
         reason: String,
-        checkpoint_artifact: Option<LocalArtifactDyn>,
     },
 }
 
@@ -150,10 +152,10 @@ impl ExperimentCheckpoint {
 
     fn ensure_status(&self, accepted_statuses: &[&str]) -> Result<()> {
         ensure!(
-            accepted_statuses.contains(&self.config.status.as_str()),
+            accepted_statuses.contains(&self.config.lifecycle.status().as_str()),
             "Experiment checkpoint {} has status {}",
             self.artifact.image_name(),
-            self.config.status
+            self.config.lifecycle.status()
         );
         Ok(())
     }
@@ -177,8 +179,7 @@ struct UnsealedExperimentDynState {
 #[derive(Debug)]
 struct RunEntryDyn {
     run_id: u64,
-    status: RunStatus,
-    reason: Option<String>,
+    lifecycle: RunLifecycle,
     attachments: AttachmentTable<Descriptor>,
     trace: Option<Descriptor>,
     solves: Vec<SolveEntryDyn>,
@@ -210,8 +211,7 @@ struct SamplingEntryDyn {
 
 #[derive(Debug, Clone)]
 struct SealedExperimentDynState {
-    status: ExperimentStatus,
-    reason: Option<String>,
+    lifecycle: ExperimentLifecycle,
     artifact: LocalArtifactDyn,
     attachments: AttachmentTable<Descriptor>,
     runs: BTreeMap<u64, SealedRunDyn>,
@@ -228,8 +228,7 @@ struct SealedExperimentDynState {
 pub struct SealedRunDyn {
     registry_handle: LocalRegistryHandle,
     run_id: u64,
-    status: RunStatus,
-    reason: Option<String>,
+    lifecycle: RunLifecycle,
     attachments: AttachmentTable<Descriptor>,
     trace: Option<Descriptor>,
     solves: Vec<SolveDyn>,
@@ -273,12 +272,17 @@ impl SealedRunDyn {
     }
 
     pub fn status(&self) -> &RunStatus {
-        &self.status
+        self.lifecycle.status()
+    }
+
+    /// Complete lifecycle value, including failure metadata where applicable.
+    pub fn lifecycle(&self) -> &RunLifecycle {
+        &self.lifecycle
     }
 
     /// Concise caller-provided reason for a failed or interrupted Run.
     pub fn lifecycle_reason(&self) -> Option<&str> {
-        self.reason.as_deref()
+        self.lifecycle.reason()
     }
 
     pub fn registry_handle(&self) -> LocalRegistryHandle {
@@ -681,7 +685,8 @@ impl ExperimentDyn {
                 .image_name
                 .clone()),
             ExperimentDynLifecycle::Sealed(sealed) => Ok(sealed.image_name().clone()),
-            ExperimentDynLifecycle::Failed { image_name, .. } => Ok(image_name.clone()),
+            ExperimentDynLifecycle::Checkpoint { image_name, .. }
+            | ExperimentDynLifecycle::CommitFailed { image_name, .. } => Ok(image_name.clone()),
         }
     }
 
@@ -767,16 +772,15 @@ impl ExperimentDyn {
                 Ok(())
             }
             ExperimentDynLifecycle::Sealed(sealed) => sealed.rename(image_name),
-            ExperimentDynLifecycle::Failed {
-                image_name: failed_image_name,
-                checkpoint_artifact: Some(artifact),
-                ..
+            ExperimentDynLifecycle::Checkpoint {
+                image_name: checkpoint_image_name,
+                sealed,
             } => {
-                *artifact = artifact.tag_as(image_name.clone())?;
-                *failed_image_name = image_name;
+                sealed.rename(image_name.clone())?;
+                *checkpoint_image_name = image_name;
                 Ok(())
             }
-            lifecycle @ ExperimentDynLifecycle::Failed { .. } => bail_non_unsealed(lifecycle),
+            lifecycle @ ExperimentDynLifecycle::CommitFailed { .. } => bail_non_unsealed(lifecycle),
         }
     }
 
@@ -784,22 +788,27 @@ impl ExperimentDyn {
         match &lock_experiment_state(&self.state).lifecycle {
             ExperimentDynLifecycle::Unsealed { .. } => "unsealed",
             ExperimentDynLifecycle::Sealed(_) => "sealed",
-            ExperimentDynLifecycle::Failed { .. } => "failed",
+            ExperimentDynLifecycle::Checkpoint { .. }
+            | ExperimentDynLifecycle::CommitFailed { .. } => "failed",
         }
     }
 
     #[cfg(test)]
     pub(super) fn failure_reason_for_test(&self) -> Option<String> {
         match &lock_experiment_state(&self.state).lifecycle {
-            ExperimentDynLifecycle::Failed { reason, .. } => Some(reason.clone()),
+            ExperimentDynLifecycle::Checkpoint { sealed, .. } => {
+                sealed.lifecycle.reason().map(ToOwned::to_owned)
+            }
+            ExperimentDynLifecycle::CommitFailed { reason, .. } => Some(reason.clone()),
             _ => None,
         }
     }
 
     pub fn experiment_status(&self) -> Option<ExperimentStatus> {
         match &lock_experiment_state(&self.state).lifecycle {
-            ExperimentDynLifecycle::Sealed(sealed) => Some(sealed.status),
-            ExperimentDynLifecycle::Failed { status, .. } => *status,
+            ExperimentDynLifecycle::Sealed(sealed)
+            | ExperimentDynLifecycle::Checkpoint { sealed, .. } => Some(*sealed.lifecycle.status()),
+            ExperimentDynLifecycle::CommitFailed { .. } => None,
             ExperimentDynLifecycle::Unsealed { .. } => None,
         }
     }
@@ -810,8 +819,11 @@ impl ExperimentDyn {
     /// include secrets, tracebacks, local variables, or environment values.
     pub fn lifecycle_reason(&self) -> Option<String> {
         match &lock_experiment_state(&self.state).lifecycle {
-            ExperimentDynLifecycle::Sealed(sealed) => sealed.reason.clone(),
-            ExperimentDynLifecycle::Failed { reason, .. } => Some(reason.clone()),
+            ExperimentDynLifecycle::Sealed(sealed)
+            | ExperimentDynLifecycle::Checkpoint { sealed, .. } => {
+                sealed.lifecycle.reason().map(ToOwned::to_owned)
+            }
+            ExperimentDynLifecycle::CommitFailed { .. } => None,
             ExperimentDynLifecycle::Unsealed { .. } => None,
         }
     }
@@ -828,11 +840,8 @@ impl ExperimentDyn {
                 .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?
                 .annotations
                 .clone()),
-            ExperimentDynLifecycle::Sealed(sealed) => sealed.artifact.annotations(),
-            ExperimentDynLifecycle::Failed {
-                checkpoint_artifact: Some(artifact),
-                ..
-            } => artifact.annotations(),
+            ExperimentDynLifecycle::Sealed(sealed)
+            | ExperimentDynLifecycle::Checkpoint { sealed, .. } => sealed.artifact.annotations(),
             lifecycle => bail_not_sealed(lifecycle),
         }
     }
@@ -840,7 +849,9 @@ impl ExperimentDyn {
     pub fn open_run_count(&self) -> usize {
         match &lock_experiment_state(&self.state).lifecycle {
             ExperimentDynLifecycle::Unsealed { open_runs, .. } => *open_runs,
-            ExperimentDynLifecycle::Sealed(_) | ExperimentDynLifecycle::Failed { .. } => 0,
+            ExperimentDynLifecycle::Sealed(_)
+            | ExperimentDynLifecycle::Checkpoint { .. }
+            | ExperimentDynLifecycle::CommitFailed { .. } => 0,
         }
     }
 }
@@ -907,12 +918,7 @@ impl ExperimentDyn {
             Ok(artifact) => artifact,
             Err(error) => {
                 let reason = error.to_string();
-                dyn_state.lifecycle = ExperimentDynLifecycle::Failed {
-                    image_name,
-                    status: None,
-                    reason,
-                    checkpoint_artifact: None,
-                };
+                dyn_state.lifecycle = ExperimentDynLifecycle::CommitFailed { image_name, reason };
                 return Err(error);
             }
         };
@@ -920,12 +926,7 @@ impl ExperimentDyn {
             Ok(sealed) => sealed,
             Err(error) => {
                 let reason = error.to_string();
-                dyn_state.lifecycle = ExperimentDynLifecycle::Failed {
-                    image_name,
-                    status: None,
-                    reason,
-                    checkpoint_artifact: None,
-                };
+                dyn_state.lifecycle = ExperimentDynLifecycle::CommitFailed { image_name, reason };
                 return Err(error);
             }
         };
@@ -935,16 +936,23 @@ impl ExperimentDyn {
 
     pub fn commit_failed_checkpoint(&self, reason: impl Into<String>) -> Result<()> {
         self.suppress_interrupted_on_drop();
-        self.commit_checkpoint(reason, super::EXPERIMENT_STATUS_FAILED)
+        self.commit_checkpoint(ExperimentLifecycle::Failed {
+            reason: Some(reason.into()),
+        })
     }
 
     pub fn commit_interrupted_checkpoint(&self, reason: impl Into<String>) -> Result<()> {
         self.suppress_interrupted_on_drop();
-        self.commit_checkpoint(reason, super::EXPERIMENT_STATUS_INTERRUPTED)
+        self.commit_checkpoint(ExperimentLifecycle::Interrupted {
+            reason: Some(reason.into()),
+        })
     }
 
-    fn commit_checkpoint(&self, reason: impl Into<String>, status: &'static str) -> Result<()> {
-        let reason = reason.into();
+    fn commit_checkpoint(&self, lifecycle: ExperimentLifecycle) -> Result<()> {
+        let reason = lifecycle
+            .reason()
+            .expect("explicit failed or interrupted checkpoint has a reason")
+            .to_string();
         let mut dyn_state = lock_experiment_state(&self.state);
         dyn_state.pending_interrupted_checkpoint = None;
         let registry_handle = dyn_state.registry_handle.clone();
@@ -963,7 +971,7 @@ impl ExperimentDyn {
             .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
         let image_name = state.image_name.clone();
         let artifact = match state
-            .commit_checkpoint(registry_handle.registry(), status, Some(reason.clone()))
+            .commit_checkpoint(registry_handle.registry(), lifecycle)
             .and_then(|artifact| {
                 LocalArtifactDyn::open_in_registry_handle(
                     registry_handle.clone(),
@@ -973,21 +981,24 @@ impl ExperimentDyn {
             Ok(artifact) => artifact,
             Err(error) => {
                 let checkpoint_error = error.to_string();
-                dyn_state.lifecycle = ExperimentDynLifecycle::Failed {
+                dyn_state.lifecycle = ExperimentDynLifecycle::CommitFailed {
                     image_name,
-                    status: None,
                     reason: format!("{reason}; failed to publish checkpoint: {checkpoint_error}"),
-                    checkpoint_artifact: None,
                 };
                 return Err(error);
             }
         };
-        dyn_state.lifecycle = ExperimentDynLifecycle::Failed {
-            image_name,
-            status: Some(ExperimentStatus::from_config(status)?),
-            reason,
-            checkpoint_artifact: Some(artifact),
+        let sealed = match SealedExperimentDynState::from_checkpoint_artifact(artifact) {
+            Ok(sealed) => sealed,
+            Err(error) => {
+                dyn_state.lifecycle = ExperimentDynLifecycle::CommitFailed {
+                    image_name,
+                    reason: error.to_string(),
+                };
+                return Err(error);
+            }
         };
+        dyn_state.lifecycle = ExperimentDynLifecycle::Checkpoint { image_name, sealed };
         Ok(())
     }
 
@@ -995,10 +1006,7 @@ impl ExperimentDyn {
         let dyn_state = lock_experiment_state(&self.state);
         match &dyn_state.lifecycle {
             ExperimentDynLifecycle::Sealed(sealed) => Ok(sealed.artifact.clone()),
-            ExperimentDynLifecycle::Failed {
-                checkpoint_artifact: Some(artifact),
-                ..
-            } => Ok(artifact.clone()),
+            ExperimentDynLifecycle::Checkpoint { sealed, .. } => Ok(sealed.artifact.clone()),
             lifecycle => bail_not_sealed(lifecycle),
         }
     }
@@ -1014,14 +1022,7 @@ impl ExperimentDyn {
                         .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
                     state.attachments.clone()
                 }
-                ExperimentDynLifecycle::Failed {
-                    checkpoint_artifact: Some(artifact),
-                    ..
-                } => {
-                    let sealed =
-                        SealedExperimentDynState::from_checkpoint_artifact(artifact.clone())?;
-                    sealed.attachments.clone()
-                }
+                ExperimentDynLifecycle::Checkpoint { sealed, .. } => sealed.attachments.clone(),
                 lifecycle => return bail_not_sealed(lifecycle),
             }
         };
@@ -1088,16 +1089,9 @@ impl ExperimentDyn {
                     state.runs.values(),
                 ))
             }
-            ExperimentDynLifecycle::Failed {
-                checkpoint_artifact: Some(artifact),
-                ..
-            } => Ok(
-                SealedExperimentDynState::from_checkpoint_artifact(artifact.clone())?
-                    .runs
-                    .values()
-                    .cloned()
-                    .collect(),
-            ),
+            ExperimentDynLifecycle::Checkpoint { sealed, .. } => {
+                Ok(sealed.runs.values().cloned().collect())
+            }
             lifecycle => bail_not_sealed(lifecycle),
         }
     }
@@ -1112,14 +1106,7 @@ impl ExperimentDyn {
                     .ok_or_else(|| anyhow::anyhow!("Experiment has already been committed"))?;
                 Ok(unsealed_run_parameter_cells(state.runs.values()))
             }
-            ExperimentDynLifecycle::Failed {
-                checkpoint_artifact: Some(artifact),
-                ..
-            } => Ok(
-                SealedExperimentDynState::from_checkpoint_artifact(artifact.clone())?
-                    .run_parameters
-                    .cells(),
-            ),
+            ExperimentDynLifecycle::Checkpoint { sealed, .. } => Ok(sealed.run_parameters.cells()),
             lifecycle => bail_not_sealed(lifecycle),
         }
     }
@@ -1131,10 +1118,7 @@ impl<'reg> AsArtifact<'reg> for ExperimentDyn {
             let dyn_state = lock_experiment_state(&self.state);
             let artifact = match &dyn_state.lifecycle {
                 ExperimentDynLifecycle::Sealed(sealed) => &sealed.artifact,
-                ExperimentDynLifecycle::Failed {
-                    checkpoint_artifact: Some(artifact),
-                    ..
-                } => artifact,
+                ExperimentDynLifecycle::Checkpoint { sealed, .. } => &sealed.artifact,
                 lifecycle => return bail_not_sealed(lifecycle),
             };
             (
@@ -1158,11 +1142,10 @@ impl UnsealedExperimentDynState {
     fn commit_checkpoint<'reg>(
         self,
         registry: &'reg LocalRegistry,
-        status: &'static str,
-        reason: Option<String>,
+        lifecycle: ExperimentLifecycle,
     ) -> Result<LocalArtifact<'reg>> {
         self.into_unsealed_state(registry)?
-            .commit_checkpoint(registry, status, reason)
+            .commit_checkpoint(registry, lifecycle)
     }
 
     fn autosave_checkpoint<'reg>(
@@ -1209,8 +1192,7 @@ impl UnsealedExperimentDynState {
                         *run_id,
                         RunEntry {
                             run_id: run.run_id,
-                            status: run.status.clone(),
-                            reason: run.reason.clone(),
+                            lifecycle: run.lifecycle.clone(),
                             attachments: run.attachments.clone().try_map_owned(|descriptor| {
                                 registry.stored_descriptor(descriptor)
                             })?,
@@ -1303,8 +1285,7 @@ impl UnsealedExperimentDynState {
                         run_id,
                         RunEntry {
                             run_id: run.run_id,
-                            status: run.status,
-                            reason: run.reason,
+                            lifecycle: run.lifecycle,
                             attachments: run.attachments.try_map_owned(|descriptor| {
                                 registry.stored_descriptor(descriptor)
                             })?,
@@ -1393,8 +1374,7 @@ impl SealedExperimentDynState {
         artifact: LocalArtifactDyn,
     ) -> Result<Self> {
         let registry_handle = artifact.registry_handle();
-        let status = *sealed.status();
-        let reason = sealed.lifecycle_reason().map(ToOwned::to_owned);
+        let lifecycle = sealed.lifecycle().clone();
         let (attachments, runs, run_parameters) = {
             let attachments = descriptor_attachment_table(sealed.attachment_table());
             let runs = sealed
@@ -1405,8 +1385,7 @@ impl SealedExperimentDynState {
                         SealedRunDyn {
                             registry_handle: registry_handle.clone(),
                             run_id: run.run_id(),
-                            status: run.status().clone(),
-                            reason: run.lifecycle_reason().map(ToOwned::to_owned),
+                            lifecycle: run.lifecycle().clone(),
                             attachments: descriptor_attachment_table(run.attachment_table()),
                             trace: run.trace_descriptor().cloned().map(Descriptor::from),
                             solves: run
@@ -1457,8 +1436,7 @@ impl SealedExperimentDynState {
             (attachments, runs, run_parameters)
         };
         Ok(Self {
-            status,
-            reason,
+            lifecycle,
             artifact,
             attachments,
             runs,
@@ -1532,8 +1510,7 @@ impl SealedExperimentDynState {
                 run.run_id,
                 RunEntryDyn {
                     run_id: run.run_id,
-                    status: run.status.clone(),
-                    reason: run.reason.clone(),
+                    lifecycle: run.lifecycle.clone(),
                     attachments: run.attachments.clone(),
                     trace: run.trace.clone(),
                     solves,
@@ -1579,8 +1556,7 @@ fn unsealed_run_views<'a>(
     runs.map(|run| SealedRunDyn {
         registry_handle: registry_handle.clone(),
         run_id: run.run_id,
-        status: run.status.clone(),
-        reason: run.reason.clone(),
+        lifecycle: run.lifecycle.clone(),
         attachments: run.attachments.clone(),
         trace: run.trace.clone(),
         solves: run
@@ -1688,7 +1664,10 @@ fn bail_non_unsealed<T>(lifecycle: &ExperimentDynLifecycle) -> Result<T> {
             unreachable!("unsealed lifecycle was handled by caller")
         }
         ExperimentDynLifecycle::Sealed(_) => crate::bail!("Sealed Experiment is read-only"),
-        ExperimentDynLifecycle::Failed { reason, .. } => {
+        ExperimentDynLifecycle::Checkpoint { .. } => {
+            crate::bail!("Checkpointed Experiment is read-only")
+        }
+        ExperimentDynLifecycle::CommitFailed { reason, .. } => {
             crate::bail!("Experiment commit has failed: {reason}")
         }
     }
@@ -1702,7 +1681,10 @@ fn bail_not_sealed<T>(lifecycle: &ExperimentDynLifecycle) -> Result<T> {
         ExperimentDynLifecycle::Sealed(_) => {
             unreachable!("sealed lifecycle was handled by caller")
         }
-        ExperimentDynLifecycle::Failed { reason, .. } => {
+        ExperimentDynLifecycle::Checkpoint { .. } => {
+            unreachable!("checkpoint lifecycle was handled by caller")
+        }
+        ExperimentDynLifecycle::CommitFailed { reason, .. } => {
             crate::bail!("Experiment commit has failed: {reason}")
         }
     }

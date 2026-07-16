@@ -2,7 +2,7 @@
 
 use super::logging::AttachmentLoggerStorage;
 use super::{
-    AdapterDiagnosticPayload, AttachmentTable, ParameterValue, Run, RunEntry, RunStatus,
+    AdapterDiagnosticPayload, AttachmentTable, ParameterValue, Run, RunEntry, RunLifecycle,
     SamplingEntry, SamplingStatus, SolveEntry, SolveStatus, Trace,
 };
 use crate::artifact::local_registry::{LocalRegistry, StoredDescriptor};
@@ -401,7 +401,7 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
     /// experiment. Consumes the handle so no further run-scoped data
     /// can be added.
     pub fn finish(self) -> Result<()> {
-        self.close(RunStatus::Finished, None)
+        self.close(RunLifecycle::Finished)
     }
 
     /// Close the run as failed and append the partial run state to the
@@ -410,7 +410,7 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
     /// This preserves run-scoped payloads and completed solves or samplings
     /// that were logged before the failure.
     pub fn finish_failed(self) -> Result<()> {
-        self.close(RunStatus::Failed, None)
+        self.close(RunLifecycle::Failed { reason: None })
     }
 
     /// Close the run as failed with a concise durable reason.
@@ -419,7 +419,9 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
     /// Do not include secrets, tracebacks, local variables, or environment
     /// values; solver diagnostics belong in Solve or Sampling diagnostics.
     pub fn finish_failed_with_reason(self, reason: impl Into<String>) -> Result<()> {
-        self.close(RunStatus::Failed, Some(reason.into()))
+        self.close(RunLifecycle::Failed {
+            reason: Some(reason.into()),
+        })
     }
 
     /// Close the run as interrupted and append the partial run state to
@@ -428,12 +430,14 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
     /// This is used for user cancellation such as Python
     /// `KeyboardInterrupt`.
     pub fn finish_interrupted(self) -> Result<()> {
-        self.close(RunStatus::Interrupted, None)
+        self.close(RunLifecycle::Interrupted { reason: None })
     }
 
     /// Close the run as interrupted with a concise durable reason.
     pub fn finish_interrupted_with_reason(self, reason: impl Into<String>) -> Result<()> {
-        self.close(RunStatus::Interrupted, Some(reason.into()))
+        self.close(RunLifecycle::Interrupted {
+            reason: Some(reason.into()),
+        })
     }
 
     /// Opt into best-effort interrupted finalization if this Run is dropped
@@ -447,16 +451,15 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         self
     }
 
-    fn close(mut self, status: RunStatus, reason: Option<String>) -> Result<()> {
-        self.close_inner(status, reason)
+    fn close(mut self, lifecycle: RunLifecycle) -> Result<()> {
+        self.close_inner(lifecycle)
     }
 
-    fn close_inner(&mut self, status: RunStatus, reason: Option<String>) -> Result<()> {
+    fn close_inner(&mut self, lifecycle: RunLifecycle) -> Result<()> {
         self.closed = true;
         let run = RunEntry {
             run_id: self.run_id,
-            status,
-            reason,
+            lifecycle,
             attachments: std::mem::take(&mut self.attachments),
             trace: self.trace.take(),
             solves: std::mem::take(&mut self.solves),
@@ -473,7 +476,7 @@ impl Drop for Run<'_, '_> {
         if !self.interrupt_on_drop || self.closed {
             return;
         }
-        if let Err(error) = self.close_inner(RunStatus::Interrupted, None) {
+        if let Err(error) = self.close_inner(RunLifecycle::Interrupted { reason: None }) {
             tracing::warn!(
                 error = %error,
                 run_id = self.run_id,

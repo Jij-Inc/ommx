@@ -109,8 +109,10 @@
 //! [`StoredDescriptor`]
 //! values carry a borrowed registry proof, while dynamic handles retain a
 //! registry owner and validate raw OCI descriptors at runtime.
-//! [`ExperimentStatus`], [`RunStatus`], [`SolveStatus`], and
-//! [`SamplingStatus`] are lifecycle values rather than alternative handles.
+//! [`ExperimentLifecycle`] and [`RunLifecycle`] are the complete lifecycle
+//! values; [`ExperimentStatus`] and [`RunStatus`] are their reason-free
+//! discriminants used by listings and compatibility accessors.
+//! [`SolveStatus`] and [`SamplingStatus`] remain status-only values.
 //! The [`config`] types describe the serialized Artifact schema and are not
 //! runtime Experiment / Run objects.
 //!
@@ -126,6 +128,7 @@ mod artifact;
 mod attachment;
 pub mod config;
 mod dynamic;
+mod lifecycle;
 mod logging;
 mod parameter;
 mod run;
@@ -138,6 +141,7 @@ pub use attachment::{
     detect_file_media_type, AttachmentTable, Compression, DEFAULT_FILE_MEDIA_TYPE,
 };
 pub use dynamic::{ExperimentDyn, RunDyn, SamplingDyn, SealedRunDyn, SolveDyn};
+pub use lifecycle::{ExperimentLifecycle, RunLifecycle};
 pub use logging::AttachmentLogger;
 pub use parameter::{ParameterValue, RunParameterCell};
 pub use run::{FailedSampleRecord, FailedSolveRecord, FinishedSampleRecord, FinishedSolveRecord};
@@ -345,20 +349,6 @@ impl RunStatus {
             Self::Interrupted => RUN_STATUS_INTERRUPTED,
         }
     }
-
-    fn from_config(status: &str) -> Result<Self> {
-        match status {
-            RUN_STATUS_FINISHED => Ok(Self::Finished),
-            RUN_STATUS_FAILED => Ok(Self::Failed),
-            RUN_STATUS_INTERRUPTED => Ok(Self::Interrupted),
-            _ => {
-                crate::bail!(
-                    "Run status is {status}, expected {RUN_STATUS_FINISHED}, \
-                     {RUN_STATUS_FAILED}, or {RUN_STATUS_INTERRUPTED}"
-                )
-            }
-        }
-    }
 }
 
 impl std::fmt::Display for RunStatus {
@@ -461,8 +451,7 @@ pub struct Experiment<'reg> {
 /// written and published.
 #[derive(Debug, Clone)]
 pub struct SealedExperiment<'reg> {
-    status: ExperimentStatus,
-    reason: Option<String>,
+    lifecycle: ExperimentLifecycle,
     artifact: LocalArtifact<'reg>,
     attachments: AttachmentTable<StoredDescriptor<'reg>>,
     runs: BTreeMap<u64, sealed::SealedRun<'reg>>,
@@ -593,10 +582,9 @@ impl Drop for ScopedExperimentGuard<'_> {
         let Some(experiment) = self.experiment.take() else {
             return;
         };
-        if let Err(error) = experiment.commit_checkpoint(
-            EXPERIMENT_STATUS_INTERRUPTED,
-            Some("Experiment scope unwound".to_string()),
-        ) {
+        if let Err(error) = experiment.commit_checkpoint(ExperimentLifecycle::Interrupted {
+            reason: Some("Experiment scope unwound".to_string()),
+        }) {
             tracing::warn!(
                 error = %error,
                 "Failed to publish interrupted Experiment checkpoint during scoped unwind"
@@ -615,8 +603,7 @@ impl Drop for ScopedExperimentGuard<'_> {
 #[derive(Debug)]
 struct RunEntry<'reg> {
     run_id: u64,
-    status: RunStatus,
-    reason: Option<String>,
+    lifecycle: RunLifecycle,
     attachments: AttachmentTable<StoredDescriptor<'reg>>,
     trace: Option<StoredDescriptor<'reg>>,
     solves: Vec<SolveEntry<'reg>>,
@@ -799,9 +786,10 @@ impl<'reg> Experiment<'reg> {
         match f(guard.experiment()) {
             Ok(()) => guard.take().commit(),
             Err(error) => {
-                if let Err(checkpoint_error) = guard
-                    .take()
-                    .commit_checkpoint(EXPERIMENT_STATUS_FAILED, Some(error.to_string()))
+                if let Err(checkpoint_error) =
+                    guard.take().commit_checkpoint(ExperimentLifecycle::Failed {
+                        reason: Some(error.to_string()),
+                    })
                 {
                     tracing::warn!(
                         error = %checkpoint_error,
@@ -966,13 +954,9 @@ impl<'reg> Experiment<'reg> {
         SealedExperiment::from_artifact(artifact)
     }
 
-    fn commit_checkpoint(
-        self,
-        status: &'static str,
-        reason: Option<String>,
-    ) -> Result<LocalArtifact<'reg>> {
+    fn commit_checkpoint(self, lifecycle: ExperimentLifecycle) -> Result<LocalArtifact<'reg>> {
         let (registry, state) = self.into_parts();
-        state.commit_checkpoint(registry, status, reason)
+        state.commit_checkpoint(registry, lifecycle)
     }
 
     fn into_parts(self) -> (&'reg LocalRegistry, UnsealedExperimentState<'reg>) {
@@ -1070,8 +1054,7 @@ impl<'reg> SealedExperiment<'reg> {
                 run.run_id(),
                 RunEntry {
                     run_id: run.run_id(),
-                    status: run.status().clone(),
-                    reason: run.lifecycle_reason().map(ToOwned::to_owned),
+                    lifecycle: run.lifecycle().clone(),
                     attachments: run.attachment_table().clone(),
                     trace: run.trace_descriptor().cloned(),
                     solves,
