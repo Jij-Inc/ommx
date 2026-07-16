@@ -140,28 +140,25 @@ The variable names and subscripts added to `DecisionVariable.binary` during crea
 
 ## Sampling with OpenJij
 
-The native OpenJij translator in `ommx-openjij-adapter` accepts Binary,
-unconstrained minimization models with a polynomial objective of any degree.
-The TSP instance above contains constraints, so first check and explicitly
-prepare it with a finite penalty weight by setting `preparation=True` on the
-sampler call. The source `Instance` remains the sampler input so Experiment
-logging records the original constrained model.
+The OpenJij adapter's input class contains Binary, unconstrained minimization
+instances with a polynomial objective of any degree.
+The TSP instance above contains constraints, so prepare it explicitly with a
+finite penalty weight. Then pass the resulting `prepared.input` `Instance` to
+the Adapter and evaluate those samples against the source model explicitly.
 
 ```{code-cell} ipython3
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
-preparation_check = OMMXOpenJijSAAdapter.check_preparation(
+prepared = OMMXOpenJijSAAdapter.prepare(
     instance,
     uniform_penalty_weight=20.0,
 )
-assert preparation_check.compatible
 
-sample_set = OMMXOpenJijSAAdapter.sample(
-    instance,
-    preparation=True,
-    uniform_penalty_weight=20.0,
+prepared_samples = OMMXOpenJijSAAdapter.sample(
+    prepared.input,
     num_reads=16,
 )
+sample_set = prepared.evaluate_source(prepared_samples)
 sample_set.summary
 ```
 
@@ -169,13 +166,13 @@ sample_set.summary
 {py:class}`~ommx.SampleSet`, which stores the evaluated objective values and
 constraint violations in addition to the decision variable values.
 `SampleSet.summary` displays this information. Its `feasible` column indicates
-feasibility for the source constrained problem, not only for the unconstrained
-model sent to OpenJij.
+feasibility for the source constrained problem because
+`prepared.evaluate_source()` evaluates the prepared-input states against that
+source model.
 
-The penalty weight passed through `sample` belongs to the explicit preparation,
-not to the OpenJij backend sampler. A finite penalty encourages feasibility but
-does not guarantee that every returned sample is feasible for the source
-problem.
+The penalty weight passed to `prepare` belongs to the explicit preparation, not
+to the OpenJij backend sampler. A finite penalty encourages feasibility but does
+not guarantee that every returned sample is feasible for the source problem.
 
 ### Inspecting preparation
 
@@ -184,48 +181,43 @@ mutating the instance. `prepare` performs the checked transformations and
 stores an audit report in `prepared.report`:
 
 ```{code-cell} ipython3
-prepared = OMMXOpenJijSAAdapter.prepare(
-    instance,
-    uniform_penalty_weight=20.0,
-)
 report = prepared.report
+final = report.prepared_input_applicability
 {
-    "source_compatibility": report.source_compatibility.compatible,
-    "encoding_compatibility": report.encoding_compatibility.compatible,
+    "source_membership": report.source_check.input_membership.is_member,
+    "preconditions": report.source_check.precondition_violations,
     "steps": [
         (step.operation, step.semantics.value)
         for step in report.steps
     ],
-    "final_compatibility": report.final_compatibility.compatible,
+    "prepared_input_applicability": final.is_applicable if final else False,
 }
 ```
 
-The report separates four questions:
+The report separates three questions:
 
-- `source_compatibility` says whether the source model and requested options
-  satisfy the explicit preparation contract.
-- `encoding_compatibility` says whether the intermediate model satisfies the
-  remaining Integer-to-Binary encoding conditions.
+- `source_check` records membership in the preparation source class and the
+  Adapter-owned preparation preconditions.
 - `steps` records each transformation and its semantic effect.
-- `final_compatibility` says whether the prepared solver model satisfies the
-  adapter's native capability and adapter-specific preconditions.
+- `prepared_input_applicability` says whether the produced `Instance` belongs
+  to the Adapter input class and satisfies its Adapter-specific preconditions.
 
 A step is `Exact` for an exact rewrite, `Approximate` when preparation uses an
 approximation such as discrete inequality slack, or `FinitePenalty` when
 constraints are replaced by finite objective penalties. `FinitePenalty` does
-not claim native or exact constrained support.
+not claim that the adapter directly or exactly supports constrained input.
 
-If variable bounds prove an inequality infeasible, `check_preparation`,
-`prepare`, and sampling with `preparation=True` raise
-{py:class}`~ommx.adapter.InfeasibleDetected`; that is a property of the model,
-not an Adapter Capability mismatch.
+If variable bounds prove an inequality infeasible, `check_preparation` and
+`prepare` raise {py:class}`~ommx.adapter.InfeasibleDetected`; that is a property
+of the model, not an adapter applicability failure.
 
 The maximum of 53 auxiliary bits checked for a used Integer variable is an
-OMMX Integer-to-Binary log-encoding condition. It is not a native OpenJij
-backend capability and is unrelated to `ommx.v2.Feature`, which gates whether a
-reader can safely interpret serialized semantics for forward compatibility.
-Spin-variable support, including OpenJij's native Spin input, is tracked
-separately in [OMMX issue #1082](https://github.com/Jij-Inc/ommx/issues/1082).
+OMMX Integer-to-Binary log-encoding condition. It is not a property of the
+OpenJij adapter's input class and is unrelated to `ommx.v2.Feature`, which gates
+whether a reader can safely interpret serialized semantics for forward
+compatibility. Spin-variable support, including direct Spin input for OpenJij,
+is tracked separately in
+[OMMX issue #1082](https://github.com/Jij-Inc/ommx/issues/1082).
 
 To view the feasibility for each constraint, use the `summary_with_constraints` property.
 

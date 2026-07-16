@@ -422,29 +422,49 @@ impl<'exp, 'reg> Run<'exp, 'reg> {
         self.close(RunStatus::Interrupted)
     }
 
-    fn close(self, status: RunStatus) -> Result<()> {
-        let Run {
-            experiment,
-            run_id,
-            attachments,
-            trace,
-            solves,
-            next_solve_id: _,
-            samplings,
-            next_sampling_id: _,
-            parameters,
-        } = self;
+    /// Opt into best-effort interrupted finalization if this Run is dropped
+    /// before an explicit finish operation.
+    ///
+    /// Ordinary Runs retain abandon-on-drop behavior. Runs created by
+    /// [`super::Experiment::scoped`] and [`super::Experiment::scoped_with_registry`]
+    /// opt in automatically. Drop failures are reported through tracing.
+    pub fn interrupt_on_drop(mut self) -> Self {
+        self.interrupt_on_drop = true;
+        self
+    }
+
+    fn close(mut self, status: RunStatus) -> Result<()> {
+        self.close_inner(status)
+    }
+
+    fn close_inner(&mut self, status: RunStatus) -> Result<()> {
+        self.closed = true;
         let run = RunEntry {
-            run_id,
+            run_id: self.run_id,
             status,
-            attachments,
-            trace,
-            solves,
-            samplings,
-            parameters,
+            attachments: std::mem::take(&mut self.attachments),
+            trace: self.trace.take(),
+            solves: std::mem::take(&mut self.solves),
+            samplings: std::mem::take(&mut self.samplings),
+            parameters: std::mem::take(&mut self.parameters),
         };
-        experiment.push_closed_run(run)?;
+        self.experiment.push_closed_run(run)?;
         Ok(())
+    }
+}
+
+impl Drop for Run<'_, '_> {
+    fn drop(&mut self) {
+        if !self.interrupt_on_drop || self.closed {
+            return;
+        }
+        if let Err(error) = self.close_inner(RunStatus::Interrupted) {
+            tracing::warn!(
+                error = %error,
+                run_id = self.run_id,
+                "Failed to finish interrupted Run during drop"
+            );
+        }
     }
 }
 

@@ -1,5 +1,7 @@
 use super::index::SqliteIndexStore;
 use super::*;
+#[cfg(feature = "remote-artifact")]
+use crate::artifact::RemoteArtifactError;
 use crate::artifact::{
     media_types, stable_json_bytes, ArtifactDraft, ImageRef, LocalArtifact, LocalManifest,
     OCI_IMAGE_MANIFEST_MEDIA_TYPE,
@@ -2244,6 +2246,36 @@ fn pull_image_short_circuits_when_ref_is_present_with_blob() -> Result<()> {
         matches!(outcome.ref_update, RefUpdate::Unchanged),
         "expected RefUpdate::Unchanged on SQLite-hit short-circuit, got {:?}",
         outcome.ref_update,
+    );
+    Ok(())
+}
+
+#[cfg(feature = "remote-artifact")]
+#[test]
+fn pull_image_does_not_classify_corrupt_local_cache_as_remote_error() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let registry = LocalRegistry::open(dir.path())?;
+    let image_name = ImageRef::parse("does-not-resolve.invalid/jij-inc/ommx/demo:corrupt-cache")?;
+    let local_artifact =
+        build_test_local_artifact(&registry, &image_name, b"corrupt-cache-payload")?;
+    let manifest_digest = local_artifact.manifest_digest().clone();
+    drop(local_artifact);
+
+    let (algorithm, encoded) = manifest_digest
+        .as_ref()
+        .split_once(':')
+        .context("test manifest digest must contain an algorithm")?;
+    fs::write(
+        registry.root().join("blobs").join(algorithm).join(encoded),
+        b"corrupt local manifest",
+    )?;
+
+    let error = registry
+        .pull_image(&image_name)
+        .expect_err("corrupt cached manifest must fail before remote access");
+    assert!(
+        !error.is::<RemoteArtifactError>(),
+        "local cache failures must not be classified as remote Artifact failures: {error:#}",
     );
     Ok(())
 }

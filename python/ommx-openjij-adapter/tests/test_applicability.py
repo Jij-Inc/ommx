@@ -6,27 +6,27 @@ import pytest
 
 from ommx import (
     DecisionVariable,
-    DegreeLimit,
+    DegreeBound,
     Equality,
     IndicatorConstraint,
     Instance,
+    InstanceClassMismatch,
     Kind,
     OneHotConstraint,
-    PortableCapabilityMismatch,
     Sense,
     Sos1Constraint,
 )
 from ommx.adapter import (
-    AdapterCompatibilityError,
-    AdapterCompatibilityReport,
+    AdapterNotApplicableError,
     AdapterPreconditionViolation,
     ConstraintRef,
     InfeasibleDetected,
 )
 from ommx_openjij_adapter import (
     OMMXOpenJijSAAdapter,
+    OpenJijPreparation,
+    OpenJijPreparationError,
     OpenJijPreparationReport,
-    OpenJijPreparedModel,
 )
 
 
@@ -45,30 +45,30 @@ def _instance_with_variable(
 
 def _assert_direct_rejection_does_not_mutate(
     instance: Instance,
-) -> tuple[PortableCapabilityMismatch, ...]:
+) -> tuple[InstanceClassMismatch, ...]:
     before = instance.to_v2_bytes()
 
-    report = OMMXOpenJijSAAdapter.check_compatibility(instance)
-    assert not report.compatible
-    assert not report.portable_report.compatible
+    report = OMMXOpenJijSAAdapter.check_applicability(instance)
+    assert not report.is_applicable
+    assert not report.input_membership.is_member
     assert not report.preconditions_checked
     assert report.precondition_violations == ()
     assert instance.to_v2_bytes() == before
 
-    with pytest.raises(AdapterCompatibilityError) as error:
+    with pytest.raises(AdapterNotApplicableError) as error:
         OMMXOpenJijSAAdapter(instance)
     assert error.value.report.adapter == report.adapter
-    assert not error.value.report.compatible
+    assert not error.value.report.is_applicable
     assert instance.to_v2_bytes() == before
 
-    [profile_report] = report.portable_report.profiles
-    return tuple(profile_report.mismatches)
+    [clause_report] = report.input_membership.clause_reports
+    return tuple(clause_report.mismatches)
 
 
 def _check_preparation_without_mutation(
     instance: Instance,
     **kwargs: Any,
-) -> AdapterCompatibilityReport:
+) -> OpenJijPreparationReport:
     before = instance.to_v2_bytes()
     report = OMMXOpenJijSAAdapter.check_preparation(instance, **kwargs)
     assert instance.to_v2_bytes() == before
@@ -79,19 +79,19 @@ def _violation_text(violation: AdapterPreconditionViolation) -> str:
     return f"{violation.condition} {violation.description}".lower()
 
 
-def test_declares_native_binary_polynomial_profile() -> None:
-    capabilities = OMMXOpenJijSAAdapter.CAPABILITIES
-    assert capabilities is not None
+def test_declares_binary_polynomial_input_class() -> None:
+    input_class = OMMXOpenJijSAAdapter.INPUT_CLASS
+    assert input_class is not None
 
-    [profile] = capabilities.profiles
-    assert profile.name == "openjij-binary-hubo"
-    assert profile.variable_kinds == {Kind.Binary}
-    assert profile.objective_degree == DegreeLimit.any()
-    assert profile.regular_constraints == {}
-    assert profile.indicator_constraints == {}
-    assert not profile.supports_one_hot
-    assert not profile.supports_sos1
-    assert profile.senses == {Sense.Minimize}
+    [clause] = input_class.clauses
+    assert clause.label == "openjij-binary-hubo"
+    assert clause.allowed_variable_kinds == {Kind.Binary}
+    assert clause.objective_degree_bound == DegreeBound.unbounded()
+    assert clause.regular_constraint_degree_bounds == {}
+    assert clause.indicator_constraint_degree_bounds == {}
+    assert not clause.allows_one_hot
+    assert not clause.allows_sos1
+    assert clause.allowed_senses == {Sense.Minimize}
 
 
 def test_direct_accepts_arbitrary_degree_binary_minimization_without_mutation() -> None:
@@ -104,9 +104,9 @@ def test_direct_accepts_arbitrary_degree_binary_minimization_without_mutation() 
     )
     before = instance.to_v2_bytes()
 
-    report = OMMXOpenJijSAAdapter.check_compatibility(instance)
-    assert report.compatible
-    assert report.portable_report.matching_profiles == ["openjij-binary-hubo"]
+    report = OMMXOpenJijSAAdapter.check_applicability(instance)
+    assert report.is_applicable
+    assert report.input_membership.matching_clauses == [(0, "openjij-binary-hubo")]
     assert report.preconditions_checked
     assert report.precondition_violations == ()
 
@@ -125,10 +125,10 @@ def test_direct_rejects_nonfinite_aggregated_interactions() -> None:
         sense=Sense.Minimize,
     )
 
-    report = OMMXOpenJijSAAdapter.check_compatibility(instance)
-    assert report.portable_report.compatible
+    report = OMMXOpenJijSAAdapter.check_applicability(instance)
+    assert report.input_membership.is_member
     assert report.preconditions_checked
-    assert not report.compatible
+    assert not report.is_applicable
     [violation] = report.precondition_violations
     assert violation.condition == "openjij.interactions.coefficient_finite"
     assert violation.variable_ids == frozenset({0})
@@ -136,14 +136,14 @@ def test_direct_rejects_nonfinite_aggregated_interactions() -> None:
 
 def test_direct_rejects_variable_id_outside_openjij_signed_range() -> None:
     accepted = _instance_with_variable(DecisionVariable.binary(2**63 - 1))
-    assert OMMXOpenJijSAAdapter.check_compatibility(accepted).compatible
+    assert OMMXOpenJijSAAdapter.check_applicability(accepted).is_applicable
 
     variable_id = 2**63
     instance = _instance_with_variable(DecisionVariable.binary(variable_id))
 
-    report = OMMXOpenJijSAAdapter.check_compatibility(instance)
-    assert report.portable_report.compatible
-    assert not report.compatible
+    report = OMMXOpenJijSAAdapter.check_applicability(instance)
+    assert report.input_membership.is_member
+    assert not report.is_applicable
     [violation] = report.precondition_violations
     assert violation.condition == "openjij.variable_id.signed_64_bit"
     assert violation.variable_ids == frozenset({variable_id})
@@ -165,10 +165,10 @@ def test_direct_rejects_non_binary_variable_kind_without_mutation(
 
     mismatches = _assert_direct_rejection_does_not_mutate(instance)
     [mismatch] = mismatches
-    assert isinstance(mismatch, PortableCapabilityMismatch.UnsupportedVariableKind)
+    assert isinstance(mismatch, InstanceClassMismatch.VariableKindNotAllowed)
     assert mismatch.kind == kind
-    assert mismatch.used_variable_ids == {0}
-    assert mismatch.supported_kinds == {Kind.Binary}
+    assert mismatch.variable_ids == {0}
+    assert mismatch.allowed_kinds == {Kind.Binary}
 
 
 def test_direct_rejects_maximization_without_mutation() -> None:
@@ -176,9 +176,9 @@ def test_direct_rejects_maximization_without_mutation() -> None:
 
     mismatches = _assert_direct_rejection_does_not_mutate(instance)
     [mismatch] = mismatches
-    assert isinstance(mismatch, PortableCapabilityMismatch.UnsupportedSense)
+    assert isinstance(mismatch, InstanceClassMismatch.SenseNotAllowed)
     assert mismatch.sense == Sense.Maximize
-    assert mismatch.supported_senses == {Sense.Minimize}
+    assert mismatch.allowed_senses == {Sense.Minimize}
 
 
 def test_direct_rejects_regular_constraints_without_mutation() -> None:
@@ -194,11 +194,11 @@ def test_direct_rejects_regular_constraints_without_mutation() -> None:
     [mismatch] = mismatches
     assert isinstance(
         mismatch,
-        PortableCapabilityMismatch.UnsupportedRegularConstraintRelation,
+        InstanceClassMismatch.RegularConstraintRelationNotAllowed,
     )
     assert mismatch.relation == Equality.LessThanOrEqualToZero
     assert mismatch.constraint_ids == {7}
-    assert mismatch.supported_relations == set()
+    assert mismatch.allowed_relations == set()
 
 
 def test_direct_rejects_all_special_constraint_families_without_mutation() -> None:
@@ -223,16 +223,14 @@ def test_direct_rejects_all_special_constraint_families_without_mutation() -> No
     mismatches = _assert_direct_rejection_does_not_mutate(instance)
     by_type = {type(mismatch): mismatch for mismatch in mismatches}
 
-    indicator = by_type[PortableCapabilityMismatch.UnsupportedIndicatorConstraints]
-    assert isinstance(
-        indicator, PortableCapabilityMismatch.UnsupportedIndicatorConstraints
-    )
+    indicator = by_type[InstanceClassMismatch.IndicatorConstraintsNotAllowed]
+    assert isinstance(indicator, InstanceClassMismatch.IndicatorConstraintsNotAllowed)
     assert indicator.constraint_ids == {10}
-    one_hot = by_type[PortableCapabilityMismatch.UnsupportedOneHotConstraints]
-    assert isinstance(one_hot, PortableCapabilityMismatch.UnsupportedOneHotConstraints)
+    one_hot = by_type[InstanceClassMismatch.OneHotConstraintsNotAllowed]
+    assert isinstance(one_hot, InstanceClassMismatch.OneHotConstraintsNotAllowed)
     assert one_hot.constraint_ids == {20}
-    sos1 = by_type[PortableCapabilityMismatch.UnsupportedSos1Constraints]
-    assert isinstance(sos1, PortableCapabilityMismatch.UnsupportedSos1Constraints)
+    sos1 = by_type[InstanceClassMismatch.Sos1ConstraintsNotAllowed]
+    assert isinstance(sos1, InstanceClassMismatch.Sos1ConstraintsNotAllowed)
     assert sos1.constraint_ids == {30}
 
 
@@ -256,7 +254,7 @@ def test_explicit_preparation_lowers_all_special_constraint_families() -> None:
     )
 
     report = _check_preparation_without_mutation(instance, uniform_penalty_weight=3.0)
-    assert report.compatible
+    assert report.is_preparable
     prepared = OMMXOpenJijSAAdapter.prepare(instance, uniform_penalty_weight=3.0)
     operations = {step.operation for step in prepared.report.steps}
     assert {
@@ -265,13 +263,14 @@ def test_explicit_preparation_lowers_all_special_constraint_families() -> None:
         "sos1_lowering",
         "finite_penalty",
     } <= operations
-    assert prepared.solver_instance.constraints == {}
-    assert prepared.solver_instance.indicator_constraints == {}
-    assert prepared.solver_instance.one_hot_constraints == {}
-    assert prepared.solver_instance.sos1_constraints == {}
-    assert set(prepared.evaluation_instance.indicator_constraints) == {10}
-    assert set(prepared.evaluation_instance.one_hot_constraints) == {20}
-    assert set(prepared.evaluation_instance.sos1_constraints) == {30}
+    prepared_input = prepared.input
+    assert prepared_input.constraints == {}
+    assert prepared_input.indicator_constraints == {}
+    assert prepared_input.one_hot_constraints == {}
+    assert prepared_input.sos1_constraints == {}
+    assert set(instance.indicator_constraints) == {10}
+    assert set(instance.one_hot_constraints) == {20}
+    assert set(instance.sos1_constraints) == {30}
 
 
 def test_special_constraint_preparation_requires_uniform_penalty() -> None:
@@ -286,8 +285,8 @@ def test_special_constraint_preparation_requires_uniform_penalty() -> None:
     )
 
     report = _check_preparation_without_mutation(instance, penalty_weights={})
-    assert not report.compatible
-    [violation] = report.precondition_violations
+    assert not report.is_preparable
+    [violation] = report.source_check.precondition_violations
     assert violation.condition == "openjij.penalty.special_requires_uniform"
     assert violation.constraint_refs == frozenset({ConstraintRef("one_hot", 20)})
 
@@ -304,32 +303,33 @@ def test_integer_sos1_is_lowered_before_log_encoding() -> None:
     )
 
     report = _check_preparation_without_mutation(instance, uniform_penalty_weight=4.0)
-    assert report.compatible
+    assert report.is_preparable
     prepared = OMMXOpenJijSAAdapter.prepare(instance, uniform_penalty_weight=4.0)
     operations = [step.operation for step in prepared.report.steps]
     assert operations.index("sos1_lowering") < operations.index("integer_log_encoding")
-    assert prepared.report.final_compatibility.compatible
-    assert set(prepared.evaluation_instance.sos1_constraints) == {30}
+    final = prepared.report.prepared_input_applicability
+    assert final is not None and final.is_applicable
+    assert set(instance.sos1_constraints) == {30}
 
 
 def test_check_preparation_accepts_finite_integer_encoding() -> None:
     instance = _instance_with_variable(DecisionVariable.integer(0, lower=-3, upper=5))
 
     report = _check_preparation_without_mutation(instance)
-    assert report.compatible
-    assert report.portable_report.compatible
-    assert report.preconditions_checked
-    assert report.precondition_violations == ()
+    assert report.is_preparable
+    assert report.source_check.input_membership.is_member
+    assert report.source_check.preconditions_checked
+    assert report.source_check.precondition_violations == ()
 
 
 def test_check_preparation_reports_unbounded_integer_encoding_precondition() -> None:
     instance = _instance_with_variable(DecisionVariable.integer(0))
 
     report = _check_preparation_without_mutation(instance)
-    assert not report.compatible
-    assert report.portable_report.compatible
-    assert report.preconditions_checked
-    [violation] = report.precondition_violations
+    assert not report.is_preparable
+    assert report.source_check.input_membership.is_member
+    assert report.source_check.preconditions_checked
+    [violation] = report.source_check.precondition_violations
     assert isinstance(violation, AdapterPreconditionViolation)
     assert violation.variable_ids == frozenset({0})
     assert violation.constraint_refs == frozenset()
@@ -342,10 +342,10 @@ def test_check_preparation_reports_more_than_53_log_encoding_bits() -> None:
     )
 
     report = _check_preparation_without_mutation(instance)
-    assert not report.compatible
-    assert report.portable_report.compatible
-    assert report.preconditions_checked
-    [violation] = report.precondition_violations
+    assert not report.is_preparable
+    assert report.source_check.input_membership.is_member
+    assert report.source_check.preconditions_checked
+    [violation] = report.source_check.precondition_violations
     assert isinstance(violation, AdapterPreconditionViolation)
     assert violation.variable_ids == frozenset({0})
     assert violation.actual == 54
@@ -367,8 +367,8 @@ def test_check_preparation_reports_slack_range_outside_u64() -> None:
         uniform_penalty_weight=2.0,
         inequality_integer_slack_max_range=2**64,
     )
-    assert not report.compatible
-    [violation] = report.precondition_violations
+    assert not report.is_preparable
+    [violation] = report.source_check.precondition_violations
     assert violation.condition == "openjij.slack.range_unsigned_64_bit"
     assert violation.constraint_refs == frozenset({ConstraintRef("regular", 7)})
     assert violation.limit == f"integer in [1, {2**64 - 1}]"
@@ -382,10 +382,10 @@ def test_check_preparation_reports_non_point_range_too_far_from_zero() -> None:
     )
 
     report = _check_preparation_without_mutation(instance)
-    assert not report.compatible
-    assert report.portable_report.compatible
-    assert report.preconditions_checked
-    [violation] = report.precondition_violations
+    assert not report.is_preparable
+    assert report.source_check.input_membership.is_member
+    assert report.source_check.preconditions_checked
+    [violation] = report.source_check.precondition_violations
     assert isinstance(violation, AdapterPreconditionViolation)
     assert violation.variable_ids == frozenset({0})
     assert violation.actual == upper
@@ -403,17 +403,17 @@ def test_check_preparation_requires_an_explicit_penalty_for_constraints() -> Non
     )
 
     report = _check_preparation_without_mutation(instance)
-    assert not report.compatible
-    assert report.portable_report.compatible
-    assert report.preconditions_checked
-    [violation] = report.precondition_violations
+    assert not report.is_preparable
+    assert report.source_check.input_membership.is_member
+    assert report.source_check.preconditions_checked
+    [violation] = report.source_check.precondition_violations
     assert isinstance(violation, AdapterPreconditionViolation)
     assert violation.variable_ids == frozenset()
     assert violation.constraint_refs == frozenset({ConstraintRef("regular", 7)})
     assert "penalty" in _violation_text(violation)
 
     accepted = _check_preparation_without_mutation(instance, uniform_penalty_weight=3.0)
-    assert accepted.compatible
+    assert accepted.is_preparable
 
 
 def test_per_constraint_penalty_preserves_u64_constraint_id() -> None:
@@ -429,11 +429,12 @@ def test_per_constraint_penalty_preserves_u64_constraint_id() -> None:
     report = _check_preparation_without_mutation(
         instance, penalty_weights={constraint_id: 2.0}
     )
-    assert report.compatible
+    assert report.is_preparable
     prepared = OMMXOpenJijSAAdapter.prepare(
         instance, penalty_weights={constraint_id: 2.0}
     )
-    assert prepared.report.final_compatibility.compatible
+    final = prepared.report.prepared_input_applicability
+    assert final is not None and final.is_applicable
 
 
 def test_check_preparation_reports_penalty_materialization_overflow() -> None:
@@ -449,17 +450,17 @@ def test_check_preparation_reports_penalty_materialization_overflow() -> None:
     report = _check_preparation_without_mutation(
         instance, uniform_penalty_weight=weight
     )
-    assert not report.compatible
-    [violation] = report.precondition_violations
+    assert not report.is_preparable
+    [violation] = report.source_check.precondition_violations
     assert violation.condition == "openjij.preparation.materialization"
     assert violation.constraint_refs == frozenset({ConstraintRef("regular", 7)})
 
-    with pytest.raises(AdapterCompatibilityError) as error:
+    with pytest.raises(OpenJijPreparationError) as error:
         OMMXOpenJijSAAdapter.prepare(
             instance,
             uniform_penalty_weight=weight,
         )
-    assert error.value.report.precondition_violations == (violation,)
+    assert error.value.report.source_check.precondition_violations == (violation,)
 
 
 def test_preparation_surfaces_proven_infeasibility() -> None:
@@ -494,28 +495,25 @@ def test_prepare_exact_maximization_and_integer_encoding() -> None:
     before = instance.to_v2_bytes()
 
     prepared = OMMXOpenJijSAAdapter.prepare(instance)
-    assert isinstance(prepared, OpenJijPreparedModel)
+    assert isinstance(prepared, OpenJijPreparation)
     assert isinstance(prepared.report, OpenJijPreparationReport)
-    assert prepared.report.source_compatibility.compatible
-    assert prepared.report.encoding_compatibility.compatible
-    assert prepared.report.final_compatibility.compatible
-    assert prepared.report.final_compatibility.portable_report.matching_profiles == [
-        "openjij-binary-hubo"
-    ]
+    assert prepared.report.source_check.is_preparable
+    final = prepared.report.prepared_input_applicability
+    assert final is not None and final.is_applicable
+    assert final.input_membership.matching_clauses == [(0, "openjij-binary-hubo")]
 
     assert len(prepared.report.steps) >= 2
     assert all(step.operation for step in prepared.report.steps)
     assert all(step.semantics.name == "Exact" for step in prepared.report.steps)
     assert any(step.variable_ids == frozenset({5}) for step in prepared.report.steps)
-    solver_instance = prepared.solver_instance
-    assert solver_instance.sense == Sense.Minimize
-    assert solver_instance.constraints == {}
-    assert {variable.kind for variable in solver_instance.used_decision_variables} == {
+    prepared_input = prepared.input
+    assert prepared_input.sense == Sense.Minimize
+    assert prepared_input.constraints == {}
+    assert {variable.kind for variable in prepared_input.used_decision_variables} == {
         DecisionVariable.BINARY
     }
-    evaluation_instance = prepared.evaluation_instance
-    assert evaluation_instance.sense == Sense.Maximize
-    assert evaluation_instance.constraints == {}
+    assert instance.sense == Sense.Maximize
+    assert instance.constraints == {}
     assert instance.to_v2_bytes() == before
 
 
@@ -542,9 +540,9 @@ def test_constrained_preparation_classifies_slack_and_finite_penalty_steps(
         inequality_integer_slack_max_range=max_range,
     )
     report = prepared.report
-    assert report.source_compatibility.compatible
-    assert report.encoding_compatibility.compatible
-    assert report.final_compatibility.compatible
+    assert report.source_check.is_preparable
+    final = report.prepared_input_applicability
+    assert final is not None and final.is_applicable
     assert all(step.operation for step in report.steps)
 
     constraint_ref = ConstraintRef("regular", 7)
@@ -563,8 +561,8 @@ def test_constrained_preparation_classifies_slack_and_finite_penalty_steps(
         and step.semantics.name == "FinitePenalty"
     ]
     assert len(penalty_steps) == 1
-    assert prepared.solver_instance.constraints == {}
-    assert set(prepared.evaluation_instance.constraints) == {7}
+    assert prepared.input.constraints == {}
+    assert set(instance.constraints) == {7}
     assert instance.to_v2_bytes() == before
 
 
@@ -581,8 +579,10 @@ def test_preparation_rechecks_generated_variable_ids_for_openjij() -> None:
         instance,
         uniform_penalty_weight=2.0,
     )
-    assert not report.compatible
-    [violation] = report.precondition_violations
+    assert not report.is_preparable
+    final = report.prepared_input_applicability
+    assert final is not None
+    [violation] = final.precondition_violations
     assert violation.condition == "openjij.variable_id.signed_64_bit"
     assert min(violation.variable_ids) >= 2**63
 
@@ -607,4 +607,4 @@ def test_preparation_reports_trivially_satisfied_inequality_as_exact() -> None:
     assert removal.semantics.name == "Exact"
     assert removal.constraint_refs == frozenset({ConstraintRef("regular", 7)})
     assert not [step for step in steps if step.operation == "finite_penalty"]
-    assert set(prepared.evaluation_instance.constraints) == {7}
+    assert set(instance.constraints) == {7}

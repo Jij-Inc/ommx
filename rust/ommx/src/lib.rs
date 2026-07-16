@@ -28,7 +28,6 @@ pub mod qplib;
 pub mod random;
 
 // Internal modules
-mod adapter_capability;
 mod annotations;
 mod atol;
 mod bound;
@@ -43,7 +42,9 @@ mod function;
 mod indicator_constraint;
 mod infeasible_detected;
 mod instance;
+mod instance_class;
 mod macros;
+mod message_io;
 mod modeling_label;
 mod named_function;
 mod one_hot_constraint;
@@ -55,7 +56,6 @@ mod solution;
 mod sos1_constraint;
 mod substitute;
 
-pub use adapter_capability::*;
 pub use annotations::*;
 pub use atol::*;
 pub use bound::*;
@@ -70,6 +70,7 @@ pub use function::*;
 pub use indicator_constraint::*;
 pub use infeasible_detected::*;
 pub use instance::*;
+pub use instance_class::*;
 pub use modeling_label::*;
 pub use named_function::*;
 pub use one_hot_constraint::*;

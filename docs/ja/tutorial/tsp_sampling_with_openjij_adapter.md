@@ -140,41 +140,38 @@ instance = Instance.from_components(
 
 ## OpenJijによるサンプリング
 
-`ommx-openjij-adapter` のOpenJijへのネイティブ変換が受け付けるのは、
-任意次数の多項式目的関数を持つバイナリ変数のみの制約なし最小化問題です。
+`ommx-openjij-adapter` のinput classに属するのは、任意次数の多項式目的関数を
+持つバイナリ変数のみの制約なし最小化問題です。
 上で作成したTSPインスタンスには制約があるため、有限のペナルティ重みを指定して
-事前に検査し、sampler callで `preparation=True` を指定して明示的に準備します。
-変換元の `Instance` をsampler入力のままにするため、Experimentには元の制約付き
-モデルが記録されます。
+明示的に準備します。その後、`prepared.input` の `Instance` をAdapterへ渡し、
+得られたsampleを変換元モデルに対して明示的に評価します。
 
 ```{code-cell} ipython3
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
-preparation_check = OMMXOpenJijSAAdapter.check_preparation(
+prepared = OMMXOpenJijSAAdapter.prepare(
     instance,
     uniform_penalty_weight=20.0,
 )
-assert preparation_check.compatible
 
-sample_set = OMMXOpenJijSAAdapter.sample(
-    instance,
-    preparation=True,
-    uniform_penalty_weight=20.0,
+prepared_samples = OMMXOpenJijSAAdapter.sample(
+    prepared.input,
     num_reads=16,
 )
+sample_set = prepared.evaluate_source(prepared_samples)
 sample_set.summary
 ```
 
 {py:meth}`~ommx_openjij_adapter.OMMXOpenJijSAAdapter.sample` は
 {py:class}`~ommx.SampleSet` を返します。これは決定変数のサンプル値に加えて、
 評価した目的関数値と制約違反を保持します。`SampleSet.summary` はこの情報の要約を
-表示します。その `feasible` 列が示すのはOpenJijに渡した制約なしモデルだけでなく、
-変換元の制約付き問題に対する実行可能性です。
+表示します。`prepared.evaluate_source()` が準備済み入力のsampleを変換元モデルに
+対して評価するため、その `feasible` 列は変換元の制約付き問題に対する実行可能性を
+示します。
 
-`sample` 経由で渡すペナルティ重みはOpenJij backend samplerのパラメータではなく、
+`prepare` に渡すペナルティ重みはOpenJij backend samplerのパラメータではなく、
 明示的な準備に対する指定です。有限ペナルティは実行可能なサンプルを得やすく
-しますが、すべてのサンプルが変換元の問題に対して実行可能になることを
-保証しません。
+しますが、すべてのサンプルが変換元の問題に対して実行可能になることを保証しません。
 
 ### 準備内容の確認
 
@@ -183,46 +180,40 @@ sample_set.summary
 `prepared.report` に保存します。
 
 ```{code-cell} ipython3
-prepared = OMMXOpenJijSAAdapter.prepare(
-    instance,
-    uniform_penalty_weight=20.0,
-)
 report = prepared.report
+final = report.prepared_input_applicability
 {
-    "source_compatibility": report.source_compatibility.compatible,
-    "encoding_compatibility": report.encoding_compatibility.compatible,
+    "source_membership": report.source_check.input_membership.is_member,
+    "preconditions": report.source_check.precondition_violations,
     "steps": [
         (step.operation, step.semantics.value)
         for step in report.steps
     ],
-    "final_compatibility": report.final_compatibility.compatible,
+    "prepared_input_applicability": final.is_applicable if final else False,
 }
 ```
 
-レポートは次の4つの問いを区別します。
+レポートは次の3つの問いを区別します。
 
-- `source_compatibility` は、変換元モデルと指定したオプションが明示的な準備の
-  契約を満たすかを示します。
-- `encoding_compatibility` は、中間モデルが残りのInteger-to-Binaryエンコード条件を
-  満たすかを示します。
+- `source_check` は、準備元のclassへのmembershipとAdapter固有の準備前提条件を
+  記録します。
 - `steps` は、各変換とその意味上の効果を記録します。
-- `final_compatibility` は、準備済みsolver modelがAdapterのnative capabilityと
+- `prepared_input_applicability` は、生成された `Instance` がAdapterのinput classに属し、
   Adapter固有の前提条件を満たすかを示します。
 
 各stepは、厳密な書き換えなら `Exact`、厳密な変換ができず離散的な不等式slack
 などの近似を使う場合は `Approximate`、制約を有限の目的関数ペナルティで置き換える
-場合は `FinitePenalty` です。`FinitePenalty` は制約をnativeに、または厳密に
+場合は `FinitePenalty` です。`FinitePenalty` は制約付き入力を直接、または厳密に
 サポートしているという意味ではありません。
 
-変数boundから不等式が実行不可能だと証明できた場合、`check_preparation`、
-`prepare`、および `preparation=True` のsamplingは
-{py:class}`~ommx.adapter.InfeasibleDetected` を送出します。これはモデル自体の
-性質であり、Adapter Capabilityの不一致ではありません。
+変数boundから不等式が実行不可能だと証明できた場合、`check_preparation` と
+`prepare` は {py:class}`~ommx.adapter.InfeasibleDetected` を送出します。これは
+モデル自体の性質であり、Adapter applicabilityの失敗ではありません。
 
 使用されるInteger変数ごとに最大53個の補助bitという条件を検査しますが、これは
-OMMXのInteger-to-Binary log encodingの前提条件です。OpenJij backendのnative
-capabilityではなく、serialized semanticsをforward compatibilityのためにreaderが
-安全に解釈できるかを管理する `ommx.v2.Feature` とも別物です。OpenJijのnative
+OMMXのInteger-to-Binary log encodingの前提条件です。OpenJij Adapterのinput classの
+性質ではなく、serialized semanticsをforward compatibilityのためにreaderが安全に
+解釈できるかを管理する `ommx.v2.Feature` とも別物です。OpenJijが直接受け付ける
 Spin入力を含むSpin変数のサポートは
 [OMMX issue #1082](https://github.com/Jij-Inc/ommx/issues/1082) で別途管理しています。
 

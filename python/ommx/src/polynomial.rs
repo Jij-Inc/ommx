@@ -77,7 +77,7 @@ pyo3_stub_gen::inventory::submit! {
 #[pymethods]
 impl Polynomial {
     #[new]
-    pub fn new(terms: BTreeMap<Vec<u64>, f64>) -> Result<Self> {
+    pub fn new(terms: BTreeMap<Vec<u64>, f64>) -> crate::error::OmmxPyResult<Self> {
         let mut out = ommx::Polynomial::default();
         for (ids, coeff) in terms {
             match TryInto::<Coefficient>::try_into(coeff) {
@@ -95,8 +95,8 @@ impl Polynomial {
     }
 
     #[pyo3(signature = (other, atol=ATol::default().into_inner()))]
-    pub fn almost_equal(&self, other: &Polynomial, atol: f64) -> bool {
-        self.0.abs_diff_eq(&other.0, ommx::ATol::new(atol).unwrap())
+    pub fn almost_equal(&self, other: &Polynomial, atol: f64) -> crate::error::OmmxPyResult<bool> {
+        Ok(self.0.abs_diff_eq(&other.0, ommx::ATol::new(atol)?))
     }
 
     pub fn __repr__(&self) -> String {
@@ -112,104 +112,103 @@ impl Polynomial {
     /// (see `crate::FunctionInput`). All non-Function inputs promote to Polynomial.
     #[gen_stub(skip)]
     #[pyo3(name = "__add__")]
-    pub fn py_add(&self, py: Python<'_>, rhs: crate::FunctionInput) -> PyResult<Py<PyAny>> {
+    pub fn py_add(
+        &self,
+        py: Python<'_>,
+        rhs: crate::FunctionInput,
+    ) -> crate::error::OmmxPyResult<Py<PyAny>> {
         Ok(match rhs {
             crate::FunctionInput::Scalar(None) => Polynomial(self.0.clone())
                 .into_pyobject(py)?
                 .into_any()
                 .unbind(),
-            crate::FunctionInput::Scalar(Some(c)) => {
-                Polynomial((&self.0 + c).map_err(crate::coefficient_error_to_pyerr)?)
+            crate::FunctionInput::Scalar(Some(c)) => Polynomial((&self.0 + c)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
+            crate::FunctionInput::Linear(l) => Polynomial((&self.0 + &l)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
+            crate::FunctionInput::Quadratic(q) => Polynomial((&self.0 + &q)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
+            crate::FunctionInput::Polynomial(p) => Polynomial((&self.0 + &p)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
+            crate::FunctionInput::Function(f) => {
+                { Function((ommx::Function::from(self.0.clone()) + f)?) }
                     .into_pyobject(py)?
                     .into_any()
                     .unbind()
             }
-            crate::FunctionInput::Linear(l) => {
-                Polynomial((&self.0 + &l).map_err(crate::coefficient_error_to_pyerr)?)
-                    .into_pyobject(py)?
-                    .into_any()
-                    .unbind()
-            }
-            crate::FunctionInput::Quadratic(q) => {
-                Polynomial((&self.0 + &q).map_err(crate::coefficient_error_to_pyerr)?)
-                    .into_pyobject(py)?
-                    .into_any()
-                    .unbind()
-            }
-            crate::FunctionInput::Polynomial(p) => {
-                Polynomial((&self.0 + &p).map_err(crate::coefficient_error_to_pyerr)?)
-                    .into_pyobject(py)?
-                    .into_any()
-                    .unbind()
-            }
-            crate::FunctionInput::Function(f) => Function(
-                (ommx::Function::from(self.0.clone()) + f)
-                    .map_err(crate::coefficient_error_to_pyerr)?,
-            )
-            .into_pyobject(py)?
-            .into_any()
-            .unbind(),
         })
     }
 
     /// Reverse addition (lhs + self)
     #[gen_stub(skip)]
-    pub fn __radd__(&self, py: Python<'_>, lhs: crate::FunctionInput) -> PyResult<Py<PyAny>> {
+    pub fn __radd__(
+        &self,
+        py: Python<'_>,
+        lhs: crate::FunctionInput,
+    ) -> crate::error::OmmxPyResult<Py<PyAny>> {
         self.py_add(py, lhs) // Addition is commutative
     }
 
     /// Polymorphic subtraction. See `py_add`.
     #[gen_stub(skip)]
     #[pyo3(name = "__sub__")]
-    pub fn py_sub(&self, py: Python<'_>, rhs: crate::FunctionInput) -> PyResult<Py<PyAny>> {
+    pub fn py_sub(
+        &self,
+        py: Python<'_>,
+        rhs: crate::FunctionInput,
+    ) -> crate::error::OmmxPyResult<Py<PyAny>> {
         Ok(match rhs {
             crate::FunctionInput::Scalar(None) => Polynomial(self.0.clone())
                 .into_pyobject(py)?
                 .into_any()
                 .unbind(),
-            crate::FunctionInput::Scalar(Some(c)) => {
-                Polynomial((&self.0 - c).map_err(crate::coefficient_error_to_pyerr)?)
+            crate::FunctionInput::Scalar(Some(c)) => Polynomial((&self.0 - c)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
+            crate::FunctionInput::Linear(l) => Polynomial((self.0.clone() - &l)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
+            crate::FunctionInput::Quadratic(q) => Polynomial((self.0.clone() - &q)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
+            crate::FunctionInput::Polynomial(p) => Polynomial((&self.0 - &p)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
+            crate::FunctionInput::Function(f) => {
+                { Function((ommx::Function::from(self.0.clone()) - f)?) }
                     .into_pyobject(py)?
                     .into_any()
                     .unbind()
             }
-            crate::FunctionInput::Linear(l) => {
-                Polynomial((self.0.clone() - &l).map_err(crate::coefficient_error_to_pyerr)?)
-                    .into_pyobject(py)?
-                    .into_any()
-                    .unbind()
-            }
-            crate::FunctionInput::Quadratic(q) => {
-                Polynomial((self.0.clone() - &q).map_err(crate::coefficient_error_to_pyerr)?)
-                    .into_pyobject(py)?
-                    .into_any()
-                    .unbind()
-            }
-            crate::FunctionInput::Polynomial(p) => {
-                Polynomial((&self.0 - &p).map_err(crate::coefficient_error_to_pyerr)?)
-                    .into_pyobject(py)?
-                    .into_any()
-                    .unbind()
-            }
-            crate::FunctionInput::Function(f) => Function(
-                (ommx::Function::from(self.0.clone()) - f)
-                    .map_err(crate::coefficient_error_to_pyerr)?,
-            )
-            .into_pyobject(py)?
-            .into_any()
-            .unbind(),
         })
     }
 
     /// Reverse subtraction (lhs - self)
     #[gen_stub(skip)]
-    pub fn __rsub__(&self, py: Python<'_>, lhs: crate::FunctionInput) -> PyResult<Py<PyAny>> {
+    pub fn __rsub__(
+        &self,
+        py: Python<'_>,
+        lhs: crate::FunctionInput,
+    ) -> crate::error::OmmxPyResult<Py<PyAny>> {
         // lhs - self = -self + lhs
         let neg = self.__neg__();
         neg.py_add(py, lhs)
     }
 
-    pub fn add_assign(&mut self, rhs: &Polynomial) -> Result<()> {
+    pub fn add_assign(&mut self, rhs: &Polynomial) -> crate::error::OmmxPyResult<()> {
+        crate::in_place_add::preflight_polynomial(&self.0, &rhs.0)?;
         self.0.try_add_assign_in_place(&rhs.0)?;
         Ok(())
     }
@@ -219,60 +218,59 @@ impl Polynomial {
     /// PyO3's in-place operator wrapper returns the mutated self object to Python
     /// when this Rust callback succeeds.
     #[gen_stub(skip)]
-    pub fn __iadd__(&mut self, rhs: &Polynomial) -> Result<()> {
+    pub fn __iadd__(&mut self, rhs: &Polynomial) -> crate::error::OmmxPyResult<()> {
         self.add_assign(rhs)
     }
 
     /// Polymorphic multiplication. See `py_add`.
     #[gen_stub(skip)]
     #[pyo3(name = "__mul__")]
-    pub fn py_mul(&self, py: Python<'_>, rhs: crate::FunctionInput) -> PyResult<Py<PyAny>> {
+    pub fn py_mul(
+        &self,
+        py: Python<'_>,
+        rhs: crate::FunctionInput,
+    ) -> crate::error::OmmxPyResult<Py<PyAny>> {
         Ok(match rhs {
             crate::FunctionInput::Scalar(None) => Polynomial(ommx::Polynomial::default())
                 .into_pyobject(py)?
                 .into_any()
                 .unbind(),
-            crate::FunctionInput::Scalar(Some(c)) => {
-                Polynomial((self.0.clone() * c).map_err(crate::coefficient_error_to_pyerr)?)
+            crate::FunctionInput::Scalar(Some(c)) => Polynomial((self.0.clone() * c)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
+            crate::FunctionInput::Linear(l) => Polynomial((&self.0 * &l)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
+            crate::FunctionInput::Quadratic(q) => Polynomial((&self.0 * &q)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
+            crate::FunctionInput::Polynomial(p) => Polynomial((&self.0 * &p)?)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
+            crate::FunctionInput::Function(f) => {
+                { Function((ommx::Function::from(self.0.clone()) * f)?) }
                     .into_pyobject(py)?
                     .into_any()
                     .unbind()
             }
-            crate::FunctionInput::Linear(l) => {
-                Polynomial((&self.0 * &l).map_err(crate::coefficient_error_to_pyerr)?)
-                    .into_pyobject(py)?
-                    .into_any()
-                    .unbind()
-            }
-            crate::FunctionInput::Quadratic(q) => {
-                Polynomial((&self.0 * &q).map_err(crate::coefficient_error_to_pyerr)?)
-                    .into_pyobject(py)?
-                    .into_any()
-                    .unbind()
-            }
-            crate::FunctionInput::Polynomial(p) => {
-                Polynomial((&self.0 * &p).map_err(crate::coefficient_error_to_pyerr)?)
-                    .into_pyobject(py)?
-                    .into_any()
-                    .unbind()
-            }
-            crate::FunctionInput::Function(f) => Function(
-                (ommx::Function::from(self.0.clone()) * f)
-                    .map_err(crate::coefficient_error_to_pyerr)?,
-            )
-            .into_pyobject(py)?
-            .into_any()
-            .unbind(),
         })
     }
 
     /// Reverse multiplication (lhs * self)
     #[gen_stub(skip)]
-    pub fn __rmul__(&self, py: Python<'_>, lhs: crate::FunctionInput) -> PyResult<Py<PyAny>> {
+    pub fn __rmul__(
+        &self,
+        py: Python<'_>,
+        lhs: crate::FunctionInput,
+    ) -> crate::error::OmmxPyResult<Py<PyAny>> {
         self.py_mul(py, lhs) // Multiplication is commutative
     }
 
-    pub fn add_scalar(&self, scalar: f64) -> Result<Polynomial> {
+    pub fn add_scalar(&self, scalar: f64) -> crate::error::OmmxPyResult<Polynomial> {
         match TryInto::<Coefficient>::try_into(scalar) {
             Ok(coeff) => Ok(Polynomial((&self.0 + coeff)?)),
             Err(CoefficientError::Zero) => Ok(Polynomial(self.0.clone())), // Return unchanged if scalar is zero
@@ -280,15 +278,15 @@ impl Polynomial {
         }
     }
 
-    pub fn add_linear(&self, linear: &Linear) -> Result<Polynomial> {
+    pub fn add_linear(&self, linear: &Linear) -> crate::error::OmmxPyResult<Polynomial> {
         Ok(Polynomial((&self.0 + &linear.0)?))
     }
 
-    pub fn add_quadratic(&self, quadratic: &Quadratic) -> Result<Polynomial> {
+    pub fn add_quadratic(&self, quadratic: &Quadratic) -> crate::error::OmmxPyResult<Polynomial> {
         Ok(Polynomial((&self.0 + &quadratic.0)?))
     }
 
-    pub fn mul_scalar(&self, scalar: f64) -> Result<Polynomial> {
+    pub fn mul_scalar(&self, scalar: f64) -> crate::error::OmmxPyResult<Polynomial> {
         match TryInto::<Coefficient>::try_into(scalar) {
             Ok(coeff) => Ok(Polynomial((self.0.clone() * coeff)?)),
             Err(CoefficientError::Zero) => Ok(Polynomial(ommx::Polynomial::default())), // Return zero if scalar is zero
@@ -296,11 +294,11 @@ impl Polynomial {
         }
     }
 
-    pub fn mul_linear(&self, linear: &Linear) -> Result<Polynomial> {
+    pub fn mul_linear(&self, linear: &Linear) -> crate::error::OmmxPyResult<Polynomial> {
         Ok(Polynomial((&self.0 * &linear.0)?))
     }
 
-    pub fn mul_quadratic(&self, quadratic: &Quadratic) -> Result<Polynomial> {
+    pub fn mul_quadratic(&self, quadratic: &Quadratic) -> crate::error::OmmxPyResult<Polynomial> {
         Ok(Polynomial((&self.0 * &quadratic.0)?))
     }
 
@@ -326,23 +324,26 @@ impl Polynomial {
     }
 
     #[pyo3(signature = (state, *, atol=None))]
-    pub fn evaluate(&self, state: State, atol: Option<f64>) -> PyResult<f64> {
+    pub fn evaluate(&self, state: State, atol: Option<f64>) -> crate::error::OmmxPyResult<f64> {
         use ommx::Evaluate;
         let atol = match atol {
-            Some(value) => ommx::ATol::new(value)
-                .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?,
+            Some(value) => ommx::ATol::new(value)?,
             None => ommx::ATol::default(),
         };
-        self.0
+        Ok(self
+            .0
             .evaluate(&state.0, atol)
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?)
     }
 
     #[pyo3(signature = (state, *, atol=None))]
-    pub fn partial_evaluate(&self, state: State, atol: Option<f64>) -> PyResult<Polynomial> {
+    pub fn partial_evaluate(
+        &self,
+        state: State,
+        atol: Option<f64>,
+    ) -> crate::error::OmmxPyResult<Polynomial> {
         let atol = match atol {
-            Some(value) => ommx::ATol::new(value)
-                .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?,
+            Some(value) => ommx::ATol::new(value)?,
             None => ommx::ATol::default(),
         };
         let mut inner = self.0.clone();
@@ -366,19 +367,19 @@ impl Polynomial {
     /// Create an equality constraint: self == other → Constraint with EqualToZero
     #[gen_stub(type_ignore = ["override"])]
     #[pyo3(name = "__eq__")]
-    pub fn py_eq(&self, other: Function) -> PyResult<Constraint> {
+    pub fn py_eq(&self, other: Function) -> crate::error::OmmxPyResult<Constraint> {
         crate::comparison_constraint(-other.0 + &self.0, ommx::Equality::EqualToZero)
     }
 
     /// Create a less-than-or-equal constraint: self <= other → Constraint
     #[pyo3(name = "__le__")]
-    pub fn py_le(&self, other: Function) -> PyResult<Constraint> {
+    pub fn py_le(&self, other: Function) -> crate::error::OmmxPyResult<Constraint> {
         crate::comparison_constraint(-other.0 + &self.0, ommx::Equality::LessThanOrEqualToZero)
     }
 
     /// Create a greater-than-or-equal constraint: self >= other → Constraint
     #[pyo3(name = "__ge__")]
-    pub fn py_ge(&self, other: Function) -> PyResult<Constraint> {
+    pub fn py_ge(&self, other: Function) -> crate::error::OmmxPyResult<Constraint> {
         crate::comparison_constraint(other.0 - &self.0, ommx::Equality::LessThanOrEqualToZero)
     }
 }

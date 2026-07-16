@@ -18,7 +18,7 @@ def _assert_sample_span_tree(result):
         assert _single_span(result, name).parent_span_id == sample.span_id
 
 
-def test_native_sample_emits_convert_call_decode_spans():
+def test_direct_sample_emits_convert_call_decode_spans():
     x0 = DecisionVariable.binary(0)
     x1 = DecisionVariable.binary(1)
     instance = Instance.from_components(
@@ -35,7 +35,7 @@ def test_native_sample_emits_convert_call_decode_spans():
     assert not [span for span in result.spans if span.name == "prepare"]
 
 
-def test_sample_with_explicit_preparation_emits_nested_prepare_span():
+def test_explicit_preparation_and_sample_are_sibling_operations():
     x = DecisionVariable.integer(0, lower=0, upper=3)
     instance = Instance.from_components(
         decision_variables=[x],
@@ -46,16 +46,18 @@ def test_sample_with_explicit_preparation_emits_nested_prepare_span():
     source = instance.to_v2_bytes()
 
     with capture_trace() as result:
+        preparation = OMMXOpenJijSAAdapter.prepare(instance)
         OMMXOpenJijSAAdapter.sample(
-            instance,
-            preparation=True,
+            preparation.input,
             num_reads=1,
             seed=0,
         )
 
+    root = _single_span(result, "ommx_trace_block")
     prepare = _single_span(result, "prepare")
     sample = _single_span(result, "sample")
-    assert prepare.parent_span_id == sample.span_id
+    assert prepare.parent_span_id == root.span_id
+    assert sample.parent_span_id == root.span_id
     _assert_sample_span_tree(result)
     assert instance.to_v2_bytes() == source
 

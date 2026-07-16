@@ -11,7 +11,6 @@ namespace OMMXProof.Test
 
 open Fixtures
 
-example : formalContractVersion = 1 := rfl
 example : constantOnlyAffine2.eval (fun _ => 0) = 1 := by native_decide
 example : twiceUpperWitness.checkImplication twiceUpper = true := by native_decide
 example : twiceUpperWitness.checkImplication tooStrongTarget = false := by native_decide
@@ -43,5 +42,8 @@ example : checkEqualityIndicatorReplace indicatorDomains indicatorEqualitySurviv
     indicatorEqualitySource indicatorEqualityBody 1 .activeOnOne
       oneSidedEqualityWitness = false := by
   native_decide
+example (assignment : Assignment 2) :
+    IndicatorBigM.LowerSide sdkIndicatorBody 1 0 assignment := by
+  simp [IndicatorBigM.LowerSide]
 
 end OMMXProof.Test

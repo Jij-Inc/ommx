@@ -159,15 +159,23 @@ def hubo_binary_inequality():
 
 def _openjij_input(instance):
     source = instance.to_v2_bytes()
-    if OMMXOpenJijSAAdapter.check_compatibility(instance).compatible:
-        options = {}
+    if OMMXOpenJijSAAdapter.check_applicability(instance).is_applicable:
+        preparation = None
+        adapter_input = instance
     else:
-        options = {
-            "preparation": True,
-            "uniform_penalty_weight": 3.1 if instance.constraints else None,
-        }
+        preparation = OMMXOpenJijSAAdapter.prepare(
+            instance,
+            uniform_penalty_weight=3.1 if instance.constraints else None,
+        )
+        adapter_input = preparation.input
     assert instance.to_v2_bytes() == source
-    return options, source
+    return adapter_input, preparation, source
+
+
+def _evaluate_source_if_prepared(sample_set, preparation):
+    if preparation is None:
+        return sample_set
+    return preparation.evaluate_source(sample_set)
 
 
 def _expected_solution(instance, ans):
@@ -213,8 +221,9 @@ def test_sample(instance, ans):
     # The uniform_penalty_weight of 3.1 was chosen to resolve multiple optimal solutions
     # effectively. This value was determined based on prior experimentation and ensures
     # that constraints are sufficiently penalized without overwhelming the objective.
-    options, source = _openjij_input(instance)
-    sample_set = OMMXOpenJijSAAdapter.sample(instance, num_reads=1, seed=999, **options)
+    adapter_input, preparation, source = _openjij_input(instance)
+    prepared_samples = OMMXOpenJijSAAdapter.sample(adapter_input, num_reads=1, seed=999)
+    sample_set = _evaluate_source_if_prepared(prepared_samples, preparation)
     assert sample_set.extract_decision_variables("x", 0) == ans
     _assert_sample_set_uses_source_model(sample_set, instance, ans)
     assert instance.to_v2_bytes() == source
@@ -224,20 +233,12 @@ def test_sample(instance, ans):
     "instance, ans",
     [
         binary_no_constraint_minimize(),
-        binary_no_constraint_maximize(),
-        binary_equality(),
-        binary_inequality(),
-        integer_equality(),
-        integer_inequality(),
         hubo_binary_no_constraint_minimize(),
-        hubo_binary_no_constraint_maximize(),
-        hubo_binary_equality(),
-        hubo_binary_inequality(),
     ],
 )
 def test_solve(instance, ans):
-    options, source = _openjij_input(instance)
-    solution = OMMXOpenJijSAAdapter.solve(instance, num_reads=1, seed=999, **options)
+    source = instance.to_v2_bytes()
+    solution = OMMXOpenJijSAAdapter.solve(instance, num_reads=1, seed=999)
     assert solution.extract_decision_variables("x") == ans
     _assert_solution_uses_source_model(solution, instance, ans)
     assert instance.to_v2_bytes() == source
@@ -259,11 +260,12 @@ def test_solve(instance, ans):
     ],
 )
 def test_sample_twice(instance, ans):
-    options, source = _openjij_input(instance)
+    adapter_input, preparation, source = _openjij_input(instance)
     for _ in range(2):
-        sample_set = OMMXOpenJijSAAdapter.sample(
-            instance, num_reads=1, seed=999, **options
+        prepared_samples = OMMXOpenJijSAAdapter.sample(
+            adapter_input, num_reads=1, seed=999
         )
+        sample_set = _evaluate_source_if_prepared(prepared_samples, preparation)
         assert sample_set.extract_decision_variables("x", 0) == ans
         _assert_sample_set_uses_source_model(sample_set, instance, ans)
         assert instance.to_v2_bytes() == source
@@ -305,13 +307,16 @@ def test_sample_decodes_integer_sos1_against_source_model():
         sense=Instance.MINIMIZE,
     )
 
-    sample_set = OMMXOpenJijSAAdapter.sample(
+    preparation = OMMXOpenJijSAAdapter.prepare(
         instance,
-        preparation=True,
         uniform_penalty_weight=4.0,
+    )
+    prepared_samples = OMMXOpenJijSAAdapter.sample(
+        preparation.input,
         num_reads=4,
         seed=999,
     )
+    sample_set = preparation.evaluate_source(prepared_samples)
     assert len(sample_set.constraints_df(kind="sos1")) == 1
     for sample_id in sample_set.sample_ids():
         solution = sample_set.get(sample_id)

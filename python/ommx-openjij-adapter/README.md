@@ -26,61 +26,55 @@ instance = Instance.from_components(
     sense=Instance.MINIMIZE,
 )
 
-preparation_check = OMMXOpenJijSAAdapter.check_preparation(
+prepared = OMMXOpenJijSAAdapter.prepare(
     instance,
     uniform_penalty_weight=2.0,
 )
-assert preparation_check.compatible
 
-sample_set = OMMXOpenJijSAAdapter.sample(
-    instance,
-    preparation=True,
-    uniform_penalty_weight=2.0,
+prepared_samples = OMMXOpenJijSAAdapter.sample(
+    prepared.input,
     num_reads=16,
 )
+sample_set = prepared.evaluate_source(prepared_samples)
 
 print(sample_set.summary)
 ```
 
-The finite penalty weight is a preparation option passed through `sample`, not
-an OpenJij backend sampler parameter. It must be chosen explicitly for a
-constrained model. A finite penalty does not guarantee that every returned
-sample is feasible for the source model; inspect the feasibility recorded in
+The finite penalty weight is an option passed to `prepare`, not an OpenJij
+backend sampler parameter. It must be chosen explicitly for a constrained
+model. A finite penalty does not guarantee that every returned sample is
+feasible for the source model; inspect the feasibility recorded in the decoded
 `SampleSet`.
 
-## Native capability and preparation
+## Input class and explicit preparation
 
-`OMMXOpenJijSAAdapter.CAPABILITIES` describes only models accepted directly by
-the OpenJij translator:
+`OMMXOpenJijSAAdapter.INPUT_CLASS` describes the instances that the adapter
+accepts directly:
 
 - Binary decision variables
 - a polynomial objective of any degree (QUBO or Binary HUBO)
 - no active regular or special constraints
 - minimization
 
-`OMMXOpenJijSAAdapter.check_compatibility()` checks this native boundary. It
-does not include conversions that the adapter can perform first. Integer
+`OMMXOpenJijSAAdapter.check_applicability()` checks whether an instance belongs
+to this input class and satisfies the adapter-specific preconditions. It does
+not include preparation that the adapter can perform first. Integer
 log-encoding, maximization-to-minimization conversion, exact lowering of
 Indicator/OneHot/SOS1 constraints, integer slack, and finite constraint
-penalties are explicit preparation operations provided by
-`check_preparation()` and `prepare()`.
+penalties are explicit preparation operations provided by `check_preparation()`
+and `prepare()`.
 
-`sample()` and `solve()` keep the common `SamplerAdapter` contract: pass the
-source `Instance` and set `preparation=True`. This also lets
-`Experiment.Run.log_sample()` record the source model. Preparation options are
-rejected unless that flag is set.
+`sample()` and `solve()` keep the common adapter contract and accept an
+`Instance` only. Explicit preparation therefore returns an
+`OpenJijPreparation`: pass its `input` `Instance` to the adapter, then use
+`evaluate_source()` to evaluate the resulting samples against the source
+model. The preparation itself is not an Adapter input. Its `report` contains:
 
-For inspection or direct backend use, `prepare()` returns an
-`OpenJijPreparedModel`, which can be passed to the adapter constructor. Its
-`report` contains:
-
-- `source_compatibility`: whether the source model and the requested options
-  satisfy the explicit preparation contract
-- `encoding_compatibility`: whether the intermediate model satisfies the
-  remaining Integer-to-Binary encoding conditions
+- `source_check`: membership in the preparation source class and the
+  Adapter-owned preparation preconditions
 - `steps`: the transformations actually applied
-- `final_compatibility`: whether the prepared solver model satisfies the native
-  adapter capability and adapter-specific preconditions
+- `prepared_input_applicability`: whether the produced `Instance` belongs to
+  the Adapter input class and satisfies its Adapter-specific preconditions
 
 Each preparation step records one of these semantic effects:
 
@@ -94,17 +88,17 @@ Per-constraint penalty weights use regular constraint IDs. A model containing
 Indicator, OneHot, or SOS1 constraints must therefore use a uniform penalty
 weight after their exact lowering.
 
-If variable bounds prove an inequality infeasible, `check_preparation()`,
-`prepare()`, and `sample()`/`solve()` with `preparation=True` raise
-`ommx.adapter.InfeasibleDetected` instead of reporting an adapter limitation.
+If variable bounds prove an inequality infeasible, `check_preparation()` and
+`prepare()` raise `ommx.adapter.InfeasibleDetected` instead of reporting an
+adapter limitation.
 
 The maximum of 53 auxiliary bits checked for each used Integer variable is a
 condition of OMMX's Integer-to-Binary log-encoding operation. It is neither a
-native OpenJij backend capability nor an `ommx.v2.Feature`. The latter is a
-wire-format forward-compatibility gate that tells readers which serialized
-semantics they must understand; adapter capabilities describe which models a
-solver adapter can accept.
+property of the OpenJij adapter's input class nor an `ommx.v2.Feature`. The
+latter is a wire-format forward-compatibility gate that tells readers which
+serialized semantics they must understand; an adapter's input class and
+preconditions determine its applicability to an in-memory `Instance`.
 
-OMMX does not yet implement `Kind::Spin`. Its addition, including native
-OpenJij Spin support, is tracked separately in
+OMMX does not yet implement `Kind::Spin`. Its addition, including direct
+OpenJij Spin input, is tracked separately in
 [OMMX issue #1082](https://github.com/Jij-Inc/ommx/issues/1082).

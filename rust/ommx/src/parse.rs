@@ -25,6 +25,16 @@ pub trait Parse: Sized {
     }
 }
 
+/// OMMX-owned signal for protobuf wire decoding and semantic message parsing.
+///
+/// Public SDK byte decoders keep returning [`crate::Result`], but preserve
+/// this type at the top of the error chain so callers can downcast without
+/// depending on the protobuf implementation:
+///
+/// ```rust
+/// let error = ommx::Instance::from_v1_bytes(&[0x80]).unwrap_err();
+/// assert!(error.downcast_ref::<ommx::ParseError>().is_some());
+/// ```
 #[derive(Debug)]
 pub struct ParseError {
     pub context: Vec<ParseContext>,
@@ -43,7 +53,11 @@ impl fmt::Display for ParseError {
     }
 }
 
-impl std::error::Error for ParseError {}
+impl std::error::Error for ParseError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.error)
+    }
+}
 
 impl From<RawParseError> for ParseError {
     fn from(error: RawParseError) -> Self {

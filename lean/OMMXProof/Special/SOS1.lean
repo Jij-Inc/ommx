@@ -4,9 +4,11 @@ import Mathlib.Tactic.Linarith
 /-!
 # SOS1 semantics and selector compression
 
-The structural binary-cardinality checker is executable. The selector-gadget
-theorem proves projection/lift equivalence for an all-fresh, fully linked gadget;
-history-specific inverse lowering remains a separate future refinement theorem.
+The structural binary-cardinality checker is executable. Selector-gadget
+theorems prove projection/lift equivalence both for the simple all-fresh,
+fully-linked formulation and for the SDK plan with reused binary members,
+fresh selectors, and omitted zero-bound links. Connecting a committed Rust
+history to this independent plan remains a separate future refinement theorem.
 -/
 
 namespace OMMXProof
@@ -617,6 +619,181 @@ def selectorCompression [Fintype ι] [DecidableEq ι]
   objective_lift _ := rfl
   sense_eq := rfl
 
+/-! ## SDK selector plan
+
+The SDK may reuse a binary member as its own selector, introduce a fresh
+selector for another member, and omit a link side whose bound is zero.  The
+following semantics models that plan directly.  `freshSelectors` is ignored at
+reused coordinates.
+-/
+
+def plannedSelector [DecidableEq ι] (reused : Finset ι)
+    (members freshSelectors : ι → Rat) : ι → Rat :=
+  fun i => if i ∈ reused then members i else freshSelectors i
+
+def OptionalUpperLink (upper member selector : Rat) : Prop :=
+  if 0 < upper then member ≤ upper * selector else True
+
+def OptionalLowerLink (lower member selector : Rat) : Prop :=
+  if lower < 0 then lower * selector ≤ member else True
+
+/-- Validation performed before the SDK introduces a fresh selector. -/
+def FreshBoundsContainZero [DecidableEq ι] (reused : Finset ι)
+    (bounds : SelectorBounds ι) : Prop :=
+  ∀ i, i ∉ reused → bounds.lower i ≤ 0 ∧ 0 ≤ bounds.upper i
+
+instance [Fintype ι] [DecidableEq ι] (reused : Finset ι)
+    (bounds : SelectorBounds ι) :
+    Decidable (FreshBoundsContainZero reused bounds) := by
+  unfold FreshBoundsContainZero
+  infer_instance
+
+/-- Exact plan-validation obligations enforced before the SDK mutates an
+instance.  `Rat` makes finiteness intrinsic; unsupported split domains remain
+outside this independent semantic model. -/
+structure PlannedSelectorValidation [DecidableEq ι] (reused : Finset ι)
+    (bounds : SelectorBounds ι) (base : (ι → Rat) → Prop) : Prop where
+  freshBoundsContainZero : FreshBoundsContainZero reused bounds
+  baseBounds : ∀ {members},
+    base members → WithinSelectorBounds bounds members
+  baseReusedBinary : ∀ {members},
+    base members → GenericBinaryOn reused members
+
+/-- Exact denotation of a mixed reused/fresh SDK selector plan. -/
+def PlannedSelectorGadget [Fintype ι] [DecidableEq ι]
+    (reused : Finset ι) (bounds : SelectorBounds ι)
+    (members freshSelectors : ι → Rat) : Prop :=
+  GenericBinaryOn Finset.univ (plannedSelector reused members freshSelectors) ∧
+    (∀ i, i ∉ reused →
+      OptionalUpperLink (bounds.upper i) (members i) (freshSelectors i) ∧
+        OptionalLowerLink (bounds.lower i) (members i) (freshSelectors i)) ∧
+    ∑ i, plannedSelector reused members freshSelectors i ≤ 1
+
+instance [Fintype ι] [DecidableEq ι] (reused : Finset ι)
+    (bounds : SelectorBounds ι) (members freshSelectors : ι → Rat) :
+    Decidable (PlannedSelectorGadget reused bounds members freshSelectors) := by
+  unfold PlannedSelectorGadget GenericBinaryOn OptionalUpperLink OptionalLowerLink
+  infer_instance
+
+theorem member_eq_zero_of_fresh_selector_eq_zero [DecidableEq ι]
+    {bounds : SelectorBounds ι}
+    {members freshSelectors : ι → Rat} {i : ι}
+    (hbound : WithinSelectorBounds bounds members)
+    (hlinks :
+      OptionalUpperLink (bounds.upper i) (members i) (freshSelectors i) ∧
+        OptionalLowerLink (bounds.lower i) (members i) (freshSelectors i))
+    (hselector : freshSelectors i = 0) :
+    members i = 0 := by
+  have hupper : members i ≤ 0 := by
+    by_cases hemitted : 0 < bounds.upper i
+    · have h := hlinks.1
+      simp [OptionalUpperLink, hemitted, hselector] at h
+      exact h
+    · exact le_trans (hbound i).2 (le_of_not_gt hemitted)
+  have hlower : 0 ≤ members i := by
+    by_cases hemitted : bounds.lower i < 0
+    · have h := hlinks.2
+      simp [OptionalLowerLink, hemitted, hselector] at h
+      exact h
+    · exact le_trans (le_of_not_gt hemitted) (hbound i).1
+  exact le_antisymm hupper hlower
+
+theorem plannedSelectorGadget_project_sos1 [Fintype ι] [DecidableEq ι]
+    (reused : Finset ι) (bounds : SelectorBounds ι)
+    (members freshSelectors : ι → Rat)
+    (hbound : WithinSelectorBounds bounds members)
+    (hgadget : PlannedSelectorGadget reused bounds members freshSelectors) :
+    GenericSOS1 members := by
+  rcases hgadget with ⟨hbinary, hlinks, hsum⟩
+  have hselectorSOS1 : GenericSOS1 (plannedSelector reused members freshSelectors) := by
+    unfold GenericSOS1
+    have hcardRat :
+        ((genericSupport Finset.univ
+          (plannedSelector reused members freshSelectors)).card : Rat) ≤ 1 := by
+      rw [← generic_binary_sum_eq_support_card Finset.univ
+        (plannedSelector reused members freshSelectors) hbinary]
+      exact hsum
+    exact_mod_cast hcardRat
+  have hsubset :
+      genericSupport Finset.univ members ⊆
+        genericSupport Finset.univ (plannedSelector reused members freshSelectors) := by
+    intro i hi
+    simp only [genericSupport, Finset.mem_filter, Finset.mem_univ, true_and] at hi ⊢
+    by_cases hreused : i ∈ reused
+    · simpa [plannedSelector, hreused] using hi
+    · simp only [plannedSelector, hreused, ↓reduceIte]
+      intro hselector
+      exact hi (member_eq_zero_of_fresh_selector_eq_zero hbound
+        (hlinks i hreused) hselector)
+  exact le_trans (Finset.card_le_card hsubset) hselectorSOS1
+
+theorem plannedSelector_canonical [Fintype ι] [DecidableEq ι]
+    (reused : Finset ι) (members : ι → Rat)
+    (hreusedBinary : GenericBinaryOn reused members) :
+    plannedSelector reused members (canonicalSelector members) =
+      canonicalSelector members := by
+  funext i
+  by_cases hreused : i ∈ reused
+  · rcases hreusedBinary i hreused with hzero | hone
+    · simp [plannedSelector, canonicalSelector, hreused, hzero]
+    · simp [plannedSelector, canonicalSelector, hreused, hone]
+  · simp [plannedSelector, hreused]
+
+theorem canonicalSelector_plannedGadget [Fintype ι] [DecidableEq ι]
+    (reused : Finset ι) (bounds : SelectorBounds ι) (members : ι → Rat)
+    (hbound : WithinSelectorBounds bounds members)
+    (hreusedBinary : GenericBinaryOn reused members)
+    (hsos1 : GenericSOS1 members) :
+    PlannedSelectorGadget reused bounds members (canonicalSelector members) := by
+  have hplanned := plannedSelector_canonical reused members hreusedBinary
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hplanned]
+    intro i _
+    exact canonicalSelector_binary members i
+  · intro i hfresh
+    by_cases hmember : members i = 0
+    · simp [OptionalUpperLink, OptionalLowerLink, canonicalSelector, hmember]
+    · have hb := hbound i
+      simp [OptionalUpperLink, OptionalLowerLink, canonicalSelector, hmember,
+        hb.1, hb.2]
+  · rw [hplanned]
+    rw [generic_binary_sum_eq_support_card Finset.univ
+      (canonicalSelector members) (fun i _ => canonicalSelector_binary members i)]
+    rw [canonicalSelector_support]
+    exact_mod_cast hsos1
+
+def plannedSelectorSourceProblem [Fintype ι] [DecidableEq ι]
+    (reused : Finset ι) (bounds : SelectorBounds ι)
+    (base : (ι → Rat) → Prop) (objective : (ι → Rat) → Rat)
+    (sense : OptimizationSense) : Problem ((ι → Rat) × (ι → Rat)) where
+  feasible pair :=
+    base pair.1 ∧ PlannedSelectorGadget reused bounds pair.1 pair.2
+  objective pair := objective pair.1
+  sense := sense
+
+/-- Projection/lift correctness for the full SDK SOS1 plan: reused binary
+members, fresh selectors, and omitted zero-bound link sides may coexist. -/
+def plannedSelectorCompression [Fintype ι] [DecidableEq ι]
+    (reused : Finset ι) (bounds : SelectorBounds ι)
+    (base : (ι → Rat) → Prop) (objective : (ι → Rat) → Rat)
+    (sense : OptimizationSense)
+    (validation : PlannedSelectorValidation reused bounds base) :
+    ProjectionPreserves
+      (plannedSelectorSourceProblem reused bounds base objective sense)
+      (sos1TargetProblem base objective sense) where
+  project := Prod.fst
+  lift members := (members, canonicalSelector members)
+  project_feasible h := ⟨h.1,
+    plannedSelectorGadget_project_sos1 reused bounds _ _
+      (validation.baseBounds h.1) h.2⟩
+  lift_feasible h := ⟨h.1,
+    canonicalSelector_plannedGadget reused bounds _
+      (validation.baseBounds h.1) (validation.baseReusedBinary h.1) h.2⟩
+  project_lift _ := rfl
+  objective_project _ := rfl
+  objective_lift _ := rfl
+  sense_eq := rfl
+
 /-! The generic theorem above makes selector isolation unrepresentable by its
 types. The following connected variant starts from a finite `CoreModel` base,
 checks an explicit isolation witness, and then derives the same projection
@@ -655,9 +832,10 @@ def EncodingRespectsIsolation {ι : Type*}
       (encode (members, selectors)) (encode (members, selectors'))
 
 /-- Exact all-fresh/full-link SOS1 compression from a checked finite base
-model. This theorem is intentionally limited to freshly introduced private
-selectors and the complete two-sided link gadget `Lᵢ zᵢ ≤ xᵢ ≤ Uᵢ zᵢ`.
-Reused selectors and omitted links require separate refinement theorems. -/
+model. This theorem retains the minimal formulation with freshly introduced
+private selectors and the complete two-sided link gadget
+`Lᵢ zᵢ ≤ xᵢ ≤ Uᵢ zᵢ`; `corePlannedSelectorCompression` below covers the SDK's
+mixed reuse and omitted-link plan. -/
 def coreSelectorCompression [Fintype ι] [DecidableEq ι]
     (model : CoreModel n)
     (encode : ((ι → Rat) × (ι → Rat)) → Assignment n)
@@ -685,6 +863,58 @@ def coreSelectorCompression [Fintype ι] [DecidableEq ι]
         (encodingIsolation y zeroSelectors (canonicalSelector y))).mp
       exact h.1
     · exact canonicalSelector_gadget bounds y (baseBounds h.1) h.2
+  project_lift _ := rfl
+  objective_project {x} h := by
+    exact (CoreModel.checkSelectorIsolation_objective_sound isolationAccepted
+      (encodingIsolation x.1 x.2 zeroSelectors)).symm
+  objective_lift {y} h := by
+    exact CoreModel.checkSelectorIsolation_objective_sound isolationAccepted
+      (encodingIsolation y (canonicalSelector y) zeroSelectors)
+  sense_eq := rfl
+
+def corePlannedSelectorSourceProblem [Fintype ι] [DecidableEq ι]
+    (model : CoreModel n)
+    (encode : ((ι → Rat) × (ι → Rat)) → Assignment n)
+    (reused : Finset ι) (bounds : SelectorBounds ι) :
+    Problem ((ι → Rat) × (ι → Rat)) where
+  feasible pair :=
+    model.Feasible (encode pair) ∧
+      PlannedSelectorGadget reused bounds pair.1 pair.2
+  objective pair := model.ObjectiveValue (encode pair)
+  sense := model.sense
+
+/-- Connected correctness theorem for the SDK SOS1 algorithm.  Reused members
+remain observable model variables; only the fresh-selector tuple is allowed to
+vary inside the checked private coordinate set. -/
+def corePlannedSelectorCompression [Fintype ι] [DecidableEq ι]
+    (model : CoreModel n)
+    (encode : ((ι → Rat) × (ι → Rat)) → Assignment n)
+    (reused : Finset ι) (bounds : SelectorBounds ι)
+    (isolation : CoreModel.SelectorIsolationWitness n)
+    (isolationAccepted : model.checkSelectorIsolation isolation = true)
+    (encodingIsolation : EncodingRespectsIsolation encode isolation)
+    (validation : PlannedSelectorValidation reused bounds
+      (fun members => model.Feasible (encode (members, zeroSelectors)))) :
+    ProjectionPreserves
+      (corePlannedSelectorSourceProblem model encode reused bounds)
+      (coreSOS1TargetProblem model encode) where
+  project := Prod.fst
+  lift members := (members, canonicalSelector members)
+  project_feasible {x} h := by
+    have hbase : model.Feasible (encode (x.1, zeroSelectors)) := by
+      apply (CoreModel.checkSelectorIsolation_sound isolationAccepted
+        (encodingIsolation x.1 x.2 zeroSelectors)).mp
+      exact h.1
+    exact ⟨hbase,
+      plannedSelectorGadget_project_sos1 reused bounds x.1 x.2
+        (validation.baseBounds hbase) h.2⟩
+  lift_feasible {y} h := by
+    constructor
+    · apply (CoreModel.checkSelectorIsolation_sound isolationAccepted
+        (encodingIsolation y zeroSelectors (canonicalSelector y))).mp
+      exact h.1
+    · exact canonicalSelector_plannedGadget reused bounds y
+        (validation.baseBounds h.1) (validation.baseReusedBinary h.1) h.2
   project_lift _ := rfl
   objective_project {x} h := by
     exact (CoreModel.checkSelectorIsolation_objective_sound isolationAccepted

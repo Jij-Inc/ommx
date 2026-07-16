@@ -1,5 +1,5 @@
 use super::*;
-use crate::{v1, v2, Message, Parse};
+use crate::{message_io, v1, v2, Message, Parse};
 use anyhow::Result;
 
 impl Solution {
@@ -14,12 +14,12 @@ impl Solution {
     }
 
     pub fn from_v1_bytes(bytes: &[u8]) -> Result<Self> {
-        let inner = v1::Solution::decode(bytes)?;
+        let inner = message_io::decode::<v1::Solution>(bytes, "ommx.v1.Solution")?;
         Ok(Parse::parse(inner, &())?)
     }
 
     pub fn from_v2_bytes(bytes: &[u8]) -> Result<Self> {
-        let inner = v2::Solution::decode(bytes)?;
+        let inner = message_io::decode::<v2::Solution>(bytes, "ommx.v2.Solution")?;
         Ok(Parse::parse(inner, &())?)
     }
 }

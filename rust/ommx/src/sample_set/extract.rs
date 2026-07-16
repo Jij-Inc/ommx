@@ -25,6 +25,13 @@ impl SampleSet {
             .collect()
     }
 
+    fn ensure_sample_id(&self, sample_id: SampleID) -> Result<(), SampleSetError> {
+        if self.objectives.get(sample_id).is_none() {
+            return Err(SampleSetError::UnknownSampleID { id: sample_id });
+        }
+        Ok(())
+    }
+
     /// Extract decision variable values for a given name and sample ID
     ///
     /// Returns a map from subscripts to values for the specified sample.
@@ -89,6 +96,7 @@ impl SampleSet {
         &self,
         sample_id: SampleID,
     ) -> Result<BTreeMap<String, BTreeMap<Vec<i64>, f64>>, SampleSetError> {
+        self.ensure_sample_id(sample_id)?;
         let mut result: BTreeMap<String, BTreeMap<Vec<i64>, f64>> = BTreeMap::new();
 
         for (id, variable) in self.decision_variables.iter() {
@@ -173,6 +181,7 @@ impl SampleSet {
         &self,
         sample_id: SampleID,
     ) -> Result<BTreeMap<String, BTreeMap<Vec<i64>, f64>>, SampleSetError> {
+        self.ensure_sample_id(sample_id)?;
         let mut result: BTreeMap<String, BTreeMap<Vec<i64>, f64>> = BTreeMap::new();
 
         for (id, nf) in &self.named_functions {
@@ -1068,6 +1077,29 @@ mod tests {
         assert_eq!(result.len(), 2);
         assert!(result.contains_key("cost"));
         assert!(result.contains_key("penalty"));
+    }
+
+    #[test]
+    fn test_extract_all_rejects_unknown_sample_id_without_named_entries() {
+        let mut objectives = crate::Sampled::default();
+        objectives.append([SampleID::from(0)], 0.0).unwrap();
+
+        let sample_set = SampleSet::builder()
+            .decision_variables(BTreeMap::new())
+            .objectives(objectives)
+            .constraints(BTreeMap::new())
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
+
+        assert!(matches!(
+            sample_set.extract_all_decision_variables(SampleID::from(999)),
+            Err(SampleSetError::UnknownSampleID { id }) if id == SampleID::from(999)
+        ));
+        assert!(matches!(
+            sample_set.extract_all_named_functions(SampleID::from(999)),
+            Err(SampleSetError::UnknownSampleID { id }) if id == SampleID::from(999)
+        ));
     }
 
     #[test]
