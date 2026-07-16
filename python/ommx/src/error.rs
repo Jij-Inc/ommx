@@ -69,93 +69,103 @@ pyo3_stub_gen::create_exception!(
     "The remote response is not a valid OMMX Artifact."
 );
 
-#[derive(Debug)]
-enum OmmxPyErrorKind {
-    Sdk(ommx::Error),
-    Python(PyErr),
-}
-
-/// Binding-internal wrapper that gives PyO3 a local error conversion point.
+/// Binding-internal wrapper around an already classified Python exception.
 ///
-/// Rust SDK errors are classified below, while Python-owned errors pass
-/// through unchanged.
+/// Each Rust SDK signal declares its Python mapping below. Python-owned errors
+/// pass through unchanged.
 #[derive(Debug)]
-pub struct OmmxPyError(OmmxPyErrorKind);
+pub struct OmmxPyError(PyErr);
 
 /// Result type for Rust SDK failures crossing the private binding boundary.
 pub type OmmxPyResult<T> = std::result::Result<T, OmmxPyError>;
 
-impl From<ommx::Error> for OmmxPyError {
-    fn from(error: ommx::Error) -> Self {
-        Self(OmmxPyErrorKind::Sdk(error))
+fn value_error<T>(_: &T, message: String) -> PyErr {
+    PyValueError::new_err(message)
+}
+
+#[cfg(feature = "remote-artifact")]
+fn remote_artifact_error_to_pyerr(
+    error: &ommx::artifact::RemoteArtifactError,
+    message: String,
+) -> PyErr {
+    match error {
+        ommx::artifact::RemoteArtifactError::ManifestNotFound { .. } => {
+            RemoteArtifactNotFoundError::new_err(message)
+        }
+        ommx::artifact::RemoteArtifactError::Authentication { .. } => {
+            RemoteArtifactAuthenticationError::new_err(message)
+        }
+        ommx::artifact::RemoteArtifactError::Authorization { .. } => {
+            RemoteArtifactAuthorizationError::new_err(message)
+        }
+        ommx::artifact::RemoteArtifactError::Transport { .. } => {
+            RemoteArtifactTransportError::new_err(message)
+        }
+        ommx::artifact::RemoteArtifactError::InvalidArtifact { .. } => {
+            InvalidRemoteArtifactError::new_err(message)
+        }
+        ommx::artifact::RemoteArtifactError::Other { .. } => RemoteArtifactError::new_err(message),
+        _ => RemoteArtifactError::new_err(message),
     }
 }
 
-macro_rules! impl_from_ommx_signal {
-    ($($error:ty),+ $(,)?) => {
+/// Declare both the direct typed conversion and the fallback dispatch used
+/// after a Rust SDK signal has already been erased into `ommx::Error`.
+///
+/// Declaration order is significant when an anyhow chain contains multiple
+/// mapped signals: the Python-visible owner must appear before nested causes.
+macro_rules! define_ommx_error_mappings {
+    (
         $(
-            impl From<$error> for OmmxPyError {
-                fn from(error: $error) -> Self {
-                    Self::from(ommx::Error::from(error))
+            $(#[$attribute:meta])*
+            $signal:ty => $mapper:path
+        ),+ $(,)?
+    ) => {
+        $(
+            $(#[$attribute])*
+            impl From<$signal> for OmmxPyError {
+                fn from(error: $signal) -> Self {
+                    let message = error.to_string();
+                    Self($mapper(&error, message))
                 }
             }
         )+
+
+        impl From<ommx::Error> for OmmxPyError {
+            fn from(error: ommx::Error) -> Self {
+                let message = format!("{error:#}");
+
+                $(
+                    $(#[$attribute])*
+                    if let Some(signal) = error.downcast_ref::<$signal>() {
+                        return Self($mapper(signal, message));
+                    }
+                )+
+
+                Self(PyRuntimeError::new_err(message))
+            }
+        }
     };
 }
 
-impl_from_ommx_signal!(ommx::AtolError, ommx::BoundError, ommx::CoefficientError,);
+define_ommx_error_mappings!(
+    ommx::AtolError => value_error,
+    ommx::BoundError => value_error,
+    ommx::CoefficientError => value_error,
+    #[cfg(feature = "remote-artifact")]
+    ommx::artifact::RemoteArtifactError => remote_artifact_error_to_pyerr,
+);
 
 impl From<PyErr> for OmmxPyError {
     fn from(error: PyErr) -> Self {
-        Self(OmmxPyErrorKind::Python(error))
+        Self(error)
     }
 }
 
 impl From<OmmxPyError> for PyErr {
     fn from(OmmxPyError(error): OmmxPyError) -> Self {
-        match error {
-            OmmxPyErrorKind::Sdk(error) => ommx_error_to_pyerr(error),
-            OmmxPyErrorKind::Python(error) => error,
-        }
+        error
     }
-}
-
-fn ommx_error_to_pyerr(error: ommx::Error) -> PyErr {
-    let message = format!("{error:#}");
-
-    if error.downcast_ref::<ommx::CoefficientError>().is_some()
-        || error.downcast_ref::<ommx::AtolError>().is_some()
-        || error.downcast_ref::<ommx::BoundError>().is_some()
-    {
-        return PyValueError::new_err(message);
-    }
-
-    #[cfg(feature = "remote-artifact")]
-    if let Some(remote_error) = error.downcast_ref::<ommx::artifact::RemoteArtifactError>() {
-        return match remote_error {
-            ommx::artifact::RemoteArtifactError::ManifestNotFound { .. } => {
-                RemoteArtifactNotFoundError::new_err(message)
-            }
-            ommx::artifact::RemoteArtifactError::Authentication { .. } => {
-                RemoteArtifactAuthenticationError::new_err(message)
-            }
-            ommx::artifact::RemoteArtifactError::Authorization { .. } => {
-                RemoteArtifactAuthorizationError::new_err(message)
-            }
-            ommx::artifact::RemoteArtifactError::Transport { .. } => {
-                RemoteArtifactTransportError::new_err(message)
-            }
-            ommx::artifact::RemoteArtifactError::InvalidArtifact { .. } => {
-                InvalidRemoteArtifactError::new_err(message)
-            }
-            ommx::artifact::RemoteArtifactError::Other { .. } => {
-                RemoteArtifactError::new_err(message)
-            }
-            _ => RemoteArtifactError::new_err(message),
-        };
-    }
-
-    PyRuntimeError::new_err(message)
 }
 
 /// Register the Python exception hierarchy owned by this conversion boundary.
