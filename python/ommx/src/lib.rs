@@ -21,6 +21,7 @@ mod function;
 mod in_place_add;
 mod indicator_constraint;
 mod instance;
+mod instance_class;
 mod linear;
 mod named_function;
 mod one_hot_constraint;
@@ -60,6 +61,7 @@ pub use experiment::*;
 pub use function::*;
 pub use indicator_constraint::*;
 pub use instance::*;
+pub use instance_class::*;
 pub use linear::*;
 pub use named_function::*;
 pub use one_hot_constraint::*;
@@ -190,6 +192,12 @@ fn _ommx_rust(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<AttachedDecisionVariable>()?;
     m.add_class::<Parameter>()?;
     m.add_class::<AdditionalCapability>()?;
+    m.add_class::<DegreeBound>()?;
+    m.add_class::<InstanceClassClause>()?;
+    m.add_class::<InstanceClass>()?;
+    m.add_class::<InstanceClassMismatch>()?;
+    m.add_class::<InstanceClassClauseReport>()?;
+    m.add_class::<InstanceClassMembershipReport>()?;
     m.add_class::<Constraint>()?;
     m.add_class::<AttachedConstraint>()?;
     m.add_class::<IndicatorConstraint>()?;
@@ -270,8 +278,14 @@ pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
     "DecisionVariable",
     "AttachedDecisionVariable",
     "Parameter",
-    // Constraint capability
+    // Instance classes and explicit special-constraint lowering
     "AdditionalCapability",
+    "DegreeBound",
+    "InstanceClassClause",
+    "InstanceClass",
+    "InstanceClassMismatch",
+    "InstanceClassClauseReport",
+    "InstanceClassMembershipReport",
     // Constraint and named function
     "Constraint",
     "AttachedConstraint",

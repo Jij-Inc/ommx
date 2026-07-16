@@ -1,7 +1,26 @@
 import pytest
-from ommx import Instance, DecisionVariable
+from ommx import Instance, DecisionVariable, OneHotConstraint
 from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 from ommx_python_mip_adapter.exception import OMMXPythonMIPAdapterError
+
+
+def test_constructor_lowers_one_hot_constraint():
+    x = [DecisionVariable.binary(i) for i in range(2)]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=sum(x),
+        constraints={},
+        one_hot_constraints={7: OneHotConstraint(variables=x)},
+        sense=Instance.MINIMIZE,
+    )
+
+    adapter = OMMXPythonMIPAdapter(instance)
+
+    assert adapter.instance is instance
+    assert instance.one_hot_constraints == {}
+    assert set(instance.removed_one_hot_constraints) == {7}
+    assert len(instance.constraints) == 1
+    assert len(adapter.solver_input.constrs) == 1
 
 
 def test_error_nonlinear_objective():
