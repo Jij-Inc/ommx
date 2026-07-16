@@ -78,6 +78,46 @@ def test_non_finite_function_input_stays_type_error() -> None:
         _ = x + math.inf
 
 
+@pytest.mark.parametrize(
+    ("lhs", "rhs", "terms"),
+    [
+        (
+            lambda: ommx.Linear({0: 1.0, 2: sys.float_info.max}),
+            lambda: ommx.Linear({0: 2.0, 2: sys.float_info.max}),
+            lambda value: value.terms(),
+        ),
+        (
+            lambda: ommx.Quadratic([0, 2], [0, 2], [1.0, sys.float_info.max]),
+            lambda: ommx.Quadratic([0, 2], [0, 2], [2.0, sys.float_info.max]),
+            lambda value: value.terms(),
+        ),
+        (
+            lambda: ommx.Polynomial({(0,): 1.0, (2,): sys.float_info.max}),
+            lambda: ommx.Polynomial({(0,): 2.0, (2,): sys.float_info.max}),
+            lambda value: value.terms(),
+        ),
+        (
+            lambda: ommx.Function(
+                ommx.Polynomial({(0,): 1.0, (2,): sys.float_info.max})
+            ),
+            lambda: ommx.Function(
+                ommx.Polynomial({(0,): 2.0, (2,): sys.float_info.max})
+            ),
+            lambda value: value.terms,
+        ),
+    ],
+    ids=["linear", "quadratic", "polynomial", "function"],
+)
+def test_in_place_add_overflow_preserves_left_operand(lhs, rhs, terms) -> None:
+    value = lhs()
+    before = dict(terms(value))
+
+    with pytest.raises(ValueError, match="Coefficient must be finite"):
+        value += rhs()
+
+    assert terms(value) == before
+
+
 def test_function_reduce_binary_power_overflow_raises_value_error() -> None:
     huge = sys.float_info.max
     function = ommx.Function(ommx.Polynomial({(0,): huge, (0, 0): huge}))

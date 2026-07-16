@@ -18,6 +18,7 @@ mod evaluated_decision_variable;
 mod evaluated_named_function;
 mod experiment;
 mod function;
+mod in_place_add;
 mod indicator_constraint;
 mod instance;
 mod linear;
