@@ -1,9 +1,9 @@
 //! Translation from Rust SDK errors to Python exceptions.
 //!
-//! Rust SDK methods keep returning `ommx::Result<T>`. Binding entry points
-//! return [`OmmxPyResult`] so `?` converts SDK errors into the local
-//! [`OmmxPyError`] wrapper before PyO3 invokes this module's single type-based
-//! classifier.
+//! Binding entry points return [`OmmxPyResult`] so `?` classifies concrete Rust
+//! SDK signals through the declarative mapping table below. Signals already
+//! erased into `ommx::Error` are recovered through the same table before PyO3
+//! receives the local [`OmmxPyError`] wrapper.
 
 use pyo3::{
     exceptions::{PyRuntimeError, PyValueError},
@@ -112,8 +112,8 @@ fn remote_artifact_error_to_pyerr(
 /// Declare both the direct typed conversion and the fallback dispatch used
 /// after a Rust SDK signal has already been erased into `ommx::Error`.
 ///
-/// Declaration order is significant when an anyhow chain contains multiple
-/// mapped signals: the Python-visible owner must appear before nested causes.
+/// Declaration order is significant when an `anyhow::Error` can be downcast to
+/// multiple mapped signals: the Python-visible owner must appear first.
 macro_rules! define_ommx_error_mappings {
     (
         $(
@@ -149,11 +149,11 @@ macro_rules! define_ommx_error_mappings {
 }
 
 define_ommx_error_mappings!(
+    #[cfg(feature = "remote-artifact")]
+    ommx::artifact::RemoteArtifactError => remote_artifact_error_to_pyerr,
     ommx::AtolError => value_error,
     ommx::BoundError => value_error,
     ommx::CoefficientError => value_error,
-    #[cfg(feature = "remote-artifact")]
-    ommx::artifact::RemoteArtifactError => remote_artifact_error_to_pyerr,
 );
 
 impl From<PyErr> for OmmxPyError {
