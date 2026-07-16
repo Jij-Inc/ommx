@@ -8,6 +8,33 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🆕 Durable lifecycle reasons for Experiments and Runs ([#1109](https://github.com/Jij-Inc/ommx/pull/1109))
+
+Failed and interrupted Experiments and Runs can now retain a concise reason in
+the Experiment config. Python context managers record the exception type and
+message automatically, and expose the durable value through
+{attr}`~ommx.experiment.Experiment.lifecycle_reason` and
+{attr}`~ommx.experiment.SealedRun.lifecycle_reason`.
+
+```python
+from ommx.experiment import Experiment
+
+try:
+    with Experiment("example.com/team/experiment:latest") as experiment:
+        with experiment.run():
+            raise RuntimeError("solver process exited")
+except RuntimeError:
+    pass
+
+assert experiment.lifecycle_reason == "RuntimeError: solver process exited"
+assert experiment.runs[0].lifecycle_reason == "RuntimeError: solver process exited"
+```
+
+The reason survives archive and registry transport. It is lifecycle metadata,
+not adapter diagnostics; keep it concise and do not include secrets,
+tracebacks, local variables, or environment values. Existing Experiment
+artifacts without an outcome detail continue to load with `None`.
+
 ### 🆕 Instance classes and adapter applicability ([#1084](https://github.com/Jij-Inc/ommx/pull/1084))
 
 The Python SDK now exposes {class}`~ommx.InstanceClass` as a set of OMMX
