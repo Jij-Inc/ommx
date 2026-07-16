@@ -20892,7 +20892,7 @@
             },
             {
               "name": "get_sample_by_id",
-              "doc": "Get sample by ID (alias for get method)",
+              "doc": "Get sample by ID (alias for get method).\n\nRaises KeyError if the sample ID does not exist.",
               "signatures": [
                 {
                   "parameters": [
