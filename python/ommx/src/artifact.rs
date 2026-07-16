@@ -270,13 +270,11 @@ impl PyArtifact {
     /// raise subclasses of {class}`~ommx.artifact.RemoteArtifactError`.
     #[cfg(feature = "remote-artifact")]
     #[staticmethod]
-    pub fn load(py: Python<'_>, image_name: &str) -> PyResult<Self> {
+    pub fn load(py: Python<'_>, image_name: &str) -> crate::error::OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        crate::error::map_ommx_error(|| {
-            let image_name = ommx::artifact::ImageRef::parse(image_name)?;
-            let inner = ommx::artifact::LocalArtifactDyn::load(image_name)?;
-            Ok(Self::new(inner))
-        })
+        let image_name = ommx::artifact::ImageRef::parse(image_name)?;
+        let inner = ommx::artifact::LocalArtifactDyn::load(image_name)?;
+        Ok(Self::new(inner))
     }
 
     /// Push the artifact to remote registry.

@@ -145,10 +145,13 @@ impl Constraint {
     ///
     /// **Returns:** {class}`~ommx.EvaluatedConstraint` containing the evaluated value and feasibility
     #[pyo3(signature = (state, *, atol=None))]
-    pub fn evaluate(&self, state: State, atol: Option<f64>) -> PyResult<EvaluatedConstraint> {
+    pub fn evaluate(
+        &self,
+        state: State,
+        atol: Option<f64>,
+    ) -> crate::error::OmmxPyResult<EvaluatedConstraint> {
         let atol = match atol {
-            Some(value) => ommx::ATol::new(value)
-                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?,
+            Some(value) => ommx::ATol::new(value)?,
             None => ommx::ATol::default(),
         };
         let evaluated = self
@@ -169,10 +172,13 @@ impl Constraint {
     ///
     /// **Returns:** Self (modified in-place) for method chaining
     #[pyo3(signature = (state, *, atol=None))]
-    pub fn partial_evaluate(&mut self, state: State, atol: Option<f64>) -> PyResult<Self> {
+    pub fn partial_evaluate(
+        &mut self,
+        state: State,
+        atol: Option<f64>,
+    ) -> crate::error::OmmxPyResult<Self> {
         let atol = match atol {
-            Some(value) => ommx::ATol::new(value)
-                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?,
+            Some(value) => ommx::ATol::new(value)?,
             None => ommx::ATol::default(),
         };
         self.0
@@ -569,10 +575,9 @@ impl AttachedConstraint {
         py: Python<'_>,
         state: State,
         atol: Option<f64>,
-    ) -> PyResult<EvaluatedConstraint> {
+    ) -> crate::error::OmmxPyResult<EvaluatedConstraint> {
         let atol = match atol {
-            Some(value) => ommx::ATol::new(value)
-                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?,
+            Some(value) => ommx::ATol::new(value)?,
             None => ommx::ATol::default(),
         };
         match &self.host {
@@ -587,7 +592,8 @@ impl AttachedConstraint {
             ConstraintHost::Parametric(_) => Err(pyo3::exceptions::PyValueError::new_err(
                 "AttachedConstraint.evaluate is not supported on a ParametricInstance host; \
                  substitute parameters via ParametricInstance.with_parameters first",
-            )),
+            )
+            .into()),
         }
     }
 
