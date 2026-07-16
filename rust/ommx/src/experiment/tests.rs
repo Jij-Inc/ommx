@@ -2785,6 +2785,8 @@ fn experiment_dyn_scopes_commit_successful_runs() {
         registry_handle,
         image_name.clone(),
         |experiment| {
+            experiment.set_annotation("com.example.workflow", "scoped")?;
+            experiment.log_json("dataset", json!({"name": "demo"}))?;
             experiment.scoped_run(|run| {
                 run.log_parameter("seed", 1_i64)?;
                 run.log_json("partial", json!({"step": 1}))?;
@@ -2796,6 +2798,10 @@ fn experiment_dyn_scopes_commit_successful_runs() {
     .unwrap();
 
     assert_eq!(artifact.image_name(), &image_name);
+    assert_eq!(
+        artifact.annotations().unwrap().get("com.example.workflow"),
+        Some(&"scoped".to_string())
+    );
     let experiment = ExperimentDyn::from_artifact(artifact).unwrap();
     assert_eq!(
         experiment.experiment_status(),
@@ -2804,6 +2810,13 @@ fn experiment_dyn_scopes_commit_successful_runs() {
     let runs = experiment.runs().unwrap();
     assert_eq!(runs.len(), 1);
     assert_eq!(runs[0].status().as_str(), RUN_STATUS_FINISHED);
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(
+            &experiment.attachment_blob("dataset").unwrap()
+        )
+        .unwrap(),
+        json!({"name": "demo"})
+    );
     assert_eq!(
         serde_json::from_slice::<serde_json::Value>(&runs[0].attachment_blob("partial").unwrap())
             .unwrap(),

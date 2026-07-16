@@ -37,7 +37,7 @@ mod run;
 mod session;
 
 pub use run::RunDyn;
-pub use session::{ExperimentSession, RunSession};
+pub use session::{ExperimentScope, ExperimentSession, RunSession};
 
 /// Runtime-owned Experiment handle.
 ///

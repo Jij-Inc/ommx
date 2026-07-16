@@ -101,7 +101,8 @@ pub use attachment::{
     detect_file_media_type, AttachmentTable, Compression, DEFAULT_FILE_MEDIA_TYPE,
 };
 pub use dynamic::{
-    ExperimentDyn, ExperimentSession, RunDyn, RunSession, SamplingDyn, SealedRunDyn, SolveDyn,
+    ExperimentDyn, ExperimentScope, ExperimentSession, RunDyn, RunSession, SamplingDyn,
+    SealedRunDyn, SolveDyn,
 };
 pub use logging::AttachmentLogger;
 pub use parameter::{ParameterValue, RunParameterCell};

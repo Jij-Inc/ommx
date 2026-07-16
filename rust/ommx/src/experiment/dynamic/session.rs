@@ -1,11 +1,97 @@
 //! Lifecycle-safe scopes for dynamic Experiment and Run handles.
 
+use super::super::logging::AttachmentLoggerStorage;
+use super::super::{AttachmentTable, AutosavePolicy, Name};
 use super::{ExperimentDyn, RunDyn};
-use crate::artifact::{LocalArtifactDyn, LocalRegistryHandle};
-use crate::experiment::Name;
+use crate::artifact::local_registry::LocalRegistry;
+use crate::artifact::{ImageRef, LocalArtifactDyn, LocalRegistryHandle};
 use anyhow::Result;
+use oci_spec::image::Descriptor;
 
 const EXPERIMENT_SCOPE_DROP_REASON: &str = "Experiment scope dropped before lifecycle completion";
+
+/// Restricted Experiment view used by [`ExperimentDyn::scoped`].
+///
+/// The scope exposes Experiment-space logging and configuration together with
+/// [`scoped_run`](Self::scoped_run), but deliberately does not expose
+/// [`ExperimentDyn::run`]. Every Run created through this view is therefore
+/// finalized before the callback can return or unwind, so a terminal
+/// Experiment checkpoint cannot omit an escaped open Run.
+///
+/// Attempting to move a raw Run outside the callback is rejected at compile
+/// time:
+///
+/// ```compile_fail
+/// use ommx::experiment::{ExperimentDyn, Name};
+///
+/// let mut escaped_run = None;
+/// let _ = ExperimentDyn::scoped(Name::Anonymous, |scope| {
+///     escaped_run = Some(scope.run()?);
+///     anyhow::bail!("stop")
+/// });
+/// ```
+#[derive(Debug)]
+pub struct ExperimentScope<'exp> {
+    experiment: &'exp ExperimentDyn,
+}
+
+impl ExperimentScope<'_> {
+    /// Concrete Local Registry image name for this Experiment.
+    pub fn image_name(&self) -> Result<ImageRef> {
+        self.experiment.image_name()
+    }
+
+    /// Set a manifest annotation on this unsealed Experiment.
+    pub fn set_annotation(&self, key: impl Into<String>, value: impl Into<String>) -> Result<()> {
+        self.experiment.set_annotation(key, value)
+    }
+
+    /// Pending manifest annotations for this unsealed Experiment.
+    pub fn annotations(&self) -> Result<std::collections::HashMap<String, String>> {
+        self.experiment.annotations()
+    }
+
+    /// Set the rolling draft checkpoint policy for closed Runs.
+    pub fn set_autosave_policy(&self, policy: AutosavePolicy) -> Result<()> {
+        self.experiment.set_autosave_policy(policy)
+    }
+
+    /// Rename the Local Registry image ref used by the final Experiment.
+    pub fn rename(&self, image_name: ImageRef) -> Result<()> {
+        self.experiment.rename(image_name)
+    }
+
+    /// Run one lifecycle-safe callback against a new Run.
+    ///
+    /// A successful callback finishes the Run. A returned error finishes it as
+    /// failed and returns the original callback error. A panic or unresolved
+    /// drop finishes it as interrupted.
+    pub fn scoped_run<T>(&self, f: impl FnOnce(&mut RunDyn) -> Result<T>) -> Result<T> {
+        self.experiment.scoped_run(f)
+    }
+}
+
+impl AttachmentLoggerStorage for &ExperimentScope<'_> {
+    type Descriptor = Descriptor;
+
+    fn with_local_registry<R>(&self, f: impl FnOnce(&LocalRegistry) -> Result<R>) -> Result<R> {
+        let experiment = self.experiment;
+        AttachmentLoggerStorage::with_local_registry(&experiment, f)
+    }
+
+    fn with_attachment_table<R>(
+        &mut self,
+        f: impl FnOnce(&mut AttachmentTable<Self::Descriptor>) -> Result<R>,
+    ) -> Result<R> {
+        let mut experiment = self.experiment;
+        AttachmentLoggerStorage::with_attachment_table(&mut experiment, f)
+    }
+
+    fn descriptor_for_attachment_table(&self, descriptor: Descriptor) -> Result<Self::Descriptor> {
+        let experiment = self.experiment;
+        AttachmentLoggerStorage::descriptor_for_attachment_table(&experiment, descriptor)
+    }
+}
 
 /// Lifecycle owner for an [`ExperimentDyn`].
 ///
@@ -186,7 +272,7 @@ impl ExperimentDyn {
     /// This method only writes to the Local Registry; it never pushes remotely.
     pub fn scoped(
         name: impl Into<Name>,
-        f: impl FnOnce(&ExperimentDyn) -> Result<()>,
+        f: impl FnOnce(&ExperimentScope<'_>) -> Result<()>,
     ) -> Result<LocalArtifactDyn> {
         let experiment = Self::new(name)?;
         Self::run_scope(experiment, f)
@@ -199,7 +285,7 @@ impl ExperimentDyn {
     pub fn scoped_with_registry_handle(
         registry_handle: LocalRegistryHandle,
         name: impl Into<Name>,
-        f: impl FnOnce(&ExperimentDyn) -> Result<()>,
+        f: impl FnOnce(&ExperimentScope<'_>) -> Result<()>,
     ) -> Result<LocalArtifactDyn> {
         let experiment = Self::with_registry_handle(registry_handle, name)?;
         Self::run_scope(experiment, f)
@@ -207,12 +293,15 @@ impl ExperimentDyn {
 
     fn run_scope(
         experiment: ExperimentDyn,
-        f: impl FnOnce(&ExperimentDyn) -> Result<()>,
+        f: impl FnOnce(&ExperimentScope<'_>) -> Result<()>,
     ) -> Result<LocalArtifactDyn> {
         let session = experiment
             .session()
             .interrupt_on_drop(EXPERIMENT_SCOPE_DROP_REASON);
-        match f(session.experiment()) {
+        let scope = ExperimentScope {
+            experiment: session.experiment(),
+        };
+        match f(&scope) {
             Ok(()) => session.commit(),
             Err(error) => {
                 let reason = format!("{error:#}");
