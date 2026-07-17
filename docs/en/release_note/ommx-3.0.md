@@ -61,6 +61,14 @@ Experiment operations classify invalid image references, autosave values,
 attachment media types, and JSON input as `ValueError`; registry, archive,
 storage, and lifecycle failures remain on the `RuntimeError` fallback.
 
+The remaining `Instance`, `ParametricInstance`, attached metadata, random
+generator, `Solution`, `Samples`, and Artifact registry bindings now use the
+same boundary. Binding-owned duplicate component IDs and missing penalty
+weights raise `ValueError`. Solver and sampler adapter exceptions passed
+through `Run.log_solve` and `Run.log_sample` preserve the original Python
+exception object. Malformed payloads received by the private cross-extension
+PyO3 bridge are internal protocol failures and raise `RuntimeError`.
+
 The mapped signals currently include `CoefficientError`, `AtolError`,
 `BoundError`, stable control-flow cases from `DecisionVariableError`,
 `SolutionError`, and `SampleSetError`, and the `ParseError` and
@@ -72,6 +80,13 @@ already persisted in the Local Registry keeps an
 archive, and content-addressed storage failures also remain on that fallback.
 Exceptions from Python-backed codecs, JSON callbacks, adapters, tracing hooks,
 and data libraries pass through unchanged.
+
+The Python extension no longer depends directly on `anyhow`, and its PyO3
+dependency no longer enables the blanket `anyhow` conversion feature.
+`pyo3-tracing-opentelemetry` is upgraded to 0.3.1 so the feature stays disabled
+through the tracing dependency as well. New exposed bindings can therefore no
+longer rely on blanket conversion and must translate Rust SDK failures
+explicitly through the shared boundary.
 
 Zero coefficients remain normalized as a successful operation, and a failed
 in-place numeric addition leaves the original object unchanged. MPS parsing and
@@ -87,7 +102,8 @@ Related PRs: [#1096](https://github.com/Jij-Inc/ommx/pull/1096),
 [#1097](https://github.com/Jij-Inc/ommx/pull/1097),
 [#1099](https://github.com/Jij-Inc/ommx/pull/1099),
 [#1100](https://github.com/Jij-Inc/ommx/pull/1100),
-[#1101](https://github.com/Jij-Inc/ommx/pull/1101).
+[#1101](https://github.com/Jij-Inc/ommx/pull/1101),
+[#1102](https://github.com/Jij-Inc/ommx/pull/1102).
 
 ### 🆕 Instance classes and adapter applicability ([#1084](https://github.com/Jij-Inc/ommx/pull/1084))
 

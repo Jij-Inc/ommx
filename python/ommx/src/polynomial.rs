@@ -1,6 +1,5 @@
 use crate::{Constraint, Function, Linear, Quadratic, Rng, State};
 
-use anyhow::{anyhow, Result};
 use approx::AbsDiffEq;
 use ommx::MonomialDyn;
 use ommx::{ATol, Coefficient, CoefficientError, Evaluate};
@@ -314,8 +313,13 @@ impl Polynomial {
         max_degree=ommx::PolynomialParameters::default().max_degree().into_inner(),
         max_id=ommx::PolynomialParameters::default().max_id().into_inner()
     ))]
-    pub fn random(rng: &Rng, num_terms: usize, max_degree: u32, max_id: u64) -> Result<Self> {
-        let mut rng = rng.lock().map_err(|_| anyhow!("Cannot get lock for RNG"))?;
+    pub fn random(
+        rng: &Rng,
+        num_terms: usize,
+        max_degree: u32,
+        max_id: u64,
+    ) -> crate::error::OmmxPyResult<Self> {
+        let mut rng = rng.lock()?;
         let inner: ommx::Polynomial = ommx::random::random(
             &mut rng,
             ommx::PolynomialParameters::new(num_terms, max_degree.into(), max_id.into())?,

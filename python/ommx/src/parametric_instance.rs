@@ -7,9 +7,13 @@ use crate::{
     Constraint, DecisionVariable, Function, Instance, NamedFunction, Parameter, RemovedConstraint,
     Sense,
 };
-use anyhow::Result;
 use ommx::{ConstraintID, NamedFunctionID, VariableID};
-use pyo3::{exceptions::PyKeyError, prelude::*, types::PyBytes, Bound, PyAny};
+use pyo3::{
+    exceptions::{PyKeyError, PyValueError},
+    prelude::*,
+    types::PyBytes,
+    Bound, PyAny,
+};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
@@ -40,7 +44,7 @@ impl ParametricInstance {
         })
     }
 
-    pub fn to_v1_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
+    pub fn to_v1_bytes<'py>(&self, py: Python<'py>) -> OmmxPyResult<Bound<'py, PyBytes>> {
         let _guard = crate::TRACING.attach_parent_context(py);
         Ok(PyBytes::new(py, &self.inner.to_v1_bytes()?))
     }
@@ -71,14 +75,18 @@ impl ParametricInstance {
         sos1_constraints: Option<BTreeMap<u64, crate::Sos1Constraint>>,
         named_functions: Option<Vec<NamedFunction>>,
         description: Option<crate::InstanceDescription>,
-    ) -> Result<Self> {
+    ) -> OmmxPyResult<Self> {
         let mut rust_decision_variables = BTreeMap::new();
         let mut variable_labels = ommx::VariableLabelStore::default();
         for var in decision_variables {
             let id = var.0;
             variable_labels.insert(id, var.2);
             if rust_decision_variables.insert(id, var.1).is_some() {
-                anyhow::bail!("Duplicate decision variable ID: {}", id.into_inner());
+                return Err(PyValueError::new_err(format!(
+                    "Duplicate decision variable ID: {}",
+                    id.into_inner()
+                ))
+                .into());
             }
         }
 
@@ -158,7 +166,11 @@ impl ParametricInstance {
                 let id = nf.0;
                 named_function_labels.insert(id, nf.2);
                 if rust_named_functions.insert(id, nf.1).is_some() {
-                    anyhow::bail!("Duplicate named function ID: {}", id.into_inner());
+                    return Err(PyValueError::new_err(format!(
+                        "Duplicate named function ID: {}",
+                        id.into_inner()
+                    ))
+                    .into());
                 }
             }
             builder = builder.named_functions(rust_named_functions);
@@ -185,7 +197,7 @@ impl ParametricInstance {
 
     /// Create trivial empty instance of minimization with zero objective, no constraints, and no decision variables and parameters.
     #[staticmethod]
-    pub fn empty() -> Result<Self> {
+    pub fn empty() -> OmmxPyResult<Self> {
         Self::from_components(
             Sense::Minimize,
             Function(ommx::Function::Zero),
@@ -203,7 +215,7 @@ impl ParametricInstance {
     /// Substitute parameters to yield an instance.
     ///
     /// Parameters can be provided as a dict mapping parameter IDs to their values.
-    pub fn with_parameters(&self, parameters: HashMap<u64, f64>) -> Result<Instance> {
+    pub fn with_parameters(&self, parameters: HashMap<u64, f64>) -> OmmxPyResult<Instance> {
         let mut v1_params = ommx::v1::Parameters::default();
         v1_params.entries = parameters;
         let instance = self.inner.clone().with_parameters(v1_params)?;
@@ -221,13 +233,13 @@ impl ParametricInstance {
         function: Function,
         max_terms: Option<usize>,
         max_chars: Option<usize>,
-    ) -> Result<String> {
+    ) -> OmmxPyResult<String> {
         let opts = ommx::FunctionFormatOptions {
             max_terms,
             max_chars,
         };
         if opts == ommx::FunctionFormatOptions::default() {
-            self.inner.format_function(&function.0)
+            Ok(self.inner.format_function(&function.0)?)
         } else {
             Ok(self.inner.format_function_with(&function.0, opts)?.text)
         }
@@ -244,7 +256,7 @@ impl ParametricInstance {
         function: Function,
         max_terms: Option<usize>,
         max_chars: Option<usize>,
-    ) -> Result<crate::display::FunctionDisplay> {
+    ) -> OmmxPyResult<crate::display::FunctionDisplay> {
         let formatted = self.inner.format_function_with(
             &function.0,
             ommx::FunctionFormatOptions {
@@ -335,7 +347,7 @@ impl ParametricInstance {
     pub fn add_decision_variable(
         slf: Bound<'_, Self>,
         variable: DecisionVariable,
-    ) -> Result<crate::AttachedDecisionVariable> {
+    ) -> OmmxPyResult<crate::AttachedDecisionVariable> {
         let id = {
             let mut inst = slf.borrow_mut();
             inst.inner
@@ -402,7 +414,7 @@ impl ParametricInstance {
     pub fn add_constraint(
         slf: Bound<'_, Self>,
         constraint: Constraint,
-    ) -> Result<crate::AttachedConstraint> {
+    ) -> OmmxPyResult<crate::AttachedConstraint> {
         let id = {
             let mut inst = slf.borrow_mut();
             inst.inner.add_constraint(constraint.0, constraint.1)?
@@ -472,7 +484,7 @@ impl ParametricInstance {
     pub fn add_indicator_constraint(
         slf: Bound<'_, Self>,
         constraint: crate::IndicatorConstraint,
-    ) -> Result<crate::AttachedIndicatorConstraint> {
+    ) -> OmmxPyResult<crate::AttachedIndicatorConstraint> {
         let id = {
             let mut inst = slf.borrow_mut();
             inst.inner
@@ -540,7 +552,7 @@ impl ParametricInstance {
     pub fn add_one_hot_constraint(
         slf: Bound<'_, Self>,
         constraint: crate::OneHotConstraint,
-    ) -> Result<crate::AttachedOneHotConstraint> {
+    ) -> OmmxPyResult<crate::AttachedOneHotConstraint> {
         let id = {
             let mut inst = slf.borrow_mut();
             inst.inner
@@ -603,7 +615,7 @@ impl ParametricInstance {
     pub fn add_sos1_constraint(
         slf: Bound<'_, Self>,
         constraint: crate::Sos1Constraint,
-    ) -> Result<crate::AttachedSos1Constraint> {
+    ) -> OmmxPyResult<crate::AttachedSos1Constraint> {
         let id = {
             let mut inst = slf.borrow_mut();
             inst.inner.add_sos1_constraint(constraint.0, constraint.1)?

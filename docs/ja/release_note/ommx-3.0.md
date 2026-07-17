@@ -58,6 +58,14 @@ Experiment 操作では、不正な image reference、autosave value、attachmen
 type、JSON input を `ValueError` とし、registry、archive、storage、lifecycle の
 failure は `RuntimeError` に fallback します。
 
+残っていた `Instance`、`ParametricInstance`、attached metadata、random
+generator、`Solution`、`Samples`、Artifact registry の binding も同じ boundary
+を使うようになりました。Binding が所有する component ID の重複と不足した
+penalty weight は `ValueError` です。`Run.log_solve` と `Run.log_sample` を通る
+solver / sampler adapter の exception は、元の Python exception object を保持します。
+Private な cross-extension PyO3 bridge が受信した不正 payload は内部 protocol の
+failure であるため、`RuntimeError` になります。
+
 現在の対象は、`CoefficientError`、`AtolError`、`BoundError`、
 `DecisionVariableError`、`SolutionError`、`SampleSetError` のうち Python 側で
 安定して判別すべき case、および parser signal の `ParseError` と
@@ -68,6 +76,13 @@ failure は `RuntimeError` に fallback します。
 `RuntimeError` に fallback します。Registry、archive、content-addressed storage の
 failure も同じ fallback を使います。Python-backed codec、JSON callback、adapter、
 tracing hook、data library が送出した exception は変更せず伝播します。
+
+Python extension は `anyhow` への直接依存を廃止し、PyO3 dependency でも blanket
+な `anyhow` conversion feature を有効にしなくなりました。
+`pyo3-tracing-opentelemetry` も 0.3.1 へ更新し、tracing dependency 経由でもこの
+feature が有効にならないようにしています。これにより、新しい exposed binding は
+blanket conversion に依存できず、Rust SDK failure を共通 boundary で明示的に
+変換する必要があります。
 
 係数 0 は従来どおり正常系として正規化され、in-place の数値加算に失敗しても元の
 object は変更されません。安定した OMMX-owned signal がまだない MPS parse と file
@@ -82,7 +97,8 @@ interrupted status で確実に閉じられます。
 [#1097](https://github.com/Jij-Inc/ommx/pull/1097)、
 [#1099](https://github.com/Jij-Inc/ommx/pull/1099)、
 [#1100](https://github.com/Jij-Inc/ommx/pull/1100)、
-[#1101](https://github.com/Jij-Inc/ommx/pull/1101)。
+[#1101](https://github.com/Jij-Inc/ommx/pull/1101)、
+[#1102](https://github.com/Jij-Inc/ommx/pull/1102)。
 
 ### 🆕 Instance Class と Adapter Applicability ([#1084](https://github.com/Jij-Inc/ommx/pull/1084))
 

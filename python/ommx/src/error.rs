@@ -259,6 +259,30 @@ impl From<serde_json::Error> for OmmxPyError {
     }
 }
 
+impl From<serde_pyobject::Error> for OmmxPyError {
+    fn from(error: serde_pyobject::Error) -> Self {
+        Self(error.into())
+    }
+}
+
+impl<'a, 'py> From<pyo3::CastError<'a, 'py>> for OmmxPyError {
+    fn from(error: pyo3::CastError<'a, 'py>) -> Self {
+        Self(error.into())
+    }
+}
+
+impl<'py> From<pyo3::CastIntoError<'py>> for OmmxPyError {
+    fn from(error: pyo3::CastIntoError<'py>) -> Self {
+        Self(error.into())
+    }
+}
+
+impl<T> From<std::sync::PoisonError<T>> for OmmxPyError {
+    fn from(_: std::sync::PoisonError<T>) -> Self {
+        Self(PyRuntimeError::new_err("Cannot get lock for RNG"))
+    }
+}
+
 impl From<OmmxPyError> for PyErr {
     fn from(OmmxPyError(error): OmmxPyError) -> Self {
         error
@@ -348,6 +372,24 @@ mod tests {
     fn serde_json_serialization_errors_map_to_runtime_error() {
         let value = std::collections::BTreeMap::from([(vec![1_u64], 1_u64)]);
         let error = serde_json::to_string(&value).expect_err("non-string JSON object key");
+        assert_exception::<PyRuntimeError>(error.into());
+    }
+
+    #[test]
+    fn serde_pyobject_errors_preserve_the_python_exception() {
+        Python::initialize();
+        Python::attach(|py| {
+            let original = PyValueError::new_err("sentinel serde-pyobject error");
+            let error = serde_pyobject::Error(original.clone_ref(py));
+            let converted: PyErr = OmmxPyError::from(error).into();
+
+            assert!(converted.value(py).is(original.value(py)));
+        });
+    }
+
+    #[test]
+    fn poisoned_rng_locks_map_to_runtime_error() {
+        let error = std::sync::PoisonError::new(());
         assert_exception::<PyRuntimeError>(error.into());
     }
 }
