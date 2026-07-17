@@ -5,12 +5,7 @@ use crate::{
 
 use approx::AbsDiffEq;
 use ommx::{ATol, Coefficient, CoefficientError, Evaluate, LinearMonomial};
-use pyo3::{
-    exceptions::{PyRuntimeError, PyTypeError},
-    prelude::*,
-    types::PyDict,
-    Bound, PyAny,
-};
+use pyo3::{exceptions::PyTypeError, prelude::*, types::PyDict, Bound, PyAny};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// General mathematical function of decision variables.
@@ -513,9 +508,7 @@ impl Function {
         max_degree: u32,
         max_id: u64,
     ) -> crate::error::OmmxPyResult<Self> {
-        let mut rng = rng
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("Cannot get lock for RNG"))?;
+        let mut rng = rng.lock()?;
         let inner: ommx::Function = ommx::random::random(
             &mut rng,
             ommx::PolynomialParameters::new(num_terms, max_degree.into(), max_id.into())?,

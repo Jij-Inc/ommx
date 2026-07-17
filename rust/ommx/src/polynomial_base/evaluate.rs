@@ -10,10 +10,15 @@ impl<M: Monomial> Evaluate for PolynomialBase<M> {
         for (monomial, coefficient) in self.iter() {
             let mut out = 1.0;
             for id in monomial.ids() {
-                out *= state
-                    .entries
-                    .get(&id.into_inner())
-                    .ok_or(crate::EvaluationError::MissingStateEntry { id })?;
+                let Some(value) = state.entries.get(&id.into_inner()) else {
+                    let missing_ids = self
+                        .required_ids()
+                        .into_iter()
+                        .filter(|id| !state.entries.contains_key(&id.into_inner()))
+                        .collect();
+                    return Err(crate::MissingStateEntries { ids: missing_ids }.into());
+                };
+                out *= value;
             }
             result += coefficient.into_inner() * out;
         }
@@ -70,18 +75,19 @@ mod tests {
     use proptest::prelude::*;
 
     #[test]
-    fn missing_state_entry_preserves_evaluation_signal() {
-        let linear = crate::Linear::from(crate::linear!(1));
+    fn missing_state_entries_preserve_all_required_ids() {
+        let linear = (crate::linear!(1) + crate::linear!(2)).unwrap();
 
         let error = linear
             .evaluate(&State::default(), crate::ATol::default())
             .unwrap_err();
 
-        assert!(error.is::<crate::EvaluationError>());
-        assert!(matches!(
-            error.downcast_ref::<crate::EvaluationError>(),
-            Some(crate::EvaluationError::MissingStateEntry { id }) if *id == 1.into()
-        ));
+        assert_eq!(
+            error
+                .downcast_ref::<crate::MissingStateEntries>()
+                .map(|error| &error.ids),
+            Some(&VariableIDSet::from([1.into(), 2.into()]))
+        );
     }
 
     #[test]

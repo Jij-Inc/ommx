@@ -3,7 +3,8 @@
 //! Binding entry points return [`OmmxPyResult`] so `?` classifies concrete Rust
 //! SDK signals through the declarative mapping table below. Signals already
 //! erased into `ommx::Error` are recovered through the same table before PyO3
-//! receives the local [`OmmxPyError`] wrapper.
+//! receives the local [`OmmxPyError`] wrapper. Binding-owned Rust errors that
+//! are not SDK signals use direct `From` implementations beside that table.
 
 use pyo3::{
     exceptions::{PyKeyError, PyRuntimeError, PyValueError},
@@ -82,7 +83,7 @@ impl std::fmt::Display for OmmxPyError {
     }
 }
 
-/// Result type for Rust SDK failures crossing the private binding boundary.
+/// Result type for Rust-owned failures crossing the private binding boundary.
 pub type OmmxPyResult<T> = std::result::Result<T, OmmxPyError>;
 
 fn value_error<T>(_: &T, message: String) -> PyErr {
@@ -206,6 +207,7 @@ fn solution_error_to_pyerr(error: &ommx::SolutionError, message: String) -> PyEr
         ommx::SolutionError::UnknownConstraintID { .. }
         | ommx::SolutionError::UnknownVariableName { .. }
         | ommx::SolutionError::UnknownConstraintName { .. }
+        | ommx::SolutionError::UnknownNamedFunctionID { .. }
         | ommx::SolutionError::UnknownNamedFunctionName { .. } => PyKeyError::new_err(message),
         ommx::SolutionError::ParameterizedConstraint
         | ommx::SolutionError::DuplicateSubscript { .. } => PyValueError::new_err(message),
@@ -243,17 +245,52 @@ define_ommx_error_mappings!(
     ommx::CoefficientError => value_error,
     ommx::ContentFactorError => value_error,
     ommx::DuplicatedSampleIDError => value_error,
-    ommx::EvaluationError => value_error,
     ommx::OneHotConstraintError => value_error,
     ommx::Sos1ConstraintError => value_error,
     ommx::SubstitutionError => value_error,
     ommx::random::SamplesParametersError => value_error,
+    ommx::InconsistentDependentValue => value_error,
+    ommx::MissingStateEntries => value_error,
+    ommx::UnknownStateEntries => value_error,
+    ommx::UnverifiableDependentAssertion => value_error,
     ommx::qplib::QplibParseError => value_error,
 );
 
 impl From<PyErr> for OmmxPyError {
     fn from(error: PyErr) -> Self {
         Self(error)
+    }
+}
+
+impl From<serde_json::Error> for OmmxPyError {
+    fn from(error: serde_json::Error) -> Self {
+        // Raw serde_json failures default to RuntimeError. Boundaries parsing
+        // caller-provided JSON must override this with ValueError explicitly.
+        Self(PyRuntimeError::new_err(error.to_string()))
+    }
+}
+
+impl From<serde_pyobject::Error> for OmmxPyError {
+    fn from(error: serde_pyobject::Error) -> Self {
+        Self(error.into())
+    }
+}
+
+impl<'a, 'py> From<pyo3::CastError<'a, 'py>> for OmmxPyError {
+    fn from(error: pyo3::CastError<'a, 'py>) -> Self {
+        Self(error.into())
+    }
+}
+
+impl<'py> From<pyo3::CastIntoError<'py>> for OmmxPyError {
+    fn from(error: pyo3::CastIntoError<'py>) -> Self {
+        Self(error.into())
+    }
+}
+
+impl<T> From<std::sync::PoisonError<T>> for OmmxPyError {
+    fn from(_: std::sync::PoisonError<T>) -> Self {
+        Self(PyRuntimeError::new_err("Cannot get lock for RNG"))
     }
 }
 
@@ -287,4 +324,83 @@ pub fn register_exceptions(py: Python<'_>, module: &Bound<'_, PyModule>) -> PyRe
         py.get_type::<InvalidRemoteArtifactError>(),
     )?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pyo3::type_object::PyTypeInfo;
+
+    fn assert_exception<T>(error: OmmxPyError)
+    where
+        T: PyTypeInfo,
+    {
+        Python::initialize();
+        Python::attach(|py| {
+            let error: PyErr = error.into();
+            assert!(error.is_instance_of::<T>(py), "{error}");
+        });
+    }
+
+    #[test]
+    fn solution_error_mapping_is_shared_by_direct_and_erased_conversions() {
+        assert_exception::<PyKeyError>(
+            ommx::SolutionError::UnknownNamedFunctionID {
+                id: ommx::NamedFunctionID::from(1),
+            }
+            .into(),
+        );
+        assert_exception::<PyKeyError>(
+            ommx::Error::from(ommx::SolutionError::UnknownNamedFunctionID {
+                id: ommx::NamedFunctionID::from(1),
+            })
+            .into(),
+        );
+
+        assert_exception::<PyValueError>(
+            ommx::SolutionError::DuplicateSubscript {
+                subscripts: vec![1],
+            }
+            .into(),
+        );
+        assert_exception::<PyValueError>(
+            ommx::Error::from(ommx::SolutionError::DuplicateSubscript {
+                subscripts: vec![1],
+            })
+            .into(),
+        );
+
+        assert_exception::<PyRuntimeError>(
+            ommx::SolutionError::MissingRequiredField { field: "objective" }.into(),
+        );
+        assert_exception::<PyRuntimeError>(
+            ommx::Error::from(ommx::SolutionError::MissingRequiredField { field: "objective" })
+                .into(),
+        );
+    }
+
+    #[test]
+    fn serde_json_serialization_errors_map_to_runtime_error() {
+        let value = std::collections::BTreeMap::from([(vec![1_u64], 1_u64)]);
+        let error = serde_json::to_string(&value).expect_err("non-string JSON object key");
+        assert_exception::<PyRuntimeError>(error.into());
+    }
+
+    #[test]
+    fn serde_pyobject_errors_preserve_the_python_exception() {
+        Python::initialize();
+        Python::attach(|py| {
+            let original = PyValueError::new_err("sentinel serde-pyobject error");
+            let error = serde_pyobject::Error(original.clone_ref(py));
+            let converted: PyErr = OmmxPyError::from(error).into();
+
+            assert!(converted.value(py).is(original.value(py)));
+        });
+    }
+
+    #[test]
+    fn poisoned_rng_locks_map_to_runtime_error() {
+        let error = std::sync::PoisonError::new(());
+        assert_exception::<PyRuntimeError>(error.into());
+    }
 }

@@ -282,11 +282,8 @@ Finally, create a class that inherits `ommx.adapter.SolverAdapter` to standardiz
 
 ```python
 class SolverAdapter(ABC):
-    ADDITIONAL_CAPABILITIES: set[AdditionalCapability] = set()
-
-    def __init__(self, ommx_instance: Instance):
-        """Reduce the instance to supported capabilities. Subclasses must call super().__init__()."""
-        ommx_instance.reduce_capabilities(self.ADDITIONAL_CAPABILITIES)
+    # OMMX-defined structural condition for adapter applicability.
+    INPUT_CLASS: InstanceClass | None = None
 
     @classmethod
     @abstractmethod
@@ -315,18 +312,20 @@ This abstract base class assumes the following two use cases:
 
 The `solve` class method may define additional adapter-specific keyword options in concrete adapters. The reserved `diagnostics` keyword is owned by `Run.log_solve`. When `Run.log_solve(..., store_diagnostics=True)` is used, adapters may record adapter-defined diagnostic reports into that sink; `None` means diagnostics are disabled.
 
-#### Constraint Capability Declaration
+#### Input Class and Explicit Constraint Lowering
 
-Each adapter must declare which constraint types it supports via the `ADDITIONAL_CAPABILITIES` class attribute. The base class automatically converts any constraint type **not** in that set into regular constraints when `super().__init__()` is called (Big-M for indicator / SOS1, linear equality for one-hot), and logs each conversion at `INFO` level. Available capabilities are:
+An adapter declares the structural set of exact `Instance` values it can receive with `INPUT_CLASS`. `check_applicability()` evaluates membership first and then adapter-owned preconditions without mutating the caller's instance; `require_applicable()` raises with the same structured report when either condition fails.
+
+`SolverAdapter` does not prescribe how a concrete adapter processes an accepted input and does not mutate the instance in a base constructor. A concrete adapter may explicitly call {meth}`Instance.reduce_capabilities <ommx.Instance.reduce_capabilities>` as an implementation detail. Its `preserved` argument uses these special-constraint family selectors:
 
 - `AdditionalCapability.Indicator`: Indicator constraints (`binvar = 1 → f(x) <= 0`)
 - `AdditionalCapability.OneHot`: Exactly one of a set of binary variables is 1
 - `AdditionalCapability.Sos1`: At most one of a set of variables is non-zero
 
-If the adapter does not override `ADDITIONAL_CAPABILITIES`, only regular constraints are kept and every special constraint type is converted automatically. Use {attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>` to inspect which special constraints an instance currently holds.
+Use {attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>` to inspect the currently active families. `reduce_capabilities` converts every family not in `preserved` into regular constraints (Big-M for indicator / SOS1, linear equality for one-hot), mutates the instance in place, and logs each conversion at `INFO` level. Neither this property nor lowering establishes `INPUT_CLASS` membership or adapter applicability.
 
 ```{important}
-Subclasses **must** call `super().__init__(ommx_instance)` in their `__init__` method to enable the automatic constraint conversion. The instance is mutated in place.
+`INPUT_CLASS` describes the exact value received by the adapter, regardless of its internal implementation. If a caller explicitly lowers an instance before choosing an adapter, the result is a different input value and must be checked again with `check_applicability()` or `require_applicable()`.
 ```
 
 Using the functions prepared so far, you can implement it as follows:
@@ -336,14 +335,15 @@ from ommx.adapter import DiagnosticsSink, SolverAdapter
 from ommx import AdditionalCapability
 
 class OMMXPySCIPOptAdapter(SolverAdapter):
-    # PySCIPOpt supports both standard and indicator constraints
-    ADDITIONAL_CAPABILITIES = {AdditionalCapability.Indicator}
-
     def __init__(
         self,
         ommx_instance: Instance,
     ):
-        super().__init__(ommx_instance)  # Auto-convert unsupported capabilities
+        # This adapter handles Indicator and SOS1 directly, and explicitly
+        # lowers every other active special-constraint family.
+        ommx_instance.reduce_capabilities(
+            {AdditionalCapability.Indicator, AdditionalCapability.Sos1}
+        )
         self.instance = ommx_instance
         self.model = pyscipopt.Model()
         self.model.hideOutput()
@@ -521,7 +521,6 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     ommx_instance: Instance
     
     def __init__(self, ommx_instance: Instance):
-        super().__init__(ommx_instance)  # Auto-convert unsupported capabilities
         self.ommx_instance = ommx_instance
 
     # Perform sampling
@@ -609,7 +608,7 @@ sample_set.summary
 In this tutorial, we learned how to implement an OMMX Adapter by connecting to PySCIPOpt as a Solver Adapter and OpenJij as a Sampler Adapter. Here are the key points when implementing an OMMX Adapter:
 
 1. Implement an OMMX Adapter by inheriting the abstract base class `SolverAdapter` or `SamplerAdapter`.
-2. Declare supported constraint types via `ADDITIONAL_CAPABILITIES` and call `super().__init__()` to enable automatic capability checking.
+2. Declare the structural input condition with `INPUT_CLASS`, then use `check_applicability()` or `require_applicable()` to evaluate membership and adapter-owned preconditions. If lowering is needed, make it an explicit concrete-adapter or caller operation; the base Adapter contract never mutates the input.
 3. The main steps of the implementation are as follows:
    - Convert `ommx.Instance` into a format that the backend solver can understand.
    - Run the backend solver to obtain a solution.

@@ -30,10 +30,24 @@ returns the typed error directly):
 - [`DecisionVariableError`](crate::DecisionVariableError), [`SubstitutionError`](crate::SubstitutionError), [`SolutionError`](crate::SolutionError),
   [`SampleSetError`](crate::SampleSetError) — domain-specific structured errors consumed by
   in-crate tests and downstream code that wants to react programmatically.
-- [`artifact::ImageRefParseError`](crate::artifact::ImageRefParseError) and
-  [`experiment::AttachmentNotFound`](crate::experiment::AttachmentNotFound) —
-  recoverable Artifact / Experiment lookup input signals while the owning SDK
-  APIs retain the common `ommx::Result<T>` surface.
+- [`MissingStateEntries`](crate::MissingStateEntries) and
+  [`UnknownStateEntries`](crate::UnknownStateEntries) — state-shape signals for
+  callers that add or remove entries before retrying evaluation.
+- [`InconsistentDependentValue`](crate::InconsistentDependentValue) and
+  [`UnverifiableDependentAssertion`](crate::UnverifiableDependentAssertion) —
+  dependent-variable assertion signals for callers that correct, defer, or
+  complete an assertion before retrying partial evaluation.
+- [`ImageRefParseError`](crate::artifact::ImageRefParseError) and
+  [`InvalidLocalRegistryImageRef`](crate::artifact::local_registry::InvalidLocalRegistryImageRef) —
+  distinguish invalid image-reference input from an invalid name/reference pair
+  already persisted in the Local Registry.
+- [`AttachmentNotFound`](crate::experiment::AttachmentNotFound) — identifies
+  an absent Attachment name in an Experiment or Run namespace.
+
+Evaluation does not define an umbrella error type. Caller-provided numeric
+validation reuses [`DecisionVariableError`](crate::DecisionVariableError), and
+failures without a stable caller recovery path remain ordinary [`Error`](crate::Error)
+values.
 
 Recover them with [`Error::downcast_ref`](crate::Error::downcast_ref) / [`Error::is`](crate::Error::is):
 
@@ -45,11 +59,14 @@ match instance.propagate(&state, atol) {
 }
 ```
 
-The [`Parse`](crate::Parse) trait is an intentional exception. It keeps its own
-[`ParseError`](crate::ParseError) type because the structured
-[`Vec<ParseContext>`](crate::parse::ParseContext) breadcrumb carries useful
-proto-tree metadata. [`ParseError`](crate::ParseError) implements [`std::error::Error`], so
-it flows into [`Result<T>`](crate::Result) via `?` at the crate boundary.
+Protobuf wire decoding and the [`Parse`](crate::Parse) trait share the
+[`ParseError`](crate::ParseError) signal. Public byte decoders preserve wire
+failures as `ParseError` in their [`Result<T>`](crate::Result) error chain,
+while semantic parsing adds structured
+[`Vec<ParseContext>`](crate::parse::ParseContext) breadcrumbs with useful
+proto-tree metadata. [`ParseError`](crate::ParseError) implements
+[`std::error::Error`], so callers can downcast the SDK error or propagate it
+with `?`.
 
 ## Fail-site macros
 
