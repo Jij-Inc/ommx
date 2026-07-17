@@ -116,6 +116,59 @@ def test_non_finite_dependent_evaluation_falls_back_to_runtime_error() -> None:
         instance.populate_state({1: sys.float_info.max})
 
 
+def test_dependency_partial_evaluation_overflow_falls_back_to_runtime_error() -> None:
+    instance = _dependent_instance_y_eq_scaled_x(sys.float_info.max)
+
+    with pytest.raises(RuntimeError, match="failed to normalize dependent variable"):
+        instance.partial_evaluate({1: sys.float_info.max})
+
+
+def test_constraint_restore_overflow_falls_back_to_runtime_error() -> None:
+    variable = ommx.DecisionVariable.continuous(1)
+    instance = ommx.Instance.from_components(
+        decision_variables=[variable],
+        objective=0,
+        constraints={0: sys.float_info.max * variable <= 0},
+        sense=ommx.Instance.MINIMIZE,
+    )
+    instance.relax_constraint(0, "test")
+    instance = instance.partial_evaluate({1: sys.float_info.max})
+
+    with pytest.raises(RuntimeError, match="failed to normalize removed constraint"):
+        instance.restore_constraint(0)
+
+    assert instance.constraints == {}
+    assert set(instance.removed_constraints) == {0}
+
+
+def test_indicator_constraint_restore_overflow_falls_back_to_runtime_error() -> None:
+    variable = ommx.DecisionVariable.continuous(1)
+    indicator = ommx.DecisionVariable.binary(10)
+    instance = ommx.Instance.from_components(
+        decision_variables=[variable, indicator],
+        objective=0,
+        constraints={},
+        indicator_constraints={
+            0: ommx.IndicatorConstraint(
+                indicator_variable=indicator,
+                function=sys.float_info.max * variable,
+                equality=ommx.Equality.LessThanOrEqualToZero,
+            )
+        },
+        sense=ommx.Instance.MINIMIZE,
+    )
+    instance.relax_indicator_constraint(0, "test")
+    instance = instance.partial_evaluate({1: sys.float_info.max})
+
+    with pytest.raises(
+        RuntimeError, match="failed to normalize removed indicator constraint"
+    ):
+        instance.restore_indicator_constraint(0)
+
+    assert instance.indicator_constraints == {}
+    assert set(instance.removed_indicator_constraints) == {0}
+
+
 @pytest.mark.parametrize("value", [float("nan"), 0.5])
 def test_partial_evaluate_validates_state_before_special_constraint_propagation(
     value: float,
