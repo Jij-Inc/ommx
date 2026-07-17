@@ -1823,7 +1823,7 @@ impl PyRun {
                 Ok(context) => context,
                 Err(error) => {
                     this.state = PyRunState::Open { run };
-                    return Err(error.into());
+                    return Err(error);
                 }
             };
             if let Err(error) = set_current_span_run_id(py, run_id) {
@@ -1831,7 +1831,7 @@ impl PyRun {
                     close_run_context_after_failed_enter(py, span_context_manager, &error);
                 this.state = PyRunState::Open { run };
                 close_result?;
-                return Err(error.into());
+                return Err(error);
             }
             this.state = PyRunState::Entered {
                 run,

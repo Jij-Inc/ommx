@@ -277,7 +277,7 @@ impl Instance {
                 "variable must be integer for log-encoding: id={id:?}, kind={kind:?}",
             );
         }
-        Ok(log_encoding_coefficients(id, v.bound(), atol)?)
+        log_encoding_coefficients(id, v.bound(), atol)
     }
 }
 
