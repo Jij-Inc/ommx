@@ -392,13 +392,15 @@ parametric_instance.parameters            # -> list[Parameter]
 parametric_instance.parameters_df()       # -> pandas.DataFrame  (method, not property)
 ```
 
-## 7. Removed helpers (`3.0.0a1`, [#770](https://github.com/Jij-Inc/ommx/pull/770), [#776](https://github.com/Jij-Inc/ommx/pull/776), [#782](https://github.com/Jij-Inc/ommx/pull/782); `3.0.0a2`, [#798](https://github.com/Jij-Inc/ommx/pull/798))
+## 7. Removed helpers (`3.0.0a1`, [#770](https://github.com/Jij-Inc/ommx/pull/770), [#776](https://github.com/Jij-Inc/ommx/pull/776), [#782](https://github.com/Jij-Inc/ommx/pull/782); `3.0.0a2`, [#798](https://github.com/Jij-Inc/ommx/pull/798); `3.0.0`, [#1087](https://github.com/Jij-Inc/ommx/pull/1087))
 
 - `Linear.from_object(x)` — construct via `Linear.single_term(...)`, `Linear.constant(...)`, or the arithmetic operators.
 - `Linear.equals_to(other)` — use `linear.almost_equal(other, atol=...)`. (Available on every expression type.)
 - `instance.constraint_hints` — replaced by `instance.one_hot_constraints` / `sos1_constraints` / `indicator_constraints`.
 - `Parameters` / `OneHot` / `Sos1` / `ConstraintHints` — see §1.2.
 - `Artifact` low-level types (`ArtifactArchive`, `ArtifactDir`, `ArtifactArchiveBuilder`, `ArtifactDirBuilder`) — replaced by unified `Artifact` / `ArtifactDraft`.
+- `ommx_openjij_adapter.response_to_samples(response)` — use `decode_to_samples(response)`.
+- `ommx_openjij_adapter.sample_qubo_sa(...)` — use `OMMXOpenJijSAAdapter.sample(...)` for a directly applicable input. The replacement returns an evaluated `SampleSet`, rather than raw `Samples`. When preparation is required, call `OMMXOpenJijSAAdapter.prepare(...)`, sample `preparation.input`, and use `preparation.evaluate_source(...)` to evaluate the samples against the source instance.
 
 ```python
 # v2.5.1

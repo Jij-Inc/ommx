@@ -66,6 +66,14 @@ old implicit path's result evaluation, which could report the rewritten
 penalty objective, reversed sense, or transformed constraints instead of the
 source objective, sense, and constraints.
 
+The deprecated `response_to_samples()` and `sample_qubo_sa()` helpers are also
+removed in 3.0.0. Use `decode_to_samples()` in place of `response_to_samples()`.
+For a directly applicable input, replace `sample_qubo_sa()` with
+`OMMXOpenJijSAAdapter.sample()`; when preparation is required, use the explicit
+`prepare()` / `sample(preparation.input)` / `evaluate_source()` flow above.
+The replacement sampling API returns an evaluated `SampleSet`, rather than the
+raw `Samples` returned by `sample_qubo_sa()`.
+
 Indicator, OneHot, and SOS1 constraints are not lowered implicitly for HiGHS or
 Python-MIP, and PySCIPOpt no longer lowers OneHot implicitly. These changes to
 first-class special-constraint handling affect Python SDK 3.0 prerelease

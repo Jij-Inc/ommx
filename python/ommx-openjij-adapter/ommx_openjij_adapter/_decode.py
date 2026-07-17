@@ -4,7 +4,6 @@ from collections.abc import Mapping
 
 import openjij as oj
 from ommx import Samples, State
-from typing_extensions import deprecated
 
 
 def _decode_to_samples(
@@ -48,9 +47,3 @@ def decode_to_samples(response: oj.Response) -> Samples:
     Convert `openjij.Response <https://openjij.github.io/OpenJij/reference/openjij/index.html#openjij.Response>`_ to :class:`Samples`
     """
     return _decode_to_samples(response)
-
-
-@deprecated("Renamed to `decode_to_samples`")
-def response_to_samples(response: oj.Response) -> Samples:
-    """Deprecated: renamed to :func:`decode_to_samples`."""
-    return decode_to_samples(response)

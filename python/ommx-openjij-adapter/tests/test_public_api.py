@@ -3,7 +3,7 @@ from typing import get_type_hints
 
 from ommx import DecisionVariable, Instance, Sense
 import ommx_openjij_adapter as package
-from ommx_openjij_adapter import _decode, _legacy, _preparation, adapter
+from ommx_openjij_adapter import _decode, _preparation, adapter
 
 
 def test_package_root_is_the_stable_public_facade() -> None:
@@ -15,8 +15,6 @@ def test_package_root_is_the_stable_public_facade() -> None:
         "OpenJijPreparationSourceCheck",
         "OpenJijPreparationStep",
         "decode_to_samples",
-        "response_to_samples",
-        "sample_qubo_sa",
     ]
 
     assert package.__all__ == expected_exports
@@ -30,8 +28,9 @@ def test_package_root_is_the_stable_public_facade() -> None:
     )
     assert package.OpenJijPreparationStep is _preparation.OpenJijPreparationStep
     assert package.decode_to_samples is _decode.decode_to_samples
-    assert package.response_to_samples is _decode.response_to_samples
-    assert package.sample_qubo_sa is _legacy.sample_qubo_sa
+    assert not hasattr(package, "response_to_samples")
+    assert not hasattr(package, "sample_qubo_sa")
+    assert not hasattr(_decode, "response_to_samples")
 
     assert package.OMMXOpenJijSAAdapter.__module__ == "ommx_openjij_adapter"
 

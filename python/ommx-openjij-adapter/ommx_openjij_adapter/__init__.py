@@ -6,8 +6,7 @@ from ._preparation import (
     OpenJijPreparationSourceCheck,
     OpenJijPreparationStep,
 )
-from ._decode import decode_to_samples, response_to_samples
-from ._legacy import sample_qubo_sa
+from ._decode import decode_to_samples
 
 
 class OMMXOpenJijSAAdapter(_OMMXOpenJijSAAdapter):
@@ -34,6 +33,4 @@ __all__ = [
     "OpenJijPreparationSourceCheck",
     "OpenJijPreparationStep",
     "decode_to_samples",
-    "response_to_samples",
-    "sample_qubo_sa",
 ]

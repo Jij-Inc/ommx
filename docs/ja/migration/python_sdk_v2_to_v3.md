@@ -235,6 +235,8 @@ ids_list: list[int] = sample_set.sample_ids_list
 - `Linear.equals_to(other)` - `linear.almost_equal(other, atol=...)` を使います。
 - `instance.constraint_hints` - `one_hot_constraints` / `sos1_constraints` / `indicator_constraints` に分かれました。
 - `ArtifactArchive` / `ArtifactDir` 系 - `Artifact` / `ArtifactDraft` に統合されました。
+- `ommx_openjij_adapter.response_to_samples(response)` - `decode_to_samples(response)` を使用します（`3.0.0`: [#1087](https://github.com/Jij-Inc/ommx/pull/1087)）。
+- `ommx_openjij_adapter.sample_qubo_sa(...)` - 直接適用可能なinputでは `OMMXOpenJijSAAdapter.sample(...)` を使用します。置き換え後はraw `Samples` ではなく評価済みの `SampleSet` を返します。preparationが必要な場合は `OMMXOpenJijSAAdapter.prepare(...)` を呼び、`preparation.input` をsampleしてから、`preparation.evaluate_source(...)` でsource instanceに対して評価します（`3.0.0`: [#1087](https://github.com/Jij-Inc/ommx/pull/1087)）。
 
 ## 8. DataFrame accessor
 
