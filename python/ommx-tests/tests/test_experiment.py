@@ -481,7 +481,6 @@ def test_store_trace_records_log_solve_scope_in_artifact():
 def test_store_trace_records_open_solve_scope_in_artifact():
     class ManualAdapter(SolverAdapter):
         def __init__(self, ommx_instance: Instance):
-            super().__init__(ommx_instance)
             self.instance = ommx_instance
 
         @classmethod
@@ -522,8 +521,8 @@ def test_store_trace_records_open_solve_scope_in_artifact():
 
 def test_store_trace_marks_open_solve_missing_decode_span_error():
     class ManualAdapter(SolverAdapter):
-        def __init__(self, ommx_instance: Instance):
-            super().__init__(ommx_instance)
+        def __init__(self, _ommx_instance: Instance):
+            pass
 
         @classmethod
         def solve(
@@ -1105,7 +1104,6 @@ def test_log_sample_records_failed_sampling_separately_from_solves():
 def test_open_solve_records_direct_solver_input_workflow():
     class ManualAdapter(SolverAdapter):
         def __init__(self, ommx_instance: Instance, *, constructor_label: str = ""):
-            super().__init__(ommx_instance)
             self.instance = ommx_instance
             self.model: dict[str, object] = {
                 "constructor_label": constructor_label,
@@ -1196,7 +1194,6 @@ def test_open_solve_records_direct_solver_input_workflow():
 def test_open_solve_manual_accessors_are_context_scoped():
     class ManualAdapter(SolverAdapter):
         def __init__(self, ommx_instance: Instance):
-            super().__init__(ommx_instance)
             self.instance = ommx_instance
             self.model: dict[str, object] = {}
 
@@ -1299,7 +1296,6 @@ def test_open_solve_rejects_reserved_diagnostics_option_with_manual_message():
 def test_open_solve_records_failed_attempt_when_adapter_construction_fails():
     class FailingConstructorAdapter(SolverAdapter):
         def __init__(self, ommx_instance: Instance, *, label: str = ""):
-            super().__init__(ommx_instance)
             raise RuntimeError("model build failed")
 
         @classmethod
@@ -1364,7 +1360,6 @@ def test_open_solve_records_failed_attempt_when_adapter_construction_fails():
 def test_open_solve_failed_decode_clears_previous_decoded_solution():
     class ManualAdapter(SolverAdapter):
         def __init__(self, ommx_instance: Instance):
-            super().__init__(ommx_instance)
             self.instance = ommx_instance
             self.model: dict[str, object] = {"decode_fails": False}
 
@@ -1429,7 +1424,6 @@ def test_open_solve_failed_decode_clears_previous_decoded_solution():
 def test_open_solve_records_failed_attempt_on_exception():
     class ManualAdapter(SolverAdapter):
         def __init__(self, ommx_instance: Instance, *, label: str = ""):
-            super().__init__(ommx_instance)
             self.label = label
 
         @classmethod
@@ -1499,7 +1493,6 @@ def test_open_solve_records_failed_attempt_on_exception():
 def test_open_solve_records_failed_attempt_when_outcome_is_missing():
     class ManualAdapter(SolverAdapter):
         def __init__(self, ommx_instance: Instance, *, label: str = ""):
-            super().__init__(ommx_instance)
             self.label = label
 
         @classmethod

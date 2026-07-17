@@ -8,89 +8,137 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
-### 🛠 Remaining Python bindings use the shared error boundary ([#1102](https://github.com/Jij-Inc/ommx/pull/1102))
+### ⚠ Input classes for HiGHS, Python-MIP, and PySCIPOpt adapters ([#1085](https://github.com/Jij-Inc/ommx/pull/1085), [#1086](https://github.com/Jij-Inc/ommx/pull/1086))
+
+`OMMXHighsAdapter`, `OMMXPythonMIPAdapter`, and `OMMXPySCIPOptAdapter` now
+declare `INPUT_CLASS` for the exact inputs accepted before direct backend
+construction. All three accept Binary, Integer, and Continuous variables used
+by the active mathematical content and both optimization senses. HiGHS and
+Python-MIP accept linear objectives and linear regular equality or inequality
+constraints. PySCIPOpt accepts objectives and regular constraints of degree at
+most two, Indicator equality or inequality bodies of degree at most one, and
+SOS1 constraints. An input outside the declared class is rejected without
+mutation through {class}`~ommx.adapter.AdapterNotApplicableError`, which carries
+structured clause mismatches. Any explicitly prepared {class}`~ommx.Instance`
+is a different input whose applicability must be checked again.
+
+This is a breaking change to the public exception contract from stable Python
+SDK 2.6.1. Unsupported objectives, regular constraints, or used variable kinds
+previously raised `OMMXHighsAdapterError`, `OMMXPythonMIPAdapterError`, or
+`OMMXPySCIPOptAdapterError`; they now raise `AdapterNotApplicableError` before
+backend construction. Code that caught an adapter-specific exception for
+constructor-time input rejection must catch `AdapterNotApplicableError`
+instead, or call `check_applicability()` before construction. The stable input
+boundaries are unchanged, and adapter-specific exceptions remain in use for
+conversion and backend failures.
+
+Indicator, OneHot, and SOS1 constraints are not lowered implicitly for HiGHS or
+Python-MIP, and PySCIPOpt no longer lowers OneHot implicitly. These changes to
+first-class special-constraint handling affect Python SDK 3.0 prerelease
+behavior; they are not compatibility changes from stable 2.6.1.
+
+### 🛠 Rust SDK errors use consistent Python exceptions
+
+Python bindings now translate OMMX-owned Rust SDK signal types at a shared PyO3
+error boundary instead of selecting exception classes separately at each entry
+point. The mapping follows the owner and meaning of the failure:
+
+- invalid input, malformed OMMX protobuf or QPLIB data, and domain operations
+  with invalid or unsatisfied preconditions raise `ValueError`;
+- missing variables, constraints, samples, named functions, Artifact layers, or
+  Experiment and Run attachments raise `KeyError`;
+- unclassified SDK and infrastructure failures continue to fall back to
+  `RuntimeError`.
+
+Python argument-extraction failures remain `TypeError`, and exceptions raised
+by Python code pass through unchanged. Error messages retain OMMX field and
+source context. `ValueError` cases include invalid bounds or tolerances,
+duplicate subscripts, parameterized-constraint extraction, and requesting a
+best sample when no feasible sample exists. Artifact operations use the same
+classification for invalid image references, malformed digests, unsupported or
+incorrect layer media types, missing typed layers, and malformed OMMX payloads.
+Experiment operations classify invalid image references, autosave values,
+attachment media types, and JSON input as `ValueError`; registry, archive,
+storage, and lifecycle failures remain on the `RuntimeError` fallback.
 
 The remaining `Instance`, `ParametricInstance`, attached metadata, random
-generator, `Solution`, `Samples`, and Artifact registry bindings now propagate
-Rust SDK failures with direct `?` through the shared PyO3 error boundary. This
-applies the existing typed exception classification consistently; unclassified
-SDK failures continue to fall back to `RuntimeError`.
+generator, `Solution`, `Samples`, and Artifact registry bindings now use the
+same boundary. Binding-owned duplicate component IDs and missing penalty
+weights raise `ValueError`. Solver and sampler adapter exceptions passed
+through `Run.log_solve` and `Run.log_sample` preserve the original Python
+exception object. Malformed payloads received by the private cross-extension
+PyO3 bridge are internal protocol failures and raise `RuntimeError`.
 
-Exceptions originating in Python remain unchanged, including the same exception
-object raised by solver and sampler adapters through `Run.log_solve` and
-`Run.log_sample`. Binding-owned duplicate component IDs and missing penalty
-weights are reported as `ValueError`.
+The mapped signals currently include `CoefficientError`, `AtolError`,
+`BoundError`, stable control-flow cases from `DecisionVariableError`,
+`SolutionError`, and `SampleSetError`, and the `ParseError` and
+`QplibParseError` parser signals. Missing Experiment or Run attachments retain
+an `AttachmentNotFound` signal and raise `KeyError`. Invalid caller-provided
+image references keep an `ImageRefParseError`, while a corrupted image ref
+already persisted in the Local Registry keeps an
+`InvalidLocalRegistryImageRef` and falls back to `RuntimeError`. Registry,
+archive, and content-addressed storage failures also remain on that fallback.
+Exceptions from Python-backed codecs, JSON callbacks, adapters, tracing hooks,
+and data libraries pass through unchanged.
 
-### 🛠 Experiment errors use the shared Python boundary ([#1101](https://github.com/Jij-Inc/ommx/pull/1101))
+The Python extension no longer depends directly on `anyhow`, and its PyO3
+dependency no longer enables the blanket `anyhow` conversion feature.
+`pyo3-tracing-opentelemetry` is upgraded to 0.3.1 so the feature stays disabled
+through the tracing dependency as well. New exposed bindings can therefore no
+longer rely on blanket conversion and must translate Rust SDK failures
+explicitly through the shared boundary.
 
-Experiment, Run, Solve, Sampling, and local-listing bindings now propagate Rust
-SDK failures through the shared PyO3 error boundary with direct `?`
-propagation. Missing Experiment or Run attachments raise `KeyError`. Invalid
-image references, autosave values, attachment media types, and JSON input raise
-`ValueError`, while registry, archive, storage, and lifecycle failures fall
-back to `RuntimeError`.
+Zero coefficients remain normalized as a successful operation, and a failed
+in-place numeric addition leaves the original object unchanged. MPS parsing and
+file-open failures remain on the `RuntimeError` fallback until they have stable
+OMMX-owned signals. Descriptor objects remain metadata-only; blob reads are
+owned by the Artifact that supplies the registry context. Attachment codecs
+validate their declared media type before reading a CAS blob and require
+encoded values to be Python `bytes`. If a Run body and tracing cleanup both
+fail, the original body exception is preserved and the Run is still closed as
+failed or interrupted.
 
-Exceptions raised by Python codecs, JSON callbacks, adapters, tracing hooks,
-and data libraries pass through unchanged. Attachment codecs validate their
-declared media type before reading the CAS blob and must return Python `bytes`.
-If a Run body and tracing cleanup both fail, the original body exception is
-preserved and the Run is still closed with failed or interrupted status.
+Related PRs: [#1096](https://github.com/Jij-Inc/ommx/pull/1096),
+[#1097](https://github.com/Jij-Inc/ommx/pull/1097),
+[#1099](https://github.com/Jij-Inc/ommx/pull/1099),
+[#1100](https://github.com/Jij-Inc/ommx/pull/1100),
+[#1101](https://github.com/Jij-Inc/ommx/pull/1101),
+[#1102](https://github.com/Jij-Inc/ommx/pull/1102).
 
-### 🛠 Artifact and Local Registry errors use consistent exceptions ([#1100](https://github.com/Jij-Inc/ommx/pull/1100))
+### 🆕 Instance classes and adapter applicability ([#1084](https://github.com/Jij-Inc/ommx/pull/1084))
 
-Artifact and Local Registry bindings now propagate Rust SDK failures through
-the shared PyO3 error boundary instead of converting them separately at each
-entry point. Invalid image references, malformed digests, unsupported or
-incorrect layer media types, missing typed layers, and malformed OMMX payloads
-raise `ValueError`. Looking up an absent layer by a valid digest raises
-`KeyError`.
+The Python SDK now exposes {class}`~ommx.InstanceClass` as a set of OMMX
+{class}`~ommx.Instance` values. Each {class}`~ommx.InstanceClassClause` is one
+conjunctive structural description, and the containing class is their finite
+union. Membership is evaluated from the exact input value and reported through
+{class}`~ommx.InstanceClassMembershipReport` with structured per-clause
+mismatches.
 
-Registry, archive, and content-addressed storage failures continue to fall back
-to `RuntimeError`, including an invalid image ref already persisted in the
-Local Registry. Exceptions raised by Python-backed JSON, NumPy, and pandas
-codecs pass through unchanged. Descriptor objects remain metadata-only; blob
-reads are owned by the Artifact that supplies the registry context.
+```python
+from ommx import DegreeBound, InstanceClass, InstanceClassClause, Kind, Sense
 
-### 🛠 Parse failures consistently raise `ValueError` ([#1099](https://github.com/Jij-Inc/ommx/pull/1099))
+binary_linear = InstanceClass(
+    [
+        InstanceClassClause(
+            label="binary-linear",
+            allowed_variable_kinds={Kind.Binary},
+            objective_degree_bound=DegreeBound.at_most(1),
+            allowed_senses={Sense.Minimize},
+        )
+    ]
+)
+report = binary_linear.check_membership(instance)
+```
 
-Malformed protobuf payloads passed to the Python byte-decoding entry points now
-raise `ValueError`, with the OMMX message and field context preserved. Semantic
-protobuf parse failures and invalid QPLIB syntax use the same exception through
-the shared PyO3 error boundary.
-
-Python argument-extraction failures remain `TypeError`. File-open failures and
-MPS parser failures, which do not yet have a stable OMMX-owned parse signal,
-continue to fall back to `RuntimeError` instead of being classified from an
-implementation error type or rendered message.
-
-### 🛠 Structured SDK errors use consistent Python exceptions ([#1097](https://github.com/Jij-Inc/ommx/pull/1097))
-
-Python bindings now route stable `DecisionVariableError`, `SolutionError`, and
-`SampleSetError` signals through the shared PyO3 error boundary. Missing names,
-sample IDs, and constraint IDs in structured result access raise `KeyError`.
-Invalid decision-variable bounds, duplicate subscripts, parameterized
-constraint extraction, and requests for a best sample when none is feasible
-raise `ValueError` consistently.
-
-An unknown integer kind passed to the `DecisionVariable` constructor is also
-reported as Python-owned `ValueError` validation. Python-native failures remain
-intact, and unclassified Rust SDK errors continue to fall back to
-`RuntimeError`.
-
-### 🛠 Numeric SDK errors consistently raise `ValueError` ([#1096](https://github.com/Jij-Inc/ommx/pull/1096))
-
-Python bindings now translate direct Rust SDK `CoefficientError`, `AtolError`,
-and `BoundError` signals through the shared PyO3 error boundary. Invalid
-coefficients in constructors, arithmetic, and binary-power reduction,
-non-positive tolerance values, and invalid bounds therefore raise
-`ValueError` consistently instead of depending on the entry point's previous
-panic, `RuntimeError`, or hand-written conversion path.
-
-Zero coefficients continue to be normalized as a successful operation.
-Failed in-place additions leave the original numeric object unchanged.
-Python-owned type and argument-shape validation also keeps its native exception
-behavior, while unclassified Rust SDK failures continue to fall back to
-`RuntimeError`.
+{class}`~ommx.adapter.SolverAdapter` subclasses declare `INPUT_CLASS` and use
+`check_applicability` or `require_applicable` to layer adapter-owned
+preconditions on top of input-class membership without mutating the caller's
+instance. Explicit preparation must be followed by a new membership check on
+the prepared input. Explicit special-constraint lowering through
+{meth}`~ommx.Instance.reduce_capabilities` and `ommx.v2.Feature` wire
+reconstruction remain separate concepts. The lowering method's keyword argument
+is renamed from `supported` to `preserved` to describe the families left
+unchanged by that explicit operation.
 
 ### 🆕 Typed remote Artifact lookup errors ([#1090](https://github.com/Jij-Inc/ommx/pull/1090))
 
@@ -951,14 +999,6 @@ In addition to regular constraints, the following three special constraint types
 For concrete usage, evaluation-result access, and the Indicator relax / restore workflow, see [Special Constraints](../user_guide/special_constraints.md).
 
 Accordingly, the legacy `ConstraintHints` / `OneHot` / `Sos1` classes, the `Instance.constraint_hints` property, and the PySCIPOpt Adapter's `use_sos1` flag are removed.
-
-### 🆕 Adapter Capability Model ([#790](https://github.com/Jij-Inc/ommx/pull/790), [#805](https://github.com/Jij-Inc/ommx/pull/805), [#810](https://github.com/Jij-Inc/ommx/pull/810), [#811](https://github.com/Jij-Inc/ommx/pull/811), [#814](https://github.com/Jij-Inc/ommx/pull/814))
-
-Alongside the special constraint types, adapters now declare their own supported capabilities via an `ADDITIONAL_CAPABILITIES` class attribute. When `super().__init__(instance)` is called, any undeclared special constraint is automatically converted to regular constraints (Big-M for Indicator / SOS1, linear equality for OneHot) before the instance reaches the solver.
-
-**Existing OMMX Adapters must be updated for Python SDK 3.0.0 to call `super().__init__(instance)`.** Currently the PySCIPOpt Adapter declares support for Indicator and SOS1.
-
-For details and the manual conversion APIs, see [Adapter Capability Model and Conversions](../user_guide/capability_model.md).
 
 ### 🔄 numpy scalar support ([#794](https://github.com/Jij-Inc/ommx/pull/794))
 
