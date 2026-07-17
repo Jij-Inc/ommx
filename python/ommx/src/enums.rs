@@ -1,13 +1,13 @@
 use pyo3::prelude::*;
 
-/// Constraint type capability flag for non-standard constraint types.
+/// Selector for a non-standard constraint family.
 ///
-/// Standard constraints are always supported. This enum lists capabilities
-/// that adapters must explicitly opt in to.
-///
-/// Use as a set: `{AdditionalCapability.Indicator}`
+/// :attr:`Instance.required_capabilities` reports these selectors for active
+/// special constraints. :meth:`Instance.reduce_capabilities` uses them to
+/// choose which families are preserved during explicit lowering. Regular
+/// constraints are outside this selector.
 #[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
-#[pyclass(eq, eq_int, hash, frozen)]
+#[pyclass(eq, eq_int, frozen)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AdditionalCapability {
     /// Indicator constraints: binvar = 1 → f(x) <= 0
@@ -18,9 +18,17 @@ pub enum AdditionalCapability {
     Sos1 = 3,
 }
 
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
+#[pymethods]
+impl AdditionalCapability {
+    fn __hash__(&self) -> isize {
+        *self as isize
+    }
+}
+
 /// Decision variable role in an instance.
 #[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
-#[pyclass(eq, eq_int, hash, frozen)]
+#[pyclass(eq, eq_int, frozen)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DecisionVariableRole {
     /// Used by the objective or active constraints passed to solvers
@@ -36,6 +44,10 @@ pub enum DecisionVariableRole {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl DecisionVariableRole {
+    fn __hash__(&self) -> isize {
+        *self as isize
+    }
+
     fn __repr__(&self) -> &'static str {
         match self {
             DecisionVariableRole::Used => "DecisionVariableRole.Used",
@@ -99,8 +111,8 @@ impl From<AdditionalCapability> for ommx::AdditionalCapability {
 
 /// Sense of optimization (minimize or maximize)
 #[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
-#[pyclass(eq, eq_int)]
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[pyclass(eq, eq_int, frozen)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Sense {
     /// Minimize the objective function
     Minimize = 1,
@@ -111,6 +123,10 @@ pub enum Sense {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Sense {
+    fn __hash__(&self) -> isize {
+        *self as isize
+    }
+
     /// Convert from Protocol Buffer sense value
     #[staticmethod]
     pub fn from_pb(value: i32) -> PyResult<Self> {
@@ -160,8 +176,8 @@ impl From<Sense> for ommx::Sense {
 
 /// Equality type for constraints
 #[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
-#[pyclass(eq, eq_int)]
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[pyclass(eq, eq_int, frozen)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Equality {
     /// Equal to zero constraint (=)
     EqualToZero = 1,
@@ -172,6 +188,10 @@ pub enum Equality {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Equality {
+    fn __hash__(&self) -> isize {
+        *self as isize
+    }
+
     /// Convert from Protocol Buffer equality value
     #[staticmethod]
     pub fn from_pb(value: i32) -> PyResult<Self> {
@@ -224,8 +244,8 @@ impl From<Equality> for ommx::Equality {
 
 /// Kind of decision variable
 #[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
-#[pyclass(eq, eq_int)]
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[pyclass(eq, eq_int, frozen)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Kind {
     /// Binary decision variable (0 or 1)
     Binary = 1,
@@ -242,6 +262,10 @@ pub enum Kind {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Kind {
+    fn __hash__(&self) -> isize {
+        *self as isize
+    }
+
     /// Convert from Protocol Buffer kind value
     #[staticmethod]
     pub fn from_pb(value: i32) -> PyResult<Self> {

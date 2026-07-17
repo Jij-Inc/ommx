@@ -67,6 +67,30 @@ class DecodeRaisesCodec:
         raise SentinelError(f"decode failed for {len(data)} bytes")
 
 
+class AttributeErrorEncodeCodec:
+    media_type = ToyPayloadCodec.media_type
+
+    @staticmethod
+    def encode(value: ToyPayload) -> bytes:
+        raise AttributeError(f"encode callback failed for {value.label}")
+
+    @staticmethod
+    def decode(data: bytes) -> ToyPayload:
+        return ToyPayloadCodec.decode(data)
+
+
+class AttributeErrorDecodeCodec:
+    media_type = ToyPayloadCodec.media_type
+
+    @staticmethod
+    def encode(value: ToyPayload) -> bytes:
+        return ToyPayloadCodec.encode(value)
+
+    @staticmethod
+    def decode(data: bytes) -> ToyPayload:
+        raise AttributeError(f"decode callback failed for {len(data)} bytes")
+
+
 class RaisingMediaTypeMeta(type):
     @property
     def media_type(cls) -> str:  # noqa: N805
@@ -129,6 +153,22 @@ class ListEncodeCodec:
         return list(ToyPayloadCodec.encode(value))
 
 
+class MissingEncodeCodec:
+    media_type = ToyPayloadCodec.media_type
+
+    @staticmethod
+    def decode(data: bytes) -> ToyPayload:
+        return ToyPayloadCodec.decode(data)
+
+
+class MissingDecodeCodec:
+    media_type = ToyPayloadCodec.media_type
+
+    @staticmethod
+    def encode(value: ToyPayload) -> bytes:
+        return ToyPayloadCodec.encode(value)
+
+
 def test_experiment_attachment_codec_round_trip():
     expected = ToyPayload(label="experiment", value=7)
 
@@ -165,6 +205,10 @@ def test_attachment_codec_callback_exceptions_are_preserved():
 
     with pytest.raises(SentinelError, match="encode failed for sentinel"):
         experiment.log_with_codec(EncodeRaisesCodec, "encode", value)
+    with pytest.raises(AttributeError, match="encode callback failed for sentinel"):
+        experiment.log_with_codec(
+            AttributeErrorEncodeCodec, "attribute-error-encode", value
+        )
     with pytest.raises(SentinelError, match="media_type lookup failed"):
         experiment.log_with_codec(
             RaisingMediaTypeCodec,  # pyright: ignore[reportArgumentType]
@@ -183,6 +227,8 @@ def test_attachment_codec_callback_exceptions_are_preserved():
     loaded = Experiment.from_artifact(experiment.artifact)
     with pytest.raises(SentinelError, match="decode failed"):
         loaded.get_with_codec(DecodeRaisesCodec, "decode")
+    with pytest.raises(AttributeError, match="decode callback failed"):
+        loaded.get_with_codec(AttributeErrorDecodeCodec, "decode")
 
 
 @pytest.mark.parametrize(
@@ -201,6 +247,26 @@ def test_attachment_codec_protocol_failures_raise_type_error(codec):
             codec,  # pyright: ignore[reportArgumentType]
             "invalid",
             ToyPayload(label="invalid", value=0),
+        )
+
+
+def test_attachment_codec_missing_methods_raise_type_error():
+    value = ToyPayload(label="missing-method", value=19)
+    experiment = Experiment.with_temp_local_registry()
+    with pytest.raises(TypeError, match="define callable `encode`"):
+        experiment.log_with_codec(
+            MissingEncodeCodec,  # pyright: ignore[reportArgumentType]
+            "missing-encode",
+            value,
+        )
+
+    experiment.log_with_codec(ToyPayloadCodec, "missing-decode", value)
+    experiment.commit()
+    loaded = Experiment.from_artifact(experiment.artifact)
+    with pytest.raises(TypeError, match="define callable `decode`"):
+        loaded.get_with_codec(
+            MissingDecodeCodec,  # pyright: ignore[reportArgumentType]
+            "missing-decode",
         )
 
 

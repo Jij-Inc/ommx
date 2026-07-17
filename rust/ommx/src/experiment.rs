@@ -32,6 +32,14 @@
 //! status; callers resume through the original requested image name
 //! rather than through a checkpoint Artifact handle.
 //!
+//! Rust callers can use [`Experiment::scoped`] and
+//! [`Experiment::scoped_run`] for the same success / failure / interruption
+//! transitions while retaining compile-time registry and Run lifetimes.
+//! [`Run::interrupt_on_drop`], [`ExperimentDyn::interrupt_on_drop`], and
+//! [`RunDyn::interrupt_on_drop`] provide opt-in, best-effort fallbacks for
+//! manually managed handles. These operations never push an Artifact to a
+//! remote registry.
+//!
 //! Forking a sealed Experiment creates a new unsealed child Experiment.
 //! The child manifest records the parent manifest as its OCI `subject`,
 //! while existing payload blobs remain shared through the Local
@@ -55,6 +63,56 @@
 //!
 //! let artifact = exp.commit()?.into_artifact();
 //! ```
+//!
+//! A lifecycle-safe scope keeps the caller error while checkpointing partial
+//! state:
+//!
+//! ```ignore
+//! use ommx::experiment::{Experiment, Name};
+//!
+//! let experiment = Experiment::scoped(Name::Anonymous, |experiment| {
+//!     experiment.scoped_run(|run| {
+//!         run.log_parameter("seed", 1_i64)?;
+//!         Ok(())
+//!     })?;
+//!     Ok(())
+//! })?;
+//! ```
+//!
+//! # Choosing an Experiment or Run type
+//!
+//! The API has two independent axes: whether Rust borrows the Local Registry
+//! through lifetimes or owns it through a runtime handle, and whether the
+//! domain object is still mutable or has been sealed. The types are separate
+//! so Rust callers can choose compile-time ownership guarantees without making
+//! dynamic runtimes such as Python model Rust lifetimes.
+//! Most Rust SDK code should start with [`Experiment`] and [`Run`]. Choose the
+//! `Dyn` family only when the registry owner or mutable handle must cross a
+//! boundary that cannot carry Rust lifetimes; choose a sealed type only after
+//! mutation has ended. These are representation and lifecycle choices, not
+//! additional workflow layers.
+//!
+//! | Type | Role | Why it is separate |
+//! | --- | --- | --- |
+//! | [`Experiment`] | Mutable Experiment borrowing a [`LocalRegistry`] | Its registry lifetime and consuming [`Experiment::commit`] make ownership and sealing explicit at compile time. |
+//! | [`SealedExperiment`] | Immutable committed Experiment borrowing its registry | It cannot expose mutable Experiment operations; [`SealedExperiment::fork`] creates a new mutable child. |
+//! | [`Run`] | Mutable Run borrowing its parent [`Experiment`] | The parent cannot be consumed while a Run borrow is live, and `finish*` writes the closed Run back to that parent. Scoped Experiments opt unresolved Runs into interrupted write-back. |
+//! | [`SealedRun`] | Immutable closed Run reconstructed from an Artifact | It reads persisted attachments, Solve records, Sampling records, and trace data without a mutable parent. |
+//! | [`Solve`] / [`Sampling`] | Immutable Solve or Sampling record borrowing its registry | Child records use the same registry lifetime as the [`SealedRun`] that owns them. |
+//! | [`ExperimentDyn`] | Runtime-owned Experiment used when Rust lifetimes cannot cross the caller boundary | One handle transitions from unsealed to sealed or failed in place, so there is intentionally no `SealedExperimentDyn`. |
+//! | [`RunDyn`] | Runtime-owned mutable Run | It keeps the parent Experiment state alive at runtime and consumes itself on `finish*`. |
+//! | [`SealedRunDyn`] | Runtime-owned immutable closed Run view | A closed Run has no write-back authority and may outlive the call that returned it. |
+//! | [`SolveDyn`] / [`SamplingDyn`] | Runtime-owned immutable Solve or Sampling record | Child records retain the registry owner needed to decode their input, output, and diagnostics. |
+//!
+//! The borrowed and runtime-owned families model the same Experiment / Run
+//! semantics, but intentionally use different representations:
+//! [`StoredDescriptor`]
+//! values carry a borrowed registry proof, while dynamic handles retain a
+//! registry owner and validate raw OCI descriptors at runtime.
+//! [`ExperimentStatus`], [`RunStatus`], [`SolveStatus`], and
+//! [`SamplingStatus`] are lifecycle values rather than alternative handles.
+//! The [`config`] types describe the serialized Artifact schema and are not
+//! runtime Experiment / Run objects.
 //!
 //! The module is split by data terms: `run` contains `Run` lifecycle
 //! operations, `attachment` contains Attachment descriptor helpers,
@@ -397,6 +455,7 @@ impl std::fmt::Display for SamplingStatus {
 pub struct Experiment<'reg> {
     registry: &'reg LocalRegistry,
     state: Mutex<UnsealedExperimentState<'reg>>,
+    unresolved_run_behavior: UnresolvedRunBehavior,
 }
 
 /// A sealed experiment session whose root artifact manifest has been
@@ -475,7 +534,10 @@ impl From<ImageRef> for Name {
 /// A `Run` borrows its parent experiment immutably for `'exp`. It
 /// writes payload bytes to the registry CAS immediately, keeps
 /// run-scoped attachments / parameters locally, and writes back to the
-/// parent experiment only when [`Self::finish`] consumes the handle.
+/// parent experiment when a `finish*` method consumes the handle. Ordinary
+/// unresolved drop abandons that local state; [`Self::interrupt_on_drop`] and
+/// Runs created by [`Experiment::scoped`] opt into best-effort interrupted
+/// write-back instead.
 /// This lets multiple runs be open at once while Rust prevents
 /// committing the parent experiment before live run handles are closed
 /// or dropped.
@@ -490,6 +552,54 @@ pub struct Run<'exp, 'reg> {
     samplings: Vec<SamplingEntry<'reg>>,
     next_sampling_id: u64,
     parameters: ParameterSet,
+    interrupt_on_drop: bool,
+    closed: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum UnresolvedRunBehavior {
+    Abandon,
+    Interrupt,
+}
+
+/// Private owner used only to publish an interrupted checkpoint during panic
+/// unwind from `Experiment::scoped*`.
+struct ScopedExperimentGuard<'reg> {
+    experiment: Option<Experiment<'reg>>,
+}
+
+impl<'reg> ScopedExperimentGuard<'reg> {
+    fn new(experiment: Experiment<'reg>) -> Self {
+        Self {
+            experiment: Some(experiment),
+        }
+    }
+
+    fn experiment(&self) -> &Experiment<'reg> {
+        self.experiment
+            .as_ref()
+            .expect("scoped Experiment is present while its callback runs")
+    }
+
+    fn take(&mut self) -> Experiment<'reg> {
+        self.experiment
+            .take()
+            .expect("scoped Experiment has exactly one terminal transition")
+    }
+}
+
+impl Drop for ScopedExperimentGuard<'_> {
+    fn drop(&mut self) {
+        let Some(experiment) = self.experiment.take() else {
+            return;
+        };
+        if let Err(error) = experiment.commit_checkpoint(EXPERIMENT_STATUS_INTERRUPTED) {
+            tracing::warn!(
+                error = %error,
+                "Failed to publish interrupted Experiment checkpoint during scoped unwind"
+            );
+        }
+    }
 }
 
 /// A closed logical Run recorded in an unsealed Experiment.
@@ -632,9 +742,72 @@ impl Experiment<'static> {
         let registry = LocalRegistry::shared_default()?;
         Self::with_registry(registry, name)
     }
+
+    /// Run a lifecycle-safe Experiment callback in the default Local Registry.
+    ///
+    /// A successful callback commits the Experiment. A returned error publishes
+    /// a best-effort failed checkpoint and returns the original callback error.
+    /// Panic unwind publishes a best-effort interrupted checkpoint. Runs opened
+    /// directly or through [`Experiment::scoped_run`] are finalized as
+    /// interrupted if they remain unresolved during callback unwind.
+    /// This method only writes to the Local Registry; it never pushes remotely.
+    /// As with any RAII API, deliberately leaking a Run with
+    /// [`std::mem::forget`] bypasses its drop fallback.
+    ///
+    /// A Run cannot escape the callback because it borrows the scoped
+    /// Experiment:
+    ///
+    /// ```compile_fail
+    /// use ommx::experiment::{Experiment, Name};
+    ///
+    /// let mut escaped_run = None;
+    /// let _ = Experiment::scoped(Name::Anonymous, |experiment| {
+    ///     escaped_run = Some(experiment.run()?);
+    ///     Ok(())
+    /// });
+    /// ```
+    pub fn scoped(
+        name: impl Into<Name>,
+        f: impl FnOnce(&Experiment<'static>) -> Result<()>,
+    ) -> Result<SealedExperiment<'static>> {
+        let registry = LocalRegistry::shared_default()?;
+        Self::scoped_with_registry(registry, name, f)
+    }
 }
 
 impl<'reg> Experiment<'reg> {
+    /// Run a lifecycle-safe Experiment callback against an explicit Local
+    /// Registry.
+    ///
+    /// Calling this method opts the created Experiment and its Runs into
+    /// best-effort interrupted finalization during unresolved drop. Ordinary
+    /// [`Experiment::with_registry`] and [`Experiment::run`] usage retains the
+    /// existing abandon-on-drop behavior unless a Run explicitly calls
+    /// [`Run::interrupt_on_drop`].
+    pub fn scoped_with_registry(
+        registry: &'reg LocalRegistry,
+        name: impl Into<Name>,
+        f: impl FnOnce(&Experiment<'reg>) -> Result<()>,
+    ) -> Result<SealedExperiment<'reg>> {
+        let experiment =
+            Self::with_registry_and_run_behavior(registry, name, UnresolvedRunBehavior::Interrupt)?;
+        let mut guard = ScopedExperimentGuard::new(experiment);
+        match f(guard.experiment()) {
+            Ok(()) => guard.take().commit(),
+            Err(error) => {
+                if let Err(checkpoint_error) =
+                    guard.take().commit_checkpoint(EXPERIMENT_STATUS_FAILED)
+                {
+                    tracing::warn!(
+                        error = %checkpoint_error,
+                        "Failed to publish failed Experiment checkpoint after callback error"
+                    );
+                }
+                Err(error)
+            }
+        }
+    }
+
     /// Create a temporary Local Registry, run an experiment callback
     /// against it, and delete the registry when the callback returns.
     ///
@@ -654,6 +827,14 @@ impl<'reg> Experiment<'reg> {
     /// Registry. The committed artifact is published under the
     /// resolved `name`.
     pub fn with_registry(registry: &'reg LocalRegistry, name: impl Into<Name>) -> Result<Self> {
+        Self::with_registry_and_run_behavior(registry, name, UnresolvedRunBehavior::Abandon)
+    }
+
+    fn with_registry_and_run_behavior(
+        registry: &'reg LocalRegistry,
+        name: impl Into<Name>,
+        unresolved_run_behavior: UnresolvedRunBehavior,
+    ) -> Result<Self> {
         let image_name = name.into().resolve(registry)?;
         Ok(Experiment {
             registry,
@@ -666,6 +847,7 @@ impl<'reg> Experiment<'reg> {
                 next_run_id: 0,
                 autosave: AutosaveController::new(0),
             }),
+            unresolved_run_behavior,
         })
     }
 
@@ -713,7 +895,34 @@ impl<'reg> Experiment<'reg> {
             samplings: Vec::new(),
             next_sampling_id: 0,
             parameters: ParameterSet::new(),
+            interrupt_on_drop: self.unresolved_run_behavior == UnresolvedRunBehavior::Interrupt,
+            closed: false,
         })
+    }
+
+    /// Run one lifecycle-safe callback against a new Run.
+    ///
+    /// A successful callback finishes the Run. A returned error finishes it as
+    /// failed and returns the original callback error. Panic unwind or another
+    /// unresolved drop finishes it as interrupted. Partial parameters and
+    /// attachments are preserved on failed and interrupted paths.
+    pub fn scoped_run<T>(&self, f: impl FnOnce(&mut Run<'_, 'reg>) -> Result<T>) -> Result<T> {
+        let mut run = self.run()?.interrupt_on_drop();
+        match f(&mut run) {
+            Ok(value) => {
+                run.finish()?;
+                Ok(value)
+            }
+            Err(error) => {
+                if let Err(finish_error) = run.finish_failed() {
+                    tracing::warn!(
+                        error = %finish_error,
+                        "Failed to finish failed Run after callback error"
+                    );
+                }
+                Err(error)
+            }
+        }
     }
 
     fn push_closed_run(&self, run: RunEntry<'reg>) -> Result<()> {
@@ -747,15 +956,30 @@ impl<'reg> Experiment<'reg> {
     /// experiment, so Rust also prevents committing while a run handle
     /// is still in scope.
     pub fn commit(self) -> Result<SealedExperiment<'reg>> {
-        let state = match self.state.into_inner() {
+        let (registry, state) = self.into_parts();
+        let artifact = state.commit(registry)?;
+        SealedExperiment::from_artifact(artifact)
+    }
+
+    fn commit_checkpoint(self, status: &'static str) -> Result<LocalArtifact<'reg>> {
+        let (registry, state) = self.into_parts();
+        state.commit_checkpoint(registry, status)
+    }
+
+    fn into_parts(self) -> (&'reg LocalRegistry, UnsealedExperimentState<'reg>) {
+        let Experiment {
+            registry,
+            state,
+            unresolved_run_behavior: _,
+        } = self;
+        let state = match state.into_inner() {
             Ok(state) => state,
             Err(poisoned) => {
-                tracing::warn!("Experiment state mutex was poisoned; committing inner state");
+                tracing::warn!("Experiment state mutex was poisoned; consuming inner state");
                 poisoned.into_inner()
             }
         };
-        let artifact = state.commit(self.registry)?;
-        SealedExperiment::from_artifact(artifact)
+        (registry, state)
     }
 }
 
@@ -858,6 +1082,7 @@ impl<'reg> SealedExperiment<'reg> {
                 autosave: AutosaveController::new(runs.len()),
                 runs,
             }),
+            unresolved_run_behavior: UnresolvedRunBehavior::Abandon,
         })
     }
 }

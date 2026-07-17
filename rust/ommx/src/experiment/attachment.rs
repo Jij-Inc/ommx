@@ -300,7 +300,16 @@ pub fn descriptor_attachment_media_type(
     attachments: &AttachmentTable<Descriptor>,
     name: &str,
 ) -> Result<MediaType> {
-    Ok(attachment_storage_format(attachments.attachment(name)?)?.logical_media_type)
+    Ok(attachment_storage_format(descriptor_attachment(attachments, name)?)?.logical_media_type)
+}
+
+/// Look up one Attachment descriptor before dynamic handles promote it to a
+/// registry-backed descriptor.
+pub fn descriptor_attachment<'a>(
+    attachments: &'a AttachmentTable<Descriptor>,
+    name: &str,
+) -> Result<&'a Descriptor> {
+    attachments.attachment(name)
 }
 
 /// OCI layer media type for JSON attachment payloads.

@@ -278,11 +278,8 @@ def decode_to_state(model: pyscipopt.Model, instance: Instance) -> State:
 
 ```python
 class SolverAdapter(ABC):
-    ADDITIONAL_CAPABILITIES: set[AdditionalCapability] = set()
-
-    def __init__(self, ommx_instance: Instance):
-        """サポート外の制約タイプを通常制約に変換する。サブクラスは super().__init__() を呼ぶ必要がある。"""
-        ommx_instance.reduce_capabilities(self.ADDITIONAL_CAPABILITIES)
+    # Adapter applicability の OMMX 定義の構造条件
+    INPUT_CLASS: InstanceClass | None = None
 
     @classmethod
     @abstractmethod
@@ -311,18 +308,20 @@ class SolverAdapter(ABC):
 
 具体的な adapter の `solve` クラスメソッドは、adapter 固有の keyword option を追加で定義できます。予約済みの `diagnostics` keyword は `Run.log_solve` が管理します。`Run.log_solve(..., store_diagnostics=True)` を使う場合、adapter はその sink に adapter 定義の diagnostic report を記録できます。`None` の場合、diagnostics は無効です。
 
-#### 制約タイプの Capability 宣言
+#### 入力 class と明示的な特殊制約 lowering
 
-各アダプターは `ADDITIONAL_CAPABILITIES` クラス属性で、サポートする制約タイプを宣言します。基底クラスは `super().__init__()` の呼び出し時に、宣言されていない制約タイプを通常の制約へ自動的に変換します（indicator/SOS1 は Big-M、one-hot は線形等式）。変換が行われた capability は `INFO` レベルでログ出力されます。利用可能な capability は以下の通りです：
+Adapter は、受け取れる具体的な `Instance` 値の構造的な集合を `INPUT_CLASS` で宣言します。`check_applicability()` は membership、続いて Adapter 固有の precondition を呼び出し元の instance を変更せずに評価します。いずれかを満たさない場合に同じ構造化 report で例外を送出するには `require_applicable()` を使います。
+
+`SolverAdapter` は、受理した入力を具体的な Adapter がどのように処理するかを規定せず、基底 class の constructor で instance を変更しません。具体的な Adapter は、実装上必要であれば {meth}`Instance.reduce_capabilities <ommx.Instance.reduce_capabilities>` を明示的に呼び出せます。`preserved` 引数では、以下の特殊制約 family selector を使います：
 
 - `AdditionalCapability.Indicator`: インジケーター制約 (`binvar = 1 → f(x) <= 0`)
 - `AdditionalCapability.OneHot`: バイナリ変数集合のうち丁度1つが1
 - `AdditionalCapability.Sos1`: 変数集合のうち高々1つが非ゼロ
 
-`ADDITIONAL_CAPABILITIES` をオーバーライドしない場合、デフォルトでは通常の制約のみが維持され、特殊制約は全て自動変換されます。`Instance` が現在保持している特殊制約を調べるには {attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>` を使用してください。
+`Instance` が現在保持する family は {attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>` で確認できます。`reduce_capabilities` は `preserved` に含まれない family を通常制約へ変換し（indicator/SOS1 は Big-M、one-hot は線形等式）、instance を in-place に変更して、各変換を `INFO` level で記録します。この property も lowering も、`INPUT_CLASS` の membership や Adapter applicability を保証しません。
 
 ```{important}
-サブクラスは `__init__` メソッドで **必ず** `super().__init__(ommx_instance)` を呼び出してください。これにより、制約の自動変換が有効になります。`Instance` はこの呼び出しで in-place に書き換えられる点に注意してください。
+`INPUT_CLASS` は Adapter の内部実装にかかわらず、Adapter が受け取る時点の入力値そのものを記述します。呼び出し側が Adapter を選ぶ前に instance を明示的に lowering した場合、結果は別の入力値なので、`check_applicability()` または `require_applicable()` で再評価する必要があります。
 ```
 
 ここまでで用意した関数を使って次のように実装することができます：
@@ -332,14 +331,15 @@ from ommx.adapter import DiagnosticsSink, SolverAdapter
 from ommx import AdditionalCapability
 
 class OMMXPySCIPOptAdapter(SolverAdapter):
-    # PySCIPOptは通常の制約とインジケーター制約の両方をサポート
-    ADDITIONAL_CAPABILITIES = {AdditionalCapability.Indicator}
-
     def __init__(
         self,
         ommx_instance: Instance,
     ):
-        super().__init__(ommx_instance)  # サポート外の制約タイプを自動変換
+        # この Adapter は Indicator と SOS1 を直接処理し、それ以外の
+        # active な特殊制約 family を明示的に lowering する
+        ommx_instance.reduce_capabilities(
+            {AdditionalCapability.Indicator, AdditionalCapability.Sos1}
+        )
         self.instance = ommx_instance
         self.model = pyscipopt.Model()
         self.model.hideOutput()
@@ -515,7 +515,6 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     ommx_instance: Instance
     
     def __init__(self, ommx_instance: Instance):
-        super().__init__(ommx_instance)  # サポート外の制約タイプを自動変換
         self.ommx_instance = ommx_instance
 
     # サンプリングを行う
@@ -603,7 +602,7 @@ sample_set.summary
 このチュートリアルでは、PySCIPOptと接続するSolver Adapterの実装とOpenJijと接続するSampler Adapterの実装を通して、OMMX Adapterの実装方法について学びました。以下がOMMX Adapterを実装する際の重要なポイントです：
 
 1. OMMX Adapterは `SolverAdapter` または `SamplerAdapter` の抽象基底クラスを継承することで実装します
-2. `ADDITIONAL_CAPABILITIES` でサポートする制約タイプを宣言し、`super().__init__()` を呼び出して自動的な capability チェックを有効にします
+2. `INPUT_CLASS` で構造的な入力条件を宣言し、`check_applicability()` または `require_applicable()` で membership と Adapter 固有の precondition を評価します。lowering が必要な場合は具体的な Adapter または呼び出し側の明示的な操作とし、基底 Adapter の契約では入力を変更しません
 3. 実装の主なステップは以下の通りです：
    - `ommx.Instance` をバックエンドソルバーが理解できる形式に変換する
    - バックエンドソルバーを実行して解を取得する

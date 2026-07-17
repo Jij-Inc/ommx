@@ -413,8 +413,7 @@ impl Instance {
             let mut inst = slf.borrow_mut();
             let id = inst.inner.next_variable_id()?;
             inst.inner
-                .add_decision_variable(id, ommx::DecisionVariable::binary(), label)
-                .map_err(|error| PyValueError::new_err(error.to_string()))?;
+                .add_decision_variable(id, ommx::DecisionVariable::binary(), label)?;
             id
         };
         Ok(crate::AttachedDecisionVariable::from_instance(
@@ -723,15 +722,12 @@ impl Instance {
             .collect()
     }
 
-    /// The non-standard constraint capabilities this instance currently uses.
+    /// Selectors for active non-standard constraint families.
     ///
-    /// Returns the set of :class:`AdditionalCapability` values corresponding to
-    /// the active (non-removed) constraint collections the instance contains.
-    /// An empty set means the instance only uses regular constraints.
-    ///
-    /// Callers can diff this against an adapter's
-    /// ``ADDITIONAL_CAPABILITIES`` to see what would be converted, or use
-    /// :meth:`reduce_capabilities` to perform the conversion.
+    /// Only active constraints are considered. This value does not describe an
+    /// :class:`InstanceClass` or establish adapter applicability. Use
+    /// :meth:`reduce_capabilities` only as an explicit special-constraint
+    /// lowering operation.
     #[getter]
     pub fn required_capabilities(&self) -> std::collections::HashSet<crate::AdditionalCapability> {
         self.inner
@@ -741,15 +737,17 @@ impl Instance {
             .collect()
     }
 
-    /// Convert constraint types not in `supported` into regular constraints.
+    /// Convert active non-standard constraint families not in ``preserved``
+    /// into regular constraints.
     ///
-    /// For every capability in :attr:`required_capabilities` not in
-    /// ``supported``, the corresponding bulk conversion is invoked
+    /// For every selector in :attr:`required_capabilities` not in
+    /// ``preserved``, the corresponding bulk conversion is invoked
     /// (:meth:`convert_all_indicators_to_constraints`,
     /// :meth:`convert_all_one_hots_to_constraints`, or
     /// :meth:`convert_all_sos1_to_constraints`). The instance is mutated in
     /// place and :attr:`required_capabilities` becomes a subset of
-    /// ``supported`` on success.
+    /// ``preserved`` on success. This does not establish
+    /// :class:`InstanceClass` membership; check the resulting input separately.
     ///
     /// Returns the set of :class:`AdditionalCapability` values that were
     /// actually converted. Empty when nothing needed conversion.
@@ -759,11 +757,11 @@ impl Instance {
     pub fn reduce_capabilities(
         &mut self,
         py: Python<'_>,
-        supported: std::collections::HashSet<crate::AdditionalCapability>,
+        preserved: std::collections::HashSet<crate::AdditionalCapability>,
     ) -> OmmxPyResult<std::collections::HashSet<crate::AdditionalCapability>> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let rust_supported: ommx::Capabilities = supported.into_iter().map(|c| c.into()).collect();
-        let converted = self.inner.reduce_capabilities(&rust_supported)?;
+        let rust_preserved: ommx::Capabilities = preserved.into_iter().map(|c| c.into()).collect();
+        let converted = self.inner.reduce_capabilities(&rust_preserved)?;
         Ok(converted.into_iter().map(|c| c.into()).collect())
     }
 
@@ -903,25 +901,13 @@ impl Instance {
     pub fn as_qubo_format<'py>(&self, py: Python<'py>) -> OmmxPyResult<(Bound<'py, PyDict>, f64)> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let (qubo, constant) = self.inner.as_qubo_format()?;
-        Ok((
-            serde_pyobject::to_pyobject(py, &qubo)
-                .map_err(PyErr::from)?
-                .extract()
-                .map_err(PyErr::from)?,
-            constant,
-        ))
+        Ok((serde_pyobject::to_pyobject(py, &qubo)?.extract()?, constant))
     }
 
     pub fn as_hubo_format<'py>(&self, py: Python<'py>) -> OmmxPyResult<(Bound<'py, PyDict>, f64)> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let (hubo, constant) = self.inner.as_hubo_format()?;
-        Ok((
-            serde_pyobject::to_pyobject(py, &hubo)
-                .map_err(PyErr::from)?
-                .extract()
-                .map_err(PyErr::from)?,
-            constant,
-        ))
+        Ok((serde_pyobject::to_pyobject(py, &hubo)?.extract()?, constant))
     }
 
     /// Convert the instance to a QUBO format.
@@ -1381,9 +1367,7 @@ impl Instance {
     /// ```
     pub fn random_state(&self, rng: &Rng) -> OmmxPyResult<crate::State> {
         let strategy = self.inner.arbitrary_state();
-        let mut rng_guard = rng
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("Cannot get lock for RNG"))?;
+        let mut rng_guard = rng.lock()?;
         let state = ommx::random::sample(&mut rng_guard, strategy);
         Ok(crate::State(state))
     }
@@ -1444,9 +1428,7 @@ impl Instance {
         )?;
 
         let strategy = self.inner.arbitrary_samples(params);
-        let mut rng_guard = rng
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("Cannot get lock for RNG"))?;
+        let mut rng_guard = rng.lock()?;
         let samples = ommx::random::sample(&mut rng_guard, strategy);
         Ok(crate::Samples(samples))
     }
@@ -2232,10 +2214,7 @@ impl Instance {
     /// ```
     pub fn stats<'py>(&self, py: Python<'py>) -> OmmxPyResult<Bound<'py, PyDict>> {
         let stats = self.inner.stats();
-        Ok(serde_pyobject::to_pyobject(py, &stats)
-            .map_err(PyErr::from)?
-            .extract()
-            .map_err(PyErr::from)?)
+        Ok(serde_pyobject::to_pyobject(py, &stats)?.extract()?)
     }
 
     /// DataFrame of decision variables

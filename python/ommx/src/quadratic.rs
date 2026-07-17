@@ -372,9 +372,7 @@ impl Quadratic {
         max_id=ommx::QuadraticParameters::default().max_id().into_inner()
     ))]
     pub fn random(rng: &Rng, num_terms: usize, max_id: u64) -> crate::error::OmmxPyResult<Self> {
-        let mut rng = rng
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("Cannot get lock for RNG"))?;
+        let mut rng = rng.lock()?;
         let inner: ommx::Quadratic = ommx::random::random(
             &mut rng,
             ommx::QuadraticParameters::new(num_terms, max_id.into())?,
@@ -389,7 +387,10 @@ impl Quadratic {
             Some(value) => ommx::ATol::new(value)?,
             None => ommx::ATol::default(),
         };
-        Ok(self.0.evaluate(&state.0, atol)?)
+        Ok(self
+            .0
+            .evaluate(&state.0, atol)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?)
     }
 
     #[pyo3(signature = (state, *, atol=None))]
