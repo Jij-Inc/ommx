@@ -34,7 +34,7 @@ fn invalid_propagated_value(
     error: impl std::fmt::Display,
 ) -> crate::Error {
     crate::error!(
-        { id = ?id, value },
+        { id = ?id, value, cause = %error },
         "special-constraint propagation produced an invalid value for decision variable {id:?}: {error}",
     )
 }
