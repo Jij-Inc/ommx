@@ -267,8 +267,10 @@ preparation = OMMXOpenJijSAAdapter.prepare(source, config=config)
 ```
 
 `preparation.report.config` は、正規化済みで実際に使われた不変の設定を記録します。
-これはレポートの4つのoutcome section、すなわち `source_check`、`steps`、
-`preparation_failures`、`input_applicability` とは別枠です。
+その他のfieldは、source rejected、preparation phase rejected、準備したcandidateが
+Adapter applicabilityでrejected、successの4つの終端状態のいずれかを表します。
+`steps` はその終端状態までに完了したoperationのprefixであり、独立したoutcomeでは
+ありません。
 
 ## 8. DataFrame accessor
 

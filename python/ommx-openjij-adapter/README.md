@@ -73,17 +73,20 @@ and `prepare()`.
 `evaluate_source()` to evaluate the resulting samples against the source
 model. The preparation itself is not an Adapter input. The report's `config`
 field records the normalized, immutable preparation settings actually used.
-Separately, its four outcome sections contain:
+The remaining fields represent one of four terminal states:
 
-- `source_check`: membership in the preparation source class and the
-  Adapter-owned preparation preconditions
-- `steps`: the OpenJij-specific operations actually applied
-- `preparation_failures`: failures discovered while materializing an accepted
-  source into an Adapter input; empty for a successful preparation
-- `input_applicability`: whether `OpenJijPreparation.input` belongs to
-  the Adapter input class and satisfies its Adapter-specific preconditions
+| State | `source_check` | `preparation_failures` | `input_applicability` |
+| --- | --- | --- | --- |
+| Source rejected | outside the preparation source class | empty | `None` |
+| Phase rejected | accepted | non-empty, with the owning `operation` | `None` |
+| Candidate rejected | accepted | empty | non-applicable report |
+| Success | accepted | empty | applicable report |
 
-The step list is an operation audit, not a composed mathematical guarantee.
+`source_check` is structural source-class membership. Operation availability
+and preparation policy are checked by the phase that owns them and appear in
+`preparation_failures`. `steps` is the prefix of OpenJij-specific operations
+that completed before the terminal state; it is an operation audit, not a
+separate outcome or a composed mathematical guarantee.
 Common preparation policy, guarantees, and automatic selection are tracked in
 [OMMX issue #1111](https://github.com/Jij-Inc/ommx/issues/1111). By default,
 this prototype applies only the available exact operations. Discrete integer
@@ -98,11 +101,12 @@ Indicator, OneHot, or SOS1 constraints must therefore use a uniform penalty
 weight after their exact lowering.
 
 If variable bounds prove an inequality infeasible, `check_preparation()` and
-`prepare()` raise `ommx.adapter.InfeasibleDetected` instead of reporting an
-adapter limitation.
+`prepare()` raise the core-owned `ommx.InfeasibleDetected` instead of reporting
+an adapter limitation. `ommx.adapter.InfeasibleDetected` remains an alias for
+the same exception object.
 
-The maximum of 53 auxiliary bits checked for each used Integer variable is a
-condition of OMMX's Integer-to-Binary log-encoding operation. It is neither a
+The maximum of 53 auxiliary bits checked for each used Integer variable is an
+availability limit of OMMX's Integer-to-Binary log-encoding operation. It is neither a
 property of the OpenJij adapter's input class nor an `ommx.v2.Feature`. The
 latter is a wire-format forward-compatibility gate that tells readers which
 serialized semantics they must understand; an adapter's input class and

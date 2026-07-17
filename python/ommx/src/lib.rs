@@ -276,6 +276,10 @@ pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
     "State",
     "Samples",
     "Bound",
+    // Domain operation signals
+    "ExactIntegerSlackError",
+    "InfeasibleDetected",
+    "LogEncodingError",
     // Function types
     "Linear",
     "Quadratic",

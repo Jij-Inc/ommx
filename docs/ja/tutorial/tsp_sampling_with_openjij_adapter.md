@@ -175,27 +175,27 @@ config_used = report.config
 final = report.input_applicability
 outcomes = {
     "source_membership": report.source_check.source_membership.is_member,
-    "preconditions": report.source_check.precondition_violations,
     "steps": [step.operation for step in report.steps],
     "preparation_failures": report.preparation_failures,
-    "input_applicability": final.is_applicable if final else False,
+    "input_applicability": None if final is None else final.is_applicable,
 }
 config_used, outcomes
 ```
 
 `report.config` は、正規化済みで実際に使われた不変のpreparation設定を記録します。
-これは5つ目のoutcomeではなく、設定の監査記録です。レポートはこれとは別に、次の
-4つの問いを区別します。
+これは設定の監査記録です。その他のfieldは、次のいずれか1つの終端状態を表します。
 
-- `source_check` は、準備元のclassへのmembershipとAdapter固有の準備前提条件を
-  記録します。
-- `steps` は、実際に適用したOpenJij固有のoperationを記録します。
-- `preparation_failures` は、受け入れた準備元からAdapter inputをmaterializeする
-  途中で判明した失敗を記録します。成功したpreparationでは空です。
-- `input_applicability` は、`prepared.input` がAdapterのinput classに属し、Adapter
-  固有の前提条件を満たすかを示します。
+| 状態 | `source_check` | `preparation_failures` | `input_applicability` |
+| --- | --- | --- | --- |
+| Source rejected | preparation source classの外 | 空 | `None` |
+| Phase rejected | accepted | ownerの `operation` を含む非空の値 | `None` |
+| Candidate rejected | accepted | 空 | non-applicable report |
+| Success | accepted | 空 | applicable report |
 
-このstep列はoperationの監査記録であり、合成された数学的guaranteeではありません。
+`source_check` は構造的なsource-class membershipです。operation availabilityと
+preparation policyは、そのoperationを実行するphaseが所有し、
+`preparation_failures` に記録します。`steps` は終端状態までに完了したoperationの
+prefixです。独立したoutcomeや、合成された数学的guaranteeではありません。
 共通のpreparation policy、guarantee、自動選択は
 [OMMX issue #1111](https://github.com/Jij-Inc/ommx/issues/1111) で扱います。このprototype
 が既定で使うのは、利用可能な厳密operationだけです。離散的なinteger slack近似には
@@ -206,11 +206,13 @@ finite-penalty preparationが選択されますが、制約付き入力をAdapte
 サポートするという意味ではありません。
 
 変数boundから不等式が実行不可能だと証明できた場合、`check_preparation` と
-`prepare` は {py:class}`~ommx.adapter.InfeasibleDetected` を送出します。これは
-モデル自体の性質であり、Adapter applicabilityの失敗ではありません。
+`prepare` はcore所有の {py:class}`~ommx.InfeasibleDetected` を送出します。従来の
+{py:class}`~ommx.adapter.InfeasibleDetected` importは同じexception objectへのalias
+として残ります。これはモデル自体の性質であり、Adapter applicabilityの失敗では
+ありません。
 
 使用されるInteger変数ごとに最大53個の補助bitという条件を検査しますが、これは
-OMMXのInteger-to-Binary log encodingの前提条件です。OpenJij Adapterのinput classの
+OMMXのInteger-to-Binary log encodingのavailability limitです。OpenJij Adapterのinput classの
 性質ではなく、serialized semanticsをforward compatibilityのためにreaderが安全に
 解釈できるかを管理する `ommx.v2.Feature` とも別物です。OpenJijが直接受け付ける
 Spin入力を含むSpin変数のサポートは

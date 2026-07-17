@@ -15,6 +15,9 @@ ommx
    _items/ommx.State
    _items/ommx.Samples
    _items/ommx.Bound
+   _items/ommx.ExactIntegerSlackError
+   _items/ommx.InfeasibleDetected
+   _items/ommx.LogEncodingError
    _items/ommx.Linear
    _items/ommx.Quadratic
    _items/ommx.Polynomial

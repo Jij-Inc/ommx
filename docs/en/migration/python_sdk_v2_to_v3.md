@@ -433,8 +433,10 @@ preparation = OMMXOpenJijSAAdapter.prepare(source, config=config)
 ```
 
 `preparation.report.config` records the normalized, immutable settings actually
-used. It is separate from the report's four outcome sections: `source_check`,
-`steps`, `preparation_failures`, and `input_applicability`.
+used. The remaining fields encode one of four terminal states: source rejected,
+preparation phase rejected, prepared candidate rejected by Adapter
+applicability, or success. `steps` is the prefix of operations completed before
+that terminal state, not a separate outcome.
 
 ```python
 # v2.5.1

@@ -176,27 +176,28 @@ config_used = report.config
 final = report.input_applicability
 outcomes = {
     "source_membership": report.source_check.source_membership.is_member,
-    "preconditions": report.source_check.precondition_violations,
     "steps": [step.operation for step in report.steps],
     "preparation_failures": report.preparation_failures,
-    "input_applicability": final.is_applicable if final else False,
+    "input_applicability": None if final is None else final.is_applicable,
 }
 config_used, outcomes
 ```
 
 `report.config` records the normalized, immutable preparation settings actually
-used. It is configuration evidence, not a fifth outcome. Separately, the report
-answers four questions:
+used. It is configuration evidence. The other fields encode one terminal state:
 
-- `source_check` records membership in the preparation source class and the
-  Adapter-owned preparation preconditions.
-- `steps` records each OpenJij-specific operation that was applied.
-- `preparation_failures` records failures discovered while materializing an
-  accepted source into an Adapter input. It is empty for a successful preparation.
-- `input_applicability` says whether `prepared.input` belongs to the Adapter
-  input class and satisfies its Adapter-specific preconditions.
+| State | `source_check` | `preparation_failures` | `input_applicability` |
+| --- | --- | --- | --- |
+| Source rejected | outside the preparation source class | empty | `None` |
+| Phase rejected | accepted | non-empty, with the owning `operation` | `None` |
+| Candidate rejected | accepted | empty | non-applicable report |
+| Success | accepted | empty | applicable report |
 
-This step list is an operation audit, not a composed mathematical guarantee.
+`source_check` is structural source-class membership. Operation availability
+and preparation policy belong to the phase that performs the operation and are
+recorded in `preparation_failures`. `steps` is the prefix of operations that
+completed before the terminal state. It is an operation audit, not a separate
+outcome or a composed mathematical guarantee.
 Common preparation policy, guarantees, and automatic selection are tracked in
 [OMMX issue #1111](https://github.com/Jij-Inc/ommx/issues/1111). By default,
 OpenJij preparation uses only the available exact operations. Discrete integer
@@ -207,11 +208,13 @@ does not opt into approximation. Configuring `uniform_penalty_weight` or
 claim that the Adapter directly or exactly supports constrained input.
 
 If variable bounds prove an inequality infeasible, `check_preparation` and
-`prepare` raise {py:class}`~ommx.adapter.InfeasibleDetected`; that is a property
-of the model, not an adapter applicability failure.
+`prepare` raise the core-owned {py:class}`~ommx.InfeasibleDetected`; the
+historical {py:class}`~ommx.adapter.InfeasibleDetected` import is an alias for
+the same exception object. This is a property of the model, not an adapter
+applicability failure.
 
 The maximum of 53 auxiliary bits checked for a used Integer variable is an
-OMMX Integer-to-Binary log-encoding condition. It is not a property of the
+availability limit of OMMX Integer-to-Binary log encoding. It is not a property of the
 OpenJij adapter's input class and is unrelated to `ommx.v2.Feature`, which gates
 whether a reader can safely interpret serialized semantics for forward
 compatibility. Spin-variable support, including direct Spin input for OpenJij,

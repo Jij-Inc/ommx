@@ -11,7 +11,6 @@ from types import MappingProxyType
 from ommx import Instance, InstanceClassMembershipReport, Samples, SampleSet, State
 from ommx.adapter import (
     AdapterApplicabilityReport,
-    AdapterPreconditionViolation,
     ConstraintRef,
 )
 
@@ -147,41 +146,32 @@ class OpenJijPreparationStep:
 
 @dataclass(frozen=True, slots=True)
 class OpenJijPreparationSourceCheck:
-    """Membership and Adapter-owned preconditions for a preparation source."""
+    """Structural membership evidence for a preparation source."""
 
     source_membership: InstanceClassMembershipReport
-    preconditions_checked: bool
-    precondition_violations: tuple[AdapterPreconditionViolation, ...]
-
-    def __post_init__(self) -> None:
-        if self.preconditions_checked != self.source_membership.is_member:
-            raise ValueError(
-                "preconditions_checked must be true exactly when source membership holds"
-            )
-        if not self.preconditions_checked and self.precondition_violations:
-            raise ValueError(
-                "precondition violations require preparation preconditions to be checked"
-            )
 
     @property
     def conditions_hold(self) -> bool:
-        return (
-            self.source_membership.is_member
-            and self.preconditions_checked
-            and not self.precondition_violations
-        )
+        return self.source_membership.is_member
 
 
 @dataclass(frozen=True, slots=True)
 class OpenJijPreparationFailure:
     """One failure discovered while materializing an accepted source."""
 
+    operation: str
     reason: str
     description: str
     variable_ids: frozenset[int] = field(default_factory=frozenset)
     constraint_refs: frozenset[ConstraintRef] = field(default_factory=frozenset)
     observed: PreparationDiagnosticValue = None
     expected: PreparationDiagnosticValue = None
+
+    def __post_init__(self) -> None:
+        if not self.operation:
+            raise ValueError("preparation failure operation must not be empty")
+        if not self.reason:
+            raise ValueError("preparation failure reason must not be empty")
 
 
 @dataclass(frozen=True, slots=True)
@@ -199,6 +189,28 @@ class OpenJijPreparationReport:
     preparation_failures: tuple[OpenJijPreparationFailure, ...] = ()
     input_applicability: AdapterApplicabilityReport | None = None
 
+    def __post_init__(self) -> None:
+        if not self.source_check.conditions_hold:
+            if (
+                self.steps
+                or self.preparation_failures
+                or self.input_applicability is not None
+            ):
+                raise ValueError(
+                    "a rejected preparation source cannot have phase or input outcomes"
+                )
+            return
+        if self.preparation_failures and self.input_applicability is not None:
+            raise ValueError(
+                "a preparation report cannot contain both phase failures and an "
+                "input applicability result"
+            )
+        if not self.preparation_failures and self.input_applicability is None:
+            raise ValueError(
+                "an accepted preparation source requires either phase failures or "
+                "an input applicability result"
+            )
+
     @property
     def is_successful(self) -> bool:
         return (
@@ -209,17 +221,20 @@ class OpenJijPreparationReport:
         )
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, init=False)
 class OpenJijPreparation:
-    """A separate Adapter input together with source-state reevaluation."""
+    """A separate Adapter input together with source-state reevaluation.
+
+    Values are created by :meth:`OMMXOpenJijSAAdapter.prepare`; callers cannot
+    pair an arbitrary input with unrelated preparation evidence.
+    """
 
     _input: Instance = field(repr=False)
     _source_instance: Instance = field(repr=False)
     report: OpenJijPreparationReport
 
-    def __post_init__(self) -> None:
-        if not self.report.is_successful:
-            raise ValueError("OpenJijPreparation requires a successful report")
+    def __init__(self) -> None:
+        raise TypeError("OpenJijPreparation is created only by prepare()")
 
     @property
     def input(self) -> Instance:
@@ -251,6 +266,22 @@ class OpenJijPreparation:
         return self._source_instance.evaluate_samples(source_samples)
 
 
+def _create_preparation(
+    *,
+    input: Instance,
+    source_instance: Instance,
+    report: OpenJijPreparationReport,
+) -> OpenJijPreparation:
+    """Project one successful private pipeline result to the public value."""
+    if not report.is_successful:
+        raise ValueError("OpenJijPreparation requires a successful report")
+    preparation = object.__new__(OpenJijPreparation)
+    object.__setattr__(preparation, "_input", input)
+    object.__setattr__(preparation, "_source_instance", source_instance)
+    object.__setattr__(preparation, "report", report)
+    return preparation
+
+
 class OpenJijPreparationError(ValueError):
     """Raised when explicit OpenJij preparation cannot produce an input."""
 
@@ -264,15 +295,9 @@ class OpenJijPreparationError(ValueError):
                 "OpenJij preparation source is outside its supported source class:\n"
                 f"{source_check.source_membership}"
             )
-        elif source_check.precondition_violations:
-            details = "\n".join(
-                f"- {violation.condition}: {violation.description}"
-                for violation in source_check.precondition_violations
-            )
-            message = f"OpenJij preparation preconditions failed:\n{details}"
         elif report.preparation_failures:
             details = "\n".join(
-                f"- {failure.reason}: {failure.description}"
+                f"- {failure.operation}/{failure.reason}: {failure.description}"
                 for failure in report.preparation_failures
             )
             message = f"OpenJij preparation failed:\n{details}"

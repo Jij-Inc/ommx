@@ -74,17 +74,20 @@ prepared_samples = OMMXOpenJijSAAdapter.sample(preparation.input)
 source_samples = preparation.evaluate_source(prepared_samples)
 ```
 
-The OpenJij-specific preparation report records the operations applied and
-applicability of `preparation.input`; it is not a common composed guarantee.
-Its separate `config` field records the normalized, immutable preparation
-settings actually used. Approximate integer slack is disabled by default and
-requires setting `allow_approximate_integer_slack=True` on
+The OpenJij-specific preparation report separates source-class membership,
+operations that completed, failures owned by the operation that encountered
+them, and applicability of `preparation.input`; it is not a common composed
+guarantee. Its separate `config` field records the normalized, immutable
+preparation settings actually used. Approximate integer slack is disabled by
+default and requires setting `allow_approximate_integer_slack=True` on
 `OpenJijPreparationConfig`. Finite penalties remain explicitly selected through
-`uniform_penalty_weight` or `penalty_weights` on that Config. Common preparation
-policy and guarantees are tracked in
-[#1111](https://github.com/Jij-Inc/ommx/issues/1111). The at-most-53-bit Integer
-encoding condition is a preparation precondition, not part of the OpenJij input
-class or `ommx.v2.Feature`.
+`uniform_penalty_weight` or `penalty_weights` on that Config. Per-constraint
+weight coverage is evaluated after slack preparation, against the regular
+constraints that actually remain to be penalized. Common preparation policy and
+guarantees are tracked in [#1111](https://github.com/Jij-Inc/ommx/issues/1111).
+The at-most-53-bit Integer encoding condition is operation availability checked
+by the Integer-encoding phase, not source-class membership, the OpenJij input
+class, or `ommx.v2.Feature`.
 
 For HiGHS, Python-MIP, and PySCIPOpt, this is a breaking change to the public
 exception contract from stable Python SDK 2.6.1. Unsupported objectives,
@@ -106,6 +109,14 @@ and an explicit approximation opt-in. The explicit `evaluate_source()` step
 also fixes the old implicit path's result evaluation, which could report the
 rewritten penalty objective, reversed sense, or transformed constraints instead
 of the source objective, sense, and constraints.
+
+The canonical infeasibility exception is now `ommx.InfeasibleDetected`, while
+`ommx.adapter.InfeasibleDetected` remains an alias for the same object. It is a
+`RuntimeError` subclass so existing handlers around the Rust-backed slack
+operations continue to catch it. This changes the stable Adapter-side hierarchy:
+an `except RuntimeError` around OpenJij preparation did not previously catch the
+old direct `Exception` subclass, but does in v3. Catch
+`InfeasibleDetected` explicitly when that distinction controls recovery.
 
 The deprecated `response_to_samples()` and `sample_qubo_sa()` helpers are also
 removed in 3.0.0. Use `decode_to_samples()` in place of `response_to_samples()`.
@@ -164,6 +175,18 @@ archive, and content-addressed storage failures also remain on that fallback.
 Exceptions from Python-backed codecs, JSON callbacks, adapters, tracing hooks,
 and data libraries pass through unchanged.
 
+Integer preparation operations expose three additional RuntimeError-compatible
+specializations. {meth}`~ommx.Instance.log_encode` raises
+{class}`~ommx.LogEncodingError` only when an exact encoding is unavailable for
+the requested variable. Exact integer-slack conversion raises
+{class}`~ommx.ExactIntegerSlackError` only when callers may explicitly select an
+approximate alternative, and both exact and approximate slack operations raise
+{class}`~ommx.InfeasibleDetected` when bounds prove the model infeasible.
+Allocation, substitution, and coefficient-arithmetic failures retain their
+ordinary exception classification; they are not treated as availability
+signals. Existing broad `except RuntimeError` handlers continue to work, while
+callers that intentionally recover can catch the concrete exception.
+
 The Python extension no longer depends directly on `anyhow`, and its PyO3
 dependency no longer enables the blanket `anyhow` conversion feature.
 `pyo3-tracing-opentelemetry` is upgraded to 0.3.1 so the feature stays disabled
@@ -186,7 +209,8 @@ Related PRs: [#1096](https://github.com/Jij-Inc/ommx/pull/1096),
 [#1099](https://github.com/Jij-Inc/ommx/pull/1099),
 [#1100](https://github.com/Jij-Inc/ommx/pull/1100),
 [#1101](https://github.com/Jij-Inc/ommx/pull/1101),
-[#1102](https://github.com/Jij-Inc/ommx/pull/1102).
+[#1102](https://github.com/Jij-Inc/ommx/pull/1102),
+[#1087](https://github.com/Jij-Inc/ommx/pull/1087).
 
 ### 🆕 Instance classes and adapter applicability ([#1084](https://github.com/Jij-Inc/ommx/pull/1084))
 

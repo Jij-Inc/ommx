@@ -72,16 +72,18 @@ prepared_samples = OMMXOpenJijSAAdapter.sample(preparation.input)
 source_samples = preparation.evaluate_source(prepared_samples)
 ```
 
-OpenJij固有のpreparation reportは、適用したoperationと `preparation.input` の
-applicabilityを記録しますが、共通の合成guaranteeではありません。これとは別の
-`config` fieldには、正規化済みで実際に使われた不変のpreparation設定を記録します。
-approximate integer slackは既定では無効で、`OpenJijPreparationConfig` で
+OpenJij固有のpreparation reportは、source classへのmembership、完了したoperation、
+failureを検出したoperation、および `preparation.input` のapplicabilityを分けて記録
+しますが、共通の合成guaranteeではありません。これとは別の `config` fieldには、
+正規化済みで実際に使われた不変のpreparation設定を記録します。approximate integer
+slackは既定では無効で、`OpenJijPreparationConfig` で
 `allow_approximate_integer_slack=True` を設定する必要があります。有限penaltyも同じ
 Configの `uniform_penalty_weight` または `penalty_weights` によって明示的に選択します。
-共通のpreparation policyとguaranteeは
+constraintごとのweight coverageはslack preparationの後、実際にpenaltyを適用する
+必要が残った通常制約に対して評価します。共通のpreparation policyとguaranteeは
 [#1111](https://github.com/Jij-Inc/ommx/issues/1111) で扱います。最大53 bitというInteger
-encoding条件はpreparationのpreconditionであり、OpenJijのinput classや
-`ommx.v2.Feature` の一部ではありません。
+encoding条件はInteger encoding phaseが確認するoperation availabilityであり、source
+classへのmembership、OpenJijのinput class、`ommx.v2.Feature` のいずれにも含まれません。
 
 HiGHS、Python-MIP、PySCIPOptについて、これはstable Python SDK 2.6.1からの公開
 exception契約の破壊的変更です。非対応の
@@ -100,6 +102,14 @@ stable 2.6.1はweight未指定時に一律penalty weight `1.0` を選び、exact
 明示する必要があります。明示的な `evaluate_source()` は、従来の暗黙経路が変換元の
 目的関数・sense・制約ではなく、penalty適用後の目的関数、反転後のsense、変換後の制約を
 報告し得た問題も修正します。
+
+infeasibility exceptionのcanonicalな型は `ommx.InfeasibleDetected` になり、
+`ommx.adapter.InfeasibleDetected` は同じobjectへのaliasとして残ります。Rust-backedな
+slack operationを囲む既存handlerが引き続き捕捉できるよう `RuntimeError` を継承します。
+そのためstableのAdapter側exception hierarchyは変わります。従来のOpenJij preparationを
+囲む `except RuntimeError` は、`Exception` 直下だった旧型を捕捉しませんでしたが、v3では
+捕捉します。この違いを回復処理に使う場合は `InfeasibleDetected` を明示的にcatchして
+ください。
 
 deprecatedであった `response_to_samples()` と `sample_qubo_sa()` も3.0.0で削除します。
 `response_to_samples()` は `decode_to_samples()` に置き換えてください。直接適用可能な
@@ -156,6 +166,17 @@ failure であるため、`RuntimeError` になります。
 failure も同じ fallback を使います。Python-backed codec、JSON callback、adapter、
 tracing hook、data library が送出した exception は変更せず伝播します。
 
+Integer preparationのoperationには、`RuntimeError` と互換性のある3つの具体的な
+exceptionも追加しました。{meth}`~ommx.Instance.log_encode` は、要求された変数を
+exactにencodeできない場合だけ {class}`~ommx.LogEncodingError` を送出します。
+exact integer slack変換は、呼び出し側が明示的に近似を選べる場合だけ
+{class}`~ommx.ExactIntegerSlackError` を送出し、exact / approximateの両方のslack
+operationはboundからモデルのinfeasibleが証明された場合に
+{class}`~ommx.InfeasibleDetected` を送出します。ID割り当て、substitution、係数演算の
+failureは従来のexception分類を維持し、availability signalとして扱いません。
+既存の広い `except RuntimeError` はそのまま機能し、意図的に回復する呼び出し側は
+具体的なexceptionをcatchできます。
+
 Python extension は `anyhow` への直接依存を廃止し、PyO3 dependency でも blanket
 な `anyhow` conversion feature を有効にしなくなりました。
 `pyo3-tracing-opentelemetry` も 0.3.1 へ更新し、tracing dependency 経由でもこの
@@ -177,7 +198,8 @@ interrupted status で確実に閉じられます。
 [#1099](https://github.com/Jij-Inc/ommx/pull/1099)、
 [#1100](https://github.com/Jij-Inc/ommx/pull/1100)、
 [#1101](https://github.com/Jij-Inc/ommx/pull/1101)、
-[#1102](https://github.com/Jij-Inc/ommx/pull/1102)。
+[#1102](https://github.com/Jij-Inc/ommx/pull/1102)、
+[#1087](https://github.com/Jij-Inc/ommx/pull/1087)。
 
 ### 🆕 Instance Class と Adapter Applicability ([#1084](https://github.com/Jij-Inc/ommx/pull/1084))
 

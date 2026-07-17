@@ -69,6 +69,81 @@ pyo3_stub_gen::create_exception!(
     RemoteArtifactError,
     "The remote response is not a valid OMMX Artifact."
 );
+pyo3::create_exception!(
+    ommx._ommx_rust,
+    LogEncodingError,
+    PyRuntimeError,
+    "An exact log encoding is unavailable for one requested decision variable. Diagnostic attributes are ``kind``, ``variable_id``, ``observed``, and ``expected``."
+);
+impl pyo3_stub_gen::PyStubType for LogEncodingError {
+    fn type_output() -> pyo3_stub_gen::TypeInfo {
+        pyo3_stub_gen::TypeInfo::builtin("LogEncodingError")
+    }
+}
+pyo3_stub_gen::impl_py_runtime_type!(LogEncodingError);
+
+fn log_encoding_diagnostic_value_type() -> pyo3_stub_gen::TypeInfo {
+    use pyo3_stub_gen::PyStubType;
+    String::type_output() | u64::type_output() | f64::type_output()
+}
+
+pyo3_stub_gen::inventory::submit! {
+    pyo3_stub_gen::type_info::PyClassInfo {
+        pyclass_name: "LogEncodingError",
+        struct_id: std::any::TypeId::of::<LogEncodingError>,
+        getters: &[
+            pyo3_stub_gen::type_info::MemberInfo {
+                name: "kind",
+                r#type: <String as pyo3_stub_gen::PyStubType>::type_output,
+                doc: "Machine-readable reason for unavailable exact encoding.",
+                default: None,
+                deprecated: None,
+            },
+            pyo3_stub_gen::type_info::MemberInfo {
+                name: "variable_id",
+                r#type: <u64 as pyo3_stub_gen::PyStubType>::type_output,
+                doc: "Decision variable for which exact encoding is unavailable.",
+                default: None,
+                deprecated: None,
+            },
+            pyo3_stub_gen::type_info::MemberInfo {
+                name: "observed",
+                r#type: log_encoding_diagnostic_value_type,
+                doc: "Observed bound or bit count that made encoding unavailable.",
+                default: None,
+                deprecated: None,
+            },
+            pyo3_stub_gen::type_info::MemberInfo {
+                name: "expected",
+                r#type: log_encoding_diagnostic_value_type,
+                doc: "Required bound condition or maximum bit count.",
+                default: None,
+                deprecated: None,
+            },
+        ],
+        setters: &[],
+        module: Some("ommx._ommx_rust"),
+        doc: "An exact log encoding is unavailable for one requested decision variable.",
+        bases: &[|| <PyRuntimeError as pyo3_stub_gen::PyStubType>::type_output()],
+        has_eq: false,
+        has_ord: false,
+        has_hash: false,
+        has_str: false,
+        subclass: true,
+    }
+}
+pyo3_stub_gen::create_exception!(
+    ommx._ommx_rust,
+    ExactIntegerSlackError,
+    PyRuntimeError,
+    "Exact integer-slack conversion is unavailable for the requested inequality."
+);
+pyo3_stub_gen::create_exception!(
+    ommx._ommx_rust,
+    InfeasibleDetected,
+    PyRuntimeError,
+    "The mathematical model was proven infeasible."
+);
 
 /// Binding-internal wrapper around an already classified Python exception.
 ///
@@ -229,6 +304,62 @@ fn sample_set_error_to_pyerr(error: &ommx::SampleSetError, message: String) -> P
     }
 }
 
+fn log_encoding_unavailable_to_pyerr(
+    error: &ommx::LogEncodingUnavailable,
+    message: String,
+) -> PyErr {
+    let pyerr = LogEncodingError::new_err(message);
+    Python::attach(|py| {
+        let value = pyerr.value(py);
+        let (kind, variable_id) = match error {
+            ommx::LogEncodingUnavailable::NonFiniteBound { id, bound } => {
+                value.setattr(
+                    "observed",
+                    format!("[{}, {}]", bound.lower(), bound.upper()),
+                )?;
+                value.setattr("expected", "finite integer range")?;
+                ("non_finite_bound", *id)
+            }
+            ommx::LogEncodingUnavailable::RangeOutsideExactIntegerDomain {
+                id,
+                lower,
+                upper,
+                max_abs,
+            } => {
+                let observed = if *lower < -*max_abs { *lower } else { *upper };
+                value.setattr("observed", observed)?;
+                value.setattr("expected", *max_abs)?;
+                ("outside_exact_integer_domain", *id)
+            }
+            ommx::LogEncodingUnavailable::RangeTooLarge {
+                id,
+                required_bits,
+                max_bits,
+            } => {
+                value.setattr("observed", *required_bits)?;
+                value.setattr("expected", *max_bits)?;
+                ("range_too_large", *id)
+            }
+            _ => ("unavailable", error.variable_id()),
+        };
+        value.setattr("kind", kind)?;
+        value.setattr("variable_id", variable_id.into_inner())
+    })
+    .expect("LogEncodingError supports diagnostic attributes");
+    pyerr
+}
+
+fn exact_integer_slack_unavailable_to_pyerr(
+    _: &ommx::ExactIntegerSlackUnavailable,
+    message: String,
+) -> PyErr {
+    ExactIntegerSlackError::new_err(message)
+}
+
+fn infeasible_detected_to_pyerr(_: &ommx::InfeasibleDetected, message: String) -> PyErr {
+    InfeasibleDetected::new_err(message)
+}
+
 define_ommx_error_mappings!(
     ommx::ParseError => parse_error_to_pyerr,
     ommx::artifact::local_registry::InvalidLocalRegistryImageRef => invalid_local_registry_image_ref_to_pyerr,
@@ -236,6 +367,9 @@ define_ommx_error_mappings!(
     ommx::DecisionVariableError => decision_variable_error_to_pyerr,
     ommx::SolutionError => solution_error_to_pyerr,
     ommx::SampleSetError => sample_set_error_to_pyerr,
+    ommx::LogEncodingUnavailable => log_encoding_unavailable_to_pyerr,
+    ommx::ExactIntegerSlackUnavailable => exact_integer_slack_unavailable_to_pyerr,
+    ommx::InfeasibleDetected => infeasible_detected_to_pyerr,
     #[cfg(feature = "remote-artifact")]
     ommx::artifact::RemoteArtifactError => remote_artifact_error_to_pyerr,
     ommx::artifact::ImageRefParseError => image_ref_parse_error_to_pyerr,
@@ -291,6 +425,12 @@ impl From<OmmxPyError> for PyErr {
 
 /// Register the Python exception hierarchy owned by this conversion boundary.
 pub fn register_exceptions(py: Python<'_>, module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add("LogEncodingError", py.get_type::<LogEncodingError>())?;
+    module.add(
+        "ExactIntegerSlackError",
+        py.get_type::<ExactIntegerSlackError>(),
+    )?;
+    module.add("InfeasibleDetected", py.get_type::<InfeasibleDetected>())?;
     module.add("RemoteArtifactError", py.get_type::<RemoteArtifactError>())?;
     module.add(
         "RemoteArtifactNotFoundError",
@@ -366,6 +506,67 @@ mod tests {
             ommx::Error::from(ommx::SolutionError::MissingRequiredField { field: "objective" })
                 .into(),
         );
+    }
+
+    #[test]
+    fn log_encoding_unavailable_maps_to_a_specific_runtime_error() {
+        let mut instance = ommx::Instance::default();
+        let id = ommx::VariableID::from(7);
+        instance
+            .add_decision_variable(
+                id,
+                ommx::DecisionVariable::integer(),
+                ommx::ModelingLabel::default(),
+            )
+            .unwrap();
+        let signal = instance
+            .log_encode([id], ommx::ATol::default())
+            .unwrap_err()
+            .downcast::<ommx::LogEncodingUnavailable>()
+            .unwrap();
+        assert_exception::<LogEncodingError>(signal.clone().into());
+        assert_exception::<LogEncodingError>(ommx::Error::from(signal.clone()).into());
+        assert_exception::<PyRuntimeError>(signal.clone().into());
+
+        let error: PyErr = OmmxPyError::from(signal).into();
+        Python::attach(|py| {
+            let value = error.value(py);
+            assert_eq!(
+                value.getattr("kind").unwrap().extract::<String>().unwrap(),
+                "non_finite_bound"
+            );
+            assert_eq!(
+                value
+                    .getattr("variable_id")
+                    .unwrap()
+                    .extract::<u64>()
+                    .unwrap(),
+                7
+            );
+            assert_eq!(
+                value
+                    .getattr("expected")
+                    .unwrap()
+                    .extract::<String>()
+                    .unwrap(),
+                "finite integer range"
+            );
+        });
+    }
+
+    #[test]
+    fn infeasible_detected_maps_to_a_specific_runtime_error() {
+        let signal = ommx::InfeasibleDetected::InequalityConstraintBound {
+            id: ommx::ConstraintID::from(3),
+            bound: ommx::Bound::new(1.0, 2.0).unwrap(),
+        };
+        assert_exception::<InfeasibleDetected>(signal.into());
+
+        let erased = ommx::Error::from(ommx::InfeasibleDetected::InequalityConstraintBound {
+            id: ommx::ConstraintID::from(3),
+            bound: ommx::Bound::new(1.0, 2.0).unwrap(),
+        });
+        assert_exception::<InfeasibleDetected>(erased.into());
     }
 
     #[test]

@@ -3,6 +3,7 @@ from typing import get_type_hints
 
 from ommx import DecisionVariable, Instance, Sense
 import ommx_openjij_adapter as package
+import pytest
 from ommx_openjij_adapter import _decode, _preparation, adapter
 
 
@@ -63,6 +64,11 @@ def test_public_classes_support_standard_introspection() -> None:
         get_type_hints(package.OpenJijPreparationReport)["config"]
         is package.OpenJijPreparationConfig
     )
+
+
+def test_preparation_value_is_created_only_by_the_pipeline() -> None:
+    with pytest.raises(TypeError, match="created only by prepare"):
+        package.OpenJijPreparation()
 
 
 def test_adapter_identity_in_applicability_report_is_unchanged() -> None:

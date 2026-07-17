@@ -36,6 +36,12 @@ returns the typed error directly):
   already persisted in the Local Registry.
 - [`AttachmentNotFound`](crate::experiment::AttachmentNotFound) — identifies
   an absent Attachment name in an Experiment or Run namespace.
+- [`LogEncodingUnavailable`](crate::LogEncodingUnavailable) and
+  [`ExactIntegerSlackUnavailable`](crate::ExactIntegerSlackUnavailable) — identify
+  the narrow cases where an exact encoding operation is unavailable and a
+  caller may explicitly choose another mathematical operation. Contract,
+  allocation, substitution, and arithmetic failures are not folded into these
+  signals.
 
 Recover them with [`Error::downcast_ref`](crate::Error::downcast_ref) / [`Error::is`](crate::Error::is):
 
@@ -44,6 +50,19 @@ match instance.propagate(&state, atol) {
     Err(e) if e.is::<ommx::InfeasibleDetected>() => { /* handle */ }
     Err(e) => return Err(e),
     Ok(outcome) => { /* ... */ }
+}
+```
+
+For example, an Adapter preparation can select an approximate slack only for
+the exact-operation signal while continuing to propagate unrelated failures:
+
+```ignore
+match instance.convert_inequality_to_equality_with_integer_slack(id, 32, atol) {
+    Err(e) if e.is::<ommx::ExactIntegerSlackUnavailable>() => {
+        instance.add_integer_slack_to_inequality(id, 32)?;
+    }
+    Err(e) => return Err(e),
+    Ok(()) => {}
 }
 ```
 

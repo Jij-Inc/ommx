@@ -210,12 +210,12 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
 
         This is intentionally separate from :meth:`check_applicability`, which
         checks only the Binary, unconstrained minimization Adapter input. The
-        53-bit log-encoding limit is a preparation precondition, not an OpenJij
-        input-class condition and not an ``ommx.v2.Feature``. A model proven
-        infeasible while preparing integer slack raises
-        :class:`~ommx.adapter.InfeasibleDetected`. Approximate integer slack is
-        disabled unless the supplied :class:`OpenJijPreparationConfig` enables
-        it.
+        53-bit log-encoding limit describes availability of that preparation
+        operation, not an OpenJij input-class condition and not an
+        ``ommx.v2.Feature``. A model proven infeasible while preparing integer
+        slack raises :class:`~ommx.InfeasibleDetected`. Approximate integer
+        slack is disabled unless the supplied
+        :class:`OpenJijPreparationConfig` enables it.
         """
         return _check_preparation(
             ommx_instance,
@@ -232,7 +232,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     ) -> OpenJijPreparation:
         """Produce a separate Adapter input and an auditable preparation report.
 
-        Raises :class:`~ommx.adapter.InfeasibleDetected` when variable bounds
+        Raises :class:`~ommx.InfeasibleDetected` when variable bounds
         prove an inequality infeasible. Other preparation failures raise
         :class:`OpenJijPreparationError`. Approximate integer slack is used only
         when the supplied :class:`OpenJijPreparationConfig` enables it.
