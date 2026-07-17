@@ -479,6 +479,15 @@ impl Parse for v2::Instance {
                 field: "decision_variables",
             })?
             .parse_as(&(), message, "decision_variables")?;
+        crate::v2_io::validate_feature_payload(
+            &required_features,
+            v2::Feature::DecisionVariableFiniteDomain,
+            decision_variables
+                .values()
+                .any(|variable| variable.kind() == crate::Kind::FiniteDomain),
+            message,
+            "decision_variables",
+        )?;
         let decision_variable_ids: VariableIDSet = decision_variables.keys().copied().collect();
         let objective = self
             .objective
@@ -874,6 +883,15 @@ impl Parse for v2::ParametricInstance {
                 field: "decision_variables",
             })?
             .parse_as(&(), message, "decision_variables")?;
+        crate::v2_io::validate_feature_payload(
+            &required_features,
+            v2::Feature::DecisionVariableFiniteDomain,
+            decision_variables
+                .values()
+                .any(|variable| variable.kind() == crate::Kind::FiniteDomain),
+            message,
+            "decision_variables",
+        )?;
         let parameters = self
             .parameters
             .map(|value| value.parse_as(&(), message, "parameters"))
@@ -1154,6 +1172,7 @@ mod tests {
             subscripts: label.subscripts,
             parameters: label.parameters.into_iter().collect(),
             description: label.description,
+            finite_domain: None,
         }
     }
 

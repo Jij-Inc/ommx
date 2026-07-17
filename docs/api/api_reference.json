@@ -1653,6 +1653,29 @@
               },
               "is_property": true,
               "is_readonly": true
+            },
+            {
+              "name": "values",
+              "doc": "Explicit feasible values for a finite-domain variable.",
+              "type_": {
+                "display": "Optional[list[float]]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "list[float]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "float",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
             }
           ],
           "deprecated": null
@@ -4004,7 +4027,7 @@
         {
           "kind": "Class",
           "name": "DecisionVariable",
-          "doc": "Decision variable in an optimization problem.\n\nThis class represents a variable that will be optimized in a mathematical programming problem.\nIt supports various types (binary, integer, continuous, semi-integer, semi-continuous) and\ncan be used in arithmetic expressions to build objective functions and constraints.\n\nNote that this object overloads `==` for creating a constraint, not for equality comparison.\n\n# Examples\n\n```python\n>>> x = DecisionVariable.integer(1)\n>>> x == 1  # Returns Constraint, not bool\nConstraint(...)\n```\n\nFor object equality comparison, use the ``equals_to()`` method or compare IDs:\n\n```python\n>>> y = DecisionVariable.integer(2)\n>>> x.id == y.id\nFalse\n```",
+          "doc": "Decision variable in an optimization problem.\n\nThis class represents a variable that will be optimized in a mathematical programming problem.\nIt supports binary, integer, continuous, semi-integer, semi-continuous,\nand finite-domain variables, and can be used in arithmetic expressions to\nbuild objective functions and constraints.\n\nNote that this object overloads `==` for creating a constraint, not for equality comparison.\n\n# Examples\n\n```python\n>>> x = DecisionVariable.integer(1)\n>>> x == 1  # Returns Constraint, not bool\nConstraint(...)\n```\n\nFor object equality comparison, use the ``equals_to()`` method or compare IDs:\n\n```python\n>>> y = DecisionVariable.integer(2)\n>>> x.id == y.id\nFalse\n```",
           "bases": [],
           "methods": [
             {
@@ -5140,6 +5163,124 @@
               "deprecated": null
             },
             {
+              "name": "finite_domain",
+              "doc": "Create a finite-domain decision variable.\n\n`values` is the exact feasible set, not a discretization of a\ncontinuous interval. Values must be non-empty, finite, and unique;\nthey are stored in ascending order.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "id",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "values",
+                      "type_": {
+                        "display": "Sequence[float]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "float",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "subscripts",
+                      "type_": {
+                        "display": "Sequence[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "[]"
+                      }
+                    },
+                    {
+                      "name": "parameters",
+                      "type_": {
+                        "display": "Mapping[str, str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "{}"
+                      }
+                    },
+                    {
+                      "name": "description",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DecisionVariable",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "integer",
               "doc": "",
               "signatures": [
@@ -5541,6 +5682,15 @@
               }
             },
             {
+              "name": "FINITE_DOMAIN",
+              "doc": "",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              }
+            },
+            {
               "name": "INTEGER",
               "doc": "",
               "type_": {
@@ -5655,6 +5805,29 @@
                     "display": "int",
                     "link_target": null,
                     "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "values",
+              "doc": "Explicit feasible values for a finite-domain variable.\n\nReturns `None` for interval-domain variable kinds.",
+              "type_": {
+                "display": "Optional[list[float]]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "list[float]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "float",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
                   }
                 ]
               },
@@ -6028,6 +6201,29 @@
                 "display": "float",
                 "link_target": null,
                 "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "values",
+              "doc": "Explicit feasible values for a finite-domain variable.",
+              "type_": {
+                "display": "Optional[list[float]]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "list[float]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "float",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
               },
               "is_property": true,
               "is_readonly": true
@@ -10218,6 +10414,115 @@
               "deprecated": null
             },
             {
+              "name": "new_finite_domain",
+              "doc": "Create and add a finite-domain decision variable with an automatically assigned ID.\n\n`values` is the exact feasible set, rather than a discretization of an\ninterval. Values must be non-empty, finite, and unique; OMMX stores them\nin ascending order.\n\n**Args:**\n- `values`: Exact feasible values of the variable.\n- `name`: Optional human-readable modeling name. Names need not be unique.\n- `subscripts`: Optional integer indices from the source model.\n- `parameters`: Optional string-valued indices from the source model.\n- `description`: Optional human-readable description.\n\nRaises {class}`ValueError` if `values` does not define a valid finite\ndomain or if no larger automatic ID can be assigned.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "values",
+                      "type_": {
+                        "display": "Sequence[float]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "float",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "subscripts",
+                      "type_": {
+                        "display": "Sequence[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "[]"
+                      }
+                    },
+                    {
+                      "name": "parameters",
+                      "type_": {
+                        "display": "Mapping[str, str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "{}"
+                      }
+                    },
+                    {
+                      "name": "description",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "AttachedDecisionVariable",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "partial_evaluate",
               "doc": "Creates a new instance with specific decision variables fixed to given values.\n\nThis method substitutes the specified decision variables with their provided values,\ncreating a new problem instance where these variables are fixed. This is useful for\nscenarios such as:\n\n- Creating simplified sub-problems with some variables fixed\n- Incrementally solving a problem by fixing some variables and optimizing the rest\n- Testing specific configurations of a problem\n\n**Args:**\n- `state`: Maps decision variable IDs to their fixed values.\n  Can be a {class}`~ommx.State` object or a dictionary mapping variable IDs to values.\n- `atol`: Absolute tolerance for floating point comparisons. If None, uses the default tolerance.\n\n**Returns:**\nA new instance with the specified decision variables fixed to their given values.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = DecisionVariable.binary(1)\n>>> y = DecisionVariable.binary(2)\n>>> instance = Instance.from_components(\n...     decision_variables=[x, y],\n...     objective=x + y,\n...     constraints=[x + y <= 1],\n...     sense=Instance.MINIMIZE\n... )\n>>> new_instance = instance.partial_evaluate({1: 1})\n>>> new_instance.objective\nFunction(x2 + 1)\n```\n\nFixed values are owned by the instance and exposed through the\nattached decision-variable view:\n\n```python\n>>> x = new_instance.attached_decision_variable(1)\n>>> x.substituted_value\n1.0\n```",
               "signatures": [
@@ -10733,7 +11038,7 @@
             },
             {
               "name": "stats",
-              "doc": "Get statistics about the instance.\n\nReturns a dictionary containing counts of decision variables and constraints\ncategorized by kind, usage, and status.\n\n**Returns:**\nA dictionary with the following structure:\n\n```text\n{\n    \"decision_variables\": {\n        \"total\": int,\n        \"by_kind\": {\n            \"binary\": int,\n            \"integer\": int,\n            \"continuous\": int,\n            \"semi_integer\": int,\n            \"semi_continuous\": int\n        },\n        \"by_usage\": {\n            \"used_in_objective\": int,\n            \"used_in_constraints\": int,\n            \"used\": int,\n            \"fixed\": int,\n            \"dependent\": int,\n            \"irrelevant\": int\n        }\n    },\n    \"constraints\": {\n        \"total\": int,\n        \"active\": int,\n        \"removed\": int\n    }\n}\n```\n\n# Examples\n\n```python\n>>> from ommx import Instance\n>>> instance = Instance.minimize()\n>>> stats = instance.stats()\n>>> stats[\"decision_variables\"][\"total\"]\n0\n>>> stats[\"constraints\"][\"total\"]\n0\n```",
+              "doc": "Get statistics about the instance.\n\nReturns a dictionary containing counts of decision variables and constraints\ncategorized by kind, usage, and status.\n\n**Returns:**\nA dictionary with the following structure:\n\n```text\n{\n    \"decision_variables\": {\n        \"total\": int,\n        \"by_kind\": {\n            \"binary\": int,\n            \"integer\": int,\n            \"continuous\": int,\n            \"semi_integer\": int,\n            \"semi_continuous\": int,\n            \"finite_domain\": int\n        },\n        \"by_usage\": {\n            \"used_in_objective\": int,\n            \"used_in_constraints\": int,\n            \"used\": int,\n            \"fixed\": int,\n            \"dependent\": int,\n            \"irrelevant\": int\n        }\n    },\n    \"constraints\": {\n        \"total\": int,\n        \"active\": int,\n        \"removed\": int\n    }\n}\n```\n\n# Examples\n\n```python\n>>> from ommx import Instance\n>>> instance = Instance.minimize()\n>>> stats = instance.stats()\n>>> stats[\"decision_variables\"][\"total\"]\n0\n>>> stats[\"constraints\"][\"total\"]\n0\n```",
               "signatures": [
                 {
                   "parameters": [],
@@ -11618,6 +11923,11 @@
             {
               "name": "Continuous",
               "doc": "Continuous decision variable (real-valued)",
+              "type_": null
+            },
+            {
+              "name": "FiniteDomain",
+              "doc": "Finite-domain decision variable (one of explicitly enumerated values)",
               "type_": null
             },
             {
@@ -21886,6 +22196,29 @@
                     "display": "int",
                     "link_target": null,
                     "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "values",
+              "doc": "Explicit feasible values for a finite-domain variable.",
+              "type_": {
+                "display": "Optional[list[float]]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "list[float]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "float",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
                   }
                 ]
               },

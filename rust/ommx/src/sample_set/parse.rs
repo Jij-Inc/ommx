@@ -273,6 +273,15 @@ impl Parse for v2::SampleSet {
                 field: "decision_variables",
             })?
             .parse_as(&(), message, "decision_variables")?;
+        crate::v2_io::validate_feature_payload(
+            &required_features,
+            v2::Feature::DecisionVariableFiniteDomain,
+            decision_variables
+                .values()
+                .any(|variable| *variable.kind() == crate::Kind::FiniteDomain),
+            message,
+            "decision_variables",
+        )?;
         let objectives = self
             .objectives
             .ok_or(RawParseError::MissingField {

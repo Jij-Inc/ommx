@@ -45,6 +45,8 @@ pub enum Feature {
     ConstraintOneHot = 2,
     /// The payload contains first-class SOS1 constraints.
     ConstraintSos1 = 3,
+    /// The payload contains a decision variable with an explicitly enumerated finite domain.
+    DecisionVariableFiniteDomain = 4,
 }
 impl Feature {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -57,6 +59,7 @@ impl Feature {
             Feature::ConstraintIndicator => "FEATURE_CONSTRAINT_INDICATOR",
             Feature::ConstraintOneHot => "FEATURE_CONSTRAINT_ONE_HOT",
             Feature::ConstraintSos1 => "FEATURE_CONSTRAINT_SOS1",
+            Feature::DecisionVariableFiniteDomain => "FEATURE_DECISION_VARIABLE_FINITE_DOMAIN",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -66,6 +69,7 @@ impl Feature {
             "FEATURE_CONSTRAINT_INDICATOR" => Some(Self::ConstraintIndicator),
             "FEATURE_CONSTRAINT_ONE_HOT" => Some(Self::ConstraintOneHot),
             "FEATURE_CONSTRAINT_SOS1" => Some(Self::ConstraintSos1),
+            "FEATURE_DECISION_VARIABLE_FINITE_DOMAIN" => Some(Self::DecisionVariableFiniteDomain),
             _ => None,
         }
     }
@@ -452,8 +456,12 @@ pub struct SampledSos1ConstraintCollection {
 pub struct DecisionVariable {
     #[prost(enumeration = "super::v1::decision_variable::Kind", tag = "1")]
     pub kind: i32,
+    /// Required for interval-domain kinds and absent for KIND_FINITE_DOMAIN.
     #[prost(message, optional, tag = "2")]
     pub bound: ::core::option::Option<super::v1::Bound>,
+    /// Required for KIND_FINITE_DOMAIN and absent for interval-domain kinds.
+    #[prost(message, optional, tag = "3")]
+    pub finite_domain: ::core::option::Option<super::v1::FiniteDomain>,
 }
 /// Evaluated-stage decision-variable row.
 #[non_exhaustive]
@@ -462,10 +470,14 @@ pub struct DecisionVariable {
 pub struct EvaluatedDecisionVariable {
     #[prost(enumeration = "super::v1::decision_variable::Kind", tag = "1")]
     pub kind: i32,
+    /// Required for interval-domain kinds and absent for KIND_FINITE_DOMAIN.
     #[prost(message, optional, tag = "2")]
     pub bound: ::core::option::Option<super::v1::Bound>,
     #[prost(double, tag = "3")]
     pub value: f64,
+    /// Required for KIND_FINITE_DOMAIN and absent for interval-domain kinds.
+    #[prost(message, optional, tag = "4")]
+    pub finite_domain: ::core::option::Option<super::v1::FiniteDomain>,
 }
 /// Sampled-stage decision-variable row.
 #[non_exhaustive]
@@ -474,10 +486,14 @@ pub struct EvaluatedDecisionVariable {
 pub struct SampledDecisionVariable {
     #[prost(enumeration = "super::v1::decision_variable::Kind", tag = "1")]
     pub kind: i32,
+    /// Required for interval-domain kinds and absent for KIND_FINITE_DOMAIN.
     #[prost(message, optional, tag = "2")]
     pub bound: ::core::option::Option<super::v1::Bound>,
     #[prost(message, optional, tag = "3")]
     pub samples: ::core::option::Option<super::v1::SampledValues>,
+    /// Required for KIND_FINITE_DOMAIN and absent for interval-domain kinds.
+    #[prost(message, optional, tag = "4")]
+    pub finite_domain: ::core::option::Option<super::v1::FiniteDomain>,
 }
 /// Definition-stage decision-variable table.
 ///

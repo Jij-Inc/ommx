@@ -62,3 +62,27 @@ fn test_nonlinear_constraint_error() {
         "unexpected error: {msg}"
     );
 }
+
+#[test]
+fn test_finite_domain_variable_error() {
+    let decision_variables = btreemap! {
+        VariableID::from(0) => DecisionVariable::new_finite_domain(vec![0.1, 0.5, 1.0]).unwrap(),
+    };
+    let instance = Instance::new(
+        Sense::Minimize,
+        Function::from(crate::linear!(0)),
+        decision_variables,
+        BTreeMap::new(),
+    )
+    .unwrap();
+
+    let mut buffer = Vec::new();
+    let error = format::format(&instance, &mut buffer).unwrap_err();
+
+    assert!(
+        error
+            .to_string()
+            .contains("MPS format does not support finite-domain decision variable"),
+        "unexpected error: {error}"
+    );
+}

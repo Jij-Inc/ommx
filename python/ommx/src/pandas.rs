@@ -843,8 +843,20 @@ pub fn set_kind(dict: &Bound<PyDict>, kind: ommx::Kind) -> PyResult<()> {
         ommx::Kind::Continuous => "Continuous",
         ommx::Kind::SemiInteger => "SemiInteger",
         ommx::Kind::SemiContinuous => "SemiContinuous",
+        ommx::Kind::FiniteDomain => "FiniteDomain",
     };
     dict.set_item("kind", s)
+}
+
+/// Set exact finite-domain values, or pandas.NA for interval-domain kinds.
+pub fn set_finite_domain(
+    dict: &Bound<PyDict>,
+    domain: Option<&ommx::FiniteDomain>,
+) -> PyResult<()> {
+    match domain {
+        Some(domain) => dict.set_item("values", domain.values().to_vec()),
+        None => dict.set_item("values", get_na(dict.py())?),
+    }
 }
 
 /// Set function type column as a string.
@@ -876,6 +888,7 @@ fn decision_variable_to_pandas_entry<'py>(
     set_kind(&dict, dv.kind())?;
     dict.set_item("lower", dv.bound().lower())?;
     dict.set_item("upper", dv.bound().upper())?;
+    set_finite_domain(&dict, dv.finite_domain())?;
     set_label_columns(
         &dict,
         label.name.as_deref(),
@@ -1350,6 +1363,7 @@ impl<'m> ToPandasEntry
         set_kind(&dict, *dv.kind())?;
         dict.set_item("lower", dv.bound().lower())?;
         dict.set_item("upper", dv.bound().upper())?;
+        set_finite_domain(&dict, dv.finite_domain())?;
         set_label_columns(
             &dict,
             m.name.as_deref(),
@@ -1443,6 +1457,7 @@ impl<'a, 'm> ToPandasEntry
         set_kind(&dict, *dv.kind())?;
         dict.set_item("lower", dv.bound().lower())?;
         dict.set_item("upper", dv.bound().upper())?;
+        set_finite_domain(&dict, dv.finite_domain())?;
         set_label_columns(
             &dict,
             m.name.as_deref(),

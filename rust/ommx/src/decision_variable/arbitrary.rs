@@ -40,13 +40,20 @@ impl Arbitrary for DecisionVariable {
     type Strategy = BoxedStrategy<Self>;
 
     fn arbitrary_with(parameters: Self::Parameters) -> Self::Strategy {
-        (Kind::arbitrary_with(parameters), Bound::arbitrary())
-            .prop_filter_map("Bound must be consistent with Kind", |(kind, bound)| {
-                // FIXME: Constructive approach to generate bounds for faster testing
-                let bound = kind.consistent_bound(bound, ATol::default())?;
-                Some((kind, bound))
+        Kind::arbitrary_with(parameters)
+            .prop_flat_map(|kind| match kind {
+                Kind::FiniteDomain => proptest::collection::vec(-10.0f64..=10.0, 1..8)
+                    .prop_filter_map("Finite-domain values must be unique", |values| {
+                        DecisionVariable::new_finite_domain(values).ok()
+                    })
+                    .boxed(),
+                _ => (Just(kind), Bound::arbitrary())
+                    .prop_filter_map("Bound must be consistent with Kind", |(kind, bound)| {
+                        // FIXME: Constructive approach to generate bounds for faster testing
+                        DecisionVariable::new(kind, bound, ATol::default()).ok()
+                    })
+                    .boxed(),
             })
-            .prop_map(|(kind, bound)| DecisionVariable { kind, bound })
             .boxed()
     }
 }

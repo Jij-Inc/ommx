@@ -60,16 +60,28 @@ instance.sense == Instance.MAXIMIZE
 
 ## 決定変数
 
+変数が取り得る値を明示的に列挙する場合は、finite-domain 変数を使います。
+
+```{code-cell} ipython3
+finite_instance = Instance.minimize()
+dose = finite_instance.new_finite_domain([0.1, 0.3, 0.5, 1.0], "dose")
+dose.values
+```
+
+指定した値は、変数が取り得る値の集合です。この集合は空ではなく、重複のない有限な数値を含む必要があります。値は昇順に保持されます。これは連続区間を近似するための離散化ではなく、指定した値だけが実行可能です。明示的な ID を持つコンポーネントから Instance を組み立てる場合は、{meth}`DecisionVariable.finite_domain <ommx.DecisionVariable.finite_domain>` で detached な変数を作ることもできます。
+
 決定変数と制約条件については [`pandas.DataFrame`](https://pandas.pydata.org/pandas-docs/stable/reference/frame.html) の形式で取得できます
 
 ```{code-cell} ipython3
 instance.decision_variables_df()
 ```
 
-まず `kind` と `lower`, `upper` は数理モデルとして必須の情報です。
+`kind` は変数の定義域をどのように表現するかを指定します。
 
-- `kind` はその決定変数の種類でBinary, Integer, Continuousに加えてSemiInteger, SemiContinuousがあります。
-- `lower` と `upper` はその決定変数の下限と上限です。Binaryの場合は $[0, 1]$ になります。
+- `kind` は決定変数の種類で、Binary、Integer、Continuous、SemiInteger、SemiContinuous、FiniteDomain があります。
+- 区間で定義される種類では、`lower` と `upper` が決定変数の下限と上限を表します。Binary の場合は $[0, 1]$ です。
+- `values` は finite-domain 変数が取り得る正確な値を保持し、区間で定義される種類では欠損値です。`lower` と `upper` の間にあっても、`values` に列挙されていない値は実行不可能です。
+- finite-domain 変数の `lower` と `upper` は、`values` の最小値と最大値から導出される表示上の値であり、独立した定義ではありません。
 
 加えてOMMXは数理最適化を実務上のデータ分析に統合した時に必要になるようなメタデータを統合的に扱う事を目指して設計されているので、決定変数のメタデータを保持することができます。これらは数理モデル自体には影響を与えないので必須の情報ではありませんがデータ分析や可視化の際に有用です。
 

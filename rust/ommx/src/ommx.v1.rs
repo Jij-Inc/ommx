@@ -292,6 +292,18 @@ pub struct Bound {
     #[prost(double, tag = "2")]
     pub upper: f64,
 }
+/// An explicitly enumerated, non-empty finite numeric domain.
+///
+/// Values are the exact feasible values of the decision variable, not
+/// discretization points approximating a continuous interval. Writers must emit
+/// finite, unique values in ascending order.
+#[non_exhaustive]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct FiniteDomain {
+    #[prost(double, repeated, tag = "1")]
+    pub values: ::prost::alloc::vec::Vec<f64>,
+}
 /// Decison variable which mathematical programming solver will optimize.
 /// It must have its kind, i.e. binary, integer, real or others and unique identifier of 64-bit integer.
 /// It may have its name and subscripts which are used to identify in modeling tools.
@@ -327,6 +339,10 @@ pub struct DecisionVariable {
     /// The value substituted by partial evaluation of the instance. Not determined by the solver.
     #[prost(double, optional, tag = "8")]
     pub substituted_value: ::core::option::Option<f64>,
+    /// Exact domain for KIND_FINITE_DOMAIN. Must be absent for every other kind.
+    /// `bound` must be absent for KIND_FINITE_DOMAIN because it is derived from these values.
+    #[prost(message, optional, tag = "9")]
+    pub finite_domain: ::core::option::Option<FiniteDomain>,
 }
 /// Nested message and enum types in `DecisionVariable`.
 pub mod decision_variable {
@@ -343,6 +359,8 @@ pub mod decision_variable {
         SemiInteger = 4,
         /// Semi-continuous decision variable is a decision variable that can take only continuous values in the given range or zero.
         SemiContinuous = 5,
+        /// Finite-domain decision variable whose exact feasible values are explicitly enumerated.
+        FiniteDomain = 6,
     }
     impl Kind {
         /// String value of the enum field names used in the ProtoBuf definition.
@@ -357,6 +375,7 @@ pub mod decision_variable {
                 Kind::Continuous => "KIND_CONTINUOUS",
                 Kind::SemiInteger => "KIND_SEMI_INTEGER",
                 Kind::SemiContinuous => "KIND_SEMI_CONTINUOUS",
+                Kind::FiniteDomain => "KIND_FINITE_DOMAIN",
             }
         }
         /// Creates an enum from field names used in the ProtoBuf definition.
@@ -368,6 +387,7 @@ pub mod decision_variable {
                 "KIND_CONTINUOUS" => Some(Self::Continuous),
                 "KIND_SEMI_INTEGER" => Some(Self::SemiInteger),
                 "KIND_SEMI_CONTINUOUS" => Some(Self::SemiContinuous),
+                "KIND_FINITE_DOMAIN" => Some(Self::FiniteDomain),
                 _ => None,
             }
         }

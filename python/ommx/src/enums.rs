@@ -237,6 +237,8 @@ pub enum Kind {
     SemiInteger = 4,
     /// Semi-continuous decision variable (continuous in range or zero)
     SemiContinuous = 5,
+    /// Finite-domain decision variable (one of explicitly enumerated values)
+    FiniteDomain = 6,
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
@@ -251,6 +253,7 @@ impl Kind {
             3 => Ok(Kind::Continuous),
             4 => Ok(Kind::SemiInteger),
             5 => Ok(Kind::SemiContinuous),
+            6 => Ok(Kind::FiniteDomain),
             _ => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
                 "Invalid kind value: {value}"
             ))),
@@ -269,6 +272,7 @@ impl Kind {
             Kind::Continuous => "Kind.Continuous".to_string(),
             Kind::SemiInteger => "Kind.SemiInteger".to_string(),
             Kind::SemiContinuous => "Kind.SemiContinuous".to_string(),
+            Kind::FiniteDomain => "Kind.FiniteDomain".to_string(),
         }
     }
 
@@ -286,6 +290,7 @@ impl From<ommx::Kind> for Kind {
             ommx::Kind::Continuous => Kind::Continuous,
             ommx::Kind::SemiInteger => Kind::SemiInteger,
             ommx::Kind::SemiContinuous => Kind::SemiContinuous,
+            ommx::Kind::FiniteDomain => Kind::FiniteDomain,
         }
     }
 }
@@ -298,6 +303,7 @@ impl From<Kind> for ommx::Kind {
             Kind::Continuous => ommx::Kind::Continuous,
             Kind::SemiInteger => ommx::Kind::SemiInteger,
             Kind::SemiContinuous => ommx::Kind::SemiContinuous,
+            Kind::FiniteDomain => ommx::Kind::FiniteDomain,
         }
     }
 }

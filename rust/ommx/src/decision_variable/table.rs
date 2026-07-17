@@ -6,8 +6,8 @@ use crate::{
 };
 
 use super::{
-    DecisionVariable, DecisionVariableError, DecisionVariableLabel, EvaluatedDecisionVariable,
-    SampledDecisionVariable, VariableID, VariableLabelStore,
+    DecisionVariable, DecisionVariableError, DecisionVariableLabel, Domain,
+    EvaluatedDecisionVariable, Kind, SampledDecisionVariable, VariableID, VariableLabelStore,
 };
 
 mod sealed {
@@ -527,16 +527,17 @@ fn decision_variable_to_v1(
     label: DecisionVariableLabel,
     substituted_value: Option<f64>,
 ) -> crate::v1::DecisionVariable {
-    let DecisionVariable { kind, bound } = decision_variable;
+    let (kind, bound, finite_domain) = decision_variable_to_wire_parts(decision_variable);
     crate::v1::DecisionVariable {
         id: id.into_inner(),
-        kind: kind.into(),
-        bound: Some(bound.into()),
+        kind,
+        bound,
         substituted_value,
         name: label.name,
         subscripts: label.subscripts,
         parameters: label.parameters.into_iter().collect(),
         description: label.description,
+        finite_domain,
     }
 }
 
@@ -545,17 +546,11 @@ fn evaluated_decision_variable_to_v1(
     evaluated: EvaluatedDecisionVariable,
     label: DecisionVariableLabel,
 ) -> crate::v1::DecisionVariable {
-    let EvaluatedDecisionVariable { kind, bound, value } = evaluated;
-    crate::v1::DecisionVariable {
-        id: id.into_inner(),
-        kind: kind.into(),
-        bound: Some(bound.into()),
-        substituted_value: Some(value),
-        name: label.name,
-        subscripts: label.subscripts,
-        parameters: label.parameters.into_iter().collect(),
-        description: label.description,
-    }
+    let EvaluatedDecisionVariable {
+        decision_variable,
+        value,
+    } = evaluated;
+    decision_variable_to_v1(id, decision_variable, label, Some(value))
 }
 
 fn sampled_decision_variable_to_v1(
@@ -564,27 +559,42 @@ fn sampled_decision_variable_to_v1(
     label: DecisionVariableLabel,
 ) -> crate::v1::SampledDecisionVariable {
     let SampledDecisionVariable {
-        kind,
-        bound,
+        decision_variable,
         samples,
     } = sampled;
     crate::v1::SampledDecisionVariable {
-        decision_variable: Some(decision_variable_to_v1(
-            id,
-            DecisionVariable { kind, bound },
-            label,
-            None,
-        )),
+        decision_variable: Some(decision_variable_to_v1(id, decision_variable, label, None)),
         samples: Some(samples.into()),
+    }
+}
+
+fn decision_variable_to_wire_parts(
+    decision_variable: DecisionVariable,
+) -> (
+    i32,
+    Option<crate::v1::Bound>,
+    Option<crate::v1::FiniteDomain>,
+) {
+    let DecisionVariable { kind, domain } = decision_variable;
+    match domain {
+        Domain::Bound(bound) => (kind.into(), Some(bound.into()), None),
+        Domain::FiniteDomain(domain) => (
+            kind.into(),
+            None,
+            Some(crate::v1::FiniteDomain {
+                values: domain.values,
+            }),
+        ),
     }
 }
 
 impl From<DecisionVariable> for crate::v2::DecisionVariable {
     fn from(value: DecisionVariable) -> Self {
-        let DecisionVariable { kind, bound } = value;
+        let (kind, bound, finite_domain) = decision_variable_to_wire_parts(value);
         Self {
-            kind: kind.into(),
-            bound: Some(bound.into()),
+            kind,
+            bound,
+            finite_domain,
         }
     }
 }
@@ -602,30 +612,71 @@ impl Parse for crate::v2::DecisionVariable {
             })
             .map_err(|e| ParseError::from(e).context(message, "kind"))?
             .parse_as(&(), message, "kind")?;
-        let bound = self
-            .bound
-            .ok_or(RawParseError::MissingField {
-                message,
-                field: "bound",
-            })?
-            .parse_as(&(), message, "bound")?;
-        DecisionVariable::new(kind, bound, ATol::default()).map_err(|source| {
-            RawParseError::InvalidDecisionVariable(DecisionVariableError::InvalidDefinition {
-                id: *id,
-                source: Box::new(source),
-            })
-            .context(message, "bound")
-        })
+        match kind {
+            Kind::FiniteDomain => {
+                if self.bound.is_some() {
+                    return Err(RawParseError::InvalidInstance(
+                        "KIND_FINITE_DOMAIN must not define bound".to_string(),
+                    )
+                    .context(message, "bound"));
+                }
+                let values = self
+                    .finite_domain
+                    .ok_or(RawParseError::MissingField {
+                        message,
+                        field: "finite_domain",
+                    })?
+                    .values;
+                DecisionVariable::new_finite_domain(values).map_err(|source| {
+                    RawParseError::InvalidDecisionVariable(
+                        DecisionVariableError::InvalidDefinition {
+                            id: *id,
+                            source: Box::new(source),
+                        },
+                    )
+                    .context(message, "finite_domain")
+                })
+            }
+            _ => {
+                if self.finite_domain.is_some() {
+                    return Err(RawParseError::InvalidInstance(format!(
+                        "finite_domain is only valid for KIND_FINITE_DOMAIN, but kind is {kind:?}"
+                    ))
+                    .context(message, "finite_domain"));
+                }
+                let bound = self
+                    .bound
+                    .ok_or(RawParseError::MissingField {
+                        message,
+                        field: "bound",
+                    })?
+                    .parse_as(&(), message, "bound")?;
+                DecisionVariable::new(kind, bound, ATol::default()).map_err(|source| {
+                    RawParseError::InvalidDecisionVariable(
+                        DecisionVariableError::InvalidDefinition {
+                            id: *id,
+                            source: Box::new(source),
+                        },
+                    )
+                    .context(message, "bound")
+                })
+            }
+        }
     }
 }
 
 impl From<EvaluatedDecisionVariable> for crate::v2::EvaluatedDecisionVariable {
     fn from(value: EvaluatedDecisionVariable) -> Self {
-        let EvaluatedDecisionVariable { kind, bound, value } = value;
-        Self {
-            kind: kind.into(),
-            bound: Some(bound.into()),
+        let EvaluatedDecisionVariable {
+            decision_variable,
             value,
+        } = value;
+        let (kind, bound, finite_domain) = decision_variable_to_wire_parts(decision_variable);
+        Self {
+            kind,
+            bound,
+            value,
+            finite_domain,
         }
     }
 }
@@ -638,6 +689,7 @@ impl Parse for crate::v2::EvaluatedDecisionVariable {
         let decision_variable = crate::v2::DecisionVariable {
             kind: self.kind,
             bound: self.bound,
+            finite_domain: self.finite_domain,
         }
         .parse(id)?;
         EvaluatedDecisionVariable::new(*id, decision_variable, self.value)
@@ -649,14 +701,15 @@ impl Parse for crate::v2::EvaluatedDecisionVariable {
 impl From<SampledDecisionVariable> for crate::v2::SampledDecisionVariable {
     fn from(value: SampledDecisionVariable) -> Self {
         let SampledDecisionVariable {
-            kind,
-            bound,
+            decision_variable,
             samples,
         } = value;
+        let (kind, bound, finite_domain) = decision_variable_to_wire_parts(decision_variable);
         Self {
-            kind: kind.into(),
-            bound: Some(bound.into()),
+            kind,
+            bound,
             samples: Some(samples.into()),
+            finite_domain,
         }
     }
 }
@@ -670,6 +723,7 @@ impl Parse for crate::v2::SampledDecisionVariable {
         let decision_variable = crate::v2::DecisionVariable {
             kind: self.kind,
             bound: self.bound,
+            finite_domain: self.finite_domain,
         }
         .parse_as(id, message, "decision_variable")?;
         let samples = self
@@ -825,6 +879,43 @@ mod tests {
 
         let sampled = SampledDecisionVariableTable::default();
         assert!(sampled.is_empty());
+    }
+
+    #[test]
+    fn finite_domain_round_trips_through_v1_and_v2_tables() {
+        let id = VariableID::from(7);
+        let variable = DecisionVariable::new_finite_domain(vec![1.0, 0.1, 0.5, 0.3]).unwrap();
+        let table = DecisionVariableTable::with_fixed_values(
+            BTreeMap::from([(id, variable.clone())]),
+            VariableLabelStore::default(),
+            BTreeMap::from([(id, 0.3)]),
+            ATol::default(),
+        )
+        .unwrap();
+
+        let v1_rows: Vec<crate::v1::DecisionVariable> = (&table).into();
+        assert!(v1_rows[0].bound.is_none());
+        assert_eq!(
+            v1_rows[0].finite_domain.as_ref().unwrap().values,
+            vec![0.1, 0.3, 0.5, 1.0]
+        );
+        let (v1_entries, _, v1_fixed_values) = v1_rows.parse(&()).unwrap();
+        assert_eq!(v1_entries[&id], variable);
+        assert_eq!(v1_fixed_values[&id], 0.3);
+
+        let v2_table: crate::v2::DecisionVariableTable = table.into();
+        assert!(v2_table.entries[&id.into_inner()].bound.is_none());
+        assert_eq!(
+            v2_table.entries[&id.into_inner()]
+                .finite_domain
+                .as_ref()
+                .unwrap()
+                .values,
+            vec![0.1, 0.3, 0.5, 1.0]
+        );
+        let parsed: DecisionVariableTable = v2_table.parse(&()).unwrap();
+        assert_eq!(parsed.entries()[&id], variable);
+        assert_eq!(parsed.fixed_value(id), Some(0.3));
     }
 
     #[test]

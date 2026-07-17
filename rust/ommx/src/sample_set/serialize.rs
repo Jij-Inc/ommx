@@ -30,6 +30,10 @@ impl From<SampleSet> for v2::SampleSet {
             !value.indicator_constraints.is_empty(),
             !value.one_hot_constraints.is_empty(),
             !value.sos1_constraints.is_empty(),
+            value
+                .decision_variables
+                .values()
+                .any(|variable| *variable.kind() == crate::Kind::FiniteDomain),
         );
 
         let SampleSet {

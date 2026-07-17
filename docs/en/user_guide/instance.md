@@ -69,16 +69,35 @@ instance.sense == Instance.MAXIMIZE
 
 ## Decision Variables
 
+Use a finite-domain variable to explicitly enumerate the values that a
+variable can take:
+
+```{code-cell} ipython3
+finite_instance = Instance.minimize()
+dose = finite_instance.new_finite_domain([0.1, 0.3, 0.5, 1.0], "dose")
+dose.values
+```
+
+The specified values are the set of values that the variable can take. This
+set must be non-empty and contain unique, finite numbers. Values are stored in
+ascending order. This is not a discretization that approximates a continuous
+interval: only the specified values are feasible. You can also create a
+detached variable with
+{meth}`DecisionVariable.finite_domain <ommx.DecisionVariable.finite_domain>`
+when assembling an instance from components with explicit IDs.
+
 Decision variables and constraints can be obtained in the form of [`pandas.DataFrame`](https://pandas.pydata.org/pandas-docs/stable/reference/frame.html).
 
 ```{code-cell} ipython3
 instance.decision_variables_df()
 ```
 
-First, `kind`, `lower`, and `upper` are essential information for the mathematical model.
+`kind` determines how the variable domain is represented.
 
-- `kind` specifies the type of decision variable, which can be Binary, Integer, Continuous, SemiInteger, or SemiContinuous.
-- `lower` and `upper` are the lower and upper bounds of the decision variable. For Binary variables, this range is $[0, 1]$.
+- `kind` specifies the type of decision variable: Binary, Integer, Continuous, SemiInteger, SemiContinuous, or FiniteDomain.
+- For interval-domain kinds, `lower` and `upper` define the lower and upper bounds. For Binary variables, this range is $[0, 1]$.
+- `values` contains the exact feasible values for finite-domain variables and is missing for interval-domain kinds. Values between `lower` and `upper` that are not listed remain infeasible.
+- For finite-domain variables, `lower` and `upper` are display values derived from the minimum and maximum of `values`; they are not an independent definition.
 
 Additionally, OMMX is designed to handle metadata that may be needed when integrating mathematical optimization into practical data analysis. While this metadata does not affect the mathematical model itself, it is useful for data analysis and visualization.
 

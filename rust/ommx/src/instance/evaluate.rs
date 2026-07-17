@@ -1,7 +1,7 @@
 use super::*;
 use crate::Result;
 use crate::{
-    constraint::RemovedReason, ATol, Bound, DecisionVariableError, Evaluate, Kind, Propagate,
+    constraint::RemovedReason, ATol, DecisionVariableError, Evaluate, Kind, Propagate,
     PropagateOutcome, VariableIDSet,
 };
 use std::collections::BTreeMap;
@@ -119,7 +119,7 @@ struct StatePopulationPlan<'a> {
     all: VariableIDSet,
     used: VariableIDSet,
     fixed: Vec<(VariableID, f64)>,
-    irrelevant: Vec<(VariableID, Kind, Bound)>,
+    irrelevant: Vec<(VariableID, &'a DecisionVariable)>,
     dependency: &'a AcyclicAssignments,
 }
 
@@ -303,14 +303,23 @@ impl StatePopulationPlan<'_> {
             }
         }
 
-        for (id, kind, bound) in &self.irrelevant {
+        for (id, variable) in &self.irrelevant {
             use std::collections::hash_map::Entry;
             match state.entries.entry(id.into_inner()) {
                 Entry::Occupied(_entry) => {}
                 Entry::Vacant(entry) => {
-                    let value = match kind {
-                        Kind::Binary | Kind::Integer | Kind::Continuous => bound.nearest_to_zero(),
+                    let value = match variable.kind() {
+                        Kind::Binary | Kind::Integer | Kind::Continuous => {
+                            variable.bound().nearest_to_zero()
+                        }
                         Kind::SemiInteger | Kind::SemiContinuous => 0.0,
+                        Kind::FiniteDomain => *variable
+                            .finite_domain()
+                            .unwrap()
+                            .values()
+                            .iter()
+                            .min_by(|lhs, rhs| lhs.abs().total_cmp(&rhs.abs()))
+                            .unwrap(),
                     };
                     entry.insert(value);
                 }
@@ -371,7 +380,7 @@ impl Instance {
             .decision_variables
             .iter()
             .filter(|(id, _)| !relevant.contains(id))
-            .map(|(id, dv)| (*id, dv.kind(), dv.bound()))
+            .map(|(id, dv)| (*id, dv))
             .collect();
 
         StatePopulationPlan {

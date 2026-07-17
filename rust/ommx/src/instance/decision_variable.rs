@@ -133,6 +133,26 @@ impl Instance {
             .unwrap()
     }
 
+    /// Create a decision variable whose feasible set is exactly `values`.
+    ///
+    /// The values are validated and stored in ascending order. They must be
+    /// non-empty, finite, and unique.
+    pub fn new_finite_domain(
+        &mut self,
+        values: Vec<f64>,
+    ) -> Result<VariableID, DecisionVariableError> {
+        let id = self.next_variable_id()?;
+        let variable = DecisionVariable::new_finite_domain(values)?;
+        self.decision_variables.insert(
+            id,
+            variable,
+            DecisionVariableLabel::default(),
+            None,
+            ATol::default(),
+        )?;
+        Ok(id)
+    }
+
     pub fn new_semi_integer(&mut self) -> VariableID {
         self.new_decision_variable(Kind::SemiInteger, Bound::default(), None, ATol::default())
             .unwrap()
@@ -231,5 +251,22 @@ mod tests {
         assert_eq!(var2, VariableID::from(1));
 
         assert_eq!(instance.next_variable_id().unwrap(), VariableID::from(2));
+    }
+
+    #[test]
+    fn new_finite_adds_exact_domain() {
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            Function::Zero,
+            BTreeMap::new(),
+            BTreeMap::new(),
+        )
+        .unwrap();
+
+        let id = instance.new_finite_domain(vec![1.0, 0.1, 0.5]).unwrap();
+        let variable = &instance.decision_variables()[&id];
+
+        assert_eq!(variable.kind(), Kind::FiniteDomain);
+        assert_eq!(variable.finite_domain().unwrap().values(), &[0.1, 0.5, 1.0]);
     }
 }

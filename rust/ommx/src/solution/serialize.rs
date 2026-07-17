@@ -30,6 +30,10 @@ impl From<Solution> for v2::Solution {
             !value.evaluated_indicator_constraints.is_empty(),
             !value.evaluated_one_hot_constraints.is_empty(),
             !value.evaluated_sos1_constraints.is_empty(),
+            value
+                .decision_variables
+                .values()
+                .any(|variable| *variable.kind() == crate::Kind::FiniteDomain),
         );
         let feasible = value.feasible();
         let feasible_relaxed = value.feasible_relaxed();

@@ -6,15 +6,13 @@ pub(crate) mod parse;
 mod table;
 
 pub use arbitrary::*;
-use getset::CopyGetters;
 pub use label_store::VariableLabelStore;
 pub use table::*;
 
-use crate::logical_memory::LogicalMemoryProfile;
+use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
 use crate::{ATol, Bound, Parse, RawParseError, SampleID, Sampled};
 use ::approx::AbsDiffEq;
 use derive_more::{Deref, From};
-use getset::Getters;
 use std::collections::BTreeSet;
 
 /// ID for decision variable and parameter.
@@ -79,6 +77,8 @@ pub enum Kind {
     Binary,
     SemiContinuous,
     SemiInteger,
+    /// A decision variable whose domain is an explicitly enumerated finite set.
+    FiniteDomain,
 }
 
 impl Kind {
@@ -89,6 +89,8 @@ impl Kind {
     ///   If there is no integer or binary in the bound, [`None`] is returned.
     /// - For [`Kind::SemiInteger`], the bound is also restricted to integer.
     ///   If there is no integer in the bound, on the other hand, returns `[0.0, 0.0]`.
+    /// - [`Kind::FiniteDomain`] cannot be defined by a bound alone and always returns
+    ///   [`None`]. Use [`DecisionVariable::new_finite_domain`] instead.
     ///
     /// As a result, the returned bound, except for `None` case, is guaranteed that there is at least one possible value.
     ///
@@ -153,6 +155,103 @@ impl Kind {
                     Some(Bound::new(0.0, 1.0).unwrap())
                 }
             }
+            Kind::FiniteDomain => None,
+        }
+    }
+}
+
+/// An explicitly enumerated finite numeric domain.
+///
+/// A finite domain is the exact feasible set of a decision variable, not an
+/// approximation obtained by discretizing a continuous interval. Values are
+/// canonicalized into ascending order at construction time.
+///
+/// # Invariants
+///
+/// - `values` is non-empty;
+/// - every value is finite;
+/// - values are strictly increasing and contain no duplicates;
+/// - `bound` is the derived convex hull `[min(values), max(values)]`.
+///
+/// These invariants are enforced by [`FiniteDomain::new`]. The fields are
+/// private so SDK callers cannot construct an invalid domain.
+#[derive(Debug, Clone, PartialEq, LogicalMemoryProfile)]
+pub struct FiniteDomain {
+    values: Vec<f64>,
+    bound: Bound,
+}
+
+impl FiniteDomain {
+    /// Construct a finite domain from explicitly enumerated feasible values.
+    pub fn new(mut values: Vec<f64>) -> Result<Self, DecisionVariableError> {
+        if values.is_empty() {
+            return Err(DecisionVariableError::EmptyFiniteDomain);
+        }
+        if let Some(&value) = values.iter().find(|value| !value.is_finite()) {
+            return Err(DecisionVariableError::NonFiniteDomainValue { value });
+        }
+
+        values.sort_by(f64::total_cmp);
+        if let Some(values) = values.windows(2).find(|pair| pair[0] == pair[1]) {
+            return Err(DecisionVariableError::DuplicateFiniteDomainValue { value: values[0] });
+        }
+
+        let bound = Bound::new(values[0], values[values.len() - 1]).unwrap();
+        Ok(Self { values, bound })
+    }
+
+    /// Canonically ordered feasible values.
+    pub fn values(&self) -> &[f64] {
+        &self.values
+    }
+
+    /// Convex hull derived from the first and last feasible values.
+    pub fn bound(&self) -> Bound {
+        self.bound
+    }
+
+    fn contains(&self, value: f64, atol: ATol) -> bool {
+        self.values
+            .iter()
+            .any(|possible| (*possible - value).abs() <= *atol)
+    }
+
+    fn clipped(&self, bound: Bound) -> Result<Self, DecisionVariableError> {
+        let values = self
+            .values
+            .iter()
+            .copied()
+            .filter(|value| *value >= bound.lower() && *value <= bound.upper())
+            .collect();
+        Self::new(values)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum Domain {
+    Bound(Bound),
+    FiniteDomain(FiniteDomain),
+}
+
+impl Domain {
+    fn bound(&self) -> Bound {
+        match self {
+            Self::Bound(bound) => *bound,
+            Self::FiniteDomain(domain) => domain.bound(),
+        }
+    }
+
+    fn finite(&self) -> Option<&FiniteDomain> {
+        match self {
+            Self::Bound(_) => None,
+            Self::FiniteDomain(domain) => Some(domain),
+        }
+    }
+
+    fn bound_ref(&self) -> &Bound {
+        match self {
+            Self::Bound(bound) => bound,
+            Self::FiniteDomain(domain) => &domain.bound,
         }
     }
 }
@@ -167,7 +266,7 @@ fn ensure_finite_value(id: VariableID, value: f64) -> Result<(), DecisionVariabl
 
 /// Row data for a decision variable table.
 ///
-/// Holds only `kind` and `bound` as its intrinsic definition. The
+/// Holds its variable `kind` and exact domain as its intrinsic definition. The
 /// [`VariableID`] is owned by the enclosing decision-variable table key.
 /// Auxiliary modeling label (`name`, `subscripts`, `parameters`,
 /// `description`) and fixed values live on the enclosing
@@ -176,17 +275,36 @@ fn ensure_finite_value(id: VariableID, value: f64) -> Result<(), DecisionVariabl
 ///
 /// Invariants
 /// ----------
-/// - `bound` is normalized for `kind` at construction or bound mutation time.
+/// - interval `bound` is normalized for `kind` at construction or bound mutation time.
 ///   - i.e. `bound` is invariant under `|bound| kind.consistent_bound(bound, atol).unwrap()` for the caller-provided `atol`.
 /// - A [`DecisionVariable`] row therefore never stores an unnormalized
 ///   integer, binary, or semi-integer bound when built through the safe API.
+/// - [`Kind::FiniteDomain`] always owns a validated [`FiniteDomain`]; its reported
+///   bound is derived from the domain and is not a second source of truth.
 ///
-#[derive(Debug, Clone, PartialEq, CopyGetters, LogicalMemoryProfile)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct DecisionVariable {
-    #[getset(get_copy = "pub")]
     kind: Kind,
-    #[getset(get_copy = "pub")]
-    bound: Bound,
+    domain: Domain,
+}
+
+// Profile only the active domain representation. Keep the established
+// `bound` path for interval-domain variables while exposing finite-domain
+// storage under its domain name.
+impl LogicalMemoryProfile for DecisionVariable {
+    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
+        self.kind
+            .visit_logical_memory(path.with("DecisionVariable.kind").as_mut(), visitor);
+        match &self.domain {
+            Domain::Bound(bound) => {
+                bound.visit_logical_memory(path.with("DecisionVariable.bound").as_mut(), visitor)
+            }
+            Domain::FiniteDomain(domain) => domain.visit_logical_memory(
+                path.with("DecisionVariable.finite_domain").as_mut(),
+                visitor,
+            ),
+        }
+    }
 }
 
 impl DecisionVariable {
@@ -194,10 +312,38 @@ impl DecisionVariable {
     pub fn new(kind: Kind, bound: Bound, atol: ATol) -> Result<Self, DecisionVariableError> {
         Ok(Self {
             kind,
-            bound: kind
-                .consistent_bound(bound, atol)
-                .ok_or(DecisionVariableError::BoundInconsistentToKind { kind, bound })?,
+            domain: Domain::Bound(
+                kind.consistent_bound(bound, atol)
+                    .ok_or(DecisionVariableError::BoundInconsistentToKind { kind, bound })?,
+            ),
         })
+    }
+
+    /// Create a finite-domain decision variable.
+    pub fn new_finite_domain(values: Vec<f64>) -> Result<Self, DecisionVariableError> {
+        Ok(Self {
+            kind: Kind::FiniteDomain,
+            domain: Domain::FiniteDomain(FiniteDomain::new(values)?),
+        })
+    }
+
+    /// Kind of this decision variable.
+    pub fn kind(&self) -> Kind {
+        self.kind
+    }
+
+    /// Convex-hull bound of this decision variable's exact domain.
+    pub fn bound(&self) -> Bound {
+        self.domain.bound()
+    }
+
+    fn bound_ref(&self) -> &Bound {
+        self.domain.bound_ref()
+    }
+
+    /// Return the exact finite domain, or [`None`] for interval-domain kinds.
+    pub fn finite_domain(&self) -> Option<&FiniteDomain> {
+        self.domain.finite()
     }
 
     pub fn binary() -> Self {
@@ -254,12 +400,12 @@ impl DecisionVariable {
         let err = || DecisionVariableError::SubstitutedValueInconsistent {
             id,
             kind: self.kind,
-            bound: self.bound,
+            bound: self.bound(),
             substituted_value: value,
             atol,
         };
         ensure_finite_value(id, value)?;
-        if !self.bound.contains(value, atol) {
+        if !self.bound().contains(value, atol) {
             return Err(err());
         }
         match self.kind {
@@ -269,20 +415,30 @@ impl DecisionVariable {
                     return Err(err());
                 }
             }
-            _ => {}
+            Kind::FiniteDomain => {
+                if !self.finite_domain().unwrap().contains(value, atol) {
+                    return Err(err());
+                }
+            }
+            Kind::Continuous | Kind::SemiContinuous => {}
         }
         Ok(())
     }
 
-    /// Set a bound on the decision variable by removing the previous bound.
+    /// Set a bound on the decision variable by replacing the previous bound.
+    ///
+    /// For a finite-domain variable, this retains only the enumerated values
+    /// contained in `bound` and derives the new bound from those values.
     pub fn set_bound(&mut self, bound: Bound, atol: ATol) -> Result<(), DecisionVariableError> {
-        let bound = self.kind.consistent_bound(bound, atol).ok_or(
-            DecisionVariableError::BoundInconsistentToKind {
-                kind: self.kind,
-                bound,
-            },
-        )?;
-        self.bound = bound;
+        self.domain = match &self.domain {
+            Domain::Bound(_) => Domain::Bound(self.kind.consistent_bound(bound, atol).ok_or(
+                DecisionVariableError::BoundInconsistentToKind {
+                    kind: self.kind,
+                    bound,
+                },
+            )?),
+            Domain::FiniteDomain(domain) => Domain::FiniteDomain(domain.clipped(bound)?),
+        };
         Ok(())
     }
 
@@ -306,16 +462,32 @@ impl DecisionVariable {
         bound: Bound,
         atol: ATol,
     ) -> Result<bool, DecisionVariableError> {
-        let intersected = self.bound.intersection(&bound).ok_or(
+        if let Domain::FiniteDomain(domain) = &self.domain {
+            let clipped = domain.clipped(bound).map_err(|_| {
+                DecisionVariableError::EmptyBoundIntersection {
+                    id,
+                    existing_bound: domain.bound(),
+                    new_bound: bound,
+                }
+            })?;
+            if &clipped == domain {
+                return Ok(false);
+            }
+            self.domain = Domain::FiniteDomain(clipped);
+            return Ok(true);
+        }
+
+        let existing_bound = self.bound();
+        let intersected = existing_bound.intersection(&bound).ok_or(
             DecisionVariableError::EmptyBoundIntersection {
                 id,
-                existing_bound: self.bound,
+                existing_bound,
                 new_bound: bound,
             },
         )?;
 
         // Check if the bound actually changes
-        if self.bound.abs_diff_eq(&intersected, atol) {
+        if existing_bound.abs_diff_eq(&intersected, atol) {
             Ok(false)
         } else {
             self.set_bound(intersected, atol)?;
@@ -329,6 +501,18 @@ impl DecisionVariable {
 pub enum DecisionVariableError {
     #[error("Bound is inconsistent to kind: kind={kind:?}, bound={bound}")]
     BoundInconsistentToKind { kind: Kind, bound: Bound },
+
+    #[error("Finite decision-variable domain must contain at least one value")]
+    EmptyFiniteDomain,
+
+    #[error("Finite decision-variable domain values must be finite: value={value}")]
+    NonFiniteDomainValue { value: f64 },
+
+    #[error("Finite decision-variable domain values must be unique: value={value}")]
+    DuplicateFiniteDomainValue { value: f64 },
+
+    #[error("Finite domain is only valid for Kind::FiniteDomain, but kind is {kind:?}")]
+    UnexpectedFiniteDomain { kind: Kind },
 
     #[error("Invalid decision variable ID={id}: {source}")]
     InvalidDefinition {
@@ -374,13 +558,9 @@ pub enum DecisionVariableError {
 pub type DecisionVariableLabel = crate::ModelingLabel;
 
 /// Single evaluation result with data integrity guarantees
-#[derive(Debug, Clone, PartialEq, Getters)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct EvaluatedDecisionVariable {
-    #[getset(get = "pub")]
-    kind: Kind,
-    #[getset(get = "pub")]
-    bound: Bound,
-    #[getset(get = "pub")]
+    decision_variable: DecisionVariable,
     value: f64,
 }
 
@@ -402,42 +582,43 @@ impl EvaluatedDecisionVariable {
         // These will be checked as part of Solution::feasible() validation.
 
         Ok(Self {
-            kind: decision_variable.kind,
-            bound: decision_variable.bound,
+            decision_variable,
             value,
         })
     }
 
+    /// Kind of the evaluated variable.
+    pub fn kind(&self) -> &Kind {
+        &self.decision_variable.kind
+    }
+
+    /// Convex-hull bound of the evaluated variable's exact domain.
+    pub fn bound(&self) -> &Bound {
+        self.decision_variable.bound_ref()
+    }
+
+    /// Exact finite domain, if this is a finite-domain variable.
+    pub fn finite_domain(&self) -> Option<&FiniteDomain> {
+        self.decision_variable.finite_domain()
+    }
+
+    /// Evaluated value.
+    pub fn value(&self) -> &f64 {
+        &self.value
+    }
+
     /// Check if the value satisfies kind and bound constraints
     pub fn is_valid(&self, atol: crate::ATol) -> bool {
-        if !self.value.is_finite() {
-            return false;
-        }
-
-        // Check bound
-        if !self.bound.contains(self.value, atol) {
-            return false;
-        }
-
-        // Check integrality for integer-like kinds
-        match self.kind {
-            Kind::Integer | Kind::Binary | Kind::SemiInteger => {
-                let rounded = self.value.round();
-                (rounded - self.value).abs() < atol
-            }
-            _ => true,
-        }
+        self.decision_variable
+            .check_value_consistency(VariableID::from(0), self.value, atol)
+            .is_ok()
     }
 }
 
 /// Multiple sample evaluation results with deduplication
-#[derive(Debug, Clone, Getters)]
+#[derive(Debug, Clone)]
 pub struct SampledDecisionVariable {
-    #[getset(get = "pub")]
-    kind: Kind,
-    #[getset(get = "pub")]
-    bound: Bound,
-    #[getset(get = "pub")]
+    decision_variable: DecisionVariable,
     samples: Sampled<f64>,
 }
 
@@ -460,10 +641,29 @@ impl SampledDecisionVariable {
         // Note: Kind and bound checking is intentionally omitted to allow infeasible solutions.
 
         Ok(Self {
-            kind: decision_variable.kind,
-            bound: decision_variable.bound,
+            decision_variable,
             samples,
         })
+    }
+
+    /// Kind of the sampled variable.
+    pub fn kind(&self) -> &Kind {
+        &self.decision_variable.kind
+    }
+
+    /// Convex-hull bound of the sampled variable's exact domain.
+    pub fn bound(&self) -> &Bound {
+        self.decision_variable.bound_ref()
+    }
+
+    /// Exact finite domain, if this is a finite-domain variable.
+    pub fn finite_domain(&self) -> Option<&FiniteDomain> {
+        self.decision_variable.finite_domain()
+    }
+
+    /// Sampled values.
+    pub fn samples(&self) -> &Sampled<f64> {
+        &self.samples
     }
 
     /// Get a specific evaluated decision variable by sample ID.
@@ -472,13 +672,7 @@ impl SampledDecisionVariable {
     pub fn get(&self, id: VariableID, sample_id: SampleID) -> Option<EvaluatedDecisionVariable> {
         let value = *self.samples.get(sample_id)?;
 
-        // Create a DecisionVariable to use with EvaluatedDecisionVariable::new
-        let dv = DecisionVariable {
-            kind: self.kind,
-            bound: self.bound,
-        };
-
-        Some(EvaluatedDecisionVariable::new(id, dv, value).unwrap())
+        Some(EvaluatedDecisionVariable::new(id, self.decision_variable.clone(), value).unwrap())
     }
 }
 
@@ -660,6 +854,61 @@ mod tests {
     }
 
     #[test]
+    fn finite_domain_is_canonical_and_exact() {
+        let id = VariableID::from(1);
+        let variable = DecisionVariable::new_finite_domain(vec![1.0, 0.1, 0.5, 0.3]).unwrap();
+
+        assert_eq!(variable.kind(), Kind::FiniteDomain);
+        assert_eq!(
+            variable.finite_domain().unwrap().values(),
+            &[0.1, 0.3, 0.5, 1.0]
+        );
+        assert_eq!(variable.bound(), Bound::new(0.1, 1.0).unwrap());
+        assert!(variable
+            .check_value_consistency(id, 0.3, ATol::default())
+            .is_ok());
+        assert!(variable
+            .check_value_consistency(id, 0.4, ATol::default())
+            .is_err());
+        assert!(variable
+            .check_value_consistency(id, 0.3 + *ATol::default(), ATol::default())
+            .is_ok());
+    }
+
+    #[test]
+    fn finite_domain_rejects_invalid_definitions() {
+        assert!(matches!(
+            DecisionVariable::new_finite_domain(vec![]),
+            Err(DecisionVariableError::EmptyFiniteDomain)
+        ));
+        assert!(matches!(
+            DecisionVariable::new_finite_domain(vec![0.0, f64::NAN]),
+            Err(DecisionVariableError::NonFiniteDomainValue { .. })
+        ));
+        assert!(matches!(
+            DecisionVariable::new_finite_domain(vec![0.0, 0.0]),
+            Err(DecisionVariableError::DuplicateFiniteDomainValue { .. })
+        ));
+    }
+
+    #[test]
+    fn clipping_finite_domain_filters_values() {
+        let id = VariableID::from(1);
+        let mut variable = DecisionVariable::new_finite_domain(vec![0.1, 0.3, 0.5, 1.0]).unwrap();
+
+        assert!(variable
+            .clip_bound(id, Bound::new(0.2, 0.6).unwrap(), ATol::default())
+            .unwrap());
+        assert_eq!(variable.finite_domain().unwrap().values(), &[0.3, 0.5]);
+        assert_eq!(variable.bound(), Bound::new(0.3, 0.5).unwrap());
+
+        assert!(matches!(
+            variable.clip_bound(id, Bound::new(0.31, 0.49).unwrap(), ATol::default()),
+            Err(DecisionVariableError::EmptyBoundIntersection { .. })
+        ));
+    }
+
+    #[test]
     fn test_decision_variable_rejects_non_finite_values() {
         let id = VariableID::from(1);
         let dv = DecisionVariable::continuous();
@@ -707,6 +956,7 @@ mod tests {
                 .into_iter()
                 .collect(),
             description: Some("A test variable".to_string()),
+            finite_domain: None,
         };
 
         let evaluated_dv: EvaluatedDecisionVariable = v1_dv.try_into().unwrap();
@@ -744,6 +994,7 @@ mod tests {
             subscripts: vec![],
             parameters: Default::default(),
             description: None,
+            finite_domain: None,
         };
 
         let result: Result<EvaluatedDecisionVariable, _> = v1_dv.try_into();

@@ -10,6 +10,15 @@ message Bound {
   double upper = 2;
 }
 
+// An explicitly enumerated, non-empty finite numeric domain.
+//
+// Values are the exact feasible values of the decision variable, not
+// discretization points approximating a continuous interval. Writers must emit
+// finite, unique values in ascending order.
+message FiniteDomain {
+  repeated double values = 1;
+}
+
 // Decison variable which mathematical programming solver will optimize.
 // It must have its kind, i.e. binary, integer, real or others and unique identifier of 64-bit integer.
 // It may have its name and subscripts which are used to identify in modeling tools.
@@ -29,6 +38,8 @@ message DecisionVariable {
     KIND_SEMI_INTEGER = 4;
     // Semi-continuous decision variable is a decision variable that can take only continuous values in the given range or zero.
     KIND_SEMI_CONTINUOUS = 5;
+    // Finite-domain decision variable whose exact feasible values are explicitly enumerated.
+    KIND_FINITE_DOMAIN = 6;
   }
 
   // Kind of the decision variable
@@ -52,4 +63,8 @@ message DecisionVariable {
 
   // The value substituted by partial evaluation of the instance. Not determined by the solver.
   optional double substituted_value = 8;
+
+  // Exact domain for KIND_FINITE_DOMAIN. Must be absent for every other kind.
+  // `bound` must be absent for KIND_FINITE_DOMAIN because it is derived from these values.
+  optional FiniteDomain finite_domain = 9;
 }

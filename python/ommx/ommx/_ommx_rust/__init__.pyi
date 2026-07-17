@@ -885,6 +885,11 @@ class AttachedDecisionVariable:
     @property
     def bound(self) -> Bound: ...
     @property
+    def values(self) -> typing.Optional[builtins.list[builtins.float]]:
+        r"""
+        Explicit feasible values for a finite-domain variable.
+        """
+    @property
     def substituted_value(self) -> typing.Optional[builtins.float]: ...
     @property
     def name(self) -> builtins.str: ...
@@ -1439,8 +1444,9 @@ class DecisionVariable:
     Decision variable in an optimization problem.
 
     This class represents a variable that will be optimized in a mathematical programming problem.
-    It supports various types (binary, integer, continuous, semi-integer, semi-continuous) and
-    can be used in arithmetic expressions to build objective functions and constraints.
+    It supports binary, integer, continuous, semi-integer, semi-continuous,
+    and finite-domain variables, and can be used in arithmetic expressions to
+    build objective functions and constraints.
 
     Note that this object overloads `==` for creating a constraint, not for equality comparison.
 
@@ -1466,12 +1472,20 @@ class DecisionVariable:
     CONTINUOUS: builtins.int = 3
     SEMI_INTEGER: builtins.int = 4
     SEMI_CONTINUOUS: builtins.int = 5
+    FINITE_DOMAIN: builtins.int = 6
     @property
     def id(self) -> builtins.int: ...
     @property
     def kind(self) -> builtins.int: ...
     @property
     def bound(self) -> Bound: ...
+    @property
+    def values(self) -> typing.Optional[builtins.list[builtins.float]]:
+        r"""
+        Explicit feasible values for a finite-domain variable.
+
+        Returns `None` for interval-domain variable kinds.
+        """
     @property
     def name(self) -> builtins.str: ...
     @property
@@ -1586,6 +1600,22 @@ class DecisionVariable:
         parameters: typing.Mapping[builtins.str, builtins.str] = {},
         description: typing.Optional[builtins.str] = None,
     ) -> DecisionVariable: ...
+    @staticmethod
+    def finite_domain(
+        id: builtins.int,
+        values: typing.Sequence[builtins.float],
+        name: typing.Optional[builtins.str] = None,
+        subscripts: typing.Sequence[builtins.int] = [],
+        parameters: typing.Mapping[builtins.str, builtins.str] = {},
+        description: typing.Optional[builtins.str] = None,
+    ) -> DecisionVariable:
+        r"""
+        Create a finite-domain decision variable.
+
+        `values` is the exact feasible set, not a discretization of a
+        continuous interval. Values must be non-empty, finite, and unique;
+        they are stored in ascending order.
+        """
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> DecisionVariable: ...
     def __deepcopy__(self, _memo: typing.Any) -> DecisionVariable: ...
@@ -1747,6 +1777,11 @@ class EvaluatedDecisionVariable:
     def upper_bound(self) -> builtins.float:
         r"""
         Get the upper bound
+        """
+    @property
+    def values(self) -> typing.Optional[builtins.list[builtins.float]]:
+        r"""
+        Explicit feasible values for a finite-domain variable.
         """
     @property
     def name(self) -> typing.Optional[builtins.str]:
@@ -3116,6 +3151,32 @@ class Instance:
         Raises {class}`ValueError` if the maximum decision-variable ID is
         `2**64 - 1` and no larger automatic ID can be assigned.
         """
+    def new_finite_domain(
+        self,
+        values: typing.Sequence[builtins.float],
+        name: typing.Optional[builtins.str] = None,
+        *,
+        subscripts: typing.Sequence[builtins.int] = [],
+        parameters: typing.Mapping[builtins.str, builtins.str] = {},
+        description: typing.Optional[builtins.str] = None,
+    ) -> AttachedDecisionVariable:
+        r"""
+        Create and add a finite-domain decision variable with an automatically assigned ID.
+
+        `values` is the exact feasible set, rather than a discretization of an
+        interval. Values must be non-empty, finite, and unique; OMMX stores them
+        in ascending order.
+
+        **Args:**
+        - `values`: Exact feasible values of the variable.
+        - `name`: Optional human-readable modeling name. Names need not be unique.
+        - `subscripts`: Optional integer indices from the source model.
+        - `parameters`: Optional string-valued indices from the source model.
+        - `description`: Optional human-readable description.
+
+        Raises {class}`ValueError` if `values` does not define a valid finite
+        domain or if no larger automatic ID can be assigned.
+        """
     def attached_decision_variable(
         self, variable_id: builtins.int
     ) -> AttachedDecisionVariable:
@@ -4277,7 +4338,8 @@ class Instance:
                     "integer": int,
                     "continuous": int,
                     "semi_integer": int,
-                    "semi_continuous": int
+                    "semi_continuous": int,
+                    "finite_domain": int
                 },
                 "by_usage": {
                     "used_in_objective": int,
@@ -6678,6 +6740,11 @@ class SampledDecisionVariable:
         Get the decision variable bound
         """
     @property
+    def values(self) -> typing.Optional[builtins.list[builtins.float]]:
+        r"""
+        Explicit feasible values for a finite-domain variable.
+        """
+    @property
     def name(self) -> typing.Optional[builtins.str]:
         r"""
         Get the decision variable name
@@ -7573,6 +7640,10 @@ class Kind(enum.Enum):
     SemiContinuous = ...
     r"""
     Semi-continuous decision variable (continuous in range or zero)
+    """
+    FiniteDomain = ...
+    r"""
+    Finite-domain decision variable (one of explicitly enumerated values)
     """
 
     @staticmethod

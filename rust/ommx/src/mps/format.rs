@@ -38,6 +38,16 @@ pub(crate) const VAR_PREFIX: &str = "OMMX_VAR_";
 /// This ensures that variables from removed constraints are preserved in
 /// the MPS output even though the constraint information is lost.
 pub fn format<W: Write>(instance: &Instance, out: &mut W) -> crate::Result<()> {
+    if let Some((id, _)) = instance
+        .used_decision_variables()
+        .into_iter()
+        .find(|(_, variable)| variable.kind() == DecisionVariableKind::FiniteDomain)
+    {
+        crate::bail!(
+            { ?id },
+            "MPS format does not support finite-domain decision variable {id:?}",
+        );
+    }
     write_beginning(instance, out)?;
     write_rows(instance, out)?;
     write_columns(instance, out)?;

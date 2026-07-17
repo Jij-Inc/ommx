@@ -25,6 +25,8 @@ enum Feature {
   FEATURE_CONSTRAINT_ONE_HOT = 2;
   // The payload contains first-class SOS1 constraints.
   FEATURE_CONSTRAINT_SOS1 = 3;
+  // The payload contains a decision variable with an explicitly enumerated finite domain.
+  FEATURE_DECISION_VARIABLE_FINITE_DOMAIN = 4;
 }
 
 // Human-authored modeling notation for one table or collection row.

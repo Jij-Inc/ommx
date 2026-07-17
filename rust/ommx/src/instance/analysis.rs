@@ -1,6 +1,6 @@
 use super::Instance;
 use crate::{
-    Bounds, ConstraintID, DecisionVariable, Evaluate, IndicatorConstraintID, Kind,
+    Bounds, ConstraintID, DecisionVariable, Evaluate, FiniteDomain, IndicatorConstraintID, Kind,
     OneHotConstraintID, Sos1ConstraintID, VariableID, VariableIDSet,
 };
 use std::collections::{BTreeMap, BTreeSet};
@@ -262,6 +262,21 @@ impl<'a> DecisionVariableUsage<'a> {
 
     pub fn used_semi_continuous(&self) -> Bounds {
         self.used_by_kind(Kind::SemiContinuous)
+    }
+
+    /// Used variables with explicitly enumerated finite domains.
+    pub fn used_finite_domain(&self) -> BTreeMap<VariableID, &FiniteDomain> {
+        self.by_used_variable
+            .keys()
+            .filter_map(|id| {
+                let variable = self
+                    .instance
+                    .decision_variables()
+                    .get(id)
+                    .expect("used variable ID must be defined in decision_variables");
+                variable.finite_domain().map(|domain| (*id, domain))
+            })
+            .collect()
     }
 
     fn used_by_kind(&self, kind: Kind) -> Bounds {
@@ -646,7 +661,7 @@ mod tests {
     }
 
     proptest! {
-        // Used binary, integer, continuous, semi_integer, and semi_continuous sets
+        // Used binary, integer, continuous, semi_integer, semi_continuous, and finite sets
         // are disjoint and their union is equal to all used variables.
         #[test]
         fn test_used_kind_partition(instance in Instance::arbitrary()) {
@@ -656,6 +671,7 @@ mod tests {
                 used.len(),
                 usage.used_binary().len() + usage.used_integer().len() + usage.used_continuous().len()
                 + usage.used_semi_integer().len() + usage.used_semi_continuous().len()
+                + usage.used_finite_domain().len()
             );
             let mut by_kind_all: VariableIDSet = usage.used_binary().keys().cloned().collect();
 
@@ -663,6 +679,7 @@ mod tests {
             by_kind_all.extend(usage.used_continuous().keys());
             by_kind_all.extend(usage.used_semi_integer().keys());
             by_kind_all.extend(usage.used_semi_continuous().keys());
+            by_kind_all.extend(usage.used_finite_domain().keys());
             prop_assert_eq!(&by_kind_all, &used);
         }
 
