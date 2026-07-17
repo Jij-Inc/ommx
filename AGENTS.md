@@ -119,6 +119,10 @@ Run `task -l` to see all available commands.
 - At the start of every review, use `.agents/skills/domain-responsibility-review/SKILL.md`.
 - First restate the global OMMX domain semantics, then identify each domain invariant, confirm where it is explicitly represented, and verify that no operation can break it.
 
+### Rust SDK Error Handling
+- When designing, implementing, or reviewing fallible Rust SDK APIs, public error or signal types, anyhow error chains, or Rust-to-Python exception conversion, use `.agents/skills/rust-error-handling/SKILL.md` after the domain responsibility analysis.
+- Keep `ommx::Result` as the default surface, add only domain-owned signals with a concrete caller recovery path, and keep Python-owned failures outside the shared Rust SDK mapper.
+
 ### Property-Test Generator Review
 - When a diff touches an `Arbitrary` implementation, a `*Parameters` strategy type, or what a default strategy generates, use `.agents/skills/proptest-arbitrary-review/SKILL.md`.
 - Enumerate every call site whose quantification domain changes, distinguish sampled dimensions from constant injected structure, and verify by running the affected proptest suites.
