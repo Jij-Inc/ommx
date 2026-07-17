@@ -242,6 +242,10 @@ define_ommx_error_mappings!(
     ommx::AtolError => value_error,
     ommx::BoundError => value_error,
     ommx::CoefficientError => value_error,
+    ommx::InconsistentDependentValue => value_error,
+    ommx::MissingStateEntries => value_error,
+    ommx::UnknownStateEntries => value_error,
+    ommx::UnverifiableDependentAssertion => value_error,
     ommx::qplib::QplibParseError => value_error,
 );
 

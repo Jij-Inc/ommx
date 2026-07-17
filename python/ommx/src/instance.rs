@@ -1207,7 +1207,7 @@ impl Instance {
     /// ```
     /// Traceback (most recent call last):
     ///     ...
-    /// ValueError: The state does not contain some required IDs: {VariableID(2)}
+    /// ValueError: state is missing required variable IDs: {VariableID(2)}
     #[pyo3(signature = (state, *, atol=None))]
     pub fn evaluate(
         &self,
@@ -1220,10 +1220,7 @@ impl Instance {
             Some(value) => ommx::ATol::new(value)?,
             None => ommx::ATol::default(),
         };
-        let solution = self
-            .inner
-            .evaluate(&state.0, atol)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        let solution = self.inner.evaluate(&state.0, atol)?;
         Ok(Solution { inner: solution })
     }
 
@@ -1244,10 +1241,7 @@ impl Instance {
             Some(value) => ommx::ATol::new(value)?,
             None => ommx::ATol::default(),
         };
-        let state = self
-            .inner
-            .populate_state(state.0, atol)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        let state = self.inner.populate_state(state.0, atol)?;
         Ok(State(state))
     }
 
@@ -1307,9 +1301,7 @@ impl Instance {
             None => ommx::ATol::default(),
         };
         let mut new_inner = self.inner.clone();
-        new_inner
-            .partial_evaluate(&state.0, atol)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        new_inner.partial_evaluate(&state.0, atol)?;
         Ok(Self { inner: new_inner })
     }
 

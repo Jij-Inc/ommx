@@ -109,10 +109,7 @@ impl NamedFunction {
             Some(value) => ommx::ATol::new(value)?,
             None => ommx::ATol::default(),
         };
-        let evaluated = self
-            .1
-            .evaluate(&state.0, atol)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        let evaluated = self.1.evaluate(&state.0, atol)?;
         // Per-element evaluate doesn't see the host's label store, so the
         // label snapshot from the source `NamedFunction` carries over.
         Ok(EvaluatedNamedFunction(self.0, evaluated, self.2.clone()))
@@ -138,9 +135,7 @@ impl NamedFunction {
             Some(value) => ommx::ATol::new(value)?,
             None => ommx::ATol::default(),
         };
-        self.1
-            .partial_evaluate(&state.0, atol)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        self.1.partial_evaluate(&state.0, atol)?;
         Ok(self.clone())
     }
 

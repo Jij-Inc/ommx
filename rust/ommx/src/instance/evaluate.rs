@@ -1,12 +1,24 @@
 use super::*;
 use crate::Result;
 use crate::{
-    constraint::RemovedReason, ATol, Bound, DecisionVariableError, Evaluate, Kind, Propagate,
-    PropagateOutcome, VariableIDSet,
+    constraint::RemovedReason, ATol, Bound, DecisionVariableError, Evaluate,
+    InconsistentDependentValue, Kind, MissingStateEntries, Propagate, PropagateOutcome,
+    UnknownStateEntries, UnverifiableDependentAssertion, VariableIDSet,
 };
 use std::collections::BTreeMap;
 
 fn ensure_state_value_is_finite(var_id: u64, value: f64) -> Result<()> {
+    if !value.is_finite() {
+        return Err(DecisionVariableError::NonFiniteValue {
+            id: var_id.into(),
+            value,
+        }
+        .into());
+    }
+    Ok(())
+}
+
+fn ensure_internal_state_value_is_finite(var_id: u64, value: f64) -> Result<()> {
     if !value.is_finite() {
         crate::bail!(
             { var_id, value },
@@ -14,6 +26,17 @@ fn ensure_state_value_is_finite(var_id: u64, value: f64) -> Result<()> {
         );
     }
     Ok(())
+}
+
+fn invalid_propagated_value(
+    id: VariableID,
+    value: f64,
+    error: impl std::fmt::Display,
+) -> crate::Error {
+    crate::error!(
+        { id = ?id, value, cause = %error },
+        "special-constraint propagation produced an invalid value for decision variable {id:?}: {error}",
+    )
 }
 
 fn ensure_instance_value_is_finite(var_id: VariableID, value: f64) -> Result<()> {
@@ -97,9 +120,9 @@ fn merge_state(
     changed: &mut bool,
 ) -> Result<()> {
     for (var_id, value) in additional.entries {
-        ensure_state_value_is_finite(var_id, value)?;
+        ensure_internal_state_value_is_finite(var_id, value)?;
         if let Some(&existing) = expanded.entries.get(&var_id) {
-            ensure_state_value_is_finite(var_id, existing)?;
+            ensure_internal_state_value_is_finite(var_id, existing)?;
             if !values_are_consistent(existing, value, atol) {
                 return Err(crate::error!(
                     "Conflicting variable fixings for ID={var_id}: \
@@ -220,15 +243,32 @@ impl PartialEvaluatePlan {
         state: &v1::State,
         atol: ATol,
     ) -> Result<BTreeMap<VariableID, f64>> {
-        let mut fixed_values = BTreeMap::new();
+        Self::validate_state(instance, state, atol)?;
+        Ok(state
+            .entries
+            .iter()
+            .map(|(&id, &value)| (VariableID::from(id), value))
+            .collect())
+    }
+
+    fn validate_state(instance: &Instance, state: &v1::State, atol: ATol) -> Result<()> {
+        let unknown_ids: VariableIDSet = state
+            .entries
+            .keys()
+            .map(|&id| VariableID::from(id))
+            .filter(|id| instance.decision_variables.get(id).is_none())
+            .collect();
+        if !unknown_ids.is_empty() {
+            return Err(UnknownStateEntries { ids: unknown_ids }.into());
+        }
+
         for (&id, &value) in &state.entries {
             ensure_state_value_is_finite(id, value)?;
             let var_id = VariableID::from(id);
-            let Some(dv) = instance.decision_variables.get(&var_id) else {
-                return Err(crate::error!(
-                    "Unknown decision variable (ID={id}) in state."
-                ));
-            };
+            let dv = instance
+                .decision_variables
+                .get(&var_id)
+                .expect("state variable IDs were validated above");
             dv.check_value_consistency(var_id, value, atol)?;
             if let Some(previous_value) = instance.decision_variables.fixed_value(var_id) {
                 if !values_are_consistent(previous_value, value, atol) {
@@ -241,9 +281,8 @@ impl PartialEvaluatePlan {
                     .into());
                 }
             }
-            fixed_values.insert(var_id, value);
         }
-        Ok(fixed_values)
+        Ok(())
     }
 
     fn evaluation_state(
@@ -264,18 +303,12 @@ impl StatePopulationPlan<'_> {
 
         let unknown_ids: VariableIDSet = state_ids.difference(&self.all).cloned().collect();
         if !unknown_ids.is_empty() {
-            crate::bail!(
-                { ?unknown_ids },
-                "state contains unknown variable IDs: {unknown_ids:?}",
-            );
+            return Err(UnknownStateEntries { ids: unknown_ids }.into());
         }
 
         let missing_ids: VariableIDSet = self.used.difference(&state_ids).cloned().collect();
         if !missing_ids.is_empty() {
-            crate::bail!(
-                { ?missing_ids },
-                "state is missing required variable IDs: {missing_ids:?}",
-            );
+            return Err(MissingStateEntries { ids: missing_ids }.into());
         }
 
         for (&id, &value) in &state.entries {
@@ -290,11 +323,13 @@ impl StatePopulationPlan<'_> {
                 Entry::Occupied(entry) => {
                     let state_value = *entry.get();
                     if !values_are_consistent(state_value, *value, atol) {
-                        let instance_value = *value;
-                        crate::bail!(
-                            { id = ?id, state_value, instance_value },
-                            "state value for variable {id:?} is inconsistent with instance (state={state_value}, instance={instance_value})",
-                        );
+                        return Err(DecisionVariableError::SubstitutedValueOverwrite {
+                            id: *id,
+                            previous_value: *value,
+                            new_value: state_value,
+                            atol,
+                        }
+                        .into());
                     }
                 }
                 Entry::Vacant(entry) => {
@@ -332,10 +367,12 @@ impl StatePopulationPlan<'_> {
                 Entry::Occupied(entry) => {
                     let state_value = *entry.get();
                     if !values_are_consistent(state_value, value, atol) {
-                        crate::bail!(
-                            { id = ?id, state_value, instance_value = value },
-                            "state value for variable {id:?} is inconsistent with instance (state={state_value}, instance={value})",
-                        );
+                        return Err(InconsistentDependentValue {
+                            id,
+                            state_value,
+                            dependency_value: value,
+                        }
+                        .into());
                     }
                 }
                 Entry::Vacant(entry) => {
@@ -440,6 +477,11 @@ impl Instance {
     }
 
     fn partial_evaluate_fallback_in_place(&mut self, state: &v1::State, atol: ATol) -> Result<()> {
+        // The input state belongs to Instance validation. Validate it before
+        // special-constraint propagation so propagation errors only describe
+        // failures in the derived state or the constraints themselves.
+        PartialEvaluatePlan::validate_state(self, state, atol)?;
+
         // Phase 1: Propagate through special constraints (unit propagation).
         let expanded_state = self.propagate_special_constraints(state, atol)?;
 
@@ -451,15 +493,17 @@ impl Instance {
             let var_id = VariableID::from(*id);
             let Some(dv) = self.decision_variables.get(&var_id) else {
                 return Err(crate::error!(
-                    "Unknown decision variable (ID={id}) in state."
+                    "special-constraint propagation produced an unknown decision variable (ID={id})"
                 ));
             };
-            dv.check_value_consistency(var_id, *value, atol)?;
+            dv.check_value_consistency(var_id, *value, atol)
+                .map_err(|error| invalid_propagated_value(var_id, *value, error))?;
             if self.decision_variable_dependency.get(&var_id).is_some() {
                 dependent_assertions.insert(var_id, *value);
             } else {
                 self.decision_variables
-                    .ensure_fixed_value(var_id, *value, atol)?;
+                    .ensure_fixed_value(var_id, *value, atol)
+                    .map_err(|error| invalid_propagated_value(var_id, *value, error))?;
             }
         }
 
@@ -487,8 +531,9 @@ impl Instance {
         for (id, function) in self.decision_variable_dependency.evaluation_order_iter() {
             let mut function = function.clone();
             function.partial_evaluate(&evaluation_state, atol)?;
+            let required_ids = function.required_ids();
 
-            if function.required_ids().is_empty() {
+            if required_ids.is_empty() {
                 let value = function.evaluate(&v1::State::default(), atol)?;
                 if !value.is_finite() {
                     crate::bail!(
@@ -498,10 +543,12 @@ impl Instance {
                 }
                 if let Some(asserted_value) = assertions.remove(&id) {
                     if !values_are_consistent(asserted_value, value, atol) {
-                        crate::bail!(
-                            { id = ?id, asserted_value, instance_value = value },
-                            "state value for dependent variable {id:?} is inconsistent with dependency (state={asserted_value}, dependency={value})",
-                        );
+                        return Err(InconsistentDependentValue {
+                            id,
+                            state_value: asserted_value,
+                            dependency_value: value,
+                        }
+                        .into());
                     }
                 }
                 let dv = self.decision_variables.get(&id).ok_or_else(|| {
@@ -514,12 +561,8 @@ impl Instance {
                     .ensure_fixed_value(id, value, atol)?;
                 evaluation_state.entries.insert(id.into_inner(), value);
             } else {
-                if let Some(asserted_value) = assertions.remove(&id) {
-                    crate::bail!(
-                        { id = ?id, asserted_value },
-                        "Dependent variable (ID={}) cannot be asserted by partial_evaluate before its dependency is fully evaluated",
-                        id.into_inner(),
-                    );
+                if assertions.remove(&id).is_some() {
+                    return Err(UnverifiableDependentAssertion { id, required_ids }.into());
                 }
                 remaining_assignments.push((id, function));
             }
@@ -816,6 +859,50 @@ mod tests {
         }
     }
 
+    fn state_validation_instance() -> Instance {
+        Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from((linear!(1) + linear!(2)).unwrap()))
+            .decision_variables(BTreeMap::from([
+                (VariableID::from(1), crate::DecisionVariable::continuous()),
+                (VariableID::from(2), crate::DecisionVariable::continuous()),
+            ]))
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap()
+    }
+
+    #[test]
+    fn test_populate_state_preserves_individual_state_shape_signals() {
+        let instance = state_validation_instance();
+
+        let missing = instance
+            .populate_state(v1::State::default(), ATol::default())
+            .unwrap_err();
+        assert_eq!(
+            missing
+                .downcast_ref::<MissingStateEntries>()
+                .map(|error| &error.ids),
+            Some(&VariableIDSet::from([
+                VariableID::from(1),
+                VariableID::from(2),
+            ]))
+        );
+
+        let unknown = instance
+            .populate_state(
+                v1::State::from(HashMap::from([(1, 0.0), (99, 0.0)])),
+                ATol::default(),
+            )
+            .unwrap_err();
+        assert_eq!(
+            unknown
+                .downcast_ref::<UnknownStateEntries>()
+                .map(|error| &error.ids),
+            Some(&VariableIDSet::from([VariableID::from(99)]))
+        );
+    }
+
     #[test]
     fn test_populate_state_rejects_non_finite_fixed_value_from_state() {
         let decision_variables = BTreeMap::from([
@@ -833,7 +920,30 @@ mod tests {
         let state = v1::State::from(HashMap::from([(1, 1.0), (2, f64::NAN)]));
 
         let err = instance.populate_state(state, ATol::default()).unwrap_err();
+        assert!(matches!(
+            err.downcast_ref::<DecisionVariableError>(),
+            Some(DecisionVariableError::NonFiniteValue { id, value })
+                if *id == VariableID::from(2) && value.is_nan()
+        ));
         assert!(err.to_string().contains("must be finite"));
+
+        let error = instance
+            .populate_state(
+                v1::State::from(HashMap::from([(1, 1.0), (2, 4.0)])),
+                ATol::default(),
+            )
+            .unwrap_err();
+        assert!(matches!(
+            error.downcast_ref::<DecisionVariableError>(),
+            Some(DecisionVariableError::SubstitutedValueOverwrite {
+                id,
+                previous_value,
+                new_value,
+                ..
+            }) if *id == VariableID::from(2)
+                && *previous_value == 3.0
+                && *new_value == 4.0
+        ));
     }
 
     #[test]
@@ -968,10 +1078,17 @@ mod tests {
             .partial_evaluate(&state, ATol::default())
             .unwrap_err();
 
-        assert!(
-            err.to_string().contains("cannot be overwritten"),
-            "unexpected error: {err}"
-        );
+        assert!(matches!(
+            err.downcast_ref::<DecisionVariableError>(),
+            Some(DecisionVariableError::SubstitutedValueOverwrite {
+                id,
+                previous_value,
+                new_value,
+                ..
+            }) if *id == VariableID::from(2)
+                && *previous_value == 0.0
+                && *new_value == 2.0
+        ));
         assert_eq!(instance.fixed_decision_variable_values(), &fixed_before);
         assert_eq!(instance.removed_constraints(), &removed_before);
     }
@@ -1374,6 +1491,16 @@ mod tests {
             .partial_evaluate(&state, ATol::default())
             .unwrap_err();
 
+        assert!(matches!(
+            err.downcast_ref::<InconsistentDependentValue>(),
+            Some(InconsistentDependentValue {
+                id,
+                state_value,
+                dependency_value,
+            }) if *id == VariableID::from(10)
+                && *state_value == 5.0
+                && *dependency_value == 4.0
+        ));
         assert!(
             err.to_string()
                 .contains("state value for dependent variable VariableID(10) is inconsistent"),
@@ -1387,6 +1514,25 @@ mod tests {
     }
 
     #[test]
+    fn test_populate_state_preserves_inconsistent_dependent_value_payload() {
+        let instance = dependent_instance_y_eq_2x();
+        let state = v1::State::from(HashMap::from([(1, 2.0), (10, 5.0)]));
+
+        let err = instance.populate_state(state, ATol::default()).unwrap_err();
+
+        assert!(matches!(
+            err.downcast_ref::<InconsistentDependentValue>(),
+            Some(InconsistentDependentValue {
+                id,
+                state_value,
+                dependency_value,
+            }) if *id == VariableID::from(10)
+                && *state_value == 5.0
+                && *dependency_value == 4.0
+        ));
+    }
+
+    #[test]
     fn test_partial_evaluate_rejects_unverifiable_dependent_assertion_atomically() {
         let mut instance = dependent_instance_y_eq_2x();
 
@@ -1395,6 +1541,14 @@ mod tests {
             .partial_evaluate(&state, ATol::default())
             .unwrap_err();
 
+        assert_eq!(
+            err.downcast_ref::<UnverifiableDependentAssertion>()
+                .map(|error| (error.id, &error.required_ids)),
+            Some((
+                VariableID::from(10),
+                &VariableIDSet::from([VariableID::from(1)]),
+            ))
+        );
         assert!(
             err.to_string()
                 .contains("Dependent variable (ID=10) cannot be asserted"),
@@ -1485,6 +1639,11 @@ mod tests {
         let state = v1::State::from(HashMap::from([(1, f64::MAX)]));
 
         let err = instance.populate_state(state, ATol::default()).unwrap_err();
+        assert!(!err.is::<MissingStateEntries>());
+        assert!(!err.is::<UnknownStateEntries>());
+        assert!(!err.is::<InconsistentDependentValue>());
+        assert!(!err.is::<UnverifiableDependentAssertion>());
+        assert!(!err.is::<DecisionVariableError>());
         assert!(err.to_string().contains("evaluated to non-finite value"));
     }
 
@@ -1595,6 +1754,177 @@ mod tests {
     }
 
     // === Unit propagation integration tests ===
+
+    #[test]
+    fn test_partial_evaluate_special_constraints_validate_state_before_propagation() {
+        use crate::{DecisionVariable, OneHotConstraint, OneHotConstraintID};
+
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            Function::Zero,
+            BTreeMap::from([
+                (VariableID::from(1), DecisionVariable::binary()),
+                (VariableID::from(2), DecisionVariable::binary()),
+            ]),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        instance
+            .one_hot_constraint_collection
+            .insert_active_with_context(
+                OneHotConstraintID::from(1),
+                OneHotConstraint::new(
+                    [VariableID::from(1), VariableID::from(2)]
+                        .into_iter()
+                        .collect(),
+                )
+                .unwrap(),
+                crate::ConstraintContext::default(),
+            )
+            .unwrap();
+
+        let unknown = instance
+            .partial_evaluate(
+                &v1::State::from(HashMap::from([(99, 0.0), (100, 0.0)])),
+                ATol::default(),
+            )
+            .unwrap_err();
+        assert_eq!(
+            unknown
+                .downcast_ref::<UnknownStateEntries>()
+                .map(|error| &error.ids),
+            Some(&VariableIDSet::from([
+                VariableID::from(99),
+                VariableID::from(100),
+            ]))
+        );
+
+        let non_finite = instance
+            .partial_evaluate(
+                &v1::State::from(HashMap::from([(1, f64::NAN)])),
+                ATol::default(),
+            )
+            .unwrap_err();
+        assert!(matches!(
+            non_finite.downcast_ref::<DecisionVariableError>(),
+            Some(DecisionVariableError::NonFiniteValue { id, value })
+                if *id == VariableID::from(1) && value.is_nan()
+        ));
+
+        let inconsistent = instance
+            .partial_evaluate(&v1::State::from(HashMap::from([(1, 0.5)])), ATol::default())
+            .unwrap_err();
+        assert!(matches!(
+            inconsistent.downcast_ref::<DecisionVariableError>(),
+            Some(DecisionVariableError::SubstitutedValueInconsistent { id, .. })
+                if *id == VariableID::from(1)
+        ));
+
+        assert_eq!(instance.one_hot_constraint_collection.active().len(), 1);
+        assert!(instance.fixed_decision_variable_values().is_empty());
+    }
+
+    #[test]
+    fn test_partial_evaluate_derived_value_failure_is_unclassified_and_atomic() {
+        use crate::{DecisionVariable, Sos1Constraint, Sos1ConstraintID};
+
+        let bounded = DecisionVariable::new(
+            Kind::Continuous,
+            Bound::new(1.0, 2.0).unwrap(),
+            ATol::default(),
+        )
+        .unwrap();
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            Function::Zero,
+            BTreeMap::from([
+                (VariableID::from(1), bounded),
+                (VariableID::from(2), DecisionVariable::continuous()),
+            ]),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        instance
+            .sos1_constraint_collection
+            .insert_active_with_context(
+                Sos1ConstraintID::from(1),
+                Sos1Constraint::new(
+                    [VariableID::from(1), VariableID::from(2)]
+                        .into_iter()
+                        .collect(),
+                )
+                .unwrap(),
+                crate::ConstraintContext::default(),
+            )
+            .unwrap();
+        let before = instance.clone();
+
+        let error = instance
+            .partial_evaluate(&v1::State::from(HashMap::from([(2, 1.0)])), ATol::default())
+            .unwrap_err();
+
+        assert!(error.downcast_ref::<DecisionVariableError>().is_none());
+        assert!(error
+            .to_string()
+            .contains("special-constraint propagation produced an invalid value"));
+        assert_eq!(instance, before);
+    }
+
+    #[test]
+    fn test_partial_evaluate_rolls_back_changes_before_later_propagation_failure() {
+        use crate::{
+            DecisionVariable, OneHotConstraint, OneHotConstraintID, Sos1Constraint,
+            Sos1ConstraintID,
+        };
+
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            Function::Zero,
+            BTreeMap::from([
+                (VariableID::from(1), DecisionVariable::binary()),
+                (VariableID::from(2), DecisionVariable::binary()),
+                (VariableID::from(3), DecisionVariable::continuous()),
+            ]),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        instance
+            .one_hot_constraint_collection
+            .insert_active_with_context(
+                OneHotConstraintID::from(1),
+                OneHotConstraint::new(
+                    [VariableID::from(1), VariableID::from(2)]
+                        .into_iter()
+                        .collect(),
+                )
+                .unwrap(),
+                crate::ConstraintContext::default(),
+            )
+            .unwrap();
+        instance
+            .sos1_constraint_collection
+            .insert_active_with_context(
+                Sos1ConstraintID::from(1),
+                Sos1Constraint::new(
+                    [VariableID::from(2), VariableID::from(3)]
+                        .into_iter()
+                        .collect(),
+                )
+                .unwrap(),
+                crate::ConstraintContext::default(),
+            )
+            .unwrap();
+        let before = instance.clone();
+
+        instance
+            .partial_evaluate(
+                &v1::State::from(HashMap::from([(1, 0.0), (3, 1.0)])),
+                ATol::default(),
+            )
+            .unwrap_err();
+
+        assert_eq!(instance, before);
+    }
 
     #[test]
     fn test_partial_evaluate_one_hot_propagation() {

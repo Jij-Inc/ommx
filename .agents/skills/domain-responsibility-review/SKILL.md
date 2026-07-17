@@ -9,6 +9,12 @@ Use this skill at the start of every OMMX review. The goal is to review code sha
 
 Treat this as a review pre-pass, not as the required final response order. When writing a code review, still lead with actionable findings; use the domain model to decide which findings matter and how to explain them.
 
+When a change adds or modifies a fallible public API, public signal type,
+`ommx::Error` chain, or error conversion, use
+`.agents/skills/rust-error-handling/SKILL.md` after identifying the domain
+owner here. Let that skill decide whether the failure needs a signal and how it
+crosses the PyO3 boundary.
+
 ## Mandatory Design Order
 
 For any change that affects mutation authority, table/collection APIs, access
