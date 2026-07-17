@@ -1,11 +1,10 @@
+from types import SimpleNamespace
 from typing import cast
 
 import openjij as oj
-from ommx import Instance, DecisionVariable, Sos1Constraint
-from ommx_openjij_adapter import OMMXOpenJijSAAdapter
-from ommx_openjij_adapter._decode import _decode_to_samples
 import pytest
-from types import SimpleNamespace
+from ommx import DecisionVariable, Instance, Sos1Constraint
+from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
 
 def binary_no_constraint_minimize():
@@ -301,21 +300,27 @@ def test_sample_fills_evaluation_variables_omitted_from_sampler_input(
     assert sample_set.objectives[0] == pytest.approx(0.0)
 
 
-def test_decode_filters_response_variables_and_defaults_with_the_same_allowlist():
+def test_decode_to_sampleset_uses_instance_variables():
+    x0 = DecisionVariable.binary(0)
+    x2 = DecisionVariable.binary(2)
+    instance = Instance.from_components(
+        decision_variables=[x0, x2],
+        objective=x0 + x2,
+        constraints={},
+        sense=Instance.MINIMIZE,
+    )
     response = SimpleNamespace(
-        variables=[0, 1],
+        variables=[0, 1],  # 1 is not part of the Adapter input.
         record=SimpleNamespace(sample=[[1.0, 1.0]], num_occurrences=[1]),
     )
 
-    samples = _decode_to_samples(
-        cast(oj.Response, response),
-        variable_ids={0},
-        default_values={0: 0.0, 99: 1.0},
-    )
-    state = samples.get_state(0)
-    assert state.get(0) == 1.0
-    assert state.get(1) is None
-    assert state.get(99) is None
+    adapter = OMMXOpenJijSAAdapter(instance)
+    sample_set = adapter.decode_to_sampleset(cast(oj.Response, response))
+    solution = sample_set.get(0)
+    assert solution.state.get(0) == 1.0
+    assert solution.state.get(1) is None
+    assert solution.state.get(2) == 0.0
+    assert solution.objective == pytest.approx(1.0)
 
 
 @pytest.mark.parametrize(

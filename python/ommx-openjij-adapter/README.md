@@ -73,6 +73,8 @@ model. The preparation itself is not an Adapter input. Its `report` contains:
 - `source_check`: membership in the preparation source class and the
   Adapter-owned preparation preconditions
 - `steps`: the OpenJij-specific operations actually applied
+- `preparation_failures`: failures discovered while materializing an accepted
+  source into an Adapter input; empty for a successful preparation
 - `input_applicability`: whether `OpenJijPreparation.input` belongs to
   the Adapter input class and satisfies its Adapter-specific preconditions
 

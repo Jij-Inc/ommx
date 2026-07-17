@@ -11,6 +11,7 @@ def test_package_root_is_the_stable_public_facade() -> None:
         "OMMXOpenJijSAAdapter",
         "OpenJijPreparation",
         "OpenJijPreparationError",
+        "OpenJijPreparationFailure",
         "OpenJijPreparationReport",
         "OpenJijPreparationSourceCheck",
         "OpenJijPreparationStep",
@@ -21,6 +22,7 @@ def test_package_root_is_the_stable_public_facade() -> None:
     assert issubclass(package.OMMXOpenJijSAAdapter, adapter.OMMXOpenJijSAAdapter)
     assert package.OpenJijPreparation is _preparation.OpenJijPreparation
     assert package.OpenJijPreparationError is _preparation.OpenJijPreparationError
+    assert package.OpenJijPreparationFailure is _preparation.OpenJijPreparationFailure
     assert package.OpenJijPreparationReport is _preparation.OpenJijPreparationReport
     assert (
         package.OpenJijPreparationSourceCheck
@@ -40,6 +42,7 @@ def test_public_classes_support_standard_introspection() -> None:
         package.OMMXOpenJijSAAdapter,
         package.OpenJijPreparation,
         package.OpenJijPreparationError,
+        package.OpenJijPreparationFailure,
         package.OpenJijPreparationReport,
         package.OpenJijPreparationSourceCheck,
         package.OpenJijPreparationStep,

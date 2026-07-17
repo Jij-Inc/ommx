@@ -26,6 +26,7 @@ from ommx_openjij_adapter import (
     OMMXOpenJijSAAdapter,
     OpenJijPreparation,
     OpenJijPreparationError,
+    OpenJijPreparationFailure,
     OpenJijPreparationReport,
 )
 
@@ -77,6 +78,10 @@ def _check_preparation_without_mutation(
 
 def _violation_text(violation: AdapterPreconditionViolation) -> str:
     return f"{violation.condition} {violation.description}".lower()
+
+
+def _failure_text(failure: OpenJijPreparationFailure) -> str:
+    return f"{failure.reason} {failure.description}".lower()
 
 
 def test_declares_binary_polynomial_input_class() -> None:
@@ -304,11 +309,12 @@ def test_special_constraint_requires_explicit_finite_penalty_selection() -> None
 
     report = _check_preparation_without_mutation(instance)
     assert not report.is_successful
-    [violation] = report.source_check.precondition_violations
-    assert violation.condition == "openjij.penalty.explicit_selection"
-    assert violation.constraint_refs == frozenset({ConstraintRef("one_hot", 20)})
-    assert "constraints remaining" in violation.description.lower()
-    assert "regular constraints" not in violation.description.lower()
+    assert report.source_check.precondition_violations == ()
+    [failure] = report.preparation_failures
+    assert failure.reason == "openjij.penalty.explicit_selection"
+    assert failure.constraint_refs == frozenset({ConstraintRef("one_hot", 20)})
+    assert "constraints remaining" in failure.description.lower()
+    assert "regular constraints" not in failure.description.lower()
 
 
 def test_integer_sos1_is_lowered_before_log_encoding() -> None:
@@ -354,6 +360,15 @@ def test_check_preparation_reports_unbounded_integer_encoding_precondition() -> 
     assert violation.variable_ids == frozenset({0})
     assert violation.constraint_refs == frozenset()
     assert "finite" in _violation_text(violation)
+
+    with pytest.raises(
+        ValueError, match="OpenJijPreparation requires a successful report"
+    ):
+        OpenJijPreparation(
+            _input=instance,
+            _source_instance=instance,
+            report=report,
+        )
 
 
 def test_check_preparation_reports_more_than_53_log_encoding_bits() -> None:
@@ -426,11 +441,12 @@ def test_check_preparation_requires_an_explicit_penalty_for_constraints() -> Non
     assert not report.is_successful
     assert report.source_check.source_membership.is_member
     assert report.source_check.preconditions_checked
-    [violation] = report.source_check.precondition_violations
-    assert isinstance(violation, AdapterPreconditionViolation)
-    assert violation.variable_ids == frozenset()
-    assert violation.constraint_refs == frozenset({ConstraintRef("regular", 7)})
-    assert "penalty" in _violation_text(violation)
+    assert report.source_check.precondition_violations == ()
+    [failure] = report.preparation_failures
+    assert isinstance(failure, OpenJijPreparationFailure)
+    assert failure.variable_ids == frozenset()
+    assert failure.constraint_refs == frozenset({ConstraintRef("regular", 7)})
+    assert "penalty" in _failure_text(failure)
 
     accepted = _check_preparation_without_mutation(instance, uniform_penalty_weight=3.0)
     assert accepted.is_successful
@@ -463,7 +479,7 @@ def test_check_preparation_reports_penalty_materialization_overflow() -> None:
         decision_variables=[x],
         objective=x,
         constraints={7: 2 * x == 0},
-        sense=Sense.Minimize,
+        sense=Sense.Maximize,
     )
     weight = float.fromhex("0x1.fffffffffffffp+1023")
 
@@ -471,16 +487,19 @@ def test_check_preparation_reports_penalty_materialization_overflow() -> None:
         instance, uniform_penalty_weight=weight
     )
     assert not report.is_successful
-    [violation] = report.source_check.precondition_violations
-    assert violation.condition == "openjij.preparation.materialization"
-    assert violation.constraint_refs == frozenset({ConstraintRef("regular", 7)})
+    assert report.source_check.precondition_violations == ()
+    assert [step.operation for step in report.steps] == ["sense_reversal"]
+    [failure] = report.preparation_failures
+    assert failure.reason == "openjij.preparation.materialization"
+    assert failure.constraint_refs == frozenset({ConstraintRef("regular", 7)})
 
     with pytest.raises(OpenJijPreparationError) as error:
         OMMXOpenJijSAAdapter.prepare(
             instance,
             uniform_penalty_weight=weight,
         )
-    assert error.value.report.source_check.precondition_violations == (violation,)
+    assert error.value.report.preparation_failures == (failure,)
+    assert error.value.report.steps == report.steps
 
 
 def test_preparation_surfaces_proven_infeasibility() -> None:
@@ -583,10 +602,11 @@ def test_approximate_integer_slack_requires_explicit_selection() -> None:
         inequality_integer_slack_max_range=1,
     )
     assert not report.is_successful
-    [violation] = report.source_check.precondition_violations
-    assert violation.condition == "openjij.slack.approximation_explicit_selection"
-    assert violation.constraint_refs == frozenset({ConstraintRef("regular", 7)})
-    assert violation.limit == "allow_approximate_integer_slack=True"
+    assert report.source_check.precondition_violations == ()
+    [failure] = report.preparation_failures
+    assert failure.reason == "openjij.slack.approximation_explicit_selection"
+    assert failure.constraint_refs == frozenset({ConstraintRef("regular", 7)})
+    assert failure.expected == "allow_approximate_integer_slack=True"
 
     with pytest.raises(OpenJijPreparationError) as error:
         OMMXOpenJijSAAdapter.prepare(

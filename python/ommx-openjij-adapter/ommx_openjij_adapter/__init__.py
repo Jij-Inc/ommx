@@ -2,6 +2,7 @@ from .adapter import OMMXOpenJijSAAdapter as _OMMXOpenJijSAAdapter
 from ._preparation import (
     OpenJijPreparation,
     OpenJijPreparationError,
+    OpenJijPreparationFailure,
     OpenJijPreparationReport,
     OpenJijPreparationSourceCheck,
     OpenJijPreparationStep,
@@ -29,6 +30,7 @@ __all__ = [
     "OMMXOpenJijSAAdapter",
     "OpenJijPreparation",
     "OpenJijPreparationError",
+    "OpenJijPreparationFailure",
     "OpenJijPreparationReport",
     "OpenJijPreparationSourceCheck",
     "OpenJijPreparationStep",

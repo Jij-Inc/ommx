@@ -21,24 +21,26 @@ from ommx import (
     Solution,
 )
 from ommx.adapter import (
-    AdapterApplicabilityReport,
     AdapterPreconditionViolation,
     DiagnosticsSink,
     SamplerAdapter,
 )
 from opentelemetry import trace
 
-from ._decode import _decode_to_samples, decode_to_samples
+from ._decode import _decode_for_instance, decode_to_samples
 from ._preparation import (
     OpenJijPreparation,
     OpenJijPreparationReport,
-    _OpenJijPreparationSupport,
+)
+from ._preparation_pipeline import (
+    check_preparation as _check_preparation,
+    prepare as _prepare,
 )
 
 _tracer = trace.get_tracer("ommx.adapter.openjij")
 
 
-class OMMXOpenJijSAAdapter(_OpenJijPreparationSupport, SamplerAdapter):
+class OMMXOpenJijSAAdapter(SamplerAdapter):
     """
     Sample an applicable Binary polynomial input with OpenJij simulated annealing.
 
@@ -197,12 +199,6 @@ class OMMXOpenJijSAAdapter(_OpenJijPreparationSupport, SamplerAdapter):
         )
 
     @classmethod
-    def _check_prepared_input_applicability(
-        cls, ommx_instance: Instance
-    ) -> AdapterApplicabilityReport:
-        return cls.check_applicability(ommx_instance)
-
-    @classmethod
     def check_preparation(
         cls,
         ommx_instance: Instance,
@@ -222,8 +218,9 @@ class OMMXOpenJijSAAdapter(_OpenJijPreparationSupport, SamplerAdapter):
         :class:`~ommx.adapter.InfeasibleDetected`. Approximate integer slack is
         disabled unless ``allow_approximate_integer_slack=True`` is supplied.
         """
-        return super().check_preparation(
+        return _check_preparation(
             ommx_instance,
+            check_input_applicability=cls.check_applicability,
             uniform_penalty_weight=uniform_penalty_weight,
             penalty_weights=penalty_weights,
             inequality_integer_slack_max_range=inequality_integer_slack_max_range,
@@ -247,13 +244,16 @@ class OMMXOpenJijSAAdapter(_OpenJijPreparationSupport, SamplerAdapter):
         :class:`OpenJijPreparationError`. Approximate integer slack is used only
         when ``allow_approximate_integer_slack=True`` is supplied.
         """
-        return super().prepare(
-            ommx_instance,
-            uniform_penalty_weight=uniform_penalty_weight,
-            penalty_weights=penalty_weights,
-            inequality_integer_slack_max_range=inequality_integer_slack_max_range,
-            allow_approximate_integer_slack=allow_approximate_integer_slack,
-        )
+        with _tracer.start_as_current_span("prepare") as span:
+            span.set_attribute("adapter", f"{cls.__module__}.{cls.__qualname__}")
+            return _prepare(
+                ommx_instance,
+                check_input_applicability=cls.check_applicability,
+                uniform_penalty_weight=uniform_penalty_weight,
+                penalty_weights=penalty_weights,
+                inequality_integer_slack_max_range=inequality_integer_slack_max_range,
+                allow_approximate_integer_slack=allow_approximate_integer_slack,
+            )
 
     @classmethod
     def sample(
@@ -329,15 +329,7 @@ class OMMXOpenJijSAAdapter(_OpenJijPreparationSupport, SamplerAdapter):
 
     def decode_to_sampleset(self, data: oj.Response) -> SampleSet:
         with _tracer.start_as_current_span("decode"):
-            variable_ids = {
-                variable.id for variable in self.ommx_instance.used_decision_variables
-            }
-            samples = _decode_to_samples(
-                data,
-                variable_ids=variable_ids,
-                default_values={id: 0.0 for id in variable_ids},
-            )
-            return self.ommx_instance.evaluate_samples(samples)
+            return _decode_for_instance(data, self.ommx_instance)
 
     def decode_to_samples(self, data: oj.Response) -> Samples:
         """

@@ -174,15 +174,18 @@ final = report.input_applicability
     "source_membership": report.source_check.source_membership.is_member,
     "preconditions": report.source_check.precondition_violations,
     "steps": [step.operation for step in report.steps],
+    "preparation_failures": report.preparation_failures,
     "input_applicability": final.is_applicable if final else False,
 }
 ```
 
-The report separates three questions:
+The report separates four questions:
 
 - `source_check` records membership in the preparation source class and the
   Adapter-owned preparation preconditions.
 - `steps` records each OpenJij-specific operation that was applied.
+- `preparation_failures` records failures discovered while materializing an
+  accepted source into an Adapter input. It is empty for a successful preparation.
 - `input_applicability` says whether `prepared.input` belongs to the Adapter
   input class and satisfies its Adapter-specific preconditions.
 

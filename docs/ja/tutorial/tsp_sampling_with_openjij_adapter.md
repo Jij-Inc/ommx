@@ -173,15 +173,18 @@ final = report.input_applicability
     "source_membership": report.source_check.source_membership.is_member,
     "preconditions": report.source_check.precondition_violations,
     "steps": [step.operation for step in report.steps],
+    "preparation_failures": report.preparation_failures,
     "input_applicability": final.is_applicable if final else False,
 }
 ```
 
-レポートは次の3つの問いを区別します。
+レポートは次の4つの問いを区別します。
 
 - `source_check` は、準備元のclassへのmembershipとAdapter固有の準備前提条件を
   記録します。
 - `steps` は、実際に適用したOpenJij固有のoperationを記録します。
+- `preparation_failures` は、受け入れた準備元からAdapter inputをmaterializeする
+  途中で判明した失敗を記録します。成功したpreparationでは空です。
 - `input_applicability` は、`prepared.input` がAdapterのinput classに属し、Adapter
   固有の前提条件を満たすかを示します。
 
