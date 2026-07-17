@@ -27,6 +27,17 @@ fn ensure_internal_state_value_is_finite(var_id: u64, value: f64) -> Result<()> 
     Ok(())
 }
 
+fn invalid_propagated_value(
+    id: VariableID,
+    value: f64,
+    error: impl std::fmt::Display,
+) -> crate::Error {
+    crate::error!(
+        { id = ?id, value },
+        "special-constraint propagation produced an invalid value for decision variable {id:?}: {error}",
+    )
+}
+
 fn ensure_instance_value_is_finite(var_id: VariableID, value: f64) -> Result<()> {
     if !value.is_finite() {
         crate::bail!(
@@ -240,15 +251,23 @@ impl PartialEvaluatePlan {
     }
 
     fn validate_state(instance: &Instance, state: &v1::State, atol: ATol) -> Result<()> {
+        let unknown_ids: VariableIDSet = state
+            .entries
+            .keys()
+            .map(|&id| VariableID::from(id))
+            .filter(|id| instance.decision_variables.get(id).is_none())
+            .collect();
+        if !unknown_ids.is_empty() {
+            return Err(EvaluationError::UnknownStateEntries { ids: unknown_ids }.into());
+        }
+
         for (&id, &value) in &state.entries {
             ensure_state_value_is_finite(id, value)?;
             let var_id = VariableID::from(id);
-            let Some(dv) = instance.decision_variables.get(&var_id) else {
-                return Err(EvaluationError::UnknownStateEntries {
-                    ids: std::iter::once(var_id).collect(),
-                }
-                .into());
-            };
+            let dv = instance
+                .decision_variables
+                .get(&var_id)
+                .expect("state variable IDs were validated above");
             dv.check_value_consistency(var_id, value, atol)?;
             if let Some(previous_value) = instance.decision_variables.fixed_value(var_id) {
                 if !values_are_consistent(previous_value, value, atol) {
@@ -469,17 +488,18 @@ impl Instance {
         for (id, value) in expanded_state.entries.iter() {
             let var_id = VariableID::from(*id);
             let Some(dv) = self.decision_variables.get(&var_id) else {
-                return Err(EvaluationError::UnknownStateEntries {
-                    ids: std::iter::once(var_id).collect(),
-                }
-                .into());
+                return Err(crate::error!(
+                    "special-constraint propagation produced an unknown decision variable (ID={id})"
+                ));
             };
-            dv.check_value_consistency(var_id, *value, atol)?;
+            dv.check_value_consistency(var_id, *value, atol)
+                .map_err(|error| invalid_propagated_value(var_id, *value, error))?;
             if self.decision_variable_dependency.get(&var_id).is_some() {
                 dependent_assertions.insert(var_id, *value);
             } else {
                 self.decision_variables
-                    .ensure_fixed_value(var_id, *value, atol)?;
+                    .ensure_fixed_value(var_id, *value, atol)
+                    .map_err(|error| invalid_propagated_value(var_id, *value, error))?;
             }
         }
 
@@ -1710,6 +1730,21 @@ mod tests {
             )
             .unwrap();
 
+        let unknown = instance
+            .partial_evaluate(
+                &v1::State::from(HashMap::from([(99, 0.0), (100, 0.0)])),
+                ATol::default(),
+            )
+            .unwrap_err();
+        assert!(matches!(
+            unknown.downcast_ref::<EvaluationError>(),
+            Some(EvaluationError::UnknownStateEntries { ids })
+                if ids == &VariableIDSet::from([
+                    VariableID::from(99),
+                    VariableID::from(100),
+                ])
+        ));
+
         let non_finite = instance
             .partial_evaluate(
                 &v1::State::from(HashMap::from([(1, f64::NAN)])),
@@ -1733,6 +1768,110 @@ mod tests {
 
         assert_eq!(instance.one_hot_constraint_collection.active().len(), 1);
         assert!(instance.fixed_decision_variable_values().is_empty());
+    }
+
+    #[test]
+    fn test_partial_evaluate_derived_value_failure_is_unclassified_and_atomic() {
+        use crate::{DecisionVariable, Sos1Constraint, Sos1ConstraintID};
+
+        let bounded = DecisionVariable::new(
+            Kind::Continuous,
+            Bound::new(1.0, 2.0).unwrap(),
+            ATol::default(),
+        )
+        .unwrap();
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            Function::Zero,
+            BTreeMap::from([
+                (VariableID::from(1), bounded),
+                (VariableID::from(2), DecisionVariable::continuous()),
+            ]),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        instance
+            .sos1_constraint_collection
+            .insert_active_with_context(
+                Sos1ConstraintID::from(1),
+                Sos1Constraint::new(
+                    [VariableID::from(1), VariableID::from(2)]
+                        .into_iter()
+                        .collect(),
+                )
+                .unwrap(),
+                crate::ConstraintContext::default(),
+            )
+            .unwrap();
+        let before = instance.clone();
+
+        let error = instance
+            .partial_evaluate(&v1::State::from(HashMap::from([(2, 1.0)])), ATol::default())
+            .unwrap_err();
+
+        assert!(error.downcast_ref::<DecisionVariableError>().is_none());
+        assert!(error.downcast_ref::<EvaluationError>().is_none());
+        assert!(error
+            .to_string()
+            .contains("special-constraint propagation produced an invalid value"));
+        assert_eq!(instance, before);
+    }
+
+    #[test]
+    fn test_partial_evaluate_rolls_back_changes_before_later_propagation_failure() {
+        use crate::{
+            DecisionVariable, OneHotConstraint, OneHotConstraintID, Sos1Constraint,
+            Sos1ConstraintID,
+        };
+
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            Function::Zero,
+            BTreeMap::from([
+                (VariableID::from(1), DecisionVariable::binary()),
+                (VariableID::from(2), DecisionVariable::binary()),
+                (VariableID::from(3), DecisionVariable::continuous()),
+            ]),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        instance
+            .one_hot_constraint_collection
+            .insert_active_with_context(
+                OneHotConstraintID::from(1),
+                OneHotConstraint::new(
+                    [VariableID::from(1), VariableID::from(2)]
+                        .into_iter()
+                        .collect(),
+                )
+                .unwrap(),
+                crate::ConstraintContext::default(),
+            )
+            .unwrap();
+        instance
+            .sos1_constraint_collection
+            .insert_active_with_context(
+                Sos1ConstraintID::from(1),
+                Sos1Constraint::new(
+                    [VariableID::from(2), VariableID::from(3)]
+                        .into_iter()
+                        .collect(),
+                )
+                .unwrap(),
+                crate::ConstraintContext::default(),
+            )
+            .unwrap();
+        let before = instance.clone();
+
+        let error = instance
+            .partial_evaluate(
+                &v1::State::from(HashMap::from([(1, 0.0), (3, 1.0)])),
+                ATol::default(),
+            )
+            .unwrap_err();
+
+        assert!(error.downcast_ref::<EvaluationError>().is_none());
+        assert_eq!(instance, before);
     }
 
     #[test]

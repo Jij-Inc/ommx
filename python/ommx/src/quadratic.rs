@@ -2,7 +2,7 @@ use crate::{Constraint, Function, Linear, Polynomial, Rng, State};
 
 use approx::AbsDiffEq;
 use ommx::{ATol, Coefficient, CoefficientError, Evaluate, VariableIDPair};
-use pyo3::{exceptions::PyRuntimeError, prelude::*, types::PyDict, Bound, PyAny};
+use pyo3::{prelude::*, types::PyDict, Bound, PyAny};
 use std::collections::BTreeMap;
 
 /// Quadratic function of decision variables.
@@ -387,10 +387,7 @@ impl Quadratic {
             Some(value) => ommx::ATol::new(value)?,
             None => ommx::ATol::default(),
         };
-        Ok(self
-            .0
-            .evaluate(&state.0, atol)
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?)
+        Ok(self.0.evaluate(&state.0, atol)?)
     }
 
     #[pyo3(signature = (state, *, atol=None))]

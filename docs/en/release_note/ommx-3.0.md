@@ -70,16 +70,24 @@ exception object. Malformed payloads received by the private cross-extension
 PyO3 bridge are internal protocol failures and raise `RuntimeError`.
 
 The mapped signals currently include `CoefficientError`, `AtolError`,
-`BoundError`, stable control-flow cases from `DecisionVariableError`,
-`SolutionError`, and `SampleSetError`, and the `ParseError` and
-`QplibParseError` parser signals. Missing Experiment or Run attachments retain
-an `AttachmentNotFound` signal and raise `KeyError`. Invalid caller-provided
-image references keep an `ImageRefParseError`, while a corrupted image ref
-already persisted in the Local Registry keeps an
+`BoundError`, `EvaluationError`, stable control-flow cases from
+`DecisionVariableError`, `SolutionError`, and `SampleSetError`, and the
+`ParseError` and `QplibParseError` parser signals. Missing Experiment or Run
+attachments retain an `AttachmentNotFound` signal and raise `KeyError`.
+Invalid caller-provided image references keep an `ImageRefParseError`, while a
+corrupted image ref already persisted in the Local Registry keeps an
 `InvalidLocalRegistryImageRef` and falls back to `RuntimeError`. Registry,
 archive, and content-addressed storage failures also remain on that fallback.
 Exceptions from Python-backed codecs, JSON callbacks, adapters, tracing hooks,
 and data libraries pass through unchanged.
+
+Function, polynomial, constraint, named-function, and `Instance` evaluation
+APIs now use this shared boundary directly. Caller-owned state shape and value
+validation failures raise `ValueError`, including validation performed before
+special-constraint propagation. Untyped constraint infeasibility and failures
+in values derived by propagation continue to fall back to `RuntimeError`.
+Partial evaluation also preserves an underlying `CoefficientError` in the
+Rust error chain instead of replacing it with an untyped message.
 
 The Python extension no longer depends directly on `anyhow`, and its PyO3
 dependency no longer enables the blanket `anyhow` conversion feature.
@@ -103,7 +111,8 @@ Related PRs: [#1096](https://github.com/Jij-Inc/ommx/pull/1096),
 [#1099](https://github.com/Jij-Inc/ommx/pull/1099),
 [#1100](https://github.com/Jij-Inc/ommx/pull/1100),
 [#1101](https://github.com/Jij-Inc/ommx/pull/1101),
-[#1102](https://github.com/Jij-Inc/ommx/pull/1102).
+[#1102](https://github.com/Jij-Inc/ommx/pull/1102),
+[#1104](https://github.com/Jij-Inc/ommx/pull/1104).
 
 ### 🆕 Instance classes and adapter applicability ([#1084](https://github.com/Jij-Inc/ommx/pull/1084))
 

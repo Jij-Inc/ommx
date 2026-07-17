@@ -67,15 +67,24 @@ Private な cross-extension PyO3 bridge が受信した不正 payload は内部 
 failure であるため、`RuntimeError` になります。
 
 現在の対象は、`CoefficientError`、`AtolError`、`BoundError`、
-`DecisionVariableError`、`SolutionError`、`SampleSetError` のうち Python 側で
-安定して判別すべき case、および parser signal の `ParseError` と
-`QplibParseError` です。存在しない Experiment / Run attachment は
-`AttachmentNotFound` signal を保持し、`KeyError` を送出します。呼び出し側が
-渡した不正な image reference は `ImageRefParseError` を保持し、Local Registry に
-保存済みの image ref が壊れている場合は `InvalidLocalRegistryImageRef` を保持して
-`RuntimeError` に fallback します。Registry、archive、content-addressed storage の
-failure も同じ fallback を使います。Python-backed codec、JSON callback、adapter、
-tracing hook、data library が送出した exception は変更せず伝播します。
+`EvaluationError`、`DecisionVariableError`、`SolutionError`、
+`SampleSetError` のうち Python 側で安定して判別すべき case、および parser
+signal の `ParseError` と `QplibParseError` です。存在しない Experiment / Run
+attachment は `AttachmentNotFound` signal を保持し、`KeyError` を送出します。
+呼び出し側が渡した不正な image reference は `ImageRefParseError` を保持し、Local
+Registry に保存済みの image ref が壊れている場合は
+`InvalidLocalRegistryImageRef` を保持して `RuntimeError` に fallback します。
+Registry、archive、content-addressed storage の failure も同じ fallback を使います。
+Python-backed codec、JSON callback、adapter、tracing hook、data library が送出した
+exception は変更せず伝播します。
+
+Function、polynomial、constraint、named function、`Instance` の evaluation API
+も、この共通 boundary を直接使うようになりました。特殊制約の伝播前に行う検証を
+含め、呼び出し側が所有する state の shape / value validation failure は
+`ValueError` になります。型付けされていない制約の infeasibility と、伝播が導出した
+値の failure は引き続き `RuntimeError` に fallback します。Partial evaluation
+では元の `CoefficientError` を型のない message に置き換えず、Rust の error chain
+に保持します。
 
 Python extension は `anyhow` への直接依存を廃止し、PyO3 dependency でも blanket
 な `anyhow` conversion feature を有効にしなくなりました。
@@ -98,7 +107,8 @@ interrupted status で確実に閉じられます。
 [#1099](https://github.com/Jij-Inc/ommx/pull/1099)、
 [#1100](https://github.com/Jij-Inc/ommx/pull/1100)、
 [#1101](https://github.com/Jij-Inc/ommx/pull/1101)、
-[#1102](https://github.com/Jij-Inc/ommx/pull/1102)。
+[#1102](https://github.com/Jij-Inc/ommx/pull/1102)、
+[#1104](https://github.com/Jij-Inc/ommx/pull/1104)。
 
 ### 🆕 Instance Class と Adapter Applicability ([#1084](https://github.com/Jij-Inc/ommx/pull/1084))
 

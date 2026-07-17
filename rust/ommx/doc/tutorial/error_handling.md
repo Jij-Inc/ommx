@@ -30,6 +30,9 @@ returns the typed error directly):
 - [`DecisionVariableError`](crate::DecisionVariableError), [`SubstitutionError`](crate::SubstitutionError), [`SolutionError`](crate::SolutionError),
   [`SampleSetError`](crate::SampleSetError) — domain-specific structured errors consumed by
   in-crate tests and downstream code that wants to react programmatically.
+- [`EvaluationError`](crate::EvaluationError) — caller-owned state shape and
+  value validation failures retained by evaluation APIs that return
+  `ommx::Result<T>`.
 - [`ImageRefParseError`](crate::artifact::ImageRefParseError) and
   [`InvalidLocalRegistryImageRef`](crate::artifact::local_registry::InvalidLocalRegistryImageRef) —
   distinguish invalid image-reference input from an invalid name/reference pair

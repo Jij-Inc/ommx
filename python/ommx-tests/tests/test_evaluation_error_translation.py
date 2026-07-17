@@ -37,6 +37,20 @@ def _instance_with_one_hot_constraint() -> ommx.Instance:
     )
 
 
+def _instance_with_sos1_derived_bound_conflict() -> ommx.Instance:
+    variables = [
+        ommx.DecisionVariable.continuous(1, lower=1.0, upper=2.0),
+        ommx.DecisionVariable.continuous(2),
+    ]
+    return ommx.Instance.from_components(
+        decision_variables=variables,
+        objective=0,
+        constraints={},
+        sos1_constraints={0: ommx.Sos1Constraint(variables=variables)},
+        sense=ommx.Instance.MINIMIZE,
+    )
+
+
 @pytest.mark.parametrize(
     "operation",
     [
@@ -75,6 +89,30 @@ def test_partial_evaluate_validates_state_before_special_constraint_propagation(
 
     with pytest.raises(ValueError):
         instance.partial_evaluate({1: value})
+
+
+def test_partial_evaluate_reports_all_unknown_state_entries() -> None:
+    instance = _instance_with_one_hot_constraint()
+
+    with pytest.raises(ValueError, match="unknown variable IDs") as error:
+        instance.partial_evaluate({99: 0.0, 100: 0.0})
+
+    assert "99" in str(error.value)
+    assert "100" in str(error.value)
+
+
+def test_special_constraint_propagation_failure_falls_back_to_runtime_error() -> None:
+    instance = _instance_with_one_hot_constraint()
+
+    with pytest.raises(RuntimeError, match="fixed to 0"):
+        instance.partial_evaluate({1: 0.0, 2: 0.0})
+
+
+def test_derived_state_validation_failure_falls_back_to_runtime_error() -> None:
+    instance = _instance_with_sos1_derived_bound_conflict()
+
+    with pytest.raises(RuntimeError, match="produced an invalid value"):
+        instance.partial_evaluate({2: 1.0})
 
 
 @pytest.mark.parametrize(
