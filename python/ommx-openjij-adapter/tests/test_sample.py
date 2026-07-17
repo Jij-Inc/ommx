@@ -2,7 +2,8 @@ from typing import cast
 
 import openjij as oj
 from ommx import Instance, DecisionVariable, Sos1Constraint
-from ommx_openjij_adapter import OMMXOpenJijSAAdapter, _decode_to_samples
+from ommx_openjij_adapter import OMMXOpenJijSAAdapter
+from ommx_openjij_adapter._decode import _decode_to_samples
 import pytest
 from types import SimpleNamespace
 

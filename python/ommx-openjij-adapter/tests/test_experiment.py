@@ -57,6 +57,7 @@ def test_log_sample_records_the_exact_prepared_adapter_input() -> None:
     assert sampling.input.to_v2_bytes() == input_bytes
     assert isinstance(sampling.output, SampleSet)
     assert sampling.output.to_v2_bytes() == prepared_samples.to_v2_bytes()
+    assert sampling.adapter == "ommx_openjij_adapter.OMMXOpenJijSAAdapter"
     assert sampling.adapter_options == {
         "num_reads": 4,
         "seed": 0,
