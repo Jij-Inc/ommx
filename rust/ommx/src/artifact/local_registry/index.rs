@@ -1237,8 +1237,6 @@ fn experiment_ref_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Experime
         .map_err(|err| rusqlite::Error::FromSqlConversionFailure(7, Type::Blob, Box::new(err)))?;
     let typed_config: ExperimentConfig = serde_json::from_slice(&config_json)
         .map_err(|err| rusqlite::Error::FromSqlConversionFailure(7, Type::Blob, Box::new(err)))?;
-    crate::experiment::ExperimentStatus::from_config(&typed_config.status)
-        .map_err(|err| rusqlite::Error::FromSqlConversionFailure(7, Type::Blob, err.into()))?;
     let run_count = u64::try_from(typed_config.runs.len())
         .map_err(|err| rusqlite::Error::FromSqlConversionFailure(7, Type::Blob, Box::new(err)))?;
     let solve_count = typed_config.runs.iter().try_fold(0_u64, |total, run| {
@@ -1270,7 +1268,7 @@ fn experiment_ref_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Experime
         manifest_digest: record.manifest_digest,
         config_digest: config_digest.clone(),
         updated_at: record.updated_at,
-        status: typed_config.status,
+        status: typed_config.lifecycle.status().to_string(),
         run_count,
         solve_count,
         sampling_count,
