@@ -127,10 +127,13 @@ state, invalid caller-provided values, and recoverable dependent-variable
 assertion failures raise `ValueError`, including validation performed before
 special-constraint propagation. State-value validation reuses
 `DecisionVariableError`; evaluation does not introduce an umbrella error type.
-Non-finite values computed from a dependency and untyped constraint propagation
-failures continue to fall back to `RuntimeError`. Partial evaluation also
-preserves an underlying `CoefficientError` in the Rust error chain instead of
-replacing it with an untyped message.
+Non-finite values computed from a dependency, coefficient overflow while
+normalizing `Instance`-owned dependencies or restoring removed constraints
+against stored dependencies and fixed values, and untyped constraint
+propagation failures continue to fall back to `RuntimeError`. Direct function
+and polynomial partial evaluation still preserves an underlying
+`CoefficientError` in the Rust error chain instead of replacing it with an
+untyped message.
 
 The Python extension no longer depends directly on `anyhow`, and its PyO3
 dependency no longer enables the blanket `anyhow` conversion feature.

@@ -2,6 +2,29 @@ use super::*;
 use crate::ATol;
 use anyhow::Result;
 
+fn normalize_restore_error<ID: std::fmt::Debug>(
+    kind: &'static str,
+    id: ID,
+    error: crate::Error,
+) -> crate::Error {
+    let coefficient_error = error.is::<crate::CoefficientError>()
+        || matches!(
+            error.downcast_ref::<crate::SubstitutionError>(),
+            Some(crate::SubstitutionError::Coefficient(_))
+        );
+    if !coefficient_error {
+        return error;
+    }
+
+    // Restore applies table-owned dependencies and fixed values. Coefficient
+    // arithmetic here is an Instance implementation detail, not a signal that
+    // the caller can recover from by changing the constraint ID.
+    crate::error!(
+        { kind, id = ?id, cause = %error },
+        "failed to normalize removed {kind} {id:?} for restore: {error:#}",
+    )
+}
+
 impl Instance {
     pub fn relax_constraint(
         &mut self,
@@ -31,14 +54,14 @@ impl Instance {
             .0
             .clone();
 
-        // The following operations are infallible for regular constraints:
-        // - substitute_acyclic only fails on cyclic dependencies, which AcyclicAssignments prevents
-        // - Constraint::partial_evaluate delegates to Function::partial_evaluate, which is infallible
         if !dependency.is_empty() {
-            crate::substitute_acyclic(&mut constraint.stage.function, &dependency)?;
+            crate::substitute_acyclic(&mut constraint.stage.function, &dependency)
+                .map_err(|error| normalize_restore_error("constraint", id, error.into()))?;
         }
         if !fixed_state.entries.is_empty() {
-            constraint.partial_evaluate(&fixed_state, ATol::default())?;
+            constraint
+                .partial_evaluate(&fixed_state, ATol::default())
+                .map_err(|error| normalize_restore_error("constraint", id, error))?;
         }
         self.constraint_collection
             .restore_removed_row(id, constraint)?;
@@ -97,15 +120,14 @@ impl Instance {
 
         let fixed_state = self.fixed_state();
         let dependency = self.decision_variable_dependency.clone();
-        // The following operations are infallible because:
-        // - substitute_acyclic only fails on cyclic dependencies, which AcyclicAssignments prevents
-        // - IndicatorConstraint::partial_evaluate fails only if the indicator variable is in
-        //   fixed_state, but we already checked that above before restoring
         if !dependency.is_empty() {
-            crate::substitute_acyclic(&mut ic.stage.function, &dependency)?;
+            crate::substitute_acyclic(&mut ic.stage.function, &dependency).map_err(|error| {
+                normalize_restore_error("indicator constraint", id, error.into())
+            })?;
         }
         if !fixed_state.entries.is_empty() {
-            ic.partial_evaluate(&fixed_state, ATol::default())?;
+            ic.partial_evaluate(&fixed_state, ATol::default())
+                .map_err(|error| normalize_restore_error("indicator constraint", id, error))?;
         }
         self.indicator_constraint_collection
             .restore_removed_row(id, ic)?;
@@ -172,6 +194,87 @@ mod tests {
         let restored = instance.constraints().get(&ConstraintID::from(1)).unwrap();
         assert!(!restored.required_ids().contains(&VariableID::from(1)));
         assert!(restored.required_ids().contains(&VariableID::from(2)));
+    }
+
+    #[test]
+    fn test_restore_constraint_fixed_value_overflow_is_unclassified_and_atomic() {
+        let constraint_id = ConstraintID::from(1);
+        let constraint = Constraint {
+            equality: Equality::LessThanOrEqualToZero,
+            stage: crate::constraint::CreatedData {
+                function: Function::from((coeff!(f64::MAX) * linear!(1)).unwrap()),
+            },
+        };
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            Function::Zero,
+            BTreeMap::from([(VariableID::from(1), DecisionVariable::continuous())]),
+            BTreeMap::from([(constraint_id, constraint)]),
+        )
+        .unwrap();
+
+        instance
+            .relax_constraint(constraint_id, "test".to_string(), [])
+            .unwrap();
+        instance
+            .partial_evaluate(&v1::State::from_iter([(1, f64::MAX)]), ATol::default())
+            .unwrap();
+        let before = instance.clone();
+
+        let error = instance.restore_constraint(constraint_id).unwrap_err();
+
+        assert!(!error.is::<crate::CoefficientError>());
+        assert!(
+            error
+                .to_string()
+                .contains("failed to normalize removed constraint"),
+            "unexpected error: {error:#}",
+        );
+        assert_eq!(instance, before);
+    }
+
+    #[test]
+    fn test_restore_constraint_dependency_overflow_is_unclassified_and_atomic() {
+        let constraint_id = ConstraintID::from(1);
+        let constraint = Constraint {
+            equality: Equality::LessThanOrEqualToZero,
+            stage: crate::constraint::CreatedData {
+                function: Function::from((coeff!(f64::MAX) * linear!(2)).unwrap()),
+            },
+        };
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            Function::Zero,
+            BTreeMap::from([
+                (VariableID::from(1), DecisionVariable::continuous()),
+                (VariableID::from(2), DecisionVariable::continuous()),
+            ]),
+            BTreeMap::from([(constraint_id, constraint)]),
+        )
+        .unwrap();
+
+        instance
+            .relax_constraint(constraint_id, "test".to_string(), [])
+            .unwrap();
+        instance = instance
+            .substitute_one(
+                VariableID::from(2),
+                &Function::from((coeff!(f64::MAX) * linear!(1)).unwrap()),
+            )
+            .unwrap();
+        let before = instance.clone();
+
+        let error = instance.restore_constraint(constraint_id).unwrap_err();
+
+        assert!(!error.is::<crate::CoefficientError>());
+        assert!(!error.is::<crate::SubstitutionError>());
+        assert!(
+            error
+                .to_string()
+                .contains("failed to normalize removed constraint"),
+            "unexpected error: {error:#}",
+        );
+        assert_eq!(instance, before);
     }
 
     #[test]
@@ -313,6 +416,53 @@ mod tests {
             .unwrap();
         assert_eq!(instance.indicator_constraints().len(), 1);
         assert!(instance.removed_indicator_constraints().is_empty());
+    }
+
+    #[test]
+    fn test_restore_indicator_constraint_fixed_value_overflow_is_unclassified_and_atomic() {
+        use crate::IndicatorConstraintID;
+
+        let constraint_id = IndicatorConstraintID::from(1);
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            Function::Zero,
+            BTreeMap::from([
+                (VariableID::from(1), DecisionVariable::continuous()),
+                (VariableID::from(10), DecisionVariable::binary()),
+            ]),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        instance
+            .indicator_constraint_collection
+            .insert_active_with_context(
+                constraint_id,
+                crate::IndicatorConstraint::new(
+                    VariableID::from(10),
+                    Equality::LessThanOrEqualToZero,
+                    Function::from((coeff!(f64::MAX) * linear!(1)).unwrap()),
+                ),
+                crate::ConstraintContext::default(),
+            )
+            .unwrap();
+
+        instance
+            .relax_indicator_constraint(constraint_id, "test".to_string(), [])
+            .unwrap();
+        instance
+            .partial_evaluate(&v1::State::from_iter([(1, f64::MAX)]), ATol::default())
+            .unwrap();
+        let before = instance.clone();
+
+        let error = instance
+            .restore_indicator_constraint(constraint_id)
+            .unwrap_err();
+
+        assert!(!error.is::<crate::CoefficientError>());
+        assert!(error
+            .to_string()
+            .contains("failed to normalize removed indicator constraint"));
+        assert_eq!(instance, before);
     }
 
     /// Restoring an indicator constraint fails if the indicator variable was fixed.

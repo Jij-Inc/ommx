@@ -49,6 +49,14 @@ validation reuses [`DecisionVariableError`](crate::DecisionVariableError), and
 failures without a stable caller recovery path remain ordinary [`Error`](crate::Error)
 values.
 
+Direct function and polynomial partial evaluation retain
+[`CoefficientError`](crate::CoefficientError), because the caller can change
+the supplied state and retry. If the same arithmetic fails while an
+[`Instance`](crate::Instance) normalizes an Instance-owned dependency or a
+removed constraint against stored dependencies and fixed values, that signal
+no longer describes caller input and is converted to an ordinary
+[`Error`](crate::Error) with structured tracing context.
+
 Recover them with [`Error::downcast_ref`](crate::Error::downcast_ref) / [`Error::is`](crate::Error::is):
 
 ```ignore
