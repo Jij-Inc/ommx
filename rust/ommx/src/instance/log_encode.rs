@@ -1,4 +1,4 @@
-use super::{encoding::ensure_unit_spaced_integer_bound, Instance};
+use super::{encoding::MAX_EXACT_ENCODING_INTEGER, Instance};
 use crate::{
     ATol, Bound, Coefficient, DecisionVariable, Function, Kind, Linear, ModelingLabel, VariableID,
 };
@@ -9,19 +9,69 @@ const MAX_LOG_ENCODING_RANGE_WIDTH: u64 = (1_u64 << MAX_LOG_ENCODING_BITS) - 1;
 type PlannedAuxiliaryVariable = (VariableID, DecisionVariable, ModelingLabel);
 type PlannedLogEncodings = (BTreeMap<VariableID, Linear>, Vec<PlannedAuxiliaryVariable>);
 
-fn log_encoding_bit_count(width: f64) -> crate::Result<usize> {
+/// Reason that [`Instance::log_encode`] cannot construct an exact binary
+/// representation for an otherwise valid Integer encoding request.
+///
+/// The complete rewrite is planned before mutation. Therefore, when this
+/// signal is returned, the [`Instance`] is unchanged. Other failures during
+/// request validation, auxiliary-variable allocation, or expression
+/// substitution retain their original error types. The variants expose the
+/// same structured observations used by preparation diagnostics; callers that
+/// only select a fallback may simply downcast to this type.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, thiserror::Error)]
+pub enum LogEncodingUnavailable {
+    #[error("bound must be finite for log-encoding: {bound}")]
+    NonFiniteBound { id: VariableID, bound: Bound },
+
+    #[error(
+        "integer bound is too far from zero for log-encoding: non-point range [{lower}, {upper}] cannot be represented as unit-spaced f64 integers"
+    )]
+    RangeOutsideExactIntegerDomain {
+        id: VariableID,
+        lower: f64,
+        upper: f64,
+        max_abs: f64,
+    },
+
+    #[error(
+        "range is too large for log-encoding: requires {required_bits} binary variables, but the limit is {max_bits}"
+    )]
+    RangeTooLarge {
+        id: VariableID,
+        required_bits: usize,
+        max_bits: usize,
+    },
+}
+
+impl LogEncodingUnavailable {
+    /// Return the decision variable whose exact representation is unavailable.
+    pub fn variable_id(&self) -> VariableID {
+        match self {
+            Self::NonFiniteBound { id, .. }
+            | Self::RangeOutsideExactIntegerDomain { id, .. }
+            | Self::RangeTooLarge { id, .. } => *id,
+        }
+    }
+}
+
+fn log_encoding_bit_count(id: VariableID, width: f64) -> crate::Result<usize> {
     if width == 0.0 {
         return Ok(0);
     }
     if width > MAX_LOG_ENCODING_RANGE_WIDTH as f64 {
-        crate::bail!(
-            { width, max_bits = MAX_LOG_ENCODING_BITS },
-            "range is too large for log-encoding: width {width} requires more than {MAX_LOG_ENCODING_BITS} binary variables",
-        );
+        let width = width as u64;
+        let required_bits = (u64::BITS - width.leading_zeros()) as usize;
+        return Err(LogEncodingUnavailable::RangeTooLarge {
+            id,
+            required_bits,
+            max_bits: MAX_LOG_ENCODING_BITS,
+        }
+        .into());
     }
     if width.fract() != 0.0 {
         crate::bail!(
-            { width },
+            { ?id, width },
             "integer range width is not exactly representable for log-encoding: {width}",
         );
     }
@@ -43,22 +93,42 @@ fn log_encoding_bit_count(width: f64) -> crate::Result<usize> {
 ///
 /// Returns an error if the bound is not finite, or if no feasible integer
 /// values exist within the bound.
-fn log_encoding_coefficients(bound: Bound, atol: ATol) -> crate::Result<(Vec<Coefficient>, f64)> {
+fn log_encoding_coefficients(
+    id: VariableID,
+    bound: Bound,
+    atol: ATol,
+) -> crate::Result<(Vec<Coefficient>, f64)> {
     let integer_bound = bound.as_integer_bound(atol).ok_or_else(|| {
-        crate::error!({ ?bound }, "no feasible integer values in bound for log-encoding: {bound}")
+        crate::error!(
+            { ?id, ?bound },
+            "no feasible integer values in bound for log-encoding: {bound}",
+        )
     })?;
     if !integer_bound.is_finite() {
-        crate::bail!({ ?bound }, "bound must be finite for log-encoding: {bound}");
+        return Err(LogEncodingUnavailable::NonFiniteBound { id, bound }.into());
     }
-    ensure_unit_spaced_integer_bound(integer_bound, "log-encoding")?;
+    if integer_bound.width() != 0.0
+        && (integer_bound.lower() < -MAX_EXACT_ENCODING_INTEGER
+            || integer_bound.upper() > MAX_EXACT_ENCODING_INTEGER)
+    {
+        return Err(LogEncodingUnavailable::RangeOutsideExactIntegerDomain {
+            id,
+            lower: integer_bound.lower(),
+            upper: integer_bound.upper(),
+            max_abs: MAX_EXACT_ENCODING_INTEGER,
+        }
+        .into());
+    }
 
     let u_l = integer_bound.width();
     if u_l < 0.0 {
-        // No feasible integer values in the range
-        crate::bail!({ ?bound }, "no feasible integer values in bound for log-encoding: {bound}");
+        crate::bail!(
+            { ?id, ?bound },
+            "no feasible integer values in bound for log-encoding: {bound}",
+        );
     }
 
-    let n = log_encoding_bit_count(u_l)?;
+    let n = log_encoding_bit_count(id, u_l)?;
     // There is only one feasible integer, and no need to encode
     if n == 0 {
         return Ok((vec![], integer_bound.lower()));
@@ -101,6 +171,13 @@ impl Instance {
     /// integer bound. Ranges that would require more than
     /// [`Self::MAX_LOG_ENCODING_BITS`] binary variables are rejected instead of
     /// creating an impractically large encoded search space.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LogEncodingUnavailable`] when an otherwise valid Integer
+    /// encoding request has no exact finite representation under this policy.
+    /// Unknown, fixed, or non-Integer variables and failures while allocating
+    /// or substituting auxiliary variables retain their ordinary error types.
     #[tracing::instrument(skip(self, ids))]
     pub fn log_encode(
         &mut self,
@@ -200,7 +277,7 @@ impl Instance {
                 "variable must be integer for log-encoding: id={id:?}, kind={kind:?}",
             );
         }
-        log_encoding_coefficients(v.bound(), atol)
+        log_encoding_coefficients(id, v.bound(), atol)
     }
 }
 
@@ -281,11 +358,14 @@ mod tests {
         if !integer_bound.is_finite() {
             return None;
         }
-        if ensure_unit_spaced_integer_bound(integer_bound, "log-encoding").is_err() {
+        if integer_bound.width() != 0.0
+            && (integer_bound.lower() < -MAX_EXACT_ENCODING_INTEGER
+                || integer_bound.upper() > MAX_EXACT_ENCODING_INTEGER)
+        {
             return None;
         }
         let width = integer_bound.width();
-        if width < 0.0 || log_encoding_bit_count(width).ok()? > max_bits {
+        if width < 0.0 || log_encoding_bit_count(VariableID::from(0), width).ok()? > max_bits {
             return None;
         }
         if integer_bound.lower() < i64::MIN as f64 || integer_bound.lower() > i64::MAX as f64 {
@@ -554,8 +634,16 @@ mod tests {
             let expected_state = state_with_original_value(state.clone(), &target, decoded_value);
             let expected = instance.evaluate(&expected_state, ATol::default()).unwrap();
 
-            let (coefficients, _) =
-                log_encoding_coefficients(instance.decision_variables().get(&target.id).unwrap().bound(), ATol::default()).unwrap();
+            let (coefficients, _) = log_encoding_coefficients(
+                target.id,
+                instance
+                    .decision_variables()
+                    .get(&target.id)
+                    .unwrap()
+                    .bound(),
+                ATol::default(),
+            )
+            .unwrap();
             let bits = log_bits_for_delta(delta, &coefficients);
 
             let mut encoded_instance = instance.clone();
@@ -624,14 +712,16 @@ mod tests {
     fn test_log_encoding_coefficients() {
         // 2^3 case
         let bound = Bound::new(0.0, 7.0).unwrap();
-        let (coefficients, offset) = log_encoding_coefficients(bound, ATol::default()).unwrap();
+        let (coefficients, offset) =
+            log_encoding_coefficients(VariableID::from(0), bound, ATol::default()).unwrap();
         assert_eq!(coefficients, vec![coeff!(1.0), coeff!(2.0), coeff!(4.0)]);
         assert_eq!(offset, 0.0);
 
         // [1, 6] should be x = 1 + b1 + 2*b2 + 2*b3, the last coefficient is shifted
         // Then, 1 + 1 + 2 + 2 = 6
         let bound = Bound::new(1.0, 6.0).unwrap();
-        let (coefficients, offset) = log_encoding_coefficients(bound, ATol::default()).unwrap();
+        let (coefficients, offset) =
+            log_encoding_coefficients(VariableID::from(0), bound, ATol::default()).unwrap();
         assert_eq!(coefficients, vec![coeff!(1.0), coeff!(2.0), coeff!(2.0)]);
         assert_eq!(offset, 1.0);
         assert_eq!(
@@ -640,33 +730,52 @@ mod tests {
         );
 
         let bound = Bound::new(1.000000000001, 6.000000000001).unwrap();
-        let (coefficients, offset) = log_encoding_coefficients(bound, ATol::default()).unwrap();
+        let (coefficients, offset) =
+            log_encoding_coefficients(VariableID::from(0), bound, ATol::default()).unwrap();
         assert_eq!(coefficients, vec![coeff!(1.0), coeff!(2.0), coeff!(2.0)]);
         assert_eq!(offset, 1.0);
 
         // [2, 2] should be x = 2, no binary variables needed
         let bound = Bound::new(2.0, 2.0).unwrap();
-        let (coefficients, offset) = log_encoding_coefficients(bound, ATol::default()).unwrap();
+        let (coefficients, offset) =
+            log_encoding_coefficients(VariableID::from(0), bound, ATol::default()).unwrap();
         assert!(coefficients.is_empty());
         assert_eq!(offset, 2.0);
 
         // No feasible integer values
         let bound = Bound::new(1.3, 1.6).unwrap();
-        assert!(log_encoding_coefficients(bound, ATol::default()).is_err());
+        let err =
+            log_encoding_coefficients(VariableID::from(0), bound, ATol::default()).unwrap_err();
+        assert!(!err.is::<LogEncodingUnavailable>());
+        assert!(err.to_string().contains("no feasible integer values"));
+
+        let err = log_encoding_bit_count(VariableID::from(4), 1.5).unwrap_err();
+        assert!(!err.is::<LogEncodingUnavailable>());
+        assert!(err.to_string().contains("not exactly representable"));
     }
 
     #[test]
     fn test_log_encoding_rejects_range_requiring_too_many_bits() {
         let accepted_bound = Bound::new(0.0, MAX_LOG_ENCODING_RANGE_WIDTH as f64).unwrap();
         let (coefficients, offset) =
-            log_encoding_coefficients(accepted_bound, ATol::default()).unwrap();
+            log_encoding_coefficients(VariableID::from(0), accepted_bound, ATol::default())
+                .unwrap();
         assert_eq!(coefficients.len(), Instance::MAX_LOG_ENCODING_BITS);
         assert_eq!(offset, 0.0);
 
         let rejected_upper = 2.0_f64.powi(Instance::MAX_LOG_ENCODING_BITS as i32);
         let rejected_bound = Bound::new(0.0, rejected_upper).unwrap();
-        let err = log_encoding_coefficients(rejected_bound, ATol::default()).unwrap_err();
-        assert!(err.to_string().contains("too large for log-encoding"));
+        let err = log_encoding_coefficients(VariableID::from(0), rejected_bound, ATol::default())
+            .unwrap_err();
+        assert!(matches!(
+            err.downcast_ref::<LogEncodingUnavailable>(),
+            Some(LogEncodingUnavailable::RangeTooLarge {
+                id,
+                required_bits,
+                max_bits: MAX_LOG_ENCODING_BITS,
+            }) if *id == VariableID::from(0)
+                && *required_bits == MAX_LOG_ENCODING_BITS + 1
+        ));
     }
 
     #[test]
@@ -674,13 +783,27 @@ mod tests {
         let max_exact_integer = 2.0_f64.powi(53);
         let accepted_bound = Bound::new(max_exact_integer - 2.0, max_exact_integer).unwrap();
         let (coefficients, offset) =
-            log_encoding_coefficients(accepted_bound, ATol::default()).unwrap();
+            log_encoding_coefficients(VariableID::from(0), accepted_bound, ATol::default())
+                .unwrap();
         assert_eq!(coefficients, vec![coeff!(1.0), coeff!(1.0)]);
         assert_eq!(offset, max_exact_integer - 2.0);
 
         let rejected_bound = Bound::new(max_exact_integer, max_exact_integer + 2.0).unwrap();
-        let err = log_encoding_coefficients(rejected_bound, ATol::default()).unwrap_err();
-        assert!(err.to_string().contains("too far from zero"));
+        let err = log_encoding_coefficients(VariableID::from(0), rejected_bound, ATol::default())
+            .unwrap_err();
+        assert!(matches!(
+            err.downcast_ref::<LogEncodingUnavailable>(),
+            Some(LogEncodingUnavailable::RangeOutsideExactIntegerDomain {
+                id,
+                lower,
+                upper,
+                max_abs,
+            })
+                if *id == VariableID::from(0)
+                    && *lower == max_exact_integer
+                    && *upper == max_exact_integer + 2.0
+                    && *max_abs == max_exact_integer
+        ));
     }
 
     #[test]
@@ -701,6 +824,7 @@ mod tests {
                 .unwrap();
 
             let err = instance.log_encode([id], ATol::default()).unwrap_err();
+            assert!(!err.is::<LogEncodingUnavailable>());
             assert!(err.to_string().contains("must be integer"));
             assert_eq!(aux_variable_count(&instance, "ommx.log_encode"), 0);
         }
@@ -712,6 +836,7 @@ mod tests {
         let mut instance = fixed_integer_instance(id);
 
         let err = instance.log_encode([id], ATol::default()).unwrap_err();
+        assert!(!err.is::<LogEncodingUnavailable>());
         assert!(err.to_string().contains("fixed decision variable"));
         assert_eq!(instance.fixed_decision_variable_value(id), Some(1.0));
         assert!(instance.decision_variable_dependency.get(&id).is_none());
@@ -808,6 +933,7 @@ mod tests {
             .unwrap();
 
         let err = instance.log_encode([id], ATol::default()).unwrap_err();
+        assert!(!err.is::<LogEncodingUnavailable>());
         assert!(err
             .to_string()
             .contains("No available decision variable ID"));
@@ -837,6 +963,7 @@ mod tests {
             .unwrap();
 
         let err = instance.log_encode([id], ATol::default()).unwrap_err();
+        assert!(!err.is::<LogEncodingUnavailable>());
         assert!(err.to_string().contains("SOS1"));
         assert!(instance.decision_variable_dependency.get(&id).is_none());
         assert_eq!(aux_variable_count(&instance, "ommx.log_encode"), 0);
@@ -868,6 +995,7 @@ mod tests {
 
         let err = instance.log_encode([id], ATol::default()).unwrap_err();
 
+        assert!(!err.is::<LogEncodingUnavailable>());
         assert!(err.to_string().contains("Coefficient must be finite"));
         assert_eq!(instance, before);
     }
@@ -938,6 +1066,10 @@ mod tests {
         let err = instance
             .log_encode([id0, id1], ATol::default())
             .unwrap_err();
+        assert!(matches!(
+            err.downcast_ref::<LogEncodingUnavailable>(),
+            Some(LogEncodingUnavailable::NonFiniteBound { id, .. }) if *id == id1
+        ));
         assert!(err.to_string().contains("bound must be finite"));
         assert!(instance.decision_variable_dependency.get(&id0).is_none());
         assert!(instance.decision_variable_dependency.get(&id1).is_none());
@@ -965,6 +1097,7 @@ mod tests {
         let err = instance
             .log_encode([id0, id1], ATol::default())
             .unwrap_err();
+        assert!(!err.is::<LogEncodingUnavailable>());
         assert!(err.to_string().contains("unknown variable"));
         assert!(instance.decision_variable_dependency.get(&id0).is_none());
         assert_eq!(aux_variable_count(&instance, "ommx.log_encode"), 0);

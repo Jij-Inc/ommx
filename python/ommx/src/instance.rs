@@ -1811,6 +1811,10 @@ impl Instance {
     /// - `atol`: Optional absolute tolerance used when normalizing integer
     ///   bounds before encoding. If None, uses the default tolerance.
     ///
+    /// Raises {class}`~ommx.LogEncodingError` when an exact representation is
+    /// unavailable for a requested variable. Allocation and expression-rewrite
+    /// failures retain their original exception types.
+    ///
     /// # Examples
     ///
     /// Let's consider a simple integer programming problem with three integer variables x0, x1, and x2.
@@ -2055,6 +2059,12 @@ impl Instance {
     /// >>> instance.constraints[0]
     /// Constraint(x0 + 2*x1 + x3 - 5 == 0)
     /// ```
+    ///
+    /// Raises {class}`~ommx.ExactIntegerSlackError` when exact conversion is
+    /// unavailable because the coefficients cannot be normalized or the slack
+    /// range exceeds ``max_integer_range``. Raises
+    /// {class}`~ommx.InfeasibleDetected` when the bounds prove the inequality
+    /// infeasible.
     pub fn convert_inequality_to_equality_with_integer_slack(
         &mut self,
         constraint_id: u64,

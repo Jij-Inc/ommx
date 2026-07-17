@@ -6356,6 +6356,21 @@
         },
         {
           "kind": "Class",
+          "name": "ExactIntegerSlackError",
+          "doc": "Exact integer-slack conversion is unavailable for the requested inequality.",
+          "bases": [
+            {
+              "display": "RuntimeError",
+              "link_target": null,
+              "children": []
+            }
+          ],
+          "methods": [],
+          "attributes": [],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
           "name": "Function",
           "doc": "General mathematical function of decision variables.",
           "bases": [],
@@ -8146,6 +8161,21 @@
         },
         {
           "kind": "Class",
+          "name": "InfeasibleDetected",
+          "doc": "The mathematical model was proven infeasible.",
+          "bases": [
+            {
+              "display": "RuntimeError",
+              "link_target": null,
+              "children": []
+            }
+          ],
+          "methods": [],
+          "attributes": [],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
           "name": "Instance",
           "doc": "Optimization problem instance.\n\nThis class also contains annotations like {attr}`~ommx.Instance.title`.\nOMMX-defined annotations are stored in explicit protobuf fields, while\nuser-defined annotations are stored in the protobuf annotation map and\nmirrored to OMMX Artifact descriptors.\n\n# Examples\n\nCreate an instance for KnapSack Problem\n\n```python\n>>> from ommx import Instance, DecisionVariable\n```\n\nProfit and weight of items\n\n```python\n>>> p = [10, 13, 18, 31, 7, 15]\n>>> w = [11, 15, 20, 35, 10, 33]\n```\n\nDecision variables\n\n```python\n>>> x = [DecisionVariable.binary(i) for i in range(6)]\n```\n\nObjective and constraint\n\n```python\n>>> objective = sum(p[i] * x[i] for i in range(6))\n>>> constraint = sum(w[i] * x[i] for i in range(6)) <= 47\n```\n\nCompose as an instance\n\n```python\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=objective,\n...     constraints=[constraint],\n...     sense=Instance.MAXIMIZE,\n... )\n```",
           "bases": [],
@@ -9116,7 +9146,7 @@
             },
             {
               "name": "convert_inequality_to_equality_with_integer_slack",
-              "doc": "Convert an inequality constraint $f(x) \\leq 0$ to an equality constraint $f(x) + s/a = 0$ with an integer slack variable $s$.\n\n- Since $a$ is determined as the minimal multiplier to make every coefficient of $a f(x)$ integer,\n  $a$ itself and the range of $s$ becomes impractically large. ``max_integer_range`` limits the maximal\n  range of $s$, and returns error if the range exceeds it.\n\n- Since this method evaluates the bound of $f(x)$, we may find that:\n\n  - The bound $[l, u]$ is strictly positive, i.e. $l > 0$:\n    this means the instance is infeasible because this constraint never be satisfied,\n    and an error is raised.\n\n  - The bound $[l, u]$ is always negative, i.e. $u \\leq 0$:\n    this means this constraint is trivially satisfied,\n    the constraint is moved to {attr}`~ommx.Instance.removed_constraints`,\n    and this method returns without introducing slack variable or raising an error.\n\n# Examples\n\nLet's consider a simple inequality constraint x0 + 2*x1 <= 5.\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [\n...     DecisionVariable.integer(i, lower=0, upper=3, name=\"x\", subscripts=[i])\n...     for i in range(3)\n... ]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[\n...         (x[0] + 2*x[1] <= 5).set_id(0)\n...     ],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.constraints[0]\nConstraint(x0 + 2*x1 - 5 <= 0)\n```\n\nIntroduce an integer slack variable\n\n```python\n>>> instance.convert_inequality_to_equality_with_integer_slack(\n...     constraint_id=0,\n...     max_integer_range=32\n... )\n>>> instance.constraints[0]\nConstraint(x0 + 2*x1 + x3 - 5 == 0)\n```",
+              "doc": "Convert an inequality constraint $f(x) \\leq 0$ to an equality constraint $f(x) + s/a = 0$ with an integer slack variable $s$.\n\n- Since $a$ is determined as the minimal multiplier to make every coefficient of $a f(x)$ integer,\n  $a$ itself and the range of $s$ becomes impractically large. ``max_integer_range`` limits the maximal\n  range of $s$, and returns error if the range exceeds it.\n\n- Since this method evaluates the bound of $f(x)$, we may find that:\n\n  - The bound $[l, u]$ is strictly positive, i.e. $l > 0$:\n    this means the instance is infeasible because this constraint never be satisfied,\n    and an error is raised.\n\n  - The bound $[l, u]$ is always negative, i.e. $u \\leq 0$:\n    this means this constraint is trivially satisfied,\n    the constraint is moved to {attr}`~ommx.Instance.removed_constraints`,\n    and this method returns without introducing slack variable or raising an error.\n\n# Examples\n\nLet's consider a simple inequality constraint x0 + 2*x1 <= 5.\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [\n...     DecisionVariable.integer(i, lower=0, upper=3, name=\"x\", subscripts=[i])\n...     for i in range(3)\n... ]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[\n...         (x[0] + 2*x[1] <= 5).set_id(0)\n...     ],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.constraints[0]\nConstraint(x0 + 2*x1 - 5 <= 0)\n```\n\nIntroduce an integer slack variable\n\n```python\n>>> instance.convert_inequality_to_equality_with_integer_slack(\n...     constraint_id=0,\n...     max_integer_range=32\n... )\n>>> instance.constraints[0]\nConstraint(x0 + 2*x1 + x3 - 5 == 0)\n```\n\nRaises {class}`~ommx.ExactIntegerSlackError` when exact conversion is\nunavailable because the coefficients cannot be normalized or the slack\nrange exceeds ``max_integer_range``. Raises\n{class}`~ommx.InfeasibleDetected` when the bounds prove the inequality\ninfeasible.",
               "signatures": [
                 {
                   "parameters": [
@@ -10121,7 +10151,7 @@
             },
             {
               "name": "log_encode",
-              "doc": "Log-encode the integer decision variables.\n\nLog encoding of an integer variable $x \\in [l, u]$ is to represent by $m$ bits $b_i \\in \\{0, 1\\}$ by:\n\n$$x = \\sum_{i=0}^{m-2} 2^i b_i + (u - l - 2^{m-1} + 1) b_{m-1} + l$$\n\nwhere $m = \\lceil \\log_2(u - l + 1) \\rceil$.\n\n**Args:**\n- `decision_variable_ids`: The IDs of the integer decision variables to log-encode.\n  If not specified (or empty), all used integer variables are log-encoded.\n- `atol`: Optional absolute tolerance used when normalizing integer\n  bounds before encoding. If None, uses the default tolerance.\n\n# Examples\n\nLet's consider a simple integer programming problem with three integer variables x0, x1, and x2.\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [\n...     DecisionVariable.integer(i, lower=0, upper=3, name=\"x\", subscripts=[i])\n...     for i in range(3)\n... ]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.objective\nFunction(x0 + x1 + x2)\n```\n\nTo log-encode the integer variables x0 and x2 (except x1), call log_encode:\n\n```python\n>>> instance.log_encode({0, 2})\n```\n\nInteger variable in range $[0, 3]$ can be represented by two binary variables:\n\n$$x_0 = b_{0,0} + 2 b_{0,1}, \\quad x_2 = b_{2,0} + 2 b_{2,1}$$\n\nAnd these are substituted into the objective and constraint functions.\n\n```python\n>>> instance.objective\nFunction(x1 + x3 + 2*x4 + x5 + 2*x6)\n```",
+              "doc": "Log-encode the integer decision variables.\n\nLog encoding of an integer variable $x \\in [l, u]$ is to represent by $m$ bits $b_i \\in \\{0, 1\\}$ by:\n\n$$x = \\sum_{i=0}^{m-2} 2^i b_i + (u - l - 2^{m-1} + 1) b_{m-1} + l$$\n\nwhere $m = \\lceil \\log_2(u - l + 1) \\rceil$.\n\n**Args:**\n- `decision_variable_ids`: The IDs of the integer decision variables to log-encode.\n  If not specified (or empty), all used integer variables are log-encoded.\n- `atol`: Optional absolute tolerance used when normalizing integer\n  bounds before encoding. If None, uses the default tolerance.\n\nRaises {class}`~ommx.LogEncodingError` when an exact representation is\nunavailable for a requested variable. Allocation and expression-rewrite\nfailures retain their original exception types.\n\n# Examples\n\nLet's consider a simple integer programming problem with three integer variables x0, x1, and x2.\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [\n...     DecisionVariable.integer(i, lower=0, upper=3, name=\"x\", subscripts=[i])\n...     for i in range(3)\n... ]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.objective\nFunction(x0 + x1 + x2)\n```\n\nTo log-encode the integer variables x0 and x2 (except x1), call log_encode:\n\n```python\n>>> instance.log_encode({0, 2})\n```\n\nInteger variable in range $[0, 3]$ can be represented by two binary variables:\n\n$$x_0 = b_{0,0} + 2 b_{0,1}, \\quad x_2 = b_{2,0} + 2 b_{2,1}$$\n\nAnd these are substituted into the objective and constraint functions.\n\n```python\n>>> instance.objective\nFunction(x1 + x3 + 2*x4 + x5 + 2*x6)\n```",
               "signatures": [
                 {
                   "parameters": [
@@ -13671,6 +13701,98 @@
                     "children": []
                   }
                 ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "LogEncodingError",
+          "doc": "An exact log encoding is unavailable for one requested decision variable.",
+          "bases": [
+            {
+              "display": "RuntimeError",
+              "link_target": null,
+              "children": []
+            }
+          ],
+          "methods": [],
+          "attributes": [
+            {
+              "name": "expected",
+              "doc": "Required bound condition or maximum bit count.",
+              "type_": {
+                "display": "str | int | float",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "float",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "kind",
+              "doc": "Machine-readable reason for unavailable exact encoding.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "observed",
+              "doc": "Observed bound or bit count that made encoding unavailable.",
+              "type_": {
+                "display": "str | int | float",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "float",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "variable_id",
+              "doc": "Decision variable for which exact encoding is unavailable.",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
               },
               "is_property": true,
               "is_readonly": true
@@ -32805,8 +32927,10 @@
     "ommx.EvaluatedConstraint": "ommx",
     "ommx.EvaluatedDecisionVariable": "ommx",
     "ommx.EvaluatedNamedFunction": "ommx",
+    "ommx.ExactIntegerSlackError": "ommx",
     "ommx.Function": "ommx",
     "ommx.IndicatorConstraint": "ommx",
+    "ommx.InfeasibleDetected": "ommx",
     "ommx.Instance": "ommx",
     "ommx.InstanceClass": "ommx",
     "ommx.InstanceClassClause": "ommx",
@@ -32815,6 +32939,7 @@
     "ommx.InstanceClassMismatch": "ommx",
     "ommx.Kind": "ommx",
     "ommx.Linear": "ommx",
+    "ommx.LogEncodingError": "ommx",
     "ommx.NamedFunction": "ommx",
     "ommx.OneHotConstraint": "ommx",
     "ommx.Optimality": "ommx",

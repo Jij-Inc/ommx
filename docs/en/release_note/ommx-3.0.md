@@ -38,11 +38,12 @@ do not include secrets, tracebacks, local variables, or environment values.
 Existing Experiment artifacts without an outcome detail continue to load with
 `None`.
 
-### ⚠ Input classes for HiGHS, Python-MIP, and PySCIPOpt adapters ([#1085](https://github.com/Jij-Inc/ommx/pull/1085), [#1086](https://github.com/Jij-Inc/ommx/pull/1086))
+### ⚠ Input classes and explicit OpenJij preparation ([#1085](https://github.com/Jij-Inc/ommx/pull/1085), [#1086](https://github.com/Jij-Inc/ommx/pull/1086), [#1087](https://github.com/Jij-Inc/ommx/pull/1087))
 
-`OMMXHighsAdapter`, `OMMXPythonMIPAdapter`, and `OMMXPySCIPOptAdapter` now
+`OMMXHighsAdapter`, `OMMXPythonMIPAdapter`, `OMMXPySCIPOptAdapter`, and
+`OMMXOpenJijSAAdapter` now
 declare `INPUT_CLASS` for the exact inputs accepted before direct backend
-construction. All three accept Binary, Integer, and Continuous variables used
+construction. The first three accept Binary, Integer, and Continuous variables used
 by the active mathematical content and both optimization senses. HiGHS and
 Python-MIP accept linear objectives and linear regular equality or inequality
 constraints. PySCIPOpt accepts objectives and regular constraints of degree at
@@ -52,15 +53,78 @@ mutation through {class}`~ommx.adapter.AdapterNotApplicableError`, which carries
 structured clause mismatches. Any explicitly prepared {class}`~ommx.Instance`
 is a different input whose applicability must be checked again.
 
-This is a breaking change to the public exception contract from stable Python
-SDK 2.6.1. Unsupported objectives, regular constraints, or used variable kinds
+OpenJij accepts Binary, unconstrained minimization inputs with a polynomial
+objective of any degree. Integer encoding, sense reversal, slack introduction,
+special-constraint lowering, and finite penalties are no longer implicit in
+the Adapter call. Prepare a separate input explicitly, pass that exact
+{class}`~ommx.Instance` to the Adapter, and then evaluate its samples against
+the source when source semantics are required:
+
+```python
+from ommx_openjij_adapter import (
+    OMMXOpenJijSAAdapter,
+    OpenJijPreparationConfig,
+)
+
+config = OpenJijPreparationConfig(
+    uniform_penalty_weight=20.0,
+)
+preparation = OMMXOpenJijSAAdapter.prepare(source, config=config)
+prepared_samples = OMMXOpenJijSAAdapter.sample(preparation.input)
+source_samples = preparation.evaluate_source(prepared_samples)
+```
+
+The OpenJij-specific preparation report separates source-class membership,
+operations that completed, failures owned by the operation that encountered
+them, and applicability of `preparation.input`; it is not a common composed
+guarantee. Its separate `config` field records the normalized, immutable
+preparation settings actually used. Approximate integer slack is disabled by
+default and requires setting `allow_approximate_integer_slack=True` on
+`OpenJijPreparationConfig`. Finite penalties remain explicitly selected through
+`uniform_penalty_weight` or `penalty_weights` on that Config. Per-constraint
+weight coverage is evaluated after slack preparation, against the regular
+constraints that actually remain to be penalized. Common preparation policy and
+guarantees are tracked in [#1111](https://github.com/Jij-Inc/ommx/issues/1111).
+The at-most-53-bit Integer encoding condition is operation availability checked
+by the Integer-encoding phase, not source-class membership, the OpenJij input
+class, or `ommx.v2.Feature`.
+
+For HiGHS, Python-MIP, and PySCIPOpt, this is a breaking change to the public
+exception contract from stable Python SDK 2.6.1. Unsupported objectives,
+regular constraints, or used variable kinds
 previously raised `OMMXHighsAdapterError`, `OMMXPythonMIPAdapterError`, or
 `OMMXPySCIPOptAdapterError`; they now raise `AdapterNotApplicableError` before
 backend construction. Code that caught an adapter-specific exception for
 constructor-time input rejection must catch `AdapterNotApplicableError`
-instead, or call `check_applicability()` before construction. The stable input
-boundaries are unchanged, and adapter-specific exceptions remain in use for
-conversion and backend failures.
+instead, or call `check_applicability()` before construction. Their stable
+input boundaries are unchanged, and adapter-specific exceptions remain in use
+for conversion and backend failures.
+
+For OpenJij, this is also a breaking change from stable 2.6.1: constructor,
+`sample()`, and `solve()` no longer accept preparation options or implicitly
+rewrite a source model. Stable 2.6.1 selected a uniform penalty weight of `1.0`
+when none was supplied and automatically attempted discrete slack
+approximation when exact conversion failed; v3 requires explicit finite weights
+and an explicit approximation opt-in. The explicit `evaluate_source()` step
+also fixes the old implicit path's result evaluation, which could report the
+rewritten penalty objective, reversed sense, or transformed constraints instead
+of the source objective, sense, and constraints.
+
+The canonical infeasibility exception is now `ommx.InfeasibleDetected`, while
+`ommx.adapter.InfeasibleDetected` remains an alias for the same object. It is a
+`RuntimeError` subclass so existing handlers around the Rust-backed slack
+operations continue to catch it. This changes the stable Adapter-side hierarchy:
+an `except RuntimeError` around OpenJij preparation did not previously catch the
+old direct `Exception` subclass, but does in v3. Catch
+`InfeasibleDetected` explicitly when that distinction controls recovery.
+
+The deprecated `response_to_samples()` and `sample_qubo_sa()` helpers are also
+removed in 3.0.0. Use `decode_to_samples()` in place of `response_to_samples()`.
+For a directly applicable input, replace `sample_qubo_sa()` with
+`OMMXOpenJijSAAdapter.sample()`; when preparation is required, use the explicit
+`prepare()` / `sample(preparation.input)` / `evaluate_source()` flow above.
+The replacement sampling API returns an evaluated `SampleSet`, rather than the
+raw `Samples` returned by `sample_qubo_sa()`.
 
 Indicator, OneHot, and SOS1 constraints are not lowered implicitly for HiGHS or
 Python-MIP, and PySCIPOpt no longer lowers OneHot implicitly. These changes to
@@ -111,6 +175,18 @@ archive, and content-addressed storage failures also remain on that fallback.
 Exceptions from Python-backed codecs, JSON callbacks, adapters, tracing hooks,
 and data libraries pass through unchanged.
 
+Integer preparation operations expose three additional RuntimeError-compatible
+specializations. {meth}`~ommx.Instance.log_encode` raises
+{class}`~ommx.LogEncodingError` only when an exact encoding is unavailable for
+the requested variable. Exact integer-slack conversion raises
+{class}`~ommx.ExactIntegerSlackError` only when callers may explicitly select an
+approximate alternative, and both exact and approximate slack operations raise
+{class}`~ommx.InfeasibleDetected` when bounds prove the model infeasible.
+Allocation, substitution, and coefficient-arithmetic failures retain their
+ordinary exception classification; they are not treated as availability
+signals. Existing broad `except RuntimeError` handlers continue to work, while
+callers that intentionally recover can catch the concrete exception.
+
 The Python extension no longer depends directly on `anyhow`, and its PyO3
 dependency no longer enables the blanket `anyhow` conversion feature.
 `pyo3-tracing-opentelemetry` is upgraded to 0.3.1 so the feature stays disabled
@@ -133,7 +209,8 @@ Related PRs: [#1096](https://github.com/Jij-Inc/ommx/pull/1096),
 [#1099](https://github.com/Jij-Inc/ommx/pull/1099),
 [#1100](https://github.com/Jij-Inc/ommx/pull/1100),
 [#1101](https://github.com/Jij-Inc/ommx/pull/1101),
-[#1102](https://github.com/Jij-Inc/ommx/pull/1102).
+[#1102](https://github.com/Jij-Inc/ommx/pull/1102),
+[#1087](https://github.com/Jij-Inc/ommx/pull/1087).
 
 ### 🆕 Instance classes and adapter applicability ([#1084](https://github.com/Jij-Inc/ommx/pull/1084))
 

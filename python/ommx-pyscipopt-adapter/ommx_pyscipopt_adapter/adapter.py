@@ -615,7 +615,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                 >>> OMMXPySCIPOptAdapter.solve(instance)
                 Traceback (most recent call last):
                     ...
-                ommx.adapter.InfeasibleDetected: Model was infeasible
+                ommx.InfeasibleDetected: Model was infeasible
 
         Unbounded Problem
 

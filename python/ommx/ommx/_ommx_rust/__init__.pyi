@@ -43,6 +43,7 @@ __all__ = [
     "EvaluatedConstraint",
     "EvaluatedDecisionVariable",
     "EvaluatedNamedFunction",
+    "ExactIntegerSlackError",
     "Experiment",
     "ExperimentCheckpointRef",
     "ExperimentRef",
@@ -53,6 +54,7 @@ __all__ = [
     "GcReport",
     "GcRoot",
     "IndicatorConstraint",
+    "InfeasibleDetected",
     "Instance",
     "InstanceClass",
     "InstanceClassClause",
@@ -64,6 +66,7 @@ __all__ = [
     "Kind",
     "Linear",
     "LinearLike",
+    "LogEncodingError",
     "NamedFunction",
     "OneHotConstraint",
     "OpenSolve",
@@ -1867,6 +1870,13 @@ class EvaluatedNamedFunction:
     def __copy__(self) -> EvaluatedNamedFunction: ...
     def __deepcopy__(self, _memo: typing.Any) -> EvaluatedNamedFunction: ...
 
+class ExactIntegerSlackError(builtins.RuntimeError):
+    r"""
+    Exact integer-slack conversion is unavailable for the requested inequality.
+    """
+
+    ...
+
 @typing.final
 class Experiment:
     r"""
@@ -2864,6 +2874,13 @@ class IndicatorConstraint:
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> IndicatorConstraint: ...
     def __deepcopy__(self, _memo: typing.Any) -> IndicatorConstraint: ...
+
+class InfeasibleDetected(builtins.RuntimeError):
+    r"""
+    The mathematical model was proven infeasible.
+    """
+
+    ...
 
 @typing.final
 class Instance:
@@ -4081,6 +4098,10 @@ class Instance:
         - `atol`: Optional absolute tolerance used when normalizing integer
           bounds before encoding. If None, uses the default tolerance.
 
+        Raises {class}`~ommx.LogEncodingError` when an exact representation is
+        unavailable for a requested variable. Allocation and expression-rewrite
+        failures retain their original exception types.
+
         # Examples
 
         Let's consider a simple integer programming problem with three integer variables x0, x1, and x2.
@@ -4263,6 +4284,12 @@ class Instance:
         >>> instance.constraints[0]
         Constraint(x0 + 2*x1 + x3 - 5 == 0)
         ```
+
+        Raises {class}`~ommx.ExactIntegerSlackError` when exact conversion is
+        unavailable because the coefficients cannot be normalized or the slack
+        range exceeds ``max_integer_range``. Raises
+        {class}`~ommx.InfeasibleDetected` when the bounds prove the inequality
+        infeasible.
         """
     def add_integer_slack_to_inequality(
         self, constraint_id: builtins.int, slack_upper_bound: builtins.int
@@ -5130,6 +5157,31 @@ class Linear:
     def __ge__(self, other: ToFunction) -> Constraint:
         r"""
         Create a greater-than-or-equal constraint: self >= other → Constraint
+        """
+
+class LogEncodingError(builtins.RuntimeError):
+    r"""
+    An exact log encoding is unavailable for one requested decision variable.
+    """
+    @property
+    def kind(self) -> builtins.str:
+        r"""
+        Machine-readable reason for unavailable exact encoding.
+        """
+    @property
+    def variable_id(self) -> builtins.int:
+        r"""
+        Decision variable for which exact encoding is unavailable.
+        """
+    @property
+    def observed(self) -> builtins.str | builtins.int | builtins.float:
+        r"""
+        Observed bound or bit count that made encoding unavailable.
+        """
+    @property
+    def expected(self) -> builtins.str | builtins.int | builtins.float:
+        r"""
+        Required bound condition or maximum bit count.
         """
 
 @typing.final
