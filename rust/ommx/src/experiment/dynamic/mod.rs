@@ -648,8 +648,10 @@ impl ExperimentDyn {
     pub fn fork(&self, name: impl Into<Name>) -> Result<Self> {
         let (sealed, registry_handle) = {
             let dyn_state = lock_experiment_state(&self.state);
-            let ExperimentDynLifecycle::Sealed(sealed) = &dyn_state.lifecycle else {
-                return bail_not_sealed(&dyn_state.lifecycle);
+            let sealed = match &dyn_state.lifecycle {
+                ExperimentDynLifecycle::Sealed(sealed)
+                | ExperimentDynLifecycle::Checkpoint { sealed, .. } => sealed,
+                lifecycle => return bail_not_sealed(lifecycle),
             };
             (sealed.clone(), dyn_state.registry_handle.clone())
         };

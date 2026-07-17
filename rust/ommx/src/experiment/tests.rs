@@ -47,6 +47,34 @@ fn with_unsealed_state<T>(
     f(&state)
 }
 
+#[derive(serde::Deserialize)]
+struct Beta1ExperimentConfig {
+    status: String,
+    #[serde(default)]
+    requested_image_name: Option<String>,
+    attachments: AttachmentTable<LayerRef>,
+    runs: Vec<Beta1ExperimentConfigRun>,
+    run_parameters: LayerRef,
+}
+
+#[derive(serde::Deserialize)]
+struct Beta1ExperimentConfigRun {
+    run_id: u64,
+    #[serde(default = "beta1_default_run_status")]
+    status: String,
+    attachments: AttachmentTable<LayerRef>,
+    #[serde(default)]
+    trace: Option<LayerRef>,
+    #[serde(default)]
+    solves: Vec<ExperimentConfigSolve>,
+    #[serde(default)]
+    samplings: Vec<ExperimentConfigSampling>,
+}
+
+fn beta1_default_run_status() -> String {
+    RUN_STATUS_FINISHED.to_string()
+}
+
 #[test]
 fn borrowed_run_lifecycle_reason_survives_commit() {
     with_temp_experiment(|experiment| {
@@ -2291,19 +2319,165 @@ fn loaded_experiment_rejects_non_finished_status() {
 }
 
 #[test]
-fn experiment_config_without_outcome_deserializes_as_finished() {
+fn experiment_config_reads_beta1_lifecycle_json_without_outcomes() {
+    let runs = json!([
+        {
+            "run_id": 0,
+            "status": "finished",
+            "attachments": {"entries": {}}
+        },
+        {
+            "run_id": 1,
+            "status": "failed",
+            "attachments": {"entries": {}}
+        },
+        {
+            "run_id": 2,
+            "status": "interrupted",
+            "attachments": {"entries": {}}
+        }
+    ]);
+
+    for (status, expected) in [
+        (EXPERIMENT_STATUS_DRAFT, ExperimentLifecycle::Draft),
+        (EXPERIMENT_STATUS_FINISHED, ExperimentLifecycle::Finished),
+        (
+            EXPERIMENT_STATUS_FAILED,
+            ExperimentLifecycle::Failed { reason: None },
+        ),
+        (
+            EXPERIMENT_STATUS_INTERRUPTED,
+            ExperimentLifecycle::Interrupted { reason: None },
+        ),
+    ] {
+        let value = json!({
+            "status": status,
+            "attachments": {"entries": {}},
+            "runs": runs,
+            "run_parameters": 0
+        });
+        let decoded: ExperimentConfig = serde_json::from_value(value).unwrap();
+        assert_eq!(decoded.lifecycle, expected);
+        assert_eq!(
+            decoded
+                .runs
+                .iter()
+                .map(|run| run.lifecycle.clone())
+                .collect::<Vec<_>>(),
+            vec![
+                RunLifecycle::Finished,
+                RunLifecycle::Failed { reason: None },
+                RunLifecycle::Interrupted { reason: None },
+            ]
+        );
+    }
+}
+
+#[test]
+fn lifecycle_json_round_trips_all_variants() {
+    let experiment_cases = [
+        (ExperimentLifecycle::Draft, json!({"status": "draft"})),
+        (ExperimentLifecycle::Finished, json!({"status": "finished"})),
+        (
+            ExperimentLifecycle::Failed { reason: None },
+            json!({"status": "failed"}),
+        ),
+        (
+            ExperimentLifecycle::Failed {
+                reason: Some("solver failed".to_string()),
+            },
+            json!({"status": "failed", "outcome": {"reason": "solver failed"}}),
+        ),
+        (
+            ExperimentLifecycle::Interrupted { reason: None },
+            json!({"status": "interrupted"}),
+        ),
+        (
+            ExperimentLifecycle::Interrupted {
+                reason: Some("cancelled".to_string()),
+            },
+            json!({"status": "interrupted", "outcome": {"reason": "cancelled"}}),
+        ),
+    ];
+    for (lifecycle, expected_json) in experiment_cases {
+        let value = serde_json::to_value(&lifecycle).unwrap();
+        assert_eq!(value, expected_json);
+        assert_eq!(
+            serde_json::from_value::<ExperimentLifecycle>(value).unwrap(),
+            lifecycle
+        );
+    }
+
+    let run_cases = [
+        (RunLifecycle::Finished, json!({"status": "finished"})),
+        (
+            RunLifecycle::Failed { reason: None },
+            json!({"status": "failed"}),
+        ),
+        (
+            RunLifecycle::Failed {
+                reason: Some("solver failed".to_string()),
+            },
+            json!({"status": "failed", "outcome": {"reason": "solver failed"}}),
+        ),
+        (
+            RunLifecycle::Interrupted { reason: None },
+            json!({"status": "interrupted"}),
+        ),
+        (
+            RunLifecycle::Interrupted {
+                reason: Some("cancelled".to_string()),
+            },
+            json!({"status": "interrupted", "outcome": {"reason": "cancelled"}}),
+        ),
+    ];
+    for (lifecycle, expected_json) in run_cases {
+        let value = serde_json::to_value(&lifecycle).unwrap();
+        assert_eq!(value, expected_json);
+        assert_eq!(
+            serde_json::from_value::<RunLifecycle>(value).unwrap(),
+            lifecycle
+        );
+    }
+}
+
+#[test]
+fn beta1_experiment_config_reader_ignores_lifecycle_outcomes() {
     let config = ExperimentConfig {
-        lifecycle: ExperimentLifecycle::Finished,
-        requested_image_name: None,
+        lifecycle: ExperimentLifecycle::Failed {
+            reason: Some("solver failed".to_string()),
+        },
+        requested_image_name: Some("example.com/experiment:failed".to_string()),
         attachments: AttachmentTable::new(),
-        runs: Vec::new(),
+        runs: vec![ExperimentConfigRun {
+            run_id: 7,
+            lifecycle: RunLifecycle::Interrupted {
+                reason: Some("cancelled".to_string()),
+            },
+            attachments: AttachmentTable::new(),
+            trace: None,
+            solves: Vec::new(),
+            samplings: Vec::new(),
+        }],
         run_parameters: LayerRef(0),
     };
-    let mut value = serde_json::to_value(config).unwrap();
-    value.as_object_mut().unwrap().remove("outcome");
 
-    let decoded: ExperimentConfig = serde_json::from_value(value).unwrap();
-    assert_eq!(decoded.lifecycle, ExperimentLifecycle::Finished);
+    let decoded: Beta1ExperimentConfig =
+        serde_json::from_value(serde_json::to_value(config).unwrap()).unwrap();
+    assert_eq!(decoded.status, EXPERIMENT_STATUS_FAILED);
+    assert_eq!(
+        decoded.requested_image_name.as_deref(),
+        Some("example.com/experiment:failed")
+    );
+    assert!(decoded.attachments.is_empty());
+    assert_eq!(decoded.run_parameters, LayerRef(0));
+    assert_eq!(decoded.runs.len(), 1);
+    assert_eq!(decoded.runs[0].run_id, 7);
+    assert_eq!(decoded.runs[0].status, RUN_STATUS_INTERRUPTED);
+    assert!(decoded.runs[0].attachments.is_empty());
+    assert_eq!(decoded.runs[0].trace, None);
+    assert!(decoded.runs[0].solves.is_empty());
+    assert!(decoded.runs[0].samplings.is_empty());
 }
 
 #[test]
@@ -3661,6 +3835,15 @@ fn experiment_dyn_publishes_failed_checkpoint() {
         imported.lifecycle_reason().as_deref(),
         Some("ValueError: failed")
     );
+
+    let child_name =
+        ImageRef::parse("ghcr.io/jij-inc/ommx/experiment-test:fork-failed-checkpoint").unwrap();
+    let child = experiment
+        .fork(Name::Named(child_name.clone()))
+        .expect("a failed checkpoint must remain forkable");
+    assert!(child.is_unsealed());
+    let child = child.commit().unwrap();
+    assert_eq!(child.image_name(), &child_name);
 
     let publish_name = ImageRef::parse("example.com/ommx/failed-experiment:published").unwrap();
     experiment.rename(publish_name.clone()).unwrap();
