@@ -30,10 +30,13 @@ assert experiment.lifecycle_reason == "RuntimeError: solver process exited"
 assert experiment.runs[0].lifecycle_reason == "RuntimeError: solver process exited"
 ```
 
-reason は archive や registry transport をまたいで保持されます。これは adapter
-diagnostics ではなく lifecycle metadata です。簡潔な内容に留め、secret、traceback、
-local variable、environment value を含めないでください。outcome detail を持たない
-既存の Experiment Artifact は、従来どおり `None` として読み込めます。
+reason は archive や registry transport をまたいで保持されます。Python の context
+manager が取得する exception reason は空白を正規化し、Unicode 文字で512文字に制限
+します。超過した値の末尾は省略記号になります。この制限は永続化する metadata の
+サイズを抑えますが、内容を秘匿化するものではありません。lifecycle reason は adapter
+diagnostics ではないため、secret、traceback、local variable、environment value を
+含めないでください。outcome detail を持たない既存の Experiment Artifact は、従来どおり
+`None` として読み込めます。
 
 ### ⚠ HiGHS / Python-MIP / PySCIPOpt Adapter の Input Class ([#1085](https://github.com/Jij-Inc/ommx/pull/1085)、[#1086](https://github.com/Jij-Inc/ommx/pull/1086))
 

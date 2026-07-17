@@ -25,6 +25,8 @@ use ommx::experiment::{
     FailedSolveRecord, FinishedSampleRecord, FinishedSolveRecord, SamplingStatus, SolveStatus,
 };
 
+const PYTHON_EXCEPTION_REASON_MAX_CHARS: usize = 512;
+
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust", name = "ExperimentRef")]
@@ -1415,17 +1417,54 @@ fn python_exception_reason(
         .and_then(|value| value.getattr("__name__").ok())
         .and_then(|value| value.extract::<String>().ok())
         .unwrap_or_else(|| "exception".to_string());
-    match exc_value.and_then(|value| value.str().ok()) {
+    let reason = match exc_value.and_then(|value| value.str().ok()) {
         Some(value) => {
             let message = value.to_string_lossy();
-            if message.is_empty() {
+            if message.split_whitespace().next().is_none() {
                 type_name
             } else {
                 format!("{type_name}: {message}")
             }
         }
         None => type_name,
+    };
+    let reason = normalize_python_exception_reason(&reason);
+    if reason.is_empty() {
+        "exception".to_string()
+    } else {
+        reason
     }
+}
+
+fn normalize_python_exception_reason(reason: &str) -> String {
+    let mut normalized = String::with_capacity(reason.len().min(PYTHON_EXCEPTION_REASON_MAX_CHARS));
+    let mut char_count = 0;
+    let mut truncated = false;
+
+    'words: for word in reason.split_whitespace() {
+        if !normalized.is_empty() {
+            if char_count == PYTHON_EXCEPTION_REASON_MAX_CHARS {
+                truncated = true;
+                break;
+            }
+            normalized.push(' ');
+            char_count += 1;
+        }
+        for character in word.chars() {
+            if char_count == PYTHON_EXCEPTION_REASON_MAX_CHARS {
+                truncated = true;
+                break 'words;
+            }
+            normalized.push(character);
+            char_count += 1;
+        }
+    }
+
+    if truncated {
+        normalized.pop();
+        normalized.push('…');
+    }
+    normalized
 }
 
 fn is_keyboard_interrupt(

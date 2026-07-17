@@ -344,6 +344,32 @@ def test_experiment_context_restores_failed_checkpoint_on_exception(tmp_path):
     assert resumed.annotations["com.example.problem"] == "qap"
 
 
+def test_exception_lifecycle_reason_is_normalized_and_bounded(tmp_path):
+    image_name = _image_name("normalized-exception-reason")
+    experiments: list[Experiment] = []
+    message = "first\nsecond\t" + "é" * 600
+
+    with pytest.raises(ValueError, match="first"):
+        with Experiment(image_name) as experiment:
+            experiments.append(experiment)
+            with experiment.run():
+                raise ValueError(message)
+
+    prefix = "ValueError: first second "
+    expected = prefix + "é" * (511 - len(prefix)) + "…"
+    assert len(expected) == 512
+
+    experiment = experiments[0]
+    assert experiment.lifecycle_reason == expected
+    assert experiment.runs[0].lifecycle_reason == expected
+
+    archive_path = tmp_path / "normalized-exception-reason.ommx"
+    experiment.save(archive_path)
+    imported = Experiment.import_archive(archive_path)
+    assert imported.lifecycle_reason == expected
+    assert imported.runs[0].lifecycle_reason == expected
+
+
 def test_checkpoint_keeps_failed_run_and_can_be_restored():
     image_name = _image_name("failed-run-checkpoint")
     with pytest.raises(RuntimeError, match="solve failed"):

@@ -30,10 +30,13 @@ assert experiment.lifecycle_reason == "RuntimeError: solver process exited"
 assert experiment.runs[0].lifecycle_reason == "RuntimeError: solver process exited"
 ```
 
-The reason survives archive and registry transport. It is lifecycle metadata,
-not adapter diagnostics; keep it concise and do not include secrets,
-tracebacks, local variables, or environment values. Existing Experiment
-artifacts without an outcome detail continue to load with `None`.
+The reason survives archive and registry transport. Exception reasons captured
+by Python context managers collapse whitespace and are limited to 512 Unicode
+characters, with longer values ending in an ellipsis. This bounds the durable
+metadata but does not redact it. Lifecycle reasons are not adapter diagnostics;
+do not include secrets, tracebacks, local variables, or environment values.
+Existing Experiment artifacts without an outcome detail continue to load with
+`None`.
 
 ### ⚠ Input classes for HiGHS, Python-MIP, and PySCIPOpt adapters ([#1085](https://github.com/Jij-Inc/ommx/pull/1085), [#1086](https://github.com/Jij-Inc/ommx/pull/1086))
 
