@@ -28,7 +28,6 @@ from opentelemetry import trace
 from typing_extensions import deprecated
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
-from enum import Enum
 from math import isfinite
 from typing import ClassVar
 import copy
@@ -36,35 +35,30 @@ import copy
 _tracer = trace.get_tracer("ommx.adapter.openjij")
 
 
-class OpenJijPreparationSemantics(str, Enum):
-    """Semantic effect of one explicit OpenJij preparation step."""
-
-    Exact = "exact"
-    Approximate = "approximate"
-    FinitePenalty = "finite_penalty"
-
-
 @dataclass(frozen=True, slots=True)
 class OpenJijPreparationStep:
-    """One auditable transformation applied before an OpenJij Adapter call."""
+    """One OpenJij-specific operation recorded for preparation auditing.
+
+    This record is not a composed mathematical guarantee. The common guarantee
+    and policy contracts are tracked separately in OMMX issue #1111.
+    """
 
     operation: str
-    semantics: OpenJijPreparationSemantics
     description: str
     variable_ids: frozenset[int] = field(default_factory=frozenset)
     constraint_refs: frozenset[ConstraintRef] = field(default_factory=frozenset)
 
 
 @dataclass(frozen=True, slots=True)
-class OpenJijPreparationCheck:
+class OpenJijPreparationSourceCheck:
     """Membership and Adapter-owned preconditions for a preparation source."""
 
-    input_membership: InstanceClassMembershipReport
+    source_membership: InstanceClassMembershipReport
     preconditions_checked: bool
     precondition_violations: tuple[AdapterPreconditionViolation, ...]
 
     def __post_init__(self) -> None:
-        if self.preconditions_checked != self.input_membership.is_member:
+        if self.preconditions_checked != self.source_membership.is_member:
             raise ValueError(
                 "preconditions_checked must be true exactly when source membership holds"
             )
@@ -74,9 +68,9 @@ class OpenJijPreparationCheck:
             )
 
     @property
-    def is_preparable(self) -> bool:
+    def conditions_hold(self) -> bool:
         return (
-            self.input_membership.is_member
+            self.source_membership.is_member
             and self.preconditions_checked
             and not self.precondition_violations
         )
@@ -84,24 +78,24 @@ class OpenJijPreparationCheck:
 
 @dataclass(frozen=True, slots=True)
 class OpenJijPreparationReport:
-    """Auditable steps and applicability of the produced Adapter input."""
+    """OpenJij operation audit and applicability of the produced Adapter input."""
 
-    source_check: OpenJijPreparationCheck
+    source_check: OpenJijPreparationSourceCheck
     steps: tuple[OpenJijPreparationStep, ...]
-    prepared_input_applicability: AdapterApplicabilityReport | None
+    input_applicability: AdapterApplicabilityReport | None
 
     @property
-    def is_preparable(self) -> bool:
+    def is_successful(self) -> bool:
         return (
-            self.source_check.is_preparable
-            and self.prepared_input_applicability is not None
-            and self.prepared_input_applicability.is_applicable
+            self.source_check.conditions_hold
+            and self.input_applicability is not None
+            and self.input_applicability.is_applicable
         )
 
 
 @dataclass(frozen=True, slots=True)
 class OpenJijPreparation:
-    """A prepared Adapter input together with source-result recovery."""
+    """A separate Adapter input together with source-state reevaluation."""
 
     _input: Instance = field(repr=False)
     _source_instance: Instance = field(repr=False)
@@ -113,7 +107,11 @@ class OpenJijPreparation:
         return copy.deepcopy(self._input)
 
     def evaluate_source(self, sample_set: SampleSet) -> SampleSet:
-        """Evaluate prepared-input sample states against the source Instance."""
+        """Reevaluate input-side sample states against the source Instance.
+
+        ``sample_set`` must have been evaluated against this preparation's
+        :attr:`input`, which populates irrelevant and dependent source variables.
+        """
         source_variable_ids = {
             variable.id for variable in self._source_instance.used_decision_variables
         }
@@ -141,10 +139,10 @@ class OpenJijPreparationError(ValueError):
     def __init__(self, report: OpenJijPreparationReport):
         self.report = report
         source_check = report.source_check
-        if not source_check.input_membership.is_member:
+        if not source_check.source_membership.is_member:
             message = (
-                "OpenJij preparation source is outside its input class:\n"
-                f"{source_check.input_membership}"
+                "OpenJij preparation source is outside its supported source class:\n"
+                f"{source_check.source_membership}"
             )
         elif source_check.precondition_violations:
             details = "\n".join(
@@ -183,12 +181,12 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         ]
     )
 
-    # This describes inputs accepted by the explicit preparation operation,
+    # This describes sources accepted by the explicit preparation operation,
     # not inputs accepted directly by the OpenJij Adapter.
-    _PREPARATION_INPUT_CLASS: ClassVar[InstanceClass] = InstanceClass(
+    _PREPARATION_SOURCE_CLASS: ClassVar[InstanceClass] = InstanceClass(
         [
             InstanceClassClause(
-                label="openjij-explicit-preparation-input",
+                label="openjij-preparation-source",
                 allowed_variable_kinds={Kind.Binary, Kind.Integer},
                 objective_degree_bound=DegreeBound.unbounded(),
                 regular_constraint_degree_bounds={
@@ -427,24 +425,6 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
                 )
             )
 
-        if (
-            constraint_refs
-            and uniform_penalty_weight is None
-            and penalty_weights is None
-        ):
-            violations.append(
-                AdapterPreconditionViolation(
-                    condition="openjij.penalty.explicit_selection",
-                    description=(
-                        "Active regular constraints require an explicit finite-penalty "
-                        "preparation; they are not part of the OpenJij input class."
-                    ),
-                    constraint_refs=constraint_refs,
-                    actual="not selected",
-                    limit="uniform_penalty_weight or penalty_weights",
-                )
-            )
-
         if not constraint_refs and (
             uniform_penalty_weight is not None or penalty_weights is not None
         ):
@@ -567,17 +547,17 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         return tuple(violations)
 
     @classmethod
-    def _check_preparation_input(
+    def _check_preparation_source(
         cls,
         ommx_instance: Instance,
         *,
         uniform_penalty_weight: float | None = None,
         penalty_weights: Mapping[int, float] | None = None,
         inequality_integer_slack_max_range: int = 32,
-    ) -> OpenJijPreparationCheck:
+    ) -> OpenJijPreparationSourceCheck:
         membership, preconditions_checked, violations = cls._check_class_preconditions(
             ommx_instance,
-            cls._PREPARATION_INPUT_CLASS,
+            cls._PREPARATION_SOURCE_CLASS,
             lambda: (
                 *cls._log_encoding_precondition_violations(ommx_instance),
                 *cls._penalty_precondition_violations(
@@ -588,8 +568,8 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
                 ),
             ),
         )
-        return OpenJijPreparationCheck(
-            input_membership=membership,
+        return OpenJijPreparationSourceCheck(
+            source_membership=membership,
             preconditions_checked=preconditions_checked,
             precondition_violations=violations,
         )
@@ -602,22 +582,23 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         uniform_penalty_weight: float | None,
         penalty_weights: Mapping[int, float] | None,
         inequality_integer_slack_max_range: int,
+        allow_approximate_integer_slack: bool,
     ) -> tuple[OpenJijPreparationReport, OpenJijPreparation | None]:
-        source_check = cls._check_preparation_input(
+        source_check = cls._check_preparation_source(
             ommx_instance,
             uniform_penalty_weight=uniform_penalty_weight,
             penalty_weights=penalty_weights,
             inequality_integer_slack_max_range=inequality_integer_slack_max_range,
         )
         if (
-            not source_check.input_membership.is_member
+            not source_check.source_membership.is_member
             or source_check.precondition_violations
         ):
             return (
                 OpenJijPreparationReport(
                     source_check=source_check,
                     steps=(),
-                    prepared_input_applicability=None,
+                    input_applicability=None,
                 ),
                 None,
             )
@@ -629,6 +610,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
                 uniform_penalty_weight=uniform_penalty_weight,
                 penalty_weights=penalty_weights,
                 inequality_integer_slack_max_range=inequality_integer_slack_max_range,
+                allow_approximate_integer_slack=allow_approximate_integer_slack,
             )
         except InfeasibleDetected:
             raise
@@ -650,8 +632,8 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
             )
             return (
                 OpenJijPreparationReport(
-                    source_check=OpenJijPreparationCheck(
-                        input_membership=source_check.input_membership,
+                    source_check=OpenJijPreparationSourceCheck(
+                        source_membership=source_check.source_membership,
                         preconditions_checked=source_check.preconditions_checked,
                         precondition_violations=(
                             *source_check.precondition_violations,
@@ -659,7 +641,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
                         ),
                     ),
                     steps=(),
-                    prepared_input_applicability=None,
+                    input_applicability=None,
                 ),
                 None,
             )
@@ -673,6 +655,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         uniform_penalty_weight: float | None = None,
         penalty_weights: Mapping[int, float] | None = None,
         inequality_integer_slack_max_range: int = 32,
+        allow_approximate_integer_slack: bool = False,
     ) -> OpenJijPreparationReport:
         """Dry-run the complete explicit preparation without mutating the input.
 
@@ -681,7 +664,8 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         input. The 53-bit log-encoding limit is a preparation precondition, not
         an OpenJij input-class condition and not an ``ommx.v2.Feature``. A model
         proven infeasible while planning integer slack raises
-        :class:`~ommx.adapter.InfeasibleDetected`.
+        :class:`~ommx.adapter.InfeasibleDetected`. Approximate integer slack is
+        disabled unless ``allow_approximate_integer_slack=True`` is supplied.
         """
 
         report, _ = cls._plan_preparation(
@@ -689,6 +673,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
             uniform_penalty_weight=uniform_penalty_weight,
             penalty_weights=penalty_weights,
             inequality_integer_slack_max_range=inequality_integer_slack_max_range,
+            allow_approximate_integer_slack=allow_approximate_integer_slack,
         )
         return report
 
@@ -777,12 +762,14 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         uniform_penalty_weight: float | None = None,
         penalty_weights: Mapping[int, float] | None = None,
         inequality_integer_slack_max_range: int = 32,
+        allow_approximate_integer_slack: bool = False,
     ) -> OpenJijPreparation:
         """Produce a separate Adapter input and an auditable preparation report.
 
         Raises :class:`~ommx.adapter.InfeasibleDetected` when variable bounds
         prove an inequality infeasible. Other preparation failures
-        raise :class:`OpenJijPreparationError`.
+        raise :class:`OpenJijPreparationError`. Approximate integer slack is
+        used only when ``allow_approximate_integer_slack=True`` is supplied.
         """
 
         with _tracer.start_as_current_span("prepare") as span:
@@ -792,6 +779,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
                 uniform_penalty_weight=uniform_penalty_weight,
                 penalty_weights=penalty_weights,
                 inequality_integer_slack_max_range=inequality_integer_slack_max_range,
+                allow_approximate_integer_slack=allow_approximate_integer_slack,
             )
             if prepared is None:
                 raise OpenJijPreparationError(report)
@@ -802,16 +790,18 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         cls,
         ommx_instance: Instance,
         *,
-        source_check: OpenJijPreparationCheck,
+        source_check: OpenJijPreparationSourceCheck,
         uniform_penalty_weight: float | None,
         penalty_weights: Mapping[int, float] | None,
         inequality_integer_slack_max_range: int,
+        allow_approximate_integer_slack: bool,
     ) -> OpenJijPreparation:
         """Explicitly prepare a source Instance and return its separate input.
 
-        Sense reversal and Integer log encoding are exact. Integer slack may be
-        exact or approximate, and every constraint penalty is finite rather
-        than an assertion of direct or exact constrained support.
+        Sense reversal and Integer log encoding use exact OMMX operations.
+        Approximate integer slack requires explicit selection, and every
+        constraint penalty is finite rather than an assertion of direct or
+        exact constrained support.
         """
 
         source_instance = copy.deepcopy(ommx_instance)
@@ -855,7 +845,6 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
             steps.append(
                 OpenJijPreparationStep(
                     operation=operation,
-                    semantics=OpenJijPreparationSemantics.Exact,
                     description=description,
                     constraint_refs=special_refs[capability],
                 )
@@ -871,7 +860,6 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
             steps.append(
                 OpenJijPreparationStep(
                     operation="integer_log_encoding",
-                    semantics=OpenJijPreparationSemantics.Exact,
                     description=(
                         "Log-encoded source Integer variables after validating "
                         f"the {cls.MAX_LOG_ENCODING_BITS}-bit preparation limit."
@@ -885,7 +873,6 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
             steps.append(
                 OpenJijPreparationStep(
                     operation="sense_reversal",
-                    semantics=OpenJijPreparationSemantics.Exact,
                     description=(
                         "Negated the objective for the Adapter minimization input; sample "
                         "evaluation retains the source maximization sense."
@@ -905,6 +892,38 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
                     constraint_id, inequality_integer_slack_max_range
                 )
             except RuntimeError as exact_error:
+                exact_message = str(exact_error)
+                if (
+                    "The bound of `f(x)` in inequality constraint" in exact_message
+                    and "is positive" in exact_message
+                ):
+                    raise InfeasibleDetected(exact_message) from None
+                if not allow_approximate_integer_slack:
+                    violation = AdapterPreconditionViolation(
+                        condition="openjij.slack.approximation_explicit_selection",
+                        description=(
+                            "Exact integer slack was unavailable "
+                            f"({exact_error}). Set "
+                            "allow_approximate_integer_slack=True to permit "
+                            "discrete slack approximation."
+                        ),
+                        constraint_refs=constraint_ref,
+                        actual="not selected",
+                        limit="allow_approximate_integer_slack=True",
+                    )
+                    failed_report = OpenJijPreparationReport(
+                        source_check=OpenJijPreparationSourceCheck(
+                            source_membership=source_check.source_membership,
+                            preconditions_checked=source_check.preconditions_checked,
+                            precondition_violations=(
+                                *source_check.precondition_violations,
+                                violation,
+                            ),
+                        ),
+                        steps=tuple(steps),
+                        input_applicability=None,
+                    )
+                    raise OpenJijPreparationError(failed_report)
                 try:
                     residual_step = working.add_integer_slack_to_inequality(
                         constraint_id, inequality_integer_slack_max_range
@@ -920,7 +939,6 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
                 steps.append(
                     OpenJijPreparationStep(
                         operation="approximate_integer_slack",
-                        semantics=OpenJijPreparationSemantics.Approximate,
                         description=(
                             "Exact integer slack was unavailable "
                             f"({exact_error}); used a discrete slack with residual "
@@ -941,14 +959,52 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
                 steps.append(
                     OpenJijPreparationStep(
                         operation=operation,
-                        semantics=OpenJijPreparationSemantics.Exact,
                         description=description,
                         constraint_refs=constraint_ref,
                     )
                 )
 
         remaining_constraint_ids = frozenset(working.constraints)
+        penalty_constraint_refs = frozenset(
+            [
+                *(
+                    ConstraintRef("regular", constraint_id)
+                    for constraint_id in remaining_constraint_ids
+                    if constraint_id in ommx_instance.constraints
+                ),
+                *(
+                    ref
+                    for ref in cls._active_constraint_refs(ommx_instance)
+                    if ref.family != "regular"
+                ),
+            ]
+        )
         if remaining_constraint_ids:
+            if uniform_penalty_weight is None and penalty_weights is None:
+                violation = AdapterPreconditionViolation(
+                    condition="openjij.penalty.explicit_selection",
+                    description=(
+                        "Constraints remaining after exact preparation require an "
+                        "explicitly selected finite penalty; constrained models are "
+                        "not part of the OpenJij input class."
+                    ),
+                    constraint_refs=penalty_constraint_refs,
+                    actual="not selected",
+                    limit="uniform_penalty_weight or penalty_weights",
+                )
+                failed_report = OpenJijPreparationReport(
+                    source_check=OpenJijPreparationSourceCheck(
+                        source_membership=source_check.source_membership,
+                        preconditions_checked=source_check.preconditions_checked,
+                        precondition_violations=(
+                            *source_check.precondition_violations,
+                            violation,
+                        ),
+                    ),
+                    steps=tuple(steps),
+                    input_applicability=None,
+                )
+                raise OpenJijPreparationError(failed_report)
             if penalty_weights is not None:
                 parametric = working.penalty_method()
                 weights: dict[int, float] = {}
@@ -975,22 +1031,8 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
             steps.append(
                 OpenJijPreparationStep(
                     operation="finite_penalty",
-                    semantics=OpenJijPreparationSemantics.FinitePenalty,
                     description=penalty_description,
-                    constraint_refs=frozenset(
-                        [
-                            *(
-                                ConstraintRef("regular", constraint_id)
-                                for constraint_id in remaining_constraint_ids
-                                if constraint_id in ommx_instance.constraints
-                            ),
-                            *(
-                                ref
-                                for ref in cls._active_constraint_refs(ommx_instance)
-                                if ref.family != "regular"
-                            ),
-                        ]
-                    ),
+                    constraint_refs=penalty_constraint_refs,
                 )
             )
 
@@ -1011,8 +1053,8 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
             )
         if not encoding_preconditions_checked or encoding_violations:
             failed_report = OpenJijPreparationReport(
-                source_check=OpenJijPreparationCheck(
-                    input_membership=source_check.input_membership,
+                source_check=OpenJijPreparationSourceCheck(
+                    source_membership=source_check.source_membership,
                     preconditions_checked=source_check.preconditions_checked,
                     precondition_violations=(
                         *source_check.precondition_violations,
@@ -1020,7 +1062,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
                     ),
                 ),
                 steps=tuple(steps),
-                prepared_input_applicability=None,
+                input_applicability=None,
             )
             raise OpenJijPreparationError(failed_report)
 
@@ -1034,19 +1076,18 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
             steps.append(
                 OpenJijPreparationStep(
                     operation="integer_slack_log_encoding",
-                    semantics=OpenJijPreparationSemantics.Exact,
                     description="Log-encoded Integer variables introduced by slack preparation.",
                     variable_ids=slack_integer_ids,
                 )
             )
 
-        prepared_input_applicability = cls.check_applicability(working)
+        input_applicability = cls.check_applicability(working)
         report = OpenJijPreparationReport(
             source_check=source_check,
             steps=tuple(steps),
-            prepared_input_applicability=prepared_input_applicability,
+            input_applicability=input_applicability,
         )
-        if not report.is_preparable:
+        if not report.is_successful:
             raise OpenJijPreparationError(report)
         return OpenJijPreparation(
             _input=working,
@@ -1229,11 +1270,16 @@ def _decode_to_samples(
     # Since OpenJij does not issue the sample ID, we need to generate it in the responsibility of this OMMX Adapter
     samples = Samples({})  # Create empty samples
     sample_id = 0
+    filtered_defaults = {
+        variable_id: value
+        for variable_id, value in (default_values or {}).items()
+        if variable_ids is None or variable_id in variable_ids
+    }
 
     num_reads = len(response.record.num_occurrences)
     for i in range(num_reads):
         sample = response.record.sample[i]
-        entries = dict(default_values or {})
+        entries = dict(filtered_defaults)
         for variable, value in zip(response.variables, sample):
             variable_id = int(variable)  # type: ignore[arg-type]
             if variable_ids is None or variable_id in variable_ids:

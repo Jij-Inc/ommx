@@ -181,15 +181,12 @@ sample_set.summary
 
 ```{code-cell} ipython3
 report = prepared.report
-final = report.prepared_input_applicability
+final = report.input_applicability
 {
-    "source_membership": report.source_check.input_membership.is_member,
+    "source_membership": report.source_check.source_membership.is_member,
     "preconditions": report.source_check.precondition_violations,
-    "steps": [
-        (step.operation, step.semantics.value)
-        for step in report.steps
-    ],
-    "prepared_input_applicability": final.is_applicable if final else False,
+    "steps": [step.operation for step in report.steps],
+    "input_applicability": final.is_applicable if final else False,
 }
 ```
 
@@ -197,14 +194,17 @@ final = report.prepared_input_applicability
 
 - `source_check` は、準備元のclassへのmembershipとAdapter固有の準備前提条件を
   記録します。
-- `steps` は、各変換とその意味上の効果を記録します。
-- `prepared_input_applicability` は、生成された `Instance` がAdapterのinput classに属し、
-  Adapter固有の前提条件を満たすかを示します。
+- `steps` は、実際に適用したOpenJij固有のoperationを記録します。
+- `input_applicability` は、`prepared.input` がAdapterのinput classに属し、Adapter
+  固有の前提条件を満たすかを示します。
 
-各stepは、厳密な書き換えなら `Exact`、厳密な変換ができず離散的な不等式slack
-などの近似を使う場合は `Approximate`、制約を有限の目的関数ペナルティで置き換える
-場合は `FinitePenalty` です。`FinitePenalty` は制約付き入力を直接、または厳密に
-サポートしているという意味ではありません。
+このstep列はoperationの監査記録であり、合成された数学的guaranteeではありません。
+共通のpreparation policy、guarantee、自動選択は
+[OMMX issue #1111](https://github.com/Jij-Inc/ommx/issues/1111) で扱います。このprototype
+が既定で使うのは、利用可能な厳密operationだけです。離散的なinteger slack近似には
+`allow_approximate_integer_slack=True` が必要で、slack rangeの指定だけでは近似への
+同意になりません。penalty weightの明示指定はfinite-penalty preparationの選択を表し、
+制約付き入力をAdapterが直接または厳密にサポートするという意味ではありません。
 
 変数boundから不等式が実行不可能だと証明できた場合、`check_preparation` と
 `prepare` は {py:class}`~ommx.adapter.InfeasibleDetected` を送出します。これは

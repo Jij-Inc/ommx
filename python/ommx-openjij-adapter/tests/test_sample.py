@@ -1,6 +1,10 @@
+from typing import cast
+
+import openjij as oj
 from ommx import Instance, DecisionVariable, Sos1Constraint
-from ommx_openjij_adapter import OMMXOpenJijSAAdapter
+from ommx_openjij_adapter import OMMXOpenJijSAAdapter, _decode_to_samples
 import pytest
+from types import SimpleNamespace
 
 
 def binary_no_constraint_minimize():
@@ -294,6 +298,67 @@ def test_sample_fills_evaluation_variables_omitted_from_sampler_input(
     sample_set = OMMXOpenJijSAAdapter.sample(instance, num_reads=1, seed=999)
     assert sample_set.extract_decision_variables("x", 0) == {(0,): 0.0}
     assert sample_set.objectives[0] == pytest.approx(0.0)
+
+
+def test_decode_filters_response_variables_and_defaults_with_the_same_allowlist():
+    response = SimpleNamespace(
+        variables=[0, 1],
+        record=SimpleNamespace(sample=[[1.0, 1.0]], num_occurrences=[1]),
+    )
+
+    samples = _decode_to_samples(
+        cast(oj.Response, response),
+        variable_ids={0},
+        default_values={0: 0.0, 99: 1.0},
+    )
+    state = samples.get_state(0)
+    assert state.get(0) == 1.0
+    assert state.get(1) is None
+    assert state.get(99) is None
+
+
+@pytest.mark.parametrize(
+    ("variable", "constraint", "expected_value"),
+    [
+        pytest.param(
+            DecisionVariable.binary(0),
+            lambda x: x - 2 <= 0,
+            0.0,
+            id="binary",
+        ),
+        pytest.param(
+            DecisionVariable.integer(0, lower=2, upper=7),
+            lambda x: x - 8 <= 0,
+            2.0,
+            id="integer",
+        ),
+    ],
+)
+def test_source_evaluation_populates_variable_removed_with_trivial_inequality(
+    variable,
+    constraint,
+    expected_value,
+):
+    source = Instance.from_components(
+        decision_variables=[variable],
+        objective=0,
+        constraints={7: constraint(variable)},
+        sense=Instance.MINIMIZE,
+    )
+    preparation = OMMXOpenJijSAAdapter.prepare(source)
+    assert preparation.input.used_decision_variables == []
+
+    input_samples = OMMXOpenJijSAAdapter.sample(
+        preparation.input,
+        num_reads=1,
+        seed=999,
+    )
+    assert input_samples.get(0).state.get(0) == expected_value
+
+    source_samples = preparation.evaluate_source(input_samples)
+    source_solution = source_samples.get(0)
+    assert source_solution.state.get(0) == expected_value
+    assert source_solution.feasible
 
 
 def test_sample_decodes_integer_sos1_against_source_model():

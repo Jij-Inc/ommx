@@ -182,15 +182,12 @@ stores an audit report in `prepared.report`:
 
 ```{code-cell} ipython3
 report = prepared.report
-final = report.prepared_input_applicability
+final = report.input_applicability
 {
-    "source_membership": report.source_check.input_membership.is_member,
+    "source_membership": report.source_check.source_membership.is_member,
     "preconditions": report.source_check.precondition_violations,
-    "steps": [
-        (step.operation, step.semantics.value)
-        for step in report.steps
-    ],
-    "prepared_input_applicability": final.is_applicable if final else False,
+    "steps": [step.operation for step in report.steps],
+    "input_applicability": final.is_applicable if final else False,
 }
 ```
 
@@ -198,14 +195,18 @@ The report separates three questions:
 
 - `source_check` records membership in the preparation source class and the
   Adapter-owned preparation preconditions.
-- `steps` records each transformation and its semantic effect.
-- `prepared_input_applicability` says whether the produced `Instance` belongs
-  to the Adapter input class and satisfies its Adapter-specific preconditions.
+- `steps` records each OpenJij-specific operation that was applied.
+- `input_applicability` says whether `prepared.input` belongs to the Adapter
+  input class and satisfies its Adapter-specific preconditions.
 
-A step is `Exact` for an exact rewrite, `Approximate` when preparation uses an
-approximation such as discrete inequality slack, or `FinitePenalty` when
-constraints are replaced by finite objective penalties. `FinitePenalty` does
-not claim that the adapter directly or exactly supports constrained input.
+This step list is an operation audit, not a composed mathematical guarantee.
+Common preparation policy, guarantees, and automatic selection are tracked in
+[OMMX issue #1111](https://github.com/Jij-Inc/ommx/issues/1111). By default,
+OpenJij preparation uses only the available exact operations. Discrete integer
+slack approximation requires `allow_approximate_integer_slack=True`; selecting
+an integer slack range alone does not opt into approximation. Supplying penalty
+weights explicitly selects finite-penalty preparation, which does not claim
+that the Adapter directly or exactly supports constrained input.
 
 If variable bounds prove an inequality infeasible, `check_preparation` and
 `prepare` raise {py:class}`~ommx.adapter.InfeasibleDetected`; that is a property

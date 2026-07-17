@@ -254,7 +254,7 @@ def test_explicit_preparation_lowers_all_special_constraint_families() -> None:
     )
 
     report = _check_preparation_without_mutation(instance, uniform_penalty_weight=3.0)
-    assert report.is_preparable
+    assert report.is_successful
     prepared = OMMXOpenJijSAAdapter.prepare(instance, uniform_penalty_weight=3.0)
     operations = {step.operation for step in prepared.report.steps}
     assert {
@@ -285,10 +285,30 @@ def test_special_constraint_preparation_requires_uniform_penalty() -> None:
     )
 
     report = _check_preparation_without_mutation(instance, penalty_weights={})
-    assert not report.is_preparable
+    assert not report.is_successful
     [violation] = report.source_check.precondition_violations
     assert violation.condition == "openjij.penalty.special_requires_uniform"
     assert violation.constraint_refs == frozenset({ConstraintRef("one_hot", 20)})
+
+
+def test_special_constraint_requires_explicit_finite_penalty_selection() -> None:
+    x = DecisionVariable.binary(0)
+    y = DecisionVariable.binary(1)
+    instance = Instance.from_components(
+        decision_variables=[x, y],
+        objective=x + y,
+        constraints={},
+        one_hot_constraints={20: OneHotConstraint(variables=[x, y])},
+        sense=Sense.Minimize,
+    )
+
+    report = _check_preparation_without_mutation(instance)
+    assert not report.is_successful
+    [violation] = report.source_check.precondition_violations
+    assert violation.condition == "openjij.penalty.explicit_selection"
+    assert violation.constraint_refs == frozenset({ConstraintRef("one_hot", 20)})
+    assert "constraints remaining" in violation.description.lower()
+    assert "regular constraints" not in violation.description.lower()
 
 
 def test_integer_sos1_is_lowered_before_log_encoding() -> None:
@@ -303,11 +323,11 @@ def test_integer_sos1_is_lowered_before_log_encoding() -> None:
     )
 
     report = _check_preparation_without_mutation(instance, uniform_penalty_weight=4.0)
-    assert report.is_preparable
+    assert report.is_successful
     prepared = OMMXOpenJijSAAdapter.prepare(instance, uniform_penalty_weight=4.0)
     operations = [step.operation for step in prepared.report.steps]
     assert operations.index("sos1_lowering") < operations.index("integer_log_encoding")
-    final = prepared.report.prepared_input_applicability
+    final = prepared.report.input_applicability
     assert final is not None and final.is_applicable
     assert set(instance.sos1_constraints) == {30}
 
@@ -316,8 +336,8 @@ def test_check_preparation_accepts_finite_integer_encoding() -> None:
     instance = _instance_with_variable(DecisionVariable.integer(0, lower=-3, upper=5))
 
     report = _check_preparation_without_mutation(instance)
-    assert report.is_preparable
-    assert report.source_check.input_membership.is_member
+    assert report.is_successful
+    assert report.source_check.source_membership.is_member
     assert report.source_check.preconditions_checked
     assert report.source_check.precondition_violations == ()
 
@@ -326,8 +346,8 @@ def test_check_preparation_reports_unbounded_integer_encoding_precondition() -> 
     instance = _instance_with_variable(DecisionVariable.integer(0))
 
     report = _check_preparation_without_mutation(instance)
-    assert not report.is_preparable
-    assert report.source_check.input_membership.is_member
+    assert not report.is_successful
+    assert report.source_check.source_membership.is_member
     assert report.source_check.preconditions_checked
     [violation] = report.source_check.precondition_violations
     assert isinstance(violation, AdapterPreconditionViolation)
@@ -342,8 +362,8 @@ def test_check_preparation_reports_more_than_53_log_encoding_bits() -> None:
     )
 
     report = _check_preparation_without_mutation(instance)
-    assert not report.is_preparable
-    assert report.source_check.input_membership.is_member
+    assert not report.is_successful
+    assert report.source_check.source_membership.is_member
     assert report.source_check.preconditions_checked
     [violation] = report.source_check.precondition_violations
     assert isinstance(violation, AdapterPreconditionViolation)
@@ -367,7 +387,7 @@ def test_check_preparation_reports_slack_range_outside_u64() -> None:
         uniform_penalty_weight=2.0,
         inequality_integer_slack_max_range=2**64,
     )
-    assert not report.is_preparable
+    assert not report.is_successful
     [violation] = report.source_check.precondition_violations
     assert violation.condition == "openjij.slack.range_unsigned_64_bit"
     assert violation.constraint_refs == frozenset({ConstraintRef("regular", 7)})
@@ -382,8 +402,8 @@ def test_check_preparation_reports_non_point_range_too_far_from_zero() -> None:
     )
 
     report = _check_preparation_without_mutation(instance)
-    assert not report.is_preparable
-    assert report.source_check.input_membership.is_member
+    assert not report.is_successful
+    assert report.source_check.source_membership.is_member
     assert report.source_check.preconditions_checked
     [violation] = report.source_check.precondition_violations
     assert isinstance(violation, AdapterPreconditionViolation)
@@ -403,8 +423,8 @@ def test_check_preparation_requires_an_explicit_penalty_for_constraints() -> Non
     )
 
     report = _check_preparation_without_mutation(instance)
-    assert not report.is_preparable
-    assert report.source_check.input_membership.is_member
+    assert not report.is_successful
+    assert report.source_check.source_membership.is_member
     assert report.source_check.preconditions_checked
     [violation] = report.source_check.precondition_violations
     assert isinstance(violation, AdapterPreconditionViolation)
@@ -413,7 +433,7 @@ def test_check_preparation_requires_an_explicit_penalty_for_constraints() -> Non
     assert "penalty" in _violation_text(violation)
 
     accepted = _check_preparation_without_mutation(instance, uniform_penalty_weight=3.0)
-    assert accepted.is_preparable
+    assert accepted.is_successful
 
 
 def test_per_constraint_penalty_preserves_u64_constraint_id() -> None:
@@ -429,11 +449,11 @@ def test_per_constraint_penalty_preserves_u64_constraint_id() -> None:
     report = _check_preparation_without_mutation(
         instance, penalty_weights={constraint_id: 2.0}
     )
-    assert report.is_preparable
+    assert report.is_successful
     prepared = OMMXOpenJijSAAdapter.prepare(
         instance, penalty_weights={constraint_id: 2.0}
     )
-    final = prepared.report.prepared_input_applicability
+    final = prepared.report.input_applicability
     assert final is not None and final.is_applicable
 
 
@@ -450,7 +470,7 @@ def test_check_preparation_reports_penalty_materialization_overflow() -> None:
     report = _check_preparation_without_mutation(
         instance, uniform_penalty_weight=weight
     )
-    assert not report.is_preparable
+    assert not report.is_successful
     [violation] = report.source_check.precondition_violations
     assert violation.condition == "openjij.preparation.materialization"
     assert violation.constraint_refs == frozenset({ConstraintRef("regular", 7)})
@@ -497,14 +517,17 @@ def test_prepare_exact_maximization_and_integer_encoding() -> None:
     prepared = OMMXOpenJijSAAdapter.prepare(instance)
     assert isinstance(prepared, OpenJijPreparation)
     assert isinstance(prepared.report, OpenJijPreparationReport)
-    assert prepared.report.source_check.is_preparable
-    final = prepared.report.prepared_input_applicability
+    assert prepared.report.source_check.conditions_hold
+    final = prepared.report.input_applicability
     assert final is not None and final.is_applicable
     assert final.input_membership.matching_clauses == [(0, "openjij-binary-hubo")]
 
     assert len(prepared.report.steps) >= 2
     assert all(step.operation for step in prepared.report.steps)
-    assert all(step.semantics.name == "Exact" for step in prepared.report.steps)
+    assert "approximate_integer_slack" not in {
+        step.operation for step in prepared.report.steps
+    }
+    assert "finite_penalty" not in {step.operation for step in prepared.report.steps}
     assert any(step.variable_ids == frozenset({5}) for step in prepared.report.steps)
     prepared_input = prepared.input
     assert prepared_input.sense == Sense.Minimize
@@ -517,14 +540,7 @@ def test_prepare_exact_maximization_and_integer_encoding() -> None:
     assert instance.to_v2_bytes() == before
 
 
-@pytest.mark.parametrize(
-    ("max_range", "expected_slack_semantics"),
-    [(32, "Exact"), (1, "Approximate")],
-)
-def test_constrained_preparation_classifies_slack_and_finite_penalty_steps(
-    max_range: int,
-    expected_slack_semantics: str,
-) -> None:
+def test_constrained_preparation_uses_exact_slack_by_default() -> None:
     x = DecisionVariable.binary(0)
     instance = Instance.from_components(
         decision_variables=[x],
@@ -537,33 +553,71 @@ def test_constrained_preparation_classifies_slack_and_finite_penalty_steps(
     prepared = OMMXOpenJijSAAdapter.prepare(
         instance,
         uniform_penalty_weight=4.0,
-        inequality_integer_slack_max_range=max_range,
+        inequality_integer_slack_max_range=32,
     )
     report = prepared.report
-    assert report.source_check.is_preparable
-    final = report.prepared_input_applicability
-    assert final is not None and final.is_applicable
-    assert all(step.operation for step in report.steps)
-
-    constraint_ref = ConstraintRef("regular", 7)
-    slack_steps = [
-        step
-        for step in report.steps
-        if constraint_ref in step.constraint_refs
-        and step.semantics.name == expected_slack_semantics
-    ]
-    assert len(slack_steps) == 1
-
-    penalty_steps = [
-        step
-        for step in report.steps
-        if constraint_ref in step.constraint_refs
-        and step.semantics.name == "FinitePenalty"
-    ]
-    assert len(penalty_steps) == 1
+    assert report.is_successful
+    assert {step.operation for step in report.steps} >= {
+        "exact_integer_slack",
+        "finite_penalty",
+    }
+    assert "approximate_integer_slack" not in {step.operation for step in report.steps}
     assert prepared.input.constraints == {}
     assert set(instance.constraints) == {7}
     assert instance.to_v2_bytes() == before
+
+
+def test_approximate_integer_slack_requires_explicit_selection() -> None:
+    x = DecisionVariable.binary(0)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        constraints={7: 3 * x - 2 <= 0},
+        sense=Sense.Minimize,
+    )
+    before = instance.to_v2_bytes()
+
+    report = _check_preparation_without_mutation(
+        instance,
+        uniform_penalty_weight=4.0,
+        inequality_integer_slack_max_range=1,
+    )
+    assert not report.is_successful
+    [violation] = report.source_check.precondition_violations
+    assert violation.condition == "openjij.slack.approximation_explicit_selection"
+    assert violation.constraint_refs == frozenset({ConstraintRef("regular", 7)})
+    assert violation.limit == "allow_approximate_integer_slack=True"
+
+    with pytest.raises(OpenJijPreparationError) as error:
+        OMMXOpenJijSAAdapter.prepare(
+            instance,
+            uniform_penalty_weight=4.0,
+            inequality_integer_slack_max_range=1,
+        )
+    assert error.value.report == report
+    assert instance.to_v2_bytes() == before
+
+
+def test_approximate_integer_slack_can_be_selected_explicitly() -> None:
+    x = DecisionVariable.binary(0)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        constraints={7: 3 * x - 2 <= 0},
+        sense=Sense.Minimize,
+    )
+
+    prepared = OMMXOpenJijSAAdapter.prepare(
+        instance,
+        uniform_penalty_weight=4.0,
+        inequality_integer_slack_max_range=1,
+        allow_approximate_integer_slack=True,
+    )
+    assert prepared.report.is_successful
+    assert {step.operation for step in prepared.report.steps} >= {
+        "approximate_integer_slack",
+        "finite_penalty",
+    }
 
 
 def test_preparation_rechecks_generated_variable_ids_for_openjij() -> None:
@@ -579,8 +633,8 @@ def test_preparation_rechecks_generated_variable_ids_for_openjij() -> None:
         instance,
         uniform_penalty_weight=2.0,
     )
-    assert not report.is_preparable
-    final = report.prepared_input_applicability
+    assert not report.is_successful
+    final = report.input_applicability
     assert final is not None
     [violation] = final.precondition_violations
     assert violation.condition == "openjij.variable_id.signed_64_bit"
@@ -596,15 +650,11 @@ def test_preparation_reports_trivially_satisfied_inequality_as_exact() -> None:
         sense=Sense.Minimize,
     )
 
-    prepared = OMMXOpenJijSAAdapter.prepare(
-        instance,
-        uniform_penalty_weight=4.0,
-    )
+    prepared = OMMXOpenJijSAAdapter.prepare(instance)
     steps = prepared.report.steps
     [removal] = [
         step for step in steps if step.operation == "trivial_inequality_removal"
     ]
-    assert removal.semantics.name == "Exact"
     assert removal.constraint_refs == frozenset({ConstraintRef("regular", 7)})
     assert not [step for step in steps if step.operation == "finite_penalty"]
     assert set(instance.constraints) == {7}

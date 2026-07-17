@@ -41,10 +41,10 @@ print(sample_set.summary)
 ```
 
 The finite penalty weight is an option passed to `prepare`, not an OpenJij
-backend sampler parameter. It must be chosen explicitly for a constrained
-model. A finite penalty does not guarantee that every returned sample is
-feasible for the source model; inspect the feasibility recorded in the decoded
-`SampleSet`.
+backend sampler parameter. It must be chosen explicitly when constraints remain
+after exact preparation. A finite penalty does not guarantee that every returned
+sample is feasible for the source model; inspect the feasibility recorded in the
+decoded `SampleSet`.
 
 ## Input class and explicit preparation
 
@@ -72,17 +72,18 @@ model. The preparation itself is not an Adapter input. Its `report` contains:
 
 - `source_check`: membership in the preparation source class and the
   Adapter-owned preparation preconditions
-- `steps`: the transformations actually applied
-- `prepared_input_applicability`: whether the produced `Instance` belongs to
+- `steps`: the OpenJij-specific operations actually applied
+- `input_applicability`: whether `OpenJijPreparation.input` belongs to
   the Adapter input class and satisfies its Adapter-specific preconditions
 
-Each preparation step records one of these semantic effects:
-
-- `Exact`: an exact rewrite such as sense reversal or valid log-encoding
-- `Approximate`: an approximation such as discrete inequality slack when an
-  exact rewrite is unavailable
-- `FinitePenalty`: replacement of constraints by finite objective penalties,
-  which does not assert exact constrained support
+The step list is an operation audit, not a composed mathematical guarantee.
+Common preparation policy, guarantees, and automatic selection are tracked in
+[OMMX issue #1111](https://github.com/Jij-Inc/ommx/issues/1111). By default,
+this prototype applies only the available exact operations. Discrete integer
+slack approximation requires `allow_approximate_integer_slack=True`; choosing
+an integer slack range does not itself opt into approximation. Finite penalties
+remain an explicit operation selected by supplying their required weights, and
+do not assert exact constrained support.
 
 Per-constraint penalty weights use regular constraint IDs. A model containing
 Indicator, OneHot, or SOS1 constraints must therefore use a uniform penalty

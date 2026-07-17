@@ -37,9 +37,13 @@ prepared_samples = OMMXOpenJijSAAdapter.sample(preparation.input)
 source_samples = preparation.evaluate_source(prepared_samples)
 ```
 
-preparation reportは、厳密・近似・有限penaltyのstepを区別し、生成された入力の
-applicabilityを記録します。最大53 bitというInteger encoding条件はpreparationの
-preconditionであり、OpenJijのinput classや `ommx.v2.Feature` の一部ではありません。
+OpenJij固有のpreparation reportは、適用したoperationと `preparation.input` の
+applicabilityを記録しますが、共通の合成guaranteeではありません。approximate integer
+slackは既定では無効で、`allow_approximate_integer_slack=True` を必要とします。有限
+penaltyもweightの指定によって明示的に選択します。共通のpreparation policyと
+guaranteeは [#1111](https://github.com/Jij-Inc/ommx/issues/1111) で扱います。最大53 bit
+というInteger encoding条件はpreparationのpreconditionであり、OpenJijのinput classや
+`ommx.v2.Feature` の一部ではありません。
 
 HiGHS、Python-MIP、PySCIPOptについて、これはstable Python SDK 2.6.1からの公開
 exception契約の破壊的変更です。非対応の

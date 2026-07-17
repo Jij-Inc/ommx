@@ -39,10 +39,14 @@ prepared_samples = OMMXOpenJijSAAdapter.sample(preparation.input)
 source_samples = preparation.evaluate_source(prepared_samples)
 ```
 
-The preparation report distinguishes exact, approximate, and finite-penalty
-steps and records applicability of the produced input. The at-most-53-bit
-Integer encoding condition is a preparation precondition, not part of the
-OpenJij input class or `ommx.v2.Feature`.
+The OpenJij-specific preparation report records the operations applied and
+applicability of `preparation.input`; it is not a common composed guarantee.
+Approximate integer slack is disabled by default and requires
+`allow_approximate_integer_slack=True`. Finite penalties remain explicitly
+selected by supplying their weights. Common preparation policy and guarantees
+are tracked in [#1111](https://github.com/Jij-Inc/ommx/issues/1111). The
+at-most-53-bit Integer encoding condition is a preparation precondition, not
+part of the OpenJij input class or `ommx.v2.Feature`.
 
 For HiGHS, Python-MIP, and PySCIPOpt, this is a breaking change to the public
 exception contract from stable Python SDK 2.6.1. Unsupported objectives,
