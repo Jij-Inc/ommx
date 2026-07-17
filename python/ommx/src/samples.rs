@@ -1,4 +1,4 @@
-use anyhow::Result;
+use crate::error::OmmxPyResult;
 use ommx::{Message, Parse, SampleID};
 use pyo3::{
     exceptions::{PyKeyError, PyTypeError},
@@ -198,7 +198,7 @@ fn samples_from_any(entries: Bound<PyAny>) -> PyResult<Samples> {
     Err(type_error())
 }
 
-fn extract_state(value: &Bound<PyAny>) -> Result<ommx::v1::State, PyErr> {
+fn extract_state(value: &Bound<PyAny>) -> PyResult<ommx::v1::State> {
     if let Ok(state) = value.extract::<crate::State>() {
         return Ok(state.0);
     }
@@ -219,8 +219,9 @@ impl Samples {
     }
 
     #[staticmethod]
-    pub fn from_v1_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
-        let v1_inner = ommx::v1::Samples::decode(bytes.as_bytes())?;
+    pub fn from_v1_bytes(bytes: &Bound<PyBytes>) -> OmmxPyResult<Self> {
+        let v1_inner: ommx::v1::Samples =
+            crate::message_io::decode(bytes.as_bytes(), "ommx.v1.Samples")?;
         let inner = v1_inner.parse(&())?;
         Ok(Self(inner))
     }

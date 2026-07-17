@@ -3,7 +3,8 @@
 //! Binding entry points return [`OmmxPyResult`] so `?` classifies concrete Rust
 //! SDK signals through the declarative mapping table below. Signals already
 //! erased into `ommx::Error` are recovered through the same table before PyO3
-//! receives the local [`OmmxPyError`] wrapper.
+//! receives the local [`OmmxPyError`] wrapper. Binding-owned Rust errors that
+//! are not SDK signals use direct `From` implementations beside that table.
 
 use pyo3::{
     exceptions::{PyKeyError, PyRuntimeError, PyValueError},
@@ -76,7 +77,13 @@ pyo3_stub_gen::create_exception!(
 #[derive(Debug)]
 pub struct OmmxPyError(PyErr);
 
-/// Result type for Rust SDK failures crossing the private binding boundary.
+impl std::fmt::Display for OmmxPyError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(formatter)
+    }
+}
+
+/// Result type for Rust-owned failures crossing the private binding boundary.
 pub type OmmxPyResult<T> = std::result::Result<T, OmmxPyError>;
 
 fn value_error<T>(_: &T, message: String) -> PyErr {
@@ -148,6 +155,36 @@ macro_rules! define_ommx_error_mappings {
     };
 }
 
+fn attachment_not_found_to_pyerr(
+    error: &ommx::experiment::AttachmentNotFound,
+    _message: String,
+) -> PyErr {
+    PyKeyError::new_err(error.name().to_string())
+}
+
+fn invalid_local_registry_image_ref_to_pyerr(
+    error: &ommx::artifact::local_registry::InvalidLocalRegistryImageRef,
+    _message: String,
+) -> PyErr {
+    // This owner describes corrupted persisted registry state, even though its
+    // source is an ImageRefParseError caused by the stored value.
+    PyRuntimeError::new_err(error.to_string())
+}
+
+fn image_ref_parse_error_to_pyerr(
+    error: &ommx::artifact::ImageRefParseError,
+    _message: String,
+) -> PyErr {
+    // ImageRefParseError's Display already includes the OCI parser source.
+    PyValueError::new_err(error.to_string())
+}
+
+fn parse_error_to_pyerr(error: &ommx::ParseError, _message: String) -> PyErr {
+    // ParseError's Display already renders its complete traceback. Reusing the
+    // anyhow chain would repeat the protobuf parser source.
+    PyValueError::new_err(error.to_string())
+}
+
 fn decision_variable_error_to_pyerr(error: &ommx::DecisionVariableError, message: String) -> PyErr {
     if matches!(
         error,
@@ -193,19 +230,56 @@ fn sample_set_error_to_pyerr(error: &ommx::SampleSetError, message: String) -> P
 }
 
 define_ommx_error_mappings!(
+    ommx::ParseError => parse_error_to_pyerr,
+    ommx::artifact::local_registry::InvalidLocalRegistryImageRef => invalid_local_registry_image_ref_to_pyerr,
+    ommx::experiment::AttachmentNotFound => attachment_not_found_to_pyerr,
     ommx::DecisionVariableError => decision_variable_error_to_pyerr,
     ommx::SolutionError => solution_error_to_pyerr,
     ommx::SampleSetError => sample_set_error_to_pyerr,
     #[cfg(feature = "remote-artifact")]
     ommx::artifact::RemoteArtifactError => remote_artifact_error_to_pyerr,
+    ommx::artifact::ImageRefParseError => image_ref_parse_error_to_pyerr,
     ommx::AtolError => value_error,
     ommx::BoundError => value_error,
     ommx::CoefficientError => value_error,
+    ommx::qplib::QplibParseError => value_error,
 );
 
 impl From<PyErr> for OmmxPyError {
     fn from(error: PyErr) -> Self {
         Self(error)
+    }
+}
+
+impl From<serde_json::Error> for OmmxPyError {
+    fn from(error: serde_json::Error) -> Self {
+        // Raw serde_json failures default to RuntimeError. Boundaries parsing
+        // caller-provided JSON must override this with ValueError explicitly.
+        Self(PyRuntimeError::new_err(error.to_string()))
+    }
+}
+
+impl From<serde_pyobject::Error> for OmmxPyError {
+    fn from(error: serde_pyobject::Error) -> Self {
+        Self(error.into())
+    }
+}
+
+impl<'a, 'py> From<pyo3::CastError<'a, 'py>> for OmmxPyError {
+    fn from(error: pyo3::CastError<'a, 'py>) -> Self {
+        Self(error.into())
+    }
+}
+
+impl<'py> From<pyo3::CastIntoError<'py>> for OmmxPyError {
+    fn from(error: pyo3::CastIntoError<'py>) -> Self {
+        Self(error.into())
+    }
+}
+
+impl<T> From<std::sync::PoisonError<T>> for OmmxPyError {
+    fn from(_: std::sync::PoisonError<T>) -> Self {
+        Self(PyRuntimeError::new_err("Cannot get lock for RNG"))
     }
 }
 
@@ -292,5 +366,30 @@ mod tests {
             ommx::Error::from(ommx::SolutionError::MissingRequiredField { field: "objective" })
                 .into(),
         );
+    }
+
+    #[test]
+    fn serde_json_serialization_errors_map_to_runtime_error() {
+        let value = std::collections::BTreeMap::from([(vec![1_u64], 1_u64)]);
+        let error = serde_json::to_string(&value).expect_err("non-string JSON object key");
+        assert_exception::<PyRuntimeError>(error.into());
+    }
+
+    #[test]
+    fn serde_pyobject_errors_preserve_the_python_exception() {
+        Python::initialize();
+        Python::attach(|py| {
+            let original = PyValueError::new_err("sentinel serde-pyobject error");
+            let error = serde_pyobject::Error(original.clone_ref(py));
+            let converted: PyErr = OmmxPyError::from(error).into();
+
+            assert!(converted.value(py).is(original.value(py)));
+        });
+    }
+
+    #[test]
+    fn poisoned_rng_locks_map_to_runtime_error() {
+        let error = std::sync::PoisonError::new(());
+        assert_exception::<PyRuntimeError>(error.into());
     }
 }

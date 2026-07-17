@@ -36,6 +36,36 @@ const EXPERIMENT_CHECKPOINT_REPOSITORY: &str = "checkpoint";
 const FILE_BLOB_STORE_DIR_NAME: &str = "blobs";
 const GC_EXCLUSION_LOCK_FILE_NAME: &str = ".gc-exclusion.lock";
 
+/// OMMX-owned signal that a persisted Local Registry ref cannot be
+/// reconstructed as an [`ImageRef`].
+///
+/// [`LocalRegistry::list_image_refs`] and [`crate::artifact::get_images`] keep
+/// returning [`crate::Result`]. Callers can downcast the returned error to this
+/// type to distinguish corrupted registry state from invalid user input. The
+/// source chain retains the underlying [`crate::artifact::ImageRefParseError`].
+#[derive(Debug, thiserror::Error)]
+#[error(
+    "Invalid Local Registry image ref with name {name:?} and reference {reference:?}: {source}"
+)]
+pub struct InvalidLocalRegistryImageRef {
+    name: String,
+    reference: String,
+    #[source]
+    source: crate::Error,
+}
+
+impl InvalidLocalRegistryImageRef {
+    /// Persisted repository name that could not be reconstructed.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Persisted tag or digest reference that could not be reconstructed.
+    pub fn reference(&self) -> &str {
+        &self.reference
+    }
+}
+
 struct InvalidCachedRefs {
     manifest_digest: Digest,
     refs: Vec<(ImageRef, String)>,
@@ -771,11 +801,24 @@ impl LocalRegistry {
     }
 
     /// List every image ref stored in this registry.
+    ///
+    /// A persisted ref that cannot be reconstructed retains an
+    /// [`InvalidLocalRegistryImageRef`] signal in the returned error.
     pub fn list_image_refs(&self) -> Result<Vec<ImageRef>> {
         self.index
             .list_refs(None)?
             .into_iter()
-            .map(|r| ImageRef::from_repository_and_reference(&r.name, &r.reference))
+            .map(|record| {
+                let name = record.name;
+                let reference = record.reference;
+                ImageRef::from_repository_and_reference(&name, &reference).map_err(|source| {
+                    crate::error!(InvalidLocalRegistryImageRef {
+                        name,
+                        reference,
+                        source,
+                    })
+                })
+            })
             .collect()
     }
 

@@ -12,10 +12,9 @@ use crate::{
     Constraint, DecisionVariable, DecisionVariableRole, Function, NamedFunction,
     ParametricInstance, RemovedConstraint, Rng, SampleSet, Samples, Sense, Solution, State,
 };
-use anyhow::Result;
 use ommx::{ConstraintID, Evaluate, NamedFunctionID, VariableID};
 use pyo3::{
-    exceptions::PyKeyError,
+    exceptions::{PyKeyError, PyRuntimeError, PyValueError},
     prelude::*,
     types::{PyBytes, PyDict},
     Bound, PyAny,
@@ -77,7 +76,7 @@ pub struct Instance {
 impl_instance_annotations!(Instance);
 
 impl Instance {
-    fn empty_with_sense(sense: Sense) -> Result<Self> {
+    fn empty_with_sense(sense: Sense) -> OmmxPyResult<Self> {
         Self::from_components(
             sense,
             Function(ommx::Function::Zero),
@@ -96,7 +95,7 @@ impl Instance {
 #[pymethods]
 impl Instance {
     #[staticmethod]
-    pub fn from_v1_bytes(py: Python<'_>, bytes: &Bound<PyBytes>) -> Result<Self> {
+    pub fn from_v1_bytes(py: Python<'_>, bytes: &Bound<PyBytes>) -> OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
         Ok(Self {
             inner: ommx::Instance::from_v1_bytes(bytes.as_bytes())?,
@@ -104,7 +103,7 @@ impl Instance {
     }
 
     #[staticmethod]
-    pub fn from_v2_bytes(py: Python<'_>, bytes: &Bound<PyBytes>) -> Result<Self> {
+    pub fn from_v2_bytes(py: Python<'_>, bytes: &Bound<PyBytes>) -> OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
         Ok(Self {
             inner: ommx::Instance::from_v2_bytes(bytes.as_bytes())?,
@@ -135,14 +134,18 @@ impl Instance {
         sos1_constraints: Option<BTreeMap<u64, crate::Sos1Constraint>>,
         named_functions: Option<Vec<NamedFunction>>,
         description: Option<InstanceDescription>,
-    ) -> Result<Self> {
+    ) -> OmmxPyResult<Self> {
         let mut rust_decision_variables = BTreeMap::new();
         let mut variable_labels = ommx::VariableLabelStore::default();
         for var in decision_variables {
             let id = var.0;
             variable_labels.insert(id, var.2);
             if rust_decision_variables.insert(id, var.1).is_some() {
-                anyhow::bail!("Duplicate decision variable ID: {}", id.into_inner());
+                return Err(PyValueError::new_err(format!(
+                    "Duplicate decision variable ID: {}",
+                    id.into_inner()
+                ))
+                .into());
             }
         }
 
@@ -218,7 +221,11 @@ impl Instance {
                 let id = nf.0;
                 named_function_labels.insert(id, nf.2);
                 if rust_named_functions.insert(id, nf.1).is_some() {
-                    anyhow::bail!("Duplicate named function ID: {}", id.into_inner());
+                    return Err(PyValueError::new_err(format!(
+                        "Duplicate named function ID: {}",
+                        id.into_inner()
+                    ))
+                    .into());
                 }
             }
             builder = builder.named_functions(rust_named_functions);
@@ -255,7 +262,7 @@ impl Instance {
     /// ```
     #[deprecated(note = "Use Instance.minimize() instead.")]
     #[staticmethod]
-    pub fn empty() -> Result<Self> {
+    pub fn empty() -> OmmxPyResult<Self> {
         Self::empty_with_sense(Sense::Minimize)
     }
 
@@ -264,7 +271,7 @@ impl Instance {
     /// Decision variables and constraints can be added incrementally with
     /// {meth}`new_binary` and {meth}`add_constraint`.
     #[staticmethod]
-    pub fn minimize() -> Result<Self> {
+    pub fn minimize() -> OmmxPyResult<Self> {
         Self::empty_with_sense(Sense::Minimize)
     }
 
@@ -273,7 +280,7 @@ impl Instance {
     /// Decision variables and constraints can be added incrementally with
     /// {meth}`new_binary` and {meth}`add_constraint`.
     #[staticmethod]
-    pub fn maximize() -> Result<Self> {
+    pub fn maximize() -> OmmxPyResult<Self> {
         Self::empty_with_sense(Sense::Maximize)
     }
 
@@ -307,7 +314,7 @@ impl Instance {
     }
 
     #[setter]
-    pub fn set_objective(&mut self, objective: Function) -> Result<()> {
+    pub fn set_objective(&mut self, objective: Function) -> OmmxPyResult<()> {
         self.inner.set_objective(objective.0)?;
         Ok(())
     }
@@ -362,7 +369,7 @@ impl Instance {
     pub fn add_decision_variable(
         slf: Bound<'_, Self>,
         variable: DecisionVariable,
-    ) -> Result<crate::AttachedDecisionVariable> {
+    ) -> OmmxPyResult<crate::AttachedDecisionVariable> {
         let id = {
             let mut inst = slf.borrow_mut();
             inst.inner
@@ -491,7 +498,7 @@ impl Instance {
         subscripts: Option<Vec<i64>>,
         parameters: Option<HashMap<String, String>>,
         description: Option<String>,
-    ) -> Result<crate::AttachedConstraint> {
+    ) -> OmmxPyResult<crate::AttachedConstraint> {
         if let Some(name) = name {
             constraint.1.label.name = Some(name);
         }
@@ -556,7 +563,7 @@ impl Instance {
     pub fn add_indicator_constraint(
         slf: Bound<'_, Self>,
         constraint: crate::IndicatorConstraint,
-    ) -> Result<crate::AttachedIndicatorConstraint> {
+    ) -> OmmxPyResult<crate::AttachedIndicatorConstraint> {
         let id = {
             let mut inst = slf.borrow_mut();
             inst.inner
@@ -622,7 +629,7 @@ impl Instance {
     pub fn add_one_hot_constraint(
         slf: Bound<'_, Self>,
         constraint: crate::OneHotConstraint,
-    ) -> Result<crate::AttachedOneHotConstraint> {
+    ) -> OmmxPyResult<crate::AttachedOneHotConstraint> {
         let id = {
             let mut inst = slf.borrow_mut();
             inst.inner
@@ -684,7 +691,7 @@ impl Instance {
     pub fn add_sos1_constraint(
         slf: Bound<'_, Self>,
         constraint: crate::Sos1Constraint,
-    ) -> Result<crate::AttachedSos1Constraint> {
+    ) -> OmmxPyResult<crate::AttachedSos1Constraint> {
         let id = {
             let mut inst = slf.borrow_mut();
             inst.inner.add_sos1_constraint(constraint.0, constraint.1)?
@@ -751,7 +758,7 @@ impl Instance {
         &mut self,
         py: Python<'_>,
         preserved: std::collections::HashSet<crate::AdditionalCapability>,
-    ) -> anyhow::Result<std::collections::HashSet<crate::AdditionalCapability>> {
+    ) -> OmmxPyResult<std::collections::HashSet<crate::AdditionalCapability>> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let rust_preserved: ommx::Capabilities = preserved.into_iter().map(|c| c.into()).collect();
         let converted = self.inner.reduce_capabilities(&rust_preserved)?;
@@ -804,7 +811,7 @@ impl Instance {
             .collect()
     }
 
-    pub fn to_v1_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
+    pub fn to_v1_bytes<'py>(&self, py: Python<'py>) -> OmmxPyResult<Bound<'py, PyBytes>> {
         let _guard = crate::TRACING.attach_parent_context(py);
         Ok(PyBytes::new(py, &self.inner.to_v1_bytes()?))
     }
@@ -833,13 +840,13 @@ impl Instance {
         function: Function,
         max_terms: Option<usize>,
         max_chars: Option<usize>,
-    ) -> Result<String> {
+    ) -> OmmxPyResult<String> {
         let opts = ommx::FunctionFormatOptions {
             max_terms,
             max_chars,
         };
         if opts == ommx::FunctionFormatOptions::default() {
-            self.inner.format_function(&function.0)
+            Ok(self.inner.format_function(&function.0)?)
         } else {
             Ok(self.inner.format_function_with(&function.0, opts)?.text)
         }
@@ -856,7 +863,7 @@ impl Instance {
         function: Function,
         max_terms: Option<usize>,
         max_chars: Option<usize>,
-    ) -> Result<crate::display::FunctionDisplay> {
+    ) -> OmmxPyResult<crate::display::FunctionDisplay> {
         let formatted = self.inner.format_function_with(
             &function.0,
             ommx::FunctionFormatOptions {
@@ -891,26 +898,16 @@ impl Instance {
             .collect()
     }
 
-    pub fn as_qubo_format<'py>(&self, py: Python<'py>) -> Result<(Bound<'py, PyDict>, f64)> {
+    pub fn as_qubo_format<'py>(&self, py: Python<'py>) -> OmmxPyResult<(Bound<'py, PyDict>, f64)> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let (qubo, constant) = self.inner.as_qubo_format()?;
-        Ok((
-            serde_pyobject::to_pyobject(py, &qubo)?
-                .extract()
-                .map_err(|e| anyhow::anyhow!("{}", e))?,
-            constant,
-        ))
+        Ok((serde_pyobject::to_pyobject(py, &qubo)?.extract()?, constant))
     }
 
-    pub fn as_hubo_format<'py>(&self, py: Python<'py>) -> Result<(Bound<'py, PyDict>, f64)> {
+    pub fn as_hubo_format<'py>(&self, py: Python<'py>) -> OmmxPyResult<(Bound<'py, PyDict>, f64)> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let (hubo, constant) = self.inner.as_hubo_format()?;
-        Ok((
-            serde_pyobject::to_pyobject(py, &hubo)?
-                .extract()
-                .map_err(|e| anyhow::anyhow!("{}", e))?,
-            constant,
-        ))
+        Ok((serde_pyobject::to_pyobject(py, &hubo)?.extract()?, constant))
     }
 
     /// Convert the instance to a QUBO format.
@@ -1095,7 +1092,7 @@ impl Instance {
     /// >>> pi.removed_constraints[1]
     /// RemovedConstraint(x1 + x2 - 1 == 0, reason=ommx.Instance.penalty_method, parameter_id=4)
     /// ```
-    pub fn penalty_method(&self, py: Python<'_>) -> Result<ParametricInstance> {
+    pub fn penalty_method(&self, py: Python<'_>) -> OmmxPyResult<ParametricInstance> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let parametric_instance = self.inner.clone().penalty_method()?;
         Ok(ParametricInstance {
@@ -1159,7 +1156,7 @@ impl Instance {
     /// >>> p.name
     /// 'uniform_penalty_weight'
     /// ```
-    pub fn uniform_penalty_method(&self, py: Python<'_>) -> Result<ParametricInstance> {
+    pub fn uniform_penalty_method(&self, py: Python<'_>) -> OmmxPyResult<ParametricInstance> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let parametric_instance = self.inner.clone().uniform_penalty_method()?;
         Ok(ParametricInstance {
@@ -1376,11 +1373,9 @@ impl Instance {
     /// >>> all(state.entries[i] in [0.0, 1.0] for i in state.entries)
     /// True
     /// ```
-    pub fn random_state(&self, rng: &Rng) -> Result<crate::State> {
+    pub fn random_state(&self, rng: &Rng) -> OmmxPyResult<crate::State> {
         let strategy = self.inner.arbitrary_state();
-        let mut rng_guard = rng
-            .lock()
-            .map_err(|_| anyhow::anyhow!("Cannot get lock for RNG"))?;
+        let mut rng_guard = rng.lock()?;
         let state = ommx::random::sample(&mut rng_guard, strategy);
         Ok(crate::State(state))
     }
@@ -1432,7 +1427,7 @@ impl Instance {
         num_different_samples: usize,
         num_samples: usize,
         max_sample_id: Option<u64>,
-    ) -> Result<crate::Samples> {
+    ) -> OmmxPyResult<crate::Samples> {
         let max_sample_id = max_sample_id.unwrap_or(num_samples as u64);
         let params = ommx::random::SamplesParameters::new(
             num_different_samples,
@@ -1441,9 +1436,7 @@ impl Instance {
         )?;
 
         let strategy = self.inner.arbitrary_samples(params);
-        let mut rng_guard = rng
-            .lock()
-            .map_err(|_| anyhow::anyhow!("Cannot get lock for RNG"))?;
+        let mut rng_guard = rng.lock()?;
         let samples = ommx::random::sample(&mut rng_guard, strategy);
         Ok(crate::Samples(samples))
     }
@@ -1495,7 +1488,7 @@ impl Instance {
         constraint_id: u64,
         reason: String,
         #[gen_stub(override_type(type_repr = "str"))] parameters: Option<HashMap<String, String>>,
-    ) -> Result<()> {
+    ) -> OmmxPyResult<()> {
         self.inner.relax_constraint(
             constraint_id.into(),
             reason,
@@ -1504,7 +1497,7 @@ impl Instance {
         Ok(())
     }
 
-    pub fn restore_constraint(&mut self, constraint_id: u64) -> Result<()> {
+    pub fn restore_constraint(&mut self, constraint_id: u64) -> OmmxPyResult<()> {
         self.inner.restore_constraint(constraint_id.into())?;
         Ok(())
     }
@@ -1516,7 +1509,7 @@ impl Instance {
         constraint_id: u64,
         reason: String,
         #[gen_stub(override_type(type_repr = "str"))] parameters: Option<HashMap<String, String>>,
-    ) -> Result<()> {
+    ) -> OmmxPyResult<()> {
         self.inner.relax_indicator_constraint(
             constraint_id.into(),
             reason,
@@ -1526,7 +1519,7 @@ impl Instance {
     }
 
     /// Restore a removed indicator constraint back to active.
-    pub fn restore_indicator_constraint(&mut self, constraint_id: u64) -> Result<()> {
+    pub fn restore_indicator_constraint(&mut self, constraint_id: u64) -> OmmxPyResult<()> {
         self.inner
             .restore_indicator_constraint(constraint_id.into())?;
         Ok(())
@@ -1563,7 +1556,7 @@ impl Instance {
     /// >>> instance.removed_one_hot_constraints
     /// {1: RemovedOneHotConstraint(OneHotConstraint(exactly one of {x0, x1, x2} = 1), reason=ommx.Instance.convert_one_hot_to_constraint, constraint_id=0)}
     /// ```
-    pub fn convert_one_hot_to_constraint(&mut self, one_hot_id: u64) -> Result<u64> {
+    pub fn convert_one_hot_to_constraint(&mut self, one_hot_id: u64) -> OmmxPyResult<u64> {
         let new_id = self
             .inner
             .convert_one_hot_to_constraint(one_hot_id.into())?;
@@ -1597,7 +1590,7 @@ impl Instance {
     /// >>> instance.constraints
     /// {0: Constraint(x0 + x1 - 1 == 0), 1: Constraint(x2 + x3 - 1 == 0)}
     /// ```
-    pub fn convert_all_one_hots_to_constraints(&mut self) -> Result<Vec<u64>> {
+    pub fn convert_all_one_hots_to_constraints(&mut self) -> OmmxPyResult<Vec<u64>> {
         let ids = self.inner.convert_all_one_hots_to_constraints()?;
         Ok(ids.into_iter().map(|id| id.into_inner()).collect())
     }
@@ -1655,7 +1648,7 @@ impl Instance {
     /// >>> instance.removed_sos1_constraints
     /// {1: RemovedSos1Constraint(Sos1Constraint(at most one of {x0, x1, x2} ≠ 0), reason=ommx.Instance.convert_sos1_to_constraints, constraint_ids=0)}
     /// ```
-    pub fn convert_sos1_to_constraints(&mut self, sos1_id: u64) -> Result<Vec<u64>> {
+    pub fn convert_sos1_to_constraints(&mut self, sos1_id: u64) -> OmmxPyResult<Vec<u64>> {
         let new_ids = self.inner.convert_sos1_to_constraints(sos1_id.into())?;
         Ok(new_ids.into_iter().map(|id| id.into_inner()).collect())
     }
@@ -1693,7 +1686,7 @@ impl Instance {
     /// >>> instance.constraints
     /// {0: Constraint(x0 + x1 - 1 <= 0), 1: Constraint(x2 + x3 - 1 <= 0)}
     /// ```
-    pub fn convert_all_sos1_to_constraints(&mut self) -> Result<BTreeMap<u64, Vec<u64>>> {
+    pub fn convert_all_sos1_to_constraints(&mut self) -> OmmxPyResult<BTreeMap<u64, Vec<u64>>> {
         let result = self.inner.convert_all_sos1_to_constraints()?;
         Ok(result
             .into_iter()
@@ -1772,7 +1765,7 @@ impl Instance {
     /// >>> instance.constraints
     /// {0: Constraint(x0 + 3*x1 - 5 <= 0)}
     /// ```
-    pub fn convert_indicator_to_constraint(&mut self, indicator_id: u64) -> Result<Vec<u64>> {
+    pub fn convert_indicator_to_constraint(&mut self, indicator_id: u64) -> OmmxPyResult<Vec<u64>> {
         let new_ids = self
             .inner
             .convert_indicator_to_constraint(indicator_id.into())?;
@@ -1789,7 +1782,9 @@ impl Instance {
     /// one is convertible are the conversions applied. If any indicator fails
     /// validation (non-finite bound on a required side), no mutation happens and
     /// the instance is left untouched.
-    pub fn convert_all_indicators_to_constraints(&mut self) -> Result<BTreeMap<u64, Vec<u64>>> {
+    pub fn convert_all_indicators_to_constraints(
+        &mut self,
+    ) -> OmmxPyResult<BTreeMap<u64, Vec<u64>>> {
         let result = self.inner.convert_all_indicators_to_constraints()?;
         Ok(result
             .into_iter()
@@ -2064,7 +2059,7 @@ impl Instance {
         &mut self,
         constraint_id: u64,
         max_integer_range: u64,
-    ) -> Result<()> {
+    ) -> OmmxPyResult<()> {
         self.inner
             .convert_inequality_to_equality_with_integer_slack(
                 constraint_id,
@@ -2125,7 +2120,7 @@ impl Instance {
         &mut self,
         constraint_id: u64,
         slack_upper_bound: u64,
-    ) -> Result<Option<f64>> {
+    ) -> OmmxPyResult<Option<f64>> {
         let result = self
             .inner
             .add_integer_slack_to_inequality(constraint_id, slack_upper_bound)?;
@@ -2225,11 +2220,9 @@ impl Instance {
     /// >>> stats["constraints"]["total"]
     /// 0
     /// ```
-    pub fn stats<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDict>> {
+    pub fn stats<'py>(&self, py: Python<'py>) -> OmmxPyResult<Bound<'py, PyDict>> {
         let stats = self.inner.stats();
-        serde_pyobject::to_pyobject(py, &stats)?
-            .extract()
-            .map_err(|e| anyhow::anyhow!("{}", e))
+        Ok(serde_pyobject::to_pyobject(py, &stats)?.extract()?)
     }
 
     /// DataFrame of decision variables
@@ -2758,21 +2751,21 @@ impl Instance {
     }
 
     #[staticmethod]
-    pub fn load_mps(py: Python<'_>, path: String) -> Result<Self> {
+    pub fn load_mps(py: Python<'_>, path: String) -> OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let instance = ommx::mps::load(path)?;
         Ok(Self { inner: instance })
     }
 
     #[pyo3(signature = (path, compress = true))]
-    pub fn save_mps(&self, py: Python<'_>, path: String, compress: bool) -> Result<()> {
+    pub fn save_mps(&self, py: Python<'_>, path: String, compress: bool) -> OmmxPyResult<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
         ommx::mps::save(&self.inner, path, compress)?;
         Ok(())
     }
 
     #[staticmethod]
-    pub fn load_qplib(py: Python<'_>, path: String) -> Result<Self> {
+    pub fn load_qplib(py: Python<'_>, path: String) -> OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let instance = ommx::qplib::load(path)?;
         Ok(Self { inner: instance })
@@ -2878,13 +2871,16 @@ impl Instance {
                 let mut weights = HashMap::new();
                 for p in pi.parameters().to_v1_parameters() {
                     let constraint_id = p.subscripts.first().copied().ok_or_else(|| {
-                        anyhow::anyhow!("Penalty parameter {} has no subscripts", p.id)
+                        PyRuntimeError::new_err(format!(
+                            "Penalty parameter {} has no subscripts",
+                            p.id
+                        ))
                     })? as u64;
                     let w = pw.get(&constraint_id).ok_or_else(|| {
-                        anyhow::anyhow!(
+                        PyValueError::new_err(format!(
                             "No penalty weight provided for constraint ID {}",
                             constraint_id
-                        )
+                        ))
                     })?;
                     weights.insert(VariableID::from(p.id).into_inner(), *w);
                 }
@@ -2894,11 +2890,10 @@ impl Instance {
             } else {
                 let weight = uniform_penalty_weight.unwrap_or(1.0);
                 let pi = self.inner.clone().uniform_penalty_method()?;
-                let param_id = pi
-                    .parameters()
-                    .keys()
-                    .next()
-                    .ok_or_else(|| anyhow::anyhow!("No penalty weight parameter found"))?;
+                let param_id =
+                    pi.parameters().keys().next().ok_or_else(|| {
+                        PyRuntimeError::new_err("No penalty weight parameter found")
+                    })?;
                 let mut v1_params = ommx::v1::Parameters::default();
                 v1_params.entries.insert(param_id.into_inner(), weight);
                 self.inner = pi.with_parameters(v1_params)?;

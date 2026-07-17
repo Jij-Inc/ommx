@@ -30,6 +30,12 @@ returns the typed error directly):
 - [`DecisionVariableError`](crate::DecisionVariableError), [`SubstitutionError`](crate::SubstitutionError), [`SolutionError`](crate::SolutionError),
   [`SampleSetError`](crate::SampleSetError) — domain-specific structured errors consumed by
   in-crate tests and downstream code that wants to react programmatically.
+- [`ImageRefParseError`](crate::artifact::ImageRefParseError) and
+  [`InvalidLocalRegistryImageRef`](crate::artifact::local_registry::InvalidLocalRegistryImageRef) —
+  distinguish invalid image-reference input from an invalid name/reference pair
+  already persisted in the Local Registry.
+- [`AttachmentNotFound`](crate::experiment::AttachmentNotFound) — identifies
+  an absent Attachment name in an Experiment or Run namespace.
 
 Recover them with [`Error::downcast_ref`](crate::Error::downcast_ref) / [`Error::is`](crate::Error::is):
 

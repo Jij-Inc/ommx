@@ -1,6 +1,5 @@
 use crate::{Constraint, Function, Polynomial, Quadratic, Rng, State};
 
-use anyhow::{anyhow, Result};
 use approx::AbsDiffEq;
 use ommx::LinearMonomial;
 use ommx::{ATol, Coefficient, CoefficientError, Evaluate};
@@ -161,8 +160,8 @@ impl Linear {
         num_terms=ommx::LinearParameters::default().num_terms(),
         max_id=ommx::LinearParameters::default().max_id().into_inner()
     ))]
-    pub fn random(rng: &Rng, num_terms: usize, max_id: u64) -> Result<Self> {
-        let mut rng = rng.lock().map_err(|_| anyhow!("Cannot get lock for RNG"))?;
+    pub fn random(rng: &Rng, num_terms: usize, max_id: u64) -> crate::error::OmmxPyResult<Self> {
+        let mut rng = rng.lock()?;
         let inner: ommx::Linear = ommx::random::random(
             &mut rng,
             ommx::LinearParameters::new(num_terms, max_id.into())?,

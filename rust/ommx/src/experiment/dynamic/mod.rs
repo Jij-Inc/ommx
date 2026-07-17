@@ -12,8 +12,10 @@
 //! tied to the registry reference inside the same owned handle. This is
 //! an internal representation detail: public accessors promote those raw
 //! descriptors before decoding typed payloads or writing attachment files.
+//! Metadata-only accessors read the descriptor directly.
 
 use super::artifact::ExperimentArtifactView;
+use super::attachment::{descriptor_attachment, descriptor_attachment_media_type};
 use super::config::ExperimentConfig;
 use super::logging::AttachmentLoggerStorage;
 use super::{
@@ -221,9 +223,10 @@ struct SealedExperimentDynState {
 /// Runtime-owned sealed Run view.
 ///
 /// `SealedRunDyn` stores raw attachment descriptors internally because
-/// it cannot borrow the registry through a Rust lifetime. Attachment
-/// accessors use the stored registry handle to verify and promote them
-/// to [`StoredDescriptor`] before exposing them.
+/// it cannot borrow the registry through a Rust lifetime. Payload accessors
+/// use the stored registry handle to verify and promote them to
+/// [`StoredDescriptor`] before reading bytes. Metadata accessors inspect the
+/// descriptor directly.
 #[derive(Debug, Clone)]
 pub struct SealedRunDyn {
     registry_handle: LocalRegistryHandle,
@@ -289,12 +292,8 @@ impl SealedRunDyn {
         self.registry_handle.clone()
     }
 
-    fn attachment_table(&self) -> Result<AttachmentTable<StoredDescriptor<'_>>> {
-        self.attachments.clone().try_map_owned(|descriptor| {
-            self.registry_handle
-                .registry()
-                .stored_descriptor(descriptor)
-        })
+    fn attachment_table(&self, name: &str) -> Result<AttachmentTable<StoredDescriptor<'_>>> {
+        stored_attachment_table(self.registry_handle.registry(), &self.attachments, name)
     }
 
     pub fn attachment_names(&self) -> Vec<String> {
@@ -302,27 +301,27 @@ impl SealedRunDyn {
     }
 
     pub fn attachment_media_type(&self, name: &str) -> Result<MediaType> {
-        self.attachment_table()?.media_type(name)
+        descriptor_attachment_media_type(&self.attachments, name)
     }
 
     pub fn attachment_blob(&self, name: &str) -> Result<Vec<u8>> {
-        self.attachment_table()?.blob(name)
+        self.attachment_table(name)?.blob(name)
     }
 
     pub fn attachment_instance(&self, name: &str) -> Result<Instance> {
-        self.attachment_table()?.instance(name)
+        self.attachment_table(name)?.instance(name)
     }
 
     pub fn attachment_parametric_instance(&self, name: &str) -> Result<ParametricInstance> {
-        self.attachment_table()?.parametric_instance(name)
+        self.attachment_table(name)?.parametric_instance(name)
     }
 
     pub fn attachment_solution(&self, name: &str) -> Result<Solution> {
-        self.attachment_table()?.solution(name)
+        self.attachment_table(name)?.solution(name)
     }
 
     pub fn attachment_sample_set(&self, name: &str) -> Result<SampleSet> {
-        self.attachment_table()?.sample_set(name)
+        self.attachment_table(name)?.sample_set(name)
     }
 
     pub fn write_attachment(
@@ -331,7 +330,7 @@ impl SealedRunDyn {
         path: impl AsRef<Path>,
         overwrite: bool,
     ) -> Result<std::path::PathBuf> {
-        self.attachment_table()?
+        self.attachment_table(name)?
             .write_attachment(name, path, overwrite)
     }
 
@@ -1011,7 +1010,7 @@ impl ExperimentDyn {
         }
     }
 
-    fn experiment_attachment_table(&self) -> Result<AttachmentTable<StoredDescriptor<'_>>> {
+    fn experiment_attachment_descriptors(&self) -> Result<AttachmentTable<Descriptor>> {
         let attachments = {
             let dyn_state = lock_experiment_state(&self.state);
             match &dyn_state.lifecycle {
@@ -1026,44 +1025,51 @@ impl ExperimentDyn {
                 lifecycle => return bail_not_sealed(lifecycle),
             }
         };
-        attachments.try_map_owned(|descriptor| {
-            self.registry_handle
-                .registry()
-                .stored_descriptor(descriptor)
-        })
+        Ok(attachments)
+    }
+
+    fn experiment_attachment_table(
+        &self,
+        name: &str,
+    ) -> Result<AttachmentTable<StoredDescriptor<'_>>> {
+        stored_attachment_table(
+            self.registry_handle.registry(),
+            &self.experiment_attachment_descriptors()?,
+            name,
+        )
     }
 
     pub fn attachment_names(&self) -> Result<Vec<String>> {
         Ok(self
-            .experiment_attachment_table()?
+            .experiment_attachment_descriptors()?
             .names()
             .map(ToOwned::to_owned)
             .collect())
     }
 
     pub fn attachment_media_type(&self, name: &str) -> Result<MediaType> {
-        self.experiment_attachment_table()?.media_type(name)
+        descriptor_attachment_media_type(&self.experiment_attachment_descriptors()?, name)
     }
 
     pub fn attachment_blob(&self, name: &str) -> Result<Vec<u8>> {
-        self.experiment_attachment_table()?.blob(name)
+        self.experiment_attachment_table(name)?.blob(name)
     }
 
     pub fn attachment_instance(&self, name: &str) -> Result<Instance> {
-        self.experiment_attachment_table()?.instance(name)
+        self.experiment_attachment_table(name)?.instance(name)
     }
 
     pub fn attachment_parametric_instance(&self, name: &str) -> Result<ParametricInstance> {
-        self.experiment_attachment_table()?
+        self.experiment_attachment_table(name)?
             .parametric_instance(name)
     }
 
     pub fn attachment_solution(&self, name: &str) -> Result<Solution> {
-        self.experiment_attachment_table()?.solution(name)
+        self.experiment_attachment_table(name)?.solution(name)
     }
 
     pub fn attachment_sample_set(&self, name: &str) -> Result<SampleSet> {
-        self.experiment_attachment_table()?.sample_set(name)
+        self.experiment_attachment_table(name)?.sample_set(name)
     }
 
     pub fn write_attachment(
@@ -1072,7 +1078,7 @@ impl ExperimentDyn {
         path: impl AsRef<Path>,
         overwrite: bool,
     ) -> Result<std::path::PathBuf> {
-        self.experiment_attachment_table()?
+        self.experiment_attachment_table(name)?
             .write_attachment(name, path, overwrite)
     }
 
@@ -1547,6 +1553,22 @@ fn descriptor_attachment_table(
     attachments
         .try_map(|_, descriptor| Ok(Descriptor::from(descriptor.clone())))
         .expect("converting StoredDescriptor to Descriptor should not fail")
+}
+
+fn stored_attachment_table<'reg>(
+    registry: &'reg LocalRegistry,
+    attachments: &AttachmentTable<Descriptor>,
+    name: &str,
+) -> Result<AttachmentTable<StoredDescriptor<'reg>>> {
+    let descriptor =
+        registry.stored_descriptor(descriptor_attachment(attachments, name)?.clone())?;
+    let mut stored = AttachmentTable::new();
+    stored.insert(
+        name,
+        descriptor,
+        attachments.filename(name).map(ToOwned::to_owned),
+    )?;
+    Ok(stored)
 }
 
 fn unsealed_run_views<'a>(

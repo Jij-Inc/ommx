@@ -3,7 +3,6 @@ use crate::{
     Quadratic, Rng, State, VariableBound,
 };
 
-use anyhow::{anyhow, Result};
 use approx::AbsDiffEq;
 use ommx::{ATol, Coefficient, CoefficientError, Evaluate, LinearMonomial};
 use pyo3::{exceptions::PyTypeError, prelude::*, types::PyDict, Bound, PyAny};
@@ -506,8 +505,13 @@ impl Function {
         max_degree=ommx::PolynomialParameters::default().max_degree().into_inner(),
         max_id=ommx::PolynomialParameters::default().max_id().into_inner()
     ))]
-    pub fn random(rng: &Rng, num_terms: usize, max_degree: u32, max_id: u64) -> Result<Self> {
-        let mut rng = rng.lock().map_err(|_| anyhow!("Cannot get lock for RNG"))?;
+    pub fn random(
+        rng: &Rng,
+        num_terms: usize,
+        max_degree: u32,
+        max_id: u64,
+    ) -> crate::error::OmmxPyResult<Self> {
+        let mut rng = rng.lock()?;
         let inner: ommx::Function = ommx::random::random(
             &mut rng,
             ommx::PolynomialParameters::new(num_terms, max_degree.into(), max_id.into())?,

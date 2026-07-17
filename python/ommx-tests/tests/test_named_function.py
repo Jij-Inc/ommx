@@ -235,7 +235,7 @@ class TestInstanceNamedFunctions:
         first = NamedFunction(id=0, function=x, name="first")
         second = NamedFunction(id=0, function=x + 1, name="second")
 
-        with pytest.raises(RuntimeError, match="Duplicate named function ID: 0"):
+        with pytest.raises(ValueError, match="Duplicate named function ID: 0"):
             Instance.from_components(
                 decision_variables=[x],
                 objective=x,

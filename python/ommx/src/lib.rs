@@ -23,6 +23,7 @@ mod indicator_constraint;
 mod instance;
 mod instance_class;
 mod linear;
+mod message_io;
 mod named_function;
 mod one_hot_constraint;
 mod pandas;
@@ -53,7 +54,7 @@ pub use constraint::*;
 #[cfg(feature = "remote-artifact")]
 pub use dataset::*;
 pub use decision_variable::*;
-pub use descriptor::*;
+pub use descriptor::{PyArchiveDescriptor, PyDescriptor};
 pub use enums::*;
 pub use evaluated_constraint::*;
 pub use evaluated_decision_variable::*;

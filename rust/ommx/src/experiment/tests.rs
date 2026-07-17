@@ -6,9 +6,9 @@ use super::config::{
 };
 use super::parameter::RunParameterTable;
 use super::{
-    AdapterDiagnosticPayload, AttachmentLogger, AttachmentTable, AutosavePolicy, Compression,
-    Experiment, ExperimentDyn, ExperimentLifecycle, ExperimentStatus, Name, ParameterValue,
-    RunLifecycle, SamplingStatus, SealedExperiment, SolveStatus, Trace,
+    AdapterDiagnosticPayload, AttachmentLogger, AttachmentNotFound, AttachmentTable,
+    AutosavePolicy, Compression, Experiment, ExperimentDyn, ExperimentLifecycle, ExperimentStatus,
+    Name, ParameterValue, RunLifecycle, SamplingStatus, SealedExperiment, SolveStatus, Trace,
     EXPERIMENT_ARTIFACT_MEDIA_TYPE, EXPERIMENT_CONFIG_MEDIA_TYPE, EXPERIMENT_STATUS_DRAFT,
     EXPERIMENT_STATUS_FAILED, EXPERIMENT_STATUS_FINISHED, EXPERIMENT_STATUS_INTERRUPTED,
     RUN_PARAMETERS_MEDIA_TYPE, RUN_STATUS_FAILED, RUN_STATUS_FINISHED, RUN_STATUS_INTERRUPTED,
@@ -224,6 +224,76 @@ fn attachment_reader_streams_payload_into_registry() {
         assert_eq!(loaded.attachment_blob("reader")?, payload);
         Ok(())
     });
+}
+
+#[test]
+fn missing_attachment_preserves_lookup_signal() {
+    with_temp_experiment(|experiment| {
+        let artifact = experiment.commit()?.into_artifact();
+        let loaded = SealedExperiment::from_artifact(artifact)?;
+        let error = loaded
+            .attachment_blob("missing")
+            .expect_err("missing Attachment must fail");
+        let signal = error
+            .downcast_ref::<AttachmentNotFound>()
+            .expect("missing Attachment must preserve AttachmentNotFound");
+        assert_eq!(signal.name(), "missing");
+        Ok(())
+    });
+}
+
+#[test]
+fn dynamic_missing_attachment_lookup_precedes_unrelated_blob_validation() {
+    let payload = b"unrelated attachment";
+    let experiment = ExperimentDyn::with_temp_local_registry(Name::Anonymous).unwrap();
+    let registry_handle = experiment.registry_handle();
+
+    AttachmentLogger::log_attachment(
+        &experiment,
+        "experiment-unrelated",
+        MediaType::from("application/octet-stream"),
+        payload,
+        HashMap::new(),
+    )
+    .unwrap();
+    let mut open_run = experiment.run().unwrap();
+    AttachmentLogger::log_attachment(
+        &mut open_run,
+        "run-unrelated",
+        MediaType::from("application/octet-stream"),
+        payload,
+        HashMap::new(),
+    )
+    .unwrap();
+    open_run.finish().unwrap();
+    experiment.commit().unwrap();
+
+    fs::remove_file(blob_path(
+        registry_handle.registry().root(),
+        &digest_for_bytes(payload),
+    ))
+    .unwrap();
+
+    let run = experiment.runs().unwrap().remove(0);
+    let destination = registry_handle.registry().root().join("missing.bin");
+    let errors = [
+        experiment
+            .attachment_blob("missing")
+            .expect_err("Experiment lookup must fail before unrelated blob validation"),
+        experiment
+            .write_attachment("missing", &destination, false)
+            .expect_err("Experiment write must fail before unrelated blob validation"),
+        run.attachment_blob("missing")
+            .expect_err("Run lookup must fail before unrelated blob validation"),
+        run.write_attachment("missing", &destination, false)
+            .expect_err("Run write must fail before unrelated blob validation"),
+    ];
+    for error in errors {
+        let signal = error
+            .downcast_ref::<AttachmentNotFound>()
+            .expect("missing name must retain AttachmentNotFound");
+        assert_eq!(signal.name(), "missing");
+    }
 }
 
 #[cfg(unix)]
