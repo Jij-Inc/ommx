@@ -4,7 +4,7 @@ use super::super::logging::AttachmentLoggerStorage;
 use super::super::parameter::ParameterSet;
 use super::super::{
     AttachmentTable, FailedSampleRecord, FailedSolveRecord, FinishedSampleRecord,
-    FinishedSolveRecord, ParameterValue, RunStatus, SamplingStatus, SolveStatus,
+    FinishedSolveRecord, ParameterValue, SamplingStatus, SolveStatus,
 };
 use super::{
     bail_non_unsealed, ensure_unsealed_for_attachment_write, lock_experiment_state,
@@ -13,6 +13,7 @@ use super::{
 };
 use crate::artifact::local_registry::LocalRegistry;
 use crate::artifact::media_types;
+use crate::experiment::RunLifecycle;
 use anyhow::{ensure, Result};
 use oci_spec::image::Descriptor;
 use std::collections::HashMap;
@@ -90,7 +91,7 @@ impl ExperimentDyn {
                 Ok(value)
             }
             Err(error) => {
-                if let Err(finish_error) = run.finish_failed() {
+                if let Err(finish_error) = run.finish_failed_with_reason(error.to_string()) {
                     tracing::warn!(
                         error = %finish_error,
                         "Failed to finish failed Run after callback error"
@@ -434,23 +435,37 @@ impl RunDyn {
 
     pub fn finish(mut self) -> Result<()> {
         self.interrupt_on_drop = false;
-        self.close_with_status(RunStatus::Finished)
+        self.close_with_lifecycle(RunLifecycle::Finished)
     }
 
     pub fn finish_failed(self) -> Result<()> {
-        self.finish_with_status(RunStatus::Failed)
+        self.finish_with_lifecycle(RunLifecycle::Failed { reason: None })
+    }
+
+    /// Close the run as failed with a concise durable reason.
+    pub fn finish_failed_with_reason(self, reason: impl Into<String>) -> Result<()> {
+        self.finish_with_lifecycle(RunLifecycle::Failed {
+            reason: Some(reason.into()),
+        })
     }
 
     pub fn finish_interrupted(self) -> Result<()> {
-        self.finish_with_status(RunStatus::Interrupted)
+        self.finish_with_lifecycle(RunLifecycle::Interrupted { reason: None })
     }
 
-    fn finish_with_status(mut self, status: RunStatus) -> Result<()> {
+    /// Close the run as interrupted with a concise durable reason.
+    pub fn finish_interrupted_with_reason(self, reason: impl Into<String>) -> Result<()> {
+        self.finish_with_lifecycle(RunLifecycle::Interrupted {
+            reason: Some(reason.into()),
+        })
+    }
+
+    fn finish_with_lifecycle(mut self, lifecycle: RunLifecycle) -> Result<()> {
         self.interrupt_on_drop = false;
-        self.close_with_status(status)
+        self.close_with_lifecycle(lifecycle)
     }
 
-    fn close_with_status(&mut self, status: RunStatus) -> Result<()> {
+    fn close_with_lifecycle(&mut self, lifecycle: RunLifecycle) -> Result<()> {
         let mut dyn_state = lock_experiment_state(&self.experiment_state);
         let registry_handle = dyn_state.registry_handle.clone();
         let ExperimentDynLifecycle::Unsealed { state, open_runs } = &mut dyn_state.lifecycle else {
@@ -471,7 +486,7 @@ impl RunDyn {
             run.run_id,
             RunEntryDyn {
                 run_id: run.run_id,
-                status,
+                lifecycle,
                 attachments: run.attachments,
                 trace: run.trace,
                 solves: run.solves,
@@ -561,7 +576,9 @@ impl Drop for RunDyn {
             return;
         }
         if self.interrupt_on_drop {
-            if let Err(error) = self.close_with_status(RunStatus::Interrupted) {
+            if let Err(error) =
+                self.close_with_lifecycle(RunLifecycle::Interrupted { reason: None })
+            {
                 tracing::warn!(
                     error = %error,
                     "Failed to finish interrupted Run during drop"

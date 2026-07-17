@@ -25,6 +25,8 @@ use ommx::experiment::{
     FailedSolveRecord, FinishedSampleRecord, FinishedSolveRecord, SamplingStatus, SolveStatus,
 };
 
+const PYTHON_EXCEPTION_REASON_MAX_CHARS: usize = 512;
+
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust", name = "ExperimentRef")]
@@ -482,8 +484,8 @@ impl PyExperiment {
         })
     }
 
-    /// Import an Experiment Artifact from a `.ommx` OCI archive file (or an OCI
-    /// Image Layout directory).
+    /// Import a finished, failed, or interrupted Experiment Artifact from a
+    /// `.ommx` OCI archive file (or an OCI Image Layout directory).
     ///
     /// The archive is imported into the default Local Registry, matching
     /// {meth}`Artifact.import_archive`, and then interpreted as an
@@ -497,7 +499,7 @@ impl PyExperiment {
         })
     }
 
-    /// Interpret an already-open Artifact as a committed Experiment.
+    /// Interpret an already-open Artifact as a finished, failed, or interrupted Experiment.
     ///
     /// This is the usual entry point after importing or receiving an OMMX
     /// Artifact handle. The artifact must contain an Experiment config.
@@ -620,7 +622,7 @@ impl PyExperiment {
         Ok(self.inner.rename(image_name)?)
     }
 
-    /// Save this committed Experiment Artifact as a `.ommx` OCI archive file at `path`.
+    /// Save this finished, failed, or interrupted Experiment Artifact as a `.ommx` archive.
     ///
     /// The archive is an exchange-format export of the registry-resident
     /// Experiment Artifact. Loading the archive back via
@@ -633,7 +635,7 @@ impl PyExperiment {
         Ok(self.inner.save(&path)?)
     }
 
-    /// Push this committed Experiment Artifact to its remote registry.
+    /// Push this finished, failed, or interrupted Experiment Artifact remotely.
     ///
     /// Use `rename(...)` first when an anonymous or local-only experiment
     /// should be published under a remote container image reference.
@@ -800,7 +802,16 @@ impl PyExperiment {
     }
 
     #[getter]
-    /// Committed OMMX Artifact for this Experiment.
+    /// Concise exception type and message for a failed or interrupted Experiment.
+    ///
+    /// This is lifecycle metadata, not solver diagnostics. It is `None` when
+    /// no reason was recorded.
+    pub fn lifecycle_reason(&self) -> Option<String> {
+        self.inner.lifecycle_reason()
+    }
+
+    #[getter]
+    /// Immutable OMMX Artifact for this finished, failed, or interrupted Experiment.
     ///
     /// Raises an error if the Experiment has not been committed yet.
     pub fn artifact(&self) -> OmmxPyResult<PyArtifact> {
@@ -1406,17 +1417,54 @@ fn python_exception_reason(
         .and_then(|value| value.getattr("__name__").ok())
         .and_then(|value| value.extract::<String>().ok())
         .unwrap_or_else(|| "exception".to_string());
-    match exc_value.and_then(|value| value.str().ok()) {
+    let reason = match exc_value.and_then(|value| value.str().ok()) {
         Some(value) => {
             let message = value.to_string_lossy();
-            if message.is_empty() {
+            if message.split_whitespace().next().is_none() {
                 type_name
             } else {
                 format!("{type_name}: {message}")
             }
         }
         None => type_name,
+    };
+    let reason = normalize_python_exception_reason(&reason);
+    if reason.is_empty() {
+        "exception".to_string()
+    } else {
+        reason
     }
+}
+
+fn normalize_python_exception_reason(reason: &str) -> String {
+    let mut normalized = String::with_capacity(reason.len().min(PYTHON_EXCEPTION_REASON_MAX_CHARS));
+    let mut char_count = 0;
+    let mut truncated = false;
+
+    'words: for word in reason.split_whitespace() {
+        if !normalized.is_empty() {
+            if char_count == PYTHON_EXCEPTION_REASON_MAX_CHARS {
+                truncated = true;
+                break;
+            }
+            normalized.push(' ');
+            char_count += 1;
+        }
+        for character in word.chars() {
+            if char_count == PYTHON_EXCEPTION_REASON_MAX_CHARS {
+                truncated = true;
+                break 'words;
+            }
+            normalized.push(character);
+            char_count += 1;
+        }
+    }
+
+    if truncated {
+        normalized.pop();
+        normalized.push('…');
+    }
+    normalized
 }
 
 fn is_keyboard_interrupt(
@@ -1836,6 +1884,7 @@ impl PyRun {
                     }
                 }
                 if exc_type.is_some() {
+                    let reason = python_exception_reason(exc_type, exc_value);
                     if self.store_trace {
                         if let Err(error) = store_trace_result(py, &mut run, trace_result) {
                             tracing::warn!(
@@ -1845,9 +1894,9 @@ impl PyRun {
                         }
                     }
                     let finish_result = if is_keyboard_interrupt(py, exc_type)? {
-                        run.finish_interrupted()
+                        run.finish_interrupted_with_reason(reason)
                     } else {
-                        run.finish_failed()
+                        run.finish_failed_with_reason(reason)
                     };
                     if let Err(error) = finish_result {
                         tracing::warn!(
@@ -4040,6 +4089,12 @@ impl PySealedRun {
     /// Solve attempts if those adapter errors were handled inside the Run.
     pub fn status(&self) -> String {
         self.run.status().to_string()
+    }
+
+    #[getter]
+    /// Concise exception type and message for a failed or interrupted Run.
+    pub fn lifecycle_reason(&self) -> Option<String> {
+        self.run.lifecycle_reason().map(ToOwned::to_owned)
     }
 
     #[getter]
