@@ -1,9 +1,18 @@
 use super::*;
 
 fn validate_one_hot_non_empty(constraint: &crate::OneHotConstraint) -> crate::Result<()> {
-    if constraint.variables.is_empty() {
-        crate::bail!("One-hot constraint must contain at least one variable");
-    }
+    crate::ensure!(
+        !constraint.variables.is_empty(),
+        crate::OneHotConstraintError::EmptyVariables
+    );
+    Ok(())
+}
+
+fn validate_sos1_non_empty(constraint: &crate::Sos1Constraint) -> crate::Result<()> {
+    crate::ensure!(
+        !constraint.variables.is_empty(),
+        crate::Sos1ConstraintError::EmptyVariables
+    );
     Ok(())
 }
 
@@ -165,9 +174,7 @@ impl Instance {
         constraint: crate::Sos1Constraint,
         context: crate::ConstraintContext,
     ) -> crate::Result<crate::Sos1ConstraintID> {
-        if constraint.variables.is_empty() {
-            crate::bail!("SOS1 constraint must contain at least one variable");
-        }
+        validate_sos1_non_empty(&constraint)?;
         self.validate_required_ids(constraint.required_ids())?;
         let id = self.sos1_constraint_collection.unused_id();
         self.sos1_constraint_collection
@@ -180,16 +187,21 @@ impl Instance {
     /// The table key must not collide with any existing variable and must not
     /// be a substitution-dependency key. Returns the inserted variable's id for
     /// symmetry with `add_constraint`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error whose chain contains
+    /// [`crate::DecisionVariableError::DuplicateID`] when `id` is already
+    /// owned by a decision variable.
     pub fn add_decision_variable(
         &mut self,
         id: crate::VariableID,
         variable: crate::DecisionVariable,
         label: crate::DecisionVariableLabel,
     ) -> crate::Result<crate::VariableID> {
-        if self.decision_variables.contains_key(&id) {
-            crate::bail!({ ?id }, "Duplicate decision variable ID: {id:?}");
-        }
-        if self.decision_variable_dependency.keys().any(|k| k == id) {
+        if !self.decision_variables.contains_key(&id)
+            && self.decision_variable_dependency.keys().any(|k| k == id)
+        {
             crate::bail!(
                 { ?id },
                 "Variable id {id:?} is currently used as a substitution-dependency key",
@@ -483,9 +495,7 @@ impl ParametricInstance {
         constraint: crate::Sos1Constraint,
         context: crate::ConstraintContext,
     ) -> crate::Result<crate::Sos1ConstraintID> {
-        if constraint.variables.is_empty() {
-            crate::bail!("SOS1 constraint must contain at least one variable");
-        }
+        validate_sos1_non_empty(&constraint)?;
         let required_ids = constraint.required_ids();
         self.require_decision_variables(required_ids.clone())?;
         self.validate_required_ids(required_ids)?;
@@ -499,22 +509,25 @@ impl ParametricInstance {
     ///
     /// The table key must not collide with any existing decision
     /// variable, parameter, or substitution-dependency key.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error whose chain contains
+    /// [`crate::DecisionVariableError::DuplicateID`] when `id` is already
+    /// owned by a decision variable, or
+    /// [`crate::AddDecisionVariableError::ParameterIDCollision`] when it is
+    /// already owned by a parameter.
     pub fn add_decision_variable(
         &mut self,
         id: crate::VariableID,
         variable: crate::DecisionVariable,
         label: crate::DecisionVariableLabel,
     ) -> crate::Result<crate::VariableID> {
-        if self.decision_variables().contains_key(&id) {
-            crate::bail!({ ?id }, "Duplicate decision variable ID: {id:?}");
+        let has_decision_variable = self.decision_variables().contains_key(&id);
+        if !has_decision_variable && self.parameters().contains_key(&id) {
+            return Err(crate::AddDecisionVariableError::ParameterIDCollision { id }.into());
         }
-        if self.parameters().contains_key(&id) {
-            crate::bail!(
-                { ?id },
-                "Variable id {id:?} collides with an existing parameter id",
-            );
-        }
-        if self.decision_variable_dependency().keys().any(|k| k == id) {
+        if !has_decision_variable && self.decision_variable_dependency().keys().any(|k| k == id) {
             crate::bail!(
                 { ?id },
                 "Variable id {id:?} is currently used as a substitution-dependency key",
@@ -534,7 +547,8 @@ mod tests {
         constraint::{Constraint, ConstraintID},
         linear,
         polynomial_base::{Linear, LinearMonomial},
-        DecisionVariable, Function, VariableID,
+        AddDecisionVariableError, DecisionVariable, Function, ParameterTable, Substitute,
+        VariableID,
     };
 
     use maplit::btreemap;
@@ -545,6 +559,103 @@ mod tests {
             variables: BTreeSet::new(),
             stage: crate::OneHotCreatedData,
         }
+    }
+
+    fn empty_sos1_constraint() -> crate::Sos1Constraint {
+        crate::Sos1Constraint {
+            variables: BTreeSet::new(),
+            stage: crate::Sos1CreatedData,
+        }
+    }
+
+    #[test]
+    fn add_decision_variable_preserves_duplicate_id_signal() {
+        let id = VariableID::from(7);
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            Function::Zero,
+            btreemap! { id => DecisionVariable::binary() },
+            BTreeMap::new(),
+        )
+        .unwrap();
+
+        let error = instance
+            .add_decision_variable(
+                id,
+                DecisionVariable::binary(),
+                crate::DecisionVariableLabel::default(),
+            )
+            .unwrap_err();
+
+        assert!(matches!(
+            error.downcast_ref::<crate::DecisionVariableError>(),
+            Some(crate::DecisionVariableError::DuplicateID { id: duplicate }) if *duplicate == id
+        ));
+        assert_eq!(instance.decision_variables().len(), 1);
+    }
+
+    #[test]
+    fn parametric_add_decision_variable_preserves_substituted_duplicate_signal() {
+        let independent = VariableID::from(0);
+        let dependent = VariableID::from(7);
+        let instance = ParametricInstance::new(
+            Sense::Minimize,
+            Function::from(linear!(dependent.into_inner())),
+            btreemap! {
+                independent => DecisionVariable::binary(),
+                dependent => DecisionVariable::binary(),
+            },
+            ParameterTable::default(),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        let mut instance = instance
+            .substitute_one(
+                dependent,
+                &Function::from(linear!(independent.into_inner())),
+            )
+            .unwrap();
+
+        let error = instance
+            .add_decision_variable(
+                dependent,
+                DecisionVariable::binary(),
+                crate::DecisionVariableLabel::default(),
+            )
+            .unwrap_err();
+
+        assert!(matches!(
+            error.downcast_ref::<crate::DecisionVariableError>(),
+            Some(crate::DecisionVariableError::DuplicateID { id }) if id == &dependent
+        ));
+        assert_eq!(instance.decision_variables().len(), 2);
+    }
+
+    #[test]
+    fn add_decision_variable_preserves_parameter_id_collision_signal() {
+        let parameter = VariableID::from(100);
+        let mut instance = ParametricInstance::new(
+            Sense::Minimize,
+            Function::Zero,
+            BTreeMap::new(),
+            ParameterTable::from_ids(BTreeSet::from([parameter])),
+            BTreeMap::new(),
+        )
+        .unwrap();
+
+        let error = instance
+            .add_decision_variable(
+                parameter,
+                DecisionVariable::binary(),
+                crate::DecisionVariableLabel::default(),
+            )
+            .unwrap_err();
+
+        assert!(matches!(
+            error.downcast_ref::<AddDecisionVariableError>(),
+            Some(AddDecisionVariableError::ParameterIDCollision { id }) if *id == parameter
+        ));
+        assert!(instance.decision_variables().is_empty());
     }
 
     #[test]
@@ -784,6 +895,10 @@ mod tests {
             )
             .unwrap_err();
 
+        assert!(matches!(
+            err.downcast_ref::<crate::OneHotConstraintError>(),
+            Some(crate::OneHotConstraintError::EmptyVariables)
+        ));
         assert!(
             err.to_string().contains("at least one variable"),
             "unexpected error: {err}"
@@ -809,11 +924,58 @@ mod tests {
             )
             .unwrap_err();
 
+        assert!(matches!(
+            err.downcast_ref::<crate::OneHotConstraintError>(),
+            Some(crate::OneHotConstraintError::EmptyVariables)
+        ));
         assert!(
             err.to_string().contains("at least one variable"),
             "unexpected error: {err}"
         );
         assert!(instance.one_hot_constraints().is_empty());
+    }
+
+    #[test]
+    fn test_add_sos1_constraint_rejects_empty_variable_set() {
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            Function::Zero,
+            BTreeMap::new(),
+            BTreeMap::new(),
+        )
+        .unwrap();
+
+        let err = instance
+            .add_sos1_constraint(empty_sos1_constraint(), crate::ConstraintContext::default())
+            .unwrap_err();
+
+        assert!(matches!(
+            err.downcast_ref::<crate::Sos1ConstraintError>(),
+            Some(crate::Sos1ConstraintError::EmptyVariables)
+        ));
+        assert!(instance.sos1_constraints().is_empty());
+    }
+
+    #[test]
+    fn test_parametric_add_sos1_constraint_rejects_empty_variable_set() {
+        let mut instance = ParametricInstance::new(
+            Sense::Minimize,
+            Function::Zero,
+            BTreeMap::new(),
+            crate::ParameterTable::default(),
+            BTreeMap::new(),
+        )
+        .unwrap();
+
+        let err = instance
+            .add_sos1_constraint(empty_sos1_constraint(), crate::ConstraintContext::default())
+            .unwrap_err();
+
+        assert!(matches!(
+            err.downcast_ref::<crate::Sos1ConstraintError>(),
+            Some(crate::Sos1ConstraintError::EmptyVariables)
+        ));
+        assert!(instance.sos1_constraints().is_empty());
     }
 
     #[test]

@@ -76,6 +76,16 @@ pub enum AdditionalCapability {
 /// formatting, and comparison are deterministic and sorted by variant order.
 pub type Capabilities = std::collections::BTreeSet<AdditionalCapability>;
 
+/// Error raised when adding a decision variable would violate a
+/// [`ParametricInstance`] cross-table invariant.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum AddDecisionVariableError {
+    /// The ID is already owned by a parameter in a parametric instance.
+    #[error("Variable id {id:?} collides with an existing parameter id")]
+    ParameterIDCollision { id: VariableID },
+}
+
 #[derive(
     Debug,
     Clone,

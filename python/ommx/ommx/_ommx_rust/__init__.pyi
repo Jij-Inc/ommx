@@ -3173,7 +3173,8 @@ class Instance:
         label updates. The original wrapper is not modified.
 
         Raises {class}`ValueError` if the variable's id collides with an
-        existing variable, parameter, or substitution-dependency key.
+        existing decision variable. Substituted variables retain their ids and
+        therefore also count as existing decision variables.
         """
     def new_binary(
         self,
@@ -5760,6 +5761,10 @@ class ParametricInstance:
         Add a decision variable to this parametric instance. Returns an
         {class}`~ommx.AttachedDecisionVariable` bound to the variable's
         id — a write-through handle for further label updates.
+
+        Raises {class}`ValueError` if the variable's id collides with an
+        existing decision variable or parameter. Substituted variables retain
+        their ids and therefore also count as existing decision variables.
         """
     def attached_decision_variable(
         self, variable_id: builtins.int

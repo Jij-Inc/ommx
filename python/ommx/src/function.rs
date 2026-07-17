@@ -437,11 +437,8 @@ impl Function {
         Ok(Function((&self.0 * &polynomial.0)?))
     }
 
-    pub fn content_factor(&self) -> PyResult<f64> {
-        self.0
-            .content_factor()
-            .map(|c| c.into_inner())
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))
+    pub fn content_factor(&self) -> crate::error::OmmxPyResult<f64> {
+        Ok(self.0.content_factor()?.into_inner())
     }
 
     pub fn required_ids(&self) -> BTreeSet<u64> {

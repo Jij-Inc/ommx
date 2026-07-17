@@ -55,6 +55,11 @@ def test_one_hot_constraint_accepts_variable_ids():
     assert one_hot.variables == [1, 2, 3]
 
 
+def test_one_hot_constraint_rejects_empty_variables_with_value_error():
+    with pytest.raises(ValueError, match="at least one variable"):
+        OneHotConstraint(variables=[])
+
+
 def test_one_hot_constraint_rejects_bool_as_variable_id():
     with pytest.raises(TypeError, match="Expected int, DecisionVariable"):
         OneHotConstraint(variables=[True])
@@ -92,6 +97,11 @@ def test_sos1_constraint_accepts_variable_ids():
     sos1 = Sos1Constraint(variables=[1, 2, 3])
 
     assert sos1.variables == [1, 2, 3]
+
+
+def test_sos1_constraint_rejects_empty_variables_with_value_error():
+    with pytest.raises(ValueError, match="at least one variable"):
+        Sos1Constraint(variables=[])
 
 
 def test_sos1_constraint_rejects_bool_as_variable_id():

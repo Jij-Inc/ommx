@@ -91,6 +91,12 @@ Experiment operations classify invalid image references, autosave values,
 attachment media types, and JSON input as `ValueError`; registry, archive,
 storage, and lifecycle failures remain on the `RuntimeError` fallback.
 
+Decision-variable insertion and substitution, `Function.content_factor`, and
+OneHot/SOS1 construction also use this boundary directly. Duplicate decision
+variable or parameter IDs, invalid substitutions, unrepresentable content
+factors, and empty structural constraints raise `ValueError` while retaining
+their Rust SDK signal owner.
+
 The remaining `Instance`, `ParametricInstance`, attached metadata, random
 generator, `Solution`, `Samples`, and Artifact registry bindings now use the
 same boundary. Binding-owned duplicate component IDs and missing penalty
@@ -99,11 +105,13 @@ through `Run.log_solve` and `Run.log_sample` preserve the original Python
 exception object. Malformed payloads received by the private cross-extension
 PyO3 bridge are internal protocol failures and raise `RuntimeError`.
 
-The mapped signals currently include `CoefficientError`, `AtolError`,
-`BoundError`, `MissingStateEntries`, `UnknownStateEntries`,
-`InconsistentDependentValue`, `UnverifiableDependentAssertion`, stable
-control-flow cases from `DecisionVariableError`, `SolutionError`, and
-`SampleSetError`, and the `ParseError` and `QplibParseError` parser signals.
+The mapped signals currently include `AddDecisionVariableError`, `AtolError`,
+`BoundError`, `CoefficientError`, `ContentFactorError`,
+`InconsistentDependentValue`, `MissingStateEntries`, `OneHotConstraintError`,
+`Sos1ConstraintError`, `SubstitutionError`, `UnknownStateEntries`,
+`UnverifiableDependentAssertion`, stable control-flow cases from
+`DecisionVariableError`, `SolutionError`, and `SampleSetError`, and the
+`ParseError` and `QplibParseError` parser signals.
 Missing Experiment or Run attachments retain an `AttachmentNotFound` signal
 and raise `KeyError`.
 Invalid caller-provided image references keep an `ImageRefParseError`, while a
@@ -150,7 +158,8 @@ Related PRs: [#1096](https://github.com/Jij-Inc/ommx/pull/1096),
 [#1100](https://github.com/Jij-Inc/ommx/pull/1100),
 [#1101](https://github.com/Jij-Inc/ommx/pull/1101),
 [#1102](https://github.com/Jij-Inc/ommx/pull/1102),
-[#1104](https://github.com/Jij-Inc/ommx/pull/1104).
+[#1104](https://github.com/Jij-Inc/ommx/pull/1104),
+[#1105](https://github.com/Jij-Inc/ommx/pull/1105).
 
 ### 🆕 Instance classes and adapter applicability ([#1084](https://github.com/Jij-Inc/ommx/pull/1084))
 

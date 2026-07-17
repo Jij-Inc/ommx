@@ -8341,7 +8341,7 @@
             },
             {
               "name": "add_decision_variable",
-              "doc": "Add a decision variable to this instance.\n\nDrains the wrapper's modeling-label snapshot into this instance's SoA\nstore and returns an {class}`~ommx.AttachedDecisionVariable`\nbound to the variable's id — a write-through handle for further\nlabel updates. The original wrapper is not modified.\n\nRaises {class}`ValueError` if the variable's id collides with an\nexisting variable, parameter, or substitution-dependency key.",
+              "doc": "Add a decision variable to this instance.\n\nDrains the wrapper's modeling-label snapshot into this instance's SoA\nstore and returns an {class}`~ommx.AttachedDecisionVariable`\nbound to the variable's id — a write-through handle for further\nlabel updates. The original wrapper is not modified.\n\nRaises {class}`ValueError` if the variable's id collides with an\nexisting decision variable. Substituted variables retain their ids and\ntherefore also count as existing decision variables.",
               "signatures": [
                 {
                   "parameters": [
@@ -15860,7 +15860,7 @@
             },
             {
               "name": "add_decision_variable",
-              "doc": "Add a decision variable to this parametric instance. Returns an\n{class}`~ommx.AttachedDecisionVariable` bound to the variable's\nid — a write-through handle for further label updates.",
+              "doc": "Add a decision variable to this parametric instance. Returns an\n{class}`~ommx.AttachedDecisionVariable` bound to the variable's\nid — a write-through handle for further label updates.\n\nRaises {class}`ValueError` if the variable's id collides with an\nexisting decision variable or parameter. Substituted variables retain\ntheir ids and therefore also count as existing decision variables.",
               "signatures": [
                 {
                   "parameters": [
