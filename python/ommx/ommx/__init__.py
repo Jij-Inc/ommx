@@ -2,16 +2,13 @@
 # ruff: noqa: F401
 
 from ommx._ommx_rust import (
-    AdapterCapabilities,
     AttachedConstraint,
     AttachedDecisionVariable,
     AttachedIndicatorConstraint,
     AttachedOneHotConstraint,
     AttachedSos1Constraint,
     Bound,
-    CapabilityProfile,
     Constraint,
-    ConstraintRequirement,
     DecisionVariable,
     DecisionVariableRole,
     DegreeBound,
@@ -38,9 +35,6 @@ from ommx._ommx_rust import (
     Parameter,
     ParametricInstance,
     Polynomial,
-    PortableCapabilityMismatch,
-    PortableCompatibilityReport,
-    ProfileCompatibilityReport,
     Provenance,
     ProvenanceKind,
     Quadratic,
@@ -68,16 +62,13 @@ from ommx._ommx_rust import (
 )
 
 __all__ = [
-    "AdapterCapabilities",
     "AttachedConstraint",
     "AttachedDecisionVariable",
     "AttachedIndicatorConstraint",
     "AttachedOneHotConstraint",
     "AttachedSos1Constraint",
     "Bound",
-    "CapabilityProfile",
     "Constraint",
-    "ConstraintRequirement",
     "DecisionVariable",
     "DecisionVariableRole",
     "DegreeBound",
@@ -104,9 +95,6 @@ __all__ = [
     "Parameter",
     "ParametricInstance",
     "Polynomial",
-    "PortableCapabilityMismatch",
-    "PortableCompatibilityReport",
-    "ProfileCompatibilityReport",
     "Provenance",
     "ProvenanceKind",
     "Quadratic",

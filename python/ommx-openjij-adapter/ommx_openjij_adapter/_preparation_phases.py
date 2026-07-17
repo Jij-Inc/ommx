@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from ommx import (
-    AdditionalCapability,
     Equality,
     ExactIntegerSlackError,
     InfeasibleDetected,
     Instance,
     Kind,
     LogEncodingError,
+    SpecialConstraintKind,
 )
 from ommx.adapter import ConstraintRef
 
@@ -98,21 +98,21 @@ def lower_special_constraints(
 ) -> _PhaseOutcome[_RegularSource]:
     working = state.take_instance()
     special_refs = {
-        AdditionalCapability.Indicator: frozenset(
+        SpecialConstraintKind.Indicator: frozenset(
             ConstraintRef("indicator", constraint_id)
             for constraint_id in working.indicator_constraints
         ),
-        AdditionalCapability.OneHot: frozenset(
+        SpecialConstraintKind.OneHot: frozenset(
             ConstraintRef("one_hot", constraint_id)
             for constraint_id in working.one_hot_constraints
         ),
-        AdditionalCapability.Sos1: frozenset(
+        SpecialConstraintKind.Sos1: frozenset(
             ConstraintRef("sos1", constraint_id)
             for constraint_id in working.sos1_constraints
         ),
     }
     try:
-        converted_specials = working.reduce_capabilities(set())
+        lowered_specials = working.lower_special_constraints(set(special_refs))
     except (RuntimeError, ValueError) as error:
         return _Blocked(
             failures=(
@@ -125,33 +125,33 @@ def lower_special_constraints(
         )
 
     special_step_details = {
-        AdditionalCapability.Indicator: (
+        SpecialConstraintKind.Indicator: (
             "indicator_lowering",
             "Lowered Indicator constraints exactly with validated Big-M bounds.",
         ),
-        AdditionalCapability.OneHot: (
+        SpecialConstraintKind.OneHot: (
             "one_hot_lowering",
             "Lowered OneHot constraints exactly to regular equalities.",
         ),
-        AdditionalCapability.Sos1: (
+        SpecialConstraintKind.Sos1: (
             "sos1_lowering",
             "Lowered SOS1 constraints exactly with validated Big-M bounds.",
         ),
     }
     steps = []
-    for capability in (
-        AdditionalCapability.Indicator,
-        AdditionalCapability.OneHot,
-        AdditionalCapability.Sos1,
+    for kind in (
+        SpecialConstraintKind.Indicator,
+        SpecialConstraintKind.OneHot,
+        SpecialConstraintKind.Sos1,
     ):
-        if capability not in converted_specials:
+        if kind not in lowered_specials:
             continue
-        operation, description = special_step_details[capability]
+        operation, description = special_step_details[kind]
         steps.append(
             OpenJijPreparationStep(
                 operation=operation,
                 description=description,
-                constraint_refs=special_refs[capability],
+                constraint_refs=special_refs[kind],
             )
         )
     return _Applied(_RegularSource(working), tuple(steps))

@@ -212,7 +212,7 @@ Related PRs: [#1096](https://github.com/Jij-Inc/ommx/pull/1096),
 [#1102](https://github.com/Jij-Inc/ommx/pull/1102),
 [#1087](https://github.com/Jij-Inc/ommx/pull/1087).
 
-### 🆕 Instance classes and adapter applicability ([#1084](https://github.com/Jij-Inc/ommx/pull/1084))
+### 🆕 Instance classes and adapter applicability ([#1084](https://github.com/Jij-Inc/ommx/pull/1084), [#1088](https://github.com/Jij-Inc/ommx/pull/1088))
 
 The Python SDK now exposes {class}`~ommx.InstanceClass` as a set of OMMX
 {class}`~ommx.Instance` values. Each {class}`~ommx.InstanceClassClause` is one
@@ -241,11 +241,11 @@ report = binary_linear.check_membership(instance)
 `check_applicability` or `require_applicable` to layer adapter-owned
 preconditions on top of input-class membership without mutating the caller's
 instance. Explicit preparation must be followed by a new membership check on
-the prepared input. Explicit special-constraint lowering through
-{meth}`~ommx.Instance.reduce_capabilities` and `ommx.v2.Feature` wire
-reconstruction remain separate concepts. The lowering method's keyword argument
-is renamed from `supported` to `preserved` to describe the families left
-unchanged by that explicit operation.
+the prepared input. {class}`~ommx.SpecialConstraintKind`,
+{attr}`~ommx.Instance.active_special_constraint_kinds`, and
+{meth}`~ommx.Instance.lower_special_constraints` provide separate inspection
+and direct-selection lowering for special constraints. `ommx.v2.Feature`
+remains an independent wire-reconstruction concept.
 
 ### 🆕 Typed remote Artifact lookup errors ([#1090](https://github.com/Jij-Inc/ommx/pull/1090))
 
@@ -333,7 +333,7 @@ raises `ValueError` instead of propagating a Rust panic.
 
 ### ⚠ Legacy v1 `ConstraintHints` remain advisory ([#1058](https://github.com/Jij-Inc/ommx/pull/1058))
 
-When {meth}`Instance.from_v1_bytes <ommx.Instance.from_v1_bytes>` or {meth}`ParametricInstance.from_v1_bytes <ommx.ParametricInstance.from_v1_bytes>` reads a legacy v1 payload, it now ignores `ConstraintHints` and preserves the referenced regular constraints and their context. Even a structurally plausible hint is not automatically promoted to a first-class one-hot or SOS1 constraint, so unverified metadata cannot change the feasible set or active solver requirements. Imported instances can also be serialized back to v1 because no special constraint is introduced implicitly.
+When {meth}`Instance.from_v1_bytes <ommx.Instance.from_v1_bytes>` or {meth}`ParametricInstance.from_v1_bytes <ommx.ParametricInstance.from_v1_bytes>` reads a legacy v1 payload, it now ignores `ConstraintHints` and preserves the referenced regular constraints and their context. Even a structurally plausible hint is not automatically promoted to a first-class one-hot or SOS1 constraint, so unverified metadata cannot change the feasible set or required adapter capabilities. Imported instances can also be serialized back to v1 because no special constraint is introduced implicitly.
 
 Construct first-class special constraints from trusted modeling input rather than from a legacy hint alone. See the [Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md) for details.
 

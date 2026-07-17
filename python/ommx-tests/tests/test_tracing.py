@@ -189,8 +189,8 @@ def test_to_qubo_emits_pipeline_spans() -> None:
 
 
 def test_tracing_info_event_captured_on_rust_span() -> None:
-    """``tracing::info!`` inside ``lower_special_constraints`` becomes a span
-    event on the Rust span, not a separate span."""
+    """``tracing::info!`` inside ``lower_special_constraints`` becomes a span event
+    on the Rust span, not a separate span."""
     exporter = get_test_exporter()
     provider = get_test_provider()
     exporter.clear()
@@ -204,9 +204,7 @@ def test_tracing_info_event_captured_on_rust_span() -> None:
 
     events_across_spans = [event for s in rust_spans for event in s.events]
     matched = [
-        e
-        for e in events_across_spans
-        if "lowered Indicator to regular constraints" in e.name
+        e for e in events_across_spans if "Indicator" in e.name and "lowered" in e.name
     ]
     assert matched, (
         "Expected the INFO event from Rust to appear as a span event. "

@@ -73,7 +73,7 @@ assert abs(solution.objective - 5.0) < 1e-6
 **One-hot 制約** はバイナリ変数の集合 $\{x_1, \ldots, x_n\}$ に対して $\sum_i x_i = 1$、つまり丁度1つだけが $1$ であることを要求します。
 
 ```{code-cell} ipython3
-from ommx import OneHotConstraint, SpecialConstraintKind
+from ommx import OneHotConstraint
 
 xs = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
 oh = OneHotConstraint(variables=xs)

@@ -10,63 +10,6 @@ from ._preparation import (
 )
 from ._decode import decode_to_samples
 
-_ALL_SPECIAL_CONSTRAINT_KINDS = frozenset(
-    {
-        SpecialConstraintKind.Indicator,
-        SpecialConstraintKind.OneHot,
-        SpecialConstraintKind.Sos1,
-    }
-)
-
-
-class OpenJijPreparationSemantics(str, Enum):
-    """Semantic effect of one explicit OpenJij preparation step."""
-
-    Exact = "exact"
-    Approximate = "approximate"
-    FinitePenalty = "finite_penalty"
-
-
-@dataclass(frozen=True, slots=True)
-class OpenJijPreparationStep:
-    """One auditable transformation applied before native OpenJij translation."""
-
-    operation: str
-    semantics: OpenJijPreparationSemantics
-    description: str
-    variable_ids: frozenset[int] = field(default_factory=frozenset)
-    constraint_refs: frozenset[ConstraintRef] = field(default_factory=frozenset)
-
-
-@dataclass(frozen=True, slots=True)
-class OpenJijPreparationReport:
-    """Compatibility checks and semantic steps for an explicit preparation."""
-
-    source_compatibility: AdapterCompatibilityReport
-    encoding_compatibility: AdapterCompatibilityReport
-    steps: tuple[OpenJijPreparationStep, ...]
-    final_compatibility: AdapterCompatibilityReport
-
-
-@dataclass(frozen=True, slots=True)
-class OpenJijPreparedModel:
-    """Prepared native solver input plus the model used to evaluate samples."""
-
-    _solver_instance: Instance = field(repr=False)
-    _decoder_instance: Instance = field(repr=False)
-    _evaluation_instance: Instance = field(repr=False)
-    report: OpenJijPreparationReport
-
-    @property
-    def solver_instance(self) -> Instance:
-        """Return an isolated copy of the Binary, unconstrained minimization input."""
-        return copy.deepcopy(self._solver_instance)
-
-    @property
-    def evaluation_instance(self) -> Instance:
-        """Return an isolated copy retaining the source optimization sense."""
-        return copy.deepcopy(self._evaluation_instance)
-
 
 class OMMXOpenJijSAAdapter(_OMMXOpenJijSAAdapter):
     """

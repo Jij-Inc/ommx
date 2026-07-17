@@ -21,7 +21,6 @@ mod pass;
 mod penalty;
 mod qubo;
 mod reduce_binary_power;
-mod requirements;
 mod serialize;
 mod setter;
 mod slack;
@@ -35,7 +34,6 @@ pub use analysis::*;
 pub use arbitrary::{InstanceParameters, InstanceSpace};
 pub use builder::*;
 pub use parametric_builder::*;
-pub use requirements::*;
 pub use stats::*;
 
 use crate::{
@@ -53,13 +51,12 @@ use crate::{
 };
 use std::collections::{BTreeMap, HashMap};
 
-/// A selector for a non-standard constraint family.
+/// A special constraint family that can be explicitly lowered to regular constraints.
 ///
-/// [`Instance::required_capabilities`] reports these selectors for active
-/// special constraints. [`Instance::reduce_capabilities`] uses them to choose
-/// which families are preserved during explicit lowering. This enum does not
-/// describe an [`crate::InstanceClass`] or adapter applicability. Regular
-/// constraints are outside this selector.
+/// This enum selects model transformations; it does not declare native adapter
+/// input support. Native input is described by [`crate::InstanceClass`], while
+/// `ommx.v2.Feature` describes wire-format reconstruction requirements. These
+/// concepts are intentionally independent.
 ///
 /// The [`PartialOrd`] / [`Ord`] derives follow variant declaration order
 /// (`Indicator < OneHot < Sos1`), which is also the order in which
@@ -74,7 +71,7 @@ pub enum SpecialConstraintKind {
     Sos1,
 }
 
-/// A set of [`AdditionalCapability`] selectors.
+/// A set of [`SpecialConstraintKind`] transformation selectors.
 ///
 /// Always represented as a [`std::collections::BTreeSet`] so iteration,
 /// formatting, and comparison are deterministic and sorted by variant order.
@@ -114,11 +111,11 @@ pub enum Sense {
 /// are distinct and do not conflict. Uniqueness is only required within the same type
 /// (i.e. active and removed constraints of the same type must have disjoint IDs).
 ///
-/// [`AdditionalCapability`], [`Instance::required_capabilities`], and
-/// [`Instance::reduce_capabilities`] inspect and explicitly lower special
-/// constraint families. They do not define membership in an
-/// [`crate::InstanceClass`]. After any explicit preparation, use
-/// [`crate::InstanceClass::check_membership`] on the resulting instance.
+/// [`SpecialConstraintKind`] identifies active special constraint families.
+/// [`Instance::active_special_constraint_kinds`] inspects them, and
+/// [`Instance::lower_special_constraints`] explicitly lowers selected families.
+/// These APIs do not define membership in an [`crate::InstanceClass`]. After
+/// any explicit preparation, check the resulting instance independently.
 ///
 /// # Mathematical operations
 ///
@@ -450,13 +447,13 @@ impl Instance {
             .set_context_for_owner(id, context, "SOS1 constraint")
     }
 
-    /// Return selectors for the active non-standard constraint families.
+    /// Return the special constraint families active in this instance.
     ///
     /// Only active constraints are considered; removed constraints are
     /// excluded. The result does not describe an [`crate::InstanceClass`] or
     /// establish adapter applicability.
-    pub fn required_capabilities(&self) -> Capabilities {
-        let mut caps = Capabilities::new();
+    pub fn active_special_constraint_kinds(&self) -> SpecialConstraintKinds {
+        let mut kinds = SpecialConstraintKinds::new();
         if !self.indicator_constraint_collection.active().is_empty() {
             kinds.insert(SpecialConstraintKind::Indicator);
         }
@@ -469,24 +466,23 @@ impl Instance {
         kinds
     }
 
-    /// Convert active non-standard constraint families not in `preserved` into
-    /// regular constraints.
+    /// Lower selected active special constraint families into regular constraints.
     ///
-    /// For every selector in `required_capabilities() - preserved`, call the
-    /// corresponding bulk conversion (`convert_all_indicators_to_constraints`,
-    /// `convert_all_one_hots_to_constraints`, or `convert_all_sos1_to_constraints`).
-    /// After this call, the instance's [`Self::required_capabilities`] is a
-    /// subset of `preserved`. This lowering operation does not establish
-    /// membership in an [`crate::InstanceClass`]; check the resulting instance
-    /// separately.
+    /// For every family in `kinds_to_lower`, call the corresponding bulk
+    /// conversion (`convert_all_indicators_to_constraints`,
+    /// `convert_all_one_hots_to_constraints`, or
+    /// `convert_all_sos1_to_constraints`) when that family is active. Families
+    /// omitted from `kinds_to_lower` remain active. Passing an empty set is a
+    /// no-op. This operation does not establish membership in an
+    /// [`crate::InstanceClass`]; check the resulting instance separately.
     ///
-    /// Returns the set of families that were actually lowered. Families are processed
-    /// in the deterministic order `Indicator`, `OneHot`, `Sos1`, matching
-    /// [`SpecialConstraintKinds`]'s iteration order. The returned set is empty when
-    /// none of the selected families were active. Each lowering is also emitted as an
-    /// `INFO`-level [`tracing`] event inside the `lower_special_constraints` span
-    /// (target `ommx::instance`) so it surfaces through
-    /// `pyo3-tracing-opentelemetry` on the Python side.
+    /// Returns the set of families that were requested and active, and therefore
+    /// actually lowered. Families are processed in the deterministic order
+    /// `Indicator`, `OneHot`, `Sos1`, matching [`SpecialConstraintKinds`]'s
+    /// iteration order. The set is empty when no selected family was active.
+    /// Each lowering is emitted as an `INFO`-level [`tracing`] event inside the
+    /// `lower_special_constraints` span (target `ommx::instance`) so it surfaces
+    /// through `pyo3-tracing-opentelemetry` on the Python side.
     ///
     /// Errors if any underlying conversion fails (e.g. SOS1 / indicator with
     /// non-finite bounds). Each per-type conversion is atomic, but this method
@@ -494,15 +490,18 @@ impl Instance {
     /// if a later one fails. Callers that need cross-type atomicity should
     /// validate / clone up front.
     #[tracing::instrument(skip_all)]
-    pub fn reduce_capabilities(&mut self, preserved: &Capabilities) -> crate::Result<Capabilities> {
-        let mut converted = Capabilities::new();
+    pub fn lower_special_constraints(
+        &mut self,
+        kinds_to_lower: &SpecialConstraintKinds,
+    ) -> crate::Result<SpecialConstraintKinds> {
+        let mut lowered = SpecialConstraintKinds::new();
         // Iterate in a fixed order so logs / callers see deterministic output.
         for kind in [
             SpecialConstraintKind::Indicator,
             SpecialConstraintKind::OneHot,
             SpecialConstraintKind::Sos1,
         ] {
-            if preserved.contains(&cap) {
+            if !kinds_to_lower.contains(&kind) {
                 continue;
             }
             let lowered_any = match kind {
@@ -533,7 +532,7 @@ impl Instance {
             };
             if lowered_any {
                 tracing::info!(
-                    "reduce_capabilities: {cap:?} is not preserved; converted to regular constraints"
+                    "lower_special_constraints: lowered {kind:?} to regular constraints"
                 );
                 lowered.insert(kind);
             }

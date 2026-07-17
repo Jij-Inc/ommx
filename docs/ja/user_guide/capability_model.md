@@ -16,13 +16,13 @@ kernelspec:
 OMMX では、従来 Adapter Capability として一緒に説明されていた次の2つの概念を分けて扱います。
 
 - {class}`~ommx.InstanceClass` は、具体的な `Instance` 値の集合です。Adapter は構造的な入力条件を `INPUT_CLASS` で宣言し、その後に Adapter 固有の precondition を評価して applicability を判定します。
-- {meth}`Instance.reduce_capabilities() <ommx.Instance.reduce_capabilities>` は、Instance 上で維持対象に選ばれなかった特殊制約 family を明示的に lowering します。入力 class の宣言でも、Adapter applicability の証明でもありません。
+- {meth}`Instance.lower_special_constraints() <ommx.Instance.lower_special_constraints>` は、Instance 上で選択した特殊制約 family を明示的に lowering します。入力 class の宣言でも、Adapter applicability の証明でもありません。
 
-以下の3種類の API は似ていますが、責務が明確に分かれています。
+本ページでは以下を説明します。
 
 - `InstanceClass` の membership と Adapter applicability
-- 特殊制約 family selector としての {class}`~ommx.AdditionalCapability` と {attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>`
-- {meth}`Instance.reduce_capabilities() <ommx.Instance.reduce_capabilities>` による明示的な lowering
+- 特殊制約 family selector としての {class}`~ommx.SpecialConstraintKind` と {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>`
+- {meth}`Instance.lower_special_constraints() <ommx.Instance.lower_special_constraints>` による明示的な lowering
 - 手動で通常制約に変換するための API
 - 変換結果の監査
 
@@ -48,42 +48,23 @@ binary_linear_with_one_hot = InstanceClass(
 
 Adapter は applicability の最初の条件を `INPUT_CLASS` として宣言します。構造化された結果を得るには `check_applicability()`、membership または Adapter 固有の precondition が満たされない場合に例外を送出するには `require_applicable()` を使います。明示的な preparation で別の入力値を作った場合は、その値で applicability を再評価します。
 
-## AdditionalCapability と required_capabilities
+## SpecialConstraintKind と active_special_constraint_kinds
 
-{class}`~ommx.AdditionalCapability` は、通常制約を超えた「追加の制約型サポート」を表す列挙型です。
+{class}`~ommx.SpecialConstraintKind` は、通常制約への明示的な lowering 対象として選択できる active な特殊制約 family を列挙します。Adapter の入力宣言でも serialization feature でもありません。
 
-| Capability | 対応する制約型 |
+| Kind | 対応する制約型 |
 |---|---|
-| {class}`~ommx.AdapterCapabilities` / {class}`~ommx.CapabilityProfile` | Adapter の native 入力の宣言と model との比較 |
-| {class}`~ommx.SpecialConstraintKind` / {meth}`~ommx.Instance.lower_special_constraints` | 明示的に実行する特殊制約 lowering の選択 |
-| `ommx.v2.Feature` / `required_features` | serialized semantics を reader が安全に deserialize できるかの判定 |
+| `SpecialConstraintKind.Indicator` | {class}`~ommx.IndicatorConstraint` |
+| `SpecialConstraintKind.OneHot` | {class}`~ommx.OneHotConstraint` |
+| `SpecialConstraintKind.Sos1` | {class}`~ommx.Sos1Constraint` |
 
-制約の lowering、Integer の Binary encoding、sense の反転、有限 penalty
-の追加で model を受理可能にできる場合でも、それらは native capability
-ではなく preparation step です。また `ommx.v2.Feature` は wire-format の
-Forward Compatibility のための仕組みであり、deserialize した model を
-solver が最適化できるかは表しません。
-
-## Model 全体の requirements を導出する
-
-{meth}`Instance.solver_requirements() <ommx.Instance.solver_requirements>` は、active な
-solver-facing model shape を導出します。次の情報が含まれます。
-
-- {class}`~ommx.Kind` ごとにまとめた used variable ID
-- 目的関数の次数と {class}`~ommx.Sense`
-- active な通常制約ごとの relation と次数
-- active な Indicator 制約ごとの relation と body の次数
-- active な OneHot と SOS1 の制約 ID
-
-Fixed、dependent、irrelevant、removed constraint だけで使われる変数、
-named function だけで使われる変数は Adapter profile を制限しません。
-Requirements は呼び出しのたびに導出されるため、working copy を変更する
-明示的な preparation の結果が反映されます。
+{attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` は、その {class}`~ommx.Instance` が **現在保持している active な特殊制約** に対応する `SpecialConstraintKind` の集合を返します。通常制約しか使っていない場合は空集合です。
 
 ```{code-cell} ipython3
-from ommx import DecisionVariable, Instance, OneHotConstraint
+from ommx import Instance, DecisionVariable, OneHotConstraint, SpecialConstraintKind
 
 xs = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
+
 instance = Instance.from_components(
     decision_variables=xs,
     objective=sum(xs),
@@ -91,58 +72,30 @@ instance = Instance.from_components(
     one_hot_constraints={0: OneHotConstraint(variables=xs)},
     sense=Instance.MAXIMIZE,
 )
-assert instance.required_capabilities == {AdditionalCapability.OneHot}
+assert instance.active_special_constraint_kinds == {SpecialConstraintKind.OneHot}
 assert binary_linear_with_one_hot.contains(instance)
 ```
 
-## reduce_capabilities による明示的な lowering
+## lower_special_constraints による明示的な lowering
 
-{meth}`Instance.reduce_capabilities() <ommx.Instance.reduce_capabilities>` は、明示的に呼び出す mutating operation です。このメソッドは `preserved` として渡された集合に含まれない特殊制約 family を、対応する変換 API（後述）を使って通常制約に変換します。
-
-```{code-cell} ipython3
-converted = instance.reduce_capabilities(preserved=set())
-assert converted == {AdditionalCapability.OneHot}
-```
-
-この instance は profile が native OneHot support を宣言していないため失敗します。
-検査は source instance を変更しません。
-
-## 特殊制約を明示的に lower して再検査する
-
-{attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>`
-は active な特殊制約 family の一覧であり、Adapter support の宣言ではありません。
-特定の family を lower するには working copy を用意し、対応する
-{class}`~ommx.SpecialConstraintKind` を
-{meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>` に渡します。
+{meth}`Instance.lower_special_constraints() <ommx.Instance.lower_special_constraints>` は、明示的に呼び出す mutating operation です。このメソッドは `kinds_to_lower` として選択された特殊制約 family が active な場合に、対応する変換 API（後述）を使って通常制約に変換します。集合に含めなかった family は active なまま残り、空集合は no-op です。
 
 ```{code-cell} ipython3
-import copy
-
-prepared = copy.deepcopy(instance)
-lowered = prepared.lower_special_constraints({SpecialConstraintKind.OneHot})
+lowered = instance.lower_special_constraints({SpecialConstraintKind.OneHot})
 assert lowered == {SpecialConstraintKind.OneHot}
-assert prepared.active_special_constraint_kinds == set()
-assert len(prepared.constraints) == 1
-
-# preparation で model shape が変わったため、requirements を再導出して再検査する
-MyLinearAdapter.require_compatible(prepared)
-
-# source model は変換用 workspace として使っていない
-assert instance.active_special_constraint_kinds == {SpecialConstraintKind.OneHot}
 ```
 
-One-hot 制約が除去され、その代わりに通常の等式制約 $x_0 + x_1 + x_2 - 1 = 0$ が1つ追加されたことが分かります。`reduce_capabilities` はインスタンスを in-place に変更します。成功時、`required_capabilities` は `preserved` の部分集合になります。変換が必要なかった場合は空集合を返します。得られた値に対して `INPUT_CLASS` の membership または Adapter applicability を再評価してください。
+```{code-cell} ipython3
+assert instance.active_special_constraint_kinds == set()
+assert instance.one_hot_constraints == {}
+assert len(instance.constraints) == 1
+```
 
-より一般的な preparation には exact reformulation、近似、relaxation、有限
-penalty 変換が含まれる場合があります。このような workflow では semantics を
-明示的に記録し、変換後の solver model を native profile に対して必ず再検査します。
-Backend の integer width のような adapter 固有の条件は portable profile に加えて
-検査しますが、新しい OMMX capability field ではなく、`ommx.v2.Feature` とも
-無関係です。
+One-hot 制約が除去され、その代わりに通常の等式制約 $x_0 + x_1 + x_2 - 1 = 0$ が1つ追加されたことが分かります。`lower_special_constraints` はインスタンスを in-place に変更し、選択され、active で、実際に lowering された family だけを返します。選択した family が active でなければ空集合を返します。得られた値に対して `INPUT_CLASS` の membership または Adapter applicability を再評価してください。
 
-## Family 別の変換 API
+## 手動変換 API
 
-個別の変換 API を直接呼び出すこともできます。
+`lower_special_constraints` は内部的に、制約型別の以下の変換 API を組み合わせて実装されています。ユーザーがこれらを直接呼ぶことも可能です。
 
 ### One-hot → 等式制約
 
@@ -249,8 +202,7 @@ for cid, c in instance2.constraints.items():
 | Adapter 入力の構造的な集合を記述する | {class}`~ommx.InstanceClass` |
 | Adapter applicability の最初の条件を宣言する | `INPUT_CLASS` |
 | membership と Adapter 固有の precondition を検査する | `check_applicability()` / `require_applicable()` |
-| active な特殊制約 family を調べる | {attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>` |
-| 維持しない特殊制約を明示的に lowering する | {meth}`Instance.reduce_capabilities <ommx.Instance.reduce_capabilities>` |
+| active な特殊制約 family を調べる | {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` |
+| 選択した特殊制約を明示的に lowering する | {meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>` |
 | 個別に通常制約に変換する | `convert_*_to_constraint(s)` / `convert_all_*_to_constraints` |
 | 変換履歴を確認する | `instance.constraints_df(kind=..., removed=True)` / `solution.constraints_df(kind=..., include=("...","removed_reason"))` |
-| Serialized format の Forward Compatibility を検査する | `ommx.v2.Feature` / `required_features` |

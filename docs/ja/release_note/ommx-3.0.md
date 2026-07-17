@@ -201,7 +201,7 @@ interrupted status で確実に閉じられます。
 [#1102](https://github.com/Jij-Inc/ommx/pull/1102)、
 [#1087](https://github.com/Jij-Inc/ommx/pull/1087)。
 
-### 🆕 Instance Class と Adapter Applicability ([#1084](https://github.com/Jij-Inc/ommx/pull/1084))
+### 🆕 Instance Class と Adapter Applicability ([#1084](https://github.com/Jij-Inc/ommx/pull/1084), [#1088](https://github.com/Jij-Inc/ommx/pull/1088))
 
 Python SDK から、OMMX {class}`~ommx.Instance` の集合を表す
 {class}`~ommx.InstanceClass` を利用できるようになりました。
@@ -230,10 +230,11 @@ report = binary_linear.check_membership(instance)
 `check_applicability` または `require_applicable` で、入力classへのmembershipに
 adapter固有のpreconditionを重ねて評価します。この処理は呼び出し元のinstanceを
 変更しません。明示的なpreparation後には、得られた入力でmembershipを再評価します。
-{meth}`~ommx.Instance.reduce_capabilities` による明示的な特殊制約loweringと
-`ommx.v2.Feature` のwire reconstructionは別概念です。このlowering methodの
-keyword argumentは、明示的な操作で維持するfamilyを表すため、`supported` から
-`preserved` に変更されました。
+{class}`~ommx.SpecialConstraintKind`、
+{attr}`~ommx.Instance.active_special_constraint_kinds`、
+{meth}`~ommx.Instance.lower_special_constraints` は、特殊制約のinspectionと
+直接指定によるloweringを別のAPIとして提供します。`ommx.v2.Feature` は独立した
+wire reconstructionの概念です。
 
 ### 🆕 remote Artifact lookup の型付き error ([#1090](https://github.com/Jij-Inc/ommx/pull/1090))
 
@@ -312,7 +313,7 @@ instance.add_constraint(x - y == 1, "c1")
 
 ### ⚠ legacy v1 `ConstraintHints` を advisory metadata として扱う ([#1058](https://github.com/Jij-Inc/ommx/pull/1058))
 
-{meth}`Instance.from_v1_bytes <ommx.Instance.from_v1_bytes>` または {meth}`ParametricInstance.from_v1_bytes <ommx.ParametricInstance.from_v1_bytes>` で legacy v1 payload を読み込む際、`ConstraintHints` を無視し、参照されている通常制約とその context を保持するようになりました。構造的に正しそうな hint であっても first-class one-hot / SOS1 制約へ自動昇格しないため、未検証の metadata が実行可能集合や active な solver requirements を変更することはありません。特殊制約を暗黙に追加しないため、読み込んだ instance は v1 へ再シリアライズできます。
+{meth}`Instance.from_v1_bytes <ommx.Instance.from_v1_bytes>` または {meth}`ParametricInstance.from_v1_bytes <ommx.ParametricInstance.from_v1_bytes>` で legacy v1 payload を読み込む際、`ConstraintHints` を無視し、参照されている通常制約とその context を保持するようになりました。構造的に正しそうな hint であっても first-class one-hot / SOS1 制約へ自動昇格しないため、未検証の metadata が実行可能集合や adapter の required capability を変更することはありません。特殊制約を暗黙に追加しないため、読み込んだ instance は v1 へ再シリアライズできます。
 
 first-class 特殊制約が必要な場合は、legacy hint だけを根拠にせず、信頼できる modeling input から構築してください。詳細は [Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md) を参照してください。
 

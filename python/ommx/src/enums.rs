@@ -1,11 +1,12 @@
 use pyo3::prelude::*;
 
-/// Selector for a non-standard constraint family.
+/// Kind of active special constraint in an instance.
 ///
-/// :attr:`Instance.required_capabilities` reports these selectors for active
-/// special constraints. :meth:`Instance.reduce_capabilities` uses them to
-/// choose which families are preserved during explicit lowering. Regular
-/// constraints are outside this selector.
+/// Use these values with :attr:`Instance.active_special_constraint_kinds` to
+/// inspect an instance and :meth:`Instance.lower_special_constraints` to select
+/// special constraint families for explicit lowering to regular constraints.
+/// This is a transformation selector, not an adapter input declaration or an
+/// ``ommx.v2.Feature`` wire-format requirement.
 #[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
 #[pyclass(eq, eq_int, frozen)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -20,7 +21,7 @@ pub enum SpecialConstraintKind {
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
-impl AdditionalCapability {
+impl SpecialConstraintKind {
     fn __hash__(&self) -> isize {
         *self as isize
     }

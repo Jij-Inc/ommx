@@ -24,8 +24,7 @@
 //! 4. Implement `Evaluate` for `NewConstraint<Created>`.
 //! 5. Add a `ConstraintCollection<NewConstraint>` field to [`Instance`].
 //! 6. Add a variant to [`SpecialConstraintKind`] and update
-//!    `Instance::active_special_constraint_kinds` when the new family supports
-//!    explicit lowering to regular constraints.
+//!    `Instance::active_special_constraint_kinds`.
 //!
 //! [`IndicatorConstraint`]: crate::IndicatorConstraint
 //! [`Instance`]: crate::Instance

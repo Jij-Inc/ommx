@@ -73,7 +73,7 @@ assert abs(solution.objective - 5.0) < 1e-6
 A **one-hot constraint** over a set of binary variables $\{x_1, \ldots, x_n\}$ requires $\sum_i x_i = 1$ — i.e. exactly one of them is 1.
 
 ```{code-cell} ipython3
-from ommx import OneHotConstraint, SpecialConstraintKind
+from ommx import OneHotConstraint
 
 xs = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
 oh = OneHotConstraint(variables=xs)

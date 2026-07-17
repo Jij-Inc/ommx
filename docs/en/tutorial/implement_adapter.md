@@ -316,16 +316,13 @@ The `solve` class method may define additional adapter-specific keyword options 
 
 An adapter declares the structural set of exact `Instance` values it can receive with `INPUT_CLASS`. `check_applicability()` evaluates membership first and then adapter-owned preconditions without mutating the caller's instance; `require_applicable()` raises with the same structured report when either condition fails.
 
-`SolverAdapter` does not prescribe how a concrete adapter processes an accepted input and does not mutate the instance in a base constructor. A concrete adapter may explicitly call {meth}`Instance.reduce_capabilities <ommx.Instance.reduce_capabilities>` as an implementation detail. Its `preserved` argument uses these special-constraint family selectors:
+`SolverAdapter` does not prescribe how a concrete adapter processes an accepted input and does not mutate the instance in a base constructor. A concrete adapter may explicitly call {meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>` as an implementation detail. Its `kinds_to_lower` argument uses these special-constraint family selectors:
 
-Before translation, call
-{meth}`~ommx.adapter.SolverAdapter.require_compatible`. It reports every
-portable mismatch and any adapter-specific precondition, and it does not
-mutate the input. The base class does not lower unsupported constraints. If an
-adapter exposes preparation, make that operation explicit, preserve its
-semantic effect, and recheck the resulting solver model.
+- `SpecialConstraintKind.Indicator`: Indicator constraints (`binvar = 1 → f(x) <= 0`)
+- `SpecialConstraintKind.OneHot`: Exactly one of a set of binary variables is 1
+- `SpecialConstraintKind.Sos1`: At most one of a set of variables is non-zero
 
-Use {attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>` to inspect the currently active families. `reduce_capabilities` converts every family not in `preserved` into regular constraints (Big-M for indicator / SOS1, linear equality for one-hot), mutates the instance in place, and logs each conversion at `INFO` level. Neither this property nor lowering establishes `INPUT_CLASS` membership or adapter applicability.
+Use {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` to inspect the currently active families. `lower_special_constraints` converts each selected active family into regular constraints (Big-M for indicator / SOS1, linear equality for one-hot), mutates the instance in place, and logs each lowering at `INFO` level. Neither this property nor lowering establishes `INPUT_CLASS` membership or adapter applicability.
 
 ```{important}
 `INPUT_CLASS` describes the exact value received by the adapter, regardless of its internal implementation. If a caller explicitly lowers an instance before choosing an adapter, the result is a different input value and must be checked again with `check_applicability()` or `require_applicable()`.
@@ -335,14 +332,7 @@ Using the functions prepared so far, you can implement it as follows:
 
 ```{code-cell} ipython3
 from ommx.adapter import DiagnosticsSink, SolverAdapter
-from ommx import (
-    AdapterCapabilities,
-    CapabilityProfile,
-    DegreeLimit,
-    Equality,
-    Kind,
-    Sense,
-)
+from ommx import SpecialConstraintKind
 
 class OMMXPySCIPOptAdapter(SolverAdapter):
     def __init__(
@@ -350,10 +340,8 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         ommx_instance: Instance,
     ):
         # This adapter handles Indicator and SOS1 directly, and explicitly
-        # lowers every other active special-constraint family.
-        ommx_instance.reduce_capabilities(
-            {AdditionalCapability.Indicator, AdditionalCapability.Sos1}
-        )
+        # lowers OneHot constraints.
+        ommx_instance.lower_special_constraints({SpecialConstraintKind.OneHot})
         self.instance = ommx_instance
         self.model = pyscipopt.Model()
         self.model.hideOutput()
@@ -529,15 +517,6 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
 
     # Retain the Instance because it is required to convert to SampleSet
     ommx_instance: Instance
-
-    CAPABILITIES = AdapterCapabilities([
-        CapabilityProfile(
-            name="tutorial-openjij-qubo",
-            variable_kinds={Kind.Binary},
-            objective_degree=DegreeLimit.at_most(2),
-            senses={Sense.Minimize},
-        )
-    ])
     
     def __init__(self, ommx_instance: Instance):
         self.ommx_instance = ommx_instance
@@ -599,12 +578,13 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
 
 ### Sampling using our Adapter
 
-Let's sample from the following native QUBO input using our Adapter:
+Let's sample from the following optimization problem using our Adapter:
 
 $$
 \begin{aligned}
-\min & \quad -x_0 - x_1 + 2 x_0 x_1 \\
-\text{s.t.} & \quad x_0, x_1 \in \{0, 1\}
+\max & \quad x_0 + x_1 \\
+\text{s.t.} & \quad x_0 \cdot x_1 = 1 \\
+& \quad x_0, x_1 \in \{0, 1\}
 \end{aligned}
 $$
 
@@ -612,21 +592,14 @@ $$
 x = [DecisionVariable.binary(id, name="x", subscripts=[id]) for id in range(2)]
 instance = Instance.from_components(
     decision_variables=x,
-    objective=-x[0] - x[1] + 2 * x[0] * x[1],
-    constraints={},
-    sense=Instance.MINIMIZE,
+    objective=x[0] + x[1],
+    constraints={0: x[0] * x[1] == 1},
+    sense=Instance.MAXIMIZE,
 )
 
 sample_set = OMMXOpenJijSAAdapter.sample(instance)
 sample_set.summary
 ```
-
-This compact tutorial adapter deliberately accepts only direct QUBO input. A
-production adapter may expose explicit preparation for source models with
-Integer variables, constraints, or the opposite sense, but those transformations
-must not be declared as native capabilities. See [Sampling from QUBO with OMMX
-Adapter](../tutorial/tsp_sampling_with_openjij_adapter) for the full OpenJij
-workflow.
 
 ## Summary
 
@@ -638,9 +611,8 @@ In this tutorial, we learned how to implement an OMMX Adapter by connecting to P
    - Convert `ommx.Instance` into a format that the backend solver can understand.
    - Run the backend solver to obtain a solution.
    - Convert the backend solver's output into `ommx.Solution` or `ommx.SampleSet`.
-4. Keep explicit preparation and special-constraint lowering separate from native capability declarations, and recheck the prepared solver model.
-5. Understand the characteristics and limitations of each backend solver and handle them appropriately.
-6. Pay attention to managing IDs and mapping variables to bridge the backend solver and OMMX.
+4. Understand the characteristics and limitations of each backend solver and handle them appropriately.
+5. Pay attention to managing IDs and mapping variables to bridge the backend solver and OMMX.
 
 If you want to connect your own backend solver to OMMX, refer to this tutorial for implementation. By implementing an OMMX Adapter following this tutorial, you can use optimization with various backend solvers through a common API.
 
