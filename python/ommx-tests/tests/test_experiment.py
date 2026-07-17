@@ -123,7 +123,7 @@ def test_experiment_annotations_reject_reserved_keys():
     experiment.set_annotation("com.example.owner", "value")
     assert experiment.annotations == {"com.example.owner": "value"}
 
-    with pytest.raises(Exception, match="reserved for OMMX metadata"):
+    with pytest.raises(ValueError, match="reserved for OMMX metadata"):
         experiment.set_annotation("org.ommx.v1.reserved", "value")
 
 
@@ -242,14 +242,14 @@ def test_create_experiment_run_attachments_and_commit(snapshot):
     }
     assert loaded.get_attachment("raw-config") == b"abc"
     assert loaded.get_blob("raw-config") == b"abc"
-    with pytest.raises(RuntimeError, match="Expected media type"):
+    with pytest.raises(ValueError, match="Expected media type"):
         loaded.get_json("raw-config")
     runs = {run.run_id: run for run in loaded.runs}
     assert set(runs) == {0}
     assert set(runs[0].attachment_names) == {"candidate", "solver-log"}
     assert runs[0].get_attachment("solver-log") == b"solved"
     assert runs[0].get_blob("solver-log") == b"solved"
-    with pytest.raises(RuntimeError, match="Expected media type"):
+    with pytest.raises(ValueError, match="Expected an OMMX Instance attachment"):
         runs[0].get_instance("candidate")
     df = loaded.run_parameters_df()
 
@@ -397,11 +397,11 @@ def test_experiment_autosave_policy_every_n_runs():
 
 
 def test_autosave_policy_rejects_invalid_intervals():
-    with pytest.raises(Exception, match="greater than zero"):
+    with pytest.raises(ValueError, match="greater than zero"):
         AutosavePolicy.every_n_runs(0)
-    with pytest.raises(Exception, match="finite and non-negative"):
+    with pytest.raises(ValueError, match="finite and non-negative"):
         AutosavePolicy.min_interval(math.inf)
-    with pytest.raises(Exception, match="finite and non-negative"):
+    with pytest.raises(ValueError, match="finite and non-negative"):
         AutosavePolicy.min_interval(-1.0)
 
 
@@ -670,6 +670,35 @@ def test_run_context_exit_failure_keeps_entered_state(monkeypatch):
             run.__enter__()
         with pytest.raises(RuntimeError, match="Run handle"):
             experiment.commit()
+
+
+def test_run_body_exception_wins_over_span_exit_failure(monkeypatch):
+    from opentelemetry import trace as otel_trace
+
+    experiment = Experiment.with_temp_local_registry()
+    run = experiment.run()
+
+    class BrokenContextManager:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_value, traceback):
+            raise RuntimeError("run span close failed")
+
+    class FakeTracer:
+        def start_as_current_span(self, name):
+            return BrokenContextManager()
+
+    with monkeypatch.context() as patch:
+        patch.setattr(otel_trace, "get_tracer", lambda *args, **kwargs: FakeTracer())
+        with pytest.raises(ValueError, match="run body failed"):
+            with run:
+                raise ValueError("run body failed")
+
+    artifact = experiment.commit()
+    runs = Experiment.from_artifact(artifact).runs
+    assert len(runs) == 1
+    assert runs[0].status == "failed"
 
 
 def test_store_trace_requires_run_context_manager_before_run_mutation():
@@ -1256,10 +1285,7 @@ def test_open_solve_rejects_reserved_diagnostics_option_with_manual_message():
             r"Run\.open_solve owns the `diagnostics` adapter option"
             r".*store_diagnostics=True"
         )
-        with pytest.raises(
-            RuntimeError,
-            match=pattern,
-        ):
+        with pytest.raises(ValueError, match=pattern):
             run.open_solve(
                 ManualAdapter,
                 Instance.empty(),
@@ -1806,7 +1832,7 @@ def test_log_solve_rejects_non_json_kwargs_before_solving():
     DummyAdapter.called = False
 
     with experiment.run() as run:
-        with pytest.raises(RuntimeError, match="JSON-serializable"):
+        with pytest.raises(ValueError, match="JSON-serializable"):
             run.log_solve(DummyAdapter, instance, callback=object())
 
     assert not DummyAdapter.called

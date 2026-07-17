@@ -34,6 +34,8 @@ returns the typed error directly):
   [`InvalidLocalRegistryImageRef`](crate::artifact::local_registry::InvalidLocalRegistryImageRef) —
   distinguish invalid image-reference input from an invalid name/reference pair
   already persisted in the Local Registry.
+- [`AttachmentNotFound`](crate::experiment::AttachmentNotFound) — identifies
+  an absent Attachment name in an Experiment or Run namespace.
 
 Recover them with [`Error::downcast_ref`](crate::Error::downcast_ref) / [`Error::is`](crate::Error::is):
 

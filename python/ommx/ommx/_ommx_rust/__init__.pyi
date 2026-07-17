@@ -1899,6 +1899,12 @@ class Experiment:
     `Run.log_solve(...)` and `Run.log_sample(...)` for payloads that belong to
     a specific run.
 
+    Attachment lookup by an absent name raises {class}`KeyError`. A caller-side
+    image reference, autosave value, media type, or JSON input that is invalid
+    raises {class}`ValueError`. Registry, archive, storage, and lifecycle-state
+    failures raise {class}`RuntimeError`. Exceptions raised by Python codecs,
+    adapters, tracing hooks, and data libraries pass through unchanged.
+
     Example:
 
     >>> from ommx.experiment import Experiment
@@ -7204,6 +7210,8 @@ class SealedRun:
 
     `SealedRun` exposes run-level attachments by name, `Solve` records created
     by `Run.log_solve`, and `Sampling` records created by `Run.log_sample`.
+    Missing attachment names raise {class}`KeyError`; choosing a typed getter
+    incompatible with the stored media type raises {class}`ValueError`.
     The `status` property records
     how the Run scope was closed: `"finished"`, `"failed"`, or `"interrupted"`.
     It is not an aggregate status of child records, so a finished Run may

@@ -45,8 +45,8 @@ point. The mapping follows the owner and meaning of the failure:
 
 - invalid input, malformed OMMX protobuf or QPLIB data, and domain operations
   with invalid or unsatisfied preconditions raise `ValueError`;
-- missing variables, constraints, samples, named functions, or Artifact layers
-  raise `KeyError`;
+- missing variables, constraints, samples, named functions, Artifact layers, or
+  Experiment and Run attachments raise `KeyError`;
 - unclassified SDK and infrastructure failures continue to fall back to
   `RuntimeError`.
 
@@ -57,27 +57,37 @@ duplicate subscripts, parameterized-constraint extraction, and requesting a
 best sample when no feasible sample exists. Artifact operations use the same
 classification for invalid image references, malformed digests, unsupported or
 incorrect layer media types, missing typed layers, and malformed OMMX payloads.
+Experiment operations classify invalid image references, autosave values,
+attachment media types, and JSON input as `ValueError`; registry, archive,
+storage, and lifecycle failures remain on the `RuntimeError` fallback.
 
 The mapped signals currently include `CoefficientError`, `AtolError`,
 `BoundError`, stable control-flow cases from `DecisionVariableError`,
 `SolutionError`, and `SampleSetError`, and the `ParseError` and
-`QplibParseError` parser signals. Invalid caller-provided image references keep
-an `ImageRefParseError`, while a corrupted image ref already persisted in the
-Local Registry keeps an `InvalidLocalRegistryImageRef` and falls back to
-`RuntimeError`. Registry, archive, and content-addressed storage failures also
-remain on that fallback. Exceptions from Python-backed JSON, NumPy, and pandas
-codecs pass through unchanged.
+`QplibParseError` parser signals. Missing Experiment or Run attachments retain
+an `AttachmentNotFound` signal and raise `KeyError`. Invalid caller-provided
+image references keep an `ImageRefParseError`, while a corrupted image ref
+already persisted in the Local Registry keeps an
+`InvalidLocalRegistryImageRef` and falls back to `RuntimeError`. Registry,
+archive, and content-addressed storage failures also remain on that fallback.
+Exceptions from Python-backed codecs, JSON callbacks, adapters, tracing hooks,
+and data libraries pass through unchanged.
 
 Zero coefficients remain normalized as a successful operation, and a failed
 in-place numeric addition leaves the original object unchanged. MPS parsing and
 file-open failures remain on the `RuntimeError` fallback until they have stable
 OMMX-owned signals. Descriptor objects remain metadata-only; blob reads are
-owned by the Artifact that supplies the registry context.
+owned by the Artifact that supplies the registry context. Attachment codecs
+validate their declared media type before reading a CAS blob and require
+encoded values to be Python `bytes`. If a Run body and tracing cleanup both
+fail, the original body exception is preserved and the Run is still closed as
+failed or interrupted.
 
 Related PRs: [#1096](https://github.com/Jij-Inc/ommx/pull/1096),
 [#1097](https://github.com/Jij-Inc/ommx/pull/1097),
 [#1099](https://github.com/Jij-Inc/ommx/pull/1099),
-[#1100](https://github.com/Jij-Inc/ommx/pull/1100).
+[#1100](https://github.com/Jij-Inc/ommx/pull/1100),
+[#1101](https://github.com/Jij-Inc/ommx/pull/1101).
 
 ### 🆕 Instance classes and adapter applicability ([#1084](https://github.com/Jij-Inc/ommx/pull/1084))
 

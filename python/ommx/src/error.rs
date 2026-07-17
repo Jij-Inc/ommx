@@ -77,6 +77,12 @@ pyo3_stub_gen::create_exception!(
 #[derive(Debug)]
 pub struct OmmxPyError(PyErr);
 
+impl std::fmt::Display for OmmxPyError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(formatter)
+    }
+}
+
 /// Result type for Rust-owned failures crossing the private binding boundary.
 pub type OmmxPyResult<T> = std::result::Result<T, OmmxPyError>;
 
@@ -149,6 +155,13 @@ macro_rules! define_ommx_error_mappings {
     };
 }
 
+fn attachment_not_found_to_pyerr(
+    error: &ommx::experiment::AttachmentNotFound,
+    _message: String,
+) -> PyErr {
+    PyKeyError::new_err(error.name().to_string())
+}
+
 fn invalid_local_registry_image_ref_to_pyerr(
     error: &ommx::artifact::local_registry::InvalidLocalRegistryImageRef,
     _message: String,
@@ -219,6 +232,7 @@ fn sample_set_error_to_pyerr(error: &ommx::SampleSetError, message: String) -> P
 define_ommx_error_mappings!(
     ommx::ParseError => parse_error_to_pyerr,
     ommx::artifact::local_registry::InvalidLocalRegistryImageRef => invalid_local_registry_image_ref_to_pyerr,
+    ommx::experiment::AttachmentNotFound => attachment_not_found_to_pyerr,
     ommx::DecisionVariableError => decision_variable_error_to_pyerr,
     ommx::SolutionError => solution_error_to_pyerr,
     ommx::SampleSetError => sample_set_error_to_pyerr,
