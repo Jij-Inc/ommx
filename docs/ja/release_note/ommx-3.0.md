@@ -127,9 +127,12 @@ Function、polynomial、constraint、named function、`Instance` の evaluation 
 含め、呼び出し側の state に不足・未知のIDや不正な値がある場合、および回復可能な
 dependent variable assertion failure は `ValueError` になります。state value の検証は
 既存の `DecisionVariableError` を再利用し、evaluation全体をまとめるerror typeは
-導入しません。dependency の評価が生成した非有限値と、型付けされていない制約伝播の
-failure は引き続き `RuntimeError` に fallback します。Partial evaluationでは元の
-`CoefficientError` を型のない message に置き換えず、Rust の error chainに保持します。
+導入しません。dependency の評価が生成した非有限値、`Instance` が所有する dependency
+の正規化中、または保存済みの dependency と fixed value を removed constraint の復元時に
+適用する際に発生した coefficient overflow、および型付けされていない制約伝播の failure
+は引き続き `RuntimeError` に fallback します。Function と polynomial を直接 partial
+evaluation する場合は、元の `CoefficientError` を型のない message に置き換えず、Rust
+の error chain に保持します。
 
 Python extension は `anyhow` への直接依存を廃止し、PyO3 dependency でも blanket
 な `anyhow` conversion feature を有効にしなくなりました。

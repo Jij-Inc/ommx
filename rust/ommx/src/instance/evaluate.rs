@@ -39,6 +39,24 @@ fn invalid_propagated_value(
     )
 }
 
+fn normalize_dependency_partial_evaluation_error(
+    id: VariableID,
+    error: crate::Error,
+) -> crate::Error {
+    if !error.is::<crate::CoefficientError>() {
+        return error;
+    }
+
+    // Direct function and polynomial APIs intentionally expose the
+    // coefficient-domain signal. During Instance-owned dependency
+    // normalization, the same coefficient arithmetic is an implementation
+    // detail, so retaining the signal would expose a false recovery path.
+    crate::error!(
+        { id = ?id, cause = %error },
+        "failed to normalize dependent variable {id:?}: {error:#}",
+    )
+}
+
 fn ensure_instance_value_is_finite(var_id: VariableID, value: f64) -> Result<()> {
     if !value.is_finite() {
         crate::bail!(
@@ -530,7 +548,9 @@ impl Instance {
 
         for (id, function) in self.decision_variable_dependency.evaluation_order_iter() {
             let mut function = function.clone();
-            function.partial_evaluate(&evaluation_state, atol)?;
+            function
+                .partial_evaluate(&evaluation_state, atol)
+                .map_err(|error| normalize_dependency_partial_evaluation_error(id, error))?;
             let required_ids = function.required_ids();
 
             if required_ids.is_empty() {
@@ -1466,6 +1486,28 @@ mod tests {
                 .entries,
             HashMap::from([(1, 2.0), (10, 4.0)])
         );
+    }
+
+    #[test]
+    fn test_partial_evaluate_dependency_overflow_is_unclassified_and_atomic() {
+        let mut instance = dependent_instance_y_eq_2x();
+        instance.decision_variable_dependency = crate::assign! {
+            10 <- coeff!(f64::MAX) * linear!(1)
+        };
+        let before = instance.clone();
+
+        let error = instance
+            .partial_evaluate(
+                &v1::State::from(HashMap::from([(1, f64::MAX)])),
+                ATol::default(),
+            )
+            .unwrap_err();
+
+        assert!(!error.is::<crate::CoefficientError>());
+        assert!(error
+            .to_string()
+            .contains("failed to normalize dependent variable"));
+        assert_eq!(instance, before);
     }
 
     #[test]
