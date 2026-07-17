@@ -278,14 +278,8 @@ def decode_to_state(model: pyscipopt.Model, instance: Instance) -> State:
 
 ```python
 class SolverAdapter(ABC):
-    CAPABILITIES: ClassVar[AdapterCapabilities | None] = None
-
-    @classmethod
-    def require_compatible(
-        cls, ommx_instance: Instance
-    ) -> AdapterCompatibilityReport:
-        """入力を変更せず、native profile 全体との互換性を検査する。"""
-        ...
+    # Adapter applicability の OMMX 定義の構造条件
+    INPUT_CLASS: InstanceClass | None = None
 
     @classmethod
     @abstractmethod
@@ -314,24 +308,22 @@ class SolverAdapter(ABC):
 
 具体的な adapter の `solve` クラスメソッドは、adapter 固有の keyword option を追加で定義できます。予約済みの `diagnostics` keyword は `Run.log_solve` が管理します。`Run.log_solve(..., store_diagnostics=True)` を使う場合、adapter はその sink に adapter 定義の diagnostic report を記録できます。`None` の場合、diagnostics は無効です。
 
-#### Native Capability の宣言
+#### 入力 class と明示的な特殊制約 lowering
 
-各 Adapter は `CAPABILITIES` に1つ以上の完全な
-{class}`~ommx.CapabilityProfile` を宣言します。Profile は direct translator 入力の
-すべての次元、すなわち used variable kind、目的関数の次数、通常制約と特殊制約の
-support（必要な family では次数上限も含む）、最適化 sense をまとめて表します。
-通常制約が常にサポートされるとは仮定しません。複数の profile は択一的な
-model shape であり、backend が持たない capability へ意図せず合成されることはありません。
+Adapter は、受け取れる具体的な `Instance` 値の構造的な集合を `INPUT_CLASS` で宣言します。`check_applicability()` は membership、続いて Adapter 固有の precondition を呼び出し元の instance を変更せずに評価します。いずれかを満たさない場合に同じ構造化 report で例外を送出するには `require_applicable()` を使います。
+
+`SolverAdapter` は、受理した入力を具体的な Adapter がどのように処理するかを規定せず、基底 class の constructor で instance を変更しません。具体的な Adapter は、実装上必要であれば {meth}`Instance.reduce_capabilities <ommx.Instance.reduce_capabilities>` を明示的に呼び出せます。`preserved` 引数では、以下の特殊制約 family selector を使います：
 
 Translator へ渡す前に {meth}`~ommx.adapter.SolverAdapter.require_compatible` を呼び出します。
 このメソッドは portable な不一致と adapter 固有の前提条件を報告し、入力を変更しません。
 基底クラスは非対応の制約を暗黙に lower しません。Adapter が preparation を提供する場合は、
 その操作と semantics を明示し、作成した solver model を再検査してください。
 
-{class}`~ommx.SpecialConstraintKind` と {meth}`~ommx.Instance.lower_special_constraints` は、
-明示的な lowering 操作の対象を選択する API であり、Adapter support の宣言ではありません。
-`ommx.v2.Feature` も別物です。これは Forward Compatibility を保って deserialize するための
-仕組みであり、backend solver が model を受理するかは表しません。
+`Instance` が現在保持する family は {attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>` で確認できます。`reduce_capabilities` は `preserved` に含まれない family を通常制約へ変換し（indicator/SOS1 は Big-M、one-hot は線形等式）、instance を in-place に変更して、各変換を `INFO` level で記録します。この property も lowering も、`INPUT_CLASS` の membership や Adapter applicability を保証しません。
+
+```{important}
+`INPUT_CLASS` は Adapter の内部実装にかかわらず、Adapter が受け取る時点の入力値そのものを記述します。呼び出し側が Adapter を選ぶ前に instance を明示的に lowering した場合、結果は別の入力値なので、`check_applicability()` または `require_applicable()` で再評価する必要があります。
+```
 
 ここまでで用意した関数を使って次のように実装することができます：
 
@@ -347,25 +339,15 @@ from ommx import (
 )
 
 class OMMXPySCIPOptAdapter(SolverAdapter):
-    # この tutorial translator が直接扱う model shape を完全に宣言する
-    CAPABILITIES = AdapterCapabilities([
-        CapabilityProfile(
-            name="tutorial-pyscipopt-quadratic",
-            variable_kinds={Kind.Binary, Kind.Integer, Kind.Continuous},
-            objective_degree=DegreeLimit.at_most(2),
-            regular_constraints={
-                Equality.EqualToZero: DegreeLimit.at_most(2),
-                Equality.LessThanOrEqualToZero: DegreeLimit.at_most(2),
-            },
-            senses={Sense.Minimize, Sense.Maximize},
-        )
-    ])
-
     def __init__(
         self,
         ommx_instance: Instance,
     ):
-        self.require_compatible(ommx_instance)
+        # この Adapter は Indicator と SOS1 を直接処理し、それ以外の
+        # active な特殊制約 family を明示的に lowering する
+        ommx_instance.reduce_capabilities(
+            {AdditionalCapability.Indicator, AdditionalCapability.Sos1}
+        )
         self.instance = ommx_instance
         self.model = pyscipopt.Model()
         self.model.hideOutput()
@@ -550,7 +532,6 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     ])
     
     def __init__(self, ommx_instance: Instance):
-        self.require_compatible(ommx_instance)
         self.ommx_instance = ommx_instance
 
     # サンプリングを行う
@@ -643,7 +624,7 @@ Production adapter は Integer 変数、制約、逆向きの sense を持つ so
 このチュートリアルでは、PySCIPOptと接続するSolver Adapterの実装とOpenJijと接続するSampler Adapterの実装を通して、OMMX Adapterの実装方法について学びました。以下がOMMX Adapterを実装する際の重要なポイントです：
 
 1. OMMX Adapterは `SolverAdapter` または `SamplerAdapter` の抽象基底クラスを継承することで実装します
-2. `CAPABILITIES` で native translator 入力全体を宣言し、変換前に `require_compatible()` を呼び出して source model を変更せず検査します
+2. `INPUT_CLASS` で構造的な入力条件を宣言し、`check_applicability()` または `require_applicable()` で membership と Adapter 固有の precondition を評価します。lowering が必要な場合は具体的な Adapter または呼び出し側の明示的な操作とし、基底 Adapter の契約では入力を変更しません
 3. 実装の主なステップは以下の通りです：
    - `ommx.Instance` をバックエンドソルバーが理解できる形式に変換する
    - バックエンドソルバーを実行して解を取得する

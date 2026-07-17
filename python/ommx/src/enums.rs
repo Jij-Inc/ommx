@@ -1,15 +1,13 @@
 use pyo3::prelude::*;
 
-/// Kind of active special constraint in an instance.
+/// Selector for a non-standard constraint family.
 ///
-/// Use these values with
-/// {meth}`~ommx.Instance.active_special_constraint_kinds` to inspect an
-/// instance and {meth}`~ommx.Instance.lower_special_constraints` to select
-/// special constraint families for explicit lowering to regular constraints.
-/// This is a transformation selector, not an adapter capability declaration
-/// or an ``ommx.v2.Feature`` wire-format requirement.
+/// :attr:`Instance.required_capabilities` reports these selectors for active
+/// special constraints. :meth:`Instance.reduce_capabilities` uses them to
+/// choose which families are preserved during explicit lowering. Regular
+/// constraints are outside this selector.
 #[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
-#[pyclass(eq, eq_int, hash, frozen)]
+#[pyclass(eq, eq_int, frozen)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SpecialConstraintKind {
     /// Indicator constraints: binvar = 1 → f(x) <= 0
@@ -20,9 +18,17 @@ pub enum SpecialConstraintKind {
     Sos1 = 3,
 }
 
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
+#[pymethods]
+impl AdditionalCapability {
+    fn __hash__(&self) -> isize {
+        *self as isize
+    }
+}
+
 /// Decision variable role in an instance.
 #[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
-#[pyclass(eq, eq_int, hash, frozen)]
+#[pyclass(eq, eq_int, frozen)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DecisionVariableRole {
     /// Used by the objective or active constraints passed to solvers
@@ -38,6 +44,10 @@ pub enum DecisionVariableRole {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl DecisionVariableRole {
+    fn __hash__(&self) -> isize {
+        *self as isize
+    }
+
     fn __repr__(&self) -> &'static str {
         match self {
             DecisionVariableRole::Used => "DecisionVariableRole.Used",
@@ -101,7 +111,7 @@ impl From<SpecialConstraintKind> for ommx::SpecialConstraintKind {
 
 /// Sense of optimization (minimize or maximize)
 #[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
-#[pyclass(eq, eq_int, hash, frozen)]
+#[pyclass(eq, eq_int, frozen)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Sense {
     /// Minimize the objective function
@@ -113,6 +123,10 @@ pub enum Sense {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Sense {
+    fn __hash__(&self) -> isize {
+        *self as isize
+    }
+
     /// Convert from Protocol Buffer sense value
     #[staticmethod]
     pub fn from_pb(value: i32) -> PyResult<Self> {
@@ -162,7 +176,7 @@ impl From<Sense> for ommx::Sense {
 
 /// Equality type for constraints
 #[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
-#[pyclass(eq, eq_int, hash, frozen)]
+#[pyclass(eq, eq_int, frozen)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Equality {
     /// Equal to zero constraint (=)
@@ -174,6 +188,10 @@ pub enum Equality {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Equality {
+    fn __hash__(&self) -> isize {
+        *self as isize
+    }
+
     /// Convert from Protocol Buffer equality value
     #[staticmethod]
     pub fn from_pb(value: i32) -> PyResult<Self> {
@@ -226,7 +244,7 @@ impl From<Equality> for ommx::Equality {
 
 /// Kind of decision variable
 #[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
-#[pyclass(eq, eq_int, hash, frozen)]
+#[pyclass(eq, eq_int, frozen)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Kind {
     /// Binary decision variable (0 or 1)
@@ -244,6 +262,10 @@ pub enum Kind {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Kind {
+    fn __hash__(&self) -> isize {
+        *self as isize
+    }
+
     /// Convert from Protocol Buffer kind value
     #[staticmethod]
     pub fn from_pb(value: i32) -> PyResult<Self> {

@@ -11,17 +11,48 @@ kernelspec:
   name: python3
 ---
 
-# Adapter Capability モデルと明示的な preparation
+# Adapter の入力 class と明示的な特殊制約 lowering
 
-Adapter Capability が答えるのは、**この Adapter がどの完全な model
-shape を backend solver へ直接変換できるか**、という問いです。Solver
-入力で実際に使われる変数の kind、目的関数と制約 family ごとの
-多項式次数上限、制約の関係、最適化 sense を含みます。したがって、
-通常制約が常にサポートされるとは限りません。
+OMMX では、従来 Adapter Capability として一緒に説明されていた次の2つの概念を分けて扱います。
+
+- {class}`~ommx.InstanceClass` は、具体的な `Instance` 値の集合です。Adapter は構造的な入力条件を `INPUT_CLASS` で宣言し、その後に Adapter 固有の precondition を評価して applicability を判定します。
+- {meth}`Instance.reduce_capabilities() <ommx.Instance.reduce_capabilities>` は、Instance 上で維持対象に選ばれなかった特殊制約 family を明示的に lowering します。入力 class の宣言でも、Adapter applicability の証明でもありません。
 
 以下の3種類の API は似ていますが、責務が明確に分かれています。
 
-| API | 責務 |
+- `InstanceClass` の membership と Adapter applicability
+- 特殊制約 family selector としての {class}`~ommx.AdditionalCapability` と {attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>`
+- {meth}`Instance.reduce_capabilities() <ommx.Instance.reduce_capabilities>` による明示的な lowering
+- 手動で通常制約に変換するための API
+- 変換結果の監査
+
+## Instance class と Adapter applicability
+
+`InstanceClass` は、条件を論理積でまとめた完全な {class}`~ommx.InstanceClassClause` の有限和です。membership は入力値そのものに対して評価され、入力の変更や preparation は行いません。
+
+```{code-cell} ipython3
+from ommx import DegreeBound, InstanceClass, InstanceClassClause, Kind, Sense
+
+binary_linear_with_one_hot = InstanceClass(
+    [
+        InstanceClassClause(
+            label="binary-linear-with-one-hot",
+            allowed_variable_kinds={Kind.Binary},
+            objective_degree_bound=DegreeBound.at_most(1),
+            allowed_senses={Sense.Maximize},
+            allows_one_hot=True,
+        )
+    ]
+)
+```
+
+Adapter は applicability の最初の条件を `INPUT_CLASS` として宣言します。構造化された結果を得るには `check_applicability()`、membership または Adapter 固有の precondition が満たされない場合に例外を送出するには `require_applicable()` を使います。明示的な preparation で別の入力値を作った場合は、その値で applicability を再評価します。
+
+## AdditionalCapability と required_capabilities
+
+{class}`~ommx.AdditionalCapability` は、通常制約を超えた「追加の制約型サポート」を表す列挙型です。
+
+| Capability | 対応する制約型 |
 |---|---|
 | {class}`~ommx.AdapterCapabilities` / {class}`~ommx.CapabilityProfile` | Adapter の native 入力の宣言と model との比較 |
 | {class}`~ommx.SpecialConstraintKind` / {meth}`~ommx.Instance.lower_special_constraints` | 明示的に実行する特殊制約 lowering の選択 |
@@ -60,67 +91,17 @@ instance = Instance.from_components(
     one_hot_constraints={0: OneHotConstraint(variables=xs)},
     sense=Instance.MAXIMIZE,
 )
-
-requirements = instance.solver_requirements()
-assert requirements.used_variable_ids == {0, 1, 2}
-assert requirements.objective_degree == 1
-assert requirements.one_hot_constraint_ids == {0}
+assert instance.required_capabilities == {AdditionalCapability.OneHot}
+assert binary_linear_with_one_hot.contains(instance)
 ```
 
-## 一貫した native profile を宣言する
+## reduce_capabilities による明示的な lowering
 
-Adapter は `CAPABILITIES` に1つ以上の完全な
-{class}`~ommx.CapabilityProfile` を宣言します。1つの profile 内ではすべての field
-が論理積です。複数の profile は各 field を和集合にせず、択一的な model
-shape を表します。たとえば continuous QP と MILP の profile を分けることで、
-意図せず MIQP support を宣言するのを防げます。
+{meth}`Instance.reduce_capabilities() <ommx.Instance.reduce_capabilities>` は、明示的に呼び出す mutating operation です。このメソッドは `preserved` として渡された集合に含まれない特殊制約 family を、対応する変換 API（後述）を使って通常制約に変換します。
 
 ```{code-cell} ipython3
-from ommx import (
-    AdapterCapabilities,
-    CapabilityProfile,
-    DegreeLimit,
-    Equality,
-    Kind,
-    Sense,
-)
-from ommx.adapter import SolverAdapter
-
-linear_profile = CapabilityProfile(
-    name="binary-linear",
-    variable_kinds={Kind.Binary},
-    objective_degree=DegreeLimit.at_most(1),
-    regular_constraints={
-        Equality.EqualToZero: DegreeLimit.at_most(1),
-        Equality.LessThanOrEqualToZero: DegreeLimit.at_most(1),
-    },
-    senses={Sense.Minimize, Sense.Maximize},
-)
-
-class MyLinearAdapter(SolverAdapter):
-    CAPABILITIES = AdapterCapabilities([linear_profile])
-```
-
-制約 family を省略すると、その profile はその family の active な制約を
-1つもサポートしません。`DegreeLimit.at_most(n)` は累積的で、0から
-`n` までの次数を受理します。`DegreeLimit.any()` は OMMX で表現できるすべての
-多項式次数を受理します。Portable に表現できない adapter 固有の数値制限は、
-profile ではなく adapter の `_check_preconditions` hook で検査します。
-
-## 入力を変更しない compatibility check
-
-{meth}`~ommx.adapter.SolverAdapter.check_compatibility` は model 全体の requirements を
-各 native profile と比較し、その後 adapter 固有の前提条件を検査します。
-入力を lower、encode、relax したり、その他の変更を加えたりしません。
-{meth}`~ommx.adapter.SolverAdapter.require_compatible` は成功時に同じ report を返し、
-失敗時に {class}`~ommx.adapter.AdapterCompatibilityError` を送出します。
-
-```{code-cell} ipython3
-from ommx import SpecialConstraintKind
-
-report = MyLinearAdapter.check_compatibility(instance)
-assert not report.compatible
-assert instance.active_special_constraint_kinds == {SpecialConstraintKind.OneHot}
+converted = instance.reduce_capabilities(preserved=set())
+assert converted == {AdditionalCapability.OneHot}
 ```
 
 この instance は profile が native OneHot support を宣言していないため失敗します。
@@ -150,11 +131,7 @@ MyLinearAdapter.require_compatible(prepared)
 assert instance.active_special_constraint_kinds == {SpecialConstraintKind.OneHot}
 ```
 
-`lower_special_constraints` は選択した instance を in-place に変更し、
-実際に lower した family を返します。対象を直接指定するため、集合を「ある
-Adapter がサポートするもの」と誤解する余地がありません。この操作は後述する
-family 別の変換 API を組み合わせ、監査のために removed constraint と provenance を
-保持します。
+One-hot 制約が除去され、その代わりに通常の等式制約 $x_0 + x_1 + x_2 - 1 = 0$ が1つ追加されたことが分かります。`reduce_capabilities` はインスタンスを in-place に変更します。成功時、`required_capabilities` は `preserved` の部分集合になります。変換が必要なかった場合は空集合を返します。得られた値に対して `INPUT_CLASS` の membership または Adapter applicability を再評価してください。
 
 より一般的な preparation には exact reformulation、近似、relaxation、有限
 penalty 変換が含まれる場合があります。このような workflow では semantics を
@@ -269,11 +246,11 @@ for cid, c in instance2.constraints.items():
 
 | やりたいこと | 使う API |
 |---|---|
-| Active な solver-facing model shape を導出する | {meth}`Instance.solver_requirements <ommx.Instance.solver_requirements>` |
-| Translator が直接扱える範囲を宣言する | {class}`~ommx.AdapterCapabilities` を持つ `SolverAdapter.CAPABILITIES` |
-| 入力を変更せず互換性を検査する | `check_compatibility` / `require_compatible` |
-| Active な特殊制約 family を調べる | {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` |
-| 選択した特殊制約を明示的に lower する | {meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>` |
+| Adapter 入力の構造的な集合を記述する | {class}`~ommx.InstanceClass` |
+| Adapter applicability の最初の条件を宣言する | `INPUT_CLASS` |
+| membership と Adapter 固有の precondition を検査する | `check_applicability()` / `require_applicable()` |
+| active な特殊制約 family を調べる | {attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>` |
+| 維持しない特殊制約を明示的に lowering する | {meth}`Instance.reduce_capabilities <ommx.Instance.reduce_capabilities>` |
 | 個別に通常制約に変換する | `convert_*_to_constraint(s)` / `convert_all_*_to_constraints` |
 | 変換履歴を確認する | `instance.constraints_df(kind=..., removed=True)` / `solution.constraints_df(kind=..., include=("...","removed_reason"))` |
 | Serialized format の Forward Compatibility を検査する | `ommx.v2.Feature` / `required_features` |

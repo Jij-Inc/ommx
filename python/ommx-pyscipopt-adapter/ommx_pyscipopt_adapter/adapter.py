@@ -16,14 +16,14 @@ from ommx.adapter import (
     NoSolutionReturned,
 )
 from ommx import (
-    AdapterCapabilities,
-    CapabilityProfile,
     Constraint,
     DecisionVariable,
-    DegreeLimit,
+    DegreeBound,
     Equality,
     Function,
     Instance,
+    InstanceClass,
+    InstanceClassClause,
     Kind,
     Sense,
     Solution,
@@ -39,13 +39,13 @@ if TYPE_CHECKING:
 _tracer = trace.get_tracer("ommx.adapter.pyscipopt")
 _SCIP_TERMINATION_EVENT = "TERMINATION"
 
-_QUADRATIC_REGULAR_CONSTRAINTS = {
-    Equality.EqualToZero: DegreeLimit.at_most(2),
-    Equality.LessThanOrEqualToZero: DegreeLimit.at_most(2),
+_QUADRATIC_REGULAR_CONSTRAINT_DEGREE_BOUNDS = {
+    Equality.EqualToZero: DegreeBound.at_most(2),
+    Equality.LessThanOrEqualToZero: DegreeBound.at_most(2),
 }
-_LINEAR_INDICATOR_CONSTRAINTS = {
-    Equality.EqualToZero: DegreeLimit.at_most(1),
-    Equality.LessThanOrEqualToZero: DegreeLimit.at_most(1),
+_LINEAR_INDICATOR_CONSTRAINT_DEGREE_BOUNDS = {
+    Equality.EqualToZero: DegreeBound.at_most(1),
+    Equality.LessThanOrEqualToZero: DegreeBound.at_most(1),
 }
 
 
@@ -500,16 +500,20 @@ def _dataframe(
 
 
 class OMMXPySCIPOptAdapter(SolverAdapter):
-    CAPABILITIES: ClassVar[AdapterCapabilities | None] = AdapterCapabilities(
+    INPUT_CLASS: ClassVar[InstanceClass | None] = InstanceClass(
         [
-            CapabilityProfile(
-                name="pyscipopt-quadratic",
-                variable_kinds={Kind.Binary, Kind.Integer, Kind.Continuous},
-                objective_degree=DegreeLimit.at_most(2),
-                regular_constraints=_QUADRATIC_REGULAR_CONSTRAINTS,
-                indicator_constraints=_LINEAR_INDICATOR_CONSTRAINTS,
-                supports_sos1=True,
-                senses={Sense.Minimize, Sense.Maximize},
+            InstanceClassClause(
+                label="pyscipopt-quadratic-mip",
+                allowed_variable_kinds={Kind.Binary, Kind.Integer, Kind.Continuous},
+                objective_degree_bound=DegreeBound.at_most(2),
+                regular_constraint_degree_bounds=(
+                    _QUADRATIC_REGULAR_CONSTRAINT_DEGREE_BOUNDS
+                ),
+                indicator_constraint_degree_bounds=(
+                    _LINEAR_INDICATOR_CONSTRAINT_DEGREE_BOUNDS
+                ),
+                allows_sos1=True,
+                allowed_senses={Sense.Minimize, Sense.Maximize},
             )
         ]
     )
@@ -525,7 +529,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         :param initial_state: Optional initial solution state.
         """
         with _tracer.start_as_current_span("convert"):
-            self.require_compatible(ommx_instance)
+            self.require_applicable(ommx_instance)
             self.instance = ommx_instance
             self.model = pyscipopt.Model()
             self.model.hideOutput()
@@ -611,7 +615,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                 >>> OMMXPySCIPOptAdapter.solve(instance)
                 Traceback (most recent call last):
                     ...
-                ommx.adapter.InfeasibleDetected: Model was infeasible
+                ommx.InfeasibleDetected: Model was infeasible
 
         Unbounded Problem
 

@@ -38,13 +38,14 @@ __all__ = [
     "ConstraintRequirement",
     "DecisionVariable",
     "DecisionVariableRole",
-    "DegreeLimit",
+    "DegreeBound",
     "Descriptor",
     "DiagnosticCollector",
     "Equality",
     "EvaluatedConstraint",
     "EvaluatedDecisionVariable",
     "EvaluatedNamedFunction",
+    "ExactIntegerSlackError",
     "Experiment",
     "ExperimentCheckpointRef",
     "ExperimentRef",
@@ -55,12 +56,19 @@ __all__ = [
     "GcReport",
     "GcRoot",
     "IndicatorConstraint",
+    "InfeasibleDetected",
     "Instance",
+    "InstanceClass",
+    "InstanceClassClause",
+    "InstanceClassClauseReport",
+    "InstanceClassMembershipReport",
+    "InstanceClassMismatch",
     "InstanceDescription",
-    "InstanceRequirements",
+    "InvalidRemoteArtifactError",
     "Kind",
     "Linear",
     "LinearLike",
+    "LogEncodingError",
     "NamedFunction",
     "OneHotConstraint",
     "OpenSolve",
@@ -77,6 +85,11 @@ __all__ = [
     "PruneAnonymousReport",
     "Quadratic",
     "Relaxation",
+    "RemoteArtifactAuthenticationError",
+    "RemoteArtifactAuthorizationError",
+    "RemoteArtifactError",
+    "RemoteArtifactNotFoundError",
+    "RemoteArtifactTransportError",
     "RemovedConstraint",
     "RemovedIndicatorConstraint",
     "RemovedOneHotConstraint",
@@ -423,6 +436,12 @@ class Artifact:
         ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f
 
         ```
+
+        Raises {class}`~ommx.artifact.RemoteArtifactNotFoundError` when the
+        exact remote reference does not exist. Other remote access failures
+        raise subclasses of {class}`~ommx.artifact.RemoteArtifactError`.
+        An invalid image reference raises {class}`ValueError` before any remote
+        access is attempted.
         """
     def push(self) -> None:
         r"""
@@ -442,10 +461,17 @@ class Artifact:
     def get_layer_descriptor(self, digest: builtins.str) -> Descriptor:
         r"""
         Look up a layer descriptor by digest.
+
+        Raises {class}`ValueError` when `digest` is malformed and
+        {class}`KeyError` when the digest is valid but is not present in the
+        Artifact manifest.
         """
     def get_blob(self, descriptor: Descriptor) -> bytes:
         r"""
         Get raw bytes of a blob by Descriptor.
+
+        Registry and storage failures, including a missing CAS blob referenced
+        by the Descriptor, raise {class}`RuntimeError`.
         """
     def get_layer(self, descriptor: Descriptor) -> typing.Any:
         r"""
@@ -457,6 +483,10 @@ class Artifact:
         - OMMX solution payloads return {class}`~ommx.Solution`
         - OMMX sample-set payloads return {class}`~ommx.SampleSet`
         - `application/vnd.numpy` returns a numpy array
+
+        Raises {class}`ValueError` for an unsupported media type. Registry and
+        storage failures raise {class}`RuntimeError`; exceptions raised by
+        Python-backed decoders are preserved.
         """
     def get_instance(self, descriptor: typing.Optional[Descriptor] = None) -> Instance:
         r"""
@@ -465,7 +495,9 @@ class Artifact:
         - If `descriptor` is `None`, returns the first instance layer.
         - If `descriptor` is given, returns the instance for that specific layer.
 
-        Raises `ValueError` if no instance layer is found.
+        Raises {class}`ValueError` if no instance layer is found, if the
+        Descriptor has the wrong media type, or if the payload is malformed.
+        Registry and storage failures raise {class}`RuntimeError`.
         """
     def get_solution(self, descriptor: typing.Optional[Descriptor] = None) -> Solution:
         r"""
@@ -474,7 +506,9 @@ class Artifact:
         - If `descriptor` is `None`, returns the first solution layer.
         - If `descriptor` is given, returns the solution for that specific layer.
 
-        Raises `ValueError` if no solution layer is found.
+        Raises {class}`ValueError` if no solution layer is found, if the
+        Descriptor has the wrong media type, or if the payload is malformed.
+        Registry and storage failures raise {class}`RuntimeError`.
         """
     def get_parametric_instance(
         self, descriptor: typing.Optional[Descriptor] = None
@@ -485,7 +519,9 @@ class Artifact:
         - If `descriptor` is `None`, returns the first parametric instance layer.
         - If `descriptor` is given, returns the parametric instance for that specific layer.
 
-        Raises `ValueError` if no parametric instance layer is found.
+        Raises {class}`ValueError` if no parametric instance layer is found, if
+        the Descriptor has the wrong media type, or if the payload is
+        malformed. Registry and storage failures raise {class}`RuntimeError`.
         """
     def get_sample_set(
         self, descriptor: typing.Optional[Descriptor] = None
@@ -496,19 +532,31 @@ class Artifact:
         - If `descriptor` is `None`, returns the first sample set layer.
         - If `descriptor` is given, returns the sample set for that specific layer.
 
-        Raises `ValueError` if no sample set layer is found.
+        Raises {class}`ValueError` if no sample set layer is found, if the
+        Descriptor has the wrong media type, or if the payload is malformed.
+        Registry and storage failures raise {class}`RuntimeError`.
         """
     def get_ndarray(self, descriptor: Descriptor) -> typing.Any:
         r"""
         Get a numpy array from an artifact layer stored by {meth}`~ommx.artifact.ArtifactDraft.add_ndarray`.
+
+        A mismatched media type raises {class}`ValueError`; registry and storage
+        failures raise {class}`RuntimeError`. NumPy exceptions are preserved.
         """
     def get_dataframe(self, descriptor: Descriptor) -> typing.Any:
         r"""
         Get a pandas DataFrame from an artifact layer stored by {meth}`~ommx.artifact.ArtifactDraft.add_dataframe`.
+
+        A mismatched media type raises {class}`ValueError`; registry and storage
+        failures raise {class}`RuntimeError`. pandas exceptions are preserved.
         """
     def get_json(self, descriptor: Descriptor) -> typing.Any:
         r"""
         Get a JSON object from an artifact layer stored by {meth}`~ommx.artifact.ArtifactDraft.add_json`.
+
+        A mismatched media type raises {class}`ValueError`; registry and storage
+        failures raise {class}`RuntimeError`. JSON decoder exceptions are
+        preserved.
         """
 
 @typing.final
@@ -546,6 +594,9 @@ class ArtifactDraft:
         ghcr.io/jij-inc/ommx/single_feasible_lp:...
 
         ```
+
+        Raises {class}`ValueError` when `image_name` is not a valid OCI image
+        reference. Registry and storage failures raise {class}`RuntimeError`.
         """
     @staticmethod
     def new_anonymous() -> ArtifactDraft:
@@ -730,6 +781,9 @@ class ArtifactDraft:
     def commit(self) -> Artifact:
         r"""
         Commit the artifact draft.
+
+        Raises {class}`RuntimeError` for registry or storage failures and when
+        the draft has already been committed.
         """
 
 @typing.final
@@ -1514,6 +1568,8 @@ class DecisionVariable:
     This class represents a variable that will be optimized in a mathematical programming problem.
     It supports various types (binary, integer, continuous, semi-integer, semi-continuous) and
     can be used in arithmetic expressions to build objective functions and constraints.
+    Construction raises ValueError when the kind discriminator is unknown or
+    the requested bound cannot be normalized for the selected variable kind.
 
     Note that this object overloads `==` for creating a constraint, not for equality comparison.
 
@@ -1687,29 +1743,29 @@ class DecisionVariable:
         """
 
 @typing.final
-class DegreeLimit:
+class DegreeBound:
     r"""
-    Cumulative polynomial-degree support in a capability profile.
+    Cumulative polynomial-degree bound in an :class:`InstanceClassClause`.
     """
     @property
     def maximum(self) -> typing.Optional[builtins.int]:
         r"""
-        Inclusive maximum degree, or ``None`` for :meth:`any`.
+        Inclusive maximum degree, or ``None`` when unbounded.
         """
     def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     @staticmethod
-    def at_most(maximum: builtins.int) -> DegreeLimit:
+    def at_most(maximum: builtins.int) -> DegreeBound:
         r"""
-        Accept every degree up to and including ``maximum``.
+        Include every degree up to and including ``maximum``.
         """
     @staticmethod
-    def any() -> DegreeLimit:
+    def unbounded() -> DegreeBound:
         r"""
-        Accept any polynomial degree representable by OMMX.
+        Include every polynomial degree representable by OMMX.
         """
-    def allows(self, actual_degree: builtins.int) -> builtins.bool:
+    def includes(self, actual_degree: builtins.int) -> builtins.bool:
         r"""
-        Return whether ``actual_degree`` is accepted.
+        Return whether ``actual_degree`` satisfies this bound.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -1895,6 +1951,13 @@ class EvaluatedNamedFunction:
     def __copy__(self) -> EvaluatedNamedFunction: ...
     def __deepcopy__(self, _memo: typing.Any) -> EvaluatedNamedFunction: ...
 
+class ExactIntegerSlackError(builtins.RuntimeError):
+    r"""
+    Exact integer-slack conversion is unavailable for the requested inequality.
+    """
+
+    ...
+
 @typing.final
 class Experiment:
     r"""
@@ -1926,6 +1989,12 @@ class Experiment:
     that should appear in `run_parameters_df()`, and use run attachments or
     `Run.log_solve(...)` and `Run.log_sample(...)` for payloads that belong to
     a specific run.
+
+    Attachment lookup by an absent name raises {class}`KeyError`. A caller-side
+    image reference, autosave value, media type, or JSON input that is invalid
+    raises {class}`ValueError`. Registry, archive, storage, and lifecycle-state
+    failures raise {class}`RuntimeError`. Exceptions raised by Python codecs,
+    adapters, tracing hooks, and data libraries pass through unchanged.
 
     Example:
 
@@ -1979,9 +2048,17 @@ class Experiment:
         Returns `None` for an unsealed Experiment.
         """
     @property
+    def lifecycle_reason(self) -> typing.Optional[builtins.str]:
+        r"""
+        Concise exception type and message for a failed or interrupted Experiment.
+
+        This is lifecycle metadata, not solver diagnostics. It is `None` when
+        no reason was recorded.
+        """
+    @property
     def artifact(self) -> Artifact:
         r"""
-        Committed OMMX Artifact for this Experiment.
+        Immutable OMMX Artifact for this finished, failed, or interrupted Experiment.
 
         Raises an error if the Experiment has not been committed yet.
         """
@@ -2032,6 +2109,10 @@ class Experiment:
         pull it from the remote registry, matching {meth}`Artifact.load`.
         The loaded artifact must contain an Experiment config. Use
         `Experiment(...)` to create a new unsealed experiment.
+
+        Raises {class}`~ommx.artifact.RemoteArtifactNotFoundError` when the
+        exact remote reference does not exist. Other remote access failures
+        raise subclasses of {class}`~ommx.artifact.RemoteArtifactError`.
         """
     @staticmethod
     def restore_from_checkpoint(image_name: builtins.str) -> Experiment:
@@ -2049,8 +2130,8 @@ class Experiment:
     @staticmethod
     def import_archive(path: builtins.str | os.PathLike | pathlib.Path) -> Experiment:
         r"""
-        Import an Experiment Artifact from a `.ommx` OCI archive file (or an OCI
-        Image Layout directory).
+        Import a finished, failed, or interrupted Experiment Artifact from a
+        `.ommx` OCI archive file (or an OCI Image Layout directory).
 
         The archive is imported into the default Local Registry, matching
         {meth}`Artifact.import_archive`, and then interpreted as an
@@ -2059,7 +2140,7 @@ class Experiment:
     @staticmethod
     def from_artifact(artifact: Artifact) -> Experiment:
         r"""
-        Interpret an already-open Artifact as a committed Experiment.
+        Interpret an already-open Artifact as a finished, failed, or interrupted Experiment.
 
         This is the usual entry point after importing or receiving an OMMX
         Artifact handle. The artifact must contain an Experiment config.
@@ -2130,7 +2211,7 @@ class Experiment:
         """
     def save(self, path: builtins.str | os.PathLike | pathlib.Path) -> None:
         r"""
-        Save this committed Experiment Artifact as a `.ommx` OCI archive file at `path`.
+        Save this finished, failed, or interrupted Experiment Artifact as a `.ommx` archive.
 
         The archive is an exchange-format export of the registry-resident
         Experiment Artifact. Loading the archive back via
@@ -2141,7 +2222,7 @@ class Experiment:
         """
     def push(self) -> None:
         r"""
-        Push this committed Experiment Artifact to its remote registry.
+        Push this finished, failed, or interrupted Experiment Artifact remotely.
 
         Use `rename(...)` first when an anonymous or local-only experiment
         should be published under a remote container image reference.
@@ -2875,6 +2956,13 @@ class IndicatorConstraint:
     def __copy__(self) -> IndicatorConstraint: ...
     def __deepcopy__(self, _memo: typing.Any) -> IndicatorConstraint: ...
 
+class InfeasibleDetected(builtins.RuntimeError):
+    r"""
+    The mathematical model was proven infeasible.
+    """
+
+    ...
+
 @typing.final
 class Instance:
     r"""
@@ -3057,11 +3145,12 @@ class Instance:
     @property
     def active_special_constraint_kinds(self) -> builtins.set[SpecialConstraintKind]:
         r"""
-        The kinds of active special constraints this instance currently uses.
+        Selectors for active non-standard constraint families.
 
-        Returns the set of :class:`SpecialConstraintKind` values corresponding
-        to non-empty active (non-removed) special constraint collections. An
-        empty set means the instance has no active special constraints.
+        Only active constraints are considered. This value does not describe an
+        :class:`InstanceClass` or establish adapter applicability. Use
+        :meth:`reduce_capabilities` only as an explicit special-constraint
+        lowering operation.
         """
     @property
     def removed_constraints(self) -> builtins.dict[builtins.int, RemovedConstraint]:
@@ -3279,26 +3368,21 @@ class Instance:
         r"""
         Add a SOS1 constraint to this instance.
         """
-    def solver_requirements(self) -> InstanceRequirements:
+    def reduce_capabilities(
+        self, preserved: builtins.set[AdditionalCapability]
+    ) -> builtins.set[AdditionalCapability]:
         r"""
-        Derive the portable shape of the complete active solver input.
+        Convert active non-standard constraint families not in ``preserved``
+        into regular constraints.
 
-        The result is recomputed on every call. Fixed, dependent, irrelevant,
-        removed-constraint-only, and named-function-only variables are excluded.
-        """
-    def lower_special_constraints(
-        self, kinds_to_lower: builtins.set[SpecialConstraintKind]
-    ) -> builtins.set[SpecialConstraintKind]:
-        r"""
-        Lower selected active special constraint kinds into regular constraints.
-
-        For every kind in ``kinds_to_lower``, the corresponding bulk conversion
-        is invoked
+        For every selector in :attr:`required_capabilities` not in
+        ``preserved``, the corresponding bulk conversion is invoked
         (:meth:`convert_all_indicators_to_constraints`,
         :meth:`convert_all_one_hots_to_constraints`, or
         :meth:`convert_all_sos1_to_constraints`). The instance is mutated in
-        place. Kinds omitted from ``kinds_to_lower`` remain active, and an empty
-        set is a no-op.
+        place and :attr:`required_capabilities` becomes a subset of
+        ``preserved`` on success. This does not establish
+        :class:`InstanceClass` membership; check the resulting input separately.
 
         Returns the set of :class:`SpecialConstraintKind` values that were
         requested and active, and therefore actually lowered. Empty when no
@@ -4100,6 +4184,10 @@ class Instance:
         - `atol`: Optional absolute tolerance used when normalizing integer
           bounds before encoding. If None, uses the default tolerance.
 
+        Raises {class}`~ommx.LogEncodingError` when an exact representation is
+        unavailable for a requested variable. Allocation and expression-rewrite
+        failures retain their original exception types.
+
         # Examples
 
         Let's consider a simple integer programming problem with three integer variables x0, x1, and x2.
@@ -4282,6 +4370,12 @@ class Instance:
         >>> instance.constraints[0]
         Constraint(x0 + 2*x1 + x3 - 5 == 0)
         ```
+
+        Raises {class}`~ommx.ExactIntegerSlackError` when exact conversion is
+        unavailable because the coefficients cannot be normalized or the slack
+        range exceeds ``max_integer_range``. Raises
+        {class}`~ommx.InfeasibleDetected` when the bounds prove the inequality
+        infeasible.
         """
     def add_integer_slack_to_inequality(
         self, constraint_id: builtins.int, slack_upper_bound: builtins.int
@@ -4706,6 +4800,279 @@ class Instance:
         """
 
 @typing.final
+class InstanceClass:
+    r"""
+    A set of :class:`Instance` values represented as a finite union of clauses.
+    """
+    @property
+    def clauses(self) -> builtins.list[InstanceClassClause]: ...
+    def __new__(
+        cls, clauses: typing.Sequence[InstanceClassClause]
+    ) -> InstanceClass: ...
+    def union(self, other: InstanceClass) -> InstanceClass:
+        r"""
+        Return the finite union of two instance classes.
+        """
+    def contains(self, instance: Instance) -> builtins.bool:
+        r"""
+        Return whether ``instance`` belongs to this class.
+        """
+    def check_membership(self, instance: Instance) -> InstanceClassMembershipReport:
+        r"""
+        Evaluate membership without mutating or preparing ``instance``.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class InstanceClassClause:
+    r"""
+    One conjunctive clause in an :class:`InstanceClass`.
+
+    Every condition in a clause must hold. The containing instance class is
+    the finite union of its clauses, so alternatives are not combined across
+    clause boundaries.
+    """
+    @property
+    def label(self) -> builtins.str:
+        r"""
+        Human-readable diagnostic label. It does not affect membership.
+        """
+    @property
+    def allowed_variable_kinds(self) -> builtins.set[Kind]: ...
+    @property
+    def objective_degree_bound(self) -> DegreeBound: ...
+    @property
+    def regular_constraint_degree_bounds(
+        self,
+    ) -> builtins.dict[Equality, DegreeBound]: ...
+    @property
+    def indicator_constraint_degree_bounds(
+        self,
+    ) -> builtins.dict[Equality, DegreeBound]: ...
+    @property
+    def allows_one_hot(self) -> builtins.bool: ...
+    @property
+    def allows_sos1(self) -> builtins.bool: ...
+    @property
+    def allowed_senses(self) -> builtins.set[Sense]: ...
+    def __new__(
+        cls,
+        *,
+        label: builtins.str,
+        allowed_variable_kinds: builtins.set[Kind],
+        objective_degree_bound: DegreeBound,
+        allowed_senses: builtins.set[Sense],
+        regular_constraint_degree_bounds: typing.Optional[
+            typing.Mapping[Equality, DegreeBound]
+        ] = None,
+        indicator_constraint_degree_bounds: typing.Optional[
+            typing.Mapping[Equality, DegreeBound]
+        ] = None,
+        allows_one_hot: builtins.bool = False,
+        allows_sos1: builtins.bool = False,
+    ) -> InstanceClassClause: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class InstanceClassClauseReport:
+    r"""
+    Membership result for one conjunctive instance-class clause.
+    """
+    @property
+    def clause_index(self) -> builtins.int: ...
+    @property
+    def clause_label(self) -> builtins.str: ...
+    @property
+    def mismatches(self) -> builtins.list[InstanceClassMismatch]: ...
+    @property
+    def is_member(self) -> builtins.bool: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class InstanceClassMembershipReport:
+    r"""
+    Side-effect-free membership report for an :class:`InstanceClass`.
+    """
+    @property
+    def clause_reports(self) -> builtins.list[InstanceClassClauseReport]: ...
+    @property
+    def is_member(self) -> builtins.bool: ...
+    @property
+    def matching_clauses(self) -> builtins.list[tuple[builtins.int, builtins.str]]: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __str__(self) -> builtins.str: ...
+    def __repr__(self) -> builtins.str: ...
+
+class InstanceClassMismatch:
+    r"""
+    One structured reason an instance is outside a complete clause.
+    """
+    @typing.final
+    class VariableKindNotAllowed(InstanceClassMismatch):
+        __match_args__ = (
+            "kind",
+            "variable_ids",
+            "allowed_kinds",
+        )
+        @property
+        def kind(self) -> Kind: ...
+        @property
+        def variable_ids(self) -> builtins.set[builtins.int]: ...
+        @property
+        def allowed_kinds(self) -> builtins.set[Kind]: ...
+        def __new__(
+            cls,
+            kind: Kind,
+            variable_ids: builtins.set[builtins.int],
+            allowed_kinds: builtins.set[Kind],
+        ) -> InstanceClassMismatch.VariableKindNotAllowed: ...
+
+    @typing.final
+    class ObjectiveDegreeExceedsBound(InstanceClassMismatch):
+        __match_args__ = (
+            "actual_degree",
+            "bound",
+        )
+        @property
+        def actual_degree(self) -> builtins.int: ...
+        @property
+        def bound(self) -> DegreeBound: ...
+        def __new__(
+            cls, actual_degree: builtins.int, bound: DegreeBound
+        ) -> InstanceClassMismatch.ObjectiveDegreeExceedsBound: ...
+
+    @typing.final
+    class RegularConstraintRelationNotAllowed(InstanceClassMismatch):
+        __match_args__ = (
+            "relation",
+            "constraint_ids",
+            "allowed_relations",
+        )
+        @property
+        def relation(self) -> Equality: ...
+        @property
+        def constraint_ids(self) -> builtins.set[builtins.int]: ...
+        @property
+        def allowed_relations(self) -> builtins.set[Equality]: ...
+        def __new__(
+            cls,
+            relation: Equality,
+            constraint_ids: builtins.set[builtins.int],
+            allowed_relations: builtins.set[Equality],
+        ) -> InstanceClassMismatch.RegularConstraintRelationNotAllowed: ...
+
+    @typing.final
+    class RegularConstraintDegreeExceedsBound(InstanceClassMismatch):
+        __match_args__ = (
+            "relation",
+            "actual_degrees",
+            "bound",
+        )
+        @property
+        def relation(self) -> Equality: ...
+        @property
+        def actual_degrees(self) -> builtins.dict[builtins.int, builtins.int]: ...
+        @property
+        def bound(self) -> DegreeBound: ...
+        def __new__(
+            cls,
+            relation: Equality,
+            actual_degrees: typing.Mapping[builtins.int, builtins.int],
+            bound: DegreeBound,
+        ) -> InstanceClassMismatch.RegularConstraintDegreeExceedsBound: ...
+
+    @typing.final
+    class IndicatorConstraintsNotAllowed(InstanceClassMismatch):
+        __match_args__ = ("constraint_ids",)
+        @property
+        def constraint_ids(self) -> builtins.set[builtins.int]: ...
+        def __new__(
+            cls, constraint_ids: builtins.set[builtins.int]
+        ) -> InstanceClassMismatch.IndicatorConstraintsNotAllowed: ...
+
+    @typing.final
+    class IndicatorConstraintRelationNotAllowed(InstanceClassMismatch):
+        __match_args__ = (
+            "relation",
+            "constraint_ids",
+            "allowed_relations",
+        )
+        @property
+        def relation(self) -> Equality: ...
+        @property
+        def constraint_ids(self) -> builtins.set[builtins.int]: ...
+        @property
+        def allowed_relations(self) -> builtins.set[Equality]: ...
+        def __new__(
+            cls,
+            relation: Equality,
+            constraint_ids: builtins.set[builtins.int],
+            allowed_relations: builtins.set[Equality],
+        ) -> InstanceClassMismatch.IndicatorConstraintRelationNotAllowed: ...
+
+    @typing.final
+    class IndicatorBodyDegreeExceedsBound(InstanceClassMismatch):
+        __match_args__ = (
+            "relation",
+            "actual_degrees",
+            "bound",
+        )
+        @property
+        def relation(self) -> Equality: ...
+        @property
+        def actual_degrees(self) -> builtins.dict[builtins.int, builtins.int]: ...
+        @property
+        def bound(self) -> DegreeBound: ...
+        def __new__(
+            cls,
+            relation: Equality,
+            actual_degrees: typing.Mapping[builtins.int, builtins.int],
+            bound: DegreeBound,
+        ) -> InstanceClassMismatch.IndicatorBodyDegreeExceedsBound: ...
+
+    @typing.final
+    class OneHotConstraintsNotAllowed(InstanceClassMismatch):
+        __match_args__ = ("constraint_ids",)
+        @property
+        def constraint_ids(self) -> builtins.set[builtins.int]: ...
+        def __new__(
+            cls, constraint_ids: builtins.set[builtins.int]
+        ) -> InstanceClassMismatch.OneHotConstraintsNotAllowed: ...
+
+    @typing.final
+    class Sos1ConstraintsNotAllowed(InstanceClassMismatch):
+        __match_args__ = ("constraint_ids",)
+        @property
+        def constraint_ids(self) -> builtins.set[builtins.int]: ...
+        def __new__(
+            cls, constraint_ids: builtins.set[builtins.int]
+        ) -> InstanceClassMismatch.Sos1ConstraintsNotAllowed: ...
+
+    @typing.final
+    class SenseNotAllowed(InstanceClassMismatch):
+        __match_args__ = (
+            "sense",
+            "allowed_senses",
+        )
+        @property
+        def sense(self) -> Sense: ...
+        @property
+        def allowed_senses(self) -> builtins.set[Sense]: ...
+        def __new__(
+            cls, sense: Sense, allowed_senses: builtins.set[Sense]
+        ) -> InstanceClassMismatch.SenseNotAllowed: ...
+
+    @typing.final
+    class Unknown(InstanceClassMismatch):
+        __match_args__ = ("message",)
+        @property
+        def message(self) -> builtins.str: ...
+        def __new__(cls, message: builtins.str) -> InstanceClassMismatch.Unknown: ...
+
+    ...
+
+@typing.final
 class InstanceDescription:
     @property
     def name(self) -> typing.Optional[builtins.str]: ...
@@ -4734,6 +5101,13 @@ class InstanceDescription:
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> InstanceDescription: ...
     def __deepcopy__(self, _memo: typing.Any) -> InstanceDescription: ...
+
+class InvalidRemoteArtifactError(RemoteArtifactError):
+    r"""
+    The remote response is not a valid OMMX Artifact.
+    """
+
+    ...
 
 @typing.final
 class InstanceRequirements:
@@ -4902,6 +5276,31 @@ class Linear:
     def __ge__(self, other: ToFunction) -> Constraint:
         r"""
         Create a greater-than-or-equal constraint: self >= other → Constraint
+        """
+
+class LogEncodingError(builtins.RuntimeError):
+    r"""
+    An exact log encoding is unavailable for one requested decision variable.
+    """
+    @property
+    def kind(self) -> builtins.str:
+        r"""
+        Machine-readable reason for unavailable exact encoding.
+        """
+    @property
+    def variable_id(self) -> builtins.int:
+        r"""
+        Decision variable for which exact encoding is unavailable.
+        """
+    @property
+    def observed(self) -> builtins.str | builtins.int | builtins.float:
+        r"""
+        Observed bound or bit count that made encoding unavailable.
+        """
+    @property
+    def expected(self) -> builtins.str | builtins.int | builtins.float:
+        r"""
+        Required bound condition or maximum bit count.
         """
 
 @typing.final
@@ -6162,6 +6561,41 @@ class Quadratic:
         Create a greater-than-or-equal constraint: self >= other → Constraint
         """
 
+class RemoteArtifactAuthenticationError(RemoteArtifactError):
+    r"""
+    Authentication for the remote Artifact registry failed.
+    """
+
+    ...
+
+class RemoteArtifactAuthorizationError(RemoteArtifactError):
+    r"""
+    The caller is not authorized to read the remote Artifact.
+    """
+
+    ...
+
+class RemoteArtifactError(builtins.RuntimeError):
+    r"""
+    Base exception for failures while accessing a remote OMMX Artifact.
+    """
+
+    ...
+
+class RemoteArtifactNotFoundError(RemoteArtifactError):
+    r"""
+    The requested remote Artifact manifest does not exist.
+    """
+
+    ...
+
+class RemoteArtifactTransportError(RemoteArtifactError):
+    r"""
+    The remote Artifact registry could not be reached or failed.
+    """
+
+    ...
+
 @typing.final
 class RemovedConstraint:
     r"""
@@ -6634,15 +7068,30 @@ class SampleSet:
     @parameters.setter
     def parameters(self, value: typing.Any) -> None: ...
     @property
-    def best_feasible_id(self) -> builtins.int: ...
+    def best_feasible_id(self) -> builtins.int:
+        r"""
+        Raises ValueError if there is no feasible sample.
+        """
     @property
-    def best_feasible_relaxed_id(self) -> builtins.int: ...
+    def best_feasible_relaxed_id(self) -> builtins.int:
+        r"""
+        Raises ValueError if there is no feasible sample in the relaxed problem.
+        """
     @property
-    def best_feasible(self) -> Solution: ...
+    def best_feasible(self) -> Solution:
+        r"""
+        Raises ValueError if there is no feasible sample.
+        """
     @property
-    def best_feasible_relaxed(self) -> Solution: ...
+    def best_feasible_relaxed(self) -> Solution:
+        r"""
+        Raises ValueError if there is no feasible sample in the relaxed problem.
+        """
     @property
-    def best_feasible_unrelaxed(self) -> Solution: ...
+    def best_feasible_unrelaxed(self) -> Solution:
+        r"""
+        Raises ValueError if there is no feasible sample.
+        """
     @property
     def objectives(self) -> builtins.dict[builtins.int, builtins.float]:
         r"""
@@ -6760,10 +7209,17 @@ class SampleSet:
     def from_v2_bytes(bytes: bytes) -> SampleSet: ...
     def to_v1_bytes(self) -> bytes: ...
     def to_v2_bytes(self) -> bytes: ...
-    def get(self, sample_id: builtins.int) -> Solution: ...
+    def get(self, sample_id: builtins.int) -> Solution:
+        r"""
+        Return one sample as a Solution.
+
+        Raises KeyError if the sample ID does not exist.
+        """
     def get_sample_by_id(self, sample_id: builtins.int) -> Solution:
         r"""
-        Get sample by ID (alias for get method)
+        Get sample by ID (alias for get method).
+
+        Raises KeyError if the sample ID does not exist.
         """
     def num_samples(self) -> builtins.int: ...
     def sample_ids(self) -> builtins.set[builtins.int]: ...
@@ -6774,7 +7230,10 @@ class SampleSet:
         self, name: builtins.str, sample_id: builtins.int
     ) -> dict:
         r"""
-        Extract decision variable values for a given name and sample ID
+        Extract decision variable values for a given name and sample ID.
+
+        Raises KeyError if the name or sample ID does not exist, and ValueError
+        if the same subscript is found more than once.
         """
     def extract_all_decision_variables(self, sample_id: builtins.int) -> dict:
         r"""
@@ -6784,8 +7243,8 @@ class SampleSet:
         This is useful for extracting all variables at once in a structured format.
         Variables without names are not included in the result.
 
-        Raises ValueError if a decision variable with parameters is found, or if the same
-        name and subscript combination is found multiple times, or if the sample ID is invalid.
+        Raises KeyError if the sample ID does not exist, and ValueError if the
+        same name and subscript combination is found multiple times.
 
         # Examples
 
@@ -6809,17 +7268,27 @@ class SampleSet:
         """
     def extract_constraints(self, name: builtins.str, sample_id: builtins.int) -> dict:
         r"""
-        Extract constraint values for a given name and sample ID
+        Extract constraint values for a given name and sample ID.
+
+        Raises KeyError if the name or sample ID does not exist. Raises
+        ValueError if a matching constraint has parameters or if the same
+        subscript is found more than once.
         """
     def extract_named_functions(
         self, name: builtins.str, sample_id: builtins.int
     ) -> dict:
         r"""
-        Extract named function values for a given name and sample ID
+        Extract named function values for a given name and sample ID.
+
+        Raises KeyError if the name or sample ID does not exist, and ValueError
+        if the same subscript is found more than once.
         """
     def extract_all_named_functions(self, sample_id: builtins.int) -> dict:
         r"""
-        Extract all named function values grouped by name for a given sample ID
+        Extract all named function values grouped by name for a given sample ID.
+
+        Raises KeyError if the sample ID does not exist, and ValueError if the
+        same name and subscript combination is found multiple times.
         """
     def get_decision_variable_by_id(
         self, variable_id: builtins.int
@@ -7120,6 +7589,8 @@ class SealedRun:
 
     `SealedRun` exposes run-level attachments by name, `Solve` records created
     by `Run.log_solve`, and `Sampling` records created by `Run.log_sample`.
+    Missing attachment names raise {class}`KeyError`; choosing a typed getter
+    incompatible with the stored media type raises {class}`ValueError`.
     The `status` property records
     how the Run scope was closed: `"finished"`, `"failed"`, or `"interrupted"`.
     It is not an aggregate status of child records, so a finished Run may
@@ -7138,6 +7609,11 @@ class SealedRun:
         This records how the Run scope was closed, not whether every child
         `Solve` record finished successfully. A finished Run may contain failed
         Solve attempts if those adapter errors were handled inside the Run.
+        """
+    @property
+    def lifecycle_reason(self) -> typing.Optional[builtins.str]:
+        r"""
+        Concise exception type and message for a failed or interrupted Run.
         """
     @property
     def attachment_names(self) -> builtins.list[builtins.str]:
@@ -7428,7 +7904,8 @@ class Solution:
         r"""
         Extract the values of decision variables based on the `name` with `subscripts` key.
 
-        Raises ValueError if a decision variable with parameters is found, or if the same subscript is found.
+        Raises KeyError if no decision variable has the requested name, and
+        ValueError if the same subscript is found more than once.
 
         # Examples
 
@@ -7454,8 +7931,8 @@ class Solution:
         This is useful for extracting all variables at once in a structured format.
         Variables without names are not included in the result.
 
-        Raises ValueError if a decision variable with parameters is found, or if the same
-        name and subscript combination is found multiple times.
+        Raises ValueError if the same name and subscript combination is found
+        multiple times.
 
         # Examples
 
@@ -7481,7 +7958,9 @@ class Solution:
         r"""
         Extract the values of constraints based on the `name` with `subscripts` key.
 
-        Raises ValueError if the constraint with parameters is found, or if the same subscript is found.
+        Raises KeyError if no constraint has the requested name. Raises
+        ValueError if a matching constraint has parameters or if the same
+        subscript is found more than once.
 
         # Examples
 
@@ -7503,17 +7982,25 @@ class Solution:
         """
     def extract_named_functions(self, name: builtins.str) -> dict:
         r"""
-        Extract named functions by name with subscripts as key (returns a Python dict)
+        Extract named functions by name with subscripts as key (returns a Python dict).
+
+        Raises KeyError if no named function has the requested name, and
+        ValueError if the same subscript is found more than once.
         """
     def extract_all_named_functions(self) -> dict:
         r"""
-        Extract all named functions grouped by name (returns a Python dict)
+        Extract all named functions grouped by name (returns a Python dict).
+
+        Raises ValueError if the same name and subscript combination is found
+        multiple times.
         """
     def set_dual_variable(
         self, constraint_id: builtins.int, value: typing.Optional[builtins.float]
     ) -> None:
         r"""
-        Set the dual variable value for a specific constraint by ID
+        Set the dual variable value for a specific constraint by ID.
+
+        Raises KeyError if the constraint ID does not exist.
         """
     def get_decision_variable_by_id(
         self, variable_id: builtins.int
@@ -7767,6 +8254,32 @@ class State:
     def __deepcopy__(self, _memo: typing.Any) -> State: ...
 
 @typing.final
+class AdditionalCapability(enum.Enum):
+    r"""
+    Selector for a non-standard constraint family.
+
+    :attr:`Instance.required_capabilities` reports these selectors for active
+    special constraints. :meth:`Instance.reduce_capabilities` uses them to
+    choose which families are preserved during explicit lowering. Regular
+    constraints are outside this selector.
+    """
+
+    Indicator = ...
+    r"""
+    Indicator constraints: binvar = 1 → f(x) <= 0
+    """
+    OneHot = ...
+    r"""
+    One-hot constraints: exactly one of a set of binary variables must be 1
+    """
+    Sos1 = ...
+    r"""
+    SOS1 constraints: at most one of a set of variables can be non-zero
+    """
+
+    def __hash__(self) -> builtins.int: ...
+
+@typing.final
 class DecisionVariableRole(enum.Enum):
     r"""
     Decision variable role in an instance.
@@ -7789,6 +8302,7 @@ class DecisionVariableRole(enum.Enum):
     Not used, fixed, or dependent
     """
 
+    def __hash__(self) -> builtins.int: ...
     def __repr__(self) -> builtins.str: ...
     def __str__(self) -> builtins.str: ...
 
@@ -7807,6 +8321,7 @@ class Equality(enum.Enum):
     Less than or equal to zero constraint (<=)
     """
 
+    def __hash__(self) -> builtins.int: ...
     @staticmethod
     def from_pb(value: builtins.int) -> Equality:
         r"""
@@ -7846,6 +8361,7 @@ class Kind(enum.Enum):
     Semi-continuous decision variable (continuous in range or zero)
     """
 
+    def __hash__(self) -> builtins.int: ...
     @staticmethod
     def from_pb(value: builtins.int) -> Kind:
         r"""
@@ -7910,6 +8426,7 @@ class ProvenanceKind(enum.Enum):
     The regular constraint was generated from a SOS1 constraint.
     """
 
+    def __hash__(self) -> builtins.int: ...
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -7954,6 +8471,7 @@ class Sense(enum.Enum):
     Maximize the objective function
     """
 
+    def __hash__(self) -> builtins.int: ...
     @staticmethod
     def from_pb(value: builtins.int) -> Sense:
         r"""
@@ -8004,6 +8522,8 @@ def gc(
     This is the Python SDK equivalent of `ommx gc`. It is a dry-run by
     default. Pass `delete=True` to unlink orphan candidates. The `grace_period`
     string accepts the same `s`, `m`, `h`, and `d` suffixes as the CLI.
+    An invalid duration raises {class}`ValueError`; registry and storage failures
+    raise {class}`RuntimeError`.
 
     ```python
     >>> from ommx.artifact import gc
@@ -8020,6 +8540,8 @@ def get_images() -> builtins.list[builtins.str]:
     Get all image names stored in the local registry.
 
     Returns a list of image names (as strings) found in the local registry.
+    Corrupted persisted refs and other registry failures raise
+    {class}`RuntimeError`.
     """
 
 def get_local_registry_root() -> pathlib.Path:
@@ -8047,6 +8569,7 @@ def list_artifacts(
     By default, an invalid cached record is repaired from the CAS when possible.
     OMMX emits `RuntimeWarning` for repaired or skipped refs and returns the
     remaining records. Pass `strict=True` to fail on the first invalid ref.
+    Registry, manifest, and storage failures raise {class}`RuntimeError`.
     """
 
 def list_experiment_checkpoints(
@@ -8102,6 +8625,8 @@ def prune_anonymous(
     are left for {func}`gc` to reclaim if they become unreachable.
     Anonymous Experiment refs are included only when `experiments=True`.
     `older_than` accepts the same `s`, `m`, `h`, and `d` suffixes as the CLI.
+    An invalid duration raises {class}`ValueError`; registry and storage failures
+    raise {class}`RuntimeError`.
 
     ```python
     >>> from ommx.artifact import prune_anonymous
@@ -8128,6 +8653,9 @@ def remove_image(
     unreachable. Returns the atomically removed Manifest digest, or `None` when
     the ref did not exist. Pass that digest to {func}`restore_image` to roll back
     this exact deletion.
+
+    An invalid image reference raises {class}`ValueError`. Registry and storage
+    failures raise {class}`RuntimeError`.
     """
 
 def restore_image(
@@ -8146,6 +8674,10 @@ def restore_image(
     `True` when the ref is inserted and `False` when it already points to the
     requested digest. A different existing target is reported as a conflict and
     is never replaced.
+
+    Invalid image references and malformed Manifest digests raise
+    {class}`ValueError`. Registry, storage, and ref-conflict failures raise
+    {class}`RuntimeError`.
     """
 
 def set_default_atol(value: builtins.float) -> None: ...

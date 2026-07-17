@@ -6,44 +6,48 @@ from ommx_pyscipopt_adapter import (
     OMMXPySCIPOptAdapter,
 )
 
-from ommx.adapter import AdapterCompatibilityError, InfeasibleDetected
+from ommx.adapter import AdapterNotApplicableError, InfeasibleDetected
 from ommx import (
     Constraint,
     DecisionVariable,
-    DegreeLimit,
+    DegreeBound,
     Equality,
     Instance,
+    InstanceClassMismatch,
     Kind,
     OneHotConstraint,
     Polynomial,
-    PortableCapabilityMismatch,
     Sense,
     Sos1Constraint,
 )
 
 
-def test_declares_native_quadratic_capability_profile():
-    capabilities = OMMXPySCIPOptAdapter.CAPABILITIES
-    assert capabilities is not None
-    [profile] = capabilities.profiles
-    assert profile.name == "pyscipopt-quadratic"
-    assert profile.variable_kinds == {Kind.Binary, Kind.Integer, Kind.Continuous}
-    assert profile.objective_degree == DegreeLimit.at_most(2)
-    assert profile.regular_constraints == {
-        Equality.EqualToZero: DegreeLimit.at_most(2),
-        Equality.LessThanOrEqualToZero: DegreeLimit.at_most(2),
+def test_declares_quadratic_mip_input_class():
+    input_class = OMMXPySCIPOptAdapter.INPUT_CLASS
+    assert input_class is not None
+    [clause] = input_class.clauses
+    assert clause.label == "pyscipopt-quadratic-mip"
+    assert clause.allowed_variable_kinds == {
+        Kind.Binary,
+        Kind.Integer,
+        Kind.Continuous,
     }
-    assert profile.indicator_constraints == {
-        Equality.EqualToZero: DegreeLimit.at_most(1),
-        Equality.LessThanOrEqualToZero: DegreeLimit.at_most(1),
+    assert clause.objective_degree_bound == DegreeBound.at_most(2)
+    assert clause.regular_constraint_degree_bounds == {
+        Equality.EqualToZero: DegreeBound.at_most(2),
+        Equality.LessThanOrEqualToZero: DegreeBound.at_most(2),
     }
-    assert not profile.supports_one_hot
-    assert profile.supports_sos1
-    assert profile.senses == {Sense.Minimize, Sense.Maximize}
+    assert clause.indicator_constraint_degree_bounds == {
+        Equality.EqualToZero: DegreeBound.at_most(1),
+        Equality.LessThanOrEqualToZero: DegreeBound.at_most(1),
+    }
+    assert not clause.allows_one_hot
+    assert clause.allows_sos1
+    assert clause.allowed_senses == {Sense.Minimize, Sense.Maximize}
 
 
 @pytest.mark.parametrize("sense", [Sense.Minimize, Sense.Maximize])
-def test_capability_profile_accepts_complete_native_boundary(sense):
+def test_input_class_accepts_complete_quadratic_mip_boundary(sense):
     b = DecisionVariable.binary(0)
     x = DecisionVariable.integer(1)
     y = DecisionVariable.continuous(2)
@@ -58,10 +62,14 @@ def test_capability_profile_accepts_complete_native_boundary(sense):
         sos1_constraints={20: Sos1Constraint(variables=[x, y])},
         sense=sense,
     )
+    before = instance.to_v2_bytes()
 
-    report = OMMXPySCIPOptAdapter.check_compatibility(instance)
-    assert report.compatible
-    assert report.portable_report.matching_profiles == ["pyscipopt-quadratic"]
+    report = OMMXPySCIPOptAdapter.check_applicability(instance)
+    assert report.is_applicable
+    assert report.input_membership.matching_clauses == [(0, "pyscipopt-quadratic-mip")]
+    assert report.precondition_violations == ()
+    OMMXPySCIPOptAdapter(instance)
+    assert instance.to_v2_bytes() == before
 
 
 def test_error_polynomial_objective():
@@ -72,12 +80,32 @@ def test_error_polynomial_objective():
         constraints={},
         sense=Instance.MINIMIZE,
     )
-    with pytest.raises(AdapterCompatibilityError) as e:
+    with pytest.raises(AdapterNotApplicableError) as e:
         OMMXPySCIPOptAdapter(ommx_instance)
-    mismatch = e.value.report.portable_report.profiles[0].mismatches[0]
-    assert isinstance(mismatch, PortableCapabilityMismatch.ObjectiveDegreeExceeded)
+    mismatches = e.value.report.input_membership.clause_reports[0].mismatches
+    assert len(mismatches) == 1
+    mismatch = mismatches[0]
+    assert isinstance(mismatch, InstanceClassMismatch.ObjectiveDegreeExceedsBound)
     assert mismatch.actual_degree == 3
-    assert mismatch.limit == DegreeLimit.at_most(2)
+    assert mismatch.bound == DegreeBound.at_most(2)
+
+
+def test_rejects_inapplicable_input_before_backend_construction(monkeypatch):
+    x = DecisionVariable.continuous(0)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x * x * x,
+        constraints={},
+        sense=Sense.Minimize,
+    )
+
+    def unexpected_model_construction(*args, **kwargs):
+        pytest.fail("PySCIPOpt model was constructed for an inapplicable input")
+
+    monkeypatch.setattr(pyscipopt, "Model", unexpected_model_construction)
+
+    with pytest.raises(AdapterNotApplicableError):
+        OMMXPySCIPOptAdapter(instance)
 
 
 def test_error_nonlinear_constraint():
@@ -94,14 +122,16 @@ def test_error_nonlinear_constraint():
         },
         sense=Instance.MINIMIZE,
     )
-    with pytest.raises(AdapterCompatibilityError) as e:
+    with pytest.raises(AdapterNotApplicableError) as e:
         OMMXPySCIPOptAdapter(ommx_instance)
-    mismatch = e.value.report.portable_report.profiles[0].mismatches[0]
+    mismatches = e.value.report.input_membership.clause_reports[0].mismatches
+    assert len(mismatches) == 1
+    mismatch = mismatches[0]
     assert isinstance(
-        mismatch, PortableCapabilityMismatch.RegularConstraintDegreeExceeded
+        mismatch, InstanceClassMismatch.RegularConstraintDegreeExceedsBound
     )
     assert mismatch.actual_degrees == {0: 3}
-    assert mismatch.limit == DegreeLimit.at_most(2)
+    assert mismatch.bound == DegreeBound.at_most(2)
 
 
 def test_rejects_quadratic_indicator_body_without_mutating_input():
@@ -116,13 +146,15 @@ def test_rejects_quadratic_indicator_body_without_mutating_input():
     )
     before = instance.to_v2_bytes()
 
-    with pytest.raises(AdapterCompatibilityError) as e:
+    with pytest.raises(AdapterNotApplicableError) as e:
         OMMXPySCIPOptAdapter(instance)
 
-    mismatch = e.value.report.portable_report.profiles[0].mismatches[0]
-    assert isinstance(mismatch, PortableCapabilityMismatch.IndicatorBodyDegreeExceeded)
+    mismatches = e.value.report.input_membership.clause_reports[0].mismatches
+    assert len(mismatches) == 1
+    mismatch = mismatches[0]
+    assert isinstance(mismatch, InstanceClassMismatch.IndicatorBodyDegreeExceedsBound)
     assert mismatch.actual_degrees == {0: 2}
-    assert mismatch.limit == DegreeLimit.at_most(1)
+    assert mismatch.bound == DegreeBound.at_most(1)
     assert instance.to_v2_bytes() == before
 
 
@@ -144,12 +176,31 @@ def test_rejects_unsupported_variable_kinds(variable, kind):
         sense=Sense.Minimize,
     )
 
-    with pytest.raises(AdapterCompatibilityError) as e:
+    with pytest.raises(AdapterNotApplicableError) as e:
         OMMXPySCIPOptAdapter(instance)
-    mismatch = e.value.report.portable_report.profiles[0].mismatches[0]
-    assert isinstance(mismatch, PortableCapabilityMismatch.UnsupportedVariableKind)
+    mismatches = e.value.report.input_membership.clause_reports[0].mismatches
+    assert len(mismatches) == 1
+    mismatch = mismatches[0]
+    assert isinstance(mismatch, InstanceClassMismatch.VariableKindNotAllowed)
     assert mismatch.kind == kind
-    assert mismatch.used_variable_ids == {0}
+    assert mismatch.variable_ids == {0}
+
+
+def test_accepts_unused_unsupported_variable_kind_without_mutating_input():
+    used = DecisionVariable.binary(0)
+    unused = DecisionVariable.semi_integer(1, lower=1, upper=3)
+    instance = Instance.from_components(
+        decision_variables=[used, unused],
+        objective=used,
+        constraints={},
+        sense=Sense.Minimize,
+    )
+    before = instance.to_v2_bytes()
+
+    report = OMMXPySCIPOptAdapter.check_applicability(instance)
+    assert report.is_applicable
+    OMMXPySCIPOptAdapter(instance)
+    assert instance.to_v2_bytes() == before
 
 
 def test_rejects_one_hot_without_implicit_lowering():
@@ -164,11 +215,13 @@ def test_rejects_one_hot_without_implicit_lowering():
     )
     before = instance.to_v2_bytes()
 
-    with pytest.raises(AdapterCompatibilityError) as e:
+    with pytest.raises(AdapterNotApplicableError) as e:
         OMMXPySCIPOptAdapter(instance)
 
-    mismatch = e.value.report.portable_report.profiles[0].mismatches[0]
-    assert isinstance(mismatch, PortableCapabilityMismatch.UnsupportedOneHotConstraints)
+    mismatches = e.value.report.input_membership.clause_reports[0].mismatches
+    assert len(mismatches) == 1
+    mismatch = mismatches[0]
+    assert isinstance(mismatch, InstanceClassMismatch.OneHotConstraintsNotAllowed)
     assert mismatch.constraint_ids == {0}
     assert instance.to_v2_bytes() == before
 

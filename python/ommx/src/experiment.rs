@@ -1,7 +1,8 @@
-use anyhow::{Context, Result};
 use oci_spec::image::MediaType;
 use pyo3::{
-    exceptions::{PyKeyboardInterrupt, PyTypeError, PyValueError},
+    exceptions::{
+        PyAttributeError, PyKeyboardInterrupt, PyRuntimeError, PyTypeError, PyValueError,
+    },
     prelude::*,
     types::{
         PyBool, PyBytes, PyDict, PyFloat, PyInt, PyList, PyModule, PyString, PyType, PyTypeMethods,
@@ -14,6 +15,7 @@ use std::{
     time::Duration,
 };
 
+use crate::error::OmmxPyResult;
 use crate::pandas::{get_na, PyDataFrame};
 use crate::PyArtifact;
 use ommx::artifact::local_registry::{ExperimentCheckpointRefRecord, ExperimentRefRecord};
@@ -22,6 +24,8 @@ use ommx::experiment::{
     AdapterDiagnosticPayload, AttachmentLogger, AutosavePolicy, Compression, FailedSampleRecord,
     FailedSolveRecord, FinishedSampleRecord, FinishedSolveRecord, SamplingStatus, SolveStatus,
 };
+
+const PYTHON_EXCEPTION_REASON_MAX_CHARS: usize = 512;
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
@@ -284,8 +288,10 @@ impl PyAutosavePolicy {
 
     /// Checkpoint after `runs` additional Runs close.
     #[staticmethod]
-    pub fn every_n_runs(runs: u32) -> Result<Self> {
-        anyhow::ensure!(runs > 0, "runs must be greater than zero");
+    pub fn every_n_runs(runs: u32) -> PyResult<Self> {
+        if runs == 0 {
+            return Err(PyValueError::new_err("runs must be greater than zero"));
+        }
         Ok(Self {
             inner: AutosavePolicy::EveryNRuns(runs),
         })
@@ -295,9 +301,9 @@ impl PyAutosavePolicy {
     /// then at most once per `seconds` interval. Failed attempts also wait for
     /// the interval before retrying.
     #[staticmethod]
-    pub fn min_interval(seconds: f64) -> Result<Self> {
+    pub fn min_interval(seconds: f64) -> PyResult<Self> {
         let interval = Duration::try_from_secs_f64(seconds)
-            .map_err(|_| anyhow::anyhow!("seconds must be finite and non-negative"))?;
+            .map_err(|_| PyValueError::new_err("seconds must be finite and non-negative"))?;
         Ok(Self {
             inner: AutosavePolicy::MinInterval(interval),
         })
@@ -357,6 +363,12 @@ impl PyAutosavePolicy {
 /// `Run.log_solve(...)` and `Run.log_sample(...)` for payloads that belong to
 /// a specific run.
 ///
+/// Attachment lookup by an absent name raises {class}`KeyError`. A caller-side
+/// image reference, autosave value, media type, or JSON input that is invalid
+/// raises {class}`ValueError`. Registry, archive, storage, and lifecycle-state
+/// failures raise {class}`RuntimeError`. Exceptions raised by Python codecs,
+/// adapters, tracing hooks, and data libraries pass through unchanged.
+///
 /// Example:
 ///
 /// >>> from ommx.experiment import Experiment
@@ -402,7 +414,7 @@ impl PyExperiment {
     /// be used as a context manager.
     #[new]
     #[pyo3(signature = (image_name = None, *, store_trace = false))]
-    pub fn new(image_name: Option<&str>, store_trace: bool) -> Result<Self> {
+    pub fn new(image_name: Option<&str>, store_trace: bool) -> OmmxPyResult<Self> {
         Ok(Self {
             inner: ommx::experiment::ExperimentDyn::new(parse_name(image_name)?)?,
             store_trace,
@@ -421,7 +433,10 @@ impl PyExperiment {
     /// be used as a context manager.
     #[staticmethod]
     #[pyo3(signature = (image_name = None, *, store_trace = false))]
-    pub fn with_temp_local_registry(image_name: Option<&str>, store_trace: bool) -> Result<Self> {
+    pub fn with_temp_local_registry(
+        image_name: Option<&str>,
+        store_trace: bool,
+    ) -> OmmxPyResult<Self> {
         Ok(Self {
             inner: ommx::experiment::ExperimentDyn::with_temp_local_registry(parse_name(
                 image_name,
@@ -436,8 +451,12 @@ impl PyExperiment {
     /// pull it from the remote registry, matching {meth}`Artifact.load`.
     /// The loaded artifact must contain an Experiment config. Use
     /// `Experiment(...)` to create a new unsealed experiment.
+    ///
+    /// Raises {class}`~ommx.artifact.RemoteArtifactNotFoundError` when the
+    /// exact remote reference does not exist. Other remote access failures
+    /// raise subclasses of {class}`~ommx.artifact.RemoteArtifactError`.
     #[staticmethod]
-    pub fn load(py: Python<'_>, image_name: &str) -> Result<Self> {
+    pub fn load(py: Python<'_>, image_name: &str) -> crate::error::OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let image_name = ommx::artifact::ImageRef::parse(image_name)?;
         Ok(Self {
@@ -456,7 +475,7 @@ impl PyExperiment {
     /// discover recovery points, but pass its `requested_image_name` here
     /// rather than its internal `checkpoint_image_name`.
     #[staticmethod]
-    pub fn restore_from_checkpoint(py: Python<'_>, image_name: &str) -> Result<Self> {
+    pub fn restore_from_checkpoint(py: Python<'_>, image_name: &str) -> OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let image_name = ommx::artifact::ImageRef::parse(image_name)?;
         Ok(Self {
@@ -465,14 +484,14 @@ impl PyExperiment {
         })
     }
 
-    /// Import an Experiment Artifact from a `.ommx` OCI archive file (or an OCI
-    /// Image Layout directory).
+    /// Import a finished, failed, or interrupted Experiment Artifact from a
+    /// `.ommx` OCI archive file (or an OCI Image Layout directory).
     ///
     /// The archive is imported into the default Local Registry, matching
     /// {meth}`Artifact.import_archive`, and then interpreted as an
     /// Experiment. The imported artifact must contain an Experiment config.
     #[staticmethod]
-    pub fn import_archive(py: Python<'_>, path: PathBuf) -> Result<Self> {
+    pub fn import_archive(py: Python<'_>, path: PathBuf) -> OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
         Ok(Self {
             inner: ommx::experiment::ExperimentDyn::import_archive(&path)?,
@@ -480,12 +499,12 @@ impl PyExperiment {
         })
     }
 
-    /// Interpret an already-open Artifact as a committed Experiment.
+    /// Interpret an already-open Artifact as a finished, failed, or interrupted Experiment.
     ///
     /// This is the usual entry point after importing or receiving an OMMX
     /// Artifact handle. The artifact must contain an Experiment config.
     #[staticmethod]
-    pub fn from_artifact(artifact: &PyArtifact) -> Result<Self> {
+    pub fn from_artifact(artifact: &PyArtifact) -> OmmxPyResult<Self> {
         Ok(Self {
             inner: ommx::experiment::ExperimentDyn::from_artifact(artifact.inner().clone())?,
             store_trace: false,
@@ -518,7 +537,7 @@ impl PyExperiment {
     /// `Run` context managers created from it. The child Experiment itself
     /// does not need to be used as a context manager.
     #[pyo3(signature = (image_name = None, *, store_trace = false))]
-    pub fn fork(&self, image_name: Option<&str>, store_trace: bool) -> Result<Self> {
+    pub fn fork(&self, image_name: Option<&str>, store_trace: bool) -> OmmxPyResult<Self> {
         Ok(Self {
             inner: self.inner.fork(parse_name(image_name)?)?,
             store_trace,
@@ -536,7 +555,7 @@ impl PyExperiment {
         exc_type: Option<&Bound<'_, PyAny>>,
         exc_value: Option<&Bound<'_, PyAny>>,
         traceback: Option<&Bound<'_, PyAny>>,
-    ) -> Result<bool> {
+    ) -> OmmxPyResult<bool> {
         if exc_type.is_some() && self.inner.is_unsealed() {
             let reason = python_exception_reason(exc_type, exc_value);
             let checkpoint = if is_keyboard_interrupt(py, exc_type)? {
@@ -559,22 +578,28 @@ impl PyExperiment {
 
     #[getter]
     /// OCI image reference used to store this Experiment in a local registry.
-    pub fn image_name(&self) -> Result<String> {
+    pub fn image_name(&self) -> OmmxPyResult<String> {
         Ok(self.inner.image_name()?.to_string())
     }
 
     #[getter]
     /// Manifest annotations that will be written, or were written, to this Experiment artifact.
-    pub fn annotations(&self) -> Result<HashMap<String, String>> {
-        self.inner.annotations()
+    pub fn annotations(&self) -> OmmxPyResult<HashMap<String, String>> {
+        Ok(self.inner.annotations()?)
     }
 
     /// Set a manifest annotation on this unsealed Experiment.
     ///
     /// OMMX-owned annotation keys are reserved. Use reverse-DNS style keys
     /// such as `"com.example.project"` for caller-owned metadata.
-    pub fn set_annotation(&mut self, key: &str, value: &str) -> Result<()> {
-        self.inner.set_annotation(key, value)
+    pub fn set_annotation(&mut self, key: &str, value: &str) -> OmmxPyResult<()> {
+        if ommx::is_reserved_annotation_key(key) {
+            return Err(PyValueError::new_err(format!(
+                "Annotation key `{key}` is reserved for OMMX metadata"
+            ))
+            .into());
+        }
+        Ok(self.inner.set_annotation(key, value)?)
     }
 
     /// Set the rolling draft checkpoint policy for this unsealed Experiment.
@@ -582,8 +607,8 @@ impl PyExperiment {
     /// Changing the policy resets its schedule at the current closed-Run
     /// count. The policy affects only draft autosaves after Run close;
     /// exception-driven failed or interrupted checkpoints are still written.
-    pub fn set_autosave_policy(&mut self, policy: &PyAutosavePolicy) -> Result<()> {
-        self.inner.set_autosave_policy(policy.inner)
+    pub fn set_autosave_policy(&mut self, policy: &PyAutosavePolicy) -> OmmxPyResult<()> {
+        Ok(self.inner.set_autosave_policy(policy.inner)?)
     }
 
     /// Rename this Experiment to another local registry image reference.
@@ -592,12 +617,12 @@ impl PyExperiment {
     /// publish. After commit, it publishes the same Artifact manifest under
     /// `image_name` and updates this handle to use the new name. The previous
     /// name remains as an alias in the Local Registry.
-    pub fn rename(&mut self, image_name: &str) -> Result<()> {
+    pub fn rename(&mut self, image_name: &str) -> OmmxPyResult<()> {
         let image_name = ommx::artifact::ImageRef::parse(image_name)?;
-        self.inner.rename(image_name)
+        Ok(self.inner.rename(image_name)?)
     }
 
-    /// Save this committed Experiment Artifact as a `.ommx` OCI archive file at `path`.
+    /// Save this finished, failed, or interrupted Experiment Artifact as a `.ommx` archive.
     ///
     /// The archive is an exchange-format export of the registry-resident
     /// Experiment Artifact. Loading the archive back via
@@ -605,33 +630,33 @@ impl PyExperiment {
     /// Registry under the same image name.
     ///
     /// Raises an error if the Experiment has not been committed yet.
-    pub fn save(&mut self, py: Python<'_>, path: PathBuf) -> Result<()> {
+    pub fn save(&mut self, py: Python<'_>, path: PathBuf) -> OmmxPyResult<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        self.inner.save(&path)
+        Ok(self.inner.save(&path)?)
     }
 
-    /// Push this committed Experiment Artifact to its remote registry.
+    /// Push this finished, failed, or interrupted Experiment Artifact remotely.
     ///
     /// Use `rename(...)` first when an anonymous or local-only experiment
     /// should be published under a remote container image reference.
     ///
     /// Raises an error if the Experiment has not been committed yet.
     #[cfg(feature = "remote-artifact")]
-    pub fn push(&mut self, py: Python<'_>) -> Result<()> {
+    pub fn push(&mut self, py: Python<'_>) -> OmmxPyResult<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        self.inner.push()
+        Ok(self.inner.push()?)
     }
 
     #[getter]
     /// Names of experiment-level attachments.
-    pub fn attachment_names(&self) -> Result<Vec<String>> {
-        self.inner.attachment_names()
+    pub fn attachment_names(&self) -> OmmxPyResult<Vec<String>> {
+        Ok(self.inner.attachment_names()?)
     }
 
     /// Original media type of an experiment-level attachment.
     ///
     /// Storage compression suffixes are hidden from this logical media type.
-    pub fn attachment_media_type(&self, name: &str) -> Result<String> {
+    pub fn attachment_media_type(&self, name: &str) -> OmmxPyResult<String> {
         Ok(self.inner.attachment_media_type(name)?.to_string())
     }
 
@@ -641,7 +666,11 @@ impl PyExperiment {
     /// JSON attachments become normal Python objects, OMMX instance-like
     /// attachments become the corresponding `ommx` objects, and unknown
     /// media types are returned as raw `bytes`.
-    pub fn get_attachment<'py>(&self, py: Python<'py>, name: &str) -> Result<Bound<'py, PyAny>> {
+    pub fn get_attachment<'py>(
+        &self,
+        py: Python<'py>,
+        name: &str,
+    ) -> OmmxPyResult<Bound<'py, PyAny>> {
         let _guard = crate::TRACING.attach_parent_context(py);
         decode_experiment_attachment(py, &self.inner, name)
     }
@@ -650,7 +679,7 @@ impl PyExperiment {
     ///
     /// Raises an error if the attachment exists but its media type is not
     /// `application/json`.
-    pub fn get_json<'py>(&self, py: Python<'py>, name: &str) -> Result<Bound<'py, PyAny>> {
+    pub fn get_json<'py>(&self, py: Python<'py>, name: &str) -> OmmxPyResult<Bound<'py, PyAny>> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let expected = MediaType::from("application/json");
         ensure_media_type(&self.inner.attachment_media_type(name)?, &expected)?;
@@ -658,8 +687,14 @@ impl PyExperiment {
     }
 
     /// Read an Instance experiment-level attachment by name.
-    pub fn get_instance(&self, py: Python<'_>, name: &str) -> Result<crate::Instance> {
+    pub fn get_instance(&self, py: Python<'_>, name: &str) -> OmmxPyResult<crate::Instance> {
         let _guard = crate::TRACING.attach_parent_context(py);
+        let media_type = self.inner.attachment_media_type(name)?;
+        ensure_typed_attachment_media_type(
+            &media_type,
+            "an OMMX Instance",
+            ommx::artifact::media_types::is_instance_payload_media_type(&media_type),
+        )?;
         let inner = self.inner.attachment_instance(name)?;
         Ok(crate::Instance { inner })
     }
@@ -669,28 +704,46 @@ impl PyExperiment {
         &self,
         py: Python<'_>,
         name: &str,
-    ) -> Result<crate::ParametricInstance> {
+    ) -> OmmxPyResult<crate::ParametricInstance> {
         let _guard = crate::TRACING.attach_parent_context(py);
+        let media_type = self.inner.attachment_media_type(name)?;
+        ensure_typed_attachment_media_type(
+            &media_type,
+            "an OMMX ParametricInstance",
+            ommx::artifact::media_types::is_parametric_instance_payload_media_type(&media_type),
+        )?;
         let inner = self.inner.attachment_parametric_instance(name)?;
         Ok(crate::ParametricInstance { inner })
     }
 
     /// Read a Solution experiment-level attachment by name.
-    pub fn get_solution(&self, py: Python<'_>, name: &str) -> Result<crate::Solution> {
+    pub fn get_solution(&self, py: Python<'_>, name: &str) -> OmmxPyResult<crate::Solution> {
         let _guard = crate::TRACING.attach_parent_context(py);
+        let media_type = self.inner.attachment_media_type(name)?;
+        ensure_typed_attachment_media_type(
+            &media_type,
+            "an OMMX Solution",
+            ommx::artifact::media_types::is_solution_payload_media_type(&media_type),
+        )?;
         let inner = self.inner.attachment_solution(name)?;
         Ok(crate::Solution { inner })
     }
 
     /// Read a SampleSet experiment-level attachment by name.
-    pub fn get_sample_set(&self, py: Python<'_>, name: &str) -> Result<crate::SampleSet> {
+    pub fn get_sample_set(&self, py: Python<'_>, name: &str) -> OmmxPyResult<crate::SampleSet> {
         let _guard = crate::TRACING.attach_parent_context(py);
+        let media_type = self.inner.attachment_media_type(name)?;
+        ensure_typed_attachment_media_type(
+            &media_type,
+            "an OMMX SampleSet",
+            ommx::artifact::media_types::is_sample_set_payload_media_type(&media_type),
+        )?;
         let inner = self.inner.attachment_sample_set(name)?;
         Ok(crate::SampleSet { inner })
     }
 
     /// Read decompressed bytes of an experiment-level attachment by name.
-    pub fn get_blob<'py>(&self, py: Python<'py>, name: &str) -> Result<Bound<'py, PyBytes>> {
+    pub fn get_blob<'py>(&self, py: Python<'py>, name: &str) -> OmmxPyResult<Bound<'py, PyBytes>> {
         let _guard = crate::TRACING.attach_parent_context(py);
         Ok(PyBytes::new(py, &self.inner.attachment_blob(name)?))
     }
@@ -708,9 +761,9 @@ impl PyExperiment {
         name: &str,
         path: PathBuf,
         overwrite: bool,
-    ) -> Result<PathBuf> {
+    ) -> OmmxPyResult<PathBuf> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        self.inner.write_attachment(name, path, overwrite)
+        Ok(self.inner.write_attachment(name, path, overwrite)?)
     }
 
     /// Read an experiment-level attachment by name and decode it with a codec.
@@ -723,18 +776,17 @@ impl PyExperiment {
         py: Python<'_>,
         codec: AttachmentCodecInput,
         name: &str,
-    ) -> Result<AttachmentPayload> {
+    ) -> OmmxPyResult<AttachmentPayload> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        codec.decode_from_parts(
-            py,
-            self.inner.attachment_media_type(name)?,
-            &self.inner.attachment_blob(name)?,
-        )
+        let media_type = self.inner.attachment_media_type(name)?;
+        codec.validate_media_type(py, &media_type)?;
+        let blob = self.inner.attachment_blob(name)?;
+        codec.decode(py, &blob)
     }
 
     #[getter]
     /// Closed runs in insertion order.
-    pub fn runs(&self) -> Result<Vec<PySealedRun>> {
+    pub fn runs(&self) -> OmmxPyResult<Vec<PySealedRun>> {
         let runs = self.inner.runs()?;
         Ok(runs.into_iter().map(|run| PySealedRun { run }).collect())
     }
@@ -750,10 +802,19 @@ impl PyExperiment {
     }
 
     #[getter]
-    /// Committed OMMX Artifact for this Experiment.
+    /// Concise exception type and message for a failed or interrupted Experiment.
+    ///
+    /// This is lifecycle metadata, not solver diagnostics. It is `None` when
+    /// no reason was recorded.
+    pub fn lifecycle_reason(&self) -> Option<String> {
+        self.inner.lifecycle_reason()
+    }
+
+    #[getter]
+    /// Immutable OMMX Artifact for this finished, failed, or interrupted Experiment.
     ///
     /// Raises an error if the Experiment has not been committed yet.
-    pub fn artifact(&self) -> Result<PyArtifact> {
+    pub fn artifact(&self) -> OmmxPyResult<PyArtifact> {
         Ok(PyArtifact::new(self.inner.artifact()?))
     }
 
@@ -773,7 +834,7 @@ impl PyExperiment {
     /// Run before it is closed are stored in the Local Registry but are not
     /// recoverable through a checkpoint until a later checkpoint includes
     /// that Run.
-    pub fn run(&self) -> Result<PyRun> {
+    pub fn run(&self) -> OmmxPyResult<PyRun> {
         Ok(PyRun {
             state: PyRunState::Open {
                 run: self.inner.run()?,
@@ -794,15 +855,15 @@ impl PyExperiment {
         media_type: &str,
         bytes: &Bound<pyo3::types::PyBytes>,
         compression: AttachmentCompression,
-    ) -> Result<()> {
-        AttachmentLogger::log_attachment_compressed(
+    ) -> OmmxPyResult<()> {
+        Ok(AttachmentLogger::log_attachment_compressed(
             &self.inner,
             name,
             MediaType::from(media_type),
             bytes.as_bytes(),
             HashMap::new(),
             compression.into(),
-        )
+        )?)
     }
 
     /// Attach an existing filesystem file in the experiment space.
@@ -822,16 +883,16 @@ impl PyExperiment {
         media_type: Option<&str>,
         filename: Option<&str>,
         compression: AttachmentCompression,
-    ) -> Result<()> {
+    ) -> OmmxPyResult<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        AttachmentLogger::log_file_compressed(
+        Ok(AttachmentLogger::log_file_compressed(
             &self.inner,
             name,
             &path,
             media_type.map(MediaType::from),
             filename,
             compression.into(),
-        )
+        )?)
     }
 
     /// Encode a Python object with an attachment codec and attach it in the experiment space.
@@ -848,17 +909,17 @@ impl PyExperiment {
         name: &str,
         value: AttachmentPayload,
         compression: AttachmentCompression,
-    ) -> Result<()> {
+    ) -> OmmxPyResult<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let attachment = codec.encode(py, &value)?;
-        AttachmentLogger::log_attachment_compressed(
+        Ok(AttachmentLogger::log_attachment_compressed(
             &self.inner,
             name,
             attachment.media_type,
             attachment.bytes,
             HashMap::new(),
             compression.into(),
-        )
+        )?)
     }
 
     /// Attach a JSON-serializable value in the experiment space.
@@ -873,22 +934,29 @@ impl PyExperiment {
         name: &str,
         value: &Bound<PyAny>,
         compression: AttachmentCompression,
-    ) -> Result<()> {
-        let json = py.import("json")?;
-        let blob: String = json.call_method1("dumps", (value,))?.extract()?;
-        AttachmentLogger::log_attachment_compressed(
+    ) -> OmmxPyResult<()> {
+        let blob = json_dumps(
+            py,
+            value,
+            "Experiment attachment value must be JSON-serializable",
+        )?;
+        Ok(AttachmentLogger::log_attachment_compressed(
             &self.inner,
             name,
             MediaType::from("application/json"),
             blob,
             HashMap::new(),
             compression.into(),
-        )
+        )?)
     }
 
     /// Attach an Instance in the experiment space.
-    pub fn log_instance(&mut self, name: &str, instance: &crate::Instance) -> Result<()> {
-        AttachmentLogger::log_instance(&self.inner, name, &instance.inner)
+    pub fn log_instance(&mut self, name: &str, instance: &crate::Instance) -> OmmxPyResult<()> {
+        Ok(AttachmentLogger::log_instance(
+            &self.inner,
+            name,
+            &instance.inner,
+        )?)
     }
 
     /// Attach an ParametricInstance in the experiment space.
@@ -896,18 +964,34 @@ impl PyExperiment {
         &mut self,
         name: &str,
         pi: &crate::ParametricInstance,
-    ) -> Result<()> {
-        AttachmentLogger::log_parametric_instance(&self.inner, name, &pi.inner)
+    ) -> OmmxPyResult<()> {
+        Ok(AttachmentLogger::log_parametric_instance(
+            &self.inner,
+            name,
+            &pi.inner,
+        )?)
     }
 
     /// Attach a Solution in the experiment space.
-    pub fn log_solution(&mut self, name: &str, solution: &crate::Solution) -> Result<()> {
-        AttachmentLogger::log_solution(&self.inner, name, &solution.inner)
+    pub fn log_solution(&mut self, name: &str, solution: &crate::Solution) -> OmmxPyResult<()> {
+        Ok(AttachmentLogger::log_solution(
+            &self.inner,
+            name,
+            &solution.inner,
+        )?)
     }
 
     /// Attach a SampleSet in the experiment space.
-    pub fn log_sample_set(&mut self, name: &str, sample_set: &crate::SampleSet) -> Result<()> {
-        AttachmentLogger::log_sample_set(&self.inner, name, &sample_set.inner)
+    pub fn log_sample_set(
+        &mut self,
+        name: &str,
+        sample_set: &crate::SampleSet,
+    ) -> OmmxPyResult<()> {
+        Ok(AttachmentLogger::log_sample_set(
+            &self.inner,
+            name,
+            &sample_set.inner,
+        )?)
     }
 
     /// Commit this unsealed Experiment into the local registry.
@@ -918,7 +1002,7 @@ impl PyExperiment {
     /// read-only view of the committed Experiment. A successful commit
     /// publishes the requested image reference and removes any local checkpoint
     /// for that Experiment when present.
-    pub fn commit(&mut self, py: Python<'_>) -> Result<PyArtifact> {
+    pub fn commit(&mut self, py: Python<'_>) -> OmmxPyResult<PyArtifact> {
         self.commit_inner(py)
     }
 
@@ -928,7 +1012,7 @@ impl PyExperiment {
     /// Closed runs with no parameters are still present as index rows.
     /// Adapter options recorded by `Run.log_solve` are solve metadata and do
     /// not appear in this table.
-    pub fn run_parameters_df<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDataFrame>> {
+    pub fn run_parameters_df<'py>(&self, py: Python<'py>) -> OmmxPyResult<Bound<'py, PyDataFrame>> {
         let mut run_ids = BTreeSet::new();
         for run in self.inner.runs()? {
             run_ids.insert(run.run_id());
@@ -948,7 +1032,7 @@ impl PyExperiment {
         run_parameters_to_dataframe(py, run_ids.into_iter().collect(), columns)
     }
 
-    pub fn __repr__(&self) -> Result<String> {
+    pub fn __repr__(&self) -> OmmxPyResult<String> {
         Ok(format!(
             "Experiment(image_name='{}', state='{}', open_runs={})",
             self.image_name()?,
@@ -959,7 +1043,7 @@ impl PyExperiment {
 }
 
 impl PyExperiment {
-    fn commit_inner(&mut self, py: Python<'_>) -> Result<PyArtifact> {
+    fn commit_inner(&mut self, py: Python<'_>) -> OmmxPyResult<PyArtifact> {
         let _guard = crate::TRACING.attach_parent_context(py);
         Ok(PyArtifact::new(self.inner.commit()?))
     }
@@ -980,7 +1064,7 @@ pub fn list_experiments(
     prefix: Option<&str>,
     root: Option<PathBuf>,
     strict: bool,
-) -> Result<Vec<PyExperimentRef>> {
+) -> OmmxPyResult<Vec<PyExperimentRef>> {
     let _guard = crate::TRACING.attach_parent_context(py);
     let registry = open_experiment_registry(root)?;
     let report = registry.list_experiments_with_options(
@@ -1013,9 +1097,8 @@ pub fn list_experiment_checkpoints(
     statuses: Option<Vec<String>>,
     root: Option<PathBuf>,
     strict: bool,
-) -> Result<Vec<PyExperimentCheckpointRef>> {
+) -> OmmxPyResult<Vec<PyExperimentCheckpointRef>> {
     let _guard = crate::TRACING.attach_parent_context(py);
-    let registry = open_experiment_registry(root)?;
     let statuses = statuses
         .unwrap_or_default()
         .into_iter()
@@ -1028,7 +1111,8 @@ pub fn list_experiment_checkpoints(
             ))
             .into()),
         })
-        .collect::<Result<Vec<_>>>()?;
+        .collect::<OmmxPyResult<Vec<_>>>()?;
+    let registry = open_experiment_registry(root)?;
     let report = registry.list_experiment_checkpoints_with_options(
         prefix,
         &ommx::artifact::local_registry::ExperimentCheckpointListOptions { statuses, strict },
@@ -1043,10 +1127,10 @@ pub fn list_experiment_checkpoints(
 
 fn open_experiment_registry(
     root: Option<PathBuf>,
-) -> Result<ommx::artifact::local_registry::LocalRegistry> {
+) -> OmmxPyResult<ommx::artifact::local_registry::LocalRegistry> {
     match root {
-        Some(root) => ommx::artifact::local_registry::LocalRegistry::open(root),
-        None => ommx::artifact::local_registry::LocalRegistry::open_default(),
+        Some(root) => Ok(ommx::artifact::local_registry::LocalRegistry::open(root)?),
+        None => Ok(ommx::artifact::local_registry::LocalRegistry::open_default()?),
     }
 }
 
@@ -1067,7 +1151,7 @@ impl RunParameterDataFrameColumn {
         }
     }
 
-    fn insert(&mut self, run_id: u64, value: ommx::experiment::ParameterValue) -> Result<()> {
+    fn insert(&mut self, run_id: u64, value: ommx::experiment::ParameterValue) -> OmmxPyResult<()> {
         match (self, value) {
             (Self::Bool(values), ommx::experiment::ParameterValue::Bool(value)) => {
                 values.insert(run_id, value);
@@ -1101,13 +1185,12 @@ impl RunParameterDataFrameColumn {
                 values.insert(run_id, value);
                 Ok(())
             }
-            (column, value) => {
-                anyhow::bail!(
-                    "Run parameter has mixed column types: existing {}, incoming {}",
-                    column.type_name(),
-                    parameter_value_type_name(&value),
-                )
-            }
+            (column, value) => Err(PyValueError::new_err(format!(
+                "Run parameter has mixed column types: existing {}, incoming {}",
+                column.type_name(),
+                parameter_value_type_name(&value),
+            ))
+            .into()),
         }
     }
 
@@ -1156,7 +1239,7 @@ fn run_parameters_to_dataframe<'py>(
     py: Python<'py>,
     run_ids: Vec<u64>,
     columns: BTreeMap<String, RunParameterDataFrameColumn>,
-) -> Result<Bound<'py, PyDataFrame>> {
+) -> OmmxPyResult<Bound<'py, PyDataFrame>> {
     let pandas = py.import("pandas")?;
     let data = PyDict::new(py);
     data.set_item("run_id", PyList::new(py, run_ids.iter())?)?;
@@ -1290,7 +1373,7 @@ fn numpy_array<'py>(
         .call_method("array", (values,), Some(&kwargs))
 }
 
-fn start_python_span(py: Python<'_>, name: &str) -> Result<Py<PyAny>> {
+fn start_python_span(py: Python<'_>, name: &str) -> OmmxPyResult<Py<PyAny>> {
     let trace = py.import("opentelemetry.trace")?;
     let tracer = trace.call_method1("get_tracer", ("ommx.experiment",))?;
     let cm = tracer.call_method1("start_as_current_span", (name,))?;
@@ -1298,14 +1381,18 @@ fn start_python_span(py: Python<'_>, name: &str) -> Result<Py<PyAny>> {
     Ok(cm.unbind())
 }
 
-fn set_current_span_run_id(py: Python<'_>, run_id: u64) -> Result<()> {
+fn set_current_span_run_id(py: Python<'_>, run_id: u64) -> OmmxPyResult<()> {
     let trace = py.import("opentelemetry.trace")?;
     let span = trace.call_method0("get_current_span")?;
     span.call_method1("set_attribute", ("ommx.run.id", run_id))?;
     Ok(())
 }
 
-fn set_current_span_solve_context(py: Python<'_>, solve_id: u64, adapter_name: &str) -> Result<()> {
+fn set_current_span_solve_context(
+    py: Python<'_>,
+    solve_id: u64,
+    adapter_name: &str,
+) -> OmmxPyResult<()> {
     let trace = py.import("opentelemetry.trace")?;
     let span = trace.call_method0("get_current_span")?;
     span.call_method1("set_attribute", ("ommx.solve.id", solve_id))?;
@@ -1313,7 +1400,7 @@ fn set_current_span_solve_context(py: Python<'_>, solve_id: u64, adapter_name: &
     Ok(())
 }
 
-fn set_current_span_error(py: Python<'_>, description: &str) -> Result<()> {
+fn set_current_span_error(py: Python<'_>, description: &str) -> OmmxPyResult<()> {
     let trace = py.import("opentelemetry.trace")?;
     let span = trace.call_method0("get_current_span")?;
     let status = trace.getattr("Status")?;
@@ -1330,20 +1417,60 @@ fn python_exception_reason(
         .and_then(|value| value.getattr("__name__").ok())
         .and_then(|value| value.extract::<String>().ok())
         .unwrap_or_else(|| "exception".to_string());
-    match exc_value.and_then(|value| value.str().ok()) {
+    let reason = match exc_value.and_then(|value| value.str().ok()) {
         Some(value) => {
             let message = value.to_string_lossy();
-            if message.is_empty() {
+            if message.split_whitespace().next().is_none() {
                 type_name
             } else {
                 format!("{type_name}: {message}")
             }
         }
         None => type_name,
+    };
+    let reason = normalize_python_exception_reason(&reason);
+    if reason.is_empty() {
+        "exception".to_string()
+    } else {
+        reason
     }
 }
 
-fn is_keyboard_interrupt(py: Python<'_>, exc_type: Option<&Bound<'_, PyAny>>) -> Result<bool> {
+fn normalize_python_exception_reason(reason: &str) -> String {
+    let mut normalized = String::with_capacity(reason.len().min(PYTHON_EXCEPTION_REASON_MAX_CHARS));
+    let mut char_count = 0;
+    let mut truncated = false;
+
+    'words: for word in reason.split_whitespace() {
+        if !normalized.is_empty() {
+            if char_count == PYTHON_EXCEPTION_REASON_MAX_CHARS {
+                truncated = true;
+                break;
+            }
+            normalized.push(' ');
+            char_count += 1;
+        }
+        for character in word.chars() {
+            if char_count == PYTHON_EXCEPTION_REASON_MAX_CHARS {
+                truncated = true;
+                break 'words;
+            }
+            normalized.push(character);
+            char_count += 1;
+        }
+    }
+
+    if truncated {
+        normalized.pop();
+        normalized.push('…');
+    }
+    normalized
+}
+
+fn is_keyboard_interrupt(
+    py: Python<'_>,
+    exc_type: Option<&Bound<'_, PyAny>>,
+) -> OmmxPyResult<bool> {
     let Some(exc_type) = exc_type else {
         return Ok(false);
     };
@@ -1361,7 +1488,7 @@ fn close_python_context_manager(
     exc_type: Option<&Bound<'_, PyAny>>,
     exc_value: Option<&Bound<'_, PyAny>>,
     traceback: Option<&Bound<'_, PyAny>>,
-) -> Result<()> {
+) -> OmmxPyResult<()> {
     if let Some(cm) = cm {
         cm.bind(py)
             .call_method1("__exit__", (exc_type, exc_value, traceback))?;
@@ -1372,49 +1499,80 @@ fn close_python_context_manager(
 pub struct AttachmentCodecInput(Py<PyType>);
 
 impl AttachmentCodecInput {
-    fn media_type(&self, py: Python<'_>) -> Result<MediaType> {
-        let media_type: String = self
-            .0
-            .bind(py)
-            .getattr("media_type")
-            .context("Attachment codec class must define `media_type`")?
+    fn media_type(&self, py: Python<'_>) -> OmmxPyResult<MediaType> {
+        let media_type = required_codec_attribute(
+            self.0.bind(py),
+            "media_type",
+            "Attachment codec class must define string `media_type`",
+        )?;
+        let media_type: String = media_type
             .extract()
-            .context("Attachment codec `media_type` must be a string")?;
+            .map_err(|_| PyTypeError::new_err("Attachment codec `media_type` must be a string"))?;
         Ok(MediaType::from(media_type.as_str()))
     }
 
-    fn encode(&self, py: Python<'_>, value: &AttachmentPayload) -> Result<EncodedAttachment> {
+    fn encode(&self, py: Python<'_>, value: &AttachmentPayload) -> OmmxPyResult<EncodedAttachment> {
         let media_type = self.media_type(py)?;
         let value = value.0.bind(py);
-        let bytes = self
-            .0
-            .bind(py)
-            .call_method1("encode", (value,))
-            .context("Attachment codec `encode(...)` failed")?
-            .extract()
-            .context("Attachment codec `encode(...)` must return bytes")?;
+        let encoded = required_codec_attribute(
+            self.0.bind(py),
+            "encode",
+            "Attachment codec class must define callable `encode`",
+        )?
+        .call1((value,))?;
+        let bytes = encoded
+            .cast::<PyBytes>()
+            .map_err(|_| PyTypeError::new_err("Attachment codec `encode` must return bytes"))?
+            .as_bytes()
+            .to_vec();
         Ok(EncodedAttachment { media_type, bytes })
     }
 
-    fn decode(&self, py: Python<'_>, blob: &[u8]) -> Result<AttachmentPayload> {
-        let value = self
-            .0
-            .bind(py)
-            .call_method1("decode", (PyBytes::new(py, blob),))
-            .context("Attachment codec `decode(...)` failed")?;
+    fn decode(&self, py: Python<'_>, blob: &[u8]) -> OmmxPyResult<AttachmentPayload> {
+        let value = required_codec_attribute(
+            self.0.bind(py),
+            "decode",
+            "Attachment codec class must define callable `decode`",
+        )?
+        .call1((PyBytes::new(py, blob),))?;
         Ok(AttachmentPayload(value.unbind()))
     }
 
-    fn decode_from_parts(
-        &self,
-        py: Python<'_>,
-        media_type: MediaType,
-        blob: &[u8],
-    ) -> Result<AttachmentPayload> {
+    fn validate_media_type(&self, py: Python<'_>, media_type: &MediaType) -> OmmxPyResult<()> {
         let expected = self.media_type(py)?;
-        ensure_media_type(&media_type, &expected)?;
-        self.decode(py, blob)
+        ensure_media_type(media_type, &expected)
     }
+}
+
+fn required_codec_attribute<'py>(
+    class: &Bound<'py, PyType>,
+    name: &str,
+    missing_message: &'static str,
+) -> OmmxPyResult<Bound<'py, PyAny>> {
+    match class.getattr(name) {
+        Ok(attribute) => Ok(attribute),
+        Err(error)
+            if error.is_instance_of::<PyAttributeError>(class.py())
+                && !type_hierarchy_defines_attribute(class, name)? =>
+        {
+            Err(PyTypeError::new_err(missing_message).into())
+        }
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn type_hierarchy_defines_attribute(class: &Bound<'_, PyType>, name: &str) -> OmmxPyResult<bool> {
+    for hierarchy in [
+        class.getattr("__mro__")?,
+        class.get_type().getattr("__mro__")?,
+    ] {
+        for base in hierarchy.try_iter()? {
+            if base?.getattr("__dict__")?.contains(name)? {
+                return Ok(true);
+            }
+        }
+    }
+    Ok(false)
 }
 
 pub struct AttachmentPayload(Py<PyAny>);
@@ -1485,15 +1643,31 @@ impl pyo3_stub_gen::PyStubType for AttachmentCodecInput {
     }
 }
 
-fn ensure_media_type(actual: &MediaType, expected: &MediaType) -> Result<()> {
-    anyhow::ensure!(
-        actual == expected,
-        "Expected media type '{expected}', got '{actual}'"
-    );
+fn ensure_media_type(actual: &MediaType, expected: &MediaType) -> OmmxPyResult<()> {
+    if actual != expected {
+        return Err(PyValueError::new_err(format!(
+            "Expected media type '{expected}', got '{actual}'"
+        ))
+        .into());
+    }
     Ok(())
 }
 
-fn decode_json_blob<'py>(py: Python<'py>, blob: &[u8]) -> Result<Bound<'py, PyAny>> {
+fn ensure_typed_attachment_media_type(
+    actual: &MediaType,
+    expected: &str,
+    matches: bool,
+) -> OmmxPyResult<()> {
+    if !matches {
+        return Err(PyValueError::new_err(format!(
+            "Expected {expected} attachment, got media type '{actual}'"
+        ))
+        .into());
+    }
+    Ok(())
+}
+
+fn decode_json_blob<'py>(py: Python<'py>, blob: &[u8]) -> OmmxPyResult<Bound<'py, PyAny>> {
     let json = py.import("json")?;
     Ok(json.call_method1("loads", (PyBytes::new(py, blob),))?)
 }
@@ -1502,7 +1676,7 @@ fn decode_experiment_attachment<'py>(
     py: Python<'py>,
     experiment: &ommx::experiment::ExperimentDyn,
     name: &str,
-) -> Result<Bound<'py, PyAny>> {
+) -> OmmxPyResult<Bound<'py, PyAny>> {
     let media_type = experiment.attachment_media_type(name)?;
     if media_type.as_ref() == "application/json" {
         decode_json_blob(py, &experiment.attachment_blob(name)?)
@@ -1543,7 +1717,7 @@ fn decode_run_attachment<'py>(
     py: Python<'py>,
     run: &ommx::experiment::SealedRunDyn,
     name: &str,
-) -> Result<Bound<'py, PyAny>> {
+) -> OmmxPyResult<Bound<'py, PyAny>> {
     let media_type = run.attachment_media_type(name)?;
     if media_type.as_ref() == "application/json" {
         decode_json_blob(py, &run.attachment_blob(name)?)
@@ -1617,7 +1791,7 @@ enum PyRunState {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl PyRun {
-    pub fn __enter__(slf: Bound<'_, Self>) -> PyResult<Py<PyRun>> {
+    pub fn __enter__(slf: Bound<'_, Self>) -> OmmxPyResult<Py<PyRun>> {
         {
             let py = slf.py();
             let mut this = slf.borrow_mut();
@@ -1625,10 +1799,12 @@ impl PyRun {
                 PyRunState::Open { run } => run,
                 state @ PyRunState::Entered { .. } => {
                     this.state = state;
-                    return Err(anyhow::anyhow!("Run context has already been entered").into());
+                    return Err(
+                        PyRuntimeError::new_err("Run context has already been entered").into(),
+                    );
                 }
                 PyRunState::Closed => {
-                    return Err(anyhow::anyhow!("Run has already been finished").into());
+                    return Err(PyRuntimeError::new_err("Run has already been finished").into());
                 }
             };
             let run_id = match run.run_id() {
@@ -1647,7 +1823,7 @@ impl PyRun {
                 Ok(context) => context,
                 Err(error) => {
                     this.state = PyRunState::Open { run };
-                    return Err(error.into());
+                    return Err(error);
                 }
             };
             if let Err(error) = set_current_span_run_id(py, run_id) {
@@ -1655,7 +1831,7 @@ impl PyRun {
                     close_run_context_after_failed_enter(py, span_context_manager, &error);
                 this.state = PyRunState::Open { run };
                 close_result?;
-                return Err(error.into());
+                return Err(error);
             }
             this.state = PyRunState::Entered {
                 run,
@@ -1673,12 +1849,12 @@ impl PyRun {
         exc_type: Option<&Bound<'_, PyAny>>,
         exc_value: Option<&Bound<'_, PyAny>>,
         traceback: Option<&Bound<'_, PyAny>>,
-    ) -> Result<bool> {
+    ) -> OmmxPyResult<bool> {
         match mem::replace(&mut self.state, PyRunState::Closed) {
             PyRunState::Closed => Ok(false),
             state @ PyRunState::Open { .. } => {
                 self.state = state;
-                anyhow::bail!("Run context has not been entered")
+                Err(PyRuntimeError::new_err("Run context has not been entered").into())
             }
             PyRunState::Entered {
                 mut run,
@@ -1693,14 +1869,22 @@ impl PyRun {
                     traceback,
                 );
                 if let Err(error) = close_result {
-                    self.state = PyRunState::Entered {
-                        run,
-                        span_context_manager,
-                        trace_result,
-                    };
-                    return Err(error);
+                    if exc_type.is_some() {
+                        tracing::warn!(
+                            error = %error,
+                            "Failed to close Run span during exception exit"
+                        );
+                    } else {
+                        self.state = PyRunState::Entered {
+                            run,
+                            span_context_manager,
+                            trace_result,
+                        };
+                        return Err(error);
+                    }
                 }
                 if exc_type.is_some() {
+                    let reason = python_exception_reason(exc_type, exc_value);
                     if self.store_trace {
                         if let Err(error) = store_trace_result(py, &mut run, trace_result) {
                             tracing::warn!(
@@ -1710,9 +1894,9 @@ impl PyRun {
                         }
                     }
                     let finish_result = if is_keyboard_interrupt(py, exc_type)? {
-                        run.finish_interrupted()
+                        run.finish_interrupted_with_reason(reason)
                     } else {
-                        run.finish_failed()
+                        run.finish_failed_with_reason(reason)
                     };
                     if let Err(error) = finish_result {
                         tracing::warn!(
@@ -1736,8 +1920,8 @@ impl PyRun {
 
     #[getter]
     /// Integer identifier of this run within its Experiment.
-    pub fn run_id(&self) -> Result<u64> {
-        self.as_open()?.run_id()
+    pub fn run_id(&self) -> OmmxPyResult<u64> {
+        Ok(self.as_open()?.run_id()?)
     }
 
     /// Log a scalar parameter for this run.
@@ -1750,7 +1934,7 @@ impl PyRun {
         py: Python<'_>,
         name: &str,
         value: ParameterValueInput,
-    ) -> Result<()> {
+    ) -> OmmxPyResult<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
         self.ensure_store_trace_context_started()?;
         self.as_open_mut()?.log_parameter(name, value.0)?;
@@ -1770,16 +1954,16 @@ impl PyRun {
         media_type: &str,
         bytes: &Bound<pyo3::types::PyBytes>,
         compression: AttachmentCompression,
-    ) -> Result<()> {
+    ) -> OmmxPyResult<()> {
         self.ensure_store_trace_context_started()?;
-        AttachmentLogger::log_attachment_compressed(
+        Ok(AttachmentLogger::log_attachment_compressed(
             self.as_open_mut()?,
             name,
             MediaType::from(media_type),
             bytes.as_bytes(),
             HashMap::new(),
             compression.into(),
-        )
+        )?)
     }
 
     /// Attach an existing filesystem file in this run.
@@ -1799,17 +1983,17 @@ impl PyRun {
         media_type: Option<&str>,
         filename: Option<&str>,
         compression: AttachmentCompression,
-    ) -> Result<()> {
+    ) -> OmmxPyResult<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
         self.ensure_store_trace_context_started()?;
-        AttachmentLogger::log_file_compressed(
+        Ok(AttachmentLogger::log_file_compressed(
             self.as_open_mut()?,
             name,
             &path,
             media_type.map(MediaType::from),
             filename,
             compression.into(),
-        )
+        )?)
     }
 
     /// Encode a Python object with an attachment codec and attach it in this run.
@@ -1826,18 +2010,18 @@ impl PyRun {
         name: &str,
         value: AttachmentPayload,
         compression: AttachmentCompression,
-    ) -> Result<()> {
+    ) -> OmmxPyResult<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
         self.ensure_store_trace_context_started()?;
         let attachment = codec.encode(py, &value)?;
-        AttachmentLogger::log_attachment_compressed(
+        Ok(AttachmentLogger::log_attachment_compressed(
             self.as_open_mut()?,
             name,
             attachment.media_type,
             attachment.bytes,
             HashMap::new(),
             compression.into(),
-        )
+        )?)
     }
 
     /// Attach a JSON-serializable value in this run.
@@ -1852,18 +2036,17 @@ impl PyRun {
         name: &str,
         value: &Bound<PyAny>,
         compression: AttachmentCompression,
-    ) -> Result<()> {
+    ) -> OmmxPyResult<()> {
         self.ensure_store_trace_context_started()?;
-        let json = py.import("json")?;
-        let blob: String = json.call_method1("dumps", (value,))?.extract()?;
-        AttachmentLogger::log_attachment_compressed(
+        let blob = json_dumps(py, value, "Run attachment value must be JSON-serializable")?;
+        Ok(AttachmentLogger::log_attachment_compressed(
             self.as_open_mut()?,
             name,
             MediaType::from("application/json"),
             blob,
             HashMap::new(),
             compression.into(),
-        )
+        )?)
     }
 
     /// Attach an Instance in this run.
@@ -1871,9 +2054,13 @@ impl PyRun {
     /// This records an instance as a run-level attachment. Use `log_solve`
     /// when the instance is the input of a solver call and should be paired
     /// with the returned solution.
-    pub fn log_instance(&mut self, name: &str, instance: &crate::Instance) -> Result<()> {
+    pub fn log_instance(&mut self, name: &str, instance: &crate::Instance) -> OmmxPyResult<()> {
         self.ensure_store_trace_context_started()?;
-        AttachmentLogger::log_instance(self.as_open_mut()?, name, &instance.inner)
+        Ok(AttachmentLogger::log_instance(
+            self.as_open_mut()?,
+            name,
+            &instance.inner,
+        )?)
     }
 
     /// Attach a ParametricInstance in this run.
@@ -1881,9 +2068,13 @@ impl PyRun {
         &mut self,
         name: &str,
         pi: &crate::ParametricInstance,
-    ) -> Result<()> {
+    ) -> OmmxPyResult<()> {
         self.ensure_store_trace_context_started()?;
-        AttachmentLogger::log_parametric_instance(self.as_open_mut()?, name, &pi.inner)
+        Ok(AttachmentLogger::log_parametric_instance(
+            self.as_open_mut()?,
+            name,
+            &pi.inner,
+        )?)
     }
 
     /// Attach a Solution in this run.
@@ -1891,15 +2082,27 @@ impl PyRun {
     /// This records a solution as a run-level attachment. Use `log_solve`
     /// when the solution is produced by a solver call and should be paired
     /// with the input instance.
-    pub fn log_solution(&mut self, name: &str, solution: &crate::Solution) -> Result<()> {
+    pub fn log_solution(&mut self, name: &str, solution: &crate::Solution) -> OmmxPyResult<()> {
         self.ensure_store_trace_context_started()?;
-        AttachmentLogger::log_solution(self.as_open_mut()?, name, &solution.inner)
+        Ok(AttachmentLogger::log_solution(
+            self.as_open_mut()?,
+            name,
+            &solution.inner,
+        )?)
     }
 
     /// Attach a SampleSet in this run.
-    pub fn log_sample_set(&mut self, name: &str, sample_set: &crate::SampleSet) -> Result<()> {
+    pub fn log_sample_set(
+        &mut self,
+        name: &str,
+        sample_set: &crate::SampleSet,
+    ) -> OmmxPyResult<()> {
         self.ensure_store_trace_context_started()?;
-        AttachmentLogger::log_sample_set(self.as_open_mut()?, name, &sample_set.inner)
+        Ok(AttachmentLogger::log_sample_set(
+            self.as_open_mut()?,
+            name,
+            &sample_set.inner,
+        )?)
     }
 
     /// Solve an Instance with an OMMX SolverAdapter and log a Solve entry.
@@ -1936,7 +2139,7 @@ impl PyRun {
         instance: &crate::Instance,
         store_diagnostics: bool,
         kwargs: Option<&Bound<PyDict>>,
-    ) -> PyResult<crate::Solution> {
+    ) -> OmmxPyResult<crate::Solution> {
         let _guard = crate::TRACING.attach_parent_context(py);
         self.ensure_store_trace_context_started()?;
         reject_reserved_adapter_kwargs(kwargs, "Run.log_solve")?;
@@ -1960,13 +2163,13 @@ impl PyRun {
                     "Failed to serialize failed Solve diagnostics; recording Solve without diagnostics",
                 );
                 let record_result = self.as_open_mut().and_then(|run| {
-                    run.log_failed_solve(FailedSolveRecord {
+                    Ok(run.log_failed_solve(FailedSolveRecord {
                         input: &instance.inner,
                         adapter: adapter_name,
                         adapter_options,
                         status,
                         diagnostics,
-                    })
+                    })?)
                 });
                 if let Err(record_error) = record_result {
                     tracing::warn!(
@@ -1974,7 +2177,7 @@ impl PyRun {
                         "Failed to record failed Solve attempt"
                     );
                 }
-                return Err(error);
+                return Err(error.into());
             }
         };
         let diagnostics = pack_diagnostics_or_none(
@@ -2016,7 +2219,7 @@ impl PyRun {
         instance: &crate::Instance,
         store_diagnostics: bool,
         kwargs: Option<&Bound<PyDict>>,
-    ) -> PyResult<crate::SampleSet> {
+    ) -> OmmxPyResult<crate::SampleSet> {
         let _guard = crate::TRACING.attach_parent_context(py);
         self.ensure_store_trace_context_started()?;
         reject_reserved_adapter_kwargs(kwargs, "Run.log_sample")?;
@@ -2040,13 +2243,13 @@ impl PyRun {
                     "Failed to serialize failed Sampling diagnostics; recording Sampling without diagnostics",
                 );
                 let record_result = self.as_open_mut().and_then(|run| {
-                    run.log_failed_sample(FailedSampleRecord {
+                    Ok(run.log_failed_sample(FailedSampleRecord {
                         input: &instance.inner,
                         adapter: adapter_name,
                         adapter_options,
                         status,
                         diagnostics,
-                    })
+                    })?)
                 });
                 if let Err(record_error) = record_result {
                     tracing::warn!(
@@ -2054,7 +2257,7 @@ impl PyRun {
                         "Failed to record failed Sampling attempt"
                     );
                 }
-                return Err(error);
+                return Err(error.into());
             }
         };
         let diagnostics = pack_diagnostics_or_none(
@@ -2127,17 +2330,18 @@ impl PyRun {
     /// context manager calls this automatically on normal exit. On exception,
     /// the context manager closes the run as failed or interrupted with its
     /// partial state.
-    pub fn finish(&mut self) -> Result<()> {
+    pub fn finish(&mut self) -> OmmxPyResult<()> {
         if self.store_trace {
-            anyhow::bail!(
+            return Err(PyRuntimeError::new_err(
                 "store_trace=True requires using Run as a context manager; \
-                 finish() is performed automatically on normal Run context-manager exit"
-            );
+                 finish() is performed automatically on normal Run context-manager exit",
+            )
+            .into());
         }
         self.finish_inner()
     }
 
-    pub fn __repr__(&self) -> Result<String> {
+    pub fn __repr__(&self) -> OmmxPyResult<String> {
         Ok(match &self.state {
             PyRunState::Open { run } | PyRunState::Entered { run, .. } => {
                 format!("Run(run_id={})", run.run_id()?)
@@ -2148,38 +2352,48 @@ impl PyRun {
 }
 
 impl PyRun {
-    fn ensure_store_trace_context_started(&self) -> Result<()> {
+    fn ensure_store_trace_context_started(&self) -> OmmxPyResult<()> {
         if self.store_trace && matches!(self.state, PyRunState::Open { .. }) {
-            anyhow::bail!("store_trace=True requires using Run as a context manager");
+            return Err(PyRuntimeError::new_err(
+                "store_trace=True requires using Run as a context manager",
+            )
+            .into());
         }
         Ok(())
     }
 
-    fn finish_inner(&mut self) -> Result<()> {
+    fn finish_inner(&mut self) -> OmmxPyResult<()> {
         let state = mem::replace(&mut self.state, PyRunState::Closed);
         match state {
-            PyRunState::Open { run } => run.finish(),
+            PyRunState::Open { run } => Ok(run.finish()?),
             state @ PyRunState::Entered { .. } => {
                 self.state = state;
-                anyhow::bail!(
-                    "Run context is active; finish() is performed automatically on normal Run context-manager exit"
+                Err(PyRuntimeError::new_err(
+                    "Run context is active; finish() is performed automatically on normal Run context-manager exit",
                 )
+                .into())
             }
-            PyRunState::Closed => anyhow::bail!("Run has already been finished"),
+            PyRunState::Closed => {
+                Err(PyRuntimeError::new_err("Run has already been finished").into())
+            }
         }
     }
 
-    fn as_open(&self) -> Result<&ommx::experiment::RunDyn> {
+    fn as_open(&self) -> OmmxPyResult<&ommx::experiment::RunDyn> {
         match &self.state {
             PyRunState::Open { run } | PyRunState::Entered { run, .. } => Ok(run),
-            PyRunState::Closed => anyhow::bail!("Run has already been finished"),
+            PyRunState::Closed => {
+                Err(PyRuntimeError::new_err("Run has already been finished").into())
+            }
         }
     }
 
-    fn as_open_mut(&mut self) -> Result<&mut ommx::experiment::RunDyn> {
+    fn as_open_mut(&mut self) -> OmmxPyResult<&mut ommx::experiment::RunDyn> {
         match &mut self.state {
             PyRunState::Open { run } | PyRunState::Entered { run, .. } => Ok(run),
-            PyRunState::Closed => anyhow::bail!("Run has already been finished"),
+            PyRunState::Closed => {
+                Err(PyRuntimeError::new_err("Run has already been finished").into())
+            }
         }
     }
 }
@@ -2322,16 +2536,18 @@ impl PyOpenSolve {
                         .bind(py)
                         .borrow_mut()
                         .as_open_mut()
-                        .and_then(|run| run.reserve_solve_id());
+                        .and_then(|run| Ok(run.reserve_solve_id()?));
                     let solve_id = match solve_id_result {
                         Ok(solve_id) => solve_id,
                         Err(error) => {
                             let original_message = error.to_string();
-                            this.close_span(py, None, None, None).with_context(|| {
-                                format!(
-                                    "OpenSolve context setup failed with `{original_message}`, then closing the partial context failed"
-                                )
-                            })?;
+                            if let Err(close_error) = this.close_span(py, None, None, None) {
+                                tracing::warn!(
+                                    setup_error = original_message,
+                                    "OpenSolve context setup and partial-context cleanup both failed"
+                                );
+                                return Err(close_error.into());
+                            }
                             return Err(error.into());
                         }
                     };
@@ -2390,12 +2606,12 @@ impl PyOpenSolve {
                     });
                 }
                 PyOpenSolveState::Active(_) | PyOpenSolveState::Finalizing { .. } => {
-                    return Err(
-                        anyhow::anyhow!("OpenSolve context has already been entered").into(),
-                    );
+                    return Err(PyRuntimeError::new_err(
+                        "OpenSolve context has already been entered",
+                    ));
                 }
                 PyOpenSolveState::Closed { .. } => {
-                    return Err(anyhow::anyhow!("OpenSolve has already been closed").into());
+                    return Err(PyRuntimeError::new_err("OpenSolve has already been closed"));
                 }
             }
         }
@@ -2409,12 +2625,18 @@ impl PyOpenSolve {
         exc_type: Option<&Bound<'_, PyAny>>,
         exc_value: Option<&Bound<'_, PyAny>>,
         traceback: Option<&Bound<'_, PyAny>>,
-    ) -> Result<bool> {
+    ) -> OmmxPyResult<bool> {
         let solve_id = match &self.state {
-            PyOpenSolveState::Open => anyhow::bail!("OpenSolve context has not been entered"),
+            PyOpenSolveState::Open => {
+                return Err(
+                    PyRuntimeError::new_err("OpenSolve context has not been entered").into(),
+                );
+            }
             PyOpenSolveState::Active(active) => active.solve_id,
             PyOpenSolveState::Finalizing { .. } => {
-                anyhow::bail!("OpenSolve context is already finalizing")
+                return Err(
+                    PyRuntimeError::new_err("OpenSolve context is already finalizing").into(),
+                );
             }
             PyOpenSolveState::Closed { .. } => {
                 self.close_span(py, exc_type, exc_value, traceback)?;
@@ -2460,9 +2682,11 @@ impl PyOpenSolve {
 
     #[getter]
     /// Reserved Solve ID for this manual Solve.
-    pub fn solve_id(&self) -> Result<u64> {
+    pub fn solve_id(&self) -> OmmxPyResult<u64> {
         match &self.state {
-            PyOpenSolveState::Open => anyhow::bail!("OpenSolve context has not been entered"),
+            PyOpenSolveState::Open => {
+                Err(PyRuntimeError::new_err("OpenSolve context has not been entered").into())
+            }
             PyOpenSolveState::Active(active) => Ok(active.solve_id),
             PyOpenSolveState::Finalizing { solve_id }
             | PyOpenSolveState::Closed { solve_id, .. } => Ok(*solve_id),
@@ -2479,7 +2703,7 @@ impl PyOpenSolve {
     /// Returns `None` until the context has closed. After closing, this exposes
     /// the recorded Solve outcome together with trace and diagnostics
     /// finalization states for advanced debugging.
-    pub fn terminal_state<'py>(&self, py: Python<'py>) -> Result<Option<Bound<'py, PyDict>>> {
+    pub fn terminal_state<'py>(&self, py: Python<'py>) -> OmmxPyResult<Option<Bound<'py, PyDict>>> {
         let PyOpenSolveState::Closed { solve_id, outcome } = &self.state else {
             return Ok(None);
         };
@@ -2503,13 +2727,13 @@ impl PyOpenSolve {
 
     #[getter]
     /// Adapter instance used by this manual Solve.
-    pub fn adapter(&self, py: Python<'_>) -> Result<Py<PyAny>> {
+    pub fn adapter(&self, py: Python<'_>) -> OmmxPyResult<Py<PyAny>> {
         Ok(self.adapter_instance_ref()?.clone_ref(py))
     }
 
     #[getter]
     /// Diagnostics collector stored with this Solve, or `None` when disabled.
-    pub fn diagnostics(&self, py: Python<'_>) -> Result<Option<Py<PyDiagnosticCollector>>> {
+    pub fn diagnostics(&self, py: Python<'_>) -> OmmxPyResult<Option<Py<PyDiagnosticCollector>>> {
         self.ensure_entered()?;
         self.diagnostics.collector_for_user(py)
     }
@@ -2545,7 +2769,7 @@ impl PyOpenSolve {
         py: Python<'_>,
         name: &str,
         value: &Bound<'_, PyAny>,
-    ) -> Result<()> {
+    ) -> OmmxPyResult<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
         self.ensure_entered()?;
         self.set_adapter_option(py, name, value)
@@ -2581,41 +2805,57 @@ impl PyOpenSolve {
         exc_type: Option<&Bound<'_, PyAny>>,
         exc_value: Option<&Bound<'_, PyAny>>,
         traceback: Option<&Bound<'_, PyAny>>,
-    ) -> Result<()> {
+    ) -> OmmxPyResult<()> {
         self.trace.close(py, exc_type, exc_value, traceback)
     }
 
-    fn ensure_entered(&self) -> Result<()> {
+    fn ensure_entered(&self) -> OmmxPyResult<()> {
         match &self.state {
-            PyOpenSolveState::Open => anyhow::bail!("OpenSolve context has not been entered"),
+            PyOpenSolveState::Open => {
+                return Err(
+                    PyRuntimeError::new_err("OpenSolve context has not been entered").into(),
+                );
+            }
             PyOpenSolveState::Active(_) => {}
             PyOpenSolveState::Finalizing { .. } => {
-                anyhow::bail!("OpenSolve context is already finalizing")
+                return Err(
+                    PyRuntimeError::new_err("OpenSolve context is already finalizing").into(),
+                );
             }
-            PyOpenSolveState::Closed { .. } => anyhow::bail!("OpenSolve has already been closed"),
+            PyOpenSolveState::Closed { .. } => {
+                return Err(PyRuntimeError::new_err("OpenSolve has already been closed").into());
+            }
         }
         Ok(())
     }
 
-    fn active(&self) -> Result<&PyOpenSolveActiveState> {
+    fn active(&self) -> OmmxPyResult<&PyOpenSolveActiveState> {
         match &self.state {
-            PyOpenSolveState::Open => anyhow::bail!("OpenSolve context has not been entered"),
+            PyOpenSolveState::Open => {
+                Err(PyRuntimeError::new_err("OpenSolve context has not been entered").into())
+            }
             PyOpenSolveState::Active(active) => Ok(active),
             PyOpenSolveState::Finalizing { .. } => {
-                anyhow::bail!("OpenSolve context is already finalizing")
+                Err(PyRuntimeError::new_err("OpenSolve context is already finalizing").into())
             }
-            PyOpenSolveState::Closed { .. } => anyhow::bail!("OpenSolve has already been closed"),
+            PyOpenSolveState::Closed { .. } => {
+                Err(PyRuntimeError::new_err("OpenSolve has already been closed").into())
+            }
         }
     }
 
-    fn active_mut(&mut self) -> Result<&mut PyOpenSolveActiveState> {
+    fn active_mut(&mut self) -> OmmxPyResult<&mut PyOpenSolveActiveState> {
         match &mut self.state {
-            PyOpenSolveState::Open => anyhow::bail!("OpenSolve context has not been entered"),
+            PyOpenSolveState::Open => {
+                Err(PyRuntimeError::new_err("OpenSolve context has not been entered").into())
+            }
             PyOpenSolveState::Active(active) => Ok(active),
             PyOpenSolveState::Finalizing { .. } => {
-                anyhow::bail!("OpenSolve context is already finalizing")
+                Err(PyRuntimeError::new_err("OpenSolve context is already finalizing").into())
             }
-            PyOpenSolveState::Closed { .. } => anyhow::bail!("OpenSolve has already been closed"),
+            PyOpenSolveState::Closed { .. } => {
+                Err(PyRuntimeError::new_err("OpenSolve has already been closed").into())
+            }
         }
     }
 
@@ -2625,7 +2865,7 @@ impl PyOpenSolve {
         solve_id: u64,
         solution: Py<crate::Solution>,
         had_body_exception: bool,
-    ) -> (PyOpenSolveCloseOutcome, Result<bool>) {
+    ) -> (PyOpenSolveCloseOutcome, OmmxPyResult<bool>) {
         if let Err(error) = self.record_decoded_solution(py, solve_id, solution) {
             if had_body_exception {
                 tracing::warn!(
@@ -2646,7 +2886,7 @@ impl PyOpenSolve {
         py: Python<'_>,
         solve_id: u64,
         exc_type: Option<&Bound<'_, PyAny>>,
-    ) -> (PyOpenSolveCloseOutcome, Result<bool>) {
+    ) -> (PyOpenSolveCloseOutcome, OmmxPyResult<bool>) {
         let interrupted = match is_keyboard_interrupt(py, exc_type) {
             Ok(interrupted) => interrupted,
             Err(error) => {
@@ -2689,7 +2929,7 @@ impl PyOpenSolve {
         &mut self,
         py: Python<'_>,
         solve_id: u64,
-    ) -> (PyOpenSolveCloseOutcome, Result<bool>) {
+    ) -> (PyOpenSolveCloseOutcome, OmmxPyResult<bool>) {
         let outcome = if let Err(error) = self.record_failed_with_status(
             py,
             solve_id,
@@ -2707,13 +2947,14 @@ impl PyOpenSolve {
         };
         (
             outcome,
-            Err(anyhow::anyhow!(
-                "OpenSolve.decode(...) must be called before leaving the context"
-            )),
+            Err(PyRuntimeError::new_err(
+                "OpenSolve.decode(...) must be called before leaving the context",
+            )
+            .into()),
         )
     }
 
-    fn adapter_instance_ref(&self) -> Result<&Py<PyAny>> {
+    fn adapter_instance_ref(&self) -> OmmxPyResult<&Py<PyAny>> {
         Ok(&self.active()?.adapter_instance)
     }
 
@@ -2722,7 +2963,7 @@ impl PyOpenSolve {
         py: Python<'_>,
         name: &str,
         value: &Bound<'_, PyAny>,
-    ) -> Result<()> {
+    ) -> OmmxPyResult<()> {
         let options = self.adapter_options.bind(py);
         let previous = options.get_item(name)?.map(|value| value.unbind());
         options.set_item(name, value)?;
@@ -2741,7 +2982,7 @@ impl PyOpenSolve {
         py: Python<'_>,
         solve_id: u64,
         solution: Py<crate::Solution>,
-    ) -> Result<u64> {
+    ) -> OmmxPyResult<u64> {
         let adapter_options = match dump_merged_kwargs(py, &self.adapter_options, None) {
             Ok(adapter_options) => adapter_options,
             Err(error) => {
@@ -2759,7 +3000,7 @@ impl PyOpenSolve {
         solve_id: u64,
         solution: &crate::Solution,
         adapter_options: String,
-    ) -> Result<u64> {
+    ) -> OmmxPyResult<u64> {
         let (diagnostics, diagnostics_pack_outcome) = self.diagnostics.pack_for_record(
             py,
             "Failed to serialize adapter diagnostics; recording Solve without diagnostics",
@@ -2787,7 +3028,7 @@ impl PyOpenSolve {
             Err(error) => {
                 self.diagnostics
                     .finalize_record_failed(diagnostics_pack_outcome);
-                return Err(error);
+                return Err(error.into());
             }
         };
         tracing::info!(solve_id, "ommx.solve.recorded");
@@ -2801,7 +3042,7 @@ impl PyOpenSolve {
         status: SolveStatus,
         kwargs: Option<&Bound<PyDict>>,
         warning_message: &'static str,
-    ) -> Result<u64> {
+    ) -> OmmxPyResult<u64> {
         let adapter_options = match dump_merged_kwargs(py, &self.adapter_options, kwargs) {
             Ok(adapter_options) => adapter_options,
             Err(error) => {
@@ -2819,7 +3060,7 @@ impl PyOpenSolve {
         status: SolveStatus,
         adapter_options: String,
         warning_message: &'static str,
-    ) -> Result<u64> {
+    ) -> OmmxPyResult<u64> {
         let (diagnostics, diagnostics_pack_outcome) =
             self.diagnostics.pack_for_record(py, warning_message);
         let result = self
@@ -2845,7 +3086,7 @@ impl PyOpenSolve {
             Err(error) => {
                 self.diagnostics
                     .finalize_record_failed(diagnostics_pack_outcome);
-                return Err(error);
+                return Err(error.into());
             }
         };
         tracing::info!(solve_id, "ommx.solve.recorded");
@@ -2929,7 +3170,7 @@ impl PyOpenSolveTraceState {
         exc_type: Option<&Bound<'_, PyAny>>,
         exc_value: Option<&Bound<'_, PyAny>>,
         traceback: Option<&Bound<'_, PyAny>>,
-    ) -> Result<()> {
+    ) -> OmmxPyResult<()> {
         let (span_context_manager, context) = match mem::replace(self, Self::NotStarted) {
             Self::NotStarted => return Ok(()),
             Self::Active {
@@ -2980,7 +3221,7 @@ impl PyOpenSolveTraceState {
         }
     }
 
-    fn to_dict<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDict>> {
+    fn to_dict<'py>(&self, py: Python<'py>) -> OmmxPyResult<Bound<'py, PyDict>> {
         let dict = PyDict::new(py);
         dict.set_item("state", self.as_str())?;
         match self {
@@ -3009,7 +3250,7 @@ impl PyOpenSolveTraceContextState {
         }
     }
 
-    fn to_dict<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDict>> {
+    fn to_dict<'py>(&self, py: Python<'py>) -> OmmxPyResult<Bound<'py, PyDict>> {
         let dict = PyDict::new(py);
         dict.set_item("solve_context", self.solve_context.to_dict(py)?)?;
         dict.set_item("error", self.error.to_dict(py)?)?;
@@ -3026,7 +3267,7 @@ impl PyOpenSolveTraceSolveContextState {
         }
     }
 
-    fn to_dict<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDict>> {
+    fn to_dict<'py>(&self, py: Python<'py>) -> OmmxPyResult<Bound<'py, PyDict>> {
         let dict = PyDict::new(py);
         dict.set_item("state", self.as_str())?;
         match self {
@@ -3061,7 +3302,7 @@ impl PyOpenSolveTraceErrorState {
         }
     }
 
-    fn to_dict<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDict>> {
+    fn to_dict<'py>(&self, py: Python<'py>) -> OmmxPyResult<Bound<'py, PyDict>> {
         let dict = PyDict::new(py);
         dict.set_item("state", self.as_str())?;
         match self {
@@ -3108,20 +3349,22 @@ impl PyOpenSolveDiagnosticsState {
         }
     }
 
-    fn collector_for_user(&self, py: Python<'_>) -> Result<Option<Py<PyDiagnosticCollector>>> {
+    fn collector_for_user(
+        &self,
+        py: Python<'_>,
+    ) -> OmmxPyResult<Option<Py<PyDiagnosticCollector>>> {
         match self {
             Self::Disabled | Self::Prepared { .. } => Ok(None),
             Self::Collecting { collector } => Ok(Some(collector.clone_ref(py))),
-            Self::Finalized { outcome } => {
-                anyhow::bail!(
-                    "OpenSolve diagnostics have been finalized ({})",
-                    outcome.as_str()
-                )
-            }
+            Self::Finalized { outcome } => Err(PyRuntimeError::new_err(format!(
+                "OpenSolve diagnostics have been finalized ({})",
+                outcome.as_str()
+            ))
+            .into()),
         }
     }
 
-    fn to_dict<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDict>> {
+    fn to_dict<'py>(&self, py: Python<'py>) -> OmmxPyResult<Bound<'py, PyDict>> {
         let dict = PyDict::new(py);
         match self {
             Self::Disabled => {
@@ -3197,7 +3440,7 @@ impl PyOpenSolveDiagnosticsRecordOutcome {
         }
     }
 
-    fn to_dict<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDict>> {
+    fn to_dict<'py>(&self, py: Python<'py>) -> OmmxPyResult<Bound<'py, PyDict>> {
         let dict = PyDict::new(py);
         dict.set_item("state", self.as_str())?;
         match self {
@@ -3221,7 +3464,7 @@ impl PyOpenSolveDiagnosticsPackOutcome {
     }
 }
 
-fn start_run_trace_capture(py: Python<'_>) -> Result<(Py<PyAny>, Option<Py<PyAny>>)> {
+fn start_run_trace_capture(py: Python<'_>) -> OmmxPyResult<(Py<PyAny>, Option<Py<PyAny>>)> {
     let tracing = py.import("ommx.tracing")?;
     let cm = tracing
         .getattr("capture_trace")?
@@ -3230,7 +3473,7 @@ fn start_run_trace_capture(py: Python<'_>) -> Result<(Py<PyAny>, Option<Py<PyAny
     Ok((cm.unbind(), Some(result.unbind())))
 }
 
-fn start_run_span(py: Python<'_>) -> Result<(Py<PyAny>, Option<Py<PyAny>>)> {
+fn start_run_span(py: Python<'_>) -> OmmxPyResult<(Py<PyAny>, Option<Py<PyAny>>)> {
     Ok((start_python_span(py, "Run")?, None))
 }
 
@@ -3238,8 +3481,13 @@ fn store_trace_result(
     py: Python<'_>,
     run: &mut ommx::experiment::RunDyn,
     trace_result: Option<Py<PyAny>>,
-) -> Result<()> {
-    let result = trace_result.context("store_trace=True lost its TraceResult before Run exit")?;
+) -> OmmxPyResult<()> {
+    let Some(result) = trace_result else {
+        return Err(PyRuntimeError::new_err(
+            "store_trace=True lost its TraceResult before Run exit",
+        )
+        .into());
+    };
     let payload: Vec<u8> = result.bind(py).call_method0("otlp_protobuf")?.extract()?;
     run.store_trace(ommx::experiment::Trace::from_bytes(payload))?;
     Ok(())
@@ -3248,18 +3496,21 @@ fn store_trace_result(
 fn close_run_context_after_failed_enter(
     py: Python<'_>,
     span_context_manager: Py<PyAny>,
-    original_error: &anyhow::Error,
-) -> Result<()> {
-    let original_message = original_error.to_string();
-    close_python_context_manager(py, Some(&span_context_manager), None, None, None)
-        .with_context(|| {
-            format!(
-                "Run context setup failed with `{original_message}`, then closing the partial context failed"
-            )
-        })
+    original_error: &crate::error::OmmxPyError,
+) -> OmmxPyResult<()> {
+    if let Err(close_error) =
+        close_python_context_manager(py, Some(&span_context_manager), None, None, None)
+    {
+        tracing::warn!(
+            setup_error = %original_error,
+            "Run context setup and partial-context cleanup both failed"
+        );
+        return Err(close_error);
+    }
+    Ok(())
 }
 
-fn parse_name(image_name: Option<&str>) -> Result<ommx::experiment::Name> {
+fn parse_name(image_name: Option<&str>) -> OmmxPyResult<ommx::experiment::Name> {
     match image_name {
         Some(image_name) => Ok(ommx::experiment::Name::Named(
             ommx::artifact::ImageRef::parse(image_name)?,
@@ -3398,7 +3649,7 @@ impl PyDiagnosticCollector {
         }
     }
 
-    fn pack(&self, py: Python<'_>) -> Result<Option<AdapterDiagnosticPayload>> {
+    fn pack(&self, py: Python<'_>) -> OmmxPyResult<Option<AdapterDiagnosticPayload>> {
         DiagnosticReport::pack_reports(py, &self.diagnostics)
     }
 }
@@ -3464,22 +3715,16 @@ impl DiagnosticReport {
         &self,
         py: Python<'py>,
         dataclasses: &Bound<'py, PyModule>,
-    ) -> Result<Bound<'py, PyAny>> {
+    ) -> OmmxPyResult<Bound<'py, PyAny>> {
         let diagnostic = self.as_bound(py);
-        let data = dataclasses
-            .call_method1("asdict", (diagnostic,))
-            .with_context(|| {
-                let type_name = python_type_name(diagnostic)
-                    .unwrap_or_else(|_| "<unknown diagnostic>".to_string());
-                format!("Adapter diagnostic `{type_name}` must be a dataclass instance")
-            })?;
+        let data = dataclasses.call_method1("asdict", (diagnostic,))?;
         Ok(data)
     }
 
     fn pack_reports(
         py: Python<'_>,
         reports: &[DiagnosticReport],
-    ) -> Result<Option<AdapterDiagnosticPayload>> {
+    ) -> OmmxPyResult<Option<AdapterDiagnosticPayload>> {
         if reports.is_empty() {
             return Ok(None);
         }
@@ -3623,25 +3868,48 @@ impl<'py> SolverAdapter<'py> {
             .map_err(|_| PyTypeError::new_err("adapter.sample(...) must return ommx.SampleSet"))
     }
 
-    fn name(&self) -> Result<String> {
+    fn name(&self) -> OmmxPyResult<String> {
         let module: String = self.adapter.module()?.extract()?;
         let qualname: String = self.adapter.qualname()?.extract()?;
         Ok(format!("{module}.{qualname}"))
     }
 }
 
-fn dump_kwargs(py: Python<'_>, kwargs: Option<&Bound<PyDict>>) -> Result<String> {
-    let json = py.import("json")?;
-    let encoded: String = match kwargs {
-        Some(kwargs) => json.call_method1("dumps", (kwargs,)),
-        None => json.call_method1("dumps", (PyDict::new(py),)),
+fn dump_kwargs(py: Python<'_>, kwargs: Option<&Bound<PyDict>>) -> OmmxPyResult<String> {
+    match kwargs {
+        Some(kwargs) => json_dumps(
+            py,
+            kwargs.as_any(),
+            "SolverAdapter kwargs must be JSON-serializable",
+        ),
+        None => {
+            let empty = PyDict::new(py);
+            json_dumps(
+                py,
+                empty.as_any(),
+                "SolverAdapter kwargs must be JSON-serializable",
+            )
+        }
     }
-    .context("SolverAdapter kwargs must be JSON-serializable")?
-    .extract()?;
-    Ok(encoded)
 }
 
-fn clone_kwargs_dict(py: Python<'_>, kwargs: Option<&Bound<PyDict>>) -> Result<Py<PyDict>> {
+fn json_dumps(
+    py: Python<'_>,
+    value: &Bound<'_, PyAny>,
+    validation_message: &str,
+) -> OmmxPyResult<String> {
+    let json = py.import("json")?;
+    let encoded = match json.call_method1("dumps", (value,)) {
+        Ok(encoded) => encoded,
+        Err(error) if error.is_instance_of::<PyTypeError>(py) => {
+            return Err(PyValueError::new_err(format!("{validation_message}: {error}")).into());
+        }
+        Err(error) => return Err(error.into()),
+    };
+    Ok(encoded.extract()?)
+}
+
+fn clone_kwargs_dict(py: Python<'_>, kwargs: Option<&Bound<PyDict>>) -> OmmxPyResult<Py<PyDict>> {
     let cloned = PyDict::new(py);
     if let Some(kwargs) = kwargs {
         for (key, value) in kwargs.iter() {
@@ -3655,7 +3923,7 @@ fn dump_merged_kwargs(
     py: Python<'_>,
     base: &Py<PyDict>,
     kwargs: Option<&Bound<PyDict>>,
-) -> Result<String> {
+) -> OmmxPyResult<String> {
     let merged = PyDict::new(py);
     for (key, value) in base.bind(py).iter() {
         merged.set_item(key, value)?;
@@ -3668,7 +3936,10 @@ fn dump_merged_kwargs(
     dump_kwargs(py, Some(&merged))
 }
 
-fn reject_reserved_adapter_kwargs(kwargs: Option<&Bound<PyDict>>, operation: &str) -> Result<()> {
+fn reject_reserved_adapter_kwargs(
+    kwargs: Option<&Bound<PyDict>>,
+    operation: &str,
+) -> OmmxPyResult<()> {
     let Some(kwargs) = kwargs else {
         return Ok(());
     };
@@ -3676,12 +3947,15 @@ fn reject_reserved_adapter_kwargs(kwargs: Option<&Bound<PyDict>>, operation: &st
         .call_method1("__contains__", ("diagnostics",))?
         .extract()?;
     if has_diagnostics {
-        anyhow::bail!("{operation} owns the `diagnostics` adapter option");
+        return Err(PyValueError::new_err(format!(
+            "{operation} owns the `diagnostics` adapter option"
+        ))
+        .into());
     }
     Ok(())
 }
 
-fn reject_reserved_open_solve_kwargs(kwargs: Option<&Bound<PyDict>>) -> Result<()> {
+fn reject_reserved_open_solve_kwargs(kwargs: Option<&Bound<PyDict>>) -> OmmxPyResult<()> {
     let Some(kwargs) = kwargs else {
         return Ok(());
     };
@@ -3689,19 +3963,13 @@ fn reject_reserved_open_solve_kwargs(kwargs: Option<&Bound<PyDict>>) -> Result<(
         .call_method1("__contains__", ("diagnostics",))?
         .extract()?;
     if has_diagnostics {
-        anyhow::bail!(
+        return Err(PyValueError::new_err(
             "Run.open_solve owns the `diagnostics` adapter option; \
-             pass `store_diagnostics=True` and use `solve.diagnostics` inside the context"
-        );
+             pass `store_diagnostics=True` and use `solve.diagnostics` inside the context",
+        )
+        .into());
     }
     Ok(())
-}
-
-fn python_type_name(value: &Bound<'_, PyAny>) -> Result<String> {
-    let ty = value.get_type();
-    let module: String = ty.getattr("__module__")?.extract()?;
-    let qualname: String = ty.getattr("__qualname__")?.extract()?;
-    Ok(format!("{module}.{qualname}"))
 }
 
 impl<'py> FromPyObject<'_, 'py> for SolverAdapterInput {
@@ -3794,6 +4062,8 @@ impl pyo3_stub_gen::PyStubType for ParameterValueInput {
 ///
 /// `SealedRun` exposes run-level attachments by name, `Solve` records created
 /// by `Run.log_solve`, and `Sampling` records created by `Run.log_sample`.
+/// Missing attachment names raise {class}`KeyError`; choosing a typed getter
+/// incompatible with the stored media type raises {class}`ValueError`.
 /// The `status` property records
 /// how the Run scope was closed: `"finished"`, `"failed"`, or `"interrupted"`.
 /// It is not an aggregate status of child records, so a finished Run may
@@ -3822,28 +4092,38 @@ impl PySealedRun {
     }
 
     #[getter]
+    /// Concise exception type and message for a failed or interrupted Run.
+    pub fn lifecycle_reason(&self) -> Option<String> {
+        self.run.lifecycle_reason().map(ToOwned::to_owned)
+    }
+
+    #[getter]
     /// Names of run-level attachments.
-    pub fn attachment_names(&self) -> Result<Vec<String>> {
+    pub fn attachment_names(&self) -> OmmxPyResult<Vec<String>> {
         Ok(self.run.attachment_names())
     }
 
     /// Original media type of a run-level attachment.
     ///
     /// Storage compression suffixes are hidden from this logical media type.
-    pub fn attachment_media_type(&self, name: &str) -> Result<String> {
+    pub fn attachment_media_type(&self, name: &str) -> OmmxPyResult<String> {
         Ok(self.run.attachment_media_type(name)?.to_string())
     }
 
     /// Read a run-level attachment by name.
     ///
     /// The returned Python object is decoded from the attachment media type.
-    pub fn get_attachment<'py>(&self, py: Python<'py>, name: &str) -> Result<Bound<'py, PyAny>> {
+    pub fn get_attachment<'py>(
+        &self,
+        py: Python<'py>,
+        name: &str,
+    ) -> OmmxPyResult<Bound<'py, PyAny>> {
         let _guard = crate::TRACING.attach_parent_context(py);
         decode_run_attachment(py, &self.run, name)
     }
 
     /// Read a JSON run-level attachment by name.
-    pub fn get_json<'py>(&self, py: Python<'py>, name: &str) -> Result<Bound<'py, PyAny>> {
+    pub fn get_json<'py>(&self, py: Python<'py>, name: &str) -> OmmxPyResult<Bound<'py, PyAny>> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let expected = MediaType::from("application/json");
         ensure_media_type(&self.run.attachment_media_type(name)?, &expected)?;
@@ -3851,8 +4131,14 @@ impl PySealedRun {
     }
 
     /// Read an Instance run-level attachment by name.
-    pub fn get_instance(&self, py: Python<'_>, name: &str) -> Result<crate::Instance> {
+    pub fn get_instance(&self, py: Python<'_>, name: &str) -> OmmxPyResult<crate::Instance> {
         let _guard = crate::TRACING.attach_parent_context(py);
+        let media_type = self.run.attachment_media_type(name)?;
+        ensure_typed_attachment_media_type(
+            &media_type,
+            "an OMMX Instance",
+            ommx::artifact::media_types::is_instance_payload_media_type(&media_type),
+        )?;
         let inner = self.run.attachment_instance(name)?;
         Ok(crate::Instance { inner })
     }
@@ -3862,28 +4148,46 @@ impl PySealedRun {
         &self,
         py: Python<'_>,
         name: &str,
-    ) -> Result<crate::ParametricInstance> {
+    ) -> OmmxPyResult<crate::ParametricInstance> {
         let _guard = crate::TRACING.attach_parent_context(py);
+        let media_type = self.run.attachment_media_type(name)?;
+        ensure_typed_attachment_media_type(
+            &media_type,
+            "an OMMX ParametricInstance",
+            ommx::artifact::media_types::is_parametric_instance_payload_media_type(&media_type),
+        )?;
         let inner = self.run.attachment_parametric_instance(name)?;
         Ok(crate::ParametricInstance { inner })
     }
 
     /// Read a Solution run-level attachment by name.
-    pub fn get_solution(&self, py: Python<'_>, name: &str) -> Result<crate::Solution> {
+    pub fn get_solution(&self, py: Python<'_>, name: &str) -> OmmxPyResult<crate::Solution> {
         let _guard = crate::TRACING.attach_parent_context(py);
+        let media_type = self.run.attachment_media_type(name)?;
+        ensure_typed_attachment_media_type(
+            &media_type,
+            "an OMMX Solution",
+            ommx::artifact::media_types::is_solution_payload_media_type(&media_type),
+        )?;
         let inner = self.run.attachment_solution(name)?;
         Ok(crate::Solution { inner })
     }
 
     /// Read a SampleSet run-level attachment by name.
-    pub fn get_sample_set(&self, py: Python<'_>, name: &str) -> Result<crate::SampleSet> {
+    pub fn get_sample_set(&self, py: Python<'_>, name: &str) -> OmmxPyResult<crate::SampleSet> {
         let _guard = crate::TRACING.attach_parent_context(py);
+        let media_type = self.run.attachment_media_type(name)?;
+        ensure_typed_attachment_media_type(
+            &media_type,
+            "an OMMX SampleSet",
+            ommx::artifact::media_types::is_sample_set_payload_media_type(&media_type),
+        )?;
         let inner = self.run.attachment_sample_set(name)?;
         Ok(crate::SampleSet { inner })
     }
 
     /// Read decompressed bytes of a run-level attachment by name.
-    pub fn get_blob<'py>(&self, py: Python<'py>, name: &str) -> Result<Bound<'py, PyBytes>> {
+    pub fn get_blob<'py>(&self, py: Python<'py>, name: &str) -> OmmxPyResult<Bound<'py, PyBytes>> {
         let _guard = crate::TRACING.attach_parent_context(py);
         Ok(PyBytes::new(py, &self.run.attachment_blob(name)?))
     }
@@ -3901,9 +4205,9 @@ impl PySealedRun {
         name: &str,
         path: PathBuf,
         overwrite: bool,
-    ) -> Result<PathBuf> {
+    ) -> OmmxPyResult<PathBuf> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        self.run.write_attachment(name, path, overwrite)
+        Ok(self.run.write_attachment(name, path, overwrite)?)
     }
 
     /// Read a run-level attachment by name and decode it with a codec.
@@ -3916,13 +4220,12 @@ impl PySealedRun {
         py: Python<'_>,
         codec: AttachmentCodecInput,
         name: &str,
-    ) -> Result<AttachmentPayload> {
+    ) -> OmmxPyResult<AttachmentPayload> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        codec.decode_from_parts(
-            py,
-            self.run.attachment_media_type(name)?,
-            &self.run.attachment_blob(name)?,
-        )
+        let media_type = self.run.attachment_media_type(name)?;
+        codec.validate_media_type(py, &media_type)?;
+        let blob = self.run.attachment_blob(name)?;
+        codec.decode(py, &blob)
     }
 
     #[getter]
@@ -3931,7 +4234,7 @@ impl PySealedRun {
         imports = ("typing", "ommx.tracing")
     ))]
     /// Stored trace for this run, or `None` when this run was recorded without trace storage.
-    pub fn trace<'py>(&self, py: Python<'py>) -> Result<Option<Bound<'py, PyAny>>> {
+    pub fn trace<'py>(&self, py: Python<'py>) -> OmmxPyResult<Option<Bound<'py, PyAny>>> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let Some(trace) = self.run.trace()? else {
             return Ok(None);
@@ -4000,14 +4303,14 @@ impl PySolve {
 
     #[getter]
     /// Input `Instance` passed to the solver.
-    pub fn input(&self) -> Result<crate::Instance> {
+    pub fn input(&self) -> OmmxPyResult<crate::Instance> {
         let inner = self.0.input_instance()?;
         Ok(crate::Instance { inner })
     }
 
     #[getter]
     /// Solution returned by the adapter, or `None` if the call failed before returning one.
-    pub fn output(&self) -> Result<Option<crate::Solution>> {
+    pub fn output(&self) -> OmmxPyResult<Option<crate::Solution>> {
         Ok(self
             .0
             .output_solution()?
@@ -4030,12 +4333,14 @@ impl PySolve {
     /// The artifact stores this value as a JSON string produced by Python's
     /// `json.dumps`; the Python SDK decodes it with `json.loads` before
     /// returning it.
-    pub fn adapter_options<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDict>> {
+    pub fn adapter_options<'py>(&self, py: Python<'py>) -> OmmxPyResult<Bound<'py, PyDict>> {
         let json = py.import("json")?;
         Ok(json
             .call_method1("loads", (self.0.adapter_options(),))?
             .cast::<PyDict>()
-            .map_err(|_| anyhow::anyhow!("Solve.adapter_options must decode to a JSON object"))?
+            .map_err(|_| {
+                PyRuntimeError::new_err("Solve.adapter_options must decode to a JSON object")
+            })?
             .clone())
     }
 
@@ -4046,7 +4351,7 @@ impl PySolve {
         imports = ("builtins", "typing")
     ))]
     /// Adapter-defined diagnostics recorded during this solve.
-    pub fn diagnostics_property<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyList>> {
+    pub fn diagnostics_property<'py>(&self, py: Python<'py>) -> OmmxPyResult<Bound<'py, PyList>> {
         unpack_diagnostics_blob(py, self.0.diagnostic_blob()?, "Solve")
     }
 
@@ -4086,7 +4391,7 @@ impl PySampling {
 
     #[getter]
     /// Input `Instance` passed to the sampler.
-    pub fn input(&self) -> Result<crate::Instance> {
+    pub fn input(&self) -> OmmxPyResult<crate::Instance> {
         Ok(crate::Instance {
             inner: self.0.input_instance()?,
         })
@@ -4094,7 +4399,7 @@ impl PySampling {
 
     #[getter]
     /// SampleSet returned by the adapter, or `None` if the call failed before returning one.
-    pub fn output(&self) -> Result<Option<crate::SampleSet>> {
+    pub fn output(&self) -> OmmxPyResult<Option<crate::SampleSet>> {
         Ok(self
             .0
             .output_sample_set()?
@@ -4113,12 +4418,14 @@ impl PySampling {
         imports = ("builtins", "typing")
     ))]
     /// Keyword arguments passed to the SamplerAdapter.
-    pub fn adapter_options<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDict>> {
+    pub fn adapter_options<'py>(&self, py: Python<'py>) -> OmmxPyResult<Bound<'py, PyDict>> {
         let json = py.import("json")?;
         Ok(json
             .call_method1("loads", (self.0.adapter_options(),))?
             .cast::<PyDict>()
-            .map_err(|_| anyhow::anyhow!("Sampling.adapter_options must decode to a JSON object"))?
+            .map_err(|_| {
+                PyRuntimeError::new_err("Sampling.adapter_options must decode to a JSON object")
+            })?
             .clone())
     }
 
@@ -4129,7 +4436,7 @@ impl PySampling {
         imports = ("builtins", "typing")
     ))]
     /// Adapter-defined diagnostics recorded during this sampling.
-    pub fn diagnostics_property<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyList>> {
+    pub fn diagnostics_property<'py>(&self, py: Python<'py>) -> OmmxPyResult<Bound<'py, PyList>> {
         unpack_diagnostics_blob(py, self.0.diagnostic_blob()?, "Sampling")
     }
 
@@ -4146,7 +4453,7 @@ fn unpack_diagnostics_blob<'py>(
     py: Python<'py>,
     blob: Option<Vec<u8>>,
     record_type: &str,
-) -> Result<Bound<'py, PyList>> {
+) -> OmmxPyResult<Bound<'py, PyList>> {
     let Some(blob) = blob else {
         return Ok(PyList::empty(py));
     };
@@ -4157,6 +4464,10 @@ fn unpack_diagnostics_blob<'py>(
     let decoded = msgpack.call_method("unpackb", (PyBytes::new(py, &blob),), Some(&kwargs))?;
     Ok(decoded
         .cast::<PyList>()
-        .map_err(|_| anyhow::anyhow!("{record_type} diagnostics payload must decode to a list"))?
+        .map_err(|_| {
+            PyRuntimeError::new_err(format!(
+                "{record_type} diagnostics payload must decode to a list"
+            ))
+        })?
         .clone())
 }

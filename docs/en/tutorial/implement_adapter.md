@@ -282,14 +282,8 @@ Finally, create a class that inherits `ommx.adapter.SolverAdapter` to standardiz
 
 ```python
 class SolverAdapter(ABC):
-    CAPABILITIES: ClassVar[AdapterCapabilities | None] = None
-
-    @classmethod
-    def require_compatible(
-        cls, ommx_instance: Instance
-    ) -> AdapterCompatibilityReport:
-        """Check the complete native profile without mutating the input."""
-        ...
+    # OMMX-defined structural condition for adapter applicability.
+    INPUT_CLASS: InstanceClass | None = None
 
     @classmethod
     @abstractmethod
@@ -318,15 +312,11 @@ This abstract base class assumes the following two use cases:
 
 The `solve` class method may define additional adapter-specific keyword options in concrete adapters. The reserved `diagnostics` keyword is owned by `Run.log_solve`. When `Run.log_solve(..., store_diagnostics=True)` is used, adapters may record adapter-defined diagnostic reports into that sink; `None` means diagnostics are disabled.
 
-#### Native Capability Declaration
+#### Input Class and Explicit Constraint Lowering
 
-Each adapter must declare `CAPABILITIES` as one or more complete native
-{class}`~ommx.CapabilityProfile` values. A profile covers all direct translator
-input dimensions together: used variable kinds, objective degree, regular and
-special constraint support with degree limits where applicable, and
-optimization senses. Do not assume regular constraints are universally
-supported. Multiple profiles are alternatives, so separate model families do
-not accidentally combine into a capability the backend lacks.
+An adapter declares the structural set of exact `Instance` values it can receive with `INPUT_CLASS`. `check_applicability()` evaluates membership first and then adapter-owned preconditions without mutating the caller's instance; `require_applicable()` raises with the same structured report when either condition fails.
+
+`SolverAdapter` does not prescribe how a concrete adapter processes an accepted input and does not mutate the instance in a base constructor. A concrete adapter may explicitly call {meth}`Instance.reduce_capabilities <ommx.Instance.reduce_capabilities>` as an implementation detail. Its `preserved` argument uses these special-constraint family selectors:
 
 Before translation, call
 {meth}`~ommx.adapter.SolverAdapter.require_compatible`. It reports every
@@ -335,11 +325,11 @@ mutate the input. The base class does not lower unsupported constraints. If an
 adapter exposes preparation, make that operation explicit, preserve its
 semantic effect, and recheck the resulting solver model.
 
-{class}`~ommx.SpecialConstraintKind` and
-{meth}`~ommx.Instance.lower_special_constraints` select explicit lowering
-operations; they are not adapter support declarations. `ommx.v2.Feature` is
-also separate: it protects forward-compatible deserialization and says nothing
-about whether a backend solver accepts the model.
+Use {attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>` to inspect the currently active families. `reduce_capabilities` converts every family not in `preserved` into regular constraints (Big-M for indicator / SOS1, linear equality for one-hot), mutates the instance in place, and logs each conversion at `INFO` level. Neither this property nor lowering establishes `INPUT_CLASS` membership or adapter applicability.
+
+```{important}
+`INPUT_CLASS` describes the exact value received by the adapter, regardless of its internal implementation. If a caller explicitly lowers an instance before choosing an adapter, the result is a different input value and must be checked again with `check_applicability()` or `require_applicable()`.
+```
 
 Using the functions prepared so far, you can implement it as follows:
 
@@ -355,25 +345,15 @@ from ommx import (
 )
 
 class OMMXPySCIPOptAdapter(SolverAdapter):
-    # This tutorial translator handles exactly these complete model shapes.
-    CAPABILITIES = AdapterCapabilities([
-        CapabilityProfile(
-            name="tutorial-pyscipopt-quadratic",
-            variable_kinds={Kind.Binary, Kind.Integer, Kind.Continuous},
-            objective_degree=DegreeLimit.at_most(2),
-            regular_constraints={
-                Equality.EqualToZero: DegreeLimit.at_most(2),
-                Equality.LessThanOrEqualToZero: DegreeLimit.at_most(2),
-            },
-            senses={Sense.Minimize, Sense.Maximize},
-        )
-    ])
-
     def __init__(
         self,
         ommx_instance: Instance,
     ):
-        self.require_compatible(ommx_instance)
+        # This adapter handles Indicator and SOS1 directly, and explicitly
+        # lowers every other active special-constraint family.
+        ommx_instance.reduce_capabilities(
+            {AdditionalCapability.Indicator, AdditionalCapability.Sos1}
+        )
         self.instance = ommx_instance
         self.model = pyscipopt.Model()
         self.model.hideOutput()
@@ -560,7 +540,6 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     ])
     
     def __init__(self, ommx_instance: Instance):
-        self.require_compatible(ommx_instance)
         self.ommx_instance = ommx_instance
 
     # Perform sampling
@@ -654,7 +633,7 @@ workflow.
 In this tutorial, we learned how to implement an OMMX Adapter by connecting to PySCIPOpt as a Solver Adapter and OpenJij as a Sampler Adapter. Here are the key points when implementing an OMMX Adapter:
 
 1. Implement an OMMX Adapter by inheriting the abstract base class `SolverAdapter` or `SamplerAdapter`.
-2. Declare the complete native translator shape via `CAPABILITIES`, then call `require_compatible()` before conversion without mutating the source model.
+2. Declare the structural input condition with `INPUT_CLASS`, then use `check_applicability()` or `require_applicable()` to evaluate membership and adapter-owned preconditions. If lowering is needed, make it an explicit concrete-adapter or caller operation; the base Adapter contract never mutates the input.
 3. The main steps of the implementation are as follows:
    - Convert `ommx.Instance` into a format that the backend solver can understand.
    - Run the backend solver to obtain a solution.

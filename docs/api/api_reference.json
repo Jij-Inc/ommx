@@ -7,8 +7,8 @@
       "items": [
         {
           "kind": "Class",
-          "name": "AdapterCapabilities",
-          "doc": "Validated alternative native capability profiles for an adapter.",
+          "name": "AdditionalCapability",
+          "doc": "Selector for a non-standard constraint family.\n\n:attr:`Instance.required_capabilities` reports these selectors for active\nspecial constraints. :meth:`Instance.reduce_capabilities` uses them to\nchoose which families are preserved during explicit lowering. Regular\nconstraints are outside this selector.",
           "bases": [],
           "methods": [
             {
@@ -4504,7 +4504,7 @@
         {
           "kind": "Class",
           "name": "DecisionVariable",
-          "doc": "Decision variable in an optimization problem.\n\nThis class represents a variable that will be optimized in a mathematical programming problem.\nIt supports various types (binary, integer, continuous, semi-integer, semi-continuous) and\ncan be used in arithmetic expressions to build objective functions and constraints.\n\nNote that this object overloads `==` for creating a constraint, not for equality comparison.\n\n# Examples\n\n```python\n>>> x = DecisionVariable.integer(1)\n>>> x == 1  # Returns Constraint, not bool\nConstraint(...)\n```\n\nFor object equality comparison, use the ``equals_to()`` method or compare IDs:\n\n```python\n>>> y = DecisionVariable.integer(2)\n>>> x.id == y.id\nFalse\n```",
+          "doc": "Decision variable in an optimization problem.\n\nThis class represents a variable that will be optimized in a mathematical programming problem.\nIt supports various types (binary, integer, continuous, semi-integer, semi-continuous) and\ncan be used in arithmetic expressions to build objective functions and constraints.\nConstruction raises ValueError when the kind discriminator is unknown or\nthe requested bound cannot be normalized for the selected variable kind.\n\nNote that this object overloads `==` for creating a constraint, not for equality comparison.\n\n# Examples\n\n```python\n>>> x = DecisionVariable.integer(1)\n>>> x == 1  # Returns Constraint, not bool\nConstraint(...)\n```\n\nFor object equality comparison, use the ``equals_to()`` method or compare IDs:\n\n```python\n>>> y = DecisionVariable.integer(2)\n>>> x.id == y.id\nFalse\n```",
           "bases": [],
           "methods": [
             {
@@ -6196,8 +6196,8 @@
         },
         {
           "kind": "Class",
-          "name": "DegreeLimit",
-          "doc": "Cumulative polynomial-degree support in a capability profile.",
+          "name": "DegreeBound",
+          "doc": "Cumulative polynomial-degree bound in an :class:`InstanceClassClause`.",
           "bases": [],
           "methods": [
             {
@@ -6243,8 +6243,34 @@
               "deprecated": null
             },
             {
-              "name": "allows",
-              "doc": "Return whether ``actual_degree`` is accepted.",
+              "name": "at_most",
+              "doc": "Include every degree up to and including ``maximum``.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "maximum",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DegreeBound",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "includes",
+              "doc": "Return whether ``actual_degree`` satisfies this bound.",
               "signatures": [
                 {
                   "parameters": [
@@ -6269,39 +6295,13 @@
               "deprecated": null
             },
             {
-              "name": "any",
-              "doc": "Accept any polynomial degree representable by OMMX.",
+              "name": "unbounded",
+              "doc": "Include every polynomial degree representable by OMMX.",
               "signatures": [
                 {
                   "parameters": [],
                   "return_type": {
-                    "display": "DegreeLimit",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "at_most",
-              "doc": "Accept every degree up to and including ``maximum``.",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "maximum",
-                      "type_": {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "DegreeLimit",
+                    "display": "DegreeBound",
                     "link_target": null,
                     "children": []
                   }
@@ -6314,7 +6314,7 @@
           "attributes": [
             {
               "name": "maximum",
-              "doc": "Inclusive maximum degree, or ``None`` for :meth:`any`.",
+              "doc": "Inclusive maximum degree, or ``None`` when unbounded.",
               "type_": {
                 "display": "Optional[int]",
                 "link_target": null,
@@ -6852,6 +6852,21 @@
               "is_readonly": true
             }
           ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "ExactIntegerSlackError",
+          "doc": "Exact integer-slack conversion is unavailable for the requested inequality.",
+          "bases": [
+            {
+              "display": "RuntimeError",
+              "link_target": null,
+              "children": []
+            }
+          ],
+          "methods": [],
+          "attributes": [],
           "deprecated": null
         },
         {
@@ -8646,6 +8661,21 @@
         },
         {
           "kind": "Class",
+          "name": "InfeasibleDetected",
+          "doc": "The mathematical model was proven infeasible.",
+          "bases": [
+            {
+              "display": "RuntimeError",
+              "link_target": null,
+              "children": []
+            }
+          ],
+          "methods": [],
+          "attributes": [],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
           "name": "Instance",
           "doc": "Optimization problem instance.\n\nThis class also contains annotations like {attr}`~ommx.Instance.title`.\nOMMX-defined annotations are stored in explicit protobuf fields, while\nuser-defined annotations are stored in the protobuf annotation map and\nmirrored to OMMX Artifact descriptors.\n\n# Examples\n\nCreate an instance for KnapSack Problem\n\n```python\n>>> from ommx import Instance, DecisionVariable\n```\n\nProfit and weight of items\n\n```python\n>>> p = [10, 13, 18, 31, 7, 15]\n>>> w = [11, 15, 20, 35, 10, 33]\n```\n\nDecision variables\n\n```python\n>>> x = [DecisionVariable.binary(i) for i in range(6)]\n```\n\nObjective and constraint\n\n```python\n>>> objective = sum(p[i] * x[i] for i in range(6))\n>>> constraint = sum(w[i] * x[i] for i in range(6)) <= 47\n```\n\nCompose as an instance\n\n```python\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=objective,\n...     constraints=[constraint],\n...     sense=Instance.MAXIMIZE,\n... )\n```",
           "bases": [],
@@ -9616,7 +9646,7 @@
             },
             {
               "name": "convert_inequality_to_equality_with_integer_slack",
-              "doc": "Convert an inequality constraint $f(x) \\leq 0$ to an equality constraint $f(x) + s/a = 0$ with an integer slack variable $s$.\n\n- Since $a$ is determined as the minimal multiplier to make every coefficient of $a f(x)$ integer,\n  $a$ itself and the range of $s$ becomes impractically large. ``max_integer_range`` limits the maximal\n  range of $s$, and returns error if the range exceeds it.\n\n- Since this method evaluates the bound of $f(x)$, we may find that:\n\n  - The bound $[l, u]$ is strictly positive, i.e. $l > 0$:\n    this means the instance is infeasible because this constraint never be satisfied,\n    and an error is raised.\n\n  - The bound $[l, u]$ is always negative, i.e. $u \\leq 0$:\n    this means this constraint is trivially satisfied,\n    the constraint is moved to {attr}`~ommx.Instance.removed_constraints`,\n    and this method returns without introducing slack variable or raising an error.\n\n# Examples\n\nLet's consider a simple inequality constraint x0 + 2*x1 <= 5.\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [\n...     DecisionVariable.integer(i, lower=0, upper=3, name=\"x\", subscripts=[i])\n...     for i in range(3)\n... ]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[\n...         (x[0] + 2*x[1] <= 5).set_id(0)\n...     ],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.constraints[0]\nConstraint(x0 + 2*x1 - 5 <= 0)\n```\n\nIntroduce an integer slack variable\n\n```python\n>>> instance.convert_inequality_to_equality_with_integer_slack(\n...     constraint_id=0,\n...     max_integer_range=32\n... )\n>>> instance.constraints[0]\nConstraint(x0 + 2*x1 + x3 - 5 == 0)\n```",
+              "doc": "Convert an inequality constraint $f(x) \\leq 0$ to an equality constraint $f(x) + s/a = 0$ with an integer slack variable $s$.\n\n- Since $a$ is determined as the minimal multiplier to make every coefficient of $a f(x)$ integer,\n  $a$ itself and the range of $s$ becomes impractically large. ``max_integer_range`` limits the maximal\n  range of $s$, and returns error if the range exceeds it.\n\n- Since this method evaluates the bound of $f(x)$, we may find that:\n\n  - The bound $[l, u]$ is strictly positive, i.e. $l > 0$:\n    this means the instance is infeasible because this constraint never be satisfied,\n    and an error is raised.\n\n  - The bound $[l, u]$ is always negative, i.e. $u \\leq 0$:\n    this means this constraint is trivially satisfied,\n    the constraint is moved to {attr}`~ommx.Instance.removed_constraints`,\n    and this method returns without introducing slack variable or raising an error.\n\n# Examples\n\nLet's consider a simple inequality constraint x0 + 2*x1 <= 5.\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [\n...     DecisionVariable.integer(i, lower=0, upper=3, name=\"x\", subscripts=[i])\n...     for i in range(3)\n... ]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[\n...         (x[0] + 2*x[1] <= 5).set_id(0)\n...     ],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.constraints[0]\nConstraint(x0 + 2*x1 - 5 <= 0)\n```\n\nIntroduce an integer slack variable\n\n```python\n>>> instance.convert_inequality_to_equality_with_integer_slack(\n...     constraint_id=0,\n...     max_integer_range=32\n... )\n>>> instance.constraints[0]\nConstraint(x0 + 2*x1 + x3 - 5 == 0)\n```\n\nRaises {class}`~ommx.ExactIntegerSlackError` when exact conversion is\nunavailable because the coefficients cannot be normalized or the slack\nrange exceeds ``max_integer_range``. Raises\n{class}`~ommx.InfeasibleDetected` when the bounds prove the inequality\ninfeasible.",
               "signatures": [
                 {
                   "parameters": [
@@ -10621,7 +10651,7 @@
             },
             {
               "name": "log_encode",
-              "doc": "Log-encode the integer decision variables.\n\nLog encoding of an integer variable $x \\in [l, u]$ is to represent by $m$ bits $b_i \\in \\{0, 1\\}$ by:\n\n$$x = \\sum_{i=0}^{m-2} 2^i b_i + (u - l - 2^{m-1} + 1) b_{m-1} + l$$\n\nwhere $m = \\lceil \\log_2(u - l + 1) \\rceil$.\n\n**Args:**\n- `decision_variable_ids`: The IDs of the integer decision variables to log-encode.\n  If not specified (or empty), all used integer variables are log-encoded.\n- `atol`: Optional absolute tolerance used when normalizing integer\n  bounds before encoding. If None, uses the default tolerance.\n\n# Examples\n\nLet's consider a simple integer programming problem with three integer variables x0, x1, and x2.\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [\n...     DecisionVariable.integer(i, lower=0, upper=3, name=\"x\", subscripts=[i])\n...     for i in range(3)\n... ]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.objective\nFunction(x0 + x1 + x2)\n```\n\nTo log-encode the integer variables x0 and x2 (except x1), call log_encode:\n\n```python\n>>> instance.log_encode({0, 2})\n```\n\nInteger variable in range $[0, 3]$ can be represented by two binary variables:\n\n$$x_0 = b_{0,0} + 2 b_{0,1}, \\quad x_2 = b_{2,0} + 2 b_{2,1}$$\n\nAnd these are substituted into the objective and constraint functions.\n\n```python\n>>> instance.objective\nFunction(x1 + x3 + 2*x4 + x5 + 2*x6)\n```",
+              "doc": "Log-encode the integer decision variables.\n\nLog encoding of an integer variable $x \\in [l, u]$ is to represent by $m$ bits $b_i \\in \\{0, 1\\}$ by:\n\n$$x = \\sum_{i=0}^{m-2} 2^i b_i + (u - l - 2^{m-1} + 1) b_{m-1} + l$$\n\nwhere $m = \\lceil \\log_2(u - l + 1) \\rceil$.\n\n**Args:**\n- `decision_variable_ids`: The IDs of the integer decision variables to log-encode.\n  If not specified (or empty), all used integer variables are log-encoded.\n- `atol`: Optional absolute tolerance used when normalizing integer\n  bounds before encoding. If None, uses the default tolerance.\n\nRaises {class}`~ommx.LogEncodingError` when an exact representation is\nunavailable for a requested variable. Allocation and expression-rewrite\nfailures retain their original exception types.\n\n# Examples\n\nLet's consider a simple integer programming problem with three integer variables x0, x1, and x2.\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [\n...     DecisionVariable.integer(i, lower=0, upper=3, name=\"x\", subscripts=[i])\n...     for i in range(3)\n... ]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.objective\nFunction(x0 + x1 + x2)\n```\n\nTo log-encode the integer variables x0 and x2 (except x1), call log_encode:\n\n```python\n>>> instance.log_encode({0, 2})\n```\n\nInteger variable in range $[0, 3]$ can be represented by two binary variables:\n\n$$x_0 = b_{0,0} + 2 b_{0,1}, \\quad x_2 = b_{2,0} + 2 b_{2,1}$$\n\nAnd these are substituted into the objective and constraint functions.\n\n```python\n>>> instance.objective\nFunction(x1 + x3 + 2*x4 + x5 + 2*x6)\n```",
               "signatures": [
                 {
                   "parameters": [
@@ -11126,6 +11156,44 @@
                     "display": "bool",
                     "link_target": null,
                     "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "reduce_capabilities",
+              "doc": "Convert active non-standard constraint families not in ``preserved``\ninto regular constraints.\n\nFor every selector in :attr:`required_capabilities` not in\n``preserved``, the corresponding bulk conversion is invoked\n(:meth:`convert_all_indicators_to_constraints`,\n:meth:`convert_all_one_hots_to_constraints`, or\n:meth:`convert_all_sos1_to_constraints`). The instance is mutated in\nplace and :attr:`required_capabilities` becomes a subset of\n``preserved`` on success. This does not establish\n:class:`InstanceClass` membership; check the resulting input separately.\n\nReturns the set of :class:`AdditionalCapability` values that were\nactually converted. Empty when nothing needed conversion.\n\nRaises if any underlying Big-M conversion fails (e.g. a SOS1 variable\nwith a non-finite bound).",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "preserved",
+                      "type_": {
+                        "display": "set[AdditionalCapability]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "AdditionalCapability",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "set[AdditionalCapability]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "AdditionalCapability",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
                   }
                 }
               ],
@@ -12189,6 +12257,23 @@
               "is_readonly": true
             },
             {
+              "name": "required_capabilities",
+              "doc": "Selectors for active non-standard constraint families.\n\nOnly active constraints are considered. This value does not describe an\n:class:`InstanceClass` or establish adapter applicability. Use\n:meth:`reduce_capabilities` only as an explicit special-constraint\nlowering operation.",
+              "type_": {
+                "display": "set[AdditionalCapability]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "AdditionalCapability",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "sense",
               "doc": "",
               "type_": {
@@ -12259,8 +12344,458 @@
         },
         {
           "kind": "Class",
-          "name": "InstanceRequirements",
-          "doc": "Portable shape of an instance's complete active solver input.\n\nFixed, dependent, irrelevant, removed-constraint-only, and\nnamed-function-only variables are excluded.",
+          "name": "InstanceClass",
+          "doc": "A set of :class:`Instance` values represented as a finite union of clauses.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__new__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "clauses",
+                      "type_": {
+                        "display": "Sequence[InstanceClassClause]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "InstanceClassClause",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "InstanceClass",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "check_membership",
+              "doc": "Evaluate membership without mutating or preparing ``instance``.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "instance",
+                      "type_": {
+                        "display": "Instance",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "InstanceClassMembershipReport",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "contains",
+              "doc": "Return whether ``instance`` belongs to this class.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "instance",
+                      "type_": {
+                        "display": "Instance",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "union",
+              "doc": "Return the finite union of two instance classes.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "InstanceClass",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "InstanceClass",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "clauses",
+              "doc": "",
+              "type_": {
+                "display": "list[InstanceClassClause]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "InstanceClassClause",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "InstanceClassClause",
+          "doc": "One conjunctive clause in an :class:`InstanceClass`.\n\nEvery condition in a clause must hold. The containing instance class is\nthe finite union of its clauses, so alternatives are not combined across\nclause boundaries.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__new__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "label",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "allowed_variable_kinds",
+                      "type_": {
+                        "display": "set[Kind]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Kind",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "objective_degree_bound",
+                      "type_": {
+                        "display": "DegreeBound",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "allowed_senses",
+                      "type_": {
+                        "display": "set[Sense]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Sense",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "regular_constraint_degree_bounds",
+                      "type_": {
+                        "display": "Optional[Mapping[Equality, DegreeBound]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Mapping[Equality, DegreeBound]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "Equality",
+                                "link_target": null,
+                                "children": []
+                              },
+                              {
+                                "display": "DegreeBound",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "indicator_constraint_degree_bounds",
+                      "type_": {
+                        "display": "Optional[Mapping[Equality, DegreeBound]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Mapping[Equality, DegreeBound]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "Equality",
+                                "link_target": null,
+                                "children": []
+                              },
+                              {
+                                "display": "DegreeBound",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "allows_one_hot",
+                      "type_": {
+                        "display": "bool",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "False"
+                      }
+                    },
+                    {
+                      "name": "allows_sos1",
+                      "type_": {
+                        "display": "bool",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "False"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "InstanceClassClause",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "allowed_senses",
+              "doc": "",
+              "type_": {
+                "display": "set[Sense]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "Sense",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "allowed_variable_kinds",
+              "doc": "",
+              "type_": {
+                "display": "set[Kind]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "Kind",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "allows_one_hot",
+              "doc": "",
+              "type_": {
+                "display": "bool",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "allows_sos1",
+              "doc": "",
+              "type_": {
+                "display": "bool",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "indicator_constraint_degree_bounds",
+              "doc": "",
+              "type_": {
+                "display": "dict[Equality, DegreeBound]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "Equality",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "DegreeBound",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "label",
+              "doc": "Human-readable diagnostic label. It does not affect membership.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "objective_degree_bound",
+              "doc": "",
+              "type_": {
+                "display": "DegreeBound",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "regular_constraint_degree_bounds",
+              "doc": "",
+              "type_": {
+                "display": "dict[Equality, DegreeBound]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "Equality",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "DegreeBound",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "InstanceClassClauseReport",
+          "doc": "Membership result for one conjunctive instance-class clause.",
           "bases": [],
           "methods": [
             {
@@ -12308,29 +12843,7 @@
           ],
           "attributes": [
             {
-              "name": "indicator_constraints",
-              "doc": "",
-              "type_": {
-                "display": "dict[int, ConstraintRequirement]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "int",
-                    "link_target": null,
-                    "children": []
-                  },
-                  {
-                    "display": "ConstraintRequirement",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "objective_degree",
+              "name": "clause_index",
               "doc": "",
               "type_": {
                 "display": "int",
@@ -12341,49 +12854,10 @@
               "is_readonly": true
             },
             {
-              "name": "one_hot_constraint_ids",
+              "name": "clause_label",
               "doc": "",
               "type_": {
-                "display": "set[int]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "int",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "regular_constraints",
-              "doc": "",
-              "type_": {
-                "display": "dict[int, ConstraintRequirement]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "int",
-                    "link_target": null,
-                    "children": []
-                  },
-                  {
-                    "display": "ConstraintRequirement",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "sense",
-              "doc": "",
-              "type_": {
-                "display": "Sense",
+                "display": "str",
                 "link_target": null,
                 "children": []
               },
@@ -12391,14 +12865,111 @@
               "is_readonly": true
             },
             {
-              "name": "sos1_constraint_ids",
+              "name": "is_member",
               "doc": "",
               "type_": {
-                "display": "set[int]",
+                "display": "bool",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "mismatches",
+              "doc": "",
+              "type_": {
+                "display": "list[InstanceClassMismatch]",
                 "link_target": null,
                 "children": [
                   {
-                    "display": "int",
+                    "display": "InstanceClassMismatch",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "InstanceClassMembershipReport",
+          "doc": "Side-effect-free membership report for an :class:`InstanceClass`.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__str__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "clause_reports",
+              "doc": "",
+              "type_": {
+                "display": "list[InstanceClassClauseReport]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "InstanceClassClauseReport",
                     "link_target": null,
                     "children": []
                   }
@@ -12408,40 +12979,34 @@
               "is_readonly": true
             },
             {
-              "name": "used_variable_ids",
+              "name": "is_member",
               "doc": "",
               "type_": {
-                "display": "set[int]",
+                "display": "bool",
                 "link_target": null,
-                "children": [
-                  {
-                    "display": "int",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
+                "children": []
               },
               "is_property": true,
               "is_readonly": true
             },
             {
-              "name": "used_variables_by_kind",
+              "name": "matching_clauses",
               "doc": "",
               "type_": {
-                "display": "dict[Kind, set[int]]",
+                "display": "list[tuple[int, str]]",
                 "link_target": null,
                 "children": [
                   {
-                    "display": "Kind",
-                    "link_target": null,
-                    "children": []
-                  },
-                  {
-                    "display": "set[int]",
+                    "display": "tuple[int, str]",
                     "link_target": null,
                     "children": [
                       {
                         "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "str",
                         "link_target": null,
                         "children": []
                       }
@@ -12453,6 +13018,15 @@
               "is_readonly": true
             }
           ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "InstanceClassMismatch",
+          "doc": "One structured reason an instance is outside a complete clause.",
+          "bases": [],
+          "methods": [],
+          "attributes": [],
           "deprecated": null
         },
         {
@@ -13698,6 +14272,98 @@
                     "children": []
                   }
                 ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "LogEncodingError",
+          "doc": "An exact log encoding is unavailable for one requested decision variable.",
+          "bases": [
+            {
+              "display": "RuntimeError",
+              "link_target": null,
+              "children": []
+            }
+          ],
+          "methods": [],
+          "attributes": [
+            {
+              "name": "expected",
+              "doc": "Required bound condition or maximum bit count.",
+              "type_": {
+                "display": "str | int | float",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "float",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "kind",
+              "doc": "Machine-readable reason for unavailable exact encoding.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "observed",
+              "doc": "Observed bound or bit count that made encoding unavailable.",
+              "type_": {
+                "display": "str | int | float",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "float",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "variable_id",
+              "doc": "Decision variable for which exact encoding is unavailable.",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
               },
               "is_property": true,
               "is_readonly": true
@@ -21580,7 +22246,7 @@
             },
             {
               "name": "extract_all_decision_variables",
-              "doc": "Extract all decision variables grouped by name for a given sample ID.\n\nReturns a mapping from variable name to a mapping from subscripts to values.\nThis is useful for extracting all variables at once in a structured format.\nVariables without names are not included in the result.\n\nRaises ValueError if a decision variable with parameters is found, or if the same\nname and subscript combination is found multiple times, or if the sample ID is invalid.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i, name=\"x\", subscripts=[i]) for i in range(3)]\n>>> y = [DecisionVariable.binary(i+3, name=\"y\", subscripts=[i]) for i in range(2)]\n>>> instance = Instance.from_components(\n...     decision_variables=x + y,\n...     objective=sum(x) + sum(y),\n...     constraints=[],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> sample_set = instance.evaluate_samples({0: {i: 1 for i in range(5)}})\n>>> all_vars = sample_set.extract_all_decision_variables(0)\n>>> all_vars[\"x\"]\n{(0,): 1.0, (1,): 1.0, (2,): 1.0}\n>>> all_vars[\"y\"]\n{(0,): 1.0, (1,): 1.0}\n```",
+              "doc": "Extract all decision variables grouped by name for a given sample ID.\n\nReturns a mapping from variable name to a mapping from subscripts to values.\nThis is useful for extracting all variables at once in a structured format.\nVariables without names are not included in the result.\n\nRaises KeyError if the sample ID does not exist, and ValueError if the\nsame name and subscript combination is found multiple times.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i, name=\"x\", subscripts=[i]) for i in range(3)]\n>>> y = [DecisionVariable.binary(i+3, name=\"y\", subscripts=[i]) for i in range(2)]\n>>> instance = Instance.from_components(\n...     decision_variables=x + y,\n...     objective=sum(x) + sum(y),\n...     constraints=[],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> sample_set = instance.evaluate_samples({0: {i: 1 for i in range(5)}})\n>>> all_vars = sample_set.extract_all_decision_variables(0)\n>>> all_vars[\"x\"]\n{(0,): 1.0, (1,): 1.0, (2,): 1.0}\n>>> all_vars[\"y\"]\n{(0,): 1.0, (1,): 1.0}\n```",
               "signatures": [
                 {
                   "parameters": [
@@ -21606,7 +22272,7 @@
             },
             {
               "name": "extract_all_named_functions",
-              "doc": "Extract all named function values grouped by name for a given sample ID",
+              "doc": "Extract all named function values grouped by name for a given sample ID.\n\nRaises KeyError if the sample ID does not exist, and ValueError if the\nsame name and subscript combination is found multiple times.",
               "signatures": [
                 {
                   "parameters": [
@@ -21632,7 +22298,7 @@
             },
             {
               "name": "extract_constraints",
-              "doc": "Extract constraint values for a given name and sample ID",
+              "doc": "Extract constraint values for a given name and sample ID.\n\nRaises KeyError if the name or sample ID does not exist. Raises\nValueError if a matching constraint has parameters or if the same\nsubscript is found more than once.",
               "signatures": [
                 {
                   "parameters": [
@@ -21667,7 +22333,7 @@
             },
             {
               "name": "extract_decision_variables",
-              "doc": "Extract decision variable values for a given name and sample ID",
+              "doc": "Extract decision variable values for a given name and sample ID.\n\nRaises KeyError if the name or sample ID does not exist, and ValueError\nif the same subscript is found more than once.",
               "signatures": [
                 {
                   "parameters": [
@@ -21702,7 +22368,7 @@
             },
             {
               "name": "extract_named_functions",
-              "doc": "Extract named function values for a given name and sample ID",
+              "doc": "Extract named function values for a given name and sample ID.\n\nRaises KeyError if the name or sample ID does not exist, and ValueError\nif the same subscript is found more than once.",
               "signatures": [
                 {
                   "parameters": [
@@ -21855,7 +22521,7 @@
             },
             {
               "name": "get",
-              "doc": "",
+              "doc": "Return one sample as a Solution.\n\nRaises KeyError if the sample ID does not exist.",
               "signatures": [
                 {
                   "parameters": [
@@ -21959,7 +22625,7 @@
             },
             {
               "name": "get_sample_by_id",
-              "doc": "Get sample by ID (alias for get method)",
+              "doc": "Get sample by ID (alias for get method).\n\nRaises KeyError if the sample ID does not exist.",
               "signatures": [
                 {
                   "parameters": [
@@ -22267,7 +22933,7 @@
             },
             {
               "name": "best_feasible",
-              "doc": "",
+              "doc": "Raises ValueError if there is no feasible sample.",
               "type_": {
                 "display": "Solution",
                 "link_target": null,
@@ -22278,7 +22944,7 @@
             },
             {
               "name": "best_feasible_id",
-              "doc": "",
+              "doc": "Raises ValueError if there is no feasible sample.",
               "type_": {
                 "display": "int",
                 "link_target": null,
@@ -22289,7 +22955,7 @@
             },
             {
               "name": "best_feasible_relaxed",
-              "doc": "",
+              "doc": "Raises ValueError if there is no feasible sample in the relaxed problem.",
               "type_": {
                 "display": "Solution",
                 "link_target": null,
@@ -22300,7 +22966,7 @@
             },
             {
               "name": "best_feasible_relaxed_id",
-              "doc": "",
+              "doc": "Raises ValueError if there is no feasible sample in the relaxed problem.",
               "type_": {
                 "display": "int",
                 "link_target": null,
@@ -22311,7 +22977,7 @@
             },
             {
               "name": "best_feasible_unrelaxed",
-              "doc": "",
+              "doc": "Raises ValueError if there is no feasible sample.",
               "type_": {
                 "display": "Solution",
                 "link_target": null,
@@ -23843,7 +24509,7 @@
             },
             {
               "name": "extract_all_decision_variables",
-              "doc": "Extract all decision variables grouped by name.\n\nReturns a mapping from variable name to a mapping from subscripts to values.\nThis is useful for extracting all variables at once in a structured format.\nVariables without names are not included in the result.\n\nRaises ValueError if a decision variable with parameters is found, or if the same\nname and subscript combination is found multiple times.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i, name=\"x\", subscripts=[i]) for i in range(3)]\n>>> y = [DecisionVariable.binary(i+3, name=\"y\", subscripts=[i]) for i in range(2)]\n>>> instance = Instance.from_components(\n...     decision_variables=x + y,\n...     objective=sum(x) + sum(y),\n...     constraints=[],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> solution = instance.evaluate({i: 1 for i in range(5)})\n>>> all_vars = solution.extract_all_decision_variables()\n>>> all_vars[\"x\"]\n{(0,): 1.0, (1,): 1.0, (2,): 1.0}\n>>> all_vars[\"y\"]\n{(0,): 1.0, (1,): 1.0}\n```",
+              "doc": "Extract all decision variables grouped by name.\n\nReturns a mapping from variable name to a mapping from subscripts to values.\nThis is useful for extracting all variables at once in a structured format.\nVariables without names are not included in the result.\n\nRaises ValueError if the same name and subscript combination is found\nmultiple times.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i, name=\"x\", subscripts=[i]) for i in range(3)]\n>>> y = [DecisionVariable.binary(i+3, name=\"y\", subscripts=[i]) for i in range(2)]\n>>> instance = Instance.from_components(\n...     decision_variables=x + y,\n...     objective=sum(x) + sum(y),\n...     constraints=[],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> solution = instance.evaluate({i: 1 for i in range(5)})\n>>> all_vars = solution.extract_all_decision_variables()\n>>> all_vars[\"x\"]\n{(0,): 1.0, (1,): 1.0, (2,): 1.0}\n>>> all_vars[\"y\"]\n{(0,): 1.0, (1,): 1.0}\n```",
               "signatures": [
                 {
                   "parameters": [],
@@ -23859,7 +24525,7 @@
             },
             {
               "name": "extract_all_named_functions",
-              "doc": "Extract all named functions grouped by name (returns a Python dict)",
+              "doc": "Extract all named functions grouped by name (returns a Python dict).\n\nRaises ValueError if the same name and subscript combination is found\nmultiple times.",
               "signatures": [
                 {
                   "parameters": [],
@@ -23875,7 +24541,7 @@
             },
             {
               "name": "extract_constraints",
-              "doc": "Extract the values of constraints based on the `name` with `subscripts` key.\n\nRaises ValueError if the constraint with parameters is found, or if the same subscript is found.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> c0 = (x[0] + x[1] == 1).set_name(\"c\").add_subscripts([0])\n>>> c1 = (x[1] + x[2] == 1).set_name(\"c\").add_subscripts([1])\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[c0, c1],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> solution = instance.evaluate({0: 1, 1: 0, 2: 1})\n>>> solution.extract_constraints(\"c\")\n{(0,): 0.0, (1,): 0.0}\n```",
+              "doc": "Extract the values of constraints based on the `name` with `subscripts` key.\n\nRaises KeyError if no constraint has the requested name. Raises\nValueError if a matching constraint has parameters or if the same\nsubscript is found more than once.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> c0 = (x[0] + x[1] == 1).set_name(\"c\").add_subscripts([0])\n>>> c1 = (x[1] + x[2] == 1).set_name(\"c\").add_subscripts([1])\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[c0, c1],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> solution = instance.evaluate({0: 1, 1: 0, 2: 1})\n>>> solution.extract_constraints(\"c\")\n{(0,): 0.0, (1,): 0.0}\n```",
               "signatures": [
                 {
                   "parameters": [
@@ -23901,7 +24567,7 @@
             },
             {
               "name": "extract_decision_variables",
-              "doc": "Extract the values of decision variables based on the `name` with `subscripts` key.\n\nRaises ValueError if a decision variable with parameters is found, or if the same subscript is found.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i, name=\"x\", subscripts=[i]) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[sum(x) == 1],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> solution = instance.evaluate({i: 1 for i in range(3)})\n>>> solution.extract_decision_variables(\"x\")\n{(0,): 1.0, (1,): 1.0, (2,): 1.0}\n```",
+              "doc": "Extract the values of decision variables based on the `name` with `subscripts` key.\n\nRaises KeyError if no decision variable has the requested name, and\nValueError if the same subscript is found more than once.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i, name=\"x\", subscripts=[i]) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[sum(x) == 1],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> solution = instance.evaluate({i: 1 for i in range(3)})\n>>> solution.extract_decision_variables(\"x\")\n{(0,): 1.0, (1,): 1.0, (2,): 1.0}\n```",
               "signatures": [
                 {
                   "parameters": [
@@ -23927,7 +24593,7 @@
             },
             {
               "name": "extract_named_functions",
-              "doc": "Extract named functions by name with subscripts as key (returns a Python dict)",
+              "doc": "Extract named functions by name with subscripts as key (returns a Python dict).\n\nRaises KeyError if no named function has the requested name, and\nValueError if the same subscript is found more than once.",
               "signatures": [
                 {
                   "parameters": [
@@ -24297,7 +24963,7 @@
             },
             {
               "name": "set_dual_variable",
-              "doc": "Set the dual variable value for a specific constraint by ID",
+              "doc": "Set the dual variable value for a specific constraint by ID.\n\nRaises KeyError if the constraint ID does not exist.",
               "signatures": [
                 {
                   "parameters": [
@@ -26227,7 +26893,7 @@
           "methods": [
             {
               "name": "get_blob",
-              "doc": "Get raw bytes of a blob by Descriptor.",
+              "doc": "Get raw bytes of a blob by Descriptor.\n\nRegistry and storage failures, including a missing CAS blob referenced\nby the Descriptor, raise {class}`RuntimeError`.",
               "signatures": [
                 {
                   "parameters": [
@@ -26258,7 +26924,7 @@
             },
             {
               "name": "get_dataframe",
-              "doc": "Get a pandas DataFrame from an artifact layer stored by {meth}`~ommx.artifact.ArtifactDraft.add_dataframe`.",
+              "doc": "Get a pandas DataFrame from an artifact layer stored by {meth}`~ommx.artifact.ArtifactDraft.add_dataframe`.\n\nA mismatched media type raises {class}`ValueError`; registry and storage\nfailures raise {class}`RuntimeError`. pandas exceptions are preserved.",
               "signatures": [
                 {
                   "parameters": [
@@ -26289,7 +26955,7 @@
             },
             {
               "name": "get_instance",
-              "doc": "Get an instance from the artifact.\n\n- If `descriptor` is `None`, returns the first instance layer.\n- If `descriptor` is given, returns the instance for that specific layer.\n\nRaises `ValueError` if no instance layer is found.",
+              "doc": "Get an instance from the artifact.\n\n- If `descriptor` is `None`, returns the first instance layer.\n- If `descriptor` is given, returns the instance for that specific layer.\n\nRaises {class}`ValueError` if no instance layer is found, if the\nDescriptor has the wrong media type, or if the payload is malformed.\nRegistry and storage failures raise {class}`RuntimeError`.",
               "signatures": [
                 {
                   "parameters": [
@@ -26329,7 +26995,7 @@
             },
             {
               "name": "get_json",
-              "doc": "Get a JSON object from an artifact layer stored by {meth}`~ommx.artifact.ArtifactDraft.add_json`.",
+              "doc": "Get a JSON object from an artifact layer stored by {meth}`~ommx.artifact.ArtifactDraft.add_json`.\n\nA mismatched media type raises {class}`ValueError`; registry and storage\nfailures raise {class}`RuntimeError`. JSON decoder exceptions are\npreserved.",
               "signatures": [
                 {
                   "parameters": [
@@ -26360,7 +27026,7 @@
             },
             {
               "name": "get_layer",
-              "doc": "Get the layer object corresponding to the descriptor.\n\nDynamically dispatched based on {attr}`~ommx.artifact.Descriptor.media_type`:\n- OMMX instance payloads return {class}`~ommx.Instance`\n- OMMX parametric instance payloads return {class}`~ommx.ParametricInstance`\n- OMMX solution payloads return {class}`~ommx.Solution`\n- OMMX sample-set payloads return {class}`~ommx.SampleSet`\n- `application/vnd.numpy` returns a numpy array",
+              "doc": "Get the layer object corresponding to the descriptor.\n\nDynamically dispatched based on {attr}`~ommx.artifact.Descriptor.media_type`:\n- OMMX instance payloads return {class}`~ommx.Instance`\n- OMMX parametric instance payloads return {class}`~ommx.ParametricInstance`\n- OMMX solution payloads return {class}`~ommx.Solution`\n- OMMX sample-set payloads return {class}`~ommx.SampleSet`\n- `application/vnd.numpy` returns a numpy array\n\nRaises {class}`ValueError` for an unsupported media type. Registry and\nstorage failures raise {class}`RuntimeError`; exceptions raised by\nPython-backed decoders are preserved.",
               "signatures": [
                 {
                   "parameters": [
@@ -26391,7 +27057,7 @@
             },
             {
               "name": "get_layer_descriptor",
-              "doc": "Look up a layer descriptor by digest.",
+              "doc": "Look up a layer descriptor by digest.\n\nRaises {class}`ValueError` when `digest` is malformed and\n{class}`KeyError` when the digest is valid but is not present in the\nArtifact manifest.",
               "signatures": [
                 {
                   "parameters": [
@@ -26422,7 +27088,7 @@
             },
             {
               "name": "get_ndarray",
-              "doc": "Get a numpy array from an artifact layer stored by {meth}`~ommx.artifact.ArtifactDraft.add_ndarray`.",
+              "doc": "Get a numpy array from an artifact layer stored by {meth}`~ommx.artifact.ArtifactDraft.add_ndarray`.\n\nA mismatched media type raises {class}`ValueError`; registry and storage\nfailures raise {class}`RuntimeError`. NumPy exceptions are preserved.",
               "signatures": [
                 {
                   "parameters": [
@@ -26453,7 +27119,7 @@
             },
             {
               "name": "get_parametric_instance",
-              "doc": "Get a parametric instance from the artifact.\n\n- If `descriptor` is `None`, returns the first parametric instance layer.\n- If `descriptor` is given, returns the parametric instance for that specific layer.\n\nRaises `ValueError` if no parametric instance layer is found.",
+              "doc": "Get a parametric instance from the artifact.\n\n- If `descriptor` is `None`, returns the first parametric instance layer.\n- If `descriptor` is given, returns the parametric instance for that specific layer.\n\nRaises {class}`ValueError` if no parametric instance layer is found, if\nthe Descriptor has the wrong media type, or if the payload is\nmalformed. Registry and storage failures raise {class}`RuntimeError`.",
               "signatures": [
                 {
                   "parameters": [
@@ -26493,7 +27159,7 @@
             },
             {
               "name": "get_sample_set",
-              "doc": "Get a sample set from the artifact.\n\n- If `descriptor` is `None`, returns the first sample set layer.\n- If `descriptor` is given, returns the sample set for that specific layer.\n\nRaises `ValueError` if no sample set layer is found.",
+              "doc": "Get a sample set from the artifact.\n\n- If `descriptor` is `None`, returns the first sample set layer.\n- If `descriptor` is given, returns the sample set for that specific layer.\n\nRaises {class}`ValueError` if no sample set layer is found, if the\nDescriptor has the wrong media type, or if the payload is malformed.\nRegistry and storage failures raise {class}`RuntimeError`.",
               "signatures": [
                 {
                   "parameters": [
@@ -26533,7 +27199,7 @@
             },
             {
               "name": "get_solution",
-              "doc": "Get a solution from the artifact.\n\n- If `descriptor` is `None`, returns the first solution layer.\n- If `descriptor` is given, returns the solution for that specific layer.\n\nRaises `ValueError` if no solution layer is found.",
+              "doc": "Get a solution from the artifact.\n\n- If `descriptor` is `None`, returns the first solution layer.\n- If `descriptor` is given, returns the solution for that specific layer.\n\nRaises {class}`ValueError` if no solution layer is found, if the\nDescriptor has the wrong media type, or if the payload is malformed.\nRegistry and storage failures raise {class}`RuntimeError`.",
               "signatures": [
                 {
                   "parameters": [
@@ -26667,7 +27333,7 @@
             },
             {
               "name": "load",
-              "doc": "Load an artifact stored as a container image in local or remote registry.\n\nIf the image is not found in local registry, it will try to pull from remote registry.\n\n```python\n>>> artifact = Artifact.load(\"ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f\")\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/random_lp_instance:4303c7f\n\n```",
+              "doc": "Load an artifact stored as a container image in local or remote registry.\n\nIf the image is not found in local registry, it will try to pull from remote registry.\n\n```python\n>>> artifact = Artifact.load(\"ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f\")\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/random_lp_instance:4303c7f\n\n```\n\nRaises {class}`~ommx.artifact.RemoteArtifactNotFoundError` when the\nexact remote reference does not exist. Other remote access failures\nraise subclasses of {class}`~ommx.artifact.RemoteArtifactError`.\nAn invalid image reference raises {class}`ValueError` before any remote\naccess is attempted.",
               "signatures": [
                 {
                   "parameters": [
@@ -27306,7 +27972,7 @@
             },
             {
               "name": "commit",
-              "doc": "Commit the artifact draft.",
+              "doc": "Commit the artifact draft.\n\nRaises {class}`RuntimeError` for registry or storage failures and when\nthe draft has already been committed.",
               "signatures": [
                 {
                   "parameters": [],
@@ -27385,7 +28051,7 @@
             },
             {
               "name": "new",
-              "doc": "Create a new artifact draft with an explicit image name. The\nartifact is published into the user's persistent SQLite Local\nRegistry on `commit()`; call {meth}`Artifact.save(path)` on the\nreturned handle if you also want a `.ommx` archive file for\nsharing.\n\n```python\n>>> from ommx.testing import SingleFeasibleLPGenerator, DataType\n>>> generator = SingleFeasibleLPGenerator(3, DataType.INT)\n>>> instance = generator.get_v1_instance()\n>>> import uuid\n>>> image_name = f\"ghcr.io/jij-inc/ommx/single_feasible_lp:{uuid.uuid4()}\"\n>>> draft = ArtifactDraft.new(image_name)\n>>> _desc = draft.add_instance(instance)\n>>> artifact = draft.commit()\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/single_feasible_lp:...\n\n```",
+              "doc": "Create a new artifact draft with an explicit image name. The\nartifact is published into the user's persistent SQLite Local\nRegistry on `commit()`; call {meth}`Artifact.save(path)` on the\nreturned handle if you also want a `.ommx` archive file for\nsharing.\n\n```python\n>>> from ommx.testing import SingleFeasibleLPGenerator, DataType\n>>> generator = SingleFeasibleLPGenerator(3, DataType.INT)\n>>> instance = generator.get_v1_instance()\n>>> import uuid\n>>> image_name = f\"ghcr.io/jij-inc/ommx/single_feasible_lp:{uuid.uuid4()}\"\n>>> draft = ArtifactDraft.new(image_name)\n>>> _desc = draft.add_instance(instance)\n>>> artifact = draft.commit()\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/single_feasible_lp:...\n\n```\n\nRaises {class}`ValueError` when `image_name` is not a valid OCI image\nreference. Registry and storage failures raise {class}`RuntimeError`.",
               "signatures": [
                 {
                   "parameters": [
@@ -28328,6 +28994,26 @@
         },
         {
           "kind": "Class",
+          "name": "InvalidRemoteArtifactError",
+          "doc": "The remote response is not a valid OMMX Artifact.",
+          "bases": [
+            {
+              "display": "RemoteArtifactError",
+              "link_target": {
+                "fqn": "ommx.artifact.RemoteArtifactError",
+                "doc_module": "ommx.artifact",
+                "kind": "Class",
+                "attribute": null
+              },
+              "children": []
+            }
+          ],
+          "methods": [],
+          "attributes": [],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
           "name": "PruneAnonymousReport",
           "doc": "Report returned by {func}`prune_anonymous`.",
           "bases": [],
@@ -28409,9 +29095,104 @@
           "deprecated": null
         },
         {
+          "kind": "Class",
+          "name": "RemoteArtifactAuthenticationError",
+          "doc": "Authentication for the remote Artifact registry failed.",
+          "bases": [
+            {
+              "display": "RemoteArtifactError",
+              "link_target": {
+                "fqn": "ommx.artifact.RemoteArtifactError",
+                "doc_module": "ommx.artifact",
+                "kind": "Class",
+                "attribute": null
+              },
+              "children": []
+            }
+          ],
+          "methods": [],
+          "attributes": [],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "RemoteArtifactAuthorizationError",
+          "doc": "The caller is not authorized to read the remote Artifact.",
+          "bases": [
+            {
+              "display": "RemoteArtifactError",
+              "link_target": {
+                "fqn": "ommx.artifact.RemoteArtifactError",
+                "doc_module": "ommx.artifact",
+                "kind": "Class",
+                "attribute": null
+              },
+              "children": []
+            }
+          ],
+          "methods": [],
+          "attributes": [],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "RemoteArtifactError",
+          "doc": "Base exception for failures while accessing a remote OMMX Artifact.",
+          "bases": [
+            {
+              "display": "RuntimeError",
+              "link_target": null,
+              "children": []
+            }
+          ],
+          "methods": [],
+          "attributes": [],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "RemoteArtifactNotFoundError",
+          "doc": "The requested remote Artifact manifest does not exist.",
+          "bases": [
+            {
+              "display": "RemoteArtifactError",
+              "link_target": {
+                "fqn": "ommx.artifact.RemoteArtifactError",
+                "doc_module": "ommx.artifact",
+                "kind": "Class",
+                "attribute": null
+              },
+              "children": []
+            }
+          ],
+          "methods": [],
+          "attributes": [],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "RemoteArtifactTransportError",
+          "doc": "The remote Artifact registry could not be reached or failed.",
+          "bases": [
+            {
+              "display": "RemoteArtifactError",
+              "link_target": {
+                "fqn": "ommx.artifact.RemoteArtifactError",
+                "doc_module": "ommx.artifact",
+                "kind": "Class",
+                "attribute": null
+              },
+              "children": []
+            }
+          ],
+          "methods": [],
+          "attributes": [],
+          "deprecated": null
+        },
+        {
           "kind": "Function",
           "name": "gc",
-          "doc": "Report or delete Local Registry blobs unreachable from SQLite refs.\n\nThis is the Python SDK equivalent of `ommx gc`. It is a dry-run by\ndefault. Pass `delete=True` to unlink orphan candidates. The `grace_period`\nstring accepts the same `s`, `m`, `h`, and `d` suffixes as the CLI.\n\n```python\n>>> from ommx.artifact import gc\n>>> report = gc()\n>>> report.delete_applied\nFalse\n\n```",
+          "doc": "Report or delete Local Registry blobs unreachable from SQLite refs.\n\nThis is the Python SDK equivalent of `ommx gc`. It is a dry-run by\ndefault. Pass `delete=True` to unlink orphan candidates. The `grace_period`\nstring accepts the same `s`, `m`, `h`, and `d` suffixes as the CLI.\nAn invalid duration raises {class}`ValueError`; registry and storage failures\nraise {class}`RuntimeError`.\n\n```python\n>>> from ommx.artifact import gc\n>>> report = gc()\n>>> report.delete_applied\nFalse\n\n```",
           "signatures": [
             {
               "parameters": [
@@ -28492,7 +29273,7 @@
         {
           "kind": "Function",
           "name": "get_images",
-          "doc": "Get all image names stored in the local registry.\n\nReturns a list of image names (as strings) found in the local registry.",
+          "doc": "Get all image names stored in the local registry.\n\nReturns a list of image names (as strings) found in the local registry.\nCorrupted persisted refs and other registry failures raise\n{class}`RuntimeError`.",
           "signatures": [
             {
               "parameters": [],
@@ -28532,7 +29313,7 @@
         {
           "kind": "Function",
           "name": "list_artifacts",
-          "doc": "List Artifact refs using the Local Registry's digest-addressed Manifest\ncache.\n\nMissing Manifest rows are backfilled from the CAS before records are\nreturned. If `prefix` is given, it is matched against the full image\nreference string. Internal implementation refs, including Experiment\ncheckpoints, are hidden by default; pass `include_internal=True` for\nregistry diagnostics.\n\nBy default, an invalid cached record is repaired from the CAS when possible.\nOMMX emits `RuntimeWarning` for repaired or skipped refs and returns the\nremaining records. Pass `strict=True` to fail on the first invalid ref.",
+          "doc": "List Artifact refs using the Local Registry's digest-addressed Manifest\ncache.\n\nMissing Manifest rows are backfilled from the CAS before records are\nreturned. If `prefix` is given, it is matched against the full image\nreference string. Internal implementation refs, including Experiment\ncheckpoints, are hidden by default; pass `include_internal=True` for\nregistry diagnostics.\n\nBy default, an invalid cached record is repaired from the CAS when possible.\nOMMX emits `RuntimeWarning` for repaired or skipped refs and returns the\nremaining records. Pass `strict=True` to fail on the first invalid ref.\nRegistry, manifest, and storage failures raise {class}`RuntimeError`.",
           "signatures": [
             {
               "parameters": [
@@ -28637,7 +29418,7 @@
         {
           "kind": "Function",
           "name": "prune_anonymous",
-          "doc": "Report or delete anonymous Artifact and Experiment refs in the Local Registry.\n\nThis is the Python SDK equivalent of `ommx prune-anonymous`.\nIt only removes SQLite refs when `delete=True`; manifest and payload blobs\nare left for {func}`gc` to reclaim if they become unreachable.\nAnonymous Experiment refs are included only when `experiments=True`.\n`older_than` accepts the same `s`, `m`, `h`, and `d` suffixes as the CLI.\n\n```python\n>>> from ommx.artifact import prune_anonymous\n>>> report = prune_anonymous()\n>>> report.delete_applied\nFalse\n\n```",
+          "doc": "Report or delete anonymous Artifact and Experiment refs in the Local Registry.\n\nThis is the Python SDK equivalent of `ommx prune-anonymous`.\nIt only removes SQLite refs when `delete=True`; manifest and payload blobs\nare left for {func}`gc` to reclaim if they become unreachable.\nAnonymous Experiment refs are included only when `experiments=True`.\n`older_than` accepts the same `s`, `m`, `h`, and `d` suffixes as the CLI.\nAn invalid duration raises {class}`ValueError`; registry and storage failures\nraise {class}`RuntimeError`.\n\n```python\n>>> from ommx.artifact import prune_anonymous\n>>> report = prune_anonymous()\n>>> report.delete_applied\nFalse\n\n```",
           "signatures": [
             {
               "parameters": [
@@ -28736,7 +29517,7 @@
         {
           "kind": "Function",
           "name": "remove_image",
-          "doc": "Remove one image ref from the Local Registry.\n\nThis removes only the mutable local ref. Immutable manifest and payload\nblobs remain available to other refs and are reclaimed by {func}`gc` once\nunreachable. Returns the atomically removed Manifest digest, or `None` when\nthe ref did not exist. Pass that digest to {func}`restore_image` to roll back\nthis exact deletion.",
+          "doc": "Remove one image ref from the Local Registry.\n\nThis removes only the mutable local ref. Immutable manifest and payload\nblobs remain available to other refs and are reclaimed by {func}`gc` once\nunreachable. Returns the atomically removed Manifest digest, or `None` when\nthe ref did not exist. Pass that digest to {func}`restore_image` to roll back\nthis exact deletion.\n\nAn invalid image reference raises {class}`ValueError`. Registry and storage\nfailures raise {class}`RuntimeError`.",
           "signatures": [
             {
               "parameters": [
@@ -28803,7 +29584,7 @@
         {
           "kind": "Function",
           "name": "restore_image",
-          "doc": "Restore a removed Local Registry image ref from its manifest digest.\n\nThe digest is printed as part of the CLI rollback command after `ommx rm`\nand `ommx prune-anonymous --delete`. The manifest and its complete\nconfig/layer/subject closure must still be present and valid in the Local\nRegistry CAS. Restore is serialized against deleting GC passes. Returns\n`True` when the ref is inserted and `False` when it already points to the\nrequested digest. A different existing target is reported as a conflict and\nis never replaced.",
+          "doc": "Restore a removed Local Registry image ref from its manifest digest.\n\nThe digest is printed as part of the CLI rollback command after `ommx rm`\nand `ommx prune-anonymous --delete`. The manifest and its complete\nconfig/layer/subject closure must still be present and valid in the Local\nRegistry CAS. Restore is serialized against deleting GC passes. Returns\n`True` when the ref is inserted and `False` when it already points to the\nrequested digest. A different existing target is reported as a conflict and\nis never replaced.\n\nInvalid image references and malformed Manifest digests raise\n{class}`ValueError`. Registry, storage, and ref-conflict failures raise\n{class}`RuntimeError`.",
           "signatures": [
             {
               "parameters": [
@@ -29053,7 +29834,7 @@
         {
           "kind": "Class",
           "name": "Experiment",
-          "doc": "A collection of optimization experiment records stored as one OMMX Artifact.\n\nAn `Experiment` owns experiment-level attachments and a sequence of\nclosed `Run` records. Each `Run` can store scalar run parameters,\nrun-level attachments, and zero or more `Solve` and `Sampling` records.\n\nNewly created experiments are unsealed. Call `commit()` to write the\nexperiment into the local registry as an OMMX Artifact. After commit, the\nsame object can be used as a read-only view of the committed artifact.\n`with Experiment(...)` commits on normal exit if the experiment is still\nunsealed. On exception it does not advance the successful Experiment image\nreference; instead it tries to publish a local checkpoint with status\n`\"failed\"` or `\"interrupted\"`.\n\nLogging APIs store payload bytes in the Local Registry immediately. The\nfinal commit writes an Experiment config and manifest that make those\npayloads reachable as one immutable Artifact. By default, a closed `Run`\nalso publishes a best-effort `\"draft\"` checkpoint so a later process can\nresume from the latest closed Run with\n`Experiment.restore_from_checkpoint(...)`. Use\n`set_autosave_policy(...)` to batch, rate-limit, or disable these\nRun-close checkpoints.\n\nUse experiment-level attachments for shared context such as dataset or\nsource-problem metadata. Use `Run.log_parameter(...)` for scalar values\nthat should appear in `run_parameters_df()`, and use run attachments or\n`Run.log_solve(...)` and `Run.log_sample(...)` for payloads that belong to\na specific run.\n\nExample:\n\n>>> from ommx.experiment import Experiment\n>>> with Experiment.with_temp_local_registry() as exp:\n...     exp.log_json(\"dataset\", {\"name\": \"demo\"})\n...     with exp.run() as run:\n...         run.log_parameter(\"capacity\", 10)\n...         run.log_json(\"scenario\", {\"capacity\": 10})\n>>> len(exp.runs)\n1\n>>> len(exp.attachment_names)\n1\n>>> exp.run_parameters_df().to_dict()\n{'capacity': {0: 10}}\n\nIf the experiment has only one run, open the experiment and the run in\none `with` statement. On normal exit, the run is finished first and then\nthe experiment is committed:\n\n>>> with Experiment() as exp, exp.run() as run:  # doctest: +SKIP\n...     solution = run.log_solve(adapter, instance, time_limit=10.0)\n>>> exp.rename(\"ghcr.io/container/name:latest\")  # doctest: +SKIP\n>>> exp.push()  # doctest: +SKIP",
+          "doc": "A collection of optimization experiment records stored as one OMMX Artifact.\n\nAn `Experiment` owns experiment-level attachments and a sequence of\nclosed `Run` records. Each `Run` can store scalar run parameters,\nrun-level attachments, and zero or more `Solve` and `Sampling` records.\n\nNewly created experiments are unsealed. Call `commit()` to write the\nexperiment into the local registry as an OMMX Artifact. After commit, the\nsame object can be used as a read-only view of the committed artifact.\n`with Experiment(...)` commits on normal exit if the experiment is still\nunsealed. On exception it does not advance the successful Experiment image\nreference; instead it tries to publish a local checkpoint with status\n`\"failed\"` or `\"interrupted\"`.\n\nLogging APIs store payload bytes in the Local Registry immediately. The\nfinal commit writes an Experiment config and manifest that make those\npayloads reachable as one immutable Artifact. By default, a closed `Run`\nalso publishes a best-effort `\"draft\"` checkpoint so a later process can\nresume from the latest closed Run with\n`Experiment.restore_from_checkpoint(...)`. Use\n`set_autosave_policy(...)` to batch, rate-limit, or disable these\nRun-close checkpoints.\n\nUse experiment-level attachments for shared context such as dataset or\nsource-problem metadata. Use `Run.log_parameter(...)` for scalar values\nthat should appear in `run_parameters_df()`, and use run attachments or\n`Run.log_solve(...)` and `Run.log_sample(...)` for payloads that belong to\na specific run.\n\nAttachment lookup by an absent name raises {class}`KeyError`. A caller-side\nimage reference, autosave value, media type, or JSON input that is invalid\nraises {class}`ValueError`. Registry, archive, storage, and lifecycle-state\nfailures raise {class}`RuntimeError`. Exceptions raised by Python codecs,\nadapters, tracing hooks, and data libraries pass through unchanged.\n\nExample:\n\n>>> from ommx.experiment import Experiment\n>>> with Experiment.with_temp_local_registry() as exp:\n...     exp.log_json(\"dataset\", {\"name\": \"demo\"})\n...     with exp.run() as run:\n...         run.log_parameter(\"capacity\", 10)\n...         run.log_json(\"scenario\", {\"capacity\": 10})\n>>> len(exp.runs)\n1\n>>> len(exp.attachment_names)\n1\n>>> exp.run_parameters_df().to_dict()\n{'capacity': {0: 10}}\n\nIf the experiment has only one run, open the experiment and the run in\none `with` statement. On normal exit, the run is finished first and then\nthe experiment is committed:\n\n>>> with Experiment() as exp, exp.run() as run:  # doctest: +SKIP\n...     solution = run.log_solve(adapter, instance, time_limit=10.0)\n>>> exp.rename(\"ghcr.io/container/name:latest\")  # doctest: +SKIP\n>>> exp.push()  # doctest: +SKIP",
           "bases": [],
           "methods": [
             {
@@ -29317,7 +30098,7 @@
             },
             {
               "name": "from_artifact",
-              "doc": "Interpret an already-open Artifact as a committed Experiment.\n\nThis is the usual entry point after importing or receiving an OMMX\nArtifact handle. The artifact must contain an Experiment config.",
+              "doc": "Interpret an already-open Artifact as a finished, failed, or interrupted Experiment.\n\nThis is the usual entry point after importing or receiving an OMMX\nArtifact handle. The artifact must contain an Experiment config.",
               "signatures": [
                 {
                   "parameters": [
@@ -29582,7 +30363,7 @@
             },
             {
               "name": "import_archive",
-              "doc": "Import an Experiment Artifact from a `.ommx` OCI archive file (or an OCI\nImage Layout directory).\n\nThe archive is imported into the default Local Registry, matching\n{meth}`Artifact.import_archive`, and then interpreted as an\nExperiment. The imported artifact must contain an Experiment config.",
+              "doc": "Import a finished, failed, or interrupted Experiment Artifact from a\n`.ommx` OCI archive file (or an OCI Image Layout directory).\n\nThe archive is imported into the default Local Registry, matching\n{meth}`Artifact.import_archive`, and then interpreted as an\nExperiment. The imported artifact must contain an Experiment config.",
               "signatures": [
                 {
                   "parameters": [
@@ -29629,7 +30410,7 @@
             },
             {
               "name": "load",
-              "doc": "Load a committed Experiment Artifact by image reference.\n\nIf the image is not found in the default Local Registry, OMMX tries to\npull it from the remote registry, matching {meth}`Artifact.load`.\nThe loaded artifact must contain an Experiment config. Use\n`Experiment(...)` to create a new unsealed experiment.",
+              "doc": "Load a committed Experiment Artifact by image reference.\n\nIf the image is not found in the default Local Registry, OMMX tries to\npull it from the remote registry, matching {meth}`Artifact.load`.\nThe loaded artifact must contain an Experiment config. Use\n`Experiment(...)` to create a new unsealed experiment.\n\nRaises {class}`~ommx.artifact.RemoteArtifactNotFoundError` when the\nexact remote reference does not exist. Other remote access failures\nraise subclasses of {class}`~ommx.artifact.RemoteArtifactError`.",
               "signatures": [
                 {
                   "parameters": [
@@ -30114,7 +30895,7 @@
             },
             {
               "name": "push",
-              "doc": "Push this committed Experiment Artifact to its remote registry.\n\nUse `rename(...)` first when an anonymous or local-only experiment\nshould be published under a remote container image reference.\n\nRaises an error if the Experiment has not been committed yet.",
+              "doc": "Push this finished, failed, or interrupted Experiment Artifact remotely.\n\nUse `rename(...)` first when an anonymous or local-only experiment\nshould be published under a remote container image reference.\n\nRaises an error if the Experiment has not been committed yet.",
               "signatures": [
                 {
                   "parameters": [],
@@ -30224,7 +31005,7 @@
             },
             {
               "name": "save",
-              "doc": "Save this committed Experiment Artifact as a `.ommx` OCI archive file at `path`.\n\nThe archive is an exchange-format export of the registry-resident\nExperiment Artifact. Loading the archive back via\n{meth}`Experiment.import_archive` reimports it into the SQLite Local\nRegistry under the same image name.\n\nRaises an error if the Experiment has not been committed yet.",
+              "doc": "Save this finished, failed, or interrupted Experiment Artifact as a `.ommx` archive.\n\nThe archive is an exchange-format export of the registry-resident\nExperiment Artifact. Loading the archive back via\n{meth}`Experiment.import_archive` reimports it into the SQLite Local\nRegistry under the same image name.\n\nRaises an error if the Experiment has not been committed yet.",
               "signatures": [
                 {
                   "parameters": [
@@ -30471,7 +31252,7 @@
             },
             {
               "name": "artifact",
-              "doc": "Committed OMMX Artifact for this Experiment.\n\nRaises an error if the Experiment has not been committed yet.",
+              "doc": "Immutable OMMX Artifact for this finished, failed, or interrupted Experiment.\n\nRaises an error if the Experiment has not been committed yet.",
               "type_": {
                 "display": "Artifact",
                 "link_target": {
@@ -30509,6 +31290,23 @@
                 "display": "str",
                 "link_target": null,
                 "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "lifecycle_reason",
+              "doc": "Concise exception type and message for a failed or interrupted Experiment.\n\nThis is lifecycle metadata, not solver diagnostics. It is `None` when\nno reason was recorded.",
+              "type_": {
+                "display": "Optional[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
               },
               "is_property": true,
               "is_readonly": true
@@ -32124,7 +32922,7 @@
         {
           "kind": "Class",
           "name": "SealedRun",
-          "doc": "Immutable view of a closed Run in an Experiment.\n\n`SealedRun` exposes run-level attachments by name, `Solve` records created\nby `Run.log_solve`, and `Sampling` records created by `Run.log_sample`.\nThe `status` property records\nhow the Run scope was closed: `\"finished\"`, `\"failed\"`, or `\"interrupted\"`.\nIt is not an aggregate status of child records, so a finished Run may\ncontain failed Solve or Sampling attempts handled inside the Run.",
+          "doc": "Immutable view of a closed Run in an Experiment.\n\n`SealedRun` exposes run-level attachments by name, `Solve` records created\nby `Run.log_solve`, and `Sampling` records created by `Run.log_sample`.\nMissing attachment names raise {class}`KeyError`; choosing a typed getter\nincompatible with the stored media type raises {class}`ValueError`.\nThe `status` property records\nhow the Run scope was closed: `\"finished\"`, `\"failed\"`, or `\"interrupted\"`.\nIt is not an aggregate status of child records, so a finished Run may\ncontain failed Solve or Sampling attempts handled inside the Run.",
           "bases": [],
           "methods": [
             {
@@ -32468,6 +33266,23 @@
               "doc": "Names of run-level attachments.",
               "type_": {
                 "display": "list[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "lifecycle_reason",
+              "doc": "Concise exception type and message for a failed or interrupted Run.",
+              "type_": {
+                "display": "Optional[str]",
                 "link_target": null,
                 "children": [
                   {
@@ -32920,17 +33735,24 @@
     "ommx.ConstraintRequirement": "ommx",
     "ommx.DecisionVariable": "ommx",
     "ommx.DecisionVariableRole": "ommx",
-    "ommx.DegreeLimit": "ommx",
+    "ommx.DegreeBound": "ommx",
     "ommx.Equality": "ommx",
     "ommx.EvaluatedConstraint": "ommx",
     "ommx.EvaluatedDecisionVariable": "ommx",
     "ommx.EvaluatedNamedFunction": "ommx",
+    "ommx.ExactIntegerSlackError": "ommx",
     "ommx.Function": "ommx",
     "ommx.IndicatorConstraint": "ommx",
+    "ommx.InfeasibleDetected": "ommx",
     "ommx.Instance": "ommx",
-    "ommx.InstanceRequirements": "ommx",
+    "ommx.InstanceClass": "ommx",
+    "ommx.InstanceClassClause": "ommx",
+    "ommx.InstanceClassClauseReport": "ommx",
+    "ommx.InstanceClassMembershipReport": "ommx",
+    "ommx.InstanceClassMismatch": "ommx",
     "ommx.Kind": "ommx",
     "ommx.Linear": "ommx",
+    "ommx.LogEncodingError": "ommx",
     "ommx.NamedFunction": "ommx",
     "ommx.OneHotConstraint": "ommx",
     "ommx.Optimality": "ommx",
@@ -32974,7 +33796,13 @@
     "ommx.artifact.GcMissingBlob": "ommx.artifact",
     "ommx.artifact.GcReport": "ommx.artifact",
     "ommx.artifact.GcRoot": "ommx.artifact",
+    "ommx.artifact.InvalidRemoteArtifactError": "ommx.artifact",
     "ommx.artifact.PruneAnonymousReport": "ommx.artifact",
+    "ommx.artifact.RemoteArtifactAuthenticationError": "ommx.artifact",
+    "ommx.artifact.RemoteArtifactAuthorizationError": "ommx.artifact",
+    "ommx.artifact.RemoteArtifactError": "ommx.artifact",
+    "ommx.artifact.RemoteArtifactNotFoundError": "ommx.artifact",
+    "ommx.artifact.RemoteArtifactTransportError": "ommx.artifact",
     "ommx.artifact.gc": "ommx.artifact",
     "ommx.artifact.get_images": "ommx.artifact",
     "ommx.artifact.get_local_registry_root": "ommx.artifact",

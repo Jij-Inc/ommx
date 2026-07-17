@@ -1,13 +1,40 @@
+import math
+
+import ommx
+import pytest
 from ommx import (
-    Instance,
     DecisionVariable,
+    ExactIntegerSlackError,
     Function,
+    InfeasibleDetected,
+    Instance,
     Linear,
+    LogEncodingError,
     Parameter,
     ParametricInstance,
 )
-import math
-import pytest
+
+
+def test_operation_error_types_are_public_runtime_errors():
+    from ommx.adapter import InfeasibleDetected as AdapterInfeasibleDetected
+
+    operation_error_types = (
+        LogEncodingError,
+        ExactIntegerSlackError,
+        InfeasibleDetected,
+    )
+    for error_type in operation_error_types:
+        assert issubclass(error_type, RuntimeError)
+        assert error_type.__module__ == "ommx"
+    assert AdapterInfeasibleDetected is InfeasibleDetected
+    assert {
+        "LogEncodingError",
+        "ExactIntegerSlackError",
+        "InfeasibleDetected",
+    } <= set(ommx.__all__)
+    assert ommx.LogEncodingError is LogEncodingError
+    assert ommx.ExactIntegerSlackError is ExactIntegerSlackError
+    assert ommx.InfeasibleDetected is InfeasibleDetected
 
 
 def test_incremental_modeling_workflow():
@@ -137,7 +164,7 @@ def test_convert_inequality_to_equality_with_integer_slack_limit():
         constraints={0: math.pi * x[0] + math.e * x[1] >= 1},
         sense=Instance.MAXIMIZE,
     )
-    with pytest.raises(RuntimeError) as e:
+    with pytest.raises(ExactIntegerSlackError) as e:
         instance.convert_inequality_to_equality_with_integer_slack(0, 32)
     assert (
         str(e.value)
@@ -175,7 +202,7 @@ def test_convert_inequality_to_equality_with_integer_slack_infeasible():
         },
         sense=Instance.MAXIMIZE,
     )
-    with pytest.raises(RuntimeError) as e:
+    with pytest.raises(InfeasibleDetected) as e:
         instance.convert_inequality_to_equality_with_integer_slack(0, 32)
     assert (
         str(e.value)
@@ -215,7 +242,7 @@ def test_add_integer_slack_to_inequality_infeasible():
         },
         sense=Instance.MAXIMIZE,
     )
-    with pytest.raises(RuntimeError) as e:
+    with pytest.raises(InfeasibleDetected) as e:
         instance.add_integer_slack_to_inequality(0, 4)
     assert (
         str(e.value)
@@ -529,8 +556,9 @@ def test_encode_methods_reject_explicit_non_integer_variables():
             constraints={},
             sense=Instance.MAXIMIZE,
         )
-        with pytest.raises(RuntimeError, match="must be integer"):
+        with pytest.raises(RuntimeError, match="must be integer") as error:
             log_instance.log_encode({0})
+        assert not isinstance(error.value, LogEncodingError)
         assert _variables_named(log_instance, "ommx.log_encode") == []
 
         unary_instance = Instance.from_components(
@@ -553,8 +581,9 @@ def test_encode_methods_reject_fixed_variables():
         constraints={},
         sense=Instance.MAXIMIZE,
     ).partial_evaluate({0: 1})
-    with pytest.raises(RuntimeError, match="fixed decision variable"):
+    with pytest.raises(RuntimeError, match="fixed decision variable") as error:
         log_instance.log_encode({0})
+    assert not isinstance(error.value, LogEncodingError)
     assert log_instance.fixed_decision_variables() == {0: 1.0}
     assert log_instance.dependent_decision_variable_ids() == set()
     assert _variables_named(log_instance, "ommx.log_encode") == []
@@ -585,8 +614,13 @@ def test_log_encode_auto_detect_is_transactional_on_failure():
     )
     before = instance.decision_variables
 
-    with pytest.raises(RuntimeError, match="bound must be finite"):
+    with pytest.raises(LogEncodingError, match="bound must be finite") as error:
         instance.log_encode()
+
+    assert error.value.kind == "non_finite_bound"
+    assert error.value.variable_id == 1
+    assert error.value.observed == "[-inf, inf]"
+    assert error.value.expected == "finite integer range"
 
     assert instance.decision_variables == before
     assert _variables_named(instance, "ommx.log_encode") == []
@@ -692,9 +726,9 @@ def test_encoding_methods_validate_atol():
         sense=Instance.MAXIMIZE,
     )
 
-    with pytest.raises(RuntimeError, match="ATol must be positive"):
+    with pytest.raises(ValueError, match="ATol must be positive"):
         log_instance.log_encode(atol=0.0)
-    with pytest.raises(RuntimeError, match="ATol must be positive"):
+    with pytest.raises(ValueError, match="ATol must be positive"):
         unary_instance.unary_encode(atol=0.0)
 
 

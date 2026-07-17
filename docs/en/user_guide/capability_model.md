@@ -11,18 +11,48 @@ kernelspec:
   name: python3
 ---
 
-# Adapter Capability Model and Explicit Preparation
+# Adapter Input Classes and Explicit Constraint Lowering
 
-An adapter capability answers one question: **which complete model shapes can
-this adapter translate directly to its backend solver?** It includes the kinds
-of variables actually used by the solver input, polynomial-degree limits for
-the objective and each constraint family, supported constraint relations, and
-the optimization sense. Regular constraints are therefore not assumed to be
-universally supported.
+OMMX separates two concepts that were previously described together as adapter capabilities:
+
+- An {class}`~ommx.InstanceClass` describes a set of exact `Instance` values. An adapter declares its structural input condition with `INPUT_CLASS`, then evaluates adapter-owned preconditions to determine applicability.
+- {meth}`Instance.reduce_capabilities() <ommx.Instance.reduce_capabilities>` explicitly lowers every special-constraint family not selected for preservation on an instance. It does not declare an input class or establish adapter applicability.
 
 Three related APIs have deliberately separate responsibilities:
 
-| API | Responsibility |
+- `InstanceClass` membership and adapter applicability
+- {class}`~ommx.AdditionalCapability` and {attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>` as special-constraint family selectors
+- {meth}`Instance.reduce_capabilities() <ommx.Instance.reduce_capabilities>` for explicit lowering
+- Manual conversion APIs per constraint type
+- Auditing conversion results
+
+## Instance classes and adapter applicability
+
+An `InstanceClass` is a finite union of complete, conjunctive {class}`~ommx.InstanceClassClause` values. Membership is evaluated against the exact input without mutating or preparing it.
+
+```{code-cell} ipython3
+from ommx import DegreeBound, InstanceClass, InstanceClassClause, Kind, Sense
+
+binary_linear_with_one_hot = InstanceClass(
+    [
+        InstanceClassClause(
+            label="binary-linear-with-one-hot",
+            allowed_variable_kinds={Kind.Binary},
+            objective_degree_bound=DegreeBound.at_most(1),
+            allowed_senses={Sense.Maximize},
+            allows_one_hot=True,
+        )
+    ]
+)
+```
+
+Adapters declare this first applicability condition as `INPUT_CLASS`. Use `check_applicability()` for a structured result or `require_applicable()` to raise when membership or an adapter-owned precondition fails. Explicit preparation produces another input value, whose applicability must be checked again.
+
+## AdditionalCapability and required_capabilities
+
+{class}`~ommx.AdditionalCapability` is the enumeration of "extra constraint types" beyond regular constraints.
+
+| Capability | Constraint type |
 |---|---|
 | {class}`~ommx.AdapterCapabilities` / {class}`~ommx.CapabilityProfile` | Declare native adapter input and compare it with a model |
 | {class}`~ommx.SpecialConstraintKind` / {meth}`~ommx.Instance.lower_special_constraints` | Select an explicit special-constraint lowering operation |
@@ -61,69 +91,17 @@ instance = Instance.from_components(
     one_hot_constraints={0: OneHotConstraint(variables=xs)},
     sense=Instance.MAXIMIZE,
 )
-
-requirements = instance.solver_requirements()
-assert requirements.used_variable_ids == {0, 1, 2}
-assert requirements.objective_degree == 1
-assert requirements.one_hot_constraint_ids == {0}
+assert instance.required_capabilities == {AdditionalCapability.OneHot}
+assert binary_linear_with_one_hot.contains(instance)
 ```
 
-## Declaring coherent native profiles
+## Explicit lowering via reduce_capabilities
 
-An adapter declares `CAPABILITIES` as one or more complete
-{class}`~ommx.CapabilityProfile` values. Every field in one profile is a
-conjunction. Multiple profiles are alternatives, not fields that are unioned
-together; for example, separate continuous-QP and MILP profiles do not
-accidentally claim MIQP support.
+{meth}`Instance.reduce_capabilities() <ommx.Instance.reduce_capabilities>` is an explicit, mutating operation. For each family in `required_capabilities` that is not in `preserved`, the corresponding conversion API (see below) is invoked to turn that special constraint into regular constraints.
 
 ```{code-cell} ipython3
-from ommx import (
-    AdapterCapabilities,
-    CapabilityProfile,
-    DegreeLimit,
-    Equality,
-    Kind,
-    Sense,
-)
-from ommx.adapter import SolverAdapter
-
-linear_profile = CapabilityProfile(
-    name="binary-linear",
-    variable_kinds={Kind.Binary},
-    objective_degree=DegreeLimit.at_most(1),
-    regular_constraints={
-        Equality.EqualToZero: DegreeLimit.at_most(1),
-        Equality.LessThanOrEqualToZero: DegreeLimit.at_most(1),
-    },
-    senses={Sense.Minimize, Sense.Maximize},
-)
-
-class MyLinearAdapter(SolverAdapter):
-    CAPABILITIES = AdapterCapabilities([linear_profile])
-```
-
-Omitting a constraint family means that the profile supports no active
-constraint of that family. `DegreeLimit.at_most(n)` is cumulative and accepts
-degrees from 0 through `n`; `DegreeLimit.any()` accepts every polynomial degree
-representable by OMMX. An adapter-specific numerical restriction that cannot be
-expressed portably belongs in the adapter's `_check_preconditions` hook, not in
-the profile.
-
-## Side-effect-free compatibility checks
-
-{meth}`~ommx.adapter.SolverAdapter.check_compatibility` compares the complete
-requirements against each native profile and then checks adapter-specific
-preconditions. It does not lower, encode, relax, or otherwise mutate the input.
-{meth}`~ommx.adapter.SolverAdapter.require_compatible` returns the same report
-on success and raises {class}`~ommx.adapter.AdapterCompatibilityError` on
-failure.
-
-```{code-cell} ipython3
-from ommx import SpecialConstraintKind
-
-report = MyLinearAdapter.check_compatibility(instance)
-assert not report.compatible
-assert instance.active_special_constraint_kinds == {SpecialConstraintKind.OneHot}
+converted = instance.reduce_capabilities(preserved=set())
+assert converted == {AdditionalCapability.OneHot}
 ```
 
 This instance fails because the profile does not claim native OneHot support.
@@ -153,11 +131,7 @@ MyLinearAdapter.require_compatible(prepared)
 assert instance.active_special_constraint_kinds == {SpecialConstraintKind.OneHot}
 ```
 
-`lower_special_constraints` mutates the selected instance in place and returns
-the families it actually lowered. Direct selection avoids interpreting the set
-as a declaration of what some adapter supports. The operation composes the
-per-family conversion APIs below and preserves the removed constraints and
-provenance for audit.
+The OneHot constraint has been removed and a regular equality $x_0 + x_1 + x_2 - 1 = 0$ has been added in its place. `reduce_capabilities` mutates the instance in place. On success, `required_capabilities` becomes a subset of `preserved`. The method returns an empty set when no conversion was needed. Recheck `INPUT_CLASS` membership or adapter applicability on this resulting value.
 
 More general preparation can include exact reformulation, approximation,
 relaxation, or finite-penalty conversion. Such a workflow should record its
@@ -272,11 +246,11 @@ for cid, c in instance2.constraints.items():
 
 | What you want to do | API |
 |---|---|
-| Derive the active solver-facing model shape | {meth}`Instance.solver_requirements <ommx.Instance.solver_requirements>` |
-| Declare direct translator support | `SolverAdapter.CAPABILITIES` with {class}`~ommx.AdapterCapabilities` |
-| Check without mutating the input | `check_compatibility` / `require_compatible` |
-| Inspect active special-constraint families | {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` |
-| Explicitly lower selected special constraints | {meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>` |
+| Describe a structural set of adapter inputs | {class}`~ommx.InstanceClass` |
+| Declare the first adapter applicability condition | `INPUT_CLASS` |
+| Check membership plus adapter-owned preconditions | `check_applicability()` / `require_applicable()` |
+| Inspect active special-constraint families | {attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>` |
+| Explicitly lower every non-preserved special constraint | {meth}`Instance.reduce_capabilities <ommx.Instance.reduce_capabilities>` |
 | Convert individually to regular constraints | `convert_*_to_constraint(s)` / `convert_all_*_to_constraints` |
 | Audit conversion history | `instance.constraints_df(kind=..., removed=True)` / `solution.constraints_df(kind=..., include=("...","removed_reason"))` |
 | Check serialized forward compatibility | `ommx.v2.Feature` / `required_features` |

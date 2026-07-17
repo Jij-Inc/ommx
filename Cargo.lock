@@ -6,7 +6,6 @@ version = 4
 name = "_ommx_rust"
 version = "3.0.0-beta.2"
 dependencies = [
- "anyhow",
  "approx",
  "derive_more",
  "fnv",
@@ -2518,6 +2517,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "ommx-pyo3-bridge"
+version = "3.0.0-beta.2"
+dependencies = [
+ "ommx",
+ "proptest",
+ "pyo3",
+ "pyo3-stub-gen",
+]
+
+[[package]]
+name = "ommx-pyo3-bridge-fixture"
+version = "3.0.0-beta.2"
+dependencies = [
+ "ommx",
+ "ommx-pyo3-bridge",
+ "pyo3",
+ "pyo3-stub-gen",
+]
+
+[[package]]
 name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2958,7 +2977,6 @@ version = "0.27.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab53c047fcd1a1d2a8820fe84f05d6be69e9526be40cb03b73f86b6b03e6d87d"
 dependencies = [
- "anyhow",
  "indoc",
  "inventory",
  "libc",
@@ -3057,11 +3075,10 @@ dependencies = [
 
 [[package]]
 name = "pyo3-tracing-opentelemetry"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b967011321acb6541a9e5ba1752cf2a8f268e9789c118be23ab8077898ef1337"
+checksum = "e59575fbbba675f80a99801402ff85de438256eb1ad2d10af6aafacec15920fc"
 dependencies = [
- "anyhow",
  "futures-util",
  "opentelemetry",
  "opentelemetry_sdk",
@@ -3791,9 +3808,9 @@ dependencies = [
 
 [[package]]
 name = "serde_with"
-version = "3.20.0"
+version = "3.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e72c1c2cb7b223fafb600a619537a871c2818583d619401b785e7c0b746ccde2"
+checksum = "76a5c54c7310e7b8b9577c286d7e399ddd876c3e12b3ed917a8aabc4b96e9e8c"
 dependencies = [
  "base64",
  "bs58",
@@ -3811,9 +3828,9 @@ dependencies = [
 
 [[package]]
 name = "serde_with_macros"
-version = "3.20.0"
+version = "3.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b90c488738ecb4fb0262f41f43bc40efc5868d9fb744319ddf5f5317f417bfac"
+checksum = "84d57bc0c8b9a17920c178daa6bb924850d54a9c97ab45194bb8c17ad66bb660"
 dependencies = [
  "darling 0.23.0",
  "proc-macro2",
@@ -4109,7 +4126,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.2",
  "once_cell",
  "rustix",
  "windows-sys 0.52.0",

@@ -73,11 +73,12 @@ impl Instance {
         let mut objective = self.objective.clone();
         let mut parameters = ParameterTable::default();
         let mut constraint_collection = self.constraint_collection;
-        let mut parameter_offset = 0;
         let mut removals = BTreeMap::new();
-        for (&constraint_id, constraint) in constraint_collection.active() {
+        for (parameter_offset, (&constraint_id, constraint)) in
+            constraint_collection.active().iter().enumerate()
+        {
+            let parameter_offset = u64::try_from(parameter_offset)?;
             let parameter_id = VariableID::from(id_base + parameter_offset);
-            parameter_offset += 1;
             let parameter_label = ParameterLabel {
                 name: Some("penalty_weight".to_string()),
                 subscripts: vec![constraint_id.into_inner() as i64],

@@ -19,27 +19,16 @@ Here, we explain how to convert a problem to QUBO and perform sampling using the
 [Illustration of a man in a suit](https://www.irasutoya.com/2017/03/blog-post_739.html)
 ```
 
-The Traveling Salesman Problem (TSP) is about finding a route for a salesman to visit multiple cities in sequence. Given the travel costs between cities, we seek to find the path that minimizes the total cost. Let's consider the following city arrangement:
+The Traveling Salesman Problem (TSP) is about finding a route for a salesman to visit multiple cities in sequence. Given the travel costs between cities, we seek to find the path that minimizes the total cost. For this self-contained example, we reproducibly generate 16 cities in a 10 by 10 region using a fixed random seed:
 
 ```{code-cell} ipython3
-# From ulysses16.tsp in TSPLIB
-ulysses16_points = [
-    (38.24, 20.42),
-    (39.57, 26.15),
-    (40.56, 25.32),
-    (36.26, 23.12),
-    (33.48, 10.54),
-    (37.56, 12.19),
-    (38.42, 13.11),
-    (37.52, 20.44),
-    (41.23, 9.10),
-    (41.17, 13.05),
-    (36.08, -5.21),
-    (38.47, 15.13),
-    (38.15, 15.35),
-    (37.51, 15.17),
-    (35.49, 14.32),
-    (39.36, 19.56),
+from random import Random
+
+N = 16
+rng = Random(42)
+city_points = [
+    (rng.uniform(0.0, 10.0), rng.uniform(0.0, 10.0))
+    for _ in range(N)
 ]
 ```
 
@@ -49,11 +38,11 @@ Let's plot the locations of the cities.
 %matplotlib inline
 from matplotlib import pyplot as plt
 
-x_coords, y_coords = zip(*ulysses16_points)
+x_coords, y_coords = zip(*city_points)
 plt.scatter(x_coords, y_coords)
 plt.xlabel('X Coordinate')
 plt.ylabel('Y Coordinate')
-plt.title('Ulysses16 Points')
+plt.title('Randomly Generated City Locations')
 plt.show()
 ```
 
@@ -63,10 +52,8 @@ Let's consider distance as the cost. We'll calculate the distance $d(i, j)$ betw
 def distance(x, y):
     return ((x[0] - y[0])**2 + (x[1] - y[1])**2)**0.5
 
-# Number of cities
-N = len(ulysses16_points)
 # Distance between each pair of cities
-d = [[distance(ulysses16_points[i], ulysses16_points[j]) for i in range(N)] for j in range(N)]
+d = [[distance(city_points[i], city_points[j]) for i in range(N)] for j in range(N)]
 ```
 
 Using this, we can formulate TSP as follows. First, let's represent whether we are at city $i$ at time $t$ with a binary variable $x_{t, i}$. Then, we seek $x_{t, i}$ that satisfies the following constraints. The distance traveled by the salesman is given by:
@@ -140,28 +127,28 @@ The variable names and subscripts added to `DecisionVariable.binary` during crea
 
 ## Sampling with OpenJij
 
-The native OpenJij translator in `ommx-openjij-adapter` accepts Binary,
-unconstrained minimization models with a polynomial objective of any degree.
-The TSP instance above contains constraints, so first check and explicitly
-prepare it with a finite penalty weight by setting `preparation=True` on the
-sampler call. The source `Instance` remains the sampler input so Experiment
-logging records the original constrained model.
+The OpenJij adapter's input class contains Binary, unconstrained minimization
+instances with a polynomial objective of any degree.
+The TSP instance above contains constraints, so prepare it explicitly with a
+finite penalty weight. Then pass the resulting `prepared.input` `Instance` to
+the Adapter and evaluate those samples against the source model explicitly.
 
 ```{code-cell} ipython3
-from ommx_openjij_adapter import OMMXOpenJijSAAdapter
+from ommx_openjij_adapter import (
+    OMMXOpenJijSAAdapter,
+    OpenJijPreparationConfig,
+)
 
-preparation_check = OMMXOpenJijSAAdapter.check_preparation(
-    instance,
+config = OpenJijPreparationConfig(
     uniform_penalty_weight=20.0,
 )
-assert preparation_check.compatible
+prepared = OMMXOpenJijSAAdapter.prepare(instance, config=config)
 
-sample_set = OMMXOpenJijSAAdapter.sample(
-    instance,
-    preparation=True,
-    uniform_penalty_weight=20.0,
+prepared_samples = OMMXOpenJijSAAdapter.sample(
+    prepared.input,
     num_reads=16,
 )
+sample_set = prepared.evaluate_source(prepared_samples)
 sample_set.summary
 ```
 
@@ -169,63 +156,70 @@ sample_set.summary
 {py:class}`~ommx.SampleSet`, which stores the evaluated objective values and
 constraint violations in addition to the decision variable values.
 `SampleSet.summary` displays this information. Its `feasible` column indicates
-feasibility for the source constrained problem, not only for the unconstrained
-model sent to OpenJij.
+feasibility for the source constrained problem because
+`prepared.evaluate_source()` evaluates the prepared-input states against that
+source model.
 
-The penalty weight passed through `sample` belongs to the explicit preparation,
-not to the OpenJij backend sampler. A finite penalty encourages feasibility but
-does not guarantee that every returned sample is feasible for the source
-problem.
+The penalty weight in `config` belongs to the explicit preparation, not to the
+OpenJij backend sampler. A finite penalty encourages feasibility but does not
+guarantee that every returned sample is feasible for the source problem.
 
 ### Inspecting preparation
 
-`check_preparation` checks the source model and preparation options without
+`check_preparation` checks the source model and preparation config without
 mutating the instance. `prepare` performs the checked transformations and
 stores an audit report in `prepared.report`:
 
 ```{code-cell} ipython3
-prepared = OMMXOpenJijSAAdapter.prepare(
-    instance,
-    uniform_penalty_weight=20.0,
-)
 report = prepared.report
-{
-    "source_compatibility": report.source_compatibility.compatible,
-    "encoding_compatibility": report.encoding_compatibility.compatible,
-    "steps": [
-        (step.operation, step.semantics.value)
-        for step in report.steps
-    ],
-    "final_compatibility": report.final_compatibility.compatible,
+config_used = report.config
+final = report.input_applicability
+outcomes = {
+    "source_membership": report.source_check.source_membership.is_member,
+    "steps": [step.operation for step in report.steps],
+    "preparation_failures": report.preparation_failures,
+    "input_applicability": None if final is None else final.is_applicable,
 }
+config_used, outcomes
 ```
 
-The report separates four questions:
+`report.config` records the normalized, immutable preparation settings actually
+used. It is configuration evidence. The other fields encode one terminal state:
 
-- `source_compatibility` says whether the source model and requested options
-  satisfy the explicit preparation contract.
-- `encoding_compatibility` says whether the intermediate model satisfies the
-  remaining Integer-to-Binary encoding conditions.
-- `steps` records each transformation and its semantic effect.
-- `final_compatibility` says whether the prepared solver model satisfies the
-  adapter's native capability and adapter-specific preconditions.
+| State | `source_check` | `preparation_failures` | `input_applicability` |
+| --- | --- | --- | --- |
+| Source rejected | outside the preparation source class | empty | `None` |
+| Phase rejected | accepted | non-empty, with the owning `operation` | `None` |
+| Candidate rejected | accepted | empty | non-applicable report |
+| Success | accepted | empty | applicable report |
 
-A step is `Exact` for an exact rewrite, `Approximate` when preparation uses an
-approximation such as discrete inequality slack, or `FinitePenalty` when
-constraints are replaced by finite objective penalties. `FinitePenalty` does
-not claim native or exact constrained support.
+`source_check` is structural source-class membership. Operation availability
+and preparation policy belong to the phase that performs the operation and are
+recorded in `preparation_failures`. `steps` is the prefix of operations that
+completed before the terminal state. It is an operation audit, not a separate
+outcome or a composed mathematical guarantee.
+Common preparation policy, guarantees, and automatic selection are tracked in
+[OMMX issue #1111](https://github.com/Jij-Inc/ommx/issues/1111). By default,
+OpenJij preparation uses only the available exact operations. Discrete integer
+slack approximation requires setting `allow_approximate_integer_slack=True` on
+`OpenJijPreparationConfig`; setting `inequality_integer_slack_max_range` alone
+does not opt into approximation. Configuring `uniform_penalty_weight` or
+`penalty_weights` explicitly selects finite-penalty preparation, which does not
+claim that the Adapter directly or exactly supports constrained input.
 
-If variable bounds prove an inequality infeasible, `check_preparation`,
-`prepare`, and sampling with `preparation=True` raise
-{py:class}`~ommx.adapter.InfeasibleDetected`; that is a property of the model,
-not an Adapter Capability mismatch.
+If variable bounds prove an inequality infeasible, `check_preparation` and
+`prepare` raise the core-owned {py:class}`~ommx.InfeasibleDetected`; the
+historical {py:class}`~ommx.adapter.InfeasibleDetected` import is an alias for
+the same exception object. This is a property of the model, not an adapter
+applicability failure.
 
 The maximum of 53 auxiliary bits checked for a used Integer variable is an
-OMMX Integer-to-Binary log-encoding condition. It is not a native OpenJij
-backend capability and is unrelated to `ommx.v2.Feature`, which gates whether a
-reader can safely interpret serialized semantics for forward compatibility.
-Spin-variable support, including OpenJij's native Spin input, is tracked
-separately in [OMMX issue #1082](https://github.com/Jij-Inc/ommx/issues/1082).
+availability limit of OMMX Integer-to-Binary log encoding. It is not a property of the
+OpenJij adapter's input class and is unrelated to `ommx.v2.Feature`, which gates
+whether a reader can safely interpret serialized semantics for forward
+compatibility. Spin-variable support, including direct Spin input for OpenJij,
+is tracked separately in
+[OMMX issue #1082](https://github.com/Jij-Inc/ommx/issues/1082).
 
 To view the feasibility for each constraint, use the `summary_with_constraints` property.
 
@@ -283,8 +277,8 @@ for i, ax in enumerate(axie.flatten()):
     s = feasible_ids[i]
     x = sample_set.extract_decision_variables("x", s)
     path = sample_to_path(x)
-    xs = [ulysses16_points[i][0] for i in path] + [ulysses16_points[path[0]][0]]
-    ys = [ulysses16_points[i][1] for i in path] + [ulysses16_points[path[0]][1]]
+    xs = [city_points[i][0] for i in path] + [city_points[path[0]][0]]
+    ys = [city_points[i][1] for i in path] + [city_points[path[0]][1]]
     ax.plot(xs, ys, marker='o')
     ax.set_title(f"Sample {s}, objective={sample_set.objectives[s]:.2f}")
 

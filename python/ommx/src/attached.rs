@@ -119,7 +119,11 @@ macro_rules! attached_constraint_context_methods {
             }
 
             /// Set the name. Writes through to the parent host's context store.
-            pub fn set_name(&self, py: pyo3::Python<'_>, name: String) -> anyhow::Result<()> {
+            pub fn set_name(
+                &self,
+                py: pyo3::Python<'_>,
+                name: String,
+            ) -> $crate::error::OmmxPyResult<()> {
                 match &self.host {
                     $crate::ConstraintHost::Instance(p) => {
                         let mut host = p.borrow_mut(py);
@@ -142,7 +146,7 @@ macro_rules! attached_constraint_context_methods {
                 &self,
                 py: pyo3::Python<'_>,
                 subscripts: Vec<i64>,
-            ) -> anyhow::Result<()> {
+            ) -> $crate::error::OmmxPyResult<()> {
                 match &self.host {
                     $crate::ConstraintHost::Instance(p) => {
                         let mut host = p.borrow_mut(py);
@@ -165,7 +169,7 @@ macro_rules! attached_constraint_context_methods {
                 &self,
                 py: pyo3::Python<'_>,
                 subscripts: Vec<i64>,
-            ) -> anyhow::Result<()> {
+            ) -> $crate::error::OmmxPyResult<()> {
                 match &self.host {
                     $crate::ConstraintHost::Instance(p) => {
                         let mut host = p.borrow_mut(py);
@@ -188,7 +192,7 @@ macro_rules! attached_constraint_context_methods {
                 &self,
                 py: pyo3::Python<'_>,
                 description: String,
-            ) -> anyhow::Result<()> {
+            ) -> $crate::error::OmmxPyResult<()> {
                 match &self.host {
                     $crate::ConstraintHost::Instance(p) => {
                         let mut host = p.borrow_mut(py);
@@ -211,7 +215,7 @@ macro_rules! attached_constraint_context_methods {
                 &self,
                 py: pyo3::Python<'_>,
                 parameters: std::collections::HashMap<String, String>,
-            ) -> anyhow::Result<()> {
+            ) -> $crate::error::OmmxPyResult<()> {
                 let params: fnv::FnvHashMap<String, String> = parameters.into_iter().collect();
                 match &self.host {
                     $crate::ConstraintHost::Instance(p) => {
@@ -238,7 +242,7 @@ macro_rules! attached_constraint_context_methods {
                 &self,
                 py: pyo3::Python<'_>,
                 parameters: std::collections::HashMap<String, String>,
-            ) -> anyhow::Result<()> {
+            ) -> $crate::error::OmmxPyResult<()> {
                 match &self.host {
                     $crate::ConstraintHost::Instance(p) => {
                         let mut host = p.borrow_mut(py);
@@ -262,7 +266,7 @@ macro_rules! attached_constraint_context_methods {
                 py: pyo3::Python<'_>,
                 key: String,
                 value: String,
-            ) -> anyhow::Result<()> {
+            ) -> $crate::error::OmmxPyResult<()> {
                 match &self.host {
                     $crate::ConstraintHost::Instance(p) => {
                         let mut host = p.borrow_mut(py);
@@ -396,7 +400,11 @@ macro_rules! attached_variable_labels_methods {
             }
 
             /// Set the name. Writes through to the parent host's label store.
-            pub fn set_name(&self, py: pyo3::Python<'_>, name: String) -> anyhow::Result<()> {
+            pub fn set_name(
+                &self,
+                py: pyo3::Python<'_>,
+                name: String,
+            ) -> $crate::error::OmmxPyResult<()> {
                 match &self.host {
                     $crate::ConstraintHost::Instance(p) => {
                         let mut host = p.borrow_mut(py);
@@ -418,7 +426,7 @@ macro_rules! attached_variable_labels_methods {
                 &self,
                 py: pyo3::Python<'_>,
                 subscripts: Vec<i64>,
-            ) -> anyhow::Result<()> {
+            ) -> $crate::error::OmmxPyResult<()> {
                 match &self.host {
                     $crate::ConstraintHost::Instance(p) => {
                         let mut host = p.borrow_mut(py);
@@ -440,7 +448,7 @@ macro_rules! attached_variable_labels_methods {
                 &self,
                 py: pyo3::Python<'_>,
                 subscripts: Vec<i64>,
-            ) -> anyhow::Result<()> {
+            ) -> $crate::error::OmmxPyResult<()> {
                 match &self.host {
                     $crate::ConstraintHost::Instance(p) => {
                         let mut host = p.borrow_mut(py);
@@ -462,7 +470,7 @@ macro_rules! attached_variable_labels_methods {
                 &self,
                 py: pyo3::Python<'_>,
                 description: String,
-            ) -> anyhow::Result<()> {
+            ) -> $crate::error::OmmxPyResult<()> {
                 match &self.host {
                     $crate::ConstraintHost::Instance(p) => {
                         let mut host = p.borrow_mut(py);
@@ -484,7 +492,7 @@ macro_rules! attached_variable_labels_methods {
                 &self,
                 py: pyo3::Python<'_>,
                 parameters: std::collections::HashMap<String, String>,
-            ) -> anyhow::Result<()> {
+            ) -> $crate::error::OmmxPyResult<()> {
                 let params: fnv::FnvHashMap<String, String> = parameters.into_iter().collect();
                 match &self.host {
                     $crate::ConstraintHost::Instance(p) => {
@@ -511,7 +519,7 @@ macro_rules! attached_variable_labels_methods {
                 &self,
                 py: pyo3::Python<'_>,
                 parameters: std::collections::HashMap<String, String>,
-            ) -> anyhow::Result<()> {
+            ) -> $crate::error::OmmxPyResult<()> {
                 match &self.host {
                     $crate::ConstraintHost::Instance(p) => {
                         let mut host = p.borrow_mut(py);
@@ -534,7 +542,7 @@ macro_rules! attached_variable_labels_methods {
                 py: pyo3::Python<'_>,
                 key: String,
                 value: String,
-            ) -> anyhow::Result<()> {
+            ) -> $crate::error::OmmxPyResult<()> {
                 match &self.host {
                     $crate::ConstraintHost::Instance(p) => {
                         let mut host = p.borrow_mut(py);

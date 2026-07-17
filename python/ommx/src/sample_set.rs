@@ -1,11 +1,11 @@
 use crate::{
+    error::OmmxPyResult,
     pandas::{
         constraint_id_col, constraint_kind_collection, entries_to_dataframe,
         sorted_entries_to_dataframe, ConstraintKind, PyDataFrame, ToPandasEntry, WithSampleIds,
     },
     Solution,
 };
-use anyhow::Result;
 use pyo3::{
     prelude::*,
     types::{PyBytes, PyDict, PyTuple},
@@ -93,7 +93,7 @@ impl_solution_annotations!(SampleSet);
 #[pymethods]
 impl SampleSet {
     #[staticmethod]
-    pub fn from_v1_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
+    pub fn from_v1_bytes(bytes: &Bound<PyBytes>) -> OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(bytes.py());
         Ok(Self {
             inner: ommx::SampleSet::from_v1_bytes(bytes.as_bytes())?,
@@ -101,7 +101,7 @@ impl SampleSet {
     }
 
     #[staticmethod]
-    pub fn from_v2_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
+    pub fn from_v2_bytes(bytes: &Bound<PyBytes>) -> OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(bytes.py());
         Ok(Self {
             inner: ommx::SampleSet::from_v2_bytes(bytes.as_bytes())?,
@@ -118,17 +118,24 @@ impl SampleSet {
         PyBytes::new(py, &self.inner.to_v2_bytes())
     }
 
-    pub fn get(&self, sample_id: u64) -> Result<Solution> {
+    /// Return one sample as a Solution.
+    ///
+    /// Raises KeyError if the sample ID does not exist.
+    pub fn get(&self, sample_id: u64) -> PyResult<Solution> {
         let sample_id = ommx::SampleID::from(sample_id);
-        let solution = self
-            .inner
-            .get(sample_id)
-            .ok_or_else(|| anyhow::anyhow!("Unknown sample ID: {}", sample_id.into_inner()))?;
+        let solution = self.inner.get(sample_id).ok_or_else(|| {
+            pyo3::exceptions::PyKeyError::new_err(format!(
+                "Unknown sample ID: {}",
+                sample_id.into_inner()
+            ))
+        })?;
         Ok(Solution { inner: solution })
     }
 
-    /// Get sample by ID (alias for get method)
-    pub fn get_sample_by_id(&self, sample_id: u64) -> Result<Solution> {
+    /// Get sample by ID (alias for get method).
+    ///
+    /// Raises KeyError if the sample ID does not exist.
+    pub fn get_sample_by_id(&self, sample_id: u64) -> PyResult<Solution> {
         self.get(sample_id)
     }
 
@@ -166,31 +173,36 @@ impl SampleSet {
     }
 
     #[getter]
-    pub fn best_feasible_id(&self) -> Result<u64> {
+    /// Raises ValueError if there is no feasible sample.
+    pub fn best_feasible_id(&self) -> OmmxPyResult<u64> {
         Ok(self.inner.best_feasible_id()?.into_inner())
     }
 
     #[getter]
-    pub fn best_feasible_relaxed_id(&self) -> Result<u64> {
+    /// Raises ValueError if there is no feasible sample in the relaxed problem.
+    pub fn best_feasible_relaxed_id(&self) -> OmmxPyResult<u64> {
         Ok(self.inner.best_feasible_relaxed_id()?.into_inner())
     }
 
     #[getter]
-    pub fn best_feasible(&self) -> Result<Solution> {
+    /// Raises ValueError if there is no feasible sample.
+    pub fn best_feasible(&self) -> OmmxPyResult<Solution> {
         Ok(Solution {
             inner: self.inner.best_feasible()?,
         })
     }
 
     #[getter]
-    pub fn best_feasible_relaxed(&self) -> Result<Solution> {
+    /// Raises ValueError if there is no feasible sample in the relaxed problem.
+    pub fn best_feasible_relaxed(&self) -> OmmxPyResult<Solution> {
         Ok(Solution {
             inner: self.inner.best_feasible_relaxed()?,
         })
     }
 
     #[getter]
-    pub fn best_feasible_unrelaxed(&self) -> Result<Solution> {
+    /// Raises ValueError if there is no feasible sample.
+    pub fn best_feasible_unrelaxed(&self) -> OmmxPyResult<Solution> {
         // Exactly the same as best_feasible
         self.best_feasible()
     }
@@ -322,13 +334,16 @@ impl SampleSet {
         self.inner.named_function_names()
     }
 
-    /// Extract decision variable values for a given name and sample ID
+    /// Extract decision variable values for a given name and sample ID.
+    ///
+    /// Raises KeyError if the name or sample ID does not exist, and ValueError
+    /// if the same subscript is found more than once.
     pub fn extract_decision_variables<'py>(
         &self,
         py: Python<'py>,
         name: &str,
         sample_id: u64,
-    ) -> Result<Bound<'py, PyDict>> {
+    ) -> OmmxPyResult<Bound<'py, PyDict>> {
         let sample_id = ommx::SampleID::from(sample_id);
         let extracted = self.inner.extract_decision_variables(name, sample_id)?;
         let dict = PyDict::new(py);
@@ -346,8 +361,8 @@ impl SampleSet {
     /// This is useful for extracting all variables at once in a structured format.
     /// Variables without names are not included in the result.
     ///
-    /// Raises ValueError if a decision variable with parameters is found, or if the same
-    /// name and subscript combination is found multiple times, or if the sample ID is invalid.
+    /// Raises KeyError if the sample ID does not exist, and ValueError if the
+    /// same name and subscript combination is found multiple times.
     ///
     /// # Examples
     ///
@@ -372,10 +387,11 @@ impl SampleSet {
         &self,
         py: Python<'py>,
         sample_id: u64,
-    ) -> Result<Bound<'py, PyDict>> {
+    ) -> OmmxPyResult<Bound<'py, PyDict>> {
         let sample_id = ommx::SampleID::from(sample_id);
+        let extracted = self.inner.extract_all_decision_variables(sample_id)?;
         let result_dict = PyDict::new(py);
-        for (name, variables) in self.inner.extract_all_decision_variables(sample_id)? {
+        for (name, variables) in extracted {
             let var_dict = PyDict::new(py);
             for (subscripts, value) in variables {
                 let key_tuple = PyTuple::new(py, &subscripts)?;
@@ -386,13 +402,17 @@ impl SampleSet {
         Ok(result_dict)
     }
 
-    /// Extract constraint values for a given name and sample ID
+    /// Extract constraint values for a given name and sample ID.
+    ///
+    /// Raises KeyError if the name or sample ID does not exist. Raises
+    /// ValueError if a matching constraint has parameters or if the same
+    /// subscript is found more than once.
     pub fn extract_constraints<'py>(
         &self,
         py: Python<'py>,
         name: &str,
         sample_id: u64,
-    ) -> Result<Bound<'py, PyDict>> {
+    ) -> OmmxPyResult<Bound<'py, PyDict>> {
         let sample_id = ommx::SampleID::from(sample_id);
         let extracted = self.inner.extract_constraints(name, sample_id)?;
         let dict = PyDict::new(py);
@@ -403,13 +423,16 @@ impl SampleSet {
         Ok(dict)
     }
 
-    /// Extract named function values for a given name and sample ID
+    /// Extract named function values for a given name and sample ID.
+    ///
+    /// Raises KeyError if the name or sample ID does not exist, and ValueError
+    /// if the same subscript is found more than once.
     pub fn extract_named_functions<'py>(
         &self,
         py: Python<'py>,
         name: &str,
         sample_id: u64,
-    ) -> Result<Bound<'py, PyDict>> {
+    ) -> OmmxPyResult<Bound<'py, PyDict>> {
         let sample_id = ommx::SampleID::from(sample_id);
         let extracted = self.inner.extract_named_functions(name, sample_id)?;
         let dict = PyDict::new(py);
@@ -420,15 +443,19 @@ impl SampleSet {
         Ok(dict)
     }
 
-    /// Extract all named function values grouped by name for a given sample ID
+    /// Extract all named function values grouped by name for a given sample ID.
+    ///
+    /// Raises KeyError if the sample ID does not exist, and ValueError if the
+    /// same name and subscript combination is found multiple times.
     pub fn extract_all_named_functions<'py>(
         &self,
         py: Python<'py>,
         sample_id: u64,
-    ) -> Result<Bound<'py, PyDict>> {
+    ) -> OmmxPyResult<Bound<'py, PyDict>> {
         let sample_id = ommx::SampleID::from(sample_id);
+        let extracted = self.inner.extract_all_named_functions(sample_id)?;
         let result_dict = PyDict::new(py);
-        for (name, functions) in self.inner.extract_all_named_functions(sample_id)? {
+        for (name, functions) in extracted {
             let func_dict = PyDict::new(py);
             for (subscripts, value) in functions {
                 let key_tuple = PyTuple::new(py, &subscripts)?;
