@@ -8,6 +8,36 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🆕 Durable lifecycle reasons for Experiments and Runs ([#1109](https://github.com/Jij-Inc/ommx/pull/1109))
+
+Failed and interrupted Experiments and Runs can now retain a concise reason in
+the Experiment config. Python context managers record the exception type and
+message automatically, and expose the durable value through
+{attr}`~ommx.experiment.Experiment.lifecycle_reason` and
+{attr}`~ommx.experiment.SealedRun.lifecycle_reason`.
+
+```python
+from ommx.experiment import Experiment
+
+try:
+    with Experiment("example.com/team/experiment:latest") as experiment:
+        with experiment.run():
+            raise RuntimeError("solver process exited")
+except RuntimeError:
+    pass
+
+assert experiment.lifecycle_reason == "RuntimeError: solver process exited"
+assert experiment.runs[0].lifecycle_reason == "RuntimeError: solver process exited"
+```
+
+The reason survives archive and registry transport. Exception reasons captured
+by Python context managers collapse whitespace and are limited to 512 Unicode
+characters, with longer values ending in an ellipsis. This bounds the durable
+metadata but does not redact it. Lifecycle reasons are not adapter diagnostics;
+do not include secrets, tracebacks, local variables, or environment values.
+Existing Experiment artifacts without an outcome detail continue to load with
+`None`.
+
 ### ⚠ Input classes and explicit OpenJij preparation ([#1085](https://github.com/Jij-Inc/ommx/pull/1085), [#1086](https://github.com/Jij-Inc/ommx/pull/1086), [#1087](https://github.com/Jij-Inc/ommx/pull/1087))
 
 `OMMXHighsAdapter`, `OMMXPythonMIPAdapter`, `OMMXPySCIPOptAdapter`, and

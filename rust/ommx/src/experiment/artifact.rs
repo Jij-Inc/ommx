@@ -5,7 +5,9 @@ use super::config::{
     LayerRef,
 };
 use super::parameter::RunParameterTable;
-use super::{experiment_manifest_record_from_artifact, UnsealedExperimentState};
+use super::{
+    experiment_manifest_record_from_artifact, ExperimentLifecycle, UnsealedExperimentState,
+};
 use super::{
     EXPERIMENT_ARTIFACT_MEDIA_TYPE, EXPERIMENT_CONFIG_MEDIA_TYPE, RUN_PARAMETERS_MEDIA_TYPE,
 };
@@ -64,7 +66,7 @@ impl<'reg> UnsealedExperimentState<'reg> {
         let artifact = self.publish_as(
             registry,
             image_name.clone(),
-            super::EXPERIMENT_STATUS_FINISHED,
+            ExperimentLifecycle::Finished,
             None,
             RefPublishMode::Publish,
         )?;
@@ -84,7 +86,7 @@ impl<'reg> UnsealedExperimentState<'reg> {
     pub fn commit_checkpoint(
         self,
         registry: &'reg LocalRegistry,
-        status: &'static str,
+        lifecycle: ExperimentLifecycle,
     ) -> Result<LocalArtifact<'reg>> {
         let requested_image_name = self.image_name.clone();
         let checkpoint_image_name =
@@ -93,7 +95,7 @@ impl<'reg> UnsealedExperimentState<'reg> {
         self.publish_as(
             registry,
             checkpoint_image_name,
-            status,
+            lifecycle,
             Some(&requested_image_name),
             RefPublishMode::Replace,
         )
@@ -109,7 +111,7 @@ impl<'reg> UnsealedExperimentState<'reg> {
         let artifact = self.publish_as(
             registry,
             image_name,
-            super::EXPERIMENT_STATUS_DRAFT,
+            ExperimentLifecycle::Draft,
             Some(&self.image_name),
             RefPublishMode::Replace,
         )?;
@@ -120,14 +122,14 @@ impl<'reg> UnsealedExperimentState<'reg> {
         &self,
         registry: &'reg LocalRegistry,
         image_name: ImageRef,
-        status: &str,
+        lifecycle: ExperimentLifecycle,
         requested_image_name: Option<&ImageRef>,
         publish_mode: RefPublishMode,
     ) -> Result<LocalArtifact<'reg>> {
         let run_parameters = self.run_parameter_descriptor(registry)?;
         let mut layers = LayerTable::default();
         let config =
-            self.experiment_config(&mut layers, run_parameters, status, requested_image_name)?;
+            self.experiment_config(&mut layers, run_parameters, lifecycle, requested_image_name)?;
         let config_descriptor = registry.store_json_blob(
             MediaType::Other(EXPERIMENT_CONFIG_MEDIA_TYPE.to_string()),
             &config,
@@ -189,7 +191,7 @@ impl<'reg> UnsealedExperimentState<'reg> {
         &self,
         layers: &mut LayerTable<'reg>,
         run_parameters: StoredDescriptor<'reg>,
-        status: &str,
+        lifecycle: ExperimentLifecycle,
         requested_image_name: Option<&ImageRef>,
     ) -> Result<ExperimentConfig> {
         let attachments = self
@@ -248,7 +250,7 @@ impl<'reg> UnsealedExperimentState<'reg> {
             }
             runs.push(ExperimentConfigRun {
                 run_id: run.run_id,
-                status: run.status.as_str().to_string(),
+                lifecycle: run.lifecycle.clone(),
                 attachments,
                 trace,
                 solves,
@@ -257,7 +259,7 @@ impl<'reg> UnsealedExperimentState<'reg> {
         }
 
         Ok(ExperimentConfig {
-            status: status.to_string(),
+            lifecycle,
             requested_image_name: requested_image_name.map(ToString::to_string),
             attachments,
             runs,

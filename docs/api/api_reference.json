@@ -29165,7 +29165,7 @@
             },
             {
               "name": "from_artifact",
-              "doc": "Interpret an already-open Artifact as a committed Experiment.\n\nThis is the usual entry point after importing or receiving an OMMX\nArtifact handle. The artifact must contain an Experiment config.",
+              "doc": "Interpret an already-open Artifact as a finished, failed, or interrupted Experiment.\n\nThis is the usual entry point after importing or receiving an OMMX\nArtifact handle. The artifact must contain an Experiment config.",
               "signatures": [
                 {
                   "parameters": [
@@ -29430,7 +29430,7 @@
             },
             {
               "name": "import_archive",
-              "doc": "Import an Experiment Artifact from a `.ommx` OCI archive file (or an OCI\nImage Layout directory).\n\nThe archive is imported into the default Local Registry, matching\n{meth}`Artifact.import_archive`, and then interpreted as an\nExperiment. The imported artifact must contain an Experiment config.",
+              "doc": "Import a finished, failed, or interrupted Experiment Artifact from a\n`.ommx` OCI archive file (or an OCI Image Layout directory).\n\nThe archive is imported into the default Local Registry, matching\n{meth}`Artifact.import_archive`, and then interpreted as an\nExperiment. The imported artifact must contain an Experiment config.",
               "signatures": [
                 {
                   "parameters": [
@@ -29962,7 +29962,7 @@
             },
             {
               "name": "push",
-              "doc": "Push this committed Experiment Artifact to its remote registry.\n\nUse `rename(...)` first when an anonymous or local-only experiment\nshould be published under a remote container image reference.\n\nRaises an error if the Experiment has not been committed yet.",
+              "doc": "Push this finished, failed, or interrupted Experiment Artifact remotely.\n\nUse `rename(...)` first when an anonymous or local-only experiment\nshould be published under a remote container image reference.\n\nRaises an error if the Experiment has not been committed yet.",
               "signatures": [
                 {
                   "parameters": [],
@@ -30072,7 +30072,7 @@
             },
             {
               "name": "save",
-              "doc": "Save this committed Experiment Artifact as a `.ommx` OCI archive file at `path`.\n\nThe archive is an exchange-format export of the registry-resident\nExperiment Artifact. Loading the archive back via\n{meth}`Experiment.import_archive` reimports it into the SQLite Local\nRegistry under the same image name.\n\nRaises an error if the Experiment has not been committed yet.",
+              "doc": "Save this finished, failed, or interrupted Experiment Artifact as a `.ommx` archive.\n\nThe archive is an exchange-format export of the registry-resident\nExperiment Artifact. Loading the archive back via\n{meth}`Experiment.import_archive` reimports it into the SQLite Local\nRegistry under the same image name.\n\nRaises an error if the Experiment has not been committed yet.",
               "signatures": [
                 {
                   "parameters": [
@@ -30319,7 +30319,7 @@
             },
             {
               "name": "artifact",
-              "doc": "Committed OMMX Artifact for this Experiment.\n\nRaises an error if the Experiment has not been committed yet.",
+              "doc": "Immutable OMMX Artifact for this finished, failed, or interrupted Experiment.\n\nRaises an error if the Experiment has not been committed yet.",
               "type_": {
                 "display": "Artifact",
                 "link_target": {
@@ -30357,6 +30357,23 @@
                 "display": "str",
                 "link_target": null,
                 "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "lifecycle_reason",
+              "doc": "Concise exception type and message for a failed or interrupted Experiment.\n\nThis is lifecycle metadata, not solver diagnostics. It is `None` when\nno reason was recorded.",
+              "type_": {
+                "display": "Optional[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
               },
               "is_property": true,
               "is_readonly": true
@@ -32316,6 +32333,23 @@
               "doc": "Names of run-level attachments.",
               "type_": {
                 "display": "list[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "lifecycle_reason",
+              "doc": "Concise exception type and message for a failed or interrupted Run.",
+              "type_": {
+                "display": "Optional[str]",
                 "link_target": null,
                 "children": [
                   {
