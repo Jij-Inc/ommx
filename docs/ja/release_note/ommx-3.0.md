@@ -29,20 +29,28 @@ penaltyはAdapter呼び出しで暗黙に実行されなくなりました。別
 変換元に対して評価します。
 
 ```python
-preparation = OMMXOpenJijSAAdapter.prepare(
-    source,
+from ommx_openjij_adapter import (
+    OMMXOpenJijSAAdapter,
+    OpenJijPreparationConfig,
+)
+
+config = OpenJijPreparationConfig(
     uniform_penalty_weight=20.0,
 )
+preparation = OMMXOpenJijSAAdapter.prepare(source, config=config)
 prepared_samples = OMMXOpenJijSAAdapter.sample(preparation.input)
 source_samples = preparation.evaluate_source(prepared_samples)
 ```
 
 OpenJij固有のpreparation reportは、適用したoperationと `preparation.input` の
-applicabilityを記録しますが、共通の合成guaranteeではありません。approximate integer
-slackは既定では無効で、`allow_approximate_integer_slack=True` を必要とします。有限
-penaltyもweightの指定によって明示的に選択します。共通のpreparation policyと
-guaranteeは [#1111](https://github.com/Jij-Inc/ommx/issues/1111) で扱います。最大53 bit
-というInteger encoding条件はpreparationのpreconditionであり、OpenJijのinput classや
+applicabilityを記録しますが、共通の合成guaranteeではありません。これとは別の
+`config` fieldには、正規化済みで実際に使われた不変のpreparation設定を記録します。
+approximate integer slackは既定では無効で、`OpenJijPreparationConfig` で
+`allow_approximate_integer_slack=True` を設定する必要があります。有限penaltyも同じ
+Configの `uniform_penalty_weight` または `penalty_weights` によって明示的に選択します。
+共通のpreparation policyとguaranteeは
+[#1111](https://github.com/Jij-Inc/ommx/issues/1111) で扱います。最大53 bitというInteger
+encoding条件はpreparationのpreconditionであり、OpenJijのinput classや
 `ommx.v2.Feature` の一部ではありません。
 
 HiGHS、Python-MIP、PySCIPOptについて、これはstable Python SDK 2.6.1からの公開
@@ -57,9 +65,11 @@ exceptionは変換・backendのfailureで引き続き使用されます。
 
 OpenJijについてもstable 2.6.1からの破壊的変更です。constructor、`sample()`、
 `solve()` はpreparation optionを受け取らず、変換元モデルを暗黙に書き換えません。
-明示的な `evaluate_source()` は、従来の暗黙経路が変換元の目的関数・sense・制約では
-なく、penalty適用後の目的関数、反転後のsense、変換後の制約を報告し得た問題も修正
-します。
+stable 2.6.1はweight未指定時に一律penalty weight `1.0` を選び、exact変換に失敗すると
+離散的なslack近似を自動的に試しました。v3では有限weightと近似への同意をそれぞれ
+明示する必要があります。明示的な `evaluate_source()` は、従来の暗黙経路が変換元の
+目的関数・sense・制約ではなく、penalty適用後の目的関数、反転後のsense、変換後の制約を
+報告し得た問題も修正します。
 
 deprecatedであった `response_to_samples()` と `sample_qubo_sa()` も3.0.0で削除します。
 `response_to_samples()` は `decode_to_samples()` に置き換えてください。直接適用可能な

@@ -134,12 +134,15 @@ finite penalty weight. Then pass the resulting `prepared.input` `Instance` to
 the Adapter and evaluate those samples against the source model explicitly.
 
 ```{code-cell} ipython3
-from ommx_openjij_adapter import OMMXOpenJijSAAdapter
+from ommx_openjij_adapter import (
+    OMMXOpenJijSAAdapter,
+    OpenJijPreparationConfig,
+)
 
-prepared = OMMXOpenJijSAAdapter.prepare(
-    instance,
+config = OpenJijPreparationConfig(
     uniform_penalty_weight=20.0,
 )
+prepared = OMMXOpenJijSAAdapter.prepare(instance, config=config)
 
 prepared_samples = OMMXOpenJijSAAdapter.sample(
     prepared.input,
@@ -157,29 +160,33 @@ feasibility for the source constrained problem because
 `prepared.evaluate_source()` evaluates the prepared-input states against that
 source model.
 
-The penalty weight passed to `prepare` belongs to the explicit preparation, not
-to the OpenJij backend sampler. A finite penalty encourages feasibility but does
-not guarantee that every returned sample is feasible for the source problem.
+The penalty weight in `config` belongs to the explicit preparation, not to the
+OpenJij backend sampler. A finite penalty encourages feasibility but does not
+guarantee that every returned sample is feasible for the source problem.
 
 ### Inspecting preparation
 
-`check_preparation` checks the source model and preparation options without
+`check_preparation` checks the source model and preparation config without
 mutating the instance. `prepare` performs the checked transformations and
 stores an audit report in `prepared.report`:
 
 ```{code-cell} ipython3
 report = prepared.report
+config_used = report.config
 final = report.input_applicability
-{
+outcomes = {
     "source_membership": report.source_check.source_membership.is_member,
     "preconditions": report.source_check.precondition_violations,
     "steps": [step.operation for step in report.steps],
     "preparation_failures": report.preparation_failures,
     "input_applicability": final.is_applicable if final else False,
 }
+config_used, outcomes
 ```
 
-The report separates four questions:
+`report.config` records the normalized, immutable preparation settings actually
+used. It is configuration evidence, not a fifth outcome. Separately, the report
+answers four questions:
 
 - `source_check` records membership in the preparation source class and the
   Adapter-owned preparation preconditions.
@@ -193,10 +200,11 @@ This step list is an operation audit, not a composed mathematical guarantee.
 Common preparation policy, guarantees, and automatic selection are tracked in
 [OMMX issue #1111](https://github.com/Jij-Inc/ommx/issues/1111). By default,
 OpenJij preparation uses only the available exact operations. Discrete integer
-slack approximation requires `allow_approximate_integer_slack=True`; selecting
-an integer slack range alone does not opt into approximation. Supplying penalty
-weights explicitly selects finite-penalty preparation, which does not claim
-that the Adapter directly or exactly supports constrained input.
+slack approximation requires setting `allow_approximate_integer_slack=True` on
+`OpenJijPreparationConfig`; setting `inequality_integer_slack_max_range` alone
+does not opt into approximation. Configuring `uniform_penalty_weight` or
+`penalty_weights` explicitly selects finite-penalty preparation, which does not
+claim that the Adapter directly or exactly supports constrained input.
 
 If variable bounds prove an inequality infeasible, `check_preparation` and
 `prepare` raise {py:class}`~ommx.adapter.InfeasibleDetected`; that is a property

@@ -4,7 +4,10 @@ from ommx import (
     OneHotConstraint,
     ProvenanceKind,
 )
-from ommx_openjij_adapter import OMMXOpenJijSAAdapter
+from ommx_openjij_adapter import (
+    OMMXOpenJijSAAdapter,
+    OpenJijPreparationConfig,
+)
 
 
 def test_preparation_explicitly_lowers_special_constraints() -> None:
@@ -19,7 +22,7 @@ def test_preparation_explicitly_lowers_special_constraints() -> None:
 
     preparation = OMMXOpenJijSAAdapter.prepare(
         instance,
-        uniform_penalty_weight=2.0,
+        config=OpenJijPreparationConfig(uniform_penalty_weight=2.0),
     )
     adapter_input = preparation.input
 

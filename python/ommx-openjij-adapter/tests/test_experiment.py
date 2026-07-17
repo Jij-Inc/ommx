@@ -1,7 +1,10 @@
 from ommx import DecisionVariable, Instance, SampleSet, Sense
 from ommx.experiment import Experiment
 
-from ommx_openjij_adapter import OMMXOpenJijSAAdapter
+from ommx_openjij_adapter import (
+    OMMXOpenJijSAAdapter,
+    OpenJijPreparationConfig,
+)
 
 
 def test_log_sample_records_the_exact_prepared_adapter_input() -> None:
@@ -15,7 +18,7 @@ def test_log_sample_records_the_exact_prepared_adapter_input() -> None:
     source_bytes = source.to_v2_bytes()
     preparation = OMMXOpenJijSAAdapter.prepare(
         source,
-        uniform_penalty_weight=2.0,
+        config=OpenJijPreparationConfig(uniform_penalty_weight=2.0),
     )
     adapter_input = preparation.input
     input_bytes = adapter_input.to_v2_bytes()

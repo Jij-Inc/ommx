@@ -134,12 +134,15 @@ instance = Instance.from_components(
 得られたsampleを変換元モデルに対して明示的に評価します。
 
 ```{code-cell} ipython3
-from ommx_openjij_adapter import OMMXOpenJijSAAdapter
+from ommx_openjij_adapter import (
+    OMMXOpenJijSAAdapter,
+    OpenJijPreparationConfig,
+)
 
-prepared = OMMXOpenJijSAAdapter.prepare(
-    instance,
+config = OpenJijPreparationConfig(
     uniform_penalty_weight=20.0,
 )
+prepared = OMMXOpenJijSAAdapter.prepare(instance, config=config)
 
 prepared_samples = OMMXOpenJijSAAdapter.sample(
     prepared.input,
@@ -156,29 +159,33 @@ sample_set.summary
 対して評価するため、その `feasible` 列は変換元の制約付き問題に対する実行可能性を
 示します。
 
-`prepare` に渡すペナルティ重みはOpenJij backend samplerのパラメータではなく、
-明示的な準備に対する指定です。有限ペナルティは実行可能なサンプルを得やすく
-しますが、すべてのサンプルが変換元の問題に対して実行可能になることを保証しません。
+`config` のペナルティ重みはOpenJij backend samplerのパラメータではなく、明示的な
+準備に対する指定です。有限ペナルティは実行可能なサンプルを得やすくしますが、
+すべてのサンプルが変換元の問題に対して実行可能になることを保証しません。
 
 ### 準備内容の確認
 
-`check_preparation` はインスタンスを変更せずに、変換元モデルと準備オプションを
+`check_preparation` はインスタンスを変更せずに、変換元モデルと準備configを
 検査します。`prepare` は検査した変換を実行し、監査用レポートを
 `prepared.report` に保存します。
 
 ```{code-cell} ipython3
 report = prepared.report
+config_used = report.config
 final = report.input_applicability
-{
+outcomes = {
     "source_membership": report.source_check.source_membership.is_member,
     "preconditions": report.source_check.precondition_violations,
     "steps": [step.operation for step in report.steps],
     "preparation_failures": report.preparation_failures,
     "input_applicability": final.is_applicable if final else False,
 }
+config_used, outcomes
 ```
 
-レポートは次の4つの問いを区別します。
+`report.config` は、正規化済みで実際に使われた不変のpreparation設定を記録します。
+これは5つ目のoutcomeではなく、設定の監査記録です。レポートはこれとは別に、次の
+4つの問いを区別します。
 
 - `source_check` は、準備元のclassへのmembershipとAdapter固有の準備前提条件を
   記録します。
@@ -192,9 +199,11 @@ final = report.input_applicability
 共通のpreparation policy、guarantee、自動選択は
 [OMMX issue #1111](https://github.com/Jij-Inc/ommx/issues/1111) で扱います。このprototype
 が既定で使うのは、利用可能な厳密operationだけです。離散的なinteger slack近似には
-`allow_approximate_integer_slack=True` が必要で、slack rangeの指定だけでは近似への
-同意になりません。penalty weightの明示指定はfinite-penalty preparationの選択を表し、
-制約付き入力をAdapterが直接または厳密にサポートするという意味ではありません。
+`OpenJijPreparationConfig` で `allow_approximate_integer_slack=True` を設定する必要が
+あり、`inequality_integer_slack_max_range` の指定だけでは近似への同意になりません。
+同じConfigで `uniform_penalty_weight` または `penalty_weights` を明示的に設定すると
+finite-penalty preparationが選択されますが、制約付き入力をAdapterが直接または厳密に
+サポートするという意味ではありません。
 
 変数boundから不等式が実行不可能だと証明できた場合、`check_preparation` と
 `prepare` は {py:class}`~ommx.adapter.InfeasibleDetected` を送出します。これは

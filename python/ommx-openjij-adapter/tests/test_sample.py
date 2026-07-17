@@ -4,7 +4,10 @@ from typing import cast
 import openjij as oj
 import pytest
 from ommx import DecisionVariable, Instance, Sos1Constraint
-from ommx_openjij_adapter import OMMXOpenJijSAAdapter
+from ommx_openjij_adapter import (
+    OMMXOpenJijSAAdapter,
+    OpenJijPreparationConfig,
+)
 
 
 def binary_no_constraint_minimize():
@@ -169,7 +172,9 @@ def _openjij_input(instance):
     else:
         preparation = OMMXOpenJijSAAdapter.prepare(
             instance,
-            uniform_penalty_weight=3.1 if instance.constraints else None,
+            config=OpenJijPreparationConfig(
+                uniform_penalty_weight=3.1 if instance.constraints else None,
+            ),
         )
         adapter_input = preparation.input
     assert instance.to_v2_bytes() == source
@@ -380,7 +385,7 @@ def test_sample_decodes_integer_sos1_against_source_model():
 
     preparation = OMMXOpenJijSAAdapter.prepare(
         instance,
-        uniform_penalty_weight=4.0,
+        config=OpenJijPreparationConfig(uniform_penalty_weight=4.0),
     )
     prepared_samples = OMMXOpenJijSAAdapter.sample(
         preparation.input,

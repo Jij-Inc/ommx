@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import copy
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable
 from math import isfinite
 
 from ommx import (
@@ -18,7 +18,7 @@ from ommx import (
 )
 from ommx.adapter import AdapterPreconditionViolation, ConstraintRef
 
-from ._preparation import OpenJijPreparationSourceCheck
+from ._preparation import OpenJijPreparationConfig, OpenJijPreparationSourceCheck
 
 
 # This describes sources accepted by the explicit preparation operation,
@@ -56,7 +56,6 @@ ENCODING_INPUT_CLASS = InstanceClass(
 )
 
 MAX_LOG_ENCODING_BITS = 53
-MAX_SLACK_RANGE = 2**64 - 1
 
 
 def active_constraint_refs(ommx_instance: Instance) -> frozenset[ConstraintRef]:
@@ -177,9 +176,7 @@ def _log_encoding_precondition_violations(
 
 def _penalty_precondition_violations(
     ommx_instance: Instance,
-    uniform_penalty_weight: float | None,
-    penalty_weights: Mapping[int, float] | None,
-    inequality_integer_slack_max_range: int,
+    config: OpenJijPreparationConfig,
 ) -> tuple[AdapterPreconditionViolation, ...]:
     constraint_ids = frozenset(ommx_instance.constraints)
     constraint_refs = active_constraint_refs(ommx_instance)
@@ -187,20 +184,8 @@ def _penalty_precondition_violations(
         ref for ref in constraint_refs if ref.family != "regular"
     )
     violations: list[AdapterPreconditionViolation] = []
-
-    if uniform_penalty_weight is not None and penalty_weights is not None:
-        violations.append(
-            AdapterPreconditionViolation(
-                condition="openjij.penalty.options_exclusive",
-                description=(
-                    "Choose either a uniform penalty weight or per-constraint "
-                    "penalty weights, not both."
-                ),
-                constraint_refs=constraint_refs,
-                actual="both selected",
-                limit="one penalty mode",
-            )
-        )
+    uniform_penalty_weight = config.uniform_penalty_weight
+    penalty_weights = config.penalty_weights
 
     if not constraint_refs and (
         uniform_penalty_weight is not None or penalty_weights is not None
@@ -211,19 +196,6 @@ def _penalty_precondition_violations(
                 description="Penalty weights were supplied for an unconstrained model.",
                 actual="penalty weights supplied",
                 limit="no penalty configuration",
-            )
-        )
-
-    if uniform_penalty_weight is not None and (
-        not isfinite(uniform_penalty_weight) or uniform_penalty_weight <= 0
-    ):
-        violations.append(
-            AdapterPreconditionViolation(
-                condition="openjij.penalty.weight_positive_finite",
-                description="The uniform penalty weight must be finite and positive.",
-                constraint_refs=constraint_refs,
-                actual=uniform_penalty_weight,
-                limit="finite value > 0",
             )
         )
 
@@ -276,70 +248,20 @@ def _penalty_precondition_violations(
                     limit=len(constraint_ids),
                 )
             )
-        for constraint_id, weight in penalty_weights.items():
-            if not isfinite(weight) or weight <= 0:
-                violations.append(
-                    AdapterPreconditionViolation(
-                        condition="openjij.penalty.weight_positive_finite",
-                        description=(
-                            f"Penalty weight for regular constraint {constraint_id} "
-                            "must be finite and positive."
-                        ),
-                        constraint_refs=frozenset(
-                            {ConstraintRef("regular", constraint_id)}
-                        ),
-                        actual=weight,
-                        limit="finite value > 0",
-                    )
-                )
-
-    inequality_refs = frozenset(
-        ConstraintRef("regular", constraint_id)
-        for constraint_id, constraint in ommx_instance.constraints.items()
-        if constraint.equality == Equality.LessThanOrEqualToZero
-    )
-    slack_relevant_refs = inequality_refs.union(
-        ref for ref in special_constraint_refs if ref.family in {"indicator", "sos1"}
-    )
-    valid_slack_range = (
-        isinstance(inequality_integer_slack_max_range, int)
-        and not isinstance(inequality_integer_slack_max_range, bool)
-        and 0 < inequality_integer_slack_max_range <= MAX_SLACK_RANGE
-    )
-    if slack_relevant_refs and not valid_slack_range:
-        violations.append(
-            AdapterPreconditionViolation(
-                condition="openjij.slack.range_unsigned_64_bit",
-                description=(
-                    "The integer slack range must fit the positive unsigned "
-                    "64-bit range when preparing inequality constraints."
-                ),
-                constraint_refs=slack_relevant_refs,
-                actual=inequality_integer_slack_max_range,
-                limit=f"integer in [1, {MAX_SLACK_RANGE}]",
-            )
-        )
     return tuple(violations)
 
 
 def check_preparation_source(
     ommx_instance: Instance,
     *,
-    uniform_penalty_weight: float | None = None,
-    penalty_weights: Mapping[int, float] | None = None,
-    inequality_integer_slack_max_range: int = 32,
+    config: OpenJijPreparationConfig,
 ) -> OpenJijPreparationSourceCheck:
     membership, preconditions_checked, violations = _check_class_preconditions(
         ommx_instance,
         PREPARATION_SOURCE_CLASS,
         lambda: (
             *_log_encoding_precondition_violations(ommx_instance),
-            *_penalty_precondition_violations(
-                ommx_instance,
-                uniform_penalty_weight,
-                penalty_weights,
-                inequality_integer_slack_max_range,
-            ),
+            *_penalty_precondition_violations(ommx_instance, config),
         ),
     )
     return OpenJijPreparationSourceCheck(

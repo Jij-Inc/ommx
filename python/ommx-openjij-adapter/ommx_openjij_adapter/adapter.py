@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable
 import copy
 from math import isfinite
 from typing import ClassVar
@@ -30,6 +30,7 @@ from opentelemetry import trace
 from ._decode import _decode_for_instance, decode_to_samples
 from ._preparation import (
     OpenJijPreparation,
+    OpenJijPreparationConfig,
     OpenJijPreparationReport,
 )
 from ._preparation_pipeline import (
@@ -203,10 +204,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         cls,
         ommx_instance: Instance,
         *,
-        uniform_penalty_weight: float | None = None,
-        penalty_weights: Mapping[int, float] | None = None,
-        inequality_integer_slack_max_range: int = 32,
-        allow_approximate_integer_slack: bool = False,
+        config: OpenJijPreparationConfig | None = None,
     ) -> OpenJijPreparationReport:
         """Dry-run the complete explicit preparation without mutating the input.
 
@@ -214,17 +212,15 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         checks only the Binary, unconstrained minimization Adapter input. The
         53-bit log-encoding limit is a preparation precondition, not an OpenJij
         input-class condition and not an ``ommx.v2.Feature``. A model proven
-        infeasible while planning integer slack raises
+        infeasible while preparing integer slack raises
         :class:`~ommx.adapter.InfeasibleDetected`. Approximate integer slack is
-        disabled unless ``allow_approximate_integer_slack=True`` is supplied.
+        disabled unless the supplied :class:`OpenJijPreparationConfig` enables
+        it.
         """
         return _check_preparation(
             ommx_instance,
             check_input_applicability=cls.check_applicability,
-            uniform_penalty_weight=uniform_penalty_weight,
-            penalty_weights=penalty_weights,
-            inequality_integer_slack_max_range=inequality_integer_slack_max_range,
-            allow_approximate_integer_slack=allow_approximate_integer_slack,
+            config=config,
         )
 
     @classmethod
@@ -232,27 +228,21 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         cls,
         ommx_instance: Instance,
         *,
-        uniform_penalty_weight: float | None = None,
-        penalty_weights: Mapping[int, float] | None = None,
-        inequality_integer_slack_max_range: int = 32,
-        allow_approximate_integer_slack: bool = False,
+        config: OpenJijPreparationConfig | None = None,
     ) -> OpenJijPreparation:
         """Produce a separate Adapter input and an auditable preparation report.
 
         Raises :class:`~ommx.adapter.InfeasibleDetected` when variable bounds
         prove an inequality infeasible. Other preparation failures raise
         :class:`OpenJijPreparationError`. Approximate integer slack is used only
-        when ``allow_approximate_integer_slack=True`` is supplied.
+        when the supplied :class:`OpenJijPreparationConfig` enables it.
         """
         with _tracer.start_as_current_span("prepare") as span:
             span.set_attribute("adapter", f"{cls.__module__}.{cls.__qualname__}")
             return _prepare(
                 ommx_instance,
                 check_input_applicability=cls.check_applicability,
-                uniform_penalty_weight=uniform_penalty_weight,
-                penalty_weights=penalty_weights,
-                inequality_integer_slack_max_range=inequality_integer_slack_max_range,
-                allow_approximate_integer_slack=allow_approximate_integer_slack,
+                config=config,
             )
 
     @classmethod

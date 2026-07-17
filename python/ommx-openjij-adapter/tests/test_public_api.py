@@ -10,6 +10,7 @@ def test_package_root_is_the_stable_public_facade() -> None:
     expected_exports = [
         "OMMXOpenJijSAAdapter",
         "OpenJijPreparation",
+        "OpenJijPreparationConfig",
         "OpenJijPreparationError",
         "OpenJijPreparationFailure",
         "OpenJijPreparationReport",
@@ -21,6 +22,7 @@ def test_package_root_is_the_stable_public_facade() -> None:
     assert package.__all__ == expected_exports
     assert issubclass(package.OMMXOpenJijSAAdapter, adapter.OMMXOpenJijSAAdapter)
     assert package.OpenJijPreparation is _preparation.OpenJijPreparation
+    assert package.OpenJijPreparationConfig is _preparation.OpenJijPreparationConfig
     assert package.OpenJijPreparationError is _preparation.OpenJijPreparationError
     assert package.OpenJijPreparationFailure is _preparation.OpenJijPreparationFailure
     assert package.OpenJijPreparationReport is _preparation.OpenJijPreparationReport
@@ -41,6 +43,7 @@ def test_public_classes_support_standard_introspection() -> None:
     public_classes = [
         package.OMMXOpenJijSAAdapter,
         package.OpenJijPreparation,
+        package.OpenJijPreparationConfig,
         package.OpenJijPreparationError,
         package.OpenJijPreparationFailure,
         package.OpenJijPreparationReport,
@@ -55,6 +58,10 @@ def test_public_classes_support_standard_introspection() -> None:
     assert (
         get_type_hints(package.OpenJijPreparation)["report"]
         is package.OpenJijPreparationReport
+    )
+    assert (
+        get_type_hints(package.OpenJijPreparationReport)["config"]
+        is package.OpenJijPreparationConfig
     )
 
 

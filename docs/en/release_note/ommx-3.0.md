@@ -31,22 +31,30 @@ the Adapter call. Prepare a separate input explicitly, pass that exact
 the source when source semantics are required:
 
 ```python
-preparation = OMMXOpenJijSAAdapter.prepare(
-    source,
+from ommx_openjij_adapter import (
+    OMMXOpenJijSAAdapter,
+    OpenJijPreparationConfig,
+)
+
+config = OpenJijPreparationConfig(
     uniform_penalty_weight=20.0,
 )
+preparation = OMMXOpenJijSAAdapter.prepare(source, config=config)
 prepared_samples = OMMXOpenJijSAAdapter.sample(preparation.input)
 source_samples = preparation.evaluate_source(prepared_samples)
 ```
 
 The OpenJij-specific preparation report records the operations applied and
 applicability of `preparation.input`; it is not a common composed guarantee.
-Approximate integer slack is disabled by default and requires
-`allow_approximate_integer_slack=True`. Finite penalties remain explicitly
-selected by supplying their weights. Common preparation policy and guarantees
-are tracked in [#1111](https://github.com/Jij-Inc/ommx/issues/1111). The
-at-most-53-bit Integer encoding condition is a preparation precondition, not
-part of the OpenJij input class or `ommx.v2.Feature`.
+Its separate `config` field records the normalized, immutable preparation
+settings actually used. Approximate integer slack is disabled by default and
+requires setting `allow_approximate_integer_slack=True` on
+`OpenJijPreparationConfig`. Finite penalties remain explicitly selected through
+`uniform_penalty_weight` or `penalty_weights` on that Config. Common preparation
+policy and guarantees are tracked in
+[#1111](https://github.com/Jij-Inc/ommx/issues/1111). The at-most-53-bit Integer
+encoding condition is a preparation precondition, not part of the OpenJij input
+class or `ommx.v2.Feature`.
 
 For HiGHS, Python-MIP, and PySCIPOpt, this is a breaking change to the public
 exception contract from stable Python SDK 2.6.1. Unsupported objectives,
@@ -61,10 +69,13 @@ for conversion and backend failures.
 
 For OpenJij, this is also a breaking change from stable 2.6.1: constructor,
 `sample()`, and `solve()` no longer accept preparation options or implicitly
-rewrite a source model. The explicit `evaluate_source()` step also fixes the
-old implicit path's result evaluation, which could report the rewritten
-penalty objective, reversed sense, or transformed constraints instead of the
-source objective, sense, and constraints.
+rewrite a source model. Stable 2.6.1 selected a uniform penalty weight of `1.0`
+when none was supplied and automatically attempted discrete slack
+approximation when exact conversion failed; v3 requires explicit finite weights
+and an explicit approximation opt-in. The explicit `evaluate_source()` step
+also fixes the old implicit path's result evaluation, which could report the
+rewritten penalty objective, reversed sense, or transformed constraints instead
+of the source objective, sense, and constraints.
 
 The deprecated `response_to_samples()` and `sample_qubo_sa()` helpers are also
 removed in 3.0.0. Use `decode_to_samples()` in place of `response_to_samples()`.

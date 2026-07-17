@@ -1,9 +1,9 @@
-"""OpenJij preparation planning and materialization."""
+"""OpenJij preparation execution and materialization."""
 
 from __future__ import annotations
 
 import copy
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from typing import NoReturn
 
 from ommx import AdditionalCapability, Equality, Instance, Kind
@@ -16,6 +16,7 @@ from ommx.adapter import (
 
 from ._preparation import (
     OpenJijPreparation,
+    OpenJijPreparationConfig,
     OpenJijPreparationError,
     OpenJijPreparationFailure,
     OpenJijPreparationReport,
@@ -34,19 +35,14 @@ def check_preparation(
     ommx_instance: Instance,
     *,
     check_input_applicability: Callable[[Instance], AdapterApplicabilityReport],
-    uniform_penalty_weight: float | None = None,
-    penalty_weights: Mapping[int, float] | None = None,
-    inequality_integer_slack_max_range: int = 32,
-    allow_approximate_integer_slack: bool = False,
+    config: OpenJijPreparationConfig | None = None,
 ) -> OpenJijPreparationReport:
     """Dry-run the complete explicit preparation without mutating the input."""
-    report, _ = _plan_preparation(
+    normalized_config = _normalize_preparation_config(config)
+    report, _ = _run_preparation(
         ommx_instance,
         check_input_applicability=check_input_applicability,
-        uniform_penalty_weight=uniform_penalty_weight,
-        penalty_weights=penalty_weights,
-        inequality_integer_slack_max_range=inequality_integer_slack_max_range,
-        allow_approximate_integer_slack=allow_approximate_integer_slack,
+        config=normalized_config,
     )
     return report
 
@@ -55,54 +51,51 @@ def prepare(
     ommx_instance: Instance,
     *,
     check_input_applicability: Callable[[Instance], AdapterApplicabilityReport],
-    uniform_penalty_weight: float | None = None,
-    penalty_weights: Mapping[int, float] | None = None,
-    inequality_integer_slack_max_range: int = 32,
-    allow_approximate_integer_slack: bool = False,
+    config: OpenJijPreparationConfig | None = None,
 ) -> OpenJijPreparation:
     """Produce a separate Adapter input and an auditable preparation report."""
-    report, prepared = _plan_preparation(
+    normalized_config = _normalize_preparation_config(config)
+    report, prepared = _run_preparation(
         ommx_instance,
         check_input_applicability=check_input_applicability,
-        uniform_penalty_weight=uniform_penalty_weight,
-        penalty_weights=penalty_weights,
-        inequality_integer_slack_max_range=inequality_integer_slack_max_range,
-        allow_approximate_integer_slack=allow_approximate_integer_slack,
+        config=normalized_config,
     )
     if prepared is None:
         raise OpenJijPreparationError(report)
     return prepared
 
 
-def _plan_preparation(
+def _normalize_preparation_config(
+    config: OpenJijPreparationConfig | None,
+) -> OpenJijPreparationConfig:
+    if config is None:
+        return OpenJijPreparationConfig()
+    if not isinstance(config, OpenJijPreparationConfig):
+        raise TypeError("config must be an OpenJijPreparationConfig")
+    return config
+
+
+def _run_preparation(
     ommx_instance: Instance,
     *,
     check_input_applicability: Callable[[Instance], AdapterApplicabilityReport],
-    uniform_penalty_weight: float | None,
-    penalty_weights: Mapping[int, float] | None,
-    inequality_integer_slack_max_range: int,
-    allow_approximate_integer_slack: bool,
+    config: OpenJijPreparationConfig,
 ) -> tuple[OpenJijPreparationReport, OpenJijPreparation | None]:
     source_check = check_preparation_source(
         ommx_instance,
-        uniform_penalty_weight=uniform_penalty_weight,
-        penalty_weights=penalty_weights,
-        inequality_integer_slack_max_range=inequality_integer_slack_max_range,
+        config=config,
     )
     if not source_check.conditions_hold:
-        return _report(source_check), None
+        return _report(config, source_check), None
 
     steps: list[OpenJijPreparationStep] = []
     try:
         prepared = _materialize_preparation(
             ommx_instance,
+            config=config,
             source_check=source_check,
             steps=steps,
             check_input_applicability=check_input_applicability,
-            uniform_penalty_weight=uniform_penalty_weight,
-            penalty_weights=penalty_weights,
-            inequality_integer_slack_max_range=inequality_integer_slack_max_range,
-            allow_approximate_integer_slack=allow_approximate_integer_slack,
         )
     except InfeasibleDetected:
         raise
@@ -124,6 +117,7 @@ def _plan_preparation(
         )
         return (
             _report(
+                config,
                 source_check,
                 preparation_failures=(failure,),
                 steps=steps,
@@ -136,13 +130,10 @@ def _plan_preparation(
 def _materialize_preparation(
     ommx_instance: Instance,
     *,
+    config: OpenJijPreparationConfig,
     source_check: OpenJijPreparationSourceCheck,
     steps: list[OpenJijPreparationStep],
     check_input_applicability: Callable[[Instance], AdapterApplicabilityReport],
-    uniform_penalty_weight: float | None,
-    penalty_weights: Mapping[int, float] | None,
-    inequality_integer_slack_max_range: int,
-    allow_approximate_integer_slack: bool,
 ) -> OpenJijPreparation:
     """Apply the ordered OpenJij preparation operations to an isolated copy."""
     source_instance = copy.deepcopy(ommx_instance)
@@ -153,21 +144,20 @@ def _materialize_preparation(
     _reverse_maximization(working, steps)
     _convert_inequalities(
         working,
+        config=config,
         source_check=source_check,
         steps=steps,
-        inequality_integer_slack_max_range=inequality_integer_slack_max_range,
-        allow_approximate_integer_slack=allow_approximate_integer_slack,
     )
     working = _apply_penalties(
+        config=config,
         source_instance=source_instance,
         working=working,
         source_check=source_check,
         steps=steps,
-        uniform_penalty_weight=uniform_penalty_weight,
-        penalty_weights=penalty_weights,
     )
     _validate_encoding_input(
         working,
+        config=config,
         source_check=source_check,
         steps=steps,
     )
@@ -175,6 +165,7 @@ def _materialize_preparation(
 
     input_applicability = check_input_applicability(working)
     report = _report(
+        config,
         source_check,
         steps=steps,
         input_applicability=input_applicability,
@@ -283,11 +274,11 @@ def _reverse_maximization(
 def _convert_inequalities(
     working: Instance,
     *,
+    config: OpenJijPreparationConfig,
     source_check: OpenJijPreparationSourceCheck,
     steps: list[OpenJijPreparationStep],
-    inequality_integer_slack_max_range: int,
-    allow_approximate_integer_slack: bool,
 ) -> None:
+    slack_max_range = config.inequality_integer_slack_max_range
     inequality_ids = [
         constraint_id
         for constraint_id, constraint in working.constraints.items()
@@ -298,13 +289,13 @@ def _convert_inequalities(
         try:
             working.convert_inequality_to_equality_with_integer_slack(
                 constraint_id,
-                inequality_integer_slack_max_range,
+                slack_max_range,
             )
         except RuntimeError as exact_error:
             exact_message = str(exact_error)
             if _reports_proven_infeasibility(exact_message):
                 raise InfeasibleDetected(exact_message) from None
-            if not allow_approximate_integer_slack:
+            if not config.allow_approximate_integer_slack:
                 failure = OpenJijPreparationFailure(
                     reason="openjij.slack.approximation_explicit_selection",
                     description=(
@@ -318,6 +309,7 @@ def _convert_inequalities(
                     expected="allow_approximate_integer_slack=True",
                 )
                 _raise_preparation_failure(
+                    config,
                     source_check,
                     steps=steps,
                     failures=(failure,),
@@ -325,7 +317,7 @@ def _convert_inequalities(
             try:
                 residual_step = working.add_integer_slack_to_inequality(
                     constraint_id,
-                    inequality_integer_slack_max_range,
+                    slack_max_range,
                 )
             except RuntimeError as approximate_error:
                 message = str(approximate_error)
@@ -363,13 +355,14 @@ def _convert_inequalities(
 
 def _apply_penalties(
     *,
+    config: OpenJijPreparationConfig,
     source_instance: Instance,
     working: Instance,
     source_check: OpenJijPreparationSourceCheck,
     steps: list[OpenJijPreparationStep],
-    uniform_penalty_weight: float | None,
-    penalty_weights: Mapping[int, float] | None,
 ) -> Instance:
+    uniform_penalty_weight = config.uniform_penalty_weight
+    penalty_weights = config.penalty_weights
     remaining_constraint_ids = frozenset(working.constraints)
     if not remaining_constraint_ids:
         return working
@@ -401,6 +394,7 @@ def _apply_penalties(
             expected="uniform_penalty_weight or penalty_weights",
         )
         _raise_preparation_failure(
+            config,
             source_check,
             steps=steps,
             failures=(failure,),
@@ -437,6 +431,7 @@ def _apply_penalties(
 def _validate_encoding_input(
     working: Instance,
     *,
+    config: OpenJijPreparationConfig,
     source_check: OpenJijPreparationSourceCheck,
     steps: list[OpenJijPreparationStep],
 ) -> None:
@@ -455,6 +450,7 @@ def _validate_encoding_input(
         )
     if not preconditions_checked or violations:
         _raise_preparation_failure(
+            config,
             source_check,
             steps=steps,
             failures=tuple(_as_preparation_failure(item) for item in violations),
@@ -485,6 +481,7 @@ def _encode_slack_integers(
 
 
 def _report(
+    config: OpenJijPreparationConfig,
     source_check: OpenJijPreparationSourceCheck,
     *,
     preparation_failures: tuple[OpenJijPreparationFailure, ...] = (),
@@ -492,6 +489,7 @@ def _report(
     input_applicability: AdapterApplicabilityReport | None = None,
 ) -> OpenJijPreparationReport:
     return OpenJijPreparationReport(
+        config=config,
         source_check=source_check,
         preparation_failures=preparation_failures,
         steps=tuple(steps),
@@ -500,6 +498,7 @@ def _report(
 
 
 def _raise_preparation_failure(
+    config: OpenJijPreparationConfig,
     source_check: OpenJijPreparationSourceCheck,
     *,
     steps: list[OpenJijPreparationStep],
@@ -507,6 +506,7 @@ def _raise_preparation_failure(
 ) -> NoReturn:
     raise OpenJijPreparationError(
         _report(
+            config,
             source_check,
             preparation_failures=failures,
             steps=steps,
