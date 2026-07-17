@@ -15,12 +15,17 @@ from ommx import (
 )
 
 
-def test_operation_error_types_are_runtime_error_compatible():
+def test_operation_error_types_are_public_runtime_errors():
     from ommx.adapter import InfeasibleDetected as AdapterInfeasibleDetected
 
-    assert issubclass(LogEncodingError, RuntimeError)
-    assert issubclass(ExactIntegerSlackError, RuntimeError)
-    assert issubclass(InfeasibleDetected, RuntimeError)
+    operation_error_types = (
+        LogEncodingError,
+        ExactIntegerSlackError,
+        InfeasibleDetected,
+    )
+    for error_type in operation_error_types:
+        assert issubclass(error_type, RuntimeError)
+        assert error_type.__module__ == "ommx"
     assert AdapterInfeasibleDetected is InfeasibleDetected
     assert {
         "LogEncodingError",

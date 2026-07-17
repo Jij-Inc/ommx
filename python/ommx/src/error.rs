@@ -69,8 +69,42 @@ pyo3_stub_gen::create_exception!(
     RemoteArtifactError,
     "The remote response is not a valid OMMX Artifact."
 );
+
+/// Define a core-owned exception whose public runtime module is `ommx` while
+/// keeping its generated binding stub in the private extension module.
+macro_rules! create_core_exception {
+    ($name:ident, $base:ty, $doc:expr) => {
+        pyo3::create_exception!(ommx, $name, $base, $doc);
+
+        impl pyo3_stub_gen::PyStubType for $name {
+            fn type_output() -> pyo3_stub_gen::TypeInfo {
+                pyo3_stub_gen::TypeInfo::builtin(stringify!($name))
+            }
+        }
+
+        pyo3_stub_gen::impl_py_runtime_type!($name);
+
+        pyo3_stub_gen::inventory::submit! {
+            pyo3_stub_gen::type_info::PyClassInfo {
+                pyclass_name: stringify!($name),
+                struct_id: std::any::TypeId::of::<$name>,
+                getters: &[],
+                setters: &[],
+                module: Some("ommx._ommx_rust"),
+                doc: $doc,
+                bases: &[|| <$base as pyo3_stub_gen::PyStubType>::type_output()],
+                has_eq: false,
+                has_ord: false,
+                has_hash: false,
+                has_str: false,
+                subclass: true,
+            }
+        }
+    };
+}
+
 pyo3::create_exception!(
-    ommx._ommx_rust,
+    ommx,
     LogEncodingError,
     PyRuntimeError,
     "An exact log encoding is unavailable for one requested decision variable. Diagnostic attributes are ``kind``, ``variable_id``, ``observed``, and ``expected``."
@@ -122,6 +156,8 @@ pyo3_stub_gen::inventory::submit! {
             },
         ],
         setters: &[],
+        // Runtime ownership and generated-stub placement are intentionally
+        // separate: the public type is `ommx.LogEncodingError`.
         module: Some("ommx._ommx_rust"),
         doc: "An exact log encoding is unavailable for one requested decision variable.",
         bases: &[|| <PyRuntimeError as pyo3_stub_gen::PyStubType>::type_output()],
@@ -132,14 +168,12 @@ pyo3_stub_gen::inventory::submit! {
         subclass: true,
     }
 }
-pyo3_stub_gen::create_exception!(
-    ommx._ommx_rust,
+create_core_exception!(
     ExactIntegerSlackError,
     PyRuntimeError,
     "Exact integer-slack conversion is unavailable for the requested inequality."
 );
-pyo3_stub_gen::create_exception!(
-    ommx._ommx_rust,
+create_core_exception!(
     InfeasibleDetected,
     PyRuntimeError,
     "The mathematical model was proven infeasible."

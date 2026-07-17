@@ -171,7 +171,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                 >>> OMMXPythonMIPAdapter.solve(instance)
                 Traceback (most recent call last):
                     ...
-                ommx.adapter.InfeasibleDetected: Model was infeasible
+                ommx.InfeasibleDetected: Model was infeasible
 
         Unbounded Problem
 
