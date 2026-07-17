@@ -1,5 +1,4 @@
 use crate::error::OmmxPyResult;
-use anyhow::Result;
 use ommx::{Message, Parse, SampleID};
 use pyo3::{
     exceptions::{PyKeyError, PyTypeError},
@@ -199,7 +198,7 @@ fn samples_from_any(entries: Bound<PyAny>) -> PyResult<Samples> {
     Err(type_error())
 }
 
-fn extract_state(value: &Bound<PyAny>) -> Result<ommx::v1::State, PyErr> {
+fn extract_state(value: &Bound<PyAny>) -> PyResult<ommx::v1::State> {
     if let Ok(state) = value.extract::<crate::State>() {
         return Ok(state.0);
     }

@@ -35,7 +35,6 @@ path = "../../rust/ommx"
 default-features = false
 
 [dependencies]
-anyhow.workspace = true
 approx.workspace = true
 derive_more.workspace = true
 fnv.workspace = true
