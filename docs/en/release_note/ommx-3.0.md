@@ -8,6 +8,29 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🆕 Finite-domain decision variables ([#1112](https://github.com/Jij-Inc/ommx/pull/1112))
+
+{class}`~ommx.DecisionVariable` can now represent an exact, explicitly
+enumerated numeric domain. Use {meth}`~ommx.Instance.new_finite_domain` while
+building an Instance incrementally, or {meth}`~ommx.DecisionVariable.finite_domain`
+when constructing components with explicit IDs.
+
+```python
+from ommx import DecisionVariable, Instance
+
+instance = Instance.minimize()
+x = instance.new_finite_domain([0.1, 0.3, 0.5, 1.0], name="x")
+
+assert x.kind == DecisionVariable.FINITE_DOMAIN
+assert x.values == [0.1, 0.3, 0.5, 1.0]
+```
+
+The value set must be non-empty and contain unique, finite numbers. OMMX
+preserves the exact set through evaluation, sampling, and v1/v2 serialization;
+it is not a discretization of a continuous interval. See [Decision
+Variables](../user_guide/instance.md) for the domain and
+DataFrame representation.
+
 ### 🆕 Typed remote Artifact lookup errors ([#1090](https://github.com/Jij-Inc/ommx/pull/1090))
 
 {meth}`~ommx.artifact.Artifact.load` and
