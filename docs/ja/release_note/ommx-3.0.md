@@ -70,26 +70,46 @@ Python binding は、Rust SDK が返す OMMX-owned signal type を entry point
 
 - 不正な入力、不正な OMMX protobuf / QPLIB data、および domain 上の前提を
   満たせない操作は `ValueError`
-- 存在しない variable、constraint、sample、named function の識別子は `KeyError`
+- 存在しない variable、constraint、sample、named function、Artifact layer、
+  Experiment / Run attachment は `KeyError`
 - 未分類の SDK / infrastructure failure は `RuntimeError` への fallback
 
 Python の引数抽出 failure は引き続き `TypeError` で、Python code が送出した
 exception も変更せず伝播します。error message には OMMX field と source の
 context が保持されます。`ValueError` には、不正な bound / tolerance、重複した
 subscript、parameter 付き constraint の抽出、feasible sample がない状態での
-best sample の要求などが含まれます。
+best sample の要求などが含まれます。Artifact 操作でも、不正な image reference、
+malformed digest、未対応または不正な layer media type、存在しない typed layer、
+不正な OMMX payload を同じ方針で分類します。
+Experiment 操作では、不正な image reference、autosave value、attachment media
+type、JSON input を `ValueError` とし、registry、archive、storage、lifecycle の
+failure は `RuntimeError` に fallback します。
 
 現在の対象は、`CoefficientError`、`AtolError`、`BoundError`、
 `DecisionVariableError`、`SolutionError`、`SampleSetError` のうち Python 側で
 安定して判別すべき case、および parser signal の `ParseError` と
-`QplibParseError` です。係数 0 は従来どおり正常系として正規化され、in-place の
-数値加算に失敗しても元の object は変更されません。安定した OMMX-owned signal が
-まだない MPS parse と file open failure は、引き続き `RuntimeError` に fallback
-します。
+`QplibParseError` です。存在しない Experiment / Run attachment は
+`AttachmentNotFound` signal を保持し、`KeyError` を送出します。呼び出し側が
+渡した不正な image reference は `ImageRefParseError` を保持し、Local Registry に
+保存済みの image ref が壊れている場合は `InvalidLocalRegistryImageRef` を保持して
+`RuntimeError` に fallback します。Registry、archive、content-addressed storage の
+failure も同じ fallback を使います。Python-backed codec、JSON callback、adapter、
+tracing hook、data library が送出した exception は変更せず伝播します。
+
+係数 0 は従来どおり正常系として正規化され、in-place の数値加算に失敗しても元の
+object は変更されません。安定した OMMX-owned signal がまだない MPS parse と file
+open failure は、引き続き `RuntimeError` に fallback します。Descriptor は
+metadata-only のまま維持し、blob read は registry context を持つ Artifact が
+所有します。Attachment codec は CAS blob を読む前に宣言した media type を検証し、
+encode 結果には Python の `bytes` を要求します。Run body と tracing cleanup が
+同時に失敗した場合も元の body exception を保持し、Run は failed または
+interrupted status で確実に閉じられます。
 
 関連 PR: [#1096](https://github.com/Jij-Inc/ommx/pull/1096)、
 [#1097](https://github.com/Jij-Inc/ommx/pull/1097)、
-[#1099](https://github.com/Jij-Inc/ommx/pull/1099)。
+[#1099](https://github.com/Jij-Inc/ommx/pull/1099)、
+[#1100](https://github.com/Jij-Inc/ommx/pull/1100)、
+[#1101](https://github.com/Jij-Inc/ommx/pull/1101)。
 
 ### 🆕 Instance Class と Adapter Applicability ([#1084](https://github.com/Jij-Inc/ommx/pull/1084))
 

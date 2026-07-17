@@ -54,7 +54,7 @@ pub use constraint::*;
 #[cfg(feature = "remote-artifact")]
 pub use dataset::*;
 pub use decision_variable::*;
-pub use descriptor::*;
+pub use descriptor::{PyArchiveDescriptor, PyDescriptor};
 pub use enums::*;
 pub use evaluated_constraint::*;
 pub use evaluated_decision_variable::*;
