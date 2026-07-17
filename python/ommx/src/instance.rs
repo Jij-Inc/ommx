@@ -1207,7 +1207,7 @@ impl Instance {
     /// ```
     /// Traceback (most recent call last):
     ///     ...
-    /// ValueError: The state does not contain some required IDs: {VariableID(2)}
+    /// ValueError: state is missing required variable IDs: {VariableID(2)}
     #[pyo3(signature = (state, *, atol=None))]
     pub fn evaluate(
         &self,

@@ -37,6 +37,19 @@ def _instance_with_one_hot_constraint() -> ommx.Instance:
     )
 
 
+def _dependent_instance_y_eq_scaled_x(coefficient: float) -> ommx.Instance:
+    x = ommx.DecisionVariable.continuous(1)
+    y = ommx.DecisionVariable.continuous(10)
+    instance = ommx.Instance.from_components(
+        decision_variables=[x, y],
+        objective=y,
+        constraints={},
+        sense=ommx.Instance.MINIMIZE,
+    )
+    instance.substitute({10: coefficient * x})
+    return instance
+
+
 def _instance_with_sos1_derived_bound_conflict() -> ommx.Instance:
     variables = [
         ommx.DecisionVariable.continuous(1, lower=1.0, upper=2.0),
@@ -67,9 +80,17 @@ def _instance_with_sos1_derived_bound_conflict() -> ommx.Instance:
         lambda: _instance_with_required_variable().evaluate_samples({7: {}}),
     ],
 )
-def test_missing_state_entry_raises_value_error_across_entrypoints(operation) -> None:
+def test_missing_state_entries_raise_value_error_across_entrypoints(operation) -> None:
     with pytest.raises(ValueError):
         operation()
+
+
+def test_missing_state_entries_report_all_required_ids() -> None:
+    with pytest.raises(ValueError) as error:
+        ommx.Linear({1: 1.0, 2: 1.0}).evaluate({})
+
+    assert "1" in str(error.value)
+    assert "2" in str(error.value)
 
 
 def test_instance_state_shape_errors_raise_value_error() -> None:
@@ -79,6 +100,20 @@ def test_instance_state_shape_errors_raise_value_error() -> None:
         instance.populate_state({})
     with pytest.raises(ValueError, match="unknown variable IDs"):
         instance.populate_state({1: 0.0, 99: 0.0})
+
+
+def test_fixed_state_conflict_reuses_decision_variable_value_error() -> None:
+    instance = _instance_with_required_variable().partial_evaluate({1: 0.0})
+
+    with pytest.raises(ValueError, match="cannot be overwritten"):
+        instance.populate_state({1: 1.0})
+
+
+def test_non_finite_dependent_evaluation_falls_back_to_runtime_error() -> None:
+    instance = _dependent_instance_y_eq_scaled_x(sys.float_info.max)
+
+    with pytest.raises(RuntimeError, match="evaluated to non-finite"):
+        instance.populate_state({1: sys.float_info.max})
 
 
 @pytest.mark.parametrize("value", [float("nan"), 0.5])

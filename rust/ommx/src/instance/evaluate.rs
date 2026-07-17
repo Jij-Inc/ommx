@@ -1,14 +1,15 @@
 use super::*;
 use crate::Result;
 use crate::{
-    constraint::RemovedReason, ATol, Bound, DecisionVariableError, Evaluate, EvaluationError, Kind,
-    Propagate, PropagateOutcome, VariableIDSet,
+    constraint::RemovedReason, ATol, Bound, DecisionVariableError, Evaluate,
+    InconsistentDependentValue, Kind, MissingStateEntries, Propagate, PropagateOutcome,
+    UnknownStateEntries, UnverifiableDependentAssertion, VariableIDSet,
 };
 use std::collections::BTreeMap;
 
 fn ensure_state_value_is_finite(var_id: u64, value: f64) -> Result<()> {
     if !value.is_finite() {
-        return Err(EvaluationError::NonFiniteStateValue {
+        return Err(DecisionVariableError::NonFiniteValue {
             id: var_id.into(),
             value,
         }
@@ -258,7 +259,7 @@ impl PartialEvaluatePlan {
             .filter(|id| instance.decision_variables.get(id).is_none())
             .collect();
         if !unknown_ids.is_empty() {
-            return Err(EvaluationError::UnknownStateEntries { ids: unknown_ids }.into());
+            return Err(UnknownStateEntries { ids: unknown_ids }.into());
         }
 
         for (&id, &value) in &state.entries {
@@ -302,12 +303,12 @@ impl StatePopulationPlan<'_> {
 
         let unknown_ids: VariableIDSet = state_ids.difference(&self.all).cloned().collect();
         if !unknown_ids.is_empty() {
-            return Err(EvaluationError::UnknownStateEntries { ids: unknown_ids }.into());
+            return Err(UnknownStateEntries { ids: unknown_ids }.into());
         }
 
         let missing_ids: VariableIDSet = self.used.difference(&state_ids).cloned().collect();
         if !missing_ids.is_empty() {
-            return Err(EvaluationError::MissingRequiredStateEntries { ids: missing_ids }.into());
+            return Err(MissingStateEntries { ids: missing_ids }.into());
         }
 
         for (&id, &value) in &state.entries {
@@ -322,11 +323,11 @@ impl StatePopulationPlan<'_> {
                 Entry::Occupied(entry) => {
                     let state_value = *entry.get();
                     if !values_are_consistent(state_value, *value, atol) {
-                        let instance_value = *value;
-                        return Err(EvaluationError::InconsistentStateValue {
+                        return Err(DecisionVariableError::SubstitutedValueOverwrite {
                             id: *id,
-                            state_value,
-                            instance_value,
+                            previous_value: *value,
+                            new_value: state_value,
+                            atol,
                         }
                         .into());
                     }
@@ -356,17 +357,20 @@ impl StatePopulationPlan<'_> {
                 tracing::error!(?id, error = %e, "failed to evaluate dependent variable");
             })?;
             if !value.is_finite() {
-                return Err(EvaluationError::NonFiniteDependentValue { id, value }.into());
+                crate::bail!(
+                    { id = ?id, value },
+                    "dependent variable {id:?} evaluated to non-finite value: {value}",
+                );
             }
             use std::collections::hash_map::Entry;
             match state.entries.entry(id.into_inner()) {
                 Entry::Occupied(entry) => {
                     let state_value = *entry.get();
                     if !values_are_consistent(state_value, value, atol) {
-                        return Err(EvaluationError::InconsistentStateValue {
+                        return Err(InconsistentDependentValue {
                             id,
                             state_value,
-                            instance_value: value,
+                            dependency_value: value,
                         }
                         .into());
                     }
@@ -527,15 +531,19 @@ impl Instance {
         for (id, function) in self.decision_variable_dependency.evaluation_order_iter() {
             let mut function = function.clone();
             function.partial_evaluate(&evaluation_state, atol)?;
+            let required_ids = function.required_ids();
 
-            if function.required_ids().is_empty() {
+            if required_ids.is_empty() {
                 let value = function.evaluate(&v1::State::default(), atol)?;
                 if !value.is_finite() {
-                    return Err(EvaluationError::NonFiniteDependentValue { id, value }.into());
+                    crate::bail!(
+                        { id = ?id, value },
+                        "dependent variable {id:?} evaluated to non-finite value: {value}",
+                    );
                 }
                 if let Some(asserted_value) = assertions.remove(&id) {
                     if !values_are_consistent(asserted_value, value, atol) {
-                        return Err(EvaluationError::InconsistentDependentValue {
+                        return Err(InconsistentDependentValue {
                             id,
                             state_value: asserted_value,
                             dependency_value: value,
@@ -554,7 +562,7 @@ impl Instance {
                 evaluation_state.entries.insert(id.into_inner(), value);
             } else {
                 if assertions.remove(&id).is_some() {
-                    return Err(EvaluationError::UnverifiableDependentAssertion { id }.into());
+                    return Err(UnverifiableDependentAssertion { id, required_ids }.into());
                 }
                 remaining_assignments.push((id, function));
             }
@@ -854,7 +862,7 @@ mod tests {
     fn state_validation_instance() -> Instance {
         Instance::builder()
             .sense(Sense::Minimize)
-            .objective(Function::from(linear!(1)))
+            .objective(Function::from((linear!(1) + linear!(2)).unwrap()))
             .decision_variables(BTreeMap::from([
                 (VariableID::from(1), crate::DecisionVariable::continuous()),
                 (VariableID::from(2), crate::DecisionVariable::continuous()),
@@ -865,17 +873,21 @@ mod tests {
     }
 
     #[test]
-    fn test_populate_state_preserves_missing_and_unknown_state_signals() {
+    fn test_populate_state_preserves_individual_state_shape_signals() {
         let instance = state_validation_instance();
 
         let missing = instance
             .populate_state(v1::State::default(), ATol::default())
             .unwrap_err();
-        assert!(matches!(
-            missing.downcast_ref::<EvaluationError>(),
-            Some(EvaluationError::MissingRequiredStateEntries { ids })
-                if ids == &VariableIDSet::from([VariableID::from(1)])
-        ));
+        assert_eq!(
+            missing
+                .downcast_ref::<MissingStateEntries>()
+                .map(|error| &error.ids),
+            Some(&VariableIDSet::from([
+                VariableID::from(1),
+                VariableID::from(2),
+            ]))
+        );
 
         let unknown = instance
             .populate_state(
@@ -883,11 +895,12 @@ mod tests {
                 ATol::default(),
             )
             .unwrap_err();
-        assert!(matches!(
-            unknown.downcast_ref::<EvaluationError>(),
-            Some(EvaluationError::UnknownStateEntries { ids })
-                if ids == &VariableIDSet::from([VariableID::from(99)])
-        ));
+        assert_eq!(
+            unknown
+                .downcast_ref::<UnknownStateEntries>()
+                .map(|error| &error.ids),
+            Some(&VariableIDSet::from([VariableID::from(99)]))
+        );
     }
 
     #[test]
@@ -908,8 +921,8 @@ mod tests {
 
         let err = instance.populate_state(state, ATol::default()).unwrap_err();
         assert!(matches!(
-            err.downcast_ref::<EvaluationError>(),
-            Some(EvaluationError::NonFiniteStateValue { id, value })
+            err.downcast_ref::<DecisionVariableError>(),
+            Some(DecisionVariableError::NonFiniteValue { id, value })
                 if *id == VariableID::from(2) && value.is_nan()
         ));
         assert!(err.to_string().contains("must be finite"));
@@ -921,9 +934,15 @@ mod tests {
             )
             .unwrap_err();
         assert!(matches!(
-            error.downcast_ref::<EvaluationError>(),
-            Some(EvaluationError::InconsistentStateValue { id, .. })
-                if *id == VariableID::from(2)
+            error.downcast_ref::<DecisionVariableError>(),
+            Some(DecisionVariableError::SubstitutedValueOverwrite {
+                id,
+                previous_value,
+                new_value,
+                ..
+            }) if *id == VariableID::from(2)
+                && *previous_value == 3.0
+                && *new_value == 4.0
         ));
     }
 
@@ -1059,10 +1078,17 @@ mod tests {
             .partial_evaluate(&state, ATol::default())
             .unwrap_err();
 
-        assert!(
-            err.to_string().contains("cannot be overwritten"),
-            "unexpected error: {err}"
-        );
+        assert!(matches!(
+            err.downcast_ref::<DecisionVariableError>(),
+            Some(DecisionVariableError::SubstitutedValueOverwrite {
+                id,
+                previous_value,
+                new_value,
+                ..
+            }) if *id == VariableID::from(2)
+                && *previous_value == 0.0
+                && *new_value == 2.0
+        ));
         assert_eq!(instance.fixed_decision_variable_values(), &fixed_before);
         assert_eq!(instance.removed_constraints(), &removed_before);
     }
@@ -1466,9 +1492,14 @@ mod tests {
             .unwrap_err();
 
         assert!(matches!(
-            err.downcast_ref::<EvaluationError>(),
-            Some(EvaluationError::InconsistentDependentValue { id, .. })
-                if *id == VariableID::from(10)
+            err.downcast_ref::<InconsistentDependentValue>(),
+            Some(InconsistentDependentValue {
+                id,
+                state_value,
+                dependency_value,
+            }) if *id == VariableID::from(10)
+                && *state_value == 5.0
+                && *dependency_value == 4.0
         ));
         assert!(
             err.to_string()
@@ -1483,6 +1514,25 @@ mod tests {
     }
 
     #[test]
+    fn test_populate_state_preserves_inconsistent_dependent_value_payload() {
+        let instance = dependent_instance_y_eq_2x();
+        let state = v1::State::from(HashMap::from([(1, 2.0), (10, 5.0)]));
+
+        let err = instance.populate_state(state, ATol::default()).unwrap_err();
+
+        assert!(matches!(
+            err.downcast_ref::<InconsistentDependentValue>(),
+            Some(InconsistentDependentValue {
+                id,
+                state_value,
+                dependency_value,
+            }) if *id == VariableID::from(10)
+                && *state_value == 5.0
+                && *dependency_value == 4.0
+        ));
+    }
+
+    #[test]
     fn test_partial_evaluate_rejects_unverifiable_dependent_assertion_atomically() {
         let mut instance = dependent_instance_y_eq_2x();
 
@@ -1491,11 +1541,14 @@ mod tests {
             .partial_evaluate(&state, ATol::default())
             .unwrap_err();
 
-        assert!(matches!(
-            err.downcast_ref::<EvaluationError>(),
-            Some(EvaluationError::UnverifiableDependentAssertion { id })
-                if *id == VariableID::from(10)
-        ));
+        assert_eq!(
+            err.downcast_ref::<UnverifiableDependentAssertion>()
+                .map(|error| (error.id, &error.required_ids)),
+            Some((
+                VariableID::from(10),
+                &VariableIDSet::from([VariableID::from(1)]),
+            ))
+        );
         assert!(
             err.to_string()
                 .contains("Dependent variable (ID=10) cannot be asserted"),
@@ -1586,11 +1639,11 @@ mod tests {
         let state = v1::State::from(HashMap::from([(1, f64::MAX)]));
 
         let err = instance.populate_state(state, ATol::default()).unwrap_err();
-        assert!(matches!(
-            err.downcast_ref::<EvaluationError>(),
-            Some(EvaluationError::NonFiniteDependentValue { id, .. })
-                if *id == VariableID::from(10)
-        ));
+        assert!(!err.is::<MissingStateEntries>());
+        assert!(!err.is::<UnknownStateEntries>());
+        assert!(!err.is::<InconsistentDependentValue>());
+        assert!(!err.is::<UnverifiableDependentAssertion>());
+        assert!(!err.is::<DecisionVariableError>());
         assert!(err.to_string().contains("evaluated to non-finite value"));
     }
 
@@ -1736,14 +1789,15 @@ mod tests {
                 ATol::default(),
             )
             .unwrap_err();
-        assert!(matches!(
-            unknown.downcast_ref::<EvaluationError>(),
-            Some(EvaluationError::UnknownStateEntries { ids })
-                if ids == &VariableIDSet::from([
-                    VariableID::from(99),
-                    VariableID::from(100),
-                ])
-        ));
+        assert_eq!(
+            unknown
+                .downcast_ref::<UnknownStateEntries>()
+                .map(|error| &error.ids),
+            Some(&VariableIDSet::from([
+                VariableID::from(99),
+                VariableID::from(100),
+            ]))
+        );
 
         let non_finite = instance
             .partial_evaluate(
@@ -1752,8 +1806,8 @@ mod tests {
             )
             .unwrap_err();
         assert!(matches!(
-            non_finite.downcast_ref::<EvaluationError>(),
-            Some(EvaluationError::NonFiniteStateValue { id, value })
+            non_finite.downcast_ref::<DecisionVariableError>(),
+            Some(DecisionVariableError::NonFiniteValue { id, value })
                 if *id == VariableID::from(1) && value.is_nan()
         ));
 
@@ -1810,7 +1864,6 @@ mod tests {
             .unwrap_err();
 
         assert!(error.downcast_ref::<DecisionVariableError>().is_none());
-        assert!(error.downcast_ref::<EvaluationError>().is_none());
         assert!(error
             .to_string()
             .contains("special-constraint propagation produced an invalid value"));
@@ -1863,14 +1916,13 @@ mod tests {
             .unwrap();
         let before = instance.clone();
 
-        let error = instance
+        instance
             .partial_evaluate(
                 &v1::State::from(HashMap::from([(1, 0.0), (3, 1.0)])),
                 ATol::default(),
             )
             .unwrap_err();
 
-        assert!(error.downcast_ref::<EvaluationError>().is_none());
         assert_eq!(instance, before);
     }
 

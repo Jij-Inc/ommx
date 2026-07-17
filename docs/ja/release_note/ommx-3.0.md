@@ -97,7 +97,8 @@ Private な cross-extension PyO3 bridge が受信した不正 payload は内部 
 failure であるため、`RuntimeError` になります。
 
 現在の対象は、`CoefficientError`、`AtolError`、`BoundError`、
-`EvaluationError`、`DecisionVariableError`、`SolutionError`、
+`MissingStateEntries`、`UnknownStateEntries`、`InconsistentDependentValue`、
+`UnverifiableDependentAssertion`、`DecisionVariableError`、`SolutionError`、
 `SampleSetError` のうち Python 側で安定して判別すべき case、および parser
 signal の `ParseError` と `QplibParseError` です。存在しない Experiment / Run
 attachment は `AttachmentNotFound` signal を保持し、`KeyError` を送出します。
@@ -110,11 +111,12 @@ exception は変更せず伝播します。
 
 Function、polynomial、constraint、named function、`Instance` の evaluation API
 も、この共通 boundary を直接使うようになりました。特殊制約の伝播前に行う検証を
-含め、呼び出し側が所有する state の shape / value validation failure は
-`ValueError` になります。型付けされていない制約の infeasibility と、伝播が導出した
-値の failure は引き続き `RuntimeError` に fallback します。Partial evaluation
-では元の `CoefficientError` を型のない message に置き換えず、Rust の error chain
-に保持します。
+含め、呼び出し側の state に不足・未知のIDや不正な値がある場合、および回復可能な
+dependent variable assertion failure は `ValueError` になります。state value の検証は
+既存の `DecisionVariableError` を再利用し、evaluation全体をまとめるerror typeは
+導入しません。dependency の評価が生成した非有限値と、型付けされていない制約伝播の
+failure は引き続き `RuntimeError` に fallback します。Partial evaluationでは元の
+`CoefficientError` を型のない message に置き換えず、Rust の error chainに保持します。
 
 Python extension は `anyhow` への直接依存を廃止し、PyO3 dependency でも blanket
 な `anyhow` conversion feature を有効にしなくなりました。

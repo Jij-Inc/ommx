@@ -3603,7 +3603,7 @@ class Instance:
         ```
         Traceback (most recent call last):
             ...
-        ValueError: The state does not contain some required IDs: {VariableID(2)}
+        ValueError: state is missing required variable IDs: {VariableID(2)}
         """
     def populate_state(
         self, state: ToState, *, atol: typing.Optional[builtins.float] = None
