@@ -19,27 +19,16 @@ kernelspec:
 [たらい回しのイラスト（スーツ・男性）](https://www.irasutoya.com/2017/03/blog-post_739.html)
 ```
 
-巡回セールスマン問題（TSP）は一人のセールスマンが複数の都市を順番に巡る方法を求める問題です。都市間の移動コストが与えられたときコストが最小になる経路を求めます。ここでは次の都市の配置を考えましょう
+巡回セールスマン問題（TSP）は一人のセールスマンが複数の都市を順番に巡る方法を求める問題です。都市間の移動コストが与えられたときコストが最小になる経路を求めます。ここでは自己完結した例として、固定した乱数seedを使って10×10の領域に16都市を再現可能な形で生成します。
 
 ```{code-cell} ipython3
-# From ulysses16.tsp in TSPLIB
-ulysses16_points = [
-    (38.24, 20.42),
-    (39.57, 26.15),
-    (40.56, 25.32),
-    (36.26, 23.12),
-    (33.48, 10.54),
-    (37.56, 12.19),
-    (38.42, 13.11),
-    (37.52, 20.44),
-    (41.23, 9.10),
-    (41.17, 13.05),
-    (36.08, -5.21),
-    (38.47, 15.13),
-    (38.15, 15.35),
-    (37.51, 15.17),
-    (35.49, 14.32),
-    (39.36, 19.56),
+from random import Random
+
+N = 16
+rng = Random(42)
+city_points = [
+    (rng.uniform(0.0, 10.0), rng.uniform(0.0, 10.0))
+    for _ in range(N)
 ]
 ```
 
@@ -49,11 +38,11 @@ ulysses16_points = [
 %matplotlib inline
 from matplotlib import pyplot as plt
 
-x_coords, y_coords = zip(*ulysses16_points)
+x_coords, y_coords = zip(*city_points)
 plt.scatter(x_coords, y_coords)
 plt.xlabel('X Coordinate')
 plt.ylabel('Y Coordinate')
-plt.title('Ulysses16 Points')
+plt.title('ランダム生成した都市配置')
 plt.show()
 ```
 
@@ -63,10 +52,8 @@ plt.show()
 def distance(x, y):
     return ((x[0] - y[0])**2 + (x[1] - y[1])**2)**0.5
 
-# 都市の数
-N = len(ulysses16_points)
 # 各都市間の距離
-d = [[distance(ulysses16_points[i], ulysses16_points[j]) for i in range(N)] for j in range(N)]
+d = [[distance(city_points[i], city_points[j]) for i in range(N)] for j in range(N)]
 ```
 
 これを使って次のような最適化問題としてTSPを定式化します。まずある時刻 $t$ に都市 $i$ にいるかどうかをバイナリ変数 $x_{t, i}$ で表します。このとき、以下の制約を満たすような $x_{t, i}$ を求めます。するとセールスマンが移動する距離は次で与えられます：
@@ -273,8 +260,8 @@ for i, ax in enumerate(axie.flatten()):
     s = feasible_ids[i]
     x = sample_set.extract_decision_variables("x", s)
     path = sample_to_path(x)
-    xs = [ulysses16_points[i][0] for i in path] + [ulysses16_points[path[0]][0]]
-    ys = [ulysses16_points[i][1] for i in path] + [ulysses16_points[path[0]][1]]
+    xs = [city_points[i][0] for i in path] + [city_points[path[0]][0]]
+    ys = [city_points[i][1] for i in path] + [city_points[path[0]][1]]
     ax.plot(xs, ys, marker='o')
     ax.set_title(f"Sample {s}, objective={sample_set.objectives[s]:.2f}")
 

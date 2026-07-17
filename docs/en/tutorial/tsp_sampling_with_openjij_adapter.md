@@ -19,27 +19,16 @@ Here, we explain how to convert a problem to QUBO and perform sampling using the
 [Illustration of a man in a suit](https://www.irasutoya.com/2017/03/blog-post_739.html)
 ```
 
-The Traveling Salesman Problem (TSP) is about finding a route for a salesman to visit multiple cities in sequence. Given the travel costs between cities, we seek to find the path that minimizes the total cost. Let's consider the following city arrangement:
+The Traveling Salesman Problem (TSP) is about finding a route for a salesman to visit multiple cities in sequence. Given the travel costs between cities, we seek to find the path that minimizes the total cost. For this self-contained example, we reproducibly generate 16 cities in a 10 by 10 region using a fixed random seed:
 
 ```{code-cell} ipython3
-# From ulysses16.tsp in TSPLIB
-ulysses16_points = [
-    (38.24, 20.42),
-    (39.57, 26.15),
-    (40.56, 25.32),
-    (36.26, 23.12),
-    (33.48, 10.54),
-    (37.56, 12.19),
-    (38.42, 13.11),
-    (37.52, 20.44),
-    (41.23, 9.10),
-    (41.17, 13.05),
-    (36.08, -5.21),
-    (38.47, 15.13),
-    (38.15, 15.35),
-    (37.51, 15.17),
-    (35.49, 14.32),
-    (39.36, 19.56),
+from random import Random
+
+N = 16
+rng = Random(42)
+city_points = [
+    (rng.uniform(0.0, 10.0), rng.uniform(0.0, 10.0))
+    for _ in range(N)
 ]
 ```
 
@@ -49,11 +38,11 @@ Let's plot the locations of the cities.
 %matplotlib inline
 from matplotlib import pyplot as plt
 
-x_coords, y_coords = zip(*ulysses16_points)
+x_coords, y_coords = zip(*city_points)
 plt.scatter(x_coords, y_coords)
 plt.xlabel('X Coordinate')
 plt.ylabel('Y Coordinate')
-plt.title('Ulysses16 Points')
+plt.title('Randomly Generated City Locations')
 plt.show()
 ```
 
@@ -63,10 +52,8 @@ Let's consider distance as the cost. We'll calculate the distance $d(i, j)$ betw
 def distance(x, y):
     return ((x[0] - y[0])**2 + (x[1] - y[1])**2)**0.5
 
-# Number of cities
-N = len(ulysses16_points)
 # Distance between each pair of cities
-d = [[distance(ulysses16_points[i], ulysses16_points[j]) for i in range(N)] for j in range(N)]
+d = [[distance(city_points[i], city_points[j]) for i in range(N)] for j in range(N)]
 ```
 
 Using this, we can formulate TSP as follows. First, let's represent whether we are at city $i$ at time $t$ with a binary variable $x_{t, i}$. Then, we seek $x_{t, i}$ that satisfies the following constraints. The distance traveled by the salesman is given by:
@@ -276,8 +263,8 @@ for i, ax in enumerate(axie.flatten()):
     s = feasible_ids[i]
     x = sample_set.extract_decision_variables("x", s)
     path = sample_to_path(x)
-    xs = [ulysses16_points[i][0] for i in path] + [ulysses16_points[path[0]][0]]
-    ys = [ulysses16_points[i][1] for i in path] + [ulysses16_points[path[0]][1]]
+    xs = [city_points[i][0] for i in path] + [city_points[path[0]][0]]
+    ys = [city_points[i][1] for i in path] + [city_points[path[0]][1]]
     ax.plot(xs, ys, marker='o')
     ax.set_title(f"Sample {s}, objective={sample_set.objectives[s]:.2f}")
 
