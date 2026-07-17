@@ -8,7 +8,7 @@
         {
           "kind": "Class",
           "name": "AdditionalCapability",
-          "doc": "Constraint type capability flag for non-standard constraint types.\n\nStandard constraints are always supported. This enum lists capabilities\nthat adapters must explicitly opt in to.\n\nUse as a set: `{AdditionalCapability.Indicator}`",
+          "doc": "Selector for a non-standard constraint family.\n\n:attr:`Instance.required_capabilities` reports these selectors for active\nspecial constraints. :meth:`Instance.reduce_capabilities` uses them to\nchoose which families are preserved during explicit lowering. Regular\nconstraints are outside this selector.",
           "bases": [],
           "methods": [],
           "attributes": [
@@ -5696,6 +5696,144 @@
         },
         {
           "kind": "Class",
+          "name": "DegreeBound",
+          "doc": "Cumulative polynomial-degree bound in an :class:`InstanceClassClause`.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "at_most",
+              "doc": "Include every degree up to and including ``maximum``.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "maximum",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "DegreeBound",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "includes",
+              "doc": "Return whether ``actual_degree`` satisfies this bound.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "actual_degree",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "unbounded",
+              "doc": "Include every polynomial degree representable by OMMX.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "DegreeBound",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "maximum",
+              "doc": "Inclusive maximum degree, or ``None`` when unbounded.",
+              "type_": {
+                "display": "Optional[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
           "name": "Equality",
           "doc": "Equality type for constraints",
           "bases": [],
@@ -9279,7 +9417,7 @@
             },
             {
               "name": "evaluate",
-              "doc": "Evaluate the given {class}`~ommx.State` into a {class}`~ommx.Solution`.\n\nThis method evaluates the problem instance using the provided state (a map from decision variable IDs to their values),\nand returns a {class}`~ommx.Solution` object containing objective value, evaluated constraint values, and feasibility information.\n\n# Examples\n\nCreate a simple instance with three binary variables and evaluate a solution:\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[(x[0] + x[1] <= 1).set_id(0)],\n...     sense=Instance.MAXIMIZE,\n... )\n```\n\nEvaluate it with a state x0 = 1, x1 = 0, x2 = 0, and show the objective and constraints:\n\n```python\n>>> solution = instance.evaluate({0: 1, 1: 0, 2: 0})\n>>> solution.objective\n1.0\n```\n\nIf the value is out of the range, the solution is infeasible:\n\n```python\n>>> solution = instance.evaluate({0: 1, 1: 0, 2: 2})\n>>> solution.feasible\nFalse\n```\n\nIf some of the decision variables are not set, this raises an error:\n\n```python\n>>> instance.evaluate({0: 1, 1: 0})\n```\nTraceback (most recent call last):\n    ...\nValueError: The state does not contain some required IDs: {VariableID(2)}",
+              "doc": "Evaluate the given {class}`~ommx.State` into a {class}`~ommx.Solution`.\n\nThis method evaluates the problem instance using the provided state (a map from decision variable IDs to their values),\nand returns a {class}`~ommx.Solution` object containing objective value, evaluated constraint values, and feasibility information.\n\n# Examples\n\nCreate a simple instance with three binary variables and evaluate a solution:\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[(x[0] + x[1] <= 1).set_id(0)],\n...     sense=Instance.MAXIMIZE,\n... )\n```\n\nEvaluate it with a state x0 = 1, x1 = 0, x2 = 0, and show the objective and constraints:\n\n```python\n>>> solution = instance.evaluate({0: 1, 1: 0, 2: 0})\n>>> solution.objective\n1.0\n```\n\nIf the value is out of the range, the solution is infeasible:\n\n```python\n>>> solution = instance.evaluate({0: 1, 1: 0, 2: 2})\n>>> solution.feasible\nFalse\n```\n\nIf some of the decision variables are not set, this raises an error:\n\n```python\n>>> instance.evaluate({0: 1, 1: 0})\n```\nTraceback (most recent call last):\n    ...\nValueError: state is missing required variable IDs: {VariableID(2)}",
               "signatures": [
                 {
                   "parameters": [
@@ -10458,12 +10596,12 @@
             },
             {
               "name": "reduce_capabilities",
-              "doc": "Convert constraint types not in `supported` into regular constraints.\n\nFor every capability in :attr:`required_capabilities` not in\n``supported``, the corresponding bulk conversion is invoked\n(:meth:`convert_all_indicators_to_constraints`,\n:meth:`convert_all_one_hots_to_constraints`, or\n:meth:`convert_all_sos1_to_constraints`). The instance is mutated in\nplace and :attr:`required_capabilities` becomes a subset of\n``supported`` on success.\n\nReturns the set of :class:`AdditionalCapability` values that were\nactually converted. Empty when nothing needed conversion.\n\nRaises if any underlying Big-M conversion fails (e.g. a SOS1 variable\nwith a non-finite bound).",
+              "doc": "Convert active non-standard constraint families not in ``preserved``\ninto regular constraints.\n\nFor every selector in :attr:`required_capabilities` not in\n``preserved``, the corresponding bulk conversion is invoked\n(:meth:`convert_all_indicators_to_constraints`,\n:meth:`convert_all_one_hots_to_constraints`, or\n:meth:`convert_all_sos1_to_constraints`). The instance is mutated in\nplace and :attr:`required_capabilities` becomes a subset of\n``preserved`` on success. This does not establish\n:class:`InstanceClass` membership; check the resulting input separately.\n\nReturns the set of :class:`AdditionalCapability` values that were\nactually converted. Empty when nothing needed conversion.\n\nRaises if any underlying Big-M conversion fails (e.g. a SOS1 variable\nwith a non-finite bound).",
               "signatures": [
                 {
                   "parameters": [
                     {
-                      "name": "supported",
+                      "name": "preserved",
                       "type_": {
                         "display": "set[AdditionalCapability]",
                         "link_target": null,
@@ -11519,7 +11657,7 @@
             },
             {
               "name": "required_capabilities",
-              "doc": "The non-standard constraint capabilities this instance currently uses.\n\nReturns the set of :class:`AdditionalCapability` values corresponding to\nthe active (non-removed) constraint collections the instance contains.\nAn empty set means the instance only uses regular constraints.\n\nCallers can diff this against an adapter's\n``ADDITIONAL_CAPABILITIES`` to see what would be converted, or use\n:meth:`reduce_capabilities` to perform the conversion.",
+              "doc": "Selectors for active non-standard constraint families.\n\nOnly active constraints are considered. This value does not describe an\n:class:`InstanceClass` or establish adapter applicability. Use\n:meth:`reduce_capabilities` only as an explicit special-constraint\nlowering operation.",
               "type_": {
                 "display": "set[AdditionalCapability]",
                 "link_target": null,
@@ -11601,6 +11739,693 @@
               "is_readonly": true
             }
           ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "InstanceClass",
+          "doc": "A set of :class:`Instance` values represented as a finite union of clauses.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__new__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "clauses",
+                      "type_": {
+                        "display": "Sequence[InstanceClassClause]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "InstanceClassClause",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "InstanceClass",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "check_membership",
+              "doc": "Evaluate membership without mutating or preparing ``instance``.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "instance",
+                      "type_": {
+                        "display": "Instance",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "InstanceClassMembershipReport",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "contains",
+              "doc": "Return whether ``instance`` belongs to this class.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "instance",
+                      "type_": {
+                        "display": "Instance",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "union",
+              "doc": "Return the finite union of two instance classes.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "InstanceClass",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "InstanceClass",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "clauses",
+              "doc": "",
+              "type_": {
+                "display": "list[InstanceClassClause]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "InstanceClassClause",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "InstanceClassClause",
+          "doc": "One conjunctive clause in an :class:`InstanceClass`.\n\nEvery condition in a clause must hold. The containing instance class is\nthe finite union of its clauses, so alternatives are not combined across\nclause boundaries.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__new__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "label",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "allowed_variable_kinds",
+                      "type_": {
+                        "display": "set[Kind]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Kind",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "objective_degree_bound",
+                      "type_": {
+                        "display": "DegreeBound",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "allowed_senses",
+                      "type_": {
+                        "display": "set[Sense]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Sense",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "regular_constraint_degree_bounds",
+                      "type_": {
+                        "display": "Optional[Mapping[Equality, DegreeBound]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Mapping[Equality, DegreeBound]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "Equality",
+                                "link_target": null,
+                                "children": []
+                              },
+                              {
+                                "display": "DegreeBound",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "indicator_constraint_degree_bounds",
+                      "type_": {
+                        "display": "Optional[Mapping[Equality, DegreeBound]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Mapping[Equality, DegreeBound]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "Equality",
+                                "link_target": null,
+                                "children": []
+                              },
+                              {
+                                "display": "DegreeBound",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "allows_one_hot",
+                      "type_": {
+                        "display": "bool",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "False"
+                      }
+                    },
+                    {
+                      "name": "allows_sos1",
+                      "type_": {
+                        "display": "bool",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "False"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "InstanceClassClause",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "allowed_senses",
+              "doc": "",
+              "type_": {
+                "display": "set[Sense]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "Sense",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "allowed_variable_kinds",
+              "doc": "",
+              "type_": {
+                "display": "set[Kind]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "Kind",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "allows_one_hot",
+              "doc": "",
+              "type_": {
+                "display": "bool",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "allows_sos1",
+              "doc": "",
+              "type_": {
+                "display": "bool",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "indicator_constraint_degree_bounds",
+              "doc": "",
+              "type_": {
+                "display": "dict[Equality, DegreeBound]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "Equality",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "DegreeBound",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "label",
+              "doc": "Human-readable diagnostic label. It does not affect membership.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "objective_degree_bound",
+              "doc": "",
+              "type_": {
+                "display": "DegreeBound",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "regular_constraint_degree_bounds",
+              "doc": "",
+              "type_": {
+                "display": "dict[Equality, DegreeBound]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "Equality",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "DegreeBound",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "InstanceClassClauseReport",
+          "doc": "Membership result for one conjunctive instance-class clause.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "clause_index",
+              "doc": "",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "clause_label",
+              "doc": "",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "is_member",
+              "doc": "",
+              "type_": {
+                "display": "bool",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "mismatches",
+              "doc": "",
+              "type_": {
+                "display": "list[InstanceClassMismatch]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "InstanceClassMismatch",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "InstanceClassMembershipReport",
+          "doc": "Side-effect-free membership report for an :class:`InstanceClass`.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__str__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "clause_reports",
+              "doc": "",
+              "type_": {
+                "display": "list[InstanceClassClauseReport]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "InstanceClassClauseReport",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "is_member",
+              "doc": "",
+              "type_": {
+                "display": "bool",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "matching_clauses",
+              "doc": "",
+              "type_": {
+                "display": "list[tuple[int, str]]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "tuple[int, str]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "InstanceClassMismatch",
+          "doc": "One structured reason an instance is outside a complete clause.",
+          "bases": [],
+          "methods": [],
+          "attributes": [],
           "deprecated": null
         },
         {
@@ -20892,7 +21717,7 @@
             },
             {
               "name": "get_sample_by_id",
-              "doc": "Get sample by ID (alias for get method)",
+              "doc": "Get sample by ID (alias for get method).\n\nRaises KeyError if the sample ID does not exist.",
               "signatures": [
                 {
                   "parameters": [
@@ -28340,7 +29165,7 @@
             },
             {
               "name": "from_artifact",
-              "doc": "Interpret an already-open Artifact as a committed Experiment.\n\nThis is the usual entry point after importing or receiving an OMMX\nArtifact handle. The artifact must contain an Experiment config.",
+              "doc": "Interpret an already-open Artifact as a finished, failed, or interrupted Experiment.\n\nThis is the usual entry point after importing or receiving an OMMX\nArtifact handle. The artifact must contain an Experiment config.",
               "signatures": [
                 {
                   "parameters": [
@@ -28605,7 +29430,7 @@
             },
             {
               "name": "import_archive",
-              "doc": "Import an Experiment Artifact from a `.ommx` OCI archive file (or an OCI\nImage Layout directory).\n\nThe archive is imported into the default Local Registry, matching\n{meth}`Artifact.import_archive`, and then interpreted as an\nExperiment. The imported artifact must contain an Experiment config.",
+              "doc": "Import a finished, failed, or interrupted Experiment Artifact from a\n`.ommx` OCI archive file (or an OCI Image Layout directory).\n\nThe archive is imported into the default Local Registry, matching\n{meth}`Artifact.import_archive`, and then interpreted as an\nExperiment. The imported artifact must contain an Experiment config.",
               "signatures": [
                 {
                   "parameters": [
@@ -29137,7 +29962,7 @@
             },
             {
               "name": "push",
-              "doc": "Push this committed Experiment Artifact to its remote registry.\n\nUse `rename(...)` first when an anonymous or local-only experiment\nshould be published under a remote container image reference.\n\nRaises an error if the Experiment has not been committed yet.",
+              "doc": "Push this finished, failed, or interrupted Experiment Artifact remotely.\n\nUse `rename(...)` first when an anonymous or local-only experiment\nshould be published under a remote container image reference.\n\nRaises an error if the Experiment has not been committed yet.",
               "signatures": [
                 {
                   "parameters": [],
@@ -29247,7 +30072,7 @@
             },
             {
               "name": "save",
-              "doc": "Save this committed Experiment Artifact as a `.ommx` OCI archive file at `path`.\n\nThe archive is an exchange-format export of the registry-resident\nExperiment Artifact. Loading the archive back via\n{meth}`Experiment.import_archive` reimports it into the SQLite Local\nRegistry under the same image name.\n\nRaises an error if the Experiment has not been committed yet.",
+              "doc": "Save this finished, failed, or interrupted Experiment Artifact as a `.ommx` archive.\n\nThe archive is an exchange-format export of the registry-resident\nExperiment Artifact. Loading the archive back via\n{meth}`Experiment.import_archive` reimports it into the SQLite Local\nRegistry under the same image name.\n\nRaises an error if the Experiment has not been committed yet.",
               "signatures": [
                 {
                   "parameters": [
@@ -29494,7 +30319,7 @@
             },
             {
               "name": "artifact",
-              "doc": "Committed OMMX Artifact for this Experiment.\n\nRaises an error if the Experiment has not been committed yet.",
+              "doc": "Immutable OMMX Artifact for this finished, failed, or interrupted Experiment.\n\nRaises an error if the Experiment has not been committed yet.",
               "type_": {
                 "display": "Artifact",
                 "link_target": {
@@ -29532,6 +30357,23 @@
                 "display": "str",
                 "link_target": null,
                 "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "lifecycle_reason",
+              "doc": "Concise exception type and message for a failed or interrupted Experiment.\n\nThis is lifecycle metadata, not solver diagnostics. It is `None` when\nno reason was recorded.",
+              "type_": {
+                "display": "Optional[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
               },
               "is_property": true,
               "is_readonly": true
@@ -31504,6 +32346,23 @@
               "is_readonly": true
             },
             {
+              "name": "lifecycle_reason",
+              "doc": "Concise exception type and message for a failed or interrupted Run.",
+              "type_": {
+                "display": "Optional[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "run_id",
               "doc": "Integer identifier of this run within its Experiment.",
               "type_": {
@@ -31941,6 +32800,7 @@
     "ommx.Constraint": "ommx",
     "ommx.DecisionVariable": "ommx",
     "ommx.DecisionVariableRole": "ommx",
+    "ommx.DegreeBound": "ommx",
     "ommx.Equality": "ommx",
     "ommx.EvaluatedConstraint": "ommx",
     "ommx.EvaluatedDecisionVariable": "ommx",
@@ -31948,6 +32808,11 @@
     "ommx.Function": "ommx",
     "ommx.IndicatorConstraint": "ommx",
     "ommx.Instance": "ommx",
+    "ommx.InstanceClass": "ommx",
+    "ommx.InstanceClassClause": "ommx",
+    "ommx.InstanceClassClauseReport": "ommx",
+    "ommx.InstanceClassMembershipReport": "ommx",
+    "ommx.InstanceClassMismatch": "ommx",
     "ommx.Kind": "ommx",
     "ommx.Linear": "ommx",
     "ommx.NamedFunction": "ommx",

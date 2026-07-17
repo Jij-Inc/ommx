@@ -3,7 +3,7 @@ use crate::{Constraint, Function, Linear, Quadratic, Rng, State};
 use approx::AbsDiffEq;
 use ommx::MonomialDyn;
 use ommx::{ATol, Coefficient, CoefficientError, Evaluate};
-use pyo3::{exceptions::PyRuntimeError, prelude::*, types::PyDict, Bound, PyAny};
+use pyo3::{prelude::*, types::PyDict, Bound, PyAny};
 use std::collections::BTreeMap;
 
 /// Polynomial function of decision variables.
@@ -319,9 +319,7 @@ impl Polynomial {
         max_degree: u32,
         max_id: u64,
     ) -> crate::error::OmmxPyResult<Self> {
-        let mut rng = rng
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("Cannot get lock for RNG"))?;
+        let mut rng = rng.lock()?;
         let inner: ommx::Polynomial = ommx::random::random(
             &mut rng,
             ommx::PolynomialParameters::new(num_terms, max_degree.into(), max_id.into())?,

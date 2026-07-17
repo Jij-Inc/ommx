@@ -132,7 +132,9 @@ impl SampleSet {
         Ok(Solution { inner: solution })
     }
 
-    /// Get sample by ID (alias for get method)
+    /// Get sample by ID (alias for get method).
+    ///
+    /// Raises KeyError if the sample ID does not exist.
     pub fn get_sample_by_id(&self, sample_id: u64) -> PyResult<Solution> {
         self.get(sample_id)
     }

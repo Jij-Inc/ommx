@@ -49,12 +49,13 @@ use crate::{
 };
 use std::collections::{BTreeMap, HashMap};
 
-/// A legacy selector for lowering non-standard constraint families.
+/// A selector for a non-standard constraint family.
 ///
-/// This enum identifies families accepted by [`Instance::reduce_capabilities`]
-/// during the staged adapter migration. It does not describe an
-/// [`crate::InstanceClass`] or adapter applicability. Regular constraints are
-/// outside this lowering selector.
+/// [`Instance::required_capabilities`] reports these selectors for active
+/// special constraints. [`Instance::reduce_capabilities`] uses them to choose
+/// which families are preserved during explicit lowering. This enum does not
+/// describe an [`crate::InstanceClass`] or adapter applicability. Regular
+/// constraints are outside this selector.
 ///
 /// The [`PartialOrd`] / [`Ord`] derives follow variant declaration order
 /// (`Indicator < OneHot < Sos1`), which is also the order in which
@@ -69,7 +70,7 @@ pub enum AdditionalCapability {
     Sos1,
 }
 
-/// A set of legacy [`AdditionalCapability`] lowering selectors.
+/// A set of [`AdditionalCapability`] selectors.
 ///
 /// Always represented as a [`std::collections::BTreeSet`] so iteration,
 /// formatting, and comparison are deterministic and sorted by variant order.
@@ -120,10 +121,10 @@ pub enum Sense {
 /// (i.e. active and removed constraints of the same type must have disjoint IDs).
 ///
 /// [`AdditionalCapability`], [`Instance::required_capabilities`], and
-/// [`Instance::reduce_capabilities`] are legacy explicit lowering APIs. They do
-/// not define membership in an [`crate::InstanceClass`]. After any explicit
-/// preparation, use [`crate::InstanceClass::check_membership`] on the resulting
-/// instance.
+/// [`Instance::reduce_capabilities`] inspect and explicitly lower special
+/// constraint families. They do not define membership in an
+/// [`crate::InstanceClass`]. After any explicit preparation, use
+/// [`crate::InstanceClass::check_membership`] on the resulting instance.
 ///
 /// # Mathematical operations
 ///
@@ -455,11 +456,11 @@ impl Instance {
             .set_context_for_owner(id, context, "SOS1 constraint")
     }
 
-    /// Return legacy selectors for the active non-standard constraint families.
+    /// Return selectors for the active non-standard constraint families.
     ///
     /// Only active constraints are considered; removed constraints are
-    /// excluded. Despite the legacy method name, the result does not describe
-    /// an [`crate::InstanceClass`] or establish adapter applicability.
+    /// excluded. The result does not describe an [`crate::InstanceClass`] or
+    /// establish adapter applicability.
     pub fn required_capabilities(&self) -> Capabilities {
         let mut caps = Capabilities::new();
         if !self.indicator_constraint_collection.active().is_empty() {

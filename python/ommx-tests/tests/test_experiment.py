@@ -308,7 +308,7 @@ def test_temp_registry_lives_with_artifact_after_experiment_drop():
     assert df.loc[0, "solver"] == "scip"
 
 
-def test_experiment_context_restores_failed_checkpoint_on_exception():
+def test_experiment_context_restores_failed_checkpoint_on_exception(tmp_path):
     image_name = _image_name("exception-checkpoint")
     experiments: list[Experiment] = []
     with pytest.raises(ValueError):
@@ -320,11 +320,19 @@ def test_experiment_context_restores_failed_checkpoint_on_exception():
             raise ValueError("failed")
 
     experiment = experiments[0]
-    with pytest.raises(RuntimeError, match="commit has failed"):
-        experiment.artifact
+    assert experiment.status == "failed"
+    assert experiment.lifecycle_reason == "ValueError: failed"
+    failed_artifact = experiment.artifact
+    archive_path = tmp_path / "failed-experiment.ommx"
+    experiment.save(archive_path)
+    imported = Experiment.import_archive(archive_path)
+    assert imported.status == "failed"
+    assert imported.lifecycle_reason == "ValueError: failed"
+    assert imported.artifact.image_name == failed_artifact.image_name
 
     resumed = Experiment.restore_from_checkpoint(image_name)
     assert resumed.status is None
+    assert resumed.lifecycle_reason is None
     assert resumed.image_name == image_name
     assert resumed.annotations["com.example.problem"] == "qap"
     with resumed:
@@ -334,6 +342,32 @@ def test_experiment_context_restores_failed_checkpoint_on_exception():
     assert [run.status for run in resumed.runs] == ["finished", "finished"]
     assert list(resumed.run_parameters_df().index) == [0, 1]
     assert resumed.annotations["com.example.problem"] == "qap"
+
+
+def test_exception_lifecycle_reason_is_normalized_and_bounded(tmp_path):
+    image_name = _image_name("normalized-exception-reason")
+    experiments: list[Experiment] = []
+    message = "first\nsecond\t" + "é" * 600
+
+    with pytest.raises(ValueError, match="first"):
+        with Experiment(image_name) as experiment:
+            experiments.append(experiment)
+            with experiment.run():
+                raise ValueError(message)
+
+    prefix = "ValueError: first second "
+    expected = prefix + "é" * (511 - len(prefix)) + "…"
+    assert len(expected) == 512
+
+    experiment = experiments[0]
+    assert experiment.lifecycle_reason == expected
+    assert experiment.runs[0].lifecycle_reason == expected
+
+    archive_path = tmp_path / "normalized-exception-reason.ommx"
+    experiment.save(archive_path)
+    imported = Experiment.import_archive(archive_path)
+    assert imported.lifecycle_reason == expected
+    assert imported.runs[0].lifecycle_reason == expected
 
 
 def test_checkpoint_keeps_failed_run_and_can_be_restored():
@@ -349,6 +383,7 @@ def test_checkpoint_keeps_failed_run_and_can_be_restored():
     assert resumed.status is None
     assert resumed.image_name == image_name
     assert resumed.runs[0].get_json("before-failure") == {"step": 1}
+    assert resumed.runs[0].lifecycle_reason == "RuntimeError: solve failed"
     assert resumed.run_parameters_df().loc[0, "solver"] == "scip"
     with resumed:
         with resumed.run() as run:
@@ -357,6 +392,7 @@ def test_checkpoint_keeps_failed_run_and_can_be_restored():
 
     assert resumed.status == "finished"
     assert [run.status for run in resumed.runs] == ["failed", "finished"]
+    assert resumed.runs[0].lifecycle_reason == "RuntimeError: solve failed"
     assert resumed.runs[0].get_json("before-failure") == {"step": 1}
     assert resumed.run_parameters_df().loc[0, "solver"] == "scip"
     assert list(resumed.run_parameters_df().index) == [0, 1]
@@ -417,6 +453,7 @@ def test_keyboard_interrupt_records_interrupted_run_and_checkpoint():
     with resumed:
         pass
     assert [run.status for run in resumed.runs] == ["interrupted"]
+    assert resumed.runs[0].lifecycle_reason == "KeyboardInterrupt"
     assert resumed.run_parameters_df().loc[0, "solver"] == "scip"
 
 
@@ -481,7 +518,6 @@ def test_store_trace_records_log_solve_scope_in_artifact():
 def test_store_trace_records_open_solve_scope_in_artifact():
     class ManualAdapter(SolverAdapter):
         def __init__(self, ommx_instance: Instance):
-            super().__init__(ommx_instance)
             self.instance = ommx_instance
 
         @classmethod
@@ -522,8 +558,8 @@ def test_store_trace_records_open_solve_scope_in_artifact():
 
 def test_store_trace_marks_open_solve_missing_decode_span_error():
     class ManualAdapter(SolverAdapter):
-        def __init__(self, ommx_instance: Instance):
-            super().__init__(ommx_instance)
+        def __init__(self, _ommx_instance: Instance):
+            pass
 
         @classmethod
         def solve(
@@ -822,6 +858,7 @@ def test_run_context_records_failed_run_on_exception():
 
     assert len(loaded.runs) == 1
     assert loaded.runs[0].status == "failed"
+    assert loaded.runs[0].lifecycle_reason == "ValueError: failed"
     assert df.loc[0, "solver"] == "scip"
 
 
@@ -1105,7 +1142,6 @@ def test_log_sample_records_failed_sampling_separately_from_solves():
 def test_open_solve_records_direct_solver_input_workflow():
     class ManualAdapter(SolverAdapter):
         def __init__(self, ommx_instance: Instance, *, constructor_label: str = ""):
-            super().__init__(ommx_instance)
             self.instance = ommx_instance
             self.model: dict[str, object] = {
                 "constructor_label": constructor_label,
@@ -1196,7 +1232,6 @@ def test_open_solve_records_direct_solver_input_workflow():
 def test_open_solve_manual_accessors_are_context_scoped():
     class ManualAdapter(SolverAdapter):
         def __init__(self, ommx_instance: Instance):
-            super().__init__(ommx_instance)
             self.instance = ommx_instance
             self.model: dict[str, object] = {}
 
@@ -1299,7 +1334,6 @@ def test_open_solve_rejects_reserved_diagnostics_option_with_manual_message():
 def test_open_solve_records_failed_attempt_when_adapter_construction_fails():
     class FailingConstructorAdapter(SolverAdapter):
         def __init__(self, ommx_instance: Instance, *, label: str = ""):
-            super().__init__(ommx_instance)
             raise RuntimeError("model build failed")
 
         @classmethod
@@ -1364,7 +1398,6 @@ def test_open_solve_records_failed_attempt_when_adapter_construction_fails():
 def test_open_solve_failed_decode_clears_previous_decoded_solution():
     class ManualAdapter(SolverAdapter):
         def __init__(self, ommx_instance: Instance):
-            super().__init__(ommx_instance)
             self.instance = ommx_instance
             self.model: dict[str, object] = {"decode_fails": False}
 
@@ -1429,7 +1462,6 @@ def test_open_solve_failed_decode_clears_previous_decoded_solution():
 def test_open_solve_records_failed_attempt_on_exception():
     class ManualAdapter(SolverAdapter):
         def __init__(self, ommx_instance: Instance, *, label: str = ""):
-            super().__init__(ommx_instance)
             self.label = label
 
         @classmethod
@@ -1499,7 +1531,6 @@ def test_open_solve_records_failed_attempt_on_exception():
 def test_open_solve_records_failed_attempt_when_outcome_is_missing():
     class ManualAdapter(SolverAdapter):
         def __init__(self, ommx_instance: Instance, *, label: str = ""):
-            super().__init__(ommx_instance)
             self.label = label
 
         @classmethod
