@@ -68,17 +68,31 @@ impl<T> Sampled<T> {
         Self { offsets: map, data }
     }
 
+    /// Append one value under every supplied sample ID.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DuplicatedSampleIDError`] if an ID already exists in this
+    /// collection or occurs more than once in `ids`. All IDs are validated
+    /// before mutation, so the collection is unchanged when this method fails.
     pub fn append(
         &mut self,
         ids: impl IntoIterator<Item = SampleID>,
         value: T,
     ) -> std::result::Result<(), DuplicatedSampleIDError> {
-        let offset = self.data.len();
-        self.data.push(value);
+        let mut new_ids = Vec::new();
+        let mut seen = FnvHashSet::default();
         for id in ids {
-            if self.offsets.insert(id, offset).is_some() {
+            if self.offsets.contains_key(&id) || !seen.insert(id) {
                 return Err(DuplicatedSampleIDError { id });
             }
+            new_ids.push(id);
+        }
+
+        let offset = self.data.len();
+        self.data.push(value);
+        for id in new_ids {
+            self.offsets.insert(id, offset);
         }
         Ok(())
     }
@@ -340,6 +354,32 @@ mod tests {
         assert_eq!(sampled.offsets[&SampleID(1)], sampled.offsets[&SampleID(2)]);
         assert_ne!(sampled.offsets[&SampleID(1)], sampled.offsets[&SampleID(3)]);
         assert_eq!(sampled.num_samples(), 3);
+    }
+
+    #[test]
+    fn append_is_atomic_when_an_existing_id_follows_a_fresh_id() {
+        let mut sampled = Sampled::from((SampleID(0), 10));
+
+        let error = sampled.append([SampleID(1), SampleID(0)], 20).unwrap_err();
+
+        assert_eq!(error.id, SampleID(0));
+        assert_eq!(sampled.ids(), BTreeSet::from([SampleID(0)]));
+        assert_eq!(sampled.get(SampleID(0)), Some(&10));
+        assert_eq!(sampled.get(SampleID(1)), None);
+        assert_eq!(sampled.data, vec![10]);
+    }
+
+    #[test]
+    fn append_is_atomic_for_duplicate_ids_in_one_input() {
+        let mut sampled = Sampled::from((SampleID(0), 10));
+
+        let error = sampled.append([SampleID(1), SampleID(1)], 20).unwrap_err();
+
+        assert_eq!(error.id, SampleID(1));
+        assert_eq!(sampled.ids(), BTreeSet::from([SampleID(0)]));
+        assert_eq!(sampled.get(SampleID(0)), Some(&10));
+        assert_eq!(sampled.get(SampleID(1)), None);
+        assert_eq!(sampled.data, vec![10]);
     }
 
     #[test]

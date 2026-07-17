@@ -97,6 +97,13 @@ variable or parameter IDs, invalid substitutions, unrepresentable content
 factors, and empty structural constraints raise `ValueError` while retaining
 their Rust SDK signal owner.
 
+`Samples.append` propagates duplicate sample IDs through the same boundary and
+validates every incoming ID before mutation, so a failed append leaves the
+collection unchanged. `Instance.random_samples` reports inconsistent state
+group counts and an undersized inclusive sample-ID range as `ValueError`.
+Full `u64` ID ranges and valid positive partitions are generated without
+integer overflow or a strategy panic.
+
 The remaining `Instance`, `ParametricInstance`, attached metadata, random
 generator, `Solution`, `Samples`, and Artifact registry bindings now use the
 same boundary. Binding-owned duplicate component IDs and missing penalty
@@ -107,7 +114,8 @@ PyO3 bridge are internal protocol failures and raise `RuntimeError`.
 
 The mapped signals currently include `AddDecisionVariableError`, `AtolError`,
 `BoundError`, `CoefficientError`, `ContentFactorError`,
-`InconsistentDependentValue`, `MissingStateEntries`, `OneHotConstraintError`,
+`DuplicatedSampleIDError`, `InconsistentDependentValue`,
+`MissingStateEntries`, `OneHotConstraintError`, `SamplesParametersError`,
 `Sos1ConstraintError`, `SubstitutionError`, `UnknownStateEntries`,
 `UnverifiableDependentAssertion`, stable control-flow cases from
 `DecisionVariableError`, `SolutionError`, and `SampleSetError`, and the
@@ -159,7 +167,8 @@ Related PRs: [#1096](https://github.com/Jij-Inc/ommx/pull/1096),
 [#1101](https://github.com/Jij-Inc/ommx/pull/1101),
 [#1102](https://github.com/Jij-Inc/ommx/pull/1102),
 [#1104](https://github.com/Jij-Inc/ommx/pull/1104),
-[#1105](https://github.com/Jij-Inc/ommx/pull/1105).
+[#1105](https://github.com/Jij-Inc/ommx/pull/1105),
+[#1107](https://github.com/Jij-Inc/ommx/pull/1107).
 
 ### 🆕 Instance classes and adapter applicability ([#1084](https://github.com/Jij-Inc/ommx/pull/1084))
 

@@ -10476,7 +10476,7 @@
             },
             {
               "name": "random_samples",
-              "doc": "Generate random samples for this instance.\n\nThe generated samples will contain ``num_samples`` sample entries divided into\n``num_different_samples`` groups, where each group shares the same state but has\ndifferent sample IDs.\n\n**Args:**\n- `rng`: Random number generator\n- `num_different_samples`: Number of different states to generate\n- `num_samples`: Total number of samples to generate\n- `max_sample_id`: Maximum sample ID (default: ``num_samples``)\n\n**Returns:**\nSamples object\n\n# Examples\n\nGenerate samples for a simple instance:\n\n```python\n>>> from ommx import Instance, DecisionVariable, Rng\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[(sum(x) <= 2).set_id(0)],\n...     sense=Instance.MAXIMIZE,\n... )\n\n>>> rng = Rng()\n>>> samples = instance.random_samples(rng, num_different_samples=2, num_samples=5)\n>>> samples.num_samples()\n5\n```",
+              "doc": "Generate random samples for this instance.\n\nThe generated samples will contain ``num_samples`` sample entries divided into\n``num_different_samples`` groups, where each group shares the same state but has\ndifferent sample IDs.\n\n**Args:**\n- `rng`: Random number generator\n- `num_different_samples`: Number of different states to generate\n- `num_samples`: Total number of samples to generate\n- `max_sample_id`: Maximum sample ID (default: ``num_samples``)\n\n**Returns:**\nSamples object\n\nRaises {class}`ValueError` if the requested state groups cannot\npartition the samples or the inclusive sample-ID range is too small.\n`num_different_samples=0` is valid only when `num_samples=0`.\n\n# Examples\n\nGenerate samples for a simple instance:\n\n```python\n>>> from ommx import Instance, DecisionVariable, Rng\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[(sum(x) <= 2).set_id(0)],\n...     sense=Instance.MAXIMIZE,\n... )\n\n>>> rng = Rng()\n>>> samples = instance.random_samples(rng, num_different_samples=2, num_samples=5)\n>>> samples.num_samples()\n5\n```",
               "signatures": [
                 {
                   "parameters": [
@@ -22956,7 +22956,7 @@
             },
             {
               "name": "append",
-              "doc": "Append a sample with the given sample IDs and state",
+              "doc": "Append a sample with the given sample IDs and state.\n\nRaises {class}`ValueError` if an ID already exists in this collection\nor occurs more than once in `sample_ids`. The collection is unchanged\nwhen validation fails.",
               "signatures": [
                 {
                   "parameters": [

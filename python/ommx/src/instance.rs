@@ -1388,6 +1388,10 @@ impl Instance {
     /// **Returns:**
     /// Samples object
     ///
+    /// Raises {class}`ValueError` if the requested state groups cannot
+    /// partition the samples or the inclusive sample-ID range is too small.
+    /// `num_different_samples=0` is valid only when `num_samples=0`.
+    ///
     /// # Examples
     ///
     /// Generate samples for a simple instance:

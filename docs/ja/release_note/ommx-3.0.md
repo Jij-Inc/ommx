@@ -93,6 +93,12 @@ Decision variable の追加と substitution、`Function.content_factor`、OneHot
 不正な substitution、表現できない content factor、空の特殊制約は、Rust SDK の
 signal owner を保持したまま `ValueError` になります。
 
+`Samples.append` も同じ boundary へ重複 sample ID を伝播し、変更前に入力 ID を
+すべて検証するため、失敗しても collection は変更されません。
+`Instance.random_samples` は、state group 数と sample 数の不整合、および inclusive
+な sample ID range の容量不足を `ValueError` として通知します。`u64` 全域の ID
+range と正しい正数 partition は、integer overflow や strategy panic なしで生成できます。
+
 残っていた `Instance`、`ParametricInstance`、attached metadata、random
 generator、`Solution`、`Samples`、Artifact registry の binding も同じ boundary
 を使うようになりました。Binding が所有する component ID の重複と不足した
@@ -102,12 +108,12 @@ Private な cross-extension PyO3 bridge が受信した不正 payload は内部 
 failure であるため、`RuntimeError` になります。
 
 現在の対象は、`AddDecisionVariableError`、`AtolError`、`BoundError`、
-`CoefficientError`、`ContentFactorError`、`InconsistentDependentValue`、
-`MissingStateEntries`、`OneHotConstraintError`、`Sos1ConstraintError`、
-`SubstitutionError`、`UnknownStateEntries`、`UnverifiableDependentAssertion`、
-`DecisionVariableError`、`SolutionError`、`SampleSetError` のうち Python 側で
-安定して判別すべき case、および parser signal の `ParseError` と
-`QplibParseError` です。存在しない Experiment / Run
+`CoefficientError`、`ContentFactorError`、`DuplicatedSampleIDError`、
+`InconsistentDependentValue`、`MissingStateEntries`、`OneHotConstraintError`、
+`SamplesParametersError`、`Sos1ConstraintError`、`SubstitutionError`、
+`UnknownStateEntries`、`UnverifiableDependentAssertion`、`DecisionVariableError`、
+`SolutionError`、`SampleSetError` のうち Python 側で安定して判別すべき case、
+および parser signal の `ParseError` と `QplibParseError` です。存在しない Experiment / Run
 attachment は `AttachmentNotFound` signal を保持し、`KeyError` を送出します。
 呼び出し側が渡した不正な image reference は `ImageRefParseError` を保持し、Local
 Registry に保存済みの image ref が壊れている場合は
@@ -151,7 +157,8 @@ interrupted status で確実に閉じられます。
 [#1101](https://github.com/Jij-Inc/ommx/pull/1101)、
 [#1102](https://github.com/Jij-Inc/ommx/pull/1102)、
 [#1104](https://github.com/Jij-Inc/ommx/pull/1104)、
-[#1105](https://github.com/Jij-Inc/ommx/pull/1105)。
+[#1105](https://github.com/Jij-Inc/ommx/pull/1105)、
+[#1107](https://github.com/Jij-Inc/ommx/pull/1107)。
 
 ### 🆕 Instance Class と Adapter Applicability ([#1084](https://github.com/Jij-Inc/ommx/pull/1084))
 
