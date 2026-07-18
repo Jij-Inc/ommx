@@ -40,15 +40,13 @@ use super::super::{async_io, LocalRegistry};
 use super::oci_dir::OciDirImport;
 use crate::artifact::{
     media_types, remote_error,
-    remote_transport::{bounded_map, RemoteTransport},
+    remote_transport::{blob_transfer_concurrency, bounded_map, RemoteTransport},
     ImageRef, OCI_IMAGE_MANIFEST_MEDIA_TYPE,
 };
 use anyhow::{Context, Result};
 use oci_client::RegistryOperation;
 use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, ImageManifest, MediaType};
 use std::{collections::HashMap, str::FromStr};
-
-const BLOB_DOWNLOAD_CONCURRENCY: usize = 4;
 
 impl LocalRegistry {
     /// Pull `image_name` from its remote registry into this Local Registry.
@@ -62,6 +60,10 @@ impl LocalRegistry {
     /// `RemoteTransport` straight into the registry, and a SQLite transaction
     /// publishes the ref descriptor. There is no on-disk OCI Image Layout
     /// intermediate.
+    ///
+    /// At most four blob operations run concurrently by default; set
+    /// `OMMX_ARTIFACT_TRANSFER_CONCURRENCY` to a positive integer to override
+    /// that limit for both push and pull.
     ///
     /// Remote access and remote-response validation failures retain a
     /// [`crate::artifact::RemoteArtifactError`] signal in the returned
@@ -90,6 +92,7 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
         if let Some(cached) = self.cached_ref()? {
             return Ok(cached);
         }
+        let transfer_concurrency = blob_transfer_concurrency()?;
 
         let transport = self.remote_manifest_result(RemoteTransport::new(self.image_name))?;
         self.remote_manifest_result(transport.auth_for(self.image_name, RegistryOperation::Pull))?;
@@ -134,7 +137,7 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
         transport.block_on(async {
             bounded_map(
                 unique_descriptors,
-                BLOB_DOWNLOAD_CONCURRENCY,
+                transfer_concurrency,
                 |descriptor| async move {
                     self.pull_descriptor_blob_async(transport_ref, &descriptor)
                         .await
@@ -142,7 +145,12 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
             )
             .await
         })?;
-        tracing::info!(transferred, deduplicated, "Completed remote blob downloads");
+        tracing::info!(
+            transferred,
+            deduplicated,
+            concurrency = transfer_concurrency.get(),
+            "Completed remote blob downloads"
+        );
 
         self.store_manifest_blob(&manifest_descriptor, &manifest_bytes)?;
 

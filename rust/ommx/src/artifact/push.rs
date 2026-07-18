@@ -14,15 +14,13 @@
 
 use super::{
     manifest::read_blob_by_descriptor_async,
-    remote_transport::{bounded_map, RemoteTransport},
+    remote_transport::{blob_transfer_concurrency, bounded_map, RemoteTransport},
     LocalArtifact, LocalManifest,
 };
 use anyhow::Context;
 use oci_client::RegistryOperation;
 use oci_spec::image::Descriptor;
 use std::collections::HashMap;
-
-const BLOB_TRANSFER_CONCURRENCY: usize = 4;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PushBlobOutcome {
@@ -45,12 +43,15 @@ impl LocalArtifact<'_> {
     /// existence check; missing blobs are read from the Local Registry
     /// and uploaded. The blob phase authenticates for pull-scoped
     /// existence checks first, then for push-scoped uploads and
-    /// manifest publishing.
+    /// manifest publishing. At most four blob operations run concurrently by
+    /// default; set `OMMX_ARTIFACT_TRANSFER_CONCURRENCY` to a positive integer
+    /// to override that limit for both push and pull.
     pub fn push(&self) -> crate::Result<()> {
         let manifest = self.get_manifest()?.clone();
         let blob_descriptors = collect_blob_descriptors(&manifest);
         let unique_blob_descriptors = deduplicate_blob_descriptors(&blob_descriptors)?;
         let deduplicated = blob_descriptors.len() - unique_blob_descriptors.len();
+        let transfer_concurrency = blob_transfer_concurrency()?;
 
         let transport = RemoteTransport::new(self.image_name())?;
         transport.auth_for(self.image_name(), RegistryOperation::Pull)?;
@@ -58,7 +59,7 @@ impl LocalArtifact<'_> {
         let outcomes = transport.block_on(async {
             bounded_map(
                 unique_blob_descriptors,
-                BLOB_TRANSFER_CONCURRENCY,
+                transfer_concurrency,
                 |descriptor| {
                     let transport = &transport;
                     push_descriptor_if_missing(
@@ -94,6 +95,7 @@ impl LocalArtifact<'_> {
             skipped,
             transferred,
             deduplicated,
+            concurrency = transfer_concurrency.get(),
             "Completed remote blob transfers"
         );
 
@@ -151,7 +153,8 @@ where
     }
 
     // Blob loading happens after the existence check, inside the same bounded
-    // future, so no more than BLOB_TRANSFER_CONCURRENCY buffers are resident.
+    // future, so no more than the configured transfer concurrency's buffers
+    // are resident.
     let bytes = read_blob(descriptor.clone()).await?;
     tracing::debug!(size = bytes.len(), %digest, "Pushing blob");
     push_blob(digest, bytes).await?;
