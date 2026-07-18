@@ -39,13 +39,16 @@ use super::super::super::RefUpdate;
 use super::super::LocalRegistry;
 use super::oci_dir::OciDirImport;
 use crate::artifact::{
-    media_types, remote_error, remote_transport::RemoteTransport, ImageRef,
-    OCI_IMAGE_MANIFEST_MEDIA_TYPE,
+    media_types, remote_error,
+    remote_transport::{bounded_map, RemoteTransport},
+    ImageRef, OCI_IMAGE_MANIFEST_MEDIA_TYPE,
 };
 use anyhow::{Context, Result};
 use oci_client::RegistryOperation;
 use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, ImageManifest, MediaType};
-use std::str::FromStr;
+use std::{collections::HashMap, str::FromStr};
+
+const BLOB_DOWNLOAD_CONCURRENCY: usize = 4;
 
 impl LocalRegistry {
     /// Pull `image_name` from its remote registry into this Local Registry.
@@ -119,11 +122,27 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
                 .context("Failed to build remote manifest descriptor"),
         )?;
 
-        self.pull_descriptor_blob(&transport, manifest.config())?;
-
-        for layer in manifest.layers() {
-            self.pull_descriptor_blob(&transport, layer)?;
-        }
+        let descriptors = std::iter::once(manifest.config())
+            .chain(manifest.layers())
+            .cloned()
+            .collect::<Vec<_>>();
+        let unique_descriptors =
+            self.invalid_remote_result(deduplicate_blob_descriptors(descriptors))?;
+        let deduplicated = 1 + manifest.layers().len() - unique_descriptors.len();
+        let transferred = unique_descriptors.len();
+        let transport_ref = &transport;
+        transport.block_on(async {
+            bounded_map(
+                unique_descriptors,
+                BLOB_DOWNLOAD_CONCURRENCY,
+                |descriptor| async move {
+                    self.pull_descriptor_blob_async(transport_ref, &descriptor)
+                        .await
+                },
+            )
+            .await
+        })?;
+        tracing::info!(transferred, deduplicated, "Completed remote blob downloads");
 
         self.store_manifest_blob(&manifest_descriptor, &manifest_bytes)?;
 
@@ -252,7 +271,7 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
     /// Pull a single descriptor's blob from the registry, write it into
     /// the registry under its content digest, and verify the written
     /// bytes match the descriptor.
-    fn pull_descriptor_blob(
+    async fn pull_descriptor_blob_async(
         &self,
         transport: &RemoteTransport,
         descriptor: &Descriptor,
@@ -262,11 +281,12 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
         // transport's pull helper allocates from this value (not from the
         // registry-reported `Content-Length`) and aborts the chunk loop if
         // the registry serves more bytes than declared.
-        let bytes = self.remote_blob_result(transport.pull_blob_to_vec(
-            self.image_name,
-            &digest,
-            descriptor.size(),
-        ))?;
+        let bytes = self.remote_blob_result(
+            transport
+                .pull_blob_to_vec_async(self.image_name, &digest, descriptor.size())
+                .await
+                .with_context(|| format!("Failed while downloading blob {digest}")),
+        )?;
         if bytes.len() as u64 != descriptor.size() {
             let source = crate::error!(
                 "Blob size mismatch for {digest}: descriptor={}, actual={}",
@@ -315,5 +335,43 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
             );
         }
         Ok(())
+    }
+}
+
+fn deduplicate_blob_descriptors(descriptors: Vec<Descriptor>) -> Result<Vec<Descriptor>> {
+    let mut seen = HashMap::with_capacity(descriptors.len());
+    let mut unique = Vec::with_capacity(descriptors.len());
+    for descriptor in descriptors {
+        let digest = descriptor.digest().to_string();
+        if let Some(size) = seen.get(&digest) {
+            anyhow::ensure!(
+                *size == descriptor.size(),
+                "Conflicting sizes for blob {digest}: {size} and {}",
+                descriptor.size()
+            );
+        } else {
+            seen.insert(digest, descriptor.size());
+            unique.push(descriptor);
+        }
+    }
+    Ok(unique)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pull_descriptors_are_deduplicated_by_digest() {
+        let descriptor = DescriptorBuilder::default()
+            .media_type(MediaType::Other("application/octet-stream".to_string()))
+            .digest(Digest::from_str(&crate::artifact::sha256_digest(b"blob")).unwrap())
+            .size(4_u64)
+            .build()
+            .unwrap();
+
+        let unique = deduplicate_blob_descriptors(vec![descriptor.clone(), descriptor]).unwrap();
+
+        assert_eq!(unique.len(), 1);
     }
 }

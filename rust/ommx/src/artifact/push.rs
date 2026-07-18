@@ -12,9 +12,17 @@
 //! rejected at parse time — so blob enumeration is uniform: `config`
 //! followed by each entry in `layers[]`.
 
-use super::{remote_transport::RemoteTransport, LocalArtifact, LocalManifest};
+use super::{
+    remote_transport::{bounded_map, RemoteTransport},
+    LocalArtifact, LocalManifest,
+};
+use anyhow::Context;
 use oci_client::RegistryOperation;
 use oci_spec::image::Descriptor;
+use std::collections::HashMap;
+
+const BLOB_CHECK_CONCURRENCY: usize = 16;
+const BLOB_UPLOAD_CONCURRENCY: usize = 4;
 
 impl LocalArtifact<'_> {
     /// Push this artifact to its OCI registry. Credentials are
@@ -35,23 +43,64 @@ impl LocalArtifact<'_> {
     pub fn push(&self) -> crate::Result<()> {
         let manifest = self.get_manifest()?.clone();
         let blob_descriptors = collect_blob_descriptors(&manifest);
+        let unique_blob_descriptors = deduplicate_blob_descriptors(&blob_descriptors)?;
+        let deduplicated = blob_descriptors.len() - unique_blob_descriptors.len();
 
         let transport = RemoteTransport::new(self.image_name())?;
         transport.auth_for(self.image_name(), RegistryOperation::Pull)?;
-        let missing_blob_descriptors =
-            collect_missing_blob_descriptors(self.image_name(), &blob_descriptors, |digest| {
-                transport.blob_exists(self.image_name(), digest)
-            })?;
+        let missing_blob_descriptors = transport.block_on(async {
+            let checked = bounded_map(
+                unique_blob_descriptors,
+                BLOB_CHECK_CONCURRENCY,
+                |descriptor| {
+                    let transport = &transport;
+                    async move {
+                        let digest = descriptor.digest().to_string();
+                        let exists = transport
+                            .blob_exists_async(self.image_name(), &digest)
+                            .await
+                            .with_context(|| format!("Failed while checking blob {digest}"))?;
+                        Ok::<_, crate::Error>((descriptor, exists))
+                    }
+                },
+            )
+            .await?;
+            Ok::<_, crate::Error>(missing_descriptors(checked))
+        })?;
+        let checked = blob_descriptors.len() - deduplicated;
+        let skipped = checked - missing_blob_descriptors.len();
+        tracing::info!(
+            checked,
+            skipped,
+            deduplicated,
+            missing = missing_blob_descriptors.len(),
+            "Completed remote blob existence checks"
+        );
 
         transport.auth(self.image_name())?;
-        for descriptor in missing_blob_descriptors {
-            push_missing_descriptor_blob(
-                self.image_name(),
-                descriptor,
-                |descriptor| self.get_blob_by_descriptor(descriptor),
-                |digest, bytes| transport.push_blob(self.image_name(), digest, bytes),
-            )?;
-        }
+        let transferred = missing_blob_descriptors.len();
+        transport.block_on(async {
+            bounded_map(
+                missing_blob_descriptors,
+                BLOB_UPLOAD_CONCURRENCY,
+                |descriptor| {
+                    let transport = &transport;
+                    async move {
+                        let digest = descriptor.digest().to_string();
+                        // Blob loading happens only when this bounded future is polled, so at
+                        // most BLOB_UPLOAD_CONCURRENCY owned buffers are resident here.
+                        let bytes = self.get_blob_by_descriptor(descriptor)?;
+                        tracing::debug!(size = bytes.len(), %digest, "Pushing blob");
+                        transport
+                            .push_blob_async(self.image_name(), &digest, bytes)
+                            .await
+                            .with_context(|| format!("Failed while uploading blob {digest}"))
+                    }
+                },
+            )
+            .await
+        })?;
+        tracing::info!(transferred, "Completed remote blob uploads");
 
         let manifest_bytes = self.read_blob_by_digest(self.manifest_digest())?;
         let content_type = manifest.media_type();
@@ -67,6 +116,39 @@ impl LocalArtifact<'_> {
     }
 }
 
+fn deduplicate_blob_descriptors(descriptors: &[Descriptor]) -> crate::Result<Vec<&Descriptor>> {
+    let mut seen = HashMap::with_capacity(descriptors.len());
+    let mut unique = Vec::with_capacity(descriptors.len());
+    for descriptor in descriptors {
+        let digest = descriptor.digest().to_string();
+        if let Some(size) = seen.get(&digest) {
+            anyhow::ensure!(
+                *size == descriptor.size(),
+                "Conflicting sizes for blob {digest}: {size} and {}",
+                descriptor.size()
+            );
+        } else {
+            seen.insert(digest, descriptor.size());
+            unique.push(descriptor);
+        }
+    }
+    Ok(unique)
+}
+
+fn missing_descriptors(checked: Vec<(&Descriptor, bool)>) -> Vec<&Descriptor> {
+    checked
+        .into_iter()
+        .filter_map(|(descriptor, exists)| {
+            if exists {
+                tracing::debug!(digest = %descriptor.digest(), "Skipping blob already present in remote");
+                None
+            } else {
+                Some(descriptor)
+            }
+        })
+        .collect()
+}
+
 /// Enumerate every blob a manifest references, in push order: dependent
 /// blobs (`config`, then `layers`) before the manifest itself.
 fn collect_blob_descriptors(manifest: &LocalManifest) -> Vec<Descriptor> {
@@ -77,53 +159,11 @@ fn collect_blob_descriptors(manifest: &LocalManifest) -> Vec<Descriptor> {
     out
 }
 
-fn collect_missing_blob_descriptors<'a>(
-    image_name: &crate::artifact::ImageRef,
-    descriptors: &'a [Descriptor],
-    mut remote_blob_exists: impl FnMut(&str) -> crate::Result<bool>,
-) -> crate::Result<Vec<&'a Descriptor>> {
-    let mut missing = Vec::new();
-    for descriptor in descriptors {
-        let digest = descriptor.digest().to_string();
-        if remote_blob_exists(&digest)? {
-            tracing::debug!("Skipping blob {digest} of {image_name}; already present in remote");
-        } else {
-            missing.push(descriptor);
-        }
-    }
-    Ok(missing)
-}
-
-fn push_missing_descriptor_blob(
-    image_name: &crate::artifact::ImageRef,
-    descriptor: &Descriptor,
-    read_blob: impl FnOnce(&Descriptor) -> crate::Result<Vec<u8>>,
-    push_blob: impl FnOnce(&str, Vec<u8>) -> crate::Result<()>,
-) -> crate::Result<()> {
-    let digest = descriptor.digest().to_string();
-    let bytes = read_blob(descriptor)?;
-    tracing::debug!(size = bytes.len(), "Pushing blob {digest} of {image_name}");
-    // `bytes` is moved into `push_blob`, which moves it into
-    // `oci_client::Client::push_blob`, which takes `Vec<u8>` by
-    // value. Avoid `to_vec()`-ing a buffer that is already owned
-    // (blobs can be tens of MB).
-    push_blob(&digest, bytes)?;
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use anyhow::{anyhow, Context};
     use oci_spec::image::{DescriptorBuilder, Digest, MediaType};
-    use std::{
-        cell::{Cell, RefCell},
-        str::FromStr,
-    };
-
-    fn image_name() -> crate::artifact::ImageRef {
-        crate::artifact::ImageRef::parse("ghcr.io/jij-inc/ommx/demo:push-test").unwrap()
-    }
+    use std::str::FromStr;
 
     fn descriptor_for(bytes: &[u8]) -> Descriptor {
         DescriptorBuilder::default()
@@ -135,77 +175,27 @@ mod tests {
     }
 
     #[test]
-    fn existing_remote_blob_is_not_marked_missing() -> crate::Result<()> {
-        let image_name = image_name();
-        let descriptors = vec![descriptor_for(b"already remote")];
-        let checked_digest = RefCell::new(None);
+    fn duplicate_descriptors_are_deduplicated_by_digest() {
+        let first = descriptor_for(b"same blob");
+        let duplicate = first.clone();
+        let other = descriptor_for(b"other blob");
+        let descriptors = vec![first, duplicate, other];
 
-        let missing = collect_missing_blob_descriptors(&image_name, &descriptors, |digest| {
-            checked_digest.replace(Some(digest.to_string()));
-            Ok(true)
-        })?;
+        let unique = deduplicate_blob_descriptors(&descriptors).unwrap();
 
-        assert!(missing.is_empty());
-        let expected_digest = descriptors[0].digest().to_string();
-        assert_eq!(
-            checked_digest.into_inner().as_deref(),
-            Some(expected_digest.as_str())
-        );
-        Ok(())
+        assert_eq!(unique.len(), 2);
+        assert_eq!(unique[0].digest(), descriptors[0].digest());
+        assert_eq!(unique[1].digest(), descriptors[2].digest());
     }
 
     #[test]
-    fn missing_remote_blob_is_marked_missing() -> crate::Result<()> {
-        let image_name = image_name();
-        let descriptors = vec![descriptor_for(b"needs upload")];
+    fn already_present_descriptors_are_not_uploaded() {
+        let present = descriptor_for(b"present");
+        let missing = descriptor_for(b"missing");
 
-        let missing = collect_missing_blob_descriptors(&image_name, &descriptors, |_| Ok(false))?;
+        let selected = missing_descriptors(vec![(&present, true), (&missing, false)]);
 
-        assert_eq!(missing.len(), 1);
-        assert_eq!(missing[0].digest(), descriptors[0].digest());
-        Ok(())
-    }
-
-    #[test]
-    fn missing_remote_blob_reads_and_uploads_once() -> crate::Result<()> {
-        let image_name = image_name();
-        let bytes = b"needs upload".to_vec();
-        let descriptor = descriptor_for(&bytes);
-        let read_count = Cell::new(0);
-        let pushed = RefCell::new(Vec::new());
-
-        push_missing_descriptor_blob(
-            &image_name,
-            &descriptor,
-            |_| {
-                read_count.set(read_count.get() + 1);
-                Ok(bytes.clone())
-            },
-            |digest, bytes| {
-                pushed.borrow_mut().push((digest.to_string(), bytes));
-                Ok(())
-            },
-        )?;
-
-        assert_eq!(read_count.get(), 1);
-        let pushed = pushed.into_inner();
-        assert_eq!(pushed.len(), 1);
-        assert_eq!(pushed[0].0, descriptor.digest().to_string());
-        assert_eq!(pushed[0].1, b"needs upload");
-        Ok(())
-    }
-
-    #[test]
-    fn remote_check_error_stops_missing_collection() {
-        let image_name = image_name();
-        let descriptors = vec![descriptor_for(b"unreachable remote")];
-
-        let err = collect_missing_blob_descriptors(&image_name, &descriptors, |_| {
-            Err(anyhow!("registry HEAD failed"))
-        })
-        .context("push decision should fail")
-        .unwrap_err();
-
-        assert!(err.to_string().contains("push decision should fail"));
+        assert_eq!(selected.len(), 1);
+        assert_eq!(selected[0].digest(), missing.digest());
     }
 }
