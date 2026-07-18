@@ -27,7 +27,7 @@ mod import;
 #[cfg(feature = "remote-artifact")]
 pub mod async_io {
     use super::LocalRegistry;
-    use anyhow::{ensure, Context, Result};
+    use anyhow::{ensure, Result};
     use oci_spec::image::Descriptor;
 
     /// Read and verify one descriptor's blob without blocking the async OCI
@@ -38,21 +38,15 @@ pub mod async_io {
         registry: &LocalRegistry,
         descriptor: &Descriptor,
     ) -> Result<Vec<u8>> {
-        let blobs = registry.blobs.clone();
-        let descriptor = descriptor.clone();
-        tokio::task::spawn_blocking(move || {
-            let bytes = blobs.read_bytes(descriptor.digest())?;
-            ensure!(
-                bytes.len() as u64 == descriptor.size(),
-                "Descriptor size mismatch for {}: descriptor={}, actual={}",
-                descriptor.digest(),
-                descriptor.size(),
-                bytes.len()
-            );
-            Ok::<_, anyhow::Error>(bytes)
-        })
-        .await
-        .context("Local Registry blob read task failed")?
+        let bytes = registry.blobs.read_bytes_async(descriptor.digest()).await?;
+        ensure!(
+            bytes.len() as u64 == descriptor.size(),
+            "Descriptor size mismatch for {}: descriptor={}, actual={}",
+            descriptor.digest(),
+            descriptor.size(),
+            bytes.len()
+        );
+        Ok(bytes)
     }
 
     /// Store and verify one descriptor's blob without blocking the async OCI
@@ -63,26 +57,22 @@ pub mod async_io {
         descriptor: Descriptor,
         bytes: Vec<u8>,
     ) -> Result<()> {
-        let blobs = registry.blobs.clone();
-        tokio::task::spawn_blocking(move || {
-            let digest = blobs.put_bytes(&bytes)?;
-            ensure!(
-                &digest == descriptor.digest(),
-                "Descriptor digest mismatch: descriptor={}, actual={}",
-                descriptor.digest(),
-                digest
-            );
-            ensure!(
-                bytes.len() as u64 == descriptor.size(),
-                "Descriptor size mismatch for {}: descriptor={}, actual={}",
-                descriptor.digest(),
-                descriptor.size(),
-                bytes.len()
-            );
-            Ok::<_, anyhow::Error>(())
-        })
-        .await
-        .context("Local Registry blob store task failed")?
+        let actual_size = bytes.len() as u64;
+        let digest = registry.blobs.put_bytes_async(bytes).await?;
+        ensure!(
+            &digest == descriptor.digest(),
+            "Descriptor digest mismatch: descriptor={}, actual={}",
+            descriptor.digest(),
+            digest
+        );
+        ensure!(
+            actual_size == descriptor.size(),
+            "Descriptor size mismatch for {}: descriptor={}, actual={}",
+            descriptor.digest(),
+            descriptor.size(),
+            actual_size
+        );
+        Ok(())
     }
 
     #[cfg(test)]
