@@ -46,7 +46,7 @@ use oci_client::{
 use std::{env, io};
 use tokio::runtime::{Builder as RuntimeBuilder, Runtime};
 
-pub(crate) async fn bounded_map<I, T, O, F, Fut>(
+pub async fn bounded_map<I, T, O, F, Fut>(
     items: I,
     concurrency: usize,
     f: F,
@@ -225,7 +225,7 @@ impl RemoteTransport {
     }
 
     /// Async blob existence check used by the bounded push pipeline.
-    pub(crate) async fn blob_exists_async(
+    pub async fn blob_exists_async(
         &self,
         image_name: &crate::artifact::ImageRef,
         digest: &str,
@@ -238,7 +238,7 @@ impl RemoteTransport {
     }
 
     /// Async blob upload used by the bounded push pipeline.
-    pub(crate) async fn push_blob_async(
+    pub async fn push_blob_async(
         &self,
         image_name: &crate::artifact::ImageRef,
         digest: &str,
@@ -300,7 +300,7 @@ impl RemoteTransport {
     }
 
     /// Pull one blob into memory for the bounded download pipeline.
-    pub(crate) async fn pull_blob_to_vec_async(
+    pub async fn pull_blob_to_vec_async(
         &self,
         image_name: &crate::artifact::ImageRef,
         digest: &str,
@@ -349,7 +349,7 @@ impl RemoteTransport {
         Ok(buf)
     }
 
-    pub(crate) fn block_on<F: std::future::Future>(&self, future: F) -> F::Output {
+    pub fn block_on<F: std::future::Future>(&self, future: F) -> F::Output {
         self.runtime.block_on(future)
     }
 }
