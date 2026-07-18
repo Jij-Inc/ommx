@@ -39,6 +39,15 @@ pub struct LocalArtifact<'reg> {
     manifest_cache: Arc<OnceLock<LocalManifest>>,
 }
 
+#[cfg(feature = "remote-artifact")]
+pub async fn read_blob_by_descriptor_async(
+    artifact: &LocalArtifact<'_>,
+    descriptor: &Descriptor,
+) -> Result<Vec<u8>> {
+    super::local_registry::registry::async_io::read_descriptor_blob(artifact.registry, descriptor)
+        .await
+}
+
 /// Runtime-owned Local Registry handle.
 ///
 /// This is the dynamic-lifetime counterpart of `&LocalRegistry`.

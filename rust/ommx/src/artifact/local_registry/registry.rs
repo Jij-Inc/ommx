@@ -24,6 +24,98 @@ mod blob;
 mod gc;
 mod import;
 
+#[cfg(feature = "remote-artifact")]
+pub mod async_io {
+    use super::LocalRegistry;
+    use anyhow::{ensure, Context, Result};
+    use oci_spec::image::Descriptor;
+
+    /// Read and verify one descriptor's blob without blocking the async OCI
+    /// transport runtime. Filesystem I/O and digest verification run on
+    /// Tokio's blocking pool because the Local Registry blob store is
+    /// intentionally synchronous outside remote transfer pipelines.
+    pub async fn read_descriptor_blob(
+        registry: &LocalRegistry,
+        descriptor: &Descriptor,
+    ) -> Result<Vec<u8>> {
+        let blobs = registry.blobs.clone();
+        let descriptor = descriptor.clone();
+        tokio::task::spawn_blocking(move || {
+            let bytes = blobs.read_bytes(descriptor.digest())?;
+            ensure!(
+                bytes.len() as u64 == descriptor.size(),
+                "Descriptor size mismatch for {}: descriptor={}, actual={}",
+                descriptor.digest(),
+                descriptor.size(),
+                bytes.len()
+            );
+            Ok::<_, anyhow::Error>(bytes)
+        })
+        .await
+        .context("Local Registry blob read task failed")?
+    }
+
+    /// Store and verify one descriptor's blob without blocking the async OCI
+    /// transport runtime. The synchronous CAS publication remains owned by
+    /// `FileBlobStore`, but runs on Tokio's blocking pool.
+    pub async fn store_descriptor_blob(
+        registry: &LocalRegistry,
+        descriptor: Descriptor,
+        bytes: Vec<u8>,
+    ) -> Result<()> {
+        let blobs = registry.blobs.clone();
+        tokio::task::spawn_blocking(move || {
+            let digest = blobs.put_bytes(&bytes)?;
+            ensure!(
+                &digest == descriptor.digest(),
+                "Descriptor digest mismatch: descriptor={}, actual={}",
+                descriptor.digest(),
+                digest
+            );
+            ensure!(
+                bytes.len() as u64 == descriptor.size(),
+                "Descriptor size mismatch for {}: descriptor={}, actual={}",
+                descriptor.digest(),
+                descriptor.size(),
+                bytes.len()
+            );
+            Ok::<_, anyhow::Error>(())
+        })
+        .await
+        .context("Local Registry blob store task failed")?
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use crate::artifact::sha256_digest;
+        use oci_spec::image::{DescriptorBuilder, Digest, MediaType};
+        use std::str::FromStr;
+
+        #[test]
+        fn reads_and_verifies_blob_on_blocking_pool() {
+            let temp = crate::artifact::local_registry::TempLocalRegistry::new().unwrap();
+            let bytes = b"async local blob";
+            let descriptor = DescriptorBuilder::default()
+                .media_type(MediaType::Other("application/octet-stream".to_string()))
+                .digest(Digest::from_str(&sha256_digest(bytes)).unwrap())
+                .size(bytes.len() as u64)
+                .build()
+                .unwrap();
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .build()
+                .unwrap();
+
+            let actual = runtime.block_on(async {
+                store_descriptor_blob(temp.registry(), descriptor.clone(), bytes.to_vec()).await?;
+                read_descriptor_blob(temp.registry(), &descriptor).await
+            });
+
+            assert_eq!(actual.unwrap(), bytes);
+        }
+    }
+}
+
 use blob::{BlobRecord, DeleteBlobOutcome, FileBlobStore};
 pub use gc::{
     GcBlob, GcDeleteReport, GcInvalidManifest, GcMissingBlob, GcOptions, GcReferenceKind, GcReport,

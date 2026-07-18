@@ -13,6 +13,7 @@
 //! followed by each entry in `layers[]`.
 
 use super::{
+    manifest::read_blob_by_descriptor_async,
     remote_transport::{bounded_map, RemoteTransport},
     LocalArtifact, LocalManifest,
 };
@@ -21,8 +22,13 @@ use oci_client::RegistryOperation;
 use oci_spec::image::Descriptor;
 use std::collections::HashMap;
 
-const BLOB_CHECK_CONCURRENCY: usize = 16;
-const BLOB_UPLOAD_CONCURRENCY: usize = 4;
+const BLOB_TRANSFER_CONCURRENCY: usize = 4;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PushBlobOutcome {
+    Skipped,
+    Transferred,
+}
 
 impl LocalArtifact<'_> {
     /// Push this artifact to its OCI registry. Credentials are
@@ -48,59 +54,48 @@ impl LocalArtifact<'_> {
 
         let transport = RemoteTransport::new(self.image_name())?;
         transport.auth_for(self.image_name(), RegistryOperation::Pull)?;
-        let missing_blob_descriptors = transport.block_on(async {
-            let checked = bounded_map(
-                unique_blob_descriptors,
-                BLOB_CHECK_CONCURRENCY,
-                |descriptor| {
-                    let transport = &transport;
-                    async move {
-                        let digest = descriptor.digest().to_string();
-                        let exists = transport
-                            .blob_exists_async(self.image_name(), &digest)
-                            .await
-                            .with_context(|| format!("Failed while checking blob {digest}"))?;
-                        Ok::<_, crate::Error>((descriptor, exists))
-                    }
-                },
-            )
-            .await?;
-            Ok::<_, crate::Error>(missing_descriptors(checked))
-        })?;
-        let checked = blob_descriptors.len() - deduplicated;
-        let skipped = checked - missing_blob_descriptors.len();
-        tracing::info!(
-            checked,
-            skipped,
-            deduplicated,
-            missing = missing_blob_descriptors.len(),
-            "Completed remote blob existence checks"
-        );
-
         transport.auth(self.image_name())?;
-        let transferred = missing_blob_descriptors.len();
-        transport.block_on(async {
+        let outcomes = transport.block_on(async {
             bounded_map(
-                missing_blob_descriptors,
-                BLOB_UPLOAD_CONCURRENCY,
+                unique_blob_descriptors,
+                BLOB_TRANSFER_CONCURRENCY,
                 |descriptor| {
                     let transport = &transport;
-                    async move {
-                        let digest = descriptor.digest().to_string();
-                        // Blob loading happens only when this bounded future is polled, so at
-                        // most BLOB_UPLOAD_CONCURRENCY owned buffers are resident here.
-                        let bytes = self.get_blob_by_descriptor(descriptor)?;
-                        tracing::debug!(size = bytes.len(), %digest, "Pushing blob");
-                        transport
-                            .push_blob_async(self.image_name(), &digest, bytes)
-                            .await
-                            .with_context(|| format!("Failed while uploading blob {digest}"))
-                    }
+                    push_descriptor_if_missing(
+                        descriptor,
+                        move |digest| async move {
+                            transport
+                                .blob_exists_async(self.image_name(), &digest)
+                                .await
+                                .with_context(|| format!("Failed while checking blob {digest}"))
+                        },
+                        |descriptor| async move {
+                            read_blob_by_descriptor_async(self, &descriptor).await
+                        },
+                        move |digest, bytes| async move {
+                            transport
+                                .push_blob_async(self.image_name(), &digest, bytes)
+                                .await
+                                .with_context(|| format!("Failed while uploading blob {digest}"))
+                        },
+                    )
                 },
             )
             .await
         })?;
-        tracing::info!(transferred, "Completed remote blob uploads");
+        let checked = outcomes.len();
+        let skipped = outcomes
+            .iter()
+            .filter(|outcome| **outcome == PushBlobOutcome::Skipped)
+            .count();
+        let transferred = checked - skipped;
+        tracing::info!(
+            checked,
+            skipped,
+            transferred,
+            deduplicated,
+            "Completed remote blob transfers"
+        );
 
         let manifest_bytes = self.read_blob_by_digest(self.manifest_digest())?;
         let content_type = manifest.media_type();
@@ -135,18 +130,32 @@ fn deduplicate_blob_descriptors(descriptors: &[Descriptor]) -> crate::Result<Vec
     Ok(unique)
 }
 
-fn missing_descriptors(checked: Vec<(&Descriptor, bool)>) -> Vec<&Descriptor> {
-    checked
-        .into_iter()
-        .filter_map(|(descriptor, exists)| {
-            if exists {
-                tracing::debug!(digest = %descriptor.digest(), "Skipping blob already present in remote");
-                None
-            } else {
-                Some(descriptor)
-            }
-        })
-        .collect()
+async fn push_descriptor_if_missing<Exists, ExistsFuture, Read, ReadFuture, Push, PushFuture>(
+    descriptor: &Descriptor,
+    blob_exists: Exists,
+    read_blob: Read,
+    push_blob: Push,
+) -> crate::Result<PushBlobOutcome>
+where
+    Exists: FnOnce(String) -> ExistsFuture,
+    ExistsFuture: std::future::Future<Output = crate::Result<bool>>,
+    Read: FnOnce(Descriptor) -> ReadFuture,
+    ReadFuture: std::future::Future<Output = crate::Result<Vec<u8>>>,
+    Push: FnOnce(String, Vec<u8>) -> PushFuture,
+    PushFuture: std::future::Future<Output = crate::Result<()>>,
+{
+    let digest = descriptor.digest().to_string();
+    if blob_exists(digest.clone()).await? {
+        tracing::debug!(%digest, "Skipping blob already present in remote");
+        return Ok(PushBlobOutcome::Skipped);
+    }
+
+    // Blob loading happens after the existence check, inside the same bounded
+    // future, so no more than BLOB_TRANSFER_CONCURRENCY buffers are resident.
+    let bytes = read_blob(descriptor.clone()).await?;
+    tracing::debug!(size = bytes.len(), %digest, "Pushing blob");
+    push_blob(digest, bytes).await?;
+    Ok(PushBlobOutcome::Transferred)
 }
 
 /// Enumerate every blob a manifest references, in push order: dependent
@@ -163,7 +172,11 @@ fn collect_blob_descriptors(manifest: &LocalManifest) -> Vec<Descriptor> {
 mod tests {
     use super::*;
     use oci_spec::image::{DescriptorBuilder, Digest, MediaType};
-    use std::str::FromStr;
+    use std::{
+        cell::{Cell, RefCell},
+        rc::Rc,
+        str::FromStr,
+    };
 
     fn descriptor_for(bytes: &[u8]) -> Descriptor {
         DescriptorBuilder::default()
@@ -191,11 +204,64 @@ mod tests {
     #[test]
     fn already_present_descriptors_are_not_uploaded() {
         let present = descriptor_for(b"present");
+        let read_count = Cell::new(0);
+        let push_count = Cell::new(0);
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap();
+        let push_count_ref = &push_count;
+
+        let outcome = runtime
+            .block_on(push_descriptor_if_missing(
+                &present,
+                |_| async { Ok(true) },
+                |_| async {
+                    read_count.set(read_count.get() + 1);
+                    Ok(Vec::new())
+                },
+                move |_, _| async move {
+                    push_count_ref.set(push_count_ref.get() + 1);
+                    Ok(())
+                },
+            ))
+            .unwrap();
+
+        assert_eq!(outcome, PushBlobOutcome::Skipped);
+        assert_eq!(read_count.get(), 0);
+        assert_eq!(push_count.get(), 0);
+    }
+
+    #[test]
+    fn missing_descriptor_is_read_and_uploaded_in_one_operation() {
         let missing = descriptor_for(b"missing");
+        let events = Rc::new(RefCell::new(Vec::new()));
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap();
+        let check_events = Rc::clone(&events);
+        let read_events = Rc::clone(&events);
+        let push_events = Rc::clone(&events);
 
-        let selected = missing_descriptors(vec![(&present, true), (&missing, false)]);
+        let outcome = runtime
+            .block_on(push_descriptor_if_missing(
+                &missing,
+                move |_| async move {
+                    check_events.borrow_mut().push("check");
+                    Ok(false)
+                },
+                move |_| async move {
+                    read_events.borrow_mut().push("read");
+                    Ok(b"missing".to_vec())
+                },
+                move |_, bytes| async move {
+                    assert_eq!(bytes, b"missing");
+                    push_events.borrow_mut().push("push");
+                    Ok(())
+                },
+            ))
+            .unwrap();
 
-        assert_eq!(selected.len(), 1);
-        assert_eq!(selected[0].digest(), missing.digest());
+        assert_eq!(outcome, PushBlobOutcome::Transferred);
+        assert_eq!(*events.borrow(), ["check", "read", "push"]);
     }
 }

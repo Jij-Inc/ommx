@@ -36,7 +36,7 @@
 //! touches the network.
 
 use super::super::super::RefUpdate;
-use super::super::LocalRegistry;
+use super::super::{async_io, LocalRegistry};
 use super::oci_dir::OciDirImport;
 use crate::artifact::{
     media_types, remote_error,
@@ -299,8 +299,9 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
             )));
         }
         // RemoteTransport verifies the downloaded bytes against the remote
-        // digest. LocalRegistry then hashes them once for its own CAS invariant.
-        self.registry.store_blob(descriptor.clone(), &bytes)?;
+        // digest. LocalRegistry then hashes and persists them on the blocking
+        // pool for its own CAS invariant without stalling other downloads.
+        async_io::store_descriptor_blob(self.registry, descriptor.clone(), bytes).await?;
         Ok(())
     }
 
