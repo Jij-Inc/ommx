@@ -13,7 +13,8 @@ lifecycle, or identifier semantics.
 
 namespace OMMXProof
 
-abbrev Assignment (n : Nat) := Fin n → Rat
+/- OMMX State, Rational (Real in Rust impl) assignment for each decision variable ID -/
+abbrev State (n : Nat) := Fin n → Rat
 
 structure Affine (n : Nat) where
   coeff : Fin n → Rat
@@ -39,14 +40,14 @@ def scale (scalar : Rat) (expr : Affine n) : Affine n where
   coeff := fun i => scalar * expr.coeff i
   constant := scalar * expr.constant
 
-def eval (expr : Affine n) (assignment : Assignment n) : Rat :=
-  (∑ i, expr.coeff i * assignment i) + expr.constant
+def eval (expr : Affine n) (state : State n) : Rat :=
+  (∑ i, expr.coeff i * state i) + expr.constant
 
 /-- A coefficient-free affine expression evaluates to its constant exactly
-once, independently of the assignment-space dimension. -/
+once, independently of the state-space dimension. -/
 theorem eval_eq_constant_of_coeff_eq_zero {expr : Affine n}
-    (hzero : ∀ i, expr.coeff i = 0) (assignment : Assignment n) :
-    eval expr assignment = expr.constant := by
+    (hzero : ∀ i, expr.coeff i = 0) (state : State n) :
+    eval expr state = expr.constant := by
   simp [eval, hzero]
 
 /-- Executable extensional equality for a finite affine expression. -/
@@ -91,45 +92,45 @@ instance (source target : Affine n) : Decidable (Implies source target) := by
   infer_instance
 
 theorem eval_le_of_implies {source target : Affine n}
-    (h : Implies source target) (assignment : Assignment n) :
-    target.eval assignment ≤ source.eval assignment := by
+    (h : Implies source target) (state : State n) :
+    target.eval state ≤ source.eval state := by
   unfold eval
   have hsum :
-      (∑ i, target.coeff i * assignment i) =
-        ∑ i, source.coeff i * assignment i := by
+      (∑ i, target.coeff i * state i) =
+        ∑ i, source.coeff i * state i := by
     apply Finset.sum_congr rfl
     intro i _
     rw [h.1 i]
   rw [hsum]
   simpa [add_comm] using
-    add_le_add_left h.2 (∑ i, source.coeff i * assignment i)
+    add_le_add_left h.2 (∑ i, source.coeff i * state i)
 
 @[simp]
-theorem eval_zero (assignment : Assignment n) :
-    eval (zero : Affine n) assignment = 0 := by
+theorem eval_zero (state : State n) :
+    eval (zero : Affine n) state = 0 := by
   simp [eval, zero]
 
 @[simp]
-theorem eval_add (lhs rhs : Affine n) (assignment : Assignment n) :
-    eval (add lhs rhs) assignment = eval lhs assignment + eval rhs assignment := by
+theorem eval_add (lhs rhs : Affine n) (state : State n) :
+    eval (add lhs rhs) state = eval lhs state + eval rhs state := by
   simp only [eval, add, add_mul, Finset.sum_add_distrib]
   ring
 
 @[simp]
-theorem eval_neg (expr : Affine n) (assignment : Assignment n) :
-    eval (neg expr) assignment = -eval expr assignment := by
+theorem eval_neg (expr : Affine n) (state : State n) :
+    eval (neg expr) state = -eval expr state := by
   simp only [eval, neg, neg_mul, Finset.sum_neg_distrib]
   ring
 
 @[simp]
-theorem eval_sub (lhs rhs : Affine n) (assignment : Assignment n) :
-    eval (sub lhs rhs) assignment = eval lhs assignment - eval rhs assignment := by
+theorem eval_sub (lhs rhs : Affine n) (state : State n) :
+    eval (sub lhs rhs) state = eval lhs state - eval rhs state := by
   simp [sub, sub_eq_add_neg]
 
 @[simp]
 theorem eval_scale (scalar : Rat) (expr : Affine n)
-    (assignment : Assignment n) :
-    eval (scale scalar expr) assignment = scalar * eval expr assignment := by
+    (state : State n) :
+    eval (scale scalar expr) state = scalar * eval expr state := by
   simp only [eval, scale, mul_assoc, ← Finset.mul_sum]
   ring
 
@@ -139,8 +140,8 @@ def coordinate (index : Fin n) : Affine n where
   constant := 0
 
 @[simp]
-theorem eval_coordinate (index : Fin n) (assignment : Assignment n) :
-    eval (coordinate index) assignment = assignment index := by
+theorem eval_coordinate (index : Fin n) (state : State n) :
+    eval (coordinate index) state = state index := by
   simp [eval, coordinate]
 
 /-- Exact substitution of one coordinate by a rational constant. The coordinate
@@ -150,8 +151,8 @@ def substitute (expr : Affine n) (index : Fin n) (value : Rat) : Affine n where
   constant := expr.constant + expr.coeff index * value
 
 theorem eval_substitute {expr : Affine n} {index : Fin n} {value : Rat}
-    {assignment : Assignment n} (hvalue : assignment index = value) :
-    eval (substitute expr index value) assignment = eval expr assignment := by
+    {state : State n} (hvalue : state index = value) :
+    eval (substitute expr index value) state = eval expr state := by
   classical
   simp only [eval, substitute, ite_mul, zero_mul]
   rw [Finset.sum_ite]
@@ -159,17 +160,17 @@ theorem eval_substitute {expr : Affine n} {index : Fin n} {value : Rat}
   rw [Finset.filter_ne']
   rw [← hvalue]
   have hsum :
-      (∑ x ∈ Finset.univ.erase index, expr.coeff x * assignment x) +
-          expr.coeff index * assignment index =
-        ∑ x, expr.coeff x * assignment x :=
+      (∑ x ∈ Finset.univ.erase index, expr.coeff x * state x) +
+          expr.coeff index * state index =
+        ∑ x, expr.coeff x * state x :=
     Finset.sum_erase_add Finset.univ
-      (fun x => expr.coeff x * assignment x) (Finset.mem_univ index)
+      (fun x => expr.coeff x * state x) (Finset.mem_univ index)
   calc
-    (∑ x ∈ Finset.univ.erase index, expr.coeff x * assignment x) +
-          (expr.constant + expr.coeff index * assignment index) =
-        ((∑ x ∈ Finset.univ.erase index, expr.coeff x * assignment x) +
-          expr.coeff index * assignment index) + expr.constant := by ring
-    _ = (∑ x, expr.coeff x * assignment x) + expr.constant :=
+    (∑ x ∈ Finset.univ.erase index, expr.coeff x * state x) +
+          (expr.constant + expr.coeff index * state index) =
+        ((∑ x ∈ Finset.univ.erase index, expr.coeff x * state x) +
+          expr.coeff index * state index) + expr.constant := by ring
+    _ = (∑ x, expr.coeff x * state x) + expr.constant :=
       congrArg (fun total => total + expr.constant) hsum
 
 end Affine
@@ -241,12 +242,12 @@ structure LinearSystem (n : Nat) where
 
 namespace LinearSystem
 
-def Feasible (system : LinearSystem n) (assignment : Assignment n) : Prop :=
-  (∀ i, (system.inequalities i).eval assignment ≤ 0) ∧
-  (∀ i, (system.equalities i).eval assignment = 0)
+def Feasible (system : LinearSystem n) (state : State n) : Prop :=
+  (∀ i, (system.inequalities i).eval state ≤ 0) ∧
+  (∀ i, (system.equalities i).eval state = 0)
 
-instance (system : LinearSystem n) (assignment : Assignment n) :
-    Decidable (Feasible system assignment) := by
+instance (system : LinearSystem n) (state : State n) :
+    Decidable (Feasible system state) := by
   unfold Feasible
   infer_instance
 
@@ -270,22 +271,22 @@ def normalize (lhs rhs : Affine n) (sense : ConstraintSense) :
   expr := lhs.sub rhs
   sense := sense
 
-def Holds (constraint : LinearConstraint n) (assignment : Assignment n) : Prop :=
+def Holds (constraint : LinearConstraint n) (state : State n) : Prop :=
   match constraint.sense with
-  | .lessEqual => constraint.expr.eval assignment ≤ 0
-  | .equal => constraint.expr.eval assignment = 0
+  | .lessEqual => constraint.expr.eval state ≤ 0
+  | .equal => constraint.expr.eval state = 0
 
-instance (constraint : LinearConstraint n) (assignment : Assignment n) :
-    Decidable (Holds constraint assignment) := by
+instance (constraint : LinearConstraint n) (state : State n) :
+    Decidable (Holds constraint state) := by
   unfold Holds
   cases constraint.sense <;> infer_instance
 
 theorem normalize_holds_iff (lhs rhs : Affine n) (sense : ConstraintSense)
-    (assignment : Assignment n) :
-    (normalize lhs rhs sense).Holds assignment ↔
+    (state : State n) :
+    (normalize lhs rhs sense).Holds state ↔
       match sense with
-      | .lessEqual => lhs.eval assignment ≤ rhs.eval assignment
-      | .equal => lhs.eval assignment = rhs.eval assignment := by
+      | .lessEqual => lhs.eval state ≤ rhs.eval state
+      | .equal => lhs.eval state = rhs.eval state := by
   cases sense <;> simp [normalize, Holds, Affine.eval_sub, sub_eq_zero]
 
 end LinearConstraint
@@ -328,18 +329,18 @@ inductive SpecialConstraint (n : Nat) where
 
 namespace SpecialConstraint
 
-def Holds : SpecialConstraint n → Assignment n → Prop
-  | .oneHot members, assignment =>
-      (∀ i ∈ members, VariableDomain.KindHolds .binary (assignment i)) ∧
-        ∑ i ∈ members, assignment i = 1
-  | .indicator trigger polarity body, assignment =>
-      polarity.Active (assignment trigger) → body.Holds assignment
-  | .sos1 members, assignment =>
+def Holds : SpecialConstraint n → State n → Prop
+  | .oneHot members, state =>
+      (∀ i ∈ members, VariableDomain.KindHolds .binary (state i)) ∧
+        ∑ i ∈ members, state i = 1
+  | .indicator trigger polarity body, state =>
+      polarity.Active (state trigger) → body.Holds state
+  | .sos1 members, state =>
       ∀ i ∈ members, ∀ j ∈ members,
-        assignment i ≠ 0 → assignment j ≠ 0 → i = j
+        state i ≠ 0 → state j ≠ 0 → i = j
 
-instance (constraint : SpecialConstraint n) (assignment : Assignment n) :
-    Decidable (Holds constraint assignment) := by
+instance (constraint : SpecialConstraint n) (state : State n) :
+    Decidable (Holds constraint state) := by
   cases constraint <;> unfold Holds <;> infer_instance
 
 end SpecialConstraint
@@ -356,16 +357,16 @@ structure CoreModel (n : Nat) where
 
 namespace CoreModel
 
-def Feasible (model : CoreModel n) (assignment : Assignment n) : Prop :=
-  (∀ i, (model.domains i).Holds (assignment i)) ∧
-    model.linear.Feasible assignment ∧
-    ∀ constraint ∈ model.specialConstraints, constraint.Holds assignment
+def Feasible (model : CoreModel n) (state : State n) : Prop :=
+  (∀ i, (model.domains i).Holds (state i)) ∧
+    model.linear.Feasible state ∧
+    ∀ constraint ∈ model.specialConstraints, constraint.Holds state
 
-def ObjectiveValue (model : CoreModel n) (assignment : Assignment n) : Rat :=
-  model.objective.eval assignment
+def ObjectiveValue (model : CoreModel n) (state : State n) : Rat :=
+  model.objective.eval state
 
-theorem linearFeasible_of_feasible {model : CoreModel n} {assignment : Assignment n}
-    (h : model.Feasible assignment) : model.linear.Feasible assignment := h.2.1
+theorem linearFeasible_of_feasible {model : CoreModel n} {state : State n}
+    (h : model.Feasible state) : model.linear.Feasible state := h.2.1
 
 end CoreModel
 
