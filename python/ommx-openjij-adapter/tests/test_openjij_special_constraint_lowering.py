@@ -26,7 +26,7 @@ def test_preparation_explicitly_lowers_special_constraints() -> None:
     )
     adapter_input = preparation.input
 
-    assert adapter_input.required_capabilities == set()
+    assert adapter_input.active_special_constraint_kinds == set()
     assert adapter_input.one_hot_constraints == {}
     constraints = list(adapter_input.removed_constraints.values())
     assert len(constraints) == 1

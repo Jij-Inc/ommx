@@ -1318,7 +1318,7 @@ mod tests {
         assert_eq!(parsed.constraints().len(), 3);
         assert!(parsed.one_hot_constraints().is_empty());
         assert!(parsed.sos1_constraints().is_empty());
-        assert!(parsed.required_capabilities().is_empty());
+        assert!(parsed.active_special_constraint_kinds().is_empty());
         for (id, expected_name) in [
             (1, "one_hot_source"),
             (10, "sos1_cardinality_source"),
@@ -1368,7 +1368,7 @@ mod tests {
 
         assert_eq!(parsed.constraints().get(&source_id), Some(&source));
         assert!(parsed.one_hot_constraints().is_empty());
-        assert!(parsed.required_capabilities().is_empty());
+        assert!(parsed.active_special_constraint_kinds().is_empty());
     }
 
     #[test]
@@ -1401,7 +1401,7 @@ mod tests {
 
         assert_eq!(parsed.constraints().get(&source_id), Some(&source));
         assert!(parsed.sos1_constraints().is_empty());
-        assert!(parsed.required_capabilities().is_empty());
+        assert!(parsed.active_special_constraint_kinds().is_empty());
     }
 
     #[test]
