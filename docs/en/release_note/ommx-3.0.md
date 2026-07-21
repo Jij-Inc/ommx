@@ -12,7 +12,7 @@ Changes merged after the most recent release will be appended here as they land,
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b2-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b2)
 
-### ⚠ `SolverAdapter.INPUT_CLASS` and explicit OpenJij preparation ([#1084](https://github.com/Jij-Inc/ommx/pull/1084), [#1085](https://github.com/Jij-Inc/ommx/pull/1085), [#1086](https://github.com/Jij-Inc/ommx/pull/1086), [#1087](https://github.com/Jij-Inc/ommx/pull/1087))
+### ⚠ `SolverAdapter.INPUT_CLASS` and explicit OpenJij preparation ([#1084](https://github.com/Jij-Inc/ommx/pull/1084), [#1085](https://github.com/Jij-Inc/ommx/pull/1085), [#1086](https://github.com/Jij-Inc/ommx/pull/1086), [#1087](https://github.com/Jij-Inc/ommx/pull/1087), [#1088](https://github.com/Jij-Inc/ommx/pull/1088))
 
 {class}`~ommx.adapter.SolverAdapter` now defines `INPUT_CLASS`, which represents
 the set of {class}`~ommx.Instance` values an adapter can handle directly without
@@ -21,6 +21,11 @@ transformation. An operation that transforms a source instance into a member of
 OpenJij; a future update will standardize it as part of the `SolverAdapter`
 workflow ([#1111](https://github.com/Jij-Inc/ommx/issues/1111)).
 
+`INPUT_CLASS` is an {class}`~ommx.InstanceClass`: a finite union of structural
+{class}`~ommx.InstanceClassClause` descriptions. Membership is evaluated on the
+exact input and {class}`~ommx.InstanceClassMembershipReport` reports structured
+per-clause mismatches.
+
 `OMMXHighsAdapter`, `OMMXPythonMIPAdapter`, `OMMXPySCIPOptAdapter`, and
 `OMMXOpenJijSAAdapter` each declare their concrete input class. Inputs outside
 that class are rejected before backend construction with
@@ -28,7 +33,10 @@ that class are rejected before backend construction with
 `check_applicability()` to inspect structured mismatches. HiGHS and Python-MIP
 accept linear models, PySCIPOpt accepts its supported quadratic, Indicator, and
 SOS1 forms, and OpenJij accepts unconstrained binary minimization problems.
-Adapters no longer lower special constraints implicitly.
+Adapters no longer lower special constraints implicitly. Use
+{attr}`~ommx.Instance.active_special_constraint_kinds` to inspect them and
+{meth}`~ommx.Instance.lower_special_constraints` to lower selected kinds
+explicitly; this operation is separate from input-class membership.
 
 OpenJij no longer performs integer encoding, sense reversal, slack conversion,
 special-constraint lowering, or penalty selection inside `sample()` or
@@ -93,7 +101,7 @@ do not include secrets, tracebacks, local variables, or environment values.
 Existing Experiment artifacts without an outcome detail continue to load with
 `None`.
 
-### 🛠 Rust SDK errors use consistent Python exceptions ([#1087](https://github.com/Jij-Inc/ommx/pull/1087), [#1096](https://github.com/Jij-Inc/ommx/pull/1096), [#1097](https://github.com/Jij-Inc/ommx/pull/1097), [#1099](https://github.com/Jij-Inc/ommx/pull/1099), [#1100](https://github.com/Jij-Inc/ommx/pull/1100), [#1101](https://github.com/Jij-Inc/ommx/pull/1101), [#1102](https://github.com/Jij-Inc/ommx/pull/1102))
+### 🛠 Rust SDK errors use consistent Python exceptions ([#1087](https://github.com/Jij-Inc/ommx/pull/1087), [#1090](https://github.com/Jij-Inc/ommx/pull/1090), [#1096](https://github.com/Jij-Inc/ommx/pull/1096), [#1097](https://github.com/Jij-Inc/ommx/pull/1097), [#1099](https://github.com/Jij-Inc/ommx/pull/1099), [#1100](https://github.com/Jij-Inc/ommx/pull/1100), [#1101](https://github.com/Jij-Inc/ommx/pull/1101), [#1102](https://github.com/Jij-Inc/ommx/pull/1102))
 
 Python bindings now translate OMMX-owned Rust SDK signal types at a shared PyO3
 error boundary instead of selecting exception classes separately at each entry
@@ -112,6 +120,13 @@ source context. This policy now applies consistently across model operations,
 parsers, Artifact and Experiment APIs, attachments, registry operations, and
 solver or sampler logging.
 
+Remote {meth}`~ommx.artifact.Artifact.load` and
+{meth}`~ommx.experiment.Experiment.load` failures now follow the same policy.
+All inherit from {class}`~ommx.artifact.RemoteArtifactError`; catch
+{class}`~ommx.artifact.RemoteArtifactNotFoundError` for a missing exact ref
+without confusing it with authentication, authorization, transport, or invalid
+Artifact failures.
+
 Integer preparation operations expose three additional RuntimeError-compatible
 specializations. {meth}`~ommx.Instance.log_encode` raises
 {class}`~ommx.LogEncodingError` when exact encoding is unavailable,
@@ -120,69 +135,6 @@ replaced by an explicit approximate alternative, and
 {class}`~ommx.InfeasibleDetected` when bounds prove infeasibility. Existing
 `except RuntimeError` handlers continue to work; catch these concrete types
 when recovery depends on the reason.
-
-### 🆕 Instance classes and adapter applicability ([#1084](https://github.com/Jij-Inc/ommx/pull/1084), [#1088](https://github.com/Jij-Inc/ommx/pull/1088))
-
-The Python SDK now exposes {class}`~ommx.InstanceClass` as a set of OMMX
-{class}`~ommx.Instance` values. Each {class}`~ommx.InstanceClassClause` is one
-conjunctive structural description, and the containing class is their finite
-union. Membership is evaluated from the exact input value and reported through
-{class}`~ommx.InstanceClassMembershipReport` with structured per-clause
-mismatches.
-
-```python
-from ommx import DegreeBound, InstanceClass, InstanceClassClause, Kind, Sense
-
-binary_linear = InstanceClass(
-    [
-        InstanceClassClause(
-            label="binary-linear",
-            allowed_variable_kinds={Kind.Binary},
-            objective_degree_bound=DegreeBound.at_most(1),
-            allowed_senses={Sense.Minimize},
-        )
-    ]
-)
-report = binary_linear.check_membership(instance)
-```
-
-{class}`~ommx.adapter.SolverAdapter` subclasses declare `INPUT_CLASS` and use
-`check_applicability` or `require_applicable` to layer adapter-owned
-preconditions on top of input-class membership without mutating the caller's
-instance. Explicit preparation must be followed by a new membership check on
-the prepared input. {class}`~ommx.SpecialConstraintKind`,
-{attr}`~ommx.Instance.active_special_constraint_kinds`, and
-{meth}`~ommx.Instance.lower_special_constraints` provide separate inspection
-and direct-selection lowering for special constraints. `ommx.v2.Feature`
-remains an independent wire-reconstruction concept.
-
-### 🆕 Typed remote Artifact lookup errors ([#1090](https://github.com/Jij-Inc/ommx/pull/1090))
-
-{meth}`~ommx.artifact.Artifact.load` and
-{meth}`~ommx.experiment.Experiment.load` now report remote lookup failures
-through OMMX-owned exceptions instead of a generic `RuntimeError` containing
-the underlying OCI transport error. Catch
-{class}`~ommx.artifact.RemoteArtifactNotFoundError` to handle a missing exact
-ref without confusing it with authentication, authorization, registry
-transport, or invalid-Artifact failures. All remote lookup exceptions inherit
-from {class}`~ommx.artifact.RemoteArtifactError`.
-
-```python
-from ommx.artifact import Artifact, RemoteArtifactNotFoundError
-
-try:
-    artifact = Artifact.load("registry.example/team/model:latest")
-except RemoteArtifactNotFoundError:
-    artifact = None
-```
-
-The sibling exception classes are
-{class}`~ommx.artifact.RemoteArtifactAuthenticationError`,
-{class}`~ommx.artifact.RemoteArtifactAuthorizationError`,
-{class}`~ommx.artifact.RemoteArtifactTransportError`, and
-{class}`~ommx.artifact.InvalidRemoteArtifactError`. Their messages retain the
-original registry and transport context. Both load entry points use the same
-PyO3 error-conversion boundary.
 
 ### 🆕 `VariableIDLike` inputs for structural constraints ([#1078](https://github.com/Jij-Inc/ommx/pull/1078))
 
