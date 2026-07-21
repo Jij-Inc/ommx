@@ -15,9 +15,10 @@ Changes merged after the most recent release will be appended here as they land,
 ### ⚠ Input classes and explicit OpenJij preparation ([#1085](https://github.com/Jij-Inc/ommx/pull/1085), [#1086](https://github.com/Jij-Inc/ommx/pull/1086), [#1087](https://github.com/Jij-Inc/ommx/pull/1087))
 
 `OMMXHighsAdapter`, `OMMXPythonMIPAdapter`, `OMMXPySCIPOptAdapter`, and
-`OMMXOpenJijSAAdapter` now declare `INPUT_CLASS`. Inputs outside an adapter's
-declared class are rejected before backend construction with
-{class}`~ommx.adapter.AdapterNotApplicableError`; use
+`OMMXOpenJijSAAdapter` now expose `INPUT_CLASS`, which represents the set of
+{class}`~ommx.Instance` values each adapter can handle directly without
+transformation. Inputs outside an adapter's declared class are rejected before
+backend construction with {class}`~ommx.adapter.AdapterNotApplicableError`; use
 `check_applicability()` to inspect structured mismatches. HiGHS and Python-MIP
 accept linear models, PySCIPOpt accepts its supported quadratic, Indicator, and
 SOS1 forms, and OpenJij accepts unconstrained binary minimization problems.
