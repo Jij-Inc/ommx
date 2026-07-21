@@ -312,13 +312,13 @@ class SolverAdapter(ABC):
 
 Adapter は、受け取れる具体的な `Instance` 値の構造的な集合を `INPUT_CLASS` で宣言します。`check_applicability()` は membership、続いて Adapter 固有の precondition を呼び出し元の instance を変更せずに評価します。いずれかを満たさない場合に同じ構造化 report で例外を送出するには `require_applicable()` を使います。
 
-`SolverAdapter` は、受理した入力を具体的な Adapter がどのように処理するかを規定せず、基底 class の constructor で instance を変更しません。具体的な Adapter は、実装上必要であれば {meth}`Instance.reduce_capabilities <ommx.Instance.reduce_capabilities>` を明示的に呼び出せます。`preserved` 引数では、以下の特殊制約 family selector を使います：
+`SolverAdapter` は、受理した入力を具体的な Adapter がどのように処理するかを規定せず、基底 class の constructor で instance を変更しません。具体的な Adapter は、実装上必要であれば {meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>` を明示的に呼び出せます。`kinds_to_lower` 引数では、以下の特殊制約 family selector を使います：
 
-- `AdditionalCapability.Indicator`: インジケーター制約 (`binvar = 1 → f(x) <= 0`)
-- `AdditionalCapability.OneHot`: バイナリ変数集合のうち丁度1つが1
-- `AdditionalCapability.Sos1`: 変数集合のうち高々1つが非ゼロ
+- `SpecialConstraintKind.Indicator`: インジケーター制約 (`binvar = 1 → f(x) <= 0`)
+- `SpecialConstraintKind.OneHot`: バイナリ変数集合のうち丁度1つが1
+- `SpecialConstraintKind.Sos1`: 変数集合のうち高々1つが非ゼロ
 
-`Instance` が現在保持する family は {attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>` で確認できます。`reduce_capabilities` は `preserved` に含まれない family を通常制約へ変換し（indicator/SOS1 は Big-M、one-hot は線形等式）、instance を in-place に変更して、各変換を `INFO` level で記録します。この property も lowering も、`INPUT_CLASS` の membership や Adapter applicability を保証しません。
+`Instance` が現在保持する family は {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` で確認できます。`lower_special_constraints` は選択した active な family を通常制約へ変換し（indicator/SOS1 は Big-M、one-hot は線形等式）、instance を in-place に変更して、各 lowering を `INFO` level で記録します。この property も lowering も、`INPUT_CLASS` の membership や Adapter applicability を保証しません。
 
 ```{important}
 `INPUT_CLASS` は Adapter の内部実装にかかわらず、Adapter が受け取る時点の入力値そのものを記述します。呼び出し側が Adapter を選ぶ前に instance を明示的に lowering した場合、結果は別の入力値なので、`check_applicability()` または `require_applicable()` で再評価する必要があります。
@@ -328,18 +328,16 @@ Adapter は、受け取れる具体的な `Instance` 値の構造的な集合を
 
 ```{code-cell} ipython3
 from ommx.adapter import DiagnosticsSink, SolverAdapter
-from ommx import AdditionalCapability
+from ommx import SpecialConstraintKind
 
 class OMMXPySCIPOptAdapter(SolverAdapter):
     def __init__(
         self,
         ommx_instance: Instance,
     ):
-        # この Adapter は Indicator と SOS1 を直接処理し、それ以外の
-        # active な特殊制約 family を明示的に lowering する
-        ommx_instance.reduce_capabilities(
-            {AdditionalCapability.Indicator, AdditionalCapability.Sos1}
-        )
+        # この Adapter は Indicator と SOS1 を直接処理し、OneHot を
+        # 明示的に lowering する
+        ommx_instance.lower_special_constraints({SpecialConstraintKind.OneHot})
         self.instance = ommx_instance
         self.model = pyscipopt.Model()
         self.model.hideOutput()

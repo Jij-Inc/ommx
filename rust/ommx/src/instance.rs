@@ -51,19 +51,18 @@ use crate::{
 };
 use std::collections::{BTreeMap, HashMap};
 
-/// A selector for a non-standard constraint family.
+/// A special constraint family that can be explicitly lowered to regular constraints.
 ///
-/// [`Instance::required_capabilities`] reports these selectors for active
-/// special constraints. [`Instance::reduce_capabilities`] uses them to choose
-/// which families are preserved during explicit lowering. This enum does not
-/// describe an [`crate::InstanceClass`] or adapter applicability. Regular
-/// constraints are outside this selector.
+/// This enum selects model transformations; it does not declare native adapter
+/// input support. Native input is described by [`crate::InstanceClass`], while
+/// `ommx.v2.Feature` describes wire-format reconstruction requirements. These
+/// concepts are intentionally independent.
 ///
 /// The [`PartialOrd`] / [`Ord`] derives follow variant declaration order
 /// (`Indicator < OneHot < Sos1`), which is also the order in which
-/// [`Capabilities`] iterates.
+/// [`SpecialConstraintKinds`] iterates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum AdditionalCapability {
+pub enum SpecialConstraintKind {
     /// Indicator constraints: binvar = 1 → f(x) <= 0
     Indicator,
     /// One-hot constraints: exactly one of a set of binary variables must be 1
@@ -72,11 +71,11 @@ pub enum AdditionalCapability {
     Sos1,
 }
 
-/// A set of [`AdditionalCapability`] selectors.
+/// A set of [`SpecialConstraintKind`] transformation selectors.
 ///
 /// Always represented as a [`std::collections::BTreeSet`] so iteration,
 /// formatting, and comparison are deterministic and sorted by variant order.
-pub type Capabilities = std::collections::BTreeSet<AdditionalCapability>;
+pub type SpecialConstraintKinds = std::collections::BTreeSet<SpecialConstraintKind>;
 
 #[derive(
     Debug,
@@ -112,11 +111,11 @@ pub enum Sense {
 /// are distinct and do not conflict. Uniqueness is only required within the same type
 /// (i.e. active and removed constraints of the same type must have disjoint IDs).
 ///
-/// [`AdditionalCapability`], [`Instance::required_capabilities`], and
-/// [`Instance::reduce_capabilities`] inspect and explicitly lower special
-/// constraint families. They do not define membership in an
-/// [`crate::InstanceClass`]. After any explicit preparation, use
-/// [`crate::InstanceClass::check_membership`] on the resulting instance.
+/// [`SpecialConstraintKind`] identifies active special constraint families.
+/// [`Instance::active_special_constraint_kinds`] inspects them, and
+/// [`Instance::lower_special_constraints`] explicitly lowers selected families.
+/// These APIs do not define membership in an [`crate::InstanceClass`]. After
+/// any explicit preparation, check the resulting instance independently.
 ///
 /// # Mathematical operations
 ///
@@ -448,41 +447,41 @@ impl Instance {
             .set_context_for_owner(id, context, "SOS1 constraint")
     }
 
-    /// Return selectors for the active non-standard constraint families.
+    /// Return the special constraint families active in this instance.
     ///
     /// Only active constraints are considered; removed constraints are
     /// excluded. The result does not describe an [`crate::InstanceClass`] or
     /// establish adapter applicability.
-    pub fn required_capabilities(&self) -> Capabilities {
-        let mut caps = Capabilities::new();
+    pub fn active_special_constraint_kinds(&self) -> SpecialConstraintKinds {
+        let mut kinds = SpecialConstraintKinds::new();
         if !self.indicator_constraint_collection.active().is_empty() {
-            caps.insert(AdditionalCapability::Indicator);
+            kinds.insert(SpecialConstraintKind::Indicator);
         }
         if !self.one_hot_constraint_collection.active().is_empty() {
-            caps.insert(AdditionalCapability::OneHot);
+            kinds.insert(SpecialConstraintKind::OneHot);
         }
         if !self.sos1_constraint_collection.active().is_empty() {
-            caps.insert(AdditionalCapability::Sos1);
+            kinds.insert(SpecialConstraintKind::Sos1);
         }
-        caps
+        kinds
     }
 
-    /// Convert active non-standard constraint families not in `preserved` into
-    /// regular constraints.
+    /// Lower selected active special constraint families into regular constraints.
     ///
-    /// For every selector in `required_capabilities() - preserved`, call the
-    /// corresponding bulk conversion (`convert_all_indicators_to_constraints`,
-    /// `convert_all_one_hots_to_constraints`, or `convert_all_sos1_to_constraints`).
-    /// After this call, the instance's [`Self::required_capabilities`] is a
-    /// subset of `preserved`. This lowering operation does not establish
-    /// membership in an [`crate::InstanceClass`]; check the resulting instance
-    /// separately.
+    /// For every family in `kinds_to_lower`, call the corresponding bulk
+    /// conversion (`convert_all_indicators_to_constraints`,
+    /// `convert_all_one_hots_to_constraints`, or
+    /// `convert_all_sos1_to_constraints`) when that family is active. Families
+    /// omitted from `kinds_to_lower` remain active. Passing an empty set is a
+    /// no-op. This operation does not establish membership in an
+    /// [`crate::InstanceClass`]; check the resulting instance separately.
     ///
-    /// Returns the set of capabilities that were actually converted. Iteration
-    /// order follows [`Capabilities`]'s sorted order (`Indicator`, `OneHot`,
-    /// `Sos1`). The set is empty when nothing needed conversion. Each
-    /// conversion is also emitted as an `INFO`-level [`tracing`] event inside
-    /// the `reduce_capabilities` span (target `ommx::instance`) so it surfaces
+    /// Returns the set of families that were requested and active, and therefore
+    /// actually lowered. Families are processed in the deterministic order
+    /// `Indicator`, `OneHot`, `Sos1`, matching [`SpecialConstraintKinds`]'s
+    /// iteration order. The set is empty when no selected family was active.
+    /// Each lowering is emitted as an `INFO`-level [`tracing`] event inside the
+    /// `lower_special_constraints` span (target `ommx::instance`) so it surfaces
     /// through `pyo3-tracing-opentelemetry` on the Python side.
     ///
     /// Errors if any underlying conversion fails (e.g. SOS1 / indicator with
@@ -491,19 +490,22 @@ impl Instance {
     /// if a later one fails. Callers that need cross-type atomicity should
     /// validate / clone up front.
     #[tracing::instrument(skip_all)]
-    pub fn reduce_capabilities(&mut self, preserved: &Capabilities) -> crate::Result<Capabilities> {
-        let mut converted = Capabilities::new();
+    pub fn lower_special_constraints(
+        &mut self,
+        kinds_to_lower: &SpecialConstraintKinds,
+    ) -> crate::Result<SpecialConstraintKinds> {
+        let mut lowered = SpecialConstraintKinds::new();
         // Iterate in a fixed order so logs / callers see deterministic output.
-        for cap in [
-            AdditionalCapability::Indicator,
-            AdditionalCapability::OneHot,
-            AdditionalCapability::Sos1,
+        for kind in [
+            SpecialConstraintKind::Indicator,
+            SpecialConstraintKind::OneHot,
+            SpecialConstraintKind::Sos1,
         ] {
-            if preserved.contains(&cap) {
+            if !kinds_to_lower.contains(&kind) {
                 continue;
             }
-            let converted_any = match cap {
-                AdditionalCapability::Indicator => {
+            let lowered_any = match kind {
+                SpecialConstraintKind::Indicator => {
                     if self.indicator_constraint_collection.active().is_empty() {
                         false
                     } else {
@@ -511,7 +513,7 @@ impl Instance {
                         true
                     }
                 }
-                AdditionalCapability::OneHot => {
+                SpecialConstraintKind::OneHot => {
                     if self.one_hot_constraint_collection.active().is_empty() {
                         false
                     } else {
@@ -519,7 +521,7 @@ impl Instance {
                         true
                     }
                 }
-                AdditionalCapability::Sos1 => {
+                SpecialConstraintKind::Sos1 => {
                     if self.sos1_constraint_collection.active().is_empty() {
                         false
                     } else {
@@ -528,14 +530,14 @@ impl Instance {
                     }
                 }
             };
-            if converted_any {
+            if lowered_any {
                 tracing::info!(
-                    "reduce_capabilities: {cap:?} is not preserved; converted to regular constraints"
+                    "lower_special_constraints: lowered {kind:?} to regular constraints"
                 );
-                converted.insert(cap);
+                lowered.insert(kind);
             }
         }
-        Ok(converted)
+        Ok(lowered)
     }
 }
 
@@ -882,7 +884,7 @@ impl ParametricInstance {
 }
 
 #[cfg(test)]
-mod reduce_capabilities_tests {
+mod lower_special_constraints_tests {
     use super::*;
     use crate::{
         indicator_constraint::{IndicatorConstraint, IndicatorConstraintID},
@@ -894,9 +896,9 @@ mod reduce_capabilities_tests {
     use maplit::btreemap;
     use std::collections::{BTreeMap, BTreeSet};
 
-    /// Build an instance with one of each non-standard constraint type, suitable
+    /// Build an instance with one of each special constraint type, suitable
     /// for Big-M conversion (binary variables have bound [0, 1]).
-    fn instance_with_all_capabilities() -> Instance {
+    fn instance_with_all_special_constraint_kinds() -> Instance {
         let decision_variables = btreemap! {
             VariableID::from(0) => DecisionVariable::binary(),
             VariableID::from(1) => DecisionVariable::binary(),
@@ -937,75 +939,62 @@ mod reduce_capabilities_tests {
     }
 
     #[test]
-    fn noop_when_all_required_are_supported() {
-        // Every required capability is in `supported` → nothing converted,
-        // instance left untouched.
-        let mut instance = instance_with_all_capabilities();
-        let supported: Capabilities = [
-            AdditionalCapability::Indicator,
-            AdditionalCapability::OneHot,
-            AdditionalCapability::Sos1,
-        ]
-        .into_iter()
-        .collect();
+    fn noop_when_no_kinds_are_selected() {
+        let mut instance = instance_with_all_special_constraint_kinds();
+        let kinds_to_lower = SpecialConstraintKinds::new();
         let before_indicators = instance.indicator_constraints().clone();
         let before_one_hots = instance.one_hot_constraints().clone();
         let before_sos1 = instance.sos1_constraints().clone();
 
-        let converted = instance.reduce_capabilities(&supported).unwrap();
+        let lowered = instance.lower_special_constraints(&kinds_to_lower).unwrap();
 
-        assert!(converted.is_empty());
+        assert!(lowered.is_empty());
         assert_eq!(instance.indicator_constraints(), &before_indicators);
         assert_eq!(instance.one_hot_constraints(), &before_one_hots);
         assert_eq!(instance.sos1_constraints(), &before_sos1);
     }
 
     #[test]
-    fn converts_only_unsupported_capabilities() {
-        // Supported = {Sos1}: Indicator and OneHot must be converted, SOS1 kept.
-        let mut instance = instance_with_all_capabilities();
-        let supported: Capabilities = [AdditionalCapability::Sos1].into_iter().collect();
-
-        let converted = instance.reduce_capabilities(&supported).unwrap();
-
-        let expected: Capabilities = [
-            AdditionalCapability::Indicator,
-            AdditionalCapability::OneHot,
+    fn lowers_only_selected_kinds() {
+        let mut instance = instance_with_all_special_constraint_kinds();
+        let kinds_to_lower: SpecialConstraintKinds = [
+            SpecialConstraintKind::Indicator,
+            SpecialConstraintKind::OneHot,
         ]
         .into_iter()
         .collect();
-        assert_eq!(converted, expected);
+
+        let lowered = instance.lower_special_constraints(&kinds_to_lower).unwrap();
+
+        assert_eq!(lowered, kinds_to_lower);
         assert!(instance.indicator_constraints().is_empty());
         assert!(instance.one_hot_constraints().is_empty());
         assert!(!instance.sos1_constraints().is_empty());
-        // required_capabilities is now a subset of supported.
-        assert!(instance.required_capabilities().is_subset(&supported));
+        assert_eq!(
+            instance.active_special_constraint_kinds(),
+            [SpecialConstraintKind::Sos1].into_iter().collect()
+        );
     }
 
     #[test]
-    fn empty_supported_converts_everything() {
-        // No capabilities supported → all three are converted.
-        let mut instance = instance_with_all_capabilities();
-        let supported = Capabilities::new();
-
-        let converted = instance.reduce_capabilities(&supported).unwrap();
-
-        let expected: Capabilities = [
-            AdditionalCapability::Indicator,
-            AdditionalCapability::OneHot,
-            AdditionalCapability::Sos1,
+    fn lowers_every_selected_kind() {
+        let mut instance = instance_with_all_special_constraint_kinds();
+        let kinds_to_lower: SpecialConstraintKinds = [
+            SpecialConstraintKind::Indicator,
+            SpecialConstraintKind::OneHot,
+            SpecialConstraintKind::Sos1,
         ]
         .into_iter()
         .collect();
-        assert_eq!(converted, expected);
-        assert!(instance.required_capabilities().is_empty());
+
+        let lowered = instance.lower_special_constraints(&kinds_to_lower).unwrap();
+
+        assert_eq!(lowered, kinds_to_lower);
+        assert!(instance.active_special_constraint_kinds().is_empty());
     }
 
     #[test]
-    fn skips_capabilities_that_are_not_required() {
-        // Instance has only a OneHot. Empty `supported` → only OneHot is reported
-        // as converted; Indicator / SOS1 aren't in the returned set since they
-        // were never present to begin with.
+    fn skips_selected_kinds_that_are_not_active() {
         let decision_variables = btreemap! {
             VariableID::from(0) => DecisionVariable::binary(),
             VariableID::from(1) => DecisionVariable::binary(),
@@ -1024,19 +1013,26 @@ mod reduce_capabilities_tests {
             .one_hot_constraints(BTreeMap::from([(OneHotConstraintID::from(1), one_hot)]))
             .build()
             .unwrap();
-        let supported = Capabilities::new();
+        let kinds_to_lower: SpecialConstraintKinds = [
+            SpecialConstraintKind::Indicator,
+            SpecialConstraintKind::OneHot,
+            SpecialConstraintKind::Sos1,
+        ]
+        .into_iter()
+        .collect();
 
-        let converted = instance.reduce_capabilities(&supported).unwrap();
+        let lowered = instance.lower_special_constraints(&kinds_to_lower).unwrap();
 
-        let expected: Capabilities = [AdditionalCapability::OneHot].into_iter().collect();
-        assert_eq!(converted, expected);
+        let expected: SpecialConstraintKinds =
+            [SpecialConstraintKind::OneHot].into_iter().collect();
+        assert_eq!(lowered, expected);
         assert!(instance.one_hot_constraints().is_empty());
     }
 
     #[test]
-    fn conversion_failure_is_propagated() {
+    fn lowering_failure_is_propagated() {
         // SOS1 over a continuous variable with infinite bound cannot be Big-M
-        // converted; reduce_capabilities surfaces the underlying error.
+        // lowered; lower_special_constraints surfaces the underlying error.
         let dv = DecisionVariable::continuous();
         let sos1 = Sos1Constraint::new([VariableID::from(0)].into_iter().collect::<BTreeSet<_>>())
             .unwrap();
@@ -1048,16 +1044,63 @@ mod reduce_capabilities_tests {
             .sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(1), sos1)]))
             .build()
             .unwrap();
-        let supported = Capabilities::new();
+        let kinds_to_lower: SpecialConstraintKinds =
+            [SpecialConstraintKind::Sos1].into_iter().collect();
 
-        let err = instance.reduce_capabilities(&supported).unwrap_err();
+        let err = instance
+            .lower_special_constraints(&kinds_to_lower)
+            .unwrap_err();
         assert!(err.to_string().contains("non-finite"));
     }
 
     #[test]
-    fn integer_sos1_converts_with_new_indicator() {
+    fn earlier_kinds_remain_lowered_when_a_later_kind_fails() {
+        // The public contract is deliberately non-atomic across families:
+        // OneHot is lowered before this invalid SOS1 conversion fails.
+        let one_hot = OneHotConstraint::new(
+            [VariableID::from(0), VariableID::from(1)]
+                .into_iter()
+                .collect(),
+        )
+        .unwrap();
+        let sos1 = Sos1Constraint::new([VariableID::from(2)].into_iter().collect()).unwrap();
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(linear!(0)))
+            .decision_variables(btreemap! {
+                VariableID::from(0) => DecisionVariable::binary(),
+                VariableID::from(1) => DecisionVariable::binary(),
+                VariableID::from(2) => DecisionVariable::continuous(),
+            })
+            .constraints(BTreeMap::new())
+            .one_hot_constraints(BTreeMap::from([(OneHotConstraintID::from(1), one_hot)]))
+            .sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(1), sos1)]))
+            .build()
+            .unwrap();
+        let kinds_to_lower: SpecialConstraintKinds =
+            [SpecialConstraintKind::OneHot, SpecialConstraintKind::Sos1]
+                .into_iter()
+                .collect();
+
+        let err = instance
+            .lower_special_constraints(&kinds_to_lower)
+            .unwrap_err();
+
+        assert!(err.to_string().contains("non-finite"));
+        assert!(instance.one_hot_constraints().is_empty());
+        assert_eq!(instance.removed_one_hot_constraints().len(), 1);
+        assert_eq!(instance.constraints().len(), 1);
+        assert_eq!(instance.sos1_constraints().len(), 1);
+        assert_eq!(
+            instance.active_special_constraint_kinds(),
+            [SpecialConstraintKind::Sos1].into_iter().collect()
+        );
+    }
+
+    #[test]
+    fn integer_sos1_lowers_with_new_indicator() {
         // A single SOS1 over an integer variable with finite bound [-2, 3]:
-        // reduce_capabilities should invoke the SOS1 Big-M conversion which
+        // lower_special_constraints should invoke the SOS1 Big-M conversion which
         // allocates a fresh binary indicator.
         let dv = DecisionVariable::new(
             Kind::Integer,
@@ -1076,10 +1119,11 @@ mod reduce_capabilities_tests {
             .build()
             .unwrap();
 
-        let converted = instance.reduce_capabilities(&Capabilities::new()).unwrap();
+        let kinds_to_lower: SpecialConstraintKinds =
+            [SpecialConstraintKind::Sos1].into_iter().collect();
+        let lowered = instance.lower_special_constraints(&kinds_to_lower).unwrap();
 
-        let expected: Capabilities = [AdditionalCapability::Sos1].into_iter().collect();
-        assert_eq!(converted, expected);
+        assert_eq!(lowered, kinds_to_lower);
         // Fresh binary indicator was allocated → decision variable count went up.
         assert_eq!(instance.decision_variables.len(), 2);
         assert!(instance.sos1_constraints().is_empty());

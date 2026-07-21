@@ -212,7 +212,7 @@ Related PRs: [#1096](https://github.com/Jij-Inc/ommx/pull/1096),
 [#1102](https://github.com/Jij-Inc/ommx/pull/1102),
 [#1087](https://github.com/Jij-Inc/ommx/pull/1087).
 
-### 🆕 Instance classes and adapter applicability ([#1084](https://github.com/Jij-Inc/ommx/pull/1084))
+### 🆕 Instance classes and adapter applicability ([#1084](https://github.com/Jij-Inc/ommx/pull/1084), [#1088](https://github.com/Jij-Inc/ommx/pull/1088))
 
 The Python SDK now exposes {class}`~ommx.InstanceClass` as a set of OMMX
 {class}`~ommx.Instance` values. Each {class}`~ommx.InstanceClassClause` is one
@@ -241,11 +241,11 @@ report = binary_linear.check_membership(instance)
 `check_applicability` or `require_applicable` to layer adapter-owned
 preconditions on top of input-class membership without mutating the caller's
 instance. Explicit preparation must be followed by a new membership check on
-the prepared input. Explicit special-constraint lowering through
-{meth}`~ommx.Instance.reduce_capabilities` and `ommx.v2.Feature` wire
-reconstruction remain separate concepts. The lowering method's keyword argument
-is renamed from `supported` to `preserved` to describe the families left
-unchanged by that explicit operation.
+the prepared input. {class}`~ommx.SpecialConstraintKind`,
+{attr}`~ommx.Instance.active_special_constraint_kinds`, and
+{meth}`~ommx.Instance.lower_special_constraints` provide separate inspection
+and direct-selection lowering for special constraints. `ommx.v2.Feature`
+remains an independent wire-reconstruction concept.
 
 ### 🆕 Typed remote Artifact lookup errors ([#1090](https://github.com/Jij-Inc/ommx/pull/1090))
 

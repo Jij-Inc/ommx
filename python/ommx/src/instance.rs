@@ -722,47 +722,53 @@ impl Instance {
             .collect()
     }
 
-    /// Selectors for active non-standard constraint families.
+    /// The kinds of active special constraints this instance currently uses.
     ///
-    /// Only active constraints are considered. This value does not describe an
-    /// :class:`InstanceClass` or establish adapter applicability. Use
-    /// :meth:`reduce_capabilities` only as an explicit special-constraint
-    /// lowering operation.
+    /// Returns the set of :class:`SpecialConstraintKind` values corresponding
+    /// to non-empty active (non-removed) special constraint collections. An
+    /// empty set means the instance has no active special constraints.
     #[getter]
-    pub fn required_capabilities(&self) -> std::collections::HashSet<crate::AdditionalCapability> {
+    pub fn active_special_constraint_kinds(
+        &self,
+    ) -> std::collections::HashSet<crate::SpecialConstraintKind> {
         self.inner
-            .required_capabilities()
+            .active_special_constraint_kinds()
             .into_iter()
-            .map(|c| c.into())
+            .map(|kind| kind.into())
             .collect()
     }
 
-    /// Convert active non-standard constraint families not in ``preserved``
-    /// into regular constraints.
+    /// Lower selected active special constraint kinds into regular constraints.
     ///
-    /// For every selector in :attr:`required_capabilities` not in
-    /// ``preserved``, the corresponding bulk conversion is invoked
+    /// For every kind in ``kinds_to_lower``, the corresponding bulk conversion
+    /// is invoked
     /// (:meth:`convert_all_indicators_to_constraints`,
     /// :meth:`convert_all_one_hots_to_constraints`, or
-    /// :meth:`convert_all_sos1_to_constraints`). The instance is mutated in
-    /// place and :attr:`required_capabilities` becomes a subset of
-    /// ``preserved`` on success. This does not establish
+    /// :meth:`convert_all_sos1_to_constraints`) when that kind is active. The
+    /// instance is mutated in place. Kinds omitted from ``kinds_to_lower``
+    /// remain active, and an empty set is a no-op. This does not establish
     /// :class:`InstanceClass` membership; check the resulting input separately.
     ///
-    /// Returns the set of :class:`AdditionalCapability` values that were
-    /// actually converted. Empty when nothing needed conversion.
+    /// Returns the set of :class:`SpecialConstraintKind` values that were
+    /// requested and active, and therefore actually lowered. Empty when no
+    /// requested kind was active.
+    ///
+    /// Kinds are processed in ``Indicator``, ``OneHot``, ``Sos1`` order. Each
+    /// individual family conversion is atomic, but the whole operation is not:
+    /// an error in a later family does not roll back families already lowered.
     ///
     /// Raises if any underlying Big-M conversion fails (e.g. a SOS1 variable
     /// with a non-finite bound).
-    pub fn reduce_capabilities(
+    pub fn lower_special_constraints(
         &mut self,
         py: Python<'_>,
-        preserved: std::collections::HashSet<crate::AdditionalCapability>,
-    ) -> OmmxPyResult<std::collections::HashSet<crate::AdditionalCapability>> {
+        kinds_to_lower: std::collections::HashSet<crate::SpecialConstraintKind>,
+    ) -> OmmxPyResult<std::collections::HashSet<crate::SpecialConstraintKind>> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let rust_preserved: ommx::Capabilities = preserved.into_iter().map(|c| c.into()).collect();
-        let converted = self.inner.reduce_capabilities(&rust_preserved)?;
-        Ok(converted.into_iter().map(|c| c.into()).collect())
+        let rust_kinds_to_lower: ommx::SpecialConstraintKinds =
+            kinds_to_lower.into_iter().map(|kind| kind.into()).collect();
+        let lowered = self.inner.lower_special_constraints(&rust_kinds_to_lower)?;
+        Ok(lowered.into_iter().map(|kind| kind.into()).collect())
     }
 
     /// Dict of all removed constraints in the instance keyed by their IDs.

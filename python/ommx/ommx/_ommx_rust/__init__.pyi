@@ -19,7 +19,6 @@ import typing_extensions
 from typing import TypeAlias
 
 __all__ = [
-    "AdditionalCapability",
     "AnonymousArtifactRef",
     "ArchiveDescriptor",
     "ArchiveManifest",
@@ -103,6 +102,7 @@ __all__ = [
     "Solution",
     "Solve",
     "Sos1Constraint",
+    "SpecialConstraintKind",
     "State",
     "ToFunction",
     "ToSamples",
@@ -3062,14 +3062,13 @@ class Instance:
         Dict of all removed SOS1 constraints in the instance keyed by their IDs.
         """
     @property
-    def required_capabilities(self) -> builtins.set[AdditionalCapability]:
+    def active_special_constraint_kinds(self) -> builtins.set[SpecialConstraintKind]:
         r"""
-        Selectors for active non-standard constraint families.
+        The kinds of active special constraints this instance currently uses.
 
-        Only active constraints are considered. This value does not describe an
-        :class:`InstanceClass` or establish adapter applicability. Use
-        :meth:`reduce_capabilities` only as an explicit special-constraint
-        lowering operation.
+        Returns the set of :class:`SpecialConstraintKind` values corresponding
+        to non-empty active (non-removed) special constraint collections. An
+        empty set means the instance has no active special constraints.
         """
     @property
     def removed_constraints(self) -> builtins.dict[builtins.int, RemovedConstraint]:
@@ -3287,24 +3286,28 @@ class Instance:
         r"""
         Add a SOS1 constraint to this instance.
         """
-    def reduce_capabilities(
-        self, preserved: builtins.set[AdditionalCapability]
-    ) -> builtins.set[AdditionalCapability]:
+    def lower_special_constraints(
+        self, kinds_to_lower: builtins.set[SpecialConstraintKind]
+    ) -> builtins.set[SpecialConstraintKind]:
         r"""
-        Convert active non-standard constraint families not in ``preserved``
-        into regular constraints.
+        Lower selected active special constraint kinds into regular constraints.
 
-        For every selector in :attr:`required_capabilities` not in
-        ``preserved``, the corresponding bulk conversion is invoked
+        For every kind in ``kinds_to_lower``, the corresponding bulk conversion
+        is invoked
         (:meth:`convert_all_indicators_to_constraints`,
         :meth:`convert_all_one_hots_to_constraints`, or
-        :meth:`convert_all_sos1_to_constraints`). The instance is mutated in
-        place and :attr:`required_capabilities` becomes a subset of
-        ``preserved`` on success. This does not establish
+        :meth:`convert_all_sos1_to_constraints`) when that kind is active. The
+        instance is mutated in place. Kinds omitted from ``kinds_to_lower``
+        remain active, and an empty set is a no-op. This does not establish
         :class:`InstanceClass` membership; check the resulting input separately.
 
-        Returns the set of :class:`AdditionalCapability` values that were
-        actually converted. Empty when nothing needed conversion.
+        Returns the set of :class:`SpecialConstraintKind` values that were
+        requested and active, and therefore actually lowered. Empty when no
+        requested kind was active.
+
+        Kinds are processed in ``Indicator``, ``OneHot``, ``Sos1`` order. Each
+        individual family conversion is atomic, but the whole operation is not:
+        an error in a later family does not roll back families already lowered.
 
         Raises if any underlying Big-M conversion fails (e.g. a SOS1 variable
         with a non-finite bound).
@@ -6072,7 +6075,8 @@ class Provenance:
 
     When a special constraint (indicator / one-hot / SOS1) is converted into a
     regular {class}`~ommx.Constraint` — for example via
-    `Instance.convert_one_hot_to_constraint` or `Instance.reduce_capabilities` —
+    :meth:`~ommx.Instance.convert_one_hot_to_constraint` or
+    :meth:`~ommx.Instance.lower_special_constraints` —
     the generated constraint records a {class}`Provenance` entry naming the
     original special constraint. This lets callers trace a regular constraint
     back to the special constraint it was derived from.
@@ -7935,32 +7939,6 @@ class State:
     def __deepcopy__(self, _memo: typing.Any) -> State: ...
 
 @typing.final
-class AdditionalCapability(enum.Enum):
-    r"""
-    Selector for a non-standard constraint family.
-
-    :attr:`Instance.required_capabilities` reports these selectors for active
-    special constraints. :meth:`Instance.reduce_capabilities` uses them to
-    choose which families are preserved during explicit lowering. Regular
-    constraints are outside this selector.
-    """
-
-    Indicator = ...
-    r"""
-    Indicator constraints: binvar = 1 → f(x) <= 0
-    """
-    OneHot = ...
-    r"""
-    One-hot constraints: exactly one of a set of binary variables must be 1
-    """
-    Sos1 = ...
-    r"""
-    SOS1 constraints: at most one of a set of variables can be non-zero
-    """
-
-    def __hash__(self) -> builtins.int: ...
-
-@typing.final
 class DecisionVariableRole(enum.Enum):
     r"""
     Decision variable role in an instance.
@@ -8164,6 +8142,33 @@ class Sense(enum.Enum):
         """
     def __repr__(self) -> builtins.str: ...
     def __str__(self) -> builtins.str: ...
+
+@typing.final
+class SpecialConstraintKind(enum.Enum):
+    r"""
+    Kind of active special constraint in an instance.
+
+    Use these values with :attr:`Instance.active_special_constraint_kinds` to
+    inspect an instance and :meth:`Instance.lower_special_constraints` to select
+    special constraint families for explicit lowering to regular constraints.
+    This is a transformation selector, not an adapter input declaration or an
+    ``ommx.v2.Feature`` wire-format requirement.
+    """
+
+    Indicator = ...
+    r"""
+    Indicator constraints: binvar = 1 → f(x) <= 0
+    """
+    OneHot = ...
+    r"""
+    One-hot constraints: exactly one of a set of binary variables must be 1
+    """
+    Sos1 = ...
+    r"""
+    SOS1 constraints: at most one of a set of variables can be non-zero
+    """
+
+    def __hash__(self) -> builtins.int: ...
 
 def gc(
     *,
