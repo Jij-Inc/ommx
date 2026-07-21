@@ -345,29 +345,35 @@ instance (constraint : SpecialConstraint n) (state : State n) :
 
 end SpecialConstraint
 
-/-- Exact implementation-independent model. Stable IDs, lifecycle, and
-serialization belong to the future OMMX integration boundary and are
-intentionally absent. -/
-structure CoreModel (n : Nat) where
+/--
+# Simplified semantic model for OMMX Instance.
+
+- IDs are packed into a finite index space `Fin n`, while Rust SDK uses stable parse IDs.
+
+## Temporal Limitations
+
+- Only Affine expressions are supported, while Rust SDK supports arbitrary polynomial expressions.
+-/
+structure Instance (n : Nat) where
   domains : Fin n → VariableDomain
   linear : LinearSystem n
   specialConstraints : List (SpecialConstraint n) := []
   objective : Affine n
   sense : OptimizationSense
 
-namespace CoreModel
+namespace Instance
 
-def Feasible (model : CoreModel n) (state : State n) : Prop :=
-  (∀ i, (model.domains i).Holds (state i)) ∧
-    model.linear.Feasible state ∧
-    ∀ constraint ∈ model.specialConstraints, constraint.Holds state
+def Feasible (inst : Instance n) (state : State n) : Prop :=
+  (∀ i, (inst.domains i).Holds (state i)) ∧
+    inst.linear.Feasible state ∧
+    ∀ constraint ∈ inst.specialConstraints, constraint.Holds state
 
-def ObjectiveValue (model : CoreModel n) (state : State n) : Rat :=
-  model.objective.eval state
+def ObjectiveValue (inst : Instance n) (state : State n) : Rat :=
+  inst.objective.eval state
 
-theorem linearFeasible_of_feasible {model : CoreModel n} {state : State n}
-    (h : model.Feasible state) : model.linear.Feasible state := h.2.1
+theorem linearFeasible_of_feasible {inst : Instance n} {state : State n}
+    (h : inst.Feasible state) : inst.linear.Feasible state := h.2.1
 
-end CoreModel
+end Instance
 
 end OMMXProof

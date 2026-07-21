@@ -95,7 +95,7 @@ theorem checkBinaryCardinalitySOS1_sound
 
 Selector compression is sound only when the removed selectors are private to
 the selector gadget. The following checker computes that fact from the exact
-independent `CoreModel` syntax. A coordinate is considered used when its domain
+independent `Instance` syntax. A coordinate is considered used when its domain
 is restrictive, a linear/special constraint observes it, or the objective has
 a nonzero coefficient.
 -/
@@ -335,65 +335,65 @@ theorem holds_iff_of_independentOf {constraint : SpecialConstraint n}
 
 end SpecialConstraint
 
-namespace CoreModel
+namespace Instance
 
 /-- Exact semantic independence of one coordinate in the independent model AST. -/
-def IndependentAt (model : CoreModel n) (index : Fin n) : Prop :=
-  (model.domains index).Unrestricted ∧
-    model.linear.IndependentAt index ∧
-    (∀ constraint ∈ model.specialConstraints,
+def IndependentAt (inst : Instance n) (index : Fin n) : Prop :=
+  (inst.domains index).Unrestricted ∧
+    inst.linear.IndependentAt index ∧
+    (∀ constraint ∈ inst.specialConstraints,
       constraint.IndependentAt index) ∧
-    model.objective.IndependentAt index
+    inst.objective.IndependentAt index
 
-instance (model : CoreModel n) (index : Fin n) :
-    Decidable (model.IndependentAt index) := by
+instance (inst : Instance n) (index : Fin n) :
+    Decidable (inst.IndependentAt index) := by
   unfold IndependentAt
   infer_instance
 
 /-- Executable semantic-use set. A selector is fresh for the base model exactly
 when it is absent from this set. -/
-def usedVariables (model : CoreModel n) : Finset (Fin n) :=
-  Finset.univ.filter fun index => ¬model.IndependentAt index
+def usedVariables (inst : Instance n) : Finset (Fin n) :=
+  Finset.univ.filter fun index => ¬inst.IndependentAt index
 
 structure SelectorIsolationWitness (n : Nat) where
   privateSelectors : Finset (Fin n)
 
-def SelectorIsolated (model : CoreModel n)
+def SelectorIsolated (inst : Instance n)
     (witness : SelectorIsolationWitness n) : Prop :=
   witness.privateSelectors.Nonempty ∧
-    Disjoint witness.privateSelectors model.usedVariables
+    Disjoint witness.privateSelectors inst.usedVariables
 
-instance (model : CoreModel n) (witness : SelectorIsolationWitness n) :
-    Decidable (model.SelectorIsolated witness) := by
+instance (inst : Instance n) (witness : SelectorIsolationWitness n) :
+    Decidable (inst.SelectorIsolated witness) := by
   unfold SelectorIsolated
   infer_instance
 
 /-- Check an untrusted set of claimed all-fresh selector coordinates. -/
-def checkSelectorIsolation (model : CoreModel n)
+def checkSelectorIsolation (inst : Instance n)
     (witness : SelectorIsolationWitness n) : Bool :=
-  decide (model.SelectorIsolated witness)
+  decide (inst.SelectorIsolated witness)
 
-theorem independentAt_of_selectorIsolated {model : CoreModel n}
+theorem independentAt_of_selectorIsolated {inst : Instance n}
     {witness : SelectorIsolationWitness n}
-    (hisolated : model.SelectorIsolated witness)
+    (hisolated : inst.SelectorIsolated witness)
     {index : Fin n} (hprivate : index ∈ witness.privateSelectors) :
-    model.IndependentAt index := by
+    inst.IndependentAt index := by
   by_contra hdependent
-  have hused : index ∈ model.usedVariables := by
+  have hused : index ∈ inst.usedVariables := by
     simp [usedVariables, hdependent]
   exact Finset.disjoint_left.mp hisolated.2 hprivate hused
 
-theorem feasible_iff_of_selectorIsolated {model : CoreModel n}
+theorem feasible_iff_of_selectorIsolated {inst : Instance n}
     {witness : SelectorIsolationWitness n}
-    (hisolated : model.SelectorIsolated witness)
+    (hisolated : inst.SelectorIsolated witness)
     {lhs rhs : State n}
     (hagree : AgreeOutside witness.privateSelectors lhs rhs) :
-    model.Feasible lhs ↔ model.Feasible rhs := by
+    inst.Feasible lhs ↔ inst.Feasible rhs := by
   have hindependent (i : Fin n) (hi : i ∈ witness.privateSelectors) :=
     independentAt_of_selectorIsolated hisolated hi
   have hdomains :
-      (∀ i, (model.domains i).Holds (lhs i)) ↔
-        ∀ i, (model.domains i).Holds (rhs i) := by
+      (∀ i, (inst.domains i).Holds (lhs i)) ↔
+        ∀ i, (inst.domains i).Holds (rhs i) := by
     constructor
     · intro hleft i
       by_cases hprivate : i ∈ witness.privateSelectors
@@ -408,7 +408,7 @@ theorem feasible_iff_of_selectorIsolated {model : CoreModel n}
   have hlinear := LinearSystem.feasible_iff_of_independentOf
     (fun i hi => (hindependent i hi).2.1) hagree
   have hspecial (constraint : SpecialConstraint n)
-      (hconstraint : constraint ∈ model.specialConstraints) :=
+      (hconstraint : constraint ∈ inst.specialConstraints) :=
     SpecialConstraint.holds_iff_of_independentOf
       (fun i hi => (hindependent i hi).2.2.1 constraint hconstraint) hagree
   unfold Feasible
@@ -424,38 +424,38 @@ theorem feasible_iff_of_selectorIsolated {model : CoreModel n}
         (hspecial constraint hconstraint).mpr
           (hrightSpecial constraint hconstraint)⟩
 
-theorem objective_eq_of_selectorIsolated {model : CoreModel n}
+theorem objective_eq_of_selectorIsolated {inst : Instance n}
     {witness : SelectorIsolationWitness n}
-    (hisolated : model.SelectorIsolated witness)
+    (hisolated : inst.SelectorIsolated witness)
     {lhs rhs : State n}
     (hagree : AgreeOutside witness.privateSelectors lhs rhs) :
-    model.ObjectiveValue lhs = model.ObjectiveValue rhs := by
+    inst.ObjectiveValue lhs = inst.ObjectiveValue rhs := by
   apply Affine.eval_eq_of_independentOf
   · intro i hi
     exact (independentAt_of_selectorIsolated hisolated hi).2.2.2
   · exact hagree
 
-theorem checkSelectorIsolation_sound {model : CoreModel n}
+theorem checkSelectorIsolation_sound {inst : Instance n}
     {witness : SelectorIsolationWitness n}
-    (hcheck : checkSelectorIsolation model witness = true)
+    (hcheck : checkSelectorIsolation inst witness = true)
     {lhs rhs : State n}
     (hagree : AgreeOutside witness.privateSelectors lhs rhs) :
-    model.Feasible lhs ↔ model.Feasible rhs := by
+    inst.Feasible lhs ↔ inst.Feasible rhs := by
   apply feasible_iff_of_selectorIsolated
   · simpa [checkSelectorIsolation, decide_eq_true_eq] using hcheck
   · exact hagree
 
-theorem checkSelectorIsolation_objective_sound {model : CoreModel n}
+theorem checkSelectorIsolation_objective_sound {inst : Instance n}
     {witness : SelectorIsolationWitness n}
-    (hcheck : checkSelectorIsolation model witness = true)
+    (hcheck : checkSelectorIsolation inst witness = true)
     {lhs rhs : State n}
     (hagree : AgreeOutside witness.privateSelectors lhs rhs) :
-    model.ObjectiveValue lhs = model.ObjectiveValue rhs := by
+    inst.ObjectiveValue lhs = inst.ObjectiveValue rhs := by
   apply objective_eq_of_selectorIsolated
   · simpa [checkSelectorIsolation, decide_eq_true_eq] using hcheck
   · exact hagree
 
-end CoreModel
+end Instance
 
 def GenericBinaryOn (members : Finset ι) (state : ι → Rat) : Prop :=
   ∀ i ∈ members, VariableDomain.KindHolds .binary (state i)
@@ -519,7 +519,7 @@ def WithinSelectorBounds (bounds : SelectorBounds ι) (members : ι → Rat) : P
   ∀ i, bounds.lower i ≤ members i ∧ members i ≤ bounds.upper i
 
 /-- Full-link selector gadget. The generic problem constructors below encode
-isolation by type; the finite `CoreModel` compression theorem additionally
+isolation by type; the finite `Instance` compression theorem additionally
 checks an explicit semantic-use witness. -/
 def SelectorGadget [Fintype ι] [DecidableEq ι]
     (bounds : SelectorBounds ι) (members selectors : ι → Rat) : Prop :=
@@ -795,7 +795,7 @@ def plannedSelectorCompression [Fintype ι] [DecidableEq ι]
   sense_eq := rfl
 
 /-! The generic theorem above makes selector isolation unrepresentable by its
-types. The following connected variant starts from a finite `CoreModel` base,
+types. The following connected variant starts from a finite `Instance` base,
 checks an explicit isolation witness, and then derives the same projection
 contract. `encode` records how member/selector tuples populate that finite
 model; `encodingIsolation` states that changing selectors changes only the
@@ -804,29 +804,29 @@ coordinates claimed private by the executable witness. -/
 def zeroSelectors (_ : ι) : Rat := 0
 
 def coreSelectorSourceProblem [Fintype ι] [DecidableEq ι]
-    (model : CoreModel n)
+    (inst : Instance n)
     (encode : ((ι → Rat) × (ι → Rat)) → State n)
     (bounds : SelectorBounds ι) :
     Problem ((ι → Rat) × (ι → Rat)) where
-  feasible pair := model.Feasible (encode pair) ∧
+  feasible pair := inst.Feasible (encode pair) ∧
     SelectorGadget bounds pair.1 pair.2
-  objective pair := model.ObjectiveValue (encode pair)
-  sense := model.sense
+  objective pair := inst.ObjectiveValue (encode pair)
+  sense := inst.sense
 
 def coreSOS1TargetProblem [Fintype ι] [DecidableEq ι]
-    (model : CoreModel n)
+    (inst : Instance n)
     (encode : ((ι → Rat) × (ι → Rat)) → State n) :
     Problem (ι → Rat) where
   feasible members :=
-    model.Feasible (encode (members, zeroSelectors)) ∧ GenericSOS1 members
-  objective members := model.ObjectiveValue (encode (members, zeroSelectors))
-  sense := model.sense
+    inst.Feasible (encode (members, zeroSelectors)) ∧ GenericSOS1 members
+  objective members := inst.ObjectiveValue (encode (members, zeroSelectors))
+  sense := inst.sense
 
 /-- The encoding may vary only the coordinates named by the isolation witness
 when its private selector tuple changes. -/
 def EncodingRespectsIsolation {ι : Type*}
     (encode : ((ι → Rat) × (ι → Rat)) → State n)
-    (witness : CoreModel.SelectorIsolationWitness n) : Prop :=
+    (witness : Instance.SelectorIsolationWitness n) : Prop :=
   ∀ members selectors selectors',
     AgreeOutside witness.privateSelectors
       (encode (members, selectors)) (encode (members, selectors'))
@@ -837,72 +837,72 @@ private selectors and the complete two-sided link gadget
 `Lᵢ zᵢ ≤ xᵢ ≤ Uᵢ zᵢ`; `corePlannedSelectorCompression` below covers the SDK's
 mixed reuse and omitted-link plan. -/
 def coreSelectorCompression [Fintype ι] [DecidableEq ι]
-    (model : CoreModel n)
+    (inst : Instance n)
     (encode : ((ι → Rat) × (ι → Rat)) → State n)
     (bounds : SelectorBounds ι)
-    (isolation : CoreModel.SelectorIsolationWitness n)
-    (isolationAccepted : model.checkSelectorIsolation isolation = true)
+    (isolation : Instance.SelectorIsolationWitness n)
+    (isolationAccepted : inst.checkSelectorIsolation isolation = true)
     (encodingIsolation : EncodingRespectsIsolation encode isolation)
     (baseBounds : ∀ {members},
-      model.Feasible (encode (members, zeroSelectors)) →
+      inst.Feasible (encode (members, zeroSelectors)) →
         WithinSelectorBounds bounds members) :
     ProjectionPreserves
-      (coreSelectorSourceProblem model encode bounds)
-      (coreSOS1TargetProblem model encode) where
+      (coreSelectorSourceProblem inst encode bounds)
+      (coreSOS1TargetProblem inst encode) where
   project := Prod.fst
   lift members := (members, canonicalSelector members)
   project_feasible {x} h := by
     constructor
-    · apply (CoreModel.checkSelectorIsolation_sound isolationAccepted
+    · apply (Instance.checkSelectorIsolation_sound isolationAccepted
         (encodingIsolation x.1 x.2 zeroSelectors)).mp
       exact h.1
     · exact selectorGadget_project_sos1 bounds _ _ h.2
   lift_feasible {y} h := by
     constructor
-    · apply (CoreModel.checkSelectorIsolation_sound isolationAccepted
+    · apply (Instance.checkSelectorIsolation_sound isolationAccepted
         (encodingIsolation y zeroSelectors (canonicalSelector y))).mp
       exact h.1
     · exact canonicalSelector_gadget bounds y (baseBounds h.1) h.2
   project_lift _ := rfl
   objective_project {x} h := by
-    exact (CoreModel.checkSelectorIsolation_objective_sound isolationAccepted
+    exact (Instance.checkSelectorIsolation_objective_sound isolationAccepted
       (encodingIsolation x.1 x.2 zeroSelectors)).symm
   objective_lift {y} h := by
-    exact CoreModel.checkSelectorIsolation_objective_sound isolationAccepted
+    exact Instance.checkSelectorIsolation_objective_sound isolationAccepted
       (encodingIsolation y (canonicalSelector y) zeroSelectors)
   sense_eq := rfl
 
 def corePlannedSelectorSourceProblem [Fintype ι] [DecidableEq ι]
-    (model : CoreModel n)
+    (inst : Instance n)
     (encode : ((ι → Rat) × (ι → Rat)) → State n)
     (reused : Finset ι) (bounds : SelectorBounds ι) :
     Problem ((ι → Rat) × (ι → Rat)) where
   feasible pair :=
-    model.Feasible (encode pair) ∧
+    inst.Feasible (encode pair) ∧
       PlannedSelectorGadget reused bounds pair.1 pair.2
-  objective pair := model.ObjectiveValue (encode pair)
-  sense := model.sense
+  objective pair := inst.ObjectiveValue (encode pair)
+  sense := inst.sense
 
 /-- Connected correctness theorem for the SDK SOS1 algorithm.  Reused members
 remain observable model variables; only the fresh-selector tuple is allowed to
 vary inside the checked private coordinate set. -/
 def corePlannedSelectorCompression [Fintype ι] [DecidableEq ι]
-    (model : CoreModel n)
+    (inst : Instance n)
     (encode : ((ι → Rat) × (ι → Rat)) → State n)
     (reused : Finset ι) (bounds : SelectorBounds ι)
-    (isolation : CoreModel.SelectorIsolationWitness n)
-    (isolationAccepted : model.checkSelectorIsolation isolation = true)
+    (isolation : Instance.SelectorIsolationWitness n)
+    (isolationAccepted : inst.checkSelectorIsolation isolation = true)
     (encodingIsolation : EncodingRespectsIsolation encode isolation)
     (validation : PlannedSelectorValidation reused bounds
-      (fun members => model.Feasible (encode (members, zeroSelectors)))) :
+      (fun members => inst.Feasible (encode (members, zeroSelectors)))) :
     ProjectionPreserves
-      (corePlannedSelectorSourceProblem model encode reused bounds)
-      (coreSOS1TargetProblem model encode) where
+      (corePlannedSelectorSourceProblem inst encode reused bounds)
+      (coreSOS1TargetProblem inst encode) where
   project := Prod.fst
   lift members := (members, canonicalSelector members)
   project_feasible {x} h := by
-    have hbase : model.Feasible (encode (x.1, zeroSelectors)) := by
-      apply (CoreModel.checkSelectorIsolation_sound isolationAccepted
+    have hbase : inst.Feasible (encode (x.1, zeroSelectors)) := by
+      apply (Instance.checkSelectorIsolation_sound isolationAccepted
         (encodingIsolation x.1 x.2 zeroSelectors)).mp
       exact h.1
     exact ⟨hbase,
@@ -910,17 +910,17 @@ def corePlannedSelectorCompression [Fintype ι] [DecidableEq ι]
         (validation.baseBounds hbase) h.2⟩
   lift_feasible {y} h := by
     constructor
-    · apply (CoreModel.checkSelectorIsolation_sound isolationAccepted
+    · apply (Instance.checkSelectorIsolation_sound isolationAccepted
         (encodingIsolation y zeroSelectors (canonicalSelector y))).mp
       exact h.1
     · exact canonicalSelector_plannedGadget reused bounds y
         (validation.baseBounds h.1) (validation.baseReusedBinary h.1) h.2
   project_lift _ := rfl
   objective_project {x} h := by
-    exact (CoreModel.checkSelectorIsolation_objective_sound isolationAccepted
+    exact (Instance.checkSelectorIsolation_objective_sound isolationAccepted
       (encodingIsolation x.1 x.2 zeroSelectors)).symm
   objective_lift {y} h := by
-    exact CoreModel.checkSelectorIsolation_objective_sound isolationAccepted
+    exact Instance.checkSelectorIsolation_objective_sound isolationAccepted
       (encodingIsolation y (canonicalSelector y) zeroSelectors)
   sense_eq := rfl
 
