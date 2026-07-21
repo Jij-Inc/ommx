@@ -15,6 +15,10 @@
 //! side; until then this `block_on` wrapper is the single point that
 //! needs to change.
 //!
+//! Blob transfers run with four concurrent operations by default. Set
+//! `OMMX_ARTIFACT_TRANSFER_CONCURRENCY` to a positive integer to override
+//! that conservative limit for both push and pull.
+//!
 //! Both push and pull surfaces are implemented here.
 //! `pull_manifest_raw` returns the manifest body verbatim so the
 //! digest the registry computes and the digest we store locally agree
@@ -35,7 +39,7 @@
 
 use anyhow::Context;
 use docker_credential::{CredentialRetrievalError, DockerCredential};
-use futures_util::TryStreamExt;
+use futures_util::{stream, StreamExt, TryStreamExt};
 use http::HeaderValue;
 use oci_client::{
     client::{ClientConfig, ClientProtocol},
@@ -43,8 +47,61 @@ use oci_client::{
     secrets::RegistryAuth,
     Client, Reference, RegistryOperation,
 };
-use std::{env, io};
+use std::{env, io, num::NonZeroUsize};
 use tokio::runtime::{Builder as RuntimeBuilder, Runtime};
+
+const ARTIFACT_TRANSFER_CONCURRENCY_ENV: &str = "OMMX_ARTIFACT_TRANSFER_CONCURRENCY";
+const DEFAULT_ARTIFACT_TRANSFER_CONCURRENCY: usize = 4;
+
+/// Resolve the shared push/pull blob-transfer concurrency.
+pub fn blob_transfer_concurrency() -> crate::Result<NonZeroUsize> {
+    match env::var(ARTIFACT_TRANSFER_CONCURRENCY_ENV) {
+        Ok(value) => {
+            let concurrency = parse_blob_transfer_concurrency(Some(&value))?;
+            tracing::debug!(
+                concurrency = concurrency.get(),
+                variable = ARTIFACT_TRANSFER_CONCURRENCY_ENV,
+                "Using configured Artifact transfer concurrency"
+            );
+            Ok(concurrency)
+        }
+        Err(env::VarError::NotPresent) => parse_blob_transfer_concurrency(None),
+        Err(env::VarError::NotUnicode(_)) => anyhow::bail!(
+            "{ARTIFACT_TRANSFER_CONCURRENCY_ENV} must be a positive integer encoded as UTF-8"
+        ),
+    }
+}
+
+fn parse_blob_transfer_concurrency(value: Option<&str>) -> crate::Result<NonZeroUsize> {
+    match value {
+        Some(value) => value.parse::<NonZeroUsize>().with_context(|| {
+            format!("{ARTIFACT_TRANSFER_CONCURRENCY_ENV} must be a positive integer, got {value:?}")
+        }),
+        None => Ok(NonZeroUsize::new(DEFAULT_ARTIFACT_TRANSFER_CONCURRENCY)
+            .expect("default Artifact transfer concurrency must be positive")),
+    }
+}
+
+/// Apply `f` with at most `concurrency` operations in flight.
+///
+/// The returned values follow readiness order and do not preserve the input
+/// order.
+pub async fn bounded_map<I, T, O, F, Fut>(
+    items: I,
+    concurrency: NonZeroUsize,
+    f: F,
+) -> crate::Result<Vec<O>>
+where
+    I: IntoIterator<Item = T>,
+    F: FnMut(T) -> Fut,
+    Fut: std::future::Future<Output = crate::Result<O>>,
+{
+    stream::iter(items)
+        .map(f)
+        .buffer_unordered(concurrency.get())
+        .try_collect()
+        .await
+}
 
 /// Sync wrapper around [`oci_client::Client`].
 pub struct RemoteTransport {
@@ -207,39 +264,30 @@ impl RemoteTransport {
         self.auth_for(image_name, RegistryOperation::Push)
     }
 
-    /// Check whether a blob already exists in the destination repository.
-    ///
-    /// Sibling Artifact code decides whether to read a local blob before
-    /// uploading it, while this private module remains the owner of raw OCI
-    /// Distribution requests and auth behavior. The underlying `oci-client`
-    /// call performs the registry blob `HEAD` check: `404` returns `Ok(false)`,
-    /// and any other registry / transport error is propagated.
-    pub fn blob_exists(
+    /// Async blob existence check used by the bounded push pipeline.
+    pub async fn blob_exists_async(
         &self,
         image_name: &crate::artifact::ImageRef,
         digest: &str,
     ) -> crate::Result<bool> {
         let reference = to_reference(image_name);
-        self.runtime
-            .block_on(self.client.blob_exists(reference, digest))
+        self.client
+            .blob_exists(reference, digest)
+            .await
             .with_context(|| format!("Failed to check blob {digest} in {reference}"))
     }
 
-    /// Push a single blob to the registry. The caller passes the
-    /// pre-computed digest (which the SQLite Local Registry already
-    /// stores as the Local Registry key), so the registry-side digest can be
-    /// validated without re-hashing. `bytes` is moved into
-    /// `oci_client::Client::push_blob` (which takes `Vec<u8>` by
-    /// value) so blobs the caller already owns don't get cloned.
-    pub fn push_blob(
+    /// Async blob upload used by the bounded push pipeline.
+    pub async fn push_blob_async(
         &self,
         image_name: &crate::artifact::ImageRef,
         digest: &str,
         bytes: Vec<u8>,
     ) -> crate::Result<()> {
         let reference = to_reference(image_name);
-        self.runtime
-            .block_on(self.client.push_blob(reference, bytes, digest))
+        self.client
+            .push_blob(reference, bytes, digest)
+            .await
             .with_context(|| format!("Failed to push blob {digest} to {reference}"))?;
         Ok(())
     }
@@ -291,78 +339,58 @@ impl RemoteTransport {
         Ok((bytes.to_vec(), digest))
     }
 
-    /// Pull a single blob into memory. The caller passes the manifest-
-    /// declared `expected_size`; the helper validates registry-reported
-    /// `Content-Length` if present, aborts the chunk loop the moment
-    /// accumulated bytes exceed `expected_size`, and caps the initial
-    /// `Vec::with_capacity` at [`BLOB_PREALLOC_CAP_BYTES`] so a manifest
-    /// that lies about a multi-gigabyte size cannot induce an
-    /// up-front OOM before any digest check has a chance to fire. The
-    /// buffer can still grow past the cap if the actual stream
-    /// genuinely produces that many bytes (legitimate large blobs
-    /// just pay an extra realloc).
-    ///
-    /// `oci_client::Client::pull_blob_stream` verifies the digest while the
-    /// response body is consumed. Digest-verification I/O errors are marked as
-    /// invalid remote responses, while other stream I/O errors are marked as
-    /// transport failures. The caller independently verifies the collected
-    /// bytes before local persistence, and the Local Registry preserves its
-    /// own CAS invariant.
-    pub fn pull_blob_to_vec(
+    /// Pull one blob into memory for the bounded download pipeline.
+    pub async fn pull_blob_to_vec_async(
         &self,
         image_name: &crate::artifact::ImageRef,
         digest: &str,
         expected_size: u64,
     ) -> crate::Result<Vec<u8>> {
         let reference = to_reference(image_name);
-        let bytes = self
-            .runtime
-            .block_on(async {
-                let resp = self.client.pull_blob_stream(reference, digest).await?;
-                if let Some(content_length) = resp.content_length {
-                    if content_length != expected_size {
-                        return Err(crate::error!(
-                            InvalidRemoteResponse::ContentLengthMismatch {
-                                digest: digest.to_owned(),
-                                content_length,
-                                expected_size,
-                            }
-                        ));
-                    }
-                }
-                // Cap preallocation. A malicious manifest claiming
-                // `size = u64::MAX` would otherwise be reduced to
-                // `usize::MAX` and OOM on the spot; capping at a
-                // sane upper bound forces the registry to actually
-                // serve that many bytes (which the accumulated check
-                // below catches) before we allocate them.
-                let prealloc = expected_size.min(BLOB_PREALLOC_CAP_BYTES) as usize;
-                let mut buf = Vec::with_capacity(prealloc);
-                let mut accumulated: u64 = 0;
-                let mut stream = resp.stream;
-                while let Some(chunk) = stream
-                    .try_next()
-                    .await
-                    .map_err(|source| blob_stream_error(digest, source))?
-                {
-                    accumulated = accumulated.checked_add(chunk.len() as u64).ok_or_else(|| {
-                        crate::error!(InvalidRemoteResponse::SizeOverflow {
-                            digest: digest.to_owned(),
-                        })
-                    })?;
-                    if accumulated > expected_size {
-                        return Err(crate::error!(InvalidRemoteResponse::BlobTooLarge {
-                            digest: digest.to_owned(),
-                            expected_size,
-                            actual_size: accumulated,
-                        }));
-                    }
-                    buf.extend_from_slice(&chunk);
-                }
-                Ok::<_, anyhow::Error>(buf)
-            })
+        let resp = self
+            .client
+            .pull_blob_stream(reference, digest)
+            .await
             .with_context(|| format!("Failed to pull blob {digest} from {reference}"))?;
-        Ok(bytes)
+        if let Some(content_length) = resp.content_length {
+            if content_length != expected_size {
+                return Err(crate::error!(
+                    InvalidRemoteResponse::ContentLengthMismatch {
+                        digest: digest.to_owned(),
+                        content_length,
+                        expected_size,
+                    }
+                ));
+            }
+        }
+        let prealloc = expected_size.min(BLOB_PREALLOC_CAP_BYTES) as usize;
+        let mut buf = Vec::with_capacity(prealloc);
+        let mut accumulated: u64 = 0;
+        let mut stream = resp.stream;
+        while let Some(chunk) = stream
+            .try_next()
+            .await
+            .map_err(|source| blob_stream_error(digest, source))?
+        {
+            accumulated = accumulated.checked_add(chunk.len() as u64).ok_or_else(|| {
+                crate::error!(InvalidRemoteResponse::SizeOverflow {
+                    digest: digest.to_owned(),
+                })
+            })?;
+            if accumulated > expected_size {
+                return Err(crate::error!(InvalidRemoteResponse::BlobTooLarge {
+                    digest: digest.to_owned(),
+                    expected_size,
+                    actual_size: accumulated,
+                }));
+            }
+            buf.extend_from_slice(&chunk);
+        }
+        Ok(buf)
+    }
+
+    pub fn block_on<F: std::future::Future>(&self, future: F) -> F::Output {
+        self.runtime.block_on(future)
     }
 }
 
@@ -548,6 +576,77 @@ fn classify_docker_credential(
 mod tests {
     use super::*;
     use crate::artifact::{remote_error, ImageRef, RemoteArtifactError};
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
+
+    #[test]
+    fn bounded_map_limits_in_flight_operations() {
+        let runtime = RuntimeBuilder::new_current_thread()
+            .enable_time()
+            .build()
+            .unwrap();
+        let in_flight = Arc::new(AtomicUsize::new(0));
+        let maximum = Arc::new(AtomicUsize::new(0));
+
+        let output = runtime
+            .block_on(bounded_map(0..12, NonZeroUsize::new(3).unwrap(), |item| {
+                let in_flight = Arc::clone(&in_flight);
+                let maximum = Arc::clone(&maximum);
+                async move {
+                    let current = in_flight.fetch_add(1, Ordering::SeqCst) + 1;
+                    maximum.fetch_max(current, Ordering::SeqCst);
+                    tokio::time::sleep(std::time::Duration::from_millis(2)).await;
+                    in_flight.fetch_sub(1, Ordering::SeqCst);
+                    Ok(item)
+                }
+            }))
+            .unwrap();
+
+        assert_eq!(output.len(), 12);
+        assert_eq!(maximum.load(Ordering::SeqCst), 3);
+    }
+
+    #[test]
+    fn bounded_map_returns_a_concurrent_operation_error() {
+        let runtime = RuntimeBuilder::new_current_thread().build().unwrap();
+        let error = runtime
+            .block_on(bounded_map(
+                0..4,
+                NonZeroUsize::new(2).unwrap(),
+                |item| async move {
+                    anyhow::ensure!(item != 2, "blob sha256:failed failed");
+                    Ok(item)
+                },
+            ))
+            .unwrap_err();
+
+        assert!(error.to_string().contains("sha256:failed"));
+    }
+
+    #[test]
+    fn artifact_transfer_concurrency_uses_conservative_default() {
+        assert_eq!(
+            parse_blob_transfer_concurrency(None).unwrap().get(),
+            DEFAULT_ARTIFACT_TRANSFER_CONCURRENCY
+        );
+    }
+
+    #[test]
+    fn artifact_transfer_concurrency_accepts_positive_override() {
+        assert_eq!(parse_blob_transfer_concurrency(Some("8")).unwrap().get(), 8);
+    }
+
+    #[test]
+    fn artifact_transfer_concurrency_rejects_invalid_override() {
+        for value in ["", "0", "-1", "four"] {
+            let error = parse_blob_transfer_concurrency(Some(value)).unwrap_err();
+            assert!(error
+                .to_string()
+                .contains(ARTIFACT_TRANSFER_CONCURRENCY_ENV));
+        }
+    }
 
     fn assert_basic(auth: Option<RegistryAuth>, expected_user: &str, expected_pass: &str) {
         match auth {
