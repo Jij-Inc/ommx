@@ -367,7 +367,7 @@ rows.  The following exact semantic layer specifies the forward algorithm used
 by the SDK: emit the upper side only for a positive upper bound, emit the lower
 side only for a negative lower bound, and otherwise rely on the corresponding
 bound implication.  The denotation is generic in `body`, so the theorem is not
-limited to the affine syntax of `CoreModel`.
+limited to the affine syntax of `Instance`.
 -/
 
 namespace IndicatorBigM

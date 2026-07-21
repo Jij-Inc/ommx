@@ -15,14 +15,14 @@ structure Problem (α : Type*) where
   objective : α → Rat
   sense : OptimizationSense
 
-namespace CoreModel
+namespace Instance
 
-def asProblem (model : CoreModel n) : Problem (State n) where
-  feasible := model.Feasible
-  objective := model.ObjectiveValue
-  sense := model.sense
+def asProblem (inst : Instance n) : Problem (State n) where
+  feasible := inst.Feasible
+  objective := inst.ObjectiveValue
+  sense := inst.sense
 
-end CoreModel
+end Instance
 
 /-- Exact equivalence in one state space. -/
 structure IdentityPreserves {α : Type*} (source target : Problem α) : Prop where

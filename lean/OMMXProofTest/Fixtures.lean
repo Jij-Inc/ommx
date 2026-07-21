@@ -457,13 +457,13 @@ def selectorIsolationLinear : LinearSystem 2 where
   inequalities := fun i => nomatch i
   equalities := fun i => nomatch i
 
-def selectorIsolationBase : CoreModel 2 where
+def selectorIsolationBase : Instance 2 where
   domains := selectorIsolationDomains
   linear := selectorIsolationLinear
   objective := twoVarAffine 1 0 0
   sense := .minimize
 
-def selectorIsolationWitness : CoreModel.SelectorIsolationWitness 2 where
+def selectorIsolationWitness : Instance.SelectorIsolationWitness 2 where
   privateSelectors := selectorPrivateExample
 
 example : selectorIsolationBase.checkSelectorIsolation
@@ -471,7 +471,7 @@ example : selectorIsolationBase.checkSelectorIsolation
 
 /-- The same witness is rejected as soon as the base objective observes the
 claimed private selector coordinate. -/
-def selectorLeakingBase : CoreModel 2 :=
+def selectorLeakingBase : Instance 2 :=
   { selectorIsolationBase with objective := twoVarAffine 1 1 0 }
 
 example : selectorLeakingBase.checkSelectorIsolation
@@ -492,7 +492,7 @@ theorem selector_leak_changes_objective :
     · rfl
     · exact False.elim (houtside (by simp [selectorPrivateExample]))
   · norm_num [selectorLeakingBase, selectorIsolationBase,
-      CoreModel.ObjectiveValue, twoVarAffine, Affine.eval]
+      Instance.ObjectiveValue, twoVarAffine, Affine.eval]
 
 def selectorPairEncoding
     (pair : (Fin 1 → Rat) × (Fin 1 → Rat)) : state 2 :=
