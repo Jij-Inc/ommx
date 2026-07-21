@@ -22,10 +22,10 @@ impl Instance {
         if !self.constraints().is_empty() {
             bail!("The instance still has constraints. Use penalty method or other way to translate into unconstrained problem first.");
         }
-        let non_standard = self.required_capabilities();
-        if !non_standard.is_empty() {
+        let special_constraint_kinds = self.active_special_constraint_kinds();
+        if !special_constraint_kinds.is_empty() {
             bail!(
-                "QUBO format does not support these constraint types: {non_standard:?}. Convert via penalty method or equivalent first."
+                "QUBO format does not support these special constraint types: {special_constraint_kinds:?}. Lower or convert them via an appropriate method first."
             );
         }
         if !self
@@ -72,10 +72,10 @@ impl Instance {
         if !self.constraints().is_empty() {
             bail!("The instance still has constraints. Use penalty method or other way to translate into unconstrained problem first.");
         }
-        let non_standard = self.required_capabilities();
-        if !non_standard.is_empty() {
+        let special_constraint_kinds = self.active_special_constraint_kinds();
+        if !special_constraint_kinds.is_empty() {
             bail!(
-                "HUBO format does not support these constraint types: {non_standard:?}. Convert via penalty method or equivalent first."
+                "HUBO format does not support these special constraint types: {special_constraint_kinds:?}. Lower or convert them via an appropriate method first."
             );
         }
         if !self
