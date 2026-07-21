@@ -10,22 +10,22 @@ separately verifies that every member has a binary domain.
 
 namespace OMMXProof
 
-def BinaryOn (members : Finset (Fin n)) (assignment : Assignment n) : Prop :=
-  ∀ i ∈ members, VariableDomain.KindHolds .binary (assignment i)
+def BinaryOn (members : Finset (Fin n)) (state : State n) : Prop :=
+  ∀ i ∈ members, VariableDomain.KindHolds .binary (state i)
 
-def support (members : Finset (Fin n)) (assignment : Assignment n) : Finset (Fin n) :=
-  members.filter fun i => assignment i ≠ 0
+def support (members : Finset (Fin n)) (state : State n) : Finset (Fin n) :=
+  members.filter fun i => state i ≠ 0
 
-def ExactlyOne (members : Finset (Fin n)) (assignment : Assignment n) : Prop :=
-  (support members assignment).card = 1
+def ExactlyOne (members : Finset (Fin n)) (state : State n) : Prop :=
+  (support members state).card = 1
 
 /-- Canonical normalized equality `sum xᵢ - 1 = 0`. -/
 def oneHotExpr (members : Finset (Fin n)) : Affine n where
   coeff := fun i => if i ∈ members then 1 else 0
   constant := -1
 
-theorem eval_oneHotExpr (members : Finset (Fin n)) (assignment : Assignment n) :
-    (oneHotExpr members).eval assignment = ∑ i ∈ members, assignment i - 1 := by
+theorem eval_oneHotExpr (members : Finset (Fin n)) (state : State n) :
+    (oneHotExpr members).eval state = ∑ i ∈ members, state i - 1 := by
   classical
   simp [oneHotExpr, Affine.eval, sub_eq_add_neg]
 
@@ -54,28 +54,28 @@ def checkOneHot (domains : Fin n → VariableDomain) (source : LinearConstraint 
     source.expr.same (Affine.scale draft.scale (oneHotExpr draft.members))
 
 theorem binaryOn_of_domains {domains : Fin n → VariableDomain}
-    {members : Finset (Fin n)} {assignment : Assignment n}
+    {members : Finset (Fin n)} {state : State n}
     (hbinary : domainsBinaryOn domains members)
-    (hdomains : ∀ i, (domains i).Holds (assignment i)) :
-    BinaryOn members assignment := by
+    (hdomains : ∀ i, (domains i).Holds (state i)) :
+    BinaryOn members state := by
   intro i hi
   have hkind := (hdomains i).1
   rw [hbinary i hi] at hkind
   exact hkind
 
 theorem binary_sum_eq_support_card (members : Finset (Fin n))
-    (assignment : Assignment n) (hbinary : BinaryOn members assignment) :
-    ∑ i ∈ members, assignment i = ((support members assignment).card : Rat) := by
+    (state : State n) (hbinary : BinaryOn members state) :
+    ∑ i ∈ members, state i = ((support members state).card : Rat) := by
   classical
   induction members using Finset.induction_on with
   | empty => simp [support]
   | @insert index members hnotmem ih =>
-    have htail : BinaryOn members assignment := by
+    have htail : BinaryOn members state := by
       intro i hi
       exact hbinary i (Finset.mem_insert_of_mem hi)
     rcases hbinary index (Finset.mem_insert_self index members) with hzero | hone
     · have hsupport :
-          support (insert index members) assignment = support members assignment := by
+          support (insert index members) state = support members state := by
         ext i
         simp only [support, Finset.mem_filter, Finset.mem_insert]
         constructor
@@ -86,8 +86,8 @@ theorem binary_sum_eq_support_card (members : Finset (Fin n))
           exact ⟨Or.inr hi, hne⟩
       rw [Finset.sum_insert hnotmem, hzero, zero_add, ih htail, hsupport]
     · have hsupport :
-          support (insert index members) assignment =
-            insert index (support members assignment) := by
+          support (insert index members) state =
+            insert index (support members state) := by
         ext i
         simp only [support, Finset.mem_filter, Finset.mem_insert]
         constructor
@@ -97,7 +97,7 @@ theorem binary_sum_eq_support_card (members : Finset (Fin n))
         · rintro (hi | ⟨hi, hne⟩)
           · exact ⟨Or.inl hi, by subst i; simp [hone]⟩
           · exact ⟨Or.inr hi, hne⟩
-      have hnotSupport : index ∉ support members assignment := by
+      have hnotSupport : index ∉ support members state := by
         intro hmem
         exact hnotmem (Finset.mem_filter.mp hmem).1
       rw [Finset.sum_insert hnotmem, hone, ih htail, hsupport,
@@ -106,18 +106,18 @@ theorem binary_sum_eq_support_card (members : Finset (Fin n))
       ring
 
 theorem oneHot_iff_exactlyOne (members : Finset (Fin n))
-    (assignment : Assignment n) (hbinary : BinaryOn members assignment) :
-    (∑ i ∈ members, assignment i = 1) ↔ ExactlyOne members assignment := by
-  rw [binary_sum_eq_support_card members assignment hbinary]
+    (state : State n) (hbinary : BinaryOn members state) :
+    (∑ i ∈ members, state i = 1) ↔ ExactlyOne members state := by
+  rw [binary_sum_eq_support_card members state hbinary]
   simp [ExactlyOne]
 
 theorem checkOneHot_sound {domains : Fin n → VariableDomain}
     {source : LinearConstraint n} {draft : OneHotDraft n}
     (hcheck : checkOneHot domains source draft = true)
-    {assignment : Assignment n}
-    (hdomains : ∀ i, (domains i).Holds (assignment i)) :
-    (source.Holds assignment ↔
-      (SpecialConstraint.oneHot draft.members).Holds assignment) := by
+    {state : State n}
+    (hdomains : ∀ i, (domains i).Holds (state i)) :
+    (source.Holds state ↔
+      (SpecialConstraint.oneHot draft.members).Holds state) := by
   have houter := Bool.and_eq_true_iff.mp hcheck
   have hconditions : draft.members.Nonempty ∧
       draft.scale ≠ 0 ∧
@@ -134,7 +134,7 @@ theorem checkOneHot_sound {domains : Fin n → VariableDomain}
   simp only [SpecialConstraint.Holds]
   constructor
   · intro hzero
-    have hsum : ∑ i ∈ draft.members, assignment i = 1 := by
+    have hsum : ∑ i ∈ draft.members, state i = 1 := by
       apply sub_eq_zero.mp
       exact (mul_eq_zero.mp hzero).resolve_left hscale
     exact ⟨hbinary, hsum⟩
@@ -145,19 +145,19 @@ theorem checkOneHot_sound {domains : Fin n → VariableDomain}
 theorem oneHot_replace_preserves {domains : Fin n → VariableDomain}
     {source : LinearConstraint n} {draft : OneHotDraft n}
     (hcheck : checkOneHot domains source draft = true)
-    (base : Assignment n → Prop) (objective : Assignment n → Rat)
+    (base : State n → Prop) (objective : State n → Rat)
     (sense : OptimizationSense)
-    (baseDomains : ∀ {assignment}, base assignment →
-      ∀ i, (domains i).Holds (assignment i)) :
+    (baseDomains : ∀ {state}, base state →
+      ∀ i, (domains i).Holds (state i)) :
     IdentityPreserves
-      (replaceProblem base (fun assignment => source.Holds assignment)
+      (replaceProblem base (fun state => source.Holds state)
         objective sense)
       (replaceProblem base
-        (fun assignment =>
-          (SpecialConstraint.oneHot draft.members).Holds assignment)
+        (fun state =>
+          (SpecialConstraint.oneHot draft.members).Holds state)
         objective sense) := by
   apply replace_preserves
-  intro assignment hbase
+  intro state hbase
   exact checkOneHot_sound hcheck (baseDomains hbase)
 
 end OMMXProof

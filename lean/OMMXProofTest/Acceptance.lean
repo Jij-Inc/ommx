@@ -42,8 +42,8 @@ example : checkEqualityIndicatorReplace indicatorDomains indicatorEqualitySurviv
     indicatorEqualitySource indicatorEqualityBody 1 .activeOnOne
       oneSidedEqualityWitness = false := by
   native_decide
-example (assignment : Assignment 2) :
-    IndicatorBigM.LowerSide sdkIndicatorBody 1 0 assignment := by
+example (state : state 2) :
+    IndicatorBigM.LowerSide sdkIndicatorBody 1 0 state := by
   simp [IndicatorBigM.LowerSide]
 
 end OMMXProof.Test

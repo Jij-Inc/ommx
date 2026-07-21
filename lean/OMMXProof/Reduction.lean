@@ -17,17 +17,17 @@ structure Problem (α : Type*) where
 
 namespace CoreModel
 
-def asProblem (model : CoreModel n) : Problem (Assignment n) where
+def asProblem (model : CoreModel n) : Problem (State n) where
   feasible := model.Feasible
   objective := model.ObjectiveValue
   sense := model.sense
 
 end CoreModel
 
-/-- Exact equivalence in one assignment space. -/
+/-- Exact equivalence in one state space. -/
 structure IdentityPreserves {α : Type*} (source target : Problem α) : Prop where
-  feasible_iff : ∀ assignment, source.feasible assignment ↔ target.feasible assignment
-  objective_eq : ∀ assignment, source.objective assignment = target.objective assignment
+  feasible_iff : ∀ state, source.feasible state ↔ target.feasible state
+  objective_eq : ∀ state, source.objective state = target.objective state
   sense_eq : source.sense = target.sense
 
 namespace IdentityPreserves
@@ -40,10 +40,10 @@ theorem trans {source middle target : Problem α}
     (second : IdentityPreserves middle target) :
     IdentityPreserves source target := by
   constructor
-  · intro assignment
-    exact (first.feasible_iff assignment).trans (second.feasible_iff assignment)
-  · intro assignment
-    exact (first.objective_eq assignment).trans (second.objective_eq assignment)
+  · intro state
+    exact (first.feasible_iff state).trans (second.feasible_iff state)
+  · intro state
+    exact (first.objective_eq state).trans (second.objective_eq state)
   · exact first.sense_eq.trans second.sense_eq
 
 end IdentityPreserves
@@ -51,15 +51,15 @@ end IdentityPreserves
 /-- Directed feasible-set implication, used for augmentation and relaxation
 dominance statements that are intentionally not equivalences. -/
 def FeasibleImplies {α : Type*} (source target : Problem α) : Prop :=
-  ∀ {assignment}, source.feasible assignment → target.feasible assignment
+  ∀ {state}, source.feasible state → target.feasible state
 
 /-- Infeasibility is a proposition about one problem, not a preservation mode. -/
 def Infeasible {α : Type*} (problem : Problem α) : Prop :=
-  ¬ ∃ assignment, problem.feasible assignment
+  ¬ ∃ state, problem.feasible state
 
 /-- `source` is an extended problem and `target` its reduced projection.
 
-Only a section law on feasible target assignments is required. Requiring
+Only a section law on feasible target states is required. Requiring
 `lift (project x) = x` would incorrectly reject valid compression with
 noncanonical private auxiliaries. -/
 structure ProjectionPreserves {α β : Type*}
@@ -120,8 +120,8 @@ theorem feasible_nonempty_iff {source : Problem α} {target : Problem β}
     exact ⟨preserves.lift y, preserves.lift_feasible hy⟩
 
 def objectiveRange (problem : Problem α) : Set Rat :=
-  {value | ∃ assignment, problem.feasible assignment ∧
-    problem.objective assignment = value}
+  {value | ∃ state, problem.feasible state ∧
+    problem.objective state = value}
 
 theorem objectiveRange_eq {source : Problem α} {target : Problem β}
     (preserves : ProjectionPreserves source target) :
@@ -139,37 +139,37 @@ end ProjectionPreserves
 
 /-- Add one semantic constraint without removing any representation. -/
 def augment (problem : Problem α) (constraint : α → Prop) : Problem α where
-  feasible assignment := problem.feasible assignment ∧ constraint assignment
+  feasible state := problem.feasible state ∧ constraint state
   objective := problem.objective
   sense := problem.sense
 
 theorem augment_preserves (problem : Problem α) (constraint : α → Prop)
-    (implied : ∀ {assignment}, problem.feasible assignment → constraint assignment) :
+    (implied : ∀ {state}, problem.feasible state → constraint state) :
     IdentityPreserves problem (augment problem constraint) := by
   constructor
-  · intro assignment
+  · intro state
     exact ⟨fun h => ⟨h, implied h⟩, And.left⟩
   · simp [augment]
   · rfl
 
-/-- A common assignment space with a surviving base and one replaceable
+/-- A common state space with a surviving base and one replaceable
 constraint. The base is the only context available to a replacement proof. -/
 def replaceProblem (base oldConstraint : α → Prop)
     (objective : α → Rat) (sense : OptimizationSense) : Problem α where
-  feasible assignment := base assignment ∧ oldConstraint assignment
+  feasible state := base state ∧ oldConstraint state
   objective := objective
   sense := sense
 
 theorem replace_preserves
     (base oldConstraint newConstraint : α → Prop)
     (objective : α → Rat) (sense : OptimizationSense)
-    (equivalent : ∀ {assignment},
-      base assignment → (oldConstraint assignment ↔ newConstraint assignment)) :
+    (equivalent : ∀ {state},
+      base state → (oldConstraint state ↔ newConstraint state)) :
     IdentityPreserves
       (replaceProblem base oldConstraint objective sense)
       (replaceProblem base newConstraint objective sense) := by
   constructor
-  · intro assignment
+  · intro state
     simp only [replaceProblem]
     exact and_congr_right fun hbase => equivalent hbase
   · simp [replaceProblem]

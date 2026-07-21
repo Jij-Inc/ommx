@@ -13,13 +13,13 @@ history to this independent plan remains a separate future refinement theorem.
 
 namespace OMMXProof
 
-def SOS1Card (members : Finset (Fin n)) (assignment : Assignment n) : Prop :=
-  (support members assignment).card ≤ 1
+def SOS1Card (members : Finset (Fin n)) (state : State n) : Prop :=
+  (support members state).card ≤ 1
 
 theorem sos1Card_iff_special (members : Finset (Fin n))
-    (assignment : Assignment n) :
-    SOS1Card members assignment ↔
-      (SpecialConstraint.sos1 members).Holds assignment := by
+    (state : State n) :
+    SOS1Card members state ↔
+      (SpecialConstraint.sos1 members).Holds state := by
   classical
   rw [SOS1Card, Finset.card_le_one]
   simp only [SpecialConstraint.Holds, support, Finset.mem_filter]
@@ -30,28 +30,28 @@ theorem sos1Card_iff_special (members : Finset (Fin n))
     exact h i hi.1 j hj.1 hi.2 hj.2
 
 theorem binary_cardinality_sos1 (members : Finset (Fin n))
-    (assignment : Assignment n) (hbinary : BinaryOn members assignment) :
-    (∑ i ∈ members, assignment i ≤ 1) ↔ SOS1Card members assignment := by
-  rw [binary_sum_eq_support_card members assignment hbinary]
+    (state : State n) (hbinary : BinaryOn members state) :
+    (∑ i ∈ members, state i ≤ 1) ↔ SOS1Card members state := by
+  rw [binary_sum_eq_support_card members state hbinary]
   simp [SOS1Card]
 
 /-- Unlike OneHot equality scaling, a scaled `≤` cardinality row requires a
 strictly positive scalar so that its direction is preserved. -/
 theorem scaledBinaryCardinality_sos1 (members : Finset (Fin n))
-    (assignment : Assignment n) (hbinary : BinaryOn members assignment)
+    (state : State n) (hbinary : BinaryOn members state)
     (scalar : Rat) (hpositive : 0 < scalar) :
-    (scalar * ((∑ i ∈ members, assignment i) - 1) ≤ 0) ↔
-      SOS1Card members assignment := by
-  rw [← binary_cardinality_sos1 members assignment hbinary]
+    (scalar * ((∑ i ∈ members, state i) - 1) ≤ 0) ↔
+      SOS1Card members state := by
+  rw [← binary_cardinality_sos1 members state hbinary]
   constructor
   · intro h
     have hmul :
-        scalar * ((∑ i ∈ members, assignment i) - 1) ≤ scalar * 0 := by
+        scalar * ((∑ i ∈ members, state i) - 1) ≤ scalar * 0 := by
       simpa using h
     have := le_of_mul_le_mul_left hmul hpositive
     linarith
   · intro h
-    have hdiff : (∑ i ∈ members, assignment i) - 1 ≤ 0 := by linarith
+    have hdiff : (∑ i ∈ members, state i) - 1 ≤ 0 := by linarith
     exact mul_nonpos_of_nonneg_of_nonpos (le_of_lt hpositive) hdiff
 
 structure BinaryCardinalitySOS1Draft (n : Nat) where
@@ -70,10 +70,10 @@ theorem checkBinaryCardinalitySOS1_sound
     {domains : Fin n → VariableDomain} {source : LinearConstraint n}
     {draft : BinaryCardinalitySOS1Draft n}
     (hcheck : checkBinaryCardinalitySOS1 domains source draft = true)
-    {assignment : Assignment n}
-    (hdomains : ∀ i, (domains i).Holds (assignment i)) :
-    (source.Holds assignment ↔
-      (SpecialConstraint.sos1 draft.members).Holds assignment) := by
+    {state : State n}
+    (hdomains : ∀ i, (domains i).Holds (state i)) :
+    (source.Holds state ↔
+      (SpecialConstraint.sos1 draft.members).Holds state) := by
   have houter := Bool.and_eq_true_iff.mp hcheck
   have hconditions : draft.members.Nonempty ∧
       0 < draft.scale ∧
@@ -88,7 +88,7 @@ theorem checkBinaryCardinalitySOS1_sound
   have hbinary := binaryOn_of_domains hbinaryDomains hdomains
   simp only [LinearConstraint.Holds, hsense]
   rw [hsource, Affine.eval_scale, eval_oneHotExpr,
-    scaledBinaryCardinality_sos1 draft.members assignment hbinary draft.scale hpositive,
+    scaledBinaryCardinality_sos1 draft.members state hbinary draft.scale hpositive,
     sos1Card_iff_special]
 
 /-! ## Executable selector-isolation contract
@@ -100,9 +100,9 @@ is restrictive, a linear/special constraint observes it, or the objective has
 a nonzero coefficient.
 -/
 
-/-- Two assignments agree on every coordinate other than `privateSet`. -/
+/-- Two states agree on every coordinate other than `privateSet`. -/
 def AgreeOutside (privateSet : Finset (Fin n))
-    (lhs rhs : Assignment n) : Prop :=
+    (lhs rhs : State n) : Prop :=
   ∀ i, i ∉ privateSet → lhs i = rhs i
 
 namespace VariableDomain
@@ -149,7 +149,7 @@ instance (expr : Affine n) (privateSet : Finset (Fin n)) :
   infer_instance
 
 theorem eval_eq_of_independentOf {expr : Affine n}
-    {privateSet : Finset (Fin n)} {lhs rhs : Assignment n}
+    {privateSet : Finset (Fin n)} {lhs rhs : State n}
     (hindependent : expr.IndependentOf privateSet)
     (hagree : AgreeOutside privateSet lhs rhs) :
     expr.eval lhs = expr.eval rhs := by
@@ -180,7 +180,7 @@ def IndependentOf (system : LinearSystem n)
   ∀ i ∈ privateSet, system.IndependentAt i
 
 theorem feasible_iff_of_independentOf {system : LinearSystem n}
-    {privateSet : Finset (Fin n)} {lhs rhs : Assignment n}
+    {privateSet : Finset (Fin n)} {lhs rhs : State n}
     (hindependent : system.IndependentOf privateSet)
     (hagree : AgreeOutside privateSet lhs rhs) :
     system.Feasible lhs ↔ system.Feasible rhs := by
@@ -219,7 +219,7 @@ def IndependentOf (constraint : LinearConstraint n)
   constraint.expr.IndependentOf privateSet
 
 theorem holds_iff_of_independentOf {constraint : LinearConstraint n}
-    {privateSet : Finset (Fin n)} {lhs rhs : Assignment n}
+    {privateSet : Finset (Fin n)} {lhs rhs : State n}
     (hindependent : constraint.IndependentOf privateSet)
     (hagree : AgreeOutside privateSet lhs rhs) :
     constraint.Holds lhs ↔ constraint.Holds rhs := by
@@ -262,7 +262,7 @@ instance (constraint : SpecialConstraint n) (privateSet : Finset (Fin n)) :
   infer_instance
 
 private theorem agree_on_members {members privateSet : Finset (Fin n)}
-    {lhs rhs : Assignment n}
+    {lhs rhs : State n}
     (hindependent : ∀ i ∈ privateSet, i ∉ members)
     (hagree : AgreeOutside privateSet lhs rhs) :
     ∀ i ∈ members, lhs i = rhs i := by
@@ -272,7 +272,7 @@ private theorem agree_on_members {members privateSet : Finset (Fin n)}
   exact hindependent i hiprivate himember
 
 theorem holds_iff_of_independentOf {constraint : SpecialConstraint n}
-    {privateSet : Finset (Fin n)} {lhs rhs : Assignment n}
+    {privateSet : Finset (Fin n)} {lhs rhs : State n}
     (hindependent : constraint.IndependentOf privateSet)
     (hagree : AgreeOutside privateSet lhs rhs) :
     constraint.Holds lhs ↔ constraint.Holds rhs := by
@@ -386,7 +386,7 @@ theorem independentAt_of_selectorIsolated {model : CoreModel n}
 theorem feasible_iff_of_selectorIsolated {model : CoreModel n}
     {witness : SelectorIsolationWitness n}
     (hisolated : model.SelectorIsolated witness)
-    {lhs rhs : Assignment n}
+    {lhs rhs : State n}
     (hagree : AgreeOutside witness.privateSelectors lhs rhs) :
     model.Feasible lhs ↔ model.Feasible rhs := by
   have hindependent (i : Fin n) (hi : i ∈ witness.privateSelectors) :=
@@ -427,7 +427,7 @@ theorem feasible_iff_of_selectorIsolated {model : CoreModel n}
 theorem objective_eq_of_selectorIsolated {model : CoreModel n}
     {witness : SelectorIsolationWitness n}
     (hisolated : model.SelectorIsolated witness)
-    {lhs rhs : Assignment n}
+    {lhs rhs : State n}
     (hagree : AgreeOutside witness.privateSelectors lhs rhs) :
     model.ObjectiveValue lhs = model.ObjectiveValue rhs := by
   apply Affine.eval_eq_of_independentOf
@@ -438,7 +438,7 @@ theorem objective_eq_of_selectorIsolated {model : CoreModel n}
 theorem checkSelectorIsolation_sound {model : CoreModel n}
     {witness : SelectorIsolationWitness n}
     (hcheck : checkSelectorIsolation model witness = true)
-    {lhs rhs : Assignment n}
+    {lhs rhs : State n}
     (hagree : AgreeOutside witness.privateSelectors lhs rhs) :
     model.Feasible lhs ↔ model.Feasible rhs := by
   apply feasible_iff_of_selectorIsolated
@@ -448,7 +448,7 @@ theorem checkSelectorIsolation_sound {model : CoreModel n}
 theorem checkSelectorIsolation_objective_sound {model : CoreModel n}
     {witness : SelectorIsolationWitness n}
     (hcheck : checkSelectorIsolation model witness = true)
-    {lhs rhs : Assignment n}
+    {lhs rhs : State n}
     (hagree : AgreeOutside witness.privateSelectors lhs rhs) :
     model.ObjectiveValue lhs = model.ObjectiveValue rhs := by
   apply objective_eq_of_selectorIsolated
@@ -457,31 +457,31 @@ theorem checkSelectorIsolation_objective_sound {model : CoreModel n}
 
 end CoreModel
 
-def GenericBinaryOn (members : Finset ι) (assignment : ι → Rat) : Prop :=
-  ∀ i ∈ members, VariableDomain.KindHolds .binary (assignment i)
+def GenericBinaryOn (members : Finset ι) (state : ι → Rat) : Prop :=
+  ∀ i ∈ members, VariableDomain.KindHolds .binary (state i)
 
 def genericSupport [DecidableEq ι]
-    (members : Finset ι) (assignment : ι → Rat) : Finset ι :=
-  members.filter fun i => assignment i ≠ 0
+    (members : Finset ι) (state : ι → Rat) : Finset ι :=
+  members.filter fun i => state i ≠ 0
 
 def GenericSOS1 [Fintype ι] [DecidableEq ι] (members : ι → Rat) : Prop :=
   (genericSupport Finset.univ members).card ≤ 1
 
 theorem generic_binary_sum_eq_support_card [DecidableEq ι]
-    (members : Finset ι) (assignment : ι → Rat)
-    (hbinary : GenericBinaryOn members assignment) :
-    ∑ i ∈ members, assignment i = ((genericSupport members assignment).card : Rat) := by
+    (members : Finset ι) (state : ι → Rat)
+    (hbinary : GenericBinaryOn members state) :
+    ∑ i ∈ members, state i = ((genericSupport members state).card : Rat) := by
   classical
   induction members using Finset.induction_on with
   | empty => simp [genericSupport]
   | @insert index rest hnotmem ih =>
-    have htail : GenericBinaryOn rest assignment := by
+    have htail : GenericBinaryOn rest state := by
       intro i hi
       exact hbinary i (Finset.mem_insert_of_mem hi)
     rcases hbinary index (Finset.mem_insert_self index rest) with hzero | hone
     · have hsupport :
-          genericSupport (insert index rest) assignment =
-            genericSupport rest assignment := by
+          genericSupport (insert index rest) state =
+            genericSupport rest state := by
         ext i
         simp only [genericSupport, Finset.mem_filter, Finset.mem_insert]
         constructor
@@ -492,8 +492,8 @@ theorem generic_binary_sum_eq_support_card [DecidableEq ι]
           exact ⟨Or.inr hi, hne⟩
       rw [Finset.sum_insert hnotmem, hzero, zero_add, ih htail, hsupport]
     · have hsupport :
-          genericSupport (insert index rest) assignment =
-            insert index (genericSupport rest assignment) := by
+          genericSupport (insert index rest) state =
+            insert index (genericSupport rest state) := by
         ext i
         simp only [genericSupport, Finset.mem_filter, Finset.mem_insert]
         constructor
@@ -503,7 +503,7 @@ theorem generic_binary_sum_eq_support_card [DecidableEq ι]
         · rintro (hi | ⟨hi, hne⟩)
           · exact ⟨Or.inl hi, by subst i; simp [hone]⟩
           · exact ⟨Or.inr hi, hne⟩
-      have hnotSupport : index ∉ genericSupport rest assignment := by
+      have hnotSupport : index ∉ genericSupport rest state := by
         intro hmem
         exact hnotmem (Finset.mem_filter.mp hmem).1
       rw [Finset.sum_insert hnotmem, hone, ih htail, hsupport,
@@ -600,7 +600,7 @@ def sos1TargetProblem [Fintype ι] [DecidableEq ι]
   sense := sense
 
 /-- In the generic layer, selector isolation is encoded by construction:
-`base` and `objective` cannot observe the private selector assignment. -/
+`base` and `objective` cannot observe the private selector state. -/
 def selectorCompression [Fintype ι] [DecidableEq ι]
     (bounds : SelectorBounds ι) (base : (ι → Rat) → Prop)
     (objective : (ι → Rat) → Rat) (sense : OptimizationSense)
@@ -805,7 +805,7 @@ def zeroSelectors (_ : ι) : Rat := 0
 
 def coreSelectorSourceProblem [Fintype ι] [DecidableEq ι]
     (model : CoreModel n)
-    (encode : ((ι → Rat) × (ι → Rat)) → Assignment n)
+    (encode : ((ι → Rat) × (ι → Rat)) → State n)
     (bounds : SelectorBounds ι) :
     Problem ((ι → Rat) × (ι → Rat)) where
   feasible pair := model.Feasible (encode pair) ∧
@@ -815,7 +815,7 @@ def coreSelectorSourceProblem [Fintype ι] [DecidableEq ι]
 
 def coreSOS1TargetProblem [Fintype ι] [DecidableEq ι]
     (model : CoreModel n)
-    (encode : ((ι → Rat) × (ι → Rat)) → Assignment n) :
+    (encode : ((ι → Rat) × (ι → Rat)) → State n) :
     Problem (ι → Rat) where
   feasible members :=
     model.Feasible (encode (members, zeroSelectors)) ∧ GenericSOS1 members
@@ -825,7 +825,7 @@ def coreSOS1TargetProblem [Fintype ι] [DecidableEq ι]
 /-- The encoding may vary only the coordinates named by the isolation witness
 when its private selector tuple changes. -/
 def EncodingRespectsIsolation {ι : Type*}
-    (encode : ((ι → Rat) × (ι → Rat)) → Assignment n)
+    (encode : ((ι → Rat) × (ι → Rat)) → State n)
     (witness : CoreModel.SelectorIsolationWitness n) : Prop :=
   ∀ members selectors selectors',
     AgreeOutside witness.privateSelectors
@@ -838,7 +838,7 @@ private selectors and the complete two-sided link gadget
 mixed reuse and omitted-link plan. -/
 def coreSelectorCompression [Fintype ι] [DecidableEq ι]
     (model : CoreModel n)
-    (encode : ((ι → Rat) × (ι → Rat)) → Assignment n)
+    (encode : ((ι → Rat) × (ι → Rat)) → State n)
     (bounds : SelectorBounds ι)
     (isolation : CoreModel.SelectorIsolationWitness n)
     (isolationAccepted : model.checkSelectorIsolation isolation = true)
@@ -874,7 +874,7 @@ def coreSelectorCompression [Fintype ι] [DecidableEq ι]
 
 def corePlannedSelectorSourceProblem [Fintype ι] [DecidableEq ι]
     (model : CoreModel n)
-    (encode : ((ι → Rat) × (ι → Rat)) → Assignment n)
+    (encode : ((ι → Rat) × (ι → Rat)) → State n)
     (reused : Finset ι) (bounds : SelectorBounds ι) :
     Problem ((ι → Rat) × (ι → Rat)) where
   feasible pair :=
@@ -888,7 +888,7 @@ remain observable model variables; only the fresh-selector tuple is allowed to
 vary inside the checked private coordinate set. -/
 def corePlannedSelectorCompression [Fintype ι] [DecidableEq ι]
     (model : CoreModel n)
-    (encode : ((ι → Rat) × (ι → Rat)) → Assignment n)
+    (encode : ((ι → Rat) × (ι → Rat)) → State n)
     (reused : Finset ι) (bounds : SelectorBounds ι)
     (isolation : CoreModel.SelectorIsolationWitness n)
     (isolationAccepted : model.checkSelectorIsolation isolation = true)

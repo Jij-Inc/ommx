@@ -44,10 +44,10 @@ theorem same_sound {lhs rhs : LinearConstraint n} (hcheck : same lhs rhs = true)
       rfl
 
 theorem substitute_holds_iff {constraint : LinearConstraint n} {index : Fin n}
-    {value : Rat} {assignment : Assignment n}
-    (hvalue : assignment index = value) :
-    (constraint.substitute index value).Holds assignment ↔
-      constraint.Holds assignment := by
+    {value : Rat} {state : State n}
+    (hvalue : state index = value) :
+    (constraint.substitute index value).Holds state ↔
+      constraint.Holds state := by
   cases constraint with
   | mk expr sense =>
     cases sense <;> simp [substitute, Holds, Affine.eval_substitute hvalue]
@@ -67,44 +67,44 @@ def branchSystem (surviving : LinearSystem n) (trigger : Fin n) (value : Rat) :
     surviving.equalities
 
 theorem branchSystem_feasible {surviving : LinearSystem n} {trigger : Fin n}
-    {value : Rat} {assignment : Assignment n}
-    (hsurviving : surviving.Feasible assignment)
-    (hvalue : assignment trigger = value) :
-    (branchSystem surviving trigger value).Feasible assignment := by
+    {value : Rat} {state : State n}
+    (hsurviving : surviving.Feasible state)
+    (hvalue : state trigger = value) :
+    (branchSystem surviving trigger value).Feasible state := by
   constructor
   · exact hsurviving.1
   · intro index
     refine Fin.cases ?_ (fun i => hsurviving.2 i) index
     have hconstant :
-        ({ coeff := fun _ => 0, constant := -value } : Affine n).eval assignment =
+        ({ coeff := fun _ => 0, constant := -value } : Affine n).eval state =
           -value := by simp [Affine.eval]
     change (Affine.add (Affine.coordinate trigger)
-      { coeff := fun _ => 0, constant := -value }).eval assignment = 0
+      { coeff := fun _ => 0, constant := -value }).eval state = 0
     rw [Affine.eval_add, Affine.eval_coordinate, hconstant, hvalue]
     ring
 
 def IndicatorPredicate (trigger : Fin n) (polarity : IndicatorPolarity)
-    (body : Assignment n → Prop) (assignment : Assignment n) : Prop :=
-  polarity.Active (assignment trigger) → body assignment
+    (body : State n → Prop) (state : State n) : Prop :=
+  polarity.Active (state trigger) → body state
 
 /-- Active-branch exactness is sufficient for augmentation while retaining the
 source row. -/
 theorem indicator_augment
-    (base source consequent : Assignment n → Prop)
+    (base source consequent : State n → Prop)
     (trigger : Fin n) (polarity : IndicatorPolarity)
-    (activeForward : ∀ {assignment},
-      base assignment →
-      VariableDomain.KindHolds .binary (assignment trigger) →
-      source assignment →
-      polarity.Active (assignment trigger) →
-      consequent assignment) :
-    ∀ assignment,
-      base assignment →
-      VariableDomain.KindHolds .binary (assignment trigger) →
-      (source assignment ↔
-        source assignment ∧
-          IndicatorPredicate trigger polarity consequent assignment) := by
-  intro assignment hbase hbinary
+    (activeForward : ∀ {state},
+      base state →
+      VariableDomain.KindHolds .binary (state trigger) →
+      source state →
+      polarity.Active (state trigger) →
+      consequent state) :
+    ∀ state,
+      base state →
+      VariableDomain.KindHolds .binary (state trigger) →
+      (source state ↔
+        source state ∧
+          IndicatorPredicate trigger polarity consequent state) := by
+  intro state hbase hbinary
   constructor
   · intro hsource
     refine ⟨hsource, ?_⟩
@@ -115,31 +115,31 @@ theorem indicator_augment
 /-- Replacement is exact when the active branch agrees in both directions and
 the source row follows from the surviving base on the inactive branch. -/
 theorem indicator_replace
-    (base source consequent : Assignment n → Prop)
+    (base source consequent : State n → Prop)
     (trigger : Fin n) (polarity : IndicatorPolarity)
-    (activeExact : ∀ {assignment},
-      base assignment →
-      VariableDomain.KindHolds .binary (assignment trigger) →
-      polarity.Active (assignment trigger) →
-      (source assignment ↔ consequent assignment))
-    (inactiveSource : ∀ {assignment},
-      base assignment →
-      VariableDomain.KindHolds .binary (assignment trigger) →
-      assignment trigger = polarity.inactiveValue →
-      source assignment) :
-    ∀ assignment,
-      base assignment →
-      VariableDomain.KindHolds .binary (assignment trigger) →
-      (source assignment ↔
-        IndicatorPredicate trigger polarity consequent assignment) := by
-  intro assignment hbase hbinary
+    (activeExact : ∀ {state},
+      base state →
+      VariableDomain.KindHolds .binary (state trigger) →
+      polarity.Active (state trigger) →
+      (source state ↔ consequent state))
+    (inactiveSource : ∀ {state},
+      base state →
+      VariableDomain.KindHolds .binary (state trigger) →
+      state trigger = polarity.inactiveValue →
+      source state) :
+    ∀ state,
+      base state →
+      VariableDomain.KindHolds .binary (state trigger) →
+      (source state ↔
+        IndicatorPredicate trigger polarity consequent state) := by
+  intro state hbase hbinary
   rcases IndicatorPolarity.active_or_inactive_of_binary hbinary with hactive | hinactive
   · constructor
     · intro hsource _
       exact (activeExact hbase hbinary hactive).mp hsource
     · intro hindicator
       exact (activeExact hbase hbinary hactive).mpr (hindicator hactive)
-  · have hnotActive : ¬polarity.Active (assignment trigger) := by
+  · have hnotActive : ¬polarity.Active (state trigger) := by
       cases polarity <;> simp_all [IndicatorPolarity.Active,
         IndicatorPolarity.activeValue, IndicatorPolarity.inactiveValue]
     constructor
@@ -152,43 +152,43 @@ theorem indicator_replace
 receive the same surviving base, so neither consumed side can prove the other. -/
 theorem equalityIndicator_replace
     (base sourceLower sourceUpper consequentLower consequentUpper :
-      Assignment n → Prop)
+      State n → Prop)
     (trigger : Fin n) (polarity : IndicatorPolarity)
-    (activeLower : ∀ {assignment},
-      base assignment →
-      VariableDomain.KindHolds .binary (assignment trigger) →
-      polarity.Active (assignment trigger) →
-      (sourceLower assignment ↔ consequentLower assignment))
-    (activeUpper : ∀ {assignment},
-      base assignment →
-      VariableDomain.KindHolds .binary (assignment trigger) →
-      polarity.Active (assignment trigger) →
-      (sourceUpper assignment ↔ consequentUpper assignment))
-    (inactiveLower : ∀ {assignment},
-      base assignment →
-      VariableDomain.KindHolds .binary (assignment trigger) →
-      assignment trigger = polarity.inactiveValue →
-      sourceLower assignment)
-    (inactiveUpper : ∀ {assignment},
-      base assignment →
-      VariableDomain.KindHolds .binary (assignment trigger) →
-      assignment trigger = polarity.inactiveValue →
-      sourceUpper assignment) :
-    ∀ assignment,
-      base assignment →
-      VariableDomain.KindHolds .binary (assignment trigger) →
-      (sourceLower assignment ∧ sourceUpper assignment ↔
+    (activeLower : ∀ {state},
+      base state →
+      VariableDomain.KindHolds .binary (state trigger) →
+      polarity.Active (state trigger) →
+      (sourceLower state ↔ consequentLower state))
+    (activeUpper : ∀ {state},
+      base state →
+      VariableDomain.KindHolds .binary (state trigger) →
+      polarity.Active (state trigger) →
+      (sourceUpper state ↔ consequentUpper state))
+    (inactiveLower : ∀ {state},
+      base state →
+      VariableDomain.KindHolds .binary (state trigger) →
+      state trigger = polarity.inactiveValue →
+      sourceLower state)
+    (inactiveUpper : ∀ {state},
+      base state →
+      VariableDomain.KindHolds .binary (state trigger) →
+      state trigger = polarity.inactiveValue →
+      sourceUpper state) :
+    ∀ state,
+      base state →
+      VariableDomain.KindHolds .binary (state trigger) →
+      (sourceLower state ∧ sourceUpper state ↔
         IndicatorPredicate trigger polarity
-          (fun x => consequentLower x ∧ consequentUpper x) assignment) := by
+          (fun x => consequentLower x ∧ consequentUpper x) state) := by
   apply indicator_replace base
     (fun x => sourceLower x ∧ sourceUpper x)
     (fun x => consequentLower x ∧ consequentUpper x)
     trigger polarity
-  · intro assignment hbase hbinary hactive
+  · intro state hbase hbinary hactive
     exact and_congr
       (activeLower hbase hbinary hactive)
       (activeUpper hbase hbinary hactive)
-  · intro assignment hbase hbinary hinactive
+  · intro state hbase hbinary hinactive
     exact ⟨inactiveLower hbase hbinary hinactive,
       inactiveUpper hbase hbinary hinactive⟩
 
@@ -210,12 +210,12 @@ theorem checkIndicatorActive_sound
     {source body : LinearConstraint n} {trigger : Fin n}
     {polarity : IndicatorPolarity}
     (hcheck : checkIndicatorActive domains source body trigger polarity = true)
-    {assignment : Assignment n}
-    (hactive : polarity.Active (assignment trigger)) :
-    source.Holds assignment ↔ body.Holds assignment := by
+    {state : State n}
+    (hactive : polarity.Active (state trigger)) :
+    source.Holds state ↔ body.Holds state := by
   have hparts := Bool.and_eq_true_iff.mp hcheck
   have hsame := LinearConstraint.same_sound hparts.2
-  have hvalue : assignment trigger = polarity.activeValue := hactive
+  have hvalue : state trigger = polarity.activeValue := hactive
   rw [← LinearConstraint.substitute_holds_iff hvalue, hsame]
 
 /-- An accepted active-branch check justifies adding the Indicator while the
@@ -225,32 +225,32 @@ theorem checkIndicatorAugment_preserves
     {source body : LinearConstraint n} {trigger : Fin n}
     {polarity : IndicatorPolarity}
     (hcheck : checkIndicatorActive domains source body trigger polarity = true)
-    (base : Assignment n → Prop) (objective : Assignment n → Rat)
+    (base : State n → Prop) (objective : State n → Rat)
     (sense : OptimizationSense)
-    (baseDomains : ∀ {assignment}, base assignment →
-      ∀ i, (domains i).Holds (assignment i)) :
+    (baseDomains : ∀ {state}, base state →
+      ∀ i, (domains i).Holds (state i)) :
     IdentityPreserves
-      (replaceProblem base (fun assignment => source.Holds assignment)
+      (replaceProblem base (fun state => source.Holds state)
         objective sense)
       (replaceProblem base
-        (fun assignment => source.Holds assignment ∧
-          (SpecialConstraint.indicator trigger polarity body).Holds assignment)
+        (fun state => source.Holds state ∧
+          (SpecialConstraint.indicator trigger polarity body).Holds state)
         objective sense) := by
   apply replace_preserves
-  intro assignment hbase
+  intro state hbase
   have hparts := Bool.and_eq_true_iff.mp hcheck
   have hkind : (domains trigger).kind = .binary := by
     simpa [decide_eq_true_eq] using hparts.1
-  have hbinary : VariableDomain.KindHolds .binary (assignment trigger) := by
+  have hbinary : VariableDomain.KindHolds .binary (state trigger) := by
     have hdomain := (baseDomains hbase trigger).1
     rw [hkind] at hdomain
     exact hdomain
-  change source.Holds assignment ↔
-    source.Holds assignment ∧
-      IndicatorPredicate trigger polarity (fun x => body.Holds x) assignment
+  change source.Holds state ↔
+    source.Holds state ∧
+      IndicatorPredicate trigger polarity (fun x => body.Holds x) state
   apply indicator_augment
       (fun _ => True) (fun x => source.Holds x) (fun x => body.Holds x)
-      trigger polarity ?_ assignment trivial hbinary
+      trigger polarity ?_ state trivial hbinary
   intro x _ _ hsource hactive
   exact (checkIndicatorActive_sound hcheck hactive).mp hsource
 
@@ -269,16 +269,16 @@ theorem checkIndicatorReplace_sound
     {witness : IndicatorReplaceWitness surviving trigger polarity}
     (hcheck : checkIndicatorReplace domains surviving source body trigger polarity
       witness = true)
-    {assignment : Assignment n}
-    (hdomains : ∀ i, (domains i).Holds (assignment i))
-    (hsurviving : surviving.Feasible assignment) :
-    (source.Holds assignment ↔
-      (SpecialConstraint.indicator trigger polarity body).Holds assignment) := by
+    {state : State n}
+    (hdomains : ∀ i, (domains i).Holds (state i))
+    (hsurviving : surviving.Feasible state) :
+    (source.Holds state ↔
+      (SpecialConstraint.indicator trigger polarity body).Holds state) := by
   have houter := Bool.and_eq_true_iff.mp hcheck
   have hparts := Bool.and_eq_true_iff.mp houter.2
   have hsenses : source.sense = .lessEqual ∧ body.sense = .lessEqual := by
     simpa [decide_eq_true_eq] using houter.1
-  have hbinary : VariableDomain.KindHolds .binary (assignment trigger) := by
+  have hbinary : VariableDomain.KindHolds .binary (state trigger) := by
     have hkind : (domains trigger).kind = .binary := by
       have hactiveParts := Bool.and_eq_true_iff.mp hparts.1
       simpa [decide_eq_true_eq] using hactiveParts.1
@@ -289,7 +289,7 @@ theorem checkIndicatorReplace_sound
       (fun x => surviving.Feasible x)
       (fun x => source.Holds x)
       (fun x => body.Holds x)
-      trigger polarity ?_ ?_ assignment hsurviving hbinary
+      trigger polarity ?_ ?_ state hsurviving hbinary
   · intro x _ hbinaryX hactive
     apply checkIndicatorActive_sound hparts.1
     exact hactive
@@ -325,17 +325,17 @@ theorem checkEqualityIndicatorReplace_sound
     {witness : EqualityIndicatorReplaceWitness surviving trigger polarity}
     (hcheck : checkEqualityIndicatorReplace domains surviving source body trigger polarity
       witness = true)
-    {assignment : Assignment n}
-    (hdomains : ∀ i, (domains i).Holds (assignment i))
-    (hsurviving : surviving.Feasible assignment) :
-    (source.Holds assignment ↔
-      (SpecialConstraint.indicator trigger polarity body).Holds assignment) := by
+    {state : State n}
+    (hdomains : ∀ i, (domains i).Holds (state i))
+    (hsurviving : surviving.Feasible state) :
+    (source.Holds state ↔
+      (SpecialConstraint.indicator trigger polarity body).Holds state) := by
   have houter := Bool.and_eq_true_iff.mp hcheck
   have hmiddle := Bool.and_eq_true_iff.mp houter.2
   have hinner := Bool.and_eq_true_iff.mp hmiddle.2
   have hsenses : source.sense = .equal ∧ body.sense = .equal := by
     simpa [decide_eq_true_eq] using houter.1
-  have hbinary : VariableDomain.KindHolds .binary (assignment trigger) := by
+  have hbinary : VariableDomain.KindHolds .binary (state trigger) := by
     have hactiveParts := Bool.and_eq_true_iff.mp hmiddle.1
     have hkind : (domains trigger).kind = .binary := by
       simpa [decide_eq_true_eq] using hactiveParts.1
@@ -346,7 +346,7 @@ theorem checkEqualityIndicatorReplace_sound
       (fun x => surviving.Feasible x)
       (fun x => source.Holds x)
       (fun x => body.Holds x)
-      trigger polarity ?_ ?_ assignment hsurviving hbinary
+      trigger polarity ?_ ?_ state hsurviving hbinary
   · intro x _ _ hactive
     exact checkIndicatorActive_sound hmiddle.1 hactive
   · intro x hbase _ hinactive
@@ -373,28 +373,28 @@ limited to the affine syntax of `CoreModel`.
 namespace IndicatorBigM
 
 /-- The upper Big-M side `f(x) + u y - u ≤ 0`, omitted when `u ≤ 0`. -/
-def UpperSide (body : Assignment n → Rat) (trigger : Fin n) (upper : Rat)
-    (assignment : Assignment n) : Prop :=
+def UpperSide (body : State n → Rat) (trigger : Fin n) (upper : Rat)
+    (state : State n) : Prop :=
   if 0 < upper then
-    body assignment + upper * assignment trigger - upper ≤ 0
+    body state + upper * state trigger - upper ≤ 0
   else
     True
 
 /-- The lower Big-M side `-f(x) - l y + l ≤ 0`, omitted when `l ≥ 0`. -/
-def LowerSide (body : Assignment n → Rat) (trigger : Fin n) (lower : Rat)
-    (assignment : Assignment n) : Prop :=
+def LowerSide (body : State n → Rat) (trigger : Fin n) (lower : Rat)
+    (state : State n) : Prop :=
   if lower < 0 then
-    -body assignment - lower * assignment trigger + lower ≤ 0
+    -body state - lower * state trigger + lower ≤ 0
   else
     True
 
-theorem upperSide_iff_indicator {body : Assignment n → Rat} {trigger : Fin n}
-    {upper : Rat} {assignment : Assignment n}
-    (hbinary : VariableDomain.KindHolds .binary (assignment trigger))
-    (hbound : body assignment ≤ upper) :
-    UpperSide body trigger upper assignment ↔
+theorem upperSide_iff_indicator {body : State n → Rat} {trigger : Fin n}
+    {upper : Rat} {state : State n}
+    (hbinary : VariableDomain.KindHolds .binary (state trigger))
+    (hbound : body state ≤ upper) :
+    UpperSide body trigger upper state ↔
       IndicatorPredicate trigger .activeOnOne
-        (fun x => body x ≤ 0) assignment := by
+        (fun x => body x ≤ 0) state := by
   rcases hbinary with hzero | hone
   · by_cases hupper : 0 < upper
     · simp [UpperSide, hupper, IndicatorPredicate, IndicatorPolarity.Active,
@@ -406,17 +406,17 @@ theorem upperSide_iff_indicator {body : Assignment n → Rat} {trigger : Fin n}
     · simp [UpperSide, hupper, IndicatorPredicate, IndicatorPolarity.Active,
         IndicatorPolarity.activeValue, hone]
     · have hnonpos : upper ≤ 0 := le_of_not_gt hupper
-      have hbody : body assignment ≤ 0 := le_trans hbound hnonpos
+      have hbody : body state ≤ 0 := le_trans hbound hnonpos
       simp [UpperSide, hupper, IndicatorPredicate, IndicatorPolarity.Active,
         IndicatorPolarity.activeValue, hone, hbody]
 
-theorem lowerSide_iff_indicator {body : Assignment n → Rat} {trigger : Fin n}
-    {lower : Rat} {assignment : Assignment n}
-    (hbinary : VariableDomain.KindHolds .binary (assignment trigger))
-    (hbound : lower ≤ body assignment) :
-    LowerSide body trigger lower assignment ↔
+theorem lowerSide_iff_indicator {body : State n → Rat} {trigger : Fin n}
+    {lower : Rat} {state : State n}
+    (hbinary : VariableDomain.KindHolds .binary (state trigger))
+    (hbound : lower ≤ body state) :
+    LowerSide body trigger lower state ↔
       IndicatorPredicate trigger .activeOnOne
-        (fun x => 0 ≤ body x) assignment := by
+        (fun x => 0 ≤ body x) state := by
   rcases hbinary with hzero | hone
   · by_cases hlower : lower < 0
     · simp [LowerSide, hlower, IndicatorPredicate, IndicatorPolarity.Active,
@@ -428,18 +428,18 @@ theorem lowerSide_iff_indicator {body : Assignment n → Rat} {trigger : Fin n}
     · simp [LowerSide, hlower, IndicatorPredicate, IndicatorPolarity.Active,
         IndicatorPolarity.activeValue, hone]
     · have hnonneg : 0 ≤ lower := le_of_not_gt hlower
-      have hbody : 0 ≤ body assignment := le_trans hnonneg hbound
+      have hbody : 0 ≤ body state := le_trans hnonneg hbound
       simp [LowerSide, hlower, IndicatorPredicate, IndicatorPolarity.Active,
         IndicatorPolarity.activeValue, hone, hbody]
 
-theorem equalitySides_iff_indicator {body : Assignment n → Rat}
-    {trigger : Fin n} {lower upper : Rat} {assignment : Assignment n}
-    (hbinary : VariableDomain.KindHolds .binary (assignment trigger))
-    (hlower : lower ≤ body assignment) (hupper : body assignment ≤ upper) :
-    UpperSide body trigger upper assignment ∧
-        LowerSide body trigger lower assignment ↔
+theorem equalitySides_iff_indicator {body : State n → Rat}
+    {trigger : Fin n} {lower upper : Rat} {state : State n}
+    (hbinary : VariableDomain.KindHolds .binary (state trigger))
+    (hlower : lower ≤ body state) (hupper : body state ≤ upper) :
+    UpperSide body trigger upper state ∧
+        LowerSide body trigger lower state ↔
       IndicatorPredicate trigger .activeOnOne
-        (fun x => body x = 0) assignment := by
+        (fun x => body x = 0) state := by
   rw [upperSide_iff_indicator hbinary hupper,
     lowerSide_iff_indicator hbinary hlower]
   unfold IndicatorPredicate
@@ -456,43 +456,43 @@ theorem equalitySides_iff_indicator {body : Assignment n → Rat}
 /-- The SDK's one-sided Indicator Big-M algorithm preserves the exact feasible
 set when the claimed upper bound holds on the surviving base. -/
 theorem inequality_preserves
-    (base : Assignment n → Prop) (body : Assignment n → Rat)
-    (trigger : Fin n) (upper : Rat) (objective : Assignment n → Rat)
+    (base : State n → Prop) (body : State n → Rat)
+    (trigger : Fin n) (upper : Rat) (objective : State n → Rat)
     (sense : OptimizationSense)
-    (binaryOnBase : ∀ {assignment}, base assignment →
-      VariableDomain.KindHolds .binary (assignment trigger))
-    (upperBoundOnBase : ∀ {assignment}, base assignment →
-      body assignment ≤ upper) :
+    (binaryOnBase : ∀ {state}, base state →
+      VariableDomain.KindHolds .binary (state trigger))
+    (upperBoundOnBase : ∀ {state}, base state →
+      body state ≤ upper) :
     IdentityPreserves
       (replaceProblem base (UpperSide body trigger upper) objective sense)
       (replaceProblem base
         (IndicatorPredicate trigger .activeOnOne (fun x => body x ≤ 0))
         objective sense) := by
   apply replace_preserves
-  intro assignment hbase
+  intro state hbase
   exact upperSide_iff_indicator (binaryOnBase hbase) (upperBoundOnBase hbase)
 
 /-- The SDK's two-sided equality Indicator Big-M algorithm preserves the exact
 feasible set, including the cases where either bound makes one side redundant. -/
 theorem equality_preserves
-    (base : Assignment n → Prop) (body : Assignment n → Rat)
-    (trigger : Fin n) (lower upper : Rat) (objective : Assignment n → Rat)
+    (base : State n → Prop) (body : State n → Rat)
+    (trigger : Fin n) (lower upper : Rat) (objective : State n → Rat)
     (sense : OptimizationSense)
-    (binaryOnBase : ∀ {assignment}, base assignment →
-      VariableDomain.KindHolds .binary (assignment trigger))
-    (boundsOnBase : ∀ {assignment}, base assignment →
-      lower ≤ body assignment ∧ body assignment ≤ upper) :
+    (binaryOnBase : ∀ {state}, base state →
+      VariableDomain.KindHolds .binary (state trigger))
+    (boundsOnBase : ∀ {state}, base state →
+      lower ≤ body state ∧ body state ≤ upper) :
     IdentityPreserves
       (replaceProblem base
-        (fun assignment =>
-          UpperSide body trigger upper assignment ∧
-            LowerSide body trigger lower assignment)
+        (fun state =>
+          UpperSide body trigger upper state ∧
+            LowerSide body trigger lower state)
         objective sense)
       (replaceProblem base
         (IndicatorPredicate trigger .activeOnOne (fun x => body x = 0))
         objective sense) := by
   apply replace_preserves
-  intro assignment hbase
+  intro state hbase
   have hbounds := boundsOnBase hbase
   exact equalitySides_iff_indicator (binaryOnBase hbase) hbounds.1 hbounds.2
 

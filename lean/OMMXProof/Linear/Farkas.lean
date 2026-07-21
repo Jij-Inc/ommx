@@ -35,9 +35,9 @@ theorem combination_succ (weights : Fin (m + 1) → Rat)
         (combination (fun i => weights i.succ) (fun i => rows i.succ)) := rfl
 
 theorem eval_combination (weights : Fin m → Rat) (rows : Fin m → Affine n)
-    (assignment : Assignment n) :
-    eval (combination weights rows) assignment =
-      ∑ i, weights i * eval (rows i) assignment := by
+    (state : State n) :
+    eval (combination weights rows) state =
+      ∑ i, weights i * eval (rows i) state := by
   induction m with
   | zero => simp
   | succ m ih =>
@@ -75,35 +75,35 @@ def checkImplication (witness : FarkasWitness system) (target : Affine n) : Bool
   decide (ValidImplication witness target)
 
 theorem inequality_combination_nonpos (witness : FarkasWitness system)
-    (assignment : Assignment n)
+    (state : State n)
     (hnonneg : ∀ i, 0 ≤ witness.inequalityWeights i)
-    (hrows : ∀ i, (system.inequalities i).eval assignment ≤ 0) :
+    (hrows : ∀ i, (system.inequalities i).eval state ≤ 0) :
     (Affine.combination witness.inequalityWeights system.inequalities).eval
-      assignment ≤ 0 := by
+      state ≤ 0 := by
   rw [Affine.eval_combination]
   exact Finset.sum_nonpos fun i _ =>
     mul_nonpos_of_nonneg_of_nonpos (hnonneg i) (hrows i)
 
 theorem equality_combination_zero (witness : FarkasWitness system)
-    (assignment : Assignment n)
-    (hrows : ∀ i, (system.equalities i).eval assignment = 0) :
+    (state : State n)
+    (hrows : ∀ i, (system.equalities i).eval state = 0) :
     (Affine.combination witness.equalityWeights system.equalities).eval
-      assignment = 0 := by
+      state = 0 := by
   rw [Affine.eval_combination]
   exact Finset.sum_eq_zero fun i _ => by simp [hrows i]
 
 theorem checkImplication_sound {witness : FarkasWitness system}
     {target : Affine n} (hcheck : witness.checkImplication target = true)
-    {assignment : Assignment n} (hfeasible : system.Feasible assignment) :
-    target.eval assignment ≤ 0 := by
+    {state : State n} (hfeasible : system.Feasible state) :
+    target.eval state ≤ 0 := by
   have hvalid : ValidImplication witness target := by
     simpa [checkImplication, decide_eq_true_eq] using hcheck
-  have hineq := inequality_combination_nonpos witness assignment hvalid.1 hfeasible.1
-  have heq := equality_combination_zero witness assignment hfeasible.2
-  have hcombined : witness.combination.eval assignment ≤ 0 := by
+  have hineq := inequality_combination_nonpos witness state hvalid.1 hfeasible.1
+  have heq := equality_combination_zero witness state hfeasible.2
+  have hcombined : witness.combination.eval state ≤ 0 := by
     rw [combination, Affine.eval_add, heq]
     simpa using hineq
-  exact le_trans (Affine.eval_le_of_implies hvalid.2 assignment) hcombined
+  exact le_trans (Affine.eval_le_of_implies hvalid.2 state) hcombined
 
 /-- Exact Farkas contradiction: zero coefficients and a strictly positive
 constant. -/
@@ -121,16 +121,16 @@ def checkInfeasibility (witness : FarkasWitness system) : Bool :=
 
 theorem checkInfeasibility_sound {witness : FarkasWitness system}
     (hcheck : witness.checkInfeasibility = true) :
-    ¬ ∃ assignment, system.Feasible assignment := by
+    ¬ ∃ state, system.Feasible state := by
   have hvalid : ValidInfeasibility witness := by
     simpa [checkInfeasibility, decide_eq_true_eq] using hcheck
-  rintro ⟨assignment, hfeasible⟩
-  have hineq := inequality_combination_nonpos witness assignment hvalid.1 hfeasible.1
-  have heq := equality_combination_zero witness assignment hfeasible.2
-  have hcombined : witness.combination.eval assignment ≤ 0 := by
+  rintro ⟨state, hfeasible⟩
+  have hineq := inequality_combination_nonpos witness state hvalid.1 hfeasible.1
+  have heq := equality_combination_zero witness state hfeasible.2
+  have hcombined : witness.combination.eval state ≤ 0 := by
     rw [combination, Affine.eval_add, heq]
     simpa using hineq
-  have heval : witness.combination.eval assignment = witness.combination.constant := by
+  have heval : witness.combination.eval state = witness.combination.constant := by
     simp [Affine.eval, hvalid.2.1]
   rw [heval] at hcombined
   exact (not_lt_of_ge hcombined) hvalid.2.2
@@ -154,21 +154,21 @@ def toAffine : BoundSide n → Affine n
         { coeff := fun _ => 0, constant := -value }
 
 theorem holds_iff :
-    (side : BoundSide n) → (assignment : Assignment n) →
-      side.toAffine.eval assignment ≤ 0 ↔
+    (side : BoundSide n) → (state : State n) →
+      side.toAffine.eval state ≤ 0 ↔
         match side with
-        | .lower index value => value ≤ assignment index
-        | .upper index value => assignment index ≤ value
-  | .lower index value, assignment => by
+        | .lower index value => value ≤ state index
+        | .upper index value => state index ≤ value
+  | .lower index value, state => by
       have hconstant :
-          ({ coeff := fun _ => 0, constant := value } : Affine n).eval assignment =
+          ({ coeff := fun _ => 0, constant := value } : Affine n).eval state =
             value := by simp [Affine.eval]
       simp only [toAffine, Affine.eval_add, Affine.eval_scale,
         Affine.eval_coordinate, hconstant]
       constructor <;> intro h <;> linarith
-  | .upper index value, assignment => by
+  | .upper index value, state => by
       have hconstant :
-          ({ coeff := fun _ => 0, constant := -value } : Affine n).eval assignment =
+          ({ coeff := fun _ => 0, constant := -value } : Affine n).eval state =
             -value := by simp [Affine.eval]
       simp only [toAffine, Affine.eval_add, Affine.eval_coordinate, hconstant]
       constructor <;> intro h <;> linarith
@@ -183,20 +183,20 @@ instance (domains : Fin n → VariableDomain) (side : BoundSide n) :
   cases side <;> simp [ValidFor] <;> infer_instance
 
 theorem validFor_holds {domains : Fin n → VariableDomain}
-    {side : BoundSide n} {assignment : Assignment n}
+    {side : BoundSide n} {state : State n}
     (hvalid : side.ValidFor domains)
-    (hdomains : ∀ i, (domains i).Holds (assignment i)) :
-    side.toAffine.eval assignment ≤ 0 := by
+    (hdomains : ∀ i, (domains i).Holds (state i)) :
+    side.toAffine.eval state ≤ 0 := by
   cases side with
   | lower index value =>
-    apply (holds_iff (.lower index value) assignment).mpr
+    apply (holds_iff (.lower index value) state).mpr
     have hbounds := (hdomains index).2
     unfold Bounds.Holds at hbounds
     simp [ValidFor] at hvalid
     rw [hvalid] at hbounds
     exact hbounds.1
   | upper index value =>
-    apply (holds_iff (.upper index value) assignment).mpr
+    apply (holds_iff (.upper index value) state).mpr
     have hbounds := (hdomains index).2
     unfold Bounds.Holds at hbounds
     simp [ValidFor] at hvalid
@@ -217,18 +217,18 @@ instance (target source : BoundSide n) : Decidable (target.Tightens source) := b
   cases target <;> cases source <;> unfold Tightens <;> infer_instance
 
 theorem target_holds_implies_source {target source : BoundSide n}
-    (htightens : target.Tightens source) {assignment : Assignment n}
-    (htarget : target.toAffine.eval assignment ≤ 0) :
-    source.toAffine.eval assignment ≤ 0 := by
+    (htightens : target.Tightens source) {state : State n}
+    (htarget : target.toAffine.eval state ≤ 0) :
+    source.toAffine.eval state ≤ 0 := by
   cases target with
   | lower targetIndex targetValue =>
     cases source with
     | lower sourceIndex sourceValue =>
       rcases htightens with ⟨hindex, hvalues⟩
       subst sourceIndex
-      apply (holds_iff (.lower targetIndex sourceValue) assignment).mpr
+      apply (holds_iff (.lower targetIndex sourceValue) state).mpr
       exact le_trans hvalues
-        ((holds_iff (.lower targetIndex targetValue) assignment).mp htarget)
+        ((holds_iff (.lower targetIndex targetValue) state).mp htarget)
     | upper _ _ => exact False.elim htightens
   | upper targetIndex targetValue =>
     cases source with
@@ -236,9 +236,9 @@ theorem target_holds_implies_source {target source : BoundSide n}
     | upper sourceIndex sourceValue =>
       rcases htightens with ⟨hindex, hvalues⟩
       subst sourceIndex
-      apply (holds_iff (.upper targetIndex sourceValue) assignment).mpr
+      apply (holds_iff (.upper targetIndex sourceValue) state).mpr
       exact le_trans
-        ((holds_iff (.upper targetIndex targetValue) assignment).mp htarget)
+        ((holds_iff (.upper targetIndex targetValue) state).mp htarget)
         hvalues
 
 end BoundSide
@@ -257,9 +257,9 @@ abbrev ActivityBoundWitness (sides : Fin m → BoundSide n) :=
 theorem checkActivityBound_sound {sides : Fin m → BoundSide n}
     {witness : ActivityBoundWitness sides} {target : Affine n}
     (hcheck : witness.checkImplication target = true)
-    {assignment : Assignment n}
-    (hbounds : ∀ i, (sides i).toAffine.eval assignment ≤ 0) :
-    target.eval assignment ≤ 0 := by
+    {state : State n}
+    (hbounds : ∀ i, (sides i).toAffine.eval state ≤ 0) :
+    target.eval state ≤ 0 := by
   apply FarkasWitness.checkImplication_sound hcheck
   exact ⟨hbounds, fun i => nomatch i⟩
 
@@ -273,9 +273,9 @@ theorem checkActivityBoundForDomains_sound
     {domains : Fin n → VariableDomain} {sides : Fin m → BoundSide n}
     {witness : ActivityBoundWitness sides} {target : Affine n}
     (hcheck : checkActivityBoundForDomains domains sides witness target = true)
-    {assignment : Assignment n}
-    (hdomains : ∀ i, (domains i).Holds (assignment i)) :
-    target.eval assignment ≤ 0 := by
+    {state : State n}
+    (hdomains : ∀ i, (domains i).Holds (state i)) :
+    target.eval state ≤ 0 := by
   have hparts := Bool.and_eq_true_iff.mp hcheck
   have hvalid : ∀ i, (sides i).ValidFor domains := by
     simpa [decide_eq_true_eq] using hparts.1
@@ -298,8 +298,8 @@ def check (witness : ImpliedEqualityWitness system) (target : Affine n) : Bool :
 
 theorem check_sound {witness : ImpliedEqualityWitness system}
     {target : Affine n} (hcheck : witness.check target = true)
-    {assignment : Assignment n} (hfeasible : system.Feasible assignment) :
-    target.eval assignment = 0 := by
+    {state : State n} (hfeasible : system.Feasible state) :
+    target.eval state = 0 := by
   have hparts := Bool.and_eq_true_iff.mp hcheck
   have hu := FarkasWitness.checkImplication_sound hparts.1 hfeasible
   have hl := FarkasWitness.checkImplication_sound hparts.2 hfeasible
@@ -321,22 +321,22 @@ def boundReplacementSystem (remaining : LinearSystem n) (source : BoundSide n) :
   equalities := remaining.equalities
 
 def BoundReplacementFeasible (remaining : LinearSystem n) (side : BoundSide n)
-    (assignment : Assignment n) : Prop :=
-  remaining.Feasible assignment ∧ side.toAffine.eval assignment ≤ 0
+    (state : State n) : Prop :=
+  remaining.Feasible state ∧ side.toAffine.eval state ≤ 0
 
 theorem boundReplacementSystem_feasible_iff
     {remaining : LinearSystem n} {source : BoundSide n}
-    {assignment : Assignment n} :
-    (boundReplacementSystem remaining source).Feasible assignment ↔
-      BoundReplacementFeasible remaining source assignment := by
+    {state : State n} :
+    (boundReplacementSystem remaining source).Feasible state ↔
+      BoundReplacementFeasible remaining source state := by
   change
     ((∀ i : Fin (Nat.succ remaining.ineqCount),
         ((Fin.cases source.toAffine remaining.inequalities i : Affine n).eval
-          assignment ≤ 0)) ∧
-      (∀ i, (remaining.equalities i).eval assignment = 0)) ↔
-      (((∀ i, (remaining.inequalities i).eval assignment ≤ 0) ∧
-        (∀ i, (remaining.equalities i).eval assignment = 0)) ∧
-        source.toAffine.eval assignment ≤ 0)
+          state ≤ 0)) ∧
+      (∀ i, (remaining.equalities i).eval state = 0)) ↔
+      (((∀ i, (remaining.inequalities i).eval state ≤ 0) ∧
+        (∀ i, (remaining.equalities i).eval state = 0)) ∧
+        source.toAffine.eval state ≤ 0)
   constructor
   · intro h
     refine ⟨⟨?_, h.2⟩, ?_⟩
@@ -368,9 +368,9 @@ theorem checkBoundTightening_sound
     {witness : BoundTighteningWitness remaining source}
     (hcheck : checkBoundTightening domains remaining source target witness = true) :
     source.ValidFor domains ∧
-      ∀ assignment,
-        BoundReplacementFeasible remaining source assignment ↔
-          BoundReplacementFeasible remaining target assignment := by
+      ∀ state,
+        BoundReplacementFeasible remaining source state ↔
+          BoundReplacementFeasible remaining target state := by
   have houter := Bool.and_eq_true_iff.mp hcheck
   have hinner := Bool.and_eq_true_iff.mp houter.2
   have hvalid : source.ValidFor domains := by
@@ -378,7 +378,7 @@ theorem checkBoundTightening_sound
   have htightens : target.Tightens source := by
     simpa [decide_eq_true_eq] using hinner.1
   refine ⟨hvalid, ?_⟩
-  intro assignment
+  intro state
   constructor
   · intro hsource
     refine ⟨hsource.1, ?_⟩
@@ -392,17 +392,17 @@ end BoundTightening
 
 /-- Semantic feasibility after adding one regular inequality row. -/
 def RowExtensionFeasible (remaining : LinearSystem n) (row : Affine n)
-    (assignment : Assignment n) : Prop :=
-  remaining.Feasible assignment ∧ row.eval assignment ≤ 0
+    (state : State n) : Prop :=
+  remaining.Feasible state ∧ row.eval state ≤ 0
 
 /-- A redundancy proof is structurally unable to use the removed row: its
 witness is indexed only by `remaining`. -/
 theorem redundantRow_iff {remaining : LinearSystem n} {row : Affine n}
     {witness : FarkasWitness remaining}
     (hcheck : witness.checkImplication row = true)
-    (assignment : Assignment n) :
-    RowExtensionFeasible remaining row assignment ↔
-      remaining.Feasible assignment := by
+    (state : State n) :
+    RowExtensionFeasible remaining row state ↔
+      remaining.Feasible state := by
   constructor
   · exact fun h => h.1
   · intro h
