@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "_ommx_rust"
-version = "3.0.0-beta.2"
+version = "3.0.0-beta.3"
 dependencies = [
  "approx",
  "derive_more",
@@ -927,7 +927,7 @@ dependencies = [
 
 [[package]]
 name = "dataset"
-version = "3.0.0-beta.2"
+version = "3.0.0-beta.3"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2443,7 +2443,7 @@ dependencies = [
 
 [[package]]
 name = "ommx"
-version = "3.0.0-beta.2"
+version = "3.0.0-beta.3"
 dependencies = [
  "anyhow",
  "approx",
@@ -2501,7 +2501,7 @@ dependencies = [
 
 [[package]]
 name = "ommx-derive"
-version = "3.0.0-beta.2"
+version = "3.0.0-beta.3"
 dependencies = [
  "insta",
  "prettyplease 0.3.0",
@@ -2512,7 +2512,7 @@ dependencies = [
 
 [[package]]
 name = "ommx-pyo3-bridge"
-version = "3.0.0-beta.2"
+version = "3.0.0-beta.3"
 dependencies = [
  "ommx",
  "proptest",
@@ -2522,7 +2522,7 @@ dependencies = [
 
 [[package]]
 name = "ommx-pyo3-bridge-fixture"
-version = "3.0.0-beta.2"
+version = "3.0.0-beta.3"
 dependencies = [
  "ommx",
  "ommx-pyo3-bridge",
@@ -2967,7 +2967,7 @@ dependencies = [
 
 [[package]]
 name = "protogen"
-version = "3.0.0-beta.2"
+version = "3.0.0-beta.3"
 dependencies = [
  "anyhow",
  "colored 3.1.1",
