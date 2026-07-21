@@ -82,6 +82,10 @@ fn parse_blob_transfer_concurrency(value: Option<&str>) -> crate::Result<NonZero
     }
 }
 
+/// Apply `f` with at most `concurrency` operations in flight.
+///
+/// The returned values follow readiness order and do not preserve the input
+/// order.
 pub async fn bounded_map<I, T, O, F, Fut>(
     items: I,
     concurrency: NonZeroUsize,

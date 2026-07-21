@@ -13,14 +13,13 @@
 //! followed by each entry in `layers[]`.
 
 use super::{
-    manifest::read_blob_by_descriptor_async,
+    manifest::{blob_descriptors_by_digest, read_blob_by_descriptor_async},
     remote_transport::{blob_transfer_concurrency, bounded_map, RemoteTransport},
     LocalArtifact, LocalManifest,
 };
 use anyhow::Context;
 use oci_client::RegistryOperation;
 use oci_spec::image::Descriptor;
-use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PushBlobOutcome {
@@ -49,8 +48,9 @@ impl LocalArtifact<'_> {
     pub fn push(&self) -> crate::Result<()> {
         let manifest = self.get_manifest()?.clone();
         let blob_descriptors = collect_blob_descriptors(&manifest);
-        let unique_blob_descriptors = deduplicate_blob_descriptors(&blob_descriptors)?;
-        let deduplicated = blob_descriptors.len() - unique_blob_descriptors.len();
+        let descriptor_count = blob_descriptors.len();
+        let unique_blob_descriptors = blob_descriptors_by_digest(&blob_descriptors)?;
+        let deduplicated = descriptor_count - unique_blob_descriptors.len();
         let transfer_concurrency = blob_transfer_concurrency()?;
 
         let transport = RemoteTransport::new(self.image_name())?;
@@ -58,7 +58,7 @@ impl LocalArtifact<'_> {
         transport.auth(self.image_name())?;
         let outcomes = transport.block_on(async {
             bounded_map(
-                unique_blob_descriptors,
+                unique_blob_descriptors.into_values(),
                 transfer_concurrency,
                 |descriptor| {
                     let transport = &transport;
@@ -111,25 +111,6 @@ impl LocalArtifact<'_> {
         transport.push_manifest_bytes(self.image_name(), manifest_bytes, content_type)?;
         Ok(())
     }
-}
-
-fn deduplicate_blob_descriptors(descriptors: &[Descriptor]) -> crate::Result<Vec<&Descriptor>> {
-    let mut seen = HashMap::with_capacity(descriptors.len());
-    let mut unique = Vec::with_capacity(descriptors.len());
-    for descriptor in descriptors {
-        let digest = descriptor.digest().to_string();
-        if let Some(size) = seen.get(&digest) {
-            anyhow::ensure!(
-                *size == descriptor.size(),
-                "Conflicting sizes for blob {digest}: {size} and {}",
-                descriptor.size()
-            );
-        } else {
-            seen.insert(digest, descriptor.size());
-            unique.push(descriptor);
-        }
-    }
-    Ok(unique)
 }
 
 async fn push_descriptor_if_missing<Exists, ExistsFuture, Read, ReadFuture, Push, PushFuture>(
@@ -188,20 +169,6 @@ mod tests {
             .size(bytes.len() as u64)
             .build()
             .unwrap()
-    }
-
-    #[test]
-    fn duplicate_descriptors_are_deduplicated_by_digest() {
-        let first = descriptor_for(b"same blob");
-        let duplicate = first.clone();
-        let other = descriptor_for(b"other blob");
-        let descriptors = vec![first, duplicate, other];
-
-        let unique = deduplicate_blob_descriptors(&descriptors).unwrap();
-
-        assert_eq!(unique.len(), 2);
-        assert_eq!(unique[0].digest(), descriptors[0].digest());
-        assert_eq!(unique[1].digest(), descriptors[2].digest());
     }
 
     #[test]
