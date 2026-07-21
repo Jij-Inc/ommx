@@ -21,10 +21,14 @@ transformation. An operation that transforms a source instance into a member of
 OpenJij; a future update will standardize it as part of the `SolverAdapter`
 workflow ([#1111](https://github.com/Jij-Inc/ommx/issues/1111)).
 
-`INPUT_CLASS` is an {class}`~ommx.InstanceClass`: a finite union of structural
-{class}`~ommx.InstanceClassClause` descriptions. Membership is evaluated on the
-exact input and {class}`~ommx.InstanceClassMembershipReport` reports structured
-per-clause mismatches.
+`INPUT_CLASS` is an {class}`~ommx.InstanceClass`: a finite union of
+{class}`~ommx.InstanceClassClause` descriptions. A clause can constrain the
+variable kinds in use, objective and constraint degrees, regular and Indicator
+relations, OneHot and SOS1 presence, and optimization sense—for example, to
+accept only linear models. See {class}`~ommx.InstanceClassClause` for the full
+set of conditions. Membership is evaluated on the exact input and
+{class}`~ommx.InstanceClassMembershipReport` reports structured per-clause
+mismatches.
 
 `OMMXHighsAdapter`, `OMMXPythonMIPAdapter`, `OMMXPySCIPOptAdapter`, and
 `OMMXOpenJijSAAdapter` each declare their concrete input class. Inputs outside

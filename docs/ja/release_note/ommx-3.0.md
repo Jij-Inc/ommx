@@ -21,8 +21,12 @@ source instanceを `INPUT_CLASS` に属するinputへ変換する操作を `Prep
 `SolverAdapter` の共通workflowとして標準化する予定です
 （[#1111](https://github.com/Jij-Inc/ommx/issues/1111)）。
 
-`INPUT_CLASS` は、構造条件を表す {class}`~ommx.InstanceClassClause` の有限和である
-{class}`~ommx.InstanceClass` です。渡されたinputそのものについてmembershipを評価し、
+`INPUT_CLASS` は、{class}`~ommx.InstanceClassClause` の有限和である
+{class}`~ommx.InstanceClass` です。各clauseには、使用中の変数kind、目的関数と制約の
+次数、通常制約とIndicator制約のrelation、OneHot / SOS1制約の有無、最適化senseを
+指定できます。例えば、線形目的関数と線形制約だけを受け入れるclassを記述できます。
+指定できる条件の詳細は {class}`~ommx.InstanceClassClause` を参照してください。
+membershipは渡されたinputそのものについて評価し、
 {class}`~ommx.InstanceClassMembershipReport` がclauseごとの構造化されたmismatchを
 返します。
 
