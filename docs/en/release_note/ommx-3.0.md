@@ -16,10 +16,15 @@ Changes merged after the most recent release will be appended here as they land,
 
 {class}`~ommx.adapter.SolverAdapter` now defines `INPUT_CLASS`, which represents
 the set of {class}`~ommx.Instance` values an adapter can handle directly without
-transformation. `OMMXHighsAdapter`, `OMMXPythonMIPAdapter`,
-`OMMXPySCIPOptAdapter`, and `OMMXOpenJijSAAdapter` each declare their concrete
-input class. Inputs outside that class are rejected before backend construction
-with {class}`~ommx.adapter.AdapterNotApplicableError`; use
+transformation. An operation that transforms a source instance into a member of
+`INPUT_CLASS` is called `Prepare`. Preparation is currently available only for
+OpenJij; a future update will standardize it as part of the `SolverAdapter`
+workflow ([#1111](https://github.com/Jij-Inc/ommx/issues/1111)).
+
+`OMMXHighsAdapter`, `OMMXPythonMIPAdapter`, `OMMXPySCIPOptAdapter`, and
+`OMMXOpenJijSAAdapter` each declare their concrete input class. Inputs outside
+that class are rejected before backend construction with
+{class}`~ommx.adapter.AdapterNotApplicableError`; use
 `check_applicability()` to inspect structured mismatches. HiGHS and Python-MIP
 accept linear models, PySCIPOpt accepts its supported quadratic, Indicator, and
 SOS1 forms, and OpenJij accepts unconstrained binary minimization problems.
