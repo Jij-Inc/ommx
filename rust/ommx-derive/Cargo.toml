@@ -28,5 +28,5 @@ syn.workspace = true
 [dev-dependencies]
 insta.workspace = true
 # `syn = "full"` is needed by prettyplease to parse the generated `syn::File`.
-prettyplease = "0.2.37"
+prettyplease = "0.3.0"
 syn = { workspace = true, features = ["full"] }

@@ -36,11 +36,13 @@
 //! touches the network.
 
 use super::super::super::RefUpdate;
-use super::super::LocalRegistry;
+use super::super::{async_io, LocalRegistry};
 use super::oci_dir::OciDirImport;
 use crate::artifact::{
-    media_types, remote_error, remote_transport::RemoteTransport, ImageRef,
-    OCI_IMAGE_MANIFEST_MEDIA_TYPE,
+    manifest::blob_descriptors_by_digest,
+    media_types, remote_error,
+    remote_transport::{blob_transfer_concurrency, bounded_map, RemoteTransport},
+    ImageRef, OCI_IMAGE_MANIFEST_MEDIA_TYPE,
 };
 use anyhow::{Context, Result};
 use oci_client::RegistryOperation;
@@ -59,6 +61,10 @@ impl LocalRegistry {
     /// `RemoteTransport` straight into the registry, and a SQLite transaction
     /// publishes the ref descriptor. There is no on-disk OCI Image Layout
     /// intermediate.
+    ///
+    /// At most four blob operations run concurrently by default; set
+    /// `OMMX_ARTIFACT_TRANSFER_CONCURRENCY` to a positive integer to override
+    /// that limit for both push and pull.
     ///
     /// Remote access and remote-response validation failures retain a
     /// [`crate::artifact::RemoteArtifactError`] signal in the returned
@@ -87,6 +93,7 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
         if let Some(cached) = self.cached_ref()? {
             return Ok(cached);
         }
+        let transfer_concurrency = blob_transfer_concurrency()?;
 
         let transport = self.remote_manifest_result(RemoteTransport::new(self.image_name))?;
         self.remote_manifest_result(transport.auth_for(self.image_name, RegistryOperation::Pull))?;
@@ -119,11 +126,32 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
                 .context("Failed to build remote manifest descriptor"),
         )?;
 
-        self.pull_descriptor_blob(&transport, manifest.config())?;
-
-        for layer in manifest.layers() {
-            self.pull_descriptor_blob(&transport, layer)?;
-        }
+        let descriptors = std::iter::once(manifest.config())
+            .chain(manifest.layers())
+            .cloned()
+            .collect::<Vec<_>>();
+        let unique_descriptors =
+            self.invalid_remote_result(blob_descriptors_by_digest(&descriptors))?;
+        let deduplicated = 1 + manifest.layers().len() - unique_descriptors.len();
+        let transferred = unique_descriptors.len();
+        let transport_ref = &transport;
+        transport.block_on(async {
+            bounded_map(
+                unique_descriptors.into_values(),
+                transfer_concurrency,
+                |descriptor| async move {
+                    self.pull_descriptor_blob_async(transport_ref, descriptor)
+                        .await
+                },
+            )
+            .await
+        })?;
+        tracing::info!(
+            transferred,
+            deduplicated,
+            concurrency = transfer_concurrency.get(),
+            "Completed remote blob downloads"
+        );
 
         self.store_manifest_blob(&manifest_descriptor, &manifest_bytes)?;
 
@@ -252,7 +280,7 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
     /// Pull a single descriptor's blob from the registry, write it into
     /// the registry under its content digest, and verify the written
     /// bytes match the descriptor.
-    fn pull_descriptor_blob(
+    async fn pull_descriptor_blob_async(
         &self,
         transport: &RemoteTransport,
         descriptor: &Descriptor,
@@ -262,11 +290,12 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
         // transport's pull helper allocates from this value (not from the
         // registry-reported `Content-Length`) and aborts the chunk loop if
         // the registry serves more bytes than declared.
-        let bytes = self.remote_blob_result(transport.pull_blob_to_vec(
-            self.image_name,
-            &digest,
-            descriptor.size(),
-        ))?;
+        let bytes = self.remote_blob_result(
+            transport
+                .pull_blob_to_vec_async(self.image_name, &digest, descriptor.size())
+                .await
+                .with_context(|| format!("Failed while downloading blob {digest}")),
+        )?;
         if bytes.len() as u64 != descriptor.size() {
             let source = crate::error!(
                 "Blob size mismatch for {digest}: descriptor={}, actual={}",
@@ -279,8 +308,9 @@ impl<'reg, 'name> RemotePull<'reg, 'name> {
             )));
         }
         // RemoteTransport verifies the downloaded bytes against the remote
-        // digest. LocalRegistry then hashes them once for its own CAS invariant.
-        self.registry.store_blob(descriptor.clone(), &bytes)?;
+        // digest. LocalRegistry then hashes and persists them on the blocking
+        // pool for its own CAS invariant without stalling other downloads.
+        async_io::store_descriptor_blob(self.registry, descriptor.clone(), bytes).await?;
         Ok(())
     }
 

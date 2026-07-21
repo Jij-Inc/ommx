@@ -3,6 +3,7 @@ use super::{
     RefUpdate, SQLITE_INDEX_FILE_NAME,
 };
 use crate::artifact::digest::validate_digest;
+use crate::artifact::manifest::blob_descriptors_by_digest;
 use crate::artifact::media_types;
 use crate::artifact::{sha256_digest, ImageRef};
 use crate::experiment::config::ExperimentConfig;
@@ -12,7 +13,6 @@ use oci_spec::image::DescriptorBuilder;
 use oci_spec::image::{Descriptor, Digest, ImageManifest, MediaType};
 use rusqlite::{params, types::Type, Connection, OptionalExtension, TransactionBehavior};
 use std::{
-    collections::BTreeMap,
     fs,
     path::Path,
     str::FromStr,
@@ -74,23 +74,15 @@ impl ArtifactRefRecord {
     /// Blobs shared with other Artifact refs are counted for each ref, so values
     /// from multiple records are not additive physical Local Registry usage.
     pub fn referenced_blob_size(&self) -> Result<u64> {
-        let mut blob_sizes = BTreeMap::new();
-        for descriptor in std::iter::once(self.manifest.config()).chain(self.manifest.layers()) {
-            let digest = descriptor.digest().to_string();
-            if let Some(previous_size) = blob_sizes.insert(digest.clone(), descriptor.size()) {
-                ensure!(
-                    previous_size == descriptor.size(),
-                    "Manifest contains conflicting sizes for {digest}: {previous_size} and {}",
-                    descriptor.size()
-                );
-            }
-        }
+        let blob_descriptors = blob_descriptors_by_digest(
+            std::iter::once(self.manifest.config()).chain(self.manifest.layers()),
+        )?;
 
-        blob_sizes
+        blob_descriptors
             .into_values()
-            .try_fold(self.manifest_size, |total, size| {
+            .try_fold(self.manifest_size, |total, descriptor| {
                 total
-                    .checked_add(size)
+                    .checked_add(descriptor.size())
                     .context("Referenced blob size overflowed u64")
             })
     }

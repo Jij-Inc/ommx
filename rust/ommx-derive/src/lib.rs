@@ -183,7 +183,7 @@ fn has_type_params(generics: &syn::Generics) -> bool {
 fn type_uses_type_param(ty: &Type, generics: &syn::Generics) -> bool {
     match ty {
         Type::Array(ty) => type_uses_type_param(&ty.elem, generics),
-        Type::BareFn(ty) => {
+        Type::FnPtr(ty) => {
             ty.inputs
                 .iter()
                 .any(|arg| type_uses_type_param(&arg.ty, generics))
@@ -239,7 +239,7 @@ fn path_arguments_use_type_param(arguments: &PathArguments, generics: &syn::Gene
             arguments
                 .inputs
                 .iter()
-                .any(|input| type_uses_type_param(input, generics))
+                .any(|input| type_uses_type_param(&input.ty, generics))
                 || matches!(
                     &arguments.output,
                     syn::ReturnType::Type(_, output) if type_uses_type_param(output, generics)
@@ -251,6 +251,36 @@ fn path_arguments_use_type_param(arguments: &PathArguments, generics: &syn::Gene
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn type_uses_param(ty: Type) -> bool {
+        let generics: syn::Generics = syn::parse_quote!(<T>);
+        type_uses_type_param(&ty, &generics)
+    }
+
+    #[test]
+    fn detects_type_param_in_function_pointer() {
+        assert!(type_uses_param(syn::parse_quote!(fn(T) -> u64)));
+        assert!(type_uses_param(syn::parse_quote!(fn(u64) -> T)));
+        assert!(!type_uses_param(syn::parse_quote!(fn(u64) -> bool)));
+    }
+
+    #[test]
+    fn detects_type_param_in_parenthesized_path_arguments() {
+        let generics: syn::Generics = syn::parse_quote!(<T>);
+        for (bound, expected) in [
+            (syn::parse_quote!(Fn(T) -> u64), true),
+            (syn::parse_quote!(Fn(u64) -> T), true),
+            (syn::parse_quote!(Fn(u64) -> bool), false),
+        ] {
+            let syn::TypeParamBound::Trait(bound) = bound else {
+                panic!("expected trait bound");
+            };
+            assert_eq!(
+                path_arguments_use_type_param(&bound.path.segments[0].arguments, &generics),
+                expected
+            );
+        }
+    }
 
     /// Render a derive-generated `TokenStream2` as a formatted Rust source
     /// string, so `insta::assert_snapshot!` diffs are readable.
