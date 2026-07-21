@@ -12,13 +12,14 @@ Changes merged after the most recent release will be appended here as they land,
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b2-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b2)
 
-### ⚠ Input classes and explicit OpenJij preparation ([#1085](https://github.com/Jij-Inc/ommx/pull/1085), [#1086](https://github.com/Jij-Inc/ommx/pull/1086), [#1087](https://github.com/Jij-Inc/ommx/pull/1087))
+### ⚠ `SolverAdapter.INPUT_CLASS` and explicit OpenJij preparation ([#1084](https://github.com/Jij-Inc/ommx/pull/1084), [#1085](https://github.com/Jij-Inc/ommx/pull/1085), [#1086](https://github.com/Jij-Inc/ommx/pull/1086), [#1087](https://github.com/Jij-Inc/ommx/pull/1087))
 
-`OMMXHighsAdapter`, `OMMXPythonMIPAdapter`, `OMMXPySCIPOptAdapter`, and
-`OMMXOpenJijSAAdapter` now expose `INPUT_CLASS`, which represents the set of
-{class}`~ommx.Instance` values each adapter can handle directly without
-transformation. Inputs outside an adapter's declared class are rejected before
-backend construction with {class}`~ommx.adapter.AdapterNotApplicableError`; use
+{class}`~ommx.adapter.SolverAdapter` now defines `INPUT_CLASS`, which represents
+the set of {class}`~ommx.Instance` values an adapter can handle directly without
+transformation. `OMMXHighsAdapter`, `OMMXPythonMIPAdapter`,
+`OMMXPySCIPOptAdapter`, and `OMMXOpenJijSAAdapter` each declare their concrete
+input class. Inputs outside that class are rejected before backend construction
+with {class}`~ommx.adapter.AdapterNotApplicableError`; use
 `check_applicability()` to inspect structured mismatches. HiGHS and Python-MIP
 accept linear models, PySCIPOpt accepts its supported quadratic, Indicator, and
 SOS1 forms, and OpenJij accepts unconstrained binary minimization problems.
