@@ -174,34 +174,26 @@ theorem holds_iff :
       constructor <;> intro h <;> linarith
 
 /-- The bound atom is justified by the corresponding stored domain side. -/
-def ValidFor (domains : Fin n → VariableDomain) : BoundSide n → Prop
-  | .lower index value => (domains index).bounds.lower = some value
-  | .upper index value => (domains index).bounds.upper = some value
+def ValidFor (domains : Fin n → Domain) : BoundSide n → Prop
+  | .lower index value => (domains index).lowerBound = some value
+  | .upper index value => (domains index).upperBound = some value
 
-instance (domains : Fin n → VariableDomain) (side : BoundSide n) :
+instance (domains : Fin n → Domain) (side : BoundSide n) :
     Decidable (side.ValidFor domains) := by
   cases side <;> simp [ValidFor] <;> infer_instance
 
-theorem validFor_holds {domains : Fin n → VariableDomain}
+theorem validFor_holds {domains : Fin n → Domain}
     {side : BoundSide n} {state : State n}
     (hvalid : side.ValidFor domains)
-    (hdomains : ∀ i, (domains i).Holds (state i)) :
+    (hdomains : ∀ i, state i ∈ domains i) :
     side.toAffine.eval state ≤ 0 := by
   cases side with
   | lower index value =>
     apply (holds_iff (.lower index value) state).mpr
-    have hbounds := (hdomains index).2
-    unfold Bounds.Holds at hbounds
-    simp [ValidFor] at hvalid
-    rw [hvalid] at hbounds
-    exact hbounds.1
+    exact Domain.lowerBound_le (hdomains index) hvalid
   | upper index value =>
     apply (holds_iff (.upper index value) state).mpr
-    have hbounds := (hdomains index).2
-    unfold Bounds.Holds at hbounds
-    simp [ValidFor] at hvalid
-    rw [hvalid] at hbounds
-    exact hbounds.2
+    exact Domain.le_upperBound (hdomains index) hvalid
 
 /-- `target.Tightens source` means that both sides refer to the same variable
 and direction and that the target interval is contained in the source
@@ -264,17 +256,17 @@ theorem checkActivityBound_sound {sides : Fin m → BoundSide n}
   exact ⟨hbounds, fun i => nomatch i⟩
 
 /-- Executable model-domain binding for an activity-bound proof. -/
-def checkActivityBoundForDomains (domains : Fin n → VariableDomain)
+def checkActivityBoundForDomains (domains : Fin n → Domain)
     (sides : Fin m → BoundSide n) (witness : ActivityBoundWitness sides)
     (target : Affine n) : Bool :=
   decide (∀ i, (sides i).ValidFor domains) && witness.checkImplication target
 
 theorem checkActivityBoundForDomains_sound
-    {domains : Fin n → VariableDomain} {sides : Fin m → BoundSide n}
+    {domains : Fin n → Domain} {sides : Fin m → BoundSide n}
     {witness : ActivityBoundWitness sides} {target : Affine n}
     (hcheck : checkActivityBoundForDomains domains sides witness target = true)
     {state : State n}
-    (hdomains : ∀ i, (domains i).Holds (state i)) :
+    (hdomains : ∀ i, state i ∈ domains i) :
     target.eval state ≤ 0 := by
   have hparts := Bool.and_eq_true_iff.mp hcheck
   have hvalid : ∀ i, (sides i).ValidFor domains := by
@@ -355,7 +347,7 @@ abbrev BoundTighteningWitness (remaining : LinearSystem n) (source : BoundSide n
 /-- Exact checker for replacing a stored bound. Besides the Farkas implication
 from the pre-state, it checks that the source is an actual domain side and that
 the proposed replacement is genuinely tighter in the same direction. -/
-def checkBoundTightening (domains : Fin n → VariableDomain)
+def checkBoundTightening (domains : Fin n → Domain)
     (remaining : LinearSystem n) (source target : BoundSide n)
     (witness : BoundTighteningWitness remaining source) : Bool :=
   decide (source.ValidFor domains) &&
@@ -363,7 +355,7 @@ def checkBoundTightening (domains : Fin n → VariableDomain)
       witness.checkImplication target.toAffine)
 
 theorem checkBoundTightening_sound
-    {domains : Fin n → VariableDomain} {remaining : LinearSystem n}
+    {domains : Fin n → Domain} {remaining : LinearSystem n}
     {source target : BoundSide n}
     {witness : BoundTighteningWitness remaining source}
     (hcheck : checkBoundTightening domains remaining source target witness = true) :

@@ -11,7 +11,7 @@ separately verifies that every member has a binary domain.
 namespace OMMXProof
 
 def BinaryOn (members : Finset (Fin n)) (state : State n) : Prop :=
-  ∀ i ∈ members, VariableDomain.KindHolds .binary (state i)
+  ∀ i ∈ members, state i ∈ Domain.binary
 
 def support (members : Finset (Fin n)) (state : State n) : Finset (Fin n) :=
   members.filter fun i => state i ≠ 0
@@ -34,18 +34,18 @@ structure OneHotDraft (n : Nat) where
   members : Finset (Fin n)
   scale : Rat
 
-def domainsBinaryOn (domains : Fin n → VariableDomain)
+def domainsBinaryOn (domains : Fin n → Domain)
     (members : Finset (Fin n)) : Prop :=
-  ∀ i ∈ members, (domains i).kind = .binary
+  ∀ i ∈ members, domains i = .binary
 
-instance (domains : Fin n → VariableDomain) (members : Finset (Fin n)) :
+instance (domains : Fin n → Domain) (members : Finset (Fin n)) :
     Decidable (domainsBinaryOn domains members) := by
   unfold domainsBinaryOn
   infer_instance
 
 /-- Exact structural checker. The source row must itself be an equality; an
 inequality with the same affine expression is not a valid OneHot witness. -/
-def checkOneHot (domains : Fin n → VariableDomain) (source : LinearConstraint n)
+def checkOneHot (domains : Fin n → Domain) (source : LinearConstraint n)
     (draft : OneHotDraft n) : Bool :=
   decide (draft.members.Nonempty ∧
       draft.scale ≠ 0 ∧
@@ -53,15 +53,15 @@ def checkOneHot (domains : Fin n → VariableDomain) (source : LinearConstraint 
       source.sense = .equal) &&
     source.expr.same (Affine.scale draft.scale (oneHotExpr draft.members))
 
-theorem binaryOn_of_domains {domains : Fin n → VariableDomain}
+theorem binaryOn_of_domains {domains : Fin n → Domain}
     {members : Finset (Fin n)} {state : State n}
     (hbinary : domainsBinaryOn domains members)
-    (hdomains : ∀ i, (domains i).Holds (state i)) :
+    (hdomains : ∀ i, state i ∈ domains i) :
     BinaryOn members state := by
   intro i hi
-  have hkind := (hdomains i).1
-  rw [hbinary i hi] at hkind
-  exact hkind
+  have hvalue := hdomains i
+  rw [hbinary i hi] at hvalue
+  exact hvalue
 
 theorem binary_sum_eq_support_card (members : Finset (Fin n))
     (state : State n) (hbinary : BinaryOn members state) :
@@ -111,11 +111,11 @@ theorem oneHot_iff_exactlyOne (members : Finset (Fin n))
   rw [binary_sum_eq_support_card members state hbinary]
   simp [ExactlyOne]
 
-theorem checkOneHot_sound {domains : Fin n → VariableDomain}
+theorem checkOneHot_sound {domains : Fin n → Domain}
     {source : LinearConstraint n} {draft : OneHotDraft n}
     (hcheck : checkOneHot domains source draft = true)
     {state : State n}
-    (hdomains : ∀ i, (domains i).Holds (state i)) :
+    (hdomains : ∀ i, state i ∈ domains i) :
     (source.Holds state ↔
       (SpecialConstraint.oneHot draft.members).Holds state) := by
   have houter := Bool.and_eq_true_iff.mp hcheck
@@ -142,13 +142,13 @@ theorem checkOneHot_sound {domains : Fin n → VariableDomain}
     rw [hsum]
     norm_num
 
-theorem oneHot_replace_preserves {domains : Fin n → VariableDomain}
+theorem oneHot_replace_preserves {domains : Fin n → Domain}
     {source : LinearConstraint n} {draft : OneHotDraft n}
     (hcheck : checkOneHot domains source draft = true)
     (base : State n → Prop) (objective : State n → Rat)
     (sense : OptimizationSense)
     (baseDomains : ∀ {state}, base state →
-      ∀ i, (domains i).Holds (state i)) :
+      ∀ i, state i ∈ domains i) :
     IdentityPreserves
       (replaceProblem base (fun state => source.Holds state)
         objective sense)

@@ -94,13 +94,13 @@ theorem indicator_augment
     (trigger : Fin n) (polarity : IndicatorPolarity)
     (activeForward : ∀ {state},
       base state →
-      VariableDomain.KindHolds .binary (state trigger) →
+      state trigger ∈ Domain.binary →
       source state →
       polarity.Active (state trigger) →
       consequent state) :
     ∀ state,
       base state →
-      VariableDomain.KindHolds .binary (state trigger) →
+      state trigger ∈ Domain.binary →
       (source state ↔
         source state ∧
           IndicatorPredicate trigger polarity consequent state) := by
@@ -119,17 +119,17 @@ theorem indicator_replace
     (trigger : Fin n) (polarity : IndicatorPolarity)
     (activeExact : ∀ {state},
       base state →
-      VariableDomain.KindHolds .binary (state trigger) →
+      state trigger ∈ Domain.binary →
       polarity.Active (state trigger) →
       (source state ↔ consequent state))
     (inactiveSource : ∀ {state},
       base state →
-      VariableDomain.KindHolds .binary (state trigger) →
+      state trigger ∈ Domain.binary →
       state trigger = polarity.inactiveValue →
       source state) :
     ∀ state,
       base state →
-      VariableDomain.KindHolds .binary (state trigger) →
+      state trigger ∈ Domain.binary →
       (source state ↔
         IndicatorPredicate trigger polarity consequent state) := by
   intro state hbase hbinary
@@ -156,27 +156,27 @@ theorem equalityIndicator_replace
     (trigger : Fin n) (polarity : IndicatorPolarity)
     (activeLower : ∀ {state},
       base state →
-      VariableDomain.KindHolds .binary (state trigger) →
+      state trigger ∈ Domain.binary →
       polarity.Active (state trigger) →
       (sourceLower state ↔ consequentLower state))
     (activeUpper : ∀ {state},
       base state →
-      VariableDomain.KindHolds .binary (state trigger) →
+      state trigger ∈ Domain.binary →
       polarity.Active (state trigger) →
       (sourceUpper state ↔ consequentUpper state))
     (inactiveLower : ∀ {state},
       base state →
-      VariableDomain.KindHolds .binary (state trigger) →
+      state trigger ∈ Domain.binary →
       state trigger = polarity.inactiveValue →
       sourceLower state)
     (inactiveUpper : ∀ {state},
       base state →
-      VariableDomain.KindHolds .binary (state trigger) →
+      state trigger ∈ Domain.binary →
       state trigger = polarity.inactiveValue →
       sourceUpper state) :
     ∀ state,
       base state →
-      VariableDomain.KindHolds .binary (state trigger) →
+      state trigger ∈ Domain.binary →
       (sourceLower state ∧ sourceUpper state ↔
         IndicatorPredicate trigger polarity
           (fun x => consequentLower x ∧ consequentUpper x) state) := by
@@ -199,14 +199,14 @@ structure IndicatorReplaceWitness (surviving : LinearSystem n)
   inactive : FarkasWitness
     (branchSystem surviving trigger polarity.inactiveValue)
 
-def checkIndicatorActive (domains : Fin n → VariableDomain)
+def checkIndicatorActive (domains : Fin n → Domain)
     (source body : LinearConstraint n) (trigger : Fin n)
     (polarity : IndicatorPolarity) : Bool :=
-  decide ((domains trigger).kind = .binary) &&
+  decide (domains trigger = .binary) &&
     (source.substitute trigger polarity.activeValue).same body
 
 theorem checkIndicatorActive_sound
-    {domains : Fin n → VariableDomain}
+    {domains : Fin n → Domain}
     {source body : LinearConstraint n} {trigger : Fin n}
     {polarity : IndicatorPolarity}
     (hcheck : checkIndicatorActive domains source body trigger polarity = true)
@@ -221,14 +221,14 @@ theorem checkIndicatorActive_sound
 /-- An accepted active-branch check justifies adding the Indicator while the
 source row remains present. This is identity-space augmentation, not removal. -/
 theorem checkIndicatorAugment_preserves
-    {domains : Fin n → VariableDomain}
+    {domains : Fin n → Domain}
     {source body : LinearConstraint n} {trigger : Fin n}
     {polarity : IndicatorPolarity}
     (hcheck : checkIndicatorActive domains source body trigger polarity = true)
     (base : State n → Prop) (objective : State n → Rat)
     (sense : OptimizationSense)
     (baseDomains : ∀ {state}, base state →
-      ∀ i, (domains i).Holds (state i)) :
+      ∀ i, state i ∈ domains i) :
     IdentityPreserves
       (replaceProblem base (fun state => source.Holds state)
         objective sense)
@@ -239,10 +239,10 @@ theorem checkIndicatorAugment_preserves
   apply replace_preserves
   intro state hbase
   have hparts := Bool.and_eq_true_iff.mp hcheck
-  have hkind : (domains trigger).kind = .binary := by
+  have hkind : domains trigger = .binary := by
     simpa [decide_eq_true_eq] using hparts.1
-  have hbinary : VariableDomain.KindHolds .binary (state trigger) := by
-    have hdomain := (baseDomains hbase trigger).1
+  have hbinary : state trigger ∈ Domain.binary := by
+    have hdomain := baseDomains hbase trigger
     rw [hkind] at hdomain
     exact hdomain
   change source.Holds state ↔
@@ -254,7 +254,7 @@ theorem checkIndicatorAugment_preserves
   intro x _ _ hsource hactive
   exact (checkIndicatorActive_sound hcheck hactive).mp hsource
 
-def checkIndicatorReplace (domains : Fin n → VariableDomain)
+def checkIndicatorReplace (domains : Fin n → Domain)
     (surviving : LinearSystem n) (source body : LinearConstraint n)
     (trigger : Fin n) (polarity : IndicatorPolarity)
     (witness : IndicatorReplaceWitness surviving trigger polarity) : Bool :=
@@ -263,14 +263,14 @@ def checkIndicatorReplace (domains : Fin n → VariableDomain)
       witness.inactive.checkImplication source.expr)
 
 theorem checkIndicatorReplace_sound
-    {domains : Fin n → VariableDomain} {surviving : LinearSystem n}
+    {domains : Fin n → Domain} {surviving : LinearSystem n}
     {source body : LinearConstraint n}
     {trigger : Fin n} {polarity : IndicatorPolarity}
     {witness : IndicatorReplaceWitness surviving trigger polarity}
     (hcheck : checkIndicatorReplace domains surviving source body trigger polarity
       witness = true)
     {state : State n}
-    (hdomains : ∀ i, (domains i).Holds (state i))
+    (hdomains : ∀ i, state i ∈ domains i)
     (hsurviving : surviving.Feasible state) :
     (source.Holds state ↔
       (SpecialConstraint.indicator trigger polarity body).Holds state) := by
@@ -278,11 +278,11 @@ theorem checkIndicatorReplace_sound
   have hparts := Bool.and_eq_true_iff.mp houter.2
   have hsenses : source.sense = .lessEqual ∧ body.sense = .lessEqual := by
     simpa [decide_eq_true_eq] using houter.1
-  have hbinary : VariableDomain.KindHolds .binary (state trigger) := by
-    have hkind : (domains trigger).kind = .binary := by
+  have hbinary : state trigger ∈ Domain.binary := by
+    have hkind : domains trigger = .binary := by
       have hactiveParts := Bool.and_eq_true_iff.mp hparts.1
       simpa [decide_eq_true_eq] using hactiveParts.1
-    have := (hdomains trigger).1
+    have := hdomains trigger
     rw [hkind] at this
     exact this
   refine indicator_replace
@@ -309,7 +309,7 @@ structure EqualityIndicatorReplaceWitness (surviving : LinearSystem n)
   lower : FarkasWitness
     (branchSystem surviving trigger polarity.inactiveValue)
 
-def checkEqualityIndicatorReplace (domains : Fin n → VariableDomain)
+def checkEqualityIndicatorReplace (domains : Fin n → Domain)
     (surviving : LinearSystem n) (source body : LinearConstraint n)
     (trigger : Fin n) (polarity : IndicatorPolarity)
     (witness : EqualityIndicatorReplaceWitness surviving trigger polarity) : Bool :=
@@ -319,14 +319,14 @@ def checkEqualityIndicatorReplace (domains : Fin n → VariableDomain)
         witness.lower.checkImplication (Affine.neg source.expr)))
 
 theorem checkEqualityIndicatorReplace_sound
-    {domains : Fin n → VariableDomain} {surviving : LinearSystem n}
+    {domains : Fin n → Domain} {surviving : LinearSystem n}
     {source body : LinearConstraint n}
     {trigger : Fin n} {polarity : IndicatorPolarity}
     {witness : EqualityIndicatorReplaceWitness surviving trigger polarity}
     (hcheck : checkEqualityIndicatorReplace domains surviving source body trigger polarity
       witness = true)
     {state : State n}
-    (hdomains : ∀ i, (domains i).Holds (state i))
+    (hdomains : ∀ i, state i ∈ domains i)
     (hsurviving : surviving.Feasible state) :
     (source.Holds state ↔
       (SpecialConstraint.indicator trigger polarity body).Holds state) := by
@@ -335,11 +335,11 @@ theorem checkEqualityIndicatorReplace_sound
   have hinner := Bool.and_eq_true_iff.mp hmiddle.2
   have hsenses : source.sense = .equal ∧ body.sense = .equal := by
     simpa [decide_eq_true_eq] using houter.1
-  have hbinary : VariableDomain.KindHolds .binary (state trigger) := by
+  have hbinary : state trigger ∈ Domain.binary := by
     have hactiveParts := Bool.and_eq_true_iff.mp hmiddle.1
-    have hkind : (domains trigger).kind = .binary := by
+    have hkind : domains trigger = .binary := by
       simpa [decide_eq_true_eq] using hactiveParts.1
-    have hdomain := (hdomains trigger).1
+    have hdomain := hdomains trigger
     rw [hkind] at hdomain
     exact hdomain
   refine indicator_replace
@@ -390,7 +390,7 @@ def LowerSide (body : State n → Rat) (trigger : Fin n) (lower : Rat)
 
 theorem upperSide_iff_indicator {body : State n → Rat} {trigger : Fin n}
     {upper : Rat} {state : State n}
-    (hbinary : VariableDomain.KindHolds .binary (state trigger))
+    (hbinary : state trigger ∈ Domain.binary)
     (hbound : body state ≤ upper) :
     UpperSide body trigger upper state ↔
       IndicatorPredicate trigger .activeOnOne
@@ -412,7 +412,7 @@ theorem upperSide_iff_indicator {body : State n → Rat} {trigger : Fin n}
 
 theorem lowerSide_iff_indicator {body : State n → Rat} {trigger : Fin n}
     {lower : Rat} {state : State n}
-    (hbinary : VariableDomain.KindHolds .binary (state trigger))
+    (hbinary : state trigger ∈ Domain.binary)
     (hbound : lower ≤ body state) :
     LowerSide body trigger lower state ↔
       IndicatorPredicate trigger .activeOnOne
@@ -434,7 +434,7 @@ theorem lowerSide_iff_indicator {body : State n → Rat} {trigger : Fin n}
 
 theorem equalitySides_iff_indicator {body : State n → Rat}
     {trigger : Fin n} {lower upper : Rat} {state : State n}
-    (hbinary : VariableDomain.KindHolds .binary (state trigger))
+    (hbinary : state trigger ∈ Domain.binary)
     (hlower : lower ≤ body state) (hupper : body state ≤ upper) :
     UpperSide body trigger upper state ∧
         LowerSide body trigger lower state ↔
@@ -460,7 +460,7 @@ theorem inequality_preserves
     (trigger : Fin n) (upper : Rat) (objective : State n → Rat)
     (sense : OptimizationSense)
     (binaryOnBase : ∀ {state}, base state →
-      VariableDomain.KindHolds .binary (state trigger))
+      state trigger ∈ Domain.binary)
     (upperBoundOnBase : ∀ {state}, base state →
       body state ≤ upper) :
     IdentityPreserves
@@ -479,7 +479,7 @@ theorem equality_preserves
     (trigger : Fin n) (lower upper : Rat) (objective : State n → Rat)
     (sense : OptimizationSense)
     (binaryOnBase : ∀ {state}, base state →
-      VariableDomain.KindHolds .binary (state trigger))
+      state trigger ∈ Domain.binary)
     (boundsOnBase : ∀ {state}, base state →
       lower ≤ body state ∧ body state ≤ upper) :
     IdentityPreserves
