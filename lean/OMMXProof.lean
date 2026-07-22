@@ -1,4 +1,5 @@
 import OMMXProof.Core
+import OMMXProof.Domain
 import OMMXProof.Function.Affine
 import OMMXProof.Linear.Farkas
 import OMMXProof.Reduction

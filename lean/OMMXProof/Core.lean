@@ -1,3 +1,4 @@
+import OMMXProof.Domain
 import OMMXProof.Function.Affine
 
 /-!
@@ -9,62 +10,6 @@ lifecycle, or identifier semantics.
 -/
 
 namespace OMMXProof
-
-inductive VariableKind where
-  | continuous
-  | integer
-  | binary
-  deriving DecidableEq, Repr
-
-/-- Bound of a decision variable.
-`None` for `lower` (`upper`) means lower (upper) bound is unbounded
--/
-structure Bounds where
-  lower : Option Rat := none
-  upper : Option Rat := none
-  deriving DecidableEq, Repr
-
-namespace Bounds
-
-def Holds (bounds : Bounds) (value : Rat) : Prop :=
-  (match bounds.lower with | none => True | some lower => lower ≤ value) ∧
-  (match bounds.upper with | none => True | some upper => value ≤ upper)
-
-instance (bounds : Bounds) (value : Rat) : Decidable (Holds bounds value) := by
-  unfold Holds
-  cases bounds.lower <;> cases bounds.upper <;> infer_instance
-
-end Bounds
-
-structure VariableDomain where
-  kind : VariableKind := .continuous
-  bounds : Bounds := {}
-  deriving DecidableEq, Repr
-
-namespace VariableDomain
-
-def KindHolds (kind : VariableKind) (value : Rat) : Prop :=
-  match kind with
-  | .continuous => True
-  | .integer => value.den = 1
-  | .binary => value = 0 ∨ value = 1
-
-def Holds (domain : VariableDomain) (value : Rat) : Prop :=
-  KindHolds domain.kind value ∧ domain.bounds.Holds value
-
-instance (kind : VariableKind) (value : Rat) : Decidable (KindHolds kind value) := by
-  cases kind <;> unfold KindHolds <;> infer_instance
-
-instance (domain : VariableDomain) (value : Rat) : Decidable (Holds domain value) := by
-  unfold Holds KindHolds
-  cases domain.kind <;> cases domain.bounds.lower <;> cases domain.bounds.upper <;>
-    infer_instance
-
-theorem binary_zero : KindHolds .binary 0 := by simp [KindHolds]
-
-theorem binary_one : KindHolds .binary 1 := by simp [KindHolds]
-
-end VariableDomain
 
 inductive OptimizationSense where
   | minimize
@@ -153,9 +98,10 @@ instance (polarity : IndicatorPolarity) (value : Rat) :
   infer_instance
 
 theorem active_or_inactive_of_binary {polarity : IndicatorPolarity} {value : Rat}
-    (hbinary : VariableDomain.KindHolds .binary value) :
+    (hbinary : value ∈ Domain.binary) :
     Active polarity value ∨ value = polarity.inactiveValue := by
-  rcases hbinary with rfl | rfl <;> cases polarity <;> simp [Active, activeValue, inactiveValue]
+  rcases hbinary with rfl | rfl <;> cases polarity <;>
+    simp [Active, activeValue, inactiveValue]
 
 end IndicatorPolarity
 
@@ -169,7 +115,7 @@ namespace SpecialConstraint
 
 def Holds : SpecialConstraint n → State n → Prop
   | .oneHot members, state =>
-      (∀ i ∈ members, VariableDomain.KindHolds .binary (state i)) ∧
+      (∀ i ∈ members, state i ∈ Domain.binary) ∧
         ∑ i ∈ members, state i = 1
   | .indicator trigger polarity body, state =>
       polarity.Active (state trigger) → body.Holds state
@@ -193,7 +139,7 @@ end SpecialConstraint
 - Only Affine expressions are supported, while Rust SDK supports arbitrary polynomial expressions.
 -/
 structure Instance (n : Nat) where
-  domains : Fin n → VariableDomain
+  domains : Fin n → Domain
   linear : LinearSystem n
   specialConstraints : List (SpecialConstraint n) := []
   objective : Affine n
@@ -202,7 +148,7 @@ structure Instance (n : Nat) where
 namespace Instance
 
 def Feasible (inst : Instance n) (state : State n) : Prop :=
-  (∀ i, (inst.domains i).Holds (state i)) ∧
+  (∀ i, state i ∈ inst.domains i) ∧
     inst.linear.Feasible state ∧
     ∀ constraint ∈ inst.specialConstraints, constraint.Holds state
 

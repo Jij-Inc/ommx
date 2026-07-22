@@ -58,7 +58,7 @@ structure BinaryCardinalitySOS1Draft (n : Nat) where
   members : Finset (Fin n)
   scale : Rat
 
-def checkBinaryCardinalitySOS1 (domains : Fin n → VariableDomain)
+def checkBinaryCardinalitySOS1 (domains : Fin n → Domain)
     (source : LinearConstraint n) (draft : BinaryCardinalitySOS1Draft n) : Bool :=
   decide (draft.members.Nonempty ∧
       0 < draft.scale ∧
@@ -67,11 +67,11 @@ def checkBinaryCardinalitySOS1 (domains : Fin n → VariableDomain)
     source.expr.same (Affine.scale draft.scale (oneHotExpr draft.members))
 
 theorem checkBinaryCardinalitySOS1_sound
-    {domains : Fin n → VariableDomain} {source : LinearConstraint n}
+    {domains : Fin n → Domain} {source : LinearConstraint n}
     {draft : BinaryCardinalitySOS1Draft n}
     (hcheck : checkBinaryCardinalitySOS1 domains source draft = true)
     {state : State n}
-    (hdomains : ∀ i, (domains i).Holds (state i)) :
+    (hdomains : ∀ i, state i ∈ domains i) :
     (source.Holds state ↔
       (SpecialConstraint.sos1 draft.members).Holds state) := by
   have houter := Bool.and_eq_true_iff.mp hcheck
@@ -104,30 +104,6 @@ a nonzero coefficient.
 def AgreeOutside (privateSet : Finset (Fin n))
     (lhs rhs : State n) : Prop :=
   ∀ i, i ∉ privateSet → lhs i = rhs i
-
-namespace VariableDomain
-
-/-- A domain that imposes no semantic condition on a rational coordinate. -/
-def Unrestricted (domain : VariableDomain) : Prop :=
-  domain.kind = .continuous ∧
-    domain.bounds.lower = none ∧ domain.bounds.upper = none
-
-instance (domain : VariableDomain) : Decidable domain.Unrestricted := by
-  unfold Unrestricted
-  infer_instance
-
-theorem holds_of_unrestricted {domain : VariableDomain}
-    (hunrestricted : domain.Unrestricted) (value : Rat) :
-    domain.Holds value := by
-  rcases hunrestricted with ⟨hkind, hlower, hupper⟩
-  unfold Holds
-  constructor
-  · simp [hkind, KindHolds]
-  · unfold Bounds.Holds
-    rw [hlower, hupper]
-    exact ⟨trivial, trivial⟩
-
-end VariableDomain
 
 namespace Affine
 
@@ -392,17 +368,17 @@ theorem feasible_iff_of_selectorIsolated {inst : Instance n}
   have hindependent (i : Fin n) (hi : i ∈ witness.privateSelectors) :=
     independentAt_of_selectorIsolated hisolated hi
   have hdomains :
-      (∀ i, (inst.domains i).Holds (lhs i)) ↔
-        ∀ i, (inst.domains i).Holds (rhs i) := by
+      (∀ i, lhs i ∈ inst.domains i) ↔
+        ∀ i, rhs i ∈ inst.domains i := by
     constructor
     · intro hleft i
       by_cases hprivate : i ∈ witness.privateSelectors
-      · exact VariableDomain.holds_of_unrestricted
+      · exact Domain.holds_of_unrestricted
           (hindependent i hprivate).1 (rhs i)
       · simpa [← hagree i hprivate] using hleft i
     · intro hright i
       by_cases hprivate : i ∈ witness.privateSelectors
-      · exact VariableDomain.holds_of_unrestricted
+      · exact Domain.holds_of_unrestricted
           (hindependent i hprivate).1 (lhs i)
       · simpa [hagree i hprivate] using hright i
   have hlinear := LinearSystem.feasible_iff_of_independentOf
@@ -458,7 +434,7 @@ theorem checkSelectorIsolation_objective_sound {inst : Instance n}
 end Instance
 
 def GenericBinaryOn (members : Finset ι) (state : ι → Rat) : Prop :=
-  ∀ i ∈ members, VariableDomain.KindHolds .binary (state i)
+  ∀ i ∈ members, state i ∈ Domain.binary
 
 def genericSupport [DecidableEq ι]
     (members : Finset ι) (state : ι → Rat) : Finset ι :=
@@ -532,9 +508,9 @@ def canonicalSelector (members : ι → Rat) : ι → Rat :=
   fun i => if members i = 0 then 0 else 1
 
 theorem canonicalSelector_binary (members : ι → Rat) (i : ι) :
-    VariableDomain.KindHolds .binary (canonicalSelector members i) := by
+    canonicalSelector members i ∈ Domain.binary := by
   by_cases hzero : members i = 0 <;>
-    simp [canonicalSelector, VariableDomain.KindHolds, hzero]
+    simp [canonicalSelector, Membership.mem, Domain.Holds, hzero]
 
 theorem canonicalSelector_support [Fintype ι] [DecidableEq ι]
     (members : ι → Rat) :
@@ -936,7 +912,7 @@ theorem canonicalSelector_not_source_retraction :
   constructor
   · constructor
     · intro i
-      simp [VariableDomain.KindHolds]
+      simp [Membership.mem, Domain.Holds]
     constructor
     · intro i
       norm_num

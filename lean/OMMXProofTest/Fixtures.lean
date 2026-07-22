@@ -118,8 +118,8 @@ theorem impossible_has_no_solution : ¬ ∃ state, impossible.Feasible state :=
   FarkasWitness.checkInfeasibility_sound (witness := impossibleWitness)
     (by native_decide)
 
-def oneVariableDomains : Fin 1 → VariableDomain := fun _ =>
-  { kind := .continuous, bounds := { lower := some 0, upper := some 1 } }
+def oneVariableDomains : Fin 1 → Domain := fun _ =>
+  .continuous (some 0) (some 1)
 
 def storedBounds : Fin 2 → BoundSide 1 := fun i =>
   if i.val = 0 then .upper 0 1 else .lower 0 0
@@ -199,10 +199,9 @@ def emptyWitness : FarkasWitness emptySystem where
 /-- Integrality cannot be smuggled into the continuous Farkas kernel. -/
 example : emptyWitness.checkImplication upperOne = false := by native_decide
 
-def binaryDomain : VariableDomain :=
-  { kind := .binary, bounds := { lower := some 0, upper := some 1 } }
+def binaryDomain : Domain := .binary
 
-def binaryDomains2 : Fin 2 → VariableDomain := fun _ => binaryDomain
+def binaryDomains2 : Fin 2 → Domain := fun _ => binaryDomain
 
 def allTwo : Finset (Fin 2) := Finset.univ
 
@@ -220,8 +219,8 @@ example : checkOneHot binaryDomains2
     { expr := oneHotExpr ∅, sense := .equal } emptyOneHotDraft = false := by
   native_decide
 
-def continuousDomains2 : Fin 2 → VariableDomain := fun _ =>
-  { kind := .continuous }
+def continuousDomains2 : Fin 2 → Domain := fun _ =>
+  .continuous
 
 example : checkOneHot continuousDomains2 scaledOneHotSource oneHotDraft = false := by
   native_decide
@@ -315,8 +314,8 @@ def indicatorSource : LinearConstraint 2 :=
 def indicatorBody : LinearConstraint 2 :=
   { expr := twoVarAffine 1 0 (-10), sense := .lessEqual }
 
-def indicatorDomains : Fin 2 → VariableDomain := fun i =>
-  if i.val = 0 then { kind := .continuous } else binaryDomain
+def indicatorDomains : Fin 2 → Domain := fun i =>
+  if i.val = 0 then .continuous else binaryDomain
 
 def indicatorWitness :
     IndicatorReplaceWitness indicatorSurviving 1 .activeOnOne where
@@ -400,7 +399,7 @@ lower bound is zero.  The remaining upper side plus the base bound still
 preserves the Indicator semantics. -/
 
 def sdkIndicatorBase (state : State 2) : Prop :=
-  VariableDomain.KindHolds .binary (state 1) ∧
+  state 1 ∈ Domain.binary ∧
     0 ≤ state 0 ∧ state 0 ≤ 3
 
 def sdkIndicatorBody (state : State 2) : Rat := state 0
@@ -445,11 +444,11 @@ def selectorObjectiveExample (members : Fin 1 → Rat) : Rat := members 0
 
 def selectorPrivateExample : Finset (Fin 2) := {1}
 
-def selectorIsolationDomains : Fin 2 → VariableDomain := fun i =>
+def selectorIsolationDomains : Fin 2 → Domain := fun i =>
   if i.val = 0 then
-    { kind := .continuous, bounds := { lower := some (-1), upper := some 1 } }
+    .continuous (some (-1)) (some 1)
   else
-    { kind := .continuous }
+    .continuous
 
 def selectorIsolationLinear : LinearSystem 2 where
   ineqCount := 0
@@ -513,8 +512,7 @@ theorem selectorIsolationBase_bounds {members : Fin 1 → Rat}
   fin_cases i
   have hdomain := hfeasible.1 (0 : Fin 2)
   simpa [selectorIsolationBase, selectorIsolationDomains,
-    selectorPairEncoding, selectorBoundsExample, VariableDomain.Holds,
-    VariableDomain.KindHolds, Bounds.Holds] using hdomain
+    selectorPairEncoding, selectorBoundsExample] using hdomain
 
 /-- The executable isolation check is consumed directly by the exact
 `ProjectionPreserves` compression theorem. -/
