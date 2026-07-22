@@ -23,6 +23,10 @@ fn incompatible_python_ommx(capability: &str, source: PyErr) -> PyErr {
     ))
 }
 
+fn incompatible_python_ommx_root(class_name: &str, source: PyErr) -> PyErr {
+    incompatible_python_ommx(&format!("ommx.{class_name}.from_v2_bytes"), source)
+}
+
 fn bridge_endpoint<'py>(py: Python<'py>, endpoint: &str) -> PyResult<Bound<'py, PyAny>> {
     let module = py
         .import("ommx._ommx_rust")
@@ -32,17 +36,16 @@ fn bridge_endpoint<'py>(py: Python<'py>, endpoint: &str) -> PyResult<Bound<'py, 
         .map_err(|error| incompatible_python_ommx(endpoint, error))
 }
 
-fn instance_from_v2_bytes<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-    let capability = "ommx.Instance.from_v2_bytes";
+fn root_from_v2_bytes<'py>(py: Python<'py>, class_name: &str) -> PyResult<Bound<'py, PyAny>> {
     let module = py
         .import("ommx")
-        .map_err(|error| incompatible_python_ommx(capability, error))?;
-    let instance = module
-        .getattr("Instance")
-        .map_err(|error| incompatible_python_ommx(capability, error))?;
-    instance
+        .map_err(|error| incompatible_python_ommx_root(class_name, error))?;
+    let root_class = module
+        .getattr(class_name)
+        .map_err(|error| incompatible_python_ommx_root(class_name, error))?;
+    root_class
         .getattr("from_v2_bytes")
-        .map_err(|error| incompatible_python_ommx(capability, error))
+        .map_err(|error| incompatible_python_ommx_root(class_name, error))
 }
 
 fn function_payload(function: ommx::Function) -> Vec<u8> {
@@ -71,11 +74,7 @@ fn decision_variable_payloads(
     )
 }
 
-fn instance_payload(instance: ommx::Instance) -> Vec<u8> {
-    instance.to_v2_bytes()
-}
-
-pub(crate) fn function_into_py<'py>(
+pub fn function_into_py<'py>(
     function: ommx::Function,
     py: Python<'py>,
 ) -> PyResult<Bound<'py, PyAny>> {
@@ -83,7 +82,7 @@ pub(crate) fn function_into_py<'py>(
     bridge_endpoint(py, FUNCTION_ENDPOINT)?.call1((PyBytes::new(py, &bytes),))
 }
 
-pub(crate) fn constraint_into_py<'py>(
+pub fn constraint_into_py<'py>(
     constraint: ommx::Constraint,
     context: ommx::ConstraintContext,
     py: Python<'py>,
@@ -93,7 +92,7 @@ pub(crate) fn constraint_into_py<'py>(
         .call1((PyBytes::new(py, &constraint), PyBytes::new(py, &context)))
 }
 
-pub(crate) fn decision_variable_into_py<'py>(
+pub fn decision_variable_into_py<'py>(
     id: ommx::VariableID,
     decision_variable: ommx::DecisionVariable,
     label: ommx::ModelingLabel,
@@ -107,12 +106,12 @@ pub(crate) fn decision_variable_into_py<'py>(
     ))
 }
 
-pub(crate) fn instance_into_py<'py>(
-    instance: ommx::Instance,
+pub fn root_into_py<'py>(
+    bytes: Vec<u8>,
+    class_name: &str,
     py: Python<'py>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let bytes = instance_payload(instance);
-    instance_from_v2_bytes(py)?.call1((PyBytes::new(py, &bytes),))
+    root_from_v2_bytes(py, class_name)?.call1((PyBytes::new(py, &bytes),))
 }
 
 #[cfg(test)]
@@ -239,7 +238,7 @@ mod tests {
         #[test]
         fn instance_payload_preserves_owner_complete_root(instance in any::<ommx::Instance>()) {
             let expected = instance.clone();
-            let payload = instance_payload(instance);
+            let payload = instance.to_v2_bytes();
             let actual = ommx::Instance::from_v2_bytes(&payload).unwrap();
             prop_assert_eq!(actual, expected);
         }

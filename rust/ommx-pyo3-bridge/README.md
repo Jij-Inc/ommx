@@ -21,7 +21,8 @@ fn objective() -> PyFunction {
 At runtime this return value is an `ommx.Function`. `pyo3-stub-gen` also emits
 `ommx.Function` in the generated stub. The crate provides the same pattern for
 detached constraints, detached decision variables, and instances through
-`PyConstraint`, `PyDecisionVariable`, and `PyInstance`.
+`PyConstraint`, `PyDecisionVariable`, `PyInstance`, `PyParametricInstance`,
+`PySolution`, and `PySampleSet`.
 
 The consuming extension and the bridge must resolve a compatible PyO3 version.
 This release accepts PyO3 0.27.2 through the 0.29 release line and uses
