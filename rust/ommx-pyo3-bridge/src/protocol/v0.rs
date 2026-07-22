@@ -23,6 +23,10 @@ fn incompatible_python_ommx(capability: &str, source: PyErr) -> PyErr {
     ))
 }
 
+fn incompatible_python_ommx_root(class_name: &str, source: PyErr) -> PyErr {
+    incompatible_python_ommx(&format!("ommx.{class_name}.from_v2_bytes"), source)
+}
+
 fn bridge_endpoint<'py>(py: Python<'py>, endpoint: &str) -> PyResult<Bound<'py, PyAny>> {
     let module = py
         .import("ommx._ommx_rust")
@@ -33,16 +37,15 @@ fn bridge_endpoint<'py>(py: Python<'py>, endpoint: &str) -> PyResult<Bound<'py, 
 }
 
 fn root_from_v2_bytes<'py>(py: Python<'py>, class_name: &str) -> PyResult<Bound<'py, PyAny>> {
-    let capability = format!("ommx.{class_name}.from_v2_bytes");
     let module = py
         .import("ommx")
-        .map_err(|error| incompatible_python_ommx(&capability, error))?;
-    let instance = module
+        .map_err(|error| incompatible_python_ommx_root(class_name, error))?;
+    let root_class = module
         .getattr(class_name)
-        .map_err(|error| incompatible_python_ommx(&capability, error))?;
-    instance
+        .map_err(|error| incompatible_python_ommx_root(class_name, error))?;
+    root_class
         .getattr("from_v2_bytes")
-        .map_err(|error| incompatible_python_ommx(&capability, error))
+        .map_err(|error| incompatible_python_ommx_root(class_name, error))
 }
 
 fn function_payload(function: ommx::Function) -> Vec<u8> {
