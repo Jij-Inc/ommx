@@ -26,7 +26,7 @@ def constantOnlyAffine2 : Affine 2 where
 example : constantOnlyAffine2.eval (fun _ => 0) = 1 := by native_decide
 
 example (lhs rhs : Affine 1) (sense : ConstraintSense)
-    (state : state 1) :
+    (state : State 1) :
     (LinearConstraint.normalize lhs rhs sense).Holds state ↔
       match sense with
       | .lessEqual => lhs.eval state ≤ rhs.eval state
@@ -181,7 +181,7 @@ def redundantWitness : FarkasWitness remainingWithoutTarget where
 
 example : redundantWitness.checkImplication twiceUpper = true := by native_decide
 
-theorem redundant_removal_preserves (state : state 1) :
+theorem redundant_removal_preserves (state : State 1) :
     RowExtensionFeasible remainingWithoutTarget twiceUpper state ↔
       remainingWithoutTarget.Feasible state :=
   redundantRow_iff (witness := redundantWitness) (by native_decide) state
@@ -229,7 +229,7 @@ example : checkOneHot continuousDomains2 scaledOneHotSource oneHotDraft = false 
 /-- The binary-domain premise is essential: `(2, -1)` satisfies the structural
 sum equation but is not a OneHot state. -/
 theorem continuous_sum_is_not_oneHot :
-    let state : state 2 := fun i => if i.val = 0 then 2 else -1
+    let state : State 2 := fun i => if i.val = 0 then 2 else -1
     (oneHotExpr allTwo).eval state = 0 ∧
       ¬(SpecialConstraint.oneHot allTwo).Holds state := by
   dsimp
@@ -255,7 +255,7 @@ example : checkOneHot binaryDomains2 wrongSenseOneHotSource
 /-- Merely matching the affine expression is insufficient: the zero state
 satisfies `sum xᵢ - 1 ≤ 0` but is not OneHot. -/
 theorem oneHot_lessEqual_is_not_equivalent :
-    let state : state 2 := fun _ => 0
+    let state : State 2 := fun _ => 0
     wrongSenseOneHotSource.Holds state ∧
       ¬(SpecialConstraint.oneHot allTwo).Holds state := by
   native_decide
@@ -286,7 +286,7 @@ example : checkBinaryCardinalitySOS1 binaryDomains2 wrongSenseSOS1Source
 /-- An equality with the cardinality affine expression excludes the all-zero
 state, which is valid SOS1. Thus checking the row sense is essential. -/
 theorem sos1_equal_is_not_equivalent :
-    let state : state 2 := fun _ => 0
+    let state : State 2 := fun _ => 0
     ¬wrongSenseSOS1Source.Holds state ∧
       (SpecialConstraint.sos1 allTwo).Holds state := by
   dsimp
@@ -350,7 +350,7 @@ example : checkIndicatorReplace indicatorDomains indicatorSurviving
 on the inactive branch the Indicator is vacuous while the source equality may
 still fail, even under the surviving row. -/
 theorem indicator_wrong_sense_is_not_replacement :
-    let state : state 2 := fun i => if i.val = 0 then -1 else 0
+    let state : State 2 := fun i => if i.val = 0 then -1 else 0
     indicatorSurviving.Feasible state ∧
       ¬wrongSenseIndicatorSource.Holds state ∧
       (SpecialConstraint.indicator 1 .activeOnOne
@@ -399,13 +399,13 @@ example : checkEqualityIndicatorReplace indicatorDomains indicatorEqualitySurviv
 lower bound is zero.  The remaining upper side plus the base bound still
 preserves the Indicator semantics. -/
 
-def sdkIndicatorBase (state : state 2) : Prop :=
+def sdkIndicatorBase (state : State 2) : Prop :=
   VariableDomain.KindHolds .binary (state 1) ∧
     0 ≤ state 0 ∧ state 0 ≤ 3
 
-def sdkIndicatorBody (state : state 2) : Rat := state 0
+def sdkIndicatorBody (state : State 2) : Rat := state 0
 
-def sdkIndicatorObjective (state : state 2) : Rat := state 0
+def sdkIndicatorObjective (state : State 2) : Rat := state 0
 
 def sdkIndicatorEqualityPreserves :
     IdentityPreserves
@@ -423,7 +423,7 @@ def sdkIndicatorEqualityPreserves :
     (by intro state hbase; exact hbase.1)
     (by intro state hbase; exact ⟨hbase.2.1, hbase.2.2⟩)
 
-example (state : state 2) :
+example (state : State 2) :
     (replaceProblem sdkIndicatorBase
       (fun x =>
         IndicatorBigM.UpperSide sdkIndicatorBody 1 3 x ∧
@@ -480,8 +480,8 @@ example : selectorLeakingBase.checkSelectorIsolation
 /-- Without selector isolation, changing only the private coordinate can change
 the objective, so compression would not preserve objective values. -/
 theorem selector_leak_changes_objective :
-    let lhs : state 2 := fun _ => 0
-    let rhs : state 2 := fun i => if i.val = 0 then 0 else 1
+    let lhs : State 2 := fun _ => 0
+    let rhs : State 2 := fun i => if i.val = 0 then 0 else 1
     AgreeOutside selectorPrivateExample lhs rhs ∧
       selectorLeakingBase.ObjectiveValue lhs ≠
         selectorLeakingBase.ObjectiveValue rhs := by
@@ -495,7 +495,7 @@ theorem selector_leak_changes_objective :
       Instance.ObjectiveValue, twoVarAffine, Affine.eval]
 
 def selectorPairEncoding
-    (pair : (Fin 1 → Rat) × (Fin 1 → Rat)) : state 2 :=
+    (pair : (Fin 1 → Rat) × (Fin 1 → Rat)) : State 2 :=
   fun i => if i.val = 0 then pair.1 0 else pair.2 0
 
 theorem selectorPairEncoding_respectsIsolation :
