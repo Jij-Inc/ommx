@@ -182,6 +182,62 @@ impl PyStubType for PyInstance {
     }
 }
 
+macro_rules! root_wrapper {
+    ($wrapper:ident, $rust_type:ty, $python_name:literal, $convert:path) => {
+        #[doc = concat!("Output wrapper converting a Rust [`", stringify!($rust_type), "`] into `ommx.", $python_name, "`.")]
+        #[derive(Debug, Clone)]
+        pub struct $wrapper($rust_type);
+
+        impl $wrapper {
+            /// Create a Python output wrapper for the value.
+            pub fn new(value: $rust_type) -> Self {
+                Self(value)
+            }
+        }
+
+        impl From<$rust_type> for $wrapper {
+            fn from(value: $rust_type) -> Self {
+                Self::new(value)
+            }
+        }
+
+        impl<'py> IntoPyObject<'py> for $wrapper {
+            type Target = PyAny;
+            type Output = Bound<'py, PyAny>;
+            type Error = PyErr;
+
+            fn into_pyobject(self, py: Python<'py>) -> PyResult<Self::Output> {
+                $convert(self.0, py)
+            }
+        }
+
+        impl PyStubType for $wrapper {
+            fn type_output() -> TypeInfo {
+                TypeInfo::with_module(concat!("ommx.", $python_name), "ommx".into())
+            }
+        }
+    };
+}
+
+root_wrapper!(
+    PyParametricInstance,
+    ommx::ParametricInstance,
+    "ParametricInstance",
+    protocol::v0::parametric_instance_into_py
+);
+root_wrapper!(
+    PySolution,
+    ommx::Solution,
+    "Solution",
+    protocol::v0::solution_into_py
+);
+root_wrapper!(
+    PySampleSet,
+    ommx::SampleSet,
+    "SampleSet",
+    protocol::v0::sample_set_into_py
+);
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -195,5 +251,11 @@ mod tests {
             "ommx.DecisionVariable"
         );
         assert_eq!(PyInstance::type_output().name, "ommx.Instance");
+        assert_eq!(
+            PyParametricInstance::type_output().name,
+            "ommx.ParametricInstance"
+        );
+        assert_eq!(PySolution::type_output().name, "ommx.Solution");
+        assert_eq!(PySampleSet::type_output().name, "ommx.SampleSet");
     }
 }

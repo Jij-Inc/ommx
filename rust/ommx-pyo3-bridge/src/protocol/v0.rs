@@ -32,17 +32,17 @@ fn bridge_endpoint<'py>(py: Python<'py>, endpoint: &str) -> PyResult<Bound<'py, 
         .map_err(|error| incompatible_python_ommx(endpoint, error))
 }
 
-fn instance_from_v2_bytes<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-    let capability = "ommx.Instance.from_v2_bytes";
+fn root_from_v2_bytes<'py>(py: Python<'py>, class_name: &str) -> PyResult<Bound<'py, PyAny>> {
+    let capability = format!("ommx.{class_name}.from_v2_bytes");
     let module = py
         .import("ommx")
-        .map_err(|error| incompatible_python_ommx(capability, error))?;
+        .map_err(|error| incompatible_python_ommx(&capability, error))?;
     let instance = module
-        .getattr("Instance")
-        .map_err(|error| incompatible_python_ommx(capability, error))?;
+        .getattr(class_name)
+        .map_err(|error| incompatible_python_ommx(&capability, error))?;
     instance
         .getattr("from_v2_bytes")
-        .map_err(|error| incompatible_python_ommx(capability, error))
+        .map_err(|error| incompatible_python_ommx(&capability, error))
 }
 
 fn function_payload(function: ommx::Function) -> Vec<u8> {
@@ -112,7 +112,31 @@ pub(crate) fn instance_into_py<'py>(
     py: Python<'py>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let bytes = instance_payload(instance);
-    instance_from_v2_bytes(py)?.call1((PyBytes::new(py, &bytes),))
+    root_from_v2_bytes(py, "Instance")?.call1((PyBytes::new(py, &bytes),))
+}
+
+pub(crate) fn parametric_instance_into_py<'py>(
+    instance: ommx::ParametricInstance,
+    py: Python<'py>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let bytes = instance.to_v2_bytes();
+    root_from_v2_bytes(py, "ParametricInstance")?.call1((PyBytes::new(py, &bytes),))
+}
+
+pub(crate) fn solution_into_py<'py>(
+    solution: ommx::Solution,
+    py: Python<'py>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let bytes = solution.to_v2_bytes();
+    root_from_v2_bytes(py, "Solution")?.call1((PyBytes::new(py, &bytes),))
+}
+
+pub(crate) fn sample_set_into_py<'py>(
+    sample_set: ommx::SampleSet,
+    py: Python<'py>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let bytes = sample_set.to_v2_bytes();
+    root_from_v2_bytes(py, "SampleSet")?.call1((PyBytes::new(py, &bytes),))
 }
 
 #[cfg(test)]
