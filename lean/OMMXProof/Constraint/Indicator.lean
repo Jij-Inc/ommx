@@ -59,49 +59,40 @@ instance (constraint : IndicatorConstraint n) (state : State n) :
   unfold Holds
   infer_instance
 
-end IndicatorConstraint
+def IndependentAt (constraint : IndicatorConstraint n) (index : Fin n) : Prop :=
+  index ≠ constraint.trigger ∧ constraint.body.IndependentAt index
 
-namespace LinearConstraint
-
-def substitute (constraint : LinearConstraint n) (index : Fin n) (value : Rat) :
-    LinearConstraint n where
-  expr := constraint.expr.substitute index value
-  sense := constraint.sense
-
-def Same (lhs rhs : LinearConstraint n) : Prop :=
-  lhs.sense = rhs.sense ∧ Affine.Same lhs.expr rhs.expr
-
-instance (lhs rhs : LinearConstraint n) : Decidable (Same lhs rhs) := by
-  unfold Same
+instance (constraint : IndicatorConstraint n) (index : Fin n) :
+    Decidable (constraint.IndependentAt index) := by
+  unfold IndependentAt
   infer_instance
 
-def same (lhs rhs : LinearConstraint n) : Bool := decide (Same lhs rhs)
+def IndependentOf (constraint : IndicatorConstraint n)
+    (privateSet : Finset (Fin n)) : Prop :=
+  ∀ i ∈ privateSet, constraint.IndependentAt i
 
-theorem same_sound {lhs rhs : LinearConstraint n} (hcheck : same lhs rhs = true) :
-    lhs = rhs := by
-  have hsame : Same lhs rhs := by
-    simpa [same, decide_eq_true_eq] using hcheck
-  cases lhs with
-  | mk lhsExpr lhsSense =>
-    cases rhs with
-    | mk rhsExpr rhsSense =>
-      simp only [Same] at hsame
-      rcases hsame with ⟨hsense, hexpr⟩
-      subst rhsSense
-      have : lhsExpr = rhsExpr := Affine.same_iff.mp hexpr
-      subst rhsExpr
-      rfl
+theorem holds_iff_of_independentOf {constraint : IndicatorConstraint n}
+    {privateSet : Finset (Fin n)} {lhs rhs : State n}
+    (hindependent : constraint.IndependentOf privateSet)
+    (hagree : AgreeOutside privateSet lhs rhs) :
+    constraint.Holds lhs ↔ constraint.Holds rhs := by
+  have htriggerOutside : constraint.trigger ∉ privateSet := by
+    intro hprivate
+    exact (hindependent constraint.trigger hprivate).1 rfl
+  have htrigger := hagree constraint.trigger htriggerOutside
+  have hbody := LinearConstraint.holds_iff_of_independentOf
+    (fun i hi => (hindependent i hi).2) hagree
+  constructor
+  · intro hleft hactive
+    apply hbody.mp
+    apply hleft
+    simpa [htrigger] using hactive
+  · intro hright hactive
+    apply hbody.mpr
+    apply hright
+    simpa [htrigger] using hactive
 
-theorem substitute_holds_iff {constraint : LinearConstraint n} {index : Fin n}
-    {value : Rat} {state : State n}
-    (hvalue : state index = value) :
-    (constraint.substitute index value).Holds state ↔
-      constraint.Holds state := by
-  cases constraint with
-  | mk expr sense =>
-    cases sense <;> simp [substitute, Holds, Affine.eval_substitute hvalue]
-
-end LinearConstraint
+end IndicatorConstraint
 
 def IndicatorPredicate (trigger : Fin n) (polarity : IndicatorPolarity)
     (body : State n → Prop) (state : State n) : Prop :=
