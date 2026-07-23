@@ -36,6 +36,11 @@ The independent formalization defines exact rational semantics for:
   counterexample to source-side retraction. The checked isolation witness is
   consumed directly by a `ProjectionPreserves` compression theorem; the
   all-fresh, full-link formulation remains available as the simpler core case.
+- an actual SDK-style SOS1 Big-M `Instance.Transform`: one SOS1 occurrence is
+  removed, binary members are reused, fresh binary components are appended for
+  the other members, and optional link rows plus the cardinality row are added.
+  The lowering is both a reduction and relaxation, has source round-trip and
+  objective/sense preservation, but deliberately has no target round-trip.
 
 Detector completeness, floating-point tolerance, Rust mutation correctness,
 serialization, lifecycle/capability/audit state, and a complete integer proof
@@ -66,6 +71,9 @@ noncanonical and unobservable.
 | Module | Responsibility |
 | --- | --- |
 | `OMMXProof.Instance` | Finite Instance syntax and exact denotation |
+| `OMMXProof.Instance.Extend` | Left-block embedding of states, expressions, constraints, and Instances into a larger finite space |
+| `OMMXProof.Instance.Transform` | Partial state transformations, directional reduction/relaxation contracts, and independent source/target round trips |
+| `OMMXProof.Instance.Transform.SOS1BigM` | SDK-style SOS1 Big-M target construction, state maps, and semantic correctness |
 | `OMMXProof.Linear.EqualityNonnegativeLP` | Equality-form LP with nonnegative variables |
 | `OMMXProof.Linear.LessEqualNonnegativeLP` | Less-than-or-equal-form LP with nonnegative variables |
 | `OMMXProof.SemanticProblem` | Syntax-independent optimization semantics, preservation relations, and composition laws |
@@ -110,6 +118,7 @@ includes Lean's standard `propext`, `Classical.choice`, and `Quot.sound` axioms.
 - [x] Reduction composition and project/lift laws
 - [x] OneHot, Indicator recovery, and Indicator Big-M lowering rules
 - [x] SOS1 projection and mixed reused/fresh SDK-plan compression
+- [x] SOS1 Big-M lowering as a finite `Instance.Transform`
 - [x] Executable accept/reject fixtures and counterexamples
 
 The canonical bridge, trace vocabulary, and Rust proof-log producer remain
