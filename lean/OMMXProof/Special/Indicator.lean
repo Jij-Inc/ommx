@@ -1,13 +1,12 @@
-import OMMXProof.Linear.Farkas
 import OMMXProof.Reduction
 import Mathlib.Tactic.Linarith
 
 /-!
 # Indicator promotion obligations
 
-Active-branch equality is checked by exact substitution. Replacement additionally
-requires a Farkas implication on the inactive branch, indexed only by the
-surviving system; the consumed row is unavailable by construction.
+Active-branch equality is checked by exact substitution. Generic semantic
+theorems state the obligations for augmentation and replacement, while the
+Big-M results describe the forward lowering used by the SDK.
 -/
 
 namespace OMMXProof
@@ -53,35 +52,6 @@ theorem substitute_holds_iff {constraint : LinearConstraint n} {index : Fin n}
     cases sense <;> simp [substitute, Holds, Affine.eval_substitute hvalue]
 
 end LinearConstraint
-
-/-- Add a branch equation `x_trigger = value` without changing the surviving
-inequalities. -/
-def branchSystem (surviving : LinearSystem n) (trigger : Fin n) (value : Rat) :
-    LinearSystem n where
-  ineqCount := surviving.ineqCount
-  eqCount := Nat.succ surviving.eqCount
-  inequalities := surviving.inequalities
-  equalities := Fin.cases
-    (Affine.add (Affine.coordinate trigger)
-      { coeff := fun _ => 0, constant := -value })
-    surviving.equalities
-
-theorem branchSystem_feasible {surviving : LinearSystem n} {trigger : Fin n}
-    {value : Rat} {state : State n}
-    (hsurviving : surviving.Feasible state)
-    (hvalue : state trigger = value) :
-    (branchSystem surviving trigger value).Feasible state := by
-  constructor
-  · exact hsurviving.1
-  · intro index
-    refine Fin.cases ?_ (fun i => hsurviving.2 i) index
-    have hconstant :
-        ({ coeff := fun _ => 0, constant := -value } : Affine n).eval state =
-          -value := by simp [Affine.eval]
-    change (Affine.add (Affine.coordinate trigger)
-      { coeff := fun _ => 0, constant := -value }).eval state = 0
-    rw [Affine.eval_add, Affine.eval_coordinate, hconstant, hvalue]
-    ring
 
 def IndicatorPredicate (trigger : Fin n) (polarity : IndicatorPolarity)
     (body : State n → Prop) (state : State n) : Prop :=
@@ -192,13 +162,6 @@ theorem equalityIndicator_replace
     exact ⟨inactiveLower hbase hbinary hinactive,
       inactiveUpper hbase hbinary hinactive⟩
 
-/-- Inactive-branch witness for one consumed inequality. Its system contains
-only surviving rows plus the branch equation. -/
-structure IndicatorReplaceWitness (surviving : LinearSystem n)
-    (trigger : Fin n) (polarity : IndicatorPolarity) where
-  inactive : FarkasWitness
-    (branchSystem surviving trigger polarity.inactiveValue)
-
 def checkIndicatorActive (domains : Fin n → Domain)
     (source body : LinearConstraint n) (trigger : Fin n)
     (polarity : IndicatorPolarity) : Bool :=
@@ -254,120 +217,13 @@ theorem checkIndicatorAugment_preserves
   intro x _ _ hsource hactive
   exact (checkIndicatorActive_sound hcheck hactive).mp hsource
 
-def checkIndicatorReplace (domains : Fin n → Domain)
-    (surviving : LinearSystem n) (source body : LinearConstraint n)
-    (trigger : Fin n) (polarity : IndicatorPolarity)
-    (witness : IndicatorReplaceWitness surviving trigger polarity) : Bool :=
-  decide (source.sense = .lessEqual ∧ body.sense = .lessEqual) &&
-    (checkIndicatorActive domains source body trigger polarity &&
-      witness.inactive.checkImplication source.expr)
-
-theorem checkIndicatorReplace_sound
-    {domains : Fin n → Domain} {surviving : LinearSystem n}
-    {source body : LinearConstraint n}
-    {trigger : Fin n} {polarity : IndicatorPolarity}
-    {witness : IndicatorReplaceWitness surviving trigger polarity}
-    (hcheck : checkIndicatorReplace domains surviving source body trigger polarity
-      witness = true)
-    {state : State n}
-    (hdomains : ∀ i, state i ∈ domains i)
-    (hsurviving : surviving.Feasible state) :
-    (source.Holds state ↔
-      (SpecialConstraint.indicator trigger polarity body).Holds state) := by
-  have houter := Bool.and_eq_true_iff.mp hcheck
-  have hparts := Bool.and_eq_true_iff.mp houter.2
-  have hsenses : source.sense = .lessEqual ∧ body.sense = .lessEqual := by
-    simpa [decide_eq_true_eq] using houter.1
-  have hbinary : state trigger ∈ Domain.binary := by
-    have hkind : domains trigger = .binary := by
-      have hactiveParts := Bool.and_eq_true_iff.mp hparts.1
-      simpa [decide_eq_true_eq] using hactiveParts.1
-    have := hdomains trigger
-    rw [hkind] at this
-    exact this
-  refine indicator_replace
-      (fun x => surviving.Feasible x)
-      (fun x => source.Holds x)
-      (fun x => body.Holds x)
-      trigger polarity ?_ ?_ state hsurviving hbinary
-  · intro x _ hbinaryX hactive
-    apply checkIndicatorActive_sound hparts.1
-    exact hactive
-  · intro x hbase _ hinactive
-    have himplied : source.expr.eval x ≤ 0 :=
-      FarkasWitness.checkImplication_sound hparts.2
-        (branchSystem_feasible hbase hinactive)
-    simpa [LinearConstraint.Holds, hsenses.1] using himplied
-
-/-- Equality replacement needs two independent inactive-branch Farkas
-certificates over the same surviving system. Neither certificate can mention
-the consumed equality because it is absent from the indexed proof system. -/
-structure EqualityIndicatorReplaceWitness (surviving : LinearSystem n)
-    (trigger : Fin n) (polarity : IndicatorPolarity) where
-  upper : FarkasWitness
-    (branchSystem surviving trigger polarity.inactiveValue)
-  lower : FarkasWitness
-    (branchSystem surviving trigger polarity.inactiveValue)
-
-def checkEqualityIndicatorReplace (domains : Fin n → Domain)
-    (surviving : LinearSystem n) (source body : LinearConstraint n)
-    (trigger : Fin n) (polarity : IndicatorPolarity)
-    (witness : EqualityIndicatorReplaceWitness surviving trigger polarity) : Bool :=
-  decide (source.sense = .equal ∧ body.sense = .equal) &&
-    (checkIndicatorActive domains source body trigger polarity &&
-      (witness.upper.checkImplication source.expr &&
-        witness.lower.checkImplication (Affine.neg source.expr)))
-
-theorem checkEqualityIndicatorReplace_sound
-    {domains : Fin n → Domain} {surviving : LinearSystem n}
-    {source body : LinearConstraint n}
-    {trigger : Fin n} {polarity : IndicatorPolarity}
-    {witness : EqualityIndicatorReplaceWitness surviving trigger polarity}
-    (hcheck : checkEqualityIndicatorReplace domains surviving source body trigger polarity
-      witness = true)
-    {state : State n}
-    (hdomains : ∀ i, state i ∈ domains i)
-    (hsurviving : surviving.Feasible state) :
-    (source.Holds state ↔
-      (SpecialConstraint.indicator trigger polarity body).Holds state) := by
-  have houter := Bool.and_eq_true_iff.mp hcheck
-  have hmiddle := Bool.and_eq_true_iff.mp houter.2
-  have hinner := Bool.and_eq_true_iff.mp hmiddle.2
-  have hsenses : source.sense = .equal ∧ body.sense = .equal := by
-    simpa [decide_eq_true_eq] using houter.1
-  have hbinary : state trigger ∈ Domain.binary := by
-    have hactiveParts := Bool.and_eq_true_iff.mp hmiddle.1
-    have hkind : domains trigger = .binary := by
-      simpa [decide_eq_true_eq] using hactiveParts.1
-    have hdomain := hdomains trigger
-    rw [hkind] at hdomain
-    exact hdomain
-  refine indicator_replace
-      (fun x => surviving.Feasible x)
-      (fun x => source.Holds x)
-      (fun x => body.Holds x)
-      trigger polarity ?_ ?_ state hsurviving hbinary
-  · intro x _ _ hactive
-    exact checkIndicatorActive_sound hmiddle.1 hactive
-  · intro x hbase _ hinactive
-    have hbranch := branchSystem_feasible hbase hinactive
-    have hu : source.expr.eval x ≤ 0 :=
-      FarkasWitness.checkImplication_sound hinner.1 hbranch
-    have hl : (Affine.neg source.expr).eval x ≤ 0 :=
-      FarkasWitness.checkImplication_sound hinner.2 hbranch
-    have heq : source.expr.eval x = 0 := by
-      rw [Affine.eval_neg] at hl
-      linarith
-    simpa [LinearConstraint.Holds, hsenses.1] using heq
-
 /-! ## Big-M lowering semantics
 
-The executable replacement checkers above recover an Indicator from candidate
-rows.  The following exact semantic layer specifies the forward algorithm used
-by the SDK: emit the upper side only for a positive upper bound, emit the lower
-side only for a negative lower bound, and otherwise rely on the corresponding
-bound implication.  The denotation is generic in `body`, so the theorem is not
-limited to the affine syntax of `Instance`.
+The following exact semantic layer specifies the forward algorithm used by the
+SDK: emit the upper side only for a positive upper bound, emit the lower side
+only for a negative lower bound, and otherwise rely on the corresponding bound
+implication. The denotation is generic in `body`, so the theorem is not limited
+to the affine syntax of `Instance`.
 -/
 
 namespace IndicatorBigM
