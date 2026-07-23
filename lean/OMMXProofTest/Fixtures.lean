@@ -1,4 +1,4 @@
-import OMMXProof.Reduction
+import OMMXProof.SemanticProblem
 import OMMXProof.Constraint.OneHot
 import OMMXProof.Constraint.Indicator
 import OMMXProof.Constraint.SOS1.Instance

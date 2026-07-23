@@ -1,4 +1,4 @@
-import OMMXProof.Reduction
+import OMMXProof.SemanticProblem
 import OMMXProof.Constraint.Linear
 import Mathlib.Tactic.Linarith
 

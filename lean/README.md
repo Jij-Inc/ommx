@@ -68,7 +68,7 @@ noncanonical and unobservable.
 | `OMMXProof.Core` | Input AST and exact denotation |
 | `OMMXProof.Linear.EqualityNonnegativeLP` | Equality-form LP with nonnegative variables |
 | `OMMXProof.Linear.LessEqualNonnegativeLP` | Less-than-or-equal-form LP with nonnegative variables |
-| `OMMXProof.Reduction` | Preservation relations and composition laws |
+| `OMMXProof.SemanticProblem` | Syntax-independent optimization semantics, preservation relations, and composition laws |
 | `OMMXProof.Constraint.Linear` | Normalized affine equality and inequality semantics |
 | `OMMXProof.Constraint.OneHot` | OneHot semantics, structural checker, and replacement theorem |
 | `OMMXProof.Constraint.Indicator` | Indicator semantics, active substitution, and forward Big-M semantics |

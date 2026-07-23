@@ -1,7 +1,7 @@
 import OMMXProof.Constraint.Indicator
 import OMMXProof.Constraint.OneHot
 import OMMXProof.Constraint.SOS1
-import OMMXProof.Reduction
+import OMMXProof.SemanticProblem
 
 /-!
 # Exact semantic core
@@ -43,7 +43,7 @@ def Feasible (inst : Instance n) (state : State n) : Prop :=
 def ObjectiveValue (inst : Instance n) (state : State n) : Rat :=
   inst.objective.eval state
 
-def asProblem (inst : Instance n) : Problem (State n) where
+def asSemanticProblem (inst : Instance n) : SemanticProblem (State n) where
   feasible := inst.Feasible
   objective := inst.ObjectiveValue
   sense := inst.sense

@@ -1,11 +1,11 @@
 import OMMXProof.State
 
 /-!
-# Preservation and reduction contracts
+# Semantic optimization problems and preservation contracts
 
-These contracts distinguish identity-space equivalence, directed implication,
-projection/lift equivalence, and infeasibility. They are propositions with laws,
-not tags in a flat result enum.
+`SemanticProblem` retains only feasibility, objective value, and optimization
+sense. The accompanying contracts distinguish identity-space equivalence,
+directed implication, projection/lift equivalence, and infeasibility.
 -/
 
 namespace OMMXProof
@@ -15,23 +15,23 @@ inductive OptimizationSense where
   | maximize
   deriving DecidableEq, Repr
 
-structure Problem (α : Type*) where
+structure SemanticProblem (α : Type*) where
   feasible : α → Prop
   objective : α → Rat
   sense : OptimizationSense
 
 /-- Exact equivalence in one state space. -/
-structure IdentityPreserves {α : Type*} (source target : Problem α) : Prop where
+structure IdentityPreserves {α : Type*} (source target : SemanticProblem α) : Prop where
   feasible_iff : ∀ state, source.feasible state ↔ target.feasible state
   objective_eq : ∀ state, source.objective state = target.objective state
   sense_eq : source.sense = target.sense
 
 namespace IdentityPreserves
 
-theorem refl (problem : Problem α) : IdentityPreserves problem problem := by
+theorem refl (problem : SemanticProblem α) : IdentityPreserves problem problem := by
   constructor <;> simp
 
-theorem trans {source middle target : Problem α}
+theorem trans {source middle target : SemanticProblem α}
     (first : IdentityPreserves source middle)
     (second : IdentityPreserves middle target) :
     IdentityPreserves source target := by
@@ -46,11 +46,11 @@ end IdentityPreserves
 
 /-- Directed feasible-set implication, used for augmentation and relaxation
 dominance statements that are intentionally not equivalences. -/
-def FeasibleImplies {α : Type*} (source target : Problem α) : Prop :=
+def FeasibleImplies {α : Type*} (source target : SemanticProblem α) : Prop :=
   ∀ {state}, source.feasible state → target.feasible state
 
 /-- Infeasibility is a proposition about one problem, not a preservation mode. -/
-def Infeasible {α : Type*} (problem : Problem α) : Prop :=
+def Infeasible {α : Type*} (problem : SemanticProblem α) : Prop :=
   ¬ ∃ state, problem.feasible state
 
 /-- `source` is an extended problem and `target` its reduced projection.
@@ -59,7 +59,7 @@ Only a section law on feasible target states is required. Requiring
 `lift (project x) = x` would incorrectly reject valid compression with
 noncanonical private auxiliaries. -/
 structure ProjectionPreserves {α β : Type*}
-    (source : Problem α) (target : Problem β) where
+    (source : SemanticProblem α) (target : SemanticProblem β) where
   project : α → β
   lift : β → α
   project_feasible : ∀ {x}, source.feasible x → target.feasible (project x)
@@ -74,7 +74,7 @@ structure ProjectionPreserves {α β : Type*}
 namespace ProjectionPreserves
 
 /-- Reduction steps compose projections forward and lifts in reverse order. -/
-def comp {source : Problem α} {middle : Problem β} {target : Problem γ}
+def comp {source : SemanticProblem α} {middle : SemanticProblem β} {target : SemanticProblem γ}
     (first : ProjectionPreserves source middle)
     (second : ProjectionPreserves middle target) :
     ProjectionPreserves source target where
@@ -94,7 +94,7 @@ def comp {source : Problem α} {middle : Problem β} {target : Problem γ}
     rw [first.objective_lift (second.lift_feasible hz), second.objective_lift hz]
   sense_eq := first.sense_eq.trans second.sense_eq
 
-def ofIdentity {source target : Problem α}
+def ofIdentity {source target : SemanticProblem α}
     (preserves : IdentityPreserves source target) :
     ProjectionPreserves source target where
   project := id
@@ -106,7 +106,7 @@ def ofIdentity {source target : Problem α}
   objective_lift _ := preserves.objective_eq _
   sense_eq := preserves.sense_eq
 
-theorem feasible_nonempty_iff {source : Problem α} {target : Problem β}
+theorem feasible_nonempty_iff {source : SemanticProblem α} {target : SemanticProblem β}
     (preserves : ProjectionPreserves source target) :
     (∃ x, source.feasible x) ↔ ∃ y, target.feasible y := by
   constructor
@@ -115,11 +115,11 @@ theorem feasible_nonempty_iff {source : Problem α} {target : Problem β}
   · rintro ⟨y, hy⟩
     exact ⟨preserves.lift y, preserves.lift_feasible hy⟩
 
-def objectiveRange (problem : Problem α) : Set Rat :=
+def objectiveRange (problem : SemanticProblem α) : Set Rat :=
   {value | ∃ state, problem.feasible state ∧
     problem.objective state = value}
 
-theorem objectiveRange_eq {source : Problem α} {target : Problem β}
+theorem objectiveRange_eq {source : SemanticProblem α} {target : SemanticProblem β}
     (preserves : ProjectionPreserves source target) :
     objectiveRange source = objectiveRange target := by
   ext value
@@ -134,12 +134,12 @@ theorem objectiveRange_eq {source : Problem α} {target : Problem β}
 end ProjectionPreserves
 
 /-- Add one semantic constraint without removing any representation. -/
-def augment (problem : Problem α) (constraint : α → Prop) : Problem α where
+def augment (problem : SemanticProblem α) (constraint : α → Prop) : SemanticProblem α where
   feasible state := problem.feasible state ∧ constraint state
   objective := problem.objective
   sense := problem.sense
 
-theorem augment_preserves (problem : Problem α) (constraint : α → Prop)
+theorem augment_preserves (problem : SemanticProblem α) (constraint : α → Prop)
     (implied : ∀ {state}, problem.feasible state → constraint state) :
     IdentityPreserves problem (augment problem constraint) := by
   constructor
@@ -151,7 +151,7 @@ theorem augment_preserves (problem : Problem α) (constraint : α → Prop)
 /-- A common state space with a surviving base and one replaceable
 constraint. The base is the only context available to a replacement proof. -/
 def replaceProblem (base oldConstraint : α → Prop)
-    (objective : α → Rat) (sense : OptimizationSense) : Problem α where
+    (objective : α → Rat) (sense : OptimizationSense) : SemanticProblem α where
   feasible state := base state ∧ oldConstraint state
   objective := objective
   sense := sense

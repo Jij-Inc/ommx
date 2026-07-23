@@ -290,14 +290,14 @@ theorem canonicalSelector_gadget [Fintype ι] [DecidableEq ι]
 def selectorSourceProblem [Fintype ι] [DecidableEq ι]
     (bounds : SelectorBounds ι) (base : (ι → Rat) → Prop)
     (objective : (ι → Rat) → Rat) (sense : OptimizationSense) :
-    Problem ((ι → Rat) × (ι → Rat)) where
+    SemanticProblem ((ι → Rat) × (ι → Rat)) where
   feasible pair := base pair.1 ∧ SelectorGadget bounds pair.1 pair.2
   objective pair := objective pair.1
   sense := sense
 
 def sos1TargetProblem [Fintype ι] [DecidableEq ι]
     (base : (ι → Rat) → Prop) (objective : (ι → Rat) → Rat)
-    (sense : OptimizationSense) : Problem (ι → Rat) where
+    (sense : OptimizationSense) : SemanticProblem (ι → Rat) where
   feasible members := base members ∧ GenericSOS1 members
   objective := objective
   sense := sense
@@ -468,7 +468,7 @@ theorem canonicalSelector_plannedGadget [Fintype ι] [DecidableEq ι]
 def plannedSelectorSourceProblem [Fintype ι] [DecidableEq ι]
     (reused : Finset ι) (bounds : SelectorBounds ι)
     (base : (ι → Rat) → Prop) (objective : (ι → Rat) → Rat)
-    (sense : OptimizationSense) : Problem ((ι → Rat) × (ι → Rat)) where
+    (sense : OptimizationSense) : SemanticProblem ((ι → Rat) × (ι → Rat)) where
   feasible pair :=
     base pair.1 ∧ PlannedSelectorGadget reused bounds pair.1 pair.2
   objective pair := objective pair.1
