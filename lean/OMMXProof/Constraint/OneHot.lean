@@ -1,4 +1,5 @@
 import OMMXProof.Reduction
+import OMMXProof.Constraint.Linear
 import Mathlib.Tactic
 
 /-!
@@ -9,6 +10,22 @@ separately verifies that every member has a binary domain.
 -/
 
 namespace OMMXProof
+
+structure OneHotConstraint (n : Nat) where
+  members : Finset (Fin n)
+
+namespace OneHotConstraint
+
+def Holds (constraint : OneHotConstraint n) (state : State n) : Prop :=
+  (∀ i ∈ constraint.members, state i ∈ Domain.binary) ∧
+    ∑ i ∈ constraint.members, state i = 1
+
+instance (constraint : OneHotConstraint n) (state : State n) :
+    Decidable (constraint.Holds state) := by
+  unfold Holds
+  infer_instance
+
+end OneHotConstraint
 
 def BinaryOn (members : Finset (Fin n)) (state : State n) : Prop :=
   ∀ i ∈ members, state i ∈ Domain.binary
@@ -117,7 +134,7 @@ theorem checkOneHot_sound {domains : Fin n → Domain}
     {state : State n}
     (hdomains : ∀ i, state i ∈ domains i) :
     (source.Holds state ↔
-      (SpecialConstraint.oneHot draft.members).Holds state) := by
+      ({ members := draft.members } : OneHotConstraint n).Holds state) := by
   have houter := Bool.and_eq_true_iff.mp hcheck
   have hconditions : draft.members.Nonempty ∧
       draft.scale ≠ 0 ∧
@@ -131,7 +148,7 @@ theorem checkOneHot_sound {domains : Fin n → Domain}
   have hbinary := binaryOn_of_domains hbinaryDomains hdomains
   simp only [LinearConstraint.Holds, hsense]
   rw [hsource, Affine.eval_scale, eval_oneHotExpr]
-  simp only [SpecialConstraint.Holds]
+  simp only [OneHotConstraint.Holds]
   constructor
   · intro hzero
     have hsum : ∑ i ∈ draft.members, state i = 1 := by
@@ -154,7 +171,7 @@ theorem oneHot_replace_preserves {domains : Fin n → Domain}
         objective sense)
       (replaceProblem base
         (fun state =>
-          (SpecialConstraint.oneHot draft.members).Holds state)
+          ({ members := draft.members } : OneHotConstraint n).Holds state)
         objective sense) := by
   apply replace_preserves
   intro state hbase
