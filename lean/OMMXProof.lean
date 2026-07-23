@@ -6,6 +6,9 @@ import OMMXProof.Constraint.SOS1.Instance
 import OMMXProof.Domain
 import OMMXProof.Function.Affine
 import OMMXProof.Instance
+import OMMXProof.Instance.Extend
+import OMMXProof.Instance.Transform
+import OMMXProof.Instance.Transform.SOS1BigM
 import OMMXProof.Linear.EqualityNonnegativeLP
 import OMMXProof.Linear.LessEqualNonnegativeLP
 import OMMXProof.SemanticProblem
