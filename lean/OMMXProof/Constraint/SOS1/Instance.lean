@@ -191,7 +191,7 @@ def coreSelectorSourceProblem [Fintype ι] [DecidableEq ι]
     (inst : Instance n)
     (encode : ((ι → Rat) × (ι → Rat)) → State n)
     (bounds : SelectorBounds ι) :
-    Problem ((ι → Rat) × (ι → Rat)) where
+    SemanticProblem ((ι → Rat) × (ι → Rat)) where
   feasible pair := inst.Feasible (encode pair) ∧
     SelectorGadget bounds pair.1 pair.2
   objective pair := inst.ObjectiveValue (encode pair)
@@ -200,7 +200,7 @@ def coreSelectorSourceProblem [Fintype ι] [DecidableEq ι]
 def coreSOS1TargetProblem [Fintype ι] [DecidableEq ι]
     (inst : Instance n)
     (encode : ((ι → Rat) × (ι → Rat)) → State n) :
-    Problem (ι → Rat) where
+    SemanticProblem (ι → Rat) where
   feasible members :=
     inst.Feasible (encode (members, zeroSelectors)) ∧ GenericSOS1 members
   objective members := inst.ObjectiveValue (encode (members, zeroSelectors))
@@ -260,7 +260,7 @@ def corePlannedSelectorSourceProblem [Fintype ι] [DecidableEq ι]
     (inst : Instance n)
     (encode : ((ι → Rat) × (ι → Rat)) → State n)
     (reused : Finset ι) (bounds : SelectorBounds ι) :
-    Problem ((ι → Rat) × (ι → Rat)) where
+    SemanticProblem ((ι → Rat) × (ι → Rat)) where
   feasible pair :=
     inst.Feasible (encode pair) ∧
       PlannedSelectorGadget reused bounds pair.1 pair.2

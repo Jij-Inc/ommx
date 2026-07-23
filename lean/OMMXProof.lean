@@ -8,5 +8,5 @@ import OMMXProof.Domain
 import OMMXProof.Function.Affine
 import OMMXProof.Linear.EqualityNonnegativeLP
 import OMMXProof.Linear.LessEqualNonnegativeLP
-import OMMXProof.Reduction
+import OMMXProof.SemanticProblem
 import OMMXProof.State
