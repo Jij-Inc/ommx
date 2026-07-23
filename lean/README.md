@@ -17,16 +17,12 @@ The independent formalization defines exact rational semantics for:
 
 - finite assignments, continuous/integer/binary domains, and finite bounds;
 - affine equalities and inequalities, objective value, and optimization sense;
-- exact Farkas implication and infeasibility checking;
-- activity-bound implication, implied equality, exact stored-bound replacement
-  with a genuine-tightening check, and non-circular redundant-row removal;
 - identity-space, directed implication, infeasibility, and projection/lift
   preservation contracts;
 - compatible reduction composition with lifts composed in reverse order;
 - structural OneHot recognition up to an arbitrary nonzero equality scale;
-- Indicator augmentation and replacement with exact active substitution and a
-  surviving-system-only inactive proof; equality replacement carries two
-  independent inactive-side witnesses over that same surviving system;
+- Indicator augmentation and replacement obligations, exact active
+  substitution, and an executable augmentation checker;
 - forward Indicator Big-M lowering for arbitrary exact function denotations,
   including the SDK's independent upper/lower side emission and bound-justified
   side omission rules;
@@ -56,11 +52,8 @@ contract.
 
 `LinearConstraint.normalize lhs rhs sense` specifies the version-1 rule of
 moving the right-hand side to the left. Rows are then represented as
-`a · x + c ≤ 0` or `a · x + c = 0`. For a Farkas
-implication, inequality multipliers must be nonnegative, equality multipliers
-are free, coefficients must cancel exactly, and scalar slack is permitted in
-the sound direction. The checker uses exact `Rat`; numerical tolerances never
-create a proof.
+`a · x + c ≤ 0` or `a · x + c = 0`. The semantics use exact `Rat`;
+numerical tolerances never create a proof.
 
 Projection preservation requires both feasible directions, objective
 preservation in both directions, and the section law
@@ -73,10 +66,11 @@ noncanonical and unobservable.
 | Module | Responsibility |
 | --- | --- |
 | `OMMXProof.Core` | Input AST and exact denotation |
-| `OMMXProof.Linear.Farkas` | Executable linear certificate checkers and soundness theorems |
+| `OMMXProof.Linear.EqualityNonnegativeLP` | Equality-form LP with nonnegative variables |
+| `OMMXProof.Linear.LessEqualNonnegativeLP` | Less-than-or-equal-form LP with nonnegative variables |
 | `OMMXProof.Reduction` | Preservation relations and composition laws |
 | `OMMXProof.Special.OneHot` | Structural OneHot checker and replacement theorem |
-| `OMMXProof.Special.Indicator` | Active substitution, inactive proof, augment/replace, and forward Big-M semantics |
+| `OMMXProof.Special.Indicator` | Active substitution, augment/replace obligations, and forward Big-M semantics |
 | `OMMXProof.Special.SOS1` | Binary cardinality, selector-use isolation, and full SDK-plan compression |
 | `OMMXProofTest.Fixtures` | Test-only accepted/rejected fixtures and counterexamples |
 | `OMMXProofTest.Acceptance` | `lake test` acceptance target |
@@ -110,7 +104,7 @@ includes Lean's standard `propext`, `Classical.choice`, and `Quot.sound` axioms.
 ## Implemented scope
 
 - [x] Semantic domains, denotation, and preservation relations
-- [x] Exact linear/Farkas checker and soundness
+- [x] Equality and less-than-or-equal nonnegative LP semantics
 - [x] Reduction composition and project/lift laws
 - [x] OneHot, Indicator recovery, and Indicator Big-M lowering rules
 - [x] SOS1 projection and mixed reused/fresh SDK-plan compression

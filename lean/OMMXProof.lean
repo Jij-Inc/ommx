@@ -1,7 +1,8 @@
 import OMMXProof.Core
 import OMMXProof.Domain
 import OMMXProof.Function.Affine
-import OMMXProof.Linear.Farkas
+import OMMXProof.Linear.EqualityNonnegativeLP
+import OMMXProof.Linear.LessEqualNonnegativeLP
 import OMMXProof.Reduction
 import OMMXProof.Special.Indicator
 import OMMXProof.Special.OneHot
