@@ -1,4 +1,4 @@
-import OMMXProof.Core
+import OMMXProof.Instance
 import OMMXProof.Constraint.SOS1
 
 /-!

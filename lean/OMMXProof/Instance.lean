@@ -4,7 +4,7 @@ import OMMXProof.Constraint.SOS1
 import OMMXProof.SemanticProblem
 
 /-!
-# Exact semantic core
+# Instance syntax and semantics
 
 This module assembles the independent constraint semantics into a finite
 optimization Instance. It deliberately has no OMMX Rust, protobuf,
