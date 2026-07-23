@@ -65,7 +65,7 @@ noncanonical and unobservable.
 
 | Module | Responsibility |
 | --- | --- |
-| `OMMXProof.Core` | Input AST and exact denotation |
+| `OMMXProof.Instance` | Finite Instance syntax and exact denotation |
 | `OMMXProof.Linear.EqualityNonnegativeLP` | Equality-form LP with nonnegative variables |
 | `OMMXProof.Linear.LessEqualNonnegativeLP` | Less-than-or-equal-form LP with nonnegative variables |
 | `OMMXProof.SemanticProblem` | Syntax-independent optimization semantics, preservation relations, and composition laws |

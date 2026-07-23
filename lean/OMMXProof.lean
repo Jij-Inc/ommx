@@ -3,9 +3,9 @@ import OMMXProof.Constraint.Linear
 import OMMXProof.Constraint.OneHot
 import OMMXProof.Constraint.SOS1
 import OMMXProof.Constraint.SOS1.Instance
-import OMMXProof.Core
 import OMMXProof.Domain
 import OMMXProof.Function.Affine
+import OMMXProof.Instance
 import OMMXProof.Linear.EqualityNonnegativeLP
 import OMMXProof.Linear.LessEqualNonnegativeLP
 import OMMXProof.SemanticProblem
