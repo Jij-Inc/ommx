@@ -5,7 +5,8 @@ import OMMXProof.Instance
 
 An `Instance.Transform source` records a transformed Instance together with
 partial state maps in both directions. It deliberately imposes no semantic
-correctness by itself: reduction and relaxation are separate predicates.
+correctness by itself: reduction, relaxation, objective preservation, and
+round trips are separate predicates.
 -/
 
 namespace OMMXProof
@@ -48,6 +49,51 @@ def IsRelaxation {source : Instance n} (transform : Transform source) : Prop :=
         transform.encode sourceState = some targetState ∧
           transform.target.Feasible targetState
 
+/-- The optimization sense is unchanged by the transformation. -/
+def SensePreserving {source : Instance n}
+    (transform : Transform source) : Prop :=
+  source.sense = transform.target.sense
+
+/-- Encoding preserves the objective value of every feasible source state.
+
+The `Option.map` equality also requires `encode` to be defined on every
+feasible source state. This is the objective condition paired with
+`IsRelaxation`. -/
+def SourceObjectiveValuePreserving {source : Instance n}
+    (transform : Transform source) : Prop :=
+  ∀ {sourceState},
+    source.Feasible sourceState →
+      Option.map transform.target.ObjectiveValue
+        (transform.encode sourceState) =
+          some (source.ObjectiveValue sourceState)
+
+/-- Decoding preserves the objective value of every feasible target state.
+
+The `Option.map` equality also requires `decode` to be defined on every
+feasible target state. This is the objective condition paired with
+`IsReduction`. -/
+def TargetObjectiveValuePreserving {source : Instance n}
+    (transform : Transform source) : Prop :=
+  ∀ {targetState},
+    transform.target.Feasible targetState →
+      Option.map source.ObjectiveValue
+        (transform.decode targetState) =
+          some (transform.target.ObjectiveValue targetState)
+
+/-- Encoding preserves the full objective: both optimization sense and value
+on every feasible source state. -/
+def SourceObjectivePreserving {source : Instance n}
+    (transform : Transform source) : Prop :=
+  transform.SensePreserving ∧
+    transform.SourceObjectiveValuePreserving
+
+/-- Decoding preserves the full objective: both optimization sense and value
+on every feasible target state. -/
+def TargetObjectivePreserving {source : Instance n}
+    (transform : Transform source) : Prop :=
+  transform.SensePreserving ∧
+    transform.TargetObjectiveValuePreserving
+
 /-- Encoding and then decoding recovers every feasible source state.
 
 The `Option.bind` equality also requires both partial maps to be defined along
@@ -82,6 +128,30 @@ theorem refl_isRelaxation (source : Instance n) :
     (refl source).IsRelaxation := by
   intro sourceState hfeasible
   exact ⟨sourceState, rfl, hfeasible⟩
+
+theorem refl_sensePreserving (source : Instance n) :
+    (refl source).SensePreserving :=
+  rfl
+
+theorem refl_sourceObjectiveValuePreserving (source : Instance n) :
+    (refl source).SourceObjectiveValuePreserving := by
+  intro sourceState _
+  rfl
+
+theorem refl_targetObjectiveValuePreserving (source : Instance n) :
+    (refl source).TargetObjectiveValuePreserving := by
+  intro targetState _
+  rfl
+
+theorem refl_sourceObjectivePreserving (source : Instance n) :
+    (refl source).SourceObjectivePreserving :=
+  ⟨refl_sensePreserving source,
+    refl_sourceObjectiveValuePreserving source⟩
+
+theorem refl_targetObjectivePreserving (source : Instance n) :
+    (refl source).TargetObjectivePreserving :=
+  ⟨refl_sensePreserving source,
+    refl_targetObjectiveValuePreserving source⟩
 
 theorem refl_sourceRoundTrip (source : Instance n) :
     (refl source).SourceRoundTrip := by
@@ -123,6 +193,63 @@ theorem comp_isRelaxation {source : Instance n}
   rcases hsecond hmiddle with ⟨targetState, hencodeSecond, htarget⟩
   refine ⟨targetState, ?_, htarget⟩
   simp [comp, hencodeFirst, hencodeSecond]
+
+theorem comp_sensePreserving {source : Instance n}
+    {first : Transform source} {second : Transform first.target}
+    (hfirst : first.SensePreserving)
+    (hsecond : second.SensePreserving) :
+    (comp first second).SensePreserving :=
+  hfirst.trans hsecond
+
+theorem comp_sourceObjectiveValuePreserving {source : Instance n}
+    {first : Transform source} {second : Transform first.target}
+    (hfirstRelaxation : first.IsRelaxation)
+    (hfirst : first.SourceObjectiveValuePreserving)
+    (hsecond : second.SourceObjectiveValuePreserving) :
+    (comp first second).SourceObjectiveValuePreserving := by
+  intro sourceState hsource
+  rcases hfirstRelaxation hsource with
+    ⟨middleState, hencodeFirst, hmiddle⟩
+  have hfirstObjective :
+      first.target.ObjectiveValue middleState =
+        source.ObjectiveValue sourceState := by
+    simpa [hencodeFirst] using hfirst hsource
+  simpa [comp, hencodeFirst, hfirstObjective] using hsecond hmiddle
+
+theorem comp_targetObjectiveValuePreserving {source : Instance n}
+    {first : Transform source} {second : Transform first.target}
+    (hsecondReduction : second.IsReduction)
+    (hfirst : first.TargetObjectiveValuePreserving)
+    (hsecond : second.TargetObjectiveValuePreserving) :
+    (comp first second).TargetObjectiveValuePreserving := by
+  intro targetState htarget
+  rcases hsecondReduction htarget with
+    ⟨middleState, hdecodeSecond, hmiddle⟩
+  have hsecondObjective :
+      first.target.ObjectiveValue middleState =
+        second.target.ObjectiveValue targetState := by
+    simpa [hdecodeSecond] using hsecond htarget
+  simpa [comp, hdecodeSecond, hsecondObjective] using hfirst hmiddle
+
+theorem comp_sourceObjectivePreserving {source : Instance n}
+    {first : Transform source} {second : Transform first.target}
+    (hfirstRelaxation : first.IsRelaxation)
+    (hfirst : first.SourceObjectivePreserving)
+    (hsecond : second.SourceObjectivePreserving) :
+    (comp first second).SourceObjectivePreserving :=
+  ⟨comp_sensePreserving hfirst.1 hsecond.1,
+    comp_sourceObjectiveValuePreserving
+      hfirstRelaxation hfirst.2 hsecond.2⟩
+
+theorem comp_targetObjectivePreserving {source : Instance n}
+    {first : Transform source} {second : Transform first.target}
+    (hsecondReduction : second.IsReduction)
+    (hfirst : first.TargetObjectivePreserving)
+    (hsecond : second.TargetObjectivePreserving) :
+    (comp first second).TargetObjectivePreserving :=
+  ⟨comp_sensePreserving hfirst.1 hsecond.1,
+    comp_targetObjectiveValuePreserving
+      hsecondReduction hfirst.2 hsecond.2⟩
 
 end Transform
 
