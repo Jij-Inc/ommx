@@ -140,46 +140,6 @@ theorem eval_eq_of_independentOf {expr : Affine n}
 
 end Affine
 
-namespace LinearSystem
-
-def IndependentAt (system : LinearSystem n) (index : Fin n) : Prop :=
-  (∀ row, (system.inequalities row).IndependentAt index) ∧
-    ∀ row, (system.equalities row).IndependentAt index
-
-instance (system : LinearSystem n) (index : Fin n) :
-    Decidable (system.IndependentAt index) := by
-  unfold IndependentAt
-  infer_instance
-
-def IndependentOf (system : LinearSystem n)
-    (privateSet : Finset (Fin n)) : Prop :=
-  ∀ i ∈ privateSet, system.IndependentAt i
-
-theorem feasible_iff_of_independentOf {system : LinearSystem n}
-    {privateSet : Finset (Fin n)} {lhs rhs : State n}
-    (hindependent : system.IndependentOf privateSet)
-    (hagree : AgreeOutside privateSet lhs rhs) :
-    system.Feasible lhs ↔ system.Feasible rhs := by
-  have hineq (row : Fin system.ineqCount) :
-      (system.inequalities row).eval lhs =
-        (system.inequalities row).eval rhs :=
-    Affine.eval_eq_of_independentOf
-      (fun i hi => (hindependent i hi).1 row) hagree
-  have heq (row : Fin system.eqCount) :
-      (system.equalities row).eval lhs =
-        (system.equalities row).eval rhs :=
-    Affine.eval_eq_of_independentOf
-      (fun i hi => (hindependent i hi).2 row) hagree
-  constructor
-  · rintro ⟨hleftIneq, hleftEq⟩
-    exact ⟨fun row => (hineq row) ▸ hleftIneq row,
-      fun row => (heq row) ▸ hleftEq row⟩
-  · rintro ⟨hrightIneq, hrightEq⟩
-    exact ⟨fun row => (hineq row).symm ▸ hrightIneq row,
-      fun row => (heq row).symm ▸ hrightEq row⟩
-
-end LinearSystem
-
 namespace LinearConstraint
 
 def IndependentAt (constraint : LinearConstraint n) (index : Fin n) : Prop :=
@@ -316,7 +276,8 @@ namespace Instance
 /-- Exact semantic independence of one coordinate in the independent model AST. -/
 def IndependentAt (inst : Instance n) (index : Fin n) : Prop :=
   (inst.domains index).Unrestricted ∧
-    inst.linear.IndependentAt index ∧
+    (∀ constraint ∈ inst.constraints,
+      constraint.IndependentAt index) ∧
     (∀ constraint ∈ inst.specialConstraints,
       constraint.IndependentAt index) ∧
     inst.objective.IndependentAt index
@@ -381,21 +342,31 @@ theorem feasible_iff_of_selectorIsolated {inst : Instance n}
       · exact Domain.holds_of_unrestricted
           (hindependent i hprivate).1 (lhs i)
       · simpa [hagree i hprivate] using hright i
-  have hlinear := LinearSystem.feasible_iff_of_independentOf
-    (fun i hi => (hindependent i hi).2.1) hagree
+  have hconstraints :
+      (∀ constraint ∈ inst.constraints, constraint.Holds lhs) ↔
+        ∀ constraint ∈ inst.constraints, constraint.Holds rhs := by
+    constructor
+    · intro hleft constraint hconstraint
+      exact (LinearConstraint.holds_iff_of_independentOf
+        (fun i hi => (hindependent i hi).2.1 constraint hconstraint)
+        hagree).mp (hleft constraint hconstraint)
+    · intro hright constraint hconstraint
+      exact (LinearConstraint.holds_iff_of_independentOf
+        (fun i hi => (hindependent i hi).2.1 constraint hconstraint)
+        hagree).mpr (hright constraint hconstraint)
   have hspecial (constraint : SpecialConstraint n)
       (hconstraint : constraint ∈ inst.specialConstraints) :=
     SpecialConstraint.holds_iff_of_independentOf
       (fun i hi => (hindependent i hi).2.2.1 constraint hconstraint) hagree
   unfold Feasible
   constructor
-  · rintro ⟨hleftDomains, hleftLinear, hleftSpecial⟩
-    exact ⟨hdomains.mp hleftDomains, hlinear.mp hleftLinear,
+  · rintro ⟨hleftDomains, hleftConstraints, hleftSpecial⟩
+    exact ⟨hdomains.mp hleftDomains, hconstraints.mp hleftConstraints,
       fun constraint hconstraint =>
         (hspecial constraint hconstraint).mp
           (hleftSpecial constraint hconstraint)⟩
-  · rintro ⟨hrightDomains, hrightLinear, hrightSpecial⟩
-    exact ⟨hdomains.mpr hrightDomains, hlinear.mpr hrightLinear,
+  · rintro ⟨hrightDomains, hrightConstraints, hrightSpecial⟩
+    exact ⟨hdomains.mpr hrightDomains, hconstraints.mpr hrightConstraints,
       fun constraint hconstraint =>
         (hspecial constraint hconstraint).mpr
           (hrightSpecial constraint hconstraint)⟩

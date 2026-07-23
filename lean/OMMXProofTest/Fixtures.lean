@@ -188,15 +188,9 @@ def selectorIsolationDomains : Fin 2 → Domain := fun i =>
   else
     .continuous
 
-def selectorIsolationLinear : LinearSystem 2 where
-  ineqCount := 0
-  eqCount := 0
-  inequalities := fun i => nomatch i
-  equalities := fun i => nomatch i
-
 def selectorIsolationBase : Instance 2 where
   domains := selectorIsolationDomains
-  linear := selectorIsolationLinear
+  constraints := []
   objective := twoVarAffine 1 0 0
   sense := .minimize
 
