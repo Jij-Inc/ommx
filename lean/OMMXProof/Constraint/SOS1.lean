@@ -111,78 +111,9 @@ theorem checkBinaryCardinalitySOS1_sound
 /-! ## Executable selector-isolation contract
 
 Selector compression is sound only when the removed selectors are private to
-the selector gadget. The following checker computes that fact from the exact
-independent `Instance` syntax. A coordinate is considered used when its domain
-is restrictive, any constraint observes it, or the objective has a nonzero
-coefficient.
+the selector gadget. The following constraint-specific lemmas support checking
+that condition against the complete `Instance` syntax.
 -/
-
-/-- Two states agree on every coordinate other than `privateSet`. -/
-def AgreeOutside (privateSet : Finset (Fin n))
-    (lhs rhs : State n) : Prop :=
-  ∀ i, i ∉ privateSet → lhs i = rhs i
-
-namespace Affine
-
-/-- Syntactic exactness criterion for semantic independence at one coordinate. -/
-def IndependentAt (expr : Affine n) (index : Fin n) : Prop :=
-  expr.coeff index = 0
-
-instance (expr : Affine n) (index : Fin n) :
-    Decidable (expr.IndependentAt index) := by
-  unfold IndependentAt
-  infer_instance
-
-def IndependentOf (expr : Affine n) (privateSet : Finset (Fin n)) : Prop :=
-  ∀ i ∈ privateSet, expr.IndependentAt i
-
-instance (expr : Affine n) (privateSet : Finset (Fin n)) :
-    Decidable (expr.IndependentOf privateSet) := by
-  unfold IndependentOf
-  infer_instance
-
-theorem eval_eq_of_independentOf {expr : Affine n}
-    {privateSet : Finset (Fin n)} {lhs rhs : State n}
-    (hindependent : expr.IndependentOf privateSet)
-    (hagree : AgreeOutside privateSet lhs rhs) :
-    expr.eval lhs = expr.eval rhs := by
-  unfold eval
-  apply congrArg (fun total => total + expr.constant)
-  apply Finset.sum_congr rfl
-  intro i _
-  by_cases hprivate : i ∈ privateSet
-  · rw [hindependent i hprivate]
-    simp
-  · rw [hagree i hprivate]
-
-end Affine
-
-namespace LinearConstraint
-
-def IndependentAt (constraint : LinearConstraint n) (index : Fin n) : Prop :=
-  constraint.expr.IndependentAt index
-
-instance (constraint : LinearConstraint n) (index : Fin n) :
-    Decidable (constraint.IndependentAt index) := by
-  unfold IndependentAt
-  infer_instance
-
-def IndependentOf (constraint : LinearConstraint n)
-    (privateSet : Finset (Fin n)) : Prop :=
-  constraint.expr.IndependentOf privateSet
-
-theorem holds_iff_of_independentOf {constraint : LinearConstraint n}
-    {privateSet : Finset (Fin n)} {lhs rhs : State n}
-    (hindependent : constraint.IndependentOf privateSet)
-    (hagree : AgreeOutside privateSet lhs rhs) :
-    constraint.Holds lhs ↔ constraint.Holds rhs := by
-  have heval := Affine.eval_eq_of_independentOf hindependent hagree
-  unfold Holds
-  cases constraint.sense
-  · exact heval ▸ Iff.rfl
-  · exact heval ▸ Iff.rfl
-
-end LinearConstraint
 
 private theorem agree_on_members {members privateSet : Finset (Fin n)}
     {lhs rhs : State n}
@@ -194,86 +125,7 @@ private theorem agree_on_members {members privateSet : Finset (Fin n)}
   intro hiprivate
   exact hindependent i hiprivate himember
 
-namespace OneHotConstraint
 
-def IndependentAt (constraint : OneHotConstraint n) (index : Fin n) : Prop :=
-  index ∉ constraint.members
-
-instance (constraint : OneHotConstraint n) (index : Fin n) :
-    Decidable (constraint.IndependentAt index) := by
-  unfold IndependentAt
-  infer_instance
-
-def IndependentOf (constraint : OneHotConstraint n)
-    (privateSet : Finset (Fin n)) : Prop :=
-  ∀ i ∈ privateSet, constraint.IndependentAt i
-
-theorem holds_iff_of_independentOf {constraint : OneHotConstraint n}
-    {privateSet : Finset (Fin n)} {lhs rhs : State n}
-    (hindependent : constraint.IndependentOf privateSet)
-    (hagree : AgreeOutside privateSet lhs rhs) :
-    constraint.Holds lhs ↔ constraint.Holds rhs := by
-  have hvalues := agree_on_members hindependent hagree
-  constructor
-  · rintro ⟨hbinary, hsum⟩
-    exact ⟨fun i hi => by simpa [← hvalues i hi] using hbinary i hi,
-      by
-        calc
-          ∑ i ∈ constraint.members, rhs i =
-              ∑ i ∈ constraint.members, lhs i := by
-            apply Finset.sum_congr rfl
-            intro i hi
-            rw [hvalues i hi]
-          _ = 1 := hsum⟩
-  · rintro ⟨hbinary, hsum⟩
-    exact ⟨fun i hi => by simpa [hvalues i hi] using hbinary i hi,
-      by
-        calc
-          ∑ i ∈ constraint.members, lhs i =
-              ∑ i ∈ constraint.members, rhs i := by
-            apply Finset.sum_congr rfl
-            intro i hi
-            rw [hvalues i hi]
-          _ = 1 := hsum⟩
-
-end OneHotConstraint
-
-namespace IndicatorConstraint
-
-def IndependentAt (constraint : IndicatorConstraint n) (index : Fin n) : Prop :=
-  index ≠ constraint.trigger ∧ constraint.body.IndependentAt index
-
-instance (constraint : IndicatorConstraint n) (index : Fin n) :
-    Decidable (constraint.IndependentAt index) := by
-  unfold IndependentAt
-  infer_instance
-
-def IndependentOf (constraint : IndicatorConstraint n)
-    (privateSet : Finset (Fin n)) : Prop :=
-  ∀ i ∈ privateSet, constraint.IndependentAt i
-
-theorem holds_iff_of_independentOf {constraint : IndicatorConstraint n}
-    {privateSet : Finset (Fin n)} {lhs rhs : State n}
-    (hindependent : constraint.IndependentOf privateSet)
-    (hagree : AgreeOutside privateSet lhs rhs) :
-    constraint.Holds lhs ↔ constraint.Holds rhs := by
-  have htriggerOutside : constraint.trigger ∉ privateSet := by
-    intro hprivate
-    exact (hindependent constraint.trigger hprivate).1 rfl
-  have htrigger := hagree constraint.trigger htriggerOutside
-  have hbody := LinearConstraint.holds_iff_of_independentOf
-    (fun i hi => (hindependent i hi).2) hagree
-  constructor
-  · intro hleft hactive
-    apply hbody.mp
-    apply hleft
-    simpa [htrigger] using hactive
-  · intro hright hactive
-    apply hbody.mpr
-    apply hright
-    simpa [htrigger] using hactive
-
-end IndicatorConstraint
 
 namespace SOS1Constraint
 
