@@ -1,10 +1,12 @@
+import OMMXProof.Constraint.Indicator
+import OMMXProof.Constraint.Linear
+import OMMXProof.Constraint.OneHot
+import OMMXProof.Constraint.SOS1
+import OMMXProof.Constraint.SOS1.Instance
 import OMMXProof.Core
 import OMMXProof.Domain
 import OMMXProof.Function.Affine
 import OMMXProof.Linear.EqualityNonnegativeLP
 import OMMXProof.Linear.LessEqualNonnegativeLP
 import OMMXProof.Reduction
-import OMMXProof.Special.Indicator
-import OMMXProof.Special.OneHot
-import OMMXProof.Special.SOS1
 import OMMXProof.State

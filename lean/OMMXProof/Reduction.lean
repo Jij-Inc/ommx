@@ -1,4 +1,4 @@
-import OMMXProof.Core
+import OMMXProof.State
 
 /-!
 # Preservation and reduction contracts
@@ -10,19 +10,15 @@ not tags in a flat result enum.
 
 namespace OMMXProof
 
+inductive OptimizationSense where
+  | minimize
+  | maximize
+  deriving DecidableEq, Repr
+
 structure Problem (α : Type*) where
   feasible : α → Prop
   objective : α → Rat
   sense : OptimizationSense
-
-namespace Instance
-
-def asProblem (inst : Instance n) : Problem (State n) where
-  feasible := inst.Feasible
-  objective := inst.ObjectiveValue
-  sense := inst.sense
-
-end Instance
 
 /-- Exact equivalence in one state space. -/
 structure IdentityPreserves {α : Type*} (source target : Problem α) : Prop where

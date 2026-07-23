@@ -1,4 +1,5 @@
-import OMMXProof.Special.OneHot
+import OMMXProof.Constraint.OneHot
+import OMMXProof.Constraint.Indicator
 import Mathlib.Tactic.Linarith
 
 /-!
@@ -13,16 +14,32 @@ history to this independent plan remains a separate future refinement theorem.
 
 namespace OMMXProof
 
+structure SOS1Constraint (n : Nat) where
+  members : Finset (Fin n)
+
+namespace SOS1Constraint
+
+def Holds (constraint : SOS1Constraint n) (state : State n) : Prop :=
+  ∀ i ∈ constraint.members, ∀ j ∈ constraint.members,
+    state i ≠ 0 → state j ≠ 0 → i = j
+
+instance (constraint : SOS1Constraint n) (state : State n) :
+    Decidable (constraint.Holds state) := by
+  unfold Holds
+  infer_instance
+
+end SOS1Constraint
+
 def SOS1Card (members : Finset (Fin n)) (state : State n) : Prop :=
   (support members state).card ≤ 1
 
-theorem sos1Card_iff_special (members : Finset (Fin n))
+theorem sos1Card_iff_holds (members : Finset (Fin n))
     (state : State n) :
     SOS1Card members state ↔
-      (SpecialConstraint.sos1 members).Holds state := by
+      ({ members } : SOS1Constraint n).Holds state := by
   classical
   rw [SOS1Card, Finset.card_le_one]
-  simp only [SpecialConstraint.Holds, support, Finset.mem_filter]
+  simp only [SOS1Constraint.Holds, support, Finset.mem_filter]
   constructor
   · intro h i hi j hj hine hjne
     exact h i ⟨hi, hine⟩ j ⟨hj, hjne⟩
@@ -73,7 +90,7 @@ theorem checkBinaryCardinalitySOS1_sound
     {state : State n}
     (hdomains : ∀ i, state i ∈ domains i) :
     (source.Holds state ↔
-      (SpecialConstraint.sos1 draft.members).Holds state) := by
+      ({ members := draft.members } : SOS1Constraint n).Holds state) := by
   have houter := Bool.and_eq_true_iff.mp hcheck
   have hconditions : draft.members.Nonempty ∧
       0 < draft.scale ∧
@@ -89,15 +106,15 @@ theorem checkBinaryCardinalitySOS1_sound
   simp only [LinearConstraint.Holds, hsense]
   rw [hsource, Affine.eval_scale, eval_oneHotExpr,
     scaledBinaryCardinality_sos1 draft.members state hbinary draft.scale hpositive,
-    sos1Card_iff_special]
+    sos1Card_iff_holds]
 
 /-! ## Executable selector-isolation contract
 
 Selector compression is sound only when the removed selectors are private to
 the selector gadget. The following checker computes that fact from the exact
 independent `Instance` syntax. A coordinate is considered used when its domain
-is restrictive, a linear/special constraint observes it, or the objective has
-a nonzero coefficient.
+is restrictive, any constraint observes it, or the objective has a nonzero
+coefficient.
 -/
 
 /-- Two states agree on every coordinate other than `privateSet`. -/
@@ -167,36 +184,6 @@ theorem holds_iff_of_independentOf {constraint : LinearConstraint n}
 
 end LinearConstraint
 
-namespace SpecialConstraint
-
-def IndependentAt : SpecialConstraint n → Fin n → Prop
-  | .oneHot members, index => index ∉ members
-  | .indicator trigger _ body, index =>
-      index ≠ trigger ∧ body.IndependentAt index
-  | .sos1 members, index => index ∉ members
-
-instance (constraint : SpecialConstraint n) (index : Fin n) :
-    Decidable (constraint.IndependentAt index) := by
-  cases constraint with
-  | oneHot members =>
-      simp only [IndependentAt]
-      infer_instance
-  | indicator trigger polarity body =>
-      simp only [IndependentAt]
-      infer_instance
-  | sos1 members =>
-      simp only [IndependentAt]
-      infer_instance
-
-def IndependentOf (constraint : SpecialConstraint n)
-    (privateSet : Finset (Fin n)) : Prop :=
-  ∀ i ∈ privateSet, constraint.IndependentAt i
-
-instance (constraint : SpecialConstraint n) (privateSet : Finset (Fin n)) :
-    Decidable (constraint.IndependentOf privateSet) := by
-  unfold IndependentOf
-  infer_instance
-
 private theorem agree_on_members {members privateSet : Finset (Fin n)}
     {lhs rhs : State n}
     (hindependent : ∀ i ∈ privateSet, i ∉ members)
@@ -207,202 +194,119 @@ private theorem agree_on_members {members privateSet : Finset (Fin n)}
   intro hiprivate
   exact hindependent i hiprivate himember
 
-theorem holds_iff_of_independentOf {constraint : SpecialConstraint n}
+namespace OneHotConstraint
+
+def IndependentAt (constraint : OneHotConstraint n) (index : Fin n) : Prop :=
+  index ∉ constraint.members
+
+instance (constraint : OneHotConstraint n) (index : Fin n) :
+    Decidable (constraint.IndependentAt index) := by
+  unfold IndependentAt
+  infer_instance
+
+def IndependentOf (constraint : OneHotConstraint n)
+    (privateSet : Finset (Fin n)) : Prop :=
+  ∀ i ∈ privateSet, constraint.IndependentAt i
+
+theorem holds_iff_of_independentOf {constraint : OneHotConstraint n}
     {privateSet : Finset (Fin n)} {lhs rhs : State n}
     (hindependent : constraint.IndependentOf privateSet)
     (hagree : AgreeOutside privateSet lhs rhs) :
     constraint.Holds lhs ↔ constraint.Holds rhs := by
-  cases constraint with
-  | oneHot members =>
-      have hvalues := agree_on_members hindependent hagree
-      simp only [Holds]
-      constructor
-      · rintro ⟨hbinary, hsum⟩
-        constructor
-        · intro i hi
-          simpa [← hvalues i hi] using hbinary i hi
-        · calc
-            ∑ i ∈ members, rhs i = ∑ i ∈ members, lhs i := by
-              apply Finset.sum_congr rfl
-              intro i hi
-              rw [hvalues i hi]
-            _ = 1 := hsum
-      · rintro ⟨hbinary, hsum⟩
-        constructor
-        · intro i hi
-          simpa [hvalues i hi] using hbinary i hi
-        · calc
-            ∑ i ∈ members, lhs i = ∑ i ∈ members, rhs i := by
-              apply Finset.sum_congr rfl
-              intro i hi
-              rw [hvalues i hi]
-            _ = 1 := hsum
-  | indicator trigger polarity body =>
-      have htriggerOutside : trigger ∉ privateSet := by
-        intro hprivate
-        exact (hindependent trigger hprivate).1 rfl
-      have htrigger := hagree trigger htriggerOutside
-      have hbodyIndependent : body.IndependentOf privateSet :=
-        fun i hi => (hindependent i hi).2
-      have hbody := LinearConstraint.holds_iff_of_independentOf
-        hbodyIndependent hagree
-      simp only [Holds]
-      constructor
-      · intro hleft hactive
-        apply hbody.mp
-        apply hleft
-        simpa [htrigger] using hactive
-      · intro hright hactive
-        apply hbody.mpr
-        apply hright
-        simpa [htrigger] using hactive
-  | sos1 members =>
-      have hvalues := agree_on_members hindependent hagree
-      simp only [Holds]
-      constructor
-      · intro hleft i hi j hj hir hjr
-        apply hleft i hi j hj
-        · simpa [hvalues i hi] using hir
-        · simpa [hvalues j hj] using hjr
-      · intro hright i hi j hj hil hjl
-        apply hright i hi j hj
-        · simpa [hvalues i hi] using hil
-        · simpa [hvalues j hj] using hjl
+  have hvalues := agree_on_members hindependent hagree
+  constructor
+  · rintro ⟨hbinary, hsum⟩
+    exact ⟨fun i hi => by simpa [← hvalues i hi] using hbinary i hi,
+      by
+        calc
+          ∑ i ∈ constraint.members, rhs i =
+              ∑ i ∈ constraint.members, lhs i := by
+            apply Finset.sum_congr rfl
+            intro i hi
+            rw [hvalues i hi]
+          _ = 1 := hsum⟩
+  · rintro ⟨hbinary, hsum⟩
+    exact ⟨fun i hi => by simpa [hvalues i hi] using hbinary i hi,
+      by
+        calc
+          ∑ i ∈ constraint.members, lhs i =
+              ∑ i ∈ constraint.members, rhs i := by
+            apply Finset.sum_congr rfl
+            intro i hi
+            rw [hvalues i hi]
+          _ = 1 := hsum⟩
 
-end SpecialConstraint
+end OneHotConstraint
 
-namespace Instance
+namespace IndicatorConstraint
 
-/-- Exact semantic independence of one coordinate in the independent model AST. -/
-def IndependentAt (inst : Instance n) (index : Fin n) : Prop :=
-  (inst.domains index).Unrestricted ∧
-    (∀ constraint ∈ inst.constraints,
-      constraint.IndependentAt index) ∧
-    (∀ constraint ∈ inst.specialConstraints,
-      constraint.IndependentAt index) ∧
-    inst.objective.IndependentAt index
+def IndependentAt (constraint : IndicatorConstraint n) (index : Fin n) : Prop :=
+  index ≠ constraint.trigger ∧ constraint.body.IndependentAt index
 
-instance (inst : Instance n) (index : Fin n) :
-    Decidable (inst.IndependentAt index) := by
+instance (constraint : IndicatorConstraint n) (index : Fin n) :
+    Decidable (constraint.IndependentAt index) := by
   unfold IndependentAt
   infer_instance
 
-/-- Executable semantic-use set. A selector is fresh for the base model exactly
-when it is absent from this set. -/
-def usedVariables (inst : Instance n) : Finset (Fin n) :=
-  Finset.univ.filter fun index => ¬inst.IndependentAt index
+def IndependentOf (constraint : IndicatorConstraint n)
+    (privateSet : Finset (Fin n)) : Prop :=
+  ∀ i ∈ privateSet, constraint.IndependentAt i
 
-structure SelectorIsolationWitness (n : Nat) where
-  privateSelectors : Finset (Fin n)
+theorem holds_iff_of_independentOf {constraint : IndicatorConstraint n}
+    {privateSet : Finset (Fin n)} {lhs rhs : State n}
+    (hindependent : constraint.IndependentOf privateSet)
+    (hagree : AgreeOutside privateSet lhs rhs) :
+    constraint.Holds lhs ↔ constraint.Holds rhs := by
+  have htriggerOutside : constraint.trigger ∉ privateSet := by
+    intro hprivate
+    exact (hindependent constraint.trigger hprivate).1 rfl
+  have htrigger := hagree constraint.trigger htriggerOutside
+  have hbody := LinearConstraint.holds_iff_of_independentOf
+    (fun i hi => (hindependent i hi).2) hagree
+  constructor
+  · intro hleft hactive
+    apply hbody.mp
+    apply hleft
+    simpa [htrigger] using hactive
+  · intro hright hactive
+    apply hbody.mpr
+    apply hright
+    simpa [htrigger] using hactive
 
-def SelectorIsolated (inst : Instance n)
-    (witness : SelectorIsolationWitness n) : Prop :=
-  witness.privateSelectors.Nonempty ∧
-    Disjoint witness.privateSelectors inst.usedVariables
+end IndicatorConstraint
 
-instance (inst : Instance n) (witness : SelectorIsolationWitness n) :
-    Decidable (inst.SelectorIsolated witness) := by
-  unfold SelectorIsolated
+namespace SOS1Constraint
+
+def IndependentAt (constraint : SOS1Constraint n) (index : Fin n) : Prop :=
+  index ∉ constraint.members
+
+instance (constraint : SOS1Constraint n) (index : Fin n) :
+    Decidable (constraint.IndependentAt index) := by
+  unfold IndependentAt
   infer_instance
 
-/-- Check an untrusted set of claimed all-fresh selector coordinates. -/
-def checkSelectorIsolation (inst : Instance n)
-    (witness : SelectorIsolationWitness n) : Bool :=
-  decide (inst.SelectorIsolated witness)
+def IndependentOf (constraint : SOS1Constraint n)
+    (privateSet : Finset (Fin n)) : Prop :=
+  ∀ i ∈ privateSet, constraint.IndependentAt i
 
-theorem independentAt_of_selectorIsolated {inst : Instance n}
-    {witness : SelectorIsolationWitness n}
-    (hisolated : inst.SelectorIsolated witness)
-    {index : Fin n} (hprivate : index ∈ witness.privateSelectors) :
-    inst.IndependentAt index := by
-  by_contra hdependent
-  have hused : index ∈ inst.usedVariables := by
-    simp [usedVariables, hdependent]
-  exact Finset.disjoint_left.mp hisolated.2 hprivate hused
-
-theorem feasible_iff_of_selectorIsolated {inst : Instance n}
-    {witness : SelectorIsolationWitness n}
-    (hisolated : inst.SelectorIsolated witness)
-    {lhs rhs : State n}
-    (hagree : AgreeOutside witness.privateSelectors lhs rhs) :
-    inst.Feasible lhs ↔ inst.Feasible rhs := by
-  have hindependent (i : Fin n) (hi : i ∈ witness.privateSelectors) :=
-    independentAt_of_selectorIsolated hisolated hi
-  have hdomains :
-      (∀ i, lhs i ∈ inst.domains i) ↔
-        ∀ i, rhs i ∈ inst.domains i := by
-    constructor
-    · intro hleft i
-      by_cases hprivate : i ∈ witness.privateSelectors
-      · exact Domain.holds_of_unrestricted
-          (hindependent i hprivate).1 (rhs i)
-      · simpa [← hagree i hprivate] using hleft i
-    · intro hright i
-      by_cases hprivate : i ∈ witness.privateSelectors
-      · exact Domain.holds_of_unrestricted
-          (hindependent i hprivate).1 (lhs i)
-      · simpa [hagree i hprivate] using hright i
-  have hconstraints :
-      (∀ constraint ∈ inst.constraints, constraint.Holds lhs) ↔
-        ∀ constraint ∈ inst.constraints, constraint.Holds rhs := by
-    constructor
-    · intro hleft constraint hconstraint
-      exact (LinearConstraint.holds_iff_of_independentOf
-        (fun i hi => (hindependent i hi).2.1 constraint hconstraint)
-        hagree).mp (hleft constraint hconstraint)
-    · intro hright constraint hconstraint
-      exact (LinearConstraint.holds_iff_of_independentOf
-        (fun i hi => (hindependent i hi).2.1 constraint hconstraint)
-        hagree).mpr (hright constraint hconstraint)
-  have hspecial (constraint : SpecialConstraint n)
-      (hconstraint : constraint ∈ inst.specialConstraints) :=
-    SpecialConstraint.holds_iff_of_independentOf
-      (fun i hi => (hindependent i hi).2.2.1 constraint hconstraint) hagree
-  unfold Feasible
+theorem holds_iff_of_independentOf {constraint : SOS1Constraint n}
+    {privateSet : Finset (Fin n)} {lhs rhs : State n}
+    (hindependent : constraint.IndependentOf privateSet)
+    (hagree : AgreeOutside privateSet lhs rhs) :
+    constraint.Holds lhs ↔ constraint.Holds rhs := by
+  have hvalues := agree_on_members hindependent hagree
   constructor
-  · rintro ⟨hleftDomains, hleftConstraints, hleftSpecial⟩
-    exact ⟨hdomains.mp hleftDomains, hconstraints.mp hleftConstraints,
-      fun constraint hconstraint =>
-        (hspecial constraint hconstraint).mp
-          (hleftSpecial constraint hconstraint)⟩
-  · rintro ⟨hrightDomains, hrightConstraints, hrightSpecial⟩
-    exact ⟨hdomains.mpr hrightDomains, hconstraints.mpr hrightConstraints,
-      fun constraint hconstraint =>
-        (hspecial constraint hconstraint).mpr
-          (hrightSpecial constraint hconstraint)⟩
+  · intro hleft i hi j hj hir hjr
+    apply hleft i hi j hj
+    · simpa [hvalues i hi] using hir
+    · simpa [hvalues j hj] using hjr
+  · intro hright i hi j hj hil hjl
+    apply hright i hi j hj
+    · simpa [hvalues i hi] using hil
+    · simpa [hvalues j hj] using hjl
 
-theorem objective_eq_of_selectorIsolated {inst : Instance n}
-    {witness : SelectorIsolationWitness n}
-    (hisolated : inst.SelectorIsolated witness)
-    {lhs rhs : State n}
-    (hagree : AgreeOutside witness.privateSelectors lhs rhs) :
-    inst.ObjectiveValue lhs = inst.ObjectiveValue rhs := by
-  apply Affine.eval_eq_of_independentOf
-  · intro i hi
-    exact (independentAt_of_selectorIsolated hisolated hi).2.2.2
-  · exact hagree
+end SOS1Constraint
 
-theorem checkSelectorIsolation_sound {inst : Instance n}
-    {witness : SelectorIsolationWitness n}
-    (hcheck : checkSelectorIsolation inst witness = true)
-    {lhs rhs : State n}
-    (hagree : AgreeOutside witness.privateSelectors lhs rhs) :
-    inst.Feasible lhs ↔ inst.Feasible rhs := by
-  apply feasible_iff_of_selectorIsolated
-  · simpa [checkSelectorIsolation, decide_eq_true_eq] using hcheck
-  · exact hagree
-
-theorem checkSelectorIsolation_objective_sound {inst : Instance n}
-    {witness : SelectorIsolationWitness n}
-    (hcheck : checkSelectorIsolation inst witness = true)
-    {lhs rhs : State n}
-    (hagree : AgreeOutside witness.privateSelectors lhs rhs) :
-    inst.ObjectiveValue lhs = inst.ObjectiveValue rhs := by
-  apply objective_eq_of_selectorIsolated
-  · simpa [checkSelectorIsolation, decide_eq_true_eq] using hcheck
-  · exact hagree
-
-end Instance
 
 def GenericBinaryOn (members : Finset ι) (state : ι → Rat) : Prop :=
   ∀ i ∈ members, state i ∈ Domain.binary
@@ -740,156 +644,5 @@ def plannedSelectorCompression [Fintype ι] [DecidableEq ι]
   objective_project _ := rfl
   objective_lift _ := rfl
   sense_eq := rfl
-
-/-! The generic theorem above makes selector isolation unrepresentable by its
-types. The following connected variant starts from a finite `Instance` base,
-checks an explicit isolation witness, and then derives the same projection
-contract. `encode` records how member/selector tuples populate that finite
-model; `encodingIsolation` states that changing selectors changes only the
-coordinates claimed private by the executable witness. -/
-
-def zeroSelectors (_ : ι) : Rat := 0
-
-def coreSelectorSourceProblem [Fintype ι] [DecidableEq ι]
-    (inst : Instance n)
-    (encode : ((ι → Rat) × (ι → Rat)) → State n)
-    (bounds : SelectorBounds ι) :
-    Problem ((ι → Rat) × (ι → Rat)) where
-  feasible pair := inst.Feasible (encode pair) ∧
-    SelectorGadget bounds pair.1 pair.2
-  objective pair := inst.ObjectiveValue (encode pair)
-  sense := inst.sense
-
-def coreSOS1TargetProblem [Fintype ι] [DecidableEq ι]
-    (inst : Instance n)
-    (encode : ((ι → Rat) × (ι → Rat)) → State n) :
-    Problem (ι → Rat) where
-  feasible members :=
-    inst.Feasible (encode (members, zeroSelectors)) ∧ GenericSOS1 members
-  objective members := inst.ObjectiveValue (encode (members, zeroSelectors))
-  sense := inst.sense
-
-/-- The encoding may vary only the coordinates named by the isolation witness
-when its private selector tuple changes. -/
-def EncodingRespectsIsolation {ι : Type*}
-    (encode : ((ι → Rat) × (ι → Rat)) → State n)
-    (witness : Instance.SelectorIsolationWitness n) : Prop :=
-  ∀ members selectors selectors',
-    AgreeOutside witness.privateSelectors
-      (encode (members, selectors)) (encode (members, selectors'))
-
-/-- Exact all-fresh/full-link SOS1 compression from a checked finite base
-model. This theorem retains the minimal formulation with freshly introduced
-private selectors and the complete two-sided link gadget
-`Lᵢ zᵢ ≤ xᵢ ≤ Uᵢ zᵢ`; `corePlannedSelectorCompression` below covers the SDK's
-mixed reuse and omitted-link plan. -/
-def coreSelectorCompression [Fintype ι] [DecidableEq ι]
-    (inst : Instance n)
-    (encode : ((ι → Rat) × (ι → Rat)) → State n)
-    (bounds : SelectorBounds ι)
-    (isolation : Instance.SelectorIsolationWitness n)
-    (isolationAccepted : inst.checkSelectorIsolation isolation = true)
-    (encodingIsolation : EncodingRespectsIsolation encode isolation)
-    (baseBounds : ∀ {members},
-      inst.Feasible (encode (members, zeroSelectors)) →
-        WithinSelectorBounds bounds members) :
-    ProjectionPreserves
-      (coreSelectorSourceProblem inst encode bounds)
-      (coreSOS1TargetProblem inst encode) where
-  project := Prod.fst
-  lift members := (members, canonicalSelector members)
-  project_feasible {x} h := by
-    constructor
-    · apply (Instance.checkSelectorIsolation_sound isolationAccepted
-        (encodingIsolation x.1 x.2 zeroSelectors)).mp
-      exact h.1
-    · exact selectorGadget_project_sos1 bounds _ _ h.2
-  lift_feasible {y} h := by
-    constructor
-    · apply (Instance.checkSelectorIsolation_sound isolationAccepted
-        (encodingIsolation y zeroSelectors (canonicalSelector y))).mp
-      exact h.1
-    · exact canonicalSelector_gadget bounds y (baseBounds h.1) h.2
-  project_lift _ := rfl
-  objective_project {x} h := by
-    exact (Instance.checkSelectorIsolation_objective_sound isolationAccepted
-      (encodingIsolation x.1 x.2 zeroSelectors)).symm
-  objective_lift {y} h := by
-    exact Instance.checkSelectorIsolation_objective_sound isolationAccepted
-      (encodingIsolation y (canonicalSelector y) zeroSelectors)
-  sense_eq := rfl
-
-def corePlannedSelectorSourceProblem [Fintype ι] [DecidableEq ι]
-    (inst : Instance n)
-    (encode : ((ι → Rat) × (ι → Rat)) → State n)
-    (reused : Finset ι) (bounds : SelectorBounds ι) :
-    Problem ((ι → Rat) × (ι → Rat)) where
-  feasible pair :=
-    inst.Feasible (encode pair) ∧
-      PlannedSelectorGadget reused bounds pair.1 pair.2
-  objective pair := inst.ObjectiveValue (encode pair)
-  sense := inst.sense
-
-/-- Connected correctness theorem for the SDK SOS1 algorithm.  Reused members
-remain observable model variables; only the fresh-selector tuple is allowed to
-vary inside the checked private coordinate set. -/
-def corePlannedSelectorCompression [Fintype ι] [DecidableEq ι]
-    (inst : Instance n)
-    (encode : ((ι → Rat) × (ι → Rat)) → State n)
-    (reused : Finset ι) (bounds : SelectorBounds ι)
-    (isolation : Instance.SelectorIsolationWitness n)
-    (isolationAccepted : inst.checkSelectorIsolation isolation = true)
-    (encodingIsolation : EncodingRespectsIsolation encode isolation)
-    (validation : PlannedSelectorValidation reused bounds
-      (fun members => inst.Feasible (encode (members, zeroSelectors)))) :
-    ProjectionPreserves
-      (corePlannedSelectorSourceProblem inst encode reused bounds)
-      (coreSOS1TargetProblem inst encode) where
-  project := Prod.fst
-  lift members := (members, canonicalSelector members)
-  project_feasible {x} h := by
-    have hbase : inst.Feasible (encode (x.1, zeroSelectors)) := by
-      apply (Instance.checkSelectorIsolation_sound isolationAccepted
-        (encodingIsolation x.1 x.2 zeroSelectors)).mp
-      exact h.1
-    exact ⟨hbase,
-      plannedSelectorGadget_project_sos1 reused bounds x.1 x.2
-        (validation.baseBounds hbase) h.2⟩
-  lift_feasible {y} h := by
-    constructor
-    · apply (Instance.checkSelectorIsolation_sound isolationAccepted
-        (encodingIsolation y zeroSelectors (canonicalSelector y))).mp
-      exact h.1
-    · exact canonicalSelector_plannedGadget reused bounds y
-        (validation.baseBounds h.1) (validation.baseReusedBinary h.1) h.2
-  project_lift _ := rfl
-  objective_project {x} h := by
-    exact (Instance.checkSelectorIsolation_objective_sound isolationAccepted
-      (encodingIsolation x.1 x.2 zeroSelectors)).symm
-  objective_lift {y} h := by
-    exact Instance.checkSelectorIsolation_objective_sound isolationAccepted
-      (encodingIsolation y (canonicalSelector y) zeroSelectors)
-  sense_eq := rfl
-
-/-- A feasible source gadget may contain a noncanonical private selector, so a
-source-side retraction law is false in general. -/
-theorem canonicalSelector_not_source_retraction :
-    let bounds : SelectorBounds (Fin 1) := ⟨fun _ => -1, fun _ => 1⟩
-    let members : Fin 1 → Rat := fun _ => 0
-    let selectors : Fin 1 → Rat := fun _ => 1
-    SelectorGadget bounds members selectors ∧
-      (members, canonicalSelector members) ≠ (members, selectors) := by
-  dsimp
-  constructor
-  · constructor
-    · intro i
-      simp [Membership.mem, Domain.Holds]
-    constructor
-    · intro i
-      norm_num
-    · norm_num [Fin.sum_univ_succ]
-  · intro h
-    have hselector := congrArg (fun pair => pair.2 0) h
-    norm_num [canonicalSelector] at hselector
 
 end OMMXProof

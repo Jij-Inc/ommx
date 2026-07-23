@@ -29,8 +29,8 @@ The independent formalization defines exact rational semantics for:
 - binary-cardinality SOS1 recognition from a complete `≤` constraint with a
   strictly positive scale (the checker rejects an equality with the same affine
   expression);
-- executable selector-use/isolation checking over the finite `CoreModel` AST,
-  including domains, linear/special constraints, and the objective;
+- executable selector-use/isolation checking over the finite `Instance` AST,
+  including domains, every constraint collection, and the objective;
 - mixed reused/fresh selector-gadget SOS1 projection with the SDK's zero-bound
   link omission rules, canonical lift, objective isolation, and the
   counterexample to source-side retraction. The checked isolation witness is
@@ -69,9 +69,11 @@ noncanonical and unobservable.
 | `OMMXProof.Linear.EqualityNonnegativeLP` | Equality-form LP with nonnegative variables |
 | `OMMXProof.Linear.LessEqualNonnegativeLP` | Less-than-or-equal-form LP with nonnegative variables |
 | `OMMXProof.Reduction` | Preservation relations and composition laws |
-| `OMMXProof.Special.OneHot` | Structural OneHot checker and replacement theorem |
-| `OMMXProof.Special.Indicator` | Active substitution, augment/replace obligations, and forward Big-M semantics |
-| `OMMXProof.Special.SOS1` | Binary cardinality, selector-use isolation, and full SDK-plan compression |
+| `OMMXProof.Constraint.Linear` | Normalized affine equality and inequality semantics |
+| `OMMXProof.Constraint.OneHot` | OneHot semantics, structural checker, and replacement theorem |
+| `OMMXProof.Constraint.Indicator` | Indicator semantics, active substitution, and forward Big-M semantics |
+| `OMMXProof.Constraint.SOS1` | SOS1 semantics and generic selector compression |
+| `OMMXProof.Constraint.SOS1.Instance` | Instance-connected selector isolation and SDK-plan compression |
 | `OMMXProofTest.Fixtures` | Test-only accepted/rejected fixtures and counterexamples |
 | `OMMXProofTest.Acceptance` | `lake test` acceptance target |
 | `OMMXProofTest.Trust` | Elaborated-environment audit rejecting project-defined axioms |

@@ -1,7 +1,7 @@
 import OMMXProof.Reduction
-import OMMXProof.Special.OneHot
-import OMMXProof.Special.Indicator
-import OMMXProof.Special.SOS1
+import OMMXProof.Constraint.OneHot
+import OMMXProof.Constraint.Indicator
+import OMMXProof.Constraint.SOS1.Instance
 
 /-!
 # Executable test fixtures and counterexamples
@@ -63,7 +63,7 @@ sum equation but is not a OneHot state. -/
 theorem continuous_sum_is_not_oneHot :
     let state : State 2 := fun i => if i.val = 0 then 2 else -1
     (oneHotExpr allTwo).eval state = 0 ∧
-      ¬(SpecialConstraint.oneHot allTwo).Holds state := by
+      ¬({ members := allTwo } : OneHotConstraint 2).Holds state := by
   dsimp
   constructor
   · native_decide
@@ -89,7 +89,7 @@ satisfies `sum xᵢ - 1 ≤ 0` but is not OneHot. -/
 theorem oneHot_lessEqual_is_not_equivalent :
     let state : State 2 := fun _ => 0
     wrongSenseOneHotSource.Holds state ∧
-      ¬(SpecialConstraint.oneHot allTwo).Holds state := by
+      ¬({ members := allTwo } : OneHotConstraint 2).Holds state := by
   native_decide
 
 def scaledSOS1Source : LinearConstraint 2 :=
@@ -120,13 +120,13 @@ state, which is valid SOS1. Thus checking the row sense is essential. -/
 theorem sos1_equal_is_not_equivalent :
     let state : State 2 := fun _ => 0
     ¬wrongSenseSOS1Source.Holds state ∧
-      (SpecialConstraint.sos1 allTwo).Holds state := by
+      ({ members := allTwo } : SOS1Constraint 2).Holds state := by
   dsimp
   constructor
   · simp only [wrongSenseSOS1Source, LinearConstraint.Holds]
     rw [Affine.eval_scale, eval_oneHotExpr]
     norm_num [allTwo]
-  · simp [SpecialConstraint.Holds]
+  · simp [SOS1Constraint.Holds]
 
 def twoVarAffine (xCoefficient zCoefficient constant : Rat) : Affine 2 where
   coeff := fun i => if i.val = 0 then xCoefficient else zCoefficient
