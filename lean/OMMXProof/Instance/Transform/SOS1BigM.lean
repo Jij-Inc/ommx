@@ -682,6 +682,35 @@ theorem lowering_isRelaxation {source : Instance n} (plan : Plan source)
   exact ⟨plan.encodeState sourceState, rfl,
     plan.encode_feasible hvalid hsource⟩
 
+theorem lowering_sensePreserving {source : Instance n}
+    (plan : Plan source) :
+    plan.lowering.SensePreserving :=
+  rfl
+
+theorem lowering_sourceObjectiveValuePreserving {source : Instance n}
+    (plan : Plan source) :
+    plan.lowering.SourceObjectiveValuePreserving := by
+  intro sourceState _
+  simp [lowering, Instance.ObjectiveValue, target, encodeState]
+
+theorem lowering_targetObjectiveValuePreserving {source : Instance n}
+    (plan : Plan source) :
+    plan.lowering.TargetObjectiveValuePreserving := by
+  intro targetState _
+  simp [lowering, Instance.ObjectiveValue, target, decodeState]
+
+theorem lowering_sourceObjectivePreserving {source : Instance n}
+    (plan : Plan source) :
+    plan.lowering.SourceObjectivePreserving :=
+  ⟨plan.lowering_sensePreserving,
+    plan.lowering_sourceObjectiveValuePreserving⟩
+
+theorem lowering_targetObjectivePreserving {source : Instance n}
+    (plan : Plan source) :
+    plan.lowering.TargetObjectivePreserving :=
+  ⟨plan.lowering_sensePreserving,
+    plan.lowering_targetObjectiveValuePreserving⟩
+
 theorem lowering_sourceRoundTrip {source : Instance n}
     (plan : Plan source) :
     plan.lowering.SourceRoundTrip := by

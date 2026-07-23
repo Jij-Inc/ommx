@@ -60,6 +60,21 @@ example : plan.lowering.IsReduction :=
 example : plan.lowering.IsRelaxation :=
   plan.lowering_isRelaxation plan_valid
 
+example : plan.lowering.SensePreserving :=
+  plan.lowering_sensePreserving
+
+example : plan.lowering.SourceObjectiveValuePreserving :=
+  plan.lowering_sourceObjectiveValuePreserving
+
+example : plan.lowering.TargetObjectiveValuePreserving :=
+  plan.lowering_targetObjectiveValuePreserving
+
+example : plan.lowering.SourceObjectivePreserving :=
+  plan.lowering_sourceObjectivePreserving
+
+example : plan.lowering.TargetObjectivePreserving :=
+  plan.lowering_targetObjectivePreserving
+
 example : plan.lowering.SourceRoundTrip :=
   plan.lowering_sourceRoundTrip
 
