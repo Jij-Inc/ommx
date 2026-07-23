@@ -16,26 +16,6 @@ inductive OptimizationSense where
   | maximize
   deriving DecidableEq, Repr
 
-/-- A normalized linear system `inequalities i ≤ 0`, `equalities j = 0`. -/
-structure LinearSystem (n : Nat) where
-  ineqCount : Nat
-  eqCount : Nat
-  inequalities : Fin ineqCount → Affine n
-  equalities : Fin eqCount → Affine n
-
-namespace LinearSystem
-
-def Feasible (system : LinearSystem n) (state : State n) : Prop :=
-  (∀ i, (system.inequalities i).eval state ≤ 0) ∧
-  (∀ i, (system.equalities i).eval state = 0)
-
-instance (system : LinearSystem n) (state : State n) :
-    Decidable (Feasible system state) := by
-  unfold Feasible
-  infer_instance
-
-end LinearSystem
-
 inductive ConstraintSense where
   | lessEqual
   | equal
@@ -140,7 +120,7 @@ end SpecialConstraint
 -/
 structure Instance (n : Nat) where
   domains : Fin n → Domain
-  linear : LinearSystem n
+  constraints : List (LinearConstraint n)
   specialConstraints : List (SpecialConstraint n) := []
   objective : Affine n
   sense : OptimizationSense
@@ -149,14 +129,15 @@ namespace Instance
 
 def Feasible (inst : Instance n) (state : State n) : Prop :=
   (∀ i, state i ∈ inst.domains i) ∧
-    inst.linear.Feasible state ∧
+    (∀ constraint ∈ inst.constraints, constraint.Holds state) ∧
     ∀ constraint ∈ inst.specialConstraints, constraint.Holds state
 
 def ObjectiveValue (inst : Instance n) (state : State n) : Rat :=
   inst.objective.eval state
 
-theorem linearFeasible_of_feasible {inst : Instance n} {state : State n}
-    (h : inst.Feasible state) : inst.linear.Feasible state := h.2.1
+theorem constraintsFeasible_of_feasible {inst : Instance n} {state : State n}
+    (h : inst.Feasible state) :
+    ∀ constraint ∈ inst.constraints, constraint.Holds state := h.2.1
 
 end Instance
 
