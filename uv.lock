@@ -10,6 +10,7 @@ resolution-markers = [
 [manifest]
 members = [
     "ommx",
+    "ommx-column-generation",
     "ommx-highs-adapter",
     "ommx-openjij-adapter",
     "ommx-pyscipopt-adapter",
@@ -2345,6 +2346,21 @@ requires-dist = [
     { name = "pyarrow", specifier = ">=16.0.0,<23.0.0" },
     { name = "python-dateutil", specifier = ">=2.9.0,<3.0.0" },
     { name = "typing-extensions", specifier = ">=4.12.2,<5.0.0" },
+]
+
+[[package]]
+name = "ommx-column-generation"
+version = "3.0.0a4"
+source = { editable = "python/ommx-column-generation" }
+dependencies = [
+    { name = "ommx" },
+    { name = "ommx-highs-adapter" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "ommx", editable = "python/ommx" },
+    { name = "ommx-highs-adapter", editable = "python/ommx-highs-adapter" },
 ]
 
 [[package]]
