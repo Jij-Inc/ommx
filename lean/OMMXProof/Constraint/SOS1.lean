@@ -108,58 +108,6 @@ theorem checkBinaryCardinalitySOS1_sound
     scaledBinaryCardinality_sos1 draft.members state hbinary draft.scale hpositive,
     sos1Card_iff_holds]
 
-/-! ## Executable selector-isolation contract
-
-Private selector variables must not affect the surviving `Instance` semantics.
-The following constraint-specific lemmas support checking that condition
-against the complete `Instance` syntax.
--/
-
-private theorem agree_on_members {members privateSet : Finset (Fin n)}
-    {lhs rhs : State n}
-    (hindependent : ∀ i ∈ privateSet, i ∉ members)
-    (hagree : AgreeOutside privateSet lhs rhs) :
-    ∀ i ∈ members, lhs i = rhs i := by
-  intro i himember
-  apply hagree i
-  intro hiprivate
-  exact hindependent i hiprivate himember
-
-
-
-namespace SOS1Constraint
-
-def IndependentAt (constraint : SOS1Constraint n) (index : Fin n) : Prop :=
-  index ∉ constraint.members
-
-instance (constraint : SOS1Constraint n) (index : Fin n) :
-    Decidable (constraint.IndependentAt index) := by
-  unfold IndependentAt
-  infer_instance
-
-def IndependentOf (constraint : SOS1Constraint n)
-    (privateSet : Finset (Fin n)) : Prop :=
-  ∀ i ∈ privateSet, constraint.IndependentAt i
-
-theorem holds_iff_of_independentOf {constraint : SOS1Constraint n}
-    {privateSet : Finset (Fin n)} {lhs rhs : State n}
-    (hindependent : constraint.IndependentOf privateSet)
-    (hagree : AgreeOutside privateSet lhs rhs) :
-    constraint.Holds lhs ↔ constraint.Holds rhs := by
-  have hvalues := agree_on_members hindependent hagree
-  constructor
-  · intro hleft i hi j hj hir hjr
-    apply hleft i hi j hj
-    · simpa [hvalues i hi] using hir
-    · simpa [hvalues j hj] using hjr
-  · intro hright i hi j hj hil hjl
-    apply hright i hi j hj
-    · simpa [hvalues i hi] using hil
-    · simpa [hvalues j hj] using hjl
-
-end SOS1Constraint
-
-
 def GenericBinaryOn (members : Finset ι) (state : ι → Rat) : Prop :=
   ∀ i ∈ members, state i ∈ Domain.binary
 

@@ -1,5 +1,5 @@
 import OMMXProof.Constraint.OneHot
-import OMMXProof.Constraint.SOS1.Instance
+import OMMXProof.Constraint.SOS1
 
 /-!
 # Executable test fixtures and counterexamples
@@ -125,55 +125,6 @@ theorem sos1_equal_is_not_equivalent :
     rw [Affine.eval_scale, eval_oneHotExpr]
     norm_num [allTwo]
   · simp [SOS1Constraint.Holds]
-
-def twoVarAffine (xCoefficient zCoefficient constant : Rat) : Affine 2 where
-  coeff := fun i => if i.val = 0 then xCoefficient else zCoefficient
-  constant := constant
-
-def selectorPrivateExample : Finset (Fin 2) := {1}
-
-def selectorIsolationDomains : Fin 2 → Domain := fun i =>
-  if i.val = 0 then
-    .continuous (.finite (-1) 1 (by norm_num))
-  else
-    .continuous
-
-def selectorIsolationBase : Instance 2 where
-  domains := selectorIsolationDomains
-  constraints := []
-  objective := twoVarAffine 1 0 0
-  sense := .minimize
-
-def selectorIsolationWitness : Instance.SelectorIsolationWitness 2 where
-  privateSelectors := selectorPrivateExample
-
-example : selectorIsolationBase.checkSelectorIsolation
-    selectorIsolationWitness = true := by native_decide
-
-/-- The same witness is rejected as soon as the base objective observes the
-claimed private selector coordinate. -/
-def selectorLeakingBase : Instance 2 :=
-  { selectorIsolationBase with objective := twoVarAffine 1 1 0 }
-
-example : selectorLeakingBase.checkSelectorIsolation
-    selectorIsolationWitness = false := by native_decide
-
-/-- Without selector isolation, changing only the private variable can change
-the objective, so it cannot be removed soundly. -/
-theorem selector_leak_changes_objective :
-    let lhs : State 2 := fun _ => 0
-    let rhs : State 2 := fun i => if i.val = 0 then 0 else 1
-    AgreeOutside selectorPrivateExample lhs rhs ∧
-      selectorLeakingBase.ObjectiveValue lhs ≠
-        selectorLeakingBase.ObjectiveValue rhs := by
-  dsimp
-  constructor
-  · intro i houtside
-    fin_cases i
-    · rfl
-    · exact False.elim (houtside (by simp [selectorPrivateExample]))
-  · norm_num [selectorLeakingBase, selectorIsolationBase,
-      Instance.ObjectiveValue, twoVarAffine, Affine.eval]
 
 /-! Mixed SDK selector layout: member 0 is reused as its own binary selector,
 while member 1 gets a fresh selector. Its lower bound is zero, so the lower

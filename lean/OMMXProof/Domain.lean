@@ -427,27 +427,6 @@ theorem le_finite_upper {domain : Domain} {value upper : Rat}
     value ≤ upper :=
   Bound.le_finite_upper (mem_bound hvalue) hupper
 
-/-- A domain containing every rational value. -/
-def Unrestricted : Domain → Prop
-  | .continuous .unbounded => True
-  | _ => False
-
-instance (domain : Domain) : Decidable domain.Unrestricted := by
-  cases domain with
-  | binary => simp only [Unrestricted]; infer_instance
-  | integer bound => simp only [Unrestricted]; infer_instance
-  | continuous bound =>
-      cases bound <;> simp only [Unrestricted] <;> infer_instance
-
-theorem holds_of_unrestricted {domain : Domain}
-    (hunrestricted : domain.Unrestricted) (value : Rat) :
-    value ∈ domain := by
-  cases domain with
-  | binary => simp [Unrestricted] at hunrestricted
-  | integer bound => simp [Unrestricted] at hunrestricted
-  | continuous bound =>
-      cases bound <;> simp [Unrestricted] at hunrestricted ⊢
-
 @[simp]
 theorem binary_zero : (0 : Rat) ∈ Domain.binary := by
   simp [Membership.mem, Holds]

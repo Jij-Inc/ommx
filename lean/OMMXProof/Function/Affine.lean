@@ -226,38 +226,6 @@ theorem eval_substitute {expr : Affine n} {index : Fin n} {value : Rat}
     _ = (∑ x, expr.coeff x * state x) + expr.constant :=
       congrArg (fun total => total + expr.constant) hsum
 
-/-- An affine function is independent of a component when its coefficient is
-zero. -/
-def IndependentAt (expr : Affine n) (index : Fin n) : Prop :=
-  expr.coeff index = 0
-
-instance (expr : Affine n) (index : Fin n) :
-    Decidable (expr.IndependentAt index) := by
-  unfold IndependentAt
-  infer_instance
-
-def IndependentOf (expr : Affine n) (privateSet : Finset (Fin n)) : Prop :=
-  ∀ i ∈ privateSet, expr.IndependentAt i
-
-instance (expr : Affine n) (privateSet : Finset (Fin n)) :
-    Decidable (expr.IndependentOf privateSet) := by
-  unfold IndependentOf
-  infer_instance
-
-theorem eval_eq_of_independentOf {expr : Affine n}
-    {privateSet : Finset (Fin n)} {lhs rhs : State n}
-    (hindependent : expr.IndependentOf privateSet)
-    (hagree : AgreeOutside privateSet lhs rhs) :
-    expr.eval lhs = expr.eval rhs := by
-  unfold eval
-  apply congrArg (fun total => total + expr.constant)
-  apply Finset.sum_congr rfl
-  intro i _
-  by_cases hprivate : i ∈ privateSet
-  · rw [hindependent i hprivate]
-    simp
-  · rw [hagree i hprivate]
-
 end Affine
 
 end OMMXProof
