@@ -118,7 +118,7 @@ def noncanonicalTarget : State (2 + witness.freshCount) :=
 theorem noncanonicalTarget_feasible :
     witness.target.Feasible noncanonicalTarget := by
   rw [noncanonicalTarget,
-    witness.target_feasible_append_iff_base_and_gadget]
+    witness.target_feasible_append_iff_base_and_formulation]
   refine ⟨(witness.source_feasible_iff_base_and_selected zeroSource).mp
     zeroSource_feasible |>.1, ?_⟩
   native_decide

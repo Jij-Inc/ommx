@@ -2,13 +2,14 @@ import OMMXProof.Constraint.OneHot
 import Mathlib.Tactic.Linarith
 
 /-!
-# SOS1 semantics and selector gadgets
+# SOS1 semantics and selector formulations
 
-The structural binary-cardinality checker is executable. Direct selector-gadget
-theorems prove SOS1 semantics both for the simple all-fresh, fully-linked
-formulation and for the SDK plan with reused binary members, fresh selectors,
-and omitted zero-bound links. Connecting a committed Rust history to this
-independent plan remains a separate future refinement theorem.
+The structural binary-cardinality checker is executable. Direct selector
+formulation theorems prove SOS1 semantics both for the simple all-fresh,
+fully-linked formulation and for the SDK formulation with reused binary
+members, fresh selectors, and omitted zero-bound links. Connecting a committed
+Rust history to this independent formulation remains a separate future
+refinement theorem.
 -/
 
 namespace OMMXProof
@@ -220,8 +221,8 @@ structure SelectorBounds (ι : Type*) where
 def WithinSelectorBounds (bounds : SelectorBounds ι) (members : ι → Rat) : Prop :=
   ∀ i, bounds.lower i ≤ members i ∧ members i ≤ bounds.upper i
 
-/-- Full-link selector gadget relating each member to a binary selector. -/
-def SelectorGadget [Fintype ι] [DecidableEq ι]
+/-- Full-link selector formulation relating each member to a binary selector. -/
+def SelectorFormulation [Fintype ι] [DecidableEq ι]
     (bounds : SelectorBounds ι) (members selectors : ι → Rat) : Prop :=
   GenericBinaryOn Finset.univ selectors ∧
     (∀ i, bounds.lower i * selectors i ≤ members i ∧
@@ -243,11 +244,11 @@ theorem canonicalSelector_support [Fintype ι] [DecidableEq ι]
   ext i
   simp [genericSupport, canonicalSelector]
 
-theorem selectorGadget_project_sos1 [Fintype ι] [DecidableEq ι]
+theorem selectorFormulation_project_sos1 [Fintype ι] [DecidableEq ι]
     (bounds : SelectorBounds ι) (members selectors : ι → Rat)
-    (hgadget : SelectorGadget bounds members selectors) :
+    (hformulation : SelectorFormulation bounds members selectors) :
     GenericSOS1 members := by
-  rcases hgadget with ⟨hbinary, hlink, hsum⟩
+  rcases hformulation with ⟨hbinary, hlink, hsum⟩
   have hselectorSOS1 : GenericSOS1 selectors := by
     unfold GenericSOS1
     have hcardRat :
@@ -267,11 +268,11 @@ theorem selectorGadget_project_sos1 [Fintype ι] [DecidableEq ι]
     exact hi (le_antisymm hbounds.2 hbounds.1)
   exact le_trans (Finset.card_le_card hsubset) hselectorSOS1
 
-theorem canonicalSelector_gadget [Fintype ι] [DecidableEq ι]
+theorem canonicalSelector_formulation [Fintype ι] [DecidableEq ι]
     (bounds : SelectorBounds ι) (members : ι → Rat)
     (hbound : WithinSelectorBounds bounds members)
     (hsos1 : GenericSOS1 members) :
-    SelectorGadget bounds members (canonicalSelector members) := by
+    SelectorFormulation bounds members (canonicalSelector members) := by
   refine ⟨?_, ?_, ?_⟩
   · intro i _
     exact canonicalSelector_binary members i
@@ -284,12 +285,12 @@ theorem canonicalSelector_gadget [Fintype ι] [DecidableEq ι]
     rw [canonicalSelector_support]
     exact_mod_cast hsos1
 
-/-! ## SDK selector plan
+/-! ## SDK selector formulation
 
 The SDK may reuse a binary member as its own selector, introduce a fresh
 selector for another member, and omit a link side whose bound is zero.  The
-following semantics models that plan directly.  `freshSelectors` is ignored at
-reused coordinates.
+following semantics models that formulation directly. `freshSelectors` is
+ignored at reused coordinates.
 -/
 
 def plannedSelector [DecidableEq ι] (reused : Finset ι)
@@ -313,10 +314,13 @@ instance [Fintype ι] [DecidableEq ι] (reused : Finset ι)
   unfold FreshBoundsContainZero
   infer_instance
 
-/-- Exact plan-validation obligations enforced before the SDK mutates an
-instance.  `Rat` makes finiteness intrinsic; unsupported split domains remain
-outside this independent semantic model. -/
-structure PlannedSelectorValidation [DecidableEq ι] (reused : Finset ι)
+/-- Exact validation obligations for the planned selector formulation.
+
+The SDK enforces them before mutating an instance. `Rat` makes finiteness
+intrinsic; unsupported split domains remain outside this independent semantic
+model. -/
+structure PlannedSelectorFormulationValidation [DecidableEq ι]
+    (reused : Finset ι)
     (bounds : SelectorBounds ι) (base : (ι → Rat) → Prop) : Prop where
   freshBoundsContainZero : FreshBoundsContainZero reused bounds
   baseBounds : ∀ {members},
@@ -324,8 +328,8 @@ structure PlannedSelectorValidation [DecidableEq ι] (reused : Finset ι)
   baseReusedBinary : ∀ {members},
     base members → GenericBinaryOn reused members
 
-/-- Exact denotation of a mixed reused/fresh SDK selector plan. -/
-def PlannedSelectorGadget [Fintype ι] [DecidableEq ι]
+/-- Exact formulation of a mixed reused/fresh SDK selector layout. -/
+def PlannedSelectorFormulation [Fintype ι] [DecidableEq ι]
     (reused : Finset ι) (bounds : SelectorBounds ι)
     (members freshSelectors : ι → Rat) : Prop :=
   GenericBinaryOn Finset.univ (plannedSelector reused members freshSelectors) ∧
@@ -336,8 +340,10 @@ def PlannedSelectorGadget [Fintype ι] [DecidableEq ι]
 
 instance [Fintype ι] [DecidableEq ι] (reused : Finset ι)
     (bounds : SelectorBounds ι) (members freshSelectors : ι → Rat) :
-    Decidable (PlannedSelectorGadget reused bounds members freshSelectors) := by
-  unfold PlannedSelectorGadget GenericBinaryOn OptionalUpperLink OptionalLowerLink
+    Decidable
+      (PlannedSelectorFormulation reused bounds members freshSelectors) := by
+  unfold PlannedSelectorFormulation GenericBinaryOn OptionalUpperLink
+    OptionalLowerLink
   infer_instance
 
 theorem member_eq_zero_of_fresh_selector_eq_zero [DecidableEq ι]
@@ -363,13 +369,15 @@ theorem member_eq_zero_of_fresh_selector_eq_zero [DecidableEq ι]
     · exact le_trans (le_of_not_gt hemitted) (hbound i).1
   exact le_antisymm hupper hlower
 
-theorem plannedSelectorGadget_project_sos1 [Fintype ι] [DecidableEq ι]
+theorem plannedSelectorFormulation_project_sos1
+    [Fintype ι] [DecidableEq ι]
     (reused : Finset ι) (bounds : SelectorBounds ι)
     (members freshSelectors : ι → Rat)
     (hbound : WithinSelectorBounds bounds members)
-    (hgadget : PlannedSelectorGadget reused bounds members freshSelectors) :
+    (hformulation :
+      PlannedSelectorFormulation reused bounds members freshSelectors) :
     GenericSOS1 members := by
-  rcases hgadget with ⟨hbinary, hlinks, hsum⟩
+  rcases hformulation with ⟨hbinary, hlinks, hsum⟩
   have hselectorSOS1 : GenericSOS1 (plannedSelector reused members freshSelectors) := by
     unfold GenericSOS1
     have hcardRat :
@@ -404,12 +412,13 @@ theorem plannedSelector_canonical [Fintype ι] [DecidableEq ι]
     · simp [plannedSelector, canonicalSelector, hreused, hone]
   · simp [plannedSelector, hreused]
 
-theorem canonicalSelector_plannedGadget [Fintype ι] [DecidableEq ι]
+theorem canonicalSelector_plannedFormulation [Fintype ι] [DecidableEq ι]
     (reused : Finset ι) (bounds : SelectorBounds ι) (members : ι → Rat)
     (hbound : WithinSelectorBounds bounds members)
     (hreusedBinary : GenericBinaryOn reused members)
     (hsos1 : GenericSOS1 members) :
-    PlannedSelectorGadget reused bounds members (canonicalSelector members) := by
+    PlannedSelectorFormulation reused bounds members
+      (canonicalSelector members) := by
   have hplanned := plannedSelector_canonical reused members hreusedBinary
   refine ⟨?_, ?_, ?_⟩
   · rw [hplanned]
