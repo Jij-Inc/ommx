@@ -1,7 +1,6 @@
 import OMMXProof.Constraint.Indicator
 import OMMXProof.Constraint.OneHot
 import OMMXProof.Constraint.SOS1
-import OMMXProof.SemanticProblem
 
 /-!
 # Instance syntax and semantics
@@ -12,6 +11,11 @@ floating-point, lifecycle, or identifier semantics.
 -/
 
 namespace OMMXProof
+
+inductive OptimizationSense where
+  | minimize
+  | maximize
+  deriving DecidableEq, Repr
 
 /--
 # Simplified semantic model for OMMX Instance.
@@ -43,10 +47,9 @@ def Feasible (inst : Instance n) (state : State n) : Prop :=
 def ObjectiveValue (inst : Instance n) (state : State n) : Rat :=
   inst.objective.eval state
 
-def asSemanticProblem (inst : Instance n) : SemanticProblem (State n) where
-  feasible := inst.Feasible
-  objective := inst.ObjectiveValue
-  sense := inst.sense
+/-- Objective values attained by feasible states of this Instance. -/
+def ObjectiveRange (inst : Instance n) : Set Rat :=
+  {value | ∃ state, inst.Feasible state ∧ inst.ObjectiveValue state = value}
 
 theorem constraintsFeasible_of_feasible {inst : Instance n} {state : State n}
     (h : inst.Feasible state) :

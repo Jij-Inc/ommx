@@ -1,4 +1,3 @@
-import OMMXProof.SemanticProblem
 import OMMXProof.Constraint.Linear
 import Mathlib.Tactic
 
@@ -213,23 +212,5 @@ theorem checkOneHot_sound {domains : Fin n → Domain}
   · rintro ⟨_, hsum⟩
     rw [hsum]
     norm_num
-
-theorem oneHot_replace_preserves {domains : Fin n → Domain}
-    {source : LinearConstraint n} {draft : OneHotDraft n}
-    (hcheck : checkOneHot domains source draft = true)
-    (base : State n → Prop) (objective : State n → Rat)
-    (sense : OptimizationSense)
-    (baseDomains : ∀ {state}, base state →
-      ∀ i, state i ∈ domains i) :
-    IdentityPreserves
-      (replaceProblem base (fun state => source.Holds state)
-        objective sense)
-      (replaceProblem base
-        (fun state =>
-          ({ members := draft.members } : OneHotConstraint n).Holds state)
-        objective sense) := by
-  apply replace_preserves
-  intro state hbase
-  exact checkOneHot_sound hcheck (baseDomains hbase)
 
 end OMMXProof

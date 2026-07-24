@@ -106,8 +106,9 @@ theorem zeroSource_feasible : source.Feasible zeroSource := by
 
 example :
     plan.target.ObjectiveValue (plan.encodeState zeroSource) =
-      source.ObjectiveValue zeroSource :=
-  (plan.projectionPreserves plan_valid).objective_lift zeroSource_feasible
+      source.ObjectiveValue zeroSource := by
+  simpa [Plan.lowering] using
+    plan.lowering_sourceObjectiveValuePreserving zeroSource_feasible
 
 def oneSelector : State plan.freshCount := fun _ => 1
 

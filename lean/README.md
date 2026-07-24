@@ -17,9 +17,9 @@ The independent formalization defines exact rational semantics for:
 
 - finite assignments, continuous/integer/binary domains, and finite bounds;
 - affine equalities and inequalities, objective value, and optimization sense;
-- identity-space, directed implication, infeasibility, and projection/lift
-  preservation contracts;
-- compatible reduction composition with lifts composed in reverse order;
+- partial `Instance` transformations with explicit target, encode, and decode;
+- directional reduction, relaxation, objective-preservation, and round-trip
+  contracts with compatible composition;
 - structural OneHot recognition up to an arbitrary nonzero equality scale;
 - Indicator augmentation and replacement obligations, exact active
   substitution, and an executable augmentation checker;
@@ -31,11 +31,8 @@ The independent formalization defines exact rational semantics for:
   expression);
 - executable selector-use/isolation checking over the finite `Instance` AST,
   including domains, every constraint collection, and the objective;
-- mixed reused/fresh selector-gadget SOS1 projection with the SDK's zero-bound
-  link omission rules, canonical lift, objective isolation, and the
-  counterexample to source-side retraction. The checked isolation witness is
-  consumed directly by a `ProjectionPreserves` compression theorem; the
-  all-fresh, full-link formulation remains available as the simpler core case.
+- direct selector-gadget SOS1 theorems for mixed reused/fresh selectors,
+  zero-bound link omission, and canonical selector construction;
 - an actual SDK-style SOS1 Big-M `Instance.Transform`: one SOS1 occurrence is
   removed, binary members are reused, fresh binary components are appended for
   the other members, and optional link rows plus the cardinality row are added.
@@ -60,11 +57,11 @@ moving the right-hand side to the left. Rows are then represented as
 `a · x + c ≤ 0` or `a · x + c = 0`. The semantics use exact `Rat`;
 numerical tolerances never create a proof.
 
-Projection preservation requires both feasible directions, objective
-preservation in both directions, and the section law
-`project (lift y) = y` for feasible reduced assignments. It deliberately does
-not require `lift (project x) = x`, because private selector assignments may be
-noncanonical and unobservable.
+An `Instance.Transform` owns its target Instance and partial state maps.
+Reduction and relaxation separately require decode and encode to preserve
+feasibility in their respective directions. Objective preservation includes
+both objective values and optimization sense. Source and target round trips
+are independent because private selector assignments may be noncanonical.
 
 ## Modules
 
@@ -76,12 +73,11 @@ noncanonical and unobservable.
 | `OMMXProof.Instance.Transform.SOS1BigM` | SDK-style SOS1 Big-M target construction, state maps, and semantic correctness |
 | `OMMXProof.Linear.EqualityNonnegativeLP` | Equality-form LP with nonnegative variables |
 | `OMMXProof.Linear.LessEqualNonnegativeLP` | Less-than-or-equal-form LP with nonnegative variables |
-| `OMMXProof.SemanticProblem` | Syntax-independent optimization semantics, preservation relations, and composition laws |
 | `OMMXProof.Constraint.Linear` | Normalized affine equality and inequality semantics |
-| `OMMXProof.Constraint.OneHot` | OneHot semantics, structural checker, and replacement theorem |
+| `OMMXProof.Constraint.OneHot` | OneHot semantics, structural checker, and direct replacement equivalence |
 | `OMMXProof.Constraint.Indicator` | Indicator semantics, active substitution, and forward Big-M semantics |
-| `OMMXProof.Constraint.SOS1` | SOS1 semantics and generic selector compression |
-| `OMMXProof.Constraint.SOS1.Instance` | Instance-connected selector isolation and SDK-plan compression |
+| `OMMXProof.Constraint.SOS1` | SOS1 semantics and direct selector-gadget theorems |
+| `OMMXProof.Constraint.SOS1.Instance` | Executable selector-isolation checking over the complete Instance AST |
 | `OMMXProofTest.Fixtures` | Test-only accepted/rejected fixtures and counterexamples |
 | `OMMXProofTest.Acceptance` | `lake test` acceptance target |
 | `OMMXProofTest.Trust` | Elaborated-environment audit rejecting project-defined axioms |
@@ -113,11 +109,11 @@ includes Lean's standard `propext`, `Classical.choice`, and `Quot.sound` axioms.
 
 ## Implemented scope
 
-- [x] Semantic domains, denotation, and preservation relations
+- [x] Semantic domains, Instance denotation, and Transform preservation relations
 - [x] Equality and less-than-or-equal nonnegative LP semantics
-- [x] Reduction composition and project/lift laws
+- [x] Reduction/relaxation composition and encode/decode round-trip laws
 - [x] OneHot, Indicator recovery, and Indicator Big-M lowering rules
-- [x] SOS1 projection and mixed reused/fresh SDK-plan compression
+- [x] SOS1 selector gadgets with mixed reused/fresh SDK plans
 - [x] SOS1 Big-M lowering as a finite `Instance.Transform`
 - [x] Executable accept/reject fixtures and counterexamples
 

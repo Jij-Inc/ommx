@@ -13,8 +13,8 @@ are omitted.
 
 `Plan` is syntax; `Plan.Valid` is the independently checkable precondition.
 Once validity is supplied, the same central denotation theorem yields the
-existing `ProjectionPreserves` view and the new `Instance.Transform`
-reduction/relaxation/round-trip properties.
+`Instance.Transform` reduction, relaxation, objective-preservation, and
+round-trip properties.
 -/
 
 namespace OMMXProof
@@ -637,27 +637,6 @@ theorem encode_feasible {source : Instance n} (plan : Plan source)
   exact ⟨hbase,
     plan.plannedSelectorGadget_encode_of_selectedHolds
       hvalid hbase.1 hselected⟩
-
-/-- The legacy projection view of the same lowering. Its orientation is from
-the generated target back to the source Instance. -/
-def projectionPreserves {source : Instance n} (plan : Plan source)
-    (hvalid : plan.Valid) :
-    ProjectionPreserves plan.target.asSemanticProblem
-      source.asSemanticProblem where
-  project := plan.decodeState
-  lift := plan.encodeState
-  project_feasible h := plan.decode_feasible hvalid h
-  lift_feasible h := plan.encode_feasible hvalid h
-  project_lift _ := plan.decode_encode _
-  objective_project := by
-    intro state _
-    simp [Instance.asSemanticProblem, Instance.ObjectiveValue,
-      target, decodeState]
-  objective_lift := by
-    intro state _
-    simp [Instance.asSemanticProblem, Instance.ObjectiveValue,
-      target, encodeState]
-  sense_eq := rfl
 
 /-- The SOS1 Big-M lowering packaged in the general Instance transformation
 shape. The state maps are total; `Option` is introduced by `Transform`. -/

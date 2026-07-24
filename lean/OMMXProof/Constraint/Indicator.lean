@@ -1,4 +1,3 @@
-import OMMXProof.SemanticProblem
 import OMMXProof.Constraint.Linear
 import Mathlib.Tactic.Linarith
 
@@ -223,40 +222,22 @@ theorem checkIndicatorActive_sound
   rw [← LinearConstraint.substitute_holds_iff hvalue, hsame]
 
 /-- An accepted active-branch check justifies adding the Indicator while the
-source row remains present. This is identity-space augmentation, not removal. -/
-theorem checkIndicatorAugment_preserves
+source row remains present. This is same-state augmentation, not removal. -/
+theorem checkIndicatorAugment_sound
     {domains : Fin n → Domain}
     {source body : LinearConstraint n} {trigger : Fin n}
     {polarity : IndicatorPolarity}
     (hcheck : checkIndicatorActive domains source body trigger polarity = true)
-    (base : State n → Prop) (objective : State n → Rat)
-    (sense : OptimizationSense)
-    (baseDomains : ∀ {state}, base state →
-      ∀ i, state i ∈ domains i) :
-    IdentityPreserves
-      (replaceProblem base (fun state => source.Holds state)
-        objective sense)
-      (replaceProblem base
-        (fun state => source.Holds state ∧
-          ({ trigger, polarity, body } : IndicatorConstraint n).Holds state)
-        objective sense) := by
-  apply replace_preserves
-  intro state hbase
-  have hparts := Bool.and_eq_true_iff.mp hcheck
-  have hkind : domains trigger = .binary := by
-    simpa [decide_eq_true_eq] using hparts.1
-  have hbinary : state trigger ∈ Domain.binary := by
-    have hdomain := baseDomains hbase trigger
-    rw [hkind] at hdomain
-    exact hdomain
-  change source.Holds state ↔
-    source.Holds state ∧
-      IndicatorPredicate trigger polarity (fun x => body.Holds x) state
-  apply indicator_augment
-      (fun _ => True) (fun x => source.Holds x) (fun x => body.Holds x)
-      trigger polarity ?_ state trivial hbinary
-  intro x _ _ hsource hactive
-  exact (checkIndicatorActive_sound hcheck hactive).mp hsource
+    (state : State n) :
+    source.Holds state ↔
+      source.Holds state ∧
+        ({ trigger, polarity, body } : IndicatorConstraint n).Holds state := by
+  constructor
+  · intro hsource
+    refine ⟨hsource, ?_⟩
+    intro hactive
+    exact (checkIndicatorActive_sound hcheck hactive).mp hsource
+  · exact And.left
 
 /-! ## Big-M lowering semantics
 
@@ -349,49 +330,6 @@ theorem equalitySides_iff_indicator {body : State n → Rat}
       exact le_of_eq (hequal hactive)
     · intro hactive
       exact le_of_eq (hequal hactive).symm
-
-/-- The SDK's one-sided Indicator Big-M algorithm preserves the exact feasible
-set when the claimed upper bound holds on the surviving base. -/
-theorem inequality_preserves
-    (base : State n → Prop) (body : State n → Rat)
-    (trigger : Fin n) (upper : Rat) (objective : State n → Rat)
-    (sense : OptimizationSense)
-    (binaryOnBase : ∀ {state}, base state →
-      state trigger ∈ Domain.binary)
-    (upperBoundOnBase : ∀ {state}, base state →
-      body state ≤ upper) :
-    IdentityPreserves
-      (replaceProblem base (UpperSide body trigger upper) objective sense)
-      (replaceProblem base
-        (IndicatorPredicate trigger .activeOnOne (fun x => body x ≤ 0))
-        objective sense) := by
-  apply replace_preserves
-  intro state hbase
-  exact upperSide_iff_indicator (binaryOnBase hbase) (upperBoundOnBase hbase)
-
-/-- The SDK's two-sided equality Indicator Big-M algorithm preserves the exact
-feasible set, including the cases where either bound makes one side redundant. -/
-theorem equality_preserves
-    (base : State n → Prop) (body : State n → Rat)
-    (trigger : Fin n) (lower upper : Rat) (objective : State n → Rat)
-    (sense : OptimizationSense)
-    (binaryOnBase : ∀ {state}, base state →
-      state trigger ∈ Domain.binary)
-    (boundsOnBase : ∀ {state}, base state →
-      lower ≤ body state ∧ body state ≤ upper) :
-    IdentityPreserves
-      (replaceProblem base
-        (fun state =>
-          UpperSide body trigger upper state ∧
-            LowerSide body trigger lower state)
-        objective sense)
-      (replaceProblem base
-        (IndicatorPredicate trigger .activeOnOne (fun x => body x = 0))
-        objective sense) := by
-  apply replace_preserves
-  intro state hbase
-  have hbounds := boundsOnBase hbase
-  exact equalitySides_iff_indicator (binaryOnBase hbase) hbounds.1 hbounds.2
 
 end IndicatorBigM
 

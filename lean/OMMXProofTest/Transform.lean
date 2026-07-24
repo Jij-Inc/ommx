@@ -38,6 +38,23 @@ example : (Instance.Transform.refl emptyInstance).TargetRoundTrip :=
   Instance.Transform.refl_targetRoundTrip emptyInstance
 
 example :
+    (∃ sourceState, emptyInstance.Feasible sourceState) ↔
+      ∃ targetState,
+        (Instance.Transform.refl emptyInstance).target.Feasible targetState :=
+  Instance.Transform.feasible_nonempty_iff
+    (Instance.Transform.refl_isReduction emptyInstance)
+    (Instance.Transform.refl_isRelaxation emptyInstance)
+
+example :
+    emptyInstance.ObjectiveRange =
+      (Instance.Transform.refl emptyInstance).target.ObjectiveRange :=
+  Instance.Transform.objectiveRange_eq
+    (Instance.Transform.refl_isReduction emptyInstance)
+    (Instance.Transform.refl_isRelaxation emptyInstance)
+    (Instance.Transform.refl_sourceObjectiveValuePreserving emptyInstance)
+    (Instance.Transform.refl_targetObjectiveValuePreserving emptyInstance)
+
+example :
     (Instance.Transform.comp
       (Instance.Transform.refl emptyInstance)
       (Instance.Transform.refl emptyInstance)).SourceObjectivePreserving :=
@@ -54,6 +71,24 @@ example :
     (Instance.Transform.refl_isReduction emptyInstance)
     (Instance.Transform.refl_targetObjectivePreserving emptyInstance)
     (Instance.Transform.refl_targetObjectivePreserving emptyInstance)
+
+example :
+    (Instance.Transform.comp
+      (Instance.Transform.refl emptyInstance)
+      (Instance.Transform.refl emptyInstance)).SourceRoundTrip :=
+  Instance.Transform.comp_sourceRoundTrip
+    (Instance.Transform.refl_isRelaxation emptyInstance)
+    (Instance.Transform.refl_sourceRoundTrip emptyInstance)
+    (Instance.Transform.refl_sourceRoundTrip emptyInstance)
+
+example :
+    (Instance.Transform.comp
+      (Instance.Transform.refl emptyInstance)
+      (Instance.Transform.refl emptyInstance)).TargetRoundTrip :=
+  Instance.Transform.comp_targetRoundTrip
+    (Instance.Transform.refl_isReduction emptyInstance)
+    (Instance.Transform.refl_targetRoundTrip emptyInstance)
+    (Instance.Transform.refl_targetRoundTrip emptyInstance)
 
 /-- A raw Transform may fail both directional feasibility contracts. -/
 def nowhereDefined : Instance.Transform emptyInstance where

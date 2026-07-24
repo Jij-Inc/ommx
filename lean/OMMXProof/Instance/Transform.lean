@@ -112,6 +112,49 @@ def TargetRoundTrip {source : Instance n} (transform : Transform source) : Prop 
     transform.target.Feasible targetState →
       transform.decode targetState >>= transform.encode = some targetState
 
+/-- Reduction and relaxation together preserve existence of feasible states. -/
+theorem feasible_nonempty_iff {source : Instance n}
+    {transform : Transform source}
+    (hreduction : transform.IsReduction)
+    (hrelaxation : transform.IsRelaxation) :
+    (∃ sourceState, source.Feasible sourceState) ↔
+      ∃ targetState, transform.target.Feasible targetState := by
+  constructor
+  · rintro ⟨sourceState, hsource⟩
+    rcases hrelaxation hsource with ⟨targetState, _, htarget⟩
+    exact ⟨targetState, htarget⟩
+  · rintro ⟨targetState, htarget⟩
+    rcases hreduction htarget with ⟨sourceState, _, hsource⟩
+    exact ⟨sourceState, hsource⟩
+
+/-- Bidirectional feasibility and objective-value preservation identify the
+sets of objective values attained by feasible states. -/
+theorem objectiveRange_eq {source : Instance n}
+    {transform : Transform source}
+    (hreduction : transform.IsReduction)
+    (hrelaxation : transform.IsRelaxation)
+    (hsourceObjective : transform.SourceObjectiveValuePreserving)
+    (htargetObjective : transform.TargetObjectiveValuePreserving) :
+    source.ObjectiveRange = transform.target.ObjectiveRange := by
+  ext value
+  constructor
+  · rintro ⟨sourceState, hsource, hvalue⟩
+    rcases hrelaxation hsource with
+      ⟨targetState, hencode, htarget⟩
+    have hobjective :
+        transform.target.ObjectiveValue targetState =
+          source.ObjectiveValue sourceState := by
+      simpa [hencode] using hsourceObjective hsource
+    exact ⟨targetState, htarget, hobjective.trans hvalue⟩
+  · rintro ⟨targetState, htarget, hvalue⟩
+    rcases hreduction htarget with
+      ⟨sourceState, hdecode, hsource⟩
+    have hobjective :
+        source.ObjectiveValue sourceState =
+          transform.target.ObjectiveValue targetState := by
+      simpa [hdecode] using htargetObjective htarget
+    exact ⟨sourceState, hsource, hobjective.trans hvalue⟩
+
 /-- The identity transformation. -/
 def refl (source : Instance n) : Transform source where
   targetDimension := n
@@ -250,6 +293,40 @@ theorem comp_targetObjectivePreserving {source : Instance n}
   ⟨comp_sensePreserving hfirst.1 hsecond.1,
     comp_targetObjectiveValuePreserving
       hsecondReduction hfirst.2 hsecond.2⟩
+
+theorem comp_sourceRoundTrip {source : Instance n}
+    {first : Transform source} {second : Transform first.target}
+    (hfirstRelaxation : first.IsRelaxation)
+    (hfirst : first.SourceRoundTrip)
+    (hsecond : second.SourceRoundTrip) :
+    (comp first second).SourceRoundTrip := by
+  intro sourceState hsource
+  rcases hfirstRelaxation hsource with
+    ⟨middleState, hencodeFirst, hmiddle⟩
+  have hdecodeFirst :
+      first.decode middleState = some sourceState := by
+    simpa [hencodeFirst] using hfirst hsource
+  have hmiddleRoundTrip := hsecond hmiddle
+  simpa [comp, hencodeFirst, Option.bind_assoc, hdecodeFirst] using
+    congrArg (fun state => state >>= first.decode) hmiddleRoundTrip
+
+theorem comp_targetRoundTrip {source : Instance n}
+    {first : Transform source} {second : Transform first.target}
+    (hsecondReduction : second.IsReduction)
+    (hfirst : first.TargetRoundTrip)
+    (hsecond : second.TargetRoundTrip) :
+    (comp first second).TargetRoundTrip := by
+  intro targetState htarget
+  rcases hsecondReduction htarget with
+    ⟨middleState, hdecodeSecond, hmiddle⟩
+  have hencodeSecond :
+      second.encode middleState = some targetState := by
+    have hroundTrip := hsecond htarget
+    rw [hdecodeSecond] at hroundTrip
+    exact hroundTrip
+  have hmiddleRoundTrip := hfirst hmiddle
+  simpa [comp, hdecodeSecond, Option.bind_assoc, hencodeSecond] using
+    congrArg (fun state => state >>= second.encode) hmiddleRoundTrip
 
 end Transform
 
