@@ -20,9 +20,5 @@ example : checkBinaryCardinalitySOS1 binaryDomains2
     scaledSOS1Source sos1Draft = true := by native_decide
 example : checkBinaryCardinalitySOS1 binaryDomains2
     wrongSenseSOS1Source sos1Draft = false := by native_decide
-example : selectorIsolationBase.checkSelectorIsolation
-    selectorIsolationWitness = true := by native_decide
-example : selectorLeakingBase.checkSelectorIsolation
-    selectorIsolationWitness = false := by native_decide
 
 end OMMXProof.Test

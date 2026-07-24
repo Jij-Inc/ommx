@@ -56,39 +56,6 @@ instance (constraint : IndicatorConstraint n) (state : State n) :
   unfold Holds
   infer_instance
 
-def IndependentAt (constraint : IndicatorConstraint n) (index : Fin n) : Prop :=
-  index ≠ constraint.trigger ∧ constraint.body.IndependentAt index
-
-instance (constraint : IndicatorConstraint n) (index : Fin n) :
-    Decidable (constraint.IndependentAt index) := by
-  unfold IndependentAt
-  infer_instance
-
-def IndependentOf (constraint : IndicatorConstraint n)
-    (privateSet : Finset (Fin n)) : Prop :=
-  ∀ i ∈ privateSet, constraint.IndependentAt i
-
-theorem holds_iff_of_independentOf {constraint : IndicatorConstraint n}
-    {privateSet : Finset (Fin n)} {lhs rhs : State n}
-    (hindependent : constraint.IndependentOf privateSet)
-    (hagree : AgreeOutside privateSet lhs rhs) :
-    constraint.Holds lhs ↔ constraint.Holds rhs := by
-  have htriggerOutside : constraint.trigger ∉ privateSet := by
-    intro hprivate
-    exact (hindependent constraint.trigger hprivate).1 rfl
-  have htrigger := hagree constraint.trigger htriggerOutside
-  have hbody := LinearConstraint.holds_iff_of_independentOf
-    (fun i hi => (hindependent i hi).2) hagree
-  constructor
-  · intro hleft hactive
-    apply hbody.mp
-    apply hleft
-    simpa [htrigger] using hactive
-  · intro hright hactive
-    apply hbody.mpr
-    apply hright
-    simpa [htrigger] using hactive
-
 end IndicatorConstraint
 
 def IndicatorPredicate (trigger : Fin n) (polarity : IndicatorPolarity)

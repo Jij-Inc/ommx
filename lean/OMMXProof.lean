@@ -2,7 +2,6 @@ import OMMXProof.Constraint.Indicator
 import OMMXProof.Constraint.Linear
 import OMMXProof.Constraint.OneHot
 import OMMXProof.Constraint.SOS1
-import OMMXProof.Constraint.SOS1.Instance
 import OMMXProof.Domain
 import OMMXProof.Function.Affine
 import OMMXProof.Instance

@@ -34,8 +34,6 @@ The independent formalization defines exact rational semantics for:
 - binary-cardinality SOS1 recognition from a complete `≤` constraint with a
   strictly positive scale (the checker rejects an equality with the same affine
   expression);
-- executable selector-use/isolation checking over the finite `Instance` AST,
-  including domains, every constraint collection, and the objective;
 - direct selector-formulation SOS1 theorems for mixed reused/fresh selectors,
   zero-bound link omission, and canonical selector construction;
 - an actual SDK-style SOS1 Big-M `Instance.Transform`: one SOS1 occurrence is
@@ -76,7 +74,7 @@ resulting target and state maps.
 | Module | Responsibility |
 | --- | --- |
 | `OMMXProof.Domain` | Binary/integer/continuous membership, explicitly unbounded interval endpoints, and intrinsically valid nonempty rational bounds |
-| `OMMXProof.Function.Affine` | Exact affine algebra and evaluation, substitution, independence, and sound domain-box bounds |
+| `OMMXProof.Function.Affine` | Exact affine algebra and evaluation, substitution, and sound domain-box bounds |
 | `OMMXProof.Instance` | Finite Instance syntax and exact denotation |
 | `OMMXProof.Instance.Extend` | Left-block embedding of states, expressions, constraints, and Instances into a larger finite space |
 | `OMMXProof.Instance.Transform` | Partial state transformations, directional reduction/relaxation and objective-preservation contracts, and independent source/target round trips |
@@ -88,7 +86,6 @@ resulting target and state maps.
 | `OMMXProof.Constraint.OneHot` | OneHot semantics, structural checker, and direct replacement equivalence |
 | `OMMXProof.Constraint.Indicator` | Indicator semantics, active substitution, and structural promotion obligations |
 | `OMMXProof.Constraint.SOS1` | SOS1 semantics and direct selector-formulation theorems |
-| `OMMXProof.Constraint.SOS1.Instance` | Executable selector-isolation checking over the complete Instance AST |
 | `OMMXProofTest.Fixtures` | Test-only accepted/rejected fixtures and counterexamples |
 | `OMMXProofTest.Acceptance` | `lake test` acceptance target |
 | `OMMXProofTest.Trust` | Elaborated-environment audit rejecting project-defined axioms |

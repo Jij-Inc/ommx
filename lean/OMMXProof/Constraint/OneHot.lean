@@ -26,61 +26,6 @@ instance (constraint : OneHotConstraint n) (state : State n) :
 
 end OneHotConstraint
 
-private theorem agree_on_oneHot_members
-    {constraint : OneHotConstraint n} {privateSet : Finset (Fin n)}
-    {lhs rhs : State n}
-    (hindependent : ∀ i ∈ privateSet, i ∉ constraint.members)
-    (hagree : AgreeOutside privateSet lhs rhs) :
-    ∀ i ∈ constraint.members, lhs i = rhs i := by
-  intro i himember
-  apply hagree i
-  intro hiprivate
-  exact hindependent i hiprivate himember
-
-namespace OneHotConstraint
-
-def IndependentAt (constraint : OneHotConstraint n) (index : Fin n) : Prop :=
-  index ∉ constraint.members
-
-instance (constraint : OneHotConstraint n) (index : Fin n) :
-    Decidable (constraint.IndependentAt index) := by
-  unfold IndependentAt
-  infer_instance
-
-def IndependentOf (constraint : OneHotConstraint n)
-    (privateSet : Finset (Fin n)) : Prop :=
-  ∀ i ∈ privateSet, constraint.IndependentAt i
-
-theorem holds_iff_of_independentOf {constraint : OneHotConstraint n}
-    {privateSet : Finset (Fin n)} {lhs rhs : State n}
-    (hindependent : constraint.IndependentOf privateSet)
-    (hagree : AgreeOutside privateSet lhs rhs) :
-    constraint.Holds lhs ↔ constraint.Holds rhs := by
-  have hvalues := agree_on_oneHot_members hindependent hagree
-  constructor
-  · rintro ⟨hbinary, hsum⟩
-    exact ⟨fun i hi => by simpa [← hvalues i hi] using hbinary i hi,
-      by
-        calc
-          ∑ i ∈ constraint.members, rhs i =
-              ∑ i ∈ constraint.members, lhs i := by
-            apply Finset.sum_congr rfl
-            intro i hi
-            rw [hvalues i hi]
-          _ = 1 := hsum⟩
-  · rintro ⟨hbinary, hsum⟩
-    exact ⟨fun i hi => by simpa [hvalues i hi] using hbinary i hi,
-      by
-        calc
-          ∑ i ∈ constraint.members, lhs i =
-              ∑ i ∈ constraint.members, rhs i := by
-            apply Finset.sum_congr rfl
-            intro i hi
-            rw [hvalues i hi]
-          _ = 1 := hsum⟩
-
-end OneHotConstraint
-
 def BinaryOn (members : Finset (Fin n)) (state : State n) : Prop :=
   ∀ i ∈ members, state i ∈ Domain.binary
 

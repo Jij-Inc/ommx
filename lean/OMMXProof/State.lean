@@ -1,5 +1,4 @@
 import Mathlib.Algebra.Order.Ring.Rat
-import Mathlib.Data.Finset.Basic
 
 /-!
 # Exact state semantics
@@ -17,10 +16,5 @@ Different from SDK which allows non-contiguous ID e.g. {1: 0.1, 3: 0.2},
 this model assumes indices are packed in `Fin n`.
 -/
 abbrev State (n : Nat) := Fin n → Rat
-
-/-- Two states agree on every component outside `privateSet`. -/
-def AgreeOutside (privateSet : Finset (Fin n))
-    (lhs rhs : State n) : Prop :=
-  ∀ i, i ∉ privateSet → lhs i = rhs i
 
 end OMMXProof
