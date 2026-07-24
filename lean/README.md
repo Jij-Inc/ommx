@@ -67,6 +67,9 @@ Reduction and relaxation separately require decode and encode to preserve
 feasibility in their respective directions. Objective preservation includes
 both objective values and optimization sense. Source and target round trips
 are independent because private selector assignments may be noncanonical.
+Concrete lowerings keep their independently checkable construction witnesses
+outside `Instance.Transform`; the common transform type records only the
+resulting target and state maps.
 
 ## Modules
 
@@ -77,8 +80,8 @@ are independent because private selector assignments may be noncanonical.
 | `OMMXProof.Instance` | Finite Instance syntax and exact denotation |
 | `OMMXProof.Instance.Extend` | Left-block embedding of states, expressions, constraints, and Instances into a larger finite space |
 | `OMMXProof.Instance.Transform` | Partial state transformations, directional reduction/relaxation and objective-preservation contracts, and independent source/target round trips |
-| `OMMXProof.Instance.Transform.IndicatorBigM` | Indicator Big-M target construction, identity state maps, and semantic correctness |
-| `OMMXProof.Instance.Transform.SOS1BigM` | SDK-style SOS1 Big-M target construction, state maps, and semantic correctness |
+| `OMMXProof.Instance.Transform.IndicatorBigM` | Checkable Indicator Big-M witnesses, target construction, identity state maps, and semantic correctness |
+| `OMMXProof.Instance.Transform.SOS1BigM` | Checkable SOS1 Big-M witnesses, target construction, state maps, and semantic correctness |
 | `OMMXProof.Linear.EqualityNonnegativeLP` | Equality-form LP with nonnegative variables |
 | `OMMXProof.Linear.LessEqualNonnegativeLP` | Less-than-or-equal-form LP with nonnegative variables |
 | `OMMXProof.Constraint.Linear` | Normalized affine equality and inequality semantics |
@@ -123,7 +126,7 @@ includes Lean's standard `propext`, `Classical.choice`, and `Quot.sound` axioms.
 - [x] Reduction/relaxation composition and encode/decode round-trip laws
 - [x] OneHot and Indicator recovery rules
 - [x] Indicator Big-M lowering as a finite `Instance.Transform`
-- [x] SOS1 selector gadgets with mixed reused/fresh SDK plans
+- [x] SOS1 selector gadgets with mixed reused/fresh selector layouts
 - [x] SOS1 Big-M lowering as a finite `Instance.Transform`
 - [x] Executable accept/reject fixtures and counterexamples
 
