@@ -1,86 +1,63 @@
-# OMMX proof-carrying reduction semantics
+# OMMX Instance semantics and transformation correctness
 
-This directory implements the independent Lean semantics described in
-[issue #1059](https://github.com/Jij-Inc/ommx/issues/1059) for designing
-proof-carrying presolve and special-constraint recovery.
-The parent runtime workstream is
+This directory gives an independent Lean formalization of:
+
+- the mathematical optimization problem denoted by an OMMX `Instance`; and
+- the mathematical correctness of transformations from one `Instance` to
+  another.
+
+The first goal is to make feasibility, objective values, optimization sense,
+domains, and constraints mathematically explicit. The second is to state and
+prove exactly what a transformation preserves through its target Instance and
+its encode/decode maps.
+
+For now, this formalization is a reference semantics for implementation and
+design. It is intentionally independent of the OMMX Rust SDK and protobuf
+schema, consumes no SDK artifact, and does not claim to verify the Rust
+implementation.
+
+The intended future integration boundary is a transformation-specific
+`Witness`: the SDK transforms an Instance and emits a `Witness`, and Lean checks
+it against the source and target Instances. Establishing that boundary will
+require a versioned contract and a reviewed refinement bridge between SDK data
+and this exact semantic model.
+
+This direction is tracked in
+[issue #1059](https://github.com/Jij-Inc/ommx/issues/1059); related SDK/runtime
+integration is tracked in
 [issue #1057](https://github.com/Jij-Inc/ommx/issues/1057).
 
-The model is intentionally independent of the OMMX Rust SDK and protobuf
-schema. It consumes no OMMX runtime artifact and does not claim to formally
-verify the Rust implementation. Future integration work will define and review
-the refinement bridge from committed OMMX snapshots and proof traces.
+## Current scope
 
-## Scope
+The current model focuses on exact-rational affine optimization. It provides:
 
-The independent formalization defines exact rational semantics for:
+- mathematical semantics for states, domains, affine functions, constraints,
+  objectives, and optimization sense;
+- an `Instance.Transform` contract with explicit target, encode/decode,
+  directional preservation, round-trip, and composition laws; and
+- representative exact results for special-constraint recognition, promotion
+  conditions, and Big-M lowering.
 
-- finite assignments, continuous/integer/binary domains, and finite bounds;
-- affine equalities and inequalities, objective value, and optimization sense;
-- exact Farkas implication and infeasibility checking;
-- activity-bound implication, implied equality, exact stored-bound replacement
-  with a genuine-tightening check, and non-circular redundant-row removal;
-- identity-space, directed implication, infeasibility, and projection/lift
-  preservation contracts;
-- compatible reduction composition with lifts composed in reverse order;
-- structural OneHot recognition up to an arbitrary nonzero equality scale;
-- Indicator augmentation and replacement with exact active substitution and a
-  surviving-system-only inactive proof; equality replacement carries two
-  independent inactive-side witnesses over that same surviving system;
-- forward Indicator Big-M lowering for arbitrary exact function denotations,
-  including the SDK's independent upper/lower side emission and bound-justified
-  side omission rules;
-- binary-cardinality SOS1 recognition from a complete `≤` constraint with a
-  strictly positive scale (the checker rejects an equality with the same affine
-  expression);
-- executable selector-use/isolation checking over the finite `CoreModel` AST,
-  including domains, linear/special constraints, and the objective;
-- mixed reused/fresh selector-gadget SOS1 projection with the SDK's zero-bound
-  link omission rules, canonical lift, objective isolation, and the
-  counterexample to source-side retraction. The checked isolation witness is
-  consumed directly by a `ProjectionPreserves` compression theorem; the
-  all-fresh, full-link formulation remains available as the simpler core case.
-
-Detector completeness, floating-point tolerance, Rust mutation correctness,
-serialization, lifecycle/capability/audit state, and a complete integer proof
-system are outside this independent model.
-
-## Formal contract
-
-The independent semantics research contract consists of the input AST,
-normalization, denotation, preservation relations, witness schemas, and
-executable checker acceptance rules. It is not a stable OMMX wire-format or
-public SDK version. A version identifier will be introduced with the canonical
-bridge when an external proof trace or decoder needs to select a compatible
-contract.
-
-`LinearConstraint.normalize lhs rhs sense` specifies the version-1 rule of
-moving the right-hand side to the left. Rows are then represented as
-`a · x + c ≤ 0` or `a · x + c = 0`. For a Farkas
-implication, inequality multipliers must be nonnegative, equality multipliers
-are free, coefficients must cancel exactly, and scalar slack is permitted in
-the sound direction. The checker uses exact `Rat`; numerical tolerances never
-create a proof.
-
-Projection preservation requires both feasible directions, objective
-preservation in both directions, and the section law
-`project (lift y) = y` for feasible reduced assignments. It deliberately does
-not require `lift (project x) = x`, because private selector assignments may be
-noncanonical and unobservable.
+Detailed modules and implemented features are listed below. SDK serialization
+and lifecycle, floating-point behavior, Rust mutation correctness, and
+completeness of recognition or presolve algorithms remain outside this model.
 
 ## Modules
 
 | Module | Responsibility |
 | --- | --- |
-| `OMMXProof.Core` | Input AST and exact denotation |
-| `OMMXProof.Linear.Farkas` | Executable linear certificate checkers and soundness theorems |
-| `OMMXProof.Reduction` | Preservation relations and composition laws |
-| `OMMXProof.Special.OneHot` | Structural OneHot checker and replacement theorem |
-| `OMMXProof.Special.Indicator` | Active substitution, inactive proof, augment/replace, and forward Big-M semantics |
-| `OMMXProof.Special.SOS1` | Binary cardinality, selector-use isolation, and full SDK-plan compression |
-| `OMMXProofTest.Fixtures` | Test-only accepted/rejected fixtures and counterexamples |
-| `OMMXProofTest.Acceptance` | `lake test` acceptance target |
-| `OMMXProofTest.Trust` | Elaborated-environment audit rejecting project-defined axioms |
+| `OMMXProof.State` | Exact rational assignments over packed `Fin n` decision-variable indices |
+| `OMMXProof.Domain` | Binary/integer/continuous membership, explicitly unbounded interval endpoints, and intrinsically valid nonempty rational bounds |
+| `OMMXProof.Function.Affine` | Exact affine algebra and evaluation, substitution, and sound domain-box bounds |
+| `OMMXProof.Constraint.Linear` | Normalized affine equality and inequality semantics |
+| `OMMXProof.Constraint.OneHot` | OneHot semantics, structural checker, and direct replacement equivalence |
+| `OMMXProof.Constraint.SOS1` | SOS1 semantics and direct selector-formulation theorems |
+| `OMMXProof.Constraint.Indicator` | Indicator semantics, active substitution, and structural promotion obligations |
+| `OMMXProof.Instance` | Finite Instance syntax and exact denotation |
+| `OMMXProof.Instance.Extend` | Left-block embedding of states, expressions, constraints, and Instances into a larger finite space |
+| `OMMXProof.Instance.Transform` | Partial state transformations, directional reduction/relaxation and objective-preservation contracts, and independent source/target round trips |
+| `OMMXProof.Instance.Transform.IndicatorBigM` | Checkable Indicator Big-M witnesses, target construction, identity state maps, and semantic correctness |
+| `OMMXProof.Instance.Transform.SOS1BigM` | Checkable SOS1 Big-M witnesses, target construction, state maps, and semantic correctness |
 
 ## Checks
 
@@ -109,12 +86,32 @@ includes Lean's standard `propext`, `Classical.choice`, and `Quot.sound` axioms.
 
 ## Implemented scope
 
-- [x] Semantic domains, denotation, and preservation relations
-- [x] Exact linear/Farkas checker and soundness
-- [x] Reduction composition and project/lift laws
-- [x] OneHot, Indicator recovery, and Indicator Big-M lowering rules
-- [x] SOS1 projection and mixed reused/fresh SDK-plan compression
+- [x] Semantic domains with explicit infinite endpoints and valid rational bounds
+- [x] Sound affine bounds, Instance denotation, and Transform preservation relations
+- [x] Reduction/relaxation composition and encode/decode round-trip laws
+- [x] OneHot and Indicator recovery rules
+- [x] Indicator Big-M lowering as a finite `Instance.Transform`
+- [x] SOS1 selector formulations with mixed reused/fresh selector layouts
+- [x] SOS1 Big-M lowering as a finite `Instance.Transform`
 - [x] Executable accept/reject fixtures and counterexamples
 
-The canonical bridge, trace vocabulary, and Rust proof-log producer remain
+## Planned directions
+
+The packaged `Instance.Transform` examples currently focus on lowering special
+constraints into ordinary constraints. The common transformation contract is
+not restricted to lowering or to presolve reductions. The intended next
+directions are:
+
+- promotion of ordinary constraints to special constraints when a
+  transformation-specific `Witness` establishes their semantic equivalence;
+- presolve transformations for MILP problems represented by `Instance`;
+- more general presolve transformations beyond the current affine MILP
+  fragment;
+- an infeasibility-certificate framework that standardizes an appropriate
+  relaxation, checks a certificate on the standardized problem, and translates
+  the certified result back to the source `Instance`; and
+- a canonical SDK-to-Lean bridge in which SDK-produced `Witness` values are
+  checked against this formal contract.
+
+The versioned `Witness` contract, bridge, and SDK-side `Witness` producer are
 future integration work and are intentionally unimplemented here.
