@@ -1,4 +1,3 @@
-import OMMXProof.SemanticProblem
 import OMMXProof.Constraint.OneHot
 import OMMXProof.Constraint.Indicator
 import OMMXProof.Constraint.SOS1.Instance
@@ -142,43 +141,17 @@ def sdkIndicatorBase (state : State 2) : Prop :=
 
 def sdkIndicatorBody (state : State 2) : Rat := state 0
 
-def sdkIndicatorObjective (state : State 2) : Rat := state 0
-
-def sdkIndicatorEqualityPreserves :
-    IdentityPreserves
-      (replaceProblem sdkIndicatorBase
-        (fun state =>
-          IndicatorBigM.UpperSide sdkIndicatorBody 1 3 state ∧
-            IndicatorBigM.LowerSide sdkIndicatorBody 1 0 state)
-        sdkIndicatorObjective .minimize)
-      (replaceProblem sdkIndicatorBase
-        (IndicatorPredicate 1 .activeOnOne
-          (fun state => sdkIndicatorBody state = 0))
-        sdkIndicatorObjective .minimize) :=
-  IndicatorBigM.equality_preserves sdkIndicatorBase sdkIndicatorBody 1 0 3
-    sdkIndicatorObjective .minimize
-    (by intro state hbase; exact hbase.1)
-    (by intro state hbase; exact ⟨hbase.2.1, hbase.2.2⟩)
-
 example (state : State 2) :
-    (replaceProblem sdkIndicatorBase
-      (fun x =>
-        IndicatorBigM.UpperSide sdkIndicatorBody 1 3 x ∧
-          IndicatorBigM.LowerSide sdkIndicatorBody 1 0 x)
-      sdkIndicatorObjective .minimize).feasible state ↔
-    (replaceProblem sdkIndicatorBase
-      (IndicatorPredicate 1 .activeOnOne
-        (fun x => sdkIndicatorBody x = 0))
-      sdkIndicatorObjective .minimize).feasible state :=
-  sdkIndicatorEqualityPreserves.feasible_iff state
-
-def selectorBoundsExample : SelectorBounds (Fin 1) :=
-  ⟨fun _ => -1, fun _ => 1⟩
-
-def selectorBaseExample (members : Fin 1 → Rat) : Prop :=
-  WithinSelectorBounds selectorBoundsExample members
-
-def selectorObjectiveExample (members : Fin 1 → Rat) : Rat := members 0
+    (sdkIndicatorBase state ∧
+      (IndicatorBigM.UpperSide sdkIndicatorBody 1 3 state ∧
+        IndicatorBigM.LowerSide sdkIndicatorBody 1 0 state)) ↔
+      (sdkIndicatorBase state ∧
+        IndicatorPredicate 1 .activeOnOne
+          (fun x => sdkIndicatorBody x = 0) state) := by
+  apply and_congr_right
+  intro hbase
+  exact IndicatorBigM.equalitySides_iff_indicator
+    hbase.1 hbase.2.1 hbase.2.2
 
 def selectorPrivateExample : Finset (Fin 2) := {1}
 
@@ -208,8 +181,8 @@ def selectorLeakingBase : Instance 2 :=
 example : selectorLeakingBase.checkSelectorIsolation
     selectorIsolationWitness = false := by native_decide
 
-/-- Without selector isolation, changing only the private coordinate can change
-the objective, so compression would not preserve objective values. -/
+/-- Without selector isolation, changing only the private variable can change
+the objective, so it cannot be removed soundly. -/
 theorem selector_leak_changes_objective :
     let lhs : State 2 := fun _ => 0
     let rhs : State 2 := fun i => if i.val = 0 then 0 else 1
@@ -224,46 +197,6 @@ theorem selector_leak_changes_objective :
     · exact False.elim (houtside (by simp [selectorPrivateExample]))
   · norm_num [selectorLeakingBase, selectorIsolationBase,
       Instance.ObjectiveValue, twoVarAffine, Affine.eval]
-
-def selectorPairEncoding
-    (pair : (Fin 1 → Rat) × (Fin 1 → Rat)) : State 2 :=
-  fun i => if i.val = 0 then pair.1 0 else pair.2 0
-
-theorem selectorPairEncoding_respectsIsolation :
-    EncodingRespectsIsolation selectorPairEncoding selectorIsolationWitness := by
-  intro members selectors selectors' index houtside
-  fin_cases index
-  · simp [selectorPairEncoding]
-  · simp [selectorIsolationWitness, selectorPrivateExample] at houtside
-
-theorem selectorIsolationBase_bounds {members : Fin 1 → Rat}
-    (hfeasible : selectorIsolationBase.Feasible
-      (selectorPairEncoding (members, zeroSelectors))) :
-    WithinSelectorBounds selectorBoundsExample members := by
-  intro i
-  fin_cases i
-  have hdomain := hfeasible.1 (0 : Fin 2)
-  simpa [selectorIsolationBase, selectorIsolationDomains,
-    selectorPairEncoding, selectorBoundsExample] using hdomain
-
-/-- The executable isolation check is consumed directly by the exact
-`ProjectionPreserves` compression theorem. -/
-def checkedSelectorCompressionExample :
-    ProjectionPreserves
-      (coreSelectorSourceProblem selectorIsolationBase selectorPairEncoding
-        selectorBoundsExample)
-      (coreSOS1TargetProblem selectorIsolationBase selectorPairEncoding) :=
-  coreSelectorCompression selectorIsolationBase selectorPairEncoding
-    selectorBoundsExample selectorIsolationWitness (by native_decide)
-    selectorPairEncoding_respectsIsolation selectorIsolationBase_bounds
-
-def selectorCompressionExample :
-    ProjectionPreserves
-      (selectorSourceProblem selectorBoundsExample selectorBaseExample
-        selectorObjectiveExample .minimize)
-      (sos1TargetProblem selectorBaseExample selectorObjectiveExample .minimize) :=
-  selectorCompression selectorBoundsExample selectorBaseExample
-    selectorObjectiveExample .minimize (by intro members h; exact h)
 
 /-! Mixed SDK plan: member 0 is reused as its own binary selector, while
 member 1 gets a fresh selector.  Its lower bound is zero, so the lower link is
@@ -283,13 +216,6 @@ example : ¬FreshBoundsContainZero plannedReusedExample
     zeroExcludingFreshBoundsExample := by
   native_decide
 
-def plannedBaseExample (members : Fin 2 → Rat) : Prop :=
-  WithinSelectorBounds plannedBoundsExample members ∧
-    GenericBinaryOn plannedReusedExample members
-
-def plannedObjectiveExample (members : Fin 2 → Rat) : Rat :=
-  members 0 + members 1
-
 def plannedMembersExample : Fin 2 → Rat := fun i => if i.val = 0 then 0 else 2
 
 def plannedFreshSelectorsExample : Fin 2 → Rat := fun _ => 1
@@ -303,28 +229,5 @@ def invalidPlannedMembersExample : Fin 2 → Rat := fun i => if i.val = 0 then 1
 example : ¬PlannedSelectorGadget plannedReusedExample plannedBoundsExample
     invalidPlannedMembersExample plannedFreshSelectorsExample := by
   native_decide
-
-def plannedSelectorCompressionExample :
-    ProjectionPreserves
-      (plannedSelectorSourceProblem plannedReusedExample plannedBoundsExample
-        plannedBaseExample plannedObjectiveExample .minimize)
-      (sos1TargetProblem plannedBaseExample plannedObjectiveExample .minimize) :=
-  plannedSelectorCompression plannedReusedExample plannedBoundsExample
-    plannedBaseExample plannedObjectiveExample .minimize
-    { freshBoundsContainZero := by native_decide
-      baseBounds := by intro members hbase; exact hbase.1
-      baseReusedBinary := by intro members hbase; exact hbase.2 }
-
-def checkedPlannedSelectorCompressionExample :
-    ProjectionPreserves
-      (corePlannedSelectorSourceProblem selectorIsolationBase selectorPairEncoding
-        ∅ selectorBoundsExample)
-      (coreSOS1TargetProblem selectorIsolationBase selectorPairEncoding) :=
-  corePlannedSelectorCompression selectorIsolationBase selectorPairEncoding
-    ∅ selectorBoundsExample selectorIsolationWitness (by native_decide)
-    selectorPairEncoding_respectsIsolation
-    { freshBoundsContainZero := by native_decide
-      baseBounds := selectorIsolationBase_bounds
-      baseReusedBinary := by intro members _ i hi; simp at hi }
 
 end OMMXProof.Test.Fixtures

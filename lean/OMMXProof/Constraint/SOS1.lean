@@ -3,13 +3,13 @@ import OMMXProof.Constraint.Indicator
 import Mathlib.Tactic.Linarith
 
 /-!
-# SOS1 semantics and selector compression
+# SOS1 semantics and selector gadgets
 
-The structural binary-cardinality checker is executable. Selector-gadget
-theorems prove projection/lift equivalence both for the simple all-fresh,
-fully-linked formulation and for the SDK plan with reused binary members,
-fresh selectors, and omitted zero-bound links. Connecting a committed Rust
-history to this independent plan remains a separate future refinement theorem.
+The structural binary-cardinality checker is executable. Direct selector-gadget
+theorems prove SOS1 semantics both for the simple all-fresh, fully-linked
+formulation and for the SDK plan with reused binary members, fresh selectors,
+and omitted zero-bound links. Connecting a committed Rust history to this
+independent plan remains a separate future refinement theorem.
 -/
 
 namespace OMMXProof
@@ -110,9 +110,9 @@ theorem checkBinaryCardinalitySOS1_sound
 
 /-! ## Executable selector-isolation contract
 
-Selector compression is sound only when the removed selectors are private to
-the selector gadget. The following constraint-specific lemmas support checking
-that condition against the complete `Instance` syntax.
+Private selector variables must not affect the surviving `Instance` semantics.
+The following constraint-specific lemmas support checking that condition
+against the complete `Instance` syntax.
 -/
 
 private theorem agree_on_members {members privateSet : Finset (Fin n)}
@@ -221,9 +221,7 @@ structure SelectorBounds (ι : Type*) where
 def WithinSelectorBounds (bounds : SelectorBounds ι) (members : ι → Rat) : Prop :=
   ∀ i, bounds.lower i ≤ members i ∧ members i ≤ bounds.upper i
 
-/-- Full-link selector gadget. The generic problem constructors below encode
-isolation by type; the finite `Instance` compression theorem additionally
-checks an explicit semantic-use witness. -/
+/-- Full-link selector gadget relating each member to a binary selector. -/
 def SelectorGadget [Fintype ι] [DecidableEq ι]
     (bounds : SelectorBounds ι) (members selectors : ι → Rat) : Prop :=
   GenericBinaryOn Finset.univ selectors ∧
@@ -286,41 +284,6 @@ theorem canonicalSelector_gadget [Fintype ι] [DecidableEq ι]
       (canonicalSelector members) (fun i _ => canonicalSelector_binary members i)]
     rw [canonicalSelector_support]
     exact_mod_cast hsos1
-
-def selectorSourceProblem [Fintype ι] [DecidableEq ι]
-    (bounds : SelectorBounds ι) (base : (ι → Rat) → Prop)
-    (objective : (ι → Rat) → Rat) (sense : OptimizationSense) :
-    SemanticProblem ((ι → Rat) × (ι → Rat)) where
-  feasible pair := base pair.1 ∧ SelectorGadget bounds pair.1 pair.2
-  objective pair := objective pair.1
-  sense := sense
-
-def sos1TargetProblem [Fintype ι] [DecidableEq ι]
-    (base : (ι → Rat) → Prop) (objective : (ι → Rat) → Rat)
-    (sense : OptimizationSense) : SemanticProblem (ι → Rat) where
-  feasible members := base members ∧ GenericSOS1 members
-  objective := objective
-  sense := sense
-
-/-- In the generic layer, selector isolation is encoded by construction:
-`base` and `objective` cannot observe the private selector state. -/
-def selectorCompression [Fintype ι] [DecidableEq ι]
-    (bounds : SelectorBounds ι) (base : (ι → Rat) → Prop)
-    (objective : (ι → Rat) → Rat) (sense : OptimizationSense)
-    (baseBounds : ∀ {members},
-      base members → WithinSelectorBounds bounds members) :
-    ProjectionPreserves
-      (selectorSourceProblem bounds base objective sense)
-      (sos1TargetProblem base objective sense) where
-  project := Prod.fst
-  lift members := (members, canonicalSelector members)
-  project_feasible h := ⟨h.1, selectorGadget_project_sos1 bounds _ _ h.2⟩
-  lift_feasible h := ⟨h.1,
-    canonicalSelector_gadget bounds _ (baseBounds h.1) h.2⟩
-  project_lift _ := rfl
-  objective_project _ := rfl
-  objective_lift _ := rfl
-  sense_eq := rfl
 
 /-! ## SDK selector plan
 
@@ -464,37 +427,5 @@ theorem canonicalSelector_plannedGadget [Fintype ι] [DecidableEq ι]
       (canonicalSelector members) (fun i _ => canonicalSelector_binary members i)]
     rw [canonicalSelector_support]
     exact_mod_cast hsos1
-
-def plannedSelectorSourceProblem [Fintype ι] [DecidableEq ι]
-    (reused : Finset ι) (bounds : SelectorBounds ι)
-    (base : (ι → Rat) → Prop) (objective : (ι → Rat) → Rat)
-    (sense : OptimizationSense) : SemanticProblem ((ι → Rat) × (ι → Rat)) where
-  feasible pair :=
-    base pair.1 ∧ PlannedSelectorGadget reused bounds pair.1 pair.2
-  objective pair := objective pair.1
-  sense := sense
-
-/-- Projection/lift correctness for the full SDK SOS1 plan: reused binary
-members, fresh selectors, and omitted zero-bound link sides may coexist. -/
-def plannedSelectorCompression [Fintype ι] [DecidableEq ι]
-    (reused : Finset ι) (bounds : SelectorBounds ι)
-    (base : (ι → Rat) → Prop) (objective : (ι → Rat) → Rat)
-    (sense : OptimizationSense)
-    (validation : PlannedSelectorValidation reused bounds base) :
-    ProjectionPreserves
-      (plannedSelectorSourceProblem reused bounds base objective sense)
-      (sos1TargetProblem base objective sense) where
-  project := Prod.fst
-  lift members := (members, canonicalSelector members)
-  project_feasible h := ⟨h.1,
-    plannedSelectorGadget_project_sos1 reused bounds _ _
-      (validation.baseBounds h.1) h.2⟩
-  lift_feasible h := ⟨h.1,
-    canonicalSelector_plannedGadget reused bounds _
-      (validation.baseBounds h.1) (validation.baseReusedBinary h.1) h.2⟩
-  project_lift _ := rfl
-  objective_project _ := rfl
-  objective_lift _ := rfl
-  sense_eq := rfl
 
 end OMMXProof
