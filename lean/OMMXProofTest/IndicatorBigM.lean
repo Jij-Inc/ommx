@@ -62,55 +62,55 @@ def source : Instance 2 where
   objective := objective
   sense := .minimize
 
-def plan : Plan source where
+def witness : Witness source where
   constraintIndex := ⟨0, by native_decide⟩
   bodyBound := .finite 0 3 (by norm_num)
 
 @[simp]
-theorem plan_bodyValue (state : State 2) :
-    plan.bodyValue state = state 0 := by
-  simp [Plan.bodyValue, Plan.constraint, plan, source, selected, body,
+theorem witness_bodyValue (state : State 2) :
+    witness.bodyValue state = state 0 := by
+  simp [Witness.bodyValue, Witness.constraint, witness, source, selected, body,
     bodyExpr, Affine.eval]
 
-theorem plan_valid : plan.Valid := by native_decide
+theorem witness_valid : witness.Valid := by native_decide
 
 example :
-    Plan.create source ⟨0, by native_decide⟩ = some plan := by
+    Witness.create source ⟨0, by native_decide⟩ = some witness := by
   native_decide
 
 /-- The positive upper side is emitted; the zero lower side is redundant. -/
-example : plan.generatedConstraints.length = 1 := by native_decide
+example : witness.generatedConstraints.length = 1 := by native_decide
 
-example : plan.target.constraints.length = 1 := by native_decide
+example : witness.target.constraints.length = 1 := by native_decide
 
-example : plan.target.indicatorConstraints = [] := by native_decide
+example : witness.target.indicatorConstraints = [] := by native_decide
 
-example : plan.lowering.targetDimension = 2 := by native_decide
+example : witness.lowering.targetDimension = 2 := by native_decide
 
-example : plan.lowering.IsReduction :=
-  plan.lowering_isReduction plan_valid
+example : witness.lowering.IsReduction :=
+  witness.lowering_isReduction witness_valid
 
-example : plan.lowering.IsRelaxation :=
-  plan.lowering_isRelaxation plan_valid
+example : witness.lowering.IsRelaxation :=
+  witness.lowering_isRelaxation witness_valid
 
-example : plan.lowering.SourceObjectivePreserving :=
-  plan.lowering_sourceObjectivePreserving
+example : witness.lowering.SourceObjectivePreserving :=
+  witness.lowering_sourceObjectivePreserving
 
-example : plan.lowering.TargetObjectivePreserving :=
-  plan.lowering_targetObjectivePreserving
+example : witness.lowering.TargetObjectivePreserving :=
+  witness.lowering_targetObjectivePreserving
 
-example : plan.lowering.SourceRoundTrip :=
-  plan.lowering_sourceRoundTrip
+example : witness.lowering.SourceRoundTrip :=
+  witness.lowering_sourceRoundTrip
 
-example : plan.lowering.TargetRoundTrip :=
-  plan.lowering_targetRoundTrip
+example : witness.lowering.TargetRoundTrip :=
+  witness.lowering_targetRoundTrip
 
-def unsafeUpperPlan : Plan source where
+def unsafeUpperWitness : Witness source where
   constraintIndex := ⟨0, by native_decide⟩
   bodyBound := .finite 0 2 (by norm_num)
 
 /-- A stored bound different from the computed affine image is rejected. -/
-theorem unsafeUpperPlan_invalid : ¬unsafeUpperPlan.Valid := by
+theorem unsafeUpperWitness_invalid : ¬unsafeUpperWitness.Valid := by
   native_decide
 
 def upperOnlyDomains : Fin 2 → Domain :=
@@ -129,34 +129,34 @@ def upperOnlyLessEqualSource : Instance 2 :=
     domains := upperOnlyDomains
     indicatorConstraints := [upperOnlyLessEqualSelected] }
 
-def upperOnlyLessEqualPlan : Plan upperOnlyLessEqualSource where
+def upperOnlyLessEqualWitness : Witness upperOnlyLessEqualSource where
   constraintIndex := ⟨0, by native_decide⟩
   bodyBound := .upperBounded 3
 
 /-- A `≤` Indicator needs only the finite upper endpoint. -/
-theorem upperOnlyLessEqualPlan_valid :
-    upperOnlyLessEqualPlan.Valid := by
+theorem upperOnlyLessEqualWitness_valid :
+    upperOnlyLessEqualWitness.Valid := by
   native_decide
 
 example :
-    Plan.create upperOnlyLessEqualSource ⟨0, by native_decide⟩ =
-      some upperOnlyLessEqualPlan := by
+    Witness.create upperOnlyLessEqualSource ⟨0, by native_decide⟩ =
+      some upperOnlyLessEqualWitness := by
   native_decide
 
 def upperOnlyEqualitySource : Instance 2 :=
   { source with domains := upperOnlyDomains }
 
-def upperOnlyEqualityPlan : Plan upperOnlyEqualitySource where
+def upperOnlyEqualityWitness : Witness upperOnlyEqualitySource where
   constraintIndex := ⟨0, by native_decide⟩
   bodyBound := .upperBounded 3
 
 /-- Equality lowering also needs a finite lower endpoint. -/
-theorem upperOnlyEqualityPlan_invalid :
-    ¬upperOnlyEqualityPlan.Valid := by
+theorem upperOnlyEqualityWitness_invalid :
+    ¬upperOnlyEqualityWitness.Valid := by
   native_decide
 
 example :
-    Plan.create upperOnlyEqualitySource ⟨0, by native_decide⟩ = none := by
+    Witness.create upperOnlyEqualitySource ⟨0, by native_decide⟩ = none := by
   native_decide
 
 def activeOnZeroSelected : IndicatorConstraint 2 :=
@@ -165,15 +165,15 @@ def activeOnZeroSelected : IndicatorConstraint 2 :=
 def activeOnZeroSource : Instance 2 :=
   { source with indicatorConstraints := [activeOnZeroSelected] }
 
-def activeOnZeroPlan : Plan activeOnZeroSource where
+def activeOnZeroWitness : Witness activeOnZeroSource where
   constraintIndex := ⟨0, by native_decide⟩
   bodyBound := .finite 0 3 (by norm_num)
 
 /-- The current generated rows encode an active-on-one Indicator only. -/
-theorem activeOnZeroPlan_invalid : ¬activeOnZeroPlan.Valid := by
+theorem activeOnZeroWitness_invalid : ¬activeOnZeroWitness.Valid := by
   intro hvalid
   have hne :
-      activeOnZeroPlan.constraint.polarity ≠ .activeOnOne := by
+      activeOnZeroWitness.constraint.polarity ≠ .activeOnOne := by
     native_decide
   exact hne hvalid.2.1
 
@@ -181,15 +181,15 @@ def nonBinarySource : Instance 2 :=
   { source with
     domains := fun _ => .continuous (.finite 0 3 (by norm_num)) }
 
-def nonBinaryPlan : Plan nonBinarySource where
+def nonBinaryWitness : Witness nonBinarySource where
   constraintIndex := ⟨0, by native_decide⟩
   bodyBound := .finite 0 3 (by norm_num)
 
 /-- A nonbinary trigger cannot validate the Big-M lowering. -/
-theorem nonBinaryPlan_invalid : ¬nonBinaryPlan.Valid := by
+theorem nonBinaryWitness_invalid : ¬nonBinaryWitness.Valid := by
   intro hvalid
   have hne :
-      nonBinarySource.domains nonBinaryPlan.constraint.trigger ≠
+      nonBinarySource.domains nonBinaryWitness.constraint.trigger ≠
         .binary := by
     native_decide
   exact hne hvalid.1

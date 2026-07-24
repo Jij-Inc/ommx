@@ -6,7 +6,9 @@ import OMMXProof.Instance
 An `Instance.Transform source` records a transformed Instance together with
 partial state maps in both directions. It deliberately imposes no semantic
 correctness by itself: reduction, relaxation, objective preservation, and
-round trips are separate predicates.
+round trips are separate predicates. Transformation-specific witnesses are
+owned and validated by the concrete transformation modules, rather than stored
+inside this common semantic result.
 -/
 
 namespace OMMXProof
