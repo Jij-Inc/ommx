@@ -29,8 +29,7 @@ integration is tracked in
 
 ## Current scope
 
-The current model deliberately focuses on a finite-dimensional, exact-rational
-affine fragment. It provides:
+The current model focuses on exact-rational affine optimization. It provides:
 
 - mathematical semantics for states, domains, affine functions, constraints,
   objectives, and optimization sense;
@@ -47,20 +46,18 @@ completeness of recognition or presolve algorithms remain outside this model.
 
 | Module | Responsibility |
 | --- | --- |
+| `OMMXProof.State` | Exact rational assignments over packed `Fin n` decision-variable indices |
 | `OMMXProof.Domain` | Binary/integer/continuous membership, explicitly unbounded interval endpoints, and intrinsically valid nonempty rational bounds |
 | `OMMXProof.Function.Affine` | Exact affine algebra and evaluation, substitution, and sound domain-box bounds |
+| `OMMXProof.Constraint.Linear` | Normalized affine equality and inequality semantics |
+| `OMMXProof.Constraint.OneHot` | OneHot semantics, structural checker, and direct replacement equivalence |
+| `OMMXProof.Constraint.SOS1` | SOS1 semantics and direct selector-formulation theorems |
+| `OMMXProof.Constraint.Indicator` | Indicator semantics, active substitution, and structural promotion obligations |
 | `OMMXProof.Instance` | Finite Instance syntax and exact denotation |
 | `OMMXProof.Instance.Extend` | Left-block embedding of states, expressions, constraints, and Instances into a larger finite space |
 | `OMMXProof.Instance.Transform` | Partial state transformations, directional reduction/relaxation and objective-preservation contracts, and independent source/target round trips |
 | `OMMXProof.Instance.Transform.IndicatorBigM` | Checkable Indicator Big-M witnesses, target construction, identity state maps, and semantic correctness |
 | `OMMXProof.Instance.Transform.SOS1BigM` | Checkable SOS1 Big-M witnesses, target construction, state maps, and semantic correctness |
-| `OMMXProof.Constraint.Linear` | Normalized affine equality and inequality semantics |
-| `OMMXProof.Constraint.OneHot` | OneHot semantics, structural checker, and direct replacement equivalence |
-| `OMMXProof.Constraint.Indicator` | Indicator semantics, active substitution, and structural promotion obligations |
-| `OMMXProof.Constraint.SOS1` | SOS1 semantics and direct selector-formulation theorems |
-| `OMMXProofTest.Fixtures` | Test-only accepted/rejected fixtures and counterexamples |
-| `OMMXProofTest.Acceptance` | `lake test` acceptance target |
-| `OMMXProofTest.Trust` | Elaborated-environment audit rejecting project-defined axioms |
 
 ## Checks
 
