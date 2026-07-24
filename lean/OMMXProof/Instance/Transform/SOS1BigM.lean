@@ -59,8 +59,10 @@ needed here. -/
 def Valid {source : Instance n} (plan : Plan source) : Prop :=
   plan.constraint.members.Nonempty ∧
     (∀ i : plan.Member,
-      (source.domains i).lowerBound = some (plan.bounds.lower i) ∧
-        (source.domains i).upperBound = some (plan.bounds.upper i)) ∧
+      (source.domains i).bound.lower =
+          Endpoint.finite (plan.bounds.lower i) ∧
+        (source.domains i).bound.upper =
+          Endpoint.finite (plan.bounds.upper i)) ∧
     FreshBoundsContainZero plan.reusedMembers plan.bounds
 
 instance {source : Instance n} (plan : Plan source) :
@@ -75,8 +77,8 @@ theorem withinBounds_of_domains {source : Instance n} (plan : Plan source)
   intro i
   have hlower := (hvalid.2.1 i).1
   have hupper := (hvalid.2.1 i).2
-  exact ⟨Domain.lowerBound_le (hdomains i) hlower,
-    Domain.le_upperBound (hdomains i) hupper⟩
+  exact ⟨Domain.finite_lower_le (hdomains i) hlower,
+    Domain.le_finite_upper (hdomains i) hupper⟩
 
 theorem reusedBinary_of_domains {source : Instance n} (plan : Plan source)
     {state : State n} (hdomains : ∀ i, state i ∈ source.domains i) :

@@ -1,5 +1,4 @@
 import OMMXProof.Constraint.OneHot
-import OMMXProof.Constraint.Indicator
 import OMMXProof.Constraint.SOS1.Instance
 
 /-!
@@ -131,33 +130,11 @@ def twoVarAffine (xCoefficient zCoefficient constant : Rat) : Affine 2 where
   coeff := fun i => if i.val = 0 then xCoefficient else zCoefficient
   constant := constant
 
-/-! The forward SDK algorithm may omit the lower equality side when the exact
-lower bound is zero.  The remaining upper side plus the base bound still
-preserves the Indicator semantics. -/
-
-def sdkIndicatorBase (state : State 2) : Prop :=
-  state 1 ∈ Domain.binary ∧
-    0 ≤ state 0 ∧ state 0 ≤ 3
-
-def sdkIndicatorBody (state : State 2) : Rat := state 0
-
-example (state : State 2) :
-    (sdkIndicatorBase state ∧
-      (IndicatorBigM.UpperSide sdkIndicatorBody 1 3 state ∧
-        IndicatorBigM.LowerSide sdkIndicatorBody 1 0 state)) ↔
-      (sdkIndicatorBase state ∧
-        IndicatorPredicate 1 .activeOnOne
-          (fun x => sdkIndicatorBody x = 0) state) := by
-  apply and_congr_right
-  intro hbase
-  exact IndicatorBigM.equalitySides_iff_indicator
-    hbase.1 hbase.2.1 hbase.2.2
-
 def selectorPrivateExample : Finset (Fin 2) := {1}
 
 def selectorIsolationDomains : Fin 2 → Domain := fun i =>
   if i.val = 0 then
-    .continuous (some (-1)) (some 1)
+    .continuous (.finite (-1) 1 (by norm_num))
   else
     .continuous
 

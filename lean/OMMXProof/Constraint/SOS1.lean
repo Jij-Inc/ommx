@@ -1,5 +1,4 @@
 import OMMXProof.Constraint.OneHot
-import OMMXProof.Constraint.Indicator
 import Mathlib.Tactic.Linarith
 
 /-!

@@ -24,8 +24,5 @@ example : selectorIsolationBase.checkSelectorIsolation
     selectorIsolationWitness = true := by native_decide
 example : selectorLeakingBase.checkSelectorIsolation
     selectorIsolationWitness = false := by native_decide
-example (state : State 2) :
-    IndicatorBigM.LowerSide sdkIndicatorBody 1 0 state := by
-  simp [IndicatorBigM.LowerSide]
 
 end OMMXProof.Test

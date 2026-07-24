@@ -15,7 +15,9 @@ the refinement bridge from committed OMMX snapshots and proof traces.
 
 The independent formalization defines exact rational semantics for:
 
-- finite assignments, continuous/integer/binary domains, and finite bounds;
+- finite assignments and continuous/integer/binary domains whose rational
+  interval bounds have explicit `-∞` and `+∞` endpoints;
+- sound affine interval evaluation over those domain bounds;
 - affine equalities and inequalities, objective value, and optimization sense;
 - partial `Instance` transformations with explicit target, encode, and decode;
 - directional reduction, relaxation, objective-preservation, and round-trip
@@ -26,6 +28,9 @@ The independent formalization defines exact rational semantics for:
 - forward Indicator Big-M lowering for arbitrary exact function denotations,
   including the SDK's independent upper/lower side emission and bound-justified
   side omission rules;
+- an active-on-one Indicator Big-M `Instance.Transform`: one Indicator
+  occurrence is removed, its generated affine rows are appended to the ordinary
+  constraints, and the same state space is retained;
 - binary-cardinality SOS1 recognition from a complete `≤` constraint with a
   strictly positive scale (the checker rejects an equality with the same affine
   expression);
@@ -67,15 +72,18 @@ are independent because private selector assignments may be noncanonical.
 
 | Module | Responsibility |
 | --- | --- |
+| `OMMXProof.Domain` | Binary/integer/continuous membership, explicitly unbounded interval endpoints, and intrinsically valid nonempty rational bounds |
+| `OMMXProof.Function.Affine` | Exact affine algebra and evaluation, substitution, independence, and sound domain-box bounds |
 | `OMMXProof.Instance` | Finite Instance syntax and exact denotation |
 | `OMMXProof.Instance.Extend` | Left-block embedding of states, expressions, constraints, and Instances into a larger finite space |
 | `OMMXProof.Instance.Transform` | Partial state transformations, directional reduction/relaxation and objective-preservation contracts, and independent source/target round trips |
+| `OMMXProof.Instance.Transform.IndicatorBigM` | Indicator Big-M target construction, identity state maps, and semantic correctness |
 | `OMMXProof.Instance.Transform.SOS1BigM` | SDK-style SOS1 Big-M target construction, state maps, and semantic correctness |
 | `OMMXProof.Linear.EqualityNonnegativeLP` | Equality-form LP with nonnegative variables |
 | `OMMXProof.Linear.LessEqualNonnegativeLP` | Less-than-or-equal-form LP with nonnegative variables |
 | `OMMXProof.Constraint.Linear` | Normalized affine equality and inequality semantics |
 | `OMMXProof.Constraint.OneHot` | OneHot semantics, structural checker, and direct replacement equivalence |
-| `OMMXProof.Constraint.Indicator` | Indicator semantics, active substitution, and forward Big-M semantics |
+| `OMMXProof.Constraint.Indicator` | Indicator semantics, active substitution, and structural promotion obligations |
 | `OMMXProof.Constraint.SOS1` | SOS1 semantics and direct selector-gadget theorems |
 | `OMMXProof.Constraint.SOS1.Instance` | Executable selector-isolation checking over the complete Instance AST |
 | `OMMXProofTest.Fixtures` | Test-only accepted/rejected fixtures and counterexamples |
@@ -109,10 +117,12 @@ includes Lean's standard `propext`, `Classical.choice`, and `Quot.sound` axioms.
 
 ## Implemented scope
 
-- [x] Semantic domains, Instance denotation, and Transform preservation relations
+- [x] Semantic domains with explicit infinite endpoints and valid rational bounds
+- [x] Sound affine bounds, Instance denotation, and Transform preservation relations
 - [x] Equality and less-than-or-equal nonnegative LP semantics
 - [x] Reduction/relaxation composition and encode/decode round-trip laws
-- [x] OneHot, Indicator recovery, and Indicator Big-M lowering rules
+- [x] OneHot and Indicator recovery rules
+- [x] Indicator Big-M lowering as a finite `Instance.Transform`
 - [x] SOS1 selector gadgets with mixed reused/fresh SDK plans
 - [x] SOS1 Big-M lowering as a finite `Instance.Transform`
 - [x] Executable accept/reject fixtures and counterexamples
