@@ -17,7 +17,7 @@ def members : Finset (Fin 2) := Finset.univ
 def domains : Fin 2 → Domain :=
   fun i =>
     if i = 0 then .binary
-    else .continuous (some 0) (some 2)
+    else .continuous (.finite 0 2 (by norm_num))
 
 def objective : Affine 2 where
   coeff := fun i => if i = 0 then 1 else 2
