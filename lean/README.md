@@ -36,7 +36,7 @@ The independent formalization defines exact rational semantics for:
   expression);
 - executable selector-use/isolation checking over the finite `Instance` AST,
   including domains, every constraint collection, and the objective;
-- direct selector-gadget SOS1 theorems for mixed reused/fresh selectors,
+- direct selector-formulation SOS1 theorems for mixed reused/fresh selectors,
   zero-bound link omission, and canonical selector construction;
 - an actual SDK-style SOS1 Big-M `Instance.Transform`: one SOS1 occurrence is
   removed, binary members are reused, fresh binary components are appended for
@@ -87,7 +87,7 @@ resulting target and state maps.
 | `OMMXProof.Constraint.Linear` | Normalized affine equality and inequality semantics |
 | `OMMXProof.Constraint.OneHot` | OneHot semantics, structural checker, and direct replacement equivalence |
 | `OMMXProof.Constraint.Indicator` | Indicator semantics, active substitution, and structural promotion obligations |
-| `OMMXProof.Constraint.SOS1` | SOS1 semantics and direct selector-gadget theorems |
+| `OMMXProof.Constraint.SOS1` | SOS1 semantics and direct selector-formulation theorems |
 | `OMMXProof.Constraint.SOS1.Instance` | Executable selector-isolation checking over the complete Instance AST |
 | `OMMXProofTest.Fixtures` | Test-only accepted/rejected fixtures and counterexamples |
 | `OMMXProofTest.Acceptance` | `lake test` acceptance target |
@@ -126,7 +126,7 @@ includes Lean's standard `propext`, `Classical.choice`, and `Quot.sound` axioms.
 - [x] Reduction/relaxation composition and encode/decode round-trip laws
 - [x] OneHot and Indicator recovery rules
 - [x] Indicator Big-M lowering as a finite `Instance.Transform`
-- [x] SOS1 selector gadgets with mixed reused/fresh selector layouts
+- [x] SOS1 selector formulations with mixed reused/fresh selector layouts
 - [x] SOS1 Big-M lowering as a finite `Instance.Transform`
 - [x] Executable accept/reject fixtures and counterexamples
 

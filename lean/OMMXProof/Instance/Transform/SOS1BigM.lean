@@ -432,16 +432,16 @@ theorem linksForFresh_iff_linksForMembers {source : Instance n}
     have hj := h (witness.freshMember j) hr
     simpa [memberState, freshSelectorState, hfresh] using hj
 
-/-- The generated linear rows denote exactly the SDK planned-selector gadget,
-provided the old and fresh blocks satisfy their declared domains. -/
-theorem generatedConstraints_hold_iff_plannedSelectorGadget
+/-- The generated linear rows denote exactly the SDK reused/fresh selector
+formulation, provided the old and fresh blocks satisfy their declared domains. -/
+theorem generatedConstraints_hold_iff_plannedSelectorFormulation
     {source : Instance n} (witness : Witness source)
     (state : State n) (selectors : State witness.freshCount)
     (hsourceDomains : ∀ i, state i ∈ source.domains i)
     (hselectorDomains : ∀ j, selectors j ∈ Domain.binary) :
     (∀ constraint ∈ witness.generatedConstraints,
       constraint.Holds (State.append state selectors)) ↔
-      PlannedSelectorGadget witness.reusedMembers witness.bounds
+      PlannedSelectorFormulation witness.reusedMembers witness.bounds
         (witness.memberState state)
         (witness.freshSelectorState state selectors) := by
   rw [generatedConstraints, List.forall_mem_append,
@@ -459,10 +459,10 @@ theorem generatedConstraints_hold_iff_plannedSelectorGadget
     rw [witness.selectorSum_eq_plannedSelector state selectors]
     exact hcardinality
 
-theorem freshSelectors_binary_of_plannedSelectorGadget
+theorem freshSelectors_binary_of_plannedSelectorFormulation
     {source : Instance n} (witness : Witness source)
     (state : State n) (selectors : State witness.freshCount)
-    (hgadget : PlannedSelectorGadget witness.reusedMembers witness.bounds
+    (hformulation : PlannedSelectorFormulation witness.reusedMembers witness.bounds
       (witness.memberState state)
       (witness.freshSelectorState state selectors)) :
     ∀ j, selectors j ∈ Domain.binary := by
@@ -471,35 +471,35 @@ theorem freshSelectors_binary_of_plannedSelectorGadget
     (witness.freshMembers.orderIsoOfFin rfl j).property
   have hr : witness.freshMember j ∉ witness.reusedMembers := by
     simpa [freshMembers] using hfresh
-  have hbinary := hgadget.1 (witness.freshMember j) (by simp)
+  have hbinary := hformulation.1 (witness.freshMember j) (by simp)
   simpa [plannedSelector, hr, freshSelectorState, hfresh] using hbinary
 
-theorem selectedHolds_of_plannedSelectorGadget
+theorem selectedHolds_of_plannedSelectorFormulation
     {source : Instance n} (witness : Witness source)
     (hvalid : witness.Valid) {state : State n}
     {selectors : State witness.freshCount}
     (hdomains : ∀ i, state i ∈ source.domains i)
-    (hgadget : PlannedSelectorGadget witness.reusedMembers witness.bounds
+    (hformulation : PlannedSelectorFormulation witness.reusedMembers witness.bounds
       (witness.memberState state)
       (witness.freshSelectorState state selectors)) :
     witness.constraint.Holds state := by
   apply (witness.genericSOS1_memberState_iff_holds state).mp
-  exact plannedSelectorGadget_project_sos1
+  exact plannedSelectorFormulation_project_sos1
     witness.reusedMembers witness.bounds
     (witness.memberState state)
     (witness.freshSelectorState state selectors)
-    (witness.withinBounds_of_domains hvalid hdomains) hgadget
+    (witness.withinBounds_of_domains hvalid hdomains) hformulation
 
-theorem plannedSelectorGadget_encode_of_selectedHolds
+theorem plannedSelectorFormulation_encode_of_selectedHolds
     {source : Instance n} (witness : Witness source)
     (hvalid : witness.Valid) {state : State n}
     (hdomains : ∀ i, state i ∈ source.domains i)
     (hselected : witness.constraint.Holds state) :
-    PlannedSelectorGadget witness.reusedMembers witness.bounds
+    PlannedSelectorFormulation witness.reusedMembers witness.bounds
       (witness.memberState state)
       (witness.freshSelectorState state (witness.encodeSelectors state)) := by
   rw [witness.freshSelectorState_encode state]
-  exact canonicalSelector_plannedGadget
+  exact canonicalSelector_plannedFormulation
     witness.reusedMembers witness.bounds (witness.memberState state)
     (witness.withinBounds_of_domains hvalid hdomains)
     (witness.reusedBinary_of_domains hdomains)
@@ -565,12 +565,12 @@ def target {source : Instance n} (witness : Witness source) :
   objective := source.objective.extend witness.freshCount
   sense := source.sense
 
-theorem target_feasible_append_iff_base_and_gadget
+theorem target_feasible_append_iff_base_and_formulation
     {source : Instance n} (witness : Witness source)
     (state : State n) (selectors : State witness.freshCount) :
     witness.target.Feasible (State.append state selectors) ↔
       witness.BaseFeasible state ∧
-        PlannedSelectorGadget witness.reusedMembers witness.bounds
+        PlannedSelectorFormulation witness.reusedMembers witness.bounds
           (witness.memberState state)
           (witness.freshSelectorState state selectors) := by
   have hsourceAt (i : Fin n) :
@@ -588,45 +588,45 @@ theorem target_feasible_append_iff_base_and_gadget
   constructor
   · rintro ⟨⟨hdomains, hselectors⟩,
       ⟨holdConstraints, hgenerated⟩, honeHot, hsos1, hindicator⟩
-    have hgadget :=
-      (witness.generatedConstraints_hold_iff_plannedSelectorGadget
+    have hformulation :=
+      (witness.generatedConstraints_hold_iff_plannedSelectorFormulation
         state selectors hdomains hselectors).mp hgenerated
     exact ⟨⟨hdomains, holdConstraints, honeHot, hsos1, hindicator⟩,
-      hgadget⟩
+      hformulation⟩
   · rintro ⟨⟨hdomains, holdConstraints, honeHot, hsos1, hindicator⟩,
-      hgadget⟩
+      hformulation⟩
     have hselectors :=
-      witness.freshSelectors_binary_of_plannedSelectorGadget
-        state selectors hgadget
+      witness.freshSelectors_binary_of_plannedSelectorFormulation
+        state selectors hformulation
     have hgenerated :=
-      (witness.generatedConstraints_hold_iff_plannedSelectorGadget
-        state selectors hdomains hselectors).mpr hgadget
+      (witness.generatedConstraints_hold_iff_plannedSelectorFormulation
+        state selectors hdomains hselectors).mpr hformulation
     exact ⟨⟨hdomains, hselectors⟩,
       ⟨holdConstraints, hgenerated⟩, honeHot, hsos1, hindicator⟩
 
-theorem target_feasible_iff_base_and_gadget
+theorem target_feasible_iff_base_and_formulation
     {source : Instance n} (witness : Witness source)
     (state : State (n + witness.freshCount)) :
     witness.target.Feasible state ↔
       witness.BaseFeasible (State.source state) ∧
-        PlannedSelectorGadget witness.reusedMembers witness.bounds
+        PlannedSelectorFormulation witness.reusedMembers witness.bounds
           (witness.memberState (State.source state))
           (witness.freshSelectorState (State.source state)
             (State.fresh state)) := by
   simpa only [State.append_source_fresh] using
-    witness.target_feasible_append_iff_base_and_gadget
+    witness.target_feasible_append_iff_base_and_formulation
       (State.source state) (State.fresh state)
 
 theorem decode_feasible {source : Instance n} (witness : Witness source)
     (hvalid : witness.Valid) {state : State (n + witness.freshCount)}
     (hfeasible : witness.target.Feasible state) :
     source.Feasible (witness.decodeState state) := by
-  rcases (witness.target_feasible_iff_base_and_gadget state).mp hfeasible with
-    ⟨hbase, hgadget⟩
+  rcases (witness.target_feasible_iff_base_and_formulation state).mp hfeasible with
+    ⟨hbase, hformulation⟩
   apply (witness.source_feasible_iff_base_and_selected
     (witness.decodeState state)).mpr
   refine ⟨hbase, ?_⟩
-  exact witness.selectedHolds_of_plannedSelectorGadget hvalid hbase.1 hgadget
+  exact witness.selectedHolds_of_plannedSelectorFormulation hvalid hbase.1 hformulation
 
 theorem encode_feasible {source : Instance n} (witness : Witness source)
     (hvalid : witness.Valid) {state : State n}
@@ -635,10 +635,10 @@ theorem encode_feasible {source : Instance n} (witness : Witness source)
   rcases (witness.source_feasible_iff_base_and_selected state).mp hfeasible with
     ⟨hbase, hselected⟩
   rw [encodeState]
-  apply (witness.target_feasible_append_iff_base_and_gadget
+  apply (witness.target_feasible_append_iff_base_and_formulation
     state (witness.encodeSelectors state)).mpr
   exact ⟨hbase,
-    witness.plannedSelectorGadget_encode_of_selectedHolds
+    witness.plannedSelectorFormulation_encode_of_selectedHolds
       hvalid hbase.1 hselected⟩
 
 /-- The SOS1 Big-M lowering packaged in the general Instance transformation

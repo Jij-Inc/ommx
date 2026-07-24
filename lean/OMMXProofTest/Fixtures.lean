@@ -175,9 +175,9 @@ theorem selector_leak_changes_objective :
   · norm_num [selectorLeakingBase, selectorIsolationBase,
       Instance.ObjectiveValue, twoVarAffine, Affine.eval]
 
-/-! Mixed SDK plan: member 0 is reused as its own binary selector, while
-member 1 gets a fresh selector.  Its lower bound is zero, so the lower link is
-omitted exactly as in `Instance::convert_sos1_to_constraints`. -/
+/-! Mixed SDK selector layout: member 0 is reused as its own binary selector,
+while member 1 gets a fresh selector. Its lower bound is zero, so the lower
+link is omitted exactly as in `Instance::convert_sos1_to_constraints`. -/
 
 def plannedReusedExample : Finset (Fin 2) := {0}
 
@@ -197,13 +197,13 @@ def plannedMembersExample : Fin 2 → Rat := fun i => if i.val = 0 then 0 else 2
 
 def plannedFreshSelectorsExample : Fin 2 → Rat := fun _ => 1
 
-example : PlannedSelectorGadget plannedReusedExample plannedBoundsExample
+example : PlannedSelectorFormulation plannedReusedExample plannedBoundsExample
     plannedMembersExample plannedFreshSelectorsExample := by
   native_decide
 
 def invalidPlannedMembersExample : Fin 2 → Rat := fun i => if i.val = 0 then 1 else 2
 
-example : ¬PlannedSelectorGadget plannedReusedExample plannedBoundsExample
+example : ¬PlannedSelectorFormulation plannedReusedExample plannedBoundsExample
     invalidPlannedMembersExample plannedFreshSelectorsExample := by
   native_decide
 
