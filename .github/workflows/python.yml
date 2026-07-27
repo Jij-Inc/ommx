@@ -144,7 +144,7 @@ jobs:
         uses: ./.github/actions/setup-test-environment
 
       - name: Format
-        run: uvx ruff format --check python
+        run: uv run --no-sync ruff format --check python
 
       - name: Lint
-        run: uvx ruff check python
+        run: uv run --no-sync ruff check python

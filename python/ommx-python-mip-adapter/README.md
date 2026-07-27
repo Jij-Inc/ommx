@@ -69,9 +69,9 @@ import mip
 import ommx_python_mip_adapter as adapter
 
 model = mip.Model()
-x1=model.add_var(name="1", var_type=mip.INTEGER, lb=0, ub=5)
-x2=model.add_var(name="2", var_type=mip.CONTINUOUS, lb=0, ub=5)
-model.objective = - x1 - 2 * x2
+x1 = model.add_var(name="1", var_type=mip.INTEGER, lb=0, ub=5)
+x2 = model.add_var(name="2", var_type=mip.CONTINUOUS, lb=0, ub=5)
+model.objective = -x1 - 2 * x2
 model.add_constr(x1 + x2 - 6 <= 0)
 
 ommx_instance = adapter.model_to_instance(model)

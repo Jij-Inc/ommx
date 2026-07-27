@@ -69,5 +69,5 @@ runs:
     - name: Setup Python Tools
       shell: bash
       run: |
-        uv tool install "ruff >= 0.9.0, < 0.10.0"
+        uv tool install "ruff == 0.16.0"
         uv tool install "twine >= 6.0.0, < 7.0.0"
