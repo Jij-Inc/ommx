@@ -47,7 +47,7 @@ tasks:
     env:
       VIRTUAL_ENV: "{{.ROOT_DIR}}/.venv"
     cmds:
-      - uvx --from "maturin>=1.12.2,<2" maturin develop --manifest-path rust/ommx-pyo3-bridge/fixture/Cargo.toml
+      - uv run --no-sync maturin develop --manifest-path rust/ommx-pyo3-bridge/fixture/Cargo.toml
       - uv run --no-sync pytest -vv rust/ommx-pyo3-bridge/fixture/tests/test_bridge.py
 
   pyo3-bridge:test:

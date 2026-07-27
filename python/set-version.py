@@ -1,10 +1,3 @@
-# /// script
-# requires-python = ">=3.9"
-# dependencies = [
-#   "tomlkit"
-# ]
-# ///
-
 # Bump up versions of OMMX Python SDK and adapters
 #
 # Usage
@@ -13,13 +6,13 @@
 # Set the version of the OMMX Python SDK and adapters to the specified version.
 #
 # ```shell
-# uv run python/set-version.py 0.1.0
+# task python:set-version -- 0.1.0
 # ```
 #
 # Bump up patch version of the OMMX Python SDK and adapters
 #
 # ```shell
-# uv run python/set-version.py
+# task python:set-version
 # ```
 #
 

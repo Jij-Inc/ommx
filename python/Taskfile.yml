@@ -76,7 +76,8 @@ tasks:
   set-version:
     desc: Set the version for all Python projects
     cmds:
-      - uv run set-version.py {{.CLI_ARGS}}
+      - uv sync --locked --only-group maintenance --no-install-workspace
+      - uv run --no-sync set-version.py {{.CLI_ARGS}}
       - task: sync
 
   book:

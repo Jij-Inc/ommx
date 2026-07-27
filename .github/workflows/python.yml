@@ -90,7 +90,9 @@ jobs:
           path: wheels
       - name: Transform Python Project to run tests
         run: |
-          uv run ci-scripts/setup-python-test-project.py ${{ matrix.python-version }}
+          # The unmodified workspace lock excludes Python 3.14.
+          uv sync --python 3.10 --locked --only-group maintenance --no-install-workspace
+          uv run --python 3.10 --no-sync ci-scripts/setup-python-test-project.py ${{ matrix.python-version }}
           cat pyproject.toml
       - name: Install deps
         run: task python:sync
@@ -128,7 +130,9 @@ jobs:
           path: wheels
       - name: Transform Python Project to run tests
         run: |
-          uv run ci-scripts/setup-python-test-project.py ${{ env.python-version }}
+          # Keep the project-rewrite tooling independent of the target Python.
+          uv sync --python 3.10 --locked --only-group maintenance --no-install-workspace
+          uv run --python 3.10 --no-sync ci-scripts/setup-python-test-project.py ${{ env.python-version }}
           cat pyproject.toml
       - name: Install deps
         run: task python:sync
@@ -142,6 +146,9 @@ jobs:
 
       - name: Setup Environment
         uses: ./.github/actions/setup-test-environment
+
+      - name: Install lint tools
+        run: uv sync --locked --only-group lint --no-install-workspace
 
       - name: Format
         run: uv run --no-sync ruff format --check python
