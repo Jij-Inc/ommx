@@ -111,7 +111,13 @@ tasks:
   stubgen:
     desc: Generate stubs files for Rust extension
     cmds:
-      - uv run --no-sync cargo run -p _ommx_rust --bin stub_gen
+      - cargo run -p _ommx_rust --bin stub_gen
+      - >-
+        uv run --no-sync ruff format
+        ommx/ommx/__init__.py
+        ommx/ommx/_ommx_rust/__init__.pyi
+        ommx/ommx/artifact/__init__.py
+        ommx/ommx/experiment/__init__.py
 
   ipython:
     desc: Start an IPython shell
