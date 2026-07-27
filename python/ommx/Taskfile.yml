@@ -53,6 +53,7 @@ tasks:
   lint:
     desc: Lint by ruff check
     cmds:
+      - uv sync --locked --only-group lint --no-install-workspace --inexact
       - uv run --no-sync ruff check python/ommx python/ommx-tests
     dir: ../..
 
@@ -71,7 +72,8 @@ tasks:
   build:pyodide:
     desc: Build OMMX Python SDK for pyodide (wasm32-unknown-emscripten)
     cmds:
-      - uv run --no-sync cibuildwheel --platform pyodide --output-dir dist
+      - uv sync --project ../.. --locked --only-group build --no-install-workspace --inexact
+      - uv run --project ../.. --no-sync cibuildwheel --platform pyodide --output-dir dist
 
   test:pyodide:
     desc: Test OMMX Python SDK in pyodide (Node.js)

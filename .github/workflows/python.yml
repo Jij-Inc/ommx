@@ -20,14 +20,15 @@ jobs:
       - name: Setup Environment
         uses: ./.github/actions/setup-test-environment
 
-      - name: Install lint tools
-        run: uv sync --locked --only-group lint --no-install-workspace
-
-      - name: Regenerate stub file
+      - name: Regenerate stub files
         run: task python:stubgen
 
-      - name: Check updated
-        run: git diff --exit-code python/ommx/ommx/_ommx_rust/__init__.pyi
+      - name: Check generated files
+        run: |
+          if [ -n "$(git status --porcelain --untracked-files=all -- python/ommx/ommx docs/api)" ]; then
+            git status --short --untracked-files=all -- python/ommx/ommx docs/api
+            exit 1
+          fi
 
   # uv run and maturin develop/build doesn't work well together-
   # Even if one runs maturin develop once, uv run pyright

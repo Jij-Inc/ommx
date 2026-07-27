@@ -64,7 +64,6 @@ release = [
 dev = [
   { include-group = "lint" },
   { include-group = "typecheck" },
-  { include-group = "test" },
   { include-group = "benchmark" },
   { include-group = "build" },
   { include-group = "maintenance" },

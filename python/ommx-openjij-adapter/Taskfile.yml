@@ -33,4 +33,6 @@ tasks:
   lint:
     desc: Lint by ruff check
     cmds:
-      - uv run --no-sync ruff check
+      - uv sync --locked --only-group lint --no-install-workspace --inexact
+      - uv run --no-sync ruff check python/ommx-openjij-adapter
+    dir: ../..
