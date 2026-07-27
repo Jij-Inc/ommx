@@ -48,19 +48,17 @@ jobs:
   python:
     name: Benchmarks for Python SDK
     runs-on: ubuntu-latest
+    env:
+      UV_PYTHON: "3.13"
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v7
+      - uses: astral-sh/setup-uv@v8.1.0
         with:
           # CodSpeed looks working with `sys.monitoring`, which has been introduced in 3.12,
           # but updates in 3.13 seems to be required for generating trace information.
           # https://docs.python.org/3/library/sys.monitoring.html
-          python-version: "3.13"
-          cache: pip
-          cache-dependency-path: |
-            python/ommx/pyproject.toml
-            python/ommx-tests/pyproject.toml
+          python-version: ${{ env.UV_PYTHON }}
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -72,18 +70,18 @@ jobs:
           # without forcing debuginfo into every release build.
           CARGO_PROFILE_RELEASE_DEBUG: "true"
         run: |
-          pip install "maturin>=1.12.2" pytest-codspeed
-          maturin build --release --out wheels -m python/ommx/Cargo.toml
-          pip install wheels/*.whl
+          uv sync --locked --only-group build --only-group benchmark --no-install-workspace
+          uv run --no-sync maturin build --release --out wheels -m python/ommx/Cargo.toml
+          uv pip install wheels/*.whl
 
       - name: Run benchmarks
         uses: CodSpeedHQ/action@v4
         with:
           run: |
             if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.suite }}" = "full" ]; then
-              pytest python/ommx-tests/tests/test_bench_*.py --codspeed
+              uv run --no-sync pytest python/ommx-tests/tests/test_bench_*.py --codspeed
             else
-              pytest python/ommx-tests/tests/test_bench_*.py --codspeed -m benchmark_guardrail
+              uv run --no-sync pytest python/ommx-tests/tests/test_bench_*.py --codspeed -m benchmark_guardrail
             fi
           token: ${{ secrets.CODSPEED_TOKEN }}
           mode: simulation

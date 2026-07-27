@@ -20,6 +20,11 @@ includes:
     dir: ommx-highs-adapter
 
 tasks:
+  sync:lint:
+    internal: true
+    cmds:
+      - uv sync --locked --only-group lint --no-install-workspace --inexact
+
   default:
     desc: Sync and Run tests for all Python projects
     cmds:
@@ -39,7 +44,8 @@ tasks:
   format:
     desc: Format Python code
     cmds:
-      - uv run ruff format
+      - task: sync:lint
+      - uv run --no-sync ruff format
 
   test:
     desc: Run tests for all Python projects
@@ -67,16 +73,14 @@ tasks:
   lint:
     desc: Run ruff check for all Python projects
     cmds:
-      - task: ommx:lint
-      - task: ommx-openjij-adapter:lint
-      - task: ommx-python-mip-adapter:lint
-      - task: ommx-pyscipopt-adapter:lint
-      - task: ommx-highs-adapter:lint
+      - task: sync:lint
+      - uv run --no-sync ruff check .
 
   set-version:
     desc: Set the version for all Python projects
     cmds:
-      - uv run set-version.py {{.CLI_ARGS}}
+      - uv sync --locked --only-group maintenance --no-install-workspace --inexact
+      - uv run --no-sync set-version.py {{.CLI_ARGS}}
       - task: sync
 
   book:
@@ -110,7 +114,14 @@ tasks:
   stubgen:
     desc: Generate stubs files for Rust extension
     cmds:
+      - task: sync:lint
       - cargo run -p _ommx_rust --bin stub_gen
+      - >-
+        uv run --no-sync ruff format
+        ommx/ommx/__init__.py
+        ommx/ommx/_ommx_rust/__init__.pyi
+        ommx/ommx/artifact/__init__.py
+        ommx/ommx/experiment/__init__.py
 
   ipython:
     desc: Start an IPython shell
