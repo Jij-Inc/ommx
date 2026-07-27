@@ -2326,7 +2326,7 @@ class VariableBase(ABC):
         return NotImplemented
 
     def __rmul__(self, other):
-        return self * other
+        return self.__mul__(other)
 
     def __le__(self, other) -> Constraint:
         return Constraint(
@@ -3277,7 +3277,7 @@ class Linear(AsConstraint):
         return self.raw.__repr__()
 
     def __add__(
-        self, rhs: int | float | DecisionVariable | _ommx_rust.Linear | Linear
+        self, rhs: int | float | VariableBase | _ommx_rust.Linear | Linear
     ) -> Linear:
         try:
             rhs = Linear.from_object(rhs)
@@ -3289,7 +3289,7 @@ class Linear(AsConstraint):
         return self + other
 
     def __iadd__(
-        self, rhs: int | float | DecisionVariable | _ommx_rust.Linear | Linear
+        self, rhs: int | float | VariableBase | _ommx_rust.Linear | Linear
     ) -> Linear:
         try:
             rhs = Linear.from_object(rhs)
@@ -3299,7 +3299,7 @@ class Linear(AsConstraint):
             return NotImplemented
 
     def __sub__(
-        self, rhs: int | float | DecisionVariable | _ommx_rust.Linear | Linear
+        self, rhs: int | float | VariableBase | _ommx_rust.Linear | Linear
     ) -> Linear:
         try:
             rhs = Linear.from_object(rhs)
@@ -3327,7 +3327,7 @@ class Linear(AsConstraint):
         return NotImplemented
 
     def __rmul__(self, other):
-        return self * other
+        return self.__mul__(other)
 
     def __neg__(self) -> Linear:
         return -1 * self
@@ -3535,15 +3535,15 @@ class Quadratic(AsConstraint):
     def __mul__(self, other: int | float) -> Quadratic: ...
 
     @overload
-    def __mul__(self, other: DecisionVariable | Linear | Quadratic) -> Polynomial: ...
+    def __mul__(self, other: VariableBase | Linear | Quadratic) -> Polynomial: ...
 
     def __mul__(
-        self, other: int | float | DecisionVariable | Linear | Quadratic
+        self, other: int | float | VariableBase | Linear | Quadratic
     ) -> Quadratic | Polynomial:
         if isinstance(other, float) or isinstance(other, int):
             return Quadratic.from_raw(self.raw.mul_scalar(other))
-        if isinstance(other, DecisionVariable):
-            other_linear = Linear(terms={other.raw.id: 1}, constant=0)
+        if isinstance(other, VariableBase):
+            other_linear = Linear(terms={other.id: 1}, constant=0)
             return Polynomial.from_raw(self.raw.mul_linear(other_linear.raw))
         if isinstance(other, Linear):
             return Polynomial.from_raw(self.raw.mul_linear(other.raw))
@@ -3552,9 +3552,9 @@ class Quadratic(AsConstraint):
         return NotImplemented
 
     def __rmul__(self, other):
-        return self * other
+        return self.__mul__(other)
 
-    def __neg__(self) -> Linear:
+    def __neg__(self) -> Quadratic:
         return -1 * self
 
     def __eq__(self, other) -> Constraint:  # type: ignore[reportIncompatibleMethodOverride]
@@ -3716,12 +3716,12 @@ class Polynomial(AsConstraint):
         return -self + other
 
     def __mul__(
-        self, other: int | float | DecisionVariable | Linear | Quadratic | Polynomial
+        self, other: int | float | VariableBase | Linear | Quadratic | Polynomial
     ) -> Polynomial:
         if isinstance(other, float) or isinstance(other, int):
             return Polynomial.from_raw(self.raw.mul_scalar(other))
-        if isinstance(other, DecisionVariable):
-            other_linear = Linear(terms={other.raw.id: 1}, constant=0)
+        if isinstance(other, VariableBase):
+            other_linear = Linear(terms={other.id: 1}, constant=0)
             return Polynomial.from_raw(self.raw.mul_linear(other_linear.raw))
         if isinstance(other, Linear):
             return Polynomial.from_raw(self.raw.mul_linear(other.raw))
@@ -3732,9 +3732,9 @@ class Polynomial(AsConstraint):
         return NotImplemented
 
     def __rmul__(self, other):
-        return self * other
+        return self.__mul__(other)
 
-    def __neg__(self) -> Linear:
+    def __neg__(self) -> Polynomial:
         return -1 * self
 
     def __eq__(self, other) -> Constraint:  # type: ignore[reportIncompatibleMethodOverride]
@@ -4174,14 +4174,14 @@ class Function(AsConstraint):
     def __mul__(
         self,
         other: (
-            int | float | DecisionVariable | Linear | Quadratic | Polynomial | Function
+            int | float | VariableBase | Linear | Quadratic | Polynomial | Function
         ),
     ) -> Function:
         if isinstance(other, float) or isinstance(other, int):
             rhs = _ommx_rust.Function.from_scalar(other)
-        elif isinstance(other, DecisionVariable):
+        elif isinstance(other, VariableBase):
             rhs = _ommx_rust.Function.from_linear(
-                _ommx_rust.Linear.single_term(other.raw.id, 1)
+                _ommx_rust.Linear.single_term(other.id, 1)
             )
         elif isinstance(other, Linear):
             rhs = _ommx_rust.Function.from_linear(other.raw)
@@ -4196,7 +4196,7 @@ class Function(AsConstraint):
         return Function.from_raw(self.raw * rhs)
 
     def __rmul__(self, other):
-        return self * other
+        return self.__mul__(other)
 
     def __neg__(self) -> Function:
         return -1 * self
@@ -4545,7 +4545,7 @@ class NamedFunction(AsConstraint):
         self,
         other: int
         | float
-        | DecisionVariable
+        | VariableBase
         | Linear
         | Quadratic
         | Polynomial
@@ -4557,7 +4557,7 @@ class NamedFunction(AsConstraint):
         self,
         other: int
         | float
-        | DecisionVariable
+        | VariableBase
         | Linear
         | Quadratic
         | Polynomial

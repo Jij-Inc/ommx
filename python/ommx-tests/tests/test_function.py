@@ -1,5 +1,7 @@
 # FIXME: Use test case generator like Hypothesis
 
+import pytest
+
 from ommx.v1 import (
     DecisionVariable,
     Function,
@@ -159,19 +161,28 @@ def test_parameter_multiplication():
     assert_eq(w * h, expected_quadratic)
     assert_eq(h * w, expected_quadratic)
 
-    assert_eq(
-        w * (h - eps) * (h - eps),
-        Polynomial(
-            terms={
-                (0, 0, w.id): 1.0,
-                (0, 1, w.id): 4.0,
-                (0, w.id, eps.id): -2.0,
-                (1, 1, w.id): 4.0,
-                (1, w.id, eps.id): -4.0,
-                (w.id, eps.id, eps.id): 1.0,
-            }
-        ),
+    expected_polynomial = Polynomial(
+        terms={
+            (0, 0, w.id): 1.0,
+            (0, 1, w.id): 4.0,
+            (0, w.id, eps.id): -2.0,
+            (1, 1, w.id): 4.0,
+            (1, w.id, eps.id): -4.0,
+            (w.id, eps.id, eps.id): 1.0,
+        }
     )
+    shifted = h - eps
+    quadratic = shifted * shifted
+    polynomial = quadratic * shifted
+
+    assert_eq(w * shifted * shifted, expected_polynomial)
+    assert_eq(quadratic * w, expected_polynomial)
+    assert_eq(w * quadratic, expected_polynomial)
+    assert_eq(polynomial * w, w * polynomial)
+    assert_eq(Function(quadratic) * w, w * Function(quadratic))
+
+    with pytest.raises(TypeError):
+        _ = object() * h
 
 
 def test_polynomial():
