@@ -20,10 +20,6 @@ def activeValue : IndicatorPolarity → Rat
   | .activeOnZero => 0
   | .activeOnOne => 1
 
-def inactiveValue : IndicatorPolarity → Rat
-  | .activeOnZero => 1
-  | .activeOnOne => 0
-
 def Active (polarity : IndicatorPolarity) (value : Rat) : Prop :=
   value = polarity.activeValue
 
@@ -31,12 +27,6 @@ instance (polarity : IndicatorPolarity) (value : Rat) :
     Decidable (Active polarity value) := by
   unfold Active
   infer_instance
-
-theorem active_or_inactive_of_binary {polarity : IndicatorPolarity} {value : Rat}
-    (hbinary : value ∈ Domain.binary) :
-    Active polarity value ∨ value = polarity.inactiveValue := by
-  rcases hbinary with rfl | rfl <;> cases polarity <;>
-    simp [Active, activeValue, inactiveValue]
 
 end IndicatorPolarity
 
