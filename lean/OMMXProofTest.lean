@@ -1,7 +1,5 @@
-import OMMXProofTest.Acceptance
 import OMMXProofTest.Affine
 import OMMXProofTest.Domain
-import OMMXProofTest.Fixtures
 import OMMXProofTest.IndicatorBigM
 import OMMXProofTest.SOS1BigM
 import OMMXProofTest.Transform

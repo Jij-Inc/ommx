@@ -12,6 +12,39 @@ namespace OMMXProof.Test.SOS1BigM
 
 open Instance.SOS1BigM
 
+/-! Mixed selector formulation: member 0 is reused as its own binary selector,
+while member 1 gets a fresh selector. Its lower bound is zero, so the lower
+link is omitted by the lowering. -/
+
+def plannedReusedExample : Finset (Fin 2) := {0}
+
+def plannedBoundsExample : SelectorBounds (Fin 2) where
+  lower := fun _ => 0
+  upper := fun i => if i.val = 0 then 1 else 3
+
+def zeroExcludingFreshBoundsExample : SelectorBounds (Fin 2) where
+  lower := fun i => if i.val = 0 then 0 else 1
+  upper := fun i => if i.val = 0 then 1 else 3
+
+example : ¬FreshBoundsContainZero plannedReusedExample
+    zeroExcludingFreshBoundsExample := by
+  native_decide
+
+def plannedMembersExample : Fin 2 → Rat := fun i => if i.val = 0 then 0 else 2
+
+def plannedFreshSelectorsExample : Fin 2 → Rat := fun _ => 1
+
+example : PlannedSelectorFormulation plannedReusedExample plannedBoundsExample
+    plannedMembersExample plannedFreshSelectorsExample := by
+  native_decide
+
+def invalidPlannedMembersExample : Fin 2 → Rat :=
+  fun i => if i.val = 0 then 1 else 2
+
+example : ¬PlannedSelectorFormulation plannedReusedExample plannedBoundsExample
+    invalidPlannedMembersExample plannedFreshSelectorsExample := by
+  native_decide
+
 def members : Finset (Fin 2) := Finset.univ
 
 def domains : Fin 2 → Domain :=

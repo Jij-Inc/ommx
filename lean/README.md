@@ -49,13 +49,14 @@ completeness of recognition or presolve algorithms remain outside this model.
 | `OMMXProof.Domain` | Binary/integer/continuous membership, explicitly unbounded interval endpoints, and intrinsically valid nonempty rational bounds |
 | `OMMXProof.Function.Affine` | Exact affine algebra and evaluation, substitution, and sound domain-box bounds |
 | `OMMXProof.Constraint.Linear` | Normalized affine equality and inequality semantics |
-| `OMMXProof.Constraint.OneHot` | OneHot semantics, structural checker, and direct replacement equivalence |
-| `OMMXProof.Constraint.SOS1` | SOS1 semantics and direct selector-formulation theorems |
+| `OMMXProof.Constraint.OneHot` | OneHot constraint syntax and exact satisfaction semantics |
+| `OMMXProof.Constraint.SOS1` | SOS1 constraint syntax and exact satisfaction semantics |
 | `OMMXProof.Constraint.Indicator` | Indicator polarity, constraint syntax, and exact satisfaction semantics |
 | `OMMXProof.Instance` | Finite Instance syntax and exact denotation |
 | `OMMXProof.Instance.Extend` | Left-block embedding of states, expressions, constraints, and Instances into a larger finite space |
 | `OMMXProof.Instance.Transform` | Partial state transformations, directional reduction/relaxation and objective-preservation contracts, and independent source/target round trips |
 | `OMMXProof.Instance.Transform.IndicatorBigM` | Checkable Indicator Big-M witnesses, target construction, identity state maps, and semantic correctness |
+| `OMMXProof.Instance.Transform.SOS1BigM.Formulation` | Mixed reused/fresh selector formulation and its exact relation to SOS1 semantics |
 | `OMMXProof.Instance.Transform.SOS1BigM` | Checkable SOS1 Big-M witnesses, target construction, state maps, and semantic correctness |
 
 ## Checks
@@ -88,10 +89,8 @@ includes Lean's standard `propext`, `Classical.choice`, and `Quot.sound` axioms.
 - [x] Semantic domains with explicit infinite endpoints and valid rational bounds
 - [x] Sound affine bounds, Instance denotation, and Transform preservation relations
 - [x] Reduction/relaxation composition and encode/decode round-trip laws
-- [x] OneHot recognition
 - [x] Indicator Big-M lowering as a finite `Instance.Transform`
-- [x] SOS1 selector formulations with mixed reused/fresh selector layouts
-- [x] SOS1 Big-M lowering as a finite `Instance.Transform`
+- [x] SOS1 Big-M lowering with mixed reused/fresh selector layouts
 - [x] Executable accept/reject fixtures and counterexamples
 
 ## Planned directions

@@ -1,5 +1,6 @@
 import OMMXProof.Instance.Extend
 import OMMXProof.Instance.Transform
+import OMMXProof.Instance.Transform.SOS1BigM.Formulation
 import Mathlib.Tactic
 
 /-!
