@@ -1,6 +1,13 @@
 # FIXME: Use test case generator like Hypothesis
 
-from ommx.v1 import Linear, DecisionVariable, Quadratic, Polynomial, Function
+from ommx.v1 import (
+    DecisionVariable,
+    Function,
+    Linear,
+    Parameter,
+    Polynomial,
+    Quadratic,
+)
 
 
 def assert_eq(lhs, rhs):
@@ -135,6 +142,36 @@ def test_quadratic():
     quad_instance += Quadratic(columns=[3], rows=[4], values=[3.0])
     assert id(quad_instance) == original_id  # Verify it's the same object
     assert_eq(quad_instance, Quadratic(columns=[1, 3], rows=[2, 4], values=[2.0, 3.0]))
+
+
+def test_parameter_multiplication():
+    x1 = DecisionVariable.binary(0, name="x1")
+    x2 = DecisionVariable.binary(1, name="x2")
+    w = Parameter.new(1_000_000, name="w")
+    eps = Parameter.new(1_000_001, name="eps")
+    h = x1 + 2.0 * x2
+
+    expected_quadratic = Quadratic(
+        columns=[0, 1],
+        rows=[w.id, w.id],
+        values=[1.0, 2.0],
+    )
+    assert_eq(w * h, expected_quadratic)
+    assert_eq(h * w, expected_quadratic)
+
+    assert_eq(
+        w * (h - eps) * (h - eps),
+        Polynomial(
+            terms={
+                (0, 0, w.id): 1.0,
+                (0, 1, w.id): 4.0,
+                (0, w.id, eps.id): -2.0,
+                (1, 1, w.id): 4.0,
+                (1, w.id, eps.id): -4.0,
+                (w.id, eps.id, eps.id): 1.0,
+            }
+        ),
+    )
 
 
 def test_polynomial():

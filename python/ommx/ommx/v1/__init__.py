@@ -3143,7 +3143,7 @@ class Linear(AsConstraint):
 
     @classmethod
     def from_object(
-        cls, obj: float | int | DecisionVariable | _ommx_rust.Linear | Linear
+        cls, obj: float | int | VariableBase | _ommx_rust.Linear | Linear
     ) -> Linear:
         if isinstance(obj, Linear):
             return obj
@@ -3153,8 +3153,8 @@ class Linear(AsConstraint):
             return new
         elif isinstance(obj, (float, int)):
             return cls.from_raw(_ommx_rust.Linear.constant(obj))
-        elif isinstance(obj, DecisionVariable):
-            return cls.from_raw(_ommx_rust.Linear.single_term(obj.raw.id, 1))
+        elif isinstance(obj, VariableBase):
+            return cls.from_raw(_ommx_rust.Linear.single_term(obj.id, 1))
         else:
             raise TypeError(f"Cannot create Linear from {type(obj).__name__}. ")
 
@@ -3314,14 +3314,14 @@ class Linear(AsConstraint):
     def __mul__(self, other: int | float) -> Linear: ...
 
     @overload
-    def __mul__(self, other: DecisionVariable | Linear) -> Quadratic: ...
+    def __mul__(self, other: VariableBase | Linear) -> Quadratic: ...
 
     def __mul__(
-        self, other: int | float | DecisionVariable | _ommx_rust.Linear | Linear
+        self, other: int | float | VariableBase | _ommx_rust.Linear | Linear
     ) -> Linear | Quadratic:
         if isinstance(other, (float, int)):
             return Linear.from_raw(self.raw.mul_scalar(other))
-        if isinstance(other, (DecisionVariable, Linear)):
+        if isinstance(other, (VariableBase, Linear)):
             rhs = Linear.from_object(other)
             return Quadratic.from_raw(self.raw * rhs.raw)
         return NotImplemented
