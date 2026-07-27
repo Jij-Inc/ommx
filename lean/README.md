@@ -35,8 +35,8 @@ The current model focuses on exact-rational affine optimization. It provides:
   objectives, and optimization sense;
 - an `Instance.Transform` contract with explicit target, encode/decode,
   directional preservation, round-trip, and composition laws; and
-- representative exact results for special-constraint recognition, promotion
-  conditions, and Big-M lowering.
+- representative exact results for special-constraint recognition, Indicator
+  promotion, and Big-M lowering.
 
 Detailed modules and implemented features are listed below. SDK serialization
 and lifecycle, floating-point behavior, Rust mutation correctness, and
@@ -52,10 +52,11 @@ completeness of recognition or presolve algorithms remain outside this model.
 | `OMMXProof.Constraint.Linear` | Normalized affine equality and inequality semantics |
 | `OMMXProof.Constraint.OneHot` | OneHot semantics, structural checker, and direct replacement equivalence |
 | `OMMXProof.Constraint.SOS1` | SOS1 semantics and direct selector-formulation theorems |
-| `OMMXProof.Constraint.Indicator` | Indicator semantics, active substitution, and structural promotion obligations |
+| `OMMXProof.Constraint.Indicator` | Indicator polarity, constraint syntax, and exact satisfaction semantics |
 | `OMMXProof.Instance` | Finite Instance syntax and exact denotation |
 | `OMMXProof.Instance.Extend` | Left-block embedding of states, expressions, constraints, and Instances into a larger finite space |
 | `OMMXProof.Instance.Transform` | Partial state transformations, directional reduction/relaxation and objective-preservation contracts, and independent source/target round trips |
+| `OMMXProof.Instance.Transform.IndicatorPromotion` | Exact same-state replacement of one ordinary constraint by a derived Indicator, with externally justified inactive redundancy |
 | `OMMXProof.Instance.Transform.IndicatorBigM` | Checkable Indicator Big-M witnesses, target construction, identity state maps, and semantic correctness |
 | `OMMXProof.Instance.Transform.SOS1BigM` | Checkable SOS1 Big-M witnesses, target construction, state maps, and semantic correctness |
 
@@ -89,7 +90,7 @@ includes Lean's standard `propext`, `Classical.choice`, and `Quot.sound` axioms.
 - [x] Semantic domains with explicit infinite endpoints and valid rational bounds
 - [x] Sound affine bounds, Instance denotation, and Transform preservation relations
 - [x] Reduction/relaxation composition and encode/decode round-trip laws
-- [x] OneHot and Indicator recovery rules
+- [x] OneHot recognition and exact one-row Indicator promotion
 - [x] Indicator Big-M lowering as a finite `Instance.Transform`
 - [x] SOS1 selector formulations with mixed reused/fresh selector layouts
 - [x] SOS1 Big-M lowering as a finite `Instance.Transform`
@@ -97,13 +98,13 @@ includes Lean's standard `propext`, `Classical.choice`, and `Quot.sound` axioms.
 
 ## Planned directions
 
-The packaged `Instance.Transform` examples currently focus on lowering special
-constraints into ordinary constraints. The common transformation contract is
-not restricted to lowering or to presolve reductions. The intended next
+The packaged `Instance.Transform` examples include Indicator promotion and
+special-constraint lowering. The common transformation contract is not
+restricted to these operations or to presolve reductions. The intended next
 directions are:
 
-- promotion of ordinary constraints to special constraints when a
-  transformation-specific `Witness` establishes their semantic equivalence;
+- promotion of additional ordinary-constraint patterns to OneHot, SOS1, or
+  multi-row Indicator constraints;
 - presolve transformations for MILP problems represented by `Instance`;
 - more general presolve transformations beyond the current affine MILP
   fragment;

@@ -8,5 +8,6 @@ import OMMXProof.Instance
 import OMMXProof.Instance.Extend
 import OMMXProof.Instance.Transform
 import OMMXProof.Instance.Transform.IndicatorBigM
+import OMMXProof.Instance.Transform.IndicatorPromotion
 import OMMXProof.Instance.Transform.SOS1BigM
 import OMMXProof.State
