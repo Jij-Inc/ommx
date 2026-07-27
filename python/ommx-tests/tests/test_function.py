@@ -4,9 +4,11 @@ import pytest
 
 from ommx import _ommx_rust
 from ommx.v1 import (
+    Constraint,
     DecisionVariable,
     Function,
     Linear,
+    NamedFunction,
     Parameter,
     Polynomial,
     Quadratic,
@@ -195,6 +197,42 @@ def test_parameter_multiplication():
 
     with pytest.raises(TypeError):
         _ = object() * h
+
+
+def test_parameter_addition_with_higher_degree_functions():
+    x = DecisionVariable.binary(0)
+    parameter = Parameter.new(1_000_000)
+    parameter_linear = Linear(terms={parameter.id: 1.0})
+    linear = x + 1
+    quadratic = linear * linear
+    polynomial = quadratic * linear
+    function = Function(polynomial)
+    named_function = NamedFunction(id=0, function=function)
+
+    for expression, function_expression in [
+        (quadratic, quadratic),
+        (polynomial, polynomial),
+        (function, function),
+        (named_function, function),
+    ]:
+        assert_eq(parameter + expression, parameter_linear + function_expression)
+        assert_eq(expression + parameter, function_expression + parameter_linear)
+        assert_eq(parameter - expression, parameter_linear - function_expression)
+        assert_eq(expression - parameter, function_expression - parameter_linear)
+
+        assert isinstance(parameter == expression, Constraint)
+        assert isinstance(parameter <= expression, Constraint)
+        assert isinstance(parameter >= expression, Constraint)
+        assert isinstance(expression == parameter, Constraint)
+        assert isinstance(expression <= parameter, Constraint)
+        assert isinstance(expression >= parameter, Constraint)
+
+    quadratic += parameter
+    polynomial += parameter
+    function += parameter
+    assert_eq(quadratic, linear * linear + parameter_linear)
+    assert_eq(polynomial, linear * linear * linear + parameter_linear)
+    assert_eq(function, Function(linear * linear * linear) + parameter_linear)
 
 
 def test_polynomial():
