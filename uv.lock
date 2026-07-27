@@ -42,7 +42,7 @@ dev = [
     { name = "pytest-codspeed", specifier = ">=4.5.0" },
     { name = "pytest-github-actions-annotate-failures" },
     { name = "ruamel-yaml", specifier = ">=0.18.10" },
-    { name = "ruff", specifier = ">=0.9.6" },
+    { name = "ruff", specifier = ">=0.16.0" },
     { name = "sphinx", specifier = ">=7.4.7" },
     { name = "sphinx-autoapi", specifier = ">=3.5.0" },
     { name = "sphinx-book-theme", specifier = ">=1.1.4" },
@@ -63,7 +63,7 @@ docs = [
     { name = "sphinxcontrib-katex", specifier = ">=0.9.11" },
     { name = "tomlkit", specifier = ">=0.13.2" },
 ]
-lint = [{ name = "ruff", specifier = ">=0.9.6" }]
+lint = [{ name = "ruff", specifier = ">=0.16.0" }]
 maintenance = [
     { name = "packaging" },
     { name = "ruamel-yaml", specifier = ">=0.18.10" },

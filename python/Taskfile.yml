@@ -39,7 +39,7 @@ tasks:
   format:
     desc: Format Python code
     cmds:
-      - uv run ruff format
+      - uv run --no-sync ruff format
 
   test:
     desc: Run tests for all Python projects
@@ -111,7 +111,7 @@ tasks:
   stubgen:
     desc: Generate stubs files for Rust extension
     cmds:
-      - cargo run -p _ommx_rust --bin stub_gen
+      - uv run --no-sync cargo run -p _ommx_rust --bin stub_gen
 
   ipython:
     desc: Start an IPython shell

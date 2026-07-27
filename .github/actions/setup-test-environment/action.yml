@@ -61,6 +61,7 @@ runs:
       uses: astral-sh/setup-uv@v8.1.0
       with:
         python-version: ${{ inputs.python-version }}
+        ignore-nothing-to-cache: true
     
     - name: Fix Python Version
       shell: bash

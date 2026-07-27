@@ -23,7 +23,7 @@ members = ["python/ommx*"]
 # declare only their runtime and build dependencies.
 [dependency-groups]
 lint = [
-  "ruff>=0.9.6",
+  "ruff>=0.16.0",
 ]
 typecheck = [
   "pyright>=1.1.394",

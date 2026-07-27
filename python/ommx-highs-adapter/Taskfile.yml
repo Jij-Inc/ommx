@@ -33,4 +33,4 @@ tasks:
   lint:
     desc: Lint by ruff check
     cmds:
-      - uv run ruff check
+      - uv run --no-sync ruff check

@@ -53,7 +53,7 @@ tasks:
   lint:
     desc: Lint by ruff check
     cmds:
-      - uv run ruff check python/ommx python/ommx-tests
+      - uv run --no-sync ruff check python/ommx python/ommx-tests
     dir: ../..
 
   bench:

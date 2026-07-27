@@ -20,6 +20,9 @@ jobs:
       - name: Setup Environment
         uses: ./.github/actions/setup-test-environment
 
+      - name: Install lint tools
+        run: uv sync --locked --only-group lint --no-install-workspace
+
       - name: Regenerate stub file
         run: task python:stubgen
 
