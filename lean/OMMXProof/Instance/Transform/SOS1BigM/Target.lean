@@ -29,18 +29,6 @@ def freshSelectorState {source : Instance n} (witness : Witness source)
     else
       canonicalSelector (witness.memberState members) i
 
-@[simp]
-theorem freshSelectorState_canonical {source : Instance n} (witness : Witness source)
-    (state : State n) :
-    witness.freshSelectorState state
-        (fun j =>
-          canonicalSelector (witness.memberState state) (witness.freshMember j)) =
-      canonicalSelector (witness.memberState state) := by
-  funext i
-  by_cases hi : i ∈ witness.freshMembers
-  · simp [freshSelectorState, hi]
-  · simp [freshSelectorState, hi]
-
 def upperLink {source : Instance n} (witness : Witness source)
     (j : Fin witness.freshCount) :
     LinearConstraint (n + witness.freshCount) where
@@ -355,23 +343,6 @@ theorem selectedHolds_of_plannedSelectorFormulation
     (witness.freshSelectorState state selectors)
     (witness.withinBounds_of_domains hvalid hdomains) hformulation
 
-theorem plannedSelectorFormulation_canonical_of_selectedHolds
-    {source : Instance n} (witness : Witness source)
-    (hvalid : witness.Valid) {state : State n}
-    (hdomains : ∀ i, state i ∈ source.domains i)
-    (hselected : witness.constraint.Holds state) :
-    PlannedSelectorFormulation witness.reusedMembers witness.bounds
-      (witness.memberState state)
-      (witness.freshSelectorState state
-        (fun j =>
-          canonicalSelector (witness.memberState state) (witness.freshMember j))) := by
-  rw [witness.freshSelectorState_canonical state]
-  exact canonicalSelector_plannedFormulation
-    witness.reusedMembers witness.bounds (witness.memberState state)
-    (witness.withinBounds_of_domains hvalid hdomains)
-    (witness.reusedBinary_of_domains hdomains)
-    ((witness.genericSOS1_memberState_iff_holds state).mpr hselected)
-
 def BaseFeasible {source : Instance n} (witness : Witness source)
     (state : State n) : Prop :=
   (∀ i, state i ∈ source.domains i) ∧
@@ -483,36 +454,6 @@ theorem target_feasible_iff_base_and_formulation
   simpa only [State.append_source_fresh] using
     witness.target_feasible_append_iff_base_and_formulation
       (State.source state) (State.fresh state)
-
-theorem source_feasible_of_target_feasible
-    {source : Instance n} (witness : Witness source)
-    (hvalid : witness.Valid) {state : State (n + witness.freshCount)}
-    (hfeasible : witness.target.Feasible state) :
-    source.Feasible (State.source state) := by
-  rcases (witness.target_feasible_iff_base_and_formulation state).mp hfeasible with
-    ⟨hbase, hformulation⟩
-  apply (witness.source_feasible_iff_base_and_selected
-    (State.source state)).mpr
-  refine ⟨hbase, ?_⟩
-  exact witness.selectedHolds_of_plannedSelectorFormulation hvalid hbase.1 hformulation
-
-theorem target_feasible_append_canonical
-    {source : Instance n} (witness : Witness source)
-    (hvalid : witness.Valid) {state : State n}
-    (hfeasible : source.Feasible state) :
-    witness.target.Feasible
-      (State.append state
-        (fun j =>
-          canonicalSelector (witness.memberState state) (witness.freshMember j))) := by
-  rcases (witness.source_feasible_iff_base_and_selected state).mp hfeasible with
-    ⟨hbase, hselected⟩
-  apply (witness.target_feasible_append_iff_base_and_formulation
-    state
-      (fun j =>
-        canonicalSelector (witness.memberState state) (witness.freshMember j))).mpr
-  exact ⟨hbase,
-    witness.plannedSelectorFormulation_canonical_of_selectedHolds
-      hvalid hbase.1 hselected⟩
 
 end Witness
 

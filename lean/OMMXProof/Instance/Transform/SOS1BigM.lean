@@ -23,91 +23,93 @@ namespace Instance
 
 namespace SOS1BigM
 
-namespace Witness
-
-def decodeState {source : Instance n} (witness : Witness source)
-    (state : State (n + witness.freshCount)) : State n :=
-  State.source state
-
-def encodeSelectors {source : Instance n} (witness : Witness source)
-    (state : State n) : State witness.freshCount :=
-  fun j => canonicalSelector (witness.memberState state) (witness.freshMember j)
-
-def encodeState {source : Instance n} (witness : Witness source)
-    (state : State n) : State (n + witness.freshCount) :=
-  State.append state (witness.encodeSelectors state)
-
-@[simp]
-theorem decode_encode {source : Instance n} (witness : Witness source)
-    (state : State n) :
-    witness.decodeState (witness.encodeState state) = state := by
-  simp [decodeState, encodeState]
-
 /-- The SOS1 Big-M lowering packaged in the general Instance transformation
 shape. The state maps are total; `Option` is introduced by `Transform`. -/
 def lowering {source : Instance n} (witness : Witness source) :
     Instance.Transform source where
   targetDimension := n + witness.freshCount
   target := witness.target
-  encode := fun state => some (witness.encodeState state)
-  decode := fun state => some (witness.decodeState state)
+  encode := fun state =>
+    some (State.append state fun j =>
+      canonicalSelector (witness.memberState state) (witness.freshMember j))
+  decode := fun state => some (State.source state)
 
 theorem lowering_isReduction {source : Instance n} (witness : Witness source)
     (hvalid : witness.Valid) :
-    witness.lowering.IsReduction := by
+    (lowering witness).IsReduction := by
   intro targetState htarget
-  refine ⟨witness.decodeState targetState, rfl, ?_⟩
-  simpa [decodeState] using
-    witness.source_feasible_of_target_feasible hvalid htarget
+  change witness.target.Feasible targetState at htarget
+  refine ⟨State.source targetState, rfl, ?_⟩
+  rcases (witness.target_feasible_iff_base_and_formulation targetState).mp
+      htarget with ⟨hbase, hformulation⟩
+  apply (witness.source_feasible_iff_base_and_selected
+    (State.source targetState)).mpr
+  exact ⟨hbase,
+    witness.selectedHolds_of_plannedSelectorFormulation
+      hvalid hbase.1 hformulation⟩
 
 theorem lowering_isRelaxation {source : Instance n} (witness : Witness source)
     (hvalid : witness.Valid) :
-    witness.lowering.IsRelaxation := by
+    (lowering witness).IsRelaxation := by
   intro sourceState hsource
-  refine ⟨witness.encodeState sourceState, rfl, ?_⟩
-  change witness.target.Feasible
-    (State.append sourceState
-      (fun j =>
-        canonicalSelector
-          (witness.memberState sourceState) (witness.freshMember j)))
-  exact witness.target_feasible_append_canonical hvalid hsource
+  let selectors : State witness.freshCount :=
+    fun j =>
+      canonicalSelector (witness.memberState sourceState) (witness.freshMember j)
+  refine ⟨State.append sourceState selectors, rfl, ?_⟩
+  change witness.target.Feasible (State.append sourceState selectors)
+  apply (witness.target_feasible_append_iff_base_and_formulation
+    sourceState selectors).mpr
+  rcases (witness.source_feasible_iff_base_and_selected sourceState).mp
+      hsource with ⟨hbase, hselected⟩
+  refine ⟨hbase, ?_⟩
+  have hselectors :
+      witness.freshSelectorState sourceState selectors =
+        canonicalSelector (witness.memberState sourceState) := by
+    funext i
+    by_cases hi : i ∈ witness.freshMembers
+    · simp [Witness.freshSelectorState, selectors, hi]
+    · simp [Witness.freshSelectorState, hi]
+  rw [hselectors]
+  exact canonicalSelector_plannedFormulation
+    witness.reusedMembers witness.bounds (witness.memberState sourceState)
+    (witness.withinBounds_of_domains hvalid hbase.1)
+    (witness.reusedBinary_of_domains hbase.1)
+    ((witness.genericSOS1_memberState_iff_holds sourceState).mpr hselected)
 
 theorem lowering_sensePreserving {source : Instance n}
     (witness : Witness source) :
-    witness.lowering.SensePreserving :=
+    (lowering witness).SensePreserving :=
   rfl
 
 theorem lowering_sourceObjectiveValuePreserving {source : Instance n}
     (witness : Witness source) :
-    witness.lowering.SourceObjectiveValuePreserving := by
+    (lowering witness).SourceObjectiveValuePreserving := by
   intro sourceState _
-  simp [lowering, Instance.ObjectiveValue, target, encodeState]
+  simp [lowering, Instance.ObjectiveValue, Witness.target]
 
 theorem lowering_targetObjectiveValuePreserving {source : Instance n}
     (witness : Witness source) :
-    witness.lowering.TargetObjectiveValuePreserving := by
+    (lowering witness).TargetObjectiveValuePreserving := by
   intro targetState _
-  simp [lowering, Instance.ObjectiveValue, target, decodeState]
+  simp [lowering, Instance.ObjectiveValue, Witness.target]
 
 theorem lowering_sourceObjectivePreserving {source : Instance n}
     (witness : Witness source) :
-    witness.lowering.SourceObjectivePreserving :=
-  ⟨witness.lowering_sensePreserving,
-    witness.lowering_sourceObjectiveValuePreserving⟩
+    (lowering witness).SourceObjectivePreserving :=
+  ⟨lowering_sensePreserving witness,
+    lowering_sourceObjectiveValuePreserving witness⟩
 
 theorem lowering_targetObjectivePreserving {source : Instance n}
     (witness : Witness source) :
-    witness.lowering.TargetObjectivePreserving :=
-  ⟨witness.lowering_sensePreserving,
-    witness.lowering_targetObjectiveValuePreserving⟩
+    (lowering witness).TargetObjectivePreserving :=
+  ⟨lowering_sensePreserving witness,
+    lowering_targetObjectiveValuePreserving witness⟩
 
 theorem lowering_sourceRoundTrip {source : Instance n}
     (witness : Witness source) :
-    witness.lowering.SourceRoundTrip := by
+    (lowering witness).SourceRoundTrip := by
   intro sourceState _
-  simp [lowering, witness.decode_encode]
-
-end Witness
+  simp [lowering]
 
 end SOS1BigM
 

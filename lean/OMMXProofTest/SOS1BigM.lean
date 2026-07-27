@@ -85,31 +85,31 @@ example : witness.linkConstraints.length = 1 := by native_decide
 
 example : witness.generatedConstraints.length = 2 := by native_decide
 
-example : witness.lowering.targetDimension = 3 := by native_decide
+example : (lowering witness).targetDimension = 3 := by native_decide
 
-example : witness.lowering.IsReduction :=
-  witness.lowering_isReduction witness_valid
+example : (lowering witness).IsReduction :=
+  lowering_isReduction witness witness_valid
 
-example : witness.lowering.IsRelaxation :=
-  witness.lowering_isRelaxation witness_valid
+example : (lowering witness).IsRelaxation :=
+  lowering_isRelaxation witness witness_valid
 
-example : witness.lowering.SensePreserving :=
-  witness.lowering_sensePreserving
+example : (lowering witness).SensePreserving :=
+  lowering_sensePreserving witness
 
-example : witness.lowering.SourceObjectiveValuePreserving :=
-  witness.lowering_sourceObjectiveValuePreserving
+example : (lowering witness).SourceObjectiveValuePreserving :=
+  lowering_sourceObjectiveValuePreserving witness
 
-example : witness.lowering.TargetObjectiveValuePreserving :=
-  witness.lowering_targetObjectiveValuePreserving
+example : (lowering witness).TargetObjectiveValuePreserving :=
+  lowering_targetObjectiveValuePreserving witness
 
-example : witness.lowering.SourceObjectivePreserving :=
-  witness.lowering_sourceObjectivePreserving
+example : (lowering witness).SourceObjectivePreserving :=
+  lowering_sourceObjectivePreserving witness
 
-example : witness.lowering.TargetObjectivePreserving :=
-  witness.lowering_targetObjectivePreserving
+example : (lowering witness).TargetObjectivePreserving :=
+  lowering_targetObjectivePreserving witness
 
-example : witness.lowering.SourceRoundTrip :=
-  witness.lowering_sourceRoundTrip
+example : (lowering witness).SourceRoundTrip :=
+  lowering_sourceRoundTrip witness
 
 def unboundedSource : Instance 1 where
   domains := fun _ => .continuous
@@ -138,10 +138,13 @@ theorem zeroSource_feasible : source.Feasible zeroSource := by
   · simp [source]
 
 example :
-    witness.target.ObjectiveValue (witness.encodeState zeroSource) =
+    witness.target.ObjectiveValue
+        (State.append zeroSource fun j =>
+          canonicalSelector
+            (witness.memberState zeroSource) (witness.freshMember j)) =
       source.ObjectiveValue zeroSource := by
-  simpa [Witness.lowering] using
-    witness.lowering_sourceObjectiveValuePreserving zeroSource_feasible
+  simpa [lowering] using
+    lowering_sourceObjectiveValuePreserving witness zeroSource_feasible
 
 def oneSelector : State witness.freshCount := fun _ => 1
 
@@ -162,19 +165,25 @@ def freshZero : Fin witness.freshCount :=
 /-- A zero member permits either selector value, so canonical re-encoding does
 not recover every feasible target state. -/
 theorem not_targetRoundTrip :
-    ¬witness.lowering.TargetRoundTrip := by
+    ¬(lowering witness).TargetRoundTrip := by
   intro hroundTrip
   have hstate := hroundTrip noncanonicalTarget_feasible
-  change some (witness.encodeState (witness.decodeState noncanonicalTarget)) =
-    some noncanonicalTarget at hstate
+  change
+    some (State.append (State.source noncanonicalTarget) fun j =>
+      canonicalSelector
+        (witness.memberState (State.source noncanonicalTarget))
+        (witness.freshMember j)) =
+      some noncanonicalTarget at hstate
   have heq :
-      witness.encodeState (witness.decodeState noncanonicalTarget) =
+      State.append (State.source noncanonicalTarget) (fun j =>
+        canonicalSelector
+          (witness.memberState (State.source noncanonicalTarget))
+          (witness.freshMember j)) =
         noncanonicalTarget :=
     Option.some.inj hstate
   have hcomponent := congrArg
     (fun state => state (Fin.natAdd 2 freshZero)) heq
-  simp [Witness.encodeState, Witness.decodeState, Witness.encodeSelectors,
-    Witness.memberState, noncanonicalTarget, oneSelector, zeroSource,
+  simp [Witness.memberState, noncanonicalTarget, oneSelector, zeroSource,
     canonicalSelector, State.source, State.append] at hcomponent
 
 end OMMXProof.Test.SOS1BigM
