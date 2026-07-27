@@ -3314,17 +3314,20 @@ class Linear(AsConstraint):
     def __mul__(self, other: int | float) -> Linear: ...
 
     @overload
-    def __mul__(self, other: VariableBase | Linear) -> Quadratic: ...
+    def __mul__(
+        self, other: VariableBase | _ommx_rust.Linear | Linear
+    ) -> Quadratic: ...
 
     def __mul__(
         self, other: int | float | VariableBase | _ommx_rust.Linear | Linear
     ) -> Linear | Quadratic:
         if isinstance(other, (float, int)):
             return Linear.from_raw(self.raw.mul_scalar(other))
-        if isinstance(other, (VariableBase, Linear)):
+        try:
             rhs = Linear.from_object(other)
-            return Quadratic.from_raw(self.raw * rhs.raw)
-        return NotImplemented
+        except TypeError:
+            return NotImplemented
+        return Quadratic.from_raw(self.raw * rhs.raw)
 
     def __rmul__(self, other):
         return self.__mul__(other)

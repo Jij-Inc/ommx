@@ -2,6 +2,7 @@
 
 import pytest
 
+from ommx import _ommx_rust
 from ommx.v1 import (
     DecisionVariable,
     Function,
@@ -78,6 +79,17 @@ def test_quadratic():
             columns=[1], rows=[2], values=[1.0], linear=Linear(terms={1: 1}, constant=0)
         ),
     )
+
+    rust_linear = _ommx_rust.Linear(terms={2: 3.0}, constant=1.0)
+    public_linear = Linear(terms={1: 1.0})
+    expected_from_rust_linear = Quadratic(
+        columns=[1],
+        rows=[2],
+        values=[3.0],
+        linear=Linear(terms={1: 1.0}),
+    )
+    assert_eq(public_linear * rust_linear, expected_from_rust_linear)
+    assert_eq(rust_linear * public_linear, expected_from_rust_linear)
 
     assert_eq(
         x1 * x2 + 2,
