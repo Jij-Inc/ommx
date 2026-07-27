@@ -47,7 +47,7 @@ completeness of recognition or presolve algorithms remain outside this model.
 | --- | --- |
 | `OMMXProof.State` | Exact rational assignments over packed `Fin n` decision-variable indices |
 | `OMMXProof.Domain` | Binary/integer/continuous membership, explicitly unbounded interval endpoints, and intrinsically valid nonempty rational bounds |
-| `OMMXProof.Function.Affine` | Exact affine algebra and evaluation, substitution, and sound domain-box bounds |
+| `OMMXProof.Function.Affine` | Exact affine algebra, evaluation, and sound domain-box bounds |
 | `OMMXProof.Constraint.Linear` | Normalized affine equality and inequality semantics |
 | `OMMXProof.Constraint.OneHot` | OneHot constraint syntax and exact satisfaction semantics |
 | `OMMXProof.Constraint.SOS1` | SOS1 constraint syntax and exact satisfaction semantics |
