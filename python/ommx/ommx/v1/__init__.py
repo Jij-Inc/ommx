@@ -2307,7 +2307,7 @@ class VariableBase(ABC):
         return Linear(terms={self.id: -1})
 
     def __radd__(self, other) -> Linear:
-        return self + other
+        return self.__add__(other)
 
     def __rsub__(self, other) -> Linear:
         return -self + other
@@ -2326,7 +2326,7 @@ class VariableBase(ABC):
         return NotImplemented
 
     def __rmul__(self, other):
-        return self * other
+        return self.__mul__(other)
 
     def __le__(self, other) -> Constraint:
         return Constraint(
@@ -3143,7 +3143,7 @@ class Linear(AsConstraint):
 
     @classmethod
     def from_object(
-        cls, obj: float | int | DecisionVariable | _ommx_rust.Linear | Linear
+        cls, obj: float | int | VariableBase | _ommx_rust.Linear | Linear
     ) -> Linear:
         if isinstance(obj, Linear):
             return obj
@@ -3153,8 +3153,8 @@ class Linear(AsConstraint):
             return new
         elif isinstance(obj, (float, int)):
             return cls.from_raw(_ommx_rust.Linear.constant(obj))
-        elif isinstance(obj, DecisionVariable):
-            return cls.from_raw(_ommx_rust.Linear.single_term(obj.raw.id, 1))
+        elif isinstance(obj, VariableBase):
+            return cls.from_raw(_ommx_rust.Linear.single_term(obj.id, 1))
         else:
             raise TypeError(f"Cannot create Linear from {type(obj).__name__}. ")
 
@@ -3277,7 +3277,7 @@ class Linear(AsConstraint):
         return self.raw.__repr__()
 
     def __add__(
-        self, rhs: int | float | DecisionVariable | _ommx_rust.Linear | Linear
+        self, rhs: int | float | VariableBase | _ommx_rust.Linear | Linear
     ) -> Linear:
         try:
             rhs = Linear.from_object(rhs)
@@ -3286,10 +3286,10 @@ class Linear(AsConstraint):
             return NotImplemented
 
     def __radd__(self, other):
-        return self + other
+        return self.__add__(other)
 
     def __iadd__(
-        self, rhs: int | float | DecisionVariable | _ommx_rust.Linear | Linear
+        self, rhs: int | float | VariableBase | _ommx_rust.Linear | Linear
     ) -> Linear:
         try:
             rhs = Linear.from_object(rhs)
@@ -3299,7 +3299,7 @@ class Linear(AsConstraint):
             return NotImplemented
 
     def __sub__(
-        self, rhs: int | float | DecisionVariable | _ommx_rust.Linear | Linear
+        self, rhs: int | float | VariableBase | _ommx_rust.Linear | Linear
     ) -> Linear:
         try:
             rhs = Linear.from_object(rhs)
@@ -3314,20 +3314,23 @@ class Linear(AsConstraint):
     def __mul__(self, other: int | float) -> Linear: ...
 
     @overload
-    def __mul__(self, other: DecisionVariable | Linear) -> Quadratic: ...
+    def __mul__(
+        self, other: VariableBase | _ommx_rust.Linear | Linear
+    ) -> Quadratic: ...
 
     def __mul__(
-        self, other: int | float | DecisionVariable | _ommx_rust.Linear | Linear
+        self, other: int | float | VariableBase | _ommx_rust.Linear | Linear
     ) -> Linear | Quadratic:
         if isinstance(other, (float, int)):
             return Linear.from_raw(self.raw.mul_scalar(other))
-        if isinstance(other, (DecisionVariable, Linear)):
+        try:
             rhs = Linear.from_object(other)
-            return Quadratic.from_raw(self.raw * rhs.raw)
-        return NotImplemented
+        except TypeError:
+            return NotImplemented
+        return Quadratic.from_raw(self.raw * rhs.raw)
 
     def __rmul__(self, other):
-        return self * other
+        return self.__mul__(other)
 
     def __neg__(self) -> Linear:
         return -1 * self
@@ -3495,12 +3498,12 @@ class Quadratic(AsConstraint):
         return self.raw.__repr__()
 
     def __add__(
-        self, other: int | float | DecisionVariable | Linear | Quadratic
+        self, other: int | float | VariableBase | Linear | Quadratic
     ) -> Quadratic:
         if isinstance(other, float) or isinstance(other, int):
             return Quadratic.from_raw(self.raw.add_scalar(other))
-        if isinstance(other, DecisionVariable):
-            other_linear = Linear(terms={other.raw.id: 1}, constant=0)
+        if isinstance(other, VariableBase):
+            other_linear = Linear(terms={other.id: 1}, constant=0)
             return Quadratic.from_raw(self.raw.add_linear(other_linear.raw))
         if isinstance(other, Linear):
             return Quadratic.from_raw(self.raw.add_linear(other.raw))
@@ -3509,10 +3512,10 @@ class Quadratic(AsConstraint):
         return NotImplemented
 
     def __radd__(self, other):
-        return self + other
+        return self.__add__(other)
 
     def __iadd__(
-        self, rhs: int | float | DecisionVariable | Linear | Quadratic
+        self, rhs: int | float | VariableBase | Linear | Quadratic
     ) -> Quadratic:
         if isinstance(rhs, Quadratic):
             self.raw.add_assign(rhs.raw)
@@ -3524,7 +3527,7 @@ class Quadratic(AsConstraint):
             return self
 
     def __sub__(
-        self, other: int | float | DecisionVariable | Linear | Quadratic
+        self, other: int | float | VariableBase | Linear | Quadratic
     ) -> Quadratic:
         return self + (-other)
 
@@ -3535,15 +3538,15 @@ class Quadratic(AsConstraint):
     def __mul__(self, other: int | float) -> Quadratic: ...
 
     @overload
-    def __mul__(self, other: DecisionVariable | Linear | Quadratic) -> Polynomial: ...
+    def __mul__(self, other: VariableBase | Linear | Quadratic) -> Polynomial: ...
 
     def __mul__(
-        self, other: int | float | DecisionVariable | Linear | Quadratic
+        self, other: int | float | VariableBase | Linear | Quadratic
     ) -> Quadratic | Polynomial:
         if isinstance(other, float) or isinstance(other, int):
             return Quadratic.from_raw(self.raw.mul_scalar(other))
-        if isinstance(other, DecisionVariable):
-            other_linear = Linear(terms={other.raw.id: 1}, constant=0)
+        if isinstance(other, VariableBase):
+            other_linear = Linear(terms={other.id: 1}, constant=0)
             return Polynomial.from_raw(self.raw.mul_linear(other_linear.raw))
         if isinstance(other, Linear):
             return Polynomial.from_raw(self.raw.mul_linear(other.raw))
@@ -3552,9 +3555,9 @@ class Quadratic(AsConstraint):
         return NotImplemented
 
     def __rmul__(self, other):
-        return self * other
+        return self.__mul__(other)
 
-    def __neg__(self) -> Linear:
+    def __neg__(self) -> Quadratic:
         return -1 * self
 
     def __eq__(self, other) -> Constraint:  # type: ignore[reportIncompatibleMethodOverride]
@@ -3673,12 +3676,12 @@ class Polynomial(AsConstraint):
         return self.raw.__repr__()
 
     def __add__(
-        self, other: int | float | DecisionVariable | Linear | Quadratic | Polynomial
+        self, other: int | float | VariableBase | Linear | Quadratic | Polynomial
     ) -> Polynomial:
         if isinstance(other, float) or isinstance(other, int):
             return Polynomial.from_raw(self.raw.add_scalar(other))
-        if isinstance(other, DecisionVariable):
-            other_linear = Linear(terms={other.raw.id: 1}, constant=0)
+        if isinstance(other, VariableBase):
+            other_linear = Linear(terms={other.id: 1}, constant=0)
             return Polynomial.from_raw(self.raw.add_linear(other_linear.raw))
         if isinstance(other, Linear):
             return Polynomial.from_raw(self.raw.add_linear(other.raw))
@@ -3689,10 +3692,10 @@ class Polynomial(AsConstraint):
         return NotImplemented
 
     def __radd__(self, other):
-        return self + other
+        return self.__add__(other)
 
     def __iadd__(
-        self, rhs: int | float | DecisionVariable | Linear | Quadratic | Polynomial
+        self, rhs: int | float | VariableBase | Linear | Quadratic | Polynomial
     ) -> Polynomial:
         if isinstance(rhs, Polynomial):
             self.raw.add_assign(rhs.raw)
@@ -3704,11 +3707,9 @@ class Polynomial(AsConstraint):
             return self
 
     def __sub__(
-        self, other: int | float | DecisionVariable | Linear | Quadratic | Polynomial
+        self, other: int | float | VariableBase | Linear | Quadratic | Polynomial
     ) -> Polynomial:
-        if isinstance(
-            other, (int, float, DecisionVariable, Linear, Quadratic, Polynomial)
-        ):
+        if isinstance(other, (int, float, VariableBase, Linear, Quadratic, Polynomial)):
             return self + (-other)
         return NotImplemented
 
@@ -3716,12 +3717,12 @@ class Polynomial(AsConstraint):
         return -self + other
 
     def __mul__(
-        self, other: int | float | DecisionVariable | Linear | Quadratic | Polynomial
+        self, other: int | float | VariableBase | Linear | Quadratic | Polynomial
     ) -> Polynomial:
         if isinstance(other, float) or isinstance(other, int):
             return Polynomial.from_raw(self.raw.mul_scalar(other))
-        if isinstance(other, DecisionVariable):
-            other_linear = Linear(terms={other.raw.id: 1}, constant=0)
+        if isinstance(other, VariableBase):
+            other_linear = Linear(terms={other.id: 1}, constant=0)
             return Polynomial.from_raw(self.raw.mul_linear(other_linear.raw))
         if isinstance(other, Linear):
             return Polynomial.from_raw(self.raw.mul_linear(other.raw))
@@ -3732,9 +3733,9 @@ class Polynomial(AsConstraint):
         return NotImplemented
 
     def __rmul__(self, other):
-        return self * other
+        return self.__mul__(other)
 
-    def __neg__(self) -> Linear:
+    def __neg__(self) -> Polynomial:
         return -1 * self
 
     def __eq__(self, other) -> Constraint:  # type: ignore[reportIncompatibleMethodOverride]
@@ -4108,19 +4109,13 @@ class Function(AsConstraint):
 
     def __add__(
         self,
-        other: int
-        | float
-        | DecisionVariable
-        | Linear
-        | Quadratic
-        | Polynomial
-        | Function,
+        other: int | float | VariableBase | Linear | Quadratic | Polynomial | Function,
     ) -> Function:
         if isinstance(other, float) or isinstance(other, int):
             rhs = _ommx_rust.Function.from_scalar(other)
-        elif isinstance(other, DecisionVariable):
+        elif isinstance(other, VariableBase):
             rhs = _ommx_rust.Function.from_linear(
-                _ommx_rust.Linear.single_term(other.raw.id, 1)
+                _ommx_rust.Linear.single_term(other.id, 1)
             )
         elif isinstance(other, Linear):
             rhs = _ommx_rust.Function.from_linear(other.raw)
@@ -4135,17 +4130,11 @@ class Function(AsConstraint):
         return Function.from_raw(self.raw + rhs)
 
     def __radd__(self, other):
-        return self + other
+        return self.__add__(other)
 
     def __iadd__(
         self,
-        rhs: int
-        | float
-        | DecisionVariable
-        | Linear
-        | Quadratic
-        | Polynomial
-        | Function,
+        rhs: int | float | VariableBase | Linear | Quadratic | Polynomial | Function,
     ) -> Function:
         if isinstance(rhs, Function):
             self.raw.add_assign(rhs.raw)
@@ -4158,13 +4147,7 @@ class Function(AsConstraint):
 
     def __sub__(
         self,
-        other: int
-        | float
-        | DecisionVariable
-        | Linear
-        | Quadratic
-        | Polynomial
-        | Function,
+        other: int | float | VariableBase | Linear | Quadratic | Polynomial | Function,
     ) -> Function:
         return self + (-other)
 
@@ -4174,14 +4157,14 @@ class Function(AsConstraint):
     def __mul__(
         self,
         other: (
-            int | float | DecisionVariable | Linear | Quadratic | Polynomial | Function
+            int | float | VariableBase | Linear | Quadratic | Polynomial | Function
         ),
     ) -> Function:
         if isinstance(other, float) or isinstance(other, int):
             rhs = _ommx_rust.Function.from_scalar(other)
-        elif isinstance(other, DecisionVariable):
+        elif isinstance(other, VariableBase):
             rhs = _ommx_rust.Function.from_linear(
-                _ommx_rust.Linear.single_term(other.raw.id, 1)
+                _ommx_rust.Linear.single_term(other.id, 1)
             )
         elif isinstance(other, Linear):
             rhs = _ommx_rust.Function.from_linear(other.raw)
@@ -4196,7 +4179,7 @@ class Function(AsConstraint):
         return Function.from_raw(self.raw * rhs)
 
     def __rmul__(self, other):
-        return self * other
+        return self.__mul__(other)
 
     def __neg__(self) -> Function:
         return -1 * self
@@ -4495,73 +4478,37 @@ class NamedFunction(AsConstraint):
 
     def __add__(
         self,
-        other: int
-        | float
-        | DecisionVariable
-        | Linear
-        | Quadratic
-        | Polynomial
-        | Function,
+        other: int | float | VariableBase | Linear | Quadratic | Polynomial | Function,
     ) -> Function:
         return self.function + other
 
     def __radd__(
         self,
-        other: int
-        | float
-        | DecisionVariable
-        | Linear
-        | Quadratic
-        | Polynomial
-        | Function,
+        other: int | float | VariableBase | Linear | Quadratic | Polynomial | Function,
     ) -> Function:
-        return self.function + other
+        return self.function.__add__(other)
 
     def __sub__(
         self,
-        other: int
-        | float
-        | DecisionVariable
-        | Linear
-        | Quadratic
-        | Polynomial
-        | Function,
+        other: int | float | VariableBase | Linear | Quadratic | Polynomial | Function,
     ) -> Function:
         return self.function - other
 
     def __rsub__(
         self,
-        other: int
-        | float
-        | DecisionVariable
-        | Linear
-        | Quadratic
-        | Polynomial
-        | Function,
+        other: int | float | VariableBase | Linear | Quadratic | Polynomial | Function,
     ) -> Function:
         return -self.function + other
 
     def __mul__(
         self,
-        other: int
-        | float
-        | DecisionVariable
-        | Linear
-        | Quadratic
-        | Polynomial
-        | Function,
+        other: int | float | VariableBase | Linear | Quadratic | Polynomial | Function,
     ) -> Function:
         return self.function * other
 
     def __rmul__(
         self,
-        other: int
-        | float
-        | DecisionVariable
-        | Linear
-        | Quadratic
-        | Polynomial
-        | Function,
+        other: int | float | VariableBase | Linear | Quadratic | Polynomial | Function,
     ) -> Function:
         return self.function * other
 
@@ -4570,13 +4517,7 @@ class NamedFunction(AsConstraint):
 
     def __eq__(  # type: ignore[reportIncompatibleMethodOverride]
         self,
-        other: int
-        | float
-        | DecisionVariable
-        | Linear
-        | Quadratic
-        | Polynomial
-        | Function,
+        other: int | float | VariableBase | Linear | Quadratic | Polynomial | Function,
     ) -> Constraint:
         return Constraint(
             function=self.function - other, equality=Constraint.EQUAL_TO_ZERO

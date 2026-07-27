@@ -1,6 +1,18 @@
 # FIXME: Use test case generator like Hypothesis
 
-from ommx.v1 import Linear, DecisionVariable, Quadratic, Polynomial, Function
+import pytest
+
+from ommx import _ommx_rust
+from ommx.v1 import (
+    Constraint,
+    DecisionVariable,
+    Function,
+    Linear,
+    NamedFunction,
+    Parameter,
+    Polynomial,
+    Quadratic,
+)
 
 
 def assert_eq(lhs, rhs):
@@ -70,6 +82,17 @@ def test_quadratic():
         ),
     )
 
+    rust_linear = _ommx_rust.Linear(terms={2: 3.0}, constant=1.0)
+    public_linear = Linear(terms={1: 1.0})
+    expected_from_rust_linear = Quadratic(
+        columns=[1],
+        rows=[2],
+        values=[3.0],
+        linear=Linear(terms={1: 1.0}),
+    )
+    assert_eq(public_linear * rust_linear, expected_from_rust_linear)
+    assert_eq(rust_linear * public_linear, expected_from_rust_linear)
+
     assert_eq(
         x1 * x2 + 2,
         Quadratic(
@@ -135,6 +158,81 @@ def test_quadratic():
     quad_instance += Quadratic(columns=[3], rows=[4], values=[3.0])
     assert id(quad_instance) == original_id  # Verify it's the same object
     assert_eq(quad_instance, Quadratic(columns=[1, 3], rows=[2, 4], values=[2.0, 3.0]))
+
+
+def test_parameter_multiplication():
+    x1 = DecisionVariable.binary(0, name="x1")
+    x2 = DecisionVariable.binary(1, name="x2")
+    w = Parameter.new(1_000_000, name="w")
+    eps = Parameter.new(1_000_001, name="eps")
+    h = x1 + 2.0 * x2
+
+    expected_quadratic = Quadratic(
+        columns=[0, 1],
+        rows=[w.id, w.id],
+        values=[1.0, 2.0],
+    )
+    assert_eq(w * h, expected_quadratic)
+    assert_eq(h * w, expected_quadratic)
+
+    expected_polynomial = Polynomial(
+        terms={
+            (0, 0, w.id): 1.0,
+            (0, 1, w.id): 4.0,
+            (0, w.id, eps.id): -2.0,
+            (1, 1, w.id): 4.0,
+            (1, w.id, eps.id): -4.0,
+            (w.id, eps.id, eps.id): 1.0,
+        }
+    )
+    shifted = h - eps
+    quadratic = shifted * shifted
+    polynomial = quadratic * shifted
+
+    assert_eq(w * shifted * shifted, expected_polynomial)
+    assert_eq(quadratic * w, expected_polynomial)
+    assert_eq(w * quadratic, expected_polynomial)
+    assert_eq(polynomial * w, w * polynomial)
+    assert_eq(Function(quadratic) * w, w * Function(quadratic))
+
+    with pytest.raises(TypeError):
+        _ = object() * h
+
+
+def test_parameter_addition_with_higher_degree_functions():
+    x = DecisionVariable.binary(0)
+    parameter = Parameter.new(1_000_000)
+    parameter_linear = Linear(terms={parameter.id: 1.0})
+    linear = x + 1
+    quadratic = linear * linear
+    polynomial = quadratic * linear
+    function = Function(polynomial)
+    named_function = NamedFunction(id=0, function=function)
+
+    for expression, function_expression in [
+        (quadratic, quadratic),
+        (polynomial, polynomial),
+        (function, function),
+        (named_function, function),
+    ]:
+        assert_eq(parameter + expression, parameter_linear + function_expression)
+        assert_eq(expression + parameter, function_expression + parameter_linear)
+        assert_eq(parameter - expression, parameter_linear - function_expression)
+        assert_eq(expression - parameter, function_expression - parameter_linear)
+
+        assert isinstance(parameter == expression, Constraint)
+        assert isinstance(parameter <= expression, Constraint)
+        assert isinstance(parameter >= expression, Constraint)
+        assert isinstance(expression == parameter, Constraint)
+        assert isinstance(expression <= parameter, Constraint)
+        assert isinstance(expression >= parameter, Constraint)
+
+    quadratic += parameter
+    polynomial += parameter
+    function += parameter
+    assert_eq(quadratic, linear * linear + parameter_linear)
+    assert_eq(polynomial, linear * linear * linear + parameter_linear)
+    assert_eq(function, Function(linear * linear * linear) + parameter_linear)
 
 
 def test_polynomial():
