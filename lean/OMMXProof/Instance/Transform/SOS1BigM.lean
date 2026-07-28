@@ -68,7 +68,7 @@ theorem lowering_isReduction {source : Instance n} (plan : Plan source)
           (validated.target_feasible_iff_base_and_formulation targetState).mp
             htarget with
         ⟨hbase, hformulation⟩
-      apply (validated.source_feasible_iff_base_and_selected
+      apply (plan.source_feasible_iff_base_and_selected
         (State.source targetState)).mpr
       exact ⟨hbase,
         validated.selectedHolds_of_plannedSelectorFormulation
@@ -93,17 +93,17 @@ theorem lowering_isRelaxation {source : Instance n} (plan : Plan source)
       change validated.target.Feasible (State.append sourceState selectors)
       apply (validated.target_feasible_append_iff_base_and_formulation
         sourceState selectors).mpr
-      rcases (validated.source_feasible_iff_base_and_selected sourceState).mp
+      rcases (plan.source_feasible_iff_base_and_selected sourceState).mp
           hsource with
         ⟨hbase, hselected⟩
       refine ⟨hbase, ?_⟩
       have hselectors :
-          validated.freshSelectorState sourceState selectors =
+          plan.freshSelectorState sourceState selectors =
             canonicalSelector (plan.memberState sourceState) := by
         funext i
         by_cases hi : i ∈ plan.freshMembers
-        · simp [Plan.Validated.freshSelectorState, selectors, hi]
-        · simp [Plan.Validated.freshSelectorState, hi]
+        · simp [Plan.freshSelectorState, selectors, hi]
+        · simp [Plan.freshSelectorState, hi]
       rw [hselectors]
       exact canonicalSelector_plannedFormulation
         plan.reusedMembers validated.bounds (plan.memberState sourceState)

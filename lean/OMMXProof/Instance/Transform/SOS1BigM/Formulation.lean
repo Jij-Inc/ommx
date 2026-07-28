@@ -103,17 +103,6 @@ def OptionalUpperLink (upper member selector : Rat) : Prop :=
 def OptionalLowerLink (lower member selector : Rat) : Prop :=
   if lower < 0 then lower * selector ≤ member else True
 
-/-- Validation performed before the lowering introduces a fresh selector. -/
-def FreshBoundsContainZero [DecidableEq ι] (reused : Finset ι)
-    (bounds : SelectorBounds ι) : Prop :=
-  ∀ i, i ∉ reused → bounds.lower i ≤ 0 ∧ 0 ≤ bounds.upper i
-
-instance [Fintype ι] [DecidableEq ι] (reused : Finset ι)
-    (bounds : SelectorBounds ι) :
-    Decidable (FreshBoundsContainZero reused bounds) := by
-  unfold FreshBoundsContainZero
-  infer_instance
-
 /-- Exact formulation of a mixed reused/fresh selector layout. -/
 def PlannedSelectorFormulation [Fintype ι] [DecidableEq ι]
     (reused : Finset ι) (bounds : SelectorBounds ι)

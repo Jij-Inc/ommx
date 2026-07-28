@@ -39,17 +39,9 @@ def freshMembers {source : Instance n} (plan : Plan source) :
     Finset plan.Member :=
   plan.reusedMembersᶜ
 
-/-- Exact validation performed before the target Instance is trusted.
-
-The extracted selector bounds are rational, so validation requires both source
-endpoints to be finite. The independent `Domain` syntax has no semi-continuous
-or semi-integer cases, so no additional kind rejection is needed here. -/
+/-- Exact validation performed before rational selector bounds are extracted. -/
 def Valid {source : Instance n} (plan : Plan source) : Prop :=
-  plan.constraint.members.Nonempty ∧
-    (∀ i : plan.Member, (source.domains i).bound.IsFinite) ∧
-    ∀ i : plan.Member, i ∉ plan.reusedMembers →
-      (source.domains i).bound.lower ≤ .finite 0 ∧
-        .finite 0 ≤ (source.domains i).bound.upper
+  ∀ i : plan.Member, (source.domains i).bound.IsFinite
 
 instance {source : Instance n} (plan : Plan source) :
     Decidable plan.Valid := by
@@ -71,9 +63,9 @@ namespace Validated
 def bounds {source : Instance n} {plan : Plan source}
     (validated : plan.Validated) : SelectorBounds plan.Member where
   lower := fun i =>
-    (source.domains i).bound.finiteLower (validated.valid.2.1 i)
+    (source.domains i).bound.finiteLower (validated.valid i)
   upper := fun i =>
-    (source.domains i).bound.finiteUpper (validated.valid.2.1 i)
+    (source.domains i).bound.finiteUpper (validated.valid i)
 
 theorem bounds_exact {source : Instance n} {plan : Plan source}
     (validated : plan.Validated) (i : plan.Member) :
@@ -81,17 +73,8 @@ theorem bounds_exact {source : Instance n} {plan : Plan source}
         .finite (validated.bounds.lower i) ∧
       (source.domains i).bound.upper =
         .finite (validated.bounds.upper i) := by
-  exact ⟨Bound.lower_eq_finiteLower _ (validated.valid.2.1 i),
-    Bound.upper_eq_finiteUpper _ (validated.valid.2.1 i)⟩
-
-theorem freshBoundsContainZero {source : Instance n} {plan : Plan source}
-    (validated : plan.Validated) :
-    FreshBoundsContainZero plan.reusedMembers validated.bounds := by
-  intro i hi
-  have hzero := validated.valid.2.2 i hi
-  rw [(validated.bounds_exact i).1, (validated.bounds_exact i).2] at hzero
-  exact ⟨Endpoint.finite_le_finite.mp hzero.1,
-    Endpoint.finite_le_finite.mp hzero.2⟩
+  exact ⟨Bound.lower_eq_finiteLower _ (validated.valid i),
+    Bound.upper_eq_finiteUpper _ (validated.valid i)⟩
 
 theorem withinBounds_of_domains {source : Instance n} {plan : Plan source}
     (validated : plan.Validated) {state : State n}

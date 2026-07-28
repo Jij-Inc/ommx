@@ -17,13 +17,10 @@ namespace SOS1BigM
 
 namespace Plan
 
-namespace Validated
-
 /-- A virtual selector tuple indexed by every SOS1 member. At a reused member
 its value is ignored by `plannedSelector`; choosing the canonical value makes
 the encode lemma exact. -/
-def freshSelectorState {source : Instance n} {plan : Plan source}
-    (_validated : plan.Validated)
+def freshSelectorState {source : Instance n} (plan : Plan source)
     (members : State n) (fresh : State plan.freshCount) :
     plan.Member → Rat :=
   fun i =>
@@ -31,6 +28,8 @@ def freshSelectorState {source : Instance n} {plan : Plan source}
       fresh (plan.freshIndex i hi)
     else
       canonicalSelector (plan.memberState members) i
+
+namespace Validated
 
 def upperLink {source : Instance n} {plan : Plan source} (validated : plan.Validated)
     (j : Fin plan.freshCount) :
@@ -109,10 +108,11 @@ theorem linkConstraints_hold_iff {source : Instance n} {plan : Plan source} (val
     <;> simp [linksFor, hu, hl, OptionalUpperLink, OptionalLowerLink] at hj ⊢
     <;> exact hj
 
+end Validated
+
 /-- Coefficients of the mixed cardinality row: reused binary members stay in
 the source block and every fresh selector contributes in the right block. -/
-def cardinalityExpr {source : Instance n} {plan : Plan source}
-    (_validated : plan.Validated) :
+def cardinalityExpr {source : Instance n} (plan : Plan source) :
     Affine (n + plan.freshCount) where
   coeff := Fin.append
     (fun i =>
@@ -120,35 +120,33 @@ def cardinalityExpr {source : Instance n} {plan : Plan source}
     (fun _ => 1)
   constant := -1
 
-def cardinalityConstraint {source : Instance n} {plan : Plan source} (validated : plan.Validated) :
+def cardinalityConstraint {source : Instance n} (plan : Plan source) :
     LinearConstraint (n + plan.freshCount) where
-  expr := validated.cardinalityExpr
+  expr := plan.cardinalityExpr
   sense := .lessEqual
 
-def selectorSum {source : Instance n} {plan : Plan source}
-    (_validated : plan.Validated)
+def selectorSum {source : Instance n} (plan : Plan source)
     (state : State n) (selectors : State plan.freshCount) : Rat :=
   (∑ i ∈ plan.constraint.members,
       if source.domains i = .binary then state i else 0) +
     ∑ j, selectors j
 
-def reusedContribution {source : Instance n} {plan : Plan source}
-    (_validated : plan.Validated)
+def reusedContribution {source : Instance n} (plan : Plan source)
     (state : State n) (i : plan.Member) : Rat :=
   if i ∈ plan.reusedMembers then plan.memberState state i else 0
 
-def freshContribution {source : Instance n} {plan : Plan source} (validated : plan.Validated)
+def freshContribution {source : Instance n} (plan : Plan source)
     (state : State n) (selectors : State plan.freshCount)
     (i : plan.Member) : Rat :=
-  if i ∈ plan.freshMembers then validated.freshSelectorState state selectors i else 0
+  if i ∈ plan.freshMembers then plan.freshSelectorState state selectors i else 0
 
 theorem plannedSelector_eq_contributions {source : Instance n}
-    {plan : Plan source} (validated : plan.Validated) (state : State n)
+    (plan : Plan source) (state : State n)
     (selectors : State plan.freshCount) (i : plan.Member) :
     plannedSelector plan.reusedMembers (plan.memberState state)
-        (validated.freshSelectorState state selectors) i =
-      validated.reusedContribution state i +
-        validated.freshContribution state selectors i := by
+        (plan.freshSelectorState state selectors) i =
+      plan.reusedContribution state i +
+        plan.freshContribution state selectors i := by
   by_cases hr : i ∈ plan.reusedMembers
   · have hf : i ∉ plan.freshMembers := by
       simp [freshMembers, hr]
@@ -157,14 +155,14 @@ theorem plannedSelector_eq_contributions {source : Instance n}
       simp [freshMembers, hr]
     simp [plannedSelector, reusedContribution, freshContribution, hr, hf]
 
-theorem sourceReusedSum_eq {source : Instance n} {plan : Plan source} (validated : plan.Validated)
+theorem sourceReusedSum_eq {source : Instance n} (plan : Plan source)
     (state : State n) :
     (∑ i ∈ plan.constraint.members,
       if source.domains i = .binary then state i else 0) =
-      ∑ i : plan.Member, validated.reusedContribution state i := by
+      ∑ i : plan.Member, plan.reusedContribution state i := by
   symm
   calc
-    (∑ i : plan.Member, validated.reusedContribution state i) =
+    (∑ i : plan.Member, plan.reusedContribution state i) =
         ∑ i : plan.Member,
           if source.domains i = .binary then state i else 0 := by
       apply Finset.sum_congr rfl
@@ -175,14 +173,14 @@ theorem sourceReusedSum_eq {source : Instance n} {plan : Plan source} (validated
       exact Finset.sum_coe_sort plan.constraint.members
         (fun i => if source.domains i = .binary then state i else 0)
 
-theorem freshSelectorSum_eq {source : Instance n} {plan : Plan source} (validated : plan.Validated)
+theorem freshSelectorSum_eq {source : Instance n} (plan : Plan source)
     (state : State n) (selectors : State plan.freshCount) :
     (∑ j, selectors j) =
-      ∑ i : plan.Member, validated.freshContribution state selectors i := by
+      ∑ i : plan.Member, plan.freshContribution state selectors i := by
   calc
     (∑ j, selectors j) =
         ∑ i : {i // i ∈ plan.freshMembers},
-          validated.freshSelectorState state selectors i.val := by
+          plan.freshSelectorState state selectors i.val := by
       apply Fintype.sum_equiv
         (plan.freshMembers.orderIsoOfFin rfl).toEquiv
       intro j
@@ -198,33 +196,33 @@ theorem freshSelectorSum_eq {source : Instance n} {plan : Plan source} (validate
       exact congrArg selectors
         ((plan.freshMembers.orderIsoOfFin rfl).symm_apply_apply j).symm
     _ = ∑ i ∈ plan.freshMembers,
-          validated.freshSelectorState state selectors i := by
+          plan.freshSelectorState state selectors i := by
       exact Finset.sum_coe_sort plan.freshMembers
-        (validated.freshSelectorState state selectors)
-    _ = ∑ i : plan.Member, validated.freshContribution state selectors i := by
+        (plan.freshSelectorState state selectors)
+    _ = ∑ i : plan.Member, plan.freshContribution state selectors i := by
       symm
       simpa [freshContribution] using
         (Finset.sum_ite_mem_eq plan.freshMembers
-          (validated.freshSelectorState state selectors))
+          (plan.freshSelectorState state selectors))
 
 theorem selectorSum_eq_plannedSelector {source : Instance n}
-    {plan : Plan source} (validated : plan.Validated) (state : State n)
+    (plan : Plan source) (state : State n)
     (selectors : State plan.freshCount) :
-    validated.selectorSum state selectors =
+    plan.selectorSum state selectors =
       ∑ i, plannedSelector plan.reusedMembers (plan.memberState state)
-        (validated.freshSelectorState state selectors) i := by
-  rw [selectorSum, validated.sourceReusedSum_eq state,
-    validated.freshSelectorSum_eq state selectors]
+        (plan.freshSelectorState state selectors) i := by
+  rw [selectorSum, plan.sourceReusedSum_eq state,
+    plan.freshSelectorSum_eq state selectors]
   rw [← Finset.sum_add_distrib]
   apply Finset.sum_congr rfl
   intro i _
-  exact (validated.plannedSelector_eq_contributions state selectors i).symm
+  exact (plan.plannedSelector_eq_contributions state selectors i).symm
 
 @[simp]
-theorem cardinalityConstraint_holds {source : Instance n} {plan : Plan source} (validated : plan.Validated)
+theorem cardinalityConstraint_holds {source : Instance n} (plan : Plan source)
     (state : State n) (selectors : State plan.freshCount) :
-    validated.cardinalityConstraint.Holds (State.append state selectors) ↔
-      validated.selectorSum state selectors ≤ 1 := by
+    plan.cardinalityConstraint.Holds (State.append state selectors) ↔
+      plan.selectorSum state selectors ≤ 1 := by
   have hsum :
       (∑ i : Fin n,
         if i ∈ plan.constraint.members ∧ source.domains i = .binary then
@@ -239,18 +237,22 @@ theorem cardinalityConstraint_holds {source : Instance n} {plan : Plan source} (
     LinearConstraint.Holds, Affine.eval, State.append, Fin.sum_univ_add]
   rw [hsum]
 
+namespace Validated
+
 def generatedConstraints {source : Instance n} {plan : Plan source} (validated : plan.Validated) :
     List (LinearConstraint (n + plan.freshCount)) :=
-  validated.linkConstraints ++ [validated.cardinalityConstraint]
+  validated.linkConstraints ++ [plan.cardinalityConstraint]
+
+end Validated
 
 theorem plannedSelector_binary_of_domains {source : Instance n}
-    {plan : Plan source} (validated : plan.Validated) (state : State n)
+    (plan : Plan source) (state : State n)
     (selectors : State plan.freshCount)
     (hsourceDomains : ∀ i, state i ∈ source.domains i)
     (hselectorDomains : ∀ j, selectors j ∈ Domain.binary) :
     GenericBinaryOn Finset.univ
       (plannedSelector plan.reusedMembers (plan.memberState state)
-        (validated.freshSelectorState state selectors)) := by
+        (plan.freshSelectorState state selectors)) := by
   intro i _
   by_cases hr : i ∈ plan.reusedMembers
   · have hdomain : source.domains i = .binary :=
@@ -261,6 +263,8 @@ theorem plannedSelector_binary_of_domains {source : Instance n}
       simp [freshMembers, hr]
     simpa [plannedSelector, hr, freshSelectorState, hfresh] using
       hselectorDomains (plan.freshIndex i hfresh)
+
+namespace Validated
 
 theorem linksForFresh_iff_linksForMembers {source : Instance n}
     {plan : Plan source} (validated : plan.Validated) (state : State n)
@@ -273,10 +277,10 @@ theorem linksForFresh_iff_linksForMembers {source : Instance n}
       ∀ i, i ∉ plan.reusedMembers →
         OptionalUpperLink (validated.bounds.upper i)
             (plan.memberState state i)
-            (validated.freshSelectorState state selectors i) ∧
+            (plan.freshSelectorState state selectors i) ∧
           OptionalLowerLink (validated.bounds.lower i)
             (plan.memberState state i)
-            (validated.freshSelectorState state selectors i) := by
+            (plan.freshSelectorState state selectors i) := by
   constructor
   · intro h i hr
     have hfresh : i ∈ plan.freshMembers := by
@@ -302,20 +306,20 @@ theorem generatedConstraints_hold_iff_plannedSelectorFormulation
       constraint.Holds (State.append state selectors)) ↔
       PlannedSelectorFormulation plan.reusedMembers validated.bounds
         (plan.memberState state)
-        (validated.freshSelectorState state selectors) := by
+        (plan.freshSelectorState state selectors) := by
   rw [generatedConstraints, List.forall_mem_append,
     List.forall_mem_singleton, validated.linkConstraints_hold_iff,
-    validated.cardinalityConstraint_holds,
+    plan.cardinalityConstraint_holds,
     validated.linksForFresh_iff_linksForMembers]
   constructor
   · rintro ⟨hlinks, hcardinality⟩
-    refine ⟨validated.plannedSelector_binary_of_domains state selectors
+    refine ⟨plan.plannedSelector_binary_of_domains state selectors
       hsourceDomains hselectorDomains, hlinks, ?_⟩
-    rw [← validated.selectorSum_eq_plannedSelector state selectors]
+    rw [← plan.selectorSum_eq_plannedSelector state selectors]
     exact hcardinality
   · rintro ⟨_, hlinks, hcardinality⟩
     refine ⟨hlinks, ?_⟩
-    rw [validated.selectorSum_eq_plannedSelector state selectors]
+    rw [plan.selectorSum_eq_plannedSelector state selectors]
     exact hcardinality
 
 theorem freshSelectors_binary_of_plannedSelectorFormulation
@@ -323,7 +327,7 @@ theorem freshSelectors_binary_of_plannedSelectorFormulation
     (state : State n) (selectors : State plan.freshCount)
     (hformulation : PlannedSelectorFormulation plan.reusedMembers validated.bounds
       (plan.memberState state)
-      (validated.freshSelectorState state selectors)) :
+      (plan.freshSelectorState state selectors)) :
     ∀ j, selectors j ∈ Domain.binary := by
   intro j
   have hfresh : plan.freshMember j ∈ plan.freshMembers :=
@@ -340,17 +344,18 @@ theorem selectedHolds_of_plannedSelectorFormulation
     (hdomains : ∀ i, state i ∈ source.domains i)
     (hformulation : PlannedSelectorFormulation plan.reusedMembers validated.bounds
       (plan.memberState state)
-      (validated.freshSelectorState state selectors)) :
+      (plan.freshSelectorState state selectors)) :
     plan.constraint.Holds state := by
   apply (plan.genericSOS1_memberState_iff_holds state).mp
   exact plannedSelectorFormulation_project_sos1
     plan.reusedMembers validated.bounds
     (plan.memberState state)
-    (validated.freshSelectorState state selectors)
+    (plan.freshSelectorState state selectors)
     (validated.withinBounds_of_domains hdomains) hformulation
 
-def BaseFeasible {source : Instance n} {plan : Plan source}
-    (_validated : plan.Validated)
+end Validated
+
+def BaseFeasible {source : Instance n} (plan : Plan source)
     (state : State n) : Prop :=
   (∀ i, state i ∈ source.domains i) ∧
     (∀ constraint ∈ source.constraints, constraint.Holds state) ∧
@@ -360,7 +365,7 @@ def BaseFeasible {source : Instance n} {plan : Plan source}
     ∀ constraint ∈ source.indicatorConstraints, constraint.Holds state
 
 theorem allSOS1_iff_erased_and_selected {source : Instance n}
-    {plan : Plan source} (_validated : plan.Validated) (state : State n) :
+    (plan : Plan source) (state : State n) :
     (∀ constraint ∈ source.sos1Constraints, constraint.Holds state) ↔
       (∀ constraint ∈
         source.sos1Constraints.eraseIdx plan.constraintIndex.val,
@@ -385,12 +390,14 @@ theorem allSOS1_iff_erased_and_selected {source : Instance n}
     · exact herased constraint herasedMem
 
 theorem source_feasible_iff_base_and_selected {source : Instance n}
-    {plan : Plan source} (validated : plan.Validated) (state : State n) :
+    (plan : Plan source) (state : State n) :
     source.Feasible state ↔
-      validated.BaseFeasible state ∧ plan.constraint.Holds state := by
+      plan.BaseFeasible state ∧ plan.constraint.Holds state := by
   unfold Instance.Feasible BaseFeasible
-  rw [validated.allSOS1_iff_erased_and_selected state]
+  rw [plan.allSOS1_iff_erased_and_selected state]
   aesop
+
+namespace Validated
 
 def target {source : Instance n} {plan : Plan source} (validated : plan.Validated) :
     Instance (n + plan.freshCount) where
@@ -414,10 +421,10 @@ theorem target_feasible_append_iff_base_and_formulation
     {source : Instance n} {plan : Plan source} (validated : plan.Validated)
     (state : State n) (selectors : State plan.freshCount) :
     validated.target.Feasible (State.append state selectors) ↔
-      validated.BaseFeasible state ∧
+      plan.BaseFeasible state ∧
         PlannedSelectorFormulation plan.reusedMembers validated.bounds
           (plan.memberState state)
-          (validated.freshSelectorState state selectors) := by
+          (plan.freshSelectorState state selectors) := by
   have hsourceAt (i : Fin n) :
       State.append state selectors (Fin.castAdd plan.freshCount i) = state i := by
     simp [State.append]
@@ -453,10 +460,10 @@ theorem target_feasible_iff_base_and_formulation
     {source : Instance n} {plan : Plan source} (validated : plan.Validated)
     (state : State (n + plan.freshCount)) :
     validated.target.Feasible state ↔
-      validated.BaseFeasible (State.source state) ∧
+      plan.BaseFeasible (State.source state) ∧
         PlannedSelectorFormulation plan.reusedMembers validated.bounds
           (plan.memberState (State.source state))
-          (validated.freshSelectorState (State.source state)
+          (plan.freshSelectorState (State.source state)
             (State.fresh state)) := by
   simpa only [State.append_source_fresh] using
     validated.target_feasible_append_iff_base_and_formulation

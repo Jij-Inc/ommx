@@ -22,14 +22,6 @@ def plannedBoundsExample : SelectorBounds (Fin 2) where
   lower := fun _ => 0
   upper := fun i => if i.val = 0 then 1 else 3
 
-def zeroExcludingFreshBoundsExample : SelectorBounds (Fin 2) where
-  lower := fun i => if i.val = 0 then 0 else 1
-  upper := fun i => if i.val = 0 then 1 else 3
-
-example : ¬FreshBoundsContainZero plannedReusedExample
-    zeroExcludingFreshBoundsExample := by
-  native_decide
-
 def plannedMembersExample : Fin 2 → Rat := fun i => if i.val = 0 then 0 else 2
 
 def plannedFreshSelectorsExample : Fin 2 → Rat := fun _ => 1
@@ -132,6 +124,37 @@ example : transform.TargetObjectivePreserving :=
 example : transform.SourceRoundTrip :=
   lowering_sourceRoundTrip plan lowering_plan
 
+/-! Only selected member bounds must be finite. Empty SOS1 constraints and
+finite member bounds that exclude zero need no additional preconditions. -/
+
+def emptySource : Instance 1 where
+  domains := fun _ => .continuous
+  constraints := []
+  sos1Constraints := [{ members := ∅ }]
+  objective := Affine.zero
+  sense := .minimize
+
+def emptyPlan : Plan emptySource where
+  constraintIndex := ⟨0, by native_decide⟩
+
+example : emptyPlan.Valid := by native_decide
+
+example : (lowering emptyPlan).isSome = true := by native_decide
+
+def positiveBoundedSource : Instance 1 where
+  domains := fun _ => .continuous (.finite 1 3 (by norm_num))
+  constraints := []
+  sos1Constraints := [{ members := Finset.univ }]
+  objective := Affine.zero
+  sense := .minimize
+
+def positiveBoundedPlan : Plan positiveBoundedSource where
+  constraintIndex := ⟨0, by native_decide⟩
+
+example : positiveBoundedPlan.Valid := by native_decide
+
+example : (lowering positiveBoundedPlan).isSome = true := by native_decide
+
 def unboundedSource : Instance 1 where
   domains := fun _ => .continuous
   constraints := []
@@ -211,7 +234,7 @@ theorem not_targetRoundTrip_of_lowering
         rw [noncanonicalTarget,
           validated.target_feasible_append_iff_base_and_formulation]
         refine
-          ⟨(validated.source_feasible_iff_base_and_selected zeroSource).mp
+          ⟨(plan.source_feasible_iff_base_and_selected zeroSource).mp
               zeroSource_feasible |>.1,
             ?_⟩
         native_decide +revert
