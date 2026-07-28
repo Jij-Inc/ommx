@@ -4,7 +4,7 @@ import OMMXProof.Instance.Transform.SOS1BigM
 # SOS1 Big-M transformation fixtures
 
 The fixture mixes one reused binary member with one continuous member that
-needs a fresh selector. Its lower bound is zero, so lowering from the witness
+needs a fresh selector. Its lower bound is zero, so lowering from the plan
 emits only the upper link for that member.
 -/
 
@@ -66,50 +66,71 @@ def source : Instance 2 where
   objective := objective
   sense := .minimize
 
-def witness : Witness source where
+def plan : Plan source where
   constraintIndex := ⟨0, by native_decide⟩
-  bounds :=
-    { lower := fun _ => 0
-      upper := fun i => if i.1 = 0 then 1 else 2 }
 
-theorem witness_valid : witness.Valid := by native_decide
+theorem plan_valid : plan.Valid := by native_decide
 
-example : witness.reusedMembers.card = 1 := by native_decide
+theorem plan_validate_isSome : plan.validate.isSome = true := by
+  native_decide
 
-example : witness.freshMembers.card = 1 := by native_decide
+def validated : plan.Validated :=
+  plan.validate.get plan_validate_isSome
 
-example : witness.freshCount = 1 := by native_decide
+theorem lowering_plan_isSome : (lowering plan).isSome = true := by
+  native_decide
+
+def transform : Instance.Transform source :=
+  (lowering plan).get lowering_plan_isSome
+
+theorem lowering_plan : lowering plan = some transform :=
+  (Option.some_get lowering_plan_isSome).symm
+
+example : plan.reusedMembers.card = 1 := by native_decide
+
+example : plan.freshMembers.card = 1 := by native_decide
+
+example : plan.freshCount = 1 := by native_decide
+
+def freshZero : Fin plan.freshCount :=
+  ⟨0, by native_decide⟩
+
+example : validated.bounds.lower (plan.freshMember freshZero) = 0 := by
+  native_decide
+
+example : validated.bounds.upper (plan.freshMember freshZero) = 2 := by
+  native_decide
 
 /-- One nontrivial upper link; the zero lower-bound side is omitted. -/
-example : witness.linkConstraints.length = 1 := by native_decide
+example : validated.linkConstraints.length = 1 := by native_decide
 
-example : witness.generatedConstraints.length = 2 := by native_decide
+example : validated.generatedConstraints.length = 2 := by native_decide
 
-example : (lowering witness).targetDimension = 3 := by native_decide
+example : transform.targetDimension = 3 := by native_decide
 
-example : (lowering witness).IsReduction :=
-  lowering_isReduction witness witness_valid
+example : transform.IsReduction :=
+  lowering_isReduction plan lowering_plan
 
-example : (lowering witness).IsRelaxation :=
-  lowering_isRelaxation witness witness_valid
+example : transform.IsRelaxation :=
+  lowering_isRelaxation plan lowering_plan
 
-example : (lowering witness).SensePreserving :=
-  lowering_sensePreserving witness
+example : transform.SensePreserving :=
+  lowering_sensePreserving plan lowering_plan
 
-example : (lowering witness).SourceObjectiveValuePreserving :=
-  lowering_sourceObjectiveValuePreserving witness
+example : transform.SourceObjectiveValuePreserving :=
+  lowering_sourceObjectiveValuePreserving plan lowering_plan
 
-example : (lowering witness).TargetObjectiveValuePreserving :=
-  lowering_targetObjectiveValuePreserving witness
+example : transform.TargetObjectiveValuePreserving :=
+  lowering_targetObjectiveValuePreserving plan lowering_plan
 
-example : (lowering witness).SourceObjectivePreserving :=
-  lowering_sourceObjectivePreserving witness
+example : transform.SourceObjectivePreserving :=
+  lowering_sourceObjectivePreserving plan lowering_plan
 
-example : (lowering witness).TargetObjectivePreserving :=
-  lowering_targetObjectivePreserving witness
+example : transform.TargetObjectivePreserving :=
+  lowering_targetObjectivePreserving plan lowering_plan
 
-example : (lowering witness).SourceRoundTrip :=
-  lowering_sourceRoundTrip witness
+example : transform.SourceRoundTrip :=
+  lowering_sourceRoundTrip plan lowering_plan
 
 def unboundedSource : Instance 1 where
   domains := fun _ => .continuous
@@ -118,12 +139,35 @@ def unboundedSource : Instance 1 where
   objective := Affine.zero
   sense := .minimize
 
-def unboundedWitness : Witness unboundedSource where
+def unboundedPlan : Plan unboundedSource where
   constraintIndex := ⟨0, by native_decide⟩
-  bounds := ⟨fun _ => 0, fun _ => 0⟩
 
-/-- A valid witness for a fresh selector requires finite source bounds. -/
-example : ¬unboundedWitness.Valid := by native_decide
+/-- A valid plan for a fresh selector requires finite source bounds. -/
+example : ¬unboundedPlan.Valid := by native_decide
+
+example : lowering unboundedPlan = none := by native_decide
+
+def lowerBoundedSource : Instance 1 :=
+  { unboundedSource with
+    domains := fun _ => .continuous (.lowerBounded 0) }
+
+def lowerBoundedPlan : Plan lowerBoundedSource where
+  constraintIndex := ⟨0, by native_decide⟩
+
+example : ¬lowerBoundedPlan.Valid := by native_decide
+
+example : lowering lowerBoundedPlan = none := by native_decide
+
+def upperBoundedSource : Instance 1 :=
+  { unboundedSource with
+    domains := fun _ => .continuous (.upperBounded 0) }
+
+def upperBoundedPlan : Plan upperBoundedSource where
+  constraintIndex := ⟨0, by native_decide⟩
+
+example : ¬upperBoundedPlan.Valid := by native_decide
+
+example : lowering upperBoundedPlan = none := by native_decide
 
 def zeroSource : State 2 := fun _ => 0
 
@@ -138,52 +182,60 @@ theorem zeroSource_feasible : source.Feasible zeroSource := by
   · simp [source]
 
 example :
-    witness.target.ObjectiveValue
-        (State.append zeroSource fun j =>
-          canonicalSelector
-            (witness.memberState zeroSource) (witness.freshMember j)) =
-      source.ObjectiveValue zeroSource := by
-  simpa [lowering] using
-    lowering_sourceObjectiveValuePreserving witness zeroSource_feasible
+    Option.map transform.target.ObjectiveValue
+        (transform.encode zeroSource) =
+      some (source.ObjectiveValue zeroSource) :=
+  lowering_sourceObjectiveValuePreserving plan lowering_plan
+    zeroSource_feasible
 
-def oneSelector : State witness.freshCount := fun _ => 1
+def oneSelector : State plan.freshCount := fun _ => 1
 
-def noncanonicalTarget : State (2 + witness.freshCount) :=
+def noncanonicalTarget : State (2 + plan.freshCount) :=
   State.append zeroSource oneSelector
-
-theorem noncanonicalTarget_feasible :
-    witness.target.Feasible noncanonicalTarget := by
-  rw [noncanonicalTarget,
-    witness.target_feasible_append_iff_base_and_formulation]
-  refine ⟨(witness.source_feasible_iff_base_and_selected zeroSource).mp
-    zeroSource_feasible |>.1, ?_⟩
-  native_decide
-
-def freshZero : Fin witness.freshCount :=
-  ⟨0, by native_decide⟩
 
 /-- A zero member permits either selector value, so canonical re-encoding does
 not recover every feasible target state. -/
-theorem not_targetRoundTrip :
-    ¬(lowering witness).TargetRoundTrip := by
-  intro hroundTrip
-  have hstate := hroundTrip noncanonicalTarget_feasible
-  change
-    some (State.append (State.source noncanonicalTarget) fun j =>
-      canonicalSelector
-        (witness.memberState (State.source noncanonicalTarget))
-        (witness.freshMember j)) =
-      some noncanonicalTarget at hstate
-  have heq :
-      State.append (State.source noncanonicalTarget) (fun j =>
-        canonicalSelector
-          (witness.memberState (State.source noncanonicalTarget))
-          (witness.freshMember j)) =
-        noncanonicalTarget :=
-    Option.some.inj hstate
-  have hcomponent := congrArg
-    (fun state => state (Fin.natAdd 2 freshZero)) heq
-  simp [Witness.memberState, noncanonicalTarget, oneSelector, zeroSource,
-    canonicalSelector, State.source, State.append] at hcomponent
+theorem not_targetRoundTrip_of_lowering
+    {lowered : Instance.Transform source}
+    (hlowering : lowering plan = some lowered) :
+    ¬lowered.TargetRoundTrip := by
+  unfold lowering at hlowering
+  cases hvalidated : plan.validate with
+  | none =>
+      simp [hvalidated] at hlowering
+  | some validated =>
+      simp only [hvalidated, Option.map_some, Option.some.injEq] at hlowering
+      subst lowered
+      have htarget :
+          validated.target.Feasible noncanonicalTarget := by
+        rw [noncanonicalTarget,
+          validated.target_feasible_append_iff_base_and_formulation]
+        refine
+          ⟨(validated.source_feasible_iff_base_and_selected zeroSource).mp
+              zeroSource_feasible |>.1,
+            ?_⟩
+        native_decide +revert
+      intro hroundTrip
+      have hstate := hroundTrip htarget
+      change
+        some (State.append (State.source noncanonicalTarget) fun j =>
+          canonicalSelector
+            (plan.memberState (State.source noncanonicalTarget))
+            (plan.freshMember j)) =
+          some noncanonicalTarget at hstate
+      have heq :
+          State.append (State.source noncanonicalTarget) (fun j =>
+            canonicalSelector
+              (plan.memberState (State.source noncanonicalTarget))
+              (plan.freshMember j)) =
+            noncanonicalTarget :=
+        Option.some.inj hstate
+      have hcomponent := congrArg
+        (fun state => state (Fin.natAdd 2 freshZero)) heq
+      simp [Plan.memberState, noncanonicalTarget, oneSelector, zeroSource,
+        canonicalSelector, State.source, State.append] at hcomponent
+
+example : ¬transform.TargetRoundTrip :=
+  not_targetRoundTrip_of_lowering lowering_plan
 
 end OMMXProof.Test.SOS1BigM

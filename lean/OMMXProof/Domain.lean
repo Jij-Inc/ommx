@@ -137,6 +137,44 @@ def upper : Bound → Endpoint
   | .upperBounded upper => .finite upper
   | .finite _ upper _ => .finite upper
 
+/-- Whether both endpoints of a bound are finite. -/
+def IsFinite : Bound → Prop
+  | .finite _ _ _ => True
+  | _ => False
+
+instance (bound : Bound) : Decidable bound.IsFinite := by
+  cases bound <;> simp only [IsFinite] <;> infer_instance
+
+/-- The lower rational endpoint of a finite bound. -/
+def finiteLower : (bound : Bound) → bound.IsFinite → Rat
+  | .finite lower _ _, _ => lower
+  | .unbounded, h => False.elim h
+  | .lowerBounded _, h => False.elim h
+  | .upperBounded _, h => False.elim h
+
+/-- The upper rational endpoint of a finite bound. -/
+def finiteUpper : (bound : Bound) → bound.IsFinite → Rat
+  | .finite _ upper _, _ => upper
+  | .unbounded, h => False.elim h
+  | .lowerBounded _, h => False.elim h
+  | .upperBounded _, h => False.elim h
+
+theorem lower_eq_finiteLower (bound : Bound) (hfinite : bound.IsFinite) :
+    bound.lower = .finite (bound.finiteLower hfinite) := by
+  cases bound with
+  | unbounded => exact False.elim hfinite
+  | lowerBounded _ => exact False.elim hfinite
+  | upperBounded _ => exact False.elim hfinite
+  | finite _ _ _ => rfl
+
+theorem upper_eq_finiteUpper (bound : Bound) (hfinite : bound.IsFinite) :
+    bound.upper = .finite (bound.finiteUpper hfinite) := by
+  cases bound with
+  | unbounded => exact False.elim hfinite
+  | lowerBounded _ => exact False.elim hfinite
+  | upperBounded _ => exact False.elim hfinite
+  | finite _ _ _ => rfl
+
 @[simp]
 theorem lower_unbounded : lower .unbounded = .negInf := rfl
 

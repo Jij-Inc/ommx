@@ -12,9 +12,13 @@ which consists of a target instance, encode/decode map between the source and ta
 Binary members are reused as their own selectors, and one fresh binary component is appended for every other member.
 
 For example, `x ∈ Binary, y ∈ [0, 2], SOS1(x, y)` is lowered to `x, z ∈ Binary, y ∈ [0, 2], x + z ≤ 1, y ≤ 2z`.
-No additional variable for `x` is not appended. For `x = y = 0` case, both `z = 0` and `z = 1` are feasible
-in the target instance. So the `decode: (x, y, z) ↦ (x, y)` map is not injective.
-This means the yielded `Instance.Transform` is not `TargetRoundTrip`.
+No additional selector is appended for `x`. When `x = y = 0`, both `z = 0`
+and `z = 1` are feasible in the target instance. Thus the
+`decode: (x, y, z) ↦ (x, y)` map is not injective, and the yielded
+`Instance.Transform` is not `TargetRoundTrip`.
+
+`lowering` is partial: it returns `none` when a required member bound is not
+finite or another plan precondition fails.
 -/
 
 namespace OMMXProof
@@ -23,93 +27,158 @@ namespace Instance
 
 namespace SOS1BigM
 
-/-- The SOS1 Big-M lowering packaged in the general Instance transformation
-shape. The state maps are total; `Option` is introduced by `Transform`. -/
-def lowering {source : Instance n} (witness : Witness source) :
-    Instance.Transform source where
-  targetDimension := n + witness.freshCount
-  target := witness.target
-  encode := fun state =>
-    some (State.append state fun j =>
-      canonicalSelector (witness.memberState state) (witness.freshMember j))
-  decode := fun state => some (State.source state)
+/-- Construct the SOS1 Big-M lowering when every required source bound is
+finite. The state maps of a successfully constructed transform are total. -/
+def lowering {source : Instance n} (plan : Plan source) :
+    Option (Instance.Transform source) :=
+  plan.validate.map fun validated =>
+    { targetDimension := n + plan.freshCount
+      target := validated.target
+      encode := fun state =>
+        some (State.append state fun j =>
+          canonicalSelector (plan.memberState state) (plan.freshMember j))
+      decode := fun state => some (State.source state) }
 
-theorem lowering_isReduction {source : Instance n} (witness : Witness source)
-    (hvalid : witness.Valid) :
-    (lowering witness).IsReduction := by
-  intro targetState htarget
-  change witness.target.Feasible targetState at htarget
-  refine ⟨State.source targetState, rfl, ?_⟩
-  rcases (witness.target_feasible_iff_base_and_formulation targetState).mp
-      htarget with ⟨hbase, hformulation⟩
-  apply (witness.source_feasible_iff_base_and_selected
-    (State.source targetState)).mpr
-  exact ⟨hbase,
-    witness.selectedHolds_of_plannedSelectorFormulation
-      hvalid hbase.1 hformulation⟩
+@[simp]
+theorem lowering_isSome_iff_valid {source : Instance n} (plan : Plan source) :
+    (lowering plan).isSome ↔ plan.Valid := by
+  simp [lowering, Plan.validate]
 
-theorem lowering_isRelaxation {source : Instance n} (witness : Witness source)
-    (hvalid : witness.Valid) :
-    (lowering witness).IsRelaxation := by
-  intro sourceState hsource
-  let selectors : State witness.freshCount :=
-    fun j =>
-      canonicalSelector (witness.memberState sourceState) (witness.freshMember j)
-  refine ⟨State.append sourceState selectors, rfl, ?_⟩
-  change witness.target.Feasible (State.append sourceState selectors)
-  apply (witness.target_feasible_append_iff_base_and_formulation
-    sourceState selectors).mpr
-  rcases (witness.source_feasible_iff_base_and_selected sourceState).mp
-      hsource with ⟨hbase, hselected⟩
-  refine ⟨hbase, ?_⟩
-  have hselectors :
-      witness.freshSelectorState sourceState selectors =
-        canonicalSelector (witness.memberState sourceState) := by
-    funext i
-    by_cases hi : i ∈ witness.freshMembers
-    · simp [Witness.freshSelectorState, selectors, hi]
-    · simp [Witness.freshSelectorState, hi]
-  rw [hselectors]
-  exact canonicalSelector_plannedFormulation
-    witness.reusedMembers witness.bounds (witness.memberState sourceState)
-    (witness.withinBounds_of_domains hvalid hbase.1)
-    (witness.reusedBinary_of_domains hbase.1)
-    ((witness.genericSOS1_memberState_iff_holds sourceState).mpr hselected)
+@[simp]
+theorem lowering_eq_none_iff_not_valid {source : Instance n}
+    (plan : Plan source) :
+    lowering plan = none ↔ ¬plan.Valid := by
+  simp [lowering, Plan.validate]
 
-theorem lowering_sensePreserving {source : Instance n}
-    (witness : Witness source) :
-    (lowering witness).SensePreserving :=
-  rfl
+theorem lowering_isReduction {source : Instance n} (plan : Plan source)
+    {transform : Instance.Transform source}
+    (hlowering : lowering plan = some transform) :
+    transform.IsReduction := by
+  unfold lowering at hlowering
+  cases hvalidated : plan.validate with
+  | none =>
+      simp [hvalidated] at hlowering
+  | some validated =>
+      simp only [hvalidated, Option.map_some, Option.some.injEq] at hlowering
+      subst transform
+      intro targetState htarget
+      change validated.target.Feasible targetState at htarget
+      refine ⟨State.source targetState, rfl, ?_⟩
+      rcases
+          (validated.target_feasible_iff_base_and_formulation targetState).mp
+            htarget with
+        ⟨hbase, hformulation⟩
+      apply (validated.source_feasible_iff_base_and_selected
+        (State.source targetState)).mpr
+      exact ⟨hbase,
+        validated.selectedHolds_of_plannedSelectorFormulation
+          hbase.1 hformulation⟩
+
+theorem lowering_isRelaxation {source : Instance n} (plan : Plan source)
+    {transform : Instance.Transform source}
+    (hlowering : lowering plan = some transform) :
+    transform.IsRelaxation := by
+  unfold lowering at hlowering
+  cases hvalidated : plan.validate with
+  | none =>
+      simp [hvalidated] at hlowering
+  | some validated =>
+      simp only [hvalidated, Option.map_some, Option.some.injEq] at hlowering
+      subst transform
+      intro sourceState hsource
+      let selectors : State plan.freshCount :=
+        fun j =>
+          canonicalSelector (plan.memberState sourceState) (plan.freshMember j)
+      refine ⟨State.append sourceState selectors, rfl, ?_⟩
+      change validated.target.Feasible (State.append sourceState selectors)
+      apply (validated.target_feasible_append_iff_base_and_formulation
+        sourceState selectors).mpr
+      rcases (validated.source_feasible_iff_base_and_selected sourceState).mp
+          hsource with
+        ⟨hbase, hselected⟩
+      refine ⟨hbase, ?_⟩
+      have hselectors :
+          validated.freshSelectorState sourceState selectors =
+            canonicalSelector (plan.memberState sourceState) := by
+        funext i
+        by_cases hi : i ∈ plan.freshMembers
+        · simp [Plan.Validated.freshSelectorState, selectors, hi]
+        · simp [Plan.Validated.freshSelectorState, hi]
+      rw [hselectors]
+      exact canonicalSelector_plannedFormulation
+        plan.reusedMembers validated.bounds (plan.memberState sourceState)
+        (validated.withinBounds_of_domains hbase.1)
+        (plan.reusedBinary_of_domains hbase.1)
+        ((plan.genericSOS1_memberState_iff_holds sourceState).mpr hselected)
+
+theorem lowering_sensePreserving {source : Instance n} (plan : Plan source)
+    {transform : Instance.Transform source}
+    (hlowering : lowering plan = some transform) :
+    transform.SensePreserving := by
+  unfold lowering at hlowering
+  cases hvalidated : plan.validate with
+  | none =>
+      simp [hvalidated] at hlowering
+  | some _ =>
+      simp only [hvalidated, Option.map_some, Option.some.injEq] at hlowering
+      subst transform
+      rfl
 
 theorem lowering_sourceObjectiveValuePreserving {source : Instance n}
-    (witness : Witness source) :
-    (lowering witness).SourceObjectiveValuePreserving := by
-  intro sourceState _
-  simp [lowering, Instance.ObjectiveValue, Witness.target]
+    (plan : Plan source) {transform : Instance.Transform source}
+    (hlowering : lowering plan = some transform) :
+    transform.SourceObjectiveValuePreserving := by
+  unfold lowering at hlowering
+  cases hvalidated : plan.validate with
+  | none =>
+      simp [hvalidated] at hlowering
+  | some _ =>
+      simp only [hvalidated, Option.map_some, Option.some.injEq] at hlowering
+      subst transform
+      intro sourceState _
+      simp [Instance.ObjectiveValue, Plan.Validated.target]
 
 theorem lowering_targetObjectiveValuePreserving {source : Instance n}
-    (witness : Witness source) :
-    (lowering witness).TargetObjectiveValuePreserving := by
-  intro targetState _
-  simp [lowering, Instance.ObjectiveValue, Witness.target]
+    (plan : Plan source) {transform : Instance.Transform source}
+    (hlowering : lowering plan = some transform) :
+    transform.TargetObjectiveValuePreserving := by
+  unfold lowering at hlowering
+  cases hvalidated : plan.validate with
+  | none =>
+      simp [hvalidated] at hlowering
+  | some _ =>
+      simp only [hvalidated, Option.map_some, Option.some.injEq] at hlowering
+      subst transform
+      intro targetState _
+      simp [Instance.ObjectiveValue, Plan.Validated.target]
 
 theorem lowering_sourceObjectivePreserving {source : Instance n}
-    (witness : Witness source) :
-    (lowering witness).SourceObjectivePreserving :=
-  ⟨lowering_sensePreserving witness,
-    lowering_sourceObjectiveValuePreserving witness⟩
+    (plan : Plan source) {transform : Instance.Transform source}
+    (hlowering : lowering plan = some transform) :
+    transform.SourceObjectivePreserving :=
+  ⟨lowering_sensePreserving plan hlowering,
+    lowering_sourceObjectiveValuePreserving plan hlowering⟩
 
 theorem lowering_targetObjectivePreserving {source : Instance n}
-    (witness : Witness source) :
-    (lowering witness).TargetObjectivePreserving :=
-  ⟨lowering_sensePreserving witness,
-    lowering_targetObjectiveValuePreserving witness⟩
+    (plan : Plan source) {transform : Instance.Transform source}
+    (hlowering : lowering plan = some transform) :
+    transform.TargetObjectivePreserving :=
+  ⟨lowering_sensePreserving plan hlowering,
+    lowering_targetObjectiveValuePreserving plan hlowering⟩
 
-theorem lowering_sourceRoundTrip {source : Instance n}
-    (witness : Witness source) :
-    (lowering witness).SourceRoundTrip := by
-  intro sourceState _
-  simp [lowering]
+theorem lowering_sourceRoundTrip {source : Instance n} (plan : Plan source)
+    {transform : Instance.Transform source}
+    (hlowering : lowering plan = some transform) :
+    transform.SourceRoundTrip := by
+  unfold lowering at hlowering
+  cases hvalidated : plan.validate with
+  | none =>
+      simp [hvalidated] at hlowering
+  | some _ =>
+      simp only [hvalidated, Option.map_some, Option.some.injEq] at hlowering
+      subst transform
+      intro sourceState _
+      simp
 
 end SOS1BigM
 

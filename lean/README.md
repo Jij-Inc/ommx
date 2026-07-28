@@ -57,7 +57,7 @@ completeness of recognition or presolve algorithms remain outside this model.
 | `OMMXProof.Instance.Transform` | Partial state transformations, directional reduction/relaxation and objective-preservation contracts, and independent source/target round trips |
 | `OMMXProof.Instance.Transform.IndicatorBigM` | Checkable Indicator Big-M witnesses, target construction, identity state maps, and semantic correctness |
 | `OMMXProof.Instance.Transform.SOS1BigM.Formulation` | Mixed reused/fresh selector formulation and its exact relation to SOS1 semantics |
-| `OMMXProof.Instance.Transform.SOS1BigM` | Checkable SOS1 Big-M witnesses, target construction, state maps, and semantic correctness |
+| `OMMXProof.Instance.Transform.SOS1BigM` | Validated SOS1 Big-M plans, partial lowering, state maps, and semantic correctness |
 
 ## Checks
 
@@ -90,7 +90,7 @@ includes Lean's standard `propext`, `Classical.choice`, and `Quot.sound` axioms.
 - [x] Sound affine bounds, Instance denotation, and Transform preservation relations
 - [x] Reduction/relaxation composition and encode/decode round-trip laws
 - [x] Indicator Big-M lowering as a finite `Instance.Transform`
-- [x] SOS1 Big-M lowering with mixed reused/fresh selector layouts
+- [x] Partial SOS1 Big-M lowering with mixed reused/fresh selector layouts
 - [x] Executable accept/reject fixtures and counterexamples
 
 ## Planned directions
