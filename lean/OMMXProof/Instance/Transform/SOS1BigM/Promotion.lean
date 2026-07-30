@@ -1,13 +1,14 @@
 import OMMXProof.Instance.Transform
-import OMMXProof.Instance.Transform.SOS1Promotion.Target
+import OMMXProof.Instance.Transform.SOS1BigM.Promotion.Target
 
 /-!
-# SOS1 promotion as an `Instance.Transform`
+# SOS1 Big-M promotion as an `Instance.Transform`
 
-SOS1 promotion recognizes a standard selector formulation in a flat source
-Instance and replaces it with one first-class SOS1 constraint.  In the initial
-supported layout, retained variables and regular constraints occupy prefixes,
-while fresh selectors and their link/cardinality rows occupy suffixes.
+SOS1 Big-M promotion recognizes a standard Big-M selector formulation in a
+flat source Instance and replaces it with one first-class SOS1 constraint. In
+the initial supported layout, retained variables and regular constraints
+occupy prefixes, while fresh selectors and their link/cardinality rows occupy
+suffixes.
 
 The transform itself is total for every untrusted `Witness`:
 
@@ -23,13 +24,9 @@ namespace OMMXProof
 
 namespace Instance
 
-namespace SOS1Promotion
+namespace SOS1BigM
 
-open SOS1SelectorFormulation
-
-namespace Witness
-
-/-- Promote the selector formulation described by an untrusted witness.
+/-- Promote the Big-M selector formulation described by an untrusted witness.
 
 Construction is unconditional.  `validate` checks the sufficient conditions
 used by the reduction, relaxation, and objective-preservation theorems. -/
@@ -43,8 +40,6 @@ def promotion (witness : Witness n)
     some (State.append state fun j =>
       canonicalSelector (witness.memberState state) (witness.freshMember j))
 
-end Witness
-
 /-- A feasible promoted state has a feasible canonical flat representation.
 
 Target feasibility supplies the retained constraints and the promoted SOS1
@@ -53,7 +48,7 @@ so appending them yields a feasible flat source state. -/
 theorem promotion_isReduction {witness : Witness n}
     {source : Instance (n + witness.freshCount)}
     (validated : witness.Validated source) :
-    (witness.promotion source).IsReduction := by
+    (promotion witness source).IsReduction := by
   intro promotedState htarget
   change State n at promotedState
   change (witness.target source).Feasible promotedState at htarget
@@ -92,7 +87,7 @@ retains every domain and regular-constraint fact in the promoted target. -/
 theorem promotion_isRelaxation {witness : Witness n}
     {source : Instance (n + witness.freshCount)}
     (validated : witness.Validated source) :
-    (witness.promotion source).IsRelaxation := by
+    (promotion witness source).IsRelaxation := by
   intro flatState hsource
   refine ⟨State.source flatState, rfl, ?_⟩
   apply
@@ -112,7 +107,7 @@ theorem promotion_isRelaxation {witness : Witness n}
 /-- Promotion preserves the optimization sense by construction. -/
 theorem promotion_sensePreserving (witness : Witness n)
     (source : Instance (n + witness.freshCount)) :
-    (witness.promotion source).SensePreserving := by
+    (promotion witness source).SensePreserving := by
   rfl
 
 /-- Projecting a feasible flat state preserves its objective value.
@@ -123,9 +118,9 @@ theorem promotion_sourceObjectiveValuePreserving
     {witness : Witness n}
     {source : Instance (n + witness.freshCount)}
     (validated : witness.Validated source) :
-    (witness.promotion source).SourceObjectiveValuePreserving := by
+    (promotion witness source).SourceObjectiveValuePreserving := by
   intro flatState _
-  simp only [Witness.promotion, Option.map_some, Option.some.injEq]
+  simp only [promotion, Option.map_some, Option.some.injEq]
   simpa only [State.append_source_fresh] using
     (Witness.Validated.sourceObjectiveValue_append_eq_target
       (witness := witness) (source := source) validated
@@ -136,14 +131,14 @@ theorem promotion_targetObjectiveValuePreserving
     {witness : Witness n}
     {source : Instance (n + witness.freshCount)}
     (validated : witness.Validated source) :
-    (witness.promotion source).TargetObjectiveValuePreserving := by
+    (promotion witness source).TargetObjectiveValuePreserving := by
   intro promotedState _
   change State n at promotedState
   let selectors : State witness.freshCount :=
     fun j =>
       canonicalSelector (witness.memberState promotedState)
         (witness.freshMember j)
-  simp only [Witness.promotion, Option.map_some, Option.some.injEq]
+  simp only [promotion, Option.map_some, Option.some.injEq]
   change
     source.ObjectiveValue (State.append promotedState selectors) =
       (witness.target source).ObjectiveValue promotedState
@@ -158,7 +153,7 @@ theorem promotion_sourceObjectivePreserving
     {witness : Witness n}
     {source : Instance (n + witness.freshCount)}
     (validated : witness.Validated source) :
-    (witness.promotion source).SourceObjectivePreserving :=
+    (promotion witness source).SourceObjectivePreserving :=
   ⟨promotion_sensePreserving witness source,
     promotion_sourceObjectiveValuePreserving validated⟩
 
@@ -168,7 +163,7 @@ theorem promotion_targetObjectivePreserving
     {witness : Witness n}
     {source : Instance (n + witness.freshCount)}
     (validated : witness.Validated source) :
-    (witness.promotion source).TargetObjectivePreserving :=
+    (promotion witness source).TargetObjectivePreserving :=
   ⟨promotion_sensePreserving witness source,
     promotion_targetObjectiveValuePreserving validated⟩
 
@@ -178,11 +173,11 @@ This round trip is unconditional because `decode` only appends a suffix and
 `encode` immediately projects back to the retained prefix. -/
 theorem promotion_targetRoundTrip (witness : Witness n)
     (source : Instance (n + witness.freshCount)) :
-    (witness.promotion source).TargetRoundTrip := by
+    (promotion witness source).TargetRoundTrip := by
   intro targetState _
-  simp [Witness.promotion]
+  simp [promotion]
 
-end SOS1Promotion
+end SOS1BigM
 
 end Instance
 

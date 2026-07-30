@@ -2,9 +2,9 @@ import OMMXProof.Instance
 import Mathlib.Tactic
 
 /-!
-# Witness data for SOS1 promotion
+# Witness data for SOS1 Big-M promotion
 
-An `SOS1Promotion.Witness n` describes one standard selector formulation whose
+An `SOS1BigM.Witness n` describes one standard Big-M selector formulation whose
 retained decision variables occupy the left `n` components of a flat Instance.
 Fresh selectors occupy the right block, and the regular constraints retained by
 the promotion precede the selector-formulation constraints.
@@ -19,7 +19,7 @@ namespace OMMXProof
 
 namespace Instance
 
-namespace SOS1Promotion
+namespace SOS1BigM
 
 /-- Untrusted layout data for promoting one regular selector formulation to SOS1.
 
@@ -76,7 +76,7 @@ theorem freshIndex_freshMember (witness : Witness n)
 
 end Witness
 
-end SOS1Promotion
+end SOS1BigM
 
 end Instance
 

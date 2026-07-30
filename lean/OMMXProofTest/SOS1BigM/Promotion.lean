@@ -1,7 +1,7 @@
-import OMMXProof.Instance.Transform.SOS1Promotion
+import OMMXProof.Instance.Transform.SOS1BigM.Promotion
 
 /-!
-# SOS1 promotion fixtures
+# SOS1 Big-M promotion fixtures
 
 The accepted fixture is an independently written flat selector formulation.
 It does not call SOS1 lowering, so promotion validation depends only on the
@@ -22,10 +22,9 @@ sufficient-condition recognizer.  Rejection is intentionally not interpreted
 as evidence that no correct promotion exists.
 -/
 
-namespace OMMXProof.Test.SOS1Promotion
+namespace OMMXProof.Test.SOS1BigM.Promotion
 
-open Instance.SOS1Promotion
-open Instance.SOS1SelectorFormulation
+open Instance.SOS1BigM
 
 def members : Finset (Fin 2) := Finset.univ
 
@@ -100,7 +99,7 @@ def validated : witness.Validated source :=
   (witness.validate source).get source_validate_isSome
 
 def transform : Instance.Transform source :=
-  witness.promotion source
+  promotion witness source
 
 example : transform.targetDimension = 2 := by
   rfl
@@ -273,4 +272,4 @@ example : ¬transform.SourceRoundTrip := by
   simp [noncanonicalSourceState, Witness.memberState, State.source,
     State.append, canonicalSelector, freshMember_zero_val] at hcomponent
 
-end OMMXProof.Test.SOS1Promotion
+end OMMXProof.Test.SOS1BigM.Promotion

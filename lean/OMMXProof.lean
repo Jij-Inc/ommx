@@ -16,10 +16,10 @@ import OMMXProof.Instance.Transform.IndicatorBigM.Target
 import OMMXProof.Instance.Transform.SOS1BigM
 import OMMXProof.Instance.Transform.SOS1BigM.Basic
 import OMMXProof.Instance.Transform.SOS1BigM.Formulation
-import OMMXProof.Instance.Transform.SOS1BigM.Plan
-import OMMXProof.Instance.Transform.SOS1BigM.Target
-import OMMXProof.Instance.Transform.SOS1Promotion
-import OMMXProof.Instance.Transform.SOS1Promotion.Target
-import OMMXProof.Instance.Transform.SOS1Promotion.Witness
-import OMMXProof.Instance.Transform.SOS1SelectorFormulation
+import OMMXProof.Instance.Transform.SOS1BigM.Lowering
+import OMMXProof.Instance.Transform.SOS1BigM.Lowering.Plan
+import OMMXProof.Instance.Transform.SOS1BigM.Lowering.Target
+import OMMXProof.Instance.Transform.SOS1BigM.Promotion
+import OMMXProof.Instance.Transform.SOS1BigM.Promotion.Target
+import OMMXProof.Instance.Transform.SOS1BigM.Promotion.Witness
 import OMMXProof.State

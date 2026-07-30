@@ -1,5 +1,5 @@
 import OMMXProof.Instance.Extend
-import OMMXProof.Instance.Transform.SOS1BigM.Plan
+import OMMXProof.Instance.Transform.SOS1BigM.Lowering.Plan
 import Mathlib.Tactic
 
 /-!

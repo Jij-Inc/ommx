@@ -1,13 +1,13 @@
 import OMMXProof.Instance.Extend
-import OMMXProof.Instance.Transform.SOS1Promotion.Witness
-import OMMXProof.Instance.Transform.SOS1SelectorFormulation
+import OMMXProof.Instance.Transform.SOS1BigM.Formulation
+import OMMXProof.Instance.Transform.SOS1BigM.Promotion.Witness
 import Mathlib.Tactic
 
 /-!
-# Target and sufficient validation for SOS1 promotion
+# Target and sufficient validation for SOS1 Big-M promotion
 
 This module constructs the promoted SOS1 Instance from a flat source Instance
-and an untrusted `SOS1Promotion.Witness`.  The initial accepted shape is
+and an untrusted `SOS1BigM.Witness`.  The initial accepted shape is
 deliberately conservative:
 
 - retained variables and regular constraints form left/prefix blocks,
@@ -19,17 +19,16 @@ deliberately conservative:
 - retained affine expressions do not depend on fresh selectors, and
 - the flat source contains no pre-existing special constraints.
 
-These are sufficient, not necessary, conditions.  Rejection by this initial
-checker does not imply that no correct SOS1 promotion exists.
+These are sufficient, not necessary, conditions. Rejection by this initial
+checker does not imply that no correct promotion exists through a broader
+Big-M recognizer or another SOS1 formulation.
 -/
 
 namespace OMMXProof
 
 namespace Instance
 
-namespace SOS1Promotion
-
-open SOS1SelectorFormulation
+namespace SOS1BigM
 
 namespace Witness
 
@@ -673,7 +672,7 @@ theorem rowsMatch_iff_eq {actual expected : List (LinearConstraint m)} :
     | cons head tail ih =>
         exact .cons (sameRow_iff_eq.mpr rfl) ih
 
-/-- Initial sufficient conditions recognized by SOS1 promotion.
+/-- Initial sufficient conditions recognized by SOS1 Big-M promotion.
 
 The condition deliberately fixes a prefix/suffix layout.  It is not intended
 to characterize every flat formulation equivalent to an SOS1 constraint.
@@ -984,7 +983,7 @@ end Source
 
 end Witness
 
-end SOS1Promotion
+end SOS1BigM
 
 end Instance
 
