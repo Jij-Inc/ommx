@@ -8,6 +8,90 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
+### 🛠 Model / sample error を呼び出し側の回復方法に応じて通知 ([#1104](https://github.com/Jij-Inc/ommx/pull/1104)、[#1105](https://github.com/Jij-Inc/ommx/pull/1105)、[#1107](https://github.com/Jij-Inc/ommx/pull/1107))
+
+Function、polynomial、constraint、named function、`Instance` のevaluation APIは、
+RustからPythonへの共通error boundaryを直接使います。呼び出し側が渡したstateの不足・
+未知のID・不正な値と、回復可能なdependent-variable assertionは`ValueError`になります。
+Functionとpolynomialを直接partial evaluationする場合は`CoefficientError`を保持し、
+`Instance`が所有するdependencyの正規化とremoved constraintの復元で発生した
+coefficient failureは`RuntimeError`にfallbackします。
+
+Decision variableの追加とsubstitution、`Function.content_factor`、OneHot/SOS1の
+構築も、このboundaryを直接使います。Decision variable / parameter IDの衝突、
+不正なsubstitution、表現できないcontent factor、空の特殊制約は、Rust SDKの
+signal ownerを保持したまま`ValueError`になります。型付けされていないdefensive
+invariant failureは、引き続き`RuntimeError`にfallbackします。
+
+`Samples.append`も同じboundaryへ重複sample IDを伝播し、変更前に入力IDをすべて
+検証するため、失敗してもcollectionは変更されません。`Instance.random_samples`は、
+state group数とsample数の不整合、およびinclusiveなsample ID rangeの容量不足を
+`ValueError`として通知します。`u64`全域のID rangeと正しい正数partitionは、
+integer overflowやstrategy panicなしで生成できます。
+
+## 3.0.0 Beta 2
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b2-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b2)
+
+### ⚠ `SolverAdapter.INPUT_CLASS` と明示的な OpenJij preparation ([#1084](https://github.com/Jij-Inc/ommx/pull/1084)、[#1085](https://github.com/Jij-Inc/ommx/pull/1085)、[#1086](https://github.com/Jij-Inc/ommx/pull/1086)、[#1087](https://github.com/Jij-Inc/ommx/pull/1087)、[#1088](https://github.com/Jij-Inc/ommx/pull/1088))
+
+{class}`~ommx.adapter.SolverAdapter` に、変換なしでAdapterが直接扱える
+{class}`~ommx.Instance` の集合を表す `INPUT_CLASS` を導入しました。
+source instanceを `INPUT_CLASS` に属するinputへ変換する操作を `Prepare` と呼びます。
+現時点でpreparationを提供するのはOpenJijだけですが、今後のupdateで
+`SolverAdapter` の共通workflowとして標準化する予定です
+（[#1111](https://github.com/Jij-Inc/ommx/issues/1111)）。
+
+`INPUT_CLASS` は、{class}`~ommx.InstanceClassClause` の有限和である
+{class}`~ommx.InstanceClass` です。各clauseには、使用中の変数kind、目的関数と制約の
+次数、通常制約とIndicator制約のrelation、OneHot / SOS1制約の有無、最適化senseを
+指定できます。例えば、線形目的関数と線形制約だけを受け入れるclassを記述できます。
+指定できる条件の詳細は {class}`~ommx.InstanceClassClause` を参照してください。
+membershipは渡されたinputそのものについて評価し、
+{class}`~ommx.InstanceClassMembershipReport` がclauseごとの構造化されたmismatchを
+返します。
+
+`OMMXHighsAdapter`、`OMMXPythonMIPAdapter`、`OMMXPySCIPOptAdapter`、
+`OMMXOpenJijSAAdapter` は、それぞれ具体的なinput classを宣言します。class外の入力は
+backend構築前に {class}`~ommx.adapter.AdapterNotApplicableError` で拒否されます。
+構造化された不一致は `check_applicability()` で確認できます。HiGHSとPython-MIPは
+線形モデル、PySCIPOptは対応する二次・Indicator・SOS1形式、OpenJijは制約なしBinary
+最小化問題を受け入れます。Adapterは特殊制約を暗黙にlowerしません。
+特殊制約は {attr}`~ommx.Instance.active_special_constraint_kinds` で確認し、
+{meth}`~ommx.Instance.lower_special_constraints` で選択したkindだけを明示的にlowerします。
+この操作はinput classへのmembershipとは独立しています。
+
+OpenJijの `sample()` / `solve()` は、Integer encoding、sense反転、slack変換、
+特殊制約lowering、penalty選択を暗黙に行いません。別の入力を明示的に準備し、
+変換元の意味が必要な場合は結果をsource modelに対して評価します。
+
+```python
+from ommx_openjij_adapter import (
+    OMMXOpenJijSAAdapter,
+    OpenJijPreparationConfig,
+)
+
+config = OpenJijPreparationConfig(
+    uniform_penalty_weight=20.0,
+)
+preparation = OMMXOpenJijSAAdapter.prepare(source, config=config)
+prepared_samples = OMMXOpenJijSAAdapter.sample(preparation.input)
+source_samples = preparation.evaluate_source(prepared_samples)
+```
+
+有限penaltyとapproximate integer slackは明示的なopt-inが必要です。prepare後の値は
+別の {class}`~ommx.Instance` なので、sourceから推論せず `preparation.input` 自体の
+applicabilityを確認してください。受け入れるmodel classとpreparationの詳細は
+[Adapter Input Class](../user_guide/capability_model.md) と
+[OpenJij tutorial](../tutorial/tsp_sampling_with_openjij_adapter.md) を参照してください。
+
+2.6.1から移行する場合、非対応入力にはAdapter固有exceptionではなく
+`AdapterNotApplicableError`をcatchしてください。infeasibilityのcanonicalな型は
+`ommx.InfeasibleDetected` です（既存の `ommx.adapter` aliasも利用できます）。
+`response_to_samples()` は `decode_to_samples()` に、`sample_qubo_sa()` は上記の明示的な
+workflowに置き換えてください。新しいAPIはraw `Samples`ではなく評価済みの`SampleSet`を
+返します。
+
 ### 🆕 Experiment / Run の lifecycle reason を永続化 ([#1109](https://github.com/Jij-Inc/ommx/pull/1109))
 
 failed / interrupted になった Experiment と Run に、簡潔な理由を Experiment
@@ -38,34 +122,7 @@ diagnostics ではないため、secret、traceback、local variable、environme
 含めないでください。outcome detail を持たない既存の Experiment Artifact は、従来どおり
 `None` として読み込めます。
 
-### ⚠ HiGHS / Python-MIP / PySCIPOpt Adapter の Input Class ([#1085](https://github.com/Jij-Inc/ommx/pull/1085)、[#1086](https://github.com/Jij-Inc/ommx/pull/1086))
-
-`OMMXHighsAdapter`、`OMMXPythonMIPAdapter`、`OMMXPySCIPOptAdapter` は、
-backend modelを直接構築する前に受け入れる入力を `INPUT_CLASS` として宣言するように
-なりました。3つとも、activeな数理内容で使われるBinary、Integer、Continuous変数と
-両方の最適化senseを受け入れます。HiGHSとPython-MIPは線形目的関数および線形の通常
-等式・不等式制約を受け入れます。PySCIPOptは二次以下の目的関数と通常制約、線形body
-のIndicator等式・不等式制約、およびSOS1制約を受け入れます。class外の入力は変更
-されることなく {class}`~ommx.adapter.AdapterNotApplicableError` として拒否され、
-このexceptionにはclauseごとの構造化されたmismatchが含まれます。明示的にprepareした
-{class}`~ommx.Instance` は別の入力であり、その値についてapplicabilityを再評価する
-必要があります。
-
-これはstable Python SDK 2.6.1からの公開exception契約の破壊的変更です。非対応の
-目的関数・通常制約・使用中の変数kindは、従来 `OMMXHighsAdapterError`、
-`OMMXPythonMIPAdapterError`、`OMMXPySCIPOptAdapterError` のいずれかとして拒否
-されていましたが、今後はbackend構築前に `AdapterNotApplicableError` が送出され
-ます。constructorでの非対応入力の拒否をAdapter固有exceptionで捕捉していたコードは、
-`AdapterNotApplicableError`を捕捉するか、構築前に`check_applicability()`を呼び出して
-ください。stableで受け入れていた入力範囲は変わらず、Adapter固有exceptionは変換・
-backendのfailureで引き続き使用されます。
-
-HiGHSとPython-MIPはIndicator、OneHot、SOS1制約を暗黙にlowerせず、PySCIPOptも
-OneHotを暗黙にlowerしなくなりました。これらfirst-class特殊制約の扱いの変更は
-Python SDK 3.0 prerelease内の挙動変更であり、stable 2.6.1に対する互換性変更では
-ありません。
-
-### 🛠 Rust SDK error を一貫した Python exception として通知
+### 🛠 Rust SDK error を一貫した Python exception として通知 ([#1087](https://github.com/Jij-Inc/ommx/pull/1087)、[#1090](https://github.com/Jij-Inc/ommx/pull/1090)、[#1096](https://github.com/Jij-Inc/ommx/pull/1096)、[#1097](https://github.com/Jij-Inc/ommx/pull/1097)、[#1099](https://github.com/Jij-Inc/ommx/pull/1099)、[#1100](https://github.com/Jij-Inc/ommx/pull/1100)、[#1101](https://github.com/Jij-Inc/ommx/pull/1101)、[#1102](https://github.com/Jij-Inc/ommx/pull/1102))
 
 Python binding は、Rust SDK が返す OMMX-owned signal type を entry point
 ごとに個別変換せず、共通の PyO3 error boundary で Python exception へ変換する
@@ -78,150 +135,23 @@ Python binding は、Rust SDK が返す OMMX-owned signal type を entry point
 - 未分類の SDK / infrastructure failure は `RuntimeError` への fallback
 
 Python の引数抽出 failure は引き続き `TypeError` で、Python code が送出した
-exception も変更せず伝播します。error message には OMMX field と source の
-context が保持されます。`ValueError` には、不正な bound / tolerance、重複した
-subscript、parameter 付き constraint の抽出、feasible sample がない状態での
-best sample の要求などが含まれます。Artifact 操作でも、不正な image reference、
-malformed digest、未対応または不正な layer media type、存在しない typed layer、
-不正な OMMX payload を同じ方針で分類します。
-Experiment 操作では、不正な image reference、autosave value、attachment media
-type、JSON input を `ValueError` とし、registry、archive、storage、lifecycle の
-failure は `RuntimeError` に fallback します。
+exception も変更せず伝播します。error messageにはOMMX fieldとsource contextが保持
+されます。この方針はmodel操作、parser、Artifact / Experiment API、attachment、
+registry操作、solver / sampler loggingに一貫して適用されます。
 
-Decision variable の追加と substitution、`Function.content_factor`、OneHot/SOS1
-の構築も、この boundary を直接使います。Decision variable / parameter ID の衝突、
-不正な substitution、表現できない content factor、空の特殊制約は、Rust SDK の
-signal owner を保持したまま `ValueError` になります。
+remoteの {meth}`~ommx.artifact.Artifact.load` と
+{meth}`~ommx.experiment.Experiment.load` のfailureも同じ方針に従います。すべて
+{class}`~ommx.artifact.RemoteArtifactError` を継承し、exact refが存在しない場合だけを
+authentication、authorization、transport、invalid Artifactと区別するには
+{class}`~ommx.artifact.RemoteArtifactNotFoundError` をcatchしてください。
 
-`Samples.append` も同じ boundary へ重複 sample ID を伝播し、変更前に入力 ID を
-すべて検証するため、失敗しても collection は変更されません。
-`Instance.random_samples` は、state group 数と sample 数の不整合、および inclusive
-な sample ID range の容量不足を `ValueError` として通知します。`u64` 全域の ID
-range と正しい正数 partition は、integer overflow や strategy panic なしで生成できます。
-
-残っていた `Instance`、`ParametricInstance`、attached metadata、random
-generator、`Solution`、`Samples`、Artifact registry の binding も同じ boundary
-を使うようになりました。Binding が所有する component ID の重複と不足した
-penalty weight は `ValueError` です。`Run.log_solve` と `Run.log_sample` を通る
-solver / sampler adapter の exception は、元の Python exception object を保持します。
-Private な cross-extension PyO3 bridge が受信した不正 payload は内部 protocol の
-failure であるため、`RuntimeError` になります。
-
-現在の対象は、`AddDecisionVariableError`、`AtolError`、`BoundError`、
-`CoefficientError`、`ContentFactorError`、`DuplicatedSampleIDError`、
-`InconsistentDependentValue`、`MissingStateEntries`、`OneHotConstraintError`、
-`SamplesParametersError`、`Sos1ConstraintError`、`SubstitutionError`、
-`UnknownStateEntries`、`UnverifiableDependentAssertion`、`DecisionVariableError`、
-`SolutionError`、`SampleSetError` のうち Python 側で安定して判別すべき case、
-および parser signal の `ParseError` と `QplibParseError` です。存在しない Experiment / Run
-attachment は `AttachmentNotFound` signal を保持し、`KeyError` を送出します。
-呼び出し側が渡した不正な image reference は `ImageRefParseError` を保持し、Local
-Registry に保存済みの image ref が壊れている場合は
-`InvalidLocalRegistryImageRef` を保持して `RuntimeError` に fallback します。
-Registry、archive、content-addressed storage の failure も同じ fallback を使います。
-Python-backed codec、JSON callback、adapter、tracing hook、data library が送出した
-exception は変更せず伝播します。
-
-Function、polynomial、constraint、named function、`Instance` の evaluation API
-も、この共通 boundary を直接使うようになりました。特殊制約の伝播前に行う検証を
-含め、呼び出し側の state に不足・未知のIDや不正な値がある場合、および回復可能な
-dependent variable assertion failure は `ValueError` になります。state value の検証は
-既存の `DecisionVariableError` を再利用し、evaluation全体をまとめるerror typeは
-導入しません。dependency の評価が生成した非有限値、`Instance` が所有する dependency
-の正規化中、または保存済みの dependency と fixed value を removed constraint の復元時に
-適用する際に発生した coefficient overflow、および型付けされていない制約伝播の failure
-は引き続き `RuntimeError` に fallback します。Function と polynomial を直接 partial
-evaluation する場合は、元の `CoefficientError` を型のない message に置き換えず、Rust
-の error chain に保持します。
-
-Python extension は `anyhow` への直接依存を廃止し、PyO3 dependency でも blanket
-な `anyhow` conversion feature を有効にしなくなりました。
-`pyo3-tracing-opentelemetry` も 0.3.1 へ更新し、tracing dependency 経由でもこの
-feature が有効にならないようにしています。これにより、新しい exposed binding は
-blanket conversion に依存できず、Rust SDK failure を共通 boundary で明示的に
-変換する必要があります。
-
-係数 0 は従来どおり正常系として正規化され、in-place の数値加算に失敗しても元の
-object は変更されません。安定した OMMX-owned signal がまだない MPS parse と file
-open failure は、引き続き `RuntimeError` に fallback します。Descriptor は
-metadata-only のまま維持し、blob read は registry context を持つ Artifact が
-所有します。Attachment codec は CAS blob を読む前に宣言した media type を検証し、
-encode 結果には Python の `bytes` を要求します。Run body と tracing cleanup が
-同時に失敗した場合も元の body exception を保持し、Run は failed または
-interrupted status で確実に閉じられます。
-
-関連 PR: [#1096](https://github.com/Jij-Inc/ommx/pull/1096)、
-[#1097](https://github.com/Jij-Inc/ommx/pull/1097)、
-[#1099](https://github.com/Jij-Inc/ommx/pull/1099)、
-[#1100](https://github.com/Jij-Inc/ommx/pull/1100)、
-[#1101](https://github.com/Jij-Inc/ommx/pull/1101)、
-[#1102](https://github.com/Jij-Inc/ommx/pull/1102)、
-[#1104](https://github.com/Jij-Inc/ommx/pull/1104)、
-[#1105](https://github.com/Jij-Inc/ommx/pull/1105)、
-[#1107](https://github.com/Jij-Inc/ommx/pull/1107)。
-
-### 🆕 Instance Class と Adapter Applicability ([#1084](https://github.com/Jij-Inc/ommx/pull/1084))
-
-Python SDK から、OMMX {class}`~ommx.Instance` の集合を表す
-{class}`~ommx.InstanceClass` を利用できるようになりました。
-{class}`~ommx.InstanceClassClause` は構造条件の論理積を1つ表し、class全体は
-clauseの有限和です。membershipは渡された入力値そのものから評価され、
-{class}`~ommx.InstanceClassMembershipReport` がclauseごとの構造化された
-mismatchを返します。
-
-```python
-from ommx import DegreeBound, InstanceClass, InstanceClassClause, Kind, Sense
-
-binary_linear = InstanceClass(
-    [
-        InstanceClassClause(
-            label="binary-linear",
-            allowed_variable_kinds={Kind.Binary},
-            objective_degree_bound=DegreeBound.at_most(1),
-            allowed_senses={Sense.Minimize},
-        )
-    ]
-)
-report = binary_linear.check_membership(instance)
-```
-
-{class}`~ommx.adapter.SolverAdapter` のsubclassは `INPUT_CLASS` を宣言し、
-`check_applicability` または `require_applicable` で、入力classへのmembershipに
-adapter固有のpreconditionを重ねて評価します。この処理は呼び出し元のinstanceを
-変更しません。明示的なpreparation後には、得られた入力でmembershipを再評価します。
-{meth}`~ommx.Instance.reduce_capabilities` による明示的な特殊制約loweringと
-`ommx.v2.Feature` のwire reconstructionは別概念です。このlowering methodの
-keyword argumentは、明示的な操作で維持するfamilyを表すため、`supported` から
-`preserved` に変更されました。
-
-### 🆕 remote Artifact lookup の型付き error ([#1090](https://github.com/Jij-Inc/ommx/pull/1090))
-
-{meth}`~ommx.artifact.Artifact.load` と
-{meth}`~ommx.experiment.Experiment.load` は、OCI transport の error を含む
-汎用的な `RuntimeError` ではなく、OMMX が所有する exception として
-remote lookup の失敗を通知するようになりました。exact ref が存在しない
-場合だけを処理するには
-{class}`~ommx.artifact.RemoteArtifactNotFoundError` を catch してください。
-authentication、authorization、registry transport、invalid Artifact の失敗を
-誤って「存在しない」と扱わずに済みます。すべての remote lookup exception は
-{class}`~ommx.artifact.RemoteArtifactError` を継承します。
-
-```python
-from ommx.artifact import Artifact, RemoteArtifactNotFoundError
-
-try:
-    artifact = Artifact.load("registry.example/team/model:latest")
-except RemoteArtifactNotFoundError:
-    artifact = None
-```
-
-個別の exception として
-{class}`~ommx.artifact.RemoteArtifactAuthenticationError`、
-{class}`~ommx.artifact.RemoteArtifactAuthorizationError`、
-{class}`~ommx.artifact.RemoteArtifactTransportError`、
-{class}`~ommx.artifact.InvalidRemoteArtifactError` も利用できます。exception の
-message には元の registry / transport context が保持されます。両方の load
-entry point は同じ PyO3 error conversion の境界を使用します。
+Integer preparationのoperationには、`RuntimeError` と互換性のある3つの具体的な
+exceptionも追加しました。{meth}`~ommx.Instance.log_encode` は、要求された変数を
+exactにencodeできない場合に {class}`~ommx.LogEncodingError`、exact slack変換を
+明示的な近似で置き換えられる場合に {class}`~ommx.ExactIntegerSlackError`、boundから
+infeasibleが証明された場合に {class}`~ommx.InfeasibleDetected` を送出します。
+既存の `except RuntimeError` はそのまま機能しますが、回復理由を区別する場合は
+これらの具体的な型をcatchしてください。
 
 ### 🆕 構造制約の `VariableIDLike` 入力 ([#1078](https://github.com/Jij-Inc/ommx/pull/1078))
 

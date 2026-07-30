@@ -334,6 +334,15 @@ match decode(bytes) {
 let instance = decode(bytes)?;
 ```
 
+The broad v2 `ommx::LogEncodingError` enum is not restored. For the narrower
+recovery case “this otherwise valid Integer request has no exact log encoding,”
+downcast the v3 error to [`LogEncodingUnavailable`](crate::LogEncodingUnavailable).
+Unknown, fixed, or non-Integer variables and auxiliary-allocation or
+substitution failures remain ordinary errors. Exact integer-slack callers can
+similarly downcast to
+[`ExactIntegerSlackUnavailable`](crate::ExactIntegerSlackUnavailable) before
+selecting an explicitly approximate transformation.
+
 **Moved / renamed error types:**
 
 - `ommx::QplibParseError` → `ommx::qplib::QplibParseError`. The type is
@@ -875,7 +884,7 @@ let air05_annotations = annotations.get("air05");
 - [ ] Update struct literals to use `stage: CreatedData { ... }` / `EvaluatedData { ... }` / etc.
 - [ ] Update `self.constraints` / `self.removed_constraints` → `self.constraint_collection.active()` / `.removed()`
 - [ ] Remove any `getset` usage for constraint types
-- [ ] Update any `InstanceError` / `MpsParseError` / `QplibParseError` / `StateValidationError` / `LogEncodingError` / `UnknownSampleIDError` matches → inspect `err.to_string()` or use `err.downcast_ref::<T>()` for signal types
+- [ ] Update any `InstanceError` / `MpsParseError` / `QplibParseError` / `StateValidationError` / `LogEncodingError` / `UnknownSampleIDError` matches → propagate ordinary failures, or downcast to `LogEncodingUnavailable` / another signal type only for an intentional recovery path
 - [ ] Replace `Result<T, UnknownSampleIDError>` key-lookup methods with `Option<T>` on the call site
 - [ ] Replace `DecisionVariable::new(id, kind, bound, ..., atol)` with `DecisionVariable::new(kind, bound, atol)`, and insert it under the desired `VariableID` key in the host table
 - [ ] Replace `DecisionVariable::binary(id)` / `integer(id)` / `continuous(id)` / `semi_integer(id)` / `semi_continuous(id)` / etc. with the no-argument row factories, and keep the ID on the enclosing map key

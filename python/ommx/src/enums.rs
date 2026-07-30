@@ -1,15 +1,16 @@
 use pyo3::prelude::*;
 
-/// Selector for a non-standard constraint family.
+/// Kind of active special constraint in an instance.
 ///
-/// :attr:`Instance.required_capabilities` reports these selectors for active
-/// special constraints. :meth:`Instance.reduce_capabilities` uses them to
-/// choose which families are preserved during explicit lowering. Regular
-/// constraints are outside this selector.
+/// Use these values with :attr:`Instance.active_special_constraint_kinds` to
+/// inspect an instance and :meth:`Instance.lower_special_constraints` to select
+/// special constraint families for explicit lowering to regular constraints.
+/// This is a transformation selector, not an adapter input declaration or an
+/// ``ommx.v2.Feature`` wire-format requirement.
 #[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
 #[pyclass(eq, eq_int, frozen)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum AdditionalCapability {
+pub enum SpecialConstraintKind {
     /// Indicator constraints: binvar = 1 → f(x) <= 0
     Indicator = 1,
     /// One-hot constraints: exactly one of a set of binary variables must be 1
@@ -20,7 +21,7 @@ pub enum AdditionalCapability {
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
-impl AdditionalCapability {
+impl SpecialConstraintKind {
     fn __hash__(&self) -> isize {
         *self as isize
     }
@@ -89,22 +90,22 @@ impl From<DecisionVariableRole> for ommx::DecisionVariableRole {
     }
 }
 
-impl From<ommx::AdditionalCapability> for AdditionalCapability {
-    fn from(cap: ommx::AdditionalCapability) -> Self {
-        match cap {
-            ommx::AdditionalCapability::Indicator => AdditionalCapability::Indicator,
-            ommx::AdditionalCapability::OneHot => AdditionalCapability::OneHot,
-            ommx::AdditionalCapability::Sos1 => AdditionalCapability::Sos1,
+impl From<ommx::SpecialConstraintKind> for SpecialConstraintKind {
+    fn from(kind: ommx::SpecialConstraintKind) -> Self {
+        match kind {
+            ommx::SpecialConstraintKind::Indicator => SpecialConstraintKind::Indicator,
+            ommx::SpecialConstraintKind::OneHot => SpecialConstraintKind::OneHot,
+            ommx::SpecialConstraintKind::Sos1 => SpecialConstraintKind::Sos1,
         }
     }
 }
 
-impl From<AdditionalCapability> for ommx::AdditionalCapability {
-    fn from(cap: AdditionalCapability) -> Self {
-        match cap {
-            AdditionalCapability::Indicator => ommx::AdditionalCapability::Indicator,
-            AdditionalCapability::OneHot => ommx::AdditionalCapability::OneHot,
-            AdditionalCapability::Sos1 => ommx::AdditionalCapability::Sos1,
+impl From<SpecialConstraintKind> for ommx::SpecialConstraintKind {
+    fn from(kind: SpecialConstraintKind) -> Self {
+        match kind {
+            SpecialConstraintKind::Indicator => ommx::SpecialConstraintKind::Indicator,
+            SpecialConstraintKind::OneHot => ommx::SpecialConstraintKind::OneHot,
+            SpecialConstraintKind::Sos1 => ommx::SpecialConstraintKind::Sos1,
         }
     }
 }

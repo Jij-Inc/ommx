@@ -7,31 +7,6 @@
       "items": [
         {
           "kind": "Class",
-          "name": "AdditionalCapability",
-          "doc": "Selector for a non-standard constraint family.\n\n:attr:`Instance.required_capabilities` reports these selectors for active\nspecial constraints. :meth:`Instance.reduce_capabilities` uses them to\nchoose which families are preserved during explicit lowering. Regular\nconstraints are outside this selector.",
-          "bases": [],
-          "methods": [],
-          "attributes": [
-            {
-              "name": "Indicator",
-              "doc": "Indicator constraints: binvar = 1 → f(x) <= 0",
-              "type_": null
-            },
-            {
-              "name": "OneHot",
-              "doc": "One-hot constraints: exactly one of a set of binary variables must be 1",
-              "type_": null
-            },
-            {
-              "name": "Sos1",
-              "doc": "SOS1 constraints: at most one of a set of variables can be non-zero",
-              "type_": null
-            }
-          ],
-          "deprecated": null
-        },
-        {
-          "kind": "Class",
           "name": "AttachedConstraint",
           "doc": "Attached constraint — a write-through handle bound to a host\n({class}`~ommx.Instance` or {class}`~ommx.ParametricInstance`).\n\n`AttachedConstraint` is returned by `Instance.add_constraint` /\n`ParametricInstance.add_constraint` and by their `constraints[id]`\ngetters. Unlike {class}`~ommx.Constraint`, which is a snapshot, reads\npull live data from the parent host and context setters write through\nto its SoA context store. Two `AttachedConstraint` instances pointing\nat the same id on the same host observe the same state.\n\nThe handle keeps the parent host alive through a refcount; drop the\nwrapper to release the back-reference.",
           "bases": [],
@@ -6356,6 +6331,21 @@
         },
         {
           "kind": "Class",
+          "name": "ExactIntegerSlackError",
+          "doc": "Exact integer-slack conversion is unavailable for the requested inequality.",
+          "bases": [
+            {
+              "display": "RuntimeError",
+              "link_target": null,
+              "children": []
+            }
+          ],
+          "methods": [],
+          "attributes": [],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
           "name": "Function",
           "doc": "General mathematical function of decision variables.",
           "bases": [],
@@ -8146,6 +8136,21 @@
         },
         {
           "kind": "Class",
+          "name": "InfeasibleDetected",
+          "doc": "The mathematical model was proven infeasible.",
+          "bases": [
+            {
+              "display": "RuntimeError",
+              "link_target": null,
+              "children": []
+            }
+          ],
+          "methods": [],
+          "attributes": [],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
           "name": "Instance",
           "doc": "Optimization problem instance.\n\nThis class also contains annotations like {attr}`~ommx.Instance.title`.\nOMMX-defined annotations are stored in explicit protobuf fields, while\nuser-defined annotations are stored in the protobuf annotation map and\nmirrored to OMMX Artifact descriptors.\n\n# Examples\n\nCreate an instance for KnapSack Problem\n\n```python\n>>> from ommx import Instance, DecisionVariable\n```\n\nProfit and weight of items\n\n```python\n>>> p = [10, 13, 18, 31, 7, 15]\n>>> w = [11, 15, 20, 35, 10, 33]\n```\n\nDecision variables\n\n```python\n>>> x = [DecisionVariable.binary(i) for i in range(6)]\n```\n\nObjective and constraint\n\n```python\n>>> objective = sum(p[i] * x[i] for i in range(6))\n>>> constraint = sum(w[i] * x[i] for i in range(6)) <= 47\n```\n\nCompose as an instance\n\n```python\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=objective,\n...     constraints=[constraint],\n...     sense=Instance.MAXIMIZE,\n... )\n```",
           "bases": [],
@@ -9116,7 +9121,7 @@
             },
             {
               "name": "convert_inequality_to_equality_with_integer_slack",
-              "doc": "Convert an inequality constraint $f(x) \\leq 0$ to an equality constraint $f(x) + s/a = 0$ with an integer slack variable $s$.\n\n- Since $a$ is determined as the minimal multiplier to make every coefficient of $a f(x)$ integer,\n  $a$ itself and the range of $s$ becomes impractically large. ``max_integer_range`` limits the maximal\n  range of $s$, and returns error if the range exceeds it.\n\n- Since this method evaluates the bound of $f(x)$, we may find that:\n\n  - The bound $[l, u]$ is strictly positive, i.e. $l > 0$:\n    this means the instance is infeasible because this constraint never be satisfied,\n    and an error is raised.\n\n  - The bound $[l, u]$ is always negative, i.e. $u \\leq 0$:\n    this means this constraint is trivially satisfied,\n    the constraint is moved to {attr}`~ommx.Instance.removed_constraints`,\n    and this method returns without introducing slack variable or raising an error.\n\n# Examples\n\nLet's consider a simple inequality constraint x0 + 2*x1 <= 5.\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [\n...     DecisionVariable.integer(i, lower=0, upper=3, name=\"x\", subscripts=[i])\n...     for i in range(3)\n... ]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[\n...         (x[0] + 2*x[1] <= 5).set_id(0)\n...     ],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.constraints[0]\nConstraint(x0 + 2*x1 - 5 <= 0)\n```\n\nIntroduce an integer slack variable\n\n```python\n>>> instance.convert_inequality_to_equality_with_integer_slack(\n...     constraint_id=0,\n...     max_integer_range=32\n... )\n>>> instance.constraints[0]\nConstraint(x0 + 2*x1 + x3 - 5 == 0)\n```",
+              "doc": "Convert an inequality constraint $f(x) \\leq 0$ to an equality constraint $f(x) + s/a = 0$ with an integer slack variable $s$.\n\n- Since $a$ is determined as the minimal multiplier to make every coefficient of $a f(x)$ integer,\n  $a$ itself and the range of $s$ becomes impractically large. ``max_integer_range`` limits the maximal\n  range of $s$, and returns error if the range exceeds it.\n\n- Since this method evaluates the bound of $f(x)$, we may find that:\n\n  - The bound $[l, u]$ is strictly positive, i.e. $l > 0$:\n    this means the instance is infeasible because this constraint never be satisfied,\n    and an error is raised.\n\n  - The bound $[l, u]$ is always negative, i.e. $u \\leq 0$:\n    this means this constraint is trivially satisfied,\n    the constraint is moved to {attr}`~ommx.Instance.removed_constraints`,\n    and this method returns without introducing slack variable or raising an error.\n\n# Examples\n\nLet's consider a simple inequality constraint x0 + 2*x1 <= 5.\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [\n...     DecisionVariable.integer(i, lower=0, upper=3, name=\"x\", subscripts=[i])\n...     for i in range(3)\n... ]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[\n...         (x[0] + 2*x[1] <= 5).set_id(0)\n...     ],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.constraints[0]\nConstraint(x0 + 2*x1 - 5 <= 0)\n```\n\nIntroduce an integer slack variable\n\n```python\n>>> instance.convert_inequality_to_equality_with_integer_slack(\n...     constraint_id=0,\n...     max_integer_range=32\n... )\n>>> instance.constraints[0]\nConstraint(x0 + 2*x1 + x3 - 5 == 0)\n```\n\nRaises {class}`~ommx.ExactIntegerSlackError` when exact conversion is\nunavailable because the coefficients cannot be normalized or the slack\nrange exceeds ``max_integer_range``. Raises\n{class}`~ommx.InfeasibleDetected` when the bounds prove the inequality\ninfeasible.",
               "signatures": [
                 {
                   "parameters": [
@@ -10121,7 +10126,7 @@
             },
             {
               "name": "log_encode",
-              "doc": "Log-encode the integer decision variables.\n\nLog encoding of an integer variable $x \\in [l, u]$ is to represent by $m$ bits $b_i \\in \\{0, 1\\}$ by:\n\n$$x = \\sum_{i=0}^{m-2} 2^i b_i + (u - l - 2^{m-1} + 1) b_{m-1} + l$$\n\nwhere $m = \\lceil \\log_2(u - l + 1) \\rceil$.\n\n**Args:**\n- `decision_variable_ids`: The IDs of the integer decision variables to log-encode.\n  If not specified (or empty), all used integer variables are log-encoded.\n- `atol`: Optional absolute tolerance used when normalizing integer\n  bounds before encoding. If None, uses the default tolerance.\n\n# Examples\n\nLet's consider a simple integer programming problem with three integer variables x0, x1, and x2.\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [\n...     DecisionVariable.integer(i, lower=0, upper=3, name=\"x\", subscripts=[i])\n...     for i in range(3)\n... ]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.objective\nFunction(x0 + x1 + x2)\n```\n\nTo log-encode the integer variables x0 and x2 (except x1), call log_encode:\n\n```python\n>>> instance.log_encode({0, 2})\n```\n\nInteger variable in range $[0, 3]$ can be represented by two binary variables:\n\n$$x_0 = b_{0,0} + 2 b_{0,1}, \\quad x_2 = b_{2,0} + 2 b_{2,1}$$\n\nAnd these are substituted into the objective and constraint functions.\n\n```python\n>>> instance.objective\nFunction(x1 + x3 + 2*x4 + x5 + 2*x6)\n```",
+              "doc": "Log-encode the integer decision variables.\n\nLog encoding of an integer variable $x \\in [l, u]$ is to represent by $m$ bits $b_i \\in \\{0, 1\\}$ by:\n\n$$x = \\sum_{i=0}^{m-2} 2^i b_i + (u - l - 2^{m-1} + 1) b_{m-1} + l$$\n\nwhere $m = \\lceil \\log_2(u - l + 1) \\rceil$.\n\n**Args:**\n- `decision_variable_ids`: The IDs of the integer decision variables to log-encode.\n  If not specified (or empty), all used integer variables are log-encoded.\n- `atol`: Optional absolute tolerance used when normalizing integer\n  bounds before encoding. If None, uses the default tolerance.\n\nRaises {class}`~ommx.LogEncodingError` when an exact representation is\nunavailable for a requested variable. Allocation and expression-rewrite\nfailures retain their original exception types.\n\n# Examples\n\nLet's consider a simple integer programming problem with three integer variables x0, x1, and x2.\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [\n...     DecisionVariable.integer(i, lower=0, upper=3, name=\"x\", subscripts=[i])\n...     for i in range(3)\n... ]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.objective\nFunction(x0 + x1 + x2)\n```\n\nTo log-encode the integer variables x0 and x2 (except x1), call log_encode:\n\n```python\n>>> instance.log_encode({0, 2})\n```\n\nInteger variable in range $[0, 3]$ can be represented by two binary variables:\n\n$$x_0 = b_{0,0} + 2 b_{0,1}, \\quad x_2 = b_{2,0} + 2 b_{2,1}$$\n\nAnd these are substituted into the objective and constraint functions.\n\n```python\n>>> instance.objective\nFunction(x1 + x3 + 2*x4 + x5 + 2*x6)\n```",
               "signatures": [
                 {
                   "parameters": [
@@ -10182,6 +10187,44 @@
                     "display": "str",
                     "link_target": null,
                     "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "lower_special_constraints",
+              "doc": "Lower selected active special constraint kinds into regular constraints.\n\nFor every kind in ``kinds_to_lower``, the corresponding bulk conversion\nis invoked\n(:meth:`convert_all_indicators_to_constraints`,\n:meth:`convert_all_one_hots_to_constraints`, or\n:meth:`convert_all_sos1_to_constraints`) when that kind is active. The\ninstance is mutated in place. Kinds omitted from ``kinds_to_lower``\nremain active, and an empty set is a no-op. This does not establish\n:class:`InstanceClass` membership; check the resulting input separately.\n\nReturns the set of :class:`SpecialConstraintKind` values that were\nrequested and active, and therefore actually lowered. Empty when no\nrequested kind was active.\n\nKinds are processed in ``Indicator``, ``OneHot``, ``Sos1`` order. Each\nindividual family conversion is atomic, but the whole operation is not:\nan error in a later family does not roll back families already lowered.\n\nRaises if any underlying Big-M conversion fails (e.g. a SOS1 variable\nwith a non-finite bound).",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "kinds_to_lower",
+                      "type_": {
+                        "display": "set[SpecialConstraintKind]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "SpecialConstraintKind",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "set[SpecialConstraintKind]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "SpecialConstraintKind",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
                   }
                 }
               ],
@@ -10588,44 +10631,6 @@
                     "display": "bool",
                     "link_target": null,
                     "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "reduce_capabilities",
-              "doc": "Convert active non-standard constraint families not in ``preserved``\ninto regular constraints.\n\nFor every selector in :attr:`required_capabilities` not in\n``preserved``, the corresponding bulk conversion is invoked\n(:meth:`convert_all_indicators_to_constraints`,\n:meth:`convert_all_one_hots_to_constraints`, or\n:meth:`convert_all_sos1_to_constraints`). The instance is mutated in\nplace and :attr:`required_capabilities` becomes a subset of\n``preserved`` on success. This does not establish\n:class:`InstanceClass` membership; check the resulting input separately.\n\nReturns the set of :class:`AdditionalCapability` values that were\nactually converted. Empty when nothing needed conversion.\n\nRaises if any underlying Big-M conversion fails (e.g. a SOS1 variable\nwith a non-finite bound).",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "preserved",
-                      "type_": {
-                        "display": "set[AdditionalCapability]",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "AdditionalCapability",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "set[AdditionalCapability]",
-                    "link_target": null,
-                    "children": [
-                      {
-                        "display": "AdditionalCapability",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
                   }
                 }
               ],
@@ -11282,6 +11287,23 @@
               }
             },
             {
+              "name": "active_special_constraint_kinds",
+              "doc": "The kinds of active special constraints this instance currently uses.\n\nReturns the set of :class:`SpecialConstraintKind` values corresponding\nto non-empty active (non-removed) special constraint collections. An\nempty set means the instance has no active special constraints.",
+              "type_": {
+                "display": "set[SpecialConstraintKind]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "SpecialConstraintKind",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "annotations",
               "doc": "Returns a read-only mapping of flat annotations.\n\nUse {meth}`add_user_annotation`, metadata properties, or\n{meth}`replace_annotations` to modify annotations.",
               "type_": {
@@ -11647,23 +11669,6 @@
                   },
                   {
                     "display": "RemovedSos1Constraint",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "required_capabilities",
-              "doc": "Selectors for active non-standard constraint families.\n\nOnly active constraints are considered. This value does not describe an\n:class:`InstanceClass` or establish adapter applicability. Use\n:meth:`reduce_capabilities` only as an explicit special-constraint\nlowering operation.",
-              "type_": {
-                "display": "set[AdditionalCapability]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "AdditionalCapability",
                     "link_target": null,
                     "children": []
                   }
@@ -13671,6 +13676,98 @@
                     "children": []
                   }
                 ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "LogEncodingError",
+          "doc": "An exact log encoding is unavailable for one requested decision variable.",
+          "bases": [
+            {
+              "display": "RuntimeError",
+              "link_target": null,
+              "children": []
+            }
+          ],
+          "methods": [],
+          "attributes": [
+            {
+              "name": "expected",
+              "doc": "Required bound condition or maximum bit count.",
+              "type_": {
+                "display": "str | int | float",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "float",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "kind",
+              "doc": "Machine-readable reason for unavailable exact encoding.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "observed",
+              "doc": "Observed bound or bit count that made encoding unavailable.",
+              "type_": {
+                "display": "str | int | float",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "float",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "variable_id",
+              "doc": "Decision variable for which exact encoding is unavailable.",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
               },
               "is_property": true,
               "is_readonly": true
@@ -18813,7 +18910,7 @@
         {
           "kind": "Class",
           "name": "Provenance",
-          "doc": "One step in a regular constraint's transformation history.\n\nWhen a special constraint (indicator / one-hot / SOS1) is converted into a\nregular {class}`~ommx.Constraint` — for example via\n`Instance.convert_one_hot_to_constraint` or `Instance.reduce_capabilities` —\nthe generated constraint records a {class}`Provenance` entry naming the\noriginal special constraint. This lets callers trace a regular constraint\nback to the special constraint it was derived from.",
+          "doc": "One step in a regular constraint's transformation history.\n\nWhen a special constraint (indicator / one-hot / SOS1) is converted into a\nregular {class}`~ommx.Constraint` — for example via\n:meth:`~ommx.Instance.convert_one_hot_to_constraint` or\n:meth:`~ommx.Instance.lower_special_constraints` —\nthe generated constraint records a {class}`Provenance` entry naming the\noriginal special constraint. This lets callers trace a regular constraint\nback to the special constraint it was derived from.",
           "bases": [],
           "methods": [
             {
@@ -24994,6 +25091,31 @@
               },
               "is_property": true,
               "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "SpecialConstraintKind",
+          "doc": "Kind of active special constraint in an instance.\n\nUse these values with :attr:`Instance.active_special_constraint_kinds` to\ninspect an instance and :meth:`Instance.lower_special_constraints` to select\nspecial constraint families for explicit lowering to regular constraints.\nThis is a transformation selector, not an adapter input declaration or an\n``ommx.v2.Feature`` wire-format requirement.",
+          "bases": [],
+          "methods": [],
+          "attributes": [
+            {
+              "name": "Indicator",
+              "doc": "Indicator constraints: binvar = 1 → f(x) <= 0",
+              "type_": null
+            },
+            {
+              "name": "OneHot",
+              "doc": "One-hot constraints: exactly one of a set of binary variables must be 1",
+              "type_": null
+            },
+            {
+              "name": "Sos1",
+              "doc": "SOS1 constraints: at most one of a set of variables can be non-zero",
+              "type_": null
             }
           ],
           "deprecated": null
@@ -32790,7 +32912,6 @@
     }
   },
   "export_map": {
-    "ommx.AdditionalCapability": "ommx",
     "ommx.AttachedConstraint": "ommx",
     "ommx.AttachedDecisionVariable": "ommx",
     "ommx.AttachedIndicatorConstraint": "ommx",
@@ -32805,8 +32926,10 @@
     "ommx.EvaluatedConstraint": "ommx",
     "ommx.EvaluatedDecisionVariable": "ommx",
     "ommx.EvaluatedNamedFunction": "ommx",
+    "ommx.ExactIntegerSlackError": "ommx",
     "ommx.Function": "ommx",
     "ommx.IndicatorConstraint": "ommx",
+    "ommx.InfeasibleDetected": "ommx",
     "ommx.Instance": "ommx",
     "ommx.InstanceClass": "ommx",
     "ommx.InstanceClassClause": "ommx",
@@ -32815,6 +32938,7 @@
     "ommx.InstanceClassMismatch": "ommx",
     "ommx.Kind": "ommx",
     "ommx.Linear": "ommx",
+    "ommx.LogEncodingError": "ommx",
     "ommx.NamedFunction": "ommx",
     "ommx.OneHotConstraint": "ommx",
     "ommx.Optimality": "ommx",
@@ -32838,6 +32962,7 @@
     "ommx.Sense": "ommx",
     "ommx.Solution": "ommx",
     "ommx.Sos1Constraint": "ommx",
+    "ommx.SpecialConstraintKind": "ommx",
     "ommx.State": "ommx",
     "ommx.ToSamples": "ommx",
     "ommx.ToState": "ommx",

@@ -1,5 +1,5 @@
 use pyo3_stub_gen::Result;
-use std::{fs, path::Path, process::Command};
+use std::{fs, path::Path};
 
 fn main() -> Result<()> {
     let stub = _ommx_rust::stub_info()?;
@@ -7,13 +7,6 @@ fn main() -> Result<()> {
 
     let root: &Path = env!("CARGO_MANIFEST_DIR").as_ref();
     avoid_git_conflict_marker_headings(&root.join("../../docs/api/_items"))?;
-    Command::new("ruff")
-        .arg("format")
-        .arg(root.join("ommx/__init__.py"))
-        .arg(root.join("ommx/_ommx_rust/__init__.pyi"))
-        .arg(root.join("ommx/artifact/__init__.py"))
-        .arg(root.join("ommx/experiment/__init__.py"))
-        .status()?;
     Ok(())
 }
 

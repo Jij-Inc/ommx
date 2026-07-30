@@ -6,10 +6,57 @@ use crate::{
 use anyhow::{bail, Context, Result};
 use num::traits::Inv;
 
+/// Signal returned when exact integer-slack conversion is structurally valid
+/// but cannot construct an exact finite encoding.
+///
+/// Callers may recover by selecting an explicitly approximate transformation.
+/// Missing constraints, unsupported variable kinds, and other contract or
+/// materialization failures are not classified as this signal.
+#[derive(Debug, thiserror::Error)]
+#[error(transparent)]
+pub struct ExactIntegerSlackUnavailable(ExactIntegerSlackFailure);
+
+#[derive(Debug, thiserror::Error)]
+enum ExactIntegerSlackFailure {
+    #[error("Cannot normalize the coefficients to integers: constraint={id:?}")]
+    CoefficientsNotNormalizable { id: ConstraintID },
+
+    #[error(
+        "The range of the slack variable exceeds the limit: evaluated({evaluated}) > limit({limit})"
+    )]
+    RangeTooLarge {
+        id: ConstraintID,
+        evaluated: f64,
+        limit: u64,
+    },
+}
+
+impl ExactIntegerSlackUnavailable {
+    fn coefficients_not_normalizable(id: ConstraintID) -> Self {
+        Self(ExactIntegerSlackFailure::CoefficientsNotNormalizable { id })
+    }
+
+    fn range_too_large(id: ConstraintID, evaluated: f64, limit: u64) -> Self {
+        Self(ExactIntegerSlackFailure::RangeTooLarge {
+            id,
+            evaluated,
+            limit,
+        })
+    }
+}
+
 impl Instance {
     /// Convert an inequality $f(x) \leq 0$ to an equality $a f(x) + s = 0$ with a
     /// newly introduced integer slack variable $s$, where $a$ is the minimal positive
     /// factor that makes every coefficient of $f(x)$ integer.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ExactIntegerSlackUnavailable`] when exact coefficient
+    /// normalization or the configured finite slack range is unavailable, and
+    /// [`InfeasibleDetected`] when variable bounds prove the inequality
+    /// infeasible. Missing constraints, unsupported variable kinds, allocation,
+    /// and coefficient-arithmetic failures retain their ordinary error types.
     pub fn convert_inequality_to_equality_with_integer_slack(
         &mut self,
         constraint_id: u64,
@@ -42,9 +89,9 @@ impl Instance {
             }
         }
 
-        let a = function
-            .content_factor()
-            .context("Cannot normalize the coefficients to integers")?;
+        let a = function.content_factor().map_err(|_| {
+            ExactIntegerSlackUnavailable::coefficients_not_normalizable(constraint_id)
+        })?;
         let af = (function.clone() * a)?;
 
         let af_bound = af.evaluate_bound(&bounds);
@@ -71,11 +118,12 @@ impl Instance {
 
         let slack_bound = Bound::new(0.0, -af_bound.lower()).unwrap();
         if slack_bound.width() > max_integer_range as f64 {
-            bail!(
-                "The range of the slack variable exceeds the limit: evaluated({}) > limit({})",
+            return Err(ExactIntegerSlackUnavailable::range_too_large(
+                constraint_id,
                 slack_bound.width(),
-                max_integer_range
-            );
+                max_integer_range,
+            )
+            .into());
         }
 
         let slack_id = self.new_decision_variable_with_label(
@@ -276,6 +324,31 @@ mod tests {
     }
 
     #[test]
+    fn exact_integer_slack_range_limit_is_a_recoverable_signal() {
+        let id = VariableID::from(1);
+        let dv = btreemap! {
+            id => DecisionVariable::new(
+                Kind::Integer,
+                Bound::new(0.0, 3.0).unwrap(),
+                ATol::default(),
+            ).unwrap(),
+        };
+        let objective = Function::from(linear!(1));
+        let constraint_fn = (Function::from(linear!(1)) + coeff!(-2.0)).unwrap();
+        let constraints = btreemap! {
+            ConstraintID::from(0) => crate::Constraint::less_than_or_equal_to_zero(constraint_fn),
+        };
+        let mut instance = Instance::new(Sense::Minimize, objective, dv, constraints).unwrap();
+
+        let err = instance
+            .convert_inequality_to_equality_with_integer_slack(0, 1, ATol::default())
+            .unwrap_err();
+
+        assert!(err.is::<ExactIntegerSlackUnavailable>());
+        assert!(instance.constraints().contains_key(&ConstraintID::from(0)));
+    }
+
+    #[test]
     fn add_integer_slack_updates_function_but_keeps_inequality() {
         // min x1 s.t. x1 - 2 <= 0, x1 integer in [0, 3]
         let dv = btreemap! {
@@ -389,6 +462,7 @@ mod tests {
         let err = instance
             .convert_inequality_to_equality_with_integer_slack(0, 32, ATol::default())
             .unwrap_err();
+        assert!(!err.is::<ExactIntegerSlackUnavailable>());
         assert!(err.to_string().contains("not inequality"));
     }
 
@@ -408,6 +482,7 @@ mod tests {
         let err = instance
             .convert_inequality_to_equality_with_integer_slack(0, 32, ATol::default())
             .unwrap_err();
+        assert!(!err.is::<ExactIntegerSlackUnavailable>());
         assert!(err.to_string().contains("continuous decision variables"));
     }
 }

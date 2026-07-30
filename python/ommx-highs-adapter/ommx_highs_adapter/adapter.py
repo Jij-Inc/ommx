@@ -701,7 +701,7 @@ class OMMXHighsAdapter(SolverAdapter):
         >>> OMMXHighsAdapter.solve(instance)  # doctest: +IGNORE_EXCEPTION_DETAIL
         Traceback (most recent call last):
             ...
-        ommx.adapter.InfeasibleDetected: Model was infeasible
+        ommx.InfeasibleDetected: Model was infeasible
         """
         # TODO would have added an unbounded example/doctest above,
         # but the same example used with pyscipopt isn't being correctly

@@ -1,12 +1,12 @@
 import copy
 
 from ommx import (
-    AdditionalCapability,
     DecisionVariable,
     Instance,
     OneHotConstraint,
     ProvenanceKind,
     Sos1Constraint,
+    SpecialConstraintKind,
 )
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
@@ -26,17 +26,12 @@ def test_adapter_accepts_an_explicitly_prepared_input() -> None:
     )
 
     prepared = copy.copy(instance)
-    prepared.reduce_capabilities(
-        {
-            AdditionalCapability.Indicator,
-            AdditionalCapability.Sos1,
-        }
-    )
+    prepared.lower_special_constraints({SpecialConstraintKind.OneHot})
 
     assert set(instance.one_hot_constraints) == {10}
-    assert prepared.required_capabilities == {
-        AdditionalCapability.Indicator,
-        AdditionalCapability.Sos1,
+    assert prepared.active_special_constraint_kinds == {
+        SpecialConstraintKind.Indicator,
+        SpecialConstraintKind.Sos1,
     }
     assert prepared.one_hot_constraints == {}
     assert set(prepared.indicator_constraints) == {30}
