@@ -64,6 +64,24 @@ def _instance_with_sos1_derived_bound_conflict() -> ommx.Instance:
     )
 
 
+def _instance_with_indicator_constraint() -> ommx.Instance:
+    variable = ommx.DecisionVariable.continuous(1)
+    indicator = ommx.DecisionVariable.binary(10)
+    return ommx.Instance.from_components(
+        decision_variables=[variable, indicator],
+        objective=0,
+        constraints={},
+        indicator_constraints={
+            0: ommx.IndicatorConstraint(
+                indicator_variable=indicator,
+                function=variable,
+                equality=ommx.Equality.LessThanOrEqualToZero,
+            )
+        },
+        sense=ommx.Instance.MINIMIZE,
+    )
+
+
 @pytest.mark.parametrize(
     "operation",
     [
@@ -107,6 +125,34 @@ def test_fixed_state_conflict_reuses_decision_variable_value_error() -> None:
 
     with pytest.raises(ValueError, match="cannot be overwritten"):
         instance.populate_state({1: 1.0})
+
+
+@pytest.mark.parametrize(
+    "operation",
+    [
+        lambda: _instance_with_indicator_constraint().evaluate({1: 0.0, 10: 0.5}),
+        lambda: _instance_with_indicator_constraint().evaluate_samples(
+            {7: {1: 0.0, 10: 0.5}}
+        ),
+    ],
+)
+def test_invalid_indicator_value_reuses_decision_variable_value_error(
+    operation,
+) -> None:
+    with pytest.raises(ValueError, match="invalid activation value"):
+        operation()
+
+
+def test_non_binary_value_without_indicator_semantics_remains_infeasible() -> None:
+    variable = ommx.DecisionVariable.binary(1)
+    instance = ommx.Instance.from_components(
+        decision_variables=[variable],
+        objective=variable,
+        constraints={},
+        sense=ommx.Instance.MINIMIZE,
+    )
+
+    assert not instance.evaluate({1: 0.5}).feasible
 
 
 def test_non_finite_dependent_evaluation_falls_back_to_runtime_error() -> None:
