@@ -1,12 +1,3 @@
-# /// script
-# requires-python = ">=3.9"
-# dependencies = [
-#     "tomlkit",
-#     "packaging",
-#     "ruamel.yaml",
-# ]
-# ///
-#
 # Used in test ci in Python Workflows
 # This do the following things:
 #

@@ -18,7 +18,7 @@ categories = ["api-bindings", "mathematics", "science"]
 workspace = true
 
 [dependencies]
-ommx = { path = "../ommx", version = "=3.0.0-beta.2", default-features = false }
+ommx = { path = "../ommx", version = "=3.0.0-beta.3", default-features = false }
 pyo3 = ">=0.27.2, <0.30"
 pyo3-stub-gen.workspace = true
 

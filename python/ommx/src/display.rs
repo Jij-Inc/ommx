@@ -15,13 +15,13 @@ impl<'py> IntoPyObject<'py> for FunctionDisplay {
 
     fn into_pyobject(self, py: Python<'py>) -> PyResult<Self::Output> {
         let function_display = py.import("ommx.display")?.getattr("FunctionDisplay")?;
-        Ok(function_display.call1((
+        function_display.call1((
             self.0.text,
             self.0.total_terms,
             self.0.written_terms,
             self.0.omitted_terms,
             self.0.truncated_by_chars,
-        ))?)
+        ))
     }
 }
 

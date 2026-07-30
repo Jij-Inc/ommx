@@ -2,7 +2,6 @@
 # ruff: noqa: F401
 
 from ommx._ommx_rust import (
-    AdditionalCapability,
     AttachedConstraint,
     AttachedDecisionVariable,
     AttachedIndicatorConstraint,
@@ -17,8 +16,10 @@ from ommx._ommx_rust import (
     EvaluatedConstraint,
     EvaluatedDecisionVariable,
     EvaluatedNamedFunction,
+    ExactIntegerSlackError,
     Function,
     IndicatorConstraint,
+    InfeasibleDetected,
     Instance,
     InstanceClass,
     InstanceClassClause,
@@ -27,6 +28,7 @@ from ommx._ommx_rust import (
     InstanceClassMismatch,
     Kind,
     Linear,
+    LogEncodingError,
     NamedFunction,
     OneHotConstraint,
     Optimality,
@@ -50,6 +52,7 @@ from ommx._ommx_rust import (
     Sense,
     Solution,
     Sos1Constraint,
+    SpecialConstraintKind,
     State,
     ToSamples,
     ToState,
@@ -59,7 +62,6 @@ from ommx._ommx_rust import (
 )
 
 __all__ = [
-    "AdditionalCapability",
     "AttachedConstraint",
     "AttachedDecisionVariable",
     "AttachedIndicatorConstraint",
@@ -74,8 +76,10 @@ __all__ = [
     "EvaluatedConstraint",
     "EvaluatedDecisionVariable",
     "EvaluatedNamedFunction",
+    "ExactIntegerSlackError",
     "Function",
     "IndicatorConstraint",
+    "InfeasibleDetected",
     "Instance",
     "InstanceClass",
     "InstanceClassClause",
@@ -84,6 +88,7 @@ __all__ = [
     "InstanceClassMismatch",
     "Kind",
     "Linear",
+    "LogEncodingError",
     "NamedFunction",
     "OneHotConstraint",
     "Optimality",
@@ -107,6 +112,7 @@ __all__ = [
     "Sense",
     "Solution",
     "Sos1Constraint",
+    "SpecialConstraintKind",
     "State",
     "ToSamples",
     "ToState",

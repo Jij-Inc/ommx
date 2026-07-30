@@ -16,13 +16,13 @@ kernelspec:
 OMMX separates two concepts that were previously described together as adapter capabilities:
 
 - An {class}`~ommx.InstanceClass` describes a set of exact `Instance` values. An adapter declares its structural input condition with `INPUT_CLASS`, then evaluates adapter-owned preconditions to determine applicability.
-- {meth}`Instance.reduce_capabilities() <ommx.Instance.reduce_capabilities>` explicitly lowers every special-constraint family not selected for preservation on an instance. It does not declare an input class or establish adapter applicability.
+- {meth}`Instance.lower_special_constraints() <ommx.Instance.lower_special_constraints>` explicitly lowers selected special-constraint families on an instance. It does not declare an input class or establish adapter applicability.
 
 This page covers:
 
 - `InstanceClass` membership and adapter applicability
-- {class}`~ommx.AdditionalCapability` and {attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>` as special-constraint family selectors
-- {meth}`Instance.reduce_capabilities() <ommx.Instance.reduce_capabilities>` for explicit lowering
+- {class}`~ommx.SpecialConstraintKind` and {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` as special-constraint family selectors
+- {meth}`Instance.lower_special_constraints() <ommx.Instance.lower_special_constraints>` for explicit lowering
 - Manual conversion APIs per constraint type
 - Auditing conversion results
 
@@ -48,20 +48,20 @@ binary_linear_with_one_hot = InstanceClass(
 
 Adapters declare this first applicability condition as `INPUT_CLASS`. Use `check_applicability()` for a structured result or `require_applicable()` to raise when membership or an adapter-owned precondition fails. Explicit preparation produces another input value, whose applicability must be checked again.
 
-## AdditionalCapability and required_capabilities
+## SpecialConstraintKind and active_special_constraint_kinds
 
-{class}`~ommx.AdditionalCapability` is the enumeration of "extra constraint types" beyond regular constraints.
+{class}`~ommx.SpecialConstraintKind` enumerates the active special-constraint families that can be selected for explicit lowering to regular constraints. It is not an Adapter input declaration or a serialization feature.
 
-| Capability | Constraint type |
+| Kind | Constraint type |
 |---|---|
-| `AdditionalCapability.Indicator` | {class}`~ommx.IndicatorConstraint` |
-| `AdditionalCapability.OneHot` | {class}`~ommx.OneHotConstraint` |
-| `AdditionalCapability.Sos1` | {class}`~ommx.Sos1Constraint` |
+| `SpecialConstraintKind.Indicator` | {class}`~ommx.IndicatorConstraint` |
+| `SpecialConstraintKind.OneHot` | {class}`~ommx.OneHotConstraint` |
+| `SpecialConstraintKind.Sos1` | {class}`~ommx.Sos1Constraint` |
 
-{attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>` returns the set of `AdditionalCapability` values corresponding to the **special constraints the instance currently holds**. When the instance uses only regular constraints the set is empty.
+{attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` returns the set of `SpecialConstraintKind` values corresponding to the **active special constraints the instance currently holds**. When the instance uses only regular constraints the set is empty.
 
 ```{code-cell} ipython3
-from ommx import Instance, DecisionVariable, OneHotConstraint, AdditionalCapability
+from ommx import Instance, DecisionVariable, OneHotConstraint, SpecialConstraintKind
 
 xs = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
 
@@ -72,30 +72,30 @@ instance = Instance.from_components(
     one_hot_constraints={0: OneHotConstraint(variables=xs)},
     sense=Instance.MAXIMIZE,
 )
-assert instance.required_capabilities == {AdditionalCapability.OneHot}
+assert instance.active_special_constraint_kinds == {SpecialConstraintKind.OneHot}
 assert binary_linear_with_one_hot.contains(instance)
 ```
 
-## Explicit lowering via reduce_capabilities
+## Explicit lowering via lower_special_constraints
 
-{meth}`Instance.reduce_capabilities() <ommx.Instance.reduce_capabilities>` is an explicit, mutating operation. For each family in `required_capabilities` that is not in `preserved`, the corresponding conversion API (see below) is invoked to turn that special constraint into regular constraints.
+{meth}`Instance.lower_special_constraints() <ommx.Instance.lower_special_constraints>` is an explicit, mutating operation. For each family selected in `kinds_to_lower`, the corresponding conversion API (see below) is invoked when that family is active. Families omitted from the set remain active, and an empty set is a no-op.
 
 ```{code-cell} ipython3
-converted = instance.reduce_capabilities(preserved=set())
-assert converted == {AdditionalCapability.OneHot}
+lowered = instance.lower_special_constraints({SpecialConstraintKind.OneHot})
+assert lowered == {SpecialConstraintKind.OneHot}
 ```
 
 ```{code-cell} ipython3
-assert instance.required_capabilities == set()
+assert instance.active_special_constraint_kinds == set()
 assert instance.one_hot_constraints == {}
 assert len(instance.constraints) == 1
 ```
 
-The OneHot constraint has been removed and a regular equality $x_0 + x_1 + x_2 - 1 = 0$ has been added in its place. `reduce_capabilities` mutates the instance in place. On success, `required_capabilities` becomes a subset of `preserved`. The method returns an empty set when no conversion was needed. Recheck `INPUT_CLASS` membership or adapter applicability on this resulting value.
+The OneHot constraint has been removed and a regular equality $x_0 + x_1 + x_2 - 1 = 0$ has been added in its place. `lower_special_constraints` mutates the instance in place and returns only the selected families that were active and actually lowered. The method returns an empty set when no selected family was active. Recheck `INPUT_CLASS` membership or adapter applicability on this resulting value.
 
 ## Manual conversion APIs
 
-`reduce_capabilities` is implemented by composing the per-type conversion APIs below. You can call these directly as well.
+`lower_special_constraints` is implemented by composing the per-type conversion APIs below. You can call these directly as well.
 
 ### One-hot → equality constraint
 
@@ -202,7 +202,7 @@ for cid, c in instance2.constraints.items():
 | Describe a structural set of adapter inputs | {class}`~ommx.InstanceClass` |
 | Declare the first adapter applicability condition | `INPUT_CLASS` |
 | Check membership plus adapter-owned preconditions | `check_applicability()` / `require_applicable()` |
-| Inspect active special-constraint families | {attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>` |
-| Explicitly lower every non-preserved special constraint | {meth}`Instance.reduce_capabilities <ommx.Instance.reduce_capabilities>` |
+| Inspect active special-constraint families | {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` |
+| Explicitly lower selected special constraints | {meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>` |
 | Convert individually to regular constraints | `convert_*_to_constraint(s)` / `convert_all_*_to_constraints` |
 | Audit conversion history | `instance.constraints_df(kind=..., removed=True)` / `solution.constraints_df(kind=..., include=("...","removed_reason"))` |

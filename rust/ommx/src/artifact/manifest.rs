@@ -11,12 +11,35 @@ use anyhow::{bail, ensure, Context, Result};
 use oci_spec::image::{Descriptor, DescriptorBuilder, Digest, ImageManifest, MediaType};
 use serde::Serialize;
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     path::Path,
     str::FromStr,
     sync::{Arc, OnceLock},
 };
 use url::Url;
+
+/// Project OCI descriptors onto their digest-keyed blob set.
+///
+/// Descriptors with the same digest identify the same raw content, so their
+/// declared sizes must agree. Other descriptor metadata does not participate
+/// in blob identity and may differ between references to the same digest.
+pub fn blob_descriptors_by_digest<'a>(
+    descriptors: impl IntoIterator<Item = &'a Descriptor>,
+) -> Result<BTreeMap<String, &'a Descriptor>> {
+    let mut unique = BTreeMap::new();
+    for descriptor in descriptors {
+        let digest = descriptor.digest().to_string();
+        let size = descriptor.size();
+        if let Some(previous) = unique.insert(digest.clone(), descriptor) {
+            let previous_size = previous.size();
+            ensure!(
+                previous_size == size,
+                "Manifest contains conflicting sizes for {digest}: {previous_size} and {size}"
+            );
+        }
+    }
+    Ok(unique)
+}
 
 /// OMMX Artifact stored in the SQLite-backed Local Registry.
 ///
@@ -37,6 +60,15 @@ pub struct LocalArtifact<'reg> {
     image_name: ImageRef,
     manifest_digest: Digest,
     manifest_cache: Arc<OnceLock<LocalManifest>>,
+}
+
+#[cfg(feature = "remote-artifact")]
+pub async fn read_blob_by_descriptor_async(
+    artifact: &LocalArtifact<'_>,
+    descriptor: &Descriptor,
+) -> Result<Vec<u8>> {
+    super::local_registry::registry::async_io::read_descriptor_blob(artifact.registry, descriptor)
+        .await
 }
 
 /// Runtime-owned Local Registry handle.
@@ -949,6 +981,49 @@ pub fn is_anonymous_artifact_tag(tag: &str) -> bool {
 mod tests {
     use super::*;
     use crate::{v1, Parse};
+
+    #[test]
+    fn blob_descriptors_are_deduplicated_by_digest() -> Result<()> {
+        let duplicate = descriptor_from_bytes(
+            MediaType::Other("application/octet-stream".to_string()),
+            b"same blob",
+            HashMap::new(),
+        )?;
+        let other = descriptor_from_bytes(
+            MediaType::Other("application/octet-stream".to_string()),
+            b"other blob",
+            HashMap::new(),
+        )?;
+
+        let descriptors = [duplicate.clone(), duplicate, other.clone()];
+        let unique = blob_descriptors_by_digest(&descriptors)?;
+
+        assert_eq!(unique.len(), 2);
+        assert!(unique.contains_key(&other.digest().to_string()));
+        Ok(())
+    }
+
+    #[test]
+    fn blob_descriptor_deduplication_rejects_conflicting_sizes() -> Result<()> {
+        let descriptor = descriptor_from_bytes(
+            MediaType::Other("application/octet-stream".to_string()),
+            b"blob",
+            HashMap::new(),
+        )?;
+        let conflicting = DescriptorBuilder::default()
+            .media_type(descriptor.media_type().clone())
+            .digest(descriptor.digest().clone())
+            .size(descriptor.size() + 1)
+            .build()?;
+
+        let descriptors = [descriptor.clone(), conflicting];
+        let error = blob_descriptors_by_digest(&descriptors).unwrap_err();
+
+        assert!(error.to_string().contains(&descriptor.digest().to_string()));
+        assert!(error.to_string().contains("conflicting sizes"));
+        Ok(())
+    }
+
     fn test_image_name(tag: &str) -> Result<ImageRef> {
         ImageRef::parse(&format!("ghcr.io/jij-inc/ommx/demo:{tag}"))
     }
