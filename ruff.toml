@@ -1,2 +1,8 @@
 [format]
 exclude = ["*.ipynb"]
+
+[lint]
+# Keep the lint policy explicit across Ruff upgrades. Ruff 0.16 expanded its
+# implicit defaults; adopting additional rule families should be a separate
+# repository-wide change.
+select = ["E4", "E7", "E9", "F"]

@@ -316,13 +316,13 @@ The `solve` class method may define additional adapter-specific keyword options 
 
 An adapter declares the structural set of exact `Instance` values it can receive with `INPUT_CLASS`. `check_applicability()` evaluates membership first and then adapter-owned preconditions without mutating the caller's instance; `require_applicable()` raises with the same structured report when either condition fails.
 
-`SolverAdapter` does not prescribe how a concrete adapter processes an accepted input and does not mutate the instance in a base constructor. A concrete adapter may explicitly call {meth}`Instance.reduce_capabilities <ommx.Instance.reduce_capabilities>` as an implementation detail. Its `preserved` argument uses these special-constraint family selectors:
+`SolverAdapter` does not prescribe how a concrete adapter processes an accepted input and does not mutate the instance in a base constructor. A concrete adapter may explicitly call {meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>` as an implementation detail. Its `kinds_to_lower` argument uses these special-constraint family selectors:
 
-- `AdditionalCapability.Indicator`: Indicator constraints (`binvar = 1 → f(x) <= 0`)
-- `AdditionalCapability.OneHot`: Exactly one of a set of binary variables is 1
-- `AdditionalCapability.Sos1`: At most one of a set of variables is non-zero
+- `SpecialConstraintKind.Indicator`: Indicator constraints (`binvar = 1 → f(x) <= 0`)
+- `SpecialConstraintKind.OneHot`: Exactly one of a set of binary variables is 1
+- `SpecialConstraintKind.Sos1`: At most one of a set of variables is non-zero
 
-Use {attr}`Instance.required_capabilities <ommx.Instance.required_capabilities>` to inspect the currently active families. `reduce_capabilities` converts every family not in `preserved` into regular constraints (Big-M for indicator / SOS1, linear equality for one-hot), mutates the instance in place, and logs each conversion at `INFO` level. Neither this property nor lowering establishes `INPUT_CLASS` membership or adapter applicability.
+Use {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` to inspect the currently active families. `lower_special_constraints` converts each selected active family into regular constraints (Big-M for indicator / SOS1, linear equality for one-hot), mutates the instance in place, and logs each lowering at `INFO` level. Neither this property nor lowering establishes `INPUT_CLASS` membership or adapter applicability.
 
 ```{important}
 `INPUT_CLASS` describes the exact value received by the adapter, regardless of its internal implementation. If a caller explicitly lowers an instance before choosing an adapter, the result is a different input value and must be checked again with `check_applicability()` or `require_applicable()`.
@@ -332,7 +332,7 @@ Using the functions prepared so far, you can implement it as follows:
 
 ```{code-cell} ipython3
 from ommx.adapter import DiagnosticsSink, SolverAdapter
-from ommx import AdditionalCapability
+from ommx import SpecialConstraintKind
 
 class OMMXPySCIPOptAdapter(SolverAdapter):
     def __init__(
@@ -340,10 +340,8 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         ommx_instance: Instance,
     ):
         # This adapter handles Indicator and SOS1 directly, and explicitly
-        # lowers every other active special-constraint family.
-        ommx_instance.reduce_capabilities(
-            {AdditionalCapability.Indicator, AdditionalCapability.Sos1}
-        )
+        # lowers OneHot constraints.
+        ommx_instance.lower_special_constraints({SpecialConstraintKind.OneHot})
         self.instance = ommx_instance
         self.model = pyscipopt.Model()
         self.model.hideOutput()

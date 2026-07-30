@@ -392,13 +392,51 @@ parametric_instance.parameters            # -> list[Parameter]
 parametric_instance.parameters_df()       # -> pandas.DataFrame  (method, not property)
 ```
 
-## 7. Removed helpers (`3.0.0a1`, [#770](https://github.com/Jij-Inc/ommx/pull/770), [#776](https://github.com/Jij-Inc/ommx/pull/776), [#782](https://github.com/Jij-Inc/ommx/pull/782); `3.0.0a2`, [#798](https://github.com/Jij-Inc/ommx/pull/798))
+## 7. Removed helpers (`3.0.0a1`, [#770](https://github.com/Jij-Inc/ommx/pull/770), [#776](https://github.com/Jij-Inc/ommx/pull/776), [#782](https://github.com/Jij-Inc/ommx/pull/782); `3.0.0a2`, [#798](https://github.com/Jij-Inc/ommx/pull/798); `3.0.0`, [#1087](https://github.com/Jij-Inc/ommx/pull/1087))
 
 - `Linear.from_object(x)` — construct via `Linear.single_term(...)`, `Linear.constant(...)`, or the arithmetic operators.
 - `Linear.equals_to(other)` — use `linear.almost_equal(other, atol=...)`. (Available on every expression type.)
 - `instance.constraint_hints` — replaced by `instance.one_hot_constraints` / `sos1_constraints` / `indicator_constraints`.
 - `Parameters` / `OneHot` / `Sos1` / `ConstraintHints` — see §1.2.
 - `Artifact` low-level types (`ArtifactArchive`, `ArtifactDir`, `ArtifactArchiveBuilder`, `ArtifactDirBuilder`) — replaced by unified `Artifact` / `ArtifactDraft`.
+- `ommx_openjij_adapter.response_to_samples(response)` — use `decode_to_samples(response)`.
+- `ommx_openjij_adapter.sample_qubo_sa(...)` — use `OMMXOpenJijSAAdapter.sample(...)` for a directly applicable input. The replacement returns an evaluated `SampleSet`, rather than raw `Samples`. When preparation is required, call `OMMXOpenJijSAAdapter.prepare(...)`, sample `preparation.input`, and use `preparation.evaluate_source(...)` to evaluate the samples against the source instance.
+
+In v2, the OpenJij Adapter constructor, `sample()`, and `solve()` accepted
+`uniform_penalty_weight`, `penalty_weights`, and
+`inequality_integer_slack_max_range` directly and performed preparation
+implicitly. In v3, move those settings into one immutable
+`OpenJijPreparationConfig`, pass it to `prepare()` through `config=`, and sample
+the resulting `preparation.input`. Use `penalty_weights` instead of
+`uniform_penalty_weight` when each regular constraint needs its own weight. v2
+also selected a uniform weight of `1.0` when neither penalty setting was
+supplied; v3 requires finite penalties to be selected explicitly when
+constraints remain after exact preparation.
+
+When exact integer slack conversion failed, v2 automatically attempted a
+discrete slack approximation. To retain that fallback, explicitly set the new
+`allow_approximate_integer_slack=True` field. Its v3 default is `False`, so the
+default preparation path uses only available exact operations.
+
+```python
+from ommx_openjij_adapter import (
+    OMMXOpenJijSAAdapter,
+    OpenJijPreparationConfig,
+)
+
+config = OpenJijPreparationConfig(
+    uniform_penalty_weight=20.0,
+    inequality_integer_slack_max_range=32,
+    allow_approximate_integer_slack=True,  # Retain v2's approximation fallback.
+)
+preparation = OMMXOpenJijSAAdapter.prepare(source, config=config)
+```
+
+`preparation.report.config` records the normalized, immutable settings actually
+used. The remaining fields encode one of four terminal states: source rejected,
+preparation phase rejected, prepared candidate rejected by Adapter
+applicability, or success. `steps` is the prefix of operations completed before
+that terminal state, not a separate outcome.
 
 ```python
 # v2.5.1

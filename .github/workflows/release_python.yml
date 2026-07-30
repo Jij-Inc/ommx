@@ -64,7 +64,7 @@ jobs:
         uses: actions/checkout@v7
       # Windows requires local Python
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: "3.10"
           cache: "pip"
@@ -133,7 +133,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: "20"
 
@@ -161,6 +161,9 @@ jobs:
       - name: Setup Test Environment
         uses: ./.github/actions/setup-test-environment
 
+      - name: Install release tools
+        run: uv sync --locked --only-group release --no-install-workspace
+
       - name: Download artifacts
         uses: actions/download-artifact@v8
         with:
@@ -169,7 +172,7 @@ jobs:
           merge-multiple: true
 
       - name: Check wheel
-        run: uvx twine check --strict dist/*
+        run: uv run --no-sync twine check --strict dist/*
 
   publish:
     if: startsWith(github.ref, 'refs/tags/python-')
@@ -206,9 +209,12 @@ jobs:
         with:
           python-version: "3.10"
 
+      - name: Install maintenance tools
+        run: uv sync --locked --only-group maintenance --no-install-workspace
+
       - name: Bump version
         run: |
-          echo "NEW_VERSION=$(uv run python/set-version.py)" >> $GITHUB_ENV
+          echo "NEW_VERSION=$(uv run --no-sync python/set-version.py)" >> $GITHUB_ENV
           task python:sync
 
       - uses: actions/create-github-app-token@v3

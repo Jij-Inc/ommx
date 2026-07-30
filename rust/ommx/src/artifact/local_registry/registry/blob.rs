@@ -73,6 +73,17 @@ impl FileBlobStore {
         Ok(digest)
     }
 
+    #[cfg(feature = "remote-artifact")]
+    /// Run the complete synchronous CAS publication as one blocking task.
+    /// Keeping hashing, locking, fsync, and atomic publication together avoids
+    /// splitting one storage transaction across async suspension points.
+    pub async fn put_bytes_async(&self, bytes: Vec<u8>) -> Result<Digest> {
+        let store = self.clone();
+        tokio::task::spawn_blocking(move || store.put_bytes(&bytes))
+            .await
+            .context("Blob store write task failed")?
+    }
+
     pub fn put_reader(&self, mut reader: impl Read) -> Result<(Digest, u64)> {
         let algorithm_dir = self.root.join(SHA256_ALGORITHM);
         fs::create_dir_all(&algorithm_dir)
@@ -129,6 +140,17 @@ impl FileBlobStore {
             "Blob digest verification failed for {digest}"
         );
         Ok(bytes)
+    }
+
+    #[cfg(feature = "remote-artifact")]
+    /// Run the complete synchronous blob read and digest verification as one
+    /// blocking task.
+    pub async fn read_bytes_async(&self, digest: &Digest) -> Result<Vec<u8>> {
+        let store = self.clone();
+        let digest = digest.clone();
+        tokio::task::spawn_blocking(move || store.read_bytes(&digest))
+            .await
+            .context("Blob store read task failed")?
     }
 
     pub fn exists(&self, digest: &Digest) -> Result<bool> {

@@ -20,11 +20,15 @@ jobs:
       - name: Setup Environment
         uses: ./.github/actions/setup-test-environment
 
-      - name: Regenerate stub file
+      - name: Regenerate stub files
         run: task python:stubgen
 
-      - name: Check updated
-        run: git diff --exit-code python/ommx/ommx/_ommx_rust/__init__.pyi
+      - name: Check generated files
+        run: |
+          if [ -n "$(git status --porcelain --untracked-files=all -- python/ommx/ommx docs/api)" ]; then
+            git status --short --untracked-files=all -- python/ommx/ommx docs/api
+            exit 1
+          fi
 
   # uv run and maturin develop/build doesn't work well together-
   # Even if one runs maturin develop once, uv run pyright
@@ -90,7 +94,9 @@ jobs:
           path: wheels
       - name: Transform Python Project to run tests
         run: |
-          uv run ci-scripts/setup-python-test-project.py ${{ matrix.python-version }}
+          # The unmodified workspace lock excludes Python 3.14.
+          uv sync --python 3.10 --locked --only-group maintenance --no-install-workspace
+          uv run --python 3.10 --no-sync ci-scripts/setup-python-test-project.py ${{ matrix.python-version }}
           cat pyproject.toml
       - name: Install deps
         run: task python:sync
@@ -128,7 +134,9 @@ jobs:
           path: wheels
       - name: Transform Python Project to run tests
         run: |
-          uv run ci-scripts/setup-python-test-project.py ${{ env.python-version }}
+          # Keep the project-rewrite tooling independent of the target Python.
+          uv sync --python 3.10 --locked --only-group maintenance --no-install-workspace
+          uv run --python 3.10 --no-sync ci-scripts/setup-python-test-project.py ${{ env.python-version }}
           cat pyproject.toml
       - name: Install deps
         run: task python:sync
@@ -143,8 +151,11 @@ jobs:
       - name: Setup Environment
         uses: ./.github/actions/setup-test-environment
 
+      - name: Install lint tools
+        run: uv sync --locked --only-group lint --no-install-workspace
+
       - name: Format
-        run: uvx ruff format --check python
+        run: uv run --no-sync ruff format --check python
 
       - name: Lint
-        run: uvx ruff check python
+        run: uv run --no-sync ruff check python

@@ -1,19 +1,19 @@
 import pytest
 
 from ommx import (
-    AdditionalCapability,
     DecisionVariableRole,
     Equality,
     Kind,
     ProvenanceKind,
     Sense,
+    SpecialConstraintKind,
 )
 
 
 @pytest.mark.parametrize(
     ("member", "value"),
     [
-        (AdditionalCapability.Indicator, 1),
+        (SpecialConstraintKind.Indicator, 1),
         (DecisionVariableRole.Used, 1),
         (Sense.Minimize, 1),
         (Equality.EqualToZero, 1),

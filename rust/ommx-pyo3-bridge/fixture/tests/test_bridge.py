@@ -64,6 +64,27 @@ def assert_component_instance(value: ommx.Instance) -> None:
     assert variable.subscripts == [9]
 
 
+def assert_component_parametric_instance(value: ommx.ParametricInstance) -> None:
+    assert type(value) is ommx.ParametricInstance
+    assert value.objective.linear_terms == {7: 1.0}
+    assert value.objective.constant_term == -3.0
+    assert len(value.decision_variables) == 1
+    assert value.decision_variables[0].name == "instance_x"
+
+
+def assert_component_solution(value: ommx.Solution) -> None:
+    assert type(value) is ommx.Solution
+    assert value.objective == 1.0
+    assert value.state.entries == {7: 4.0}
+    assert value.feasible
+
+
+def assert_component_sample_set(value: ommx.SampleSet) -> None:
+    assert type(value) is ommx.SampleSet
+    assert value.sample_ids() == {0}
+    assert_component_solution(value.get(0))
+
+
 def test_reconstruction_endpoints_stay_binding_private() -> None:
     endpoints = (
         "_pyo3_bridge_v0_function_from_bytes",
@@ -116,6 +137,18 @@ def test_decision_variable_is_canonical_and_preserves_owner_side_data() -> None:
 
 def test_instance_is_canonical_and_preserves_root_owned_data() -> None:
     assert_component_instance(fixture.instance())
+
+
+def test_parametric_instance_is_canonical_and_preserves_root_owned_data() -> None:
+    assert_component_parametric_instance(fixture.parametric_instance())
+
+
+def test_solution_is_canonical_and_preserves_evaluated_data() -> None:
+    assert_component_solution(fixture.solution())
+
+
+def test_sample_set_is_canonical_and_preserves_sampled_data() -> None:
+    assert_component_sample_set(fixture.sample_set())
 
 
 def test_frozen_v0_payloads_reconstruct_canonical_values() -> None:
@@ -229,6 +262,9 @@ def test_generated_stub_uses_canonical_ommx_types() -> None:
     assert "def constraint() -> ommx.Constraint:" in stub
     assert "def decision_variable() -> ommx.DecisionVariable:" in stub
     assert "def instance() -> ommx.Instance:" in stub
+    assert "def parametric_instance() -> ommx.ParametricInstance:" in stub
+    assert "def solution() -> ommx.Solution:" in stub
+    assert "def sample_set() -> ommx.SampleSet:" in stub
     assert "typing.Any" not in stub
     assert "override_return_type" not in stub
 
@@ -246,6 +282,9 @@ def test_missing_python_bridge_endpoint_has_a_clear_error() -> None:
         fake_rust = types.ModuleType("ommx._ommx_rust")
         fake_ommx._ommx_rust = fake_rust
         fake_ommx.Instance = type("Instance", (), {})
+        fake_ommx.ParametricInstance = type("ParametricInstance", (), {})
+        fake_ommx.Solution = type("Solution", (), {})
+        fake_ommx.SampleSet = type("SampleSet", (), {})
         sys.modules["ommx"] = fake_ommx
         sys.modules["ommx._ommx_rust"] = fake_rust
 
@@ -267,6 +306,18 @@ def test_missing_python_bridge_endpoint_has_a_clear_error() -> None:
         assert_missing_capability(
             fixture.instance,
             "ommx.Instance.from_v2_bytes",
+        )
+        assert_missing_capability(
+            fixture.parametric_instance,
+            "ommx.ParametricInstance.from_v2_bytes",
+        )
+        assert_missing_capability(
+            fixture.solution,
+            "ommx.Solution.from_v2_bytes",
+        )
+        assert_missing_capability(
+            fixture.sample_set,
+            "ommx.SampleSet.from_v2_bytes",
         )
         """
     )

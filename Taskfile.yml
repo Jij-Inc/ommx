@@ -38,6 +38,7 @@ tasks:
     env:
       VIRTUAL_ENV: "{{.ROOT_DIR}}/.venv"
     cmds:
+      - uv sync --locked --only-group typecheck --no-install-workspace --inexact
       - cargo run -p ommx-pyo3-bridge-fixture --bin stub_gen
       - git diff --exit-code -- rust/ommx-pyo3-bridge/fixture/ommx_pyo3_bridge_fixture.pyi
       - uv run --no-sync pyright --project rust/ommx-pyo3-bridge/fixture/pyrightconfig.json
@@ -47,7 +48,8 @@ tasks:
     env:
       VIRTUAL_ENV: "{{.ROOT_DIR}}/.venv"
     cmds:
-      - uvx --from "maturin>=1.12.2,<2" maturin develop --manifest-path rust/ommx-pyo3-bridge/fixture/Cargo.toml
+      - uv sync --locked --only-group build --only-group test --no-install-workspace --inexact
+      - uv run --no-sync maturin develop --manifest-path rust/ommx-pyo3-bridge/fixture/Cargo.toml
       - uv run --no-sync pytest -vv rust/ommx-pyo3-bridge/fixture/tests/test_bridge.py
 
   pyo3-bridge:test:

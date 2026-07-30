@@ -18,6 +18,7 @@ from ommx import (
     OneHotConstraint,
     Sense,
     Sos1Constraint,
+    SpecialConstraintKind,
 )
 from ommx.adapter import (
     AdapterApplicabilityReport,
@@ -319,7 +320,13 @@ def test_membership_is_recomputed_after_explicit_lowering() -> None:
     )
 
     assert not prepared_input_class.contains(instance)
-    instance.reduce_capabilities(set())
+    assert instance.active_special_constraint_kinds == {SpecialConstraintKind.OneHot}
+    assert instance.lower_special_constraints(set()) == set()
+    assert set(instance.one_hot_constraints) == {30}
+
+    lowered = instance.lower_special_constraints({SpecialConstraintKind.OneHot})
+    assert lowered == {SpecialConstraintKind.OneHot}
+    assert instance.active_special_constraint_kinds == set()
     assert prepared_input_class.contains(instance)
 
 
@@ -433,7 +440,7 @@ def test_precondition_hook_is_isolated_and_validated() -> None:
             ommx_instance: Instance,
             input_membership: InstanceClassMembershipReport,
         ) -> tuple[AdapterPreconditionViolation, ...]:
-            ommx_instance.reduce_capabilities(set())
+            ommx_instance.lower_special_constraints({SpecialConstraintKind.OneHot})
             return ()
 
     assert MutatingHook.check_applicability(instance).is_applicable

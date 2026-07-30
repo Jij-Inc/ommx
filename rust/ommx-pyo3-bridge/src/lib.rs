@@ -145,42 +145,51 @@ impl PyStubType for PyDecisionVariable {
     }
 }
 
-/// Output wrapper converting a Rust [`ommx::Instance`] into `ommx.Instance`.
-///
-/// Instances already have a public, owner-complete v2 root serialization, so
-/// this wrapper uses `ommx.Instance.from_v2_bytes` rather than a component-only
-/// reconstruction endpoint.
-#[derive(Debug, Clone)]
-pub struct PyInstance(ommx::Instance);
+macro_rules! root_wrapper {
+    ($wrapper:ident, $rust_type:ty, $python_name:literal) => {
+        #[doc = concat!("Output wrapper converting a Rust [`", stringify!($rust_type), "`] into `ommx.", $python_name, "`.")]
+        #[derive(Debug, Clone)]
+        pub struct $wrapper($rust_type);
 
-impl PyInstance {
-    /// Create a Python output wrapper for `instance`.
-    pub fn new(instance: ommx::Instance) -> Self {
-        Self(instance)
-    }
+        impl $wrapper {
+            /// Create a Python output wrapper for the value.
+            pub fn new(value: $rust_type) -> Self {
+                Self(value)
+            }
+        }
+
+        impl From<$rust_type> for $wrapper {
+            fn from(value: $rust_type) -> Self {
+                Self::new(value)
+            }
+        }
+
+        impl<'py> IntoPyObject<'py> for $wrapper {
+            type Target = PyAny;
+            type Output = Bound<'py, PyAny>;
+            type Error = PyErr;
+
+            fn into_pyobject(self, py: Python<'py>) -> PyResult<Self::Output> {
+                protocol::v0::root_into_py(self.0.to_v2_bytes(), $python_name, py)
+            }
+        }
+
+        impl PyStubType for $wrapper {
+            fn type_output() -> TypeInfo {
+                TypeInfo::with_module(concat!("ommx.", $python_name), "ommx".into())
+            }
+        }
+    };
 }
 
-impl From<ommx::Instance> for PyInstance {
-    fn from(instance: ommx::Instance) -> Self {
-        Self::new(instance)
-    }
-}
-
-impl<'py> IntoPyObject<'py> for PyInstance {
-    type Target = PyAny;
-    type Output = Bound<'py, PyAny>;
-    type Error = PyErr;
-
-    fn into_pyobject(self, py: Python<'py>) -> PyResult<Self::Output> {
-        protocol::v0::instance_into_py(self.0, py)
-    }
-}
-
-impl PyStubType for PyInstance {
-    fn type_output() -> TypeInfo {
-        TypeInfo::with_module("ommx.Instance", "ommx".into())
-    }
-}
+root_wrapper!(PyInstance, ommx::Instance, "Instance");
+root_wrapper!(
+    PyParametricInstance,
+    ommx::ParametricInstance,
+    "ParametricInstance"
+);
+root_wrapper!(PySolution, ommx::Solution, "Solution");
+root_wrapper!(PySampleSet, ommx::SampleSet, "SampleSet");
 
 #[cfg(test)]
 mod tests {
@@ -195,5 +204,11 @@ mod tests {
             "ommx.DecisionVariable"
         );
         assert_eq!(PyInstance::type_output().name, "ommx.Instance");
+        assert_eq!(
+            PyParametricInstance::type_output().name,
+            "ommx.ParametricInstance"
+        );
+        assert_eq!(PySolution::type_output().name, "ommx.Solution");
+        assert_eq!(PySampleSet::type_output().name, "ommx.SampleSet");
     }
 }
