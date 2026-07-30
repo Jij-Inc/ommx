@@ -4,7 +4,7 @@ import OMMXProof.Instance.Transform.IndicatorBigM
 # Indicator Big-M transformation fixtures
 
 The exact row-level fixture exercises omission of the redundant lower side.
-Finite `Instance.Transform` fixtures are defined below it.
+Finite `Instance.Transform` fixtures are constructed through validated plans.
 -/
 
 namespace OMMXProof.Test.IndicatorBigM
@@ -62,56 +62,74 @@ def source : Instance 2 where
   objective := objective
   sense := .minimize
 
-def witness : Witness source where
+def plan : Plan source where
   constraintIndex := ⟨0, by native_decide⟩
-  bodyBound := .finite 0 3 (by norm_num)
 
 @[simp]
-theorem witness_bodyValue (state : State 2) :
-    witness.bodyValue state = state 0 := by
-  simp [Witness.bodyValue, Witness.constraint, witness, source, selected, body,
+theorem plan_bodyValue (state : State 2) :
+    plan.bodyValue state = state 0 := by
+  simp [Plan.bodyValue, Plan.constraint, plan, source, selected, body,
     bodyExpr, Affine.eval]
 
-theorem witness_valid : witness.Valid := by native_decide
-
-example :
-    Witness.create source ⟨0, by native_decide⟩ = some witness := by
+example : plan.bodyBound = .finite 0 3 (by norm_num) := by
   native_decide
+
+theorem plan_valid : plan.Valid := by native_decide
+
+theorem plan_validate_isSome : plan.validate.isSome = true := by
+  native_decide
+
+def validated : plan.Validated :=
+  plan.validate.get plan_validate_isSome
+
+example : validated.upper = 3 := by native_decide
+
+example : validated.lower (by native_decide) = 0 := by native_decide
+
+theorem lowering_plan_isSome : (lowering plan).isSome = true := by
+  native_decide
+
+def transform : Instance.Transform source :=
+  (lowering plan).get lowering_plan_isSome
+
+theorem lowering_plan : lowering plan = some transform :=
+  (Option.some_get lowering_plan_isSome).symm
 
 /-- The positive upper side is emitted; the zero lower side is redundant. -/
-example : witness.generatedConstraints.length = 1 := by native_decide
+example : validated.generatedConstraints.length = 1 := by native_decide
 
-example : witness.target.constraints.length = 1 := by native_decide
+example : transform.target.constraints.length = 1 := by native_decide
 
-example : witness.target.indicatorConstraints = [] := by native_decide
+example : transform.target.indicatorConstraints = [] := by native_decide
 
-example : witness.lowering.targetDimension = 2 := by native_decide
+example : transform.targetDimension = 2 := by native_decide
 
-example : witness.lowering.IsReduction :=
-  witness.lowering_isReduction witness_valid
+example : transform.IsReduction :=
+  lowering_isReduction plan lowering_plan
 
-example : witness.lowering.IsRelaxation :=
-  witness.lowering_isRelaxation witness_valid
+example : transform.IsRelaxation :=
+  lowering_isRelaxation plan lowering_plan
 
-example : witness.lowering.SourceObjectivePreserving :=
-  witness.lowering_sourceObjectivePreserving
+example : transform.SensePreserving :=
+  lowering_sensePreserving plan lowering_plan
 
-example : witness.lowering.TargetObjectivePreserving :=
-  witness.lowering_targetObjectivePreserving
+example : transform.SourceObjectiveValuePreserving :=
+  lowering_sourceObjectiveValuePreserving plan lowering_plan
 
-example : witness.lowering.SourceRoundTrip :=
-  witness.lowering_sourceRoundTrip
+example : transform.TargetObjectiveValuePreserving :=
+  lowering_targetObjectiveValuePreserving plan lowering_plan
 
-example : witness.lowering.TargetRoundTrip :=
-  witness.lowering_targetRoundTrip
+example : transform.SourceObjectivePreserving :=
+  lowering_sourceObjectivePreserving plan lowering_plan
 
-def unsafeUpperWitness : Witness source where
-  constraintIndex := ⟨0, by native_decide⟩
-  bodyBound := .finite 0 2 (by norm_num)
+example : transform.TargetObjectivePreserving :=
+  lowering_targetObjectivePreserving plan lowering_plan
 
-/-- A stored bound different from the computed affine image is rejected. -/
-theorem unsafeUpperWitness_invalid : ¬unsafeUpperWitness.Valid := by
-  native_decide
+example : transform.SourceRoundTrip :=
+  lowering_sourceRoundTrip plan lowering_plan
+
+example : transform.TargetRoundTrip :=
+  lowering_targetRoundTrip plan lowering_plan
 
 def upperOnlyDomains : Fin 2 → Domain :=
   fun i =>
@@ -129,34 +147,46 @@ def upperOnlyLessEqualSource : Instance 2 :=
     domains := upperOnlyDomains
     indicatorConstraints := [upperOnlyLessEqualSelected] }
 
-def upperOnlyLessEqualWitness : Witness upperOnlyLessEqualSource where
+def upperOnlyLessEqualPlan : Plan upperOnlyLessEqualSource where
   constraintIndex := ⟨0, by native_decide⟩
-  bodyBound := .upperBounded 3
 
 /-- A `≤` Indicator needs only the finite upper endpoint. -/
-theorem upperOnlyLessEqualWitness_valid :
-    upperOnlyLessEqualWitness.Valid := by
+theorem upperOnlyLessEqualPlan_valid :
+    upperOnlyLessEqualPlan.Valid := by
   native_decide
 
-example :
-    Witness.create upperOnlyLessEqualSource ⟨0, by native_decide⟩ =
-      some upperOnlyLessEqualWitness := by
+example : (lowering upperOnlyLessEqualPlan).isSome = true := by
   native_decide
 
 def upperOnlyEqualitySource : Instance 2 :=
   { source with domains := upperOnlyDomains }
 
-def upperOnlyEqualityWitness : Witness upperOnlyEqualitySource where
+def upperOnlyEqualityPlan : Plan upperOnlyEqualitySource where
   constraintIndex := ⟨0, by native_decide⟩
-  bodyBound := .upperBounded 3
 
 /-- Equality lowering also needs a finite lower endpoint. -/
-theorem upperOnlyEqualityWitness_invalid :
-    ¬upperOnlyEqualityWitness.Valid := by
+theorem upperOnlyEqualityPlan_invalid :
+    ¬upperOnlyEqualityPlan.Valid := by
   native_decide
 
-example :
-    Witness.create upperOnlyEqualitySource ⟨0, by native_decide⟩ = none := by
+example : lowering upperOnlyEqualityPlan = none := by
+  native_decide
+
+def unboundedDomains : Fin 2 → Domain :=
+  fun i => if i = 0 then .continuous else .binary
+
+def unboundedLessEqualSource : Instance 2 :=
+  { upperOnlyLessEqualSource with domains := unboundedDomains }
+
+def unboundedLessEqualPlan : Plan unboundedLessEqualSource where
+  constraintIndex := ⟨0, by native_decide⟩
+
+/-- A `≤` Indicator still needs a finite upper endpoint. -/
+theorem unboundedLessEqualPlan_invalid :
+    ¬unboundedLessEqualPlan.Valid := by
+  native_decide
+
+example : lowering unboundedLessEqualPlan = none := by
   native_decide
 
 def activeOnZeroSelected : IndicatorConstraint 2 :=
@@ -165,33 +195,28 @@ def activeOnZeroSelected : IndicatorConstraint 2 :=
 def activeOnZeroSource : Instance 2 :=
   { source with indicatorConstraints := [activeOnZeroSelected] }
 
-def activeOnZeroWitness : Witness activeOnZeroSource where
+def activeOnZeroPlan : Plan activeOnZeroSource where
   constraintIndex := ⟨0, by native_decide⟩
-  bodyBound := .finite 0 3 (by norm_num)
 
 /-- The current generated rows encode an active-on-one Indicator only. -/
-theorem activeOnZeroWitness_invalid : ¬activeOnZeroWitness.Valid := by
-  intro hvalid
-  have hne :
-      activeOnZeroWitness.constraint.polarity ≠ .activeOnOne := by
-    native_decide
-  exact hne hvalid.2.1
+theorem activeOnZeroPlan_invalid : ¬activeOnZeroPlan.Valid := by
+  native_decide
+
+example : lowering activeOnZeroPlan = none := by
+  native_decide
 
 def nonBinarySource : Instance 2 :=
   { source with
     domains := fun _ => .continuous (.finite 0 3 (by norm_num)) }
 
-def nonBinaryWitness : Witness nonBinarySource where
+def nonBinaryPlan : Plan nonBinarySource where
   constraintIndex := ⟨0, by native_decide⟩
-  bodyBound := .finite 0 3 (by norm_num)
 
 /-- A nonbinary trigger cannot validate the Big-M lowering. -/
-theorem nonBinaryWitness_invalid : ¬nonBinaryWitness.Valid := by
-  intro hvalid
-  have hne :
-      nonBinarySource.domains nonBinaryWitness.constraint.trigger ≠
-        .binary := by
-    native_decide
-  exact hne hvalid.1
+theorem nonBinaryPlan_invalid : ¬nonBinaryPlan.Valid := by
+  native_decide
+
+example : lowering nonBinaryPlan = none := by
+  native_decide
 
 end OMMXProof.Test.IndicatorBigM

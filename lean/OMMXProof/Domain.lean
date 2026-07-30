@@ -42,6 +42,28 @@ instance : LinearOrder Endpoint :=
 instance : Coe Rat Endpoint where
   coe := .finite
 
+/-- Whether an extended-rational endpoint is finite. -/
+def IsFinite : Endpoint → Prop
+  | .finite _ => True
+  | _ => False
+
+instance (endpoint : Endpoint) : Decidable endpoint.IsFinite := by
+  cases endpoint <;> simp only [IsFinite] <;> infer_instance
+
+/-- The rational value of a finite endpoint. -/
+def finiteValue : (endpoint : Endpoint) → endpoint.IsFinite → Rat
+  | .finite value, _ => value
+  | .negInf, h => False.elim h
+  | .posInf, h => False.elim h
+
+theorem eq_finiteValue (endpoint : Endpoint)
+    (hfinite : endpoint.IsFinite) :
+    endpoint = .finite (endpoint.finiteValue hfinite) := by
+  cases endpoint with
+  | negInf => exact False.elim hfinite
+  | finite _ => rfl
+  | posInf => exact False.elim hfinite
+
 @[simp]
 theorem negInf_le (endpoint : Endpoint) : .negInf ≤ endpoint := by
   cases endpoint <;>
