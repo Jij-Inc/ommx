@@ -27,6 +27,7 @@ def genericSupport [DecidableEq ι]
 def GenericSOS1 [Fintype ι] [DecidableEq ι] (members : ι → Rat) : Prop :=
   (genericSupport Finset.univ members).card ≤ 1
 
+/-- The sum of binary member values equals the cardinality of their nonzero support. -/
 theorem generic_binary_sum_eq_support_card [DecidableEq ι]
     (members : Finset ι) (state : ι → Rat)
     (hbinary : GenericBinaryOn members state) :
@@ -81,11 +82,13 @@ def WithinSelectorBounds (bounds : SelectorBounds ι) (members : ι → Rat) : P
 def canonicalSelector (members : ι → Rat) : ι → Rat :=
   fun i => if members i = 0 then 0 else 1
 
+/-- Every canonical selector is binary. -/
 theorem canonicalSelector_binary (members : ι → Rat) (i : ι) :
     canonicalSelector members i ∈ Domain.binary := by
   by_cases hzero : members i = 0 <;>
     simp [canonicalSelector, Membership.mem, Domain.Holds, hzero]
 
+/-- Canonical selectors have the same nonzero support as their members. -/
 theorem canonicalSelector_support [Fintype ι] [DecidableEq ι]
     (members : ι → Rat) :
     genericSupport Finset.univ (canonicalSelector members) =
@@ -121,6 +124,7 @@ instance [Fintype ι] [DecidableEq ι] (reused : Finset ι)
     OptionalLowerLink
   infer_instance
 
+/-- A linked member is zero whenever its fresh selector is zero. -/
 theorem member_eq_zero_of_fresh_selector_eq_zero [DecidableEq ι]
     {bounds : SelectorBounds ι}
     {members freshSelectors : ι → Rat} {i : ι}
@@ -144,6 +148,7 @@ theorem member_eq_zero_of_fresh_selector_eq_zero [DecidableEq ι]
     · exact le_trans (le_of_not_gt hemitted) (hbound i).1
   exact le_antisymm hupper hlower
 
+/-- Projecting a valid mixed selector formulation recovers the original SOS1 condition. -/
 theorem plannedSelectorFormulation_project_sos1
     [Fintype ι] [DecidableEq ι]
     (reused : Finset ι) (bounds : SelectorBounds ι)
@@ -175,6 +180,7 @@ theorem plannedSelectorFormulation_project_sos1
         (hlinks i hreused) hselector)
   exact le_trans (Finset.card_le_card hsubset) hselectorSOS1
 
+/-- Reusing binary members agrees with the canonical selector on every member. -/
 theorem plannedSelector_canonical [Fintype ι] [DecidableEq ι]
     (reused : Finset ι) (members : ι → Rat)
     (hreusedBinary : GenericBinaryOn reused members) :
@@ -187,6 +193,7 @@ theorem plannedSelector_canonical [Fintype ι] [DecidableEq ι]
     · simp [plannedSelector, canonicalSelector, hreused, hone]
   · simp [plannedSelector, hreused]
 
+/-- Canonical selectors realize the planned formulation of a bounded SOS1 state. -/
 theorem canonicalSelector_plannedFormulation [Fintype ι] [DecidableEq ι]
     (reused : Finset ι) (bounds : SelectorBounds ι) (members : ι → Rat)
     (hbound : WithinSelectorBounds bounds members)
