@@ -55,102 +55,77 @@ theorem lowering_isReduction {source : Instance n} (plan : Plan source)
     (hlowering : lowering plan = some transform) :
     transform.IsReduction := by
   unfold lowering at hlowering
-  cases hvalidated : plan.validate with
-  | none =>
-      simp [hvalidated] at hlowering
-  | some validated =>
-      simp only [hvalidated, Option.map_some, Option.some.injEq] at hlowering
-      subst transform
-      intro targetState htarget
-      change validated.target.Feasible targetState at htarget
-      refine ⟨State.source targetState, rfl, ?_⟩
-      rcases
-          (validated.target_feasible_iff_base_and_formulation targetState).mp
-            htarget with
-        ⟨hbase, hformulation⟩
-      apply (plan.source_feasible_iff_base_and_selected
-        (State.source targetState)).mpr
-      exact ⟨hbase,
-        validated.selectedHolds_of_plannedSelectorFormulation
-          hbase.1 hformulation⟩
+  rcases Option.map_eq_some_iff.mp hlowering with ⟨validated, _, rfl⟩
+  intro targetState htarget
+  change validated.target.Feasible targetState at htarget
+  refine ⟨State.source targetState, rfl, ?_⟩
+  rcases
+      (validated.target_feasible_iff_base_and_formulation targetState).mp
+        htarget with
+    ⟨hbase, hformulation⟩
+  apply (plan.source_feasible_iff_base_and_selected
+    (State.source targetState)).mpr
+  exact ⟨hbase,
+    validated.selectedHolds_of_plannedSelectorFormulation
+      hbase.1 hformulation⟩
 
 theorem lowering_isRelaxation {source : Instance n} (plan : Plan source)
     {transform : Instance.Transform source}
     (hlowering : lowering plan = some transform) :
     transform.IsRelaxation := by
   unfold lowering at hlowering
-  cases hvalidated : plan.validate with
-  | none =>
-      simp [hvalidated] at hlowering
-  | some validated =>
-      simp only [hvalidated, Option.map_some, Option.some.injEq] at hlowering
-      subst transform
-      intro sourceState hsource
-      let selectors : State plan.freshCount :=
-        fun j =>
-          canonicalSelector (plan.memberState sourceState) (plan.freshMember j)
-      refine ⟨State.append sourceState selectors, rfl, ?_⟩
-      change validated.target.Feasible (State.append sourceState selectors)
-      apply (validated.target_feasible_append_iff_base_and_formulation
-        sourceState selectors).mpr
-      rcases (plan.source_feasible_iff_base_and_selected sourceState).mp
-          hsource with
-        ⟨hbase, hselected⟩
-      refine ⟨hbase, ?_⟩
-      have hselectors :
-          plan.freshSelectorState sourceState selectors =
-            canonicalSelector (plan.memberState sourceState) := by
-        funext i
-        by_cases hi : i ∈ plan.freshMembers
-        · simp [Plan.freshSelectorState, selectors, hi]
-        · simp [Plan.freshSelectorState, hi]
-      rw [hselectors]
-      exact canonicalSelector_plannedFormulation
-        plan.reusedMembers validated.bounds (plan.memberState sourceState)
-        (validated.withinBounds_of_domains hbase.1)
-        (plan.reusedBinary_of_domains hbase.1)
-        ((plan.genericSOS1_memberState_iff_holds sourceState).mpr hselected)
+  rcases Option.map_eq_some_iff.mp hlowering with ⟨validated, _, rfl⟩
+  intro sourceState hsource
+  let selectors : State plan.freshCount :=
+    fun j =>
+      canonicalSelector (plan.memberState sourceState) (plan.freshMember j)
+  refine ⟨State.append sourceState selectors, rfl, ?_⟩
+  change validated.target.Feasible (State.append sourceState selectors)
+  apply (validated.target_feasible_append_iff_base_and_formulation
+    sourceState selectors).mpr
+  rcases (plan.source_feasible_iff_base_and_selected sourceState).mp
+      hsource with
+    ⟨hbase, hselected⟩
+  refine ⟨hbase, ?_⟩
+  have hselectors :
+      plan.freshSelectorState sourceState selectors =
+        canonicalSelector (plan.memberState sourceState) := by
+    funext i
+    by_cases hi : i ∈ plan.freshMembers
+    · simp [Plan.freshSelectorState, selectors, hi]
+    · simp [Plan.freshSelectorState, hi]
+  rw [hselectors]
+  exact canonicalSelector_plannedFormulation
+    plan.reusedMembers validated.bounds (plan.memberState sourceState)
+    (validated.withinBounds_of_domains hbase.1)
+    (plan.reusedBinary_of_domains hbase.1)
+    ((plan.genericSOS1_memberState_iff_holds sourceState).mpr hselected)
 
 theorem lowering_sensePreserving {source : Instance n} (plan : Plan source)
     {transform : Instance.Transform source}
     (hlowering : lowering plan = some transform) :
     transform.SensePreserving := by
   unfold lowering at hlowering
-  cases hvalidated : plan.validate with
-  | none =>
-      simp [hvalidated] at hlowering
-  | some _ =>
-      simp only [hvalidated, Option.map_some, Option.some.injEq] at hlowering
-      subst transform
-      rfl
+  rcases Option.map_eq_some_iff.mp hlowering with ⟨_, _, rfl⟩
+  rfl
 
 theorem lowering_sourceObjectiveValuePreserving {source : Instance n}
     (plan : Plan source) {transform : Instance.Transform source}
     (hlowering : lowering plan = some transform) :
     transform.SourceObjectiveValuePreserving := by
   unfold lowering at hlowering
-  cases hvalidated : plan.validate with
-  | none =>
-      simp [hvalidated] at hlowering
-  | some _ =>
-      simp only [hvalidated, Option.map_some, Option.some.injEq] at hlowering
-      subst transform
-      intro sourceState _
-      simp [Instance.ObjectiveValue, Plan.Validated.target]
+  rcases Option.map_eq_some_iff.mp hlowering with ⟨_, _, rfl⟩
+  intro sourceState _
+  simp [Instance.ObjectiveValue, Plan.Validated.target]
 
 theorem lowering_targetObjectiveValuePreserving {source : Instance n}
     (plan : Plan source) {transform : Instance.Transform source}
     (hlowering : lowering plan = some transform) :
     transform.TargetObjectiveValuePreserving := by
   unfold lowering at hlowering
-  cases hvalidated : plan.validate with
-  | none =>
-      simp [hvalidated] at hlowering
-  | some _ =>
-      simp only [hvalidated, Option.map_some, Option.some.injEq] at hlowering
-      subst transform
-      intro targetState _
-      simp [Instance.ObjectiveValue, Plan.Validated.target]
+  rcases Option.map_eq_some_iff.mp hlowering with ⟨_, _, rfl⟩
+  intro targetState _
+  simp [Instance.ObjectiveValue, Plan.Validated.target]
 
 theorem lowering_sourceObjectivePreserving {source : Instance n}
     (plan : Plan source) {transform : Instance.Transform source}
@@ -171,14 +146,9 @@ theorem lowering_sourceRoundTrip {source : Instance n} (plan : Plan source)
     (hlowering : lowering plan = some transform) :
     transform.SourceRoundTrip := by
   unfold lowering at hlowering
-  cases hvalidated : plan.validate with
-  | none =>
-      simp [hvalidated] at hlowering
-  | some _ =>
-      simp only [hvalidated, Option.map_some, Option.some.injEq] at hlowering
-      subst transform
-      intro sourceState _
-      simp
+  rcases Option.map_eq_some_iff.mp hlowering with ⟨_, _, rfl⟩
+  intro sourceState _
+  simp
 
 end SOS1BigM
 

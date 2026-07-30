@@ -223,40 +223,37 @@ theorem not_targetRoundTrip_of_lowering
     (hlowering : lowering plan = some lowered) :
     ¬lowered.TargetRoundTrip := by
   unfold lowering at hlowering
-  cases hvalidated : plan.validate with
-  | none =>
-      simp [hvalidated] at hlowering
-  | some validated =>
-      simp only [hvalidated, Option.map_some, Option.some.injEq] at hlowering
-      subst lowered
-      have htarget :
-          validated.target.Feasible noncanonicalTarget := by
-        rw [noncanonicalTarget,
-          validated.target_feasible_append_iff_base_and_formulation]
-        refine
-          ⟨(plan.source_feasible_iff_base_and_selected zeroSource).mp
-              zeroSource_feasible |>.1,
-            ?_⟩
-        native_decide +revert
-      intro hroundTrip
-      have hstate := hroundTrip htarget
-      change
-        some (State.append (State.source noncanonicalTarget) fun j =>
-          canonicalSelector
-            (plan.memberState (State.source noncanonicalTarget))
-            (plan.freshMember j)) =
-          some noncanonicalTarget at hstate
-      have heq :
-          State.append (State.source noncanonicalTarget) (fun j =>
-            canonicalSelector
-              (plan.memberState (State.source noncanonicalTarget))
-              (plan.freshMember j)) =
-            noncanonicalTarget :=
-        Option.some.inj hstate
-      have hcomponent := congrArg
-        (fun state => state (Fin.natAdd 2 freshZero)) heq
-      simp [Plan.memberState, noncanonicalTarget, oneSelector, zeroSource,
-        canonicalSelector, State.source, State.append] at hcomponent
+  rcases Option.map_eq_some_iff.mp hlowering with
+    ⟨validated, hvalidated, rfl⟩
+  clear hlowering
+  have htarget :
+      validated.target.Feasible noncanonicalTarget := by
+    rw [noncanonicalTarget,
+      validated.target_feasible_append_iff_base_and_formulation]
+    refine
+      ⟨(plan.source_feasible_iff_base_and_selected zeroSource).mp
+          zeroSource_feasible |>.1,
+        ?_⟩
+    native_decide +revert
+  intro hroundTrip
+  have hstate := hroundTrip htarget
+  change
+    some (State.append (State.source noncanonicalTarget) fun j =>
+      canonicalSelector
+        (plan.memberState (State.source noncanonicalTarget))
+        (plan.freshMember j)) =
+      some noncanonicalTarget at hstate
+  have heq :
+      State.append (State.source noncanonicalTarget) (fun j =>
+        canonicalSelector
+          (plan.memberState (State.source noncanonicalTarget))
+          (plan.freshMember j)) =
+        noncanonicalTarget :=
+    Option.some.inj hstate
+  have hcomponent := congrArg
+    (fun state => state (Fin.natAdd 2 freshZero)) heq
+  simp [Plan.memberState, noncanonicalTarget, oneSelector, zeroSource,
+    canonicalSelector, State.source, State.append] at hcomponent
 
 example : ¬transform.TargetRoundTrip :=
   not_targetRoundTrip_of_lowering lowering_plan
