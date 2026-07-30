@@ -18,6 +18,8 @@ import OMMXProof.Instance.Transform.SOS1BigM.Basic
 import OMMXProof.Instance.Transform.SOS1BigM.Formulation
 import OMMXProof.Instance.Transform.SOS1BigM.Plan
 import OMMXProof.Instance.Transform.SOS1BigM.Target
+import OMMXProof.Instance.Transform.SOS1Promotion
+import OMMXProof.Instance.Transform.SOS1Promotion.Target
 import OMMXProof.Instance.Transform.SOS1Promotion.Witness
 import OMMXProof.Instance.Transform.SOS1SelectorFormulation
 import OMMXProof.State
