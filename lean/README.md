@@ -35,7 +35,8 @@ The current model focuses on exact-rational affine optimization. It provides:
   objectives, and optimization sense;
 - an `Instance.Transform` contract with explicit target, encode/decode,
   directional preservation, round-trip, and composition laws; and
-- exact Indicator and SOS1 Big-M lowering as `Instance.Transform`s.
+- partial Indicator and SOS1 Big-M lowering that validates a `Plan` before
+  constructing an `Instance.Transform`.
 
 Detailed modules and implemented features are listed below. SDK serialization
 and lifecycle, floating-point behavior, Rust mutation correctness, and
@@ -56,9 +57,13 @@ completeness of recognition or presolve algorithms remain outside this model.
 | `OMMXProof.Instance.Extend` | Left-block embedding of states, expressions, constraints, and Instances into a larger finite space |
 | `OMMXProof.Instance.Transform` | Partial state transformations, directional reduction/relaxation and objective-preservation contracts, and independent source/target round trips |
 | `OMMXProof.Instance.Transform.IndicatorBigM.Formulation` | Pointwise Big-M sides and their exact relation to active-on-one Indicator semantics |
-| `OMMXProof.Instance.Transform.IndicatorBigM` | Validated Indicator Big-M plans, partial lowering, identity state maps, and semantic correctness |
+| `OMMXProof.Instance.Transform.IndicatorBigM.Plan` | Indicator selection, affine body-bound computation, and validation of supported triggers, polarity, and finite endpoints |
+| `OMMXProof.Instance.Transform.IndicatorBigM.Target` | Generated linear rows, target Instance construction, and feasibility equivalence |
+| `OMMXProof.Instance.Transform.IndicatorBigM` | Partial lowering with identity state maps and transformation correctness |
 | `OMMXProof.Instance.Transform.SOS1BigM.Formulation` | Mixed reused/fresh selector formulation and its exact relation to SOS1 semantics |
-| `OMMXProof.Instance.Transform.SOS1BigM` | Validated SOS1 Big-M plans, partial lowering, state maps, and semantic correctness |
+| `OMMXProof.Instance.Transform.SOS1BigM.Plan` | SOS1 selection, reused/fresh member partitioning, and finite-bound validation |
+| `OMMXProof.Instance.Transform.SOS1BigM.Target` | Big-M links, selector cardinality, target Instance construction, and feasibility equivalence |
+| `OMMXProof.Instance.Transform.SOS1BigM` | Partial lowering, canonical encoding, source projection, and transformation correctness |
 
 ## Checks
 
@@ -90,17 +95,20 @@ includes Lean's standard `propext`, `Classical.choice`, and `Quot.sound` axioms.
 - [x] Semantic domains with explicit infinite endpoints and valid rational bounds
 - [x] Sound affine bounds, Instance denotation, and Transform preservation relations
 - [x] Reduction/relaxation composition and encode/decode round-trip laws
-- [x] Indicator Big-M lowering as a finite `Instance.Transform`
+- [x] Partial Indicator Big-M lowering with validated affine body bounds and identity state maps
 - [x] Partial SOS1 Big-M lowering with mixed reused/fresh selector layouts
 - [x] Executable accept/reject fixtures and counterexamples
 
 ## Planned directions
 
-The packaged `Instance.Transform` examples currently focus on lowering special
-constraints into ordinary constraints. The common transformation contract is
-not restricted to lowering or to presolve reductions. The intended next
-directions are:
+The packaged `Instance.Transform` examples currently focus on lowering
+Indicator and SOS1 constraints into regular linear constraints. The common
+transformation contract is not restricted to lowering or to presolve
+reductions. The intended next directions are:
 
+- promotion from regular linear formulations to higher-level constraint
+  families, including validation of whether earlier lowering data still
+  supports inverse lowering after presolve;
 - presolve transformations for MILP problems represented by `Instance`;
 - more general presolve transformations beyond the current affine MILP
   fragment;
@@ -110,5 +118,6 @@ directions are:
 - a canonical SDK-to-Lean bridge in which SDK-produced `Witness` values are
   checked against this formal contract.
 
-The versioned `Witness` contract, bridge, and SDK-side `Witness` producer are
-future integration work and are intentionally unimplemented here.
+The future SDK-produced `Witness` is distinct from the current in-Lean `Plan`,
+which selects and validates one lowering operation. The versioned `Witness`
+contract, bridge, and SDK-side producer are intentionally unimplemented here.
