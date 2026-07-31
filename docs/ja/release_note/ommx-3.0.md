@@ -8,6 +8,15 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
+### 🛠 Evaluation error を呼び出し側の回復方法に応じて通知 ([#1104](https://github.com/Jij-Inc/ommx/pull/1104))
+
+Function、polynomial、constraint、named function、`Instance` のevaluation APIは、
+RustからPythonへの共通error boundaryを直接使います。呼び出し側が渡したstateの不足・
+未知のID・不正な値と、回復可能なdependent-variable assertionは`ValueError`になります。
+Functionとpolynomialを直接partial evaluationする場合は`CoefficientError`を保持し、
+`Instance`が所有するdependencyの正規化とremoved constraintの復元で発生した
+coefficient failureは`RuntimeError`にfallbackします。
+
 ## 3.0.0 Beta 2
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b2-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b2)

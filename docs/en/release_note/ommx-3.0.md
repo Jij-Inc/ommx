@@ -8,6 +8,16 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🛠 Evaluation errors follow caller ownership ([#1104](https://github.com/Jij-Inc/ommx/pull/1104))
+
+Function, polynomial, constraint, named-function, and `Instance` evaluation
+APIs use the shared Rust-to-Python error boundary directly. Missing or unknown
+caller-owned state, invalid caller-provided values, and recoverable
+dependent-variable assertions raise `ValueError`. Direct function and
+polynomial partial evaluation preserves `CoefficientError`, while coefficient
+failures from `Instance`-owned dependency normalization and removed-constraint
+restoration fall back to `RuntimeError`.
+
 ## 3.0.0 Beta 2
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b2-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b2)
