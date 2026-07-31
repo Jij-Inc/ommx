@@ -155,16 +155,22 @@ mod tests {
         let objective = (linear!(1) + coeff!(1.0)).into();
         let constraints = BTreeMap::new();
 
+        let error = ParametricInstance::new(
+            Sense::Minimize,
+            objective,
+            decision_variables,
+            parameters,
+            constraints,
+        )
+        .unwrap_err();
+
+        assert!(matches!(
+            error.downcast_ref::<crate::ParameterIDCollision>(),
+            Some(crate::ParameterIDCollision { id }) if *id == VariableID::from(1)
+        ));
         insta::assert_snapshot!(
-            ParametricInstance::new(
-                Sense::Minimize,
-                objective,
-                decision_variables,
-                parameters,
-                constraints,
-            )
-            .unwrap_err(),
-            @"Duplicated variable ID is found in definition: VariableID(1)"
+            error,
+            @"Decision variable id VariableID(1) collides with an existing parameter id"
         );
     }
 

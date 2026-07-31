@@ -16660,7 +16660,7 @@
             },
             {
               "name": "from_components",
-              "doc": "",
+              "doc": "Build a parametric instance from its model components.\n\nRaises {class}`ValueError` if a decision variable and parameter use the\nsame ID.",
               "signatures": [
                 {
                   "parameters": [

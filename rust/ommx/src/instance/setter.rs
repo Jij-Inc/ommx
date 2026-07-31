@@ -515,8 +515,8 @@ impl ParametricInstance {
     /// Returns an error whose chain contains
     /// [`crate::DecisionVariableError::DuplicateID`] when `id` is already
     /// owned by a decision variable, or
-    /// [`crate::AddDecisionVariableError::ParameterIDCollision`] when it is
-    /// already owned by a parameter.
+    /// [`crate::ParameterIDCollision`] when it is already owned by a
+    /// parameter.
     pub fn add_decision_variable(
         &mut self,
         id: crate::VariableID,
@@ -525,7 +525,7 @@ impl ParametricInstance {
     ) -> crate::Result<crate::VariableID> {
         let has_decision_variable = self.decision_variables().contains_key(&id);
         if !has_decision_variable && self.parameters().contains_key(&id) {
-            return Err(crate::AddDecisionVariableError::ParameterIDCollision { id }.into());
+            return Err(crate::ParameterIDCollision { id }.into());
         }
         if !has_decision_variable && self.decision_variable_dependency().keys().any(|k| k == id) {
             crate::bail!(
@@ -547,8 +547,7 @@ mod tests {
         constraint::{Constraint, ConstraintID},
         linear,
         polynomial_base::{Linear, LinearMonomial},
-        AddDecisionVariableError, DecisionVariable, Function, ParameterTable, Substitute,
-        VariableID,
+        DecisionVariable, Function, ParameterIDCollision, ParameterTable, Substitute, VariableID,
     };
 
     use maplit::btreemap;
@@ -652,8 +651,8 @@ mod tests {
             .unwrap_err();
 
         assert!(matches!(
-            error.downcast_ref::<AddDecisionVariableError>(),
-            Some(AddDecisionVariableError::ParameterIDCollision { id }) if *id == parameter
+            error.downcast_ref::<ParameterIDCollision>(),
+            Some(ParameterIDCollision { id }) if *id == parameter
         ));
         assert!(instance.decision_variables().is_empty());
     }

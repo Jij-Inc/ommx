@@ -5741,7 +5741,13 @@ class ParametricInstance:
         ] = None,
         named_functions: typing.Optional[typing.Sequence[NamedFunction]] = None,
         description: typing.Optional[InstanceDescription] = None,
-    ) -> ParametricInstance: ...
+    ) -> ParametricInstance:
+        r"""
+        Build a parametric instance from its model components.
+
+        Raises {class}`ValueError` if a decision variable and parameter use the
+        same ID.
+        """
     @staticmethod
     def empty() -> ParametricInstance:
         r"""

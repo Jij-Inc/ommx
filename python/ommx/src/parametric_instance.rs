@@ -62,6 +62,10 @@ impl ParametricInstance {
         self.inner.format_summary()
     }
 
+    /// Build a parametric instance from its model components.
+    ///
+    /// Raises {class}`ValueError` if a decision variable and parameter use the
+    /// same ID.
     #[staticmethod]
     #[pyo3(signature = (*, sense, objective, decision_variables, constraints, parameters, indicator_constraints=None, one_hot_constraints=None, sos1_constraints=None, named_functions=None, description=None))]
     pub fn from_components(
