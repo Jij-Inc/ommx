@@ -3,7 +3,7 @@ from ommx.experiment import Experiment
 
 from ommx_openjij_adapter import (
     OMMXOpenJijSAAdapter,
-    OpenJijPreparationConfig,
+    OpenJijPreparationPolicy,
 )
 
 
@@ -18,7 +18,7 @@ def test_log_sample_records_the_exact_prepared_adapter_input() -> None:
     source_bytes = source.to_v2_bytes()
     preparation = OMMXOpenJijSAAdapter.prepare(
         source,
-        config=OpenJijPreparationConfig(uniform_penalty_weight=2.0),
+        policy=OpenJijPreparationPolicy(uniform_penalty_weight=2.0),
     )
     adapter_input = preparation.input
     input_bytes = adapter_input.to_v2_bytes()
@@ -43,7 +43,7 @@ def test_log_sample_records_the_exact_prepared_adapter_input() -> None:
         assert actual.sense == expected.sense
         assert len(actual.constraints) == len(expected.constraints)
 
-    source_samples = preparation.evaluate_source(prepared_samples)
+    source_samples = preparation.decode(prepared_samples)
     assert source_samples.sense == Sense.Maximize
     assert len(source_samples.constraints) == 1
     for sample_id in source_samples.sample_ids():

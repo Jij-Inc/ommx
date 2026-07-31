@@ -236,12 +236,12 @@ ids_list: list[int] = sample_set.sample_ids_list
 - `instance.constraint_hints` - `one_hot_constraints` / `sos1_constraints` / `indicator_constraints` に分かれました。
 - `ArtifactArchive` / `ArtifactDir` 系 - `Artifact` / `ArtifactDraft` に統合されました。
 - `ommx_openjij_adapter.response_to_samples(response)` - `decode_to_samples(response)` を使用します（`3.0.0`: [#1087](https://github.com/Jij-Inc/ommx/pull/1087)）。
-- `ommx_openjij_adapter.sample_qubo_sa(...)` - 直接適用可能なinputでは `OMMXOpenJijSAAdapter.sample(...)` を使用します。置き換え後はraw `Samples` ではなく評価済みの `SampleSet` を返します。preparationが必要な場合は `OMMXOpenJijSAAdapter.prepare(...)` を呼び、`preparation.input` をsampleしてから、`preparation.evaluate_source(...)` でsource instanceに対して評価します（`3.0.0`: [#1087](https://github.com/Jij-Inc/ommx/pull/1087)）。
+- `ommx_openjij_adapter.sample_qubo_sa(...)` - 直接適用可能なinputでは `OMMXOpenJijSAAdapter.sample(...)` を使用します。置き換え後はraw `Samples` ではなく評価済みの `SampleSet` を返します。preparationが必要な場合は `OMMXOpenJijSAAdapter.prepare(...)` を呼び、`preparation.input` をsampleしてから、`preparation.decode(...)` でsource instanceに対して評価します（`3.0.0`: [#1087](https://github.com/Jij-Inc/ommx/pull/1087)）。
 
 v2のOpenJij Adapterでは、constructor、`sample()`、`solve()` が
 `uniform_penalty_weight`、`penalty_weights`、
 `inequality_integer_slack_max_range` を直接受け取り、暗黙にpreparationを実行していました。
-v3では、これらを1つの不変な `OpenJijPreparationConfig` にまとめ、`config=` から
+v3では、これらを1つの不変な `OpenJijPreparationPolicy` にまとめ、`policy=` から
 `prepare()` に渡したうえで、得られた `preparation.input` をsampleします。通常制約ごとに
 異なるweightが必要な場合は、`uniform_penalty_weight` の代わりに `penalty_weights` を
 使います。v2はどちらのpenalty設定もない場合に一律weight `1.0` を選びましたが、v3では
@@ -255,21 +255,21 @@ v2はexact integer slackへの変換に失敗すると、離散的なslack近似
 ```python
 from ommx_openjij_adapter import (
     OMMXOpenJijSAAdapter,
-    OpenJijPreparationConfig,
+    OpenJijPreparationPolicy,
 )
 
-config = OpenJijPreparationConfig(
+policy = OpenJijPreparationPolicy(
     uniform_penalty_weight=20.0,
     inequality_integer_slack_max_range=32,
     allow_approximate_integer_slack=True,  # v2の近似fallbackを維持
 )
-preparation = OMMXOpenJijSAAdapter.prepare(source, config=config)
+preparation = OMMXOpenJijSAAdapter.prepare(source, policy=policy)
 ```
 
-`preparation.report.config` は、正規化済みで実際に使われた不変の設定を記録します。
+`preparation.report.policy` は、正規化済みで実際に使われた不変の設定を記録します。
 その他のfieldは、source rejected、preparation phase rejected、準備したcandidateが
 Adapter applicabilityでrejected、successの4つの終端状態のいずれかを表します。
-`steps` はその終端状態までに完了したoperationのprefixであり、独立したoutcomeでは
+`transforms` はその終端状態までに完了したtransformのprefixであり、独立したoutcomeでは
 ありません。
 
 ## 8. DataFrame accessor

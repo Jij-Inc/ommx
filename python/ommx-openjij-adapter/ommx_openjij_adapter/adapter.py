@@ -19,20 +19,19 @@ from ommx import (
     Samples,
     SampleSet,
     Solution,
+    SpecialConstraintKind,
 )
 from ommx.adapter import (
     AdapterPreconditionViolation,
     DiagnosticsSink,
+    Preparation,
+    PreparationPolicy,
     SamplerAdapter,
 )
 from opentelemetry import trace
 
 from ._decode import _decode_for_instance, decode_to_samples
-from ._preparation import (
-    OpenJijPreparation,
-    OpenJijPreparationConfig,
-    OpenJijPreparationReport,
-)
+from ._preparation import OpenJijPreparationReport
 from ._preparation_pipeline import (
     check_preparation as _check_preparation,
     prepare as _prepare,
@@ -52,7 +51,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
 
     Integer encoding, sense reversal, slack introduction, and finite constraint
     penalties are explicit preparation operations, not part of the declared
-    input class. Pass :attr:`OpenJijPreparation.input` back to this Adapter
+    input class. Pass :attr:`Preparation.input` back to this Adapter
     as a separate :class:`ommx.Instance` value.
     """
 
@@ -65,6 +64,13 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
                 allowed_senses={Sense.Minimize},
             )
         ]
+    )
+    PREPARATION_SPECIAL_CONSTRAINT_LOWERINGS: ClassVar[
+        tuple[SpecialConstraintKind, ...]
+    ] = (
+        SpecialConstraintKind.Indicator,
+        SpecialConstraintKind.OneHot,
+        SpecialConstraintKind.Sos1,
     )
 
     MAX_OPENJIJ_VARIABLE_ID: ClassVar[int] = 2**63 - 1
@@ -202,9 +208,9 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     @classmethod
     def check_preparation(
         cls,
-        ommx_instance: Instance,
+        source: Instance,
         *,
-        config: OpenJijPreparationConfig | None = None,
+        policy: PreparationPolicy | None = None,
     ) -> OpenJijPreparationReport:
         """Dry-run the complete explicit preparation without mutating the input.
 
@@ -215,34 +221,40 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         ``ommx.v2.Feature``. A model proven infeasible while preparing integer
         slack raises :class:`~ommx.InfeasibleDetected`. Approximate integer
         slack is disabled unless the supplied
-        :class:`OpenJijPreparationConfig` enables it.
+        :class:`OpenJijPreparationPolicy` enables it.
         """
         return _check_preparation(
-            ommx_instance,
+            source,
             check_input_applicability=cls.check_applicability,
-            config=config,
+            candidate_special_constraint_lowerings=(
+                cls._validated_preparation_lowering_candidates()
+            ),
+            policy=policy,
         )
 
     @classmethod
     def prepare(
         cls,
-        ommx_instance: Instance,
+        source: Instance,
         *,
-        config: OpenJijPreparationConfig | None = None,
-    ) -> OpenJijPreparation:
+        policy: PreparationPolicy | None = None,
+    ) -> Preparation[OpenJijPreparationReport]:
         """Produce a separate Adapter input and an auditable preparation report.
 
         Raises :class:`~ommx.InfeasibleDetected` when variable bounds
         prove an inequality infeasible. Other preparation failures raise
         :class:`OpenJijPreparationError`. Approximate integer slack is used only
-        when the supplied :class:`OpenJijPreparationConfig` enables it.
+        when the supplied :class:`OpenJijPreparationPolicy` enables it.
         """
         with _tracer.start_as_current_span("prepare") as span:
             span.set_attribute("adapter", f"{cls.__module__}.{cls.__qualname__}")
             return _prepare(
-                ommx_instance,
+                source,
                 check_input_applicability=cls.check_applicability,
-                config=config,
+                candidate_special_constraint_lowerings=(
+                    cls._validated_preparation_lowering_candidates()
+                ),
+                policy=policy,
             )
 
     @classmethod

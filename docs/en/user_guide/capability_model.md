@@ -11,16 +11,18 @@ kernelspec:
   name: python3
 ---
 
-# Adapter Input Classes and Explicit Constraint Lowering
+# Adapter Input Classes, Preparation, and Constraint Lowering
 
-OMMX separates two concepts that were previously described together as adapter capabilities:
+OMMX separates three concepts that were previously described together as adapter capabilities:
 
 - An {class}`~ommx.InstanceClass` describes a set of exact `Instance` values. An adapter declares its structural input condition with `INPUT_CLASS`, then evaluates adapter-owned preconditions to determine applicability.
+- {meth}`SolverAdapter.prepare() <ommx.adapter.SolverAdapter.prepare>` applies an Adapter-declared, policy-permitted Transform to an isolated source and returns an applicable {class}`~ommx.adapter.Preparation` input together with output decoding.
 - {meth}`Instance.lower_special_constraints() <ommx.Instance.lower_special_constraints>` explicitly lowers selected special-constraint families on an instance. It does not declare an input class or establish adapter applicability.
 
 This page covers:
 
 - `InstanceClass` membership and adapter applicability
+- {class}`~ommx.adapter.Preparation`, {class}`~ommx.adapter.PreparationPolicy`, and output decoding
 - {class}`~ommx.SpecialConstraintKind` and {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` as special-constraint family selectors
 - {meth}`Instance.lower_special_constraints() <ommx.Instance.lower_special_constraints>` for explicit lowering
 - Manual conversion APIs per constraint type
@@ -47,6 +49,31 @@ binary_linear_with_one_hot = InstanceClass(
 ```
 
 Adapters declare this first applicability condition as `INPUT_CLASS`. Use `check_applicability()` for a structured result or `require_applicable()` to raise when membership or an adapter-owned precondition fails. Explicit preparation produces another input value, whose applicability must be checked again.
+
+## Policy-driven Adapter preparation
+
+{meth}`SolverAdapter.prepare() <ommx.adapter.SolverAdapter.prepare>` keeps direct Adapter applicability unchanged while providing an explicit preparation workflow. It first prefers identity when the source is already applicable. In the current common slice, it otherwise applies the canonical ordered special-constraint families declared by that Adapter and allowed by the caller's {class}`~ommx.adapter.PreparationPolicy`. Those selected active families are lowered together by the SDK; this tuple is not yet a general alternative-path search API. The source is never mutated, and the produced input is checked again before {class}`~ommx.adapter.Preparation` is returned.
+
+HiGHS declares exact Indicator, OneHot, and SOS1 lowering candidates. A caller can therefore prepare a source with special constraints without manually choosing the active families:
+
+```python
+from ommx.adapter import PreparationPolicy
+from ommx_highs_adapter import OMMXHighsAdapter
+
+source = instance
+preparation = OMMXHighsAdapter.prepare(source)
+input_solution = OMMXHighsAdapter.solve(preparation.input)
+source_solution = preparation.decode(input_solution)
+
+# A policy can restrict, but never broaden, the Adapter's candidates.
+no_automatic_lowering = PreparationPolicy(
+    allowed_special_constraint_lowerings=frozenset()
+)
+```
+
+`preparation.input` and `input_solution` belong to the transformed problem. For the current SDK special lowerings and the OpenJij pipeline, input evaluation retains or reconstructs every source variable. {meth}`Preparation.decode() <ommx.adapter.Preparation.decode>` can therefore select those source variables, remove input-only auxiliaries, and reevaluate the state on `preparation.source`; it does not promote regular constraints back into special constraints. `PreparationTransform` is an applied-transform audit receipt, not a formal proof or a general executable `encode`/`decode` object.
+
+This slice transports successful `Solution` and `SampleSet` values. It does not yet provide a high-level invocation API that transports `InfeasibleDetected` or `UnboundedDetected` across a Preparation. Direct constructors, `solve()`, and `sample()` remain preparation-free and continue to reject non-applicable inputs.
 
 ## SpecialConstraintKind and active_special_constraint_kinds
 
@@ -202,6 +229,8 @@ for cid, c in instance2.constraints.items():
 | Describe a structural set of adapter inputs | {class}`~ommx.InstanceClass` |
 | Declare the first adapter applicability condition | `INPUT_CLASS` |
 | Check membership plus adapter-owned preconditions | `check_applicability()` / `require_applicable()` |
+| Prepare an isolated applicable Adapter input | {meth}`SolverAdapter.prepare <ommx.adapter.SolverAdapter.prepare>` with {class}`~ommx.adapter.PreparationPolicy` |
+| Decode and reevaluate Adapter output on the source | {meth}`Preparation.decode <ommx.adapter.Preparation.decode>` |
 | Inspect active special-constraint families | {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` |
 | Explicitly lower selected special constraints | {meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>` |
 | Convert individually to regular constraints | `convert_*_to_constraint(s)` / `convert_all_*_to_constraints` |

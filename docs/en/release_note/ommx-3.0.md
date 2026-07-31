@@ -67,15 +67,15 @@ the source model when source semantics are required:
 ```python
 from ommx_openjij_adapter import (
     OMMXOpenJijSAAdapter,
-    OpenJijPreparationConfig,
+    OpenJijPreparationPolicy,
 )
 
-config = OpenJijPreparationConfig(
+policy = OpenJijPreparationPolicy(
     uniform_penalty_weight=20.0,
 )
-preparation = OMMXOpenJijSAAdapter.prepare(source, config=config)
+preparation = OMMXOpenJijSAAdapter.prepare(source, policy=policy)
 prepared_samples = OMMXOpenJijSAAdapter.sample(preparation.input)
-source_samples = preparation.evaluate_source(prepared_samples)
+source_samples = preparation.decode(prepared_samples)
 ```
 
 Finite penalties and approximate integer slack now require explicit opt-in.

@@ -21,6 +21,7 @@ from ommx import (
     Kind,
     Sense,
     Solution,
+    SpecialConstraintKind,
     State,
 )
 from ommx.adapter import (
@@ -584,6 +585,14 @@ class OMMXHighsAdapter(SolverAdapter):
                 allowed_senses={Sense.Minimize, Sense.Maximize},
             )
         ]
+    )
+
+    PREPARATION_SPECIAL_CONSTRAINT_LOWERINGS: ClassVar[
+        tuple[SpecialConstraintKind, ...]
+    ] = (
+        SpecialConstraintKind.Indicator,
+        SpecialConstraintKind.OneHot,
+        SpecialConstraintKind.Sos1,
     )
 
     def __init__(self, ommx_instance: Instance, *, verbose: bool = False):

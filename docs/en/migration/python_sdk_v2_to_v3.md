@@ -400,13 +400,13 @@ parametric_instance.parameters_df()       # -> pandas.DataFrame  (method, not pr
 - `Parameters` / `OneHot` / `Sos1` / `ConstraintHints` — see §1.2.
 - `Artifact` low-level types (`ArtifactArchive`, `ArtifactDir`, `ArtifactArchiveBuilder`, `ArtifactDirBuilder`) — replaced by unified `Artifact` / `ArtifactDraft`.
 - `ommx_openjij_adapter.response_to_samples(response)` — use `decode_to_samples(response)`.
-- `ommx_openjij_adapter.sample_qubo_sa(...)` — use `OMMXOpenJijSAAdapter.sample(...)` for a directly applicable input. The replacement returns an evaluated `SampleSet`, rather than raw `Samples`. When preparation is required, call `OMMXOpenJijSAAdapter.prepare(...)`, sample `preparation.input`, and use `preparation.evaluate_source(...)` to evaluate the samples against the source instance.
+- `ommx_openjij_adapter.sample_qubo_sa(...)` — use `OMMXOpenJijSAAdapter.sample(...)` for a directly applicable input. The replacement returns an evaluated `SampleSet`, rather than raw `Samples`. When preparation is required, call `OMMXOpenJijSAAdapter.prepare(...)`, sample `preparation.input`, and use `preparation.decode(...)` to evaluate the samples against the source instance.
 
 In v2, the OpenJij Adapter constructor, `sample()`, and `solve()` accepted
 `uniform_penalty_weight`, `penalty_weights`, and
 `inequality_integer_slack_max_range` directly and performed preparation
 implicitly. In v3, move those settings into one immutable
-`OpenJijPreparationConfig`, pass it to `prepare()` through `config=`, and sample
+`OpenJijPreparationPolicy`, pass it to `prepare()` through `policy=`, and sample
 the resulting `preparation.input`. Use `penalty_weights` instead of
 `uniform_penalty_weight` when each regular constraint needs its own weight. v2
 also selected a uniform weight of `1.0` when neither penalty setting was
@@ -421,21 +421,21 @@ default preparation path uses only available exact operations.
 ```python
 from ommx_openjij_adapter import (
     OMMXOpenJijSAAdapter,
-    OpenJijPreparationConfig,
+    OpenJijPreparationPolicy,
 )
 
-config = OpenJijPreparationConfig(
+policy = OpenJijPreparationPolicy(
     uniform_penalty_weight=20.0,
     inequality_integer_slack_max_range=32,
     allow_approximate_integer_slack=True,  # Retain v2's approximation fallback.
 )
-preparation = OMMXOpenJijSAAdapter.prepare(source, config=config)
+preparation = OMMXOpenJijSAAdapter.prepare(source, policy=policy)
 ```
 
-`preparation.report.config` records the normalized, immutable settings actually
+`preparation.report.policy` records the normalized, immutable settings actually
 used. The remaining fields encode one of four terminal states: source rejected,
 preparation phase rejected, prepared candidate rejected by Adapter
-applicability, or success. `steps` is the prefix of operations completed before
+applicability, or success. `transforms` is the prefix of transformations completed before
 that terminal state, not a separate outcome.
 
 ```python

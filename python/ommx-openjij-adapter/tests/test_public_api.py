@@ -2,6 +2,13 @@ import inspect
 from typing import get_type_hints
 
 from ommx import DecisionVariable, Instance, Sense
+from ommx.adapter import (
+    Preparation,
+    PreparationError,
+    PreparationFailure,
+    PreparationPolicy,
+    PreparationTransform,
+)
 import ommx_openjij_adapter as package
 import pytest
 from ommx_openjij_adapter import _decode, _preparation, adapter
@@ -10,29 +17,35 @@ from ommx_openjij_adapter import _decode, _preparation, adapter
 def test_package_root_is_the_stable_public_facade() -> None:
     expected_exports = [
         "OMMXOpenJijSAAdapter",
-        "OpenJijPreparation",
-        "OpenJijPreparationConfig",
+        "OpenJijPreparationPolicy",
         "OpenJijPreparationError",
-        "OpenJijPreparationFailure",
         "OpenJijPreparationReport",
         "OpenJijPreparationSourceCheck",
-        "OpenJijPreparationStep",
         "decode_to_samples",
     ]
 
     assert package.__all__ == expected_exports
     assert issubclass(package.OMMXOpenJijSAAdapter, adapter.OMMXOpenJijSAAdapter)
-    assert package.OpenJijPreparation is _preparation.OpenJijPreparation
-    assert package.OpenJijPreparationConfig is _preparation.OpenJijPreparationConfig
+    assert package.OpenJijPreparationPolicy is _preparation.OpenJijPreparationPolicy
     assert package.OpenJijPreparationError is _preparation.OpenJijPreparationError
-    assert package.OpenJijPreparationFailure is _preparation.OpenJijPreparationFailure
     assert package.OpenJijPreparationReport is _preparation.OpenJijPreparationReport
     assert (
         package.OpenJijPreparationSourceCheck
         is _preparation.OpenJijPreparationSourceCheck
     )
-    assert package.OpenJijPreparationStep is _preparation.OpenJijPreparationStep
+    assert issubclass(package.OpenJijPreparationPolicy, PreparationPolicy)
+    assert issubclass(package.OpenJijPreparationError, PreparationError)
     assert package.decode_to_samples is _decode.decode_to_samples
+    for removed_name in (
+        "OpenJijPreparation",
+        "OpenJijPreparationConfig",
+        "OpenJijPreparationFailure",
+        "OpenJijPreparationStep",
+        "Preparation",
+        "PreparationFailure",
+        "PreparationTransform",
+    ):
+        assert not hasattr(package, removed_name)
     assert not hasattr(package, "response_to_samples")
     assert not hasattr(package, "sample_qubo_sa")
     assert not hasattr(_decode, "response_to_samples")
@@ -43,13 +56,13 @@ def test_package_root_is_the_stable_public_facade() -> None:
 def test_public_classes_support_standard_introspection() -> None:
     public_classes = [
         package.OMMXOpenJijSAAdapter,
-        package.OpenJijPreparation,
-        package.OpenJijPreparationConfig,
+        package.OpenJijPreparationPolicy,
         package.OpenJijPreparationError,
-        package.OpenJijPreparationFailure,
         package.OpenJijPreparationReport,
         package.OpenJijPreparationSourceCheck,
-        package.OpenJijPreparationStep,
+        Preparation,
+        PreparationFailure,
+        PreparationTransform,
     ]
 
     for class_ in public_classes:
@@ -57,18 +70,14 @@ def test_public_classes_support_standard_introspection() -> None:
         get_type_hints(class_)
 
     assert (
-        get_type_hints(package.OpenJijPreparation)["report"]
-        is package.OpenJijPreparationReport
-    )
-    assert (
-        get_type_hints(package.OpenJijPreparationReport)["config"]
-        is package.OpenJijPreparationConfig
+        get_type_hints(package.OpenJijPreparationReport)["policy"]
+        is package.OpenJijPreparationPolicy
     )
 
 
 def test_preparation_value_is_created_only_by_the_pipeline() -> None:
-    with pytest.raises(TypeError, match="created only by prepare"):
-        package.OpenJijPreparation()
+    with pytest.raises(TypeError, match="created only by .*prepare"):
+        Preparation()
 
 
 def test_adapter_identity_in_applicability_report_is_unchanged() -> None:

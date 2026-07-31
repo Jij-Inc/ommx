@@ -15,16 +15,26 @@ from ommx import (
     InstanceClassMembershipReport,
     InstanceClassMismatch,
     Kind,
+    NamedFunction,
     OneHotConstraint,
+    Samples,
     Sense,
+    Solution,
     Sos1Constraint,
     SpecialConstraintKind,
+    State,
 )
 from ommx.adapter import (
     AdapterApplicabilityReport,
     AdapterNotApplicableError,
     AdapterPreconditionViolation,
     ConstraintRef,
+    Preparation,
+    PreparationError,
+    PreparationFailure,
+    PreparationPolicy,
+    PreparationReport,
+    PreparationTransform,
     SolverAdapter,
 )
 
@@ -460,3 +470,245 @@ def test_precondition_hook_is_isolated_and_validated() -> None:
 
     with pytest.raises(TypeError, match="AdapterPreconditionViolation"):
         InvalidHook.check_applicability(instance)
+
+
+def binary_linear_equality_input_class() -> InstanceClass:
+    return InstanceClass(
+        [
+            clause(
+                "binary-linear-equality",
+                allowed_variable_kinds={Kind.Binary},
+                objective_degree_bound=DegreeBound.at_most(1),
+                regular_constraint_degree_bounds={
+                    Equality.EqualToZero: DegreeBound.at_most(1)
+                },
+            )
+        ]
+    )
+
+
+def one_hot_source() -> Instance:
+    x = [DecisionVariable.binary(1), DecisionVariable.binary(2)]
+    return Instance.from_components(
+        sense=Sense.Minimize,
+        objective=x[0] + x[1],
+        decision_variables=x,
+        constraints={},
+        one_hot_constraints={30: OneHotConstraint(variables=x)},
+    )
+
+
+def test_preparation_policy_snapshots_and_validates_lowering_restrictions() -> None:
+    mutable = {SpecialConstraintKind.OneHot}
+    policy = PreparationPolicy(
+        allowed_special_constraint_lowerings=cast(
+            frozenset[SpecialConstraintKind], mutable
+        )
+    )
+    mutable.clear()
+
+    assert policy.allowed_special_constraint_lowerings == frozenset(
+        {SpecialConstraintKind.OneHot}
+    )
+    with pytest.raises(TypeError, match="SpecialConstraintKind"):
+        PreparationPolicy(
+            allowed_special_constraint_lowerings=cast(
+                frozenset[SpecialConstraintKind], frozenset({"one_hot"})
+            )
+        )
+
+
+def test_preparation_value_and_receipts_validate_public_invariants() -> None:
+    with pytest.raises(TypeError, match="created only"):
+        Preparation()
+    with pytest.raises(ValueError, match="name must not be empty"):
+        PreparationTransform(name="", description="invalid")
+    with pytest.raises(ValueError, match="name must not be empty"):
+        PreparationFailure(name="", reason="invalid", description="invalid")
+
+
+def test_solver_adapter_prepare_prefers_identity_and_defensively_copies() -> None:
+    x = DecisionVariable.binary(1)
+    source = instance_with_objective(x, x)
+
+    class Adapter(SolverAdapter):
+        INPUT_CLASS = binary_linear_input_class()
+
+    preparation = Adapter.prepare(source)
+
+    assert isinstance(preparation, Preparation)
+    assert isinstance(preparation.report, PreparationReport)
+    assert preparation.report.is_successful
+    assert preparation.report.source_applicability.is_applicable
+    assert preparation.report.transforms == ()
+    assert preparation.source.to_v2_bytes() == source.to_v2_bytes()
+    assert preparation.input.to_v2_bytes() == source.to_v2_bytes()
+    assert preparation.source is not source
+    assert preparation.input is not source
+    assert preparation.input is not preparation.input
+
+    direct = source.evaluate({1: 1})
+    direct.optimality = Solution.OPTIMAL
+    decoded = preparation.decode(direct)
+    assert isinstance(decoded, Solution)
+    assert decoded is not direct
+    assert decoded.objective == direct.objective
+    assert decoded.optimality == Solution.OPTIMAL
+
+
+def test_solver_adapter_prepare_lowers_declared_kind_and_decodes_outputs() -> None:
+    source = one_hot_source()
+    before = source.to_v2_bytes()
+
+    class Adapter(SolverAdapter):
+        INPUT_CLASS = binary_linear_equality_input_class()
+        PREPARATION_SPECIAL_CONSTRAINT_LOWERINGS = (SpecialConstraintKind.OneHot,)
+
+    preparation = Adapter.prepare(source)
+
+    assert source.to_v2_bytes() == before
+    assert not preparation.report.source_applicability.is_applicable
+    assert preparation.report.input_applicability is not None
+    assert preparation.report.input_applicability.is_applicable
+    [transform] = preparation.report.transforms
+    assert transform.name == "one_hot_lowering"
+    assert transform.special_constraint_kinds == frozenset(
+        {SpecialConstraintKind.OneHot}
+    )
+    assert transform.constraint_refs == frozenset({ConstraintRef("one_hot", 30)})
+
+    adapter_input = preparation.input
+    assert adapter_input.active_special_constraint_kinds == set()
+    assert adapter_input.one_hot_constraints == {}
+    input_solution = adapter_input.evaluate({1: 1, 2: 0})
+    input_solution.optimality = Solution.OPTIMAL
+    source_solution = preparation.decode(input_solution)
+    assert isinstance(source_solution, Solution)
+    assert source_solution.feasible
+    assert source_solution.optimality == Solution.OPTIMAL
+    assert len(source_solution.constraints_df(kind="one_hot")) == 1
+
+    samples = Samples({})
+    samples.append([5], State(entries=[(1, 0), (2, 1)]))
+    input_samples = adapter_input.evaluate_samples(samples)
+    source_samples = preparation.decode(input_samples)
+    assert source_samples.sample_ids() == {5}
+    assert source_samples.get(5).feasible
+    assert len(source_samples.constraints_df(kind="one_hot")) == 1
+
+    detached_input = preparation.input
+    [constraint_id] = detached_input.constraints
+    detached_input.relax_constraint(constraint_id, "test")
+    assert preparation.input.constraints
+
+    source.lower_special_constraints({SpecialConstraintKind.OneHot})
+    assert preparation.source.one_hot_constraints
+
+
+def test_preparation_decode_preserves_every_source_variable_coordinate() -> None:
+    x = [DecisionVariable.binary(1), DecisionVariable.binary(2)]
+    named_only = DecisionVariable.binary(3)
+    source = Instance.from_components(
+        sense=Sense.Minimize,
+        objective=x[0] + x[1],
+        decision_variables=[*x, named_only],
+        constraints={},
+        one_hot_constraints={30: OneHotConstraint(variables=x)},
+        named_functions=[NamedFunction(id=40, function=named_only, name="named_only")],
+    )
+
+    class Adapter(SolverAdapter):
+        INPUT_CLASS = binary_linear_equality_input_class()
+        PREPARATION_SPECIAL_CONSTRAINT_LOWERINGS = (SpecialConstraintKind.OneHot,)
+
+    preparation = Adapter.prepare(source)
+    input_solution = preparation.input.evaluate({1: 1, 2: 0, 3: 1})
+    decoded_solution = preparation.decode(input_solution)
+
+    assert decoded_solution.state.get(3) == 1
+    assert decoded_solution.get_named_function_by_id(40).evaluated_value == 1
+
+    input_samples = preparation.input.evaluate_samples({5: {1: 0, 2: 1, 3: 1}})
+    decoded_samples = preparation.decode(input_samples)
+
+    assert decoded_samples.get(5).state.get(3) == 1
+    assert decoded_samples.extract_named_functions("named_only", 5) == {(): 1}
+
+
+def test_preparation_policy_only_restricts_adapter_candidates() -> None:
+    source = one_hot_source()
+    before = source.to_v2_bytes()
+
+    class Adapter(SolverAdapter):
+        INPUT_CLASS = binary_linear_equality_input_class()
+        PREPARATION_SPECIAL_CONSTRAINT_LOWERINGS = (SpecialConstraintKind.OneHot,)
+
+    with pytest.raises(PreparationError) as error:
+        Adapter.prepare(
+            source,
+            policy=PreparationPolicy(allowed_special_constraint_lowerings=frozenset()),
+        )
+
+    report = error.value.report
+    assert report.transforms == ()
+    [failure] = report.preparation_failures
+    assert failure.name == "special_constraint_lowering"
+    assert (
+        failure.reason == "preparation.policy.special_constraint_lowering_not_allowed"
+    )
+    assert failure.constraint_refs == frozenset({ConstraintRef("one_hot", 30)})
+    assert report.input_applicability is None
+    assert source.to_v2_bytes() == before
+
+
+def test_preparation_rechecks_applicability_after_transform() -> None:
+    x = [DecisionVariable.binary(1), DecisionVariable.binary(2)]
+    source = Instance.from_components(
+        sense=Sense.Minimize,
+        objective=x[0] * x[1],
+        decision_variables=x,
+        constraints={},
+        one_hot_constraints={30: OneHotConstraint(variables=x)},
+    )
+    before = source.to_v2_bytes()
+
+    class Adapter(SolverAdapter):
+        INPUT_CLASS = binary_linear_equality_input_class()
+        PREPARATION_SPECIAL_CONSTRAINT_LOWERINGS = (SpecialConstraintKind.OneHot,)
+
+    with pytest.raises(PreparationError) as error:
+        Adapter.prepare(source)
+
+    report = error.value.report
+    assert [transform.name for transform in report.transforms] == ["one_hot_lowering"]
+    assert report.input_applicability is not None
+    assert not report.input_applicability.is_applicable
+    assert source.to_v2_bytes() == before
+
+
+@pytest.mark.parametrize(
+    "candidates, message",
+    [
+        (
+            (SpecialConstraintKind.OneHot, SpecialConstraintKind.OneHot),
+            "duplicate",
+        ),
+        (
+            (SpecialConstraintKind.Sos1, SpecialConstraintKind.Indicator),
+            "SDK order",
+        ),
+    ],
+)
+def test_preparation_rejects_invalid_adapter_candidate_declarations(
+    candidates: tuple[SpecialConstraintKind, ...],
+    message: str,
+) -> None:
+    x = DecisionVariable.binary(1)
+    source = instance_with_objective(x, x)
+
+    class Adapter(SolverAdapter):
+        INPUT_CLASS = binary_linear_input_class()
+        PREPARATION_SPECIAL_CONSTRAINT_LOWERINGS = candidates
+
+    with pytest.raises(ValueError, match=message):
+        Adapter.prepare(source)

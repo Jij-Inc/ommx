@@ -284,6 +284,8 @@ Finally, create a class that inherits `ommx.adapter.SolverAdapter` to standardiz
 class SolverAdapter(ABC):
     # OMMX-defined structural condition for adapter applicability.
     INPUT_CLASS: InstanceClass | None = None
+    # Canonical special-constraint families this Adapter permits prepare() to lower.
+    PREPARATION_SPECIAL_CONSTRAINT_LOWERINGS: tuple[SpecialConstraintKind, ...] = ()
 
     @classmethod
     @abstractmethod
@@ -312,11 +314,13 @@ This abstract base class assumes the following two use cases:
 
 The `solve` class method may define additional adapter-specific keyword options in concrete adapters. The reserved `diagnostics` keyword is owned by `Run.log_solve`. When `Run.log_solve(..., store_diagnostics=True)` is used, adapters may record adapter-defined diagnostic reports into that sink; `None` means diagnostics are disabled.
 
-#### Input Class and Explicit Constraint Lowering
+#### Input Class and Preparation
 
 An adapter declares the structural set of exact `Instance` values it can receive with `INPUT_CLASS`. `check_applicability()` evaluates membership first and then adapter-owned preconditions without mutating the caller's instance; `require_applicable()` raises with the same structured report when either condition fails.
 
-`SolverAdapter` does not prescribe how a concrete adapter processes an accepted input and does not mutate the instance in a base constructor. A concrete adapter may explicitly call {meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>` as an implementation detail. Its `kinds_to_lower` argument uses these special-constraint family selectors:
+Direct constructors, `solve()`, and `sample()` receive only applicable inputs and never prepare them implicitly. Separately, an Adapter may declare the canonical ordered special-constraint families it permits with `PREPARATION_SPECIAL_CONSTRAINT_LOWERINGS`. The inherited {meth}`SolverAdapter.prepare <ommx.adapter.SolverAdapter.prepare>` intersects that family list with the caller's {class}`~ommx.adapter.PreparationPolicy`, lowers the selected active families together on an isolated copy, and checks the produced input again. This first common slice is not a general alternative-path search API.
+
+The Adapter declaration and the root-owned {meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>` Transform use these special-constraint family selectors:
 
 - `SpecialConstraintKind.Indicator`: Indicator constraints (`binvar = 1 → f(x) <= 0`)
 - `SpecialConstraintKind.OneHot`: Exactly one of a set of binary variables is 1
@@ -325,23 +329,46 @@ An adapter declares the structural set of exact `Instance` values it can receive
 Use {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` to inspect the currently active families. `lower_special_constraints` converts each selected active family into regular constraints (Big-M for indicator / SOS1, linear equality for one-hot), mutates the instance in place, and logs each lowering at `INFO` level. Neither this property nor lowering establishes `INPUT_CLASS` membership or adapter applicability.
 
 ```{important}
-`INPUT_CLASS` describes the exact value received by the adapter, regardless of its internal implementation. If a caller explicitly lowers an instance before choosing an adapter, the result is a different input value and must be checked again with `check_applicability()` or `require_applicable()`.
+`INPUT_CLASS` describes the exact value received by the adapter. `prepare(source)` is an explicit operation that returns a separate {class}`~ommx.adapter.Preparation`; pass `preparation.input` to the direct Adapter API and use `preparation.decode(output)` for a source-evaluated result.
+
+Each {class}`~ommx.adapter.PreparationTransform` in the report is an audit receipt for an applied SDK Transform, not an Adapter-authored exactness proof. The current common decoder is intended for Transform pipelines whose evaluated input state retains or reconstructs every source variable.
 ```
 
 Using the functions prepared so far, you can implement it as follows:
 
 ```{code-cell} ipython3
+from ommx import (
+    DegreeBound,
+    Equality,
+    InstanceClass,
+    InstanceClassClause,
+    Kind,
+    Sense,
+)
 from ommx.adapter import DiagnosticsSink, SolverAdapter
-from ommx import SpecialConstraintKind
 
 class OMMXPySCIPOptAdapter(SolverAdapter):
+    INPUT_CLASS = InstanceClass(
+        [
+            InstanceClassClause(
+                label="tutorial-quadratic-mip",
+                allowed_variable_kinds={Kind.Binary, Kind.Integer, Kind.Continuous},
+                objective_degree_bound=DegreeBound.at_most(2),
+                regular_constraint_degree_bounds={
+                    Equality.EqualToZero: DegreeBound.at_most(2),
+                    Equality.LessThanOrEqualToZero: DegreeBound.at_most(2),
+                },
+                allowed_senses={Sense.Minimize, Sense.Maximize},
+            )
+        ]
+    )
+
     def __init__(
         self,
         ommx_instance: Instance,
     ):
-        # This adapter handles Indicator and SOS1 directly, and explicitly
-        # lowers OneHot constraints.
-        ommx_instance.lower_special_constraints({SpecialConstraintKind.OneHot})
+        # The direct constructor receives an already-applicable input.
+        self.require_applicable(ommx_instance)
         self.instance = ommx_instance
         self.model = pyscipopt.Model()
         self.model.hideOutput()
@@ -606,7 +633,7 @@ sample_set.summary
 In this tutorial, we learned how to implement an OMMX Adapter by connecting to PySCIPOpt as a Solver Adapter and OpenJij as a Sampler Adapter. Here are the key points when implementing an OMMX Adapter:
 
 1. Implement an OMMX Adapter by inheriting the abstract base class `SolverAdapter` or `SamplerAdapter`.
-2. Declare the structural input condition with `INPUT_CLASS`, then use `check_applicability()` or `require_applicable()` to evaluate membership and adapter-owned preconditions. If lowering is needed, make it an explicit concrete-adapter or caller operation; the base Adapter contract never mutates the input.
+2. Declare the structural input condition with `INPUT_CLASS`, then use `check_applicability()` or `require_applicable()` to evaluate membership and adapter-owned preconditions. Declare only Adapter-approved automatic special-constraint families; `prepare()` lowers policy-permitted active families together on an isolated copy, while direct Adapter calls remain preparation-free.
 3. The main steps of the implementation are as follows:
    - Convert `ommx.Instance` into a format that the backend solver can understand.
    - Run the backend solver to obtain a solution.

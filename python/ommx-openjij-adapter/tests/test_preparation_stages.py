@@ -22,7 +22,7 @@ from ommx_openjij_adapter._preparation_phases import (
     apply_penalties,
     encode_source_integers,
 )
-from ommx_openjij_adapter import OMMXOpenJijSAAdapter, OpenJijPreparationConfig
+from ommx_openjij_adapter import OMMXOpenJijSAAdapter, OpenJijPreparationPolicy
 
 
 def test_penalty_ready_accepts_an_approximate_slack_inequality() -> None:
@@ -170,7 +170,7 @@ def test_policy_rejection_still_consumes_the_penalty_ready_stage() -> None:
         slack_outcomes=(),
     )
 
-    outcome = apply_penalties(state, source_instance, OpenJijPreparationConfig())
+    outcome = apply_penalties(state, source_instance, OpenJijPreparationPolicy())
 
     assert isinstance(outcome, _Blocked)
     with pytest.raises(_StageInvariantError, match="already been consumed"):

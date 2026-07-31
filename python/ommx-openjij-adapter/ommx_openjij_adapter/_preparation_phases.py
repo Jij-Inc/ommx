@@ -11,13 +11,9 @@ from ommx import (
     LogEncodingError,
     SpecialConstraintKind,
 )
-from ommx.adapter import ConstraintRef
+from ommx.adapter import ConstraintRef, PreparationFailure, PreparationTransform
 
-from ._preparation import (
-    OpenJijPreparationConfig,
-    OpenJijPreparationFailure,
-    OpenJijPreparationStep,
-)
+from ._preparation import OpenJijPreparationPolicy
 from ._preparation_checks import active_constraint_refs
 from ._preparation_stages import (
     _AdapterInputCandidate,
@@ -40,15 +36,15 @@ MAX_LOG_ENCODING_BITS = 53
 
 
 def _materialization_failure(
-    operation: str,
+    name: str,
     error: Exception,
     *,
     variable_ids: frozenset[int] = frozenset(),
     constraint_refs: frozenset[ConstraintRef] = frozenset(),
-) -> OpenJijPreparationFailure:
-    phase = operation.replace("_", " ")
-    return OpenJijPreparationFailure(
-        operation=operation,
+) -> PreparationFailure:
+    phase = name.replace("_", " ")
+    return PreparationFailure(
+        name=name,
         reason="openjij.preparation.materialization",
         description=f"The {phase} phase could not be materialized: {error}",
         variable_ids=variable_ids,
@@ -62,8 +58,8 @@ def _log_encoding_unavailable(
     error: LogEncodingError,
     fallback_variable_ids: frozenset[int],
     *,
-    operation: str,
-) -> OpenJijPreparationFailure:
+    name: str,
+) -> PreparationFailure:
     kind = getattr(error, "kind", "unavailable")
     reason = {
         "non_finite_bound": "openjij.log_encoding.bound_finite",
@@ -76,8 +72,8 @@ def _log_encoding_unavailable(
         if isinstance(variable_id, int)
         else fallback_variable_ids
     )
-    return OpenJijPreparationFailure(
-        operation=operation,
+    return PreparationFailure(
+        name=name,
         reason=reason,
         description=f"Exact Integer-to-Binary log encoding is unavailable: {error}",
         variable_ids=variable_ids,
@@ -95,6 +91,8 @@ def _log_encoding_unavailable(
 
 def lower_special_constraints(
     state: _SourceMember,
+    *,
+    allowed_special_constraint_lowerings: frozenset[SpecialConstraintKind],
 ) -> _PhaseOutcome[_RegularSource]:
     working = state.take_instance()
     special_refs = {
@@ -111,8 +109,56 @@ def lower_special_constraints(
             for constraint_id in working.sos1_constraints
         ),
     }
+    special_transform_details = {
+        SpecialConstraintKind.Indicator: (
+            "indicator_lowering",
+            "Indicator",
+            "Lowered Indicator constraints exactly with validated Big-M bounds.",
+        ),
+        SpecialConstraintKind.OneHot: (
+            "one_hot_lowering",
+            "OneHot",
+            "Lowered OneHot constraints exactly to regular equalities.",
+        ),
+        SpecialConstraintKind.Sos1: (
+            "sos1_lowering",
+            "SOS1",
+            "Lowered SOS1 constraints exactly with validated Big-M bounds.",
+        ),
+    }
+    forbidden_kinds = tuple(
+        kind
+        for kind in (
+            SpecialConstraintKind.Indicator,
+            SpecialConstraintKind.OneHot,
+            SpecialConstraintKind.Sos1,
+        )
+        if special_refs[kind] and kind not in allowed_special_constraint_lowerings
+    )
+    if forbidden_kinds:
+        return _Blocked(
+            failures=tuple(
+                PreparationFailure(
+                    name=special_transform_details[kind][0],
+                    reason="openjij.special_constraint_lowering.policy",
+                    description=(
+                        f"{special_transform_details[kind][1]} lowering is disabled "
+                        "by the preparation policy."
+                    ),
+                    constraint_refs=special_refs[kind],
+                    observed="not allowed",
+                    expected=(
+                        f"allow {special_transform_details[kind][1]} lowering in "
+                        "allowed_special_constraint_lowerings"
+                    ),
+                )
+                for kind in forbidden_kinds
+            )
+        )
+
+    active_kinds = {kind for kind, refs in special_refs.items() if refs}
     try:
-        lowered_specials = working.lower_special_constraints(set(special_refs))
+        lowered_specials = working.lower_special_constraints(active_kinds)
     except (RuntimeError, ValueError) as error:
         return _Blocked(
             failures=(
@@ -124,21 +170,7 @@ def lower_special_constraints(
             )
         )
 
-    special_step_details = {
-        SpecialConstraintKind.Indicator: (
-            "indicator_lowering",
-            "Lowered Indicator constraints exactly with validated Big-M bounds.",
-        ),
-        SpecialConstraintKind.OneHot: (
-            "one_hot_lowering",
-            "Lowered OneHot constraints exactly to regular equalities.",
-        ),
-        SpecialConstraintKind.Sos1: (
-            "sos1_lowering",
-            "Lowered SOS1 constraints exactly with validated Big-M bounds.",
-        ),
-    }
-    steps = []
+    transforms = []
     for kind in (
         SpecialConstraintKind.Indicator,
         SpecialConstraintKind.OneHot,
@@ -146,15 +178,16 @@ def lower_special_constraints(
     ):
         if kind not in lowered_specials:
             continue
-        operation, description = special_step_details[kind]
-        steps.append(
-            OpenJijPreparationStep(
-                operation=operation,
+        name, _, description = special_transform_details[kind]
+        transforms.append(
+            PreparationTransform(
+                name=name,
                 description=description,
                 constraint_refs=special_refs[kind],
+                special_constraint_kinds=frozenset({kind}),
             )
         )
-    return _Applied(_RegularSource(working), tuple(steps))
+    return _Applied(_RegularSource(working), tuple(transforms))
 
 
 def encode_source_integers(
@@ -173,7 +206,7 @@ def encode_source_integers(
                 _log_encoding_unavailable(
                     error,
                     source_integer_ids,
-                    operation="integer_log_encoding",
+                    name="integer_log_encoding",
                 ),
             )
         )
@@ -191,8 +224,8 @@ def encode_source_integers(
     return _Applied(
         _SourceEncoded(working, source_integer_ids),
         (
-            OpenJijPreparationStep(
-                operation="integer_log_encoding",
+            PreparationTransform(
+                name="integer_log_encoding",
                 description=(
                     "Log-encoded source Integer variables after validating "
                     f"the {MAX_LOG_ENCODING_BITS}-bit encoding limit."
@@ -209,11 +242,11 @@ def normalize_sense(
     source_integer_ids = state.source_integer_ids
     working = state.take_instance()
     reversed_sense = working.as_minimization_problem()
-    steps = ()
+    transforms = ()
     if reversed_sense:
-        steps = (
-            OpenJijPreparationStep(
-                operation="sense_reversal",
+        transforms = (
+            PreparationTransform(
+                name="sense_reversal",
                 description=(
                     "Negated the objective for the Adapter minimization input; "
                     "sample evaluation retains the source maximization sense."
@@ -222,13 +255,13 @@ def normalize_sense(
         )
     return _Applied(
         _MinimizationSource(working, source_integer_ids),
-        steps,
+        transforms,
     )
 
 
 def prepare_inequalities(
     state: _MinimizationSource,
-    config: OpenJijPreparationConfig,
+    policy: OpenJijPreparationPolicy,
 ) -> _PhaseOutcome[_PenaltyReady]:
     working = state.take_instance()
     inequality_ids = frozenset(
@@ -237,23 +270,23 @@ def prepare_inequalities(
         if constraint.equality == Equality.LessThanOrEqualToZero
     )
     slack_outcomes = []
-    steps = []
+    transforms = []
 
     for constraint_id in sorted(inequality_ids):
         constraint_refs = frozenset({ConstraintRef("regular", constraint_id)})
         try:
             working.convert_inequality_to_equality_with_integer_slack(
                 constraint_id,
-                config.inequality_integer_slack_max_range,
+                policy.inequality_integer_slack_max_range,
             )
         except InfeasibleDetected as error:
             return _ProvenInfeasible(error)
         except ExactIntegerSlackError as exact_error:
-            if not config.allow_approximate_integer_slack:
+            if not policy.allow_approximate_integer_slack:
                 return _Blocked(
                     failures=(
-                        OpenJijPreparationFailure(
-                            operation="integer_slack",
+                        PreparationFailure(
+                            name="integer_slack",
                             reason=("openjij.slack.approximation_explicit_selection"),
                             description=(
                                 "Exact integer slack was unavailable "
@@ -266,12 +299,12 @@ def prepare_inequalities(
                             expected="allow_approximate_integer_slack=True",
                         ),
                     ),
-                    steps=tuple(steps),
+                    transforms=tuple(transforms),
                 )
             try:
                 residual_step = working.add_integer_slack_to_inequality(
                     constraint_id,
-                    config.inequality_integer_slack_max_range,
+                    policy.inequality_integer_slack_max_range,
                 )
             except InfeasibleDetected as error:
                 return _ProvenInfeasible(error)
@@ -284,14 +317,14 @@ def prepare_inequalities(
                             constraint_refs=constraint_refs,
                         ),
                     ),
-                    steps=tuple(steps),
+                    transforms=tuple(transforms),
                 )
 
             if residual_step is None:
                 slack_outcomes.append(_TrivialInequality(constraint_id))
-                steps.append(
-                    OpenJijPreparationStep(
-                        operation="trivial_inequality_removal",
+                transforms.append(
+                    PreparationTransform(
+                        name="trivial_inequality_removal",
                         description=(
                             "Removed an inequality proven satisfied by the variable "
                             "bounds."
@@ -303,9 +336,9 @@ def prepare_inequalities(
                 slack_outcomes.append(
                     _ApproximateIntegerSlack(constraint_id, residual_step)
                 )
-                steps.append(
-                    OpenJijPreparationStep(
-                        operation="approximate_integer_slack",
+                transforms.append(
+                    PreparationTransform(
+                        name="approximate_integer_slack",
                         description=(
                             "Exact integer slack was unavailable "
                             f"({exact_error}); used a discrete slack with residual "
@@ -323,7 +356,7 @@ def prepare_inequalities(
                         constraint_refs=constraint_refs,
                     ),
                 ),
-                steps=tuple(steps),
+                transforms=tuple(transforms),
             )
         else:
             if constraint_id in working.constraints:
@@ -336,9 +369,9 @@ def prepare_inequalities(
                 description = (
                     "Removed an inequality proven satisfied by the variable bounds."
                 )
-            steps.append(
-                OpenJijPreparationStep(
-                    operation=operation,
+            transforms.append(
+                PreparationTransform(
+                    name=operation,
                     description=description,
                     constraint_refs=constraint_refs,
                 )
@@ -346,15 +379,15 @@ def prepare_inequalities(
 
     return _Applied(
         _PenaltyReady(working, inequality_ids, tuple(slack_outcomes)),
-        tuple(steps),
+        tuple(transforms),
     )
 
 
 def _penalty_policy_failures(
     working: Instance,
     source_instance: Instance,
-    config: OpenJijPreparationConfig,
-) -> tuple[OpenJijPreparationFailure, ...]:
+    policy: OpenJijPreparationPolicy,
+) -> tuple[PreparationFailure, ...]:
     remaining_constraint_ids = frozenset(working.constraints)
     source_regular_ids = frozenset(source_instance.constraints)
     source_special_refs = frozenset(
@@ -363,20 +396,20 @@ def _penalty_policy_failures(
         if ref.family != "regular"
     )
     source_has_constraints = bool(active_constraint_refs(source_instance))
-    penalty_weights = config.penalty_weights
+    penalty_weights = policy.penalty_weights
     penalty_selected = (
-        config.uniform_penalty_weight is not None or penalty_weights is not None
+        policy.uniform_penalty_weight is not None or penalty_weights is not None
     )
     failures = []
 
     if not source_has_constraints and penalty_selected:
         failures.append(
-            OpenJijPreparationFailure(
-                operation="finite_penalty",
+            PreparationFailure(
+                name="finite_penalty",
                 reason="openjij.penalty.unused",
                 description="Penalty weights were supplied for an unconstrained model.",
                 observed="penalty weights supplied",
-                expected="no penalty configuration",
+                expected="no penalty selection in the preparation policy",
             )
         )
 
@@ -385,8 +418,8 @@ def _penalty_policy_failures(
         unexpected = configured_ids.difference(source_regular_ids)
         if unexpected:
             failures.append(
-                OpenJijPreparationFailure(
-                    operation="finite_penalty",
+                PreparationFailure(
+                    name="finite_penalty",
                     reason="openjij.penalty.weight_coverage",
                     description=(
                         "Per-constraint penalty weights contain unknown regular "
@@ -404,8 +437,8 @@ def _penalty_policy_failures(
         generated_ids = remaining_constraint_ids.difference(source_regular_ids)
         if generated_ids:
             failures.append(
-                OpenJijPreparationFailure(
-                    operation="finite_penalty",
+                PreparationFailure(
+                    name="finite_penalty",
                     reason="openjij.penalty.special_requires_uniform",
                     description=(
                         "Per-constraint weights cannot identify regular constraints "
@@ -422,8 +455,8 @@ def _penalty_policy_failures(
         missing = remaining_source_ids.difference(configured_ids)
         if missing:
             failures.append(
-                OpenJijPreparationFailure(
-                    operation="finite_penalty",
+                PreparationFailure(
+                    name="finite_penalty",
                     reason="openjij.penalty.weight_coverage",
                     description=(
                         "Per-constraint penalty weights do not cover every regular "
@@ -440,8 +473,8 @@ def _penalty_policy_failures(
 
     if remaining_constraint_ids and not penalty_selected:
         failures.append(
-            OpenJijPreparationFailure(
-                operation="finite_penalty",
+            PreparationFailure(
+                name="finite_penalty",
                 reason="openjij.penalty.explicit_selection",
                 description=(
                     "Constraints remaining after exact preparation require an "
@@ -469,10 +502,10 @@ def _penalty_policy_failures(
 def apply_penalties(
     state: _PenaltyReady,
     source_instance: Instance,
-    config: OpenJijPreparationConfig,
+    policy: OpenJijPreparationPolicy,
 ) -> _PhaseOutcome[_EncodingInput]:
     working = state.take_instance()
-    failures = _penalty_policy_failures(working, source_instance, config)
+    failures = _penalty_policy_failures(working, source_instance, policy)
     if failures:
         return _Blocked(failures=failures)
 
@@ -498,25 +531,25 @@ def apply_penalties(
     )
 
     try:
-        if config.penalty_weights is not None:
+        if policy.penalty_weights is not None:
             parametric = working.penalty_method()
             weights: dict[int, float] = {}
             for constraint_id in remaining_constraint_ids:
                 removed = parametric.removed_constraints[constraint_id]
                 parameter_id = int(removed.removed_reason_parameters["parameter_id"])
-                weights[parameter_id] = config.penalty_weights[constraint_id]
+                weights[parameter_id] = policy.penalty_weights[constraint_id]
             penalized = parametric.with_parameters(weights)
             penalty_description = "Applied positive per-constraint finite penalties."
         else:
-            assert config.uniform_penalty_weight is not None
+            assert policy.uniform_penalty_weight is not None
             parametric = working.uniform_penalty_method()
             parameter = parametric.parameters[0]
             penalized = parametric.with_parameters(
-                {parameter.id: config.uniform_penalty_weight}
+                {parameter.id: policy.uniform_penalty_weight}
             )
             penalty_description = (
                 "Applied finite uniform penalty weight "
-                f"{config.uniform_penalty_weight}."
+                f"{policy.uniform_penalty_weight}."
             )
     except (RuntimeError, ValueError) as error:
         return _Blocked(
@@ -532,8 +565,8 @@ def apply_penalties(
     return _Applied(
         _EncodingInput(penalized),
         (
-            OpenJijPreparationStep(
-                operation="finite_penalty",
+            PreparationTransform(
+                name="finite_penalty",
                 description=penalty_description,
                 constraint_refs=penalty_constraint_refs,
             ),
@@ -561,7 +594,7 @@ def encode_remaining_integers(
                 _log_encoding_unavailable(
                     error,
                     integer_ids,
-                    operation="integer_slack_log_encoding",
+                    name="integer_slack_log_encoding",
                 ),
             )
         )
@@ -579,8 +612,8 @@ def encode_remaining_integers(
     return _Applied(
         _AdapterInputCandidate(working),
         (
-            OpenJijPreparationStep(
-                operation="integer_slack_log_encoding",
+            PreparationTransform(
+                name="integer_slack_log_encoding",
                 description=(
                     "Log-encoded Integer variables introduced during preparation."
                 ),

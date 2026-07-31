@@ -11,16 +11,18 @@ kernelspec:
   name: python3
 ---
 
-# Adapter の入力 class と明示的な特殊制約 lowering
+# Adapter の入力 class、Preparation、特殊制約 lowering
 
-OMMX では、従来 Adapter Capability として一緒に説明されていた次の2つの概念を分けて扱います。
+OMMX では、従来 Adapter Capability として一緒に説明されていた次の3つの概念を分けて扱います。
 
 - {class}`~ommx.InstanceClass` は、具体的な `Instance` 値の集合です。Adapter は構造的な入力条件を `INPUT_CLASS` で宣言し、その後に Adapter 固有の precondition を評価して applicability を判定します。
+- {meth}`SolverAdapter.prepare() <ommx.adapter.SolverAdapter.prepare>` は、Adapter が宣言しpolicyで許可されたTransformを隔離したsourceに適用し、applicableな {class}`~ommx.adapter.Preparation` inputとoutputのdecodeを提供します。
 - {meth}`Instance.lower_special_constraints() <ommx.Instance.lower_special_constraints>` は、Instance 上で選択した特殊制約 family を明示的に lowering します。入力 class の宣言でも、Adapter applicability の証明でもありません。
 
 本ページでは以下を説明します。
 
 - `InstanceClass` の membership と Adapter applicability
+- {class}`~ommx.adapter.Preparation`、{class}`~ommx.adapter.PreparationPolicy`、outputのdecode
 - 特殊制約 family selector としての {class}`~ommx.SpecialConstraintKind` と {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>`
 - {meth}`Instance.lower_special_constraints() <ommx.Instance.lower_special_constraints>` による明示的な lowering
 - 手動で通常制約に変換するための API
@@ -47,6 +49,31 @@ binary_linear_with_one_hot = InstanceClass(
 ```
 
 Adapter は applicability の最初の条件を `INPUT_CLASS` として宣言します。構造化された結果を得るには `check_applicability()`、membership または Adapter 固有の precondition が満たされない場合に例外を送出するには `require_applicable()` を使います。明示的な preparation で別の入力値を作った場合は、その値で applicability を再評価します。
+
+## Policyに基づくAdapter Preparation
+
+{meth}`SolverAdapter.prepare() <ommx.adapter.SolverAdapter.prepare>` は、直接のAdapter applicabilityを変えずに、明示的なpreparation workflowを提供します。sourceがすでにapplicableならidentityを優先します。現在の共通sliceでは、それ以外の場合に、そのAdapterがcanonicalな順序で宣言し、呼び出し側の {class}`~ommx.adapter.PreparationPolicy` が許可した特殊制約familyを適用します。選択したactive familyはSDKがまとめてloweringするため、このtupleはまだ一般のalternative path探索APIではありません。sourceは変更せず、生成したinputのapplicabilityを再検査してから {class}`~ommx.adapter.Preparation` を返します。
+
+HiGHSはIndicator、OneHot、SOS1のexact loweringを候補として宣言しています。そのため、呼び出し側がactive familyを手作業で選ばなくても、特殊制約を持つsourceを準備できます。
+
+```python
+from ommx.adapter import PreparationPolicy
+from ommx_highs_adapter import OMMXHighsAdapter
+
+source = instance
+preparation = OMMXHighsAdapter.prepare(source)
+input_solution = OMMXHighsAdapter.solve(preparation.input)
+source_solution = preparation.decode(input_solution)
+
+# policyはAdapterの候補を制限できますが、広げることはできません。
+no_automatic_lowering = PreparationPolicy(
+    allowed_special_constraint_lowerings=frozenset()
+)
+```
+
+`preparation.input` と `input_solution` は変換後の問題に属します。現在のSDK特殊制約loweringとOpenJij pipelineでは、inputのevaluationがすべてのsource変数を保持または再構築します。そのため {meth}`Preparation.decode() <ommx.adapter.Preparation.decode>` はsource変数だけを選び、input固有の補助変数を除いて、`preparation.source` 上でstateを再評価できます。通常制約を特殊制約へ昇格し直す操作ではありません。`PreparationTransform` は適用済みTransformの監査receiptであり、形式証明でも一般の実行可能な `encode` / `decode` objectでもありません。
+
+このsliceがtransportするのは正常に返った `Solution` と `SampleSet` です。`InfeasibleDetected` や `UnboundedDetected` をPreparation越しにtransportするhigh-level invocation APIはまだ提供しません。直接のconstructor、`solve()`、`sample()` はpreparation-freeのままであり、non-applicableな入力を引き続き拒否します。
 
 ## SpecialConstraintKind と active_special_constraint_kinds
 
@@ -202,6 +229,8 @@ for cid, c in instance2.constraints.items():
 | Adapter 入力の構造的な集合を記述する | {class}`~ommx.InstanceClass` |
 | Adapter applicability の最初の条件を宣言する | `INPUT_CLASS` |
 | membership と Adapter 固有の precondition を検査する | `check_applicability()` / `require_applicable()` |
+| 隔離したapplicableなAdapter inputを準備する | {meth}`SolverAdapter.prepare <ommx.adapter.SolverAdapter.prepare>` と {class}`~ommx.adapter.PreparationPolicy` |
+| Adapter outputをdecodeしてsource上で再評価する | {meth}`Preparation.decode <ommx.adapter.Preparation.decode>` |
 | active な特殊制約 family を調べる | {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` |
 | 選択した特殊制約を明示的に lowering する | {meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>` |
 | 個別に通常制約に変換する | `convert_*_to_constraint(s)` / `convert_all_*_to_constraints` |

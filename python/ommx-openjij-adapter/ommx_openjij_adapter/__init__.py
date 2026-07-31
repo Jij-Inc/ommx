@@ -1,12 +1,9 @@
 from .adapter import OMMXOpenJijSAAdapter as _OMMXOpenJijSAAdapter
 from ._preparation import (
-    OpenJijPreparation,
-    OpenJijPreparationConfig,
+    OpenJijPreparationPolicy,
     OpenJijPreparationError,
-    OpenJijPreparationFailure,
     OpenJijPreparationReport,
     OpenJijPreparationSourceCheck,
-    OpenJijPreparationStep,
 )
 from ._decode import decode_to_samples
 
@@ -22,19 +19,16 @@ class OMMXOpenJijSAAdapter(_OMMXOpenJijSAAdapter):
 
     Integer encoding, sense reversal, slack introduction, and finite constraint
     penalties are explicit preparation operations, not part of the declared
-    input class. Pass :attr:`OpenJijPreparation.input` back to this Adapter
+    input class. Pass :attr:`ommx.adapter.Preparation.input` back to this Adapter
     as a separate :class:`ommx.Instance` value.
     """
 
 
 __all__ = [
     "OMMXOpenJijSAAdapter",
-    "OpenJijPreparation",
-    "OpenJijPreparationConfig",
+    "OpenJijPreparationPolicy",
     "OpenJijPreparationError",
-    "OpenJijPreparationFailure",
     "OpenJijPreparationReport",
     "OpenJijPreparationSourceCheck",
-    "OpenJijPreparationStep",
     "decode_to_samples",
 ]

@@ -29,3 +29,20 @@ ommx_solution = OMMXHighsAdapter.solve(ommx_instance)
 
 print(ommx_solution)
 ```
+
+`solve()` remains a direct-input API and does not transform its argument. When
+the source contains Indicator, OneHot, or SOS1 constraints, use the explicit
+Preparation workflow. HiGHS declares exact lowering for those three families;
+the produced input is checked again before it is returned.
+
+```python
+preparation = OMMXHighsAdapter.prepare(source)
+input_solution = OMMXHighsAdapter.solve(preparation.input)
+source_solution = preparation.decode(input_solution)
+```
+
+`input_solution` belongs to the lowered input. `decode()` removes any auxiliary
+variables introduced by lowering and reevaluates the state against the retained
+source instance. A caller can restrict automatic lowering with
+`ommx.adapter.PreparationPolicy`; a policy never adds candidates that HiGHS did
+not declare.

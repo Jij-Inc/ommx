@@ -136,19 +136,19 @@ the Adapter and evaluate those samples against the source model explicitly.
 ```{code-cell} ipython3
 from ommx_openjij_adapter import (
     OMMXOpenJijSAAdapter,
-    OpenJijPreparationConfig,
+    OpenJijPreparationPolicy,
 )
 
-config = OpenJijPreparationConfig(
+policy = OpenJijPreparationPolicy(
     uniform_penalty_weight=20.0,
 )
-prepared = OMMXOpenJijSAAdapter.prepare(instance, config=config)
+prepared = OMMXOpenJijSAAdapter.prepare(instance, policy=policy)
 
 prepared_samples = OMMXOpenJijSAAdapter.sample(
     prepared.input,
     num_reads=16,
 )
-sample_set = prepared.evaluate_source(prepared_samples)
+sample_set = prepared.decode(prepared_samples)
 sample_set.summary
 ```
 
@@ -157,34 +157,34 @@ sample_set.summary
 constraint violations in addition to the decision variable values.
 `SampleSet.summary` displays this information. Its `feasible` column indicates
 feasibility for the source constrained problem because
-`prepared.evaluate_source()` evaluates the prepared-input states against that
+`prepared.decode()` decodes the prepared-input states and evaluates them against that
 source model.
 
-The penalty weight in `config` belongs to the explicit preparation, not to the
+The penalty weight in `policy` belongs to the explicit preparation, not to the
 OpenJij backend sampler. A finite penalty encourages feasibility but does not
 guarantee that every returned sample is feasible for the source problem.
 
 ### Inspecting preparation
 
-`check_preparation` checks the source model and preparation config without
+`check_preparation` checks the source model and preparation policy without
 mutating the instance. `prepare` performs the checked transformations and
 stores an audit report in `prepared.report`:
 
 ```{code-cell} ipython3
 report = prepared.report
-config_used = report.config
+policy_used = report.policy
 final = report.input_applicability
 outcomes = {
     "source_membership": report.source_check.source_membership.is_member,
-    "steps": [step.operation for step in report.steps],
+    "transforms": [transform.name for transform in report.transforms],
     "preparation_failures": report.preparation_failures,
     "input_applicability": None if final is None else final.is_applicable,
 }
-config_used, outcomes
+policy_used, outcomes
 ```
 
-`report.config` records the normalized, immutable preparation settings actually
-used. It is configuration evidence. The other fields encode one terminal state:
+`report.policy` records the normalized, immutable preparation settings actually
+used. It is policy evidence. The other fields encode one terminal state:
 
 | State | `source_check` | `preparation_failures` | `input_applicability` |
 | --- | --- | --- | --- |
@@ -195,14 +195,14 @@ used. It is configuration evidence. The other fields encode one terminal state:
 
 `source_check` is structural source-class membership. Operation availability
 and preparation policy belong to the phase that performs the operation and are
-recorded in `preparation_failures`. `steps` is the prefix of operations that
-completed before the terminal state. It is an operation audit, not a separate
+recorded in `preparation_failures`. `transforms` is the prefix of transformations
+that completed before the terminal state. It is a transform audit, not a separate
 outcome or a composed mathematical guarantee.
-Common preparation policy, guarantees, and automatic selection are tracked in
-[OMMX issue #1111](https://github.com/Jij-Inc/ommx/issues/1111). By default,
+Common preparation policy and automatic selection are provided by
+{py:class}`~ommx.adapter.SolverAdapter`. By default,
 OpenJij preparation uses only the available exact operations. Discrete integer
 slack approximation requires setting `allow_approximate_integer_slack=True` on
-`OpenJijPreparationConfig`; setting `inequality_integer_slack_max_range` alone
+`OpenJijPreparationPolicy`; setting `inequality_integer_slack_max_range` alone
 does not opt into approximation. Configuring `uniform_penalty_weight` or
 `penalty_weights` explicitly selects finite-penalty preparation, which does not
 claim that the Adapter directly or exactly supports constrained input.

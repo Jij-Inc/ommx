@@ -136,53 +136,53 @@ instance = Instance.from_components(
 ```{code-cell} ipython3
 from ommx_openjij_adapter import (
     OMMXOpenJijSAAdapter,
-    OpenJijPreparationConfig,
+    OpenJijPreparationPolicy,
 )
 
-config = OpenJijPreparationConfig(
+policy = OpenJijPreparationPolicy(
     uniform_penalty_weight=20.0,
 )
-prepared = OMMXOpenJijSAAdapter.prepare(instance, config=config)
+prepared = OMMXOpenJijSAAdapter.prepare(instance, policy=policy)
 
 prepared_samples = OMMXOpenJijSAAdapter.sample(
     prepared.input,
     num_reads=16,
 )
-sample_set = prepared.evaluate_source(prepared_samples)
+sample_set = prepared.decode(prepared_samples)
 sample_set.summary
 ```
 
 {py:meth}`~ommx_openjij_adapter.OMMXOpenJijSAAdapter.sample` は
 {py:class}`~ommx.SampleSet` を返します。これは決定変数のサンプル値に加えて、
 評価した目的関数値と制約違反を保持します。`SampleSet.summary` はこの情報の要約を
-表示します。`prepared.evaluate_source()` が準備済み入力のsampleを変換元モデルに
+表示します。`prepared.decode()` が準備済み入力のsampleをdecodeし、変換元モデルに
 対して評価するため、その `feasible` 列は変換元の制約付き問題に対する実行可能性を
 示します。
 
-`config` のペナルティ重みはOpenJij backend samplerのパラメータではなく、明示的な
+`policy` のペナルティ重みはOpenJij backend samplerのパラメータではなく、明示的な
 準備に対する指定です。有限ペナルティは実行可能なサンプルを得やすくしますが、
 すべてのサンプルが変換元の問題に対して実行可能になることを保証しません。
 
 ### 準備内容の確認
 
-`check_preparation` はインスタンスを変更せずに、変換元モデルと準備configを
+`check_preparation` はインスタンスを変更せずに、変換元モデルと準備policyを
 検査します。`prepare` は検査した変換を実行し、監査用レポートを
 `prepared.report` に保存します。
 
 ```{code-cell} ipython3
 report = prepared.report
-config_used = report.config
+policy_used = report.policy
 final = report.input_applicability
 outcomes = {
     "source_membership": report.source_check.source_membership.is_member,
-    "steps": [step.operation for step in report.steps],
+    "transforms": [transform.name for transform in report.transforms],
     "preparation_failures": report.preparation_failures,
     "input_applicability": None if final is None else final.is_applicable,
 }
-config_used, outcomes
+policy_used, outcomes
 ```
 
-`report.config` は、正規化済みで実際に使われた不変のpreparation設定を記録します。
+`report.policy` は、正規化済みで実際に使われた不変のpreparation設定を記録します。
 これは設定の監査記録です。その他のfieldは、次のいずれか1つの終端状態を表します。
 
 | 状態 | `source_check` | `preparation_failures` | `input_applicability` |
@@ -194,14 +194,14 @@ config_used, outcomes
 
 `source_check` は構造的なsource-class membershipです。operation availabilityと
 preparation policyは、そのoperationを実行するphaseが所有し、
-`preparation_failures` に記録します。`steps` は終端状態までに完了したoperationの
+`preparation_failures` に記録します。`transforms` は終端状態までに完了したtransformの
 prefixです。独立したoutcomeや、合成された数学的guaranteeではありません。
-共通のpreparation policy、guarantee、自動選択は
-[OMMX issue #1111](https://github.com/Jij-Inc/ommx/issues/1111) で扱います。このprototype
-が既定で使うのは、利用可能な厳密operationだけです。離散的なinteger slack近似には
-`OpenJijPreparationConfig` で `allow_approximate_integer_slack=True` を設定する必要が
+共通のpreparation policyと自動選択は
+{py:class}`~ommx.adapter.SolverAdapter` が提供します。既定で使うのは、利用可能な厳密
+operationだけです。離散的なinteger slack近似には
+`OpenJijPreparationPolicy` で `allow_approximate_integer_slack=True` を設定する必要が
 あり、`inequality_integer_slack_max_range` の指定だけでは近似への同意になりません。
-同じConfigで `uniform_penalty_weight` または `penalty_weights` を明示的に設定すると
+同じpolicyで `uniform_penalty_weight` または `penalty_weights` を明示的に設定すると
 finite-penalty preparationが選択されますが、制約付き入力をAdapterが直接または厳密に
 サポートするという意味ではありません。
 

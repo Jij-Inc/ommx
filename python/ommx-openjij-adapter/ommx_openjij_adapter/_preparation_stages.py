@@ -8,12 +8,14 @@ from math import isfinite
 from typing import Generic, TypeAlias, TypeVar
 
 from ommx import Equality, InfeasibleDetected, Instance, Kind, Sense
-from ommx.adapter import AdapterApplicabilityReport
+from ommx.adapter import (
+    AdapterApplicabilityReport,
+    PreparationFailure,
+    PreparationTransform,
+)
 
 from ._preparation import (
-    OpenJijPreparationFailure,
     OpenJijPreparationSourceCheck,
-    OpenJijPreparationStep,
 )
 
 
@@ -280,13 +282,13 @@ _T = TypeVar("_T")
 @dataclass(frozen=True, slots=True)
 class _Applied(Generic[_T]):
     value: _T
-    steps: tuple[OpenJijPreparationStep, ...] = ()
+    transforms: tuple[PreparationTransform, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
 class _Blocked:
-    failures: tuple[OpenJijPreparationFailure, ...]
-    steps: tuple[OpenJijPreparationStep, ...] = ()
+    failures: tuple[PreparationFailure, ...]
+    transforms: tuple[PreparationTransform, ...] = ()
 
     def __post_init__(self) -> None:
         _require(bool(self.failures), "blocked phase requires at least one failure")
@@ -314,8 +316,8 @@ class _SourceRejected:
 @dataclass(frozen=True, slots=True)
 class _PhaseRejected:
     source_check: OpenJijPreparationSourceCheck
-    steps: tuple[OpenJijPreparationStep, ...]
-    failures: tuple[OpenJijPreparationFailure, ...]
+    transforms: tuple[PreparationTransform, ...]
+    failures: tuple[PreparationFailure, ...]
 
     def __post_init__(self) -> None:
         _require(
@@ -328,7 +330,7 @@ class _PhaseRejected:
 @dataclass(frozen=True, slots=True)
 class _InputRejected:
     source_check: OpenJijPreparationSourceCheck
-    steps: tuple[OpenJijPreparationStep, ...]
+    transforms: tuple[PreparationTransform, ...]
     checked_input: _CheckedAdapterInput
 
     @property
@@ -349,7 +351,7 @@ class _InputRejected:
 @dataclass(frozen=True, slots=True)
 class _PreparedInput:
     source_check: OpenJijPreparationSourceCheck
-    steps: tuple[OpenJijPreparationStep, ...]
+    transforms: tuple[PreparationTransform, ...]
     checked_input: _CheckedAdapterInput
     source_instance: Instance = field(repr=False)
 
