@@ -39,6 +39,35 @@ namespace SOS1BigM
 - `promotion` itself is total. The reduction, relaxation, and objective-preservation
   theorems require `witness.validate source` to succeed.
 
+## Sufficient condition and executable check
+
+The sufficient condition is the proposition
+`witness.StandardBigMForm source`. It requires:
+
+- finite declared bounds for every promoted SOS1 member;
+- reused selectors to be exactly the retained binary members;
+- every fresh selector in the source suffix to be binary;
+- a valid retained-constraint prefix whose rows do not depend on fresh selectors;
+- the remaining ordered regular-constraint suffix to equal the canonical Big-M
+  link/cardinality rows generated from the witness and declared bounds;
+- every existing OneHot and SOS1 constraint to contain only retained members;
+- every existing Indicator constraint to have a retained trigger and a body independent
+  of fresh selectors; and
+- the objective to be independent of fresh selectors.
+
+This proposition is decidable. `witness.validate source` is its executable checker and
+returns the proposition bundled as `Witness.Validated`. The theorem
+`Witness.validate_isSome_iff_standardBigMForm` states the exact checker contract:
+
+```
+(witness.validate source).isSome ↔ witness.StandardBigMForm source
+```
+
+Correspondingly, `Witness.validate_eq_none_iff_not_standardBigMForm` characterizes
+rejection. The reduction, relaxation, and objective-preservation theorems consume the
+returned `Witness.Validated`; rejection does not prove that promotion is semantically
+incorrect outside this sufficient-condition recognizer.
+
 ## Example
 
 For example, `x, z ∈ Binary, y ∈ [0, 2], x + z ≤ 1, y ≤ 2z` is promoted to
