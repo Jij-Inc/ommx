@@ -26,6 +26,7 @@ mod setter;
 mod slack;
 pub use slack::ExactIntegerSlackUnavailable;
 mod sos1;
+mod sos1_promotion;
 mod stats;
 mod substitute;
 mod unary_encode;
@@ -34,6 +35,7 @@ pub use analysis::*;
 pub use arbitrary::{InstanceParameters, InstanceSpace};
 pub use builder::*;
 pub use parametric_builder::*;
+pub use sos1_promotion::*;
 pub use stats::*;
 
 use crate::{
