@@ -26,10 +26,64 @@ namespace Instance
 
 namespace SOS1BigM
 
-/-- Promote the Big-M selector formulation described by an untrusted witness.
+/--
+# SOS1 Big-M promotion
 
-Construction is unconditional.  `validate` checks the sufficient conditions
-used by the reduction, relaxation, and objective-preservation theorems. -/
+## Promotion rule
+
+- Retain the decision-variable and regular-constraint prefixes selected by the witness.
+- Remove the fresh-selector suffix and its exact Big-M link/cardinality rows.
+- Add one first-class SOS1 constraint over the witnessed members.
+- `promotion` itself is total. The reduction, relaxation, and objective-preservation
+  theorems require `witness.validate source` to succeed.
+
+## Example
+
+For example, `x, z ∈ Binary, y ∈ [0, 2], x + z ≤ 1, y ≤ 2z` is promoted to
+`x ∈ Binary, y ∈ [0, 2], SOS1(x, y)`.
+
+This uses a `Witness 2` with the following data:
+
+- The retained prefix has dimension `2`, with component `0` named `x` and component `1`
+  named `y`.
+- `members = {x, y}` selects both retained components for the promoted SOS1 constraint.
+- `freshMembers = {y}` declares that `y` uses a fresh selector. Consequently `x` is the
+  reused selector, `freshCount = 1`, and the appended source component is named `z`.
+- `retainedConstraintCount = 0` declares that no regular row is retained. The entire
+  ordered constraint list is therefore the generated suffix `[y ≤ 2z, x + z ≤ 1]`.
+
+Under this witness:
+
+- `y ≤ 2z` is recognized as the upper link obtained from the upper bound `2` and
+  removed. No lower link is expected because the lower bound of `y` is zero.
+- `x + z ≤ 1` is recognized as the selector-cardinality row and removed.
+- `SOS1(x, y)` is added to the promoted target.
+- `(x, y, z)` is the flat source state and `(x, y)` is the promoted target state.
+- `encode` discards `z`: `(x, y, z) ↦ (x, y)`.
+- `decode` restores the canonical selector,
+  `z = if y = 0 then 0 else 1`.
+
+When `x = y = 0`, both `z = 0` and `z = 1` are feasible in the flat source.
+Encoding `(0, 0, 1)` and then decoding yields `(0, 0, 0)`, so the transform is not
+`SourceRoundTrip`. Target round-trip does hold because decoding always chooses the canonical
+selector and encoding immediately discards it.
+
+## Validation failures
+
+The untrusted witness always constructs a transform, but `witness.validate source` returns
+`none` unless the source has the initial supported standard form. For example:
+
+- Replacing `x + z ≤ 1` with `x + z ≤ 2` is rejected. This row does not enforce the
+  at-most-one selector condition and can project to a state violating `SOS1(x, y)`.
+- Replacing `y ≤ 2z` with `y ≤ 3z` is also rejected. Given `y ∈ [0, 2]`, this looser
+  coefficient can still describe a valid formulation, but the initial checker deliberately
+  requires the canonical row generated from the declared upper bound.
+- Making the source objective depend on `z` is rejected because removing `z` would not
+  preserve objective values.
+
+Thus validation failure means that this conservative Big-M recognizer does not certify the
+input, not that no mathematically correct SOS1 promotion exists.
+-/
 def promotion (witness : Witness n)
     (source : Instance (n + witness.freshCount)) :
     Instance.Transform source where
