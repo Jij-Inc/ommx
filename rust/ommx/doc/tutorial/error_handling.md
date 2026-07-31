@@ -111,10 +111,13 @@ proto-tree metadata. [`ParseError`](crate::ParseError) implements
 [`std::error::Error`], so callers can downcast the SDK error or propagate it
 with `?`.
 
-Semantic v2 parsing of OneHot and SOS1 constraints keeps `ParseError` as the
-outer owner while retaining [`OneHotConstraintError`](crate::OneHotConstraintError)
-or [`Sos1ConstraintError`](crate::Sos1ConstraintError) in its standard source
-chain. This preserves the structural validation cause without changing the
+Semantic parsing keeps `ParseError` as the outer owner while retaining a
+narrower validation signal in its standard source chain. This includes
+[`ParameterIDCollision`](crate::ParameterIDCollision) for v1 and v2
+ParametricInstance namespace collisions, and
+[`OneHotConstraintError`](crate::OneHotConstraintError) or
+[`Sos1ConstraintError`](crate::Sos1ConstraintError) for v2 special-constraint
+validation. This preserves the validation cause without changing the
 Python-visible parse contract.
 
 ## Fail-site macros

@@ -720,10 +720,8 @@ impl Parse for v1::ParametricInstance {
             .collect();
         if !intersection.is_empty() {
             let id = *intersection.iter().next().unwrap();
-            return Err(RawParseError::InvalidInstance(format!(
-                "Duplicated variable ID is found in definition: {id:?}"
-            ))
-            .context(message, "parameters"));
+            return Err(RawParseError::from(crate::ParameterIDCollision { id })
+                .context(message, "parameters"));
         }
 
         let objective = self
@@ -883,10 +881,8 @@ impl Parse for v2::ParametricInstance {
         let decision_variable_ids: VariableIDSet = decision_variables.keys().copied().collect();
         let parameter_ids: VariableIDSet = parameters.keys().copied().collect();
         if let Some(id) = decision_variable_ids.intersection(&parameter_ids).next() {
-            return Err(RawParseError::InvalidInstance(format!(
-                "Duplicated variable ID is found in definition: {id:?}"
-            ))
-            .context(message, "parameters"));
+            return Err(RawParseError::from(crate::ParameterIDCollision { id: *id })
+                .context(message, "parameters"));
         }
         let all_variable_ids: VariableIDSet = decision_variable_ids
             .union(&parameter_ids)
@@ -1125,7 +1121,41 @@ mod tests {
     use crate::instance::Instance;
     use proptest::prelude::*;
     use prost::Message;
-    use std::collections::HashMap;
+    use std::{collections::HashMap, error::Error as _};
+
+    fn parameter_collision_test_instance(id: VariableID) -> ParametricInstance {
+        ParametricInstance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::from([(id, DecisionVariable::binary())]))
+            .parameters(crate::ParameterTable::default())
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap()
+    }
+
+    fn assert_parameter_id_collision_source(error: crate::Error, expected_id: VariableID) {
+        let parse_error = error
+            .downcast_ref::<ParseError>()
+            .expect("semantic byte decoding must retain ParseError as the outer owner");
+        assert!(matches!(
+            &parse_error.error,
+            RawParseError::ParameterIDCollision(crate::ParameterIDCollision { id })
+                if *id == expected_id
+        ));
+
+        let raw_source = parse_error
+            .source()
+            .expect("ParseError must expose its RawParseError source");
+        assert!(raw_source.downcast_ref::<RawParseError>().is_some());
+        let signal_source = raw_source
+            .source()
+            .expect("RawParseError must expose the parameter collision signal");
+        assert!(matches!(
+            signal_source.downcast_ref::<crate::ParameterIDCollision>(),
+            Some(crate::ParameterIDCollision { id }) if *id == expected_id
+        ));
+    }
 
     fn binary_decision_variables() -> Vec<v1::DecisionVariable> {
         [0, 1]
@@ -1467,6 +1497,37 @@ mod tests {
         └─ommx.v1.ParametricInstance[annotations]
         Annotation key `org.ommx.v1.parametric-instance.title` is reserved for OMMX metadata and cannot be stored in extension annotations.
         "###);
+    }
+
+    #[test]
+    fn from_v1_bytes_preserves_parameter_id_collision_source() {
+        let id = VariableID::from(7);
+        let mut proto =
+            v1::ParametricInstance::try_from(parameter_collision_test_instance(id)).unwrap();
+        proto.parameters.push(v1::Parameter {
+            id: id.into_inner(),
+            ..Default::default()
+        });
+
+        let error = ParametricInstance::from_v1_bytes(&proto.encode_to_vec()).unwrap_err();
+
+        assert_parameter_id_collision_source(error, id);
+    }
+
+    #[test]
+    fn from_v2_bytes_preserves_parameter_id_collision_source() {
+        let id = VariableID::from(7);
+        let mut proto = v2::ParametricInstance::from(parameter_collision_test_instance(id));
+        proto
+            .parameters
+            .as_mut()
+            .expect("serialized ParametricInstance must contain its parameter table")
+            .ids
+            .push(id.into_inner());
+
+        let error = ParametricInstance::from_v2_bytes(&proto.encode_to_vec()).unwrap_err();
+
+        assert_parameter_id_collision_source(error, id);
     }
 
     #[test]

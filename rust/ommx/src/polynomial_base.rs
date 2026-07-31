@@ -24,7 +24,7 @@ pub use quadratic::*;
 use crate::{coeff, v1::State, Coefficient, CoefficientError, VariableID, VariableIDSet};
 use anyhow::{Context, Result};
 use fnv::{FnvHashMap, FnvHashSet};
-use num::integer::{gcd, lcm};
+use num::integer::gcd;
 use proptest::strategy::BoxedStrategy;
 use std::{fmt::Debug, hash::Hash};
 
@@ -42,7 +42,7 @@ pub enum ContentFactorError {
 
     /// The least common multiple of coefficient denominators exceeds `i64`.
     #[error(
-        "Overflow detected while evaluating minimal integer coefficient multiplier. This means it is hard to make the all coefficient integer"
+        "The least common multiple of coefficient denominators exceeds the 64-bit integer range"
     )]
     MultiplierOverflow,
 }
@@ -270,10 +270,11 @@ impl<M: Monomial> PolynomialBase<M> {
             let r = num::Rational64::approximate_float(coefficient.into_inner())
                 .ok_or(ContentFactorError::CannotApproximateCoefficient)?;
             numer_gcd = gcd(numer_gcd, *r.numer());
-            denom_lcm
-                .checked_mul(*r.denom())
+            let denominator = *r.denom();
+            let reduced_lcm = denom_lcm / gcd(denom_lcm, denominator);
+            denom_lcm = reduced_lcm
+                .checked_mul(denominator)
                 .ok_or(ContentFactorError::MultiplierOverflow)?;
-            denom_lcm = lcm(denom_lcm, *r.denom());
         }
 
         if numer_gcd == 0 {
@@ -444,6 +445,24 @@ mod tests {
             error.downcast_ref::<ContentFactorError>(),
             Some(ContentFactorError::CannotApproximateCoefficient)
         ));
+    }
+
+    #[test]
+    fn content_factor_does_not_overflow_for_repeated_denominators() {
+        let denominators = [1009_i64, 1013, 1019, 1021, 1031, 1033];
+        let mut p = Linear::default();
+        for (id, denominator) in denominators.into_iter().chain(denominators).enumerate() {
+            p.add_term(
+                LinearMonomial::Variable(VariableID::from(id as u64)),
+                Coefficient::try_from(1.0 / denominator as f64).unwrap(),
+            )
+            .unwrap();
+        }
+
+        let factor = p.content_factor().unwrap();
+        let expected_lcm = denominators.into_iter().product::<i64>() as f64;
+
+        assert_eq!(factor.into_inner(), expected_lcm);
     }
 
     #[test]
