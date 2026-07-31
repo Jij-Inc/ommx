@@ -1,5 +1,5 @@
 import OMMXProof.Instance.Transform
-import OMMXProof.Instance.Transform.SOS1BigM.Promotion.Validation
+import OMMXProof.Instance.Transform.SOS1BigM.Promotion.Semantics
 
 /-!
 # SOS1 Big-M promotion as an `Instance.Transform`
@@ -10,6 +10,21 @@ the initial supported layout, retained variables and regular constraints
 occupy prefixes, while fresh selectors and their link/cardinality rows occupy
 suffixes. Existing special constraints are preserved when they do not
 reference fresh selectors.
+
+## Submodules
+
+The implementation follows a one-way dependency through these submodules:
+
+- `Promotion.Witness` defines the untrusted retained/fresh suffix layout;
+- `Promotion.Target` projects retained data and constructs the promoted Instance;
+- `Promotion.Formulation` reconstructs the expected Big-M links and cardinality row;
+- `Promotion.Validation` checks the supported source shape and derives structural
+  source equalities;
+- `Promotion.Semantics` derives feasibility, canonical-selector, and objective
+  characterizations from validated evidence.
+
+This module consumes those characterizations to package the transform and prove
+its reduction, relaxation, round-trip, and objective-preservation properties.
 
 The transform itself is total for every untrusted `Witness`:
 

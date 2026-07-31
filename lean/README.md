@@ -70,7 +70,8 @@ completeness of recognition or presolve algorithms remain outside this model.
 | `OMMXProof.Instance.Transform.SOS1BigM.Promotion.Witness` | Untrusted retained/fresh suffix layout supplied to the promotion checker |
 | `OMMXProof.Instance.Transform.SOS1BigM.Promotion.Target` | Retained-prefix projection, promoted target construction, and target feasibility characterization |
 | `OMMXProof.Instance.Transform.SOS1BigM.Promotion.Formulation` | Expected Big-M links and selector-cardinality formulation reconstructed from the witness |
-| `OMMXProof.Instance.Transform.SOS1BigM.Promotion.Validation` | Conservative standard-form validation and source semantics derived from a validated witness |
+| `OMMXProof.Instance.Transform.SOS1BigM.Promotion.Validation` | Conservative standard-form validation and structural source equalities derived from a validated witness |
+| `OMMXProof.Instance.Transform.SOS1BigM.Promotion.Semantics` | Feasibility, canonical-selector, and objective characterizations for validated promotion |
 | `OMMXProof.Instance.Transform.SOS1BigM.Promotion` | Total witnessed promotion plus correctness theorems under validated sufficient conditions |
 | `OMMXProof.Instance.Transform.SOS1BigM` | Umbrella for both directions of the SOS1 Big-M formulation |
 | `OMMXProof.Instance.Transform` | Entrypoint for common transformation semantics and all concrete Instance transformations |
