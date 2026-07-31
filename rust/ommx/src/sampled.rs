@@ -55,10 +55,29 @@ impl<T> From<(SampleID, T)> for Sampled<T> {
     }
 }
 
+/// A sample ID already present in a collection or repeated in one append input.
+///
+/// Use [`Self::id`] to identify the conflicting ID before correcting the input
+/// and retrying the atomic operation.
+///
+/// ```
+/// let mut sampled = ommx::Sampled::from((ommx::SampleID::from(0), "existing"));
+/// let error = sampled
+///     .append([ommx::SampleID::from(0)], "replacement")
+///     .unwrap_err();
+/// assert_eq!(error.id(), ommx::SampleID::from(0));
+/// ```
 #[derive(Debug, thiserror::Error)]
 #[error("Duplicated sample ID: {id:?}")]
 pub struct DuplicatedSampleIDError {
     id: SampleID,
+}
+
+impl DuplicatedSampleIDError {
+    /// Return the sample ID that caused the duplicate-ID failure.
+    pub fn id(&self) -> SampleID {
+        self.id
+    }
 }
 
 impl<T> Sampled<T> {
@@ -362,7 +381,7 @@ mod tests {
 
         let error = sampled.append([SampleID(1), SampleID(0)], 20).unwrap_err();
 
-        assert_eq!(error.id, SampleID(0));
+        assert_eq!(error.id(), SampleID(0));
         assert_eq!(sampled.ids(), BTreeSet::from([SampleID(0)]));
         assert_eq!(sampled.get(SampleID(0)), Some(&10));
         assert_eq!(sampled.get(SampleID(1)), None);
@@ -375,7 +394,7 @@ mod tests {
 
         let error = sampled.append([SampleID(1), SampleID(1)], 20).unwrap_err();
 
-        assert_eq!(error.id, SampleID(1));
+        assert_eq!(error.id(), SampleID(1));
         assert_eq!(sampled.ids(), BTreeSet::from([SampleID(0)]));
         assert_eq!(sampled.get(SampleID(0)), Some(&10));
         assert_eq!(sampled.get(SampleID(1)), None);
