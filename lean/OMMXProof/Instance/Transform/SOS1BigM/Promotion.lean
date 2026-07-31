@@ -1,5 +1,5 @@
 import OMMXProof.Instance.Transform
-import OMMXProof.Instance.Transform.SOS1BigM.Promotion.Target
+import OMMXProof.Instance.Transform.SOS1BigM.Promotion.Validation
 
 /-!
 # SOS1 Big-M promotion as an `Instance.Transform`
