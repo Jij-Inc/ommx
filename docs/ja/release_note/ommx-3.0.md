@@ -8,6 +8,20 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
+### 🆕 Policyで制御するSolverAdapter preparation ([#1137](https://github.com/Jij-Inc/ommx/pull/1137))
+
+{meth}`SolverAdapter.prepare <ommx.adapter.SolverAdapter.prepare>` に、直接の
+`solve()` / `sample()` の挙動を変えず、applicableなAdapter inputを生成する明示的な
+共通workflowを追加しました。{class}`~ommx.adapter.PreparationPolicy` でAdapterが
+宣言した特殊制約loweringを制限できます。返される
+{class}`~ommx.adapter.Preparation` は、適用したTransformを記録し、Adapter outputを
+source instanceに対して再評価する `decode()` を提供します。
+
+HiGHSのpreparationは、activeなIndicator、OneHot、SOS1制約を既存SDKのexactな
+Transformでloweringしてからapplicabilityを再検査します。OpenJijの既存pipelineも
+共通の `Preparation`、Transform、policy、`decode()` vocabularyを使い、OpenJij固有の
+設定は `OpenJijPreparationPolicy` で指定します。
+
 ### 🛠 Model error を呼び出し側の回復方法に応じて通知 ([#1104](https://github.com/Jij-Inc/ommx/pull/1104)、[#1105](https://github.com/Jij-Inc/ommx/pull/1105))
 
 Function、polynomial、constraint、named function、`Instance` のevaluation APIは、

@@ -8,6 +8,22 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🆕 Policy-driven SolverAdapter preparation ([#1137](https://github.com/Jij-Inc/ommx/pull/1137))
+
+{meth}`SolverAdapter.prepare <ommx.adapter.SolverAdapter.prepare>` now provides
+an explicit common workflow for producing an applicable Adapter input without
+changing direct `solve()` or `sample()` behavior. A
+{class}`~ommx.adapter.PreparationPolicy` can restrict the Adapter-declared
+special-constraint lowerings, and the returned
+{class}`~ommx.adapter.Preparation` records applied Transforms and decodes
+Adapter outputs by reevaluating them against the source instance.
+
+HiGHS preparation now lowers active Indicator, OneHot, and SOS1 constraints
+through the existing exact SDK Transforms before rechecking applicability.
+OpenJij's existing pipeline uses the same `Preparation`, Transform, policy, and
+`decode()` vocabulary, with OpenJij-specific settings in
+`OpenJijPreparationPolicy`.
+
 ### 🛠 Model errors follow caller ownership ([#1104](https://github.com/Jij-Inc/ommx/pull/1104), [#1105](https://github.com/Jij-Inc/ommx/pull/1105))
 
 Function, polynomial, constraint, named-function, and `Instance` evaluation
