@@ -1,4 +1,4 @@
-import OMMXProof.Instance.Transform.SOS1BigM.Promotion.Formulation
+import OMMXProof.Instance.Transform.SOS1BigM.Promotion.Reconstruction
 import Mathlib.Tactic
 
 /-!

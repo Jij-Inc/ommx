@@ -10,9 +10,9 @@ Fresh selectors occupy the right block, and the regular constraints retained by
 the promotion precede the selector-formulation constraints.
 
 The witness is intentionally untrusted.  It determines a promoted target and
-state maps unconditionally; `StandardBigMForm` in the target module records a
-conservative sufficient condition under which those maps preserve feasibility
-and objective values.
+state maps unconditionally; `StandardBigMForm` in the validation module
+records a conservative sufficient condition under which those maps preserve
+feasibility and objective values.
 -/
 
 namespace OMMXProof

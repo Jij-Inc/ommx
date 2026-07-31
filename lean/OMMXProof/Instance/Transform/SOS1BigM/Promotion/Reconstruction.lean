@@ -3,10 +3,11 @@ import OMMXProof.Instance.Transform.SOS1BigM.Promotion.Target
 import Mathlib.Tactic
 
 /-!
-# Canonical selector formulation for SOS1 Big-M promotion
+# Canonical Big-M row reconstruction for SOS1 promotion
 
-This module defines the regular Big-M link and cardinality constraints generated
-by a promotion witness and relates them to the abstract selector formulation.
+This module reconstructs the regular Big-M link and cardinality constraints
+specified by a promotion witness and relates them to the shared abstract
+selector formulation.
 -/
 
 namespace OMMXProof

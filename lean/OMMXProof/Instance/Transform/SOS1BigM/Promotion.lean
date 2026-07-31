@@ -17,7 +17,7 @@ The implementation follows a one-way dependency through these submodules:
 
 - `Promotion.Witness` defines the untrusted retained/fresh suffix layout;
 - `Promotion.Target` projects retained data and constructs the promoted Instance;
-- `Promotion.Formulation` reconstructs the expected Big-M links and cardinality row;
+- `Promotion.Reconstruction` reconstructs the expected Big-M links and cardinality row;
 - `Promotion.Validation` checks the supported source shape and derives structural
   source equalities;
 - `Promotion.Semantics` derives feasibility, canonical-selector, and objective
