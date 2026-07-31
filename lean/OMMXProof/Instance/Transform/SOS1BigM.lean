@@ -10,7 +10,8 @@ This module collects both directions of the SOS1 Big-M formulation:
 - `SOS1BigM.lowering` replaces one first-class SOS1 constraint with binary
   selectors, Big-M links, and a selector-cardinality row.
 - `SOS1BigM.promotion` recognizes that standard Big-M layout and replaces it
-  with one first-class SOS1 constraint.
+  with one first-class SOS1 constraint while preserving existing special
+  constraints which do not reference the removed selectors.
 
 The promotion checker deliberately accepts a conservative sufficient
 condition. Other valid formulations of SOS1 remain outside this Big-M-specific

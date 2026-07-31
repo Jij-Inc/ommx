@@ -17,7 +17,8 @@ deliberately conservative:
 - the suffix is the standard upper/lower Big-M links followed by one
   cardinality constraint,
 - retained affine expressions do not depend on fresh selectors, and
-- the flat source contains no pre-existing special constraints.
+- every pre-existing special constraint is independent of fresh selectors and
+  can therefore be preserved in the promoted Instance.
 
 These are sufficient, not necessary, conditions. Rejection by this initial
 checker does not imply that no correct promotion exists through a broader
@@ -138,6 +139,213 @@ theorem holds_prefixConstraint_append_of_freshIndependent
         simp [LinearConstraint.Holds, prefixConstraint,
           witness.eval_prefixAffine_append_of_freshIndependent h]
 
+/-- Restrict a special-constraint member set to the retained left block. -/
+def prefixMembers
+    (members : Finset (Fin (n + witness.freshCount))) : Finset (Fin n) :=
+  Finset.univ.filter fun i ↦ Fin.castAdd witness.freshCount i ∈ members
+
+/-- A special-constraint member set does not reference fresh selectors. -/
+def MembersFreshIndependent
+    (members : Finset (Fin (n + witness.freshCount))) : Prop :=
+  ∀ j, Fin.natAdd n j ∉ members
+
+instance (members : Finset (Fin (n + witness.freshCount))) :
+    Decidable (witness.MembersFreshIndependent members) := by
+  unfold MembersFreshIndependent
+  infer_instance
+
+@[simp]
+theorem mem_prefixMembers
+    (members : Finset (Fin (n + witness.freshCount))) (i : Fin n) :
+    i ∈ witness.prefixMembers members ↔
+      Fin.castAdd witness.freshCount i ∈ members := by
+  simp [prefixMembers]
+
+theorem extend_prefixMembers_of_freshIndependent
+    {members : Finset (Fin (n + witness.freshCount))}
+    (h : witness.MembersFreshIndependent members) :
+    extendMembers (witness.prefixMembers members) witness.freshCount = members := by
+  ext i
+  refine Fin.addCases ?_ ?_ i
+  · intro j
+    simp [prefixMembers]
+  · intro j
+    constructor
+    · intro hmember
+      simp only [extendMembers, Finset.mem_map] at hmember
+      rcases hmember with ⟨i, _, heq⟩
+      have hval := congrArg Fin.val heq
+      simp at hval
+      omega
+    · exact fun hmember ↦ (h j hmember).elim
+
+/-- A OneHot constraint does not reference fresh selectors. -/
+def OneHotFreshIndependent
+    (constraint : OneHotConstraint (n + witness.freshCount)) : Prop :=
+  witness.MembersFreshIndependent constraint.members
+
+instance (constraint : OneHotConstraint (n + witness.freshCount)) :
+    Decidable (witness.OneHotFreshIndependent constraint) := by
+  unfold OneHotFreshIndependent
+  infer_instance
+
+/-- Project a fresh-independent OneHot constraint to the retained block. -/
+def prefixOneHot?
+    (constraint : OneHotConstraint (n + witness.freshCount)) :
+    Option (OneHotConstraint n) :=
+  if witness.OneHotFreshIndependent constraint then
+    some { members := witness.prefixMembers constraint.members }
+  else
+    none
+
+theorem prefixOneHot?_eq_some
+    {constraint : OneHotConstraint (n + witness.freshCount)}
+    (h : witness.OneHotFreshIndependent constraint) :
+    witness.prefixOneHot? constraint =
+      some { members := witness.prefixMembers constraint.members } := by
+  simp [prefixOneHot?, h]
+
+theorem extend_prefixOneHot_of_freshIndependent
+    {constraint : OneHotConstraint (n + witness.freshCount)}
+    (h : witness.OneHotFreshIndependent constraint) :
+    ({ members := witness.prefixMembers constraint.members } : OneHotConstraint n).extend
+        witness.freshCount = constraint := by
+  cases constraint
+  simp only [OneHotConstraint.extend, OneHotFreshIndependent] at h ⊢
+  rw [witness.extend_prefixMembers_of_freshIndependent h]
+
+theorem map_extend_filterMap_prefixOneHot
+    {constraints : List (OneHotConstraint (n + witness.freshCount))}
+    (h : constraints.Forall witness.OneHotFreshIndependent) :
+    (constraints.filterMap witness.prefixOneHot?).map
+        (fun constraint ↦ constraint.extend witness.freshCount) = constraints := by
+  induction constraints with
+  | nil => rfl
+  | cons head tail ih =>
+      simp only [List.forall_cons] at h
+      simp [witness.prefixOneHot?_eq_some h.1,
+        witness.extend_prefixOneHot_of_freshIndependent h.1, ih h.2]
+
+/-- An SOS1 constraint does not reference fresh selectors. -/
+def SOS1FreshIndependent
+    (constraint : SOS1Constraint (n + witness.freshCount)) : Prop :=
+  witness.MembersFreshIndependent constraint.members
+
+instance (constraint : SOS1Constraint (n + witness.freshCount)) :
+    Decidable (witness.SOS1FreshIndependent constraint) := by
+  unfold SOS1FreshIndependent
+  infer_instance
+
+/-- Project a fresh-independent SOS1 constraint to the retained block. -/
+def prefixSOS1?
+    (constraint : SOS1Constraint (n + witness.freshCount)) :
+    Option (SOS1Constraint n) :=
+  if witness.SOS1FreshIndependent constraint then
+    some { members := witness.prefixMembers constraint.members }
+  else
+    none
+
+theorem prefixSOS1?_eq_some
+    {constraint : SOS1Constraint (n + witness.freshCount)}
+    (h : witness.SOS1FreshIndependent constraint) :
+    witness.prefixSOS1? constraint =
+      some { members := witness.prefixMembers constraint.members } := by
+  simp [prefixSOS1?, h]
+
+theorem extend_prefixSOS1_of_freshIndependent
+    {constraint : SOS1Constraint (n + witness.freshCount)}
+    (h : witness.SOS1FreshIndependent constraint) :
+    ({ members := witness.prefixMembers constraint.members } : SOS1Constraint n).extend
+        witness.freshCount = constraint := by
+  cases constraint
+  simp only [SOS1Constraint.extend, SOS1FreshIndependent] at h ⊢
+  rw [witness.extend_prefixMembers_of_freshIndependent h]
+
+theorem map_extend_filterMap_prefixSOS1
+    {constraints : List (SOS1Constraint (n + witness.freshCount))}
+    (h : constraints.Forall witness.SOS1FreshIndependent) :
+    (constraints.filterMap witness.prefixSOS1?).map
+        (fun constraint ↦ constraint.extend witness.freshCount) = constraints := by
+  induction constraints with
+  | nil => rfl
+  | cons head tail ih =>
+      simp only [List.forall_cons] at h
+      simp [witness.prefixSOS1?_eq_some h.1,
+        witness.extend_prefixSOS1_of_freshIndependent h.1, ih h.2]
+
+/-- An Indicator constraint has a retained trigger and a fresh-independent body. -/
+def IndicatorFreshIndependent
+    (constraint : IndicatorConstraint (n + witness.freshCount)) : Prop :=
+  constraint.trigger.val < n ∧
+    witness.FreshIndependent constraint.body.expr
+
+instance (constraint : IndicatorConstraint (n + witness.freshCount)) :
+    Decidable (witness.IndicatorFreshIndependent constraint) := by
+  unfold IndicatorFreshIndependent
+  infer_instance
+
+/-- Project a fresh-independent Indicator constraint to the retained block. -/
+def prefixIndicator?
+    (constraint : IndicatorConstraint (n + witness.freshCount)) :
+    Option (IndicatorConstraint n) :=
+  if h : witness.IndicatorFreshIndependent constraint then
+    some
+      { trigger := ⟨constraint.trigger.val, h.1⟩
+        polarity := constraint.polarity
+        body := witness.prefixConstraint constraint.body }
+  else
+    none
+
+theorem prefixIndicator?_eq_some
+    {constraint : IndicatorConstraint (n + witness.freshCount)}
+    (h : witness.IndicatorFreshIndependent constraint) :
+    witness.prefixIndicator? constraint = some
+      { trigger := ⟨constraint.trigger.val, h.1⟩
+        polarity := constraint.polarity
+        body := witness.prefixConstraint constraint.body } := by
+  simp [prefixIndicator?, h]
+
+theorem extend_prefixIndicator_of_freshIndependent
+    {constraint : IndicatorConstraint (n + witness.freshCount)}
+    (h : witness.IndicatorFreshIndependent constraint) :
+    ({ trigger := ⟨constraint.trigger.val, h.1⟩
+       polarity := constraint.polarity
+       body := witness.prefixConstraint constraint.body } : IndicatorConstraint n).extend
+        witness.freshCount = constraint := by
+  cases constraint with
+  | mk trigger polarity body =>
+      simp only [IndicatorConstraint.extend]
+      have htrigger :
+          Fin.castAdd witness.freshCount ⟨trigger.val, h.1⟩ = trigger := by
+        apply Fin.ext
+        rfl
+      rw [htrigger]
+      rw [witness.extend_prefixConstraint_of_freshIndependent h.2]
+
+theorem map_extend_filterMap_prefixIndicator
+    {constraints : List (IndicatorConstraint (n + witness.freshCount))}
+    (h : constraints.Forall witness.IndicatorFreshIndependent) :
+    (constraints.filterMap witness.prefixIndicator?).map
+        (fun constraint ↦ constraint.extend witness.freshCount) = constraints := by
+  induction constraints with
+  | nil => rfl
+  | cons head tail ih =>
+      simp only [List.forall_cons] at h
+      simp [witness.prefixIndicator?_eq_some h.1,
+        witness.extend_prefixIndicator_of_freshIndependent h.1, ih h.2]
+
+/-- Existing OneHot constraints projected to the retained block. -/
+def retainedOneHotConstraints : List (OneHotConstraint n) :=
+  source.oneHotConstraints.filterMap witness.prefixOneHot?
+
+/-- Existing SOS1 constraints projected to the retained block. -/
+def retainedSOS1Constraints : List (SOS1Constraint n) :=
+  source.sos1Constraints.filterMap witness.prefixSOS1?
+
+/-- Existing Indicator constraints projected to the retained block. -/
+def retainedIndicatorConstraints : List (IndicatorConstraint n) :=
+  source.indicatorConstraints.filterMap witness.prefixIndicator?
+
 /-- The first-class SOS1 constraint created by this promotion. -/
 def promotedConstraint : SOS1Constraint n where
   members := witness.members
@@ -151,9 +359,10 @@ def target : Instance n where
   constraints :=
     (source.constraints.take witness.retainedConstraintCount).map
       witness.prefixConstraint
-  oneHotConstraints := []
-  sos1Constraints := [witness.promotedConstraint]
-  indicatorConstraints := []
+  oneHotConstraints := witness.retainedOneHotConstraints source
+  sos1Constraints :=
+    witness.retainedSOS1Constraints source ++ [witness.promotedConstraint]
+  indicatorConstraints := witness.retainedIndicatorConstraints source
   objective := witness.prefixAffine source.objective
   sense := source.sense
 
@@ -692,9 +901,12 @@ structure StandardBigMForm : Prop where
     RowsMatch
       (source.constraints.drop witness.retainedConstraintCount)
       (witness.generatedConstraints source)
-  noOneHotConstraints : source.oneHotConstraints.length = 0
-  noSOS1Constraints : source.sos1Constraints.length = 0
-  noIndicatorConstraints : source.indicatorConstraints.length = 0
+  oneHotConstraintsFreshIndependent :
+    source.oneHotConstraints.Forall witness.OneHotFreshIndependent
+  sos1ConstraintsFreshIndependent :
+    source.sos1Constraints.Forall witness.SOS1FreshIndependent
+  indicatorConstraintsFreshIndependent :
+    source.indicatorConstraints.Forall witness.IndicatorFreshIndependent
   objectiveFreshIndependent :
     witness.FreshIndependent source.objective
 
@@ -708,9 +920,9 @@ private def standardBigMFormConditions : Prop :=
     RowsMatch
       (source.constraints.drop witness.retainedConstraintCount)
       (witness.generatedConstraints source) ∧
-    source.oneHotConstraints.length = 0 ∧
-    source.sos1Constraints.length = 0 ∧
-    source.indicatorConstraints.length = 0 ∧
+    source.oneHotConstraints.Forall witness.OneHotFreshIndependent ∧
+    source.sos1Constraints.Forall witness.SOS1FreshIndependent ∧
+    source.indicatorConstraints.Forall witness.IndicatorFreshIndependent ∧
     witness.FreshIndependent source.objective
 
 private instance : Decidable (witness.standardBigMFormConditions source) := by
@@ -725,8 +937,8 @@ private theorem standardBigMForm_iff_conditions :
     exact ⟨h.finiteMemberBounds, h.reusedMembersMatchDomains,
       h.freshSelectorDomains, h.retainedConstraintCount_le,
       h.retainedConstraintsFreshIndependent, h.formulationSuffixMatches,
-      h.noOneHotConstraints, h.noSOS1Constraints,
-      h.noIndicatorConstraints, h.objectiveFreshIndependent⟩
+      h.oneHotConstraintsFreshIndependent, h.sos1ConstraintsFreshIndependent,
+      h.indicatorConstraintsFreshIndependent, h.objectiveFreshIndependent⟩
   · rintro ⟨hfinite, hlayout, hfreshDomains, hcount, hretained,
       hsuffix, honeHot, hsos1, hindicator, hobjective⟩
     exact
@@ -736,9 +948,9 @@ private theorem standardBigMForm_iff_conditions :
         retainedConstraintCount_le := hcount
         retainedConstraintsFreshIndependent := hretained
         formulationSuffixMatches := hsuffix
-        noOneHotConstraints := honeHot
-        noSOS1Constraints := hsos1
-        noIndicatorConstraints := hindicator
+        oneHotConstraintsFreshIndependent := honeHot
+        sos1ConstraintsFreshIndependent := hsos1
+        indicatorConstraintsFreshIndependent := hindicator
         objectiveFreshIndependent := hobjective }
 
 instance : Decidable (witness.StandardBigMForm source) :=
@@ -836,20 +1048,35 @@ theorem sourceConstraints_eq
           witness.generatedConstraints source := by
       rw [target, validated.extendedPrefixConstraints_eq]
 
-theorem sourceOneHotConstraints_eq_nil
+theorem sourceOneHotConstraints_eq
     (validated : witness.Validated source) :
-    source.oneHotConstraints = [] := by
-  simpa using validated.standardBigMForm.noOneHotConstraints
+    source.oneHotConstraints =
+      (witness.retainedOneHotConstraints source).map
+        (fun constraint ↦ constraint.extend witness.freshCount) := by
+  symm
+  simpa [retainedOneHotConstraints] using
+    witness.map_extend_filterMap_prefixOneHot
+      validated.standardBigMForm.oneHotConstraintsFreshIndependent
 
-theorem sourceSOS1Constraints_eq_nil
+theorem sourceSOS1Constraints_eq
     (validated : witness.Validated source) :
-    source.sos1Constraints = [] := by
-  simpa using validated.standardBigMForm.noSOS1Constraints
+    source.sos1Constraints =
+      (witness.retainedSOS1Constraints source).map
+        (fun constraint ↦ constraint.extend witness.freshCount) := by
+  symm
+  simpa [retainedSOS1Constraints] using
+    witness.map_extend_filterMap_prefixSOS1
+      validated.standardBigMForm.sos1ConstraintsFreshIndependent
 
-theorem sourceIndicatorConstraints_eq_nil
+theorem sourceIndicatorConstraints_eq
     (validated : witness.Validated source) :
-    source.indicatorConstraints = [] := by
-  simpa using validated.standardBigMForm.noIndicatorConstraints
+    source.indicatorConstraints =
+      (witness.retainedIndicatorConstraints source).map
+        (fun constraint ↦ constraint.extend witness.freshCount) := by
+  symm
+  simpa [retainedIndicatorConstraints] using
+    witness.map_extend_filterMap_prefixIndicator
+      validated.standardBigMForm.indicatorConstraintsFreshIndependent
 
 theorem sourceObjective_eq
     (validated : witness.Validated source) :
@@ -864,10 +1091,16 @@ end Validated
 
 /-! ## Feasibility and objective characterizations -/
 
-/-- Feasibility facts retained by promotion before adding the SOS1 condition. -/
+/-- Feasibility facts retained by promotion before adding the new SOS1 condition. -/
 def BaseFeasible (state : State n) : Prop :=
   (∀ i, state i ∈ (witness.target source).domains i) ∧
-    ∀ constraint ∈ (witness.target source).constraints,
+    (∀ constraint ∈ (witness.target source).constraints,
+      constraint.Holds state) ∧
+    (∀ constraint ∈ witness.retainedOneHotConstraints source,
+      constraint.Holds state) ∧
+    (∀ constraint ∈ witness.retainedSOS1Constraints source,
+      constraint.Holds state) ∧
+    ∀ constraint ∈ witness.retainedIndicatorConstraints source,
       constraint.Holds state
 
 theorem target_feasible_iff_base_and_selected (state : State n) :
@@ -875,7 +1108,7 @@ theorem target_feasible_iff_base_and_selected (state : State n) :
       witness.BaseFeasible source state ∧
         witness.promotedConstraint.Holds state := by
   simp only [Instance.Feasible, target, BaseFeasible,
-    List.forall_mem_singleton]
+    List.forall_mem_append, List.forall_mem_singleton]
   aesop
 
 namespace Validated
@@ -898,22 +1131,26 @@ theorem source_feasible_append_iff_base_and_formulation
     simp [State.append]
   simp only [Instance.Feasible, validated.sourceDomains_eq,
     validated.sourceConstraints_eq,
-    validated.sourceOneHotConstraints_eq_nil,
-    validated.sourceSOS1Constraints_eq_nil,
-    validated.sourceIndicatorConstraints_eq_nil,
+    validated.sourceOneHotConstraints_eq,
+    validated.sourceSOS1Constraints_eq,
+    validated.sourceIndicatorConstraints_eq,
     Domain.append, Fin.forall_fin_add, hretainedAt, hfreshAt,
     Fin.append_left, Fin.append_right, List.forall_mem_append,
-    List.forall_mem_map, LinearConstraint.holds_extend_append, BaseFeasible]
+    List.forall_mem_map, LinearConstraint.holds_extend_append,
+    OneHotConstraint.holds_extend_append, SOS1Constraint.holds_extend_append,
+    IndicatorConstraint.holds_extend_append, BaseFeasible]
   constructor
   · rintro ⟨⟨hdomains, hselectors⟩,
-      ⟨hretained, hgenerated⟩, _, _, _⟩
+      ⟨hretained, hgenerated⟩, honeHot, hsos1, hindicator⟩
     have hformulation :=
       (witness.generatedConstraints_hold_iff_plannedSelectorFormulation
         source
         validated.standardBigMForm.reusedMembersMatchDomains
         state selectors hdomains hselectors).mp hgenerated
-    exact ⟨⟨hdomains, hretained⟩, hformulation⟩
-  · rintro ⟨⟨hdomains, hretained⟩, hformulation⟩
+    exact
+      ⟨⟨hdomains, hretained, honeHot, hsos1, hindicator⟩, hformulation⟩
+  · rintro
+      ⟨⟨hdomains, hretained, honeHot, hsos1, hindicator⟩, hformulation⟩
     have hselectors :=
       witness.freshSelectors_binary_of_plannedSelectorFormulation
         source state selectors hformulation
@@ -922,9 +1159,9 @@ theorem source_feasible_append_iff_base_and_formulation
         source
         validated.standardBigMForm.reusedMembersMatchDomains
         state selectors hdomains hselectors).mpr hformulation
-    refine
-      ⟨⟨hdomains, hselectors⟩, ⟨hretained, hgenerated⟩, ?_, ?_, ?_⟩
-    all_goals simp
+    exact
+      ⟨⟨hdomains, hselectors⟩, ⟨hretained, hgenerated⟩,
+        honeHot, hsos1, hindicator⟩
 
 theorem source_feasible_iff_base_and_formulation
     (validated : witness.Validated source)

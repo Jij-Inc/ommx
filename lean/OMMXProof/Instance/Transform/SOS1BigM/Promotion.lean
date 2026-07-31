@@ -8,7 +8,8 @@ SOS1 Big-M promotion recognizes a standard Big-M selector formulation in a
 flat source Instance and replaces it with one first-class SOS1 constraint. In
 the initial supported layout, retained variables and regular constraints
 occupy prefixes, while fresh selectors and their link/cardinality rows occupy
-suffixes.
+suffixes. Existing special constraints are preserved when they do not
+reference fresh selectors.
 
 The transform itself is total for every untrusted `Witness`:
 
@@ -32,6 +33,7 @@ namespace SOS1BigM
 ## Promotion rule
 
 - Retain the decision-variable and regular-constraint prefixes selected by the witness.
+- Retain existing OneHot, SOS1, and Indicator constraints which do not use fresh selectors.
 - Remove the fresh-selector suffix and its exact Big-M link/cardinality rows.
 - Add one first-class SOS1 constraint over the witnessed members.
 - `promotion` itself is total. The reduction, relaxation, and objective-preservation
@@ -78,6 +80,9 @@ The untrusted witness always constructs a transform, but `witness.validate sourc
 - Replacing `y ≤ 2z` with `y ≤ 3z` is also rejected. Given `y ∈ [0, 2]`, this looser
   coefficient can still describe a valid formulation, but the initial checker deliberately
   requires the canonical row generated from the declared upper bound.
+- Making an existing OneHot or SOS1 constraint contain `z`, or using `z` as an Indicator
+  trigger or in its body, is rejected because that constraint cannot be preserved after
+  removing `z`.
 - Making the source objective depend on `z` is rejected because removing `z` would not
   preserve objective values.
 

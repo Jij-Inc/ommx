@@ -198,6 +198,89 @@ def existingIndicatorSource : Instance (2 + witness.freshCount) :=
          polarity := .activeOnOne
          body := retainedRow }] }
 
+theorem existingOneHotSource_validate_isSome :
+    (witness.validate existingOneHotSource).isSome = true := by
+  native_decide
+
+def existingOneHotTransform : Instance.Transform existingOneHotSource :=
+  promotion witness existingOneHotSource
+
+example : existingOneHotTransform.target.oneHotConstraints.length = 1 := by
+  native_decide
+
+example :
+    (existingOneHotTransform.target.oneHotConstraints.get
+      ⟨0, by native_decide⟩).members = ({0} : Finset (Fin 2)) := by
+  native_decide
+
+theorem existingSOS1Source_validate_isSome :
+    (witness.validate existingSOS1Source).isSome = true := by
+  native_decide
+
+def existingSOS1Transform : Instance.Transform existingSOS1Source :=
+  promotion witness existingSOS1Source
+
+/-- A previously promoted SOS1 is retained before the newly promoted one. -/
+example : existingSOS1Transform.target.sos1Constraints.length = 2 := by
+  native_decide
+
+example :
+    (existingSOS1Transform.target.sos1Constraints.get
+      ⟨0, by native_decide⟩).members = ({0} : Finset (Fin 2)) := by
+  native_decide
+
+example :
+    (existingSOS1Transform.target.sos1Constraints.get
+      ⟨1, by native_decide⟩).members = members := by
+  native_decide
+
+theorem existingIndicatorSource_validate_isSome :
+    (witness.validate existingIndicatorSource).isSome = true := by
+  native_decide
+
+def existingIndicatorTransform : Instance.Transform existingIndicatorSource :=
+  promotion witness existingIndicatorSource
+
+example : existingIndicatorTransform.target.indicatorConstraints.length = 1 := by
+  native_decide
+
+example :
+    (existingIndicatorTransform.target.indicatorConstraints.get
+      ⟨0, by native_decide⟩).trigger.val = 0 := by
+  native_decide
+
+example :
+    let body :=
+      (existingIndicatorTransform.target.indicatorConstraints.get
+        ⟨0, by native_decide⟩).body
+    body.expr.coeff (0 : Fin 2) = 1 ∧
+      body.expr.coeff (1 : Fin 2) = 1 ∧
+      body.expr.constant = -2 ∧
+      body.sense = .lessEqual := by
+  native_decide
+
+def freshOneHotMemberSource : Instance (2 + witness.freshCount) :=
+  { source with
+    oneHotConstraints := [{ members := {0, 2} }] }
+
+def freshSOS1MemberSource : Instance (2 + witness.freshCount) :=
+  { source with
+    sos1Constraints := [{ members := {0, 2} }] }
+
+def freshIndicatorTriggerSource : Instance (2 + witness.freshCount) :=
+  { source with
+    indicatorConstraints :=
+      [{ trigger := 2
+         polarity := .activeOnOne
+         body := retainedRow }] }
+
+def freshIndicatorBodySource : Instance (2 + witness.freshCount) :=
+  { source with
+    indicatorConstraints :=
+      [{ trigger := 0
+         polarity := .activeOnOne
+         body := row 0 0 1 0 }] }
+
 example : witness.validate selectorNonbinarySource = none := by
   native_decide
 
@@ -219,14 +302,85 @@ example : witness.validate retainedDependencySource = none := by
 example : witness.validate reusedNonbinarySource = none := by
   native_decide
 
-example : witness.validate existingOneHotSource = none := by
+example : witness.validate freshOneHotMemberSource = none := by
   native_decide
 
-example : witness.validate existingSOS1Source = none := by
+example : witness.validate freshSOS1MemberSource = none := by
   native_decide
 
-example : witness.validate existingIndicatorSource = none := by
+example : witness.validate freshIndicatorTriggerSource = none := by
   native_decide
+
+example : witness.validate freshIndicatorBodySource = none := by
+  native_decide
+
+/-! ## Multiple sequential SOS1 promotions -/
+
+namespace MultipleSOS1
+
+def members : Finset (Fin 3) := {0, 1}
+
+def freshMembers : Finset {i // i ∈ members} :=
+  {⟨1, by native_decide⟩}
+
+def witness : Witness 3 where
+  members := members
+  freshMembers := freshMembers
+  retainedConstraintCount := 0
+
+def domains : Fin (3 + witness.freshCount) → Domain :=
+  fun i =>
+    if i.val = 0 then .binary
+    else if i.val = 1 then .continuous (.finite (-2) 3 (by norm_num))
+    else if i.val = 2 then .continuous (.finite (-1) 1 (by norm_num))
+    else .binary
+
+/-- The formulation rows are generated here to keep this fixture focused on
+preservation of a distinct SOS1 recovered by an earlier promotion. -/
+def skeleton : Instance (3 + witness.freshCount) where
+  domains := domains
+  constraints := []
+  oneHotConstraints := []
+  sos1Constraints := []
+  indicatorConstraints := []
+  objective := Affine.zero
+  sense := .minimize
+
+def source : Instance (3 + witness.freshCount) :=
+  { skeleton with
+    constraints := witness.generatedConstraints skeleton
+    sos1Constraints := [{ members := {1, 2} }] }
+
+theorem source_validate_isSome :
+    (witness.validate source).isSome = true := by
+  native_decide
+
+def validated : witness.Validated source :=
+  (witness.validate source).get source_validate_isSome
+
+def transform : Instance.Transform source :=
+  promotion witness source
+
+example : transform.target.sos1Constraints.length = 2 := by
+  native_decide
+
+example :
+    (transform.target.sos1Constraints.get
+      ⟨0, by native_decide⟩).members = ({1, 2} : Finset (Fin 3)) := by
+  native_decide
+
+example :
+    (transform.target.sos1Constraints.get
+      ⟨1, by native_decide⟩).members = members := by
+  native_decide
+
+example : transform.IsReduction :=
+  promotion_isReduction validated
+
+example : transform.IsRelaxation :=
+  promotion_isRelaxation validated
+
+end MultipleSOS1
 
 /-! ## Noncanonical feasible flat state -/
 
