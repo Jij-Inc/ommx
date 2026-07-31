@@ -2020,7 +2020,7 @@ mod tests {
         insta::assert_snapshot!(result.unwrap_err(), @r###"
         Traceback for OMMX Message parse error:
         └─ommx.v1.ParametricInstance[parameters]
-        Duplicated variable ID is found in definition: VariableID(1)
+        Decision variable id VariableID(1) collides with an existing parameter id
         "###);
     }
 
