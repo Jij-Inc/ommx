@@ -226,7 +226,8 @@ impl ParametricInstanceBuilder {
     /// # Errors
     /// Returns an error if:
     /// - Required fields (`sense`, `objective`, `decision_variables`, `parameters`, `constraints`) are not set
-    /// - Decision variable IDs and parameter IDs overlap
+    /// - Decision variable IDs and parameter IDs overlap (the error chain
+    ///   contains [`crate::ParameterIDCollision`])
     /// - The objective function, constraints, or named functions reference undefined variable IDs
     /// - The keys of `constraints` and `removed_constraints` are not disjoint
     /// - Label/context stores contain IDs that are not owned by the
@@ -269,10 +270,7 @@ impl ParametricInstanceBuilder {
             .collect();
         if !intersection.is_empty() {
             let id = *intersection.iter().next().unwrap();
-            crate::bail!(
-                { ?id },
-                "Duplicated variable ID is found in definition: {id:?}",
-            );
+            return Err(crate::ParameterIDCollision { id }.into());
         }
 
         // Combine decision variables and parameters for validation
@@ -367,10 +365,12 @@ impl ParametricInstanceBuilder {
         // be a binary decision variable (parameter ids rejected).
         for (id, value) in &self.one_hot_constraints {
             if value.variables.is_empty() {
-                crate::bail!(
-                    { ?id },
-                    "One-hot constraint {id:?} has no variables; one-hot constraints must contain at least one variable",
-                );
+                return Err(crate::Error::new(
+                    crate::OneHotConstraintError::EmptyVariables,
+                )
+                .context(format!(
+                    "One-hot constraint {id:?} has no variables; one-hot constraints must contain at least one variable"
+                )));
             }
             for var_id in &value.variables {
                 let Some(dv) = decision_variables.get(var_id) else {
@@ -396,10 +396,12 @@ impl ParametricInstanceBuilder {
         // non-empty. SOS1 does not require Kind::Binary.
         for (id, value) in &self.sos1_constraints {
             if value.variables.is_empty() {
-                crate::bail!(
-                    { ?id },
-                    "SOS1 constraint {id:?} has no variables; SOS1 constraints must contain at least one variable",
-                );
+                return Err(crate::Error::new(
+                    crate::Sos1ConstraintError::EmptyVariables,
+                )
+                .context(format!(
+                    "SOS1 constraint {id:?} has no variables; SOS1 constraints must contain at least one variable"
+                )));
             }
             for var_id in &value.variables {
                 if !decision_variable_ids.contains(var_id) {
@@ -827,11 +829,10 @@ mod tests {
             .build()
             .unwrap_err();
 
-        let msg = err.to_string();
-        assert!(
-            msg.contains("Duplicated variable ID") && msg.contains(&format!("{:?}", var_id)),
-            "unexpected error: {msg}"
-        );
+        assert!(matches!(
+            err.downcast_ref::<crate::ParameterIDCollision>(),
+            Some(crate::ParameterIDCollision { id }) if *id == var_id
+        ));
     }
 
     #[test]
@@ -1054,6 +1055,40 @@ mod tests {
     }
 
     #[test]
+    fn test_parametric_builder_rejects_empty_one_hot() {
+        use maplit::btreemap;
+
+        let one_hot = crate::OneHotConstraint {
+            variables: BTreeSet::new(),
+            stage: crate::OneHotCreatedData,
+        };
+
+        let err = ParametricInstance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(btreemap! {
+                VariableID::from(1) => DecisionVariable::binary(),
+            })
+            .parameters(ParameterTable::default())
+            .constraints(BTreeMap::new())
+            .one_hot_constraints(btreemap! {
+                crate::OneHotConstraintID::from(0) => one_hot,
+            })
+            .build()
+            .unwrap_err();
+
+        let msg = err.to_string();
+        assert!(matches!(
+            err.downcast_ref::<crate::OneHotConstraintError>(),
+            Some(crate::OneHotConstraintError::EmptyVariables)
+        ));
+        assert!(
+            msg.contains("at least one variable"),
+            "unexpected error: {msg}"
+        );
+    }
+
+    #[test]
     fn test_parametric_builder_rejects_empty_sos1() {
         use maplit::btreemap;
 
@@ -1077,6 +1112,10 @@ mod tests {
             .unwrap_err();
 
         let msg = err.to_string();
+        assert!(matches!(
+            err.downcast_ref::<crate::Sos1ConstraintError>(),
+            Some(crate::Sos1ConstraintError::EmptyVariables)
+        ));
         assert!(
             msg.contains("at least one variable"),
             "unexpected error: {msg}"

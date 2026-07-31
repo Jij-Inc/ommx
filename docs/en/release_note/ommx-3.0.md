@@ -8,7 +8,7 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
-### 🛠 Evaluation errors follow caller ownership ([#1104](https://github.com/Jij-Inc/ommx/pull/1104))
+### 🛠 Model errors follow caller ownership ([#1104](https://github.com/Jij-Inc/ommx/pull/1104), [#1105](https://github.com/Jij-Inc/ommx/pull/1105))
 
 Function, polynomial, constraint, named-function, and `Instance` evaluation
 APIs use the shared Rust-to-Python error boundary directly. Missing or unknown
@@ -17,6 +17,13 @@ dependent-variable assertions raise `ValueError`. Direct function and
 polynomial partial evaluation preserves `CoefficientError`, while coefficient
 failures from `Instance`-owned dependency normalization and removed-constraint
 restoration fall back to `RuntimeError`.
+
+Decision-variable insertion and substitution, `Function.content_factor`, and
+OneHot/SOS1 construction also use this boundary directly. Duplicate decision
+variable or parameter IDs, invalid substitutions, unrepresentable content
+factors, and empty structural constraints raise `ValueError` while retaining
+their Rust SDK signal owner. Untyped defensive invariant failures continue to
+fall back to `RuntimeError`.
 
 ## 3.0.0 Beta 2
 

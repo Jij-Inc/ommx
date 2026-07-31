@@ -10,6 +10,15 @@ use crate::{
 use derive_more::{Deref, From};
 use std::collections::{BTreeMap, BTreeSet};
 
+/// Validation failures for one-hot constraints.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum OneHotConstraintError {
+    /// A one-hot constraint has no variables to select from.
+    #[error("One-hot constraints must contain at least one variable")]
+    EmptyVariables,
+}
+
 /// ID for one-hot constraints, independent from regular [`ConstraintID`](crate::ConstraintID).
 #[derive(
     Clone,
@@ -182,11 +191,10 @@ impl OneHotConstraint<Created> {
     ///
     /// # Errors
     ///
-    /// Returns an error if `variables` is empty.
+    /// The error chain contains [`OneHotConstraintError::EmptyVariables`] if
+    /// `variables` is empty.
     pub fn new(variables: BTreeSet<VariableID>) -> crate::Result<Self> {
-        if variables.is_empty() {
-            crate::bail!("One-hot constraints must contain at least one variable");
-        }
+        crate::ensure!(!variables.is_empty(), OneHotConstraintError::EmptyVariables);
         Ok(Self {
             variables,
             stage: OneHotCreatedData,
@@ -217,8 +225,12 @@ impl Parse for crate::v2::OneHotConstraint {
             message,
             "variables",
         )?)
-        .map_err(|e| {
-            crate::RawParseError::InvalidInstance(e.to_string()).context(message, "variables")
+        .map_err(|error| {
+            match error.downcast::<OneHotConstraintError>() {
+                Ok(error) => crate::RawParseError::from(error),
+                Err(error) => crate::RawParseError::InvalidInstance(error.to_string()),
+            }
+            .context(message, "variables")
         })
     }
 }
@@ -393,6 +405,7 @@ impl std::fmt::Display for OneHotConstraint<Created> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::error::Error as _;
 
     #[test]
     fn test_create_one_hot_constraint() {
@@ -404,7 +417,38 @@ mod tests {
     #[test]
     fn one_hot_constraint_rejects_empty_variable_set() {
         let err = OneHotConstraint::new(BTreeSet::new()).unwrap_err();
-        assert!(err.to_string().contains("at least one variable"));
+        assert!(matches!(
+            err.downcast_ref::<OneHotConstraintError>(),
+            Some(OneHotConstraintError::EmptyVariables)
+        ));
+    }
+
+    #[test]
+    fn parse_v2_preserves_empty_variables_signal() {
+        let error: crate::Error = crate::v2::OneHotConstraint { variables: vec![] }
+            .parse(&())
+            .unwrap_err()
+            .into();
+        let parse_error = error
+            .downcast_ref::<ParseError>()
+            .expect("v2 semantic parse failures must remain downcastable as ParseError");
+
+        assert!(matches!(
+            &parse_error.error,
+            crate::RawParseError::OneHotConstraintError(OneHotConstraintError::EmptyVariables)
+        ));
+
+        let raw_source = parse_error
+            .source()
+            .expect("ParseError must expose its RawParseError source");
+        assert!(raw_source.downcast_ref::<crate::RawParseError>().is_some());
+        let signal_source = raw_source
+            .source()
+            .expect("RawParseError must expose the one-hot constraint signal");
+        assert!(matches!(
+            signal_source.downcast_ref::<OneHotConstraintError>(),
+            Some(OneHotConstraintError::EmptyVariables)
+        ));
     }
 
     #[test]

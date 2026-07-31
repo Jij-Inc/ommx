@@ -24,9 +24,28 @@ pub use quadratic::*;
 use crate::{coeff, v1::State, Coefficient, CoefficientError, VariableID, VariableIDSet};
 use anyhow::{Context, Result};
 use fnv::{FnvHashMap, FnvHashSet};
-use num::integer::{gcd, lcm};
+use num::integer::gcd;
 use proptest::strategy::BoxedStrategy;
 use std::{fmt::Debug, hash::Hash};
+
+/// Failures while finding a factor that makes polynomial coefficients integers.
+///
+/// [`PolynomialBase::content_factor`] returns [`crate::Result`] and stores this
+/// signal in the error chain so callers can distinguish unsupported coefficient
+/// magnitudes from other coefficient failures.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum ContentFactorError {
+    /// A coefficient cannot be represented as a 64-bit rational approximation.
+    #[error("Cannot approximate coefficient in 64-bit rational")]
+    CannotApproximateCoefficient,
+
+    /// The least common multiple of coefficient denominators exceeds `i64`.
+    #[error(
+        "The least common multiple of coefficient denominators exceeds the 64-bit integer range"
+    )]
+    MultiplierOverflow,
+}
 
 /// Monomial, without coefficient
 ///
@@ -236,17 +255,26 @@ impl<M: Monomial> PolynomialBase<M> {
     /// Get a minimal positive factor `a` which make all coefficients of `a * self` integer.
     ///
     /// This returns `Coefficient::one()` for zero polynomial. See also <https://en.wikipedia.org/wiki/Primitive_part_and_content>.
+    ///
+    /// # Errors
+    ///
+    /// The error chain contains [`ContentFactorError::CannotApproximateCoefficient`]
+    /// when a coefficient cannot be represented as a 64-bit rational, or
+    /// [`ContentFactorError::MultiplierOverflow`] when the denominator multiplier
+    /// exceeds `i64`. Final coefficient conversion errors retain their
+    /// [`CoefficientError`] source.
     pub fn content_factor(&self) -> Result<Coefficient> {
         let mut numer_gcd = 0;
         let mut denom_lcm: i64 = 1;
         for coefficient in self.terms.values() {
             let r = num::Rational64::approximate_float(coefficient.into_inner())
-                .context("Cannot approximate coefficient in 64-bit rational")?;
+                .ok_or(ContentFactorError::CannotApproximateCoefficient)?;
             numer_gcd = gcd(numer_gcd, *r.numer());
-            denom_lcm
-                .checked_mul(*r.denom())
-                .context("Overflow detected while evaluating minimal integer coefficient multiplier. This means it is hard to make the all coefficient integer")?;
-            denom_lcm = lcm(denom_lcm, *r.denom());
+            let denominator = *r.denom();
+            let reduced_lcm = denom_lcm / gcd(denom_lcm, denominator);
+            denom_lcm = reduced_lcm
+                .checked_mul(denominator)
+                .ok_or(ContentFactorError::MultiplierOverflow)?;
         }
 
         if numer_gcd == 0 {
@@ -402,5 +430,60 @@ mod tests {
         let factor = p.content_factor().unwrap();
         // For PI and 2*PI, the content factor should be approximately 1/PI
         assert_abs_diff_eq!(factor.into_inner(), 1.0 / PI);
+    }
+
+    #[test]
+    fn content_factor_preserves_rational_approximation_error_signal() {
+        let p = Linear::single_term(
+            LinearMonomial::Variable(VariableID::from(1)),
+            Coefficient::try_from(f64::MAX).unwrap(),
+        );
+
+        let error = p.content_factor().unwrap_err();
+
+        assert!(matches!(
+            error.downcast_ref::<ContentFactorError>(),
+            Some(ContentFactorError::CannotApproximateCoefficient)
+        ));
+    }
+
+    #[test]
+    fn content_factor_does_not_overflow_for_repeated_denominators() {
+        let denominators = [1009_i64, 1013, 1019, 1021, 1031, 1033];
+        let mut p = Linear::default();
+        for (id, denominator) in denominators.into_iter().chain(denominators).enumerate() {
+            p.add_term(
+                LinearMonomial::Variable(VariableID::from(id as u64)),
+                Coefficient::try_from(1.0 / denominator as f64).unwrap(),
+            )
+            .unwrap();
+        }
+
+        let factor = p.content_factor().unwrap();
+        let expected_lcm = denominators.into_iter().product::<i64>() as f64;
+
+        assert_eq!(factor.into_inner(), expected_lcm);
+    }
+
+    #[test]
+    fn content_factor_preserves_multiplier_overflow_error_signal() {
+        let mut p = Linear::default();
+        for (id, denominator) in [1009, 1013, 1019, 1021, 1031, 1033, 1039]
+            .into_iter()
+            .enumerate()
+        {
+            p.add_term(
+                LinearMonomial::Variable(VariableID::from(id as u64)),
+                Coefficient::try_from(1.0 / denominator as f64).unwrap(),
+            )
+            .unwrap();
+        }
+
+        let error = p.content_factor().unwrap_err();
+
+        assert!(matches!(
+            error.downcast_ref::<ContentFactorError>(),
+            Some(ContentFactorError::MultiplierOverflow)
+        ));
     }
 }

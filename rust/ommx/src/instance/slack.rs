@@ -89,8 +89,10 @@ impl Instance {
             }
         }
 
-        let a = function.content_factor().map_err(|_| {
-            ExactIntegerSlackUnavailable::coefficients_not_normalizable(constraint_id)
+        let a = function.content_factor().map_err(|source| {
+            source.context(ExactIntegerSlackUnavailable::coefficients_not_normalizable(
+                constraint_id,
+            ))
         })?;
         let af = (function.clone() * a)?;
 
@@ -345,6 +347,38 @@ mod tests {
             .unwrap_err();
 
         assert!(err.is::<ExactIntegerSlackUnavailable>());
+        assert!(instance.constraints().contains_key(&ConstraintID::from(0)));
+    }
+
+    #[test]
+    fn exact_integer_slack_preserves_content_factor_signal() {
+        let id = VariableID::from(1);
+        let dv = btreemap! {
+            id => DecisionVariable::new(
+                Kind::Integer,
+                Bound::new(0.0, 1.0).unwrap(),
+                ATol::default(),
+            ).unwrap(),
+        };
+        let constraint_fn = Function::from(Linear::single_term(
+            LinearMonomial::Variable(id),
+            Coefficient::try_from(f64::MAX).unwrap(),
+        ));
+        let constraints = btreemap! {
+            ConstraintID::from(0) => crate::Constraint::less_than_or_equal_to_zero(constraint_fn),
+        };
+        let mut instance = Instance::new(Sense::Minimize, Function::Zero, dv, constraints).unwrap();
+
+        let err = instance
+            .convert_inequality_to_equality_with_integer_slack(0, 32, ATol::default())
+            .unwrap_err();
+
+        assert!(err.is::<ExactIntegerSlackUnavailable>());
+        assert!(matches!(
+            err.downcast_ref::<crate::ContentFactorError>(),
+            Some(crate::ContentFactorError::CannotApproximateCoefficient)
+        ));
+        assert_eq!(instance.decision_variables().len(), 1);
         assert!(instance.constraints().contains_key(&ConstraintID::from(0)));
     }
 

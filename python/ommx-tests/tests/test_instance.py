@@ -833,6 +833,20 @@ def test_substitute_recursive_assignment_raises():
     assert instance.objective.almost_equal(objective_before)
 
 
+def test_parametric_instance_from_components_rejects_parameter_id_collision():
+    x = DecisionVariable.binary(1, name="x")
+    p = Parameter(1, name="p")
+
+    with pytest.raises(ValueError, match="collides with an existing parameter"):
+        ParametricInstance.from_components(
+            decision_variables=[x],
+            parameters=[p],
+            objective=x,
+            constraints={},
+            sense=Instance.MINIMIZE,
+        )
+
+
 def test_parametric_instance_substitute_with_parameterized_rhs():
     """ParametricInstance.substitute keeps parameters symbolic until materialization."""
     x = DecisionVariable.integer(0, lower=0, upper=10, name="x")

@@ -43,7 +43,7 @@ impl OneHotConstraint {
         subscripts: Vec<i64>,
         description: Option<String>,
         parameters: HashMap<String, String>,
-    ) -> PyResult<Self> {
+    ) -> crate::error::OmmxPyResult<Self> {
         let vars: BTreeSet<ommx::VariableID> =
             variables.into_iter().map(|variable| variable.0).collect();
         let context = ommx::ConstraintContext {
@@ -55,8 +55,7 @@ impl OneHotConstraint {
             },
             provenance: Vec::new(),
         };
-        let constraint = ommx::OneHotConstraint::new(vars)
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
+        let constraint = ommx::OneHotConstraint::new(vars)?;
         Ok(Self(constraint, context))
     }
 

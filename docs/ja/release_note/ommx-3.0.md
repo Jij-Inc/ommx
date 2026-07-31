@@ -8,7 +8,7 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
-### 🛠 Evaluation error を呼び出し側の回復方法に応じて通知 ([#1104](https://github.com/Jij-Inc/ommx/pull/1104))
+### 🛠 Model error を呼び出し側の回復方法に応じて通知 ([#1104](https://github.com/Jij-Inc/ommx/pull/1104)、[#1105](https://github.com/Jij-Inc/ommx/pull/1105))
 
 Function、polynomial、constraint、named function、`Instance` のevaluation APIは、
 RustからPythonへの共通error boundaryを直接使います。呼び出し側が渡したstateの不足・
@@ -16,6 +16,12 @@ RustからPythonへの共通error boundaryを直接使います。呼び出し�
 Functionとpolynomialを直接partial evaluationする場合は`CoefficientError`を保持し、
 `Instance`が所有するdependencyの正規化とremoved constraintの復元で発生した
 coefficient failureは`RuntimeError`にfallbackします。
+
+Decision variableの追加とsubstitution、`Function.content_factor`、OneHot/SOS1の
+構築も、このboundaryを直接使います。Decision variable / parameter IDの衝突、
+不正なsubstitution、表現できないcontent factor、空の特殊制約は、Rust SDKの
+signal ownerを保持したまま`ValueError`になります。型付けされていないdefensive
+invariant failureは、引き続き`RuntimeError`にfallbackします。
 
 ## 3.0.0 Beta 2
 
