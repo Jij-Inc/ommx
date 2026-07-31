@@ -1,4 +1,5 @@
 import OMMXProof.Instance.Transform.SOS1BigM.Formulation
+import OMMXProof.Instance.Transform.SOS1BigM.CanonicalRows
 import OMMXProof.Instance.Transform.SOS1BigM.Lowering
 import OMMXProof.Instance.Transform.SOS1BigM.Promotion
 
@@ -7,6 +8,8 @@ import OMMXProof.Instance.Transform.SOS1BigM.Promotion
 
 This module collects both directions of the SOS1 Big-M formulation:
 
+- `SOS1BigM.CanonicalRows` specifies the selector layout and canonical regular
+  rows shared by both directions.
 - `SOS1BigM.lowering` replaces one first-class SOS1 constraint with binary
   selectors, Big-M links, and a selector-cardinality row.
 - `SOS1BigM.promotion` recognizes that standard Big-M layout and replaces it

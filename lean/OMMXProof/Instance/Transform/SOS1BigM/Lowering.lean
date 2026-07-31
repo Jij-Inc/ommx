@@ -153,10 +153,7 @@ theorem lowering_isRelaxation {source : Instance n} (plan : Plan source)
   have hselectors :
       plan.freshSelectorState sourceState selectors =
         canonicalSelector (plan.memberState sourceState) := by
-    funext i
-    by_cases hi : i ∈ plan.freshMembers
-    · simp [Plan.freshSelectorState, selectors, hi]
-    · simp [Plan.freshSelectorState, hi]
+    exact plan.selectorLayout.freshSelectorState_canonical sourceState
   rw [hselectors]
   exact canonicalSelector_plannedFormulation
     plan.reusedMembers validated.bounds (plan.memberState sourceState)

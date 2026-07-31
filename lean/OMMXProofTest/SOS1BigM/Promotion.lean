@@ -348,7 +348,8 @@ def skeleton : Instance (3 + witness.freshCount) where
 
 def source : Instance (3 + witness.freshCount) :=
   { skeleton with
-    constraints := witness.generatedConstraints skeleton
+    constraints :=
+      witness.selectorLayout.canonicalRows (witness.selectorBounds skeleton)
     sos1Constraints := [{ members := {1, 2} }] }
 
 theorem source_validate_isSome :
@@ -423,7 +424,8 @@ example : ¬transform.SourceRoundTrip := by
     Option.some.inj hstate
   have hcomponent := congrArg
     (fun state => state (Fin.natAdd 2 freshZero)) heq
-  simp [noncanonicalSourceState, Witness.memberState, State.source,
-    State.append, canonicalSelector, freshMember_zero_val] at hcomponent
+  simp [noncanonicalSourceState, Witness.memberState,
+    SelectorLayout.memberState, State.source, State.append,
+    canonicalSelector, freshMember_zero_val] at hcomponent
 
 end OMMXProof.Test.SOS1BigM.Promotion

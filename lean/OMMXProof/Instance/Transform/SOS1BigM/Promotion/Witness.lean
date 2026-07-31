@@ -1,4 +1,4 @@
-import OMMXProof.Instance
+import OMMXProof.Instance.Transform.SOS1BigM.CanonicalRows
 import Mathlib.Tactic
 
 /-!
@@ -36,43 +36,57 @@ structure Witness (n : Nat) where
 
 namespace Witness
 
+/-- The direction-independent selector layout described by this witness. -/
+def selectorLayout (witness : Witness n) : SelectorLayout n where
+  members := witness.members
+  freshMembers := witness.freshMembers
+
 /-- An SOS1 member selected by the witness. -/
 abbrev Member (witness : Witness n) :=
-  {i // i ∈ witness.members}
+  witness.selectorLayout.Member
+
+/-- Restrict a retained state to the witnessed SOS1 members. -/
+def memberState (witness : Witness n)
+    (state : State n) : witness.Member → Rat :=
+  witness.selectorLayout.memberState state
 
 /-- Members which the witness claims are reused directly as binary selectors. -/
 def reusedMembers (witness : Witness n) : Finset witness.Member :=
-  witness.freshMembersᶜ
+  witness.selectorLayout.reusedMembers
 
 /-- Number of fresh selector variables in the flat source Instance. -/
 abbrev freshCount (witness : Witness n) : Nat :=
-  witness.freshMembers.card
+  witness.selectorLayout.freshCount
 
 /-- The member corresponding to one fresh selector in the right block. -/
 def freshMember (witness : Witness n)
     (j : Fin witness.freshCount) : witness.Member :=
-  (witness.freshMembers.orderIsoOfFin rfl j).val
+  witness.selectorLayout.freshMember j
 
 /-- The right-block selector index corresponding to one fresh member. -/
 def freshIndex (witness : Witness n)
     (i : witness.Member) (hi : i ∈ witness.freshMembers) :
     Fin witness.freshCount :=
-  (witness.freshMembers.orderIsoOfFin rfl).symm ⟨i, hi⟩
+  witness.selectorLayout.freshIndex i hi
+
+/-- A virtual selector tuple indexed by every witnessed SOS1 member. -/
+def freshSelectorState (witness : Witness n)
+    (members : State n) (fresh : State witness.freshCount) :
+    witness.Member → Rat :=
+  witness.selectorLayout.freshSelectorState members fresh
 
 @[simp]
 theorem freshMember_freshIndex (witness : Witness n)
     (i : witness.Member) (hi : i ∈ witness.freshMembers) :
     witness.freshMember (witness.freshIndex i hi) = i := by
-  simp [freshMember, freshIndex]
+  exact witness.selectorLayout.freshMember_freshIndex i hi
 
 @[simp]
 theorem freshIndex_freshMember (witness : Witness n)
     (j : Fin witness.freshCount) :
     witness.freshIndex (witness.freshMember j) (by
-      exact (witness.freshMembers.orderIsoOfFin rfl j).property) = j := by
-  change (witness.freshMembers.orderIsoOfFin rfl).symm
-    ((witness.freshMembers.orderIsoOfFin rfl) j) = j
-  exact (witness.freshMembers.orderIsoOfFin rfl).symm_apply_apply j
+      exact (witness.selectorLayout.freshMembers.orderIsoOfFin rfl j).property) = j := by
+  exact witness.selectorLayout.freshIndex_freshMember j
 
 end Witness
 

@@ -94,7 +94,9 @@ example : validated.bounds.upper (plan.freshMember freshZero) = 2 := by
   native_decide
 
 /-- One nontrivial upper link; the zero lower-bound side is omitted. -/
-example : validated.linkConstraints.length = 1 := by native_decide
+example :
+    (plan.selectorLayout.linkConstraints validated.bounds).length = 1 := by
+  native_decide
 
 example : validated.generatedConstraints.length = 2 := by native_decide
 
@@ -252,8 +254,9 @@ theorem not_targetRoundTrip_of_lowering
     Option.some.inj hstate
   have hcomponent := congrArg
     (fun state => state (Fin.natAdd 2 freshZero)) heq
-  simp [Plan.memberState, noncanonicalTarget, oneSelector, zeroSource,
-    canonicalSelector, State.source, State.append] at hcomponent
+  simp [Plan.memberState, SelectorLayout.memberState, noncanonicalTarget,
+    oneSelector, zeroSource, canonicalSelector, State.source,
+    State.append] at hcomponent
 
 example : ¬transform.TargetRoundTrip :=
   not_targetRoundTrip_of_lowering lowering_plan

@@ -1,4 +1,5 @@
-import OMMXProof.Instance.Transform.SOS1BigM.Promotion.Reconstruction
+import OMMXProof.Instance.Transform.SOS1BigM.CanonicalRows
+import OMMXProof.Instance.Transform.SOS1BigM.Promotion.Target
 import Mathlib.Tactic
 
 /-!
@@ -35,6 +36,52 @@ section Source
 
 variable (witness : Witness n)
 variable (source : Instance (n + witness.freshCount))
+
+/-! ## Source-dependent inputs to the canonical row specification -/
+
+/-- Finite declared bounds for every promoted SOS1 member. -/
+def FiniteMemberBounds : Prop :=
+  ∀ i : witness.Member, ((witness.target source).domains i).bound.IsFinite
+
+instance : Decidable (witness.FiniteMemberBounds source) := by
+  unfold FiniteMemberBounds
+  infer_instance
+
+/-- Bounds extracted from the retained member domains.
+
+The fallback zero keeps the expected-row specification total for untrusted
+witnesses. `StandardBigMForm.finiteMemberBounds` proves that it is unreachable
+for every accepted promotion. -/
+def selectorBounds : SelectorBounds witness.Member where
+  lower := fun i =>
+    if h : ((witness.target source).domains i).bound.IsFinite then
+      ((witness.target source).domains i).bound.finiteLower h
+    else 0
+  upper := fun i =>
+    if h : ((witness.target source).domains i).bound.IsFinite then
+      ((witness.target source).domains i).bound.finiteUpper h
+    else 0
+
+theorem selectorBounds_exact
+    (hfinite : witness.FiniteMemberBounds source)
+    (i : witness.Member) :
+    ((witness.target source).domains i).bound.lower =
+        .finite ((witness.selectorBounds source).lower i) ∧
+      ((witness.target source).domains i).bound.upper =
+        .finite ((witness.selectorBounds source).upper i) := by
+  have hi := hfinite i
+  simp only [selectorBounds, hi, ↓reduceDIte]
+  exact ⟨Bound.lower_eq_finiteLower _ hi,
+    Bound.upper_eq_finiteUpper _ hi⟩
+
+/-- The witness classifies reused members exactly as retained binary members. -/
+def ReusedMembersMatchDomains : Prop :=
+  ∀ i : witness.Member,
+    i ∈ witness.reusedMembers ↔ (witness.target source).domains i = .binary
+
+instance : Decidable (witness.ReusedMembersMatchDomains source) := by
+  unfold ReusedMembersMatchDomains
+  infer_instance
 
 /-! ## Conservative validation of the flat source shape -/
 
@@ -111,7 +158,7 @@ structure StandardBigMForm : Prop where
   formulationSuffixMatches :
     RowsMatch
       (source.constraints.drop witness.retainedConstraintCount)
-      (witness.generatedConstraints source)
+      (witness.selectorLayout.canonicalRows (witness.selectorBounds source))
   oneHotConstraintsFreshIndependent :
     source.oneHotConstraints.Forall witness.OneHotFreshIndependent
   sos1ConstraintsFreshIndependent :
@@ -130,7 +177,7 @@ private def standardBigMFormConditions : Prop :=
       (fun constraint => witness.FreshIndependent constraint.expr) ∧
     RowsMatch
       (source.constraints.drop witness.retainedConstraintCount)
-      (witness.generatedConstraints source) ∧
+      (witness.selectorLayout.canonicalRows (witness.selectorBounds source)) ∧
     source.oneHotConstraints.Forall witness.OneHotFreshIndependent ∧
     source.sos1Constraints.Forall witness.SOS1FreshIndependent ∧
     source.indicatorConstraints.Forall witness.IndicatorFreshIndependent ∧
@@ -221,7 +268,7 @@ theorem extendedPrefixConstraints_eq
 theorem formulationSuffix_eq
     (validated : witness.Validated source) :
     source.constraints.drop witness.retainedConstraintCount =
-      witness.generatedConstraints source := by
+      witness.selectorLayout.canonicalRows (witness.selectorBounds source) := by
   exact rowsMatch_iff_eq.mp
     validated.standardBigMForm.formulationSuffixMatches
 
@@ -242,7 +289,8 @@ theorem sourceConstraints_eq
     source.constraints =
       ((witness.target source).constraints.map
         fun constraint => constraint.extend witness.freshCount) ++
-        witness.generatedConstraints source := by
+        witness.selectorLayout.canonicalRows
+          (witness.selectorBounds source) := by
   calc
     source.constraints =
         source.constraints.take witness.retainedConstraintCount ++
@@ -251,12 +299,14 @@ theorem sourceConstraints_eq
         source.constraints).symm
     _ =
         source.constraints.take witness.retainedConstraintCount ++
-          witness.generatedConstraints source := by
+          witness.selectorLayout.canonicalRows
+            (witness.selectorBounds source) := by
       rw [validated.formulationSuffix_eq]
     _ =
         ((witness.target source).constraints.map
           fun constraint => constraint.extend witness.freshCount) ++
-          witness.generatedConstraints source := by
+          witness.selectorLayout.canonicalRows
+            (witness.selectorBounds source) := by
       rw [target, validated.extendedPrefixConstraints_eq]
 
 theorem sourceOneHotConstraints_eq

@@ -15,11 +15,12 @@ reference fresh selectors.
 
 The implementation follows a one-way dependency through these submodules:
 
+- `SOS1BigM.CanonicalRows` defines the direction-independent selector layout,
+  canonical Big-M rows, and their exact selector-formulation semantics;
 - `Promotion.Witness` defines the untrusted retained/fresh suffix layout;
 - `Promotion.Target` projects retained data and constructs the promoted Instance;
-- `Promotion.Reconstruction` reconstructs the expected Big-M links and cardinality row;
-- `Promotion.Validation` checks the supported source shape and derives structural
-  source equalities;
+- `Promotion.Validation` checks the supported source rows directly against the
+  shared canonical row specification and derives structural source equalities;
 - `Promotion.Semantics` derives feasibility, canonical-selector, and objective
   characterizations from validated evidence.
 
@@ -172,10 +173,7 @@ theorem promotion_isReduction {witness : Witness n}
   have hselectors :
       witness.freshSelectorState promotedState selectors =
         canonicalSelector (witness.memberState promotedState) := by
-    funext i
-    by_cases hi : i ∈ witness.freshMembers
-    · simp [Witness.freshSelectorState, selectors, hi]
-    · simp [Witness.freshSelectorState, hi]
+    exact witness.selectorLayout.freshSelectorState_canonical promotedState
   rw [hselectors]
   exact
     Witness.Validated.canonicalSelectorFormulation_of_selected

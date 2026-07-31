@@ -21,6 +21,83 @@ section Source
 variable (witness : Witness n)
 variable (source : Instance (n + witness.freshCount))
 
+theorem withinSelectorBounds_of_domains
+    (hfinite : witness.FiniteMemberBounds source)
+    {state : State n}
+    (hdomains : ∀ i, state i ∈ (witness.target source).domains i) :
+    WithinSelectorBounds (witness.selectorBounds source)
+      (witness.memberState state) := by
+  intro i
+  exact
+    ⟨Domain.finite_lower_le (hdomains i)
+        (witness.selectorBounds_exact source hfinite i).1,
+      Domain.le_finite_upper (hdomains i)
+        (witness.selectorBounds_exact source hfinite i).2⟩
+
+theorem reusedBinary_of_domains
+    (hlayout : witness.ReusedMembersMatchDomains source)
+    {state : State n}
+    (hdomains : ∀ i, state i ∈ (witness.target source).domains i) :
+    GenericBinaryOn witness.reusedMembers (witness.memberState state) := by
+  intro i hi
+  have hdomain : (witness.target source).domains i = .binary :=
+    (hlayout i).mp hi
+  simpa [Witness.memberState, SelectorLayout.memberState, hdomain] using
+    hdomains i
+
+theorem genericSOS1_memberState_iff_holds (state : State n) :
+    GenericSOS1 (witness.memberState state) ↔
+      witness.promotedConstraint.Holds state := by
+  classical
+  rw [GenericSOS1, Finset.card_le_one]
+  simp only [genericSupport, Finset.mem_filter, Finset.mem_univ, true_and]
+  constructor
+  · intro h i hi j hj hine hjne
+    have hij :
+        (⟨i, hi⟩ : witness.Member) = (⟨j, hj⟩ : witness.Member) := by
+      apply h
+      · simpa [Witness.memberState, SelectorLayout.memberState] using hine
+      · simpa [Witness.memberState, SelectorLayout.memberState] using hjne
+    exact congrArg Subtype.val hij
+  · intro h i hi j hj
+    apply Subtype.ext
+    apply h i.val i.property j.val j.property
+    · simpa [Witness.memberState, SelectorLayout.memberState] using hi
+    · simpa [Witness.memberState, SelectorLayout.memberState] using hj
+
+theorem selectedHolds_of_plannedSelectorFormulation
+    (hfinite : witness.FiniteMemberBounds source)
+    {state : State n} {selectors : State witness.freshCount}
+    (hdomains : ∀ i, state i ∈ (witness.target source).domains i)
+    (hformulation :
+      PlannedSelectorFormulation witness.reusedMembers
+        (witness.selectorBounds source)
+        (witness.memberState state)
+        (witness.freshSelectorState state selectors)) :
+    witness.promotedConstraint.Holds state := by
+  apply (witness.genericSOS1_memberState_iff_holds state).mp
+  exact plannedSelectorFormulation_project_sos1
+    witness.reusedMembers (witness.selectorBounds source)
+    (witness.memberState state)
+    (witness.freshSelectorState state selectors)
+    (witness.withinSelectorBounds_of_domains source hfinite hdomains)
+    hformulation
+
+theorem canonicalSelectorFormulation_of_selected
+    (hfinite : witness.FiniteMemberBounds source)
+    (hlayout : witness.ReusedMembersMatchDomains source)
+    {state : State n}
+    (hdomains : ∀ i, state i ∈ (witness.target source).domains i)
+    (hselected : witness.promotedConstraint.Holds state) :
+    PlannedSelectorFormulation witness.reusedMembers
+      (witness.selectorBounds source)
+      (witness.memberState state)
+      (canonicalSelector (witness.memberState state)) := by
+  apply canonicalSelector_plannedFormulation
+  · exact witness.withinSelectorBounds_of_domains source hfinite hdomains
+  · exact witness.reusedBinary_of_domains source hlayout hdomains
+  · exact (witness.genericSOS1_memberState_iff_holds state).mpr hselected
+
 namespace Validated
 
 theorem source_feasible_append_iff_base_and_formulation
@@ -53,22 +130,24 @@ theorem source_feasible_append_iff_base_and_formulation
   · rintro ⟨⟨hdomains, hselectors⟩,
       ⟨hretained, hgenerated⟩, honeHot, hsos1, hindicator⟩
     have hformulation :=
-      (witness.generatedConstraints_hold_iff_plannedSelectorFormulation
-        source
-        validated.standardBigMForm.reusedMembersMatchDomains
-        state selectors hdomains hselectors).mp hgenerated
+      (witness.selectorLayout.canonicalRows_hold_iff_plannedSelectorFormulation
+        (witness.selectorBounds source) state selectors
+        (witness.reusedBinary_of_domains source
+          validated.standardBigMForm.reusedMembersMatchDomains hdomains)
+        hselectors).mp hgenerated
     exact
       ⟨⟨hdomains, hretained, honeHot, hsos1, hindicator⟩, hformulation⟩
   · rintro
       ⟨⟨hdomains, hretained, honeHot, hsos1, hindicator⟩, hformulation⟩
     have hselectors :=
-      witness.freshSelectors_binary_of_plannedSelectorFormulation
-        source state selectors hformulation
+      witness.selectorLayout.freshSelectors_binary_of_plannedSelectorFormulation
+        (witness.selectorBounds source) state selectors hformulation
     have hgenerated :=
-      (witness.generatedConstraints_hold_iff_plannedSelectorFormulation
-        source
-        validated.standardBigMForm.reusedMembersMatchDomains
-        state selectors hdomains hselectors).mpr hformulation
+      (witness.selectorLayout.canonicalRows_hold_iff_plannedSelectorFormulation
+        (witness.selectorBounds source) state selectors
+        (witness.reusedBinary_of_domains source
+          validated.standardBigMForm.reusedMembersMatchDomains hdomains)
+        hselectors).mpr hformulation
     exact
       ⟨⟨hdomains, hselectors⟩, ⟨hretained, hgenerated⟩,
         honeHot, hsos1, hindicator⟩

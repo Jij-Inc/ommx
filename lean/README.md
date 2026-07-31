@@ -64,13 +64,13 @@ completeness of recognition or presolve algorithms remain outside this model.
 | `OMMXProof.Instance.Transform.IndicatorBigM.Basic` | Partial lowering with identity state maps and transformation correctness |
 | `OMMXProof.Instance.Transform.IndicatorBigM` | Entrypoint for the complete Indicator Big-M lowering |
 | `OMMXProof.Instance.Transform.SOS1BigM.Formulation` | Mixed reused/fresh selector formulation and its exact relation to SOS1 semantics |
+| `OMMXProof.Instance.Transform.SOS1BigM.CanonicalRows` | Shared selector layout, canonical Big-M rows, and their exact formulation semantics |
 | `OMMXProof.Instance.Transform.SOS1BigM.Lowering.Plan` | SOS1 selection, reused/fresh member partitioning, and finite-bound validation |
-| `OMMXProof.Instance.Transform.SOS1BigM.Lowering.Target` | Big-M links, selector cardinality, target Instance construction, and feasibility equivalence |
+| `OMMXProof.Instance.Transform.SOS1BigM.Lowering.Target` | Canonical-row instantiation, target Instance construction, and feasibility equivalence |
 | `OMMXProof.Instance.Transform.SOS1BigM.Lowering` | Partial lowering, canonical encoding, source projection, and transformation correctness |
 | `OMMXProof.Instance.Transform.SOS1BigM.Promotion.Witness` | Untrusted retained/fresh suffix layout supplied to the promotion checker |
 | `OMMXProof.Instance.Transform.SOS1BigM.Promotion.Target` | Retained-prefix projection, promoted target construction, and target feasibility characterization |
-| `OMMXProof.Instance.Transform.SOS1BigM.Promotion.Reconstruction` | Expected Big-M links and selector-cardinality rows reconstructed from the witness |
-| `OMMXProof.Instance.Transform.SOS1BigM.Promotion.Validation` | Conservative standard-form validation and structural source equalities derived from a validated witness |
+| `OMMXProof.Instance.Transform.SOS1BigM.Promotion.Validation` | Direct canonical-row validation and structural source equalities derived from a validated witness |
 | `OMMXProof.Instance.Transform.SOS1BigM.Promotion.Semantics` | Feasibility, canonical-selector, and objective characterizations for validated promotion |
 | `OMMXProof.Instance.Transform.SOS1BigM.Promotion` | Total witnessed promotion plus correctness theorems under validated sufficient conditions |
 | `OMMXProof.Instance.Transform.SOS1BigM` | Umbrella for both directions of the SOS1 Big-M formulation |
