@@ -407,15 +407,15 @@ define_ommx_error_mappings!(
     #[cfg(feature = "remote-artifact")]
     ommx::artifact::RemoteArtifactError => remote_artifact_error_to_pyerr,
     ommx::artifact::ImageRefParseError => image_ref_parse_error_to_pyerr,
-    ommx::AddDecisionVariableError => value_error,
+    ommx::ParameterIDCollision => value_error,
     ommx::AtolError => value_error,
     ommx::BoundError => value_error,
+    ommx::SubstitutionError => value_error,
     ommx::CoefficientError => value_error,
     ommx::ContentFactorError => value_error,
     ommx::DuplicatedSampleIDError => value_error,
     ommx::OneHotConstraintError => value_error,
     ommx::Sos1ConstraintError => value_error,
-    ommx::SubstitutionError => value_error,
     ommx::random::SamplesParametersError => value_error,
     ommx::InconsistentDependentValue => value_error,
     ommx::MissingStateEntries => value_error,
@@ -612,6 +612,42 @@ mod tests {
             bound: ommx::Bound::new(1.0, 2.0).unwrap(),
         });
         assert_exception::<InfeasibleDetected>(erased.into());
+    }
+
+    #[test]
+    fn exact_integer_slack_owner_precedes_nested_content_factor_signal() {
+        let id = ommx::VariableID::from(1);
+        let decision_variables = std::collections::BTreeMap::from([(
+            id,
+            ommx::DecisionVariable::new(
+                ommx::Kind::Integer,
+                ommx::Bound::new(0.0, 1.0).unwrap(),
+                ommx::ATol::default(),
+            )
+            .unwrap(),
+        )]);
+        let constraint_function = ommx::Function::from(ommx::Linear::single_term(
+            ommx::LinearMonomial::Variable(id),
+            ommx::Coefficient::try_from(f64::MAX).unwrap(),
+        ));
+        let constraints = std::collections::BTreeMap::from([(
+            ommx::ConstraintID::from(0),
+            ommx::Constraint::less_than_or_equal_to_zero(constraint_function),
+        )]);
+        let mut instance = ommx::Instance::new(
+            ommx::Sense::Minimize,
+            ommx::Function::Zero,
+            decision_variables,
+            constraints,
+        )
+        .unwrap();
+
+        let error = instance
+            .convert_inequality_to_equality_with_integer_slack(0, 32, ommx::ATol::default())
+            .unwrap_err();
+        assert!(error.is::<ommx::ExactIntegerSlackUnavailable>());
+        assert!(error.is::<ommx::ContentFactorError>());
+        assert_exception::<ExactIntegerSlackError>(error.into());
     }
 
     #[test]

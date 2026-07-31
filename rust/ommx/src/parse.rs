@@ -1,6 +1,7 @@
 use crate::{
     polynomial_base::QuadraticParseError, BoundError, CoefficientError, DecisionVariable,
-    DecisionVariableError, SampleID, SampleSetError, SolutionError, SubstitutionError, VariableID,
+    DecisionVariableError, OneHotConstraintError, SampleID, SampleSetError, SolutionError,
+    Sos1ConstraintError, SubstitutionError, VariableID,
 };
 use prost::DecodeError;
 use std::{
@@ -147,6 +148,12 @@ pub enum RawParseError {
 
     #[error(transparent)]
     InvalidDecisionVariable(#[from] DecisionVariableError),
+
+    #[error("{0}")]
+    OneHotConstraintError(#[from] OneHotConstraintError),
+
+    #[error("{0}")]
+    Sos1ConstraintError(#[from] Sos1ConstraintError),
 
     #[error("Duplicated sample ID: {id:?}")]
     DuplicatedSampleID { id: SampleID },

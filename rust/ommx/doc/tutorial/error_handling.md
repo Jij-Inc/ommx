@@ -30,6 +30,15 @@ returns the typed error directly):
 - [`DecisionVariableError`](crate::DecisionVariableError), [`SubstitutionError`](crate::SubstitutionError), [`SolutionError`](crate::SolutionError),
   [`SampleSetError`](crate::SampleSetError) — domain-specific structured errors consumed by
   in-crate tests and downstream code that wants to react programmatically.
+- [`ParameterIDCollision`](crate::ParameterIDCollision) — identifies a
+  decision-variable ID already owned by a parameter, so the caller can choose
+  another ID before retrying construction or insertion.
+- [`ContentFactorError`](crate::ContentFactorError) — identifies coefficients
+  that cannot be converted to a bounded rational multiplier, so the caller can
+  change the coefficients or choose another normalization operation.
+- [`OneHotConstraintError`](crate::OneHotConstraintError) and
+  [`Sos1ConstraintError`](crate::Sos1ConstraintError) — identify empty
+  structural constraints, so the caller can supply a non-empty variable set.
 - [`MissingStateEntries`](crate::MissingStateEntries) and
   [`UnknownStateEntries`](crate::UnknownStateEntries) — state-shape signals for
   callers that add or remove entries before retrying evaluation.
@@ -86,6 +95,13 @@ match instance.convert_inequality_to_equality_with_integer_slack(id, 32, atol) {
 }
 ```
 
+If exact integer-slack conversion cannot normalize the coefficients, the same
+error chain retains both the outer
+[`ExactIntegerSlackUnavailable`](crate::ExactIntegerSlackUnavailable) signal
+and its inner [`ContentFactorError`](crate::ContentFactorError). Callers can
+therefore choose an approximate transformation from the outer operation signal
+or change the coefficients based on the narrower cause.
+
 Protobuf wire decoding and the [`Parse`](crate::Parse) trait share the
 [`ParseError`](crate::ParseError) signal. Public byte decoders preserve wire
 failures as `ParseError` in their [`Result<T>`](crate::Result) error chain,
@@ -94,6 +110,12 @@ while semantic parsing adds structured
 proto-tree metadata. [`ParseError`](crate::ParseError) implements
 [`std::error::Error`], so callers can downcast the SDK error or propagate it
 with `?`.
+
+Semantic v2 parsing of OneHot and SOS1 constraints keeps `ParseError` as the
+outer owner while retaining [`OneHotConstraintError`](crate::OneHotConstraintError)
+or [`Sos1ConstraintError`](crate::Sos1ConstraintError) in its standard source
+chain. This preserves the structural validation cause without changing the
+Python-visible parse contract.
 
 ## Fail-site macros
 

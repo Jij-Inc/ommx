@@ -226,7 +226,8 @@ impl ParametricInstanceBuilder {
     /// # Errors
     /// Returns an error if:
     /// - Required fields (`sense`, `objective`, `decision_variables`, `parameters`, `constraints`) are not set
-    /// - Decision variable IDs and parameter IDs overlap
+    /// - Decision variable IDs and parameter IDs overlap (the error chain
+    ///   contains [`crate::ParameterIDCollision`])
     /// - The objective function, constraints, or named functions reference undefined variable IDs
     /// - The keys of `constraints` and `removed_constraints` are not disjoint
     /// - Label/context stores contain IDs that are not owned by the
@@ -269,10 +270,7 @@ impl ParametricInstanceBuilder {
             .collect();
         if !intersection.is_empty() {
             let id = *intersection.iter().next().unwrap();
-            crate::bail!(
-                { ?id },
-                "Duplicated variable ID is found in definition: {id:?}",
-            );
+            return Err(crate::ParameterIDCollision { id }.into());
         }
 
         // Combine decision variables and parameters for validation
@@ -831,11 +829,10 @@ mod tests {
             .build()
             .unwrap_err();
 
-        let msg = err.to_string();
-        assert!(
-            msg.contains("Duplicated variable ID") && msg.contains(&format!("{:?}", var_id)),
-            "unexpected error: {msg}"
-        );
+        assert!(matches!(
+            err.downcast_ref::<crate::ParameterIDCollision>(),
+            Some(crate::ParameterIDCollision { id }) if *id == var_id
+        ));
     }
 
     #[test]

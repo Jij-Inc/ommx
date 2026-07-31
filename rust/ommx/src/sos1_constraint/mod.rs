@@ -225,8 +225,12 @@ impl Parse for crate::v2::Sos1Constraint {
             message,
             "variables",
         )?)
-        .map_err(|e| {
-            crate::RawParseError::InvalidInstance(e.to_string()).context(message, "variables")
+        .map_err(|error| {
+            match error.downcast::<Sos1ConstraintError>() {
+                Ok(error) => crate::RawParseError::from(error),
+                Err(error) => crate::RawParseError::InvalidInstance(error.to_string()),
+            }
+            .context(message, "variables")
         })
     }
 }
@@ -400,6 +404,7 @@ impl std::fmt::Display for Sos1Constraint<Created> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::error::Error as _;
 
     #[test]
     fn test_create_sos1_constraint() {
@@ -413,6 +418,34 @@ mod tests {
         let err = Sos1Constraint::new(BTreeSet::new()).unwrap_err();
         assert!(matches!(
             err.downcast_ref::<Sos1ConstraintError>(),
+            Some(Sos1ConstraintError::EmptyVariables)
+        ));
+    }
+
+    #[test]
+    fn parse_v2_preserves_empty_variables_signal() {
+        let error: crate::Error = crate::v2::Sos1Constraint { variables: vec![] }
+            .parse(&())
+            .unwrap_err()
+            .into();
+        let parse_error = error
+            .downcast_ref::<ParseError>()
+            .expect("v2 semantic parse failures must remain downcastable as ParseError");
+
+        assert!(matches!(
+            &parse_error.error,
+            crate::RawParseError::Sos1ConstraintError(Sos1ConstraintError::EmptyVariables)
+        ));
+
+        let raw_source = parse_error
+            .source()
+            .expect("ParseError must expose its RawParseError source");
+        assert!(raw_source.downcast_ref::<crate::RawParseError>().is_some());
+        let signal_source = raw_source
+            .source()
+            .expect("RawParseError must expose the SOS1 constraint signal");
+        assert!(matches!(
+            signal_source.downcast_ref::<Sos1ConstraintError>(),
             Some(Sos1ConstraintError::EmptyVariables)
         ));
     }

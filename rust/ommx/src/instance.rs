@@ -77,14 +77,17 @@ pub enum SpecialConstraintKind {
 /// formatting, and comparison are deterministic and sorted by variant order.
 pub type SpecialConstraintKinds = std::collections::BTreeSet<SpecialConstraintKind>;
 
-/// Error raised when adding a decision variable would violate a
-/// [`ParametricInstance`] cross-table invariant.
+/// Signal that a decision-variable ID is already owned by a parameter in a
+/// [`ParametricInstance`].
+///
+/// Callers can choose an ID outside the shared decision-variable / parameter
+/// namespace before retrying construction or insertion.
 #[non_exhaustive]
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-pub enum AddDecisionVariableError {
-    /// The ID is already owned by a parameter in a parametric instance.
-    #[error("Variable id {id:?} collides with an existing parameter id")]
-    ParameterIDCollision { id: VariableID },
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("Decision variable id {id:?} collides with an existing parameter id")]
+pub struct ParameterIDCollision {
+    /// ID claimed by both a decision variable and a parameter.
+    pub id: VariableID,
 }
 
 #[derive(
