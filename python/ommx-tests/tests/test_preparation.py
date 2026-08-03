@@ -259,7 +259,9 @@ def test_identity_does_not_interpret_unused_per_constraint_penalty_ids() -> None
     assert instance.to_v2_bytes() == before
 
 
-def test_extra_unknown_per_constraint_penalty_id_fails_when_penalty_is_reached() -> None:
+def test_extra_unknown_per_constraint_penalty_id_fails_when_penalty_is_reached() -> (
+    None
+):
     x = DecisionVariable.binary(0)
     instance = Instance.from_components(
         decision_variables=[x],
