@@ -45,7 +45,7 @@ pub enum Feature {
     ConstraintOneHot = 2,
     /// The payload contains first-class SOS1 constraints.
     ConstraintSos1 = 3,
-    /// The payload contains non-polynomial dependent-variable expressions.
+    /// The payload uses the DependentExpr-based dependent-variable encoding.
     DependentExpression = 4,
 }
 impl Feature {

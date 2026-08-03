@@ -25,7 +25,7 @@ enum Feature {
   FEATURE_CONSTRAINT_ONE_HOT = 2;
   // The payload contains first-class SOS1 constraints.
   FEATURE_CONSTRAINT_SOS1 = 3;
-  // The payload contains non-polynomial dependent-variable expressions.
+  // The payload uses the DependentExpr-based dependent-variable encoding.
   FEATURE_DEPENDENT_EXPRESSION = 4;
 }
 
