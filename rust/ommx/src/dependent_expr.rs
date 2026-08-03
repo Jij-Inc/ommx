@@ -6,14 +6,14 @@ use crate::{
 };
 use std::mem::size_of;
 
-fn exact_nonzero_indicator(value: f64) -> crate::Result<f64> {
+fn evaluate_nonzero_indicator(value: f64, atol: crate::ATol) -> crate::Result<f64> {
     if !value.is_finite() {
         crate::bail!(
             { value },
             "NonzeroIndicator input evaluated to a non-finite value: {value}"
         );
     }
-    Ok(if value == 0.0 { 0.0 } else { 1.0 })
+    Ok(if atol.considers_zero(value) { 0.0 } else { 1.0 })
 }
 
 /// A deterministic expression used to reconstruct a dependent decision variable.
@@ -25,23 +25,25 @@ fn exact_nonzero_indicator(value: f64) -> crate::Result<f64> {
 /// input algebraic.
 ///
 /// The initial AST deliberately contains only existing [`Function`] leaves
-/// and exact nonzero indicators. More reconstruction operations can be added as
-/// new variants without extending the algebra understood by solver adapters.
+/// and tolerance-aware nonzero indicators. More reconstruction operations can
+/// be added as new variants without extending the algebra understood by solver
+/// adapters.
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum DependentExpr {
     /// An existing algebraic OMMX function.
     Function(Function),
-    /// `0` exactly when the inner expression is `0`, and `1` otherwise.
+    /// `0` when the inner expression is zero within the evaluation's
+    /// [`crate::ATol`], and `1` otherwise.
     ///
-    /// This predicate uses exact floating-point equality, including treating
-    /// both `0.0` and `-0.0` as zero. [`crate::ATol`] is intentionally not used
-    /// to classify the inner value.
+    /// This uses the same strict absolute-tolerance boundary as OMMX constraint
+    /// evaluation: `abs(value) < atol` is zero and the boundary itself is
+    /// non-zero. Non-finite values are rejected.
     NonzeroIndicator(Box<DependentExpr>),
 }
 
 impl DependentExpr {
-    /// Wrap an expression in an exact nonzero indicator.
+    /// Wrap an expression in a tolerance-aware nonzero indicator.
     pub fn nonzero_indicator(expr: impl Into<Self>) -> Self {
         Self::NonzeroIndicator(Box::new(expr.into()))
     }
@@ -106,7 +108,7 @@ impl Evaluate for DependentExpr {
             Self::Function(function) => function.evaluate(state, atol),
             Self::NonzeroIndicator(inner) => {
                 let value = inner.evaluate(state, atol)?;
-                exact_nonzero_indicator(value)
+                evaluate_nonzero_indicator(value, atol)
             }
         }
     }
@@ -120,22 +122,18 @@ impl Evaluate for DependentExpr {
             Self::Function(function) => function.evaluate_samples(samples, atol),
             Self::NonzeroIndicator(inner) => inner
                 .evaluate_samples(samples, atol)?
-                .try_map_ref(|value| exact_nonzero_indicator(*value)),
+                .try_map_ref(|value| evaluate_nonzero_indicator(*value, atol)),
         }
     }
 
     fn partial_evaluate(&mut self, state: &State, atol: crate::ATol) -> crate::Result<()> {
         match self {
             Self::Function(function) => function.partial_evaluate(state, atol),
-            Self::NonzeroIndicator(inner) => {
-                inner.partial_evaluate(state, atol)?;
-                if inner.required_ids().is_empty() {
-                    let value = inner.evaluate(&State::default(), atol)?;
-                    let value = exact_nonzero_indicator(value)?;
-                    *self = Self::Function(Function::try_from(value)?);
-                }
-                Ok(())
-            }
+            // Keep the indicator node even when its inner expression becomes
+            // constant. Folding it here would permanently capture this
+            // partial-evaluation tolerance and ignore the ATol supplied to a
+            // later evaluation.
+            Self::NonzeroIndicator(inner) => inner.partial_evaluate(state, atol),
         }
     }
 
@@ -219,22 +217,16 @@ mod tests {
     }
 
     #[test]
-    fn nonzero_indicator_uses_exact_zero_independently_of_atol() {
+    fn nonzero_indicator_uses_evaluation_atol() {
         let expr = DependentExpr::nonzero_indicator(Function::from(linear!(1)));
         let atol = ATol::new(1.0).unwrap();
 
         assert_eq!(expr.evaluate(&state([(1, 0.0)]), atol).unwrap(), 0.0);
         assert_eq!(expr.evaluate(&state([(1, -0.0)]), atol).unwrap(), 0.0);
-        assert_eq!(
-            expr.evaluate(&state([(1, f64::MIN_POSITIVE)]), atol)
-                .unwrap(),
-            1.0
-        );
-        assert_eq!(
-            expr.evaluate(&state([(1, -f64::MIN_POSITIVE)]), atol)
-                .unwrap(),
-            1.0
-        );
+        assert_eq!(expr.evaluate(&state([(1, 0.5)]), atol).unwrap(), 0.0);
+        assert_eq!(expr.evaluate(&state([(1, -0.5)]), atol).unwrap(), 0.0);
+        assert_eq!(expr.evaluate(&state([(1, 1.0)]), atol).unwrap(), 1.0);
+        assert_eq!(expr.evaluate(&state([(1, -1.0)]), atol).unwrap(), 1.0);
     }
 
     #[test]
@@ -272,7 +264,7 @@ mod tests {
     }
 
     #[test]
-    fn partial_evaluate_preserves_or_folds_indicator_by_required_ids() {
+    fn partial_evaluate_preserves_indicator_for_later_atol() {
         let function = Function::from((linear!(1) + linear!(2)).unwrap());
         let mut expr = DependentExpr::nonzero_indicator(function);
 
@@ -282,7 +274,12 @@ mod tests {
 
         expr.partial_evaluate(&state([(2, 1.0)]), ATol::default())
             .unwrap();
-        assert_eq!(expr, DependentExpr::Function(Function::Zero));
+        assert!(matches!(expr, DependentExpr::NonzeroIndicator(_)));
+        assert!(expr.required_ids().is_empty());
+        assert_eq!(
+            expr.evaluate(&State::default(), ATol::default()).unwrap(),
+            0.0
+        );
 
         let mut nonzero = DependentExpr::nonzero_indicator(Function::from(linear!(3)));
         nonzero
@@ -295,6 +292,25 @@ mod tests {
             1.0
         );
         assert!(nonzero.required_ids().is_empty());
+
+        let mut residual = DependentExpr::nonzero_indicator(Function::from(linear!(4)));
+        residual
+            .partial_evaluate(&state([(4, 5.0e-7)]), ATol::new(1.0e-6).unwrap())
+            .unwrap();
+        assert!(matches!(residual, DependentExpr::NonzeroIndicator(_)));
+        assert!(residual.required_ids().is_empty());
+        assert_eq!(
+            residual
+                .evaluate(&State::default(), ATol::new(1.0e-6).unwrap())
+                .unwrap(),
+            0.0
+        );
+        assert_eq!(
+            residual
+                .evaluate(&State::default(), ATol::new(1.0e-8).unwrap())
+                .unwrap(),
+            1.0
+        );
     }
 
     #[test]
@@ -305,11 +321,13 @@ mod tests {
                 vec![SampleID::from(10), SampleID::from(11)],
                 vec![SampleID::from(20)],
             ],
-            [state([(1, 0.0)]), state([(1, 2.0)])],
+            [state([(1, 5.0e-7)]), state([(1, 2.0)])],
         )
         .unwrap();
 
-        let evaluated = expr.evaluate_samples(&samples, ATol::default()).unwrap();
+        let evaluated = expr
+            .evaluate_samples(&samples, ATol::new(1.0e-6).unwrap())
+            .unwrap();
 
         assert_eq!(evaluated.num_samples(), 3);
         assert_eq!(evaluated.get(SampleID::from(10)), Some(&0.0));

@@ -159,10 +159,10 @@ impl Instance {
     /// SOS1 capability to the instance; witness rejection means only that the
     /// claimed formulation is outside this conservative checker.
     ///
-    /// The correctness contract uses exact algebraic feasibility. It does not
-    /// claim equality of [`crate::Evaluate`] results for a positive [`crate::ATol`],
-    /// because regular rows and SOS1 constraints apply different tolerance
-    /// classifiers near zero.
+    /// Canonical formulation recognition is exact. When evaluating a solver
+    /// state, fresh-selector reconstruction uses the same [`crate::ATol`]
+    /// zero classifier as the promoted SOS1 constraint so numerical residuals
+    /// near zero do not reactivate retained selectors.
     ///
     /// On success the verified formulation rows are relaxed, fresh selectors
     /// remain registered as dependent variables, and a new active SOS1
@@ -731,6 +731,38 @@ mod tests {
             )
             .unwrap();
         assert_eq!(nonzero.entries[&10], 1.0);
+    }
+
+    #[test]
+    fn reconstructed_selector_uses_the_sos1_zero_tolerance() {
+        let (mut instance, witness) = mixed_instance();
+        let promotion = instance.promote_sos1_big_m(&witness).unwrap();
+        let atol = ATol::new(1.0e-6).unwrap();
+
+        let near_zero = instance
+            .evaluate(&crate::v1::State::from_iter([(0, 0.0), (1, 5.0e-7)]), atol)
+            .unwrap();
+        assert_eq!(near_zero.state().entries[&selector_id().into_inner()], 0.0);
+        let evaluated = near_zero
+            .evaluated_sos1_constraints()
+            .get(&promotion.sos1_constraint_id())
+            .unwrap();
+        assert!(evaluated.stage.feasible);
+        assert_eq!(evaluated.stage.active_variable, None);
+
+        let on_boundary = instance
+            .evaluate(&crate::v1::State::from_iter([(0, 0.0), (1, 1.0e-6)]), atol)
+            .unwrap();
+        assert_eq!(
+            on_boundary.state().entries[&selector_id().into_inner()],
+            1.0
+        );
+        let evaluated = on_boundary
+            .evaluated_sos1_constraints()
+            .get(&promotion.sos1_constraint_id())
+            .unwrap();
+        assert!(evaluated.stage.feasible);
+        assert_eq!(evaluated.stage.active_variable, Some(member_integer_id()));
     }
 
     #[test]

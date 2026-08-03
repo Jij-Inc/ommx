@@ -751,7 +751,7 @@ fn expected_sampled_sos1_active_variable(
             .samples()
             .get(sample_id)
             .expect("sample IDs must be validated first");
-        if value.abs() >= *atol {
+        if !atol.considers_zero(value) {
             if active.is_some() {
                 return (false, None);
             }

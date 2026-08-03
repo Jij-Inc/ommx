@@ -31,7 +31,7 @@ impl Propagate for Sos1Constraint<Created> {
             };
 
             ensure_sos1_value_is_finite(var_id, value)?;
-            if value.abs() < *atol {
+            if atol.considers_zero(value) {
                 // Variable is ~0, removed from set
             } else {
                 // Variable is non-zero
@@ -148,7 +148,7 @@ fn check_sos1(
         })?;
 
         ensure_sos1_value_is_finite(var_id, *value)?;
-        if value.abs() >= *atol {
+        if !atol.considers_zero(*value) {
             // Variable is non-zero
             if active.is_some() {
                 // Multiple variables are non-zero → infeasible

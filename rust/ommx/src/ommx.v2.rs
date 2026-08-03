@@ -538,6 +538,8 @@ pub mod dependent_expr {
     pub enum Expression {
         #[prost(message, tag = "1")]
         Function(super::super::v1::Function),
+        /// Evaluates to 0 when the inner value has absolute value below the
+        /// evaluation tolerance, and to 1 otherwise.
         #[prost(message, tag = "2")]
         NonzeroIndicator(::prost::alloc::boxed::Box<super::DependentExpr>),
     }

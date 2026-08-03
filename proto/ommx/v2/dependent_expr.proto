@@ -12,6 +12,8 @@ import "ommx/v1/function.proto";
 message DependentExpr {
   oneof expression {
     ommx.v1.Function function = 1;
+    // Evaluates to 0 when the inner value has absolute value below the
+    // evaluation tolerance, and to 1 otherwise.
     DependentExpr nonzero_indicator = 2;
   }
 }

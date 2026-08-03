@@ -870,7 +870,7 @@ fn expected_sos1_active_variable(
             .get(variable_id)
             .expect("SOS1 structural variables must be validated first")
             .value();
-        if value.abs() >= *atol {
+        if !atol.considers_zero(value) {
             if active.is_some() {
                 return (false, None);
             }

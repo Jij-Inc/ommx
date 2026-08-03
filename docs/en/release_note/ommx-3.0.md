@@ -15,7 +15,9 @@ coordinates as consistency assertions. Values within `atol` are accepted, but
 the returned {class}`~ommx.State` now always contains the fixed value owned by
 the Instance or the deterministic value computed from the dependency. Later
 dependent reconstructions therefore observe canonical coordinates instead of
-an approximate assertion supplied by the caller.
+an approximate assertion supplied by the caller. Nonzero-indicator
+dependencies use this same `atol` to keep reconstructed selectors consistent
+with SOS1 feasibility for solver-produced residuals near zero.
 
 ### 🛠 Model and sample errors follow caller ownership ([#1104](https://github.com/Jij-Inc/ommx/pull/1104), [#1105](https://github.com/Jij-Inc/ommx/pull/1105), [#1107](https://github.com/Jij-Inc/ommx/pull/1107))
 

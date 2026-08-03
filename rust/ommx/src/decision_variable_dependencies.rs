@@ -352,10 +352,13 @@ mod tests {
         assert_eq!(zero.entries[&2], 0.0);
         assert_eq!(zero.entries[&1], 0.0);
 
-        let nonzero = dependencies
-            .evaluate(&state([(3, f64::MIN_POSITIVE)]), ATol::default())
-            .unwrap();
-        assert_eq!(nonzero.entries[&2], f64::MIN_POSITIVE);
+        let atol = ATol::new(1.0e-6).unwrap();
+        let near_zero = dependencies.evaluate(&state([(3, 5.0e-7)]), atol).unwrap();
+        assert_eq!(near_zero.entries[&2], 5.0e-7);
+        assert_eq!(near_zero.entries[&1], 0.0);
+
+        let nonzero = dependencies.evaluate(&state([(3, 1.0e-6)]), atol).unwrap();
+        assert_eq!(nonzero.entries[&2], 1.0e-6);
         assert_eq!(nonzero.entries[&1], 1.0);
     }
 

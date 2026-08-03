@@ -15,6 +15,8 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 返される {class}`~ommx.State` には、Instance が所有する固定値または dependency から
 決定的に計算した値を格納します。これにより、後続の dependent reconstruction は、
 呼び出し側が渡した近似値ではなく canonical な coordinate を参照します。
+nonzero indicator dependency も同じ `atol` を使うため、solver が返すゼロ近傍の
+数値残差について、復元されたselectorとSOS1のfeasibility判定が一致します。
 
 ### 🛠 Model / sample error を呼び出し側の回復方法に応じて通知 ([#1104](https://github.com/Jij-Inc/ommx/pull/1104)、[#1105](https://github.com/Jij-Inc/ommx/pull/1105)、[#1107](https://github.com/Jij-Inc/ommx/pull/1107))
 
