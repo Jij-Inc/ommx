@@ -16,7 +16,7 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 決定的に計算した値を格納します。これにより、後続の dependent reconstruction は、
 呼び出し側が渡した近似値ではなく canonical な coordinate を参照します。
 
-### 🛠 Model error を呼び出し側の回復方法に応じて通知 ([#1104](https://github.com/Jij-Inc/ommx/pull/1104)、[#1105](https://github.com/Jij-Inc/ommx/pull/1105))
+### 🛠 Model / sample error を呼び出し側の回復方法に応じて通知 ([#1104](https://github.com/Jij-Inc/ommx/pull/1104)、[#1105](https://github.com/Jij-Inc/ommx/pull/1105)、[#1107](https://github.com/Jij-Inc/ommx/pull/1107))
 
 Function、polynomial、constraint、named function、`Instance` のevaluation APIは、
 RustからPythonへの共通error boundaryを直接使います。呼び出し側が渡したstateの不足・
@@ -30,6 +30,12 @@ Decision variableの追加とsubstitution、`Function.content_factor`、OneHot/S
 不正なsubstitution、表現できないcontent factor、空の特殊制約は、Rust SDKの
 signal ownerを保持したまま`ValueError`になります。型付けされていないdefensive
 invariant failureは、引き続き`RuntimeError`にfallbackします。
+
+`Samples.append`も同じboundaryへ重複sample IDを伝播し、変更前に入力IDをすべて
+検証するため、失敗してもcollectionは変更されません。`Instance.random_samples`は、
+state group数とsample数の不整合、およびinclusiveなsample ID rangeの容量不足を
+`ValueError`として通知します。`u64`全域のID rangeと正しい正数partitionは、
+integer overflowやstrategy panicなしで生成できます。
 
 ## 3.0.0 Beta 2
 

@@ -1,5 +1,5 @@
-from ommx import _ommx_rust
 import pytest
+from ommx import Samples, State, _ommx_rust
 
 
 def test_create_samples_from_single_state():
@@ -198,3 +198,14 @@ def test_samples_append_with_dict():
     samples.append([0], {1: 1.0, 2: 2.0})
     assert samples.num_samples() == 1
     assert 0 in samples.sample_ids()
+
+
+@pytest.mark.parametrize("sample_ids", [[1, 0, 2], [1, 1]])
+def test_samples_append_duplicate_id_is_atomic(sample_ids: list[int]):
+    samples = Samples({0: {1: 10.0}})
+
+    with pytest.raises(ValueError, match="Duplicated sample ID"):
+        samples.append(sample_ids, State({1: 20.0}))
+
+    assert samples.sample_ids() == {0}
+    assert samples.get_state(0).entries == {1: 10.0}
