@@ -11,7 +11,8 @@ structured fields.
 A small number of APIs return a typed error directly rather than
 `ommx::Result<T>` — specifically [`DecisionVariable::with_bound`](crate::DecisionVariable::with_bound),
 the [`SampleSet::best_feasible`](crate::SampleSet::best_feasible) family,
-and a few builders — because their single failure mode is already a
+[`Sampled::append`](crate::Sampled::append), and a few builders — because their
+single failure mode is already a
 **signal type** and the typed return surfaces that at the call site.
 Every such typed error implements [`std::error::Error`], so `?` still
 lifts it into `ommx::Result<T>` at a domain boundary; the distinction
@@ -30,6 +31,13 @@ returns the typed error directly):
 - [`DecisionVariableError`](crate::DecisionVariableError), [`SubstitutionError`](crate::SubstitutionError), [`SolutionError`](crate::SolutionError),
   [`SampleSetError`](crate::SampleSetError) — domain-specific structured errors consumed by
   in-crate tests and downstream code that wants to react programmatically.
+- [`DuplicatedSampleIDError`](crate::DuplicatedSampleIDError) — identifies a
+  sample ID already present in a [`Sampled`](crate::Sampled) collection or
+  repeated in one append input, so the caller can choose another ID and retry
+  the atomic append.
+- [`SamplesParametersError`](crate::random::SamplesParametersError) —
+  identifies invalid relations among random-sample counts and the inclusive ID
+  range, so the caller can correct the requested parameters before retrying.
 - [`ParameterIDCollision`](crate::ParameterIDCollision) — identifies a
   decision-variable ID already owned by a parameter, so the caller can choose
   another ID before retrying construction or insertion.

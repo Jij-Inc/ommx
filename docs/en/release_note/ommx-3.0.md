@@ -8,7 +8,7 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
-### 🛠 Model errors follow caller ownership ([#1104](https://github.com/Jij-Inc/ommx/pull/1104), [#1105](https://github.com/Jij-Inc/ommx/pull/1105))
+### 🛠 Model and sample errors follow caller ownership ([#1104](https://github.com/Jij-Inc/ommx/pull/1104), [#1105](https://github.com/Jij-Inc/ommx/pull/1105), [#1107](https://github.com/Jij-Inc/ommx/pull/1107))
 
 Function, polynomial, constraint, named-function, and `Instance` evaluation
 APIs use the shared Rust-to-Python error boundary directly. Missing or unknown
@@ -24,6 +24,13 @@ variable or parameter IDs, invalid substitutions, unrepresentable content
 factors, and empty structural constraints raise `ValueError` while retaining
 their Rust SDK signal owner. Untyped defensive invariant failures continue to
 fall back to `RuntimeError`.
+
+`Samples.append` propagates duplicate sample IDs through the same boundary and
+validates every incoming ID before mutation, so a failed append leaves the
+collection unchanged. `Instance.random_samples` reports inconsistent state
+group counts and an undersized inclusive sample-ID range as `ValueError`.
+Full `u64` ID ranges and valid positive partitions are generated without
+integer overflow or a strategy panic.
 
 ## 3.0.0 Beta 2
 
