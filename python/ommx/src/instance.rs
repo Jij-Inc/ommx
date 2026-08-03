@@ -10,7 +10,8 @@ use crate::{
         raw_entries_to_dataframe, ConstraintKind, PyDataFrame, ToPandasEntry,
     },
     Constraint, DecisionVariable, DecisionVariableRole, Function, NamedFunction,
-    ParametricInstance, RemovedConstraint, Rng, SampleSet, Samples, Sense, Solution, State,
+    ParametricInstance, Preparation, PreparationPolicy, RemovedConstraint, Rng, SampleSet, Samples,
+    Sense, Solution, State,
 };
 use ommx::{ConstraintID, Evaluate, NamedFunctionID, VariableID};
 use pyo3::{
@@ -94,6 +95,18 @@ impl Instance {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Instance {
+    /// Prepare an isolated snapshot of this Instance according to ``policy``.
+    ///
+    /// Preparation is an OMMX-owned Instance operation. It does not receive or
+    /// retain a Solver Adapter. A successful result has an input belonging to
+    /// ``policy.acceptable_instance_class`` and records the applied Transforms
+    /// and their source-specific receipts together with the source and Policy
+    /// snapshots. Model evaluation and solver outputs are separate operations.
+    pub fn prepare(&self, py: Python<'_>, policy: &PreparationPolicy) -> OmmxPyResult<Preparation> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        Ok(Preparation(self.inner.prepare(&policy.0)?))
+    }
+
     #[staticmethod]
     pub fn from_v1_bytes(py: Python<'_>, bytes: &Bound<PyBytes>) -> OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);

@@ -179,6 +179,43 @@ create_core_exception!(
     "The mathematical model was proven infeasible."
 );
 
+pyo3::create_exception!(
+    ommx,
+    PreparationError,
+    PyValueError,
+    "Canonical Instance preparation could not satisfy the requested policy."
+);
+impl pyo3_stub_gen::PyStubType for PreparationError {
+    fn type_output() -> pyo3_stub_gen::TypeInfo {
+        pyo3_stub_gen::TypeInfo::builtin("PreparationError")
+    }
+}
+pyo3_stub_gen::impl_py_runtime_type!(PreparationError);
+pyo3_stub_gen::inventory::submit! {
+    pyo3_stub_gen::type_info::PyClassInfo {
+        pyclass_name: "PreparationError",
+        struct_id: std::any::TypeId::of::<PreparationError>,
+        getters: &[
+            pyo3_stub_gen::type_info::MemberInfo {
+                name: "failure",
+                r#type: <crate::PreparationFailure as pyo3_stub_gen::PyStubType>::type_output,
+                doc: "Structured evidence from the unsuccessful canonical Preparation attempt.",
+                default: None,
+                deprecated: None,
+            },
+        ],
+        setters: &[],
+        module: Some("ommx._ommx_rust"),
+        doc: "Canonical Instance preparation could not satisfy the requested policy.",
+        bases: &[|| <PyValueError as pyo3_stub_gen::PyStubType>::type_output()],
+        has_eq: false,
+        has_ord: false,
+        has_hash: false,
+        has_str: false,
+        subclass: true,
+    }
+}
+
 /// Binding-internal wrapper around an already classified Python exception.
 ///
 /// Each Rust SDK signal declares its Python mapping below. Python-owned errors
@@ -394,6 +431,17 @@ fn infeasible_detected_to_pyerr(_: &ommx::InfeasibleDetected, message: String) -
     InfeasibleDetected::new_err(message)
 }
 
+fn preparation_failure_to_pyerr(error: &ommx::PreparationFailure, message: String) -> PyErr {
+    let pyerr = PreparationError::new_err(message);
+    Python::attach(|py| {
+        pyerr
+            .value(py)
+            .setattr("failure", crate::PreparationFailure::from_core(error))
+    })
+    .expect("PreparationError supports a typed failure attribute");
+    pyerr
+}
+
 define_ommx_error_mappings!(
     ommx::ParseError => parse_error_to_pyerr,
     ommx::artifact::local_registry::InvalidLocalRegistryImageRef => invalid_local_registry_image_ref_to_pyerr,
@@ -404,6 +452,10 @@ define_ommx_error_mappings!(
     ommx::LogEncodingUnavailable => log_encoding_unavailable_to_pyerr,
     ommx::ExactIntegerSlackUnavailable => exact_integer_slack_unavailable_to_pyerr,
     ommx::InfeasibleDetected => infeasible_detected_to_pyerr,
+    // PreparationFailure is reserved for canonical selection/policy failures.
+    // Errors owned by an applied Instance operation propagate without this
+    // wrapper and retain the mappings above.
+    ommx::PreparationFailure => preparation_failure_to_pyerr,
     #[cfg(feature = "remote-artifact")]
     ommx::artifact::RemoteArtifactError => remote_artifact_error_to_pyerr,
     ommx::artifact::ImageRefParseError => image_ref_parse_error_to_pyerr,
@@ -474,6 +526,7 @@ pub fn register_exceptions(py: Python<'_>, module: &Bound<'_, PyModule>) -> PyRe
         py.get_type::<ExactIntegerSlackError>(),
     )?;
     module.add("InfeasibleDetected", py.get_type::<InfeasibleDetected>())?;
+    module.add("PreparationError", py.get_type::<PreparationError>())?;
     module.add("RemoteArtifactError", py.get_type::<RemoteArtifactError>())?;
     module.add(
         "RemoteArtifactNotFoundError",

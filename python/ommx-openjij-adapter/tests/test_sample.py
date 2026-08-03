@@ -4,10 +4,7 @@ from typing import cast
 import openjij as oj
 import pytest
 from ommx import DecisionVariable, Instance, Sos1Constraint
-from ommx_openjij_adapter import (
-    OMMXOpenJijSAAdapter,
-    OpenJijPreparationConfig,
-)
+from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
 
 def binary_no_constraint_minimize():
@@ -166,25 +163,21 @@ def hubo_binary_inequality():
 
 def _openjij_input(instance):
     source = instance.to_v2_bytes()
-    if OMMXOpenJijSAAdapter.check_applicability(instance).is_applicable:
-        preparation = None
-        adapter_input = instance
-    else:
-        preparation = OMMXOpenJijSAAdapter.prepare(
-            instance,
-            config=OpenJijPreparationConfig(
-                uniform_penalty_weight=3.1 if instance.constraints else None,
-            ),
-        )
-        adapter_input = preparation.input
+    policy = OMMXOpenJijSAAdapter.recommended_preparation_policy(
+        uniform_penalty_weight=3.1 if instance.constraints else None,
+    )
+    preparation = instance.prepare(policy)
+    adapter_input = preparation.input
     assert instance.to_v2_bytes() == source
     return adapter_input, preparation, source
 
 
-def _evaluate_source_if_prepared(sample_set, preparation):
-    if preparation is None:
-        return sample_set
-    return preparation.evaluate_source(sample_set)
+def _evaluate_source(sample_set, preparation):
+    source_samples = preparation.decode(sample_set.samples)
+    return preparation.source.evaluate_samples(
+        source_samples,
+        atol=preparation.policy.atol,
+    )
 
 
 def _expected_solution(instance, ans):
@@ -232,7 +225,7 @@ def test_sample(instance, ans):
     # that constraints are sufficiently penalized without overwhelming the objective.
     adapter_input, preparation, source = _openjij_input(instance)
     prepared_samples = OMMXOpenJijSAAdapter.sample(adapter_input, num_reads=1, seed=999)
-    sample_set = _evaluate_source_if_prepared(prepared_samples, preparation)
+    sample_set = _evaluate_source(prepared_samples, preparation)
     assert sample_set.extract_decision_variables("x", 0) == ans
     _assert_sample_set_uses_source_model(sample_set, instance, ans)
     assert instance.to_v2_bytes() == source
@@ -274,7 +267,7 @@ def test_sample_twice(instance, ans):
         prepared_samples = OMMXOpenJijSAAdapter.sample(
             adapter_input, num_reads=1, seed=999
         )
-        sample_set = _evaluate_source_if_prepared(prepared_samples, preparation)
+        sample_set = _evaluate_source(prepared_samples, preparation)
         assert sample_set.extract_decision_variables("x", 0) == ans
         _assert_sample_set_uses_source_model(sample_set, instance, ans)
         assert instance.to_v2_bytes() == source
@@ -356,7 +349,14 @@ def test_source_evaluation_populates_variable_removed_with_trivial_inequality(
         constraints={7: constraint(variable)},
         sense=Instance.MINIMIZE,
     )
-    preparation = OMMXOpenJijSAAdapter.prepare(source)
+    preparation = source.prepare(
+        OMMXOpenJijSAAdapter.recommended_preparation_policy(
+            # A source-ID weight remains valid when canonical Preparation
+            # removes that source constraint as trivial before the penalty phase.
+            penalty_weights={7: 2.0},
+        )
+    )
+    assert preparation.policy.penalty_weights == {7: 2.0}
     assert preparation.input.used_decision_variables == []
 
     input_samples = OMMXOpenJijSAAdapter.sample(
@@ -366,8 +366,12 @@ def test_source_evaluation_populates_variable_removed_with_trivial_inequality(
     )
     assert input_samples.get(0).state.get(0) == expected_value
 
-    source_samples = preparation.evaluate_source(input_samples)
-    source_solution = source_samples.get(0)
+    decoded = preparation.decode(input_samples.samples)
+    source_sample_set = preparation.source.evaluate_samples(
+        decoded,
+        atol=preparation.policy.atol,
+    )
+    source_solution = source_sample_set.get(0)
     assert source_solution.state.get(0) == expected_value
     assert source_solution.feasible
 
@@ -383,16 +387,21 @@ def test_sample_decodes_integer_sos1_against_source_model():
         sense=Instance.MINIMIZE,
     )
 
-    preparation = OMMXOpenJijSAAdapter.prepare(
-        instance,
-        config=OpenJijPreparationConfig(uniform_penalty_weight=4.0),
+    preparation = instance.prepare(
+        OMMXOpenJijSAAdapter.recommended_preparation_policy(
+            uniform_penalty_weight=4.0,
+        )
     )
     prepared_samples = OMMXOpenJijSAAdapter.sample(
         preparation.input,
         num_reads=4,
         seed=999,
     )
-    sample_set = preparation.evaluate_source(prepared_samples)
+    source_samples = preparation.decode(prepared_samples.samples)
+    sample_set = preparation.source.evaluate_samples(
+        source_samples,
+        atol=preparation.policy.atol,
+    )
     assert len(sample_set.constraints_df(kind="sos1")) == 1
     for sample_id in sample_set.sample_ids():
         solution = sample_set.get(sample_id)

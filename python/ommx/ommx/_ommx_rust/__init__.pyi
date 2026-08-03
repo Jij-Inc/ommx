@@ -74,6 +74,10 @@ __all__ = [
     "Parameters",
     "ParametricInstance",
     "Polynomial",
+    "Preparation",
+    "PreparationError",
+    "PreparationFailure",
+    "PreparationPolicy",
     "Provenance",
     "ProvenanceKind",
     "PruneAnonymousReport",
@@ -107,6 +111,7 @@ __all__ = [
     "ToFunction",
     "ToSamples",
     "ToState",
+    "Transform",
     "VariableIDLike",
     "gc",
     "get_default_atol",
@@ -3109,6 +3114,16 @@ class Instance:
     def get_user_annotations(
         self, *, annotation_namespace: builtins.str = "org.ommx.user."
     ) -> builtins.dict[builtins.str, builtins.str]: ...
+    def prepare(self, policy: PreparationPolicy) -> Preparation:
+        r"""
+        Prepare an isolated snapshot of this Instance according to ``policy``.
+
+        Preparation is an OMMX-owned Instance operation. It does not receive or
+        retain a Solver Adapter. A successful result has an input belonging to
+        ``policy.acceptable_instance_class`` and records the applied Transforms
+        and their source-specific receipts together with the source and Policy
+        snapshots. Model evaluation and solver outputs are separate operations.
+        """
     @staticmethod
     def from_v1_bytes(bytes: bytes) -> Instance: ...
     @staticmethod
@@ -6080,6 +6095,274 @@ class Polynomial:
         """
 
 @typing.final
+class Preparation:
+    r"""
+    An immutable, auditable relation between a source Instance and the prepared
+    input produced from it under one :class:`PreparationPolicy`.
+    """
+    @property
+    def source(self) -> Instance:
+        r"""
+        Isolated snapshot of the Instance passed to :meth:`Instance.prepare`.
+        """
+    @property
+    def input(self) -> Instance:
+        r"""
+        Constructed Instance belonging to the Policy's acceptable class.
+        """
+    @property
+    def policy(self) -> PreparationPolicy:
+        r"""
+        Isolated snapshot of the Policy passed to :meth:`Instance.prepare`.
+        """
+    @property
+    def transforms(self) -> builtins.list[Transform]:
+        r"""
+        Applied Transform receipts in construction order.
+        """
+    @typing.overload
+    def encode(self, data: State) -> State:
+        r"""
+        Compose applied Transform encoders for State or Samples.
+
+        Solution and SampleSet are not accepted, and no model is evaluated.
+        """
+    @typing.overload
+    def encode(self, data: Samples) -> Samples:
+        r"""
+        Compose encoders pointwise while preserving IDs and grouping.
+        """
+    @typing.overload
+    def decode(self, data: State) -> State:
+        r"""
+        Compose applied Transform decoders for State or Samples.
+
+        This performs no source evaluation and transports no solver status.
+        """
+    @typing.overload
+    def decode(self, data: Samples) -> Samples:
+        r"""
+        Compose decoders pointwise while preserving IDs and grouping.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+class PreparationError(builtins.ValueError):
+    r"""
+    Canonical Instance preparation could not satisfy the requested policy.
+    """
+    @property
+    def failure(self) -> PreparationFailure:
+        r"""
+        Structured evidence from the unsuccessful canonical Preparation attempt.
+        """
+
+class PreparationFailure:
+    r"""
+    Structured evidence from an unsuccessful canonical Preparation attempt.
+
+    The corresponding Python exception exposes this value as
+    :attr:`PreparationError.failure`.
+
+    ``PolicyMismatch`` carries ``source``, ``policy``, ``current_membership``,
+    committed ``transforms``, and ``detail``. ``ResourceLimitExceeded`` carries
+    the same snapshots plus ``operation``, ``resource``, ``observed``, and
+    ``limit``. ``TargetInstanceClassNotReached`` carries the common snapshots
+    plus ``detail``. Errors owned by a mathematical Transform are not converted
+    to these variants.
+    """
+    @typing.final
+    class PolicyMismatch(PreparationFailure):
+        __match_args__ = (
+            "source",
+            "policy",
+            "current_membership",
+            "transforms",
+            "detail",
+        )
+        @property
+        def source(self) -> Instance: ...
+        @property
+        def policy(self) -> PreparationPolicy: ...
+        @property
+        def current_membership(self) -> InstanceClassMembershipReport: ...
+        @property
+        def transforms(self) -> builtins.list[Transform]: ...
+        @property
+        def detail(self) -> builtins.str: ...
+        def __new__(
+            cls,
+            source: Instance,
+            policy: PreparationPolicy,
+            current_membership: InstanceClassMembershipReport,
+            transforms: typing.Sequence[Transform],
+            detail: builtins.str,
+        ) -> PreparationFailure.PolicyMismatch: ...
+
+    @typing.final
+    class ResourceLimitExceeded(PreparationFailure):
+        __match_args__ = (
+            "source",
+            "policy",
+            "current_membership",
+            "transforms",
+            "operation",
+            "resource",
+            "observed",
+            "limit",
+        )
+        @property
+        def source(self) -> Instance: ...
+        @property
+        def policy(self) -> PreparationPolicy: ...
+        @property
+        def current_membership(self) -> InstanceClassMembershipReport: ...
+        @property
+        def transforms(self) -> builtins.list[Transform]: ...
+        @property
+        def operation(self) -> builtins.str: ...
+        @property
+        def resource(self) -> builtins.str: ...
+        @property
+        def observed(self) -> builtins.int: ...
+        @property
+        def limit(self) -> builtins.int: ...
+        def __new__(
+            cls,
+            source: Instance,
+            policy: PreparationPolicy,
+            current_membership: InstanceClassMembershipReport,
+            transforms: typing.Sequence[Transform],
+            operation: builtins.str,
+            resource: builtins.str,
+            observed: builtins.int,
+            limit: builtins.int,
+        ) -> PreparationFailure.ResourceLimitExceeded: ...
+
+    @typing.final
+    class TargetInstanceClassNotReached(PreparationFailure):
+        __match_args__ = (
+            "source",
+            "policy",
+            "current_membership",
+            "transforms",
+            "detail",
+        )
+        @property
+        def source(self) -> Instance: ...
+        @property
+        def policy(self) -> PreparationPolicy: ...
+        @property
+        def current_membership(self) -> InstanceClassMembershipReport: ...
+        @property
+        def transforms(self) -> builtins.list[Transform]: ...
+        @property
+        def detail(self) -> builtins.str: ...
+        def __new__(
+            cls,
+            source: Instance,
+            policy: PreparationPolicy,
+            current_membership: InstanceClassMembershipReport,
+            transforms: typing.Sequence[Transform],
+            detail: builtins.str,
+        ) -> PreparationFailure.TargetInstanceClassNotReached: ...
+
+    ...
+
+@typing.final
+class PreparationPolicy:
+    r"""
+    Caller-owned permissions and parameters for :meth:`Instance.prepare`.
+
+    This is an OMMX core value. Solver Adapters may recommend a policy, but the
+    policy neither retains an Adapter nor calls Adapter-owned Python code.
+    """
+    @property
+    def acceptable_instance_class(self) -> InstanceClass:
+        r"""
+        InstanceClass that the prepared input must belong to.
+        """
+    @property
+    def allowed_special_constraint_lowerings(
+        self,
+    ) -> builtins.set[SpecialConstraintKind]:
+        r"""
+        Special-constraint families whose existing OMMX lowering may be used.
+        """
+    @property
+    def allow_integer_log_encoding(self) -> builtins.bool:
+        r"""
+        Whether bounded Integer variables may be log encoded.
+        """
+    @property
+    def allow_sense_normalization(self) -> builtins.bool:
+        r"""
+        Whether a maximization objective may be normalized to minimization.
+        """
+    @property
+    def inequality_integer_slack_max_range(self) -> typing.Optional[builtins.int]:
+        r"""
+        Configured positive slack range, or ``None`` when integer slack is forbidden.
+        """
+    @property
+    def allow_approximate_integer_slack(self) -> builtins.bool:
+        r"""
+        Whether approximate integer slack may be used after exact slack is unavailable.
+        """
+    @property
+    def uniform_penalty_weight(self) -> typing.Optional[builtins.float]:
+        r"""
+        Uniform finite penalty weight, or ``None`` when another/no penalty mode
+        is configured.
+        """
+    @property
+    def penalty_weights(
+        self,
+    ) -> typing.Optional[builtins.dict[builtins.int, builtins.float]]:
+        r"""
+        Per-constraint finite penalty weights.
+
+        Keys identify source regular constraints by their stable IDs; those IDs
+        are preserved by Preparation Transforms. The map must cover every
+        source regular constraint still active at the penalty step, while an
+        entry for one removed as trivial is allowed. Special-constraint
+        lowering adds new regular rows outside this source-map domain, so a
+        uniform penalty is required when such rows remain active.
+        """
+    @property
+    def atol(self) -> builtins.float:
+        r"""
+        Absolute tolerance snapshotted into every Transform that uses it.
+        """
+    @property
+    def max_added_decision_variables(self) -> typing.Optional[builtins.int]:
+        r"""
+        Maximum number of decision variables introduced relative to the source.
+        """
+    @property
+    def max_added_regular_constraints(self) -> typing.Optional[builtins.int]:
+        r"""
+        Maximum number of active regular constraints introduced relative to the source.
+        """
+    def __new__(
+        cls,
+        *,
+        acceptable_instance_class: InstanceClass,
+        allowed_special_constraint_lowerings: builtins.set[
+            SpecialConstraintKind
+        ] = set(),
+        allow_integer_log_encoding: builtins.bool = False,
+        allow_sense_normalization: builtins.bool = False,
+        inequality_integer_slack_max_range: typing.Optional[builtins.int] = None,
+        allow_approximate_integer_slack: builtins.bool = False,
+        uniform_penalty_weight: typing.Optional[builtins.float] = None,
+        penalty_weights: typing.Optional[collections.abc.Mapping[int, float]] = None,
+        atol: typing.Optional[builtins.float] = None,
+        max_added_decision_variables: typing.Optional[builtins.int] = None,
+        max_added_regular_constraints: typing.Optional[builtins.int] = None,
+    ) -> PreparationPolicy: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class Provenance:
     r"""
     One step in a regular constraint's transformation history.
@@ -6763,6 +7046,15 @@ class SampleSet:
     def parameters(self) -> typing.Optional[typing.Any]: ...
     @parameters.setter
     def parameters(self, value: typing.Any) -> None: ...
+    @property
+    def samples(self) -> Samples:
+        r"""
+        Extract the unevaluated decision-variable states for all samples.
+
+        Sample IDs are preserved. Objective values, constraint evaluations,
+        feasibility, solver metadata, and annotations are intentionally not
+        included in the returned :class:`Samples`.
+        """
     @property
     def best_feasible_id(self) -> builtins.int:
         r"""
@@ -7948,6 +8240,47 @@ class State:
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> State: ...
     def __deepcopy__(self, _memo: typing.Any) -> State: ...
+
+@typing.final
+class Transform:
+    r"""
+    One OMMX Transform applied by :meth:`Instance.prepare`.
+
+    Values are created while OMMX applies an Instance operation. They are
+    immutable, source-specific receipts, not caller-supplied instructions and
+    not reusable ``apply`` objects.
+    """
+    @property
+    def name(self) -> builtins.str:
+        r"""
+        Stable operation name for this applied Transform receipt.
+        """
+    @typing.overload
+    def encode(self, data: State) -> State:
+        r"""
+        Mechanically map State or Samples to this Transform's input side.
+
+        This maps decision-variable state only; it does not evaluate an
+        Instance or assert feasibility.
+        """
+    @typing.overload
+    def encode(self, data: Samples) -> Samples:
+        r"""
+        Map samples pointwise while preserving IDs and grouping.
+        """
+    @typing.overload
+    def decode(self, data: State) -> State:
+        r"""
+        Mechanically map State or Samples back to this Transform's source side.
+
+        This does not transport objectives, feasibility, or solver status.
+        """
+    @typing.overload
+    def decode(self, data: Samples) -> Samples:
+        r"""
+        Map samples back pointwise while preserving IDs and grouping.
+        """
+    def __repr__(self) -> builtins.str: ...
 
 @typing.final
 class DecisionVariableRole(enum.Enum):

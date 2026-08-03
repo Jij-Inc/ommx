@@ -3,6 +3,12 @@ use crate::{linear, Function, ParameterLabel, VariableID};
 use anyhow::Result;
 use std::collections::BTreeMap;
 
+/// Operation-owned result used by canonical preparation.
+pub(super) struct PenaltyMethodReceipt {
+    pub(super) instance: ParametricInstance,
+    pub(super) parameter_ids: BTreeMap<ConstraintID, VariableID>,
+}
+
 impl Instance {
     #[cfg_attr(doc, katexit::katexit)]
     /// Convert constraints to penalty terms in the objective function.
@@ -39,6 +45,11 @@ impl Instance {
     ///
     /// where $\lambda_1$ and $\lambda_2$ are penalty parameters.
     pub fn penalty_method(self) -> Result<ParametricInstance> {
+        Ok(self.penalty_method_with_receipt()?.instance)
+    }
+
+    /// Per-constraint penalty conversion with its generated parameter IDs.
+    pub(super) fn penalty_method_with_receipt(self) -> Result<PenaltyMethodReceipt> {
         anyhow::ensure!(
             self.indicator_constraint_collection.active().is_empty(),
             "penalty_method does not support indicator constraints. \
@@ -72,6 +83,7 @@ impl Instance {
         let id_base = max_id + 1;
         let mut objective = self.objective.clone();
         let mut parameters = ParameterTable::default();
+        let mut parameter_ids = BTreeMap::new();
         let mut constraint_collection = self.constraint_collection;
         let mut removals = BTreeMap::new();
         for (parameter_offset, (&constraint_id, constraint)) in
@@ -105,23 +117,27 @@ impl Instance {
             };
 
             parameters.insert(parameter_id, parameter_label)?;
+            parameter_ids.insert(constraint_id, parameter_id);
             removals.insert(constraint_id, (constraint.clone(), removed_reason));
         }
         constraint_collection.move_active_rows_to_removed(removals)?;
 
-        Ok(ParametricInstance {
-            sense: self.sense,
-            objective,
-            decision_variables: self.decision_variables,
-            parameters,
-            constraint_collection,
-            indicator_constraint_collection: self.indicator_constraint_collection,
-            one_hot_constraint_collection: self.one_hot_constraint_collection,
-            sos1_constraint_collection: self.sos1_constraint_collection,
-            decision_variable_dependency: self.decision_variable_dependency,
-            description: self.description,
-            named_functions: self.named_functions,
-            annotations: self.annotations,
+        Ok(PenaltyMethodReceipt {
+            instance: ParametricInstance {
+                sense: self.sense,
+                objective,
+                decision_variables: self.decision_variables,
+                parameters,
+                constraint_collection,
+                indicator_constraint_collection: self.indicator_constraint_collection,
+                one_hot_constraint_collection: self.one_hot_constraint_collection,
+                sos1_constraint_collection: self.sos1_constraint_collection,
+                decision_variable_dependency: self.decision_variable_dependency,
+                description: self.description,
+                named_functions: self.named_functions,
+                annotations: self.annotations,
+            },
+            parameter_ids,
         })
     }
 
@@ -160,6 +176,11 @@ impl Instance {
     ///
     /// where $\lambda$ is the single penalty parameter.
     pub fn uniform_penalty_method(self) -> Result<ParametricInstance> {
+        Ok(self.uniform_penalty_method_with_receipt()?.instance)
+    }
+
+    /// Uniform penalty conversion with its generated parameter ID mapping.
+    pub(super) fn uniform_penalty_method_with_receipt(self) -> Result<PenaltyMethodReceipt> {
         anyhow::ensure!(
             self.indicator_constraint_collection.active().is_empty(),
             "uniform_penalty_method does not support indicator constraints. \
@@ -178,19 +199,22 @@ impl Instance {
 
         // Early return if no active constraints (preserve any existing removed constraints)
         if self.constraints().is_empty() {
-            return Ok(ParametricInstance {
-                sense: self.sense,
-                objective: self.objective,
-                decision_variables: self.decision_variables,
-                parameters: ParameterTable::default(),
-                constraint_collection: self.constraint_collection,
-                indicator_constraint_collection: self.indicator_constraint_collection,
-                one_hot_constraint_collection: self.one_hot_constraint_collection,
-                sos1_constraint_collection: self.sos1_constraint_collection,
-                decision_variable_dependency: self.decision_variable_dependency,
-                description: self.description,
-                named_functions: self.named_functions,
-                annotations: self.annotations,
+            return Ok(PenaltyMethodReceipt {
+                instance: ParametricInstance {
+                    sense: self.sense,
+                    objective: self.objective,
+                    decision_variables: self.decision_variables,
+                    parameters: ParameterTable::default(),
+                    constraint_collection: self.constraint_collection,
+                    indicator_constraint_collection: self.indicator_constraint_collection,
+                    one_hot_constraint_collection: self.one_hot_constraint_collection,
+                    sos1_constraint_collection: self.sos1_constraint_collection,
+                    decision_variable_dependency: self.decision_variable_dependency,
+                    description: self.description,
+                    named_functions: self.named_functions,
+                    annotations: self.annotations,
+                },
+                parameter_ids: BTreeMap::new(),
             });
         }
 
@@ -218,7 +242,9 @@ impl Instance {
         let mut quad_sum = Function::zero();
         let mut constraint_collection = self.constraint_collection;
         let mut removals = BTreeMap::new();
+        let mut penalized_constraint_ids = Vec::new();
         for (&constraint_id, constraint) in constraint_collection.active() {
+            penalized_constraint_ids.push(constraint_id);
             let f = constraint.function().clone();
             let mut squared = f.clone();
             squared.try_mul_assign_in_place(&f)?;
@@ -239,19 +265,25 @@ impl Instance {
         let mut parameters = ParameterTable::default();
         parameters.insert(parameter_id, parameter_label)?;
 
-        Ok(ParametricInstance {
-            sense: self.sense,
-            objective,
-            decision_variables: self.decision_variables,
-            parameters,
-            constraint_collection,
-            indicator_constraint_collection: self.indicator_constraint_collection,
-            one_hot_constraint_collection: self.one_hot_constraint_collection,
-            sos1_constraint_collection: self.sos1_constraint_collection,
-            decision_variable_dependency: self.decision_variable_dependency,
-            description: self.description,
-            named_functions: self.named_functions,
-            annotations: self.annotations,
+        Ok(PenaltyMethodReceipt {
+            instance: ParametricInstance {
+                sense: self.sense,
+                objective,
+                decision_variables: self.decision_variables,
+                parameters,
+                constraint_collection,
+                indicator_constraint_collection: self.indicator_constraint_collection,
+                one_hot_constraint_collection: self.one_hot_constraint_collection,
+                sos1_constraint_collection: self.sos1_constraint_collection,
+                decision_variable_dependency: self.decision_variable_dependency,
+                description: self.description,
+                named_functions: self.named_functions,
+                annotations: self.annotations,
+            },
+            parameter_ids: penalized_constraint_ids
+                .into_iter()
+                .map(|constraint_id| (constraint_id, parameter_id))
+                .collect(),
         })
     }
 }

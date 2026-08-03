@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 import copy
 from math import isfinite
 from typing import ClassVar
@@ -15,10 +15,12 @@ from ommx import (
     InstanceClassClause,
     InstanceClassMembershipReport,
     Kind,
+    PreparationPolicy,
     Sense,
     Samples,
     SampleSet,
     Solution,
+    SpecialConstraintKind,
 )
 from ommx.adapter import (
     AdapterPreconditionViolation,
@@ -28,15 +30,6 @@ from ommx.adapter import (
 from opentelemetry import trace
 
 from ._decode import _decode_for_instance, decode_to_samples
-from ._preparation import (
-    OpenJijPreparation,
-    OpenJijPreparationConfig,
-    OpenJijPreparationReport,
-)
-from ._preparation_pipeline import (
-    check_preparation as _check_preparation,
-    prepare as _prepare,
-)
 
 _tracer = trace.get_tracer("ommx.adapter.openjij")
 
@@ -50,10 +43,10 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     Arbitrary polynomial objective degree is supported through OpenJij's QUBO
     and Binary-HUBO paths.
 
-    Integer encoding, sense reversal, slack introduction, and finite constraint
-    penalties are explicit preparation operations, not part of the declared
-    input class. Pass :attr:`OpenJijPreparation.input` back to this Adapter
-    as a separate :class:`ommx.Instance` value.
+    Integer encoding, sense normalization, slack introduction, and finite
+    penalties are explicit OMMX preparation operations, not part of the
+    declared input class. Use :meth:`recommended_preparation_policy` with
+    :meth:`ommx.Instance.prepare` to construct a separate direct input.
     """
 
     INPUT_CLASS: ClassVar[InstanceClass | None] = InstanceClass(
@@ -200,50 +193,41 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         )
 
     @classmethod
-    def check_preparation(
+    def recommended_preparation_policy(
         cls,
-        ommx_instance: Instance,
         *,
-        config: OpenJijPreparationConfig | None = None,
-    ) -> OpenJijPreparationReport:
-        """Dry-run the complete explicit preparation without mutating the input.
+        uniform_penalty_weight: float | None = None,
+        penalty_weights: Mapping[int, float] | None = None,
+        inequality_integer_slack_max_range: int = 32,
+        allow_approximate_integer_slack: bool = False,
+    ) -> PreparationPolicy:
+        """Return the common OMMX Policy recommended for OpenJij input.
 
-        This is intentionally separate from :meth:`check_applicability`, which
-        checks only the Binary, unconstrained minimization Adapter input. The
-        53-bit log-encoding limit describes availability of that preparation
-        operation, not an OpenJij input-class condition and not an
-        ``ommx.v2.Feature``. A model proven infeasible while preparing integer
-        slack raises :class:`~ommx.InfeasibleDetected`. Approximate integer
-        slack is disabled unless the supplied
-        :class:`OpenJijPreparationConfig` enables it.
+        The default permits the OMMX operations needed for bounded Integer
+        encoding and minimization-sense normalization. Finite penalties and
+        approximate integer slack remain explicit caller choices through this
+        method's keyword arguments. The returned Policy is executed only by
+        :meth:`ommx.Instance.prepare`; this Adapter's direct APIs stay strict.
         """
-        return _check_preparation(
-            ommx_instance,
-            check_input_applicability=cls.check_applicability,
-            config=config,
-        )
-
-    @classmethod
-    def prepare(
-        cls,
-        ommx_instance: Instance,
-        *,
-        config: OpenJijPreparationConfig | None = None,
-    ) -> OpenJijPreparation:
-        """Produce a separate Adapter input and an auditable preparation report.
-
-        Raises :class:`~ommx.InfeasibleDetected` when variable bounds
-        prove an inequality infeasible. Other preparation failures raise
-        :class:`OpenJijPreparationError`. Approximate integer slack is used only
-        when the supplied :class:`OpenJijPreparationConfig` enables it.
-        """
-        with _tracer.start_as_current_span("prepare") as span:
-            span.set_attribute("adapter", f"{cls.__module__}.{cls.__qualname__}")
-            return _prepare(
-                ommx_instance,
-                check_input_applicability=cls.check_applicability,
-                config=config,
+        input_class = cls.INPUT_CLASS
+        if input_class is None:  # pragma: no cover - class declaration invariant
+            raise TypeError(
+                f"{cls.__module__}.{cls.__qualname__} must declare INPUT_CLASS"
             )
+        return PreparationPolicy(
+            acceptable_instance_class=input_class,
+            allowed_special_constraint_lowerings={
+                SpecialConstraintKind.Indicator,
+                SpecialConstraintKind.OneHot,
+                SpecialConstraintKind.Sos1,
+            },
+            allow_integer_log_encoding=True,
+            allow_sense_normalization=True,
+            inequality_integer_slack_max_range=inequality_integer_slack_max_range,
+            allow_approximate_integer_slack=allow_approximate_integer_slack,
+            uniform_penalty_weight=uniform_penalty_weight,
+            penalty_weights=None if penalty_weights is None else dict(penalty_weights),
+        )
 
     @classmethod
     def sample(

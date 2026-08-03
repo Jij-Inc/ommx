@@ -29,3 +29,38 @@ ommx_solution = OMMXHighsAdapter.solve(ommx_instance)
 
 print(ommx_solution)
 ```
+
+The direct Adapter APIs accept only instances in
+`OMMXHighsAdapter.INPUT_CLASS` and never prepare their input implicitly. For
+example, prepare an instance containing a special constraint through the
+Adapter's recommended common OMMX Policy:
+
+```python markdown-code-runner
+from ommx import DecisionVariable, Instance, OneHotConstraint
+from ommx_highs_adapter import OMMXHighsAdapter
+
+x = [DecisionVariable.binary(i) for i in range(2)]
+source = Instance.from_components(
+    decision_variables=x,
+    objective=x[0] + 2 * x[1],
+    constraints={},
+    one_hot_constraints={0: OneHotConstraint(variables=x)},
+    sense=Instance.MINIMIZE,
+)
+
+policy = OMMXHighsAdapter.recommended_preparation_policy()
+preparation = source.prepare(policy)
+input_solution = OMMXHighsAdapter.solve(preparation.input)
+
+source_state = preparation.decode(input_solution.state)
+source_solution = preparation.source.evaluate(
+    source_state,
+    atol=preparation.policy.atol,
+)
+print(source_solution)
+```
+
+The recommended Policy permits OMMX's existing Indicator, OneHot, and SOS1
+lowering operations. `Instance.prepare()` acts on an isolated value and checks
+that its result belongs to the Policy's acceptable `InstanceClass`. The direct
+HiGHS boundary remains responsible for its own applicability check.

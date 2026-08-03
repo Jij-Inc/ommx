@@ -12,6 +12,7 @@ from ommx import (
     Instance,
     InstanceClass,
     InstanceClassMembershipReport,
+    PreparationPolicy,
     SampleSet,
     Solution,
 )
@@ -135,12 +136,31 @@ class SolverAdapter(ABC):
     the input and combines class membership with the adapter's
     ``_check_preconditions`` hook.
 
-    ``INPUT_CLASS`` describes only which exact inputs an adapter accepts; it does
+    ``INPUT_CLASS`` describes only which direct inputs an adapter accepts; it does
     not prescribe how the subclass processes them. The base class never lowers
     or otherwise mutates the input instance.
     """
 
     INPUT_CLASS: ClassVar[InstanceClass | None] = None
+
+    @classmethod
+    def recommended_preparation_policy(cls) -> PreparationPolicy:
+        """Return this Adapter's recommended OMMX preparation policy.
+
+        The base recommendation targets :attr:`INPUT_CLASS` and permits only
+        identity preparation. Subclasses may recommend additional OMMX-owned
+        Transform options by returning another common
+        :class:`PreparationPolicy` value. The Adapter does not execute the
+        policy and is not retained by it. Reaching :attr:`INPUT_CLASS` does
+        not check Adapter-owned preconditions; the direct applicability
+        boundary remains separate.
+        """
+        input_class = cls.INPUT_CLASS
+        if input_class is None:
+            raise TypeError(
+                f"{cls.__module__}.{cls.__qualname__} must declare INPUT_CLASS"
+            )
+        return PreparationPolicy(acceptable_instance_class=input_class)
 
     @classmethod
     def check_applicability(cls, ommx_instance: Instance) -> AdapterApplicabilityReport:

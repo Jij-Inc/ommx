@@ -10518,6 +10518,32 @@
               "deprecated": null
             },
             {
+              "name": "prepare",
+              "doc": "Prepare an isolated snapshot of this Instance according to ``policy``.\n\nPreparation is an OMMX-owned Instance operation. It does not receive or\nretain a Solver Adapter. A successful result has an input belonging to\n``policy.acceptable_instance_class`` and records the applied Transforms\nand their source-specific receipts together with the source and Policy\nsnapshots. Model evaluation and solver outputs are separate operations.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "policy",
+                      "type_": {
+                        "display": "PreparationPolicy",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Preparation",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "random_samples",
               "doc": "Generate random samples for this instance.\n\nThe generated samples will contain ``num_samples`` sample entries divided into\n``num_different_samples`` groups, where each group shares the same state but has\ndifferent sample IDs.\n\n**Args:**\n- `rng`: Random number generator\n- `num_different_samples`: Number of different states to generate\n- `num_samples`: Total number of samples to generate\n- `max_sample_id`: Maximum sample ID (default: ``num_samples``)\n\n**Returns:**\nSamples object\n\n# Examples\n\nGenerate samples for a simple instance:\n\n```python\n>>> from ommx import Instance, DecisionVariable, Rng\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[(sum(x) <= 2).set_id(0)],\n...     sense=Instance.MAXIMIZE,\n... )\n\n>>> rng = Rng()\n>>> samples = instance.random_samples(rng, num_different_samples=2, num_samples=5)\n>>> samples.num_samples()\n5\n```",
               "signatures": [
@@ -18909,6 +18935,606 @@
         },
         {
           "kind": "Class",
+          "name": "Preparation",
+          "doc": "An immutable, auditable relation between a source Instance and the prepared\ninput produced from it under one :class:`PreparationPolicy`.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "decode",
+              "doc": "Compose applied Transform decoders for State or Samples.\n\nThis performs no source evaluation and transports no solver status.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "data",
+                      "type_": {
+                        "display": "State",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "State",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "data",
+                      "type_": {
+                        "display": "Samples",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Samples",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "encode",
+              "doc": "Compose applied Transform encoders for State or Samples.\n\nSolution and SampleSet are not accepted, and no model is evaluated.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "data",
+                      "type_": {
+                        "display": "State",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "State",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "data",
+                      "type_": {
+                        "display": "Samples",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Samples",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "input",
+              "doc": "Constructed Instance belonging to the Policy's acceptable class.",
+              "type_": {
+                "display": "Instance",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "policy",
+              "doc": "Isolated snapshot of the Policy passed to :meth:`Instance.prepare`.",
+              "type_": {
+                "display": "PreparationPolicy",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "source",
+              "doc": "Isolated snapshot of the Instance passed to :meth:`Instance.prepare`.",
+              "type_": {
+                "display": "Instance",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "transforms",
+              "doc": "Applied Transform receipts in construction order.",
+              "type_": {
+                "display": "list[Transform]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "Transform",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "PreparationError",
+          "doc": "Canonical Instance preparation could not satisfy the requested policy.",
+          "bases": [
+            {
+              "display": "ValueError",
+              "link_target": null,
+              "children": []
+            }
+          ],
+          "methods": [],
+          "attributes": [
+            {
+              "name": "failure",
+              "doc": "Structured evidence from the unsuccessful canonical Preparation attempt.",
+              "type_": {
+                "display": "PreparationFailure",
+                "link_target": {
+                  "fqn": "ommx.PreparationFailure",
+                  "doc_module": "ommx",
+                  "kind": "Class",
+                  "attribute": null
+                },
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "PreparationFailure",
+          "doc": "Structured evidence from an unsuccessful canonical Preparation attempt.\n\nThe corresponding Python exception exposes this value as\n:attr:`PreparationError.failure`.\n\n``PolicyMismatch`` carries ``source``, ``policy``, ``current_membership``,\ncommitted ``transforms``, and ``detail``. ``ResourceLimitExceeded`` carries\nthe same snapshots plus ``operation``, ``resource``, ``observed``, and\n``limit``. ``TargetInstanceClassNotReached`` carries the common snapshots\nplus ``detail``. Errors owned by a mathematical Transform are not converted\nto these variants.",
+          "bases": [],
+          "methods": [],
+          "attributes": [],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "PreparationPolicy",
+          "doc": "Caller-owned permissions and parameters for :meth:`Instance.prepare`.\n\nThis is an OMMX core value. Solver Adapters may recommend a policy, but the\npolicy neither retains an Adapter nor calls Adapter-owned Python code.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__new__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "acceptable_instance_class",
+                      "type_": {
+                        "display": "InstanceClass",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "allowed_special_constraint_lowerings",
+                      "type_": {
+                        "display": "set[SpecialConstraintKind]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "SpecialConstraintKind",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "set()"
+                      }
+                    },
+                    {
+                      "name": "allow_integer_log_encoding",
+                      "type_": {
+                        "display": "bool",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "False"
+                      }
+                    },
+                    {
+                      "name": "allow_sense_normalization",
+                      "type_": {
+                        "display": "bool",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "False"
+                      }
+                    },
+                    {
+                      "name": "inequality_integer_slack_max_range",
+                      "type_": {
+                        "display": "Optional[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "allow_approximate_integer_slack",
+                      "type_": {
+                        "display": "bool",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "False"
+                      }
+                    },
+                    {
+                      "name": "uniform_penalty_weight",
+                      "type_": {
+                        "display": "Optional[float]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "float",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "penalty_weights",
+                      "type_": {
+                        "display": "Optional[Mapping[int, float]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Mapping[int, float]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "int",
+                                "link_target": null,
+                                "children": []
+                              },
+                              {
+                                "display": "float",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "atol",
+                      "type_": {
+                        "display": "Optional[float]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "float",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "max_added_decision_variables",
+                      "type_": {
+                        "display": "Optional[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "max_added_regular_constraints",
+                      "type_": {
+                        "display": "Optional[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "PreparationPolicy",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "acceptable_instance_class",
+              "doc": "InstanceClass that the prepared input must belong to.",
+              "type_": {
+                "display": "InstanceClass",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "allow_approximate_integer_slack",
+              "doc": "Whether approximate integer slack may be used after exact slack is unavailable.",
+              "type_": {
+                "display": "bool",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "allow_integer_log_encoding",
+              "doc": "Whether bounded Integer variables may be log encoded.",
+              "type_": {
+                "display": "bool",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "allow_sense_normalization",
+              "doc": "Whether a maximization objective may be normalized to minimization.",
+              "type_": {
+                "display": "bool",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "allowed_special_constraint_lowerings",
+              "doc": "Special-constraint families whose existing OMMX lowering may be used.",
+              "type_": {
+                "display": "set[SpecialConstraintKind]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "SpecialConstraintKind",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "atol",
+              "doc": "Absolute tolerance snapshotted into every Transform that uses it.",
+              "type_": {
+                "display": "float",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "inequality_integer_slack_max_range",
+              "doc": "Configured positive slack range, or ``None`` when integer slack is forbidden.",
+              "type_": {
+                "display": "Optional[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "max_added_decision_variables",
+              "doc": "Maximum number of decision variables introduced relative to the source.",
+              "type_": {
+                "display": "Optional[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "max_added_regular_constraints",
+              "doc": "Maximum number of active regular constraints introduced relative to the source.",
+              "type_": {
+                "display": "Optional[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "penalty_weights",
+              "doc": "Per-constraint finite penalty weights.\n\nKeys identify source regular constraints by their stable IDs; those IDs\nare preserved by Preparation Transforms. The map must cover every\nsource regular constraint still active at the penalty step, while an\nentry for one removed as trivial is allowed. Special-constraint\nlowering adds new regular rows outside this source-map domain, so a\nuniform penalty is required when such rows remain active.",
+              "type_": {
+                "display": "Optional[dict[int, float]]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "dict[int, float]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "float",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "uniform_penalty_weight",
+              "doc": "Uniform finite penalty weight, or ``None`` when another/no penalty mode\nis configured.",
+              "type_": {
+                "display": "Optional[float]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "float",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
           "name": "Provenance",
           "doc": "One step in a regular constraint's transformation history.\n\nWhen a special constraint (indicator / one-hot / SOS1) is converted into a\nregular {class}`~ommx.Constraint` — for example via\n:meth:`~ommx.Instance.convert_one_hot_to_constraint` or\n:meth:`~ommx.Instance.lower_special_constraints` —\nthe generated constraint records a {class}`Provenance` entry naming the\noriginal special constraint. This lets callers trace a regular constraint\nback to the special constraint it was derived from.",
           "bases": [],
@@ -22446,6 +23072,22 @@
               "is_readonly": true
             },
             {
+              "name": "samples",
+              "doc": "Extract the unevaluated decision-variable states for all samples.\n\nSample IDs are preserved. Objective values, constraint evaluations,\nfeasibility, solver metadata, and annotations are intentionally not\nincluded in the returned :class:`Samples`.",
+              "type_": {
+                "display": "Samples",
+                "link_target": {
+                  "fqn": "ommx.Samples",
+                  "doc_module": "ommx",
+                  "kind": "Class",
+                  "attribute": null
+                },
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "sense",
               "doc": "Get the optimization sense (minimize or maximize)",
               "type_": {
@@ -25485,6 +26127,132 @@
                 ]
               },
               "is_property": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "Transform",
+          "doc": "One OMMX Transform applied by :meth:`Instance.prepare`.\n\nValues are created while OMMX applies an Instance operation. They are\nimmutable, source-specific receipts, not caller-supplied instructions and\nnot reusable ``apply`` objects.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "decode",
+              "doc": "Mechanically map State or Samples back to this Transform's source side.\n\nThis does not transport objectives, feasibility, or solver status.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "data",
+                      "type_": {
+                        "display": "State",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "State",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "data",
+                      "type_": {
+                        "display": "Samples",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Samples",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "encode",
+              "doc": "Mechanically map State or Samples to this Transform's input side.\n\nThis maps decision-variable state only; it does not evaluate an\nInstance or assert feasibility.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "data",
+                      "type_": {
+                        "display": "State",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "State",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "data",
+                      "type_": {
+                        "display": "Samples",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Samples",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "name",
+              "doc": "Stable operation name for this applied Transform receipt.",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
             }
           ],
           "deprecated": null
@@ -32945,6 +33713,10 @@
     "ommx.Parameter": "ommx",
     "ommx.ParametricInstance": "ommx",
     "ommx.Polynomial": "ommx",
+    "ommx.Preparation": "ommx",
+    "ommx.PreparationError": "ommx",
+    "ommx.PreparationFailure": "ommx",
+    "ommx.PreparationPolicy": "ommx",
     "ommx.Provenance": "ommx",
     "ommx.ProvenanceKind": "ommx",
     "ommx.Quadratic": "ommx",
@@ -32966,6 +33738,7 @@
     "ommx.State": "ommx",
     "ommx.ToSamples": "ommx",
     "ommx.ToState": "ommx",
+    "ommx.Transform": "ommx",
     "ommx.VariableIDLike": "ommx",
     "ommx.artifact.AnonymousArtifactRef": "ommx.artifact",
     "ommx.artifact.ArchiveDescriptor": "ommx.artifact",

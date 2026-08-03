@@ -7,6 +7,7 @@ use crate::{
     Constraint, Function, Linear,
 };
 use anyhow::{Context, Result};
+use std::collections::BTreeMap;
 
 impl Instance {
     #[cfg_attr(doc, katexit::katexit)]
@@ -76,6 +77,16 @@ impl Instance {
     /// Returns the IDs of the newly created regular constraints in ascending
     /// order of the original one-hot constraint IDs.
     pub fn convert_all_one_hots_to_constraints(&mut self) -> Result<Vec<ConstraintID>> {
+        Ok(self
+            .convert_all_one_hots_to_constraints_with_receipt()?
+            .into_values()
+            .collect())
+    }
+
+    /// Convert all active one-hot constraints and retain their ID mapping.
+    pub(super) fn convert_all_one_hots_to_constraints_with_receipt(
+        &mut self,
+    ) -> Result<BTreeMap<OneHotConstraintID, ConstraintID>> {
         let ids: Vec<_> = self
             .one_hot_constraint_collection
             .active()
@@ -83,7 +94,7 @@ impl Instance {
             .copied()
             .collect();
         ids.into_iter()
-            .map(|id| self.convert_one_hot_to_constraint(id))
+            .map(|id| Ok((id, self.convert_one_hot_to_constraint(id)?)))
             .collect()
     }
 }

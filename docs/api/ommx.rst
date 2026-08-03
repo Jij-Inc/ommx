@@ -32,6 +32,11 @@ ommx
    _items/ommx.InstanceClassMismatch
    _items/ommx.InstanceClassClauseReport
    _items/ommx.InstanceClassMembershipReport
+   _items/ommx.PreparationPolicy
+   _items/ommx.Transform
+   _items/ommx.PreparationFailure
+   _items/ommx.Preparation
+   _items/ommx.PreparationError
    _items/ommx.Constraint
    _items/ommx.AttachedConstraint
    _items/ommx.IndicatorConstraint

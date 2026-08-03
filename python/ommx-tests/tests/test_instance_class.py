@@ -16,6 +16,7 @@ from ommx import (
     InstanceClassMismatch,
     Kind,
     OneHotConstraint,
+    PreparationPolicy,
     Sense,
     Sos1Constraint,
     SpecialConstraintKind,
@@ -332,6 +333,34 @@ def test_membership_is_recomputed_after_explicit_lowering() -> None:
 
 def test_solver_adapter_has_no_implicit_input_transformation_hook() -> None:
     assert "__init__" not in SolverAdapter.__dict__
+
+
+def test_solver_adapter_recommends_identity_policy_for_declared_input_class() -> None:
+    class Adapter(SolverAdapter):
+        INPUT_CLASS = binary_linear_input_class()
+
+    policy = Adapter.recommended_preparation_policy()
+
+    assert isinstance(policy, PreparationPolicy)
+    [target_clause] = policy.acceptable_instance_class.clauses
+    assert Adapter.INPUT_CLASS is not None
+    [input_clause] = Adapter.INPUT_CLASS.clauses
+    assert target_clause.label == input_clause.label
+    assert policy.allowed_special_constraint_lowerings == set()
+    assert not policy.allow_integer_log_encoding
+    assert not policy.allow_sense_normalization
+    assert policy.inequality_integer_slack_max_range is None
+    assert not policy.allow_approximate_integer_slack
+    assert policy.uniform_penalty_weight is None
+    assert policy.penalty_weights is None
+
+
+def test_solver_adapter_policy_recommendation_requires_input_class() -> None:
+    class MissingDeclaration(SolverAdapter):
+        pass
+
+    with pytest.raises(TypeError, match="must declare INPUT_CLASS"):
+        MissingDeclaration.recommended_preparation_policy()
 
 
 def test_solver_adapter_layers_preconditions_and_preserves_the_caller() -> None:

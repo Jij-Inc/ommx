@@ -400,43 +400,47 @@ parametric_instance.parameters_df()       # -> pandas.DataFrame  (method, not pr
 - `Parameters` / `OneHot` / `Sos1` / `ConstraintHints` — see §1.2.
 - `Artifact` low-level types (`ArtifactArchive`, `ArtifactDir`, `ArtifactArchiveBuilder`, `ArtifactDirBuilder`) — replaced by unified `Artifact` / `ArtifactDraft`.
 - `ommx_openjij_adapter.response_to_samples(response)` — use `decode_to_samples(response)`.
-- `ommx_openjij_adapter.sample_qubo_sa(...)` — use `OMMXOpenJijSAAdapter.sample(...)` for a directly applicable input. The replacement returns an evaluated `SampleSet`, rather than raw `Samples`. When preparation is required, call `OMMXOpenJijSAAdapter.prepare(...)`, sample `preparation.input`, and use `preparation.evaluate_source(...)` to evaluate the samples against the source instance.
+- `ommx_openjij_adapter.sample_qubo_sa(...)` — use `OMMXOpenJijSAAdapter.sample(...)` for a directly applicable input. The replacement returns an evaluated `SampleSet`, rather than raw `Samples`. When preparation is required, obtain the Adapter's recommended common Policy, call `source.prepare(policy)`, sample `preparation.input`, decode `input_sample_set.samples`, and evaluate those decoded samples against `preparation.source`.
 
 In v2, the OpenJij Adapter constructor, `sample()`, and `solve()` accepted
 `uniform_penalty_weight`, `penalty_weights`, and
 `inequality_integer_slack_max_range` directly and performed preparation
-implicitly. In v3, move those settings into one immutable
-`OpenJijPreparationConfig`, pass it to `prepare()` through `config=`, and sample
-the resulting `preparation.input`. Use `penalty_weights` instead of
+implicitly. In v3, pass those settings to
+`OMMXOpenJijSAAdapter.recommended_preparation_policy()`, execute the returned
+common `PreparationPolicy` with `Instance.prepare()`, and sample the resulting
+`preparation.input`. Use `penalty_weights` instead of
 `uniform_penalty_weight` when each regular constraint needs its own weight. v2
 also selected a uniform weight of `1.0` when neither penalty setting was
 supplied; v3 requires finite penalties to be selected explicitly when
-constraints remain after exact preparation.
+constraints remain.
 
 When exact integer slack conversion failed, v2 automatically attempted a
 discrete slack approximation. To retain that fallback, explicitly set the new
-`allow_approximate_integer_slack=True` field. Its v3 default is `False`, so the
-default preparation path uses only available exact operations.
+`allow_approximate_integer_slack=True` option. Its v3 default is `False`.
 
 ```python
-from ommx_openjij_adapter import (
-    OMMXOpenJijSAAdapter,
-    OpenJijPreparationConfig,
-)
+from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
-config = OpenJijPreparationConfig(
+policy = OMMXOpenJijSAAdapter.recommended_preparation_policy(
     uniform_penalty_weight=20.0,
     inequality_integer_slack_max_range=32,
     allow_approximate_integer_slack=True,  # Retain v2's approximation fallback.
 )
-preparation = OMMXOpenJijSAAdapter.prepare(source, config=config)
+preparation = source.prepare(policy)
+input_sample_set = OMMXOpenJijSAAdapter.sample(preparation.input)
+source_samples = preparation.decode(input_sample_set.samples)
+source_sample_set = preparation.source.evaluate_samples(
+    source_samples,
+    atol=preparation.policy.atol,
+)
 ```
 
-`preparation.report.config` records the normalized, immutable settings actually
-used. The remaining fields encode one of four terminal states: source rejected,
-preparation phase rejected, prepared candidate rejected by Adapter
-applicability, or success. `steps` is the prefix of operations completed before
-that terminal state, not a separate outcome.
+`Preparation` retains isolated source, Policy, and input snapshots together
+with the applied `Transform` receipts. Its `encode()` and `decode()` methods map
+only `State` or `Samples`; source objective and feasibility evaluation remains
+the explicit `evaluate()` / `evaluate_samples()` call. Preparation does not
+transport solver statuses or claim that finite penalties preserve the source
+problem.
 
 ```python
 # v2.5.1

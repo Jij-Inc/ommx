@@ -6,6 +6,28 @@ use crate::{
 use anyhow::{bail, Context, Result};
 use num::traits::Inv;
 
+/// Operation-owned receipt for an exact integer-slack conversion.
+#[derive(Debug, Clone)]
+pub(super) enum ExactIntegerSlackReceipt {
+    Applied {
+        slack_variable_id: VariableID,
+        slack_value: crate::Function,
+    },
+    Trivial,
+}
+
+/// Operation-owned receipt for a discrete approximate integer-slack conversion.
+#[derive(Debug, Clone)]
+pub(super) enum ApproximateIntegerSlackReceipt {
+    Applied {
+        slack_variable_id: VariableID,
+        source_function: crate::Function,
+        coefficient: f64,
+        upper_bound: u64,
+    },
+    Trivial,
+}
+
 /// Signal returned when exact integer-slack conversion is structurally valid
 /// but cannot construct an exact finite encoding.
 ///
@@ -63,6 +85,21 @@ impl Instance {
         max_integer_range: u64,
         atol: ATol,
     ) -> Result<()> {
+        self.convert_inequality_to_equality_with_integer_slack_receipt(
+            constraint_id,
+            max_integer_range,
+            atol,
+        )?;
+        Ok(())
+    }
+
+    /// Exact integer-slack conversion with the state-encoding receipt.
+    pub(super) fn convert_inequality_to_equality_with_integer_slack_receipt(
+        &mut self,
+        constraint_id: u64,
+        max_integer_range: u64,
+        atol: ATol,
+    ) -> Result<ExactIntegerSlackReceipt> {
         let constraint_id = ConstraintID::from(constraint_id);
         let bounds = self.bounds();
         let kinds = self.kinds();
@@ -115,7 +152,7 @@ impl Instance {
                 "ommx.Instance.convert_inequality_to_equality_with_integer_slack".to_string(),
                 [],
             )?;
-            return Ok(());
+            return Ok(ExactIntegerSlackReceipt::Trivial);
         }
 
         let slack_bound = Bound::new(0.0, -af_bound.lower()).unwrap();
@@ -141,6 +178,7 @@ impl Instance {
         )?;
 
         let slack_term = Linear::single_term(LinearMonomial::Variable(slack_id), a.inv()?);
+        let slack_value = (function.clone() * -a)?;
         let new_function = (function + slack_term)?;
 
         let mut constraint = self
@@ -154,7 +192,10 @@ impl Instance {
         self.constraint_collection
             .replace_active_row(constraint_id, constraint)?;
 
-        Ok(())
+        Ok(ExactIntegerSlackReceipt::Applied {
+            slack_variable_id: slack_id,
+            slack_value,
+        })
     }
 
     /// Convert an inequality $f(x) \leq 0$ to $f(x) + b s \leq 0$ with an integer
@@ -168,6 +209,25 @@ impl Instance {
         constraint_id: u64,
         slack_upper_bound: u64,
     ) -> Result<Option<f64>> {
+        Ok(
+            match self.add_integer_slack_to_inequality_receipt(
+                constraint_id,
+                slack_upper_bound,
+                ATol::default(),
+            )? {
+                ApproximateIntegerSlackReceipt::Applied { coefficient, .. } => Some(coefficient),
+                ApproximateIntegerSlackReceipt::Trivial => None,
+            },
+        )
+    }
+
+    /// Approximate integer-slack conversion with the state-encoding receipt.
+    pub(super) fn add_integer_slack_to_inequality_receipt(
+        &mut self,
+        constraint_id: u64,
+        slack_upper_bound: u64,
+        atol: ATol,
+    ) -> Result<ApproximateIntegerSlackReceipt> {
         let constraint_id = ConstraintID::from(constraint_id);
         let bounds = self.bounds();
         let kinds = self.kinds();
@@ -207,7 +267,7 @@ impl Instance {
                 "add_integer_slack_to_inequality".to_string(),
                 [],
             )?;
-            return Ok(None);
+            return Ok(ApproximateIntegerSlackReceipt::Trivial);
         }
 
         let b = -f_bound.lower() / slack_upper_bound as f64;
@@ -236,15 +296,15 @@ impl Instance {
                 ..Default::default()
             },
             None,
-            ATol::default(),
+            atol,
         )?;
 
         let new_function = match b_coeff {
             Some(c) => {
                 let slack_term = Linear::single_term(LinearMonomial::Variable(slack_id), c);
-                (function + slack_term)?
+                (function.clone() + slack_term)?
             }
-            None => function,
+            None => function.clone(),
         };
 
         let mut constraint = self
@@ -257,7 +317,12 @@ impl Instance {
         self.constraint_collection
             .replace_active_row(constraint_id, constraint)?;
 
-        Ok(Some(b))
+        Ok(ApproximateIntegerSlackReceipt::Applied {
+            slack_variable_id: slack_id,
+            source_function: function,
+            coefficient: b,
+            upper_bound: slack_upper_bound,
+        })
     }
 
     /// Snapshot of bounds for every decision variable.

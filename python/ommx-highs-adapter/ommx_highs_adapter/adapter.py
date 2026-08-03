@@ -19,8 +19,10 @@ from ommx import (
     InstanceClass,
     InstanceClassClause,
     Kind,
+    PreparationPolicy,
     Sense,
     Solution,
+    SpecialConstraintKind,
     State,
 )
 from ommx.adapter import (
@@ -585,6 +587,23 @@ class OMMXHighsAdapter(SolverAdapter):
             )
         ]
     )
+
+    @classmethod
+    def recommended_preparation_policy(cls) -> PreparationPolicy:
+        """Recommend special-constraint lowering for HiGHS input."""
+        input_class = cls.INPUT_CLASS
+        if input_class is None:  # pragma: no cover - class declaration invariant
+            raise TypeError(
+                f"{cls.__module__}.{cls.__qualname__} must declare INPUT_CLASS"
+            )
+        return PreparationPolicy(
+            acceptable_instance_class=input_class,
+            allowed_special_constraint_lowerings={
+                SpecialConstraintKind.Indicator,
+                SpecialConstraintKind.OneHot,
+                SpecialConstraintKind.Sos1,
+            },
+        )
 
     def __init__(self, ommx_instance: Instance, *, verbose: bool = False):
         """
