@@ -8,6 +8,41 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🆕 Instance-owned preparation policies for solver adapters ([#1139](https://github.com/Jij-Inc/ommx/pull/1139))
+
+{class}`~ommx.PreparationPolicy` now describes a caller-selected acceptable
+{class}`~ommx.InstanceClass` together with the transformations, parameters,
+and resource limits that preparation may use. {meth}`~ommx.Instance.prepare`
+interprets that Policy using OMMX's canonical phase order and returns a
+{class}`~ommx.Preparation` containing isolated source and input snapshots plus
+the applied {class}`~ommx.Transform` receipts. A `SolverAdapter` may recommend
+a Policy through `recommended_preparation_policy()`, but the Adapter neither
+executes preparation nor weakens its direct `INPUT_CLASS` check.
+
+```python
+policy = OMMXHighsAdapter.recommended_preparation_policy()
+preparation = source.prepare(policy)
+input_solution = OMMXHighsAdapter.solve(preparation.input)
+
+source_state = preparation.decode(input_solution.state)
+source_solution = preparation.source.evaluate(
+    source_state,
+    atol=preparation.policy.atol,
+)
+```
+
+The HiGHS recommendation permits automatic Indicator, OneHot, and SOS1
+lowering during `Instance.prepare()`. OpenJij's previous Adapter-owned
+preparation API is replaced by the same workflow, with finite penalty and
+approximate integer-slack choices remaining explicit Policy options.
+
+`Preparation.encode()` and `decode()` map only {class}`~ommx.State` or
+{class}`~ommx.Samples`; they do not transport a Solution, SampleSet, objective,
+feasibility, or solver status. Existing regular-constraint IDs remain stable
+through regular transformations. Lowering a special constraint creates fresh
+regular rows, so per-constraint penalty weights use source regular-constraint
+IDs and a uniform weight is required when generated rows remain active.
+
 ### 🛠 Model errors follow caller ownership ([#1104](https://github.com/Jij-Inc/ommx/pull/1104), [#1105](https://github.com/Jij-Inc/ommx/pull/1105))
 
 Function, polynomial, constraint, named-function, and `Instance` evaluation
@@ -34,9 +69,10 @@ fall back to `RuntimeError`.
 {class}`~ommx.adapter.SolverAdapter` now defines `INPUT_CLASS`, which represents
 the set of {class}`~ommx.Instance` values an adapter can handle directly without
 transformation. An operation that transforms a source instance into a member of
-`INPUT_CLASS` is called `Prepare`. Preparation is currently available only for
-OpenJij; a future update will standardize it as part of the `SolverAdapter`
-workflow ([#1111](https://github.com/Jij-Inc/ommx/issues/1111)).
+`INPUT_CLASS` is called `Prepare`. Beta 2 provided an OpenJij-specific
+preparation API; the Unreleased common `PreparationPolicy` /
+`Instance.prepare()` workflow supersedes it as part of
+[#1111](https://github.com/Jij-Inc/ommx/issues/1111).
 
 `INPUT_CLASS` is an {class}`~ommx.InstanceClass`: a finite union of
 {class}`~ommx.InstanceClassClause` descriptions. A clause can constrain the

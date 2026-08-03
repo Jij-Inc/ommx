@@ -8,6 +8,38 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
+### 🆕 Solver Adapter向けのInstance-owned preparation policy ([#1139](https://github.com/Jij-Inc/ommx/pull/1139))
+
+{class}`~ommx.PreparationPolicy` は、呼び出し側が選んだ受け入れ可能な
+{class}`~ommx.InstanceClass` と、preparationで許可する変換・parameter・resource
+limitを表します。{meth}`~ommx.Instance.prepare` がOMMXのcanonicalなphase順序で
+Policyを解釈し、分離されたsource / input snapshotと、適用済みの
+{class}`~ommx.Transform` receiptを持つ {class}`~ommx.Preparation` を返します。
+`SolverAdapter` は `recommended_preparation_policy()` でPolicyを推奨できますが、
+preparationを実行せず、直接入力に対する `INPUT_CLASS` checkも緩和しません。
+
+```python
+policy = OMMXHighsAdapter.recommended_preparation_policy()
+preparation = source.prepare(policy)
+input_solution = OMMXHighsAdapter.solve(preparation.input)
+
+source_state = preparation.decode(input_solution.state)
+source_solution = preparation.source.evaluate(
+    source_state,
+    atol=preparation.policy.atol,
+)
+```
+
+HiGHSの推奨Policyは、`Instance.prepare()` 中のIndicator、OneHot、SOS1の自動loweringを
+許可します。従来のOpenJij Adapter-owned preparation APIもこの共通workflowに
+置き換わり、有限penaltyと近似integer slackは引き続き明示的なPolicy optionです。
+
+`Preparation.encode()` / `decode()` が写すのは {class}`~ommx.State` または
+{class}`~ommx.Samples` だけで、Solution、SampleSet、objective、feasibility、solver
+statusは運びません。通常制約のIDは通常制約に対する変換では保持されます。
+特殊制約のloweringだけは新しい通常制約rowを生成するため、制約ごとのpenalty weightは
+sourceの通常制約IDを使い、生成されたrowがactiveに残る場合はuniform weightが必要です。
+
 ### 🛠 Model error を呼び出し側の回復方法に応じて通知 ([#1104](https://github.com/Jij-Inc/ommx/pull/1104)、[#1105](https://github.com/Jij-Inc/ommx/pull/1105))
 
 Function、polynomial、constraint、named function、`Instance` のevaluation APIは、
@@ -32,9 +64,9 @@ invariant failureは、引き続き`RuntimeError`にfallbackします。
 {class}`~ommx.adapter.SolverAdapter` に、変換なしでAdapterが直接扱える
 {class}`~ommx.Instance` の集合を表す `INPUT_CLASS` を導入しました。
 source instanceを `INPUT_CLASS` に属するinputへ変換する操作を `Prepare` と呼びます。
-現時点でpreparationを提供するのはOpenJijだけですが、今後のupdateで
-`SolverAdapter` の共通workflowとして標準化する予定です
-（[#1111](https://github.com/Jij-Inc/ommx/issues/1111)）。
+Beta 2ではOpenJij固有のpreparation APIを提供していましたが、Unreleasedの共通
+`PreparationPolicy` / `Instance.prepare()` workflowが
+[#1111](https://github.com/Jij-Inc/ommx/issues/1111) の一部としてこれを置き換えます。
 
 `INPUT_CLASS` は、{class}`~ommx.InstanceClassClause` の有限和である
 {class}`~ommx.InstanceClass` です。各clauseには、使用中の変数kind、目的関数と制約の
