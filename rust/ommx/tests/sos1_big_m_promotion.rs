@@ -67,12 +67,16 @@ fn public_api_promotes_a_checked_mixed_selector_formulation() {
     let promotion = instance.promote_sos1_big_m(&witness).unwrap();
 
     assert!(instance.constraints().is_empty());
-    assert!(!instance
+    assert!(instance
         .decision_variables()
         .contains_key(&VariableID::from(10)));
+    assert_eq!(instance.removed_constraints().len(), 3);
+    assert_eq!(promotion.relaxed_constraint_ids().len(), 3);
     assert_eq!(instance.sos1_constraints().len(), 1);
     let target = v1::State::from_iter([(0, 0.0), (1, -2.0)]);
-    let lifted = promotion.lift_state(&target).unwrap();
-    assert_eq!(lifted.entries[&10], 1.0);
-    assert_eq!(promotion.project_state(&lifted).unwrap(), target);
+    let populated = instance.populate_state(target, Default::default()).unwrap();
+    assert_eq!(populated.entries[&10], 1.0);
+
+    let restored = Instance::from_v2_bytes(&instance.to_v2_bytes()).unwrap();
+    assert_eq!(restored, instance);
 }

@@ -579,33 +579,6 @@ impl<T: ConstraintType> ConstraintCollection<T> {
         self.replace_and_remove_active_rows(BTreeMap::new(), removals)
     }
 
-    /// Permanently consume active rows and their context sidecars.
-    ///
-    /// The enclosing root object owns the semantic proof that these rows are
-    /// representation-only and may be deleted. This collection applies only
-    /// the family-local storage effect. Every ID is validated before mutation,
-    /// so an unknown or non-active ID leaves the collection unchanged.
-    ///
-    /// Consumed rows are deliberately not moved to `removed`: removed rows
-    /// remain part of evaluation and must continue to reference registered
-    /// decision variables.
-    pub(crate) fn consume_active_rows(&mut self, ids: &BTreeSet<T::ID>) -> crate::Result<()> {
-        for id in ids {
-            if !self.active.contains_key(id) {
-                crate::bail!({ ?id }, "Active constraint with ID {id:?} not found");
-            }
-        }
-
-        for id in ids {
-            self.active
-                .remove(id)
-                .expect("active row was validated before consumption");
-            self.context.remove(*id);
-        }
-        debug_assert!(self.validate_context_ids().is_ok());
-        Ok(())
-    }
-
     /// Insert an active constraint along with its context in one step.
     ///
     /// `id` must not already be present in either the active or removed map.
@@ -1708,57 +1681,6 @@ mod tests {
         assert!(collection.removed().contains_key(&removed_id));
         assert_eq!(collection.context().name(removed_id), Some("original"));
         collection.validate_context_ids().unwrap();
-    }
-
-    #[test]
-    fn consume_active_rows_prunes_rows_and_context_without_tombstones() {
-        let consumed_id = ConstraintID::from(1);
-        let retained_id = ConstraintID::from(2);
-        let mut context = ConstraintContextStore::default();
-        context.set_name(consumed_id, "representation-only");
-        context.set_name(retained_id, "retained");
-        let mut collection = ConstraintCollection::<Constraint>::with_context(
-            BTreeMap::from([
-                (consumed_id, Constraint::equal_to_zero(Function::Zero)),
-                (retained_id, Constraint::equal_to_zero(Function::Zero)),
-            ]),
-            BTreeMap::new(),
-            context,
-        )
-        .unwrap();
-
-        collection
-            .consume_active_rows(&BTreeSet::from([consumed_id]))
-            .unwrap();
-
-        assert!(!collection.active().contains_key(&consumed_id));
-        assert!(collection.active().contains_key(&retained_id));
-        assert!(collection.removed().is_empty());
-        assert!(!collection.context().contains(consumed_id));
-        assert_eq!(collection.context().name(retained_id), Some("retained"));
-        collection.validate_context_ids().unwrap();
-    }
-
-    #[test]
-    fn consume_active_rows_validates_the_whole_batch_before_mutation() {
-        let id = ConstraintID::from(1);
-        let unknown = ConstraintID::from(99);
-        let mut context = ConstraintContextStore::default();
-        context.set_name(id, "kept-on-error");
-        let mut collection = ConstraintCollection::<Constraint>::with_context(
-            BTreeMap::from([(id, Constraint::equal_to_zero(Function::Zero))]),
-            BTreeMap::new(),
-            context,
-        )
-        .unwrap();
-        let before = collection.clone();
-
-        let error = collection
-            .consume_active_rows(&BTreeSet::from([id, unknown]))
-            .unwrap_err();
-
-        assert!(error.to_string().contains("ConstraintID(99)"));
-        assert_eq!(collection, before);
     }
 
     #[test]

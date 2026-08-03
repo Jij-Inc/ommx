@@ -84,64 +84,6 @@ impl AcyclicAssignments {
         self.assignments.iter()
     }
 
-    /// Apply an acyclic substitution atomically without cloning unaffected assignments.
-    ///
-    /// Crate-internal root operations use this storage effect after planning
-    /// every other fallible owner-level rewrite. Only assignment functions
-    /// whose right-hand sides reference substituted variables are cloned and
-    /// rewritten; the dependency graph is rebuilt from borrowed unchanged rows.
-    pub(crate) fn substitute_acyclic_in_place_atomic(
-        &mut self,
-        acyclic: &AcyclicAssignments,
-    ) -> Result<(), SubstitutionError> {
-        if acyclic.is_empty() {
-            return Ok(());
-        }
-        if self.is_empty() {
-            *self = acyclic.clone();
-            return Ok(());
-        }
-
-        let substituted_variables = acyclic.keys().collect::<std::collections::BTreeSet<_>>();
-        let mut replacements = FnvHashMap::default();
-        for (&id, function) in &self.assignments {
-            // Incoming assignments replace rows with the same ID. Do not
-            // evaluate an obsolete right-hand side: besides wasting work, it
-            // could fail even though that row is absent from the final value.
-            if substituted_variables.contains(&id) {
-                continue;
-            }
-            if !function.required_ids().is_disjoint(&substituted_variables) {
-                replacements.insert(id, function.clone().substitute_acyclic(acyclic)?);
-            }
-        }
-
-        // The consuming implementation normalizes newly inserted assignments
-        // through later substitutions when `self` is non-empty. Preserve that
-        // representation while cloning only the incoming assignment set.
-        let incoming = acyclic
-            .assignments
-            .iter()
-            .map(|(&id, function)| Ok((id, function.clone().substitute_acyclic(acyclic)?)))
-            .collect::<Result<FnvHashMap<_, _>, SubstitutionError>>()?;
-
-        let mut final_assignments = Vec::with_capacity(self.assignments.len() + incoming.len());
-        for (&id, function) in &self.assignments {
-            if incoming.contains_key(&id) {
-                continue;
-            }
-            final_assignments.push((id, replacements.get(&id).unwrap_or(function)));
-        }
-        final_assignments.extend(incoming.iter().map(|(&id, function)| (id, function)));
-        let (dependency, topological_order) = build_dependency_graph(final_assignments)?;
-
-        self.assignments.extend(replacements);
-        self.assignments.extend(incoming);
-        self.dependency = dependency;
-        self.topological_order = topological_order;
-        Ok(())
-    }
-
     /// Get the assignments in substitution order (variables that need to be replaced first).
     ///
     /// This order is used when performing substitution operations where assigned
@@ -439,68 +381,6 @@ mod tests {
             initial.substitute_acyclic(&substitution).unwrap_err(),
             @"Recursive assignment detected: variable 1 cannot be assigned to a function that depends on itself"
         );
-    }
-
-    #[test]
-    fn substitute_acyclic_in_place_atomic_matches_consuming_result() {
-        let initial = assign! {
-            1 <- linear!(2) + linear!(5),
-            2 <- linear!(6),
-            9 <- linear!(10)
-        };
-        let substitution = assign! {
-            2 <- linear!(3) + coeff!(1.0),
-            3 <- linear!(4)
-        };
-        let expected = initial.clone().substitute_acyclic(&substitution).unwrap();
-        let mut actual = initial;
-
-        actual
-            .substitute_acyclic_in_place_atomic(&substitution)
-            .unwrap();
-
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn substitute_acyclic_in_place_atomic_preserves_value_on_error() {
-        let huge = crate::Coefficient::try_from(f64::MAX).unwrap();
-        let mut initial = AcyclicAssignments::new([(
-            VariableID::from(1),
-            Function::from((huge * linear!(2)).unwrap()),
-        )])
-        .unwrap();
-        let substitution = assign! {
-            2 <- (coeff!(2.0) * linear!(3)).unwrap()
-        };
-        let before = initial.clone();
-
-        let err = initial
-            .substitute_acyclic_in_place_atomic(&substitution)
-            .unwrap_err();
-
-        assert!(err.to_string().contains("Coefficient must be finite"));
-        assert_eq!(initial, before);
-    }
-
-    #[test]
-    fn substitute_acyclic_in_place_atomic_skips_overwritten_rhs() {
-        let huge = crate::Coefficient::try_from(f64::MAX).unwrap();
-        let mut initial = AcyclicAssignments::new([(
-            VariableID::from(1),
-            Function::from((huge * linear!(2)).unwrap()),
-        )])
-        .unwrap();
-        let substitution = assign! {
-            1 <- linear!(3),
-            2 <- (coeff!(2.0) * linear!(4)).unwrap()
-        };
-
-        initial
-            .substitute_acyclic_in_place_atomic(&substitution)
-            .unwrap();
-
-        assert_eq!(initial, substitution);
     }
 
     #[test]

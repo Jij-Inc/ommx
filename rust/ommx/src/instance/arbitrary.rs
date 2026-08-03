@@ -354,7 +354,7 @@ impl Arbitrary for Instance {
                                 let mut removed_constraints = BTreeMap::new();
                                 let mut fixed_decision_variable_values = BTreeMap::new();
                                 let mut decision_variable_dependency =
-                                    AcyclicAssignments::default();
+                                    DecisionVariableDependencies::default();
                                 let mut indicator_constraints = BTreeMap::new();
                                 let mut removed_indicator_constraints = BTreeMap::new();
                                 let mut indicator_constraint_context =
@@ -395,10 +395,15 @@ impl Arbitrary for Instance {
                                     variable_labels.set_name(fixed_id, "arbitrary_fixed");
 
                                     decision_variables
-                                        .insert(dependent_id, DecisionVariable::continuous());
+                                        .insert(dependent_id, DecisionVariable::binary());
                                     decision_variable_dependency =
-                                        AcyclicAssignments::new([(dependent_id, Function::Zero)])
-                                            .expect("constant assignment is acyclic");
+                                        DecisionVariableDependencies::new([(
+                                            dependent_id,
+                                            DependentExpr::nonzero_indicator(Function::from(
+                                                crate::linear!(indicator_body_var.into_inner()),
+                                            )),
+                                        )])
+                                        .expect("single dependent expression is acyclic");
                                     variable_labels.set_name(dependent_id, "arbitrary_dependent");
 
                                     for id in [
@@ -645,6 +650,10 @@ mod tests {
         fn full_v3_space_exercises_v3_instance_state(instance in Instance::arbitrary()) {
             prop_assert!(!instance.fixed_decision_variable_values().is_empty());
             prop_assert!(!instance.decision_variable_dependency().is_empty());
+            prop_assert!(instance
+                .decision_variable_dependency()
+                .iter()
+                .any(|(_, expr)| matches!(expr, DependentExpr::NonzeroIndicator(_))));
             prop_assert!(!instance.removed_constraints().is_empty());
             prop_assert!(!instance.indicator_constraints().is_empty());
             prop_assert!(!instance.removed_indicator_constraints().is_empty());

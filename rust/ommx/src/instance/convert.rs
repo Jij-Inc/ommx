@@ -241,6 +241,44 @@ mod with_parameters_tests {
         );
     }
 
+    #[test]
+    fn parameter_substitution_descends_into_dependent_expression_ast() {
+        let dependent = VariableID::from(2);
+        let parameter = VariableID::from(100);
+        let parametric = ParametricInstance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(btreemap! {
+                dependent => DecisionVariable::binary(),
+            })
+            .parameters(parameters([parameter]))
+            .constraints(BTreeMap::new())
+            .decision_variable_dependency(
+                crate::DecisionVariableDependencies::new([(
+                    dependent,
+                    crate::DependentExpr::nonzero_indicator(Function::from(linear!(100))),
+                )])
+                .unwrap(),
+            )
+            .build()
+            .unwrap();
+
+        let instance = parametric
+            .with_parameters(crate::v1::Parameters {
+                entries: std::collections::HashMap::from([(100, 2.0)]),
+            })
+            .unwrap();
+        let state = instance
+            .populate_state(crate::v1::State::default(), crate::ATol::default())
+            .unwrap();
+
+        assert_eq!(state.entries[&2], 1.0);
+        assert!(!instance
+            .decision_variable_dependency()
+            .required_ids()
+            .contains(&parameter));
+    }
+
     /// Parameter substitution must apply to *removed* regular constraints
     /// as well. `ParametricInstance` permits removed-constraint bodies to
     /// reference parameters (function bodies are unrestricted), but the

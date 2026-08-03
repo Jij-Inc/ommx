@@ -3258,8 +3258,8 @@ class Instance:
         - `description`: Optional description for the inserted constraint
 
         Raises {class}`ValueError` if the constraint references an undefined
-        decision variable or one currently used as a substitution-dependency
-        key, matching the validation performed by other constraint-insertion
+        decision variable or one currently used as a dependent-variable
+        reconstruction target, matching the validation performed by other constraint-insertion
         paths.
         """
     def add_indicator_constraint(
@@ -3274,8 +3274,8 @@ class Instance:
         new id.
 
         Raises {class}`ValueError` if the constraint references an undefined
-        decision variable or one currently used as a substitution-dependency
-        key.
+        decision variable or one currently used as a dependent-variable
+        reconstruction target.
         """
     def add_one_hot_constraint(
         self, constraint: OneHotConstraint
@@ -4368,7 +4368,7 @@ class Instance:
         """
     def dependent_decision_variable_ids(self) -> builtins.set[builtins.int]:
         r"""
-        Return IDs of decision variables defined by ``decision_variable_dependency``.
+        Return IDs of decision variables defined by reconstruction dependencies.
         """
     def irrelevant_decision_variable_ids(self) -> builtins.set[builtins.int]:
         r"""
@@ -5847,7 +5847,7 @@ class ParametricInstance:
 
         Raises {class}`ValueError` if the constraint references an id that is
         neither a defined decision variable nor a defined parameter, or if it
-        references an id currently used as a substitution-dependency key.
+        references an id currently used as a dependent-variable reconstruction target.
         """
     def add_indicator_constraint(
         self, constraint: IndicatorConstraint
@@ -5862,8 +5862,8 @@ class ParametricInstance:
 
         Raises {class}`ValueError` if the constraint references an id that
         is neither a defined decision variable nor a defined parameter, or
-        if it references an id currently used as a substitution-dependency
-        key.
+        if it references an id currently used as a dependent-variable
+        reconstruction target.
         """
     def add_one_hot_constraint(
         self, constraint: OneHotConstraint
@@ -7965,7 +7965,7 @@ class DecisionVariableRole(enum.Enum):
     """
     Dependent = ...
     r"""
-    Defined by decision_variable_dependency
+    Defined by a deterministic reconstruction dependency
     """
     Irrelevant = ...
     r"""

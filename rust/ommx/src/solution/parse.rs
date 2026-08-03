@@ -324,6 +324,12 @@ impl Parse for v2::Solution {
         let message = "ommx.v2.Solution";
         let required_features =
             crate::v2_io::parse_required_features(self.required_features, message)?;
+        if required_features.contains(&v2::Feature::DependentExpression) {
+            return Err(RawParseError::InvalidInstance(
+                "DependentExpression is not applicable to ommx.v2.Solution".to_string(),
+            )
+            .context(message, "required_features"));
+        }
         let feasibility_atol =
             crate::v2_io::parse_feasibility_atol(self.feasibility_atol, message)?;
         let annotations =

@@ -8,6 +8,15 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🛠 Canonical state reconstruction for dependent variables ([#1136](https://github.com/Jij-Inc/ommx/pull/1136))
+
+{meth}`~ommx.Instance.populate_state` treats caller-provided fixed and dependent
+coordinates as consistency assertions. Values within `atol` are accepted, but
+the returned {class}`~ommx.State` now always contains the fixed value owned by
+the Instance or the deterministic value computed from the dependency. Later
+dependent reconstructions therefore observe canonical coordinates instead of
+an approximate assertion supplied by the caller.
+
 ### 🛠 Model errors follow caller ownership ([#1104](https://github.com/Jij-Inc/ommx/pull/1104), [#1105](https://github.com/Jij-Inc/ommx/pull/1105))
 
 Function, polynomial, constraint, named-function, and `Instance` evaluation

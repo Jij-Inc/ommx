@@ -9,7 +9,11 @@
 //!
 //! into
 //!
-//! `Base(x) AND SOS1(x)`.
+//! `Base(x) AND SOS1(x)`
+//!
+//! while retaining the complete formulation history in the same [`Instance`].
+//! Verified Big-M rows move to the removed collection, and fresh selectors
+//! become dependent variables reconstructed by a [`crate::DependentExpr`].
 //!
 //! The reusable proof plan remains private and is applied only to a staged
 //! clone. This keeps witness rejection atomic and prevents a checked plan from
@@ -23,8 +27,8 @@ use super::{
     Instance,
 };
 use crate::{
-    v1, Bound, Constraint, ConstraintContext, ConstraintID, Equality, Evaluate, Kind,
-    Sos1Constraint, Sos1ConstraintID, VariableID, VariableIDSet,
+    Bound, Constraint, ConstraintContext, ConstraintID, DependentExpr, Equality, Function, Kind,
+    RemovedReason, Sos1Constraint, Sos1ConstraintID, VariableID, VariableIDSet,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -88,26 +92,19 @@ impl Sos1BigMPromotionWitness {
     }
 }
 
-/// Result and exact raw-state map for one checked SOS1 Big-M promotion.
+/// Result of one checked SOS1 Big-M promotion.
 ///
-/// `project_state` removes only verified fresh-selector coordinates. The
-/// canonical `lift_state` reconstructs each such selector as `0` exactly when
-/// its member equals `0.0`, and as `1` otherwise. Consequently
-/// `project_state(lift_state(target)) == target`; the reverse round trip is not
-/// promised because a feasible source may contain a non-canonical selector
-/// value when its member is zero.
-///
-/// These maps operate on complete finite raw states. They are exact
-/// representation bookkeeping, not tolerance-based feasibility classifiers.
-#[must_use = "retain the state map when states cross the promotion boundary"]
+/// State reconstruction is owned by the mutated [`Instance`]: each fresh
+/// selector remains registered and is assigned a [`DependentExpr`] evaluated
+/// by [`Instance::populate_state`]. This result is therefore informational and
+/// does not represent an external project/lift boundary.
+#[must_use = "the result identifies the promoted constraint and retained history"]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Sos1BigMPromotion {
     sos1_constraint_id: Sos1ConstraintID,
     members: VariableIDSet,
     fresh_selectors: BTreeMap<VariableID, VariableID>,
-    consumed_constraint_ids: BTreeSet<ConstraintID>,
-    before_variable_ids: VariableIDSet,
-    after_variable_ids: VariableIDSet,
+    relaxed_constraint_ids: BTreeSet<ConstraintID>,
 }
 
 impl Sos1BigMPromotion {
@@ -126,66 +123,9 @@ impl Sos1BigMPromotion {
         &self.fresh_selectors
     }
 
-    /// Regular formulation rows permanently consumed by the promotion.
-    pub fn consumed_constraint_ids(&self) -> &BTreeSet<ConstraintID> {
-        &self.consumed_constraint_ids
-    }
-
-    /// Complete variable-ID set immediately before promotion.
-    pub fn before_variable_ids(&self) -> &VariableIDSet {
-        &self.before_variable_ids
-    }
-
-    /// Complete variable-ID set immediately after promotion.
-    pub fn after_variable_ids(&self) -> &VariableIDSet {
-        &self.after_variable_ids
-    }
-
-    /// Project a complete finite pre-promotion state to the promoted instance.
-    pub fn project_state(&self, before: &v1::State) -> crate::Result<v1::State> {
-        validate_state(before, &self.before_variable_ids, "pre-promotion")?;
-        let mut entries = before.entries.clone();
-        for selector in self.fresh_selectors.values() {
-            entries.remove(&selector.into_inner()).ok_or_else(|| {
-                crate::error!(
-                    { ?selector },
-                    "Pre-promotion state is missing fresh selector {selector:?}"
-                )
-            })?;
-        }
-        let after = v1::State { entries };
-        validate_state(&after, &self.after_variable_ids, "post-promotion")?;
-        Ok(after)
-    }
-
-    /// Canonically lift a complete finite post-promotion state.
-    ///
-    /// Mathematical exact zero is used: both `0.0` and `-0.0` produce selector
-    /// value `0.0`; every other finite member value produces `1.0`.
-    pub fn lift_state(&self, after: &v1::State) -> crate::Result<v1::State> {
-        validate_state(after, &self.after_variable_ids, "post-promotion")?;
-        let mut entries = after.entries.clone();
-        for (&member, &selector) in &self.fresh_selectors {
-            let member_value = entries.get(&member.into_inner()).copied().ok_or_else(|| {
-                crate::error!(
-                    { ?member },
-                    "Post-promotion state is missing SOS1 member {member:?}"
-                )
-            })?;
-            let selector_value = if member_value == 0.0 { 0.0 } else { 1.0 };
-            if entries
-                .insert(selector.into_inner(), selector_value)
-                .is_some()
-            {
-                crate::bail!(
-                    { ?selector },
-                    "Post-promotion state unexpectedly contains fresh selector {selector:?}"
-                );
-            }
-        }
-        let before = v1::State { entries };
-        validate_state(&before, &self.before_variable_ids, "pre-promotion")?;
-        Ok(before)
+    /// Canonical formulation rows moved from active to removed.
+    pub fn relaxed_constraint_ids(&self) -> &BTreeSet<ConstraintID> {
+        &self.relaxed_constraint_ids
     }
 }
 
@@ -205,46 +145,70 @@ impl Instance {
     /// - distinct full binary fresh selectors outside the member set;
     /// - exact canonical upper/lower links and cardinality row, without a
     ///   tolerance or scalar-multiple relaxation;
-    /// - absence of every fresh selector from the objective, retained active
-    ///   rows, removed rows, every special-constraint family, named functions,
-    ///   dependency keys/RHS expressions, and fixed-value state.
+    /// - absence of every fresh selector from current active solver input,
+    ///   except for the claimed formulation rows.
     ///
     /// Rust-side concepts not modeled by the initial Lean semantics are
     /// handled conservatively. Selected semi variables, fixed or dependent
-    /// members, fixed binary member bounds, non-default consumed-row context,
-    /// and non-default fresh-selector labels are rejected. Unrelated nonlinear
+    /// members, fixed binary member bounds, and already fixed/dependent fresh
+    /// selectors are rejected. Removed constraints, named functions,
+    /// dependency RHS expressions, row context, and selector labels remain
+    /// valid history and are preserved unchanged. Unrelated nonlinear
     /// expressions and unrelated special constraints are preserved unchanged.
     /// Calling this family-specific method is the explicit request to add the
     /// SOS1 capability to the instance; witness rejection means only that the
     /// claimed formulation is outside this conservative checker.
     ///
     /// The correctness contract uses exact algebraic feasibility. It does not
-    /// claim equality of [`Evaluate`] results for a positive [`crate::ATol`],
+    /// claim equality of [`crate::Evaluate`] results for a positive [`crate::ATol`],
     /// because regular rows and SOS1 constraints apply different tolerance
     /// classifiers near zero.
     ///
-    /// On success the verified formulation rows and fresh selectors are
-    /// permanently consumed and a new active SOS1 constraint is inserted. The
-    /// operation is atomic: every change is applied to a staged clone before
-    /// replacing `self`.
+    /// On success the verified formulation rows are relaxed, fresh selectors
+    /// remain registered as dependent variables, and a new active SOS1
+    /// constraint is inserted. The operation is atomic: every change is
+    /// applied to a staged clone before replacing `self`.
     pub fn promote_sos1_big_m(
         &mut self,
         witness: &Sos1BigMPromotionWitness,
     ) -> crate::Result<Sos1BigMPromotion> {
         let plan = self.plan_sos1_big_m_promotion(witness)?;
         let mut staged = self.clone();
-        staged
-            .constraint_collection
-            .consume_active_rows(&plan.result.consumed_constraint_ids)?;
-        let fresh_selector_ids = plan
-            .result
-            .fresh_selectors
-            .values()
-            .copied()
-            .collect::<BTreeSet<_>>();
-        staged
-            .decision_variables
-            .remove_unfixed_rows(&fresh_selector_ids)?;
+        for &id in &plan.result.relaxed_constraint_ids {
+            staged.constraint_collection.relax(
+                id,
+                RemovedReason {
+                    reason: "promoted canonical SOS1 Big-M formulation".to_string(),
+                    parameters: [(
+                        "sos1_constraint_id".to_string(),
+                        plan.result.sos1_constraint_id.to_string(),
+                    )]
+                    .into_iter()
+                    .collect(),
+                },
+            )?;
+        }
+
+        let mut dependencies = staged
+            .decision_variable_dependency
+            .iter()
+            .map(|(&id, expr)| (id, expr.clone()))
+            .collect::<Vec<_>>();
+        dependencies.extend(
+            plan.result
+                .fresh_selectors
+                .iter()
+                .map(|(&member, &selector)| {
+                    (
+                        selector,
+                        DependentExpr::nonzero_indicator(Function::from(crate::linear!(
+                            member.into_inner()
+                        ))),
+                    )
+                }),
+        );
+        staged.decision_variable_dependency =
+            crate::DecisionVariableDependencies::new(dependencies)?;
         staged
             .sos1_constraint_collection
             .insert_active_with_context(
@@ -253,14 +217,6 @@ impl Instance {
                 ConstraintContext::default(),
             )?;
 
-        debug_assert_eq!(
-            staged
-                .decision_variables()
-                .keys()
-                .copied()
-                .collect::<VariableIDSet>(),
-            plan.result.after_variable_ids
-        );
         *self = staged;
         Ok(plan.result)
     }
@@ -280,7 +236,7 @@ impl Instance {
             .collect::<VariableIDSet>();
         let mut fresh_selectors = BTreeMap::new();
         let mut fresh_selector_ids = VariableIDSet::new();
-        let mut consumed_constraint_ids = BTreeSet::new();
+        let mut relaxed_constraint_ids = BTreeSet::new();
 
         for (&member, &role) in &witness.selector_roles {
             let variable = self.decision_variables().get(&member).ok_or_else(|| {
@@ -368,13 +324,6 @@ impl Instance {
                             "Fresh SOS1 selector {selector:?} does not have the full binary domain [0, 1]"
                         );
                     }
-                    if self.variable_labels().collect_for(selector) != Default::default() {
-                        crate::bail!(
-                            { ?member, ?selector },
-                            "Fresh SOS1 selector {selector:?} has a modeling label that promotion would discard"
-                        );
-                    }
-
                     self.validate_optional_sos1_link(
                         member,
                         selector,
@@ -382,7 +331,7 @@ impl Instance {
                         bound.upper() > 0.0,
                         "upper",
                         || canonical_sos1_big_m_upper_link(member, selector, bound.upper()),
-                        &mut consumed_constraint_ids,
+                        &mut relaxed_constraint_ids,
                     )?;
                     self.validate_optional_sos1_link(
                         member,
@@ -391,14 +340,14 @@ impl Instance {
                         bound.lower() < 0.0,
                         "lower",
                         || canonical_sos1_big_m_lower_link(member, selector, bound.lower()),
-                        &mut consumed_constraint_ids,
+                        &mut relaxed_constraint_ids,
                     )?;
                     fresh_selectors.insert(member, selector);
                 }
             }
         }
 
-        if !consumed_constraint_ids.insert(witness.cardinality_constraint) {
+        if !relaxed_constraint_ids.insert(witness.cardinality_constraint) {
             crate::bail!(
                 { cardinality = ?witness.cardinality_constraint },
                 "SOS1 cardinality constraint is also claimed as a member link"
@@ -418,28 +367,11 @@ impl Instance {
             "cardinality",
         )?;
 
-        for id in &consumed_constraint_ids {
-            if self.constraint_context().collect_for(*id) != ConstraintContext::default() {
-                crate::bail!(
-                    { ?id },
-                    "SOS1 formulation constraint {id:?} has context that promotion would discard"
-                );
-            }
-        }
         self.ensure_variables_isolated_for_sos1_promotion(
             &fresh_selector_ids,
-            &consumed_constraint_ids,
+            &relaxed_constraint_ids,
         )?;
 
-        let before_variable_ids = self
-            .decision_variables()
-            .keys()
-            .copied()
-            .collect::<VariableIDSet>();
-        let after_variable_ids = before_variable_ids
-            .difference(&fresh_selector_ids)
-            .copied()
-            .collect::<VariableIDSet>();
         let sos1_constraint_id = self.next_sos1_constraint_id()?;
 
         Ok(Sos1BigMPromotionPlan {
@@ -447,9 +379,7 @@ impl Instance {
                 sos1_constraint_id,
                 members,
                 fresh_selectors,
-                consumed_constraint_ids,
-                before_variable_ids,
-                after_variable_ids,
+                relaxed_constraint_ids,
             },
         })
     }
@@ -463,7 +393,7 @@ impl Instance {
         required: bool,
         side: &'static str,
         expected: impl FnOnce() -> crate::Result<Constraint>,
-        consumed: &mut BTreeSet<ConstraintID>,
+        relaxed: &mut BTreeSet<ConstraintID>,
     ) -> crate::Result<()> {
         match (required, actual_id) {
             (false, None) => Ok(()),
@@ -476,7 +406,7 @@ impl Instance {
                 "SOS1 member {member:?} is missing its canonical {side} link"
             ),
             (true, Some(id)) => {
-                if !consumed.insert(id) {
+                if !relaxed.insert(id) {
                     crate::bail!(
                         { ?member, ?selector, ?id, side },
                         "Regular constraint {id:?} is claimed for more than one SOS1 formulation role"
@@ -508,101 +438,62 @@ impl Instance {
         Ok(())
     }
 
-    /// Exhaustively prove that fresh coordinates occur only in consumed rows.
+    /// Prove that fresh selectors occur in current active solver input only in
+    /// the formulation rows claimed by the witness.
     ///
-    /// `DecisionVariableUsage` intentionally indexes only active solver input,
-    /// so it is insufficient for a representation-compression operation that
-    /// deletes variables from the root object.
+    /// Removed rows, named functions, and dependency RHS expressions are not
+    /// solver input. They are intentionally allowed to retain references and
+    /// observe the canonical dependent-selector value during evaluation.
     fn ensure_variables_isolated_for_sos1_promotion(
         &self,
         private_ids: &VariableIDSet,
-        consumed_regular_rows: &BTreeSet<ConstraintID>,
+        relaxed_regular_rows: &BTreeSet<ConstraintID>,
     ) -> crate::Result<()> {
-        reject_required_ids(private_ids, &self.objective.required_ids(), "the objective")?;
-
-        for (id, constraint) in self.constraints() {
-            if !consumed_regular_rows.contains(id) {
-                reject_required_ids(
-                    private_ids,
-                    &constraint.required_ids(),
-                    &format!("active regular constraint {id:?}"),
-                )?;
+        let usage = self.decision_variable_usage();
+        for &id in private_ids {
+            if let Some(entry) = usage.get(id) {
+                if entry.used_in_objective() {
+                    crate::bail!({ ?id }, "Fresh SOS1 selector {id:?} is used by the objective");
+                }
+                if let Some(row) = entry
+                    .used_in_regular_constraints()
+                    .difference(relaxed_regular_rows)
+                    .next()
+                {
+                    crate::bail!(
+                        { ?id, ?row },
+                        "Fresh SOS1 selector {id:?} is used by retained active regular constraint {row:?}"
+                    );
+                }
+                if let Some(row) = entry.used_in_indicator_constraints().iter().next() {
+                    crate::bail!(
+                        { ?id, ?row },
+                        "Fresh SOS1 selector {id:?} is used by active Indicator constraint {row:?}"
+                    );
+                }
+                if let Some(row) = entry.used_in_one_hot_constraints().iter().next() {
+                    crate::bail!(
+                        { ?id, ?row },
+                        "Fresh SOS1 selector {id:?} is used by active OneHot constraint {row:?}"
+                    );
+                }
+                if let Some(row) = entry.used_in_sos1_constraints().iter().next() {
+                    crate::bail!(
+                        { ?id, ?row },
+                        "Fresh SOS1 selector {id:?} is used by active SOS1 constraint {row:?}"
+                    );
+                }
             }
-        }
-        for (id, (constraint, _)) in self.removed_constraints() {
-            reject_required_ids(
-                private_ids,
-                &constraint.required_ids(),
-                &format!("removed regular constraint {id:?}"),
-            )?;
-        }
-        for (id, constraint) in self.indicator_constraints() {
-            reject_required_ids(
-                private_ids,
-                &constraint.required_ids(),
-                &format!("active Indicator constraint {id:?}"),
-            )?;
-        }
-        for (id, (constraint, _)) in self.removed_indicator_constraints() {
-            reject_required_ids(
-                private_ids,
-                &constraint.required_ids(),
-                &format!("removed Indicator constraint {id:?}"),
-            )?;
-        }
-        for (id, constraint) in self.one_hot_constraints() {
-            reject_required_ids(
-                private_ids,
-                &constraint.required_ids(),
-                &format!("active OneHot constraint {id:?}"),
-            )?;
-        }
-        for (id, (constraint, _)) in self.removed_one_hot_constraints() {
-            reject_required_ids(
-                private_ids,
-                &constraint.required_ids(),
-                &format!("removed OneHot constraint {id:?}"),
-            )?;
-        }
-        for (id, constraint) in self.sos1_constraints() {
-            reject_required_ids(
-                private_ids,
-                &constraint.required_ids(),
-                &format!("active SOS1 constraint {id:?}"),
-            )?;
-        }
-        for (id, (constraint, _)) in self.removed_sos1_constraints() {
-            reject_required_ids(
-                private_ids,
-                &constraint.required_ids(),
-                &format!("removed SOS1 constraint {id:?}"),
-            )?;
-        }
-        for (id, named) in self.named_functions() {
-            reject_required_ids(
-                private_ids,
-                &named.function.required_ids(),
-                &format!("named function {id:?}"),
-            )?;
-        }
-        for (id, function) in self.decision_variable_dependency.iter() {
-            if private_ids.contains(id) {
+
+            if self.decision_variable_dependency.get(&id).is_some() {
                 crate::bail!(
                     { ?id },
                     "Fresh SOS1 selector {id:?} is a dependency target"
                 );
             }
-            reject_required_ids(
-                private_ids,
-                &function.required_ids(),
-                &format!("decision-variable dependency {id:?}"),
-            )?;
-        }
-        if let Some(id) = private_ids
-            .iter()
-            .find(|id| self.fixed_decision_variable_values().contains_key(id))
-        {
-            crate::bail!({ ?id }, "Fresh SOS1 selector {id:?} is fixed");
+            if self.fixed_decision_variable_values().contains_key(&id) {
+                crate::bail!({ ?id }, "Fresh SOS1 selector {id:?} is fixed");
+            }
         }
         Ok(())
     }
@@ -639,61 +530,11 @@ fn same_linear_constraint(actual: &Constraint, expected: &Constraint) -> bool {
     actual.as_ref() == expected.as_ref()
 }
 
-fn reject_required_ids(
-    private_ids: &VariableIDSet,
-    required_ids: &VariableIDSet,
-    location: &str,
-) -> crate::Result<()> {
-    if let Some(id) = private_ids.intersection(required_ids).next() {
-        crate::bail!(
-            { ?id, location },
-            "Fresh SOS1 selector {id:?} is used by {location}"
-        );
-    }
-    Ok(())
-}
-
-fn validate_state(
-    state: &v1::State,
-    expected_ids: &VariableIDSet,
-    side: &'static str,
-) -> crate::Result<()> {
-    let actual_ids = state
-        .entries
-        .keys()
-        .copied()
-        .map(VariableID::from)
-        .collect::<VariableIDSet>();
-    if &actual_ids != expected_ids {
-        crate::bail!(
-            { side },
-            "{side} state has a different variable-ID set from its SOS1 promotion"
-        );
-    }
-    for (&id, &value) in &state.entries {
-        if !value.is_finite() {
-            crate::bail!(
-                { id, value, side },
-                "{side} state value for variable {} is not finite",
-                VariableID::from(id)
-            );
-        }
-    }
-    Ok(())
-}
-
-#[cfg(test)]
-fn state(entries: impl IntoIterator<Item = (u64, f64)>) -> v1::State {
-    v1::State {
-        entries: entries.into_iter().collect(),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
-        coeff, linear, quadratic, ATol, AcyclicAssignments, DecisionVariable, Function,
+        coeff, linear, quadratic, ATol, AcyclicAssignments, DecisionVariable, Evaluate, Function,
         IndicatorConstraint, ModelingLabel, NamedFunction, OneHotConstraint, RemovedReason, Sense,
     };
 
@@ -842,7 +683,7 @@ mod tests {
     }
 
     #[test]
-    fn promotes_mixed_canonical_formulation_and_maps_states() {
+    fn promotes_mixed_canonical_formulation_and_retains_history() {
         let (mut instance, witness) = mixed_instance();
         let promotion = instance.promote_sos1_big_m(&witness).unwrap();
 
@@ -856,34 +697,40 @@ mod tests {
             &BTreeMap::from([(member_integer_id(), selector_id())])
         );
         assert_eq!(
-            promotion.consumed_constraint_ids(),
+            promotion.relaxed_constraint_ids(),
             &BTreeSet::from([upper_row_id(), lower_row_id(), cardinality_row_id()])
         );
-        assert!(!instance.decision_variables().contains_key(&selector_id()));
+        assert!(instance.decision_variables().contains_key(&selector_id()));
         assert!(instance.constraints().is_empty());
-        assert!(instance.removed_constraints().is_empty());
+        assert_eq!(instance.removed_constraints().len(), 3);
+        assert!(instance
+            .removed_constraints()
+            .values()
+            .all(|(_, reason)| reason.reason == "promoted canonical SOS1 Big-M formulation"));
         assert_eq!(
             &instance.sos1_constraints()[&Sos1ConstraintID::from(0)].variables,
             promotion.members()
         );
         assert!(instance.decision_variables().contains_key(&unrelated_id()));
+        assert!(matches!(
+            instance.decision_variable_dependency().get(&selector_id()),
+            Some(DependentExpr::NonzeroIndicator(_))
+        ));
 
-        // Projection accepts a feasible but non-canonical source selector.
-        let before = state([(0, 0.0), (1, 0.0), (10, 1.0), (20, 7.0)]);
-        let after = promotion.project_state(&before).unwrap();
-        assert_eq!(after, state([(0, 0.0), (1, 0.0), (20, 7.0)]));
-        let canonical = promotion.lift_state(&after).unwrap();
-        assert_eq!(canonical.entries[&10], 0.0);
-        assert_ne!(canonical, before);
-
-        // The direction promised by the promotion is a section law.
-        let target = state([(0, 0.0), (1, -2.0), (20, 4.0)]);
-        assert_eq!(
-            promotion
-                .project_state(&promotion.lift_state(&target).unwrap())
-                .unwrap(),
-            target
-        );
+        let zero = instance
+            .populate_state(
+                crate::v1::State::from_iter([(0, 0.0), (1, 0.0)]),
+                ATol::default(),
+            )
+            .unwrap();
+        assert_eq!(zero.entries[&10], 0.0);
+        let nonzero = instance
+            .populate_state(
+                crate::v1::State::from_iter([(0, 0.0), (1, -2.0)]),
+                ATol::default(),
+            )
+            .unwrap();
+        assert_eq!(nonzero.entries[&10], 1.0);
     }
 
     #[test]
@@ -899,7 +746,7 @@ mod tests {
     }
 
     #[test]
-    fn all_reused_members_produce_an_identity_state_map() {
+    fn all_reused_members_need_no_dependency() {
         let variables = BTreeMap::from([
             (VariableID::from(3), DecisionVariable::binary()),
             (VariableID::from(4), DecisionVariable::binary()),
@@ -925,15 +772,10 @@ mod tests {
         );
         let promotion = instance.promote_sos1_big_m(&witness).unwrap();
         assert!(promotion.fresh_selectors().is_empty());
-        assert_eq!(
-            promotion.before_variable_ids(),
-            promotion.after_variable_ids()
-        );
-        let original = state([(3, -0.0), (4, 1.0)]);
-        let projected = promotion.project_state(&original).unwrap();
-        let lifted = promotion.lift_state(&projected).unwrap();
-        assert_eq!(projected.entries[&3].to_bits(), (-0.0f64).to_bits());
-        assert_eq!(lifted.entries[&3].to_bits(), (-0.0f64).to_bits());
+        assert!(instance.decision_variable_dependency().is_empty());
+        assert_eq!(instance.decision_variables().len(), 2);
+        assert!(instance.constraints().is_empty());
+        assert!(instance.removed_constraints().contains_key(&cardinality));
     }
 
     #[test]
@@ -1014,9 +856,9 @@ mod tests {
     }
 
     #[test]
-    fn rejects_metadata_that_would_be_discarded() {
-        let (mut labeled_selector, witness) = mixed_instance();
-        labeled_selector
+    fn preserves_selector_labels_and_relaxed_row_context() {
+        let (mut instance, witness) = mixed_instance();
+        instance
             .set_variable_label(
                 selector_id(),
                 ModelingLabel {
@@ -1025,10 +867,7 @@ mod tests {
                 },
             )
             .unwrap();
-        assert_atomic_rejection(labeled_selector, &witness, "modeling label");
-
-        let (mut contextual_row, witness) = mixed_instance();
-        contextual_row
+        instance
             .set_constraint_context(
                 upper_row_id(),
                 ConstraintContext {
@@ -1040,11 +879,21 @@ mod tests {
                 },
             )
             .unwrap();
-        assert_atomic_rejection(contextual_row, &witness, "context");
+        let _ = instance.promote_sos1_big_m(&witness).unwrap();
+
+        assert_eq!(
+            instance.variable_labels().name(selector_id()),
+            Some("user_selector")
+        );
+        assert_eq!(
+            instance.constraint_context().name(upper_row_id()),
+            Some("user_link")
+        );
+        assert!(instance.removed_constraints().contains_key(&upper_row_id()));
     }
 
     #[test]
-    fn fresh_selector_isolation_covers_every_instance_owner() {
+    fn fresh_selector_isolation_rejects_retained_active_solver_usage() {
         let (base, witness) = mixed_instance();
 
         let mut instance = base.clone();
@@ -1058,19 +907,7 @@ mod tests {
                 Default::default(),
             )
             .unwrap();
-        assert_atomic_rejection(instance, &witness, "active regular");
-
-        let mut instance = base.clone();
-        let id = instance
-            .add_constraint(
-                Constraint::less_than_or_equal_to_zero(Function::from(linear!(10))),
-                Default::default(),
-            )
-            .unwrap();
-        instance
-            .relax_constraint(id, "test".to_string(), [])
-            .unwrap();
-        assert_atomic_rejection(instance, &witness, "removed regular");
+        assert_atomic_rejection(instance, &witness, "retained active regular");
 
         let mut instance = base.clone();
         instance
@@ -1086,29 +923,6 @@ mod tests {
         assert_atomic_rejection(instance, &witness, "active Indicator");
 
         let mut instance = base.clone();
-        let id = instance
-            .add_indicator_constraint(
-                IndicatorConstraint::new(
-                    selector_id(),
-                    Equality::LessThanOrEqualToZero,
-                    Function::Zero,
-                ),
-                Default::default(),
-            )
-            .unwrap();
-        instance
-            .indicator_constraint_collection
-            .relax(
-                id,
-                RemovedReason {
-                    reason: "test".to_string(),
-                    parameters: Default::default(),
-                },
-            )
-            .unwrap();
-        assert_atomic_rejection(instance, &witness, "removed Indicator");
-
-        let mut instance = base.clone();
         instance
             .add_one_hot_constraint(
                 OneHotConstraint::new(BTreeSet::from([selector_id()])).unwrap(),
@@ -1116,25 +930,6 @@ mod tests {
             )
             .unwrap();
         assert_atomic_rejection(instance, &witness, "active OneHot");
-
-        let mut instance = base.clone();
-        let id = instance
-            .add_one_hot_constraint(
-                OneHotConstraint::new(BTreeSet::from([selector_id()])).unwrap(),
-                Default::default(),
-            )
-            .unwrap();
-        instance
-            .one_hot_constraint_collection
-            .relax(
-                id,
-                RemovedReason {
-                    reason: "test".to_string(),
-                    parameters: Default::default(),
-                },
-            )
-            .unwrap();
-        assert_atomic_rejection(instance, &witness, "removed OneHot");
 
         let mut instance = base.clone();
         instance
@@ -1146,45 +941,10 @@ mod tests {
         assert_atomic_rejection(instance, &witness, "active SOS1");
 
         let mut instance = base.clone();
-        let id = instance
-            .add_sos1_constraint(
-                Sos1Constraint::new(BTreeSet::from([selector_id()])).unwrap(),
-                Default::default(),
-            )
-            .unwrap();
-        instance
-            .sos1_constraint_collection
-            .relax(
-                id,
-                RemovedReason {
-                    reason: "test".to_string(),
-                    parameters: Default::default(),
-                },
-            )
-            .unwrap();
-        assert_atomic_rejection(instance, &witness, "removed SOS1");
-
-        let mut instance = base.clone();
-        instance
-            .named_functions
-            .insert(
-                crate::NamedFunctionID::from(0),
-                NamedFunction {
-                    function: Function::from(linear!(10)),
-                },
-                Default::default(),
-            )
-            .unwrap();
-        assert_atomic_rejection(instance, &witness, "named function");
-
-        let mut instance = base.clone();
         instance.decision_variable_dependency =
-            AcyclicAssignments::new([(unrelated_id(), Function::from(linear!(10)))]).unwrap();
-        assert_atomic_rejection(instance, &witness, "decision-variable dependency");
-
-        let mut instance = base.clone();
-        instance.decision_variable_dependency =
-            AcyclicAssignments::new([(selector_id(), Function::Zero)]).unwrap();
+            AcyclicAssignments::new([(selector_id(), Function::Zero)])
+                .unwrap()
+                .into();
         assert_atomic_rejection(instance, &witness, "dependency target");
 
         let mut instance = base;
@@ -1196,24 +956,124 @@ mod tests {
     }
 
     #[test]
-    fn state_map_rejects_stale_and_nonfinite_states() {
+    fn removed_named_and_dependency_rhs_references_are_preserved() {
         let (mut instance, witness) = mixed_instance();
-        let promotion = instance.promote_sos1_big_m(&witness).unwrap();
 
-        assert!(promotion
-            .project_state(&state([(0, 0.0), (1, 0.0), (10, 0.0)]))
+        let regular_id = instance
+            .add_constraint(
+                Constraint::less_than_or_equal_to_zero(Function::from(linear!(10))),
+                Default::default(),
+            )
+            .unwrap();
+        instance
+            .relax_constraint(regular_id, "test".to_string(), [])
+            .unwrap();
+
+        let indicator_id = instance
+            .add_indicator_constraint(
+                IndicatorConstraint::new(
+                    selector_id(),
+                    Equality::LessThanOrEqualToZero,
+                    Function::Zero,
+                ),
+                Default::default(),
+            )
+            .unwrap();
+        instance
+            .indicator_constraint_collection
+            .relax(indicator_id, test_removed_reason())
+            .unwrap();
+
+        let one_hot_id = instance
+            .add_one_hot_constraint(
+                OneHotConstraint::new(BTreeSet::from([selector_id()])).unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        instance
+            .one_hot_constraint_collection
+            .relax(one_hot_id, test_removed_reason())
+            .unwrap();
+
+        let removed_sos1_id = instance
+            .add_sos1_constraint(
+                Sos1Constraint::new(BTreeSet::from([selector_id()])).unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        instance
+            .sos1_constraint_collection
+            .relax(removed_sos1_id, test_removed_reason())
+            .unwrap();
+
+        instance
+            .named_functions
+            .insert(
+                crate::NamedFunctionID::from(0),
+                NamedFunction {
+                    function: Function::from(linear!(10)),
+                },
+                Default::default(),
+            )
+            .unwrap();
+        instance.decision_variable_dependency =
+            AcyclicAssignments::new([(unrelated_id(), Function::from(linear!(10)))])
+                .unwrap()
+                .into();
+
+        let _ = instance.promote_sos1_big_m(&witness).unwrap();
+
+        assert!(instance.removed_constraints().contains_key(&regular_id));
+        assert!(instance
+            .removed_indicator_constraints()
+            .contains_key(&indicator_id));
+        assert!(instance
+            .removed_one_hot_constraints()
+            .contains_key(&one_hot_id));
+        assert!(instance
+            .removed_sos1_constraints()
+            .contains_key(&removed_sos1_id));
+        assert!(instance
+            .named_functions()
+            .contains_key(&crate::NamedFunctionID::from(0)));
+        assert_eq!(instance.decision_variable_dependency().len(), 2);
+
+        let solution = instance
+            .evaluate(
+                &crate::v1::State::from_iter([(0, 0.0), (1, 0.0)]),
+                ATol::default(),
+            )
+            .unwrap();
+        assert_eq!(solution.state().entries[&selector_id().into_inner()], 0.0);
+        assert_eq!(solution.state().entries[&unrelated_id().into_inner()], 0.0);
+    }
+
+    #[test]
+    fn dependent_selector_reconstruction_validates_input_state() {
+        let (mut instance, witness) = mixed_instance();
+        let _ = instance.promote_sos1_big_m(&witness).unwrap();
+
+        let inconsistent = instance
+            .populate_state(
+                crate::v1::State::from_iter([(0, 0.0), (1, 0.0), (10, 1.0)]),
+                ATol::default(),
+            )
+            .unwrap_err();
+        assert!(inconsistent.is::<crate::InconsistentDependentValue>());
+        assert!(instance
+            .populate_state(
+                crate::v1::State::from_iter([(0, 0.0), (1, f64::NAN)]),
+                ATol::default(),
+            )
             .unwrap_err()
             .to_string()
-            .contains("variable-ID set"));
-        assert!(promotion
-            .project_state(&state([(0, 0.0), (1, f64::NAN), (10, 0.0), (20, 0.0),]))
-            .unwrap_err()
-            .to_string()
-            .contains("not finite"));
-        assert!(promotion
-            .lift_state(&state([(0, 0.0), (1, 0.0), (10, 0.0), (20, 0.0)]))
-            .unwrap_err()
-            .to_string()
-            .contains("variable-ID set"));
+            .contains("must be finite"));
+    }
+
+    fn test_removed_reason() -> RemovedReason {
+        RemovedReason {
+            reason: "test".to_string(),
+            parameters: Default::default(),
+        }
     }
 }

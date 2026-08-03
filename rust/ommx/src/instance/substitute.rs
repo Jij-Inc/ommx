@@ -168,11 +168,13 @@ impl Instance {
 
         let plan = self.plan_substitution(acyclic)?;
 
-        // This is the last fallible operation. It plans and validates the
-        // dependency update before mutating the table, and clones only the
-        // assignment functions affected by this substitution.
-        self.decision_variable_dependency
-            .substitute_acyclic_in_place_atomic(acyclic)?;
+        // This is the last fallible operation. Prepare the complete dependency
+        // rewrite before mutating any owner.
+        let decision_variable_dependency = self
+            .decision_variable_dependency
+            .clone()
+            .substitute_acyclic(acyclic)?;
+        self.decision_variable_dependency = decision_variable_dependency;
 
         for (id, variable, label) in fresh_variables {
             self.decision_variables

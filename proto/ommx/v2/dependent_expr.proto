@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package ommx.v2;
+
+import "ommx/v1/function.proto";
+
+// Deterministic postsolve expression for reconstructing a dependent variable.
+//
+// This is deliberately separate from ommx.v1.Function: postsolve
+// reconstruction may use deterministic operations that are not valid
+// objective or constraint functions.
+message DependentExpr {
+  oneof expression {
+    ommx.v1.Function function = 1;
+    DependentExpr nonzero_indicator = 2;
+  }
+}
