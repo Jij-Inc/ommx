@@ -16,8 +16,6 @@ from ommx import (
     Kind,
     LogEncodingError,
     OneHotConstraint,
-    PreparationError,
-    PreparationFailure,
     PreparationPolicy,
     Samples,
     Sense,
@@ -70,9 +68,6 @@ def test_policy_snapshots_preparation_options() -> None:
         inequality_integer_slack_max_range=31,
         allow_approximate_integer_slack=True,
         penalty_weights=penalty_weights,
-        atol=1e-8,
-        max_added_decision_variables=10,
-        max_added_regular_constraints=20,
     )
     mutable_weights[7] = 9.0
 
@@ -86,9 +81,6 @@ def test_policy_snapshots_preparation_options() -> None:
     assert policy.allow_approximate_integer_slack
     assert policy.uniform_penalty_weight is None
     assert policy.penalty_weights == {7: 2.0}
-    assert policy.atol == 1e-8
-    assert policy.max_added_decision_variables == 10
-    assert policy.max_added_regular_constraints == 20
 
     returned_weights = policy.penalty_weights
     assert returned_weights is not None
@@ -190,24 +182,6 @@ def test_policy_rejects_invalid_integer_slack_max_range(max_range: object) -> No
         )
 
 
-@pytest.mark.parametrize("limit", [True, False, -1, 1.5, "1"])
-@pytest.mark.parametrize(
-    "field", ["max_added_decision_variables", "max_added_regular_constraints"]
-)
-def test_policy_rejects_invalid_resource_limits(field: str, limit: object) -> None:
-    with pytest.raises(ValueError, match="non-negative integers"):
-        if field == "max_added_decision_variables":
-            PreparationPolicy(
-                acceptable_instance_class=binary_linear_class(),
-                max_added_decision_variables=cast(int, limit),
-            )
-        else:
-            PreparationPolicy(
-                acceptable_instance_class=binary_linear_class(),
-                max_added_regular_constraints=cast(int, limit),
-            )
-
-
 def test_identity_preparation_uses_input_for_evaluation() -> None:
     x = DecisionVariable.binary(0)
     instance = Instance.from_components(
@@ -265,35 +239,6 @@ def test_lowered_special_constraint_is_evaluated_by_prepared_input() -> None:
     assert sample_set.get(12).feasible
 
 
-def test_canonical_failure_has_variant_specific_payload() -> None:
-    x = DecisionVariable.binary(0)
-    y = DecisionVariable.binary(1)
-    instance = Instance.from_components(
-        decision_variables=[x, y],
-        objective=x + y,
-        constraints={},
-        one_hot_constraints={7: OneHotConstraint(variables=[x, y])},
-        sense=Sense.Minimize,
-    )
-    policy = PreparationPolicy(
-        acceptable_instance_class=binary_linear_class(),
-        allowed_special_constraint_lowerings={SpecialConstraintKind.OneHot},
-        max_added_regular_constraints=0,
-    )
-
-    with pytest.raises(PreparationError) as error:
-        instance.prepare(policy)
-
-    assert isinstance(error.value, ValueError)
-    failure = error.value.failure
-    assert isinstance(failure, PreparationFailure.ResourceLimitExceeded)
-    assert failure.operation == "lower_one_hot_constraints"
-    assert failure.resource == "regular constraints"
-    assert failure.observed == 1
-    assert failure.limit == 0
-    assert failure.current.to_v2_bytes() == instance.to_v2_bytes()
-
-
 def test_identity_does_not_interpret_unused_per_constraint_penalty_ids() -> None:
     x = DecisionVariable.binary(0)
     instance = Instance.from_components(
@@ -314,7 +259,7 @@ def test_identity_does_not_interpret_unused_per_constraint_penalty_ids() -> None
     assert instance.to_v2_bytes() == before
 
 
-def test_unknown_per_constraint_penalty_id_fails_when_penalty_is_reached() -> None:
+def test_extra_unknown_per_constraint_penalty_id_fails_when_penalty_is_reached() -> None:
     x = DecisionVariable.binary(0)
     instance = Instance.from_components(
         decision_variables=[x],
@@ -325,17 +270,12 @@ def test_unknown_per_constraint_penalty_id_fails_when_penalty_is_reached() -> No
     before = instance.to_v2_bytes()
     policy = PreparationPolicy(
         acceptable_instance_class=binary_unconstrained_class(),
-        penalty_weights={999: 2.0},
+        penalty_weights={9: 2.0, 999: 3.0},
     )
 
-    with pytest.raises(PreparationError) as error:
+    with pytest.raises(RuntimeError):
         instance.prepare(policy)
 
-    failure = error.value.failure
-    assert isinstance(failure, PreparationFailure.PolicyMismatch)
-    assert not failure.current_membership.is_member
-    assert "outside Preparation.source" in failure.detail
-    assert failure.current.to_v2_bytes() == before
     assert instance.to_v2_bytes() == before
 
 
@@ -374,19 +314,15 @@ def test_generated_regular_constraint_requires_uniform_penalty() -> None:
         allowed_special_constraint_lowerings={SpecialConstraintKind.OneHot},
         penalty_weights={},
     )
+    before = instance.to_v2_bytes()
 
-    with pytest.raises(PreparationError) as error:
+    with pytest.raises(RuntimeError):
         instance.prepare(policy)
 
-    failure = error.value.failure
-    assert isinstance(failure, PreparationFailure.PolicyMismatch)
-    assert "generated active regular constraints" in failure.detail
-    assert failure.current.one_hot_constraints == {}
-    assert set(failure.current.removed_one_hot_constraints) == {7}
-    assert len(failure.current.constraints) == 1
+    assert instance.to_v2_bytes() == before
 
 
-def test_operation_owned_error_is_not_reclassified_as_preparation_error() -> None:
+def test_operation_owned_error_is_preserved() -> None:
     x = DecisionVariable.integer(0)
     instance = Instance.from_components(
         decision_variables=[x],

@@ -75,8 +75,6 @@ __all__ = [
     "ParametricInstance",
     "Polynomial",
     "Preparation",
-    "PreparationError",
-    "PreparationFailure",
     "PreparationPolicy",
     "Provenance",
     "ProvenanceKind",
@@ -6117,126 +6115,6 @@ class Preparation:
         """
     def __repr__(self) -> builtins.str: ...
 
-class PreparationError(builtins.ValueError):
-    r"""
-    Canonical Instance preparation could not satisfy the requested policy.
-    """
-    @property
-    def failure(self) -> PreparationFailure:
-        r"""
-        Structured evidence from the unsuccessful canonical Preparation attempt.
-        """
-
-class PreparationFailure:
-    r"""
-    Structured evidence from an unsuccessful canonical Preparation attempt.
-
-    The corresponding Python exception exposes this value as
-    :attr:`PreparationError.failure`.
-
-    Every variant carries ``source``, ``policy``, ``current``, and
-    ``current_membership`` snapshots. ``current`` is the last Instance committed
-    by the canonical procedure. Variant-specific fields explain why that
-    Instance could not be returned as a successful prepared input.
-    """
-    @typing.final
-    class PolicyMismatch(PreparationFailure):
-        __match_args__ = (
-            "source",
-            "policy",
-            "current",
-            "current_membership",
-            "detail",
-        )
-        @property
-        def source(self) -> Instance: ...
-        @property
-        def policy(self) -> PreparationPolicy: ...
-        @property
-        def current(self) -> Instance: ...
-        @property
-        def current_membership(self) -> InstanceClassMembershipReport: ...
-        @property
-        def detail(self) -> builtins.str: ...
-        def __new__(
-            cls,
-            source: Instance,
-            policy: PreparationPolicy,
-            current: Instance,
-            current_membership: InstanceClassMembershipReport,
-            detail: builtins.str,
-        ) -> PreparationFailure.PolicyMismatch: ...
-
-    @typing.final
-    class ResourceLimitExceeded(PreparationFailure):
-        __match_args__ = (
-            "source",
-            "policy",
-            "current",
-            "current_membership",
-            "operation",
-            "resource",
-            "observed",
-            "limit",
-        )
-        @property
-        def source(self) -> Instance: ...
-        @property
-        def policy(self) -> PreparationPolicy: ...
-        @property
-        def current(self) -> Instance: ...
-        @property
-        def current_membership(self) -> InstanceClassMembershipReport: ...
-        @property
-        def operation(self) -> builtins.str: ...
-        @property
-        def resource(self) -> builtins.str: ...
-        @property
-        def observed(self) -> builtins.int: ...
-        @property
-        def limit(self) -> builtins.int: ...
-        def __new__(
-            cls,
-            source: Instance,
-            policy: PreparationPolicy,
-            current: Instance,
-            current_membership: InstanceClassMembershipReport,
-            operation: builtins.str,
-            resource: builtins.str,
-            observed: builtins.int,
-            limit: builtins.int,
-        ) -> PreparationFailure.ResourceLimitExceeded: ...
-
-    @typing.final
-    class TargetInstanceClassNotReached(PreparationFailure):
-        __match_args__ = (
-            "source",
-            "policy",
-            "current",
-            "current_membership",
-            "detail",
-        )
-        @property
-        def source(self) -> Instance: ...
-        @property
-        def policy(self) -> PreparationPolicy: ...
-        @property
-        def current(self) -> Instance: ...
-        @property
-        def current_membership(self) -> InstanceClassMembershipReport: ...
-        @property
-        def detail(self) -> builtins.str: ...
-        def __new__(
-            cls,
-            source: Instance,
-            policy: PreparationPolicy,
-            current: Instance,
-            current_membership: InstanceClassMembershipReport,
-            detail: builtins.str,
-        ) -> PreparationFailure.TargetInstanceClassNotReached: ...
-
-    ...
-
 @typing.final
 class PreparationPolicy:
     r"""
@@ -6299,21 +6177,6 @@ class PreparationPolicy:
         source-map domain, so a uniform penalty is required when such rows
         remain active.
         """
-    @property
-    def atol(self) -> builtins.float:
-        r"""
-        Absolute tolerance used by permitted preparation operations.
-        """
-    @property
-    def max_added_decision_variables(self) -> typing.Optional[builtins.int]:
-        r"""
-        Maximum number of decision variables introduced relative to the source.
-        """
-    @property
-    def max_added_regular_constraints(self) -> typing.Optional[builtins.int]:
-        r"""
-        Maximum number of active regular constraints introduced relative to the source.
-        """
     def __new__(
         cls,
         *,
@@ -6327,9 +6190,6 @@ class PreparationPolicy:
         allow_approximate_integer_slack: builtins.bool = False,
         uniform_penalty_weight: typing.Optional[builtins.float] = None,
         penalty_weights: typing.Optional[collections.abc.Mapping[int, float]] = None,
-        atol: typing.Optional[builtins.float] = None,
-        max_added_decision_variables: typing.Optional[builtins.int] = None,
-        max_added_regular_constraints: typing.Optional[builtins.int] = None,
     ) -> PreparationPolicy: ...
     def __repr__(self) -> builtins.str: ...
 

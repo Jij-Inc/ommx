@@ -18995,47 +18995,6 @@
         },
         {
           "kind": "Class",
-          "name": "PreparationError",
-          "doc": "Canonical Instance preparation could not satisfy the requested policy.",
-          "bases": [
-            {
-              "display": "ValueError",
-              "link_target": null,
-              "children": []
-            }
-          ],
-          "methods": [],
-          "attributes": [
-            {
-              "name": "failure",
-              "doc": "Structured evidence from the unsuccessful canonical Preparation attempt.",
-              "type_": {
-                "display": "PreparationFailure",
-                "link_target": {
-                  "fqn": "ommx.PreparationFailure",
-                  "doc_module": "ommx",
-                  "kind": "Class",
-                  "attribute": null
-                },
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            }
-          ],
-          "deprecated": null
-        },
-        {
-          "kind": "Class",
-          "name": "PreparationFailure",
-          "doc": "Structured evidence from an unsuccessful canonical Preparation attempt.\n\nThe corresponding Python exception exposes this value as\n:attr:`PreparationError.failure`.\n\nEvery variant carries ``source``, ``policy``, ``current``, and\n``current_membership`` snapshots. ``current`` is the last Instance committed\nby the canonical procedure. Variant-specific fields explain why that\nInstance could not be returned as a successful prepared input.",
-          "bases": [],
-          "methods": [],
-          "attributes": [],
-          "deprecated": null
-        },
-        {
-          "kind": "Class",
           "name": "PreparationPolicy",
           "doc": "Caller-owned permissions and parameters for :meth:`Instance.prepare`.\n\nThis is an OMMX core value. Solver Adapters may recommend a policy, but the\npolicy neither retains an Adapter nor calls Adapter-owned Python code.\nPositive finite penalty weights require a minimization candidate; permit\nsense normalization when preparing a maximization source.",
           "bases": [],
@@ -19173,60 +19132,6 @@
                         "kind": "Simple",
                         "value": "None"
                       }
-                    },
-                    {
-                      "name": "atol",
-                      "type_": {
-                        "display": "Optional[float]",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "float",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      },
-                      "default": {
-                        "kind": "Simple",
-                        "value": "None"
-                      }
-                    },
-                    {
-                      "name": "max_added_decision_variables",
-                      "type_": {
-                        "display": "Optional[int]",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "int",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      },
-                      "default": {
-                        "kind": "Simple",
-                        "value": "None"
-                      }
-                    },
-                    {
-                      "name": "max_added_regular_constraints",
-                      "type_": {
-                        "display": "Optional[int]",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "int",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      },
-                      "default": {
-                        "kind": "Simple",
-                        "value": "None"
-                      }
                     }
                   ],
                   "return_type": {
@@ -19319,53 +19224,8 @@
               "is_readonly": true
             },
             {
-              "name": "atol",
-              "doc": "Absolute tolerance used by permitted preparation operations.",
-              "type_": {
-                "display": "float",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
               "name": "inequality_integer_slack_max_range",
               "doc": "Configured positive slack range, or ``None`` when integer slack is forbidden.",
-              "type_": {
-                "display": "Optional[int]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "int",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "max_added_decision_variables",
-              "doc": "Maximum number of decision variables introduced relative to the source.",
-              "type_": {
-                "display": "Optional[int]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "int",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "max_added_regular_constraints",
-              "doc": "Maximum number of active regular constraints introduced relative to the source.",
               "type_": {
                 "display": "Optional[int]",
                 "link_target": null,
@@ -33467,8 +33327,6 @@
     "ommx.ParametricInstance": "ommx",
     "ommx.Polynomial": "ommx",
     "ommx.Preparation": "ommx",
-    "ommx.PreparationError": "ommx",
-    "ommx.PreparationFailure": "ommx",
     "ommx.PreparationPolicy": "ommx",
     "ommx.Provenance": "ommx",
     "ommx.ProvenanceKind": "ommx",

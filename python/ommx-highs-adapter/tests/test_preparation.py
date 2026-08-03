@@ -6,8 +6,6 @@ from ommx import (
     IndicatorConstraint,
     Instance,
     OneHotConstraint,
-    PreparationError,
-    PreparationFailure,
     PreparationPolicy,
     Sense,
     Sos1Constraint,
@@ -118,11 +116,7 @@ def test_identity_only_policy_rejects_lowering_without_mutating_source() -> None
     assert input_class is not None
     policy = PreparationPolicy(acceptable_instance_class=input_class)
 
-    with pytest.raises(PreparationError) as error:
+    with pytest.raises(RuntimeError):
         source.prepare(policy)
 
-    failure = error.value.failure
-    assert isinstance(failure, PreparationFailure.TargetInstanceClassNotReached)
-    assert failure.current_membership.is_member is False
-    assert failure.current.to_v2_bytes() == before
     assert source.to_v2_bytes() == before

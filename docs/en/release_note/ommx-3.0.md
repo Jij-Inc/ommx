@@ -11,9 +11,9 @@ Changes merged after the most recent release will be appended here as they land,
 ### 🆕 Instance-owned preparation policies for solver adapters ([#1139](https://github.com/Jij-Inc/ommx/pull/1139))
 
 {class}`~ommx.PreparationPolicy` now describes a caller-selected acceptable
-{class}`~ommx.InstanceClass` together with the transformations, parameters,
-and resource limits that preparation may use. {meth}`~ommx.Instance.prepare`
-interprets that Policy using OMMX's canonical phase order and returns a
+{class}`~ommx.InstanceClass` together with the existing `Instance` operations
+and their parameters that preparation may use. {meth}`~ommx.Instance.prepare`
+interprets that Policy in a fixed order and returns a
 {class}`~ommx.Preparation` containing isolated source, Policy, and input
 snapshots. A `SolverAdapter` may recommend a Policy through
 `recommended_preparation_policy()`, but the Adapter neither executes
@@ -37,10 +37,12 @@ variables. Adapters already evaluate their returned {class}`~ommx.Solution` or
 IDs remain stable through regular transformations. Lowering a special
 constraint creates fresh regular rows, so per-constraint penalty weights use
 source regular-constraint IDs and a uniform weight is required when generated
-rows remain active. Weight binding is owned by the penalty operation and does
-not interpret removed-reason metadata. Positive finite weights require a
-minimization candidate, so a maximization source must permit sense
-normalization.
+rows remain active. `Instance.prepare()` reads the parameter IDs recorded by
+the existing penalty transformation instead of maintaining another mapping.
+Positive finite weights require a minimization candidate, so a maximization
+source must permit sense normalization. Errors from existing `Instance`
+operations propagate unchanged; failure to reach the acceptable class after
+all permitted operations is an ordinary error.
 
 ### 🛠 Model errors follow caller ownership ([#1104](https://github.com/Jij-Inc/ommx/pull/1104), [#1105](https://github.com/Jij-Inc/ommx/pull/1105))
 

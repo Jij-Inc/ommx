@@ -58,12 +58,6 @@ returns the typed error directly):
   caller may explicitly choose another mathematical operation. Contract,
   allocation, substitution, and arithmetic failures are not folded into these
   signals.
-- [`PreparationFailure`](crate::PreparationFailure) — structured evidence that
-  the canonical [`Instance::prepare`](crate::Instance::prepare) procedure found
-  Instance-specific Policy data that did not apply, would exceed a Policy
-  resource limit, or exhausted its permitted phases without reaching the
-  acceptable [`InstanceClass`](crate::InstanceClass). It does not wrap errors
-  owned by an applied mathematical operation.
 
 Evaluation does not define an umbrella error type. Caller-provided numeric
 validation reuses [`DecisionVariableError`](crate::DecisionVariableError), and
@@ -98,26 +92,6 @@ match instance.convert_inequality_to_equality_with_integer_slack(id, 32, atol) {
     }
     Err(e) => return Err(e),
     Ok(()) => {}
-}
-```
-
-Canonical Preparation failures can be inspected independently of those
-operation-owned signals:
-
-```ignore
-match source.prepare(&policy) {
-    Err(e) if e.is::<ommx::PreparationFailure>() => {
-        match e.downcast_ref::<ommx::PreparationFailure>().unwrap() {
-            ommx::PreparationFailure::PolicyMismatch { .. } => { /* fix Policy data */ }
-            ommx::PreparationFailure::ResourceLimitExceeded { .. } => { /* revise limit */ }
-            ommx::PreparationFailure::TargetInstanceClassNotReached { .. } => {
-                /* revise target or permitted operations */
-            }
-            _ => { /* the signal is non-exhaustive */ }
-        }
-    }
-    Err(e) => return Err(e), // Instance-operation signal or ordinary SDK error
-    Ok(preparation) => { /* use preparation.input() */ }
 }
 ```
 

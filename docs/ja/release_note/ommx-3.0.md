@@ -11,9 +11,9 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 ### 🆕 Solver Adapter向けのInstance-owned preparation policy ([#1139](https://github.com/Jij-Inc/ommx/pull/1139))
 
 {class}`~ommx.PreparationPolicy` は、呼び出し側が選んだ受け入れ可能な
-{class}`~ommx.InstanceClass` と、preparationで許可する変換・parameter・resource
-limitを表します。{meth}`~ommx.Instance.prepare` がOMMXのcanonicalなphase順序で
-Policyを解釈し、分離されたsource / Policy / input snapshotを持つ
+{class}`~ommx.InstanceClass` と、preparationで利用を許可する既存の `Instance` 操作・
+parameterを表します。{meth}`~ommx.Instance.prepare` が固定順序でPolicyを解釈し、
+分離されたsource / Policy / input snapshotを持つ
 {class}`~ommx.Preparation` を返します。
 `SolverAdapter` は `recommended_preparation_policy()` でPolicyを推奨できますが、
 preparationを実行せず、直接入力に対する `INPUT_CLASS` checkも緩和しません。
@@ -33,10 +33,12 @@ provenance、補助変数としてinput自身が所有します。Adapterが返�
 {class}`~ommx.Solution` / {class}`~ommx.SampleSet` は、そのinputに対して既に評価済みです。
 通常制約のIDは通常制約に対する変換では保持されます。特殊制約のloweringだけは新しい
 通常制約rowを生成するため、制約ごとのpenalty weightはsourceの通常制約IDを使い、
-生成されたrowがactiveに残る場合はuniform weightが必要です。weightの対応付けは
-penalty操作自身が所有し、removed-reason metadataを解釈しません。正のfinite weightは
-minimization candidateにだけ適用されるため、maximization sourceではsense normalizationも
-許可する必要があります。
+生成されたrowがactiveに残る場合はuniform weightが必要です。`Instance.prepare()` は
+別の対応表を持たず、既存のpenalty変形が記録したparameter IDを読み取ります。正の
+finite weightはminimization candidateにだけ適用されるため、maximization sourceでは
+sense normalizationも許可する必要があります。既存の `Instance` 操作のerrorはそのまま
+返し、許可された操作をすべて適用しても受け入れ可能なclassに到達しなければ通常の
+errorを返します。
 
 ### 🛠 Model error を呼び出し側の回復方法に応じて通知 ([#1104](https://github.com/Jij-Inc/ommx/pull/1104)、[#1105](https://github.com/Jij-Inc/ommx/pull/1105))
 

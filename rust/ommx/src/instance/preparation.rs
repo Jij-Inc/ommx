@@ -1,201 +1,123 @@
-//! Canonical construction of adapter-ready [`Instance`] values.
+//! Policy-driven construction of adapter-ready [`Instance`] values.
 //!
-//! [`Preparation`] retains isolated source, policy, and prepared input
-//! snapshots after canonical construction reaches a caller-selected
-//! [`InstanceClass`]. The prepared [`Instance`] itself owns the data used to
-//! evaluate solver outputs.
+//! Preparation is a thin interpreter over existing [`Instance`] operations.
+//! The prepared [`Instance`] itself retains everything needed to evaluate
+//! solver states and samples.
 
-use super::{Instance, SpecialConstraintKind, SpecialConstraintKinds};
-use crate::{
-    v1, ATol, ConstraintID, Equality, InstanceClass, InstanceClassMembershipReport, Kind, Sense,
-};
+use super::{Instance, SpecialConstraintKinds};
+use crate::{v1, ATol, ConstraintID, Equality, InstanceClass, Kind, Sense};
 use anyhow::Context;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-/// Caller-selected integer-slack behavior for canonical preparation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct IntegerSlackPolicy {
-    max_range: u64,
-    allow_approximate: bool,
-}
-
-impl IntegerSlackPolicy {
-    /// Permit only exact integer slack with the given maximum range.
-    pub fn exact(max_range: u64) -> crate::Result<Self> {
-        Self::new(max_range, false)
-    }
-
-    /// Prefer exact slack and permit discrete approximate slack as fallback.
-    pub fn exact_or_approximate(max_range: u64) -> crate::Result<Self> {
-        Self::new(max_range, true)
-    }
-
-    fn new(max_range: u64, allow_approximate: bool) -> crate::Result<Self> {
-        if max_range == 0 {
-            crate::bail!("integer slack max_range must be positive");
-        }
-        Ok(Self {
-            max_range,
-            allow_approximate,
-        })
-    }
-
-    /// Maximum integer range permitted for a newly introduced slack variable.
-    pub fn max_range(&self) -> u64 {
-        self.max_range
-    }
-
-    /// Whether approximate slack may be used when exact slack is unavailable.
-    pub fn allow_approximate(&self) -> bool {
-        self.allow_approximate
-    }
-}
-
-/// Explicit finite penalty weights permitted by a [`PreparationPolicy`].
+/// Caller-owned permissions and parameters interpreted by [`Instance::prepare`].
 ///
-/// Positive weights are applied only to a minimization candidate. A Policy
-/// preparing a maximization source must also permit sense normalization.
-#[derive(Debug, Clone, PartialEq)]
-#[non_exhaustive]
-pub enum PenaltyWeights {
-    /// One positive finite weight for every active regular constraint.
-    Uniform { weight: f64 },
-    /// Positive finite weights keyed by source regular constraint ID.
-    ///
-    /// Every source regular row still active at the penalty phase must be
-    /// present. Entries for source rows removed as trivial are permitted and
-    /// are ignored when materializing the finite penalty. Special-constraint
-    /// lowering creates fresh regular rows outside this source-ID domain, so
-    /// [`Self::Uniform`] is required when any such row remains active.
-    PerConstraint {
-        weights: BTreeMap<ConstraintID, f64>,
-    },
-}
-
-impl PenaltyWeights {
-    fn validate(&self) -> crate::Result<()> {
-        let validate_weight = |weight: f64| -> crate::Result<()> {
-            if !weight.is_finite() || weight <= 0.0 {
-                crate::bail!("finite penalty weights must be positive and finite: {weight}");
-            }
-            Ok(())
-        };
-        match self {
-            Self::Uniform { weight } => validate_weight(*weight),
-            Self::PerConstraint { weights } => {
-                for (&id, &weight) in weights {
-                    validate_weight(weight).map_err(|error| {
-                        error.context(format!("invalid penalty weight for constraint {id:?}"))
-                    })?;
-                }
-                Ok(())
-            }
-        }
-    }
-}
-
-/// Caller-owned settings interpreted by [`Instance::prepare`].
-///
-/// This value contains permissions and parameters, not an executable recipe.
-/// Canonical phase ordering belongs to the SDK implementation.
+/// This value is not an executable recipe. The SDK applies the permitted
+/// existing [`Instance`] operations in a fixed order and stops as soon as the
+/// input belongs to [`Self::acceptable_instance_class`].
 #[derive(Debug, Clone)]
 pub struct PreparationPolicy {
     acceptable_instance_class: InstanceClass,
     allowed_special_constraint_lowerings: SpecialConstraintKinds,
     allow_integer_log_encoding: bool,
     allow_sense_normalization: bool,
-    integer_slack_policy: Option<IntegerSlackPolicy>,
-    penalty_weights: Option<PenaltyWeights>,
-    atol: ATol,
-    max_added_decision_variables: Option<usize>,
-    max_added_regular_constraints: Option<usize>,
+    inequality_integer_slack_max_range: Option<u64>,
+    allow_approximate_integer_slack: bool,
+    uniform_penalty_weight: Option<f64>,
+    penalty_weights: Option<BTreeMap<ConstraintID, f64>>,
 }
 
 impl PreparationPolicy {
-    /// Construct caller-owned permissions and resource limits.
-    ///
-    /// `acceptable_instance_class` is the complete success criterion. The
-    /// remaining arguments permit individual canonical phases but do not set
-    /// their order.
+    /// Construct permissions and parameters for [`Instance::prepare`].
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         acceptable_instance_class: InstanceClass,
         allowed_special_constraint_lowerings: SpecialConstraintKinds,
         allow_integer_log_encoding: bool,
         allow_sense_normalization: bool,
-        integer_slack_policy: Option<IntegerSlackPolicy>,
-        penalty_weights: Option<PenaltyWeights>,
-        atol: ATol,
-        max_added_decision_variables: Option<usize>,
-        max_added_regular_constraints: Option<usize>,
+        inequality_integer_slack_max_range: Option<u64>,
+        allow_approximate_integer_slack: bool,
+        uniform_penalty_weight: Option<f64>,
+        penalty_weights: Option<BTreeMap<ConstraintID, f64>>,
     ) -> crate::Result<Self> {
-        if let Some(weights) = &penalty_weights {
-            weights.validate()?;
+        if inequality_integer_slack_max_range == Some(0) {
+            crate::bail!("inequality integer slack max range must be positive");
         }
+        if allow_approximate_integer_slack && inequality_integer_slack_max_range.is_none() {
+            crate::bail!(
+                "approximate integer slack requires an inequality integer slack max range"
+            );
+        }
+        if uniform_penalty_weight.is_some() && penalty_weights.is_some() {
+            crate::bail!("uniform and per-constraint penalty weights are mutually exclusive");
+        }
+        if let Some(weight) = uniform_penalty_weight {
+            ensure_positive_finite_penalty(weight)?;
+        }
+        if let Some(weights) = &penalty_weights {
+            for (&constraint_id, &weight) in weights {
+                ensure_positive_finite_penalty(weight).with_context(|| {
+                    format!("invalid penalty weight for constraint {constraint_id:?}")
+                })?;
+            }
+        }
+
         Ok(Self {
             acceptable_instance_class,
             allowed_special_constraint_lowerings,
             allow_integer_log_encoding,
             allow_sense_normalization,
-            integer_slack_policy,
+            inequality_integer_slack_max_range,
+            allow_approximate_integer_slack,
+            uniform_penalty_weight,
             penalty_weights,
-            atol,
-            max_added_decision_variables,
-            max_added_regular_constraints,
         })
     }
 
-    /// The set that the prepared input must belong to.
+    /// The class that the prepared input must belong to.
     pub fn acceptable_instance_class(&self) -> &InstanceClass {
         &self.acceptable_instance_class
     }
 
-    /// Special-constraint families that canonical preparation may lower.
+    /// Special-constraint families that may be lowered.
     pub fn allowed_special_constraint_lowerings(&self) -> &SpecialConstraintKinds {
         &self.allowed_special_constraint_lowerings
     }
 
-    /// Whether canonical preparation may log-encode Integer variables.
+    /// Whether bounded Integer variables may be log encoded.
     pub fn allow_integer_log_encoding(&self) -> bool {
         self.allow_integer_log_encoding
     }
 
-    /// Whether canonical preparation may normalize maximization to minimization.
+    /// Whether a maximization objective may be normalized to minimization.
     pub fn allow_sense_normalization(&self) -> bool {
         self.allow_sense_normalization
     }
 
-    /// Configured integer-slack behavior, if permitted.
-    pub fn integer_slack_policy(&self) -> Option<IntegerSlackPolicy> {
-        self.integer_slack_policy
+    /// Maximum range for an Integer slack variable, when slack is permitted.
+    pub fn inequality_integer_slack_max_range(&self) -> Option<u64> {
+        self.inequality_integer_slack_max_range
     }
 
-    /// Configured finite penalty weights, if permitted.
-    pub fn penalty_weights(&self) -> Option<&PenaltyWeights> {
+    /// Whether approximate Integer slack may be used when exact slack is unavailable.
+    pub fn allow_approximate_integer_slack(&self) -> bool {
+        self.allow_approximate_integer_slack
+    }
+
+    /// Uniform finite penalty weight, when selected.
+    pub fn uniform_penalty_weight(&self) -> Option<f64> {
+        self.uniform_penalty_weight
+    }
+
+    /// Per-constraint finite penalty weights, when selected.
+    pub fn penalty_weights(&self) -> Option<&BTreeMap<ConstraintID, f64>> {
         self.penalty_weights.as_ref()
-    }
-
-    /// Absolute tolerance passed to canonical operations that accept one.
-    pub fn atol(&self) -> ATol {
-        self.atol
-    }
-
-    /// Maximum permitted decision-variable count added relative to the source.
-    pub fn max_added_decision_variables(&self) -> Option<usize> {
-        self.max_added_decision_variables
-    }
-
-    /// Maximum permitted active regular-constraint count added relative to the source.
-    pub fn max_added_regular_constraints(&self) -> Option<usize> {
-        self.max_added_regular_constraints
     }
 }
 
-/// Immutable construction record produced by [`Instance::prepare`].
+/// Immutable source, Policy, and prepared-input snapshots.
 ///
-/// The prepared [`Self::input`] is the owner of every transformation effect
-/// needed for evaluation. This record does not define a separate state mapping
-/// or duplicate transformation history outside the Instance.
+/// This type does not define a separate transformation history or result
+/// mapping. Evaluate solver states and samples with [`Self::input`].
 #[derive(Debug, Clone)]
 pub struct Preparation {
     source: Instance,
@@ -214,508 +136,213 @@ impl Preparation {
         &self.policy
     }
 
-    /// Constructed Instance belonging to the Policy's acceptable class.
-    ///
-    /// Solver states and samples are evaluated against this Instance. Its own
-    /// dependency, removed-row, provenance, and auxiliary-variable data record
-    /// the effects of the transformations applied during preparation.
+    /// Prepared input belonging to the Policy's acceptable class.
     pub fn input(&self) -> &Instance {
         &self.input
     }
 }
 
-/// Operational evidence that canonical preparation could not return an input.
-#[derive(Debug, Clone)]
-#[non_exhaustive]
-pub enum PreparationFailure {
-    /// An Instance-specific Policy value cannot be applied to the source or
-    /// current canonical candidate.
-    PolicyMismatch {
-        /// Isolated source snapshot.
-        source: Instance,
-        /// Isolated Policy snapshot.
-        policy: PreparationPolicy,
-        /// Last candidate committed by the canonical procedure.
-        current: Instance,
-        /// Membership evidence for the last committed candidate.
-        current_membership: InstanceClassMembershipReport,
-        /// Human-readable mismatch detail.
-        detail: String,
-    },
-    /// Committing the next canonical operation would exceed a Policy limit.
-    ResourceLimitExceeded {
-        /// Isolated source snapshot.
-        source: Instance,
-        /// Isolated Policy snapshot.
-        policy: PreparationPolicy,
-        /// Last candidate committed before the rejected operation.
-        current: Instance,
-        /// Membership evidence for the last committed candidate.
-        current_membership: InstanceClassMembershipReport,
-        /// Stable name of the operation whose candidate exceeded the limit.
-        operation: String,
-        /// Resource counted by this limit.
-        resource: String,
-        /// Candidate count that would have been committed.
-        observed: usize,
-        /// Policy limit.
-        limit: usize,
-    },
-    /// The canonical procedure exhausted its permitted phases without reaching
-    /// the acceptable InstanceClass.
-    TargetInstanceClassNotReached {
-        /// Isolated source snapshot.
-        source: Instance,
-        /// Isolated Policy snapshot.
-        policy: PreparationPolicy,
-        /// Final candidate committed by the canonical procedure.
-        current: Instance,
-        /// Membership evidence for the final canonical candidate.
-        current_membership: InstanceClassMembershipReport,
-        /// Human-readable target failure detail.
-        detail: String,
-    },
-}
-
-impl PreparationFailure {
-    /// Isolated source snapshot retained as failure evidence.
-    pub fn source(&self) -> &Instance {
-        match self {
-            Self::PolicyMismatch { source, .. }
-            | Self::ResourceLimitExceeded { source, .. }
-            | Self::TargetInstanceClassNotReached { source, .. } => source,
-        }
-    }
-
-    /// Isolated Policy snapshot retained as failure evidence.
-    pub fn policy(&self) -> &PreparationPolicy {
-        match self {
-            Self::PolicyMismatch { policy, .. }
-            | Self::ResourceLimitExceeded { policy, .. }
-            | Self::TargetInstanceClassNotReached { policy, .. } => policy,
-        }
-    }
-
-    /// Last Instance committed by the canonical procedure.
-    pub fn current(&self) -> &Instance {
-        match self {
-            Self::PolicyMismatch { current, .. }
-            | Self::ResourceLimitExceeded { current, .. }
-            | Self::TargetInstanceClassNotReached { current, .. } => current,
-        }
-    }
-
-    /// Membership evidence for the last committed canonical candidate.
-    pub fn current_membership(&self) -> &InstanceClassMembershipReport {
-        match self {
-            Self::PolicyMismatch {
-                current_membership, ..
-            }
-            | Self::ResourceLimitExceeded {
-                current_membership, ..
-            }
-            | Self::TargetInstanceClassNotReached {
-                current_membership, ..
-            } => current_membership,
-        }
-    }
-
-    /// Human-readable detail suitable for diagnostics.
-    pub fn detail(&self) -> String {
-        match self {
-            Self::ResourceLimitExceeded {
-                operation,
-                resource,
-                observed,
-                limit,
-                ..
-            } => format!(
-                "{operation} would use {observed} added {resource}, exceeding the limit {limit}"
-            ),
-            Self::PolicyMismatch { detail, .. }
-            | Self::TargetInstanceClassNotReached { detail, .. } => detail.clone(),
-        }
-    }
-}
-
-impl std::fmt::Display for PreparationFailure {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.detail())
-    }
-}
-
-impl std::error::Error for PreparationFailure {}
-
 impl Instance {
-    /// Apply the SDK's versioned canonical preparation procedure.
+    /// Apply Policy-permitted existing Instance operations in canonical order.
     ///
-    /// The source and policy are cloned before any operation. Identity is
-    /// checked first; source-relative Policy IDs are interpreted only if their
-    /// canonical phase is reached. Permitted phases are applied in the fixed
-    /// order Indicator, OneHot, SOS1, source Integer log encoding, sense
-    /// normalization, integer slack, finite penalty, and remaining Integer log
-    /// encoding. Whole-class membership is checked after every committed
-    /// operation.
-    ///
-    /// A successful result is evaluated through [`Preparation::input`]. The
-    /// prepared Instance itself records dependency, removed-row, provenance,
-    /// and auxiliary-variable data; Preparation does not add encode/decode
-    /// operations or a parallel transformation history.
-    ///
-    /// A failure means only that this canonical procedure did not produce the
-    /// requested class member. It does not prove that no other operation
-    /// sequence exists. Existing operation-owned errors are returned without a
-    /// Preparation wrapper.
+    /// The source is cloned before any operation, so a failure never mutates
+    /// the caller's Instance. Existing operation errors are returned unchanged.
+    /// If all permitted operations are exhausted, an ordinary error reports
+    /// the final [`InstanceClass`](crate::InstanceClass) membership failure.
     #[tracing::instrument(skip_all)]
     pub fn prepare(&self, policy: &PreparationPolicy) -> crate::Result<Preparation> {
         let source = self.clone();
         let policy = policy.clone();
-        let mut current = source.clone();
-        let mut membership = policy.acceptable_instance_class.check_membership(&current);
+        let mut input = source.clone();
 
-        if membership.is_member() {
-            return Ok(Preparation {
-                source,
-                policy,
-                input: current,
-            });
-        }
-
-        macro_rules! commit {
-            ($candidate:expr, $operation:expr) => {{
-                let candidate = $candidate;
-                let candidate_membership = policy
-                    .acceptable_instance_class
-                    .check_membership(&candidate);
-                check_resource_limits(
-                    &source,
-                    &policy,
-                    &current,
-                    &candidate,
-                    &membership,
-                    $operation,
-                )?;
-                current = candidate;
-                membership = candidate_membership;
-                if membership.is_member() {
+        macro_rules! return_if_acceptable {
+            () => {
+                if policy.acceptable_instance_class.contains(&input) {
                     return Ok(Preparation {
                         source,
                         policy,
-                        input: current,
+                        input,
                     });
                 }
-            }};
+            };
         }
 
-        if policy
-            .allowed_special_constraint_lowerings
-            .contains(&SpecialConstraintKind::Indicator)
-            && !current.indicator_constraints().is_empty()
-        {
-            let mut candidate = current.clone();
-            candidate.convert_all_indicators_to_constraints()?;
-            commit!(candidate, "lower_indicator_constraints");
+        return_if_acceptable!();
+
+        input.lower_special_constraints(&policy.allowed_special_constraint_lowerings)?;
+        return_if_acceptable!();
+
+        if policy.allow_integer_log_encoding {
+            log_encode_used_integers(&mut input)?;
+            return_if_acceptable!();
         }
 
-        if policy
-            .allowed_special_constraint_lowerings
-            .contains(&SpecialConstraintKind::OneHot)
-            && !current.one_hot_constraints().is_empty()
-        {
-            let mut candidate = current.clone();
-            candidate.convert_all_one_hots_to_constraints()?;
-            commit!(candidate, "lower_one_hot_constraints");
+        if policy.allow_sense_normalization {
+            input.as_minimization_problem();
+            return_if_acceptable!();
         }
 
-        if policy
-            .allowed_special_constraint_lowerings
-            .contains(&SpecialConstraintKind::Sos1)
-            && !current.sos1_constraints().is_empty()
+        if let Some(max_range) = policy.inequality_integer_slack_max_range {
+            add_integer_slack(
+                &mut input,
+                max_range,
+                policy.allow_approximate_integer_slack,
+            )?;
+            return_if_acceptable!();
+        }
+
+        if !input.constraints().is_empty()
+            && (policy.uniform_penalty_weight.is_some() || policy.penalty_weights.is_some())
         {
-            let mut candidate = current.clone();
-            candidate.convert_all_sos1_to_constraints()?;
-            commit!(candidate, "lower_sos1_constraints");
+            input = apply_finite_penalty(
+                input,
+                policy.uniform_penalty_weight,
+                policy.penalty_weights.as_ref(),
+                &source.constraints().keys().copied().collect(),
+            )?;
+            return_if_acceptable!();
         }
 
         if policy.allow_integer_log_encoding {
-            if let Some(candidate) = log_encode_current_integers(&current, policy.atol)? {
-                commit!(candidate, "log_encode_integers");
-            }
+            log_encode_used_integers(&mut input)?;
+            return_if_acceptable!();
         }
 
-        if policy.allow_sense_normalization && current.sense() == Sense::Maximize {
-            let mut candidate = current.clone();
-            let changed = candidate.as_minimization_problem();
-            debug_assert!(changed);
-            commit!(candidate, "normalize_to_minimization");
-        }
-
-        if let Some(slack_policy) = policy.integer_slack_policy {
-            let inequality_ids = current
-                .constraints()
-                .iter()
-                .filter_map(|(&id, constraint)| {
-                    (constraint.equality == Equality::LessThanOrEqualToZero).then_some(id)
-                })
-                .collect::<Vec<_>>();
-            for constraint_id in inequality_ids {
-                let mut candidate = current.clone();
-                let operation = match candidate.convert_inequality_to_equality_with_integer_slack(
-                    constraint_id.into_inner(),
-                    slack_policy.max_range,
-                    policy.atol,
-                ) {
-                    Ok(()) => "exact_integer_slack",
-                    Err(error)
-                        if slack_policy.allow_approximate
-                            && error.is::<super::slack::ExactIntegerSlackUnavailable>() =>
-                    {
-                        candidate = current.clone();
-                        candidate.add_integer_slack_to_inequality(
-                            constraint_id.into_inner(),
-                            slack_policy.max_range,
-                        )?;
-                        "approximate_integer_slack"
-                    }
-                    Err(error) => return Err(error),
-                };
-                commit!(candidate, operation);
-            }
-        }
-
-        if let Some(weights) = &policy.penalty_weights {
-            if !current.constraints().is_empty() {
-                if current.sense() != Sense::Minimize {
-                    return Err(policy_mismatch(
-                        &source,
-                        &policy,
-                        &current,
-                        &membership,
-                        "positive finite penalty weights require minimization; permit sense normalization before the penalty phase".to_string(),
-                    ));
-                }
-                if let PenaltyWeights::PerConstraint { weights } = weights {
-                    let source_regular_ids = source
-                        .constraints()
-                        .keys()
-                        .copied()
-                        .collect::<BTreeSet<_>>();
-                    let active_ids = current
-                        .constraints()
-                        .keys()
-                        .copied()
-                        .collect::<BTreeSet<_>>();
-                    let configured_ids = weights.keys().copied().collect::<BTreeSet<_>>();
-                    let unexpected = configured_ids
-                        .difference(&source_regular_ids)
-                        .copied()
-                        .collect::<BTreeSet<_>>();
-                    if !unexpected.is_empty() {
-                        return Err(policy_mismatch(
-                            &source,
-                            &policy,
-                            &current,
-                            &membership,
-                            format!(
-                                "per-constraint penalty weights contain IDs outside Preparation.source active regular constraints: {unexpected:?}"
-                            ),
-                        ));
-                    }
-                    let generated = active_ids
-                        .difference(&source_regular_ids)
-                        .copied()
-                        .collect::<BTreeSet<_>>();
-                    if !generated.is_empty() {
-                        return Err(policy_mismatch(
-                            &source,
-                            &policy,
-                            &current,
-                            &membership,
-                            format!(
-                                "special-constraint lowering generated active regular constraints {generated:?}; use a uniform penalty weight"
-                            ),
-                        ));
-                    }
-                    let remaining_source_ids = active_ids
-                        .intersection(&source_regular_ids)
-                        .copied()
-                        .collect::<BTreeSet<_>>();
-                    let missing = remaining_source_ids
-                        .difference(&configured_ids)
-                        .copied()
-                        .collect::<BTreeSet<_>>();
-                    if !missing.is_empty() {
-                        return Err(policy_mismatch(
-                            &source,
-                            &policy,
-                            &current,
-                            &membership,
-                            format!(
-                                "per-constraint penalty weights do not cover active source regular constraints {missing:?}"
-                            ),
-                        ));
-                    }
-                }
-                let candidate = apply_finite_penalty(current.clone(), weights)?;
-                commit!(candidate, "finite_penalty");
-            }
-        }
-
-        if policy.allow_integer_log_encoding {
-            if let Some(candidate) = log_encode_current_integers(&current, policy.atol)? {
-                commit!(candidate, "log_encode_integers");
-            }
-        }
-
-        Err(target_failure(
-            &source,
-            &policy,
-            &current,
-            &membership,
-            format!(
-                "canonical preparation exhausted its permitted phases without reaching the acceptable InstanceClass:\n{membership}"
-            ),
-        ))
+        let membership = policy.acceptable_instance_class.check_membership(&input);
+        crate::bail!("Preparation did not reach the acceptable InstanceClass:\n{membership}")
     }
 }
 
-fn log_encode_current_integers(current: &Instance, atol: ATol) -> crate::Result<Option<Instance>> {
-    let integer_ids = current
+fn ensure_positive_finite_penalty(weight: f64) -> crate::Result<()> {
+    if !weight.is_finite() || weight <= 0.0 {
+        crate::bail!("penalty weights must be positive and finite: {weight}");
+    }
+    Ok(())
+}
+
+fn log_encode_used_integers(input: &mut Instance) -> crate::Result<()> {
+    let integer_ids = input
         .used_decision_variables()
         .into_iter()
         .filter_map(|(id, variable)| (variable.kind() == Kind::Integer).then_some(id))
         .collect::<BTreeSet<_>>();
-    if integer_ids.is_empty() {
-        return Ok(None);
-    }
-    let mut candidate = current.clone();
-    candidate.log_encode(integer_ids, atol)?;
-    Ok(Some(candidate))
+    input.log_encode(integer_ids, ATol::default())?;
+    Ok(())
 }
 
-fn apply_finite_penalty(current: Instance, selected: &PenaltyWeights) -> crate::Result<Instance> {
-    match selected {
-        PenaltyWeights::Uniform { weight } => {
-            let parametric = current.uniform_penalty_method()?;
-            anyhow::ensure!(
-                parametric.parameters().ids().len() == 1,
-                "uniform penalty conversion must create exactly one parameter"
-            );
-            let parameter_id = parametric
-                .parameters()
-                .ids()
-                .iter()
-                .next()
-                .copied()
-                .context("uniform penalty conversion did not create a parameter")?;
-            parametric.with_parameters(v1::Parameters {
-                entries: HashMap::from([(parameter_id.into_inner(), *weight)]),
-            })
-        }
-        PenaltyWeights::PerConstraint { weights } => {
-            let active_weights = current
-                .constraints()
-                .keys()
-                .map(|&constraint_id| (constraint_id, weights[&constraint_id]))
-                .collect::<BTreeMap<_, _>>();
-            super::penalty::penalty_method_with_weights(current, &active_weights)
-        }
-    }
-}
-
-fn check_resource_limits(
-    source: &Instance,
-    policy: &PreparationPolicy,
-    current: &Instance,
-    candidate: &Instance,
-    current_membership: &InstanceClassMembershipReport,
-    operation: &'static str,
+fn add_integer_slack(
+    input: &mut Instance,
+    max_range: u64,
+    allow_approximate: bool,
 ) -> crate::Result<()> {
-    let added_variables = candidate
-        .decision_variables()
-        .len()
-        .saturating_sub(source.decision_variables().len());
-    if let Some(limit) = policy.max_added_decision_variables {
-        if added_variables > limit {
-            return Err(PreparationFailure::ResourceLimitExceeded {
-                source: source.clone(),
-                policy: policy.clone(),
-                current: current.clone(),
-                current_membership: current_membership.clone(),
-                operation: operation.to_string(),
-                resource: "decision variables".to_string(),
-                observed: added_variables,
-                limit,
-            }
-            .into());
-        }
-    }
-
-    let added_constraints = candidate
+    let inequality_ids = input
         .constraints()
-        .len()
-        .saturating_sub(source.constraints().len());
-    if let Some(limit) = policy.max_added_regular_constraints {
-        if added_constraints > limit {
-            return Err(PreparationFailure::ResourceLimitExceeded {
-                source: source.clone(),
-                policy: policy.clone(),
-                current: current.clone(),
-                current_membership: current_membership.clone(),
-                operation: operation.to_string(),
-                resource: "regular constraints".to_string(),
-                observed: added_constraints,
-                limit,
+        .iter()
+        .filter_map(|(&id, constraint)| {
+            (constraint.equality == Equality::LessThanOrEqualToZero).then_some(id)
+        })
+        .collect::<Vec<_>>();
+
+    for constraint_id in inequality_ids {
+        match input.convert_inequality_to_equality_with_integer_slack(
+            constraint_id.into_inner(),
+            max_range,
+            ATol::default(),
+        ) {
+            Ok(()) => {}
+            Err(error)
+                if allow_approximate
+                    && error.is::<super::slack::ExactIntegerSlackUnavailable>() =>
+            {
+                input.add_integer_slack_to_inequality(constraint_id.into_inner(), max_range)?;
             }
-            .into());
+            Err(error) => return Err(error),
         }
     }
     Ok(())
 }
 
-fn target_failure(
-    source: &Instance,
-    policy: &PreparationPolicy,
-    current: &Instance,
-    membership: &InstanceClassMembershipReport,
-    detail: String,
-) -> crate::Error {
-    PreparationFailure::TargetInstanceClassNotReached {
-        source: source.clone(),
-        policy: policy.clone(),
-        current: current.clone(),
-        current_membership: membership.clone(),
-        detail,
-    }
-    .into()
-}
+fn apply_finite_penalty(
+    input: Instance,
+    uniform_weight: Option<f64>,
+    per_constraint_weights: Option<&BTreeMap<ConstraintID, f64>>,
+    source_constraint_ids: &BTreeSet<ConstraintID>,
+) -> crate::Result<Instance> {
+    anyhow::ensure!(
+        input.sense() == Sense::Minimize,
+        "positive finite penalty weights require a minimization problem"
+    );
 
-fn policy_mismatch(
-    source: &Instance,
-    policy: &PreparationPolicy,
-    current: &Instance,
-    membership: &InstanceClassMembershipReport,
-    detail: String,
-) -> crate::Error {
-    PreparationFailure::PolicyMismatch {
-        source: source.clone(),
-        policy: policy.clone(),
-        current: current.clone(),
-        current_membership: membership.clone(),
-        detail,
+    match (uniform_weight, per_constraint_weights) {
+        (Some(weight), None) => {
+            let parametric = input.uniform_penalty_method()?;
+            let parameter_id = parametric
+                .parameters()
+                .keys()
+                .next()
+                .copied()
+                .context("uniform penalty method did not create a parameter")?;
+            parametric.with_parameters(v1::Parameters {
+                entries: HashMap::from([(parameter_id.into_inner(), weight)]),
+            })
+        }
+        (None, Some(weights)) => {
+            let active_ids = input.constraints().keys().copied().collect::<Vec<_>>();
+            for constraint_id in weights.keys() {
+                anyhow::ensure!(
+                    source_constraint_ids.contains(constraint_id),
+                    "penalty weight refers to unknown source constraint {constraint_id:?}"
+                );
+            }
+            anyhow::ensure!(
+                active_ids
+                    .iter()
+                    .all(|constraint_id| source_constraint_ids.contains(constraint_id)),
+                "per-constraint penalty weights cannot address constraints generated during Preparation; use a uniform penalty weight"
+            );
+            let parametric = input.penalty_method()?;
+            let mut entries = HashMap::with_capacity(active_ids.len());
+            for constraint_id in active_ids {
+                let (_, removed_reason) = parametric
+                    .removed_constraints()
+                    .get(&constraint_id)
+                    .with_context(|| {
+                        format!("penalty method did not remove constraint {constraint_id:?}")
+                    })?;
+                let parameter_id = removed_reason
+                    .parameters
+                    .get("parameter_id")
+                    .with_context(|| {
+                        format!(
+                            "penalty method did not record a parameter for constraint {constraint_id:?}"
+                        )
+                    })?
+                    .parse::<u64>()
+                    .with_context(|| {
+                        format!(
+                            "penalty method recorded an invalid parameter for constraint {constraint_id:?}"
+                        )
+                    })?;
+                let weight = *weights.get(&constraint_id).with_context(|| {
+                    format!("no penalty weight for active constraint {constraint_id:?}")
+                })?;
+                entries.insert(parameter_id, weight);
+            }
+            parametric.with_parameters(v1::Parameters { entries })
+        }
+        (None, None) => Ok(input),
+        (Some(_), Some(_)) => unreachable!("PreparationPolicy validates penalty modes"),
     }
-    .into()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
-        coeff, linear, v1, Bound, Constraint, DecisionVariable, DegreeBound, Evaluate, Function,
+        coeff, linear, Bound, Constraint, DecisionVariable, DegreeBound, Evaluate, Function,
         IndicatorConstraint, IndicatorConstraintID, InstanceClassClause, OneHotConstraint,
-        OneHotConstraintID, Sos1Constraint, Sos1ConstraintID, VariableID,
+        OneHotConstraintID, Sos1Constraint, Sos1ConstraintID, SpecialConstraintKind, VariableID,
     };
-    use std::collections::HashMap;
 
     fn highs_class() -> InstanceClass {
         InstanceClass::new(vec![InstanceClassClause::new(
@@ -740,12 +367,117 @@ mod tests {
         )])
     }
 
-    fn special_constraint_instance() -> Instance {
+    fn zero_state_for(instance: &Instance) -> v1::State {
+        v1::State::from(
+            instance
+                .used_decision_variable_ids()
+                .into_iter()
+                .map(|id| (id.into_inner(), 0.0))
+                .collect::<HashMap<_, _>>(),
+        )
+    }
+
+    fn integer_inequality_instance() -> Instance {
+        let x = VariableID::from(1);
+        Instance::builder()
+            .sense(Sense::Maximize)
+            .objective(Function::from(linear!(x)))
+            .decision_variables(BTreeMap::from([(
+                x,
+                DecisionVariable::new(
+                    Kind::Integer,
+                    Bound::new(0.0, 3.0).unwrap(),
+                    ATol::default(),
+                )
+                .unwrap(),
+            )]))
+            .constraints(BTreeMap::from([(
+                ConstraintID::from(10),
+                Constraint::less_than_or_equal_to_zero(Function::from(linear!(x) + coeff!(-2.0))),
+            )]))
+            .build()
+            .unwrap()
+    }
+
+    #[test]
+    fn policy_validates_only_its_own_values() {
+        assert!(PreparationPolicy::new(
+            openjij_class(),
+            SpecialConstraintKinds::new(),
+            false,
+            false,
+            Some(0),
+            false,
+            None,
+            None,
+        )
+        .is_err());
+        assert!(PreparationPolicy::new(
+            openjij_class(),
+            SpecialConstraintKinds::new(),
+            false,
+            false,
+            None,
+            true,
+            None,
+            None,
+        )
+        .is_err());
+        assert!(PreparationPolicy::new(
+            openjij_class(),
+            SpecialConstraintKinds::new(),
+            false,
+            false,
+            None,
+            false,
+            Some(1.0),
+            Some(BTreeMap::new()),
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn identity_preparation_does_not_interpret_unused_parameters() {
+        let source = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::new())
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap();
+        let target = InstanceClass::new(vec![InstanceClassClause::new(
+            "empty",
+            BTreeSet::new(),
+            DegreeBound::at_most(0),
+            BTreeSet::from([Sense::Minimize]),
+        )]);
+        let preparation = source
+            .prepare(
+                &PreparationPolicy::new(
+                    target,
+                    SpecialConstraintKinds::new(),
+                    false,
+                    false,
+                    None,
+                    false,
+                    None,
+                    Some(BTreeMap::from([(ConstraintID::from(99), 1.0)])),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+
+        assert_eq!(preparation.source(), &source);
+        assert_eq!(preparation.input(), &source);
+    }
+
+    #[test]
+    fn lowers_selected_special_constraints_with_existing_instance_operation() {
         let x = VariableID::from(1);
         let y = VariableID::from(2);
         let z = VariableID::from(3);
         let w = VariableID::from(4);
-        Instance::builder()
+        let source = Instance::builder()
             .sense(Sense::Minimize)
             .objective(Function::from((linear!(x) + linear!(w)).unwrap()))
             .decision_variables(BTreeMap::from([
@@ -772,81 +504,30 @@ mod tests {
                 Sos1Constraint::new(BTreeSet::from([x, y])).unwrap(),
             )]))
             .build()
-            .unwrap()
-    }
+            .unwrap();
+        let preparation = source
+            .prepare(
+                &PreparationPolicy::new(
+                    highs_class(),
+                    BTreeSet::from([
+                        SpecialConstraintKind::Indicator,
+                        SpecialConstraintKind::OneHot,
+                        SpecialConstraintKind::Sos1,
+                    ]),
+                    false,
+                    false,
+                    None,
+                    false,
+                    None,
+                    None,
+                )
+                .unwrap(),
+            )
+            .unwrap();
 
-    fn integer_inequality_instance() -> Instance {
-        let x = VariableID::from(1);
-        let variable = DecisionVariable::new(
-            Kind::Integer,
-            Bound::new(0.0, 3.0).unwrap(),
-            ATol::default(),
-        )
-        .unwrap();
-        Instance::builder()
-            .sense(Sense::Maximize)
-            .objective(Function::from(linear!(x)))
-            .decision_variables(BTreeMap::from([(x, variable)]))
-            .constraints(BTreeMap::from([(
-                ConstraintID::from(10),
-                Constraint::less_than_or_equal_to_zero(Function::from(linear!(x) + coeff!(-2.0))),
-            )]))
-            .build()
-            .unwrap()
-    }
-
-    fn zero_state_for(instance: &Instance) -> v1::State {
-        v1::State::from(
-            instance
-                .used_decision_variable_ids()
-                .into_iter()
-                .map(|id| (id.into_inner(), 0.0))
-                .collect::<HashMap<_, _>>(),
-        )
-    }
-
-    #[test]
-    fn lowers_all_special_constraints_for_a_linear_mip_class() {
-        let source = special_constraint_instance();
-        let policy = PreparationPolicy::new(
-            highs_class(),
-            BTreeSet::from([
-                SpecialConstraintKind::Indicator,
-                SpecialConstraintKind::OneHot,
-                SpecialConstraintKind::Sos1,
-            ]),
-            false,
-            false,
-            None,
-            None,
-            ATol::default(),
-            None,
-            None,
-        )
-        .unwrap();
-
-        let preparation = source.prepare(&policy).unwrap();
-
-        assert!(policy
-            .acceptable_instance_class()
-            .contains(preparation.input()));
-        assert_eq!(preparation.source(), &source);
         assert!(preparation.input().indicator_constraints().is_empty());
         assert!(preparation.input().one_hot_constraints().is_empty());
         assert!(preparation.input().sos1_constraints().is_empty());
-        assert!(preparation
-            .input()
-            .removed_indicator_constraints()
-            .contains_key(&IndicatorConstraintID::from(10)));
-        assert!(preparation
-            .input()
-            .removed_one_hot_constraints()
-            .contains_key(&OneHotConstraintID::from(20)));
-        assert!(preparation
-            .input()
-            .removed_sos1_constraints()
-            .contains_key(&Sos1ConstraintID::from(30)));
-
         let solution = preparation
             .input()
             .evaluate(&zero_state_for(preparation.input()), ATol::default())
@@ -863,274 +544,76 @@ mod tests {
     }
 
     #[test]
-    fn constructs_openjij_input_evaluated_by_the_prepared_instance() {
+    fn composes_existing_operations_for_openjij_input() {
         let source = integer_inequality_instance();
-        let policy = PreparationPolicy::new(
-            openjij_class(),
-            SpecialConstraintKinds::new(),
-            true,
-            true,
-            Some(IntegerSlackPolicy::exact(16).unwrap()),
-            Some(PenaltyWeights::Uniform { weight: 5.0 }),
-            ATol::default(),
-            None,
-            None,
-        )
-        .unwrap();
+        let preparation = source
+            .prepare(
+                &PreparationPolicy::new(
+                    openjij_class(),
+                    SpecialConstraintKinds::new(),
+                    true,
+                    true,
+                    Some(16),
+                    false,
+                    Some(5.0),
+                    None,
+                )
+                .unwrap(),
+            )
+            .unwrap();
 
-        let preparation = source.prepare(&policy).unwrap();
-
-        assert!(policy
-            .acceptable_instance_class()
-            .contains(preparation.input()));
+        assert_eq!(source.sense(), Sense::Maximize);
         assert_eq!(preparation.input().sense(), Sense::Minimize);
         assert!(preparation.input().constraints().is_empty());
-        assert!(preparation
-            .input()
-            .removed_constraints()
-            .contains_key(&ConstraintID::from(10)));
         assert!(preparation
             .input()
             .decision_variable_dependency()
             .get(&VariableID::from(1))
             .is_some());
-
         let solution = preparation
             .input()
             .evaluate(&zero_state_for(preparation.input()), ATol::default())
             .unwrap();
-        assert_eq!(solution.state().entries[&1], 0.0);
         assert!(solution
             .evaluated_constraints()
             .is_removed(&ConstraintID::from(10)));
     }
 
     #[test]
-    fn approximate_slack_is_selected_only_for_the_recoverable_exact_signal() {
+    fn approximate_slack_falls_back_only_from_exact_unavailable() {
         let mut source = integer_inequality_instance();
         source.as_minimization_problem();
         let target = InstanceClass::new(vec![InstanceClassClause::new(
-            "integer-quadratic-unconstrained",
+            "integer-unconstrained",
             BTreeSet::from([Kind::Integer]),
             DegreeBound::at_most(2),
             BTreeSet::from([Sense::Minimize]),
         )]);
-        let policy = PreparationPolicy::new(
-            target,
-            SpecialConstraintKinds::new(),
-            false,
-            false,
-            Some(IntegerSlackPolicy::exact_or_approximate(1).unwrap()),
-            Some(PenaltyWeights::Uniform { weight: 3.0 }),
-            ATol::default(),
-            None,
-            None,
-        )
-        .unwrap();
+        let preparation = source
+            .prepare(
+                &PreparationPolicy::new(
+                    target,
+                    SpecialConstraintKinds::new(),
+                    false,
+                    false,
+                    Some(1),
+                    true,
+                    Some(3.0),
+                    None,
+                )
+                .unwrap(),
+            )
+            .unwrap();
 
-        let preparation = source.prepare(&policy).unwrap();
-
-        assert!(policy
-            .acceptable_instance_class()
-            .contains(preparation.input()));
         assert!(preparation.input().constraints().is_empty());
-        assert!(preparation
-            .input()
-            .removed_constraints()
-            .contains_key(&ConstraintID::from(10)));
         assert_eq!(
             preparation.input().decision_variables().len(),
             source.decision_variables().len() + 1
         );
-        preparation
-            .input()
-            .evaluate(&zero_state_for(preparation.input()), ATol::default())
-            .unwrap();
     }
 
     #[test]
-    fn resource_failure_keeps_the_last_committed_instance() {
-        let source = special_constraint_instance();
-        let policy = PreparationPolicy::new(
-            highs_class(),
-            BTreeSet::from([
-                SpecialConstraintKind::Indicator,
-                SpecialConstraintKind::OneHot,
-                SpecialConstraintKind::Sos1,
-            ]),
-            false,
-            false,
-            None,
-            None,
-            ATol::default(),
-            None,
-            Some(1),
-        )
-        .unwrap();
-
-        let error = source.prepare(&policy).unwrap_err();
-        let failure = error.downcast_ref::<PreparationFailure>().unwrap();
-
-        match failure {
-            PreparationFailure::ResourceLimitExceeded {
-                operation,
-                resource,
-                observed,
-                limit,
-                current,
-                ..
-            } => {
-                assert_eq!(operation, "lower_one_hot_constraints");
-                assert_eq!(resource, "regular constraints");
-                assert_eq!((*observed, *limit), (2, 1));
-                let mut expected = source.clone();
-                expected.convert_all_indicators_to_constraints().unwrap();
-                assert_eq!(current, &expected);
-            }
-            other => panic!("unexpected preparation failure: {other:?}"),
-        }
-        let mut completed = source.clone();
-        completed.convert_all_indicators_to_constraints().unwrap();
-        assert_eq!(failure.current(), &completed);
-        assert_eq!(
-            failure.current_membership(),
-            &policy
-                .acceptable_instance_class()
-                .check_membership(&completed)
-        );
-    }
-
-    #[test]
-    fn decision_variable_resource_limit_rejects_an_uncommitted_log_encoding() {
-        let mut source = integer_inequality_instance();
-        source.as_minimization_problem();
-        let target = InstanceClass::new(vec![InstanceClassClause::new(
-            "binary-linear",
-            BTreeSet::from([Kind::Binary]),
-            DegreeBound::at_most(1),
-            BTreeSet::from([Sense::Minimize]),
-        )
-        .with_regular_constraint(Equality::LessThanOrEqualToZero, DegreeBound::at_most(1))]);
-        let policy = PreparationPolicy::new(
-            target,
-            SpecialConstraintKinds::new(),
-            true,
-            false,
-            None,
-            None,
-            ATol::default(),
-            Some(1),
-            None,
-        )
-        .unwrap();
-
-        let error = source.prepare(&policy).unwrap_err();
-        let failure = error.downcast_ref::<PreparationFailure>().unwrap();
-
-        match failure {
-            PreparationFailure::ResourceLimitExceeded {
-                operation,
-                resource,
-                observed,
-                limit,
-                current,
-                ..
-            } => {
-                assert_eq!(operation, "log_encode_integers");
-                assert_eq!(resource, "decision variables");
-                assert_eq!((*observed, *limit), (2, 1));
-                assert_eq!(current, &source);
-            }
-            other => panic!("unexpected preparation failure: {other:?}"),
-        }
-        assert_eq!(
-            failure.current_membership(),
-            &policy.acceptable_instance_class().check_membership(&source)
-        );
-        assert_eq!(failure.source(), &source);
-        assert_eq!(failure.current(), &source);
-    }
-
-    #[test]
-    fn per_constraint_policy_uses_only_active_source_rows() {
-        let x = VariableID::from(1);
-        let y = VariableID::from(2);
-        let trivial_id = ConstraintID::from(10);
-        let active_id = ConstraintID::from(11);
-        let source = Instance::builder()
-            .sense(Sense::Minimize)
-            .objective(Function::from((linear!(x) + linear!(y)).unwrap()))
-            .decision_variables(BTreeMap::from([
-                (x, DecisionVariable::binary()),
-                (y, DecisionVariable::binary()),
-            ]))
-            .constraints(BTreeMap::from([
-                (
-                    trivial_id,
-                    Constraint::less_than_or_equal_to_zero(Function::from(
-                        linear!(x) + coeff!(-2.0),
-                    )),
-                ),
-                (
-                    active_id,
-                    Constraint::equal_to_zero(Function::from(linear!(y) + coeff!(-1.0))),
-                ),
-            ]))
-            .build()
-            .unwrap();
-        let policy = PreparationPolicy::new(
-            openjij_class(),
-            SpecialConstraintKinds::new(),
-            false,
-            false,
-            Some(IntegerSlackPolicy::exact(16).unwrap()),
-            Some(PenaltyWeights::PerConstraint {
-                weights: BTreeMap::from([(trivial_id, 2.0), (active_id, 4.0)]),
-            }),
-            ATol::default(),
-            None,
-            None,
-        )
-        .unwrap();
-
-        let preparation = source.prepare(&policy).unwrap();
-
-        assert!(policy
-            .acceptable_instance_class()
-            .contains(preparation.input()));
-        assert!(preparation.input().constraints().is_empty());
-        assert_eq!(
-            preparation
-                .input()
-                .removed_constraints()
-                .keys()
-                .copied()
-                .collect::<BTreeSet<_>>(),
-            BTreeSet::from([trivial_id, active_id])
-        );
-        assert_eq!(
-            preparation.input().removed_constraints()[&trivial_id]
-                .1
-                .reason,
-            "ommx.Instance.convert_inequality_to_equality_with_integer_slack"
-        );
-        assert_eq!(
-            preparation.input().removed_constraints()[&active_id]
-                .1
-                .reason,
-            "ommx.Instance.penalty_method"
-        );
-
-        let solution = preparation
-            .input()
-            .evaluate(&zero_state_for(preparation.input()), ATol::default())
-            .unwrap();
-        assert!(solution.evaluated_constraints().is_removed(&trivial_id));
-        assert!(solution.evaluated_constraints().is_removed(&active_id));
-    }
-
-    #[test]
-    fn per_constraint_weights_are_materialized_by_constraint_id() {
+    fn per_constraint_weights_follow_recorded_constraint_ids() {
         let x = VariableID::from(1);
         let y = VariableID::from(2);
         let x_constraint = ConstraintID::from(10);
@@ -1154,22 +637,21 @@ mod tests {
             ]))
             .build()
             .unwrap();
-        let policy = PreparationPolicy::new(
-            openjij_class(),
-            SpecialConstraintKinds::new(),
-            false,
-            false,
-            None,
-            Some(PenaltyWeights::PerConstraint {
-                weights: BTreeMap::from([(x_constraint, 2.0), (y_constraint, 5.0)]),
-            }),
-            ATol::default(),
-            None,
-            None,
-        )
-        .unwrap();
-
-        let preparation = source.prepare(&policy).unwrap();
+        let preparation = source
+            .prepare(
+                &PreparationPolicy::new(
+                    openjij_class(),
+                    SpecialConstraintKinds::new(),
+                    false,
+                    false,
+                    None,
+                    false,
+                    None,
+                    Some(BTreeMap::from([(x_constraint, 2.0), (y_constraint, 5.0)])),
+                )
+                .unwrap(),
+            )
+            .unwrap();
         let x_only = preparation
             .input()
             .evaluate(
@@ -1196,161 +678,32 @@ mod tests {
     }
 
     #[test]
-    fn positive_penalty_weights_require_minimization() {
-        let x = VariableID::from(1);
-        let constraint_id = ConstraintID::from(10);
-        let source = Instance::builder()
-            .sense(Sense::Maximize)
-            .objective(Function::Zero)
-            .decision_variables(BTreeMap::from([(x, DecisionVariable::binary())]))
-            .constraints(BTreeMap::from([(
-                constraint_id,
-                Constraint::equal_to_zero(Function::from(linear!(x) + coeff!(-1.0))),
-            )]))
-            .build()
-            .unwrap();
-        let policy = PreparationPolicy::new(
-            openjij_class(),
-            SpecialConstraintKinds::new(),
-            false,
-            false,
-            None,
-            Some(PenaltyWeights::PerConstraint {
-                weights: BTreeMap::from([(constraint_id, 2.0)]),
-            }),
-            ATol::default(),
-            None,
-            None,
-        )
-        .unwrap();
-
-        let error = source.prepare(&policy).unwrap_err();
-        let failure = error.downcast_ref::<PreparationFailure>().unwrap();
-
-        match failure {
-            PreparationFailure::PolicyMismatch {
-                current, detail, ..
-            } => {
-                assert_eq!(current, &source);
-                assert!(detail.contains("require minimization"));
-            }
-            other => panic!("unexpected preparation failure: {other:?}"),
-        }
-    }
-
-    #[test]
-    fn policy_mismatch_is_distinct_from_target_non_membership() {
-        let x = VariableID::from(1);
-        let source = Instance::builder()
-            .sense(Sense::Minimize)
-            .objective(Function::Zero)
-            .decision_variables(BTreeMap::from([(x, DecisionVariable::binary())]))
-            .constraints(BTreeMap::from([(
-                ConstraintID::from(10),
-                Constraint::equal_to_zero(Function::from(linear!(x) + coeff!(-1.0))),
-            )]))
-            .build()
-            .unwrap();
-        let policy = PreparationPolicy::new(
-            openjij_class(),
-            SpecialConstraintKinds::new(),
-            false,
-            false,
-            None,
-            Some(PenaltyWeights::PerConstraint {
-                weights: BTreeMap::from([(ConstraintID::from(99), 1.0)]),
-            }),
-            ATol::default(),
-            None,
-            None,
-        )
-        .unwrap();
-
-        let error = source.prepare(&policy).unwrap_err();
-        let failure = error.downcast_ref::<PreparationFailure>().unwrap();
-
-        assert!(matches!(failure, PreparationFailure::PolicyMismatch { .. }));
-        assert!(!failure.current_membership().is_member());
-        assert_eq!(failure.source(), &source);
-        assert_eq!(failure.current(), &source);
-    }
-
-    #[test]
-    fn target_non_membership_retains_the_final_prepared_candidate() {
+    fn final_membership_failure_is_an_ordinary_error() {
         let source = integer_inequality_instance();
-        let policy = PreparationPolicy::new(
-            openjij_class(),
-            SpecialConstraintKinds::new(),
-            false,
-            false,
-            None,
-            None,
-            ATol::default(),
-            None,
-            None,
-        )
-        .unwrap();
+        let error = source
+            .prepare(
+                &PreparationPolicy::new(
+                    openjij_class(),
+                    SpecialConstraintKinds::new(),
+                    false,
+                    false,
+                    None,
+                    false,
+                    None,
+                    None,
+                )
+                .unwrap(),
+            )
+            .unwrap_err();
 
-        let error = source.prepare(&policy).unwrap_err();
-        let failure = error.downcast_ref::<PreparationFailure>().unwrap();
-
-        assert!(matches!(
-            failure,
-            PreparationFailure::TargetInstanceClassNotReached { .. }
-        ));
-        assert_eq!(failure.source(), &source);
-        assert_eq!(failure.current(), &source);
-        assert_eq!(
-            failure.current_membership(),
-            &policy.acceptable_instance_class().check_membership(&source)
-        );
+        assert!(error
+            .to_string()
+            .contains("did not reach the acceptable InstanceClass"));
+        assert_eq!(source, integer_inequality_instance());
     }
 
     #[test]
-    fn identity_does_not_interpret_unused_policy_parameters() {
-        let source = Instance::builder()
-            .sense(Sense::Minimize)
-            .objective(Function::Zero)
-            .decision_variables(BTreeMap::new())
-            .constraints(BTreeMap::new())
-            .build()
-            .unwrap();
-        let policy = PreparationPolicy::new(
-            InstanceClass::new(vec![InstanceClassClause::new(
-                "empty",
-                BTreeSet::new(),
-                DegreeBound::at_most(0),
-                BTreeSet::from([Sense::Minimize]),
-            )]),
-            SpecialConstraintKinds::new(),
-            false,
-            false,
-            None,
-            Some(PenaltyWeights::PerConstraint {
-                weights: BTreeMap::from([(ConstraintID::from(99), 1.0)]),
-            }),
-            ATol::default(),
-            None,
-            None,
-        )
-        .unwrap();
-
-        let preparation = source.prepare(&policy).unwrap();
-
-        assert_eq!(preparation.source(), &source);
-        assert_eq!(preparation.input(), &source);
-        assert!(preparation
-            .policy()
-            .acceptable_instance_class()
-            .contains(preparation.input()));
-        preparation
-            .input()
-            .evaluate(&v1::State::default(), ATol::default())
-            .unwrap();
-    }
-
-    #[test]
-    fn operation_owned_error_is_not_reclassified_as_preparation_failure() {
+    fn operation_errors_propagate_without_preparation_wrapper() {
         let x = VariableID::from(1);
         let source = Instance::builder()
             .sense(Sense::Minimize)
@@ -1377,22 +730,22 @@ mod tests {
             BTreeSet::from([Sense::Minimize]),
         )
         .with_regular_constraint(Equality::EqualToZero, DegreeBound::at_most(1))]);
-        let policy = PreparationPolicy::new(
-            target,
-            SpecialConstraintKinds::new(),
-            false,
-            false,
-            Some(IntegerSlackPolicy::exact_or_approximate(16).unwrap()),
-            None,
-            ATol::default(),
-            None,
-            None,
-        )
-        .unwrap();
+        let error = source
+            .prepare(
+                &PreparationPolicy::new(
+                    target,
+                    SpecialConstraintKinds::new(),
+                    false,
+                    false,
+                    Some(16),
+                    true,
+                    None,
+                    None,
+                )
+                .unwrap(),
+            )
+            .unwrap_err();
 
-        let error = source.prepare(&policy).unwrap_err();
-
-        assert!(error.downcast_ref::<PreparationFailure>().is_none());
         assert!(error.to_string().contains("continuous decision variables"));
     }
 }

@@ -1,7 +1,4 @@
-use crate::{
-    error::OmmxPyResult, Instance, InstanceClass, InstanceClassMembershipReport,
-    SpecialConstraintKind,
-};
+use crate::{error::OmmxPyResult, Instance, InstanceClass, SpecialConstraintKind};
 use pyo3::{
     exceptions::{PyTypeError, PyValueError},
     prelude::*,
@@ -42,33 +39,6 @@ fn invalid_integer_slack_max_range() -> PyErr {
     PyValueError::new_err(format!(
         "inequality_integer_slack_max_range must be an integer in [1, {MAX_U64}]"
     ))
-}
-
-struct ResourceLimitInput(usize);
-
-impl<'py> FromPyObject<'_, 'py> for ResourceLimitInput {
-    type Error = PyErr;
-
-    fn extract(ob: pyo3::Borrowed<'_, 'py, PyAny>) -> PyResult<Self> {
-        let value = ob.to_owned();
-        if value.is_instance_of::<PyBool>() || !value.is_instance_of::<PyInt>() {
-            return Err(invalid_resource_limit());
-        }
-        value
-            .extract::<usize>()
-            .map(Self)
-            .map_err(|_| invalid_resource_limit())
-    }
-}
-
-impl pyo3_stub_gen::PyStubType for ResourceLimitInput {
-    fn type_output() -> pyo3_stub_gen::TypeInfo {
-        <usize as pyo3_stub_gen::PyStubType>::type_output()
-    }
-}
-
-fn invalid_resource_limit() -> PyErr {
-    PyValueError::new_err("Preparation resource limits must be non-negative integers")
 }
 
 struct PositiveFinitePenaltyWeightInput(f64);
@@ -186,7 +156,7 @@ impl PreparationPolicy {
 #[pymethods]
 impl PreparationPolicy {
     #[new]
-    #[pyo3(signature = (*, acceptable_instance_class, allowed_special_constraint_lowerings=HashSet::new(), allow_integer_log_encoding=false, allow_sense_normalization=false, inequality_integer_slack_max_range=None, allow_approximate_integer_slack=false, uniform_penalty_weight=None, penalty_weights=None, atol=None, max_added_decision_variables=None, max_added_regular_constraints=None))]
+    #[pyo3(signature = (*, acceptable_instance_class, allowed_special_constraint_lowerings=HashSet::new(), allow_integer_log_encoding=false, allow_sense_normalization=false, inequality_integer_slack_max_range=None, allow_approximate_integer_slack=false, uniform_penalty_weight=None, penalty_weights=None))]
     #[allow(clippy::too_many_arguments)]
     fn new(
         acceptable_instance_class: &InstanceClass,
@@ -197,17 +167,9 @@ impl PreparationPolicy {
         allow_approximate_integer_slack: bool,
         uniform_penalty_weight: Option<PositiveFinitePenaltyWeightInput>,
         penalty_weights: Option<PenaltyWeightsInput>,
-        atol: Option<f64>,
-        max_added_decision_variables: Option<ResourceLimitInput>,
-        max_added_regular_constraints: Option<ResourceLimitInput>,
     ) -> OmmxPyResult<Self> {
-        let integer_slack_policy = match inequality_integer_slack_max_range {
-            Some(IntegerSlackMaxRangeInput(max_range)) if allow_approximate_integer_slack => {
-                Some(ommx::IntegerSlackPolicy::exact_or_approximate(max_range)?)
-            }
-            Some(IntegerSlackMaxRangeInput(max_range)) => {
-                Some(ommx::IntegerSlackPolicy::exact(max_range)?)
-            }
+        let inequality_integer_slack_max_range = match inequality_integer_slack_max_range {
+            Some(IntegerSlackMaxRangeInput(max_range)) => Some(max_range),
             None if allow_approximate_integer_slack => {
                 return Err(PyValueError::new_err(
                     "allow_approximate_integer_slack requires inequality_integer_slack_max_range",
@@ -217,31 +179,27 @@ impl PreparationPolicy {
             None => None,
         };
 
-        let penalty_weights = match (uniform_penalty_weight, penalty_weights) {
-            (Some(_), Some(_)) => {
-                return Err(PyValueError::new_err(
-                    "uniform_penalty_weight and penalty_weights are mutually exclusive",
-                )
-                .into());
-            }
-            (Some(PositiveFinitePenaltyWeightInput(weight)), None) => {
-                Some(ommx::PenaltyWeights::Uniform { weight })
-            }
-            (None, Some(PenaltyWeightsInput(weights))) => {
-                Some(ommx::PenaltyWeights::PerConstraint {
-                    weights: weights
-                        .into_iter()
-                        .map(|(id, weight)| (ommx::ConstraintID::from(id), weight))
-                        .collect(),
-                })
-            }
-            (None, None) => None,
-        };
+        let (uniform_penalty_weight, penalty_weights) =
+            match (uniform_penalty_weight, penalty_weights) {
+                (Some(_), Some(_)) => {
+                    return Err(PyValueError::new_err(
+                        "uniform_penalty_weight and penalty_weights are mutually exclusive",
+                    )
+                    .into());
+                }
+                (Some(PositiveFinitePenaltyWeightInput(weight)), None) => (Some(weight), None),
+                (None, Some(PenaltyWeightsInput(weights))) => (
+                    None,
+                    Some(
+                        weights
+                            .into_iter()
+                            .map(|(id, weight)| (ommx::ConstraintID::from(id), weight))
+                            .collect(),
+                    ),
+                ),
+                (None, None) => (None, None),
+            };
 
-        let atol = match atol {
-            Some(value) => ommx::ATol::new(value)?,
-            None => ommx::ATol::default(),
-        };
         Ok(Self(ommx::PreparationPolicy::new(
             acceptable_instance_class.0.clone(),
             allowed_special_constraint_lowerings
@@ -250,11 +208,10 @@ impl PreparationPolicy {
                 .collect(),
             allow_integer_log_encoding,
             allow_sense_normalization,
-            integer_slack_policy,
+            inequality_integer_slack_max_range,
+            allow_approximate_integer_slack,
+            uniform_penalty_weight,
             penalty_weights,
-            atol,
-            max_added_decision_variables.map(|limit| limit.0),
-            max_added_regular_constraints.map(|limit| limit.0),
         )?))
     }
 
@@ -290,27 +247,20 @@ impl PreparationPolicy {
     #[getter]
     /// Configured positive slack range, or ``None`` when integer slack is forbidden.
     pub fn inequality_integer_slack_max_range(&self) -> Option<u64> {
-        self.0
-            .integer_slack_policy()
-            .map(|policy| policy.max_range())
+        self.0.inequality_integer_slack_max_range()
     }
 
     #[getter]
     /// Whether approximate integer slack may be used after exact slack is unavailable.
     pub fn allow_approximate_integer_slack(&self) -> bool {
-        self.0
-            .integer_slack_policy()
-            .is_some_and(|policy| policy.allow_approximate())
+        self.0.allow_approximate_integer_slack()
     }
 
     /// Uniform finite penalty weight, or ``None`` when another/no penalty mode
     /// is configured.
     #[getter]
     pub fn uniform_penalty_weight(&self) -> Option<f64> {
-        match self.0.penalty_weights() {
-            Some(ommx::PenaltyWeights::Uniform { weight }) => Some(*weight),
-            _ => None,
-        }
+        self.0.uniform_penalty_weight()
     }
 
     /// Per-constraint finite penalty weights.
@@ -323,144 +273,16 @@ impl PreparationPolicy {
     /// remain active.
     #[getter]
     pub fn penalty_weights(&self) -> Option<BTreeMap<u64, f64>> {
-        match self.0.penalty_weights() {
-            Some(ommx::PenaltyWeights::PerConstraint { weights }) => Some(
-                weights
-                    .iter()
-                    .map(|(id, weight)| (id.into_inner(), *weight))
-                    .collect(),
-            ),
-            _ => None,
-        }
-    }
-
-    #[getter]
-    /// Absolute tolerance used by permitted preparation operations.
-    pub fn atol(&self) -> f64 {
-        self.0.atol().into_inner()
-    }
-
-    #[getter]
-    /// Maximum number of decision variables introduced relative to the source.
-    pub fn max_added_decision_variables(&self) -> Option<usize> {
-        self.0.max_added_decision_variables()
-    }
-
-    #[getter]
-    /// Maximum number of active regular constraints introduced relative to the source.
-    pub fn max_added_regular_constraints(&self) -> Option<usize> {
-        self.0.max_added_regular_constraints()
+        self.0.penalty_weights().map(|weights| {
+            weights
+                .iter()
+                .map(|(id, weight)| (id.into_inner(), *weight))
+                .collect()
+        })
     }
 
     pub fn __repr__(&self) -> String {
         format!("PreparationPolicy({:?})", self.0)
-    }
-}
-
-/// Structured evidence from an unsuccessful canonical Preparation attempt.
-///
-/// The corresponding Python exception exposes this value as
-/// :attr:`PreparationError.failure`.
-///
-/// Every variant carries ``source``, ``policy``, ``current``, and
-/// ``current_membership`` snapshots. ``current`` is the last Instance committed
-/// by the canonical procedure. Variant-specific fields explain why that
-/// Instance could not be returned as a successful prepared input.
-#[pyo3_stub_gen::derive::gen_stub_pyclass_complex_enum]
-#[pyclass(frozen)]
-#[derive(Clone)]
-pub enum PreparationFailure {
-    PolicyMismatch {
-        source: Instance,
-        policy: PreparationPolicy,
-        current: Instance,
-        current_membership: InstanceClassMembershipReport,
-        detail: String,
-    },
-    ResourceLimitExceeded {
-        source: Instance,
-        policy: PreparationPolicy,
-        current: Instance,
-        current_membership: InstanceClassMembershipReport,
-        operation: String,
-        resource: String,
-        observed: usize,
-        limit: usize,
-    },
-    TargetInstanceClassNotReached {
-        source: Instance,
-        policy: PreparationPolicy,
-        current: Instance,
-        current_membership: InstanceClassMembershipReport,
-        detail: String,
-    },
-}
-
-impl PreparationFailure {
-    /// Project the pinned core failure into its frozen Python representation.
-    pub(crate) fn from_core(failure: &ommx::PreparationFailure) -> Self {
-        match failure {
-            ommx::PreparationFailure::PolicyMismatch {
-                source,
-                policy,
-                current,
-                current_membership,
-                detail,
-            } => Self::PolicyMismatch {
-                source: Instance {
-                    inner: source.clone(),
-                },
-                policy: PreparationPolicy::from_core(policy.clone()),
-                current: Instance {
-                    inner: current.clone(),
-                },
-                current_membership: InstanceClassMembershipReport(current_membership.clone()),
-                detail: detail.clone(),
-            },
-            ommx::PreparationFailure::ResourceLimitExceeded {
-                source,
-                policy,
-                current,
-                current_membership,
-                operation,
-                resource,
-                observed,
-                limit,
-            } => Self::ResourceLimitExceeded {
-                source: Instance {
-                    inner: source.clone(),
-                },
-                policy: PreparationPolicy::from_core(policy.clone()),
-                current: Instance {
-                    inner: current.clone(),
-                },
-                current_membership: InstanceClassMembershipReport(current_membership.clone()),
-                operation: operation.clone(),
-                resource: resource.clone(),
-                observed: *observed,
-                limit: *limit,
-            },
-            ommx::PreparationFailure::TargetInstanceClassNotReached {
-                source,
-                policy,
-                current,
-                current_membership,
-                detail,
-            } => Self::TargetInstanceClassNotReached {
-                source: Instance {
-                    inner: source.clone(),
-                },
-                policy: PreparationPolicy::from_core(policy.clone()),
-                current: Instance {
-                    inner: current.clone(),
-                },
-                current_membership: InstanceClassMembershipReport(current_membership.clone()),
-                detail: detail.clone(),
-            },
-            _ => unreachable!(
-                "the Python binding must project every PreparationFailure variant from its pinned core version"
-            ),
-        }
     }
 }
 
