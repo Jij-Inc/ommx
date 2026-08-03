@@ -151,34 +151,6 @@ impl SampleSet {
             .collect()
     }
 
-    /// Extract the unevaluated decision-variable states for all samples.
-    ///
-    /// Sample IDs are preserved. Objective values, constraint evaluations,
-    /// feasibility, solver metadata, and annotations are intentionally not
-    /// included in the returned :class:`Samples`.
-    #[getter]
-    pub fn samples(&self) -> crate::Samples {
-        let samples =
-            ommx::Sampled::new_no_dedup(self.inner.sample_ids().into_iter().map(|sample_id| {
-                let entries = self
-                    .inner
-                    .decision_variables()
-                    .iter()
-                    .map(|(variable_id, variable)| {
-                        let value = variable
-                            .samples()
-                            .get(sample_id)
-                            .expect("SampleSet decision variables have consistent sample IDs");
-                        (variable_id.into_inner(), *value)
-                    })
-                    .collect();
-                let mut state = ommx::v1::State::default();
-                state.entries = entries;
-                (sample_id, state)
-            }));
-        crate::Samples(samples)
-    }
-
     pub fn feasible_ids(&self) -> BTreeSet<u64> {
         self.inner
             .feasible_ids()

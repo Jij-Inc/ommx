@@ -10519,7 +10519,7 @@
             },
             {
               "name": "prepare",
-              "doc": "Prepare an isolated snapshot of this Instance according to ``policy``.\n\nPreparation is an OMMX-owned Instance operation. It does not receive or\nretain a Solver Adapter. A successful result has an input belonging to\n``policy.acceptable_instance_class`` and records the applied Transforms\nand their source-specific receipts together with the source and Policy\nsnapshots. Model evaluation and solver outputs are separate operations.",
+              "doc": "Prepare an isolated snapshot of this Instance according to ``policy``.\n\nPreparation is an OMMX-owned Instance operation. It does not receive or\nretain a Solver Adapter. A successful result has an input belonging to\n``policy.acceptable_instance_class`` together with isolated source and\nPolicy snapshots. Evaluate solver states and samples against\n:attr:`Preparation.input`; that Instance owns the effects of every\noperation applied during preparation.",
               "signatures": [
                 {
                   "parameters": [
@@ -18936,7 +18936,7 @@
         {
           "kind": "Class",
           "name": "Preparation",
-          "doc": "An immutable, auditable relation between a source Instance and the prepared\ninput produced from it under one :class:`PreparationPolicy`.",
+          "doc": "An immutable construction record containing source, Policy, and prepared\ninput snapshots.",
           "bases": [],
           "methods": [
             {
@@ -18947,94 +18947,6 @@
                   "parameters": [],
                   "return_type": {
                     "display": "str",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "decode",
-              "doc": "Compose applied Transform decoders for State or Samples.\n\nThis performs no source evaluation and transports no solver status.",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "data",
-                      "type_": {
-                        "display": "State",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "State",
-                    "link_target": null,
-                    "children": []
-                  }
-                },
-                {
-                  "parameters": [
-                    {
-                      "name": "data",
-                      "type_": {
-                        "display": "Samples",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "Samples",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "encode",
-              "doc": "Compose applied Transform encoders for State or Samples.\n\nSolution and SampleSet are not accepted, and no model is evaluated.",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "data",
-                      "type_": {
-                        "display": "State",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "State",
-                    "link_target": null,
-                    "children": []
-                  }
-                },
-                {
-                  "parameters": [
-                    {
-                      "name": "data",
-                      "type_": {
-                        "display": "Samples",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "Samples",
                     "link_target": null,
                     "children": []
                   }
@@ -19077,23 +18989,6 @@
               },
               "is_property": true,
               "is_readonly": true
-            },
-            {
-              "name": "transforms",
-              "doc": "Applied Transform receipts in construction order.",
-              "type_": {
-                "display": "list[Transform]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "Transform",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
             }
           ],
           "deprecated": null
@@ -19133,7 +19028,7 @@
         {
           "kind": "Class",
           "name": "PreparationFailure",
-          "doc": "Structured evidence from an unsuccessful canonical Preparation attempt.\n\nThe corresponding Python exception exposes this value as\n:attr:`PreparationError.failure`.\n\n``PolicyMismatch`` carries ``source``, ``policy``, ``current_membership``,\ncommitted ``transforms``, and ``detail``. ``ResourceLimitExceeded`` carries\nthe same snapshots plus ``operation``, ``resource``, ``observed``, and\n``limit``. ``TargetInstanceClassNotReached`` carries the common snapshots\nplus ``detail``. Errors owned by a mathematical Transform are not converted\nto these variants.",
+          "doc": "Structured evidence from an unsuccessful canonical Preparation attempt.\n\nThe corresponding Python exception exposes this value as\n:attr:`PreparationError.failure`.\n\nEvery variant carries ``source``, ``policy``, ``current``, and\n``current_membership`` snapshots. ``current`` is the last Instance committed\nby the canonical procedure. Variant-specific fields explain why that\nInstance could not be returned as a successful prepared input.",
           "bases": [],
           "methods": [],
           "attributes": [],
@@ -19142,7 +19037,7 @@
         {
           "kind": "Class",
           "name": "PreparationPolicy",
-          "doc": "Caller-owned permissions and parameters for :meth:`Instance.prepare`.\n\nThis is an OMMX core value. Solver Adapters may recommend a policy, but the\npolicy neither retains an Adapter nor calls Adapter-owned Python code.",
+          "doc": "Caller-owned permissions and parameters for :meth:`Instance.prepare`.\n\nThis is an OMMX core value. Solver Adapters may recommend a policy, but the\npolicy neither retains an Adapter nor calls Adapter-owned Python code.\nPositive finite penalty weights require a minimization candidate; permit\nsense normalization when preparing a maximization source.",
           "bases": [],
           "methods": [
             {
@@ -19425,7 +19320,7 @@
             },
             {
               "name": "atol",
-              "doc": "Absolute tolerance snapshotted into every Transform that uses it.",
+              "doc": "Absolute tolerance used by permitted preparation operations.",
               "type_": {
                 "display": "float",
                 "link_target": null,
@@ -19487,7 +19382,7 @@
             },
             {
               "name": "penalty_weights",
-              "doc": "Per-constraint finite penalty weights.\n\nKeys identify source regular constraints by their stable IDs; those IDs\nare preserved by Preparation Transforms. The map must cover every\nsource regular constraint still active at the penalty step, while an\nentry for one removed as trivial is allowed. Special-constraint\nlowering adds new regular rows outside this source-map domain, so a\nuniform penalty is required when such rows remain active.",
+              "doc": "Per-constraint finite penalty weights.\n\nKeys identify source regular constraints by their stable IDs. The map\nmust cover every source regular constraint still active at the penalty\nstep, while an entry for one removed as trivial is allowed.\nSpecial-constraint lowering adds new regular rows outside this\nsource-map domain, so a uniform penalty is required when such rows\nremain active.",
               "type_": {
                 "display": "Optional[dict[int, float]]",
                 "link_target": null,
@@ -23072,22 +22967,6 @@
               "is_readonly": true
             },
             {
-              "name": "samples",
-              "doc": "Extract the unevaluated decision-variable states for all samples.\n\nSample IDs are preserved. Objective values, constraint evaluations,\nfeasibility, solver metadata, and annotations are intentionally not\nincluded in the returned :class:`Samples`.",
-              "type_": {
-                "display": "Samples",
-                "link_target": {
-                  "fqn": "ommx.Samples",
-                  "doc_module": "ommx",
-                  "kind": "Class",
-                  "attribute": null
-                },
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
               "name": "sense",
               "doc": "Get the optimization sense (minimize or maximize)",
               "type_": {
@@ -26127,132 +26006,6 @@
                 ]
               },
               "is_property": true
-            }
-          ],
-          "deprecated": null
-        },
-        {
-          "kind": "Class",
-          "name": "Transform",
-          "doc": "One OMMX Transform applied by :meth:`Instance.prepare`.\n\nValues are created while OMMX applies an Instance operation. They are\nimmutable, source-specific receipts, not caller-supplied instructions and\nnot reusable ``apply`` objects.",
-          "bases": [],
-          "methods": [
-            {
-              "name": "__repr__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "str",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "decode",
-              "doc": "Mechanically map State or Samples back to this Transform's source side.\n\nThis does not transport objectives, feasibility, or solver status.",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "data",
-                      "type_": {
-                        "display": "State",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "State",
-                    "link_target": null,
-                    "children": []
-                  }
-                },
-                {
-                  "parameters": [
-                    {
-                      "name": "data",
-                      "type_": {
-                        "display": "Samples",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "Samples",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "encode",
-              "doc": "Mechanically map State or Samples to this Transform's input side.\n\nThis maps decision-variable state only; it does not evaluate an\nInstance or assert feasibility.",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "data",
-                      "type_": {
-                        "display": "State",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "State",
-                    "link_target": null,
-                    "children": []
-                  }
-                },
-                {
-                  "parameters": [
-                    {
-                      "name": "data",
-                      "type_": {
-                        "display": "Samples",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "Samples",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            }
-          ],
-          "attributes": [
-            {
-              "name": "name",
-              "doc": "Stable operation name for this applied Transform receipt.",
-              "type_": {
-                "display": "str",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
             }
           ],
           "deprecated": null
@@ -33738,7 +33491,6 @@
     "ommx.State": "ommx",
     "ommx.ToSamples": "ommx",
     "ommx.ToState": "ommx",
-    "ommx.Transform": "ommx",
     "ommx.VariableIDLike": "ommx",
     "ommx.artifact.AnonymousArtifactRef": "ommx.artifact",
     "ommx.artifact.ArchiveDescriptor": "ommx.artifact",

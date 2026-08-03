@@ -1,6 +1,6 @@
 use crate::{
-    error::OmmxPyResult, Instance, InstanceClass, InstanceClassMembershipReport, Samples,
-    SpecialConstraintKind, State,
+    error::OmmxPyResult, Instance, InstanceClass, InstanceClassMembershipReport,
+    SpecialConstraintKind,
 };
 use pyo3::{
     exceptions::{PyTypeError, PyValueError},
@@ -164,10 +164,23 @@ fn invalid_penalty_weight(field: &str) -> PyErr {
 ///
 /// This is an OMMX core value. Solver Adapters may recommend a policy, but the
 /// policy neither retains an Adapter nor calls Adapter-owned Python code.
+/// Positive finite penalty weights require a minimization candidate; permit
+/// sense normalization when preparing a maximization source.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(frozen)]
 #[derive(Clone)]
-pub struct PreparationPolicy(pub(crate) ommx::PreparationPolicy);
+pub struct PreparationPolicy(ommx::PreparationPolicy);
+
+impl PreparationPolicy {
+    /// Read-only bridge used by the Instance binding that executes this Policy.
+    pub(crate) fn as_core(&self) -> &ommx::PreparationPolicy {
+        &self.0
+    }
+
+    fn from_core(policy: ommx::PreparationPolicy) -> Self {
+        Self(policy)
+    }
+}
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
@@ -302,12 +315,12 @@ impl PreparationPolicy {
 
     /// Per-constraint finite penalty weights.
     ///
-    /// Keys identify source regular constraints by their stable IDs; those IDs
-    /// are preserved by Preparation Transforms. The map must cover every
-    /// source regular constraint still active at the penalty step, while an
-    /// entry for one removed as trivial is allowed. Special-constraint
-    /// lowering adds new regular rows outside this source-map domain, so a
-    /// uniform penalty is required when such rows remain active.
+    /// Keys identify source regular constraints by their stable IDs. The map
+    /// must cover every source regular constraint still active at the penalty
+    /// step, while an entry for one removed as trivial is allowed.
+    /// Special-constraint lowering adds new regular rows outside this
+    /// source-map domain, so a uniform penalty is required when such rows
+    /// remain active.
     #[getter]
     pub fn penalty_weights(&self) -> Option<BTreeMap<u64, f64>> {
         match self.0.penalty_weights() {
@@ -322,7 +335,7 @@ impl PreparationPolicy {
     }
 
     #[getter]
-    /// Absolute tolerance snapshotted into every Transform that uses it.
+    /// Absolute tolerance used by permitted preparation operations.
     pub fn atol(&self) -> f64 {
         self.0.atol().into_inner()
     }
@@ -344,27 +357,15 @@ impl PreparationPolicy {
     }
 }
 
-/// One OMMX Transform applied by :meth:`Instance.prepare`.
-///
-/// Values are created while OMMX applies an Instance operation. They are
-/// immutable, source-specific receipts, not caller-supplied instructions and
-/// not reusable ``apply`` objects.
-#[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass(frozen)]
-#[derive(Clone)]
-pub struct Transform(pub(crate) ommx::Transform);
-
 /// Structured evidence from an unsuccessful canonical Preparation attempt.
 ///
 /// The corresponding Python exception exposes this value as
 /// :attr:`PreparationError.failure`.
 ///
-/// ``PolicyMismatch`` carries ``source``, ``policy``, ``current_membership``,
-/// committed ``transforms``, and ``detail``. ``ResourceLimitExceeded`` carries
-/// the same snapshots plus ``operation``, ``resource``, ``observed``, and
-/// ``limit``. ``TargetInstanceClassNotReached`` carries the common snapshots
-/// plus ``detail``. Errors owned by a mathematical Transform are not converted
-/// to these variants.
+/// Every variant carries ``source``, ``policy``, ``current``, and
+/// ``current_membership`` snapshots. ``current`` is the last Instance committed
+/// by the canonical procedure. Variant-specific fields explain why that
+/// Instance could not be returned as a successful prepared input.
 #[pyo3_stub_gen::derive::gen_stub_pyclass_complex_enum]
 #[pyclass(frozen)]
 #[derive(Clone)]
@@ -372,15 +373,15 @@ pub enum PreparationFailure {
     PolicyMismatch {
         source: Instance,
         policy: PreparationPolicy,
+        current: Instance,
         current_membership: InstanceClassMembershipReport,
-        transforms: Vec<Transform>,
         detail: String,
     },
     ResourceLimitExceeded {
         source: Instance,
         policy: PreparationPolicy,
+        current: Instance,
         current_membership: InstanceClassMembershipReport,
-        transforms: Vec<Transform>,
         operation: String,
         resource: String,
         observed: usize,
@@ -389,35 +390,38 @@ pub enum PreparationFailure {
     TargetInstanceClassNotReached {
         source: Instance,
         policy: PreparationPolicy,
+        current: Instance,
         current_membership: InstanceClassMembershipReport,
-        transforms: Vec<Transform>,
         detail: String,
     },
 }
 
 impl PreparationFailure {
+    /// Project the pinned core failure into its frozen Python representation.
     pub(crate) fn from_core(failure: &ommx::PreparationFailure) -> Self {
         match failure {
             ommx::PreparationFailure::PolicyMismatch {
                 source,
                 policy,
+                current,
                 current_membership,
-                transforms,
                 detail,
             } => Self::PolicyMismatch {
                 source: Instance {
                     inner: source.clone(),
                 },
-                policy: PreparationPolicy(policy.clone()),
+                policy: PreparationPolicy::from_core(policy.clone()),
+                current: Instance {
+                    inner: current.clone(),
+                },
                 current_membership: InstanceClassMembershipReport(current_membership.clone()),
-                transforms: transforms.iter().cloned().map(Transform).collect(),
                 detail: detail.clone(),
             },
             ommx::PreparationFailure::ResourceLimitExceeded {
                 source,
                 policy,
+                current,
                 current_membership,
-                transforms,
                 operation,
                 resource,
                 observed,
@@ -426,9 +430,11 @@ impl PreparationFailure {
                 source: Instance {
                     inner: source.clone(),
                 },
-                policy: PreparationPolicy(policy.clone()),
+                policy: PreparationPolicy::from_core(policy.clone()),
+                current: Instance {
+                    inner: current.clone(),
+                },
                 current_membership: InstanceClassMembershipReport(current_membership.clone()),
-                transforms: transforms.iter().cloned().map(Transform).collect(),
                 operation: operation.clone(),
                 resource: resource.clone(),
                 observed: *observed,
@@ -437,16 +443,18 @@ impl PreparationFailure {
             ommx::PreparationFailure::TargetInstanceClassNotReached {
                 source,
                 policy,
+                current,
                 current_membership,
-                transforms,
                 detail,
             } => Self::TargetInstanceClassNotReached {
                 source: Instance {
                     inner: source.clone(),
                 },
-                policy: PreparationPolicy(policy.clone()),
+                policy: PreparationPolicy::from_core(policy.clone()),
+                current: Instance {
+                    inner: current.clone(),
+                },
                 current_membership: InstanceClassMembershipReport(current_membership.clone()),
-                transforms: transforms.iter().cloned().map(Transform).collect(),
                 detail: detail.clone(),
             },
             _ => unreachable!(
@@ -456,162 +464,17 @@ impl PreparationFailure {
     }
 }
 
-/// Typed carrier for the two state-domain inputs accepted by Transform and
-/// Preparation. It is private so no ``Any``-typed surface leaks into Python.
-enum PreparationData {
-    State(State),
-    Samples(Samples),
-}
-
-impl<'py> FromPyObject<'_, 'py> for PreparationData {
-    type Error = PyErr;
-
-    fn extract(ob: pyo3::Borrowed<'_, 'py, PyAny>) -> PyResult<Self> {
-        if let Ok(state) = ob.cast::<State>() {
-            return Ok(Self::State(state.borrow().clone()));
-        }
-        if let Ok(samples) = ob.cast::<Samples>() {
-            return Ok(Self::Samples(samples.borrow().clone()));
-        }
-        Err(PyTypeError::new_err(
-            "data must be an ommx.State or ommx.Samples",
-        ))
-    }
-}
-
-impl<'py> IntoPyObject<'py> for PreparationData {
-    type Target = PyAny;
-    type Output = Bound<'py, PyAny>;
-    type Error = PyErr;
-
-    fn into_pyobject(self, py: Python<'py>) -> PyResult<Self::Output> {
-        match self {
-            Self::State(state) => Ok(Py::new(py, state)?.into_bound(py).into_any()),
-            Self::Samples(samples) => Ok(Py::new(py, samples)?.into_bound(py).into_any()),
-        }
-    }
-}
-
-impl pyo3_stub_gen::PyStubType for PreparationData {
-    fn type_input() -> pyo3_stub_gen::TypeInfo {
-        <State as pyo3_stub_gen::PyStubType>::type_output()
-            | <Samples as pyo3_stub_gen::PyStubType>::type_output()
-    }
-
-    fn type_output() -> pyo3_stub_gen::TypeInfo {
-        <State as pyo3_stub_gen::PyStubType>::type_output()
-            | <Samples as pyo3_stub_gen::PyStubType>::type_output()
-    }
-}
-
-// Preserve the input-dependent return types in generated stubs. Runtime
-// extraction remains restricted to the two concrete SDK classes above.
-pyo3_stub_gen::inventory::submit! {
-    pyo3_stub_gen::derive::gen_methods_from_python! {
-        r#"
-        class Transform:
-            @overload
-            def encode(self, data: State) -> State:
-                """Mechanically map State or Samples to this Transform's input side.
-
-                This maps decision-variable state only; it does not evaluate an
-                Instance or assert feasibility.
-                """
-            @overload
-            def encode(self, data: Samples) -> Samples:
-                """Map samples pointwise while preserving IDs and grouping."""
-            @overload
-            def decode(self, data: State) -> State:
-                """Mechanically map State or Samples back to this Transform's source side.
-
-                This does not transport objectives, feasibility, or solver status.
-                """
-            @overload
-            def decode(self, data: Samples) -> Samples:
-                """Map samples back pointwise while preserving IDs and grouping."""
-        "#
-    }
-}
-
-#[pyo3_stub_gen::derive::gen_stub_pymethods]
-#[pymethods]
-impl Transform {
-    /// Stable operation name for this applied Transform receipt.
-    #[getter]
-    pub fn name(&self) -> &str {
-        self.0.name()
-    }
-
-    #[gen_stub(skip)]
-    /// Mechanically map a :class:`State` or :class:`Samples` value from this
-    /// Transform's source-side variable namespace to its input-side namespace.
-    ///
-    /// This does not evaluate an Instance or assert feasibility. ``Samples``
-    /// IDs and grouping are preserved.
-    fn encode(&self, data: PreparationData) -> OmmxPyResult<PreparationData> {
-        match data {
-            PreparationData::State(state) => {
-                Ok(PreparationData::State(State(self.0.encode(&state.0)?)))
-            }
-            PreparationData::Samples(samples) => Ok(PreparationData::Samples(Samples(
-                self.0.encode_samples(&samples.0)?,
-            ))),
-        }
-    }
-
-    #[gen_stub(skip)]
-    /// Mechanically map a :class:`State` or :class:`Samples` value from this
-    /// Transform's input-side variable namespace back to its source side.
-    ///
-    /// This does not transport objectives, feasibility, or solver statuses and
-    /// is not promised to invert every possible encoding.
-    fn decode(&self, data: PreparationData) -> OmmxPyResult<PreparationData> {
-        match data {
-            PreparationData::State(state) => {
-                Ok(PreparationData::State(State(self.0.decode(&state.0)?)))
-            }
-            PreparationData::Samples(samples) => Ok(PreparationData::Samples(Samples(
-                self.0.decode_samples(&samples.0)?,
-            ))),
-        }
-    }
-
-    pub fn __repr__(&self) -> String {
-        format!("Transform({:?})", self.0)
-    }
-}
-
-/// An immutable, auditable relation between a source Instance and the prepared
-/// input produced from it under one :class:`PreparationPolicy`.
+/// An immutable construction record containing source, Policy, and prepared
+/// input snapshots.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(frozen)]
 #[derive(Clone)]
-pub struct Preparation(pub(crate) ommx::Preparation);
+pub struct Preparation(ommx::Preparation);
 
-// Preserve the input-dependent return types in the generated Python stub.
-pyo3_stub_gen::inventory::submit! {
-    pyo3_stub_gen::derive::gen_methods_from_python! {
-        r#"
-        class Preparation:
-            @overload
-            def encode(self, data: State) -> State:
-                """Compose applied Transform encoders for State or Samples.
-
-                Solution and SampleSet are not accepted, and no model is evaluated.
-                """
-            @overload
-            def encode(self, data: Samples) -> Samples:
-                """Compose encoders pointwise while preserving IDs and grouping."""
-            @overload
-            def decode(self, data: State) -> State:
-                """Compose applied Transform decoders for State or Samples.
-
-                This performs no source evaluation and transports no solver status.
-                """
-            @overload
-            def decode(self, data: Samples) -> Samples:
-                """Compose decoders pointwise while preserving IDs and grouping."""
-        "#
+impl Preparation {
+    /// Construct the frozen Python wrapper from the pinned core result.
+    pub(crate) fn from_core(preparation: ommx::Preparation) -> Self {
+        Self(preparation)
     }
 }
 
@@ -637,46 +500,7 @@ impl Preparation {
     #[getter]
     /// Isolated snapshot of the Policy passed to :meth:`Instance.prepare`.
     pub fn policy(&self) -> PreparationPolicy {
-        PreparationPolicy(self.0.policy().clone())
-    }
-
-    #[getter]
-    /// Applied Transform receipts in construction order.
-    pub fn transforms(&self) -> Vec<Transform> {
-        self.0.transforms().iter().cloned().map(Transform).collect()
-    }
-
-    #[gen_stub(skip)]
-    /// Compose the applied Transform encoders in construction order.
-    ///
-    /// Accepts only :class:`State` or :class:`Samples`; it does not accept a
-    /// Solution or SampleSet and performs no source evaluation.
-    fn encode(&self, data: PreparationData) -> OmmxPyResult<PreparationData> {
-        match data {
-            PreparationData::State(state) => {
-                Ok(PreparationData::State(State(self.0.encode(&state.0)?)))
-            }
-            PreparationData::Samples(samples) => Ok(PreparationData::Samples(Samples(
-                self.0.encode_samples(&samples.0)?,
-            ))),
-        }
-    }
-
-    #[gen_stub(skip)]
-    /// Compose the applied Transform decoders in reverse construction order.
-    ///
-    /// Accepts only :class:`State` or :class:`Samples`. Evaluate the returned
-    /// state data against :attr:`source` explicitly when source-side results
-    /// are needed.
-    fn decode(&self, data: PreparationData) -> OmmxPyResult<PreparationData> {
-        match data {
-            PreparationData::State(state) => {
-                Ok(PreparationData::State(State(self.0.decode(&state.0)?)))
-            }
-            PreparationData::Samples(samples) => Ok(PreparationData::Samples(Samples(
-                self.0.decode_samples(&samples.0)?,
-            ))),
-        }
+        PreparationPolicy::from_core(self.0.policy().clone())
     }
 
     pub fn __repr__(&self) -> String {

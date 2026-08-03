@@ -11,16 +11,18 @@ kernelspec:
   name: python3
 ---
 
-# Adapter Input Classes and Explicit Constraint Lowering
+# Adapter Input Classes, Preparation, and Explicit Constraint Lowering
 
-OMMX separates two concepts that were previously described together as adapter capabilities:
+OMMX separates three concepts that were previously described together as adapter capabilities:
 
 - An {class}`~ommx.InstanceClass` describes a set of exact `Instance` values. An adapter declares its structural input condition with `INPUT_CLASS`, then evaluates adapter-owned preconditions to determine applicability.
+- A {class}`~ommx.PreparationPolicy` describes which OMMX-owned operations may be used to reach an acceptable `InstanceClass`. An Adapter may recommend a Policy, but the caller chooses it and {meth}`Instance.prepare <ommx.Instance.prepare>` interprets it.
 - {meth}`Instance.lower_special_constraints() <ommx.Instance.lower_special_constraints>` explicitly lowers selected special-constraint families on an instance. It does not declare an input class or establish adapter applicability.
 
 This page covers:
 
 - `InstanceClass` membership and adapter applicability
+- `PreparationPolicy` and `Instance.prepare(policy)`
 - {class}`~ommx.SpecialConstraintKind` and {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` as special-constraint family selectors
 - {meth}`Instance.lower_special_constraints() <ommx.Instance.lower_special_constraints>` for explicit lowering
 - Manual conversion APIs per constraint type
@@ -47,6 +49,21 @@ binary_linear_with_one_hot = InstanceClass(
 ```
 
 Adapters declare this first applicability condition as `INPUT_CLASS`. Use `check_applicability()` for a structured result or `require_applicable()` to raise when membership or an adapter-owned precondition fails. Explicit preparation produces another input value, whose applicability must be checked again.
+
+## Preparing an input for an Adapter
+
+An Adapter recommends a common Policy targeting its direct `INPUT_CLASS`; it does not execute or interpret that Policy. The caller passes the selected Policy to the source `Instance`, then passes only the resulting `Instance` to the direct Adapter API.
+
+```python
+policy = Adapter.recommended_preparation_policy()
+preparation = source.prepare(policy)
+Adapter.require_applicable(preparation.input)
+result = Adapter.solve(preparation.input)
+```
+
+`Preparation` retains isolated `source`, `policy`, and `input` snapshots. Solver states and samples are evaluated by the exact prepared `Instance`, using the transformation data already stored in that `Instance`; Preparation does not add a separate encode/decode protocol. Adapter-owned preconditions remain outside Policy execution and are checked at the direct boundary.
+
+Finite penalty weights are positive and therefore apply to a minimization candidate. A Policy that prepares a maximization source with a finite penalty must also permit sense normalization.
 
 ## SpecialConstraintKind and active_special_constraint_kinds
 
@@ -201,6 +218,8 @@ for cid, c in instance2.constraints.items():
 |---|---|
 | Describe a structural set of adapter inputs | {class}`~ommx.InstanceClass` |
 | Declare the first adapter applicability condition | `INPUT_CLASS` |
+| Recommend allowed operations toward an input class | `recommended_preparation_policy()` |
+| Execute a caller-selected preparation policy | {meth}`Instance.prepare <ommx.Instance.prepare>` |
 | Check membership plus adapter-owned preconditions | `check_applicability()` / `require_applicable()` |
 | Inspect active special-constraint families | {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` |
 | Explicitly lower selected special constraints | {meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>` |

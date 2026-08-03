@@ -400,7 +400,7 @@ parametric_instance.parameters_df()       # -> pandas.DataFrame  (method, not pr
 - `Parameters` / `OneHot` / `Sos1` / `ConstraintHints` — see §1.2.
 - `Artifact` low-level types (`ArtifactArchive`, `ArtifactDir`, `ArtifactArchiveBuilder`, `ArtifactDirBuilder`) — replaced by unified `Artifact` / `ArtifactDraft`.
 - `ommx_openjij_adapter.response_to_samples(response)` — use `decode_to_samples(response)`.
-- `ommx_openjij_adapter.sample_qubo_sa(...)` — use `OMMXOpenJijSAAdapter.sample(...)` for a directly applicable input. The replacement returns an evaluated `SampleSet`, rather than raw `Samples`. When preparation is required, obtain the Adapter's recommended common Policy, call `source.prepare(policy)`, sample `preparation.input`, decode `input_sample_set.samples`, and evaluate those decoded samples against `preparation.source`.
+- `ommx_openjij_adapter.sample_qubo_sa(...)` — use `OMMXOpenJijSAAdapter.sample(...)` for a directly applicable input. The replacement returns an evaluated `SampleSet`, rather than raw `Samples`. When preparation is required, obtain the Adapter's recommended common Policy, call `source.prepare(policy)`, and sample `preparation.input`; the returned `SampleSet` is already evaluated against that prepared `Instance`.
 
 In v2, the OpenJij Adapter constructor, `sample()`, and `solve()` accepted
 `uniform_penalty_weight`, `penalty_weights`, and
@@ -427,20 +427,15 @@ policy = OMMXOpenJijSAAdapter.recommended_preparation_policy(
     allow_approximate_integer_slack=True,  # Retain v2's approximation fallback.
 )
 preparation = source.prepare(policy)
-input_sample_set = OMMXOpenJijSAAdapter.sample(preparation.input)
-source_samples = preparation.decode(input_sample_set.samples)
-source_sample_set = preparation.source.evaluate_samples(
-    source_samples,
-    atol=preparation.policy.atol,
-)
+sample_set = OMMXOpenJijSAAdapter.sample(preparation.input)
 ```
 
-`Preparation` retains isolated source, Policy, and input snapshots together
-with the applied `Transform` receipts. Its `encode()` and `decode()` methods map
-only `State` or `Samples`; source objective and feasibility evaluation remains
-the explicit `evaluate()` / `evaluate_samples()` call. Preparation does not
-transport solver statuses or claim that finite penalties preserve the source
-problem.
+`Preparation` retains isolated source, Policy, and input snapshots. The input
+`Instance` itself owns the decision-variable dependencies, removed constraints,
+provenance, and auxiliary variables produced by preparation. Adapter results
+are evaluated against that input. Their objective and sense therefore belong
+to the prepared model, and a finite penalty does not guarantee feasible
+samples.
 
 ```python
 # v2.5.1

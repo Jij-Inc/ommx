@@ -50,17 +50,14 @@ source = Instance.from_components(
 
 policy = OMMXHighsAdapter.recommended_preparation_policy()
 preparation = source.prepare(policy)
-input_solution = OMMXHighsAdapter.solve(preparation.input)
-
-source_state = preparation.decode(input_solution.state)
-source_solution = preparation.source.evaluate(
-    source_state,
-    atol=preparation.policy.atol,
-)
-print(source_solution)
+solution = OMMXHighsAdapter.solve(preparation.input)
+print(solution)
 ```
 
 The recommended Policy permits OMMX's existing Indicator, OneHot, and SOS1
 lowering operations. `Instance.prepare()` acts on an isolated value and checks
 that its result belongs to the Policy's acceptable `InstanceClass`. The direct
-HiGHS boundary remains responsible for its own applicability check.
+HiGHS boundary remains responsible for its own applicability check. The Adapter
+already evaluates the solver state against `preparation.input`; that prepared
+`Instance` retains the dependency, removed-constraint, provenance, and
+auxiliary-variable data produced by its transformations.

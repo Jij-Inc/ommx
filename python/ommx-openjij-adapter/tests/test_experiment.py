@@ -41,20 +41,6 @@ def test_log_sample_records_the_prepared_adapter_input() -> None:
         assert actual.sense == expected.sense
         assert len(actual.constraints) == len(expected.constraints)
 
-    decoded = preparation.decode(prepared_samples.samples)
-    source_sample_set = preparation.source.evaluate_samples(
-        decoded,
-        atol=preparation.policy.atol,
-    )
-    assert source_sample_set.sense == Sense.Maximize
-    assert len(source_sample_set.constraints) == 1
-    for sample_id in source_sample_set.sample_ids():
-        value = source_sample_set.extract_decision_variables("x", sample_id)[(0,)]
-        expected = source.evaluate({0: value})
-        actual = source_sample_set.get(sample_id)
-        assert actual.objective == expected.objective
-        assert actual.feasible == expected.feasible
-
     loaded = Experiment.from_artifact(experiment.commit())
     [sampling] = loaded.runs[0].samplings
     assert sampling.status == "finished"

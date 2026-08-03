@@ -33,7 +33,6 @@ ommx
    _items/ommx.InstanceClassClauseReport
    _items/ommx.InstanceClassMembershipReport
    _items/ommx.PreparationPolicy
-   _items/ommx.Transform
    _items/ommx.PreparationFailure
    _items/ommx.Preparation
    _items/ommx.PreparationError

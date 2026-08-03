@@ -131,8 +131,8 @@ The OpenJij adapter's input class contains Binary, unconstrained minimization
 instances with a polynomial objective of any degree.
 The TSP instance above contains constraints, so obtain a common OMMX preparation
 Policy with an explicit finite penalty weight. Apply that Policy to the
-`Instance`, pass the resulting `preparation.input` to the Adapter, and evaluate
-the decoded states against the retained source explicitly.
+`Instance` and pass the resulting `preparation.input` to the Adapter. The
+Adapter returns samples already evaluated against that prepared `Instance`.
 
 ```{code-cell} ipython3
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
@@ -142,14 +142,9 @@ policy = OMMXOpenJijSAAdapter.recommended_preparation_policy(
 )
 preparation = instance.prepare(policy)
 
-input_sample_set = OMMXOpenJijSAAdapter.sample(
+sample_set = OMMXOpenJijSAAdapter.sample(
     preparation.input,
     num_reads=16,
-)
-source_samples = preparation.decode(input_sample_set.samples)
-sample_set = preparation.source.evaluate_samples(
-    source_samples,
-    atol=preparation.policy.atol,
 )
 sample_set.summary
 ```
@@ -157,10 +152,11 @@ sample_set.summary
 {py:meth}`~ommx_openjij_adapter.OMMXOpenJijSAAdapter.sample` returns
 {py:class}`~ommx.SampleSet`, which stores the evaluated objective values and
 constraint violations in addition to the decision variable values.
-`SampleSet.summary` displays this information. Its `feasible` column indicates
-feasibility for the source constrained problem because the final
-`evaluate_samples()` call evaluates the decoded states against that source
-model.
+`SampleSet.summary` displays this information. Evaluation of a prepared
+`Instance` includes constraints retained in its removed-constraint collections,
+so the `feasible` column still accounts for the original TSP constraints after
+they have been converted into a penalty. The displayed objective is the
+prepared objective, including that finite penalty.
 
 The penalty weight in `policy` belongs to the explicit preparation, not to the
 OpenJij backend sampler. A finite penalty encourages feasibility but does not
@@ -169,9 +165,10 @@ guarantee that every returned sample is feasible for the source problem.
 ### Inspecting preparation
 
 `Instance.prepare()` leaves `instance` unchanged. The returned value retains
-isolated source, Policy, and input snapshots together with the applied
-Transforms. It records construction; it does not copy solver statuses or claim
-that finite penalties preserve source feasibility or optimality.
+isolated source, Policy, and input snapshots. The prepared input itself records
+transformation effects through decision-variable dependencies, removed
+constraints, provenance, and auxiliary variables, and the Adapter evaluates
+its results against this input.
 
 ```{code-cell} ipython3
 OMMXOpenJijSAAdapter.require_applicable(preparation.input)
@@ -179,7 +176,8 @@ OMMXOpenJijSAAdapter.require_applicable(preparation.input)
     "target_membership": preparation.policy.acceptable_instance_class.contains(
         preparation.input
     ),
-    "transforms": [transform.name for transform in preparation.transforms],
+    "active_constraints": len(preparation.input.constraints),
+    "removed_constraints": len(preparation.input.removed_constraints),
 }
 ```
 
@@ -187,7 +185,7 @@ Discrete integer slack approximation requires passing
 `allow_approximate_integer_slack=True` when obtaining the Policy; setting only
 `inequality_integer_slack_max_range` does not opt into approximation.
 `uniform_penalty_weight` and `penalty_weights` explicitly select a finite
-penalty Transform. Per-constraint weights address regular constraint IDs; when
+penalty operation. Per-constraint weights address regular constraint IDs; when
 special-constraint lowering adds regular constraints, use a uniform weight.
 
 If variable bounds prove an inequality infeasible, `Instance.prepare()` raises

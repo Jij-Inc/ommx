@@ -18,18 +18,6 @@ enum IndicatorPlan {
     Fresh { bound: Bound },
 }
 
-/// Operation-owned receipt used by canonical preparation.
-///
-/// The public conversion APIs continue to return only generated regular
-/// constraint IDs. Preparation additionally needs the exact source-variable
-/// to indicator-variable correspondence in order to encode states without
-/// inspecting modeling labels or inferring fresh-ID allocation order.
-#[derive(Debug, Clone)]
-pub(super) struct Sos1ConversionReceipt {
-    pub(super) generated_constraints: Vec<ConstraintID>,
-    pub(super) indicator_variables: BTreeMap<VariableID, VariableID>,
-}
-
 impl Instance {
     #[cfg_attr(doc, katexit::katexit)]
     /// Convert a SOS1 constraint to regular constraints using the Big-M method.
@@ -69,7 +57,7 @@ impl Instance {
         id: Sos1ConstraintID,
     ) -> Result<Vec<ConstraintID>> {
         let plans = self.plan_sos1_conversion(id)?;
-        Ok(self.apply_sos1_conversion(id, plans)?.generated_constraints)
+        self.apply_sos1_conversion(id, plans)
     }
 
     /// Convert every active SOS1 constraint to regular constraints using Big-M.
@@ -86,21 +74,6 @@ impl Instance {
     pub fn convert_all_sos1_to_constraints(
         &mut self,
     ) -> Result<BTreeMap<Sos1ConstraintID, Vec<ConstraintID>>> {
-        Ok(self
-            .convert_all_sos1_to_constraints_with_receipts()?
-            .into_iter()
-            .map(|(id, receipt)| (id, receipt.generated_constraints))
-            .collect())
-    }
-
-    /// Convert every active SOS1 and retain the state-encoding receipt.
-    ///
-    /// This has the same atomic planning and application behavior as
-    /// [`Self::convert_all_sos1_to_constraints`]. It is crate-private because
-    /// the richer receipt is owned by [`crate::Transform`].
-    pub(super) fn convert_all_sos1_to_constraints_with_receipts(
-        &mut self,
-    ) -> Result<BTreeMap<Sos1ConstraintID, Sos1ConversionReceipt>> {
         let ids: Vec<_> = self
             .sos1_constraint_collection
             .active()
@@ -184,7 +157,7 @@ impl Instance {
         &mut self,
         id: Sos1ConstraintID,
         plans: Vec<(VariableID, IndicatorPlan)>,
-    ) -> Result<Sos1ConversionReceipt> {
+    ) -> Result<Vec<ConstraintID>> {
         // Allocate fresh binary indicators first.
         let mut indicators: BTreeMap<VariableID, VariableID> = BTreeMap::new();
         for (x_id, plan) in &plans {
@@ -278,10 +251,7 @@ impl Instance {
             )
             .expect("SOS1 id was present when the plan was built and hasn't been touched since");
 
-        Ok(Sos1ConversionReceipt {
-            generated_constraints: new_constraint_ids,
-            indicator_variables: indicators,
-        })
+        Ok(new_constraint_ids)
     }
 
     fn insert_sos1_generated_constraint(

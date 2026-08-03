@@ -148,12 +148,12 @@ class SolverAdapter(ABC):
         """Return this Adapter's recommended OMMX preparation policy.
 
         The base recommendation targets :attr:`INPUT_CLASS` and permits only
-        identity preparation. Subclasses may recommend additional OMMX-owned
-        Transform options by returning another common
+        identity preparation. Subclasses may permit additional OMMX-owned
+        preparation operations by returning another common
         :class:`PreparationPolicy` value. The Adapter does not execute the
-        policy and is not retained by it. Reaching :attr:`INPUT_CLASS` does
-        not check Adapter-owned preconditions; the direct applicability
-        boundary remains separate.
+        policy and is not retained by it. Reaching :attr:`INPUT_CLASS` does not
+        check Adapter-owned preconditions; the direct applicability boundary
+        remains separate.
         """
         input_class = cls.INPUT_CLASS
         if input_class is None:
@@ -168,8 +168,8 @@ class SolverAdapter(ABC):
 
         Adapter-specific preconditions run only after at least one complete
         input-class clause contains the instance. The hook receives an isolated
-        copy so it cannot mutate the caller's instance. Any explicitly
-        transformed value is a different input and must be checked separately.
+        copy so it cannot mutate the caller's instance. A prepared value is a
+        different input and must be checked separately.
         """
         input_class = cls.INPUT_CLASS
         if input_class is None:

@@ -236,7 +236,7 @@ ids_list: list[int] = sample_set.sample_ids_list
 - `instance.constraint_hints` - `one_hot_constraints` / `sos1_constraints` / `indicator_constraints` に分かれました。
 - `ArtifactArchive` / `ArtifactDir` 系 - `Artifact` / `ArtifactDraft` に統合されました。
 - `ommx_openjij_adapter.response_to_samples(response)` - `decode_to_samples(response)` を使用します（`3.0.0`: [#1087](https://github.com/Jij-Inc/ommx/pull/1087)）。
-- `ommx_openjij_adapter.sample_qubo_sa(...)` - 直接適用可能なinputでは `OMMXOpenJijSAAdapter.sample(...)` を使用します。置き換え後はraw `Samples` ではなく評価済みの `SampleSet` を返します。preparationが必要な場合はAdapter推奨の共通Policyを取得し、`source.prepare(policy)` を呼び、`preparation.input` をsampleします。その後 `input_sample_set.samples` をdecodeし、`preparation.source` で明示的に評価します（`3.0.0`: [#1087](https://github.com/Jij-Inc/ommx/pull/1087)）。
+- `ommx_openjij_adapter.sample_qubo_sa(...)` - 直接適用可能なinputでは `OMMXOpenJijSAAdapter.sample(...)` を使用します。置き換え後はraw `Samples` ではなく評価済みの `SampleSet` を返します。preparationが必要な場合はAdapter推奨の共通Policyを取得し、`source.prepare(policy)` を呼んで `preparation.input` をsampleします。返される `SampleSet` はその変換済み `Instance` に対して既に評価済みです（`3.0.0`: [#1087](https://github.com/Jij-Inc/ommx/pull/1087)）。
 
 v2のOpenJij Adapterでは、constructor、`sample()`、`solve()` が
 `uniform_penalty_weight`、`penalty_weights`、
@@ -261,19 +261,14 @@ policy = OMMXOpenJijSAAdapter.recommended_preparation_policy(
     allow_approximate_integer_slack=True,  # v2の近似fallbackを維持
 )
 preparation = source.prepare(policy)
-input_sample_set = OMMXOpenJijSAAdapter.sample(preparation.input)
-source_samples = preparation.decode(input_sample_set.samples)
-source_sample_set = preparation.source.evaluate_samples(
-    source_samples,
-    atol=preparation.policy.atol,
-)
+sample_set = OMMXOpenJijSAAdapter.sample(preparation.input)
 ```
 
-`Preparation` は互いに独立したsource、Policy、inputのsnapshotと、適用された
-`Transform` receiptを保持します。`encode()` / `decode()` が扱うのは `State` または
-`Samples` だけです。sourceの目的関数と実行可能性は `evaluate()` /
-`evaluate_samples()` で明示的に評価します。Preparationはsolver statusを転送せず、
-有限penaltyがsource problemを保存すると主張しません。
+`Preparation` は互いに独立したsource、Policy、inputのsnapshotを保持します。
+preparationによって作られたdecision-variable dependency、removed constraint、
+provenance、補助変数はinputの `Instance` 自身が所有します。Adapterの結果はそのinputに
+対して評価されます。結果のobjectiveとsenseは変換後のmodelのものであり、有限penaltyは
+実行可能なsampleを保証しません。
 
 ## 8. DataFrame accessor
 

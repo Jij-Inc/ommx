@@ -131,8 +131,8 @@ instance = Instance.from_components(
 持つバイナリ変数のみの制約なし最小化問題です。
 上で作成したTSPインスタンスには制約があるため、有限のペナルティ重みを明示した
 共通のOMMX preparation Policyを取得します。そのPolicyを `Instance` に適用し、
-得られた `preparation.input` をAdapterへ渡した後、decodeしたstateを保持された
-sourceに対して明示的に評価します。
+得られた `preparation.input` をAdapterへ渡します。Adapterは、その変換済み
+`Instance` に対して評価済みのサンプルを返します。
 
 ```{code-cell} ipython3
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
@@ -142,14 +142,9 @@ policy = OMMXOpenJijSAAdapter.recommended_preparation_policy(
 )
 preparation = instance.prepare(policy)
 
-input_sample_set = OMMXOpenJijSAAdapter.sample(
+sample_set = OMMXOpenJijSAAdapter.sample(
     preparation.input,
     num_reads=16,
-)
-source_samples = preparation.decode(input_sample_set.samples)
-sample_set = preparation.source.evaluate_samples(
-    source_samples,
-    atol=preparation.policy.atol,
 )
 sample_set.summary
 ```
@@ -157,8 +152,9 @@ sample_set.summary
 {py:meth}`~ommx_openjij_adapter.OMMXOpenJijSAAdapter.sample` は
 {py:class}`~ommx.SampleSet` を返します。これは決定変数のサンプル値に加えて、
 評価した目的関数値と制約違反を保持します。`SampleSet.summary` はこの情報の要約を
-表示します。最後の `evaluate_samples()` がdecode後のstateをsource modelに対して
-評価するため、その `feasible` 列は変換元の制約付き問題に対する実行可能性を示します。
+表示します。変換済み `Instance` の評価にはremoved constraint collectionに保持された
+制約も含まれるため、penaltyへ変換した後も `feasible` 列には元のTSP制約が反映されます。
+表示される目的関数はfinite penaltyを含む変換後の目的関数です。
 
 `policy` のペナルティ重みはOpenJij backend samplerのパラメータではなく、明示的な
 準備に対する指定です。有限ペナルティは実行可能なサンプルを得やすくしますが、
@@ -167,9 +163,9 @@ sample_set.summary
 ### 準備内容の確認
 
 `Instance.prepare()` は `instance` を変更しません。返される値は、互いに独立した
-source、Policy、inputのsnapshotと、適用されたTransformを保持します。これは構築内容の
-記録であり、solver statusを転送したり、有限penaltyがsourceの実行可能性や最適性を
-保存すると主張したりはしません。
+source、Policy、inputのsnapshotを保持します。変換の結果はinput自身の
+decision-variable dependency、removed constraint、provenance、補助変数に記録されます。
+Adapterはこのinputに対して結果を評価します。
 
 ```{code-cell} ipython3
 OMMXOpenJijSAAdapter.require_applicable(preparation.input)
@@ -177,13 +173,14 @@ OMMXOpenJijSAAdapter.require_applicable(preparation.input)
     "target_membership": preparation.policy.acceptable_instance_class.contains(
         preparation.input
     ),
-    "transforms": [transform.name for transform in preparation.transforms],
+    "active_constraints": len(preparation.input.constraints),
+    "removed_constraints": len(preparation.input.removed_constraints),
 }
 ```
 離散的なinteger slack近似を使うには、Policyを取得するときに
 `allow_approximate_integer_slack=True` を渡します。
 `inequality_integer_slack_max_range` の指定だけでは近似への同意になりません。
-`uniform_penalty_weight` または `penalty_weights` はfinite penalty Transformを明示的に
+`uniform_penalty_weight` または `penalty_weights` はfinite penalty操作を明示的に
 選択します。制約ごとのweightは通常制約IDを指定するため、特殊制約loweringによって
 通常制約が追加される場合はuniform weightを使います。
 

@@ -116,7 +116,7 @@ match source.prepare(&policy) {
             _ => { /* the signal is non-exhaustive */ }
         }
     }
-    Err(e) => return Err(e), // Transform-owned signal or ordinary SDK error
+    Err(e) => return Err(e), // Instance-operation signal or ordinary SDK error
     Ok(preparation) => { /* use preparation.input() */ }
 }
 ```

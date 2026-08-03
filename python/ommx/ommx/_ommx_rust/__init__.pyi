@@ -111,7 +111,6 @@ __all__ = [
     "ToFunction",
     "ToSamples",
     "ToState",
-    "Transform",
     "VariableIDLike",
     "gc",
     "get_default_atol",
@@ -3120,9 +3119,10 @@ class Instance:
 
         Preparation is an OMMX-owned Instance operation. It does not receive or
         retain a Solver Adapter. A successful result has an input belonging to
-        ``policy.acceptable_instance_class`` and records the applied Transforms
-        and their source-specific receipts together with the source and Policy
-        snapshots. Model evaluation and solver outputs are separate operations.
+        ``policy.acceptable_instance_class`` together with isolated source and
+        Policy snapshots. Evaluate solver states and samples against
+        :attr:`Preparation.input`; that Instance owns the effects of every
+        operation applied during preparation.
         """
     @staticmethod
     def from_v1_bytes(bytes: bytes) -> Instance: ...
@@ -6097,8 +6097,8 @@ class Polynomial:
 @typing.final
 class Preparation:
     r"""
-    An immutable, auditable relation between a source Instance and the prepared
-    input produced from it under one :class:`PreparationPolicy`.
+    An immutable construction record containing source, Policy, and prepared
+    input snapshots.
     """
     @property
     def source(self) -> Instance:
@@ -6114,35 +6114,6 @@ class Preparation:
     def policy(self) -> PreparationPolicy:
         r"""
         Isolated snapshot of the Policy passed to :meth:`Instance.prepare`.
-        """
-    @property
-    def transforms(self) -> builtins.list[Transform]:
-        r"""
-        Applied Transform receipts in construction order.
-        """
-    @typing.overload
-    def encode(self, data: State) -> State:
-        r"""
-        Compose applied Transform encoders for State or Samples.
-
-        Solution and SampleSet are not accepted, and no model is evaluated.
-        """
-    @typing.overload
-    def encode(self, data: Samples) -> Samples:
-        r"""
-        Compose encoders pointwise while preserving IDs and grouping.
-        """
-    @typing.overload
-    def decode(self, data: State) -> State:
-        r"""
-        Compose applied Transform decoders for State or Samples.
-
-        This performs no source evaluation and transports no solver status.
-        """
-    @typing.overload
-    def decode(self, data: Samples) -> Samples:
-        r"""
-        Compose decoders pointwise while preserving IDs and grouping.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -6163,20 +6134,18 @@ class PreparationFailure:
     The corresponding Python exception exposes this value as
     :attr:`PreparationError.failure`.
 
-    ``PolicyMismatch`` carries ``source``, ``policy``, ``current_membership``,
-    committed ``transforms``, and ``detail``. ``ResourceLimitExceeded`` carries
-    the same snapshots plus ``operation``, ``resource``, ``observed``, and
-    ``limit``. ``TargetInstanceClassNotReached`` carries the common snapshots
-    plus ``detail``. Errors owned by a mathematical Transform are not converted
-    to these variants.
+    Every variant carries ``source``, ``policy``, ``current``, and
+    ``current_membership`` snapshots. ``current`` is the last Instance committed
+    by the canonical procedure. Variant-specific fields explain why that
+    Instance could not be returned as a successful prepared input.
     """
     @typing.final
     class PolicyMismatch(PreparationFailure):
         __match_args__ = (
             "source",
             "policy",
+            "current",
             "current_membership",
-            "transforms",
             "detail",
         )
         @property
@@ -6184,17 +6153,17 @@ class PreparationFailure:
         @property
         def policy(self) -> PreparationPolicy: ...
         @property
-        def current_membership(self) -> InstanceClassMembershipReport: ...
+        def current(self) -> Instance: ...
         @property
-        def transforms(self) -> builtins.list[Transform]: ...
+        def current_membership(self) -> InstanceClassMembershipReport: ...
         @property
         def detail(self) -> builtins.str: ...
         def __new__(
             cls,
             source: Instance,
             policy: PreparationPolicy,
+            current: Instance,
             current_membership: InstanceClassMembershipReport,
-            transforms: typing.Sequence[Transform],
             detail: builtins.str,
         ) -> PreparationFailure.PolicyMismatch: ...
 
@@ -6203,8 +6172,8 @@ class PreparationFailure:
         __match_args__ = (
             "source",
             "policy",
+            "current",
             "current_membership",
-            "transforms",
             "operation",
             "resource",
             "observed",
@@ -6215,9 +6184,9 @@ class PreparationFailure:
         @property
         def policy(self) -> PreparationPolicy: ...
         @property
-        def current_membership(self) -> InstanceClassMembershipReport: ...
+        def current(self) -> Instance: ...
         @property
-        def transforms(self) -> builtins.list[Transform]: ...
+        def current_membership(self) -> InstanceClassMembershipReport: ...
         @property
         def operation(self) -> builtins.str: ...
         @property
@@ -6230,8 +6199,8 @@ class PreparationFailure:
             cls,
             source: Instance,
             policy: PreparationPolicy,
+            current: Instance,
             current_membership: InstanceClassMembershipReport,
-            transforms: typing.Sequence[Transform],
             operation: builtins.str,
             resource: builtins.str,
             observed: builtins.int,
@@ -6243,8 +6212,8 @@ class PreparationFailure:
         __match_args__ = (
             "source",
             "policy",
+            "current",
             "current_membership",
-            "transforms",
             "detail",
         )
         @property
@@ -6252,17 +6221,17 @@ class PreparationFailure:
         @property
         def policy(self) -> PreparationPolicy: ...
         @property
-        def current_membership(self) -> InstanceClassMembershipReport: ...
+        def current(self) -> Instance: ...
         @property
-        def transforms(self) -> builtins.list[Transform]: ...
+        def current_membership(self) -> InstanceClassMembershipReport: ...
         @property
         def detail(self) -> builtins.str: ...
         def __new__(
             cls,
             source: Instance,
             policy: PreparationPolicy,
+            current: Instance,
             current_membership: InstanceClassMembershipReport,
-            transforms: typing.Sequence[Transform],
             detail: builtins.str,
         ) -> PreparationFailure.TargetInstanceClassNotReached: ...
 
@@ -6275,6 +6244,8 @@ class PreparationPolicy:
 
     This is an OMMX core value. Solver Adapters may recommend a policy, but the
     policy neither retains an Adapter nor calls Adapter-owned Python code.
+    Positive finite penalty weights require a minimization candidate; permit
+    sense normalization when preparing a maximization source.
     """
     @property
     def acceptable_instance_class(self) -> InstanceClass:
@@ -6321,17 +6292,17 @@ class PreparationPolicy:
         r"""
         Per-constraint finite penalty weights.
 
-        Keys identify source regular constraints by their stable IDs; those IDs
-        are preserved by Preparation Transforms. The map must cover every
-        source regular constraint still active at the penalty step, while an
-        entry for one removed as trivial is allowed. Special-constraint
-        lowering adds new regular rows outside this source-map domain, so a
-        uniform penalty is required when such rows remain active.
+        Keys identify source regular constraints by their stable IDs. The map
+        must cover every source regular constraint still active at the penalty
+        step, while an entry for one removed as trivial is allowed.
+        Special-constraint lowering adds new regular rows outside this
+        source-map domain, so a uniform penalty is required when such rows
+        remain active.
         """
     @property
     def atol(self) -> builtins.float:
         r"""
-        Absolute tolerance snapshotted into every Transform that uses it.
+        Absolute tolerance used by permitted preparation operations.
         """
     @property
     def max_added_decision_variables(self) -> typing.Optional[builtins.int]:
@@ -7046,15 +7017,6 @@ class SampleSet:
     def parameters(self) -> typing.Optional[typing.Any]: ...
     @parameters.setter
     def parameters(self, value: typing.Any) -> None: ...
-    @property
-    def samples(self) -> Samples:
-        r"""
-        Extract the unevaluated decision-variable states for all samples.
-
-        Sample IDs are preserved. Objective values, constraint evaluations,
-        feasibility, solver metadata, and annotations are intentionally not
-        included in the returned :class:`Samples`.
-        """
     @property
     def best_feasible_id(self) -> builtins.int:
         r"""
@@ -8240,47 +8202,6 @@ class State:
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> State: ...
     def __deepcopy__(self, _memo: typing.Any) -> State: ...
-
-@typing.final
-class Transform:
-    r"""
-    One OMMX Transform applied by :meth:`Instance.prepare`.
-
-    Values are created while OMMX applies an Instance operation. They are
-    immutable, source-specific receipts, not caller-supplied instructions and
-    not reusable ``apply`` objects.
-    """
-    @property
-    def name(self) -> builtins.str:
-        r"""
-        Stable operation name for this applied Transform receipt.
-        """
-    @typing.overload
-    def encode(self, data: State) -> State:
-        r"""
-        Mechanically map State or Samples to this Transform's input side.
-
-        This maps decision-variable state only; it does not evaluate an
-        Instance or assert feasibility.
-        """
-    @typing.overload
-    def encode(self, data: Samples) -> Samples:
-        r"""
-        Map samples pointwise while preserving IDs and grouping.
-        """
-    @typing.overload
-    def decode(self, data: State) -> State:
-        r"""
-        Mechanically map State or Samples back to this Transform's source side.
-
-        This does not transport objectives, feasibility, or solver status.
-        """
-    @typing.overload
-    def decode(self, data: Samples) -> Samples:
-        r"""
-        Map samples back pointwise while preserving IDs and grouping.
-        """
-    def __repr__(self) -> builtins.str: ...
 
 @typing.final
 class DecisionVariableRole(enum.Enum):

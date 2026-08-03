@@ -32,23 +32,18 @@ policy = OMMXOpenJijSAAdapter.recommended_preparation_policy(
 )
 preparation = instance.prepare(policy)
 
-input_sample_set = OMMXOpenJijSAAdapter.sample(
+sample_set = OMMXOpenJijSAAdapter.sample(
     preparation.input,
     num_reads=16,
 )
-source_samples = preparation.decode(input_sample_set.samples)
-source_sample_set = preparation.source.evaluate_samples(
-    source_samples,
-    atol=preparation.policy.atol,
-)
 
-print(source_sample_set.summary)
+print(sample_set.summary)
 ```
 
 The finite penalty weight is part of `PreparationPolicy`, not an OpenJij
 backend sampler parameter. It must be selected explicitly when constraints
 remain. A finite penalty does not ensure that every returned sample is feasible
-for the source model; inspect the source-evaluated `SampleSet`.
+for the original constraints; inspect the evaluated `SampleSet`.
 
 ## Input class and preparation
 
@@ -86,10 +81,11 @@ boundary remains authoritative:
 OMMXOpenJijSAAdapter.require_applicable(preparation.input)
 ```
 
-Preparation mechanically encodes and decodes `State` or `Samples`. Source
-objective and feasibility evaluation is deliberately separate, as shown in the
-usage example. Preparation does not transport solver optimality, infeasibility,
-or unboundedness claims to the source.
+The Adapter already evaluates returned samples against `preparation.input`.
+That prepared `Instance` retains the decision-variable dependencies, removed
+constraints, provenance, and auxiliary variables created by its
+transformations, so its ordinary evaluation path is sufficient. The reported
+objective is the prepared objective, including any finite penalty.
 
 The maximum of 53 auxiliary bits for each Integer variable belongs to OMMX's
 Integer-to-Binary log-encoding operation. It is neither a property of the

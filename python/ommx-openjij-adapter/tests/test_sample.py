@@ -169,15 +169,7 @@ def _openjij_input(instance):
     preparation = instance.prepare(policy)
     adapter_input = preparation.input
     assert instance.to_v2_bytes() == source
-    return adapter_input, preparation, source
-
-
-def _evaluate_source(sample_set, preparation):
-    source_samples = preparation.decode(sample_set.samples)
-    return preparation.source.evaluate_samples(
-        source_samples,
-        atol=preparation.policy.atol,
-    )
+    return adapter_input, source
 
 
 def _expected_solution(instance, ans):
@@ -188,8 +180,9 @@ def _expected_solution(instance, ans):
     return instance.evaluate(state)
 
 
-def _assert_sample_set_uses_source_model(sample_set, instance, ans):
-    expected = _expected_solution(instance, ans)
+def _assert_sample_set_uses_instance(sample_set, instance):
+    solution = sample_set.get(0)
+    expected = instance.evaluate(solution.state)
     assert sample_set.sense == expected.sense
     assert sample_set.objectives[0] == pytest.approx(expected.objective)
     assert sample_set.feasible[0] == expected.feasible
@@ -223,11 +216,10 @@ def test_sample(instance, ans):
     # The uniform_penalty_weight of 3.1 was chosen to resolve multiple optimal solutions
     # effectively. This value was determined based on prior experimentation and ensures
     # that constraints are sufficiently penalized without overwhelming the objective.
-    adapter_input, preparation, source = _openjij_input(instance)
-    prepared_samples = OMMXOpenJijSAAdapter.sample(adapter_input, num_reads=1, seed=999)
-    sample_set = _evaluate_source(prepared_samples, preparation)
+    adapter_input, source = _openjij_input(instance)
+    sample_set = OMMXOpenJijSAAdapter.sample(adapter_input, num_reads=1, seed=999)
     assert sample_set.extract_decision_variables("x", 0) == ans
-    _assert_sample_set_uses_source_model(sample_set, instance, ans)
+    _assert_sample_set_uses_instance(sample_set, adapter_input)
     assert instance.to_v2_bytes() == source
 
 
@@ -262,14 +254,11 @@ def test_solve(instance, ans):
     ],
 )
 def test_sample_twice(instance, ans):
-    adapter_input, preparation, source = _openjij_input(instance)
+    adapter_input, source = _openjij_input(instance)
     for _ in range(2):
-        prepared_samples = OMMXOpenJijSAAdapter.sample(
-            adapter_input, num_reads=1, seed=999
-        )
-        sample_set = _evaluate_source(prepared_samples, preparation)
+        sample_set = OMMXOpenJijSAAdapter.sample(adapter_input, num_reads=1, seed=999)
         assert sample_set.extract_decision_variables("x", 0) == ans
-        _assert_sample_set_uses_source_model(sample_set, instance, ans)
+        _assert_sample_set_uses_instance(sample_set, adapter_input)
         assert instance.to_v2_bytes() == source
 
 
@@ -338,7 +327,7 @@ def test_decode_to_sampleset_uses_instance_variables():
         ),
     ],
 )
-def test_source_evaluation_populates_variable_removed_with_trivial_inequality(
+def test_prepared_input_evaluation_populates_variable_removed_with_trivial_inequality(
     variable,
     constraint,
     expected_value,
@@ -366,17 +355,14 @@ def test_source_evaluation_populates_variable_removed_with_trivial_inequality(
     )
     assert input_samples.get(0).state.get(0) == expected_value
 
-    decoded = preparation.decode(input_samples.samples)
-    source_sample_set = preparation.source.evaluate_samples(
-        decoded,
-        atol=preparation.policy.atol,
-    )
-    source_solution = source_sample_set.get(0)
-    assert source_solution.state.get(0) == expected_value
-    assert source_solution.feasible
+    solution = input_samples.get(0)
+    expected = preparation.input.evaluate(solution.state)
+    assert solution.state.get(0) == expected_value
+    assert solution.objective == expected.objective
+    assert solution.feasible == expected.feasible
 
 
-def test_sample_decodes_integer_sos1_against_source_model():
+def test_sample_evaluates_integer_sos1_against_prepared_input():
     integer = DecisionVariable.integer(0, lower=-1, upper=1)
     binary = DecisionVariable.binary(1)
     instance = Instance.from_components(
@@ -392,19 +378,14 @@ def test_sample_decodes_integer_sos1_against_source_model():
             uniform_penalty_weight=4.0,
         )
     )
-    prepared_samples = OMMXOpenJijSAAdapter.sample(
+    sample_set = OMMXOpenJijSAAdapter.sample(
         preparation.input,
         num_reads=4,
         seed=999,
     )
-    source_samples = preparation.decode(prepared_samples.samples)
-    sample_set = preparation.source.evaluate_samples(
-        source_samples,
-        atol=preparation.policy.atol,
-    )
     assert len(sample_set.constraints_df(kind="sos1")) == 1
     for sample_id in sample_set.sample_ids():
         solution = sample_set.get(sample_id)
-        expected = instance.evaluate(solution.state)
+        expected = preparation.input.evaluate(solution.state)
         assert solution.objective == pytest.approx(expected.objective)
         assert solution.feasible == expected.feasible

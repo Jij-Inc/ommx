@@ -13,32 +13,30 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 {class}`~ommx.PreparationPolicy` は、呼び出し側が選んだ受け入れ可能な
 {class}`~ommx.InstanceClass` と、preparationで許可する変換・parameter・resource
 limitを表します。{meth}`~ommx.Instance.prepare` がOMMXのcanonicalなphase順序で
-Policyを解釈し、分離されたsource / input snapshotと、適用済みの
-{class}`~ommx.Transform` receiptを持つ {class}`~ommx.Preparation` を返します。
+Policyを解釈し、分離されたsource / Policy / input snapshotを持つ
+{class}`~ommx.Preparation` を返します。
 `SolverAdapter` は `recommended_preparation_policy()` でPolicyを推奨できますが、
 preparationを実行せず、直接入力に対する `INPUT_CLASS` checkも緩和しません。
 
 ```python
 policy = OMMXHighsAdapter.recommended_preparation_policy()
 preparation = source.prepare(policy)
-input_solution = OMMXHighsAdapter.solve(preparation.input)
-
-source_state = preparation.decode(input_solution.state)
-source_solution = preparation.source.evaluate(
-    source_state,
-    atol=preparation.policy.atol,
-)
+solution = OMMXHighsAdapter.solve(preparation.input)
 ```
 
 HiGHSの推奨Policyは、`Instance.prepare()` 中のIndicator、OneHot、SOS1の自動loweringを
 許可します。従来のOpenJij Adapter-owned preparation APIもこの共通workflowに
 置き換わり、有限penaltyと近似integer slackは引き続き明示的なPolicy optionです。
 
-`Preparation.encode()` / `decode()` が写すのは {class}`~ommx.State` または
-{class}`~ommx.Samples` だけで、Solution、SampleSet、objective、feasibility、solver
-statusは運びません。通常制約のIDは通常制約に対する変換では保持されます。
-特殊制約のloweringだけは新しい通常制約rowを生成するため、制約ごとのpenalty weightは
-sourceの通常制約IDを使い、生成されたrowがactiveに残る場合はuniform weightが必要です。
+変換の結果は `preparation.input` のdecision-variable dependency、removed constraint、
+provenance、補助変数としてinput自身が所有します。Adapterが返す
+{class}`~ommx.Solution` / {class}`~ommx.SampleSet` は、そのinputに対して既に評価済みです。
+通常制約のIDは通常制約に対する変換では保持されます。特殊制約のloweringだけは新しい
+通常制約rowを生成するため、制約ごとのpenalty weightはsourceの通常制約IDを使い、
+生成されたrowがactiveに残る場合はuniform weightが必要です。weightの対応付けは
+penalty操作自身が所有し、removed-reason metadataを解釈しません。正のfinite weightは
+minimization candidateにだけ適用されるため、maximization sourceではsense normalizationも
+許可する必要があります。
 
 ### 🛠 Model error を呼び出し側の回復方法に応じて通知 ([#1104](https://github.com/Jij-Inc/ommx/pull/1104)、[#1105](https://github.com/Jij-Inc/ommx/pull/1105))
 
@@ -88,21 +86,17 @@ backend構築前に {class}`~ommx.adapter.AdapterNotApplicableError` で拒否�
 この操作はinput classへのmembershipとは独立しています。
 
 OpenJijの `sample()` / `solve()` は、Integer encoding、sense反転、slack変換、
-特殊制約lowering、penalty選択を暗黙に行いません。別の入力を明示的に準備し、
-変換元の意味が必要な場合は結果をsource modelに対して評価します。
+特殊制約lowering、penalty選択を暗黙に行いません。別の入力を明示的に準備すると、
+Adapterはその変換済みinputに対して結果を評価します。
 
 ```python
-from ommx_openjij_adapter import (
-    OMMXOpenJijSAAdapter,
-    OpenJijPreparationConfig,
-)
+from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
-config = OpenJijPreparationConfig(
+policy = OMMXOpenJijSAAdapter.recommended_preparation_policy(
     uniform_penalty_weight=20.0,
 )
-preparation = OMMXOpenJijSAAdapter.prepare(source, config=config)
-prepared_samples = OMMXOpenJijSAAdapter.sample(preparation.input)
-source_samples = preparation.evaluate_source(prepared_samples)
+preparation = source.prepare(policy)
+sample_set = OMMXOpenJijSAAdapter.sample(preparation.input)
 ```
 
 有限penaltyとapproximate integer slackは明示的なopt-inが必要です。prepare後の値は
@@ -115,8 +109,8 @@ applicabilityを確認してください。受け入れるmodel classとpreparat
 `AdapterNotApplicableError`をcatchしてください。infeasibilityのcanonicalな型は
 `ommx.InfeasibleDetected` です（既存の `ommx.adapter` aliasも利用できます）。
 `response_to_samples()` は `decode_to_samples()` に、`sample_qubo_sa()` は上記の明示的な
-workflowに置き換えてください。新しいAPIはraw `Samples`ではなく評価済みの`SampleSet`を
-返します。
+workflowに置き換えてください。新しいAPIはraw `Samples`ではなく
+`preparation.input` に対して評価済みの`SampleSet`を返します。
 
 ### 🆕 Experiment / Run の lifecycle reason を永続化 ([#1109](https://github.com/Jij-Inc/ommx/pull/1109))
 

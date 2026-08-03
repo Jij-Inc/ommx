@@ -73,23 +73,15 @@ def test_recommended_policy_targets_highs_input_class() -> None:
 
 
 @pytest.mark.parametrize(
-    ("make_source", "kind", "transform_name"),
+    ("make_source", "kind"),
     [
-        (
-            _indicator_instance,
-            SpecialConstraintKind.Indicator,
-            "lower_indicator_constraints",
-        ),
-        (
-            _one_hot_instance,
-            SpecialConstraintKind.OneHot,
-            "lower_one_hot_constraints",
-        ),
-        (_sos1_instance, SpecialConstraintKind.Sos1, "lower_sos1_constraints"),
+        (_indicator_instance, SpecialConstraintKind.Indicator),
+        (_one_hot_instance, SpecialConstraintKind.OneHot),
+        (_sos1_instance, SpecialConstraintKind.Sos1),
     ],
 )
 def test_instance_prepare_automatically_lowers_special_constraint(
-    make_source, kind, transform_name
+    make_source, kind
 ) -> None:
     source = make_source()
     before = source.to_v2_bytes()
@@ -100,23 +92,23 @@ def test_instance_prepare_automatically_lowers_special_constraint(
     assert source.to_v2_bytes() == before
     assert kind not in preparation.input.active_special_constraint_kinds
     assert OMMXHighsAdapter.check_applicability(preparation.input).is_applicable
-    assert [transform.name for transform in preparation.transforms] == [transform_name]
 
 
-def test_sos1_preparation_decodes_input_state_for_source_evaluation() -> None:
+def test_sos1_solution_is_evaluated_against_prepared_input() -> None:
     source = _sos1_instance()
     preparation = source.prepare(OMMXHighsAdapter.recommended_preparation_policy())
 
-    input_solution = OMMXHighsAdapter.solve(preparation.input)
-    source_state = preparation.decode(input_solution.state)
-    source_solution = preparation.source.evaluate(
-        source_state,
-        atol=preparation.policy.atol,
+    solution = OMMXHighsAdapter.solve(preparation.input)
+    sos1 = solution.constraints_df(
+        kind="sos1",
+        include=["removed_reason"],
     )
 
-    assert source_solution.feasible
-    assert source_solution.objective == pytest.approx(-6)
-    assert source_solution.state.entries == pytest.approx({0: 0, 1: 3})
+    assert solution.feasible
+    assert list(sos1.index) == [30]
+    assert bool(sos1.loc[30, "feasible"])
+    assert sos1.loc[30, "active_variable"] == 1
+    assert sos1.loc[30, "removed_reason"] == "ommx.Instance.convert_sos1_to_constraints"
 
 
 def test_identity_only_policy_rejects_lowering_without_mutating_source() -> None:
@@ -132,5 +124,5 @@ def test_identity_only_policy_rejects_lowering_without_mutating_source() -> None
     failure = error.value.failure
     assert isinstance(failure, PreparationFailure.TargetInstanceClassNotReached)
     assert failure.current_membership.is_member is False
-    assert failure.transforms == []
+    assert failure.current.to_v2_bytes() == before
     assert source.to_v2_bytes() == before

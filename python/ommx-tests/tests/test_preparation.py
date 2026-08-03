@@ -56,7 +56,7 @@ def binary_unconstrained_class() -> InstanceClass:
     )
 
 
-def test_policy_snapshots_transform_specific_options() -> None:
+def test_policy_snapshots_preparation_options() -> None:
     mutable_weights = {7: 2.0}
     penalty_weights: Mapping[int, float] = MappingProxyType(mutable_weights)
     policy = PreparationPolicy(
@@ -208,7 +208,7 @@ def test_policy_rejects_invalid_resource_limits(field: str, limit: object) -> No
             )
 
 
-def test_identity_preparation_maps_only_state_and_samples() -> None:
+def test_identity_preparation_uses_input_for_evaluation() -> None:
     x = DecisionVariable.binary(0)
     instance = Instance.from_components(
         decision_variables=[x],
@@ -220,30 +220,22 @@ def test_identity_preparation_maps_only_state_and_samples() -> None:
         PreparationPolicy(acceptable_instance_class=binary_linear_class())
     )
 
-    assert preparation.transforms == []
     assert preparation.source.to_v2_bytes() == instance.to_v2_bytes()
     assert preparation.input.to_v2_bytes() == instance.to_v2_bytes()
 
     state = State({0: 1.0})
-    encoded_state = preparation.encode(state)
-    assert isinstance(encoded_state, State)
-    assert encoded_state.entries == {0: 1.0}
-    assert preparation.decode(encoded_state).entries == {0: 1.0}
+    solution = preparation.input.evaluate(state)
+    assert solution.state.entries == {0: 1.0}
+    assert solution.objective == pytest.approx(1.0)
 
     samples = Samples({3: {0: 1.0}, 8: {0: 0.0}})
-    encoded_samples = preparation.encode(samples)
-    assert isinstance(encoded_samples, Samples)
-    assert encoded_samples.sample_ids() == {3, 8}
-    assert preparation.decode(encoded_samples).sample_ids() == {3, 8}
-
-    solution = instance.evaluate(state)
-    sample_set = instance.evaluate_samples(samples)
-    for unsupported in ({0: 1.0}, solution, sample_set):
-        with pytest.raises(TypeError, match="ommx.State or ommx.Samples"):
-            preparation.decode(unsupported)  # type: ignore[arg-type]
+    sample_set = preparation.input.evaluate_samples(samples)
+    assert sample_set.sample_ids() == {3, 8}
+    assert sample_set.get(3).state.entries == {0: 1.0}
+    assert sample_set.get(8).state.entries == {0: 0.0}
 
 
-def test_transform_exposes_state_and_samples_operations_without_apply() -> None:
+def test_lowered_special_constraint_is_evaluated_by_prepared_input() -> None:
     x = DecisionVariable.binary(0)
     y = DecisionVariable.binary(1)
     instance = Instance.from_components(
@@ -260,13 +252,17 @@ def test_transform_exposes_state_and_samples_operations_without_apply() -> None:
         )
     )
 
-    [transform] = preparation.transforms
-    assert transform.name == "lower_one_hot_constraints"
-    assert not hasattr(transform, "apply")
-    assert transform.encode(State({0: 1.0, 1: 0.0})).entries == {0: 1.0, 1: 0.0}
-    mapped = transform.decode(Samples({12: {0: 0.0, 1: 1.0}}))
-    assert isinstance(mapped, Samples)
-    assert mapped.sample_ids() == {12}
+    assert preparation.input.one_hot_constraints == {}
+    assert set(preparation.input.removed_one_hot_constraints) == {7}
+    assert len(preparation.input.constraints) == 1
+
+    solution = preparation.input.evaluate(State({0: 1.0, 1: 0.0}))
+    assert solution.feasible
+    assert solution.objective == pytest.approx(1.0)
+
+    sample_set = preparation.input.evaluate_samples(Samples({12: {0: 0.0, 1: 1.0}}))
+    assert sample_set.sample_ids() == {12}
+    assert sample_set.get(12).feasible
 
 
 def test_canonical_failure_has_variant_specific_payload() -> None:
@@ -295,7 +291,7 @@ def test_canonical_failure_has_variant_specific_payload() -> None:
     assert failure.resource == "regular constraints"
     assert failure.observed == 1
     assert failure.limit == 0
-    assert failure.transforms == []
+    assert failure.current.to_v2_bytes() == instance.to_v2_bytes()
 
 
 def test_identity_does_not_interpret_unused_per_constraint_penalty_ids() -> None:
@@ -314,7 +310,6 @@ def test_identity_does_not_interpret_unused_per_constraint_penalty_ids() -> None
 
     preparation = instance.prepare(policy)
 
-    assert preparation.transforms == []
     assert preparation.input.to_v2_bytes() == before
     assert instance.to_v2_bytes() == before
 
@@ -340,7 +335,7 @@ def test_unknown_per_constraint_penalty_id_fails_when_penalty_is_reached() -> No
     assert isinstance(failure, PreparationFailure.PolicyMismatch)
     assert not failure.current_membership.is_member
     assert "outside Preparation.source" in failure.detail
-    assert failure.transforms == []
+    assert failure.current.to_v2_bytes() == before
     assert instance.to_v2_bytes() == before
 
 
@@ -360,9 +355,8 @@ def test_per_constraint_penalty_tracks_existing_regular_constraint_id() -> None:
     )
 
     assert not preparation.input.constraints
-    assert [transform.name for transform in preparation.transforms] == [
-        "finite_penalty"
-    ]
+    assert set(preparation.input.removed_constraints) == {9}
+    assert preparation.input.evaluate(State({0: 0.0})).objective == pytest.approx(0.0)
 
 
 def test_generated_regular_constraint_requires_uniform_penalty() -> None:
@@ -387,12 +381,12 @@ def test_generated_regular_constraint_requires_uniform_penalty() -> None:
     failure = error.value.failure
     assert isinstance(failure, PreparationFailure.PolicyMismatch)
     assert "generated active regular constraints" in failure.detail
-    assert [transform.name for transform in failure.transforms] == [
-        "lower_one_hot_constraints"
-    ]
+    assert failure.current.one_hot_constraints == {}
+    assert set(failure.current.removed_one_hot_constraints) == {7}
+    assert len(failure.current.constraints) == 1
 
 
-def test_transform_owned_error_is_not_reclassified_as_preparation_error() -> None:
+def test_operation_owned_error_is_not_reclassified_as_preparation_error() -> None:
     x = DecisionVariable.integer(0)
     instance = Instance.from_components(
         decision_variables=[x],

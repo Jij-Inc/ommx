@@ -99,12 +99,15 @@ impl Instance {
     ///
     /// Preparation is an OMMX-owned Instance operation. It does not receive or
     /// retain a Solver Adapter. A successful result has an input belonging to
-    /// ``policy.acceptable_instance_class`` and records the applied Transforms
-    /// and their source-specific receipts together with the source and Policy
-    /// snapshots. Model evaluation and solver outputs are separate operations.
+    /// ``policy.acceptable_instance_class`` together with isolated source and
+    /// Policy snapshots. Evaluate solver states and samples against
+    /// :attr:`Preparation.input`; that Instance owns the effects of every
+    /// operation applied during preparation.
     pub fn prepare(&self, py: Python<'_>, policy: &PreparationPolicy) -> OmmxPyResult<Preparation> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        Ok(Preparation(self.inner.prepare(&policy.0)?))
+        Ok(Preparation::from_core(
+            self.inner.prepare(policy.as_core())?,
+        ))
     }
 
     #[staticmethod]
