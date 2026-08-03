@@ -566,6 +566,7 @@ def test_solver_adapter_prepare_lowers_declared_kind_and_decodes_outputs() -> No
 
     preparation = Adapter.prepare(source)
 
+    assert isinstance(preparation.report, PreparationReport)
     assert source.to_v2_bytes() == before
     assert not preparation.report.source_applicability.is_applicable
     assert preparation.report.input_applicability is not None
