@@ -17,7 +17,7 @@ pub fn required_features(
     has_indicator_constraints: bool,
     has_one_hot_constraints: bool,
     has_sos1_constraints: bool,
-    has_dependent_expressions: bool,
+    has_decision_variable_dependencies: bool,
 ) -> Vec<i32> {
     let mut features = Vec::new();
     if has_indicator_constraints {
@@ -29,7 +29,7 @@ pub fn required_features(
     if has_sos1_constraints {
         features.push(Feature::ConstraintSos1 as i32);
     }
-    if has_dependent_expressions {
+    if has_decision_variable_dependencies {
         features.push(Feature::DependentExpression as i32);
     }
     features

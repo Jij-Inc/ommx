@@ -22,10 +22,14 @@ message Instance {
   IndicatorConstraintCollection indicator_constraints = 8;
   OneHotConstraintCollection one_hot_constraints = 9;
   Sos1ConstraintCollection sos1_constraints = 10;
-  map<uint64, ommx.v1.Function> decision_variable_dependency = 11;
+  // Deprecated Function-only encoding retained for reading existing v2
+  // payloads. Writers must leave this field empty and use
+  // decision_variable_dependencies instead.
+  map<uint64, ommx.v1.Function> decision_variable_dependency = 11 [deprecated = true];
   NamedFunctionTable named_functions = 12;
   map<string, string> annotations = 13;
-  // Used instead of decision_variable_dependency when any dependency requires
-  // the postsolve-only expression AST. Writers must not populate both maps.
-  map<uint64, DependentExpr> dependent_expressions = 14;
+  // Canonical dependent-variable reconstruction DAG. Writers must include
+  // FEATURE_DEPENDENT_EXPRESSION when this map is non-empty. Readers reject
+  // payloads that also populate the deprecated decision_variable_dependency.
+  map<uint64, DependentExpr> decision_variable_dependencies = 14;
 }

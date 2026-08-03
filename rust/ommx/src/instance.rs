@@ -182,7 +182,8 @@ pub enum Sense {
 ///   Function-valued dependencies reachable from a removed row are substituted
 ///   when the constraint is restored via [`Self::restore_constraint`]. Restore
 ///   rejects a row atomically when its reachable dependency closure contains a
-///   non-algebraic expression; unrelated non-algebraic dependencies do not block it.
+///   dependency not representable as [`Function`]; unrelated postsolve-only
+///   dependencies do not block it.
 /// - [`Self::named_functions`] is keyed by the table-owned
 ///   [`NamedFunctionID`]; named-function rows do not carry IDs.
 /// - [`Self::named_functions`] may contain fixed or dependent variable IDs (like `removed_constraints`).

@@ -18,6 +18,9 @@ dependent reconstructions therefore observe canonical coordinates instead of
 an approximate assertion supplied by the caller. Nonzero-indicator
 dependencies use this same `atol` to keep reconstructed selectors consistent
 with SOS1 feasibility for solver-produced residuals near zero.
+V2 serialization writes every dependency DAG through the canonical
+`DependentExpr` encoding. V2 readers still accept the deprecated Function-only
+field emitted by earlier v3 prereleases and normalize it on the next write.
 
 ### 🛠 Model and sample errors follow caller ownership ([#1104](https://github.com/Jij-Inc/ommx/pull/1104), [#1105](https://github.com/Jij-Inc/ommx/pull/1105), [#1107](https://github.com/Jij-Inc/ommx/pull/1107))
 

@@ -60,31 +60,31 @@ fn validate_fixed_decision_variable_partition(
 
 fn parse_v2_decision_variable_dependency(
     legacy: BTreeMap<u64, v1::Function>,
-    expressions: BTreeMap<u64, v2::DependentExpr>,
+    dependencies: BTreeMap<u64, v2::DependentExpr>,
     required_features: &std::collections::BTreeSet<v2::Feature>,
     message: &'static str,
 ) -> Result<(DecisionVariableDependencies, &'static str), ParseError> {
-    if !legacy.is_empty() && !expressions.is_empty() {
+    if !legacy.is_empty() && !dependencies.is_empty() {
         return Err(RawParseError::InvalidInstance(
-            "decision_variable_dependency and dependent_expressions cannot both be non-empty"
+            "deprecated decision_variable_dependency and decision_variable_dependencies cannot both be non-empty"
                 .to_string(),
         )
-        .context(message, "dependent_expressions"));
+        .context(message, "decision_variable_dependencies"));
     }
     crate::v2_io::validate_feature_payload(
         required_features,
         v2::Feature::DependentExpression,
-        !expressions.is_empty(),
+        !dependencies.is_empty(),
         message,
-        "dependent_expressions",
+        "decision_variable_dependencies",
     )?;
 
-    let dependency_field = if expressions.is_empty() {
+    let dependency_field = if dependencies.is_empty() {
         "decision_variable_dependency"
     } else {
-        "dependent_expressions"
+        "decision_variable_dependencies"
     };
-    let dependency = if expressions.is_empty() {
+    let dependency = if dependencies.is_empty() {
         legacy
             .into_iter()
             .map(|(id, function)| {
@@ -99,12 +99,12 @@ fn parse_v2_decision_variable_dependency(
             })
             .collect::<Result<BTreeMap<_, _>, ParseError>>()?
     } else {
-        expressions
+        dependencies
             .into_iter()
             .map(|(id, expression)| {
                 Ok((
                     VariableID::from(id),
-                    expression.parse_as(&(), message, "dependent_expressions")?,
+                    expression.parse_as(&(), message, "decision_variable_dependencies")?,
                 ))
             })
             .collect::<Result<BTreeMap<_, _>, ParseError>>()?
@@ -123,7 +123,7 @@ fn decision_variable_dependency_to_v1_map(
             let DependentExpr::Function(function) = expression else {
                 crate::bail!(
                     { ?id },
-                    "Non-polynomial dependency for variable {id:?} cannot be serialized to ommx.v1 protobuf; use to_v2_bytes()"
+                    "Dependency for variable {id:?} cannot be represented as ommx.v1.Function; use to_v2_bytes()"
                 );
             };
             Ok((id.into_inner(), function.clone().into()))
@@ -631,10 +631,12 @@ impl Parse for v2::Instance {
             }
         }
 
+        #[allow(deprecated)]
+        let legacy_decision_variable_dependency = self.decision_variable_dependency;
         let (decision_variable_dependency, dependency_field) =
             parse_v2_decision_variable_dependency(
-                self.decision_variable_dependency,
-                self.dependent_expressions,
+                legacy_decision_variable_dependency,
+                self.decision_variable_dependencies,
                 &required_features,
                 message,
             )?;
@@ -1043,10 +1045,12 @@ impl Parse for v2::ParametricInstance {
             }
         }
 
+        #[allow(deprecated)]
+        let legacy_decision_variable_dependency = self.decision_variable_dependency;
         let (decision_variable_dependency, dependency_field) =
             parse_v2_decision_variable_dependency(
-                self.decision_variable_dependency,
-                self.dependent_expressions,
+                legacy_decision_variable_dependency,
+                self.decision_variable_dependencies,
                 &required_features,
                 message,
             )?;
@@ -2237,6 +2241,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_v2_instance_parse_rejects_undefined_dependency_rhs() {
         use crate::{linear, DecisionVariable, Function, Sense, VariableID};
 
@@ -2281,14 +2286,14 @@ mod tests {
         undefined_rhs
             .required_features
             .push(crate::v2::Feature::DependentExpression as i32);
-        undefined_rhs.dependent_expressions.insert(
+        undefined_rhs.decision_variable_dependencies.insert(
             1,
             DependentExpr::nonzero_indicator(Function::from(linear!(999))).into(),
         );
         let error = Instance::try_from(undefined_rhs).unwrap_err();
         assert!(
             error.to_string().contains(
-                "Undefined variable ID is used in dependent_expressions: VariableID(999)"
+                "Undefined variable ID is used in decision_variable_dependencies: VariableID(999)"
             ),
             "unexpected error: {error}"
         );
@@ -2297,14 +2302,14 @@ mod tests {
         undefined_target
             .required_features
             .push(crate::v2::Feature::DependentExpression as i32);
-        undefined_target.dependent_expressions.insert(
+        undefined_target.decision_variable_dependencies.insert(
             999,
             DependentExpr::nonzero_indicator(Function::from(linear!(1))).into(),
         );
         let error = Instance::try_from(undefined_target).unwrap_err();
         assert!(
             error.to_string().contains(
-                "Variable ID VariableID(999) in dependent_expressions is not in decision_variables"
+                "Variable ID VariableID(999) in decision_variable_dependencies is not in decision_variables"
             ),
             "unexpected error: {error}"
         );

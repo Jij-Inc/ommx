@@ -633,7 +633,11 @@ pub struct Instance {
     pub one_hot_constraints: ::core::option::Option<OneHotConstraintCollection>,
     #[prost(message, optional, tag = "10")]
     pub sos1_constraints: ::core::option::Option<Sos1ConstraintCollection>,
+    /// Deprecated Function-only encoding retained for reading existing v2
+    /// payloads. Writers must leave this field empty and use
+    /// decision_variable_dependencies instead.
     #[prost(btree_map = "uint64, message", tag = "11")]
+    #[deprecated]
     pub decision_variable_dependency:
         ::prost::alloc::collections::BTreeMap<u64, super::v1::Function>,
     #[prost(message, optional, tag = "12")]
@@ -643,10 +647,11 @@ pub struct Instance {
         ::prost::alloc::string::String,
         ::prost::alloc::string::String,
     >,
-    /// Used instead of decision_variable_dependency when any dependency requires
-    /// the postsolve-only expression AST. Writers must not populate both maps.
+    /// Canonical dependent-variable reconstruction DAG. Writers must include
+    /// FEATURE_DEPENDENT_EXPRESSION when this map is non-empty. Readers reject
+    /// payloads that also populate the deprecated decision_variable_dependency.
     #[prost(btree_map = "uint64, message", tag = "14")]
-    pub dependent_expressions: ::prost::alloc::collections::BTreeMap<u64, DependentExpr>,
+    pub decision_variable_dependencies: ::prost::alloc::collections::BTreeMap<u64, DependentExpr>,
 }
 /// Parameter IDs and labels owned by ParametricInstance.
 ///
@@ -689,7 +694,11 @@ pub struct ParametricInstance {
     pub one_hot_constraints: ::core::option::Option<OneHotConstraintCollection>,
     #[prost(message, optional, tag = "10")]
     pub sos1_constraints: ::core::option::Option<Sos1ConstraintCollection>,
+    /// Deprecated Function-only encoding retained for reading existing v2
+    /// payloads. Writers must leave this field empty and use
+    /// decision_variable_dependencies instead.
     #[prost(btree_map = "uint64, message", tag = "11")]
+    #[deprecated]
     pub decision_variable_dependency:
         ::prost::alloc::collections::BTreeMap<u64, super::v1::Function>,
     #[prost(message, optional, tag = "12")]
@@ -699,10 +708,11 @@ pub struct ParametricInstance {
         ::prost::alloc::string::String,
         ::prost::alloc::string::String,
     >,
-    /// Used instead of decision_variable_dependency when any dependency requires
-    /// the postsolve-only expression AST. Writers must not populate both maps.
+    /// Canonical dependent-variable reconstruction DAG. Writers must include
+    /// FEATURE_DEPENDENT_EXPRESSION when this map is non-empty. Readers reject
+    /// payloads that also populate the deprecated decision_variable_dependency.
     #[prost(btree_map = "uint64, message", tag = "14")]
-    pub dependent_expressions: ::prost::alloc::collections::BTreeMap<u64, DependentExpr>,
+    pub decision_variable_dependencies: ::prost::alloc::collections::BTreeMap<u64, DependentExpr>,
 }
 /// Validated multi-sample solver or sampler output serialization root.
 #[non_exhaustive]

@@ -17,6 +17,9 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 呼び出し側が渡した近似値ではなく canonical な coordinate を参照します。
 nonzero indicator dependency も同じ `atol` を使うため、solver が返すゼロ近傍の
 数値残差について、復元されたselectorとSOS1のfeasibility判定が一致します。
+v2 serialization はすべての dependency DAG を canonical な `DependentExpr`
+encoding に書き込みます。v2 reader は以前の v3 prerelease が出力した deprecated な
+Function-only field も引き続き読み込み、次の書き込み時に canonical encoding へ正規化します。
 
 ### 🛠 Model / sample error を呼び出し側の回復方法に応じて通知 ([#1104](https://github.com/Jij-Inc/ommx/pull/1104)、[#1105](https://github.com/Jij-Inc/ommx/pull/1105)、[#1107](https://github.com/Jij-Inc/ommx/pull/1107))
 
