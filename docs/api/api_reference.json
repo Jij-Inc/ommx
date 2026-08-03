@@ -10195,7 +10195,7 @@
             },
             {
               "name": "lower_special_constraints",
-              "doc": "Lower selected active special constraint kinds into regular constraints.\n\nFor every kind in ``kinds_to_lower``, the corresponding bulk conversion\nis invoked\n(:meth:`convert_all_indicators_to_constraints`,\n:meth:`convert_all_one_hots_to_constraints`, or\n:meth:`convert_all_sos1_to_constraints`) when that kind is active. The\ninstance is mutated in place. Kinds omitted from ``kinds_to_lower``\nremain active, and an empty set is a no-op. This does not establish\n:class:`InstanceClass` membership; check the resulting input separately.\n\nReturns the set of :class:`SpecialConstraintKind` values that were\nrequested and active, and therefore actually lowered. Empty when no\nrequested kind was active.\n\nKinds are processed in ``Indicator``, ``OneHot``, ``Sos1`` order. Each\nindividual family conversion is atomic, but the whole operation is not:\nan error in a later family does not roll back families already lowered.\n\nRaises if any underlying Big-M conversion fails (e.g. a SOS1 variable\nwith a non-finite bound).",
+              "doc": "Lower selected active special constraint kinds into regular constraints.\n\nFor every kind in ``kinds_to_lower``, the corresponding bulk conversion\nis invoked\n(:meth:`convert_all_indicators_to_constraints`,\n:meth:`convert_all_one_hots_to_constraints`, or\n:meth:`convert_all_sos1_to_constraints`) when that kind is active. The\ninstance is mutated in place. Kinds omitted from ``kinds_to_lower``\nremain active, and an empty set is a no-op. This does not establish\n:class:`InstanceClass` membership; check the current Instance after\nlowering.\n\nReturns the set of :class:`SpecialConstraintKind` values that were\nrequested and active, and therefore actually lowered. Empty when no\nrequested kind was active.\n\nKinds are processed in ``Indicator``, ``OneHot``, ``Sos1`` order. Each\nindividual family conversion is atomic, but the whole operation is not:\nan error in a later family does not roll back families already lowered.\n\nRaises if any underlying Big-M conversion fails (e.g. a SOS1 variable\nwith a non-finite bound).",
               "signatures": [
                 {
                   "parameters": [
@@ -10519,7 +10519,7 @@
             },
             {
               "name": "prepare",
-              "doc": "Prepare an isolated snapshot of this Instance according to ``policy``.\n\nPreparation is an OMMX-owned Instance operation. It does not receive or\nretain a Solver Adapter. A successful result has an input belonging to\n``policy.acceptable_instance_class`` together with isolated source and\nPolicy snapshots. Evaluate solver states and samples against\n:attr:`Preparation.input`; that Instance owns the effects of every\noperation applied during preparation.",
+              "doc": "Prepare this Instance in place according to ``policy``.\n\nPreparation is an OMMX-owned Instance operation. It does not receive or\nretain a Solver Adapter. On success this same Instance belongs to\n``policy.acceptable_instance_class`` and owns the effects of every\napplied operation. Evaluate solver states and samples against it.\nExisting in-place operations are applied directly. After read-only\nvalidation, the current Instance is cloned only when a consuming penalty\noperation is required, and is replaced only after that operation\nsucceeds.",
               "signatures": [
                 {
                   "parameters": [
@@ -10534,7 +10534,7 @@
                     }
                   ],
                   "return_type": {
-                    "display": "Preparation",
+                    "display": "None",
                     "link_target": null,
                     "children": []
                   }
@@ -18935,66 +18935,6 @@
         },
         {
           "kind": "Class",
-          "name": "Preparation",
-          "doc": "An immutable construction record containing source, Policy, and prepared\ninput snapshots.",
-          "bases": [],
-          "methods": [
-            {
-              "name": "__repr__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "str",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            }
-          ],
-          "attributes": [
-            {
-              "name": "input",
-              "doc": "Constructed Instance belonging to the Policy's acceptable class.",
-              "type_": {
-                "display": "Instance",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "policy",
-              "doc": "Isolated snapshot of the Policy passed to :meth:`Instance.prepare`.",
-              "type_": {
-                "display": "PreparationPolicy",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "source",
-              "doc": "Isolated snapshot of the Instance passed to :meth:`Instance.prepare`.",
-              "type_": {
-                "display": "Instance",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            }
-          ],
-          "deprecated": null
-        },
-        {
-          "kind": "Class",
           "name": "PreparationPolicy",
           "doc": "Caller-owned permissions and parameters for :meth:`Instance.prepare`.\n\nThis is an OMMX core value. Solver Adapters may recommend a policy, but the\npolicy neither retains an Adapter nor calls Adapter-owned Python code.\nPositive finite penalty weights require a minimization candidate; permit\nsense normalization when preparing a maximization source.",
           "bases": [],
@@ -19164,7 +19104,7 @@
           "attributes": [
             {
               "name": "acceptable_instance_class",
-              "doc": "InstanceClass that the prepared input must belong to.",
+              "doc": "InstanceClass that the Instance must belong to after preparation.",
               "type_": {
                 "display": "InstanceClass",
                 "link_target": null,
@@ -33326,7 +33266,6 @@
     "ommx.Parameter": "ommx",
     "ommx.ParametricInstance": "ommx",
     "ommx.Polynomial": "ommx",
-    "ommx.Preparation": "ommx",
     "ommx.PreparationPolicy": "ommx",
     "ommx.Provenance": "ommx",
     "ommx.ProvenanceKind": "ommx",

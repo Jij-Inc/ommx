@@ -203,7 +203,6 @@ fn _ommx_rust(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<InstanceClassClauseReport>()?;
     m.add_class::<InstanceClassMembershipReport>()?;
     m.add_class::<PreparationPolicy>()?;
-    m.add_class::<Preparation>()?;
     m.add_class::<Constraint>()?;
     m.add_class::<AttachedConstraint>()?;
     m.add_class::<IndicatorConstraint>()?;
@@ -303,7 +302,6 @@ pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
     "InstanceClassMembershipReport",
     // Preparation
     "PreparationPolicy",
-    "Preparation",
     // Constraint and named function
     "Constraint",
     "AttachedConstraint",

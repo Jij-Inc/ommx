@@ -40,7 +40,7 @@ from ommx import DecisionVariable, Instance, OneHotConstraint
 from ommx_highs_adapter import OMMXHighsAdapter
 
 x = [DecisionVariable.binary(i) for i in range(2)]
-source = Instance.from_components(
+instance = Instance.from_components(
     decision_variables=x,
     objective=x[0] + 2 * x[1],
     constraints={},
@@ -49,15 +49,20 @@ source = Instance.from_components(
 )
 
 policy = OMMXHighsAdapter.recommended_preparation_policy()
-preparation = source.prepare(policy)
-solution = OMMXHighsAdapter.solve(preparation.input)
+instance.prepare(policy)
+solution = OMMXHighsAdapter.solve(instance)
 print(solution)
 ```
 
 The recommended Policy permits OMMX's existing Indicator, OneHot, and SOS1
-lowering operations. `Instance.prepare()` acts on an isolated value and checks
-that its result belongs to the Policy's acceptable `InstanceClass`. The direct
-HiGHS boundary remains responsible for its own applicability check. The Adapter
-already evaluates the solver state against `preparation.input`; that prepared
-`Instance` retains the dependency, removed-constraint, provenance, and
-auxiliary-variable data produced by its transformations.
+lowering operations. `Instance.prepare()` mutates the same `Instance` and checks
+that it belongs to the Policy's acceptable `InstanceClass`. The direct HiGHS
+boundary remains responsible for its own applicability check. The Adapter
+already evaluates the solver state against that `Instance`, which retains the
+dependency, removed-constraint, provenance, and auxiliary-variable data
+produced by its transformations.
+
+Preparation is not globally transactional. Existing in-place operations run
+directly and retain their own failure semantics. The consuming penalty operation
+is the only exception: it works on a clone of the current `Instance` and commits
+that value only after penalty conversion and parameter materialization succeed.

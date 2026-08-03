@@ -17,16 +17,15 @@ def test_preparation_explicitly_lowers_special_constraints() -> None:
         sense=Instance.MINIMIZE,
     )
 
-    preparation = instance.prepare(
+    instance.prepare(
         OMMXOpenJijSAAdapter.recommended_preparation_policy(
             uniform_penalty_weight=2.0,
         )
     )
-    adapter_input = preparation.input
 
-    assert adapter_input.active_special_constraint_kinds == set()
-    assert adapter_input.one_hot_constraints == {}
-    constraints = list(adapter_input.removed_constraints.values())
+    assert instance.active_special_constraint_kinds == set()
+    assert instance.one_hot_constraints == {}
+    constraints = list(instance.removed_constraints.values())
     assert len(constraints) == 1
     assert constraints[0].provenance[-1].kind == ProvenanceKind.OneHotConstraint
     assert constraints[0].provenance[-1].original_id == 10

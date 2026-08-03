@@ -48,20 +48,30 @@ binary_linear_with_one_hot = InstanceClass(
 )
 ```
 
-Adapters declare this first applicability condition as `INPUT_CLASS`. Use `check_applicability()` for a structured result or `require_applicable()` to raise when membership or an adapter-owned precondition fails. Explicit preparation produces another input value, whose applicability must be checked again.
+Adapters declare this first applicability condition as `INPUT_CLASS`. Use `check_applicability()` for a structured result or `require_applicable()` to raise when membership or an adapter-owned precondition fails. Explicit preparation mutates the input value, whose applicability must be checked again.
 
 ## Preparing an input for an Adapter
 
-An Adapter recommends a common Policy targeting its direct `INPUT_CLASS`; it does not execute or interpret that Policy. The caller passes the selected Policy to the source `Instance`, then passes only the resulting `Instance` to the direct Adapter API.
+An Adapter recommends a common Policy targeting its direct `INPUT_CLASS`; it does not execute or interpret that Policy. The caller passes the selected Policy to an `Instance`, then passes that same, now-prepared `Instance` to the direct Adapter API.
 
 ```python
 policy = Adapter.recommended_preparation_policy()
-preparation = source.prepare(policy)
-Adapter.require_applicable(preparation.input)
-result = Adapter.solve(preparation.input)
+instance.prepare(policy)
+Adapter.require_applicable(instance)
+result = Adapter.solve(instance)
 ```
 
-`Preparation` retains isolated `source`, `policy`, and `input` snapshots. Solver states and samples are evaluated by the exact prepared `Instance`, using the transformation data already stored in that `Instance`; Preparation does not add a separate encode/decode protocol. Adapter-owned preconditions remain outside Policy execution and are checked at the direct boundary.
+The prepared `Instance` stores the decision-variable dependencies, removed
+constraints, provenance, and auxiliary variables produced by its
+transformations. Solver states and samples are evaluated by that same
+`Instance`. Adapter-owned preconditions remain outside Policy execution and are
+checked at the direct boundary.
+
+Preparation is not globally transactional. Existing in-place operations run
+directly on `instance` and retain their own failure semantics. The consuming
+penalty operation is the only exception: it runs on a clone of the current
+`Instance` and replaces `instance` only after penalty conversion and parameter
+materialization both succeed.
 
 Finite penalty weights are positive and therefore apply to a minimization candidate. A Policy that prepares a maximization source with a finite penalty must also permit sense normalization.
 

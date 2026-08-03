@@ -1,4 +1,4 @@
-use crate::{error::OmmxPyResult, Instance, InstanceClass, SpecialConstraintKind};
+use crate::{error::OmmxPyResult, InstanceClass, SpecialConstraintKind};
 use pyo3::{
     exceptions::{PyTypeError, PyValueError},
     prelude::*,
@@ -146,10 +146,6 @@ impl PreparationPolicy {
     pub(crate) fn as_core(&self) -> &ommx::PreparationPolicy {
         &self.0
     }
-
-    fn from_core(policy: ommx::PreparationPolicy) -> Self {
-        Self(policy)
-    }
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
@@ -216,7 +212,7 @@ impl PreparationPolicy {
     }
 
     #[getter]
-    /// InstanceClass that the prepared input must belong to.
+    /// InstanceClass that the Instance must belong to after preparation.
     pub fn acceptable_instance_class(&self) -> InstanceClass {
         InstanceClass(self.0.acceptable_instance_class().clone())
     }
@@ -283,49 +279,5 @@ impl PreparationPolicy {
 
     pub fn __repr__(&self) -> String {
         format!("PreparationPolicy({:?})", self.0)
-    }
-}
-
-/// An immutable construction record containing source, Policy, and prepared
-/// input snapshots.
-#[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass(frozen)]
-#[derive(Clone)]
-pub struct Preparation(ommx::Preparation);
-
-impl Preparation {
-    /// Construct the frozen Python wrapper from the pinned core result.
-    pub(crate) fn from_core(preparation: ommx::Preparation) -> Self {
-        Self(preparation)
-    }
-}
-
-#[pyo3_stub_gen::derive::gen_stub_pymethods]
-#[pymethods]
-impl Preparation {
-    #[getter]
-    /// Isolated snapshot of the Instance passed to :meth:`Instance.prepare`.
-    pub fn source(&self) -> Instance {
-        Instance {
-            inner: self.0.source().clone(),
-        }
-    }
-
-    #[getter]
-    /// Constructed Instance belonging to the Policy's acceptable class.
-    pub fn input(&self) -> Instance {
-        Instance {
-            inner: self.0.input().clone(),
-        }
-    }
-
-    #[getter]
-    /// Isolated snapshot of the Policy passed to :meth:`Instance.prepare`.
-    pub fn policy(&self) -> PreparationPolicy {
-        PreparationPolicy::from_core(self.0.policy().clone())
-    }
-
-    pub fn __repr__(&self) -> String {
-        format!("Preparation({:?})", self.0)
     }
 }

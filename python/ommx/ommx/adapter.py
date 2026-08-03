@@ -168,8 +168,8 @@ class SolverAdapter(ABC):
 
         Adapter-specific preconditions run only after at least one complete
         input-class clause contains the instance. The hook receives an isolated
-        copy so it cannot mutate the caller's instance. A prepared value is a
-        different input and must be checked separately.
+        copy so it cannot mutate the caller's instance. After preparation
+        mutates an instance, its current value must be checked again.
         """
         input_class = cls.INPUT_CLASS
         if input_class is None:

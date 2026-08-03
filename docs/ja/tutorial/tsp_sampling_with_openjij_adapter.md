@@ -130,9 +130,9 @@ instance = Instance.from_components(
 `ommx-openjij-adapter` のinput classに属するのは、任意次数の多項式目的関数を
 持つバイナリ変数のみの制約なし最小化問題です。
 上で作成したTSPインスタンスには制約があるため、有限のペナルティ重みを明示した
-共通のOMMX preparation Policyを取得します。そのPolicyを `Instance` に適用し、
-得られた `preparation.input` をAdapterへ渡します。Adapterは、その変換済み
-`Instance` に対して評価済みのサンプルを返します。
+共通のOMMX preparation Policyを取得します。そのPolicyを `Instance` にin-placeで
+適用し、変更された同じ `Instance` をAdapterへ渡します。Adapterは、その `Instance`
+に対して評価済みのサンプルを返します。
 
 ```{code-cell} ipython3
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
@@ -140,10 +140,10 @@ from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 policy = OMMXOpenJijSAAdapter.recommended_preparation_policy(
     uniform_penalty_weight=20.0,
 )
-preparation = instance.prepare(policy)
+instance.prepare(policy)
 
 sample_set = OMMXOpenJijSAAdapter.sample(
-    preparation.input,
+    instance,
     num_reads=16,
 )
 sample_set.summary
@@ -160,23 +160,26 @@ sample_set.summary
 準備に対する指定です。有限ペナルティは実行可能なサンプルを得やすくしますが、
 すべてのサンプルが変換元の問題に対して実行可能になることを保証しません。
 
-### 準備内容の確認
+### 変換後のInstanceの確認
 
-`Instance.prepare()` は `instance` を変更しません。返される値は、互いに独立した
-source、Policy、inputのsnapshotを保持します。変換の結果はinput自身の
+`Instance.prepare()` は `instance` をin-placeに変更します。変換の結果は、その同じ値の
 decision-variable dependency、removed constraint、provenance、補助変数に記録されます。
-Adapterはこのinputに対して結果を評価します。
+Adapterもこの `Instance` に対して結果を評価します。
 
 ```{code-cell} ipython3
-OMMXOpenJijSAAdapter.require_applicable(preparation.input)
+OMMXOpenJijSAAdapter.require_applicable(instance)
 {
-    "target_membership": preparation.policy.acceptable_instance_class.contains(
-        preparation.input
-    ),
-    "active_constraints": len(preparation.input.constraints),
-    "removed_constraints": len(preparation.input.removed_constraints),
+    "target_membership": policy.acceptable_instance_class.contains(instance),
+    "active_constraints": len(instance.constraints),
+    "removed_constraints": len(instance.removed_constraints),
 }
 ```
+
+Preparation全体はtransactionではありません。既存のin-place操作は `instance` に直接
+適用され、それぞれの失敗時のsemanticsをそのまま保ちます。例外は消費型のpenalty操作
+だけで、現在の `Instance` のclone上で実行し、penalty変換とparameter materializationが
+成功した場合にだけcommitします。
+
 離散的なinteger slack近似を使うには、Policyを取得するときに
 `allow_approximate_integer_slack=True` を渡します。
 `inequality_integer_slack_max_range` の指定だけでは近似への同意になりません。

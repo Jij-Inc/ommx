@@ -43,14 +43,12 @@ def test_explicit_preparation_does_not_wrap_the_direct_sample_operation():
         constraints={},
         sense=Instance.MAXIMIZE,
     )
-    source = instance.to_v2_bytes()
-
+    prepared: bytes | None = None
     with capture_trace() as result:
-        preparation = instance.prepare(
-            OMMXOpenJijSAAdapter.recommended_preparation_policy()
-        )
+        instance.prepare(OMMXOpenJijSAAdapter.recommended_preparation_policy())
+        prepared = instance.to_v2_bytes()
         OMMXOpenJijSAAdapter.sample(
-            preparation.input,
+            instance,
             num_reads=1,
             seed=0,
         )
@@ -64,7 +62,8 @@ def test_explicit_preparation_does_not_wrap_the_direct_sample_operation():
     for prepare in [span for span in result.spans if span.name == "prepare"]:
         assert prepare.parent_span_id == root.span_id
     _assert_sample_span_tree(result)
-    assert instance.to_v2_bytes() == source
+    assert prepared is not None
+    assert instance.to_v2_bytes() == prepared
 
 
 def test_solve_delegates_to_sample_trace():

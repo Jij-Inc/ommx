@@ -131,8 +131,8 @@ The OpenJij adapter's input class contains Binary, unconstrained minimization
 instances with a polynomial objective of any degree.
 The TSP instance above contains constraints, so obtain a common OMMX preparation
 Policy with an explicit finite penalty weight. Apply that Policy to the
-`Instance` and pass the resulting `preparation.input` to the Adapter. The
-Adapter returns samples already evaluated against that prepared `Instance`.
+`Instance` in place and pass that same `Instance` to the Adapter. The Adapter
+returns samples already evaluated against it.
 
 ```{code-cell} ipython3
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
@@ -140,10 +140,10 @@ from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 policy = OMMXOpenJijSAAdapter.recommended_preparation_policy(
     uniform_penalty_weight=20.0,
 )
-preparation = instance.prepare(policy)
+instance.prepare(policy)
 
 sample_set = OMMXOpenJijSAAdapter.sample(
-    preparation.input,
+    instance,
     num_reads=16,
 )
 sample_set.summary
@@ -162,24 +162,27 @@ The penalty weight in `policy` belongs to the explicit preparation, not to the
 OpenJij backend sampler. A finite penalty encourages feasibility but does not
 guarantee that every returned sample is feasible for the source problem.
 
-### Inspecting preparation
+### Inspecting the prepared Instance
 
-`Instance.prepare()` leaves `instance` unchanged. The returned value retains
-isolated source, Policy, and input snapshots. The prepared input itself records
-transformation effects through decision-variable dependencies, removed
-constraints, provenance, and auxiliary variables, and the Adapter evaluates
-its results against this input.
+`Instance.prepare()` mutates `instance`. That same value records transformation
+effects through decision-variable dependencies, removed constraints,
+provenance, and auxiliary variables, and the Adapter evaluates its results
+against it.
 
 ```{code-cell} ipython3
-OMMXOpenJijSAAdapter.require_applicable(preparation.input)
+OMMXOpenJijSAAdapter.require_applicable(instance)
 {
-    "target_membership": preparation.policy.acceptable_instance_class.contains(
-        preparation.input
-    ),
-    "active_constraints": len(preparation.input.constraints),
-    "removed_constraints": len(preparation.input.removed_constraints),
+    "target_membership": policy.acceptable_instance_class.contains(instance),
+    "active_constraints": len(instance.constraints),
+    "removed_constraints": len(instance.removed_constraints),
 }
 ```
+
+Preparation is not globally transactional. Existing in-place operations run
+directly on `instance` and retain their own failure semantics. The consuming
+penalty operation is the only exception: it runs on a clone of the current
+`Instance` and commits that value only after penalty conversion and parameter
+materialization succeed.
 
 Discrete integer slack approximation requires passing
 `allow_approximate_integer_slack=True` when obtaining the Policy; setting only

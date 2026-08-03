@@ -25,7 +25,7 @@ OMMX は通常の制約（{class}`~ommx.Constraint`、等式・不等式を持�
 pip install ommx-pyscipopt-adapter
 ```
 
-PySCIPOpt Adapter は Indicator と SOS1 を SCIP の `addConsIndicator` / `addConsSOS1` にそのまま渡します（等式 Indicator は上下2本の不等式 Indicator に分解されます）。OneHot は直接受け入れないため、呼び出し側が通常の等式制約へ明示的に lowering してから、得られた入力を Adapter に渡す必要があります。この preparation は `INPUT_CLASS` の membership や Adapter applicability とは別です。詳しくは [Adapter の入力 class と明示的な特殊制約 lowering](./capability_model.md) を参照してください。
+PySCIPOpt Adapter は Indicator と SOS1 を SCIP の `addConsIndicator` / `addConsSOS1` にそのまま渡します（等式 Indicator は上下2本の不等式 Indicator に分解されます）。OneHot は直接受け入れないため、呼び出し側が同じ Instance 上で通常の等式制約へ明示的に lowering してから Adapter に渡す必要があります。lowering はその Instance を in-place に変更するので、その後に Adapter applicability を確認します。詳しくは [Adapter の入力 class、Preparation、明示的な特殊制約 lowering](./capability_model.md) を参照してください。
 
 ## IndicatorConstraint
 
@@ -94,7 +94,7 @@ instance_oh = Instance.from_components(
 assert set(instance_oh.one_hot_constraints.keys()) == {0}
 ```
 
-PySCIPOpt Adapter に渡す前に、OneHot を通常の等式制約 $x_0 + x_1 + x_2 - 1 = 0$ へ明示的に lowering します。変換後は別の入力値になるため、solve の前にその applicability を確認します。
+PySCIPOpt Adapter に渡す前に、OneHot を通常の等式制約 $x_0 + x_1 + x_2 - 1 = 0$ へ明示的に lowering します。この変換は Instance を in-place に変更するため、solve の前に現在の applicability を確認します。
 
 ```{code-cell} ipython3
 instance_oh.convert_all_one_hots_to_constraints()

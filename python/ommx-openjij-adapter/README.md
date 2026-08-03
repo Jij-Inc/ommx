@@ -30,10 +30,10 @@ instance = Instance.from_components(
 policy = OMMXOpenJijSAAdapter.recommended_preparation_policy(
     uniform_penalty_weight=2.0,
 )
-preparation = instance.prepare(policy)
+instance.prepare(policy)
 
 sample_set = OMMXOpenJijSAAdapter.sample(
-    preparation.input,
+    instance,
     num_reads=16,
 )
 
@@ -72,20 +72,25 @@ may remain after its constraint was removed as trivial. Special-constraint
 lowering instead adds fresh regular rows outside that source map's domain, so
 use a uniform penalty weight when such rows remain active.
 
-`Instance.prepare(policy)` leaves the caller's source unchanged and produces a
-separate input belonging to the Policy's acceptable `InstanceClass`. It does
-not run the Adapter or check backend-specific preconditions. The direct Adapter
-boundary remains authoritative:
+`Instance.prepare(policy)` mutates the caller's `Instance` until it belongs to
+the Policy's acceptable `InstanceClass`. It does not run the Adapter or check
+backend-specific preconditions. The direct Adapter boundary remains
+authoritative:
 
 ```python
-OMMXOpenJijSAAdapter.require_applicable(preparation.input)
+OMMXOpenJijSAAdapter.require_applicable(instance)
 ```
 
-The Adapter already evaluates returned samples against `preparation.input`.
-That prepared `Instance` retains the decision-variable dependencies, removed
-constraints, provenance, and auxiliary variables created by its
-transformations, so its ordinary evaluation path is sufficient. The reported
-objective is the prepared objective, including any finite penalty.
+The Adapter already evaluates returned samples against that same `Instance`.
+It retains the decision-variable dependencies, removed constraints, provenance,
+and auxiliary variables created by its transformations, so its ordinary
+evaluation path is sufficient. The reported objective is the prepared
+objective, including any finite penalty.
+
+Preparation is not globally transactional. Existing in-place operations run
+directly and retain their own failure semantics. The consuming penalty operation
+is the only exception: it works on a clone of the current `Instance` and commits
+that value only after penalty conversion and parameter materialization succeed.
 
 The maximum of 53 auxiliary bits for each Integer variable belongs to OMMX's
 Integer-to-Binary log-encoding operation. It is neither a property of the

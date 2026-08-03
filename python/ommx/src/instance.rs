@@ -10,8 +10,8 @@ use crate::{
         raw_entries_to_dataframe, ConstraintKind, PyDataFrame, ToPandasEntry,
     },
     Constraint, DecisionVariable, DecisionVariableRole, Function, NamedFunction,
-    ParametricInstance, Preparation, PreparationPolicy, RemovedConstraint, Rng, SampleSet, Samples,
-    Sense, Solution, State,
+    ParametricInstance, PreparationPolicy, RemovedConstraint, Rng, SampleSet, Samples, Sense,
+    Solution, State,
 };
 use ommx::{ConstraintID, Evaluate, NamedFunctionID, VariableID};
 use pyo3::{
@@ -95,19 +95,20 @@ impl Instance {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Instance {
-    /// Prepare an isolated snapshot of this Instance according to ``policy``.
+    /// Prepare this Instance in place according to ``policy``.
     ///
     /// Preparation is an OMMX-owned Instance operation. It does not receive or
-    /// retain a Solver Adapter. A successful result has an input belonging to
-    /// ``policy.acceptable_instance_class`` together with isolated source and
-    /// Policy snapshots. Evaluate solver states and samples against
-    /// :attr:`Preparation.input`; that Instance owns the effects of every
-    /// operation applied during preparation.
-    pub fn prepare(&self, py: Python<'_>, policy: &PreparationPolicy) -> OmmxPyResult<Preparation> {
+    /// retain a Solver Adapter. On success this same Instance belongs to
+    /// ``policy.acceptable_instance_class`` and owns the effects of every
+    /// applied operation. Evaluate solver states and samples against it.
+    /// Existing in-place operations are applied directly. After read-only
+    /// validation, the current Instance is cloned only when a consuming penalty
+    /// operation is required, and is replaced only after that operation
+    /// succeeds.
+    pub fn prepare(&mut self, py: Python<'_>, policy: &PreparationPolicy) -> OmmxPyResult<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        Ok(Preparation::from_core(
-            self.inner.prepare(policy.as_core())?,
-        ))
+        self.inner.prepare(policy.as_core())?;
+        Ok(())
     }
 
     #[staticmethod]
@@ -764,7 +765,8 @@ impl Instance {
     /// :meth:`convert_all_sos1_to_constraints`) when that kind is active. The
     /// instance is mutated in place. Kinds omitted from ``kinds_to_lower``
     /// remain active, and an empty set is a no-op. This does not establish
-    /// :class:`InstanceClass` membership; check the resulting input separately.
+    /// :class:`InstanceClass` membership; check the current Instance after
+    /// lowering.
     ///
     /// Returns the set of :class:`SpecialConstraintKind` values that were
     /// requested and active, and therefore actually lowered. Empty when no

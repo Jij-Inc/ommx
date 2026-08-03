@@ -6,19 +6,17 @@ from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
 def test_log_sample_records_the_prepared_adapter_input() -> None:
     x = DecisionVariable.binary(0, name="x", subscripts=[0])
-    source = Instance.from_components(
+    adapter_input = Instance.from_components(
         decision_variables=[x],
         objective=x,
         constraints={7: x == 1},
         sense=Sense.Maximize,
     )
-    source_bytes = source.to_v2_bytes()
-    preparation = source.prepare(
+    adapter_input.prepare(
         OMMXOpenJijSAAdapter.recommended_preparation_policy(
             uniform_penalty_weight=2.0,
         )
     )
-    adapter_input = preparation.input
     input_bytes = adapter_input.to_v2_bytes()
     experiment = Experiment.with_temp_local_registry()
     prepared_samples: SampleSet | None = None
@@ -32,7 +30,6 @@ def test_log_sample_records_the_prepared_adapter_input() -> None:
         )
 
     assert prepared_samples is not None
-    assert source.to_v2_bytes() == source_bytes
     assert prepared_samples.sense == Sense.Minimize
     for sample_id in prepared_samples.sample_ids():
         actual = prepared_samples.get(sample_id)

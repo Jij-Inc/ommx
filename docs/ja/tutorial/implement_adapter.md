@@ -316,16 +316,21 @@ class SolverAdapter(ABC):
 
 Adapter は、受け取れる具体的な `Instance` 値の構造的な集合を `INPUT_CLASS` で宣言します。`check_applicability()` は membership、続いて Adapter 固有の precondition を呼び出し元の instance を変更せずに評価します。いずれかを満たさない場合に同じ構造化 report で例外を送出するには `require_applicable()` を使います。
 
-Adapter は `recommended_preparation_policy()` を通して、`INPUT_CLASS` を対象とする共通の {class}`~ommx.PreparationPolicy` を推奨できます。呼び出し側がその Policy を選び、{meth}`Instance.prepare <ommx.Instance.prepare>` に渡します。Policy を解釈して実行するのは `Instance` であり、得られた `preparation.input` を direct Adapter API に渡します。Adapter は Policy を受け取らず、解釈もしません。
+Adapter は `recommended_preparation_policy()` を通して、`INPUT_CLASS` を対象とする共通の {class}`~ommx.PreparationPolicy` を推奨できます。呼び出し側がその Policy を選び、{meth}`Instance.prepare <ommx.Instance.prepare>` に渡します。Policy を解釈してin-placeに実行するのは `Instance` であり、変更された同じ `Instance` を direct Adapter API に渡します。Adapter は Policy を受け取らず、解釈もしません。
 
 ```python
 policy = OMMXPySCIPOptAdapter.recommended_preparation_policy()
-preparation = source.prepare(policy)
-OMMXPySCIPOptAdapter.require_applicable(preparation.input)
-solution = OMMXPySCIPOptAdapter.solve(preparation.input)
+instance.prepare(policy)
+OMMXPySCIPOptAdapter.require_applicable(instance)
+solution = OMMXPySCIPOptAdapter.solve(instance)
 ```
 
 基底 class の推奨 Policy は identity preparation だけを許可します。具体的な Adapter は追加の OMMX-owned operation を推奨できますが、direct constructor と `solve()` は、実際に受け取った入力を厳密に扱います。
+
+Preparation全体はtransactionではありません。既存のin-place操作は `Instance` に直接
+適用され、それぞれの失敗時のsemanticsをそのまま保ちます。例外は消費型のpenalty操作
+だけで、現在の `Instance` のclone上で実行し、penalty変換とparameter materializationが
+成功した場合にだけcommitします。
 
 低レベルの制御が必要なら、呼び出し側が {meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>` を明示的に呼ぶこともできます。`kinds_to_lower` 引数では、以下の特殊制約 family selector を使います：
 
@@ -336,7 +341,7 @@ solution = OMMXPySCIPOptAdapter.solve(preparation.input)
 `Instance` が現在保持する family は {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` で確認できます。`lower_special_constraints` は選択した active な family を通常制約へ変換し（indicator/SOS1 は Big-M、one-hot は線形等式）、instance を in-place に変更して、各 lowering を `INFO` level で記録します。この property も lowering も、`INPUT_CLASS` の membership や Adapter applicability を保証しません。
 
 ```{important}
-`INPUT_CLASS` は Adapter が受け取る時点の入力値そのものを記述します。`Instance.prepare()` と手動操作のどちらで得た値でも、使用前に `check_applicability()` または `require_applicable()` で評価する必要があります。
+`INPUT_CLASS` は Adapter が受け取る時点の入力値そのものを記述します。`Instance.prepare()` または手動操作で変更した値は、使用前に `check_applicability()` または `require_applicable()` で評価する必要があります。
 ```
 
 ここまでで用意した関数を使って次のように実装することができます：
@@ -611,7 +616,7 @@ sample_set.summary
 このチュートリアルでは、PySCIPOptと接続するSolver Adapterの実装とOpenJijと接続するSampler Adapterの実装を通して、OMMX Adapterの実装方法について学びました。以下がOMMX Adapterを実装する際の重要なポイントです：
 
 1. OMMX Adapterは `SolverAdapter` または `SamplerAdapter` の抽象基底クラスを継承することで実装します
-2. `INPUT_CLASS` で構造的な入力条件を宣言します。Adapter は共通の `PreparationPolicy` を推奨できますが、それを選ぶのは呼び出し側、実行するのは `Instance.prepare(policy)` です。direct Adapter は Policy を解釈せず、得られた `Instance` の applicability だけを検査します
+2. `INPUT_CLASS` で構造的な入力条件を宣言します。Adapter は共通の `PreparationPolicy` を推奨できますが、それを選ぶのは呼び出し側、in-placeに実行するのは `Instance.prepare(policy)` です。direct Adapter は Policy を解釈せず、変更された同じ `Instance` の applicability だけを検査します
 3. 実装の主なステップは以下の通りです：
    - `ommx.Instance` をバックエンドソルバーが理解できる形式に変換する
    - バックエンドソルバーを実行して解を取得する

@@ -320,16 +320,22 @@ The `solve` class method may define additional adapter-specific keyword options 
 
 An adapter declares the structural set of exact `Instance` values it can receive with `INPUT_CLASS`. `check_applicability()` evaluates membership first and then adapter-owned preconditions without mutating the caller's instance; `require_applicable()` raises with the same structured report when either condition fails.
 
-An Adapter may recommend a common {class}`~ommx.PreparationPolicy` targeting its `INPUT_CLASS` through `recommended_preparation_policy()`. The caller chooses that Policy and passes it to {meth}`Instance.prepare <ommx.Instance.prepare>`; `Instance` interprets and executes the Policy, and the resulting `preparation.input` is passed to the direct Adapter API. The Adapter neither receives nor interprets the Policy.
+An Adapter may recommend a common {class}`~ommx.PreparationPolicy` targeting its `INPUT_CLASS` through `recommended_preparation_policy()`. The caller chooses that Policy and passes it to {meth}`Instance.prepare <ommx.Instance.prepare>`; `Instance` interprets and executes the Policy in place, and that same `Instance` is passed to the direct Adapter API. The Adapter neither receives nor interprets the Policy.
 
 ```python
 policy = OMMXPySCIPOptAdapter.recommended_preparation_policy()
-preparation = source.prepare(policy)
-OMMXPySCIPOptAdapter.require_applicable(preparation.input)
-solution = OMMXPySCIPOptAdapter.solve(preparation.input)
+instance.prepare(policy)
+OMMXPySCIPOptAdapter.require_applicable(instance)
+solution = OMMXPySCIPOptAdapter.solve(instance)
 ```
 
 The base recommendation permits only identity preparation. A concrete Adapter may recommend additional OMMX-owned operations, but its direct constructor and `solve()` remain strict about the exact input they receive.
+
+Preparation is not globally transactional. Existing in-place operations run
+directly on the `Instance` and retain their own failure semantics. The consuming
+penalty operation is the only exception: it runs on a clone of the current
+`Instance` and commits that value only after penalty conversion and parameter
+materialization succeed.
 
 For low-level control, a caller may instead explicitly call {meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>`. Its `kinds_to_lower` argument uses these special-constraint family selectors:
 
@@ -340,7 +346,7 @@ For low-level control, a caller may instead explicitly call {meth}`Instance.lowe
 Use {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` to inspect the currently active families. `lower_special_constraints` converts each selected active family into regular constraints (Big-M for indicator / SOS1, linear equality for one-hot), mutates the instance in place, and logs each lowering at `INFO` level. Neither this property nor lowering establishes `INPUT_CLASS` membership or adapter applicability.
 
 ```{important}
-`INPUT_CLASS` describes the exact value received by the Adapter. Whether it came from `Instance.prepare()` or a manual operation, the resulting value must be checked with `check_applicability()` or `require_applicable()` before use.
+`INPUT_CLASS` describes the exact value received by the Adapter. Whether it was changed by `Instance.prepare()` or by a manual operation, that value must be checked with `check_applicability()` or `require_applicable()` before use.
 ```
 
 Using the functions prepared so far, you can implement it as follows:
@@ -617,7 +623,7 @@ sample_set.summary
 In this tutorial, we learned how to implement an OMMX Adapter by connecting to PySCIPOpt as a Solver Adapter and OpenJij as a Sampler Adapter. Here are the key points when implementing an OMMX Adapter:
 
 1. Implement an OMMX Adapter by inheriting the abstract base class `SolverAdapter` or `SamplerAdapter`.
-2. Declare the structural input condition with `INPUT_CLASS`. An Adapter may recommend a common `PreparationPolicy`, but the caller chooses it and `Instance.prepare(policy)` executes it. The direct Adapter receives only the resulting `Instance` and checks applicability without interpreting the Policy.
+2. Declare the structural input condition with `INPUT_CLASS`. An Adapter may recommend a common `PreparationPolicy`, but the caller chooses it and `Instance.prepare(policy)` executes it in place. The direct Adapter receives that same `Instance` and checks applicability without interpreting the Policy.
 3. The main steps of the implementation are as follows:
    - Convert `ommx.Instance` into a format that the backend solver can understand.
    - Run the backend solver to obtain a solution.

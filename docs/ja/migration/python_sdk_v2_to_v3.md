@@ -236,14 +236,14 @@ ids_list: list[int] = sample_set.sample_ids_list
 - `instance.constraint_hints` - `one_hot_constraints` / `sos1_constraints` / `indicator_constraints` に分かれました。
 - `ArtifactArchive` / `ArtifactDir` 系 - `Artifact` / `ArtifactDraft` に統合されました。
 - `ommx_openjij_adapter.response_to_samples(response)` - `decode_to_samples(response)` を使用します（`3.0.0`: [#1087](https://github.com/Jij-Inc/ommx/pull/1087)）。
-- `ommx_openjij_adapter.sample_qubo_sa(...)` - 直接適用可能なinputでは `OMMXOpenJijSAAdapter.sample(...)` を使用します。置き換え後はraw `Samples` ではなく評価済みの `SampleSet` を返します。preparationが必要な場合はAdapter推奨の共通Policyを取得し、`source.prepare(policy)` を呼んで `preparation.input` をsampleします。返される `SampleSet` はその変換済み `Instance` に対して既に評価済みです（`3.0.0`: [#1087](https://github.com/Jij-Inc/ommx/pull/1087)）。
+- `ommx_openjij_adapter.sample_qubo_sa(...)` - 直接適用可能なinputでは `OMMXOpenJijSAAdapter.sample(...)` を使用します。置き換え後はraw `Samples` ではなく評価済みの `SampleSet` を返します。preparationが必要な場合はAdapter推奨の共通Policyを取得し、`instance.prepare(policy)` を呼んで同じ `instance` をsampleします。返される `SampleSet` はその変換済み `Instance` に対して既に評価済みです（`3.0.0`: [#1087](https://github.com/Jij-Inc/ommx/pull/1087)）。
 
 v2のOpenJij Adapterでは、constructor、`sample()`、`solve()` が
 `uniform_penalty_weight`、`penalty_weights`、
 `inequality_integer_slack_max_range` を直接受け取り、暗黙にpreparationを実行していました。
 v3では、これらを `OMMXOpenJijSAAdapter.recommended_preparation_policy()` に渡し、
-返された共通 `PreparationPolicy` を `Instance.prepare()` で実行したうえで、得られた
-`preparation.input` をsampleします。通常制約ごとに
+返された共通 `PreparationPolicy` を `Instance.prepare()` でin-placeに実行したうえで、
+変更された同じ `Instance` をsampleします。通常制約ごとに
 異なるweightが必要な場合は、`uniform_penalty_weight` の代わりに `penalty_weights` を
 使います。v2はどちらのpenalty設定もない場合に一律weight `1.0` を選びましたが、v3では
 制約が残る場合、有限penaltyを明示的に選択する必要があります。
@@ -260,15 +260,19 @@ policy = OMMXOpenJijSAAdapter.recommended_preparation_policy(
     inequality_integer_slack_max_range=32,
     allow_approximate_integer_slack=True,  # v2の近似fallbackを維持
 )
-preparation = source.prepare(policy)
-sample_set = OMMXOpenJijSAAdapter.sample(preparation.input)
+instance.prepare(policy)
+sample_set = OMMXOpenJijSAAdapter.sample(instance)
 ```
 
-`Preparation` は互いに独立したsource、Policy、inputのsnapshotを保持します。
-preparationによって作られたdecision-variable dependency、removed constraint、
-provenance、補助変数はinputの `Instance` 自身が所有します。Adapterの結果はそのinputに
-対して評価されます。結果のobjectiveとsenseは変換後のmodelのものであり、有限penaltyは
-実行可能なsampleを保証しません。
+`Instance.prepare()` は `None` を返し、同じ `Instance` を変更します。preparationによって
+作られたdecision-variable dependency、removed constraint、provenance、補助変数は
+その値自身が所有し、Adapterの結果もその値に対して評価されます。結果のobjectiveとsenseは
+変換後のmodelのものであり、有限penaltyは実行可能なsampleを保証しません。
+
+Preparation全体はtransactionではありません。既存のin-place操作は直接実行され、
+それぞれの失敗時のsemanticsをそのまま保ちます。例外は消費型のpenalty操作だけで、
+現在の `Instance` のclone上で実行し、penalty変換とparameter materializationが成功した
+場合にだけcommitします。
 
 ## 8. DataFrame accessor
 

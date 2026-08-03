@@ -13,32 +13,35 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 {class}`~ommx.PreparationPolicy` は、呼び出し側が選んだ受け入れ可能な
 {class}`~ommx.InstanceClass` と、preparationで利用を許可する既存の `Instance` 操作・
 parameterを表します。{meth}`~ommx.Instance.prepare` が固定順序でPolicyを解釈し、
-分離されたsource / Policy / input snapshotを持つ
-{class}`~ommx.Preparation` を返します。
+その `Instance` をin-placeに変更して `None` を返します。
 `SolverAdapter` は `recommended_preparation_policy()` でPolicyを推奨できますが、
 preparationを実行せず、直接入力に対する `INPUT_CLASS` checkも緩和しません。
 
 ```python
 policy = OMMXHighsAdapter.recommended_preparation_policy()
-preparation = source.prepare(policy)
-solution = OMMXHighsAdapter.solve(preparation.input)
+instance.prepare(policy)
+solution = OMMXHighsAdapter.solve(instance)
 ```
 
 HiGHSの推奨Policyは、`Instance.prepare()` 中のIndicator、OneHot、SOS1の自動loweringを
 許可します。従来のOpenJij Adapter-owned preparation APIもこの共通workflowに
 置き換わり、有限penaltyと近似integer slackは引き続き明示的なPolicy optionです。
 
-変換の結果は `preparation.input` のdecision-variable dependency、removed constraint、
-provenance、補助変数としてinput自身が所有します。Adapterが返す
-{class}`~ommx.Solution` / {class}`~ommx.SampleSet` は、そのinputに対して既に評価済みです。
+変換の結果は、同じ `Instance` のdecision-variable dependency、removed constraint、
+provenance、補助変数としてその値自身が所有します。Adapterが返す
+{class}`~ommx.Solution` / {class}`~ommx.SampleSet` は、その値に対して既に評価済みです。
 通常制約のIDは通常制約に対する変換では保持されます。特殊制約のloweringだけは新しい
-通常制約rowを生成するため、制約ごとのpenalty weightはsourceの通常制約IDを使い、
-生成されたrowがactiveに残る場合はuniform weightが必要です。`Instance.prepare()` は
-別の対応表を持たず、既存のpenalty変形が記録したparameter IDを読み取ります。正の
+通常制約rowを生成するため、制約ごとのpenalty weightはpreparation開始時の通常制約IDを
+使い、生成されたrowがactiveに残る場合はuniform weightが必要です。生成したparameter
+IDとremoved constraintの記録は、既存のpenalty操作が引き続き所有します。正の
 finite weightはminimization candidateにだけ適用されるため、maximization sourceでは
-sense normalizationも許可する必要があります。既存の `Instance` 操作のerrorはそのまま
-返し、許可された操作をすべて適用しても受け入れ可能なclassに到達しなければ通常の
-errorを返します。
+sense normalizationも許可する必要があります。
+
+Preparation全体はtransactionではありません。既存のin-place操作は `Instance` を直接
+変更し、それぞれの失敗時のsemanticsをそのまま保ちます。例外は消費型のpenalty操作
+だけで、現在の `Instance` のclone上で実行し、penalty変換とparameter materializationが
+成功した場合にだけcommitします。許可された操作をすべて適用しても受け入れ可能な
+classに到達しなければ通常のerrorを返します。
 
 ### 🛠 Model / sample error を呼び出し側の回復方法に応じて通知 ([#1104](https://github.com/Jij-Inc/ommx/pull/1104)、[#1105](https://github.com/Jij-Inc/ommx/pull/1105)、[#1107](https://github.com/Jij-Inc/ommx/pull/1107))
 
@@ -94,8 +97,8 @@ backend構築前に {class}`~ommx.adapter.AdapterNotApplicableError` で拒否�
 この操作はinput classへのmembershipとは独立しています。
 
 OpenJijの `sample()` / `solve()` は、Integer encoding、sense反転、slack変換、
-特殊制約lowering、penalty選択を暗黙に行いません。別の入力を明示的に準備すると、
-Adapterはその変換済みinputに対して結果を評価します。
+特殊制約lowering、penalty選択を暗黙に行いません。同じ `Instance` をin-placeで明示的に
+準備し、Adapterもその変換後の値に対して結果を評価します。
 
 ```python
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
@@ -103,13 +106,13 @@ from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 policy = OMMXOpenJijSAAdapter.recommended_preparation_policy(
     uniform_penalty_weight=20.0,
 )
-preparation = source.prepare(policy)
-sample_set = OMMXOpenJijSAAdapter.sample(preparation.input)
+instance.prepare(policy)
+sample_set = OMMXOpenJijSAAdapter.sample(instance)
 ```
 
-有限penaltyとapproximate integer slackは明示的なopt-inが必要です。prepare後の値は
-別の {class}`~ommx.Instance` なので、sourceから推論せず `preparation.input` 自体の
-applicabilityを確認してください。受け入れるmodel classとpreparationの詳細は
+有限penaltyとapproximate integer slackは明示的なopt-inが必要です。preparationは
+渡された {class}`~ommx.Instance` を変更するため、その値でapplicabilityをもう一度
+確認してください。受け入れるmodel classとpreparationの詳細は
 [Adapter Input Class](../user_guide/capability_model.md) と
 [OpenJij tutorial](../tutorial/tsp_sampling_with_openjij_adapter.md) を参照してください。
 
@@ -118,7 +121,7 @@ applicabilityを確認してください。受け入れるmodel classとpreparat
 `ommx.InfeasibleDetected` です（既存の `ommx.adapter` aliasも利用できます）。
 `response_to_samples()` は `decode_to_samples()` に、`sample_qubo_sa()` は上記の明示的な
 workflowに置き換えてください。新しいAPIはraw `Samples`ではなく
-`preparation.input` に対して評価済みの`SampleSet`を返します。
+変換後の `Instance` に対して評価済みの`SampleSet`を返します。
 
 ### 🆕 Experiment / Run の lifecycle reason を永続化 ([#1109](https://github.com/Jij-Inc/ommx/pull/1109))
 

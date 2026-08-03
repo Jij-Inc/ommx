@@ -13,16 +13,15 @@ Changes merged after the most recent release will be appended here as they land,
 {class}`~ommx.PreparationPolicy` now describes a caller-selected acceptable
 {class}`~ommx.InstanceClass` together with the existing `Instance` operations
 and their parameters that preparation may use. {meth}`~ommx.Instance.prepare`
-interprets that Policy in a fixed order and returns a
-{class}`~ommx.Preparation` containing isolated source, Policy, and input
-snapshots. A `SolverAdapter` may recommend a Policy through
+interprets that Policy in a fixed order, mutates that `Instance`, and returns
+`None`. A `SolverAdapter` may recommend a Policy through
 `recommended_preparation_policy()`, but the Adapter neither executes
 preparation nor weakens its direct `INPUT_CLASS` check.
 
 ```python
 policy = OMMXHighsAdapter.recommended_preparation_policy()
-preparation = source.prepare(policy)
-solution = OMMXHighsAdapter.solve(preparation.input)
+instance.prepare(policy)
+solution = OMMXHighsAdapter.solve(instance)
 ```
 
 The HiGHS recommendation permits automatic Indicator, OneHot, and SOS1
@@ -30,19 +29,25 @@ lowering during `Instance.prepare()`. OpenJij's previous Adapter-owned
 preparation API is replaced by the same workflow, with finite penalty and
 approximate integer-slack choices remaining explicit Policy options.
 
-Transformation effects are owned by `preparation.input` through its
+Transformation effects are owned by the same `Instance` through its
 decision-variable dependencies, removed constraints, provenance, and auxiliary
 variables. Adapters already evaluate their returned {class}`~ommx.Solution` or
-{class}`~ommx.SampleSet` against that exact input. Existing regular-constraint
+{class}`~ommx.SampleSet` against that exact value. Existing regular-constraint
 IDs remain stable through regular transformations. Lowering a special
 constraint creates fresh regular rows, so per-constraint penalty weights use
-source regular-constraint IDs and a uniform weight is required when generated
-rows remain active. `Instance.prepare()` reads the parameter IDs recorded by
-the existing penalty transformation instead of maintaining another mapping.
+the regular-constraint IDs present when preparation starts, and a uniform
+weight is required when generated rows remain active. The existing penalty
+operation remains the owner of its generated parameter IDs and
+removed-constraint records.
 Positive finite weights require a minimization candidate, so a maximization
-source must permit sense normalization. Errors from existing `Instance`
-operations propagate unchanged; failure to reach the acceptable class after
-all permitted operations is an ordinary error.
+source must permit sense normalization.
+
+Preparation is not globally transactional. Existing in-place operations mutate
+the `Instance` directly and retain their own failure semantics. The consuming
+penalty operation is the only exception: it runs on a clone of the current
+`Instance` and commits that value only after penalty conversion and parameter
+materialization succeed. Failure to reach the acceptable class after all
+permitted operations is an ordinary error.
 
 ### 🛠 Model and sample errors follow caller ownership ([#1104](https://github.com/Jij-Inc/ommx/pull/1104), [#1105](https://github.com/Jij-Inc/ommx/pull/1105), [#1107](https://github.com/Jij-Inc/ommx/pull/1107))
 
@@ -105,8 +110,8 @@ explicitly; this operation is separate from input-class membership.
 
 OpenJij no longer performs integer encoding, sense reversal, slack conversion,
 special-constraint lowering, or penalty selection inside `sample()` or
-`solve()`. Prepare a separate input explicitly; the Adapter evaluates its
-result against that prepared input:
+`solve()`. Prepare the `Instance` explicitly in place; the Adapter evaluates
+its result against that same prepared value:
 
 ```python
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
@@ -114,13 +119,13 @@ from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 policy = OMMXOpenJijSAAdapter.recommended_preparation_policy(
     uniform_penalty_weight=20.0,
 )
-preparation = source.prepare(policy)
-sample_set = OMMXOpenJijSAAdapter.sample(preparation.input)
+instance.prepare(policy)
+sample_set = OMMXOpenJijSAAdapter.sample(instance)
 ```
 
 Finite penalties and approximate integer slack now require explicit opt-in.
-Every prepared value is a new {class}`~ommx.Instance`, so applicability must be
-checked on `preparation.input`, not inferred from the source. See
+Preparation changes the supplied {class}`~ommx.Instance`, so applicability must
+be checked again on that value. See
 [Adapter input classes](../user_guide/capability_model.md) and the
 [OpenJij tutorial](../tutorial/tsp_sampling_with_openjij_adapter.md) for the
 accepted model classes and preparation details.
@@ -130,7 +135,7 @@ adapter-specific exception for unsupported input. The canonical infeasibility
 exception is `ommx.InfeasibleDetected` (also available through the existing
 `ommx.adapter` alias). Replace `response_to_samples()` with
 `decode_to_samples()` and `sample_qubo_sa()` with the explicit workflow above;
-the replacement returns a `SampleSet` evaluated against `preparation.input`
+the replacement returns a `SampleSet` evaluated against the prepared `Instance`
 rather than raw `Samples`.
 
 ### 🆕 Durable lifecycle reasons for Experiments and Runs ([#1109](https://github.com/Jij-Inc/ommx/pull/1109))

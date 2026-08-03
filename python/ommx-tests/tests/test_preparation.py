@@ -182,7 +182,7 @@ def test_policy_rejects_invalid_integer_slack_max_range(max_range: object) -> No
         )
 
 
-def test_identity_preparation_uses_input_for_evaluation() -> None:
+def test_identity_preparation_returns_none_and_uses_instance_for_evaluation() -> None:
     x = DecisionVariable.binary(0)
     instance = Instance.from_components(
         decision_variables=[x],
@@ -190,26 +190,25 @@ def test_identity_preparation_uses_input_for_evaluation() -> None:
         constraints={},
         sense=Sense.Minimize,
     )
-    preparation = instance.prepare(
+    result = instance.prepare(
         PreparationPolicy(acceptable_instance_class=binary_linear_class())
     )
 
-    assert preparation.source.to_v2_bytes() == instance.to_v2_bytes()
-    assert preparation.input.to_v2_bytes() == instance.to_v2_bytes()
+    assert result is None
 
     state = State({0: 1.0})
-    solution = preparation.input.evaluate(state)
+    solution = instance.evaluate(state)
     assert solution.state.entries == {0: 1.0}
     assert solution.objective == pytest.approx(1.0)
 
     samples = Samples({3: {0: 1.0}, 8: {0: 0.0}})
-    sample_set = preparation.input.evaluate_samples(samples)
+    sample_set = instance.evaluate_samples(samples)
     assert sample_set.sample_ids() == {3, 8}
     assert sample_set.get(3).state.entries == {0: 1.0}
     assert sample_set.get(8).state.entries == {0: 0.0}
 
 
-def test_lowered_special_constraint_is_evaluated_by_prepared_input() -> None:
+def test_lowered_special_constraint_is_evaluated_by_prepared_instance() -> None:
     x = DecisionVariable.binary(0)
     y = DecisionVariable.binary(1)
     instance = Instance.from_components(
@@ -219,22 +218,23 @@ def test_lowered_special_constraint_is_evaluated_by_prepared_input() -> None:
         one_hot_constraints={7: OneHotConstraint(variables=[x, y])},
         sense=Sense.Minimize,
     )
-    preparation = instance.prepare(
+    result = instance.prepare(
         PreparationPolicy(
             acceptable_instance_class=binary_linear_class(),
             allowed_special_constraint_lowerings={SpecialConstraintKind.OneHot},
         )
     )
 
-    assert preparation.input.one_hot_constraints == {}
-    assert set(preparation.input.removed_one_hot_constraints) == {7}
-    assert len(preparation.input.constraints) == 1
+    assert result is None
+    assert instance.one_hot_constraints == {}
+    assert set(instance.removed_one_hot_constraints) == {7}
+    assert len(instance.constraints) == 1
 
-    solution = preparation.input.evaluate(State({0: 1.0, 1: 0.0}))
+    solution = instance.evaluate(State({0: 1.0, 1: 0.0}))
     assert solution.feasible
     assert solution.objective == pytest.approx(1.0)
 
-    sample_set = preparation.input.evaluate_samples(Samples({12: {0: 0.0, 1: 1.0}}))
+    sample_set = instance.evaluate_samples(Samples({12: {0: 0.0, 1: 1.0}}))
     assert sample_set.sample_ids() == {12}
     assert sample_set.get(12).feasible
 
@@ -253,9 +253,9 @@ def test_identity_does_not_interpret_unused_per_constraint_penalty_ids() -> None
         penalty_weights={999: 2.0},
     )
 
-    preparation = instance.prepare(policy)
+    result = instance.prepare(policy)
 
-    assert preparation.input.to_v2_bytes() == before
+    assert result is None
     assert instance.to_v2_bytes() == before
 
 
@@ -289,19 +289,20 @@ def test_per_constraint_penalty_tracks_existing_regular_constraint_id() -> None:
         constraints={9: x == 0},
         sense=Sense.Minimize,
     )
-    preparation = instance.prepare(
+    result = instance.prepare(
         PreparationPolicy(
             acceptable_instance_class=binary_unconstrained_class(),
             penalty_weights={9: 2.0},
         )
     )
 
-    assert not preparation.input.constraints
-    assert set(preparation.input.removed_constraints) == {9}
-    assert preparation.input.evaluate(State({0: 0.0})).objective == pytest.approx(0.0)
+    assert result is None
+    assert not instance.constraints
+    assert set(instance.removed_constraints) == {9}
+    assert instance.evaluate(State({0: 0.0})).objective == pytest.approx(0.0)
 
 
-def test_generated_regular_constraint_requires_uniform_penalty() -> None:
+def test_penalty_failure_keeps_prior_in_place_special_constraint_lowering() -> None:
     x = DecisionVariable.binary(0)
     y = DecisionVariable.binary(1)
     instance = Instance.from_components(
@@ -316,12 +317,12 @@ def test_generated_regular_constraint_requires_uniform_penalty() -> None:
         allowed_special_constraint_lowerings={SpecialConstraintKind.OneHot},
         penalty_weights={},
     )
-    before = instance.to_v2_bytes()
-
     with pytest.raises(RuntimeError):
         instance.prepare(policy)
 
-    assert instance.to_v2_bytes() == before
+    assert instance.one_hot_constraints == {}
+    assert set(instance.removed_one_hot_constraints) == {7}
+    assert len(instance.constraints) == 1
 
 
 def test_operation_owned_error_is_preserved() -> None:
@@ -336,6 +337,9 @@ def test_operation_owned_error_is_preserved() -> None:
         acceptable_instance_class=binary_linear_class(),
         allow_integer_log_encoding=True,
     )
+    before = instance.to_v2_bytes()
 
     with pytest.raises(LogEncodingError, match="bound must be finite"):
         instance.prepare(policy)
+
+    assert instance.to_v2_bytes() == before

@@ -48,20 +48,28 @@ binary_linear_with_one_hot = InstanceClass(
 )
 ```
 
-Adapter は applicability の最初の条件を `INPUT_CLASS` として宣言します。構造化された結果を得るには `check_applicability()`、membership または Adapter 固有の precondition が満たされない場合に例外を送出するには `require_applicable()` を使います。明示的な preparation で別の入力値を作った場合は、その値で applicability を再評価します。
+Adapter は applicability の最初の条件を `INPUT_CLASS` として宣言します。構造化された結果を得るには `check_applicability()`、membership または Adapter 固有の precondition が満たされない場合に例外を送出するには `require_applicable()` を使います。明示的な preparation で入力値を変更した場合は、その値で applicability を再評価します。
 
 ## Adapter 入力の Preparation
 
-Adapter は direct `INPUT_CLASS` を対象とする共通 Policy を推奨するだけで、Policy を実行も解釈もしません。呼び出し側が選んだ Policy を source `Instance` に渡し、得られた `Instance` だけを direct Adapter API に渡します。
+Adapter は direct `INPUT_CLASS` を対象とする共通 Policy を推奨するだけで、Policy を実行も解釈もしません。呼び出し側が選んだ Policy を `Instance` に渡し、変更された同じ `Instance` を direct Adapter API に渡します。
 
 ```python
 policy = Adapter.recommended_preparation_policy()
-preparation = source.prepare(policy)
-Adapter.require_applicable(preparation.input)
-result = Adapter.solve(preparation.input)
+instance.prepare(policy)
+Adapter.require_applicable(instance)
+result = Adapter.solve(instance)
 ```
 
-`Preparation` が保持するのは、互いに独立した `source`、`policy`、`input` の snapshot です。solver の state や samples は、その `Instance` に既に記録されている変換データを使って、prepared `Instance` 自身が評価します。Preparation は別の encode/decode protocol を追加しません。Adapter 固有の precondition は Policy 実行の外にあり、direct boundary で検査されます。
+変換によって作られたdecision-variable dependency、removed constraint、provenance、
+補助変数は、変換後の `Instance` 自身に記録されます。solver のstateやsamplesは、その同じ
+`Instance` が評価します。Adapter固有のpreconditionはPolicy実行の外にあり、direct
+boundaryで検査されます。
+
+Preparation全体はtransactionではありません。既存のin-place操作は `instance` に直接
+適用され、それぞれの失敗時のsemanticsをそのまま保ちます。例外は消費型のpenalty操作
+だけで、現在の `Instance` のclone上で実行し、penalty変換とparameter materializationの
+両方が成功した場合にだけ `instance` を置き換えます。
 
 finite penalty weight は正の値なので、minimization candidate にだけ適用されます。maximization source に finite penalty を適用する Policy では、sense normalization も許可する必要があります。
 

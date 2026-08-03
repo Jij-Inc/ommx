@@ -81,22 +81,20 @@ def test_recommended_policy_targets_highs_input_class() -> None:
 def test_instance_prepare_automatically_lowers_special_constraint(
     make_source, kind
 ) -> None:
-    source = make_source()
-    before = source.to_v2_bytes()
+    instance = make_source()
 
-    preparation = source.prepare(OMMXHighsAdapter.recommended_preparation_policy())
+    result = instance.prepare(OMMXHighsAdapter.recommended_preparation_policy())
 
-    assert preparation.source.to_v2_bytes() == before
-    assert source.to_v2_bytes() == before
-    assert kind not in preparation.input.active_special_constraint_kinds
-    assert OMMXHighsAdapter.check_applicability(preparation.input).is_applicable
+    assert result is None
+    assert kind not in instance.active_special_constraint_kinds
+    assert OMMXHighsAdapter.check_applicability(instance).is_applicable
 
 
 def test_sos1_solution_is_evaluated_against_prepared_input() -> None:
-    source = _sos1_instance()
-    preparation = source.prepare(OMMXHighsAdapter.recommended_preparation_policy())
+    instance = _sos1_instance()
+    instance.prepare(OMMXHighsAdapter.recommended_preparation_policy())
 
-    solution = OMMXHighsAdapter.solve(preparation.input)
+    solution = OMMXHighsAdapter.solve(instance)
     sos1 = solution.constraints_df(
         kind="sos1",
         include=["removed_reason"],
